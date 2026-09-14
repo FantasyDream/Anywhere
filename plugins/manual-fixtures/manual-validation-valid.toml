@@ -1,0 +1,27 @@
+protocol_version = 1
+id = "manual_check"
+name = "Manual Validation"
+
+[[commands]]
+id = "copy"
+title = "Manual Copy Text"
+accepts = ["core.text"]
+[commands.action]
+type = "copy"
+text = "COPY[{{context.value}}]"
+
+[[commands]]
+id = "open_file"
+title = "Manual Open File"
+accepts = ["core.file"]
+[commands.action]
+type = "open_file"
+path = "{{context.value}}"
+
+[[commands]]
+id = "minify"
+title = "Manual Minify JSON"
+accepts = ["core.json"]
+[commands.action]
+type = "execute_builtin"
+command_id = "core.json.minify"

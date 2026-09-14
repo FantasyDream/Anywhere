@@ -1,0 +1,11 @@
+protocol_version = 1
+id = "manual_bad"
+name = "Invalid Manual Fixture"
+
+[[commands]]
+id = "test"
+title = "INVALID SHOULD NOT APPEAR"
+accepts = ["invalid matcher"]
+[commands.action]
+type = "copy"
+text = "{{context.value}}"

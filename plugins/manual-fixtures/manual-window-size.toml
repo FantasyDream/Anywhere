@@ -1,0 +1,67 @@
+protocol_version = 1
+id = "manual_window_size"
+name = "Window Size Validation"
+
+[[commands]]
+id = "copy_01"
+title = "Window Size 01"
+accepts = ["core.text"]
+[commands.action]
+type = "copy"
+text = "WINDOW[01]: {{context.value}}"
+
+[[commands]]
+id = "copy_02"
+title = "Window Size 02"
+accepts = ["core.text"]
+[commands.action]
+type = "copy"
+text = "WINDOW[02]: {{context.value}}"
+
+[[commands]]
+id = "copy_03"
+title = "Window Size 03"
+accepts = ["core.text"]
+[commands.action]
+type = "copy"
+text = "WINDOW[03]: {{context.value}}"
+
+[[commands]]
+id = "copy_04"
+title = "Window Size 04"
+accepts = ["core.text"]
+[commands.action]
+type = "copy"
+text = "WINDOW[04]: {{context.value}}"
+
+[[commands]]
+id = "copy_05"
+title = "Window Size 05"
+accepts = ["core.text"]
+[commands.action]
+type = "copy"
+text = "WINDOW[05]: {{context.value}}"
+
+[[commands]]
+id = "copy_06"
+title = "Window Size 06"
+accepts = ["core.text"]
+[commands.action]
+type = "copy"
+text = "WINDOW[06]: {{context.value}}"
+
+[[commands]]
+id = "copy_07"
+title = "Window Size 07"
+accepts = ["core.text"]
+[commands.action]
+type = "copy"
+text = "WINDOW[07]: {{context.value}}"
+
+[[commands]]
+id = "copy_08"
+title = "Window Size 08"
+accepts = ["core.text"]
+[commands.action]
+type = "copy"
+text = "WINDOW[08]: {{context.value}}"
