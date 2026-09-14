@@ -2,6 +2,9 @@
 $ErrorActionPreference = 'Stop'
 $repo = Split-Path -Parent $PSScriptRoot
 if ($env:OS -ne 'Windows_NT') { throw 'The Windows bundle must be built on a Windows host.' }
+if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -ne 'X64') {
+    throw 'This script packages x64 and requires a Windows x64 host.'
+}
 Push-Location $repo
 try {
     & rustup target add x86_64-pc-windows-msvc
@@ -12,7 +15,7 @@ try {
     try {
         & flutter pub get
         if ($LASTEXITCODE -ne 0) { throw 'Flutter dependency resolution failed.' }
-        & flutter build windows --release --target-platform=windows-x64
+        & flutter build windows --release
         if ($LASTEXITCODE -ne 0) { throw 'Flutter Windows build failed.' }
     } finally { Pop-Location }
     $bundle = Join-Path $repo 'apps/flutter/build/windows/x64/runner/Release'
