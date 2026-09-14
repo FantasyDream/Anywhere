@@ -15,7 +15,7 @@ try {
     try {
         & flutter pub get
         if ($LASTEXITCODE -ne 0) { throw 'Flutter dependency resolution failed.' }
-        & flutter build windows --release
+        & flutter build windows --release --verbose
         if ($LASTEXITCODE -ne 0) { throw 'Flutter Windows build failed.' }
     } finally { Pop-Location }
     $bundle = Join-Path $repo 'apps/flutter/build/windows/x64/runner/Release'
