@@ -23,7 +23,7 @@ const EncodableValue* Field(const EncodableValue* args, const char* key) {
 std::optional<int64_t> Generation(const EncodableValue* args) {
   const auto* value = Field(args, "generation");
   if (value) {
-    if (const auto* small = std::get_if<int32_t>(value)) return *small;
+    if (const auto* integer = std::get_if<int32_t>(value)) return *integer;
     if (const auto* large = std::get_if<int64_t>(value)) return *large;
   }
   return std::nullopt;
