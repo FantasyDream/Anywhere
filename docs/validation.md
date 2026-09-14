@@ -107,6 +107,14 @@ xcrun swift -module-cache-path .tools/swift-cache \
 
 已重新构建本机 Release 应用；构建脚本中的签名步骤完成。遵循用户「不要自己测」的要求，本次未运行测试、未启动应用或操作 GUI。实际四角、毛玻璃透色及展开/收起效果由用户按更新后的 K01/K12/K14 验证。
 
+## 0.1.1 输入闪退、文字对比度和 Windows 交付
+
+读取用户机器已有的 5 份崩溃报告（2026-09-14 18:02、19:17、19:18 两次、19:30），均为 EXC_BAD_ACCESS，栈顶 `impeller::Canvas::SetupRenderPass`。按当前 SDK 的正式配置设 `FLTEnableImpeller=false` 切回 Skia/Metal，避开该崩溃路径；不能据此宣称已修复上游引擎。输入解析期间保留不可执行的已提交列表，提交新结果后才改变窗口高度，相同尺寸不重复调用原生 resize。半透明底色加深，正文、提示与副标题亮度提高。
+
+0.1.1 (2) 的 macOS Release 已重新编译，构建脚本完成签名步骤；未自行启动或执行测试。用户重点回归 K01/K02/K10/K12，包括手打、中文组词、粘贴后退格以及浅色背景文字。
+
+Windows 新增 Shell COM 目录捕获、文件/目录/URL 打开、文件定位、PowerShell 当前目录和 Unicode 剪贴板；保留平台中立 Core。用户授权上传 GitHub 后，私有仓库已创建，Actions 只构建打包，不执行测试。最终构建结果及产物见 [Windows 工作流](https://github.com/FantasyDream/Context-Aware-Launcher/actions/workflows/windows.yml)；Windows 人工验收尚未执行。
+
 ## 当前边界
 
-应用为本机 arm64、adhoc 本地签名包，没有发行证书、公证或 universal packaging。未验证其他 macOS 版本。没有实现计划排除的后续功能。完整验收前仍需解决真实界面运行中发现的问题。
+macOS 应用为本机 arm64、adhoc 本地签名包，没有发行证书、公证或 universal packaging。未验证其他 macOS 版本。Windows x64 按用户追加要求加入，尚未完成实机验证。完整验收前仍需解决真实界面运行中发现的问题。

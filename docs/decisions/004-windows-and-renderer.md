@@ -9,6 +9,6 @@
 - macOS 的 5 份崩溃报告均为 EXC_BAD_ACCESS，栈顶 impeller::Canvas::SetupRenderPass。当前 SDK 支持 FLTEnableImpeller=false，先切回 Skia/Metal，待用户回归；这是兼容性避让，并非已修复 Flutter 引擎。输入只在结果提交时改变列表高度，不在每个字符处理中先收起再展开。
 - 半透明底色加深并提高次要文字亮度，使浅色背景下文字仍清楚，保留原生毛玻璃。
 
-Windows 完整构建需要 Windows 主机及 Visual Studio C++ 工具链。当前只有 Mac，用户确认暂时没有 Windows 主机/CI 仓库，因此交付适配源码和构建脚本；在取得环境前不能标记 Windows 可执行包已生成。用户要求人工测试，本轮不运行自动/GUI 测试。
+Windows 完整构建需要 Windows 主机及 Visual Studio C++ 工具链。当前只有 Mac，用户确认暂时没有 Windows 主机/CI 仓库，因此最初准备适配源码和构建脚本。2026-09-15 用户进一步授权上传 GitHub 并配置 Actions，现使用私有仓库的 Windows 2022 runner 构建。构建成功仍不等于实机验收通过。用户要求人工测试，本轮不运行自动/GUI 测试。
 
 依据：[Flutter Windows 构建环境](https://docs.flutter.dev/platform-integration/windows/setup)、[Flutter 渲染器配置](https://docs.flutter.dev/perf/impeller)、[IShellBrowser::QueryActiveShellView](https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nf-shobjidl_core-ishellbrowser-queryactiveshellview)。

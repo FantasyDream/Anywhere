@@ -1,8 +1,14 @@
 # Windows x64 交付与人工验证
 
-**状态：适配源码和构建脚本已提供；尚未在 Windows 编译或运行，未生成 Windows EXE。** 当前环境是 macOS，用户确认暂时没有 Windows 构建主机或 CI 仓库。Mac 应用成功构建不代表 Windows 通过。
+**状态：Windows x64 已接入 GitHub Actions，首轮构建进行中；尚未进行 Windows 实机运行验收。** 仓库为 [FantasyDream/Context-Aware-Launcher](https://github.com/FantasyDream/Context-Aware-Launcher)，保持私有。Mac 应用成功构建不代表 Windows 通过。
 
-## 构建
+## GitHub Actions 下载
+
+打开 [Package Windows x64](https://github.com/FantasyDream/Context-Aware-Launcher/actions/workflows/windows.yml)，选择成功的运行，在 Artifacts 下载 `Context-Launcher-Windows-x64`。私有仓库需要登录有访问权限的 GitHub 账户。
+
+相关源码推送到 main 会自动构建，也可以选择 Run workflow 手动打包。工作流只编译打包，不运行测试；产物保留 30 天。不要把构建成功标记为全部人工 case 通过。
+
+## 本地构建
 
 准备 Windows 10/11 x64、Rust stable MSVC 工具链、Flutter 3.47.x Windows SDK、Visual Studio 2022/Build Tools 的「使用 C++ 的桌面开发」工作负载和 Windows SDK。官方说明见 [Flutter Windows 环境](https://docs.flutter.dev/platform-integration/windows/setup)。当前 runner 使用 Flutter 3.47 的 `set_impeller_switch` API。
 

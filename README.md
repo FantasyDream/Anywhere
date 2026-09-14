@@ -8,7 +8,7 @@ Understand → Enrich → Match → Rank → Execute
 
 在 Finder 中按 **⌘⌥Space**，无需输入即可得到 Open Terminal Here / Copy Path / Open Directory。输入 URL、JSON、文件、目录或普通文本，会得到对应动作；有输入时只显示该输入的动作，清空后恢复 Finder 环境动作。
 
-macOS 应用可在本机编译；Windows x64 的 Host、资源管理器适配和一键打包脚本已加入，**尚未在 Windows 编译/运行**。见 [Windows 构建与 18 项人工验证](docs/windows.md)。
+macOS 应用可在本机编译；Windows x64 的 Host、资源管理器适配和一键打包脚本已加入，[GitHub Actions](https://github.com/FantasyDream/Context-Aware-Launcher/actions/workflows/windows.yml) 自动编译并提供 ZIP。Windows 实机验收仍待人工执行。见 [Windows 构建与 18 项人工验证](docs/windows.md)。
 
 ## 构建与运行
 

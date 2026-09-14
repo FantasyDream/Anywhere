@@ -63,7 +63,7 @@ Finder 中用 **⌘⇧G** 粘贴目录路径，再按 Enter。Launcher 中用 **
 
 ```bash
 mkdir -p "$HOME/Library/Application Support/ContextLauncher/plugins"
-cp '/Users/luckincoffee/Documents/Github/Context-Aware-Launcher/build/manual-validation/manual-window-size.toml' \
+cp '/Users/luckincoffee/Documents/Github/Context-Aware-Launcher/plugins/manual-fixtures/manual-window-size.toml' \
    "$HOME/Library/Application Support/ContextLauncher/plugins/manual-window-size.toml"
 ```
 
@@ -220,7 +220,7 @@ sqlite3 "$HOME/Library/Application Support/ContextLauncher/usage.sqlite3" \
 
 ```bash
 mkdir -p "$HOME/Library/Application Support/ContextLauncher/plugins"
-cp '/Users/luckincoffee/Documents/Github/Context-Aware-Launcher/build/manual-validation/manual-validation-valid.toml' \
+cp '/Users/luckincoffee/Documents/Github/Context-Aware-Launcher/plugins/manual-fixtures/manual-validation-valid.toml' \
    "$HOME/Library/Application Support/ContextLauncher/plugins/manual-validation-valid.toml"
 ```
 
@@ -239,7 +239,7 @@ cp '/Users/luckincoffee/Documents/Github/Context-Aware-Launcher/build/manual-val
 2. 将已准备好的 8 个非法样例复制进去：
 
 ```bash
-cp /Users/luckincoffee/Documents/Github/Context-Aware-Launcher/build/manual-validation/invalid-plugins/*.toml \
+cp /Users/luckincoffee/Documents/Github/Context-Aware-Launcher/plugins/manual-fixtures/invalid-plugins/*.toml \
    "$HOME/Library/Application Support/ContextLauncher/plugins/"
 ```
 
