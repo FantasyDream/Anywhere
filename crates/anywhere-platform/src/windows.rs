@@ -1,13 +1,7 @@
+use super::windows_native::*;
 use super::*;
 use anyhow::{bail, Context};
 use std::{os::windows::ffi::OsStrExt, path::PathBuf, sync::Mutex};
-
-extern "C" {
-    fn launcher_windows_foreground(executable: *mut u16, capacity: u32, window: *mut isize) -> i32;
-    fn launcher_windows_directory(window: isize, output: *mut u16, capacity: u32) -> i32;
-    fn launcher_windows_open(value: *const u16, kind: i32) -> i32;
-    fn launcher_windows_copy(value: *const u16, length: u32) -> i32;
-}
 
 #[derive(Default)]
 pub struct WindowsPlatform {
@@ -147,21 +141,190 @@ impl Platform for WindowsPlatform {
         Ok(())
     }
 
-    // V0.2 capabilities are not implemented on Windows yet; they degrade to the
-    // explicitly unsupported trait defaults so V0.1 behaviour is unchanged and no
-    // application-launch or Git candidate can appear on this platform.
-    fn bundle_application(&self, _bundle: &Path) -> Result<Option<BundleApplication>> {
-        Ok(None)
+    /// A Start Menu shortcut is the Windows equivalent of an application bundle: it is
+    /// what the shell lists and what the user recognizes. Its display name and launch
+    /// target come from the shortcut itself, so an entry whose file name is an
+    /// implementation detail (`chrome.lnk`) still indexes as "Google Chrome".
+    fn bundle_application(&self, shortcut: &Path) -> Result<Option<BundleApplication>> {
+        if !shortcut.is_file() {
+            return Ok(None);
+        }
+        let path = wide(shortcut.as_os_str())?;
+        let mut name = vec![0u16; 512];
+        let mut target = vec![0u16; 32768];
+        // SAFETY: both buffers are caller-owned with their lengths passed alongside;
+        // native code retains no pointer and bounds every copy.
+        if !status("resolve_shortcut", unsafe {
+            launcher_windows_resolve_shortcut(
+                path.as_ptr(),
+                name.as_mut_ptr(),
+                name.len() as u32,
+                target.as_mut_ptr(),
+                target.len() as u32,
+            )
+        })? {
+            return Ok(None);
+        }
+        let name = utf16_string(&name);
+        let target = utf16_string(&target);
+        if name.trim().is_empty() || target.is_empty() {
+            return Ok(None);
+        }
+        let Some(identity) = Path::new(&target)
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().to_lowercase())
+            .filter(|stem| !stem.is_empty())
+        else {
+            return Ok(None);
+        };
+        Ok(Some(BundleApplication {
+            bundle_id: format!("app.{identity}"),
+            name,
+            path: Some(target),
+            icon: None,
+        }))
     }
     fn application_icon(&self, _path: &str, _size: u32) -> Result<Option<Vec<u8>>> {
+        // Icons are presentation only; without an extractor the host falls back to its
+        // semantic icon, which is preferable to shipping a wrong one.
         Ok(None)
+    }
+    fn launch_application(&self, path: &str) -> Result<bool> {
+        // ShellExecute resolves a running instance, waits on elevation prompts and handles
+        // both an `.exe` and a `.lnk`. There is no "activate instead of launch" signal to
+        // report, so a successful start is the answer.
+        open(Path::new(path), false, 0)?;
+        Ok(true)
     }
     fn clipboard_text(&self) -> Result<Option<String>> {
-        Ok(None)
+        // Bounded like the macOS snapshot: a huge clipboard must not be pulled into the
+        // launcher at activation.
+        let mut buffer = vec![0u16; 64 * 1024];
+        let mut length = 0u32;
+        // SAFETY: the buffer and its capacity are passed together; native code fills at
+        // most `capacity - 1` code units and NUL-terminates.
+        let result = unsafe {
+            launcher_windows_clipboard_text(buffer.as_mut_ptr(), buffer.len() as u32, &mut length)
+        };
+        // S_FALSE is the shim's "no text on the clipboard", not a failure.
+        if !status("clipboard_text", result)? {
+            return Ok(None);
+        }
+        let length = (length as usize).min(buffer.len());
+        let text = String::from_utf16_lossy(&buffer[..length]);
+        Ok(if text.is_empty() { None } else { Some(text) })
     }
     fn git_available(&self) -> bool {
-        false
+        git_program().is_some()
     }
+    fn run_git(&self, repository: &Path, operation: GitOperation) -> Result<GitOutput> {
+        if !repository.is_dir() {
+            bail!("repository is no longer a directory");
+        }
+        let program = git_program().context("git is not installed")?;
+        // The argv allowlist and the deadline handling are shared with macOS; only the
+        // process API differs, and `std::process` is already correct on both.
+        let mut child = crate::git::command(&program, repository, operation)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .with_context(|| format!("start {}", program.display()))?;
+        let stdout = child.stdout.take().context("git stdout missing")?;
+        let stderr = child.stderr.take().context("git stderr missing")?;
+        // Drain both pipes concurrently: waiting for exit first can deadlock on a large diff.
+        let (stdout_tx, stdout_rx) = std::sync::mpsc::channel();
+        let (stderr_tx, stderr_rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = stdout_tx.send(crate::drain::read_bounded(stdout));
+        });
+        std::thread::spawn(move || {
+            let _ = stderr_tx.send(crate::drain::read_bounded(stderr));
+        });
+        let deadline = std::time::Instant::now() + GIT_TIMEOUT;
+        let mut timed_out = false;
+        let mut exit_status = None;
+        loop {
+            if let Some(status) = child.try_wait()? {
+                exit_status = Some(status);
+                break;
+            }
+            if std::time::Instant::now() >= deadline {
+                let _ = child.kill();
+                let _ = child.wait();
+                timed_out = true;
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        if timed_out {
+            // A killed process normally closes both pipes at once. If a grandchild holds
+            // one open, reading must not outlive the deadline.
+            let _ = crate::drain::join(stdout_rx, crate::drain::DRAIN_TIMEOUT);
+            let _ = crate::drain::join(stderr_rx, crate::drain::DRAIN_TIMEOUT);
+            bail!(
+                "git {} timed out after {}s; the repository may be very large",
+                operation.as_str(),
+                GIT_TIMEOUT.as_secs()
+            );
+        }
+        let (stdout, stdout_truncated) =
+            match crate::drain::join(stdout_rx, crate::drain::DRAIN_TIMEOUT) {
+                crate::drain::ReaderOutcome::Drained(bytes, truncated) => (bytes, truncated),
+                crate::drain::ReaderOutcome::Stalled => bail!(
+                    "git {} output did not close after the process exited",
+                    operation.as_str()
+                ),
+                crate::drain::ReaderOutcome::Failed => {
+                    bail!("could not read git {} output", operation.as_str())
+                }
+            };
+        let (stderr, stderr_truncated) =
+            match crate::drain::join(stderr_rx, crate::drain::DRAIN_TIMEOUT) {
+                crate::drain::ReaderOutcome::Drained(bytes, truncated) => (bytes, truncated),
+                crate::drain::ReaderOutcome::Stalled => bail!(
+                    "git {} error output did not close after the process exited",
+                    operation.as_str()
+                ),
+                crate::drain::ReaderOutcome::Failed => (Vec::new(), false),
+            };
+        if exit_status.is_some_and(|status| !status.success()) {
+            let detail = String::from_utf8_lossy(&stderr);
+            bail!("git {} failed: {}", operation.as_str(), detail.trim());
+        }
+        let truncated = stdout_truncated || stderr_truncated;
+        let (text, truncated) = crate::git::format_output(operation, &stdout, truncated);
+        Ok(GitOutput { text, truncated })
+    }
+}
+
+/// How long the read-only Git operations may run before they are killed.
+const GIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Locate `git.exe` on `PATH` without running a shell.
+///
+/// Checked once per call rather than cached: the launcher is long-lived, and a user who
+/// installs Git while it is running should not have to restart it.
+fn git_program() -> Option<PathBuf> {
+    let path = std::env::var_os("PATH")?;
+    for directory in std::env::split_paths(&path) {
+        for name in ["git.exe", "git.cmd"] {
+            let candidate = directory.join(name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
+/// Decode a NUL-terminated UTF-16 buffer filled by the native shim.
+fn utf16_string(buffer: &[u16]) -> String {
+    let length = buffer
+        .iter()
+        .position(|&unit| unit == 0)
+        .unwrap_or(buffer.len());
+    String::from_utf16_lossy(&buffer[..length])
 }
 
 #[cfg(test)]

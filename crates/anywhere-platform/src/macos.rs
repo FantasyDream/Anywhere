@@ -2,7 +2,7 @@ use super::*;
 use anyhow::{bail, Context};
 use std::{
     ffi::{CStr, CString, OsStr},
-    io::{Read, Write},
+    io::Write,
     os::raw::c_char,
     path::PathBuf,
     process::{Command, Stdio},
@@ -27,10 +27,7 @@ extern "C" {
 /// Clipboard snapshots are bounded so a huge clipboard cannot stall activation.
 pub const MAX_CLIPBOARD_BYTES: usize = 1024 * 1024;
 /// Git output cap per stream; larger results are cut and reported as truncated.
-const MAX_GIT_BYTES: usize = 1024 * 1024;
 const GIT_TIMEOUT: Duration = Duration::from_secs(5);
-/// Upper bound on waiting for the pipes to close once the process is gone or killed.
-const READER_DRAIN_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Default)]
 pub struct MacOsPlatform;
@@ -203,57 +200,7 @@ impl Platform for MacOsPlatform {
         }
         let program = git_program().context("git is not installed")?;
         // Allowlisted argv only: no shell, no pager, no external helpers.
-        let mut args = vec![
-            OsStr::new("--no-pager"),
-            OsStr::new("-c"),
-            OsStr::new("core.fsmonitor=false"),
-            OsStr::new("-c"),
-            OsStr::new("pager.status=false"),
-            OsStr::new("-c"),
-            OsStr::new("pager.log=false"),
-            OsStr::new("-c"),
-            OsStr::new("pager.diff=false"),
-            OsStr::new("-c"),
-            OsStr::new("diff.external="),
-            OsStr::new("-c"),
-            OsStr::new("diff.textconv="),
-            OsStr::new("-C"),
-            repository.as_os_str(),
-        ];
-        match operation {
-            GitOperation::Status => {
-                args.extend([OsStr::new("status"), OsStr::new("--porcelain=v1")]);
-            }
-            GitOperation::Log => {
-                args.extend([
-                    OsStr::new("log"),
-                    OsStr::new("--oneline"),
-                    OsStr::new("--no-color"),
-                    OsStr::new("-n"),
-                    OsStr::new("100"),
-                ]);
-            }
-            GitOperation::Diff => {
-                args.extend([
-                    OsStr::new("diff"),
-                    OsStr::new("--no-color"),
-                    // Both helpers must be off. `--no-ext-diff` only covers external
-                    // diff drivers; a repository can also configure a textconv driver,
-                    // which git runs unless it is disabled explicitly.
-                    OsStr::new("--no-ext-diff"),
-                    OsStr::new("--no-textconv"),
-                ]);
-            }
-        }
-        let mut child = Command::new(&program)
-            .args(&args)
-            .env("LC_ALL", "en_US.UTF-8")
-            // Honour the selected repository, not an inherited one.
-            .env_remove("GIT_DIR")
-            .env_remove("GIT_WORK_TREE")
-            .env_remove("GIT_INDEX_FILE")
-            .env("GIT_OPTIONAL_LOCKS", "0")
-            .env("GIT_PAGER", "cat")
+        let mut child = crate::git::command(&program, repository, operation)
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -267,10 +214,10 @@ impl Platform for MacOsPlatform {
         let (stdout_tx, stdout_rx) = std::sync::mpsc::channel();
         let (stderr_tx, stderr_rx) = std::sync::mpsc::channel();
         std::thread::spawn(move || {
-            let _ = stdout_tx.send(read_bounded(stdout));
+            let _ = stdout_tx.send(crate::drain::read_bounded(stdout));
         });
         std::thread::spawn(move || {
-            let _ = stderr_tx.send(read_bounded(stderr));
+            let _ = stderr_tx.send(crate::drain::read_bounded(stderr));
         });
         let deadline = Instant::now() + GIT_TIMEOUT;
         let mut timed_out = false;
@@ -292,47 +239,40 @@ impl Platform for MacOsPlatform {
             // A killed child normally closes both pipes at once. If it does not — a
             // grandchild that inherited a pipe keeps it open — reading must not outlive the
             // deadline, so the wait is bounded and reported as the timeout this already is.
-            let _ = join_reader(stdout_rx, READER_DRAIN_TIMEOUT);
-            let _ = join_reader(stderr_rx, READER_DRAIN_TIMEOUT);
+            let _ = crate::drain::join(stdout_rx, crate::drain::DRAIN_TIMEOUT);
+            let _ = crate::drain::join(stderr_rx, crate::drain::DRAIN_TIMEOUT);
             bail!(
                 "git {} timed out after {}s; the repository may be very large",
                 operation.as_str(),
                 GIT_TIMEOUT.as_secs()
             );
         }
-        let (stdout, stdout_truncated) = match join_reader(stdout_rx, READER_DRAIN_TIMEOUT) {
-            ReaderOutcome::Drained(bytes, truncated) => (bytes, truncated),
-            ReaderOutcome::Stalled => bail!(
-                "git {} output did not close after the process exited",
-                operation.as_str()
-            ),
-            ReaderOutcome::Failed => bail!("could not read git {} output", operation.as_str()),
-        };
-        let (stderr, stderr_truncated) = match join_reader(stderr_rx, READER_DRAIN_TIMEOUT) {
-            ReaderOutcome::Drained(bytes, truncated) => (bytes, truncated),
-            ReaderOutcome::Stalled => bail!(
-                "git {} error output did not close after the process exited",
-                operation.as_str()
-            ),
-            ReaderOutcome::Failed => (Vec::new(), false),
-        };
+        let (stdout, stdout_truncated) =
+            match crate::drain::join(stdout_rx, crate::drain::DRAIN_TIMEOUT) {
+                crate::drain::ReaderOutcome::Drained(bytes, truncated) => (bytes, truncated),
+                crate::drain::ReaderOutcome::Stalled => bail!(
+                    "git {} output did not close after the process exited",
+                    operation.as_str()
+                ),
+                crate::drain::ReaderOutcome::Failed => {
+                    bail!("could not read git {} output", operation.as_str())
+                }
+            };
+        let (stderr, stderr_truncated) =
+            match crate::drain::join(stderr_rx, crate::drain::DRAIN_TIMEOUT) {
+                crate::drain::ReaderOutcome::Drained(bytes, truncated) => (bytes, truncated),
+                crate::drain::ReaderOutcome::Stalled => bail!(
+                    "git {} error output did not close after the process exited",
+                    operation.as_str()
+                ),
+                crate::drain::ReaderOutcome::Failed => (Vec::new(), false),
+            };
         if exit_status.is_some_and(|status| !status.success()) {
             let detail = String::from_utf8_lossy(&stderr);
             bail!("git {} failed: {}", operation.as_str(), detail.trim());
         }
-        let stdout = String::from_utf8_lossy(&stdout).into_owned();
-        let mut text = stdout.trim_end().to_owned();
-        if text.is_empty() {
-            text = match operation {
-                GitOperation::Status => "Working tree clean.".into(),
-                GitOperation::Log => "No commits yet.".into(),
-                GitOperation::Diff => "No unstaged changes.".into(),
-            };
-        }
         let truncated = stdout_truncated || stderr_truncated;
-        if truncated {
-            text.push_str("\n… output truncated");
-        }
+        let (text, truncated) = crate::git::format_output(operation, &stdout, truncated);
         Ok(GitOutput { text, truncated })
     }
 
@@ -391,56 +331,6 @@ fn git_program() -> Option<PathBuf> {
         }
     }
     None
-}
-
-/// Read at most `MAX_GIT_BYTES`, then keep draining so the child never blocks.
-fn read_bounded(mut reader: impl Read) -> std::io::Result<(Vec<u8>, bool)> {
-    let mut collected = Vec::new();
-    let mut buffer = [0u8; 16 * 1024];
-    let mut truncated = false;
-    loop {
-        let read = reader.read(&mut buffer)?;
-        if read == 0 {
-            return Ok((collected, truncated));
-        }
-        if collected.len() < MAX_GIT_BYTES {
-            let room = MAX_GIT_BYTES - collected.len();
-            collected.extend_from_slice(&buffer[..read.min(room)]);
-            if read > room {
-                truncated = true;
-            }
-        } else {
-            truncated = true;
-        }
-    }
-}
-
-/// Outcome of waiting for one pipe reader.
-enum ReaderOutcome {
-    /// The pipe reached EOF and the output is complete.
-    Drained(Vec<u8>, bool),
-    /// The reader was still blocked when the wait expired; the thread keeps draining in
-    /// the background, which is the only option for a blocking pipe read.
-    Stalled,
-    /// The read failed; the error is already logged at debug level.
-    Failed,
-}
-
-/// Wait for one pipe reader, giving up after `timeout` so a stuck pipe cannot hold the
-/// launcher open any longer than the Git deadline intends.
-fn join_reader(
-    rx: std::sync::mpsc::Receiver<std::io::Result<(Vec<u8>, bool)>>,
-    timeout: Duration,
-) -> ReaderOutcome {
-    match rx.recv_timeout(timeout) {
-        Ok(Ok((bytes, truncated))) => ReaderOutcome::Drained(bytes, truncated),
-        Ok(Err(error)) => {
-            tracing::debug!(error = %error, "git_output_read_failed");
-            ReaderOutcome::Failed
-        }
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => ReaderOutcome::Stalled,
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => ReaderOutcome::Failed,
-    }
 }
 
 fn require_directory(path: &Path) -> Result<()> {
@@ -515,33 +405,6 @@ mod tests {
         assert!(platform
             .open_directory(Path::new("/nonexistent-launcher-test"))
             .is_err());
-    }
-
-    /// A reader that produces a fixed number of bytes without ever blocking.
-    struct Fixed(usize);
-    impl Read for Fixed {
-        fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
-            let produce = self.0.min(buffer.len());
-            for byte in buffer.iter_mut().take(produce) {
-                *byte = b'x';
-            }
-            self.0 -= produce;
-            Ok(produce)
-        }
-    }
-
-    #[test]
-    fn bounded_reader_caps_output_but_keeps_draining_the_pipe() {
-        let (collected, truncated) = read_bounded(Fixed(MAX_GIT_BYTES + 4096)).unwrap();
-        assert_eq!(collected.len(), MAX_GIT_BYTES);
-        assert!(truncated, "over-cap output must be reported as truncated");
-        let (small, truncated) = read_bounded(Fixed(32)).unwrap();
-        assert_eq!(small.len(), 32);
-        assert!(!truncated);
-        // The reader is drained to EOF, so the child process can never block on a full pipe.
-        let mut exhausted = Fixed(0);
-        let mut buffer = [0u8; 8];
-        assert_eq!(exhausted.read(&mut buffer).unwrap(), 0);
     }
 
     #[test]

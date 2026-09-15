@@ -18,6 +18,7 @@ macOS 26.6.2 / Apple Silicon，Rust 1.98.1，Flutter `3.47.0-1.0.pre-1`（Engine
 | Flutter 组件测试 | `flutter test` | 通过：12 项 |
 | macOS Release 构建 | `scripts/build-macos.sh` | 通过，签名校验成功 |
 | 微基准 | `cargo run --release -p anywhere-core --example measure` | 见下表 |
+| Windows 类型检查 | `ANYWHERE_SKIP_NATIVE=1 cargo clippy --target x86_64-pc-windows-msvc -p anywhere-platform --all-targets -- -D warnings` | 通过（只含 Rust 侧；`native/windows.cpp` 需 Windows SDK，未编译） |
 
 测试数量相对 V0.1（17 项 Rust + 4 项组件）增长，覆盖统一 Provider、预算与 late Context、应用搜索、Scope/Availability、Git 执行边界和 v1 兼容性。
 
@@ -226,7 +227,7 @@ Safari (com.apple.Safari)       aliases=["Safari浏览器"]
 | F10 | 所有权（Current App）跨 Context 串味 | 已修复 | 所有权按 Context 计算，环境所有者独立推导，不再沿用循环中上一次的结果 |
 | F11 | `compact()` 只保留 ASCII，非拉丁输入被清空 | 已修复 | 改为 `char::is_alphanumeric`，中文/重音字符保留 |
 | F12 | Git 执行的两个边界：`textconv` 未被禁用；reader join 可能超出 deadline | 已修复 | 加入 `--no-textconv`；读取改为有界等待（`ReaderOutcome`），子进程被 kill 后若管道仍未关闭，超过 1s 即按超时返回，不再无限阻塞 |
-| F13 | Windows 上不产生「Git 未安装」以外的 Git 语义 | 接受并记录 | V0.2 约定 Windows 只保持 V0.1 行为（见 `docs/decisions/004-windows-and-renderer.md`）；Windows 的 `git_available()` 返回 false，Git 动作因此 Disabled 且不可执行。提示文案是 macOS 口径，Windows 实机验收时一并校正 |
+| F13 | Windows 上不产生「Git 未安装」以外的 Git 语义 | 已实现，待实机验收 | 三个新平台能力在 Windows 上补齐：开始菜单 `.lnk` 索引（`IShellLinkW` 取名称与目标，`ShellExecute` 启动）、`CF_UNICODETEXT` 剪贴板读取（64K 上限）、Git runner（与 macOS 共用 `git.rs` 的 argv 白名单与输出格式化，`git.exe` 从 `PATH` 查找）。`anywhere-platform` 的 Windows 目标在 macOS 上通过 `cargo check` 与 `clippy -D warnings`（`ANYWHERE_SKIP_NATIVE=1`，只检查 Rust 侧）；**C++ shim 未编译、Windows 未运行**，验收项 W19–W22 见 `docs/windows.md` |
 | F14 | matcher / ranking 计时边界不完全对应两个阶段 | 接受并记录 | `matcher_us` 覆盖动作匹配，`ranking_us` 覆盖去重、Scope 构建与排序——后者包含少量构建开销。两个名字都是规格要求且都有测量，未发现会误导排障的偏差 |
 
 ## 与规格的偏差（有意保留）

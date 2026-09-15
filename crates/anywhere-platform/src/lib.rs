@@ -35,6 +35,14 @@ pub enum GitOperation {
     Diff,
 }
 
+/// Shared bounded draining of a child process's pipes.
+pub(crate) mod drain;
+/// Shared Git argv and formatting, so both desktop platforms run the same command.
+pub mod git;
+/// Native shim declarations for the Windows platform.
+#[cfg(target_os = "windows")]
+mod windows_native;
+
 impl GitOperation {
     pub const ALL: [GitOperation; 3] = [Self::Status, Self::Log, Self::Diff];
 

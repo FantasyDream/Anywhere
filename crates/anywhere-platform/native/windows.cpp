@@ -156,3 +156,96 @@ extern "C" int32_t launcher_windows_copy(const wchar_t* text, uint32_t length) {
   DestroyWindow(owner);
   return hr;
 }
+
+/// One plain-text clipboard snapshot.
+///
+/// Returns S_OK with `length` set to the copied length, S_FALSE when the clipboard holds
+/// no text, and an error HRESULT otherwise. `capacity` bounds the copy so a huge clipboard
+/// cannot be pulled into the launcher at activation.
+extern "C" int32_t launcher_windows_clipboard_text(wchar_t* output, uint32_t capacity,
+                                                   uint32_t* length) {
+  if (!output || capacity == 0 || !length) return E_INVALIDARG;
+  *length = 0;
+  HWND owner = CreateWindowExW(0, L"STATIC", L"", 0, 0, 0, 0, 0, HWND_MESSAGE,
+                               nullptr, GetModuleHandleW(nullptr), nullptr);
+  if (!owner) return HRESULT_FROM_WIN32(GetLastError());
+  bool opened = false;
+  for (int attempt = 0; attempt < 5 && !opened; ++attempt) {
+    opened = OpenClipboard(owner) != FALSE;
+    if (!opened) Sleep(10);
+  }
+  HRESULT hr = S_FALSE;
+  if (opened) {
+    if (IsClipboardFormatAvailable(CF_UNICODETEXT)) {
+      HANDLE handle = GetClipboardData(CF_UNICODETEXT);
+      if (handle) {
+        const wchar_t* text = static_cast<const wchar_t*>(GlobalLock(handle));
+        if (text) {
+          const size_t available = wcslen(text);
+          const size_t copied = available < capacity - 1 ? available : capacity - 1;
+          memcpy(output, text, copied * sizeof(wchar_t));
+          output[copied] = L'\0';
+          *length = static_cast<uint32_t>(copied);
+          GlobalUnlock(handle);
+          hr = S_OK;
+        } else {
+          hr = HRESULT_FROM_WIN32(GetLastError());
+        }
+      }
+    }
+    CloseClipboard();
+  } else {
+    hr = HRESULT_FROM_WIN32(ERROR_BUSY);
+  }
+  DestroyWindow(owner);
+  return hr;
+}
+
+/// Resolve one Start Menu shortcut: its display name and its launch target.
+///
+/// The target is what the launcher starts and what the icon is read from; when a shortcut
+/// points at nothing resolvable (an advertised or MSI shortcut that has never been
+/// installed) the shell resolves it to the `.lnk` itself, which is still launchable, so the
+/// returned path is used directly rather than second-guessed.
+extern "C" int32_t launcher_windows_resolve_shortcut(const wchar_t* shortcut,
+                                                     wchar_t* name, uint32_t name_capacity,
+                                                     wchar_t* target, uint32_t target_capacity) {
+  if (!shortcut || !name || !target) return E_INVALIDARG;
+  name[0] = L'\0';
+  target[0] = L'\0';
+  ComScope com;
+  if (FAILED(com.result)) return com.result;
+  ComPtr<IShellLinkW> link;
+  HRESULT hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
+                                IID_PPV_ARGS(&link));
+  if (FAILED(hr)) return hr;
+  ComPtr<IPersistFile> file;
+  if (FAILED(hr = link.As(&file))) return hr;
+  if (FAILED(hr = file->Load(shortcut, STGM_READ))) return hr;
+
+  // `GetPath` with SLGP_RAWPATH returns the recorded target without any environment
+  // expansion, which is what launching and icon lookup need.
+  wchar_t resolved[MAX_PATH] = {};
+  WIN32_FIND_DATAW data{};
+  if (SUCCEEDED(link->GetPath(resolved, MAX_PATH, &data, SLGP_RAWPATH)) && resolved[0]) {
+    hr = copy_path(resolved, target, target_capacity);
+    if (FAILED(hr)) return hr;
+  } else {
+    hr = copy_path(shortcut, target, target_capacity);
+    if (FAILED(hr)) return hr;
+  }
+
+  // The description is what the shell shows for a shortcut whose file name is an
+  // implementation detail ("Google Chrome" is stored as `chrome.lnk`).
+  wchar_t description[INFOTIPSIZE] = {};
+  if (SUCCEEDED(link->GetDescription(description, INFOTIPSIZE)) && description[0]) {
+    return copy_path(description, name, name_capacity);
+  }
+  // Fall back to the file name without its extension.
+  std::wstring stem(shortcut);
+  const size_t slash = stem.find_last_of(L"\\/");
+  if (slash != std::wstring::npos) stem = stem.substr(slash + 1);
+  const size_t dot = stem.find_last_of(L'.');
+  if (dot != std::wstring::npos) stem = stem.substr(0, dot);
+  return copy_path(stem.c_str(), name, name_capacity);
+}

@@ -14,6 +14,9 @@ use std::sync::Arc;
 
 /// Root order also decides which duplicate installation wins.
 pub fn standard_roots(home: Option<&Path>) -> Vec<PathBuf> {
+    if cfg!(target_os = "windows") {
+        return windows_roots();
+    }
     let mut roots = Vec::new();
     if let Some(home) = home {
         roots.push(home.join("Applications"));
@@ -23,9 +26,50 @@ pub fn standard_roots(home: Option<&Path>) -> Vec<PathBuf> {
     roots
 }
 
+/// Start Menu locations, per-user first.
+///
+/// These are where the shell lists installed applications, and `%ProgramData%` covers the
+/// machine-wide installs. Roots that do not exist are skipped by the walk.
+#[cfg(target_os = "windows")]
+fn windows_roots() -> Vec<PathBuf> {
+    let mut roots = Vec::new();
+    if let Some(appdata) = std::env::var_os("APPDATA") {
+        roots.push(
+            PathBuf::from(appdata)
+                .join("Microsoft")
+                .join("Windows")
+                .join("Start Menu")
+                .join("Programs"),
+        );
+    }
+    if let Some(program_data) = std::env::var_os("ProgramData") {
+        roots.push(
+            PathBuf::from(program_data)
+                .join("Microsoft")
+                .join("Windows")
+                .join("Start Menu")
+                .join("Programs"),
+        );
+    }
+    roots
+}
+
+/// Windows builds without the Windows target have no Start Menu to read.
+#[cfg(not(target_os = "windows"))]
+fn windows_roots() -> Vec<PathBuf> {
+    Vec::new()
+}
+
 /// Depth is bounded so a pathological tree cannot stall the scan.
 const MAX_DEPTH: usize = 3;
 const MAX_APPS: usize = 4000;
+
+/// Extensions that mark one entry as an application.
+fn is_application_path(path: &Path) -> bool {
+    path.extension().is_some_and(|extension| {
+        extension == "app" || (cfg!(target_os = "windows") && extension == "lnk")
+    })
+}
 
 /// Find `.app` bundles without descending into them.
 pub fn discover_bundles(roots: &[PathBuf]) -> Vec<PathBuf> {
@@ -57,7 +101,7 @@ fn walk(directory: &Path, depth: usize, bundles: &mut Vec<PathBuf>) {
         if !path.is_dir() {
             continue;
         }
-        if path.extension().is_some_and(|extension| extension == "app") {
+        if is_application_path(&path) {
             bundles.push(path);
         } else {
             walk(&path, depth + 1, bundles);
