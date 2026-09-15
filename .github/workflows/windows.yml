@@ -57,7 +57,7 @@ jobs:
       - name: Upload Windows ZIP
         uses: actions/upload-artifact@v4
         with:
-          name: Context-Launcher-Windows-x64
-          path: build/Context-Launcher-Windows-x64.zip
+          name: Anywhere-Windows-x64
+          path: build/Anywhere-Windows-x64.zip
           if-no-files-found: error
           retention-days: 30

@@ -68,11 +68,11 @@ bool FlutterWindow::OnCreate() {
   tray_.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
   tray_.uCallbackMessage = kTrayMessage;
   tray_.hIcon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON));
-  wcscpy_s(tray_.szTip, L"Context Launcher");
+  wcscpy_s(tray_.szTip, L"Anywhere");
   if (!Shell_NotifyIconW(NIM_ADD, &tray_)) hotkey_error += " Tray icon unavailable.";
 
   channel_ = std::make_unique<flutter::MethodChannel<EncodableValue>>(
-      flutter_controller_->engine()->messenger(), "context_launcher/window",
+      flutter_controller_->engine()->messenger(), "anywhere/window",
       &flutter::StandardMethodCodec::GetInstance());
   channel_->SetMethodCallHandler([this, hotkey_error](const auto& call, auto result) {
     const auto& method = call.method_name();
@@ -82,7 +82,8 @@ bool FlutterWindow::OnCreate() {
       if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &local))) {
         result->Error("paths", "Cannot locate LocalAppData"); return;
       }
-      auto data = std::filesystem::path(local) / L"ContextLauncher";
+      // Same directory the host created at startup, including the one-time adoption.
+      auto data = std::filesystem::path(local) / L"Anywhere";
       CoTaskMemFree(local);
       wchar_t executable[32768] = {};
       GetModuleFileNameW(nullptr, executable, 32768);
@@ -194,8 +195,8 @@ LRESULT FlutterWindow::MessageHandler(HWND hwnd, UINT message, WPARAM wparam, LP
       POINT mouse{};
       GetCursorPos(&mouse);
       HMENU menu = CreatePopupMenu();
-      AppendMenuW(menu, MF_STRING, 1, L"Open Context Launcher  Ctrl+Alt+Space");
-      AppendMenuW(menu, MF_STRING, 2, L"Quit Context Launcher");
+      AppendMenuW(menu, MF_STRING, 1, L"Open Anywhere  Ctrl+Alt+Space");
+      AppendMenuW(menu, MF_STRING, 2, L"Quit Anywhere");
       SetForegroundWindow(hwnd);
       UINT command = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, mouse.x, mouse.y, 0, hwnd, nullptr);
       DestroyMenu(menu);

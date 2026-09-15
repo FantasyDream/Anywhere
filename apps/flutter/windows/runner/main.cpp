@@ -23,9 +23,16 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
 
   PWSTR local = nullptr;
   if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &local))) {
-    auto data = std::filesystem::path(local) / L"ContextLauncher";
-    CoTaskMemFree(local);
+    // Adopt the previous name once, so an existing usage history is kept.
+    auto data = std::filesystem::path(local) / L"Anywhere";
     std::error_code error;
+    if (!std::filesystem::exists(data)) {
+      auto previous = std::filesystem::path(local) / L"ContextLauncher";
+      if (std::filesystem::exists(previous)) {
+        std::filesystem::rename(previous, data, error);
+      }
+    }
+    CoTaskMemFree(local);
     std::filesystem::create_directories(data, error);
     if (!error) {
       FILE* log = nullptr;
@@ -48,7 +55,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   FlutterWindow window(project);
   Win32Window::Point origin(10, 10);
   Win32Window::Size size(648, 64);
-  if (!window.Create(L"Context Launcher", origin, size)) {
+  if (!window.Create(L"Anywhere", origin, size)) {
     return EXIT_FAILURE;
   }
   window.SetQuitOnClose(true);

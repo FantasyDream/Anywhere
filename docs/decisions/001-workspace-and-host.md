@@ -1,6 +1,6 @@
 # 001 — Workspace root and macOS build host
 
-The existing `Context-Aware-Launcher` directory is the workspace root; an extra
+The existing repository directory is the workspace root; an extra
 `context-launcher/` wrapper adds no boundary. Crates and app paths follow the plan.
 
 This host initially has only Xcode Command Line Tools, no full Xcode, Flutter or

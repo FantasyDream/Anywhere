@@ -1,4 +1,4 @@
 rust_input: crate::api
-rust_root: ../../crates/launcher-bridge-flutter/
+rust_root: ../../crates/anywhere-bridge-flutter/
 dart_output: lib/src/rust
 web: false

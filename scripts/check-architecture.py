@@ -6,7 +6,7 @@ import subprocess
 metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--locked', '--format-version=1']))
 packages = {package['id']: package for package in metadata['packages']}
 nodes = {node['id']: node for node in metadata['resolve']['nodes']}
-core = next(package['id'] for package in packages.values() if package['name'] == 'launcher-core')
+core = next(package['id'] for package in packages.values() if package['name'] == 'anywhere-core')
 visited = set()
 
 def walk(package_id):

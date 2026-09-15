@@ -8,7 +8,7 @@ import 'src/rust/frb_generated.dart';
 import 'src/rust/api.dart' as bridge;
 import 'launcher_screen.dart';
 
-const windowChannel = MethodChannel('context_launcher/window');
+const windowChannel = MethodChannel('anywhere/window');
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,8 +17,8 @@ Future<void> main() async {
     await RustLib.init(
       externalLibrary: ExternalLibrary.open(
         Platform.isWindows
-            ? '$executable/launcher_bridge_flutter.dll'
-            : '$executable/../Frameworks/liblauncher_bridge_flutter.dylib',
+            ? '$executable/anywhere_bridge_flutter.dll'
+            : '$executable/../Frameworks/libanywhere_bridge_flutter.dylib',
       ),
     );
     final paths = await windowChannel.invokeMapMethod<String, String>('paths');
@@ -36,8 +36,17 @@ Future<void> main() async {
           input: input,
           revision: revision,
         ),
-        execute: (session, action) =>
-            bridge.execute(sessionId: session, actionId: action),
+        execute: (session, revision, candidate) => bridge.execute(
+          sessionId: session,
+          revision: revision,
+          candidateId: candidate,
+        ),
+        waitForSnapshot: (session, afterSeq) => bridge.waitForSnapshot(
+          sessionId: session,
+          afterSeq: afterSeq,
+        ),
+        loadIcon: (candidate) =>
+            bridge.applicationIcon(candidateId: candidate),
         deactivate: (session) => bridge.deactivate(sessionId: session),
         window: windowChannel,
         startupMessage: paths['hotkeyError'] ?? '',

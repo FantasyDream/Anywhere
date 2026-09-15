@@ -20,17 +20,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var presentedGeneration: Int?
     var latestGeneration = 0
 
+    /// Application support directory for this app.
+    ///
+    /// On first launch under the new name the previous directory is adopted, so the
+    /// usage history and plugins a user already has are kept.
+    static func supportDirectory() -> URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let current = base.appendingPathComponent("Anywhere", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: current.path) {
+            let previous = base.appendingPathComponent("ContextLauncher", isDirectory: true)
+            if FileManager.default.fileExists(atPath: previous.path) {
+                try? FileManager.default.moveItem(at: previous, to: current)
+            }
+        }
+        try? FileManager.default.createDirectory(at: current, withIntermediateDirectories: true)
+        return current
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let logs = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("ContextLauncher", isDirectory: true)
-        try? FileManager.default.createDirectory(at: logs, withIntermediateDirectories: true)
+        let logs = Self.supportDirectory()
         freopen(logs.appendingPathComponent("launcher.log").path, "w", stderr)
         NSApp.setActivationPolicy(.accessory)
         controller = FlutterViewController(project: FlutterDartProject())
         controller.backgroundColor = .clear
         window = LauncherWindow(contentRect: NSRect(x: 0, y: 0, width: 648, height: 64),
                                 styleMask: [.borderless], backing: .buffered, defer: false)
-        window.title = "Context Launcher"
+        window.title = "Anywhere"
         let windowFrame = window.frame
         window.contentViewController = controller
         // Flutter's initial view is 0×0; preserve the requested window size when attaching it.
@@ -64,13 +79,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         mask.resizingMode = .stretch
         glass.maskImage = mask
         controller.view.addSubview(glass, positioned: .below, relativeTo: nil)
-        channel = FlutterMethodChannel(name: "context_launcher/window", binaryMessenger: controller.engine.binaryMessenger)
+        channel = FlutterMethodChannel(name: "anywhere/window", binaryMessenger: controller.engine.binaryMessenger)
         channel.setMethodCallHandler { [weak self] call, reply in
             guard let self else { return }
             switch call.method {
             case "paths":
-                let data = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-                    .appendingPathComponent("ContextLauncher", isDirectory: true)
+                let data = Self.supportDirectory()
                 reply(["data": data.path,
                        "plugins": Bundle.main.resourceURL!.appendingPathComponent("plugins", isDirectory: true).path,
                        "hotkeyError": self.hotKeyError ?? ""])
@@ -186,13 +200,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func installMenu() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "sparkle.magnifyingglass", accessibilityDescription: "Context Launcher")
+        statusItem.button?.image = NSImage(systemSymbolName: "sparkle.magnifyingglass", accessibilityDescription: "Anywhere")
         let menu = NSMenu()
-        let show = NSMenuItem(title: "Open Context Launcher  ⌘⌥Space", action: #selector(activate), keyEquivalent: "")
+        let show = NSMenuItem(title: "Open Anywhere  ⌘⌥Space", action: #selector(activate), keyEquivalent: "")
         show.target = self
         menu.addItem(show)
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Quit Context Launcher", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "Quit Anywhere", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
         menu.addItem(quit)
         statusItem.menu = menu

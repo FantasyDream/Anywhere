@@ -1,0 +1,20 @@
+[package]
+name = "anywhere-bridge-flutter"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+anywhere-core.workspace = true
+anywhere-protocol.workspace = true
+anywhere-platform.workspace = true
+anywhere-plugin.workspace = true
+anyhow.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+flutter_rust_bridge = "=2.11.1"
+

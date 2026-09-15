@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/foundation.dart';
@@ -10,7 +12,17 @@ typedef UpdateInput = Future<LauncherStateDto?> Function(
   String input,
   int revision,
 );
-typedef Execute = Future<ActionResultDto> Function(int session, String action);
+typedef Execute = Future<ActionResultDto> Function(
+  int session,
+  int revision,
+  String candidate,
+);
+typedef WaitForSnapshot = Future<LauncherStateDto?> Function(
+  int session,
+  int afterSeq,
+);
+/// Fetches an application icon on demand; presentation only.
+typedef LoadIcon = Future<Uint8List?> Function(String candidateId);
 
 class LauncherApp extends StatelessWidget {
   const LauncherApp({
@@ -20,6 +32,8 @@ class LauncherApp extends StatelessWidget {
     required this.execute,
     required this.deactivate,
     required this.window,
+    this.waitForSnapshot,
+    this.loadIcon,
     this.startupMessage = '',
   });
   final Activate activate;
@@ -27,12 +41,16 @@ class LauncherApp extends StatelessWidget {
   final Execute execute;
   final Future<void> Function(int) deactivate;
   final MethodChannel window;
+  /// Awaits late context. Absent in tests that only exercise the first snapshot.
+  final WaitForSnapshot? waitForSnapshot;
+  /// Loads application icons lazily. Absent in tests that do not need icons.
+  final LoadIcon? loadIcon;
   final String startupMessage;
 
   @override
   Widget build(BuildContext context) => MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'Context Launcher',
+        title: 'Anywhere',
         theme: ThemeData(
           brightness: Brightness.dark,
           useMaterial3: true,
@@ -51,6 +69,8 @@ class LauncherApp extends StatelessWidget {
           execute: execute,
           deactivate: deactivate,
           window: window,
+          waitForSnapshot: waitForSnapshot,
+          loadIcon: loadIcon,
           startupMessage: startupMessage,
         ),
       );
@@ -65,12 +85,16 @@ class LauncherScreen extends StatefulWidget {
     required this.deactivate,
     required this.window,
     required this.startupMessage,
+    this.waitForSnapshot,
+    this.loadIcon,
   });
   final Activate activate;
   final UpdateInput updateInput;
   final Execute execute;
   final Future<void> Function(int) deactivate;
   final MethodChannel window;
+  final WaitForSnapshot? waitForSnapshot;
+  final LoadIcon? loadIcon;
   final String startupMessage;
   @override
   State<LauncherScreen> createState() => _LauncherScreenState();
@@ -79,12 +103,31 @@ class LauncherScreen extends StatefulWidget {
 class _LauncherScreenState extends State<LauncherScreen> {
   static const _rowHeight = 52.0;
   static const _maxRows = 7;
+  static const _inputHeight = 64.0;
+  static const _scopeHeight = 32.0;
+  static const _headerHeight = 28.0;
+  static const _footerHeight = 32.0;
+  static const _emptyHeight = 54.0;
+  /// Context Home shows this many rows per scope; a query scrolls instead.
+  static const _homeLimit = 7;
   final _input = TextEditingController();
   final _focus = FocusNode();
   final _scroll = ScrollController();
   LauncherStateDto? _state;
-  int _selected = 0;
+  String _scopeId = 'all';
+  /// Stable candidate identity, not a list index, so late reranking cannot move it.
+  String? _selectedId;
+  /// True once the user moved the selection; the service then keeps their row.
+  bool _userMovedSelection = false;
   int _revision = 0;
+  /// Highest revision this window has asked for.
+  ///
+  /// A late snapshot carries the revision it was resolved for, so one from a previous
+  /// revision must never be displayed. The displayed state's own revision already
+  /// rejects that case; this states the intent directly and stays correct if the
+  /// displayed state is ever cleared while a request is outstanding. No test reaches
+  /// it as a distinct branch today, and it is not claimed as covered.
+  int _requestedRevision = 0;
   int _generation = 0;
   bool _visible = false;
   bool _activating = false;
@@ -92,10 +135,86 @@ class _LauncherScreenState extends State<LauncherScreen> {
   bool _executing = false;
   String? _message;
   String? _output;
+  /// Icon bytes for candidates that have one. Bounded so a long search cannot grow
+  /// unbounded.
+  static const _iconCacheLimit = 128;
+  final Map<String, Uint8List> _icons = {};
+  /// Candidate ids with an icon request in flight, so a frame does not ask twice.
+  final Set<String> _iconRequests = {};
+  /// Candidate ids that came back without an icon during the current query.
+  ///
+  /// Kept separate from `_icons` so an absence is never cached forever, and cleared
+  /// whenever the user changes the query or the scope: each of those gets one fresh
+  /// attempt, which covers a bridge that was still starting, while repeated rebuilds
+  /// of the same query cannot turn into a retry storm.
+  final Set<String> _iconFailures = {};
 
-  // Keep the last committed rows while resolving. Revision checks prevent their
-  // execution; only a committed result changes the native window's height.
-  List<ActionDto> get _actions => _state?.actions ?? [];
+  List<ScopeDto> get _scopes => _state?.scopes ?? const [];
+  ScopeDto? get _scope {
+    final scopes = _scopes;
+    for (final scope in scopes) {
+      if (scope.id == _scopeId) return scope;
+    }
+    return scopes.isEmpty ? null : scopes.first;
+  }
+
+  /// Candidates of the active scope, in the order the service ranked them.
+  /// Candidates of the active scope, ranked, as this view will show them.
+  ///
+  /// The service keeps every candidate so its scope id lists always resolve; Context
+  /// Home is where the top-N limit belongs, and it is applied per scope rather than to
+  /// the whole set, which is what used to leave a populated group rendering empty.
+  List<CandidateDto> get _visibleCandidates {
+    final state = _state;
+    if (state == null) return const [];
+    final scope = _scope;
+    final byId = <String, CandidateDto>{
+      for (final candidate in state.candidates) candidate.id: candidate,
+    };
+    final list = <CandidateDto>[];
+    final ids = scope?.candidateIds;
+    if (ids != null) {
+      for (final id in ids) {
+        final candidate = byId[id];
+        if (candidate != null && candidate.availability != 'hidden') {
+          list.add(candidate);
+        }
+      }
+    } else {
+      for (final candidate in state.candidates) {
+        if (candidate.availability != 'hidden') list.add(candidate);
+      }
+    }
+    // An empty input is Context Home, which shows a short list; a query scrolls.
+    final searching = (_state?.input ?? '').trim().isNotEmpty;
+    if (!searching && list.length > _homeLimit) {
+      return list.sublist(0, _homeLimit);
+    }
+    return list;
+  }
+
+  int get _selectedIndex {
+    final candidates = _visibleCandidates;
+    final id = _selectedId;
+    if (id != null) {
+      final index = candidates.indexWhere((candidate) => candidate.id == id);
+      if (index >= 0) return index;
+    }
+    return 0;
+  }
+
+  /// Why there is nothing to show, phrased so the user can act on it.
+  String get _emptyReason {
+    if (_resolving) return 'Searching…';
+    final state = _state;
+    if (state != null && !state.contextComplete) {
+      return 'Looking for actions in this context…';
+    }
+    final query = _input.text.trim();
+    if (query.isNotEmpty) return 'No actions or apps match “$query”';
+    return 'No actions for this context';
+  }
+
   String? get _notice =>
       _message ??
       ((_state?.diagnostics.isNotEmpty ?? false)
@@ -103,14 +222,27 @@ class _LauncherScreenState extends State<LauncherScreen> {
           : null);
   double get _previewHeight =>
       ((_output?.split('\n').length ?? 0).clamp(3, 14) * 20.0) + 24;
+  /// True when a session is open but there is nothing to list.
+  bool get _isEmpty =>
+      _output == null && _visibleCandidates.isEmpty && _state != null;
+
   double get _height {
+    final candidates = _visibleCandidates;
     final body = _output != null
         ? _previewHeight
-        : _actions.length.clamp(0, _maxRows) * _rowHeight + 8;
-    return (64.0 +
-            (_notice == null ? 0 : 44) +
-            (_output != null || _actions.isNotEmpty ? 62 + body : 0))
-        .clamp(64.0, 520.0);
+        : candidates.length.clamp(0, _maxRows) * _rowHeight + 8;
+    final scope = _scopes.length > 1 ? _scopeHeight : 0.0;
+    // A panel with zero rows used to collapse the window to a bare search bar, which
+    // said nothing about why it was empty. It now keeps a short explanation row.
+    final panel = _output != null
+        ? _headerHeight + body + _footerHeight + 2
+        : candidates.isNotEmpty
+            ? _headerHeight + body + _footerHeight + 2
+            : _isEmpty
+                ? _emptyHeight
+                : 0.0;
+    return (_inputHeight + scope + (_notice == null ? 0 : 44) + panel)
+        .clamp(_inputHeight, 520.0);
   }
 
   @override
@@ -141,6 +273,106 @@ class _LauncherScreenState extends State<LauncherScreen> {
     });
   }
 
+  /// Let the next snapshot try again for icons that failed.
+  void _resetIconFailures() {
+    if (_iconFailures.isNotEmpty) _iconFailures.clear();
+    _iconRequests.clear();
+  }
+
+  /// Fetch icons for the application rows that are about to be drawn.
+  ///
+  /// Failures leave the semantic glyph in place and never reorder or block rows.
+  void _requestIcons(List<CandidateDto> candidates) {
+    final load = widget.loadIcon;
+    if (load == null) return;
+    for (final candidate in candidates) {
+      if (candidate.kind != 'application') continue;
+      if (_icons.containsKey(candidate.id) ||
+          _iconFailures.contains(candidate.id) ||
+          _iconRequests.contains(candidate.id)) {
+        continue;
+      }
+      _iconRequests.add(candidate.id);
+      unawaited(() async {
+        Uint8List? bytes;
+        try {
+          bytes = await load(candidate.id);
+        } catch (_) {
+          bytes = null;
+        }
+        if (!mounted) return;
+        setState(() {
+          _iconRequests.remove(candidate.id);
+          if (bytes == null || bytes.isEmpty) {
+            _iconFailures.add(candidate.id);
+          } else {
+            _icons[candidate.id] = bytes;
+            _trimIcons();
+          }
+        });
+      }());
+    }
+  }
+
+  /// Evict the oldest entries once the cache is over its limit.
+  ///
+  /// Order is insertion order, so this is FIFO rather than LRU; that is enough
+  /// because rows do not change identity and every visible row is requested again
+  /// on the next snapshot.
+  void _trimIcons() {
+    while (_icons.length > _iconCacheLimit) {
+      _icons.remove(_icons.keys.first);
+    }
+  }
+
+  /// Choose the row to highlight after a snapshot is committed.
+  ///
+  /// Untouched selection follows the new first row; a user's choice survives late
+  /// enrichment and only falls back when their row really disappeared.
+  void _reconcileSelection(List<CandidateDto> candidates) {
+    final current = _selectedId;
+    if (!_userMovedSelection) {
+      _selectedId = candidates.isEmpty ? null : candidates.first.id;
+      return;
+    }
+    if (current != null &&
+        candidates.any((candidate) => candidate.id == current)) {
+      return;
+    }
+    _selectedId = candidates.isEmpty ? null : candidates.first.id;
+    _userMovedSelection = false;
+  }
+
+  /// Accept a committed snapshot, rejecting anything older than what we hold.
+  void _applyState(LauncherStateDto state, {required bool fromLateUpdate}) {
+    // Nothing older than what this window asked for may be displayed, and this window
+    // asked for at least the revision currently on screen.
+    if (state.revision < _requestedRevision) return;
+    final held = _state;
+    if (held != null && held.sessionId == state.sessionId) {
+      if (state.revision < held.revision) return;
+      if (state.revision == held.revision &&
+          state.snapshotSeq <= held.snapshotSeq) {
+        return;
+      }
+    }
+    _state = state;
+    _revision = state.revision;
+    if (_scopeId != 'all' &&
+        !state.scopes.any((scope) => scope.id == _scopeId)) {
+      _scopeId = 'all';
+    }
+    if (_scopeId == 'all' && state.scopes.isEmpty) {
+      _scopeId = 'all';
+    }
+    _reconcileSelection(_visibleCandidates);
+    _requestIcons(_visibleCandidates);
+    if (fromLateUpdate && _scroll.hasClients) {
+      // Keep the user's view stable; only ensure their row is visible.
+      _ensureSelectedVisible();
+    }
+  }
+
   Future<void> _activate() async {
     _activating = true;
     final generation = ++_generation;
@@ -152,11 +384,14 @@ class _LauncherScreenState extends State<LauncherScreen> {
       }
       _input.clear();
       setState(() {
-        _state = state;
-        _revision = state.revision;
-        _selected = 0;
+        _state = null;
+        _selectedId = null;
+        _userMovedSelection = false;
+        _scopeId = 'all';
+        _requestedRevision = state.revision;
         _message = widget.startupMessage.isEmpty ? null : widget.startupMessage;
         _output = null;
+        _applyState(state, fromLateUpdate: false);
         _visible = true;
         _resolving = false;
         _executing = false;
@@ -165,6 +400,8 @@ class _LauncherScreenState extends State<LauncherScreen> {
       await _syncWindow(show: true);
       if (mounted && _visible && generation == _generation) {
         _focus.requestFocus();
+        unawaited(
+            _followLateContext(generation, state.sessionId, state.snapshotSeq));
       }
     } catch (error) {
       if (mounted && generation == _generation) {
@@ -182,6 +419,25 @@ class _LauncherScreenState extends State<LauncherScreen> {
     }
   }
 
+  /// Await context published after the first snapshot and fold it in.
+  Future<void> _followLateContext(
+      int generation, int session, int sequence) async {
+    final wait = widget.waitForSnapshot;
+    if (wait == null) return;
+    if (_state?.contextComplete ?? true) return;
+    var lastSeq = sequence;
+    while (mounted && _visible && generation == _generation) {
+      final next = await wait(session, lastSeq);
+      if (!mounted || !_visible || generation != _generation) return;
+      if (next == null || next.sessionId != session) return;
+      if (next.snapshotSeq <= lastSeq) return;
+      lastSeq = next.snapshotSeq;
+      setState(() => _applyState(next, fromLateUpdate: true));
+      await _syncWindow();
+      if (next.contextComplete) return;
+    }
+  }
+
   Future<void> _hide({bool hostAlreadyHidden = false}) async {
     final generation = _generation;
     final session = _state?.sessionId;
@@ -194,8 +450,14 @@ class _LauncherScreenState extends State<LauncherScreen> {
       _resolving = false;
       _executing = false;
       _state = null;
+      _selectedId = null;
+      _userMovedSelection = false;
+      _scopeId = 'all';
       _output = null;
       _message = null;
+      _icons.clear();
+      _iconRequests.clear();
+      _iconFailures.clear();
     });
     final invalidation =
         session == null ? Future<void>.value() : widget.deactivate(session);
@@ -210,13 +472,15 @@ class _LauncherScreenState extends State<LauncherScreen> {
     final session = _state?.sessionId;
     if (session == null || !_visible) return;
     final revision = ++_revision;
+    _requestedRevision = revision;
     final generation = _generation;
     setState(() {
       _resolving = true;
       _executing = false;
       _output = null;
       _message = null;
-      _selected = 0;
+      _userMovedSelection = false;
+      _resetIconFailures();
     });
     try {
       final state = await widget.updateInput(session, input, revision);
@@ -230,11 +494,14 @@ class _LauncherScreenState extends State<LauncherScreen> {
         return;
       }
       setState(() {
-        _state = state;
+        _selectedId = null;
+        _scopeId = 'all';
+        _applyState(state, fromLateUpdate: false);
         _resolving = false;
       });
       if (_scroll.hasClients) _scroll.jumpTo(0);
       await _syncWindow();
+      _followLateContext(generation, session, state.snapshotSeq);
     } catch (error) {
       if (mounted &&
           _visible &&
@@ -251,20 +518,27 @@ class _LauncherScreenState extends State<LauncherScreen> {
 
   Future<void> _execute() async {
     final state = _state;
+    final candidates = _visibleCandidates;
     if (state == null ||
-        _actions.isEmpty ||
+        candidates.isEmpty ||
         _resolving ||
         _executing ||
         !_visible ||
         state.revision != _revision) {
       return;
     }
+    final candidate = candidates[_selectedIndex];
+    if (candidate.availability != 'enabled') {
+      setState(() => _message = candidate.availabilityReason ??
+          'This action is not available right now.');
+      await _syncWindow();
+      return;
+    }
     final generation = _generation;
     final revision = _revision;
     setState(() => _executing = true);
     try {
-      final result =
-          await widget.execute(state.sessionId, _actions[_selected].id);
+      final result = await widget.execute(state.sessionId, revision, candidate.id);
       if (!mounted ||
           !_visible ||
           generation != _generation ||
@@ -298,15 +572,42 @@ class _LauncherScreenState extends State<LauncherScreen> {
   }
 
   void _move(int direction) {
-    if (_resolving || _actions.isEmpty) return;
+    final candidates = _visibleCandidates;
+    if (_resolving || candidates.isEmpty) return;
+    final next = (_selectedIndex + direction) % candidates.length;
     setState(() {
-      _selected = (_selected + direction) % _actions.length;
+      _selectedId = candidates[next].id;
+      _userMovedSelection = true;
       _output = null;
     });
     _syncWindow();
+    _ensureSelectedVisible();
+  }
+
+  /// Option/Alt + arrows cycle scopes; plain arrows stay with the text caret.
+  void _cycleScope(int direction) {
+    final scopes = _scopes;
+    if (scopes.length < 2) return;
+    final index = scopes.indexWhere((scope) => scope.id == _scopeId);
+    final base = index < 0 ? 0 : index;
+    final next = (base + direction + scopes.length) % scopes.length;
+    setState(() {
+      _scopeId = scopes[next].id;
+      _output = null;
+      _userMovedSelection = false;
+      _resetIconFailures();
+    });
+    _reconcileSelection(_visibleCandidates);
+    _requestIcons(_visibleCandidates);
+    _ensureSelectedVisible();
+    _syncWindow();
+  }
+
+  void _ensureSelectedVisible() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_visible || !_scroll.hasClients) return;
-      final top = _selected * _rowHeight;
+      final index = _selectedIndex;
+      final top = index * _rowHeight;
       final bottom = top + _rowHeight;
       if (top < _scroll.offset) _scroll.jumpTo(top);
       if (bottom > _scroll.offset + _scroll.position.viewportDimension) {
@@ -322,12 +623,18 @@ class _LauncherScreenState extends State<LauncherScreen> {
     }
     // Leave candidate selection to the input method until composition has finished.
     if (!_input.value.composing.isCollapsed) return KeyEventResult.ignored;
+    final scopeSwitch = HardwareKeyboard.instance.isAltPressed ||
+        HardwareKeyboard.instance.isMetaPressed;
     if (event.logicalKey == LogicalKeyboardKey.escape) {
       _hide();
     } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
       _move(1);
     } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
       _move(-1);
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft && scopeSwitch) {
+      _cycleScope(-1);
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowRight && scopeSwitch) {
+      _cycleScope(1);
     } else if (event.logicalKey == LogicalKeyboardKey.enter ||
         event.logicalKey == LogicalKeyboardKey.numpadEnter) {
       _execute();
@@ -349,10 +656,10 @@ class _LauncherScreenState extends State<LauncherScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final actions = _actions;
-    final hasPanel = _output != null || actions.isNotEmpty;
-    final labels =
-        (_state?.contexts ?? []).map((c) => c.label).toSet().join(' · ');
+    final candidates = _visibleCandidates;
+    final hasPanel = _output != null || candidates.isNotEmpty;
+    final contexts = (_state?.contexts ?? []);
+    final labels = contexts.map((c) => c.label).toSet().join(' · ');
     return Align(
       alignment: Alignment.topCenter,
       child: SizedBox(
@@ -371,7 +678,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
             onKeyEvent: _onKey,
             child: Column(children: [
               SizedBox(
-                height: 64,
+                height: _inputHeight,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   child: Row(children: [
@@ -387,7 +694,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
                           fontSize: 18, color: Color(0xfff7f8fc)),
                       cursorColor: const Color(0xffd5d7df),
                       decoration: const InputDecoration(
-                        hintText: 'Search for an action…',
+                        hintText: 'Search for an action or app…',
                         hintStyle: TextStyle(
                             color: Color(0xffc2c7d2),
                             fontWeight: FontWeight.w400),
@@ -408,6 +715,9 @@ class _LauncherScreenState extends State<LauncherScreen> {
                   ]),
                 ),
               ),
+              // A single scope is not a choice: hide the bar when there is nothing
+                // to switch between, which is exactly the empty case.
+                if (_scopes.length > 1) _scopeBar(),
               if (_notice != null)
                 SizedBox(
                     height: 44,
@@ -425,11 +735,13 @@ class _LauncherScreenState extends State<LauncherScreen> {
                                     fontSize: 11, color: Color(0xffe3bc83))),
                           )),
                     )),
+              if (_isEmpty && _output == null)
+                SizedBox(height: _emptyHeight, child: _emptyState()),
               if (hasPanel) ...[
                 const Divider(
                     height: 1, thickness: 1, color: Color(0x24ffffff)),
                 SizedBox(
-                    height: 28,
+                    height: _headerHeight,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 18),
                       child: Row(children: [
@@ -466,14 +778,14 @@ class _LauncherScreenState extends State<LauncherScreen> {
                             controller: _scroll,
                             padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
                             itemExtent: _rowHeight,
-                            itemCount: actions.length,
+                            itemCount: candidates.length,
                             itemBuilder: (context, index) =>
-                                _actionRow(actions[index], index),
+                                _candidateRow(candidates[index], index),
                           )),
                 const Divider(
                     height: 1, thickness: 1, color: Color(0x24ffffff)),
                 SizedBox(
-                    height: 32,
+                    height: _footerHeight,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Row(children: [
@@ -482,12 +794,12 @@ class _LauncherScreenState extends State<LauncherScreen> {
                         const SizedBox(width: 6),
                         Text(
                             _output == null
-                                ? '${actions.length} actions'
-                                : 'JSON',
+                                ? '${candidates.length} results'
+                                : 'Result',
                             style: const TextStyle(
                                 fontSize: 11, color: Color(0xffc2c7d2))),
                         const Spacer(),
-                        Text(_output == null ? 'Run action' : 'Back to actions',
+                        Text(_output == null ? 'Run' : 'Back to results',
                             style: const TextStyle(
                                 fontSize: 11, color: Color(0xffd0d6e1))),
                         const SizedBox(width: 8),
@@ -502,8 +814,76 @@ class _LauncherScreenState extends State<LauncherScreen> {
     );
   }
 
-  Widget _actionRow(ActionDto action, int index) {
-    final selected = index == _selected;
+  Widget _emptyState() => Padding(
+        key: const Key('empty-state'),
+        padding: const EdgeInsets.symmetric(horizontal: 20),
+        child: Row(children: [
+          Icon(
+              _state?.contextComplete ?? true
+                  ? Icons.search_off_rounded
+                  : Icons.hourglass_empty_rounded,
+              size: 16,
+              color: const Color(0xff9aa0ad)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(_emptyReason,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, color: Color(0xffc2c7d2))),
+          ),
+        ]),
+      );
+
+  Widget _scopeBar() {
+    final scopes = _scopes;
+    final active = _scope?.id;
+    return SizedBox(
+      height: _scopeHeight,
+      child: ListView(
+        key: const Key('scope-bar'),
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 14),
+        children: [
+          for (final scope in scopes)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+              child: _scopeChip(scope, scope.id == active),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _scopeChip(ScopeDto scope, bool selected) => Material(
+        color: selected ? const Color(0x59a7b4cb) : Colors.transparent,
+        borderRadius: BorderRadius.circular(6),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(6),
+          onTap: () {
+            setState(() {
+              _scopeId = scope.id;
+              _output = null;
+              _userMovedSelection = false;
+              _resetIconFailures();
+            });
+            _reconcileSelection(_visibleCandidates);
+            _requestIcons(_visibleCandidates);
+            _syncWindow();
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            child: Text(scope.label,
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                    color: const Color(0xffdbe0ea))),
+          ),
+        ),
+      );
+
+  Widget _candidateRow(CandidateDto candidate, int index) {
+    final selected = index == _selectedIndex;
+    final disabled = candidate.availability != 'enabled';
     return Semantics(
       selected: selected,
       button: true,
@@ -514,7 +894,10 @@ class _LauncherScreenState extends State<LauncherScreen> {
           borderRadius: BorderRadius.circular(7),
           onTap: () {
             if (_resolving) return;
-            setState(() => _selected = index);
+            setState(() {
+              _selectedId = candidate.id;
+              _userMovedSelection = true;
+            });
             _execute();
           },
           child: Padding(
@@ -524,34 +907,45 @@ class _LauncherScreenState extends State<LauncherScreen> {
                   width: 30,
                   height: 30,
                   decoration: BoxDecoration(
-                      color: const Color(0x4d454955),
+                      // Only the fallback glyph needs a plate: a real icon is opaque.
+                      color: _icons.containsKey(candidate.id)
+                          ? Colors.transparent
+                          : const Color(0x4d454955),
                       borderRadius: BorderRadius.circular(7)),
-                  child: Icon(_icon(action.iconKey),
-                      size: 17, color: const Color(0xffcad0de))),
+                  clipBehavior: Clip.antiAlias,
+                  child: _iconFor(candidate, disabled)),
               const SizedBox(width: 12),
               Expanded(
                   child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(action.title,
+                  Text(candidate.title,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
-                          color: Color(0xffebebef))),
-                  if (action.subtitle != null)
-                    Text(action.subtitle!,
+                          color: disabled
+                              ? const Color(0xff9aa0ad)
+                              : const Color(0xffebebef))),
+                  if (candidate.subtitle != null || disabled)
+                    Text(
+                        disabled
+                            ? (candidate.availabilityReason ??
+                                'Not available right now')
+                            : candidate.subtitle!,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 11,
                             height: 1.5,
-                            color: Color(0xffd0d6e1))),
+                            color: disabled
+                                ? const Color(0xffc9a26b)
+                                : const Color(0xffd0d6e1))),
                 ],
               )),
-              if (selected) ...[
+              if (selected && !disabled) ...[
                 const SizedBox(width: 12),
                 const Icon(Icons.keyboard_return_rounded,
                     size: 16, color: Color(0xffa8abb7)),
@@ -562,6 +956,28 @@ class _LauncherScreenState extends State<LauncherScreen> {
       ),
     );
   }
+
+  /// Real application icon when available, semantic glyph otherwise.
+  Widget _iconFor(CandidateDto candidate, bool disabled) {
+    final bytes = _icons[candidate.id];
+    if (bytes != null) {
+      // `cover` fills the slot the way the system's own icon renderer does. `contain`
+      // letterboxes, which showed up as a transparent frame around the artwork.
+      return Image.memory(bytes,
+          width: 30,
+          height: 30,
+          fit: BoxFit.cover,
+          gaplessPlayback: true,
+          errorBuilder: (_, __, ___) => _glyph(candidate, disabled));
+    }
+    return _glyph(candidate, disabled);
+  }
+
+  Widget _glyph(CandidateDto candidate, bool disabled) => Icon(
+        _icon(candidate),
+        size: 17,
+        color: disabled ? const Color(0xff8a8f9c) : const Color(0xffcad0de),
+      );
 
   Widget _keycap(String label) => Container(
         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
@@ -574,14 +990,18 @@ class _LauncherScreenState extends State<LauncherScreen> {
                 fontSize: 10, height: 1.1, color: Color(0xffd0d6e1))),
       );
 
-  IconData _icon(String key) => switch (key) {
-        'terminal' => Icons.terminal_rounded,
-        'folder' => Icons.folder_open_rounded,
-        'file' => Icons.insert_drive_file_outlined,
-        'copy' => Icons.content_copy_rounded,
-        'globe' => Icons.language_rounded,
-        'code' => Icons.data_object_rounded,
-        'search' => Icons.search_rounded,
-        _ => Icons.bolt_rounded,
-      };
+  IconData _icon(CandidateDto candidate) {
+    if (candidate.kind == 'application') return Icons.apps_rounded;
+    return switch (candidate.iconKey) {
+      'terminal' => Icons.terminal_rounded,
+      'folder' => Icons.folder_open_rounded,
+      'file' => Icons.insert_drive_file_outlined,
+      'copy' => Icons.content_copy_rounded,
+      'globe' => Icons.language_rounded,
+      'code' => Icons.data_object_rounded,
+      'search' => Icons.search_rounded,
+      'git' => Icons.account_tree_outlined,
+      _ => Icons.bolt_rounded,
+    };
+  }
 }

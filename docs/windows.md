@@ -1,12 +1,12 @@
 # Windows x64 交付与人工验证
 
-**状态：Windows x64 已由 GitHub Actions 成功编译并生成 ZIP；尚未进行 Windows 实机运行验收。** 仓库为 [FantasyDream/Context-Aware-Launcher](https://github.com/FantasyDream/Context-Aware-Launcher)，保持私有。[成功构建记录](https://github.com/FantasyDream/Context-Aware-Launcher/actions/runs/34870418394) 对应提交 `e82a5ec`。构建成功不代表人工 case 通过。
+**状态：Windows x64 已由 GitHub Actions 成功编译并生成 ZIP；尚未进行 Windows 实机运行验收。** 仓库为 [FantasyDream/Anywhere](https://github.com/FantasyDream/Anywhere)，保持私有。[成功构建记录](https://github.com/FantasyDream/Anywhere/actions/runs/34870418394) 对应提交 `e82a5ec`。构建成功不代表人工 case 通过。
 
 ## GitHub Actions 下载
 
-打开 [Package Windows x64](https://github.com/FantasyDream/Context-Aware-Launcher/actions/workflows/windows.yml)，选择成功的运行，在 Artifacts 下载 `Context-Launcher-Windows-x64`。私有仓库需要登录有访问权限的 GitHub 账户。
+打开 [Package Windows x64](https://github.com/FantasyDream/Anywhere/actions/workflows/windows.yml)，选择成功的运行，在 Artifacts 下载 `Context-Launcher-Windows-x64`。私有仓库需要登录有访问权限的 GitHub 账户。
 
-本次 [Windows x64 产物](https://github.com/FantasyDream/Context-Aware-Launcher/actions/runs/34870418394/artifacts/10359256591) 下载后，解压其中的 `Context-Launcher-Windows-x64.zip`，运行 `context_launcher.exe`。
+本次 [Windows x64 产物](https://github.com/FantasyDream/Anywhere/actions/runs/34870418394/artifacts/10359256591) 下载后，解压其中的 `Context-Launcher-Windows-x64.zip`，运行 `context_launcher.exe`。
 
 相关源码推送到 main 会自动构建，也可以选择 Run workflow 手动打包。工作流只编译打包，不运行测试；产物保留 30 天。不要把构建成功标记为全部人工 case 通过。
 
@@ -24,7 +24,7 @@
 
 ```text
 build\Context-Launcher-Windows-x64.zip
-apps\flutter\build\windows\x64\runner\Release\context_launcher.exe
+apps\flutter\build\windows\x64\runner\Release\anywhere.exe
 ```
 
 打包包含 Flutter 引擎、Dart 数据、Rust DLL、Google 插件及可用的 Visual C++ 运行库。分发整个 ZIP，不能只复制 EXE。第一次构建如失败，提供首个错误及前后日志，不能将其标记为可用版本。
@@ -36,16 +36,16 @@ apps\flutter\build\windows\x64\runner\Release\context_launcher.exe
 - Open Terminal Here 打开 PowerShell 并切换到目标目录；Reveal in File Manager 定位并选中文件。打开 URL/文件使用系统默认程序，复制使用 CF_UNICODETEXT。
 - 非空输入仅显示该输入的动作，清空后恢复本 Session 的环境快照；每次唤醒是新 Session。
 - Windows 字体为 Segoe UI；Windows 11 请求系统圆角/背景材质，旧版系统使用深色底色。具体渲染效果、资源管理器标签页识别均待实机确认。
-- 数据、插件、日志分别在 `%LOCALAPPDATA%\ContextLauncher\usage.sqlite3`、`plugins`、`launcher.log`。日志每次启动覆盖，故障后先留存。
+- 数据、插件、日志分别在 `%LOCALAPPDATA%\Anywhere\usage.sqlite3`、`plugins`、`launcher.log`。日志每次启动覆盖，故障后先留存。
 
 ## 人工 case
 
 所有项目初始均为「未测」。先在 PowerShell 准备专用数据：
 
 ```powershell
-$caseRoot = Join-Path $env:TEMP 'ContextLauncher-Manual'
+$caseRoot = Join-Path $env:TEMP 'Anywhere-Manual'
 New-Item -ItemType Directory -Force (Join-Path $caseRoot '目录 A'), (Join-Path $caseRoot '目录 B') | Out-Null
-Set-Content -LiteralPath (Join-Path $caseRoot '目录 A\hello world.txt') -Value 'Context Launcher manual validation 中文' -Encoding utf8
+Set-Content -LiteralPath (Join-Path $caseRoot '目录 A\hello world.txt') -Value 'Anywhere manual validation 中文' -Encoding utf8
 $caseRoot
 ```
 

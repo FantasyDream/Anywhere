@@ -9,7 +9,7 @@ Push-Location $repo
 try {
     & rustup target add x86_64-pc-windows-msvc
     if ($LASTEXITCODE -ne 0) { throw 'Installing the Rust Windows target failed.' }
-    & cargo build --locked --release --target x86_64-pc-windows-msvc -p launcher-bridge-flutter
+    & cargo build --locked --release --target x86_64-pc-windows-msvc -p anywhere-bridge-flutter
     if ($LASTEXITCODE -ne 0) { throw 'Rust build failed.' }
     Push-Location apps/flutter
     try {
@@ -19,9 +19,9 @@ try {
         if ($LASTEXITCODE -ne 0) { throw 'Flutter Windows build failed.' }
     } finally { Pop-Location }
     $bundle = Join-Path $repo 'apps/flutter/build/windows/x64/runner/Release'
-    $archive = Join-Path $repo 'build/Context-Launcher-Windows-x64.zip'
+    $archive = Join-Path $repo 'build/Anywhere-Windows-x64.zip'
     New-Item -ItemType Directory -Force (Split-Path $archive) | Out-Null
     Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath $archive -Force
     Write-Host "Built $archive"
-    Write-Host 'Extract the entire ZIP and run context_launcher.exe; keep DLLs and data beside it.'
+    Write-Host 'Extract the entire ZIP and run anywhere.exe; keep DLLs and data beside it.'
 } finally { Pop-Location }

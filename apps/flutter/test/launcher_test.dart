@@ -2,32 +2,70 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:context_launcher/launcher_screen.dart';
-import 'package:context_launcher/src/rust/api.dart';
+import 'package:anywhere/launcher_screen.dart';
+import 'package:anywhere/src/rust/api.dart';
 
-LauncherStateDto state(int revision, String title) => LauncherStateDto(
-      sessionId: 1,
-      revision: revision,
-      input: '',
-      contexts: [],
-      diagnostics: [],
-      actions: [
-        ActionDto(
-            id: 'first-$revision',
-            commandId: 'first',
-            title: title,
-            subtitle: 'from Rust',
-            iconKey: 'file',
-            score: 100),
-        ActionDto(
-            id: 'second-$revision',
-            commandId: 'second',
-            title: 'Second action',
-            subtitle: null,
-            iconKey: 'copy',
-            score: 90),
-      ],
+/// Two action candidates with the documented stable ids.
+CandidateDto candidate(
+  String id,
+  String title, {
+  String kind = 'action',
+  String availability = 'enabled',
+  String? reason,
+  String iconKey = 'file',
+  String groupId = 'folder',
+  double score = 100,
+}) =>
+    CandidateDto(
+      id: id,
+      kind: kind,
+      title: title,
+      subtitle: 'from Rust',
+      iconKey: iconKey,
+      score: score,
+      groupId: groupId,
+      availability: availability,
+      availabilityReason: reason,
+      commandId: kind == 'action' ? id.split(':')[1] : null,
+      bundleId: kind == 'application' ? 'com.example.${id.split(':')[1]}' : null,
     );
+
+LauncherStateDto state(
+  int revision,
+  String title, {
+  int snapshotSeq = 1,
+  bool contextComplete = true,
+  String input = '',
+}) {
+  final first = candidate('action:first:c1', title);
+  final second = candidate('action:second:c1', 'Second action', iconKey: 'copy');
+  return LauncherStateDto(
+    sessionId: 1,
+    revision: revision,
+    snapshotSeq: snapshotSeq,
+    input: input,
+    contextComplete: contextComplete,
+    contexts: [],
+    candidates: [first, second],
+    scopes: [
+      ScopeDto(id: 'all', kind: 'all', label: 'All', candidateIds: [first.id, second.id]),
+    ],
+    diagnostics: [],
+  );
+}
+
+/// Smallest valid PNG (1x1, transparent) so `Image.memory` has real bytes.
+const _onePixelPng = <int>[
+  0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, //
+  0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
+  0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+  0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
+  0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
+  0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+  0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
+  0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
+  0x42, 0x60, 0x82,
+];
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -73,38 +111,52 @@ void main() {
       (windowMessages.lastWhere((call) => call.method == 'show').arguments
           as Map)['generation'] as int;
 
-  LauncherStateDto sizedState(int revision, int count) {
-    final sample = state(revision, 'Action');
+  LauncherStateDto sizedState(int revision, int count,
+      {String scopeFilter = '', String input = ''}) {
+    final candidates = List.generate(
+        count,
+        (i) => candidate('action:command.$i:$scopeFilter',
+            scopeFilter.isEmpty ? 'Action $i' : '$scopeFilter $i',
+            score: 100.0 - i));
     return LauncherStateDto(
-        sessionId: 1,
-        revision: revision,
-        input: '',
-        contexts: [],
-        diagnostics: [],
-        actions: List.generate(
-            count,
-            (i) => ActionDto(
-                id: '$i-$revision',
-                commandId: 'command.$i',
-                title: 'Action $i',
-                subtitle: sample.actions[0].subtitle,
-                iconKey: 'file',
-                score: 100.0 - i)));
+      sessionId: 1,
+      revision: revision,
+      snapshotSeq: 1,
+      input: input,
+      contextComplete: true,
+      contexts: [],
+      candidates: candidates,
+      scopes: [
+        ScopeDto(
+            id: 'all',
+            kind: 'all',
+            label: 'All',
+            candidateIds: candidates.map((c) => c.id).toList()),
+      ],
+      diagnostics: [],
+    );
   }
 
   testWidgets(
-      'empty results collapse and result rows grow up to a scrollable maximum',
+      'empty results collapse and candidate rows grow up to a scrollable maximum',
       (tester) async {
     await tester.pumpWidget(LauncherApp(
         window: channel,
         activate: () async => sizedState(0, 0),
         updateInput: (_, input, revision) async =>
-            sizedState(revision, int.parse(input)),
-        execute: (_, action) async => throw StateError('not invoked'),
+            sizedState(revision, int.parse(input), input: input),
+        execute: (_, revision, candidate) async =>
+            throw StateError('not invoked'),
         deactivate: (_) async {}));
     await toggle(tester);
     expect(find.byKey(const Key('action-list')), findsNothing);
-    expect(tester.getSize(find.byKey(const Key('launcher-panel'))).height, 64);
+    // An empty result is still a panel: it explains itself instead of collapsing to a
+    // bare search bar with nothing to read.
+    expect(find.byKey(const Key('empty-state')), findsOneWidget);
+    expect(find.textContaining('No actions'), findsOneWidget);
+    final emptyHeight =
+        tester.getSize(find.byKey(const Key('launcher-panel'))).height;
+    expect(emptyHeight, greaterThan(64));
     await tester.enterText(find.byType(TextField), '2');
     await tester.pumpAndSettle();
     final twoRows =
@@ -123,7 +175,54 @@ void main() {
     await tester.enterText(find.byType(TextField), '0');
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('action-list')), findsNothing);
-    expect(tester.getSize(find.byKey(const Key('launcher-panel'))).height, 64);
+    expect(find.byKey(const Key('empty-state')), findsOneWidget);
+    expect(
+        tester.getSize(find.byKey(const Key('launcher-panel'))).height,
+        emptyHeight);
+  });
+
+  testWidgets('an empty search says so instead of showing a bare bar',
+      (tester) async {
+    await tester.pumpWidget(LauncherApp(
+        window: channel,
+        activate: () async => sizedState(0, 0),
+        updateInput: (_, input, revision) async => sizedState(revision, 0),
+        execute: (_, revision, candidate) async =>
+            throw StateError('not invoked'),
+        deactivate: (_) async {}));
+    await toggle(tester);
+    // Context Home with nothing to offer.
+    expect(find.text('No actions for this context'), findsOneWidget);
+    // A query that matches nothing names the query, so the user knows what failed.
+    await tester.enterText(find.byType(TextField), 'zzz');
+    await tester.pumpAndSettle();
+    expect(find.textContaining('zzz'), findsWidgets);
+    expect(find.textContaining('match'), findsOneWidget);
+  });
+
+  testWidgets('an unresolved context says it is still looking',
+      (tester) async {
+    await tester.pumpWidget(LauncherApp(
+        window: channel,
+        activate: () async => LauncherStateDto(
+              sessionId: 1,
+              revision: 0,
+              snapshotSeq: 1,
+              input: '',
+              contextComplete: false,
+              contexts: [],
+              candidates: [],
+              scopes: [
+                ScopeDto(id: 'all', kind: 'all', label: 'All', candidateIds: []),
+              ],
+              diagnostics: [],
+            ),
+        updateInput: (_, input, revision) async => sizedState(revision, 0),
+        execute: (_, revision, candidate) async =>
+            throw StateError('not invoked'),
+        deactivate: (_) async {}));
+    await toggle(tester);
+    expect(find.textContaining('Looking for actions'), findsOneWidget);
   });
 
   testWidgets(
@@ -136,7 +235,8 @@ void main() {
         window: channel,
         activate: () async => state(0, 'Capture ${++captures}'),
         updateInput: (_, input, revision) => delayed.future,
-        execute: (_, action) async => throw StateError('not invoked'),
+        execute: (_, revision, candidate) async =>
+            throw StateError('not invoked'),
         deactivate: (_) async {
           invalidations++;
         }));
@@ -168,8 +268,8 @@ void main() {
     await tester.pumpWidget(LauncherApp(
         window: channel,
         activate: () async => state(0, 'Capture ${++captures}'),
-        updateInput: (_, input, revision) async => state(revision, input),
-        execute: (_, action) => pending.future,
+        updateInput: (_, input, revision) async => state(revision, input, input: input),
+        execute: (_, revision, candidate) => pending.future,
         deactivate: (_) async {}));
     await toggle(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
@@ -193,8 +293,9 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       activate: () => captured.future,
-      updateInput: (_, input, revision) async => state(revision, input),
-      execute: (_, action) async => throw StateError('not invoked'),
+      updateInput: (_, input, revision) async => state(revision, input, input: input),
+      execute: (_, revision, candidate) async =>
+          throw StateError('not invoked'),
       deactivate: (_) async {},
     ));
     final activation = Completer<void>();
@@ -219,12 +320,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       activate: () async => state(0, 'Open Terminal Here'),
-      updateInput: (_, input, revision) async => state(revision, input),
-      execute: (session, action) async {
-        executed.add(action);
+      updateInput: (_, input, revision) async => state(revision, input, input: input),
+      execute: (session, revision, candidate) async {
+        executed.add(candidate);
         return ActionResultDto(
             sessionId: session,
-            revision: 0,
+            revision: revision,
             success: true,
             message: 'Done',
             outputText: null,
@@ -241,7 +342,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
-    expect(executed, ['second-0']);
+    expect(executed, ['action:second:c1']);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
     expect(deactivated, 1);
@@ -257,7 +358,8 @@ void main() {
       activate: () async => state(0, 'Initial action'),
       updateInput: (_, input, revision) =>
           revision == 1 ? old.future : fresh.future,
-      execute: (_, action) async => throw StateError('not invoked'),
+      execute: (_, revision, candidate) async =>
+          throw StateError('not invoked'),
       deactivate: (_) async {},
     ));
     await toggle(tester);
@@ -277,8 +379,8 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       activate: () async => state(0, 'Initial action'),
-      updateInput: (_, input, revision) async => state(revision, input),
-      execute: (_, action) => result.future,
+      updateInput: (_, input, revision) async => state(revision, input, input: input),
+      execute: (_, revision, candidate) => result.future,
       deactivate: (_) async {},
     ));
     await toggle(tester);
@@ -294,5 +396,352 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('New input'), findsWidgets);
     expect(windowCalls, isNot(contains('hide')));
+  });
+
+  testWidgets('scope bar switches scopes and stays presentation-only',
+      (tester) async {
+    final all = candidate('action:core.git.status:c1', 'Git Status', groupId: 'git');
+    final folder = candidate('action:core.git.log:c1', 'Git Log', groupId: 'git');
+    final appRow = candidate('action:core.directory.copy:c1', 'Copy Path');
+    LauncherStateDto scoped(int revision) => LauncherStateDto(
+          sessionId: 1,
+          revision: revision,
+          snapshotSeq: 1,
+          input: '',
+          contextComplete: true,
+          contexts: [],
+          candidates: [appRow, all, folder],
+          scopes: [
+            ScopeDto(
+                id: 'all',
+                kind: 'all',
+                label: 'All',
+                candidateIds: [appRow.id, all.id, folder.id]),
+            ScopeDto(
+                id: 'app',
+                kind: 'app',
+                label: 'Finder',
+                candidateIds: [appRow.id]),
+            ScopeDto(
+                id: 'git',
+                kind: 'group',
+                label: 'Git',
+                candidateIds: [all.id, folder.id]),
+          ],
+          diagnostics: [],
+        );
+    await tester.pumpWidget(LauncherApp(
+      window: channel,
+      activate: () async => scoped(0),
+      updateInput: (_, input, revision) async => scoped(revision),
+      execute: (_, revision, candidate) async =>
+          throw StateError('not invoked'),
+      deactivate: (_) async {},
+    ));
+    await toggle(tester);
+    expect(find.byKey(const Key('scope-bar')), findsOneWidget);
+    expect(find.text('All'), findsOneWidget);
+    expect(find.text('Finder'), findsOneWidget);
+    expect(find.text('Git'), findsOneWidget);
+    // All is selected first, so the ambient action leads.
+    expect(find.text('Copy Path'), findsOneWidget);
+    await tester.tap(find.text('Git'));
+    await tester.pumpAndSettle();
+    expect(find.text('Copy Path'), findsNothing);
+    expect(find.text('Git Status'), findsOneWidget);
+    expect(find.text('Git Log'), findsOneWidget);
+    // Left/right with a modifier cycles scopes; plain arrows keep moving rows.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+    await tester.pumpAndSettle();
+    expect(find.text('Copy Path'), findsOneWidget);
+  });
+
+  testWidgets('manual selection survives late context and falls back when removed',
+      (tester) async {
+    final first = candidate('action:first:c1', 'First row');
+    final second = candidate('action:second:c1', 'Second row');
+    final third = candidate('action:third:c1', 'Third row');
+    LauncherStateDto lateState({required bool keepSecond}) => LauncherStateDto(
+          sessionId: 1,
+          revision: 0,
+          snapshotSeq: 2,
+          input: '',
+          contextComplete: true,
+          contexts: [],
+          candidates: [third, first, if (keepSecond) second],
+          scopes: [
+            ScopeDto(id: 'all', kind: 'all', label: 'All', candidateIds: [
+              third.id,
+              first.id,
+              if (keepSecond) second.id,
+            ]),
+          ],
+          diagnostics: [],
+        );
+    final firstSnapshot = LauncherStateDto(
+      sessionId: 1,
+      revision: 0,
+      snapshotSeq: 1,
+      input: '',
+      contextComplete: false,
+      contexts: [],
+      candidates: [first, second],
+      scopes: [
+        ScopeDto(id: 'all', kind: 'all', label: 'All', candidateIds: [
+          first.id,
+          second.id,
+        ]),
+      ],
+      diagnostics: [],
+    );
+    final late = Completer<LauncherStateDto?>();
+    var waits = 0;
+    await tester.pumpWidget(LauncherApp(
+      window: channel,
+      activate: () async => firstSnapshot,
+      updateInput: (_, input, revision) async => state(revision, input, input: input),
+      execute: (_, revision, candidate) async =>
+          throw StateError('not invoked'),
+      deactivate: (_) async {},
+      waitForSnapshot: (_, afterSeq) {
+        waits++;
+        return late.future;
+      },
+    ));
+    await toggle(tester);
+    expect(waits, 1, reason: 'late context is awaited once for an incomplete graph');
+    // The user moves down before late context arrives.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    expect(find.text('Second row'), findsOneWidget);
+    late.complete(lateState(keepSecond: true));
+    await tester.pumpAndSettle();
+    // The list reordered, but the user's row is still present and selected.
+    expect(find.text('Second row'), findsOneWidget);
+    expect(windowCalls, isNot(contains('hide')));
+  });
+
+  testWidgets('removed selection falls back to the first row on late update',
+      (tester) async {
+    final first = candidate('action:first:c1', 'First row');
+    final second = candidate('action:second:c1', 'Second row');
+    final third = candidate('action:third:c1', 'Third row');
+    final late = Completer<LauncherStateDto?>();
+    await tester.pumpWidget(LauncherApp(
+      window: channel,
+      activate: () async => LauncherStateDto(
+        sessionId: 1,
+        revision: 0,
+        snapshotSeq: 1,
+        input: '',
+        contextComplete: false,
+        contexts: [],
+        candidates: [first, second],
+        scopes: [
+          ScopeDto(id: 'all', kind: 'all', label: 'All', candidateIds: [
+            first.id,
+            second.id,
+          ]),
+        ],
+        diagnostics: [],
+      ),
+      updateInput: (_, input, revision) async => state(revision, input, input: input),
+      execute: (_, revision, candidate) async =>
+          throw StateError('not invoked'),
+      deactivate: (_) async {},
+      waitForSnapshot: (_, afterSeq) => late.future,
+    ));
+    await toggle(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    late.complete(LauncherStateDto(
+      sessionId: 1,
+      revision: 0,
+      snapshotSeq: 2,
+      input: '',
+      contextComplete: true,
+      contexts: [],
+      candidates: [third],
+      scopes: [
+        ScopeDto(id: 'all', kind: 'all', label: 'All', candidateIds: [third.id]),
+      ],
+      diagnostics: [],
+    ));
+    await tester.pumpAndSettle();
+    expect(find.text('Third row'), findsOneWidget);
+    expect(find.text('Second row'), findsNothing);
+  });
+
+  testWidgets('application icons render when loaded and fall back when absent',
+      (tester) async {
+    final chrome = CandidateDto(
+      id: 'app:com.google.Chrome:/Applications/Google Chrome.app',
+      kind: 'application',
+      title: 'Google Chrome',
+      subtitle: '/Applications/Google Chrome.app',
+      iconKey: 'application',
+      score: 5000,
+      groupId: 'app',
+      availability: 'enabled',
+      availabilityReason: null,
+      commandId: null,
+      bundleId: 'com.google.Chrome',
+    );
+    final notes = CandidateDto(
+      id: 'app:com.apple.Notes:/System/Applications/Notes.app',
+      kind: 'application',
+      title: 'Notes',
+      subtitle: '/System/Applications/Notes.app',
+      iconKey: 'application',
+      score: 4000,
+      groupId: 'app',
+      availability: 'enabled',
+      availabilityReason: null,
+      commandId: null,
+      bundleId: 'com.apple.Notes',
+    );
+    final state = LauncherStateDto(
+      sessionId: 1,
+      revision: 0,
+      snapshotSeq: 1,
+      input: 'app',
+      contextComplete: true,
+      contexts: [],
+      candidates: [chrome, notes],
+      scopes: [
+        ScopeDto(id: 'all', kind: 'all', label: 'All', candidateIds: [
+          chrome.id,
+          notes.id,
+        ]),
+      ],
+      diagnostics: [],
+    );
+    final requested = <String>[];
+    await tester.pumpWidget(LauncherApp(
+      window: channel,
+      activate: () async => state,
+      updateInput: (_, input, revision) async => state,
+      execute: (_, revision, candidate) async =>
+          throw StateError('not invoked'),
+      deactivate: (_) async {},
+      // Chrome loads a real 1x1 PNG; Notes fails, so the glyph must remain.
+      loadIcon: (candidateId) async {
+        requested.add(candidateId);
+        if (candidateId.startsWith('app:com.google.Chrome')) {
+          return Uint8List.fromList(_onePixelPng);
+        }
+        throw StateError('no icon');
+      },
+    ));
+    await toggle(tester);
+    await tester.pumpAndSettle();
+    expect(requested, contains(chrome.id));
+    expect(requested, contains(notes.id));
+    expect(find.byType(Image), findsOneWidget);
+    // The failing icon falls back to a glyph instead of breaking the row.
+    expect(find.byIcon(Icons.apps_rounded), findsOneWidget);
+    expect(find.text('Notes'), findsOneWidget);
+  });
+
+  testWidgets('an icon that fails once is retried on the next snapshot',
+      (tester) async {
+    CandidateDto app(String id, String title) => CandidateDto(
+          id: id,
+          kind: 'application',
+          title: title,
+          subtitle: '/Applications/$title.app',
+          iconKey: 'application',
+          score: 5000,
+          groupId: 'app',
+          availability: 'enabled',
+          availabilityReason: null,
+          commandId: null,
+          bundleId: id,
+        );
+    final edge = app('app:com.microsoft.edgemac', 'Microsoft Edge');
+    // Sequence must advance, or the ordering guard correctly ignores the second
+    // snapshot and this test would not exercise a retry at all.
+    LauncherStateDto withEdge(int revision) => LauncherStateDto(
+          sessionId: 1,
+          revision: revision,
+          snapshotSeq: revision + 1,
+          input: 'edge',
+          contextComplete: true,
+          contexts: [],
+          candidates: [edge],
+          scopes: [
+            ScopeDto(
+                id: 'all',
+                kind: 'all',
+                label: 'All',
+                candidateIds: [edge.id]),
+          ],
+          diagnostics: [],
+        );
+    var attempts = 0;
+    await tester.pumpWidget(LauncherApp(
+      window: channel,
+      activate: () async => withEdge(0),
+      updateInput: (_, input, revision) async => withEdge(revision),
+      execute: (_, revision, candidate) async =>
+          throw StateError('not invoked'),
+      deactivate: (_) async {},
+      loadIcon: (candidateId) async {
+        attempts++;
+        // First attempt fails (as it would while the bridge is still starting).
+        if (attempts == 1) throw StateError('not ready yet');
+        return Uint8List.fromList(_onePixelPng);
+      },
+    ));
+    await toggle(tester);
+    await tester.pumpAndSettle();
+    expect(attempts, 1);
+    expect(find.byType(Image), findsNothing, reason: 'the first attempt failed');
+    // A later snapshot must try again rather than cache the absence forever.
+    await tester.enterText(find.byType(TextField), 'edge again');
+    await tester.pumpAndSettle();
+    expect(attempts, greaterThan(1));
+    expect(find.byType(Image), findsOneWidget);
+  });
+
+  testWidgets('disabled candidates show their reason and cannot execute',
+      (tester) async {
+    var executed = 0;
+    await tester.pumpWidget(LauncherApp(
+      window: channel,
+      activate: () async => LauncherStateDto(
+        sessionId: 1,
+        revision: 0,
+        snapshotSeq: 1,
+        input: '',
+        contextComplete: true,
+        contexts: [],
+        candidates: [
+          candidate('action:core.git.status:c1', 'Git Status',
+              availability: 'disabled',
+              reason: 'git is not installed',
+              iconKey: 'git'),
+        ],
+        scopes: [
+          ScopeDto(id: 'all', kind: 'all', label: 'All', candidateIds: [
+            'action:core.git.status:c1',
+          ]),
+        ],
+        diagnostics: [],
+      ),
+      updateInput: (_, input, revision) async => state(revision, input, input: input),
+      execute: (_, revision, candidate) async {
+        executed++;
+        throw StateError('must not execute');
+      },
+      deactivate: (_) async {},
+    ));
+    await toggle(tester);
+    expect(find.text('git is not installed'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(executed, 0);
   });
 }

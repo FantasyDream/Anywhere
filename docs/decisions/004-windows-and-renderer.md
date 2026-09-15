@@ -1,6 +1,6 @@
 # 004 — Windows 适配与渲染兼容性
 
-用户明确要求新增 Windows 版本，覆盖原计划仅 macOS 的范围限制。Core 保持 UI/OS-neutral；Windows 原生能力只放在 launcher-platform，窗口/热键/托盘放在 Flutter Windows Host。
+用户明确要求新增 Windows 版本，覆盖原计划仅 macOS 的范围限制。Core 保持 UI/OS-neutral；Windows 原生能力只放在 anywhere-platform，窗口/热键/托盘放在 Flutter Windows Host。
 
 - 复用 Flutter 官方 Windows runner；默认 x64，Ctrl+Alt+Space 唤醒，支持失焦隐藏及当前 generation 的动态高度。
 - 使用 Windows Shell COM 读取唤醒前资源管理器的活动视图。实际目录提供 Directory；Home/此电脑等虚拟视图返回 None，不能沿用上次目录。捕获 HWND 与前台应用快照，读取时不再猜测最新前台窗口。

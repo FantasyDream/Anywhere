@@ -1,0 +1,14 @@
+[package]
+name = "anywhere-plugin"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+anywhere-protocol.workspace = true
+serde.workspace = true
+toml = "0.8"
+url.workspace = true
+tracing.workspace = true
+
