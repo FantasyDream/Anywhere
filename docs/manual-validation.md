@@ -270,7 +270,7 @@ cp /Users/luckincoffee/Documents/Github/Anywhere/plugins/manual-fixtures/invalid
 | R02 | 可选：在系统设置中暂时关闭此应用对 Finder 的 Automation 授权，重启并从 Finder 唤醒 | 显示明确失败提示，但 URL/JSON/文本输入仍可用。此项测完恢复原授权；不需要撤销 Codex 的任何权限 |
 | R03 | 若任一实际执行发生失败，观察错误，再把输入改为 `hello world` | 失败有提示，不显示虚假成功；改输入后可以继续执行。若本轮未遇到执行失败，记「未测」，不要将 X02 的不存在路径识别当作执行失败 |
 | R04 | 查看本次日志 | 能看到 Session、Revision、Resolver、Provider、Matcher、Ranking、Action；非法插件测试有 plugin_load_failure；平台失败有错误日志 |
-| R05 | Finder 已授权，从同一实际目录执行「唤醒→Esc」10 次 | 记录各次 hotkey_to_visible_ms，报告中位数、最大值；目标 <100 ms。首次授权的几秒等待单列，不混进正常样本 |
+| R05 | Finder 已授权，从同一实际目录执行「唤醒→Esc」10 次 | 记录各次 hotkey_to_visible_ms，报告中位数、最大值。**目标已从「<100 ms」改为「记录实测值并对照内容 grace」**：首屏在预算到期后最多再等 `DEFAULT_FIRST_CONTENT_GRACE`（400ms）以等回目录/Git 动作，因此带慢目录捕获时中位数预期在 250–350ms、不带捕获时应低于 100ms。两项分开记录，不要用单一样本代表两种情况。首次授权的几秒等待单列，不混进正常样本 |
 | R06 | 输入 URL、JSON、文件、目录、文本，查看耗时 | 记录 input_context_resolved、input_actions_ready、ranking_completed；Resolver 目标 <10 ms、Ranking 目标 <5 ms，超标照实记录 |
 
 日志位置：
