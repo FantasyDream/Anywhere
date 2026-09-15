@@ -142,9 +142,14 @@ impl Platform for WindowsPlatform {
     }
 
     /// A Start Menu shortcut is the Windows equivalent of an application bundle: it is
-    /// what the shell lists and what the user recognizes. Its display name and launch
-    /// target come from the shortcut itself, so an entry whose file name is an
-    /// implementation detail (`chrome.lnk`) still indexes as "Google Chrome".
+    /// what the shell lists and what the user recognizes. Its display name comes from the
+    /// shortcut itself, so an entry whose file name is an implementation detail
+    /// (`chrome.lnk`) still indexes as "Google Chrome".
+    ///
+    /// The shortcut stays the launch path. Launching the resolved target instead would drop
+    /// the shortcut's arguments and working directory, which applications such as
+    /// `Update.exe --processStart …` depend on, and `GetPath` is documented to return the
+    /// recorded string, which may still contain unexpanded environment variables.
     fn bundle_application(&self, shortcut: &Path) -> Result<Option<BundleApplication>> {
         if !shortcut.is_file() {
             return Ok(None);
@@ -166,22 +171,20 @@ impl Platform for WindowsPlatform {
             return Ok(None);
         }
         let name = utf16_string(&name);
-        let target = utf16_string(&target);
-        if name.trim().is_empty() || target.is_empty() {
+        if name.trim().is_empty() {
             return Ok(None);
         }
-        let Some(identity) = Path::new(&target)
-            .file_stem()
-            .map(|stem| stem.to_string_lossy().to_lowercase())
-            .filter(|stem| !stem.is_empty())
-        else {
-            return Ok(None);
-        };
+        let target = utf16_string(&target);
         Ok(Some(BundleApplication {
-            bundle_id: format!("app.{identity}"),
+            // The executable name cannot be the identity: unrelated applications share
+            // one (`Update.exe`, `launcher.exe`), and collapsing them would hide every one
+            // but the first and share their usage history. The shortcut path is what the
+            // shell lists, so it is both unique and stable across scans; the resolved
+            // target is only the subtitle.
+            bundle_id: format!("app.{}", identity_of(shortcut)),
             name,
-            path: Some(target),
-            icon: None,
+            path: Some(shortcut.to_string_lossy().into_owned()),
+            icon: (!target.is_empty()).then_some(target),
         }))
     }
     fn application_icon(&self, _path: &str, _size: u32) -> Result<Option<Vec<u8>>> {
@@ -193,7 +196,17 @@ impl Platform for WindowsPlatform {
         // ShellExecute resolves a running instance, waits on elevation prompts and handles
         // both an `.exe` and a `.lnk`. There is no "activate instead of launch" signal to
         // report, so a successful start is the answer.
-        open(Path::new(path), false, 0)?;
+        let path = Path::new(path);
+        // The extension decides whether the shell can be handed this entry, not
+        // `is_file`: an indexed shortcut exists, but a path recorded with unexpanded
+        // variables would fail that check while remaining perfectly launchable.
+        let startable = path.extension().is_some_and(|extension| {
+            extension.eq_ignore_ascii_case("lnk") || extension.eq_ignore_ascii_case("exe")
+        }) || path.is_file();
+        if !startable {
+            bail!("application no longer exists: {}", path.display());
+        }
+        open(path, false, 0)?;
         Ok(true)
     }
     fn clipboard_text(&self) -> Result<Option<String>> {
@@ -224,7 +237,9 @@ impl Platform for WindowsPlatform {
         let program = git_program().context("git is not installed")?;
         // The argv allowlist and the deadline handling are shared with macOS; only the
         // process API differs, and `std::process` is already correct on both.
-        let mut child = crate::git::command(&program, repository, operation)
+        let mut command = crate::git::command(&program, repository, operation);
+        configure_no_console(&mut command);
+        let mut child = command
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -296,6 +311,33 @@ impl Platform for WindowsPlatform {
         let (text, truncated) = crate::git::format_output(operation, &stdout, truncated);
         Ok(GitOutput { text, truncated })
     }
+}
+
+/// Stable identity for one Start Menu shortcut.
+///
+/// The whole path, lowercased, with separators folded so the same shortcut yields the same
+/// id regardless of how the enumerator spelled the drive or the trailing separator.
+fn identity_of(shortcut: &Path) -> String {
+    shortcut
+        .to_string_lossy()
+        .to_lowercase()
+        .replace('/', "\\")
+        .trim_end_matches('\\')
+        .to_owned()
+}
+
+/// Run the child without a console window.
+///
+/// A GUI process started from Explorer has no console of its own, so a console subsystem
+/// child such as `git.exe` would get a new one — which can take focus from the launcher and
+/// dismiss it, throwing away the output this call exists to produce. Both pipes are already
+/// captured, so nothing needs a console.
+#[cfg(target_os = "windows")]
+fn configure_no_console(command: &mut std::process::Command) {
+    use std::os::windows::process::CommandExt;
+    /// `CREATE_NO_WINDOW`.
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    command.creation_flags(CREATE_NO_WINDOW);
 }
 
 /// How long the read-only Git operations may run before they are killed.

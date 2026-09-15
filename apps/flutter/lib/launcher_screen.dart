@@ -188,7 +188,17 @@ class _LauncherScreenState extends State<LauncherScreen> {
     // An empty input is Context Home, which shows a short list; a query scrolls.
     final searching = (_state?.input ?? '').trim().isNotEmpty;
     if (!searching && list.length > _homeLimit) {
-      return list.sublist(0, _homeLimit);
+      final shown = list.sublist(0, _homeLimit);
+      // The limit is a *view* limit, so it must never hide the row the user is on: a late
+      // update can push their selection past it while the candidate is still perfectly
+      // present and executable. Keeping it as an extra row preserves the identity they
+      // chose instead of silently jumping them back to the first entry.
+      final selected = _selectedId;
+      if (selected != null && !shown.any((candidate) => candidate.id == selected)) {
+        final held = list.where((candidate) => candidate.id == selected);
+        if (held.isNotEmpty) return [...shown, held.first];
+      }
+      return shown;
     }
     return list;
   }
@@ -420,11 +430,18 @@ class _LauncherScreenState extends State<LauncherScreen> {
   }
 
   /// Await context published after the first snapshot and fold it in.
+  ///
+  /// Runs for as long as the window is up, not until `contextComplete`: the core publishes
+  /// more than late *context*. The application index arrives after activation and rebuilds
+  /// the committed snapshot, so a search typed in the first moments — before the index
+  /// existed — gets its application candidates from an update that a `contextComplete`
+  /// check would have stopped waiting for. The window is torn down by the generation and
+  /// visibility checks, and `waitForSnapshot` returns immediately when there is nothing
+  /// newer, so staying subscribed costs nothing.
   Future<void> _followLateContext(
       int generation, int session, int sequence) async {
     final wait = widget.waitForSnapshot;
     if (wait == null) return;
-    if (_state?.contextComplete ?? true) return;
     var lastSeq = sequence;
     while (mounted && _visible && generation == _generation) {
       final next = await wait(session, lastSeq);
@@ -434,7 +451,6 @@ class _LauncherScreenState extends State<LauncherScreen> {
       lastSeq = next.snapshotSeq;
       setState(() => _applyState(next, fromLateUpdate: true));
       await _syncWindow();
-      if (next.contextComplete) return;
     }
   }
 

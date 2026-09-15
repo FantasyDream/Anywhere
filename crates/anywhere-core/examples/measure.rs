@@ -1,8 +1,12 @@
 //! Repeatable local CPU timings for the V0.2 hot path.
 //!
-//! Covers input recognition, candidate construction and ranking with a realistic
-//! application catalog. Finder Automation, FFI, window rendering and RSS are not
-//! measurable here; use `launcher.log` and the manual validation checklist for those.
+//! Reports the three phases of a candidate build separately — action matching, application
+//! matching and ranking — because the first two are matching work and only the third is
+//! sorting. They used to be reported as one number under two names, which hid a 1.2s
+//! regression in application matching behind the ranking label.
+//!
+//! Finder Automation, FFI, window rendering and RSS are not measurable here; use
+//! `launcher.log` and the manual validation checklist for those.
 use anywhere_core::{
     candidates::{IndexedApplication, Matcher, SessionFacts},
     command::CommandRegistry,
@@ -13,7 +17,7 @@ use anywhere_core::{
 };
 use std::time::Instant;
 
-/// Ranking is timed on its own, so the sample vector append is excluded.
+/// Percentiles of a sample vector in milliseconds.
 fn percentiles(mut samples: Vec<u128>) -> (f64, f64) {
     samples.sort_unstable();
     let index = |percent: usize| {
@@ -70,6 +74,7 @@ fn main() {
         };
         let mut recognize = Vec::new();
         let mut matcher_times = Vec::new();
+        let mut apps_times = Vec::new();
         let mut ranking_times = Vec::new();
         for sample in 0..1100 {
             let started = Instant::now();
@@ -80,23 +85,25 @@ fn main() {
             let recognized = started.elapsed();
 
             let query = Query::parse(input);
-            let started = Instant::now();
             let set = matcher.build(&query, &contexts);
-            let matched = started.elapsed();
-            let ranked = set.ranking_us;
 
             if sample >= 100 {
                 recognize.push(recognized.as_nanos());
-                matcher_times.push(matched.as_nanos());
-                ranking_times.push(ranked as u128 * 1000);
+                // Each phase is timed where it happens, so these three are additive parts
+                // of `build` rather than one number reported under three names.
+                matcher_times.push(set.matcher_us as u128 * 1000);
+                apps_times.push(set.apps_us as u128 * 1000);
+                ranking_times.push(set.ranking_us as u128 * 1000);
             }
         }
         let (recognize_p50, recognize_p95) = percentiles(recognize);
         let (matcher_p50, matcher_p95) = percentiles(matcher_times);
+        let (apps_p50, apps_p95) = percentiles(apps_times);
         let (ranking_p50, ranking_p95) = percentiles(ranking_times);
         println!(
             "{label}: input_recognition p50={recognize_p50:.3}ms p95={recognize_p95:.3}ms; \
              matcher p50={matcher_p50:.3}ms p95={matcher_p95:.3}ms; \
+             applications p50={apps_p50:.3}ms p95={apps_p95:.3}ms; \
              ranking p50={ranking_p50:.3}ms p95={ranking_p95:.3}ms"
         );
     }

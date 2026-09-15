@@ -2,6 +2,7 @@
 use anyhow::{bail, Result};
 use anywhere_core::{
     applications::ApplicationCatalog,
+    candidates::IndexedApplication,
     command::CommandRegistry,
     context::{ContextValue, ResolvedContext},
     history::{MemoryHistory, SqliteHistory, UsageHistory},
@@ -47,6 +48,9 @@ impl CaptureGate {
         let mut released = self.released.lock().unwrap();
         *released = true;
         self.signal.notify_all();
+    }
+    fn released(&self) -> bool {
+        *self.released.lock().unwrap()
     }
 }
 
@@ -754,6 +758,7 @@ async fn applications_are_searchable_but_never_appear_in_context_home() {
         searched.candidates[0].bundle_id.as_deref(),
         Some("app.googlechrome.com")
     );
+
     let launched = app
         .execute(
             state.session_id,
@@ -1049,6 +1054,113 @@ impl ContextProvider for DelayedProvider {
     }
 }
 
+/// A provider call cut short by the budget is resumed, not made twice.
+///
+/// The execution-dedup rule is about the provider's own work: a call that was started must
+/// not be started again for the same `(provider, context, session, revision)`. Keeping the
+/// started call in the run is what makes that true; discarding it and re-entering the
+/// provider would repeat whatever the first call had already begun.
+#[tokio::test]
+async fn a_budget_cut_resumes_the_provider_call_instead_of_repeating_it() {
+    struct CountingProvider {
+        descriptor: ProviderDescriptor,
+        calls: Arc<AtomicUsize>,
+        started: Arc<Notify>,
+        release: Arc<Notify>,
+    }
+    #[async_trait]
+    impl ContextProvider for CountingProvider {
+        fn descriptor(&self) -> &ProviderDescriptor {
+            &self.descriptor
+        }
+        async fn resolve(
+            &self,
+            input: &ResolvedContext,
+            _: &ExecutionContext,
+        ) -> Result<Vec<ResolvedContext>> {
+            if input.value.text() != "slow" {
+                return Ok(vec![]);
+            }
+            self.calls.fetch_add(1, Ordering::Relaxed);
+            self.started.notify_one();
+            self.release.notified().await;
+            Ok(vec![ResolvedContext::new(
+                "test.enriched",
+                ContextValue::Extension("late".into()),
+                input.source,
+                "test.counting",
+            )])
+        }
+    }
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut app = app_with_budget(
+        Arc::new(TestPlatform::new(dir.path().canonicalize().unwrap(), false)),
+        Duration::from_millis(20),
+    )
+    .with_content_grace(Duration::from_millis(20));
+    let calls = Arc::new(AtomicUsize::new(0));
+    let started = Arc::new(Notify::new());
+    let release = Arc::new(Notify::new());
+    app.register_provider(Arc::new(CountingProvider {
+        descriptor: ProviderDescriptor {
+            id: "test.counting".into(),
+            accepts: vec![TEXT.into()],
+            produces: vec!["test.enriched".into()],
+            priority: 0,
+        },
+        calls: calls.clone(),
+        started: started.clone(),
+        release: release.clone(),
+    }))
+    .unwrap();
+
+    let state = app.activate().await.unwrap().unwrap();
+    let worker = Arc::new(app);
+    let pending = tokio::spawn({
+        let worker = worker.clone();
+        let session = state.session_id;
+        async move { worker.update_input(session, "slow".into(), 1).await }
+    });
+    // The call is in flight when both the budget and the grace expire.
+    started.notified().await;
+    let partial = tokio::time::timeout(Duration::from_secs(5), pending)
+        .await
+        .expect("the budget and grace must both expire")
+        .unwrap()
+        .unwrap()
+        .expect("a partial snapshot is published");
+    assert_eq!(
+        calls.load(Ordering::Relaxed),
+        1,
+        "the call must have been made once"
+    );
+    assert!(
+        !partial
+            .context_summary
+            .iter()
+            .any(|context| context.type_id == "test.enriched"),
+        "the cut must not have produced the late context yet: {:?}",
+        partial.context_summary
+    );
+
+    // The late pass resumes the same call: it completes, and it is still one call.
+    release.notify_one();
+    let settled_state = settled(&worker, state.session_id, 1).await;
+    assert!(
+        settled_state
+            .context_summary
+            .iter()
+            .any(|context| context.type_id == "test.enriched"),
+        "the late pass must collect the result of the call it kept: {settled_state:?}"
+    );
+    assert_eq!(
+        calls.load(Ordering::Relaxed),
+        1,
+        "resuming the call must not run the provider twice"
+    );
+}
+
 #[tokio::test]
 async fn old_async_results_are_discarded_after_revision_session_and_hide() {
     for transition in ["revision", "session", "hide"] {
@@ -1336,6 +1448,86 @@ async fn usage_is_recorded_even_when_the_action_ends_its_own_session() {
         .get(&key)
         .unwrap_or_else(|| panic!("no usage row for {key:?}: {recorded:?}"));
     assert_eq!(stats.execute_count, 1);
+}
+
+/// A queued action that is dismissed before its worker starts must not run.
+///
+/// `execute` checks currency when the request arrives, but the side effect happens on a
+/// blocking worker, which can wait behind other work. Dismissing the launcher in that gap
+/// must stop the action: otherwise Esc still opens a window or overwrites the clipboard for
+/// a session the user already left.
+///
+/// The runtime here allows exactly two blocking threads — the shipped default allows 512,
+/// so a test cannot saturate it — which makes the worker's start deterministic: two holders
+/// occupy the pool, the action queues behind them, and the session is dismissed before the
+/// pool is released.
+#[test]
+fn a_queued_action_does_not_run_after_the_session_is_dismissed() {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .max_blocking_threads(2)
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let platform = Arc::new(TestPlatform::new(root, true));
+        let app = Arc::new(app(platform.clone()));
+        let state = settled(&app, app.activate().await.unwrap().unwrap().session_id, 0).await;
+        let copy_id = candidate(&state, "core.directory.copy");
+
+        let gate = CaptureGate::new();
+        let holding = Arc::new(AtomicUsize::new(0));
+        let mut holders = Vec::new();
+        for _ in 0..2 {
+            let (gate, holding) = (gate.clone(), holding.clone());
+            holders.push(tokio::task::spawn_blocking(move || {
+                holding.fetch_add(1, Ordering::Relaxed);
+                // Bounded hold: a broken test fails instead of hanging the suite.
+                let deadline = std::time::Instant::now() + Duration::from_secs(10);
+                while !gate.released() && std::time::Instant::now() < deadline {
+                    std::thread::sleep(Duration::from_millis(2));
+                }
+            }));
+        }
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while holding.load(Ordering::Relaxed) < 2 {
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+        })
+        .await
+        .expect("the blocking pool was never saturated");
+
+        let queued = tokio::spawn({
+            let app = app.clone();
+            let session = state.session_id;
+            let revision = state.revision;
+            async move { app.execute(session, revision, copy_id).await }
+        });
+        // Let the request pass its opening gate and queue its worker, then dismiss.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(
+            platform.calls.lock().unwrap().is_empty(),
+            "the action must still be queued: {:?}",
+            platform.calls.lock().unwrap()
+        );
+        app.deactivate(state.session_id).unwrap();
+        gate.release();
+        for holder in holders {
+            let _ = holder.await;
+        }
+
+        let result = queued.await.unwrap().unwrap();
+        assert!(
+            !result.success,
+            "the queued action must be refused: {result:?}"
+        );
+        assert!(
+            platform.calls.lock().unwrap().is_empty(),
+            "a dismissed action must not reach the platform: {:?}",
+            platform.calls.lock().unwrap()
+        );
+    });
 }
 
 /// A late append must be observable by a *host*, not only by an in-crate helper.
@@ -1679,6 +1871,117 @@ async fn snapshot_sequence_increases_for_late_enrichment() {
 }
 
 /// The spec names seven performance metrics; the code must emit all of them.
+/// Application matching is reported as matching, not as ranking.
+///
+/// Every installed application is scanned against the query by `application_candidates`,
+/// which used to run inside the `ranking_us` window: the 1.2s regression on a pasted
+/// document was reported as ranking cost. The phases are now timed apart, and this pins the
+/// boundary on an index large enough for the application phase to dominate: if the split
+/// were lost, `ranking_duration` would absorb it and stop being the smaller number.
+///
+/// A scoped subscriber rather than the shared recorder: another test may have installed
+/// that one already, and this must not depend on test order.
+#[test]
+fn application_matching_is_not_charged_to_ranking() {
+    use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+
+    #[derive(Default)]
+    struct Durations {
+        applications: AtomicU64,
+        ranking: AtomicU64,
+    }
+    struct Capture(Arc<Durations>);
+    impl<S: tracing::Subscriber> tracing_subscriber::Layer<S> for Capture {
+        fn on_event(
+            &self,
+            event: &tracing::Event<'_>,
+            _: tracing_subscriber::layer::Context<'_, S>,
+        ) {
+            struct Visitor<'a>(&'a Durations);
+            impl tracing::field::Visit for Visitor<'_> {
+                fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
+                    match field.name() {
+                        "applications_duration" => {
+                            self.0.applications.store(value, AtomicOrdering::Relaxed);
+                        }
+                        "ranking_duration" => {
+                            self.0.ranking.store(value, AtomicOrdering::Relaxed);
+                        }
+                        _ => {}
+                    }
+                }
+                fn record_debug(&mut self, _: &tracing::field::Field, _: &dyn std::fmt::Debug) {}
+            }
+            event.record(&mut Visitor(&self.0));
+        }
+    }
+
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let dir = tempfile::tempdir().unwrap();
+        let app = app(Arc::new(TestPlatform::new(
+            dir.path().canonicalize().unwrap(),
+            false,
+        )));
+        // Activate first so the background scan starts, then let it finish: the index is
+        // one scan per process, and a catalog injected before it lands would be
+        // overwritten by it.
+        let state = app.activate().await.unwrap().unwrap();
+        app.catalog_ready().await;
+        // A real-sized index: the application phase has to be measurable for the split to
+        // mean anything.
+        *app.resolver.catalog.lock().unwrap() = ApplicationCatalog::new(
+            (0..2_000)
+                .map(|index| IndexedApplication {
+                    bundle_id: format!("com.example.application{index}"),
+                    name: format!("Example Application {index}"),
+                    path: format!("/Applications/Example {index}.app"),
+                    aliases: vec![format!("app{index}")],
+                    keywords: vec!["example".into()],
+                })
+                .collect(),
+        );
+
+        let durations = Arc::new(Durations::default());
+        {
+            use tracing_subscriber::layer::SubscriberExt;
+            let subscriber = tracing_subscriber::registry().with(Capture(durations.clone()));
+            let _guard = tracing::subscriber::set_default(subscriber);
+            let searched = app
+                .update_input(state.session_id, "example 1999".into(), 1)
+                .await
+                .unwrap()
+                .unwrap();
+            assert!(
+                searched
+                    .candidates
+                    .iter()
+                    .any(|candidate| candidate.kind == CandidateKind::Application),
+                "the query must reach the application index: {:?}",
+                searched
+                    .candidates
+                    .iter()
+                    .map(|candidate| &candidate.title)
+                    .collect::<Vec<_>>()
+            );
+        }
+        let applications = durations.applications.load(AtomicOrdering::Relaxed);
+        let ranking = durations.ranking.load(AtomicOrdering::Relaxed);
+        assert!(
+            applications >= 50,
+            "matching 2000 applications must be a measurable cost, got {applications}us"
+        );
+        assert!(
+            ranking < applications,
+            "ranking must not absorb application matching: ranking {ranking}us vs \
+             applications {applications}us"
+        );
+    });
+}
+
 #[tokio::test]
 async fn every_named_performance_metric_is_emitted_for_one_activation() {
     use anywhere_core::provider::metrics;

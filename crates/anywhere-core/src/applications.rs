@@ -65,9 +65,14 @@ const MAX_DEPTH: usize = 3;
 const MAX_APPS: usize = 4000;
 
 /// Extensions that mark one entry as an application.
+///
+/// Both are recognized on every platform, deliberately: the decision is name-based, so it
+/// can be tested where it is written, and the platform call that reads the entry is what
+/// decides whether the name means anything there (`bundle_application` returns `None` for
+/// a `.lnk` on macOS and for anything that is not a bundle there).
 fn is_application_path(path: &Path) -> bool {
     path.extension().is_some_and(|extension| {
-        extension == "app" || (cfg!(target_os = "windows") && extension == "lnk")
+        extension.eq_ignore_ascii_case("app") || extension.eq_ignore_ascii_case("lnk")
     })
 }
 
@@ -98,12 +103,12 @@ fn walk(directory: &Path, depth: usize, bundles: &mut Vec<PathBuf>) {
     // Deterministic order keeps duplicate resolution reproducible.
     paths.sort();
     for path in paths {
-        if !path.is_dir() {
-            continue;
-        }
+        // An application entry may be a file, not a directory: on Windows every
+        // application is a `.lnk`, so testing for a directory first skipped all of them
+        // and the index came back empty on the one platform that needed it.
         if is_application_path(&path) {
             bundles.push(path);
-        } else {
+        } else if path.is_dir() {
             walk(&path, depth + 1, bundles);
         }
     }
@@ -390,6 +395,35 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(names, ["Alpha", "Beta", "Gamma"]);
         assert!(!names.iter().any(|name| name == "Nested"));
+    }
+
+    /// Entries are recognized before they are descended into.
+    ///
+    /// The walk used to skip anything that was not a directory first. Every Windows
+    /// application is a `.lnk` *file*, so the whole index came back empty there while the
+    /// platform reader that understands shortcuts was never even called.
+    #[test]
+    fn discovery_finds_application_entries_that_are_files() {
+        let root = tempfile::tempdir().unwrap();
+        let programs = root.path().join("Start Menu").join("Programs");
+        std::fs::create_dir_all(&programs).unwrap();
+        std::fs::write(programs.join("Google Chrome.lnk"), b"stub").unwrap();
+        std::fs::create_dir_all(programs.join("Company")).unwrap();
+        std::fs::write(programs.join("Company").join("Tool.LNK"), b"stub").unwrap();
+        // A plain file must not be treated as an application.
+        std::fs::write(programs.join("notes.txt"), b"stub").unwrap();
+        make_apps(&programs, &["Mac Only"]);
+
+        let mut names = discover_bundles(&[root.path().to_path_buf()])
+            .iter()
+            .map(|entry| entry.file_name().unwrap().to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        names.sort();
+        assert_eq!(
+            names,
+            ["Google Chrome.lnk", "Mac Only.app", "Tool.LNK"],
+            "shortcut files are applications; other files are not"
+        );
     }
 
     #[test]

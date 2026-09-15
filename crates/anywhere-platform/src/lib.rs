@@ -13,12 +13,15 @@ pub struct ApplicationInfo {
     pub name: String,
 }
 
-/// Metadata read from one installed application bundle.
+/// Metadata read from one installed application.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BundleApplication {
     pub bundle_id: String,
     pub name: String,
-    /// Canonical bundle path used for launch; `None` keeps the discovered path.
+    /// Path to launch and to read the icon from. `None` keeps the discovered entry.
+    ///
+    /// This is the *entry*, not the program: a Windows shortcut carries the arguments and
+    /// working directory, so launching its target directly silently drops them.
     pub path: Option<String>,
     /// Opaque icon reference; resolved lazily through `application_icon`.
     pub icon: Option<String>,

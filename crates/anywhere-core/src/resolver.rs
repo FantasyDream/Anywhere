@@ -11,8 +11,7 @@ use crate::{
     history::UsageHistory,
     provider::{
         stamp, ContextGraph, ContextGraphRun, ContextProvider, CurrentDirectoryProvider,
-        ExecutionContext, GitRepositoryProvider, GraphStep, InputTypeProvider, StepOutcome,
-        TextProvider,
+        ExecutionContext, GitRepositoryProvider, GraphStep, InputTypeProvider, TextProvider,
     },
     query::Query,
     ranking::UsageStats,
@@ -22,7 +21,6 @@ use anywhere_platform::{ApplicationInfo, Platform};
 use anywhere_protocol::*;
 use std::{
     collections::HashMap,
-    future::Future,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc, Mutex,
@@ -140,9 +138,13 @@ impl Resolver {
     }
 
     /// Wait until the background application scan has published its catalog.
+    ///
+    /// Checks the current value before waiting: the sender only ever goes `false → true`,
+    /// so a receiver that subscribed after the scan finished would see no further change
+    /// and wait out the whole timeout for a catalog it already has.
     pub async fn catalog_ready(&self) {
         let mut rx = self.catalog_rx.clone();
-        if !*rx.borrow() {
+        if !*rx.borrow_and_update() {
             let _ = tokio::time::timeout(Duration::from_secs(10), rx.changed()).await;
         }
     }
@@ -307,19 +309,12 @@ impl Resolver {
                         run,
                     });
                 }
-                GraphStep::Pending(pending) => {
-                    let mut poll = pending.future;
-                    let Some(outcome) = self
-                        .await_within(
-                            budget_deadline,
-                            grace_deadline,
-                            session_id,
-                            revision,
-                            &mut poll,
-                        )
-                        .await
+                GraphStep::Pending => {
+                    // Wait on the detached call the run already started: a cut leaves it
+                    // running, and the late pass collects this same result.
+                    let Some(outcome) = run.await_pending(budget_deadline, grace_deadline).await
                     else {
-                        return Some(self.cut_short(session_id, revision, &mut run, started));
+                        return Some(self.cut_short(session_id, revision, run, started));
                     };
                     run.settle(outcome);
                 }
@@ -327,55 +322,11 @@ impl Resolver {
         }
     }
 
-    /// Await the one in-flight provider call under the first-snapshot time policy.
-    ///
-    /// Returns `None` when both the budget and the grace window are exhausted, which
-    /// is the caller's signal to publish what it has. The graph is sequential, so
-    /// there is never more than this one pending call: waiting for it cannot cascade.
-    async fn await_within(
-        &self,
-        budget_deadline: Option<Instant>,
-        grace_deadline: Option<Instant>,
-        session_id: SessionId,
-        revision: Revision,
-        poll: &mut (impl Future<Output = StepOutcome> + Send + Unpin),
-    ) -> Option<StepOutcome> {
-        let Some(budget_deadline) = budget_deadline else {
-            // The late pass waits however long the provider needs.
-            return Some(poll.await);
-        };
-        let budget = budget_deadline.saturating_duration_since(Instant::now());
-        if !budget.is_zero() {
-            tokio::select! {
-                biased;
-                outcome = &mut *poll => return Some(outcome),
-                _ = tokio::time::sleep(budget) => {}
-            }
-        }
-        // The budget is gone. Waiting longer is worth it because a run cut here would
-        // publish a half-finished list: the real machine committed before the Git
-        // provider had even started.
-        let grace = grace_deadline
-            .map(|deadline| deadline.saturating_duration_since(Instant::now()))
-            .filter(|remaining| !remaining.is_zero())?;
-        tracing::info!(
-            session_id,
-            revision,
-            extension_us = grace.as_micros() as u64,
-            "first_snapshot_grace_extended"
-        );
-        tokio::select! {
-            biased;
-            outcome = &mut *poll => Some(outcome),
-            _ = tokio::time::sleep(grace) => None,
-        }
-    }
-
     fn cut_short(
         &self,
         session_id: SessionId,
         revision: Revision,
-        run: &mut ContextGraphRun,
+        run: ContextGraphRun,
         started: Instant,
     ) -> Resolution {
         tracing::info!(
@@ -386,17 +337,16 @@ impl Resolver {
             complete = false,
             "context_resolution_total"
         );
-        // The late pass has to make this call again: the frame that was cut may already
-        // have spawned work (a directory capture, for instance) that nothing will ever
-        // await if the call is left marked as visited.
-        run.abandon_pending();
-        // The run itself travels with the result: the caller resumes exactly this
-        // graph to append the context this cut left behind.
+        // The run travels with the result, including the provider call that was still in
+        // flight: the late pass resumes exactly this graph, so that call is polled to
+        // completion instead of being discarded and made a second time.
+        let contexts = run.contexts().to_vec();
+        let diagnostics = run.diagnostics().to_vec();
         Resolution {
-            contexts: run.contexts().to_vec(),
-            diagnostics: run.diagnostics().to_vec(),
+            contexts,
+            diagnostics,
             complete: false,
-            run: run.clone(),
+            run,
         }
     }
 
@@ -593,11 +543,15 @@ impl Resolver {
             "snapshot_committed"
         );
         // The matcher times itself, so this is the candidate work alone and not the
-        // session lock or the snapshot bookkeeping around it.
+        // session lock or the snapshot bookkeeping around it. The application index is
+        // reported separately: matching installed applications is the same kind of work as
+        // matching actions, and folding it into `ranking_duration` made that number
+        // describe sorting when it was really measuring a name search.
         tracing::info!(
             session_id,
             revision,
             matcher_duration = set.matcher_us,
+            applications_duration = set.apps_us,
             "matcher_completed"
         );
         tracing::info!(

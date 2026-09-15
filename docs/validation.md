@@ -10,12 +10,12 @@ macOS 26.6.2 / Apple Silicon，Rust 1.98.1，Flutter `3.47.0-1.0.pre-1`（Engine
 
 | 检查 | 命令 | 结果 |
 |---|---|---|
-| 工作区测试 | `cargo test --workspace --locked` | 通过：Core lib 55、Facade 29、Platform 9、Plugin 2、Protocol 4（共 99 项） |
+| 工作区测试 | `cargo test --workspace --locked` | 通过：Core lib 56、Facade 32、Platform 10、Plugin 2、Protocol 4（共 104 项） |
 | Clippy | `cargo clippy --workspace --all-targets --locked -- -D warnings` | 通过，无警告 |
 | 格式 | `cargo fmt --all --check` | 通过 |
 | 架构边界 | `python3 scripts/check-architecture.py` | 通过：90 个 Core 依赖，无 UI/Flutter 依赖 |
 | Flutter 静态检查 | `flutter analyze` | No issues found |
-| Flutter 组件测试 | `flutter test` | 通过：12 项 |
+| Flutter 组件测试 | `flutter test` | 通过：17 项 |
 | macOS Release 构建 | `scripts/build-macos.sh` | 通过，签名校验成功 |
 | 微基准 | `cargo run --release -p anywhere-core --example measure` | 见下表 |
 | Windows 类型检查 | `ANYWHERE_SKIP_NATIVE=1 cargo clippy --target x86_64-pc-windows-msvc -p anywhere-platform --all-targets -- -D warnings` | 通过（只含 Rust 侧；`native/windows.cpp` 需 Windows SDK，未编译） |
@@ -26,26 +26,26 @@ macOS 26.6.2 / Apple Silicon，Rust 1.98.1，Flutter `3.47.0-1.0.pre-1`（Engine
 
 `measure` 已修正 V0.1 把采样向量 push 计入 ranking 的计时误差，并加入 1000 个合成应用、`git sta`、`chrome` 和 1 MiB 输入。每种场景预热 100 次、测量 1000 次；单位 ms。
 
-多次 Release 采样（本机 arm64，含最终代码在内）的 p50 / p95 区间。最后一次采样的完整数字如下（`scripts/env.sh` + `cargo run --release --locked -p anywhere-core --example measure`）：
+Release 采样的 p50 / p95（本机 arm64）。`measure` 现在分列三个阶段，因为前两个是匹配、只有第三个是排序：
 
-| 输入 | 输入识别 p50 / p95 | matcher p50 / p95 | ranking p50 / p95 |
-|---|---:|---:|---:|
-| `https://github.com` | 0.022 / 0.029 | 0.415 / 0.436 | 0.413 / 0.434 |
-| `{"name":"foo","age":18}` | 0.022 / 0.029 | 0.420 / 0.436 | 0.416 / 0.433 |
-| `Cargo.toml` | 0.014 / 0.042 | 0.423 / 0.646 | 0.420 / 0.642 |
-| `.` | 0.011 / 0.018 | 0.334 / 0.353 | 0.331 / 0.350 |
-| `hello world` | 0.021 / 0.030 | 0.395 / 0.413 | 0.395 / 0.412 |
-| `git sta` | 0.023 / 0.034 | 0.396 / 0.443 | 0.395 / 0.443 |
-| `chrome` | 0.022 / 0.033 | 0.381 / 0.407 | 0.380 / 0.406 |
-| 1 MiB 文本 | 0.268 / 0.284 | 0.014 / 0.020 | 0.014 / 0.019 |
+| 输入 | 输入识别 p50 / p95 | 动作匹配 p50 / p95 | 应用匹配 p50 / p95 | 排序 p50 / p95 |
+|---|---:|---:|---:|---:|
+| `https://github.com` | 0.024 / 0.033 | 0.001 / 0.002 | 0.409 / 0.442 | 0.000 / 0.000 |
+| `{"name":"foo","age":18}` | 0.023 / 0.035 | 0.002 / 0.002 | 0.411 / 0.427 | 0.001 / 0.001 |
+| `Cargo.toml` | 0.015 / 0.021 | 0.002 / 0.002 | 0.402 / 0.417 | 0.001 / 0.001 |
+| `.` | 0.013 / 0.020 | 0.002 / 0.002 | 0.332 / 0.341 | 0.001 / 0.001 |
+| `hello world` | 0.024 / 0.032 | 0.000 / 0.000 | 0.402 / 0.417 | 0.000 / 0.000 |
+| `git sta` | 0.024 / 0.032 | 0.000 / 0.000 | 0.383 / 0.394 | 0.000 / 0.000 |
+| `chrome` | 0.024 / 0.032 | 0.000 / 0.000 | 0.374 / 0.382 | 0.000 / 0.000 |
+| 1 MiB 文本 | 0.267 / 0.279 | 0.000 / 0.000 | 0.000 / 0.000 | 0.013 / 0.014 |
 
-早期采样（F09 之前，应用索引尚为空）matcher 是 0.11–0.14ms；那一档没有真正把 1000 个合成应用投进 `application_candidates`，所以不是可比基线。现在的 0.33–0.42ms 才是「索引里有 1000 个应用」的真实代价，仍远低于 matcher <10ms、ranking <5ms 的目标。
+**本表的归因修正过一次。** 在此之前 `measure` 把整段 `build()` 记为 matcher、又把 `ranking_us` 记为 ranking，于是「matcher」和「ranking」两列几乎相同（0.33–0.42ms），而 0.11–0.14ms 那一档其实是应用索引为空时的数字。R12 把应用匹配移出 ranking 计时窗口、并把 `build` 拆成三段之后，真正的成本分布才显出来：**以上场景的成本几乎全在应用匹配**（1000 条合成索引 0.33–0.42ms），动作匹配与排序都在微秒级。这不是性能变化，而是同一个工作量第一次被记到正确的名字下。
 
 `Cargo.toml` 与 `.` 的偶发高 p95 来自路径识别里的真实文件系统调用，受机器负载影响。
 
-**1 MiB 输入曾经是 1.25s**（p95 1.56s）：应用索引一被填充，`application_candidates` 就会把整个 1 MiB 查询按每个已安装应用扫一遍，而这条路径属于首屏构建。现在超过 `MAX_QUERY_FOR_APPLICATIONS`（1024 字符）的查询不再参与应用索引匹配——粘贴进来的文档不是应用名，它的对象动作（URL/JSON/路径）本来就已经在列表里。修复后 1 MiB 输入降到 0.014ms，代价是不可搜索超长字符串（无实际用途），由 `a_pasted_document_does_not_match_the_application_index` 断言。
+**1 MiB 输入曾经是 1.25s**（p95 1.56s）：应用索引一被填充，`application_candidates` 就会把整个 1 MiB 查询按每个已安装应用扫一遍，而这条路径属于首屏构建。现在超过 `MAX_QUERY_FOR_APPLICATIONS`（1024 字符）的查询不再参与应用索引匹配——粘贴进来的文档不是应用名，它的对象动作（URL/JSON/路径）本来就已经在列表里。修复后 1 MiB 输入的应用匹配为 0，由 `a_pasted_document_does_not_match_the_application_index` 断言。
 
-结论：输入识别与 matcher 合计 p95 最差约 1.1ms（偶发文件系统抖动），远低于 Resolver <10ms、Ranking <5ms 的既有目标。matcher 比 V0.1 的「仅 ranking」慢，因为它现在还要做 Availability、查询匹配、分组、Scope 计算和应用候选；这是同一阶段新增的工作，不是回归。
+结论：三个阶段的合计 p95 最差约 0.9ms（偶发文件系统抖动），远低于 Resolver <10ms、Ranking <5ms 的既有目标。
 
 ## 更名为 Anywhere（V0.2 后）
 
@@ -230,10 +230,31 @@ Safari (com.apple.Safari)       aliases=["Safari浏览器"]
 | F13 | Windows 上不产生「Git 未安装」以外的 Git 语义 | 已实现，待实机验收 | 三个新平台能力在 Windows 上补齐：开始菜单 `.lnk` 索引（`IShellLinkW` 取名称与目标，`ShellExecute` 启动）、`CF_UNICODETEXT` 剪贴板读取（64K 上限）、Git runner（与 macOS 共用 `git.rs` 的 argv 白名单与输出格式化，`git.exe` 从 `PATH` 查找）。`anywhere-platform` 的 Windows 目标在 macOS 上通过 `cargo check` 与 `clippy -D warnings`（`ANYWHERE_SKIP_NATIVE=1`，只检查 Rust 侧）；**C++ shim 未编译、Windows 未运行**，验收项 W19–W22 见 `docs/windows.md` |
 | F14 | matcher / ranking 计时边界不完全对应两个阶段 | 接受并记录 | `matcher_us` 覆盖动作匹配，`ranking_us` 覆盖去重、Scope 构建与排序——后者包含少量构建开销。两个名字都是规格要求且都有测量，未发现会误导排障的偏差 |
 
+## 第四轮静态审查（R1–R12）
+
+第二轮静态审查的 12 项发现。逐条核对后：9 项已修复、2 项判定为执行标准变更或按契约处理、1 项部分修复并说明边界。
+
+| 编号 | 发现 | 结论 | 处理 |
+|---|---|---|---|
+| R1 | budget 到期仍不生成首屏 | 验收标准已变更（已确认） | 见 `docs/decisions/005-v0.2-minimal-mvp.md`「首屏验收口径的变更」：给出原始/当前口径对照、代价和回退方式。不再作为「偏差」记录 |
+| R2 | Provider Future 仍被取消并重新执行 | 已修复 | 调用改为 detach 成独立任务：`ContextGraphRun` 持有 `oneshot` 接收端并随 run 移动（不再 `Clone`），late pass 继续等同一个结果。丢弃 future 会连带取消内部的 `spawn_blocking` await，因此仅「保留 future」不够。`step` 先消费待定调用、`settle` 按 context id 复位 cursor，新增 `a_budget_cut_resumes_the_provider_call_instead_of_repeating_it` 断言调用计数恒为 1 且 late pass 收得到结果 |
+| R3 | 路径 IO 仍无法被计时器抢占 | 已修复 | `InputTypeProvider` 的 `InputEngine::resolve`（`canonicalize`/`is_dir`/`is_file`）与 `GitRepositoryProvider` 的 `repository_root` 都移入 `spawn_blocking`；两者在返回前校验执行戳。系统调用本身仍不可中断（见 F07） |
+| R4 | 索引重算结果没有完整接入 UI | 已修复 | `_followLateContext` 不再在 `contextComplete` 时停止：应用索引到达时会重建已提交快照，只等 Context 完成会漏掉它。窗口生命周期由 generation/可见性判断结束，`waitForSnapshot` 无新快照时立即返回。新增 `a context-complete window still receives later snapshots` |
+| R5 | Top 7 仍破坏手动选择 | 已修复 | Home 截断时若选中行不在前 7 条，则把它作为额外一行保留（视图上限不能吞掉选择）。新增 `a selected row stays visible when late context pushes it past Home`；该测试在修复前失败 |
+| R6 | 已失效的排队执行仍有副作用 | 已修复 | worker 内、调用 Platform **之前**再校验一次执行票据；副作用之后仍不做检查（否则成功动作会记不上 usage）。新增 `a_queued_action_does_not_run_after_the_session_is_dismissed`，用 `max_blocking_threads(2)` 的运行时把 worker 卡在队列里；该测试在修复前失败 |
+| R7 | Windows 开始菜单快捷方式全部被跳过 | 已修复 | `walk` 先判断应用条目、再判断目录递归；`.lnk` 是文件，原先在第一步就被 `continue` 掉，Windows 索引因此恒为空。新增 `discovery_finds_application_entries_that_are_files` |
+| R8 | Windows 快捷方式的启动语义丢失 | 已修复 | 启动路径保留 `.lnk`（参数与工作目录由快捷方式承载），解析出的目标只作为副标题；`launch_application` 不再用 `is_file` 判定（`SLGP_RAWPATH` 可能含未展开的变量），改为按扩展名或存在性判断 |
+| R9 | Windows 应用身份会把不同应用合并 | 已修复 | 身份改为快捷方式完整路径（小写、分隔符归一），不再用可执行文件名——`Update.exe`、`launcher.exe` 这类同名目标会把无关应用并成一条并共享历史 |
+| R10 | Windows Git 启动会创建控制台窗口 | 已修复 | Git 子进程加 `CREATE_NO_WINDOW`：GUI 进程没有控制台，子进程新建的控制台可能抢焦点并让 launcher 失焦隐藏，正好丢掉这次调用的输出 |
+| R11 | 剪贴板读取先无界扫描再截断 | 已修复 | 用 `GlobalSize` 限定源缓冲区后再找终止符并复制；无终止符的不完整数据视为无文本，不再依赖 `wcslen` 越界扫描 |
+| R12 | 应用匹配仍被计入 ranking | 已修复 | 应用匹配移出 ranking 计时窗口，新增 `applications_duration` 指标；`matcher_completed` 同时记录 `matcher_duration` 与 `applications_duration`，`ranking_completed` 只记排序。新增 `application_matching_is_not_charged_to_ranking`，用 2000 条合成索引断言应用阶段可测量且 ranking 小于它 |
+
+R2、R3、R6 的修复都补了「修复前必失败」的回归测试；R4、R5 的两个 Flutter 测试同样在修复前失败（R4 的测试最初写得不触达订阅路径，已改写）。
+
 ## 与规格的偏差（有意保留）
 
-- **首屏预算被内容 grace 延长**：规格 §2 写「预算到期即返回」，实现改为「预算到期时若仍有 Provider 在飞，最多再等 `DEFAULT_FIRST_CONTENT_GRACE`（400ms）」。原因是实测 Finder Automation 目录捕获约需 250ms，纯预算路径会先发布一个空 launcher 并要求用户输入，这正是用户报告的第一个缺陷。代价是冷启动首帧可能到约 300ms，`hotkey_to_visible < 100ms` 这一条**在带慢目录捕获时不再成立**；预算本身（40ms）与 late pass 语义未变，`with_content_grace(Duration::ZERO)` 可恢复纯预算行为。
-- **Home 上限 7**：规格写 5~8，取 7 作为验收默认值，由 Flutter 视图施加。
+- **首屏预算口径已变更**：规格 §2 写「预算到期即返回」，实现改为「预算到期时若仍有 Provider 在飞，最多再等 `DEFAULT_FIRST_CONTENT_GRACE`（400ms）」。这是验收标准的变更（已确认），不是实现偏差——原始口径必然复现用户报告的第一个缺陷（Finder 唤起后必须先输入才显示目录动作）。完整对照、代价与回退方式见 `docs/decisions/005-v0.2-minimal-mvp.md` 的「首屏验收口径的变更」。`hotkey_to_visible < 100ms` 在带慢目录捕获时不再成立，人工清单 R05 已改为分别记录两种情况并与 grace 对照。
+- **Home 上限 7**：规格写 5~8，取 7 作为验收默认值，由 Flutter 视图施加；用户手动选中的行会作为第 8 行保留，视图上限不能吞掉选择。
 
 ## 与 V0.1 的对比口径
 
@@ -242,7 +263,7 @@ V0.1 记录的 ranking p50/p95 为 0.001–0.003ms，只统计 12 个内建命�
 ## 自动测试覆盖的新行为
 
 - Context：`core.text` 到 URL/JSON/文件/目录的叠加识别；`json.document` 是否为规范名；普通仓库、子目录和 worktree `.git` 文件的仓库发现；发现阶段零 Git 进程。
-- 首屏：预算为零时提交部分快照并在 late pass 追加目录与 Git 仓库；late 结果不覆盖更新的 Revision；被截断的 Provider 调用在 late pass 中重试（因为重入安全是 Provider 契约）；`snapshot_seq` 随 late enrichment 递增；订阅重放最新快照。
+- 首屏：预算为零时提交部分快照并在 late pass 追加目录与 Git 仓库；late 结果不覆盖更新的 Revision；被预算截断的 Provider 调用由 late pass 继续等待同一个结果，调用计数恒为 1；`snapshot_seq` 随 late enrichment 递增；订阅重放最新快照。
 - 应用索引迟到：搜索先落在空索引上，索引到达后重建当前 Revision，且重建只在 `context_complete` 后发布（`an_index_that_arrives_late_reaches_the_settled_snapshot`）。
 - 搜索：`chrome` 命中应用并只出现在搜索而非 Home；`git sta` 命中 Git Status；URL 输入保留对象动作与文本兜底；应用索引不进入 Context Graph。
 - Group/Scope：Git 目录出现 `git` 与 `folder` 分组；Current App 使用环境来源并排除启动候选；应用专属分组不影响分组标签的可见性。

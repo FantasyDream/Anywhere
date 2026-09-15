@@ -179,15 +179,26 @@ extern "C" int32_t launcher_windows_clipboard_text(wchar_t* output, uint32_t cap
     if (IsClipboardFormatAvailable(CF_UNICODETEXT)) {
       HANDLE handle = GetClipboardData(CF_UNICODETEXT);
       if (handle) {
+        // The clipboard belongs to another process and can be malformed, so the source is
+        // never scanned past what the handle actually spans: `GlobalSize` bounds the
+        // search for the terminator, and the copy is capped by both that bound and the
+        // caller's capacity. A missing terminator inside the allocation is treated as no
+        // text rather than read past.
+        const SIZE_T bytes = GlobalSize(handle);
         const wchar_t* text = static_cast<const wchar_t*>(GlobalLock(handle));
         if (text) {
-          const size_t available = wcslen(text);
-          const size_t copied = available < capacity - 1 ? available : capacity - 1;
-          memcpy(output, text, copied * sizeof(wchar_t));
-          output[copied] = L'\0';
-          *length = static_cast<uint32_t>(copied);
+          const SIZE_T units = bytes / sizeof(wchar_t);
+          SIZE_T available = 0;
+          while (available < units && text[available] != L'\0') ++available;
+          if (available < units) {
+            const SIZE_T limit = static_cast<SIZE_T>(capacity) - 1;
+            const SIZE_T copied = available < limit ? available : limit;
+            memcpy(output, text, copied * sizeof(wchar_t));
+            output[copied] = L'\0';
+            *length = static_cast<uint32_t>(copied);
+            hr = S_OK;
+          }
           GlobalUnlock(handle);
-          hr = S_OK;
         } else {
           hr = HRESULT_FROM_WIN32(GetLastError());
         }

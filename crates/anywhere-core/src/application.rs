@@ -567,6 +567,9 @@ impl LauncherApplication for Application {
         let platform = self.platform.clone();
         let registry = self.resolver.registry.clone();
         let history = self.resolver.history.clone();
+        // Handed to the worker so it can re-check currency when it actually starts running,
+        // rather than trusting a check made while the request was still being queued.
+        let execution_ticket = self.resolver.execution(session_id, revision);
         let record_id = candidate
             .presentation
             .command_id
@@ -592,6 +595,13 @@ impl LauncherApplication for Application {
             "action_execution_started"
         );
         let result = tokio::task::spawn_blocking(move || {
+            // The opening gate ran when the request arrived; this one runs when the worker
+            // actually starts. A blocking worker can wait behind other work, and the user
+            // can dismiss the launcher in that gap — acting then would open a window, or
+            // overwrite the clipboard, for a session that no longer exists.
+            if !execution_ticket.is_current() {
+                bail!("action expired before it started");
+            }
             let output = match (
                 &candidate.command,
                 &candidate.context,
@@ -611,13 +621,13 @@ impl LauncherApplication for Application {
                 }
                 _ => bail!("candidate cannot be executed"),
             };
-            // No currency re-check here. The side effect has already happened, so
-            // refusing at this point cannot prevent anything; it only loses the usage
-            // record. Every action that closes the window ends its own session (the host
-            // dismisses on focus loss), so a re-check would fail exactly the successful
-            // executions whose frequency the ranking needs, and it would report
-            // "expired" for an action the user watched succeed. Currency is enforced
-            // before the side effect, in `execute`'s opening gate.
+            // No currency re-check *after* the side effect. By then refusing cannot prevent
+            // anything; it only loses the usage record. Every action that closes the window
+            // ends its own session (the host dismisses on focus loss), so checking here
+            // would fail exactly the successful executions whose frequency the ranking
+            // needs, and report "expired" for an action the user watched succeed. Currency
+            // is enforced before the side effect: once when the request arrives, once when
+            // the worker starts.
             let history_result = history
                 .lock()
                 .map_err(|_| anyhow::anyhow!("history lock poisoned"))

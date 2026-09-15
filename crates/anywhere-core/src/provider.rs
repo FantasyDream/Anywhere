@@ -4,22 +4,20 @@
 //! wait, then keeps stepping the run to append late context.
 use crate::context::{ContextValue, ResolvedContext};
 use crate::input::{text_context, InputEngine};
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use anywhere_platform::{ApplicationInfo, Platform};
 use anywhere_protocol::*;
 use async_trait::async_trait;
 use std::{
     collections::HashSet,
-    future::Future,
     path::{Path, PathBuf},
-    pin::Pin,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc,
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
-use tokio::sync::{broadcast, watch};
+use tokio::sync::{broadcast, oneshot, watch};
 
 pub const MAX_DEPTH: u8 = 3;
 
@@ -108,10 +106,9 @@ pub trait ContextProvider: Send + Sync {
     fn descriptor(&self) -> &ProviderDescriptor;
     /// Resolve `input` into further contexts.
     ///
-    /// Must be safe to call again for the same `(input, session, revision)`: the budget
-    /// may discard this future mid-flight, and the late pass re-enters the provider so
-    /// the work is not lost. Keep any OS work behind a single-flight memo rather than
-    /// repeating it per call.
+    /// Called at most once per `(provider, input, session, revision)`: a caller that stops
+    /// waiting keeps the started call and resumes it, so a provider never has to defend
+    /// against being re-entered for work it has already begun.
     async fn resolve(
         &self,
         input: &ResolvedContext,
@@ -160,7 +157,6 @@ pub fn text_provider_contexts(raw: &str) -> Vec<ResolvedContext> {
 /// `core.text` to `core.url` / `json.document` / `core.file` / `core.directory`.
 pub struct InputTypeProvider {
     descriptor: ProviderDescriptor,
-    engine: InputEngine,
 }
 impl Default for InputTypeProvider {
     fn default() -> Self {
@@ -176,7 +172,6 @@ impl Default for InputTypeProvider {
                 ],
                 priority: 0,
             },
-            engine: InputEngine,
         }
     }
 }
@@ -193,7 +188,15 @@ impl ContextProvider for InputTypeProvider {
         if !matches!(input.value, ContextValue::Text(_)) {
             return Ok(vec![]);
         }
-        Ok(self.engine.resolve(&input.value.text()))
+        // Input recognition touches the file system (`canonicalize`, `is_dir`, `is_file`),
+        // and this is an async poll: a slow or network-backed path would otherwise block the
+        // executor and make the first-snapshot budget meaningless. The engine is stateless,
+        // so the owned text is all the task needs.
+        let text = input.value.text();
+        let resolved = tokio::task::spawn_blocking(move || InputEngine.resolve(&text))
+            .await
+            .context("input recognition task failed")?;
+        Ok(resolved)
     }
 }
 
@@ -373,19 +376,21 @@ impl ContextProvider for GitRepositoryProvider {
         input: &ResolvedContext,
         execution: &ExecutionContext,
     ) -> Result<Vec<ResolvedContext>> {
-        let Some(path) = input.value.path() else {
+        let Some(path) = input.value.path().map(|path| path.to_path_buf()) else {
             return Ok(vec![]);
         };
-        // The walk touches the file system, so it stops as soon as this revision is gone.
+        // The repository walk stats every ancestor, so it belongs on a blocking boundary
+        // for the same reason input recognition does.
+        let root = tokio::task::spawn_blocking(move || repository_root(&path))
+            .await
+            .context("repository detection task failed")?;
+        // The walk may have outlived the revision that asked for it.
         if !execution.is_current() {
             return Ok(vec![]);
         }
-        let Some(root) = repository_root(path) else {
+        let Some(root) = root else {
             return Ok(vec![]);
         };
-        if !execution.is_current() {
-            return Ok(vec![]);
-        }
         Ok(vec![ResolvedContext::new(
             GIT_REPOSITORY,
             ContextValue::Repository(root),
@@ -416,12 +421,18 @@ pub struct PendingStep {
     pub provider_id: ProviderId,
     pub source_context_id: ContextId,
     pub produces: Vec<ContextTypeId>,
-    pub future: Pin<Box<dyn Future<Output = StepOutcome> + Send>>,
+    /// The started call, detached into its own task.
+    ///
+    /// Detaching is the point: a budget cut stops *waiting*, and dropping a future that is
+    /// awaiting a `spawn_blocking` handle would cancel the awaited task and lose the work
+    /// the provider had already begun. A detached task keeps running to completion whatever
+    /// the caller does, and the receiver is how the late pass collects the same result.
+    outcome: oneshot::Receiver<StepOutcome>,
 }
 
 pub enum GraphStep {
-    /// Poll the provider call, then call `settle` and step again.
-    Pending(Box<PendingStep>),
+    /// Poll `run.pending()`, then call `settle` and step again.
+    Pending,
     /// The whole graph for this revision finished, or was superseded.
     Done {
         contexts: Vec<ResolvedContext>,
@@ -502,7 +513,81 @@ impl ContextGraph {
     }
 }
 
-#[derive(Clone)]
+/// Run one provider call to completion, detached from whoever is waiting for it.
+///
+/// The result is sent whether or not anyone is still waiting, so the work is never lost
+/// and never repeated.
+async fn run_provider(
+    provider: Arc<dyn ContextProvider>,
+    input: ResolvedContext,
+    execution: ExecutionContext,
+    outcome: oneshot::Sender<StepOutcome>,
+) {
+    let result = if !execution.is_current() {
+        StepOutcome::Abandoned
+    } else {
+        tracing::info!(
+            session_id = execution.session_id,
+            revision = execution.revision,
+            provider_id = provider.descriptor().id,
+            source_context_id = input.id,
+            "provider_started"
+        );
+        let started = std::time::Instant::now();
+        StepOutcome::Completed {
+            result: provider.resolve(&input, &execution).await,
+            duration_us: started.elapsed().as_micros() as u64,
+        }
+    };
+    // A closed receiver only means nobody is waiting any more.
+    let _ = outcome.send(result);
+}
+
+/// Wait for a detached provider call under the first-snapshot time policy.
+///
+/// `None` means the deadline (and grace) expired first. The call keeps running: the
+/// receiver stays in the run, and the late pass awaits it with no deadline at all.
+async fn await_outcome(
+    outcome: &mut oneshot::Receiver<StepOutcome>,
+    deadline: Option<Instant>,
+    grace: Option<Instant>,
+) -> Option<StepOutcome> {
+    let Some(deadline) = deadline else {
+        // The late pass waits however long the provider needs.
+        return outcome.await.ok();
+    };
+    let budget = deadline.saturating_duration_since(Instant::now());
+    if !budget.is_zero() {
+        tokio::select! {
+            biased;
+            received = &mut *outcome => return received.ok(),
+            _ = tokio::time::sleep(budget) => {}
+        }
+    }
+    // The budget is gone. Waiting a little longer is worth it because a frame cut here
+    // would publish a half-finished list: on the real machine the budget landed exactly
+    // before the Git provider ran.
+    let grace = grace
+        .map(|grace| grace.saturating_duration_since(Instant::now()))
+        .filter(|remaining| !remaining.is_zero())?;
+    tracing::info!(
+        extension_us = grace.as_micros() as u64,
+        "first_snapshot_grace_extended"
+    );
+    tokio::select! {
+        biased;
+        received = &mut *outcome => received.ok(),
+        _ = tokio::time::sleep(grace) => None,
+    }
+}
+
+/// One resolution pass over the context graph.
+///
+/// Deliberately not `Clone`: the run owns the one in-flight provider call, so a budget cut
+/// hands that call to the late pass instead of dropping it. Dropping it lost the work the
+/// provider had already started and forced a second call for the same
+/// `(provider, context, session, revision)`, which is exactly what the execution-dedup rule
+/// forbids — and what made provider re-entrancy a requirement rather than a property.
 pub struct ContextGraphRun {
     pub execution: ExecutionContext,
     pub(crate) contexts: Vec<ResolvedContext>,
@@ -510,7 +595,8 @@ pub struct ContextGraphRun {
     visited: HashSet<(ProviderId, ContextId, SessionId, Revision)>,
     pub(crate) diagnostics: Vec<String>,
     cursor: usize,
-    pending: Option<(ProviderId, ContextId, Vec<ContextTypeId>)>,
+    /// The call that has been started and not yet settled, kept across a budget cut.
+    pending: Option<PendingStep>,
 }
 
 impl ContextGraphRun {
@@ -540,29 +626,22 @@ impl ContextGraphRun {
         self.contexts.push(context);
     }
 
-    /// Undo the bookkeeping for a provider call the late pass still has to make.
+    /// Await the started call, or `None` when it has no pending call.
     ///
-    /// A caller whose budget expires discards the in-flight future, so the same
-    /// `(provider, context, session, revision)` work must stay retryable: the late pass
-    /// has to make that call again. If it did not, the work would be skipped forever —
-    /// which is what happened when the frame rate was cut short on a slow directory
-    /// capture: the capture itself had already started (the provider spawns it before it
-    /// awaits), but nothing ever awaited its result, so the late pass had nothing to do
-    /// and the snapshot stayed empty.
-    ///
-    /// Re-entering a provider is therefore part of the contract, not an accident: a
-    /// provider whose call is cut must be safe to call again for the same input. The
-    /// directory memo is single-flight for exactly this reason, and the remaining
-    /// providers are pure.
-    pub fn abandon_pending(&mut self) {
-        if let Some((provider_id, source_context_id, _)) = self.pending.take() {
-            self.visited.remove(&(
-                provider_id,
-                source_context_id,
-                self.execution.session_id,
-                self.execution.revision,
-            ));
-        }
+    /// Returns `None` again if the caller's deadline expires first: the task keeps running
+    /// and a later pass awaits the same receiver.
+    pub async fn await_pending(
+        &mut self,
+        deadline: Option<Instant>,
+        grace: Option<Instant>,
+    ) -> Option<StepOutcome> {
+        let pending = self.pending.as_mut()?;
+        await_outcome(&mut pending.outcome, deadline, grace).await
+    }
+
+    /// Whether a started call is still waiting to be polled.
+    pub fn has_pending(&self) -> bool {
+        self.pending.is_some()
     }
 
     fn finished(&mut self) -> GraphStep {
@@ -574,6 +653,12 @@ impl ContextGraphRun {
 
     /// Next provider call, or the terminal state of this run.
     pub fn step(&mut self, providers: &[Arc<dyn ContextProvider>]) -> GraphStep {
+        // A started call comes first. It is already running — `await_pending` decides
+        // whether to keep waiting for it — so stepping past its input would lose the
+        // context it is about to produce and then skip the call as already visited.
+        if self.has_pending() {
+            return GraphStep::Pending;
+        }
         loop {
             if !self.execution.is_current() {
                 return self.finished();
@@ -612,49 +697,31 @@ impl ContextGraphRun {
                 self.cursor += 1;
                 continue;
             };
-            // Record the invocation only now. A caller that discards this run before
-            // polling the future (budget expiry) must be able to retry the same call.
+            // Record the invocation and start the call in one step: the call lives in the
+            // run, so it is resumed rather than repeated if this pass is cut short.
             self.visited.insert(key);
-            self.pending = Some((id.clone(), input.id.clone(), produces.clone()));
-            return GraphStep::Pending(Box::new(PendingStep {
+            let (tx, outcome) = oneshot::channel();
+            let execution = self.execution.clone();
+            tokio::spawn(run_provider(provider, input.clone(), execution, tx));
+            self.pending = Some(PendingStep {
                 provider_id: id,
                 source_context_id: input.id.clone(),
                 produces,
-                future: self.poll(provider, input),
-            }));
+                outcome,
+            });
+            return GraphStep::Pending;
         }
-    }
-
-    /// Provider call for `input`; the caller polls the returned future.
-    fn poll(
-        &mut self,
-        provider: Arc<dyn ContextProvider>,
-        input: ResolvedContext,
-    ) -> Pin<Box<dyn Future<Output = StepOutcome> + Send>> {
-        let execution = self.execution.clone();
-        Box::pin(async move {
-            if !execution.is_current() {
-                return StepOutcome::Abandoned;
-            }
-            tracing::info!(
-                session_id = execution.session_id,
-                revision = execution.revision,
-                provider_id = provider.descriptor().id,
-                source_context_id = input.id,
-                "provider_started"
-            );
-            let started = std::time::Instant::now();
-            let result = provider.resolve(&input, &execution).await;
-            StepOutcome::Completed {
-                result,
-                duration_us: started.elapsed().as_micros() as u64,
-            }
-        })
     }
 
     /// Fold one provider outcome into the graph.
     pub fn settle(&mut self, outcome: StepOutcome) {
-        let Some((provider_id, source_context_id, produces)) = self.pending.take() else {
+        let Some(PendingStep {
+            provider_id,
+            source_context_id,
+            produces,
+            ..
+        }) = self.pending.take()
+        else {
             return;
         };
         let StepOutcome::Completed {
@@ -664,6 +731,19 @@ impl ContextGraphRun {
         else {
             return;
         };
+        // `settle` folds in the call that was made for the context at `cursor`, but between
+        // starting the call and settling it the cursor can already have walked past that
+        // context — `step` skips a context whose only provider is visited. Finding the input
+        // by identity keeps the two in step; the visited marks, not the cursor, are what
+        // stop any call from being made twice.
+        let Some(position) = self
+            .contexts
+            .iter()
+            .position(|context| context.id == source_context_id)
+        else {
+            return;
+        };
+        self.cursor = position;
         let input = self.contexts[self.cursor].clone();
         match result {
             Ok(outputs) => {
@@ -787,8 +867,12 @@ mod tests {
         );
         loop {
             match run.step(graph.providers()) {
-                GraphStep::Pending(pending) => {
-                    let outcome = pending.future.await;
+                GraphStep::Pending => {
+                    // The run owns the started call; this is the same detached task the
+                    // resolver awaits and the late pass would collect.
+                    let Some(outcome) = run.await_pending(None, None).await else {
+                        continue;
+                    };
                     run.settle(outcome);
                 }
                 GraphStep::Done {

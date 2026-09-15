@@ -87,7 +87,12 @@ pub struct CandidateSet {
     pub scopes: Vec<ScopeEntry>,
     /// Usage total per dynamic scope, used to order the scope bar.
     pub scope_use: BTreeMap<GroupId, u32>,
+    /// Action matching: applicability, availability and query match per context.
     pub matcher_us: u64,
+    /// Application-index matching, reported separately so it cannot be mistaken for
+    /// sorting cost.
+    pub apps_us: u64,
+    /// Scoring and ordering of the candidates that were matched.
     pub ranking_us: u64,
 }
 
@@ -166,17 +171,27 @@ impl<'a> Matcher<'a> {
                 .or_default() += count;
         }
 
+        // Application matching is *matching*, not ranking: it builds search fields and
+        // matches every installed application against the query. Charging it to
+        // `ranking_us` made that number unattributable and hid a 1.2s regression behind a
+        // metric that was supposed to describe sorting.
+        let apps_started = Instant::now();
+        let mut applications = Vec::new();
+        // Context Home lists context actions only; applications exist for search, and only
+        // for a query that can still be an application name.
+        if searching && query.raw_input.len() <= MAX_QUERY_FOR_APPLICATIONS {
+            applications = self.application_candidates(query);
+        }
+        let apps_us = apps_started.elapsed().as_micros() as u64;
+
         let ranking_started = Instant::now();
         action_candidates.sort_by(compare_candidates);
         deduplicate_actions(&mut action_candidates);
 
         let mut candidates = action_candidates;
-        // Context Home lists context actions only; applications exist for search, and only
-        // for a query that can still be an application name.
-        if searching && query.raw_input.len() <= MAX_QUERY_FOR_APPLICATIONS {
-            let mut apps = self.application_candidates(query);
-            apps.sort_by(compare_candidates);
-            candidates.extend(apps);
+        if !applications.is_empty() {
+            applications.sort_by(compare_candidates);
+            candidates.extend(applications);
             candidates.sort_by(compare_candidates);
         }
         // Text fallbacks are appended last, after sorting, so they never displace a
@@ -207,6 +222,7 @@ impl<'a> Matcher<'a> {
             scopes,
             scope_use,
             matcher_us,
+            apps_us,
             ranking_us,
         }
     }
