@@ -10,7 +10,7 @@ macOS 26.6.2 / Apple Silicon，Rust 1.98.1，Flutter `3.47.0-1.0.pre-1`（Engine
 
 | 检查 | 命令 | 结果 |
 |---|---|---|
-| 工作区测试 | `cargo test --workspace --locked` | 通过：Core lib 55、Facade 28、Platform 9、Plugin 2、Protocol 4（共 98 项） |
+| 工作区测试 | `cargo test --workspace --locked` | 通过：Core lib 55、Facade 29、Platform 9、Plugin 2、Protocol 4（共 99 项） |
 | Clippy | `cargo clippy --workspace --all-targets --locked -- -D warnings` | 通过，无警告 |
 | 格式 | `cargo fmt --all --check` | 通过 |
 | 架构边界 | `python3 scripts/check-architecture.py` | 通过：90 个 Core 依赖，无 UI/Flutter 依赖 |
@@ -220,7 +220,7 @@ Safari (com.apple.Safari)       aliases=["Safari浏览器"]
 | F04 | 副作用之后的货币性检查会丢弃成功的执行（含 usage 记录） | 已修复 | 删除副作用后的 `is_current()` 中止：动作本身导致窗口失焦＝该动作结束了自己的会话，再检查只会让**最成功的那些动作**记不上 usage。改为在入口处用 `candidates_revision` 门禁，候选集未发布到当前 Revision 时拒绝执行（`a_candidate_from_a_superseded_revision_cannot_execute`、`usage_is_recorded_even_when_the_action_ends_its_own_session`） |
 | F05 | 40ms 首屏预算被 grace 延长到约 440ms | 接受并记录 | 见下方「与规格的偏差」：这是为修复用户报告的「Finder 唤起需先输入才显示目录动作」而做的取舍 |
 | F06 | 被截断的 Provider 调用「从未 poll」的假设不成立 | 判定不成立（但注释有误） | 目录捕获在 Provider 被 poll 的那一刻就已启动，其 Task 独立于 future；若撤销登记被跳过，late pass 将永远不再调用它，快照就停在空列表。因此「截断即重试」是**必须**的，重入安全是 Provider 的契约（`ContextProvider::resolve` 已注明），`DirectoryMemo` 单飞正是为此 |
-| F07 | Provider 内的同步文件系统调用不可抢占 | 接受并记录 | 同步调用跑在 `spawn_blocking` 上，预算耗尽不会取消它，只是不再等待；真正取消需要可中断的 IO，超出 V0.2 范围 |
+| F07 | Provider 内的同步文件系统调用不可抢占 | 部分修复 | 阻塞调用仍跑在 `spawn_blocking` 上且无法在系统调用中途取消，但**等待**现在是可取消的：`DirectoryMemo::directory` 同时监听执行戳（`ExecutionContext::superseded`），被取代的 Revision 立即放弃等待并返回空上下文，而不是把阻塞工作占满 30s 超时；`GitRepositoryProvider` 在进入文件系统遍历前与返回前各校验一次执行戳。新增 `a_superseded_revision_does_not_keep_waiting_for_the_directory`。真正中断 `read_dir`/Automation 调用仍需可中断 IO，超出本版范围 |
 | F08 | 应用索引每次激活都重扫，且索引就绪后不重新提交 | 已修复 | 扫描改为每进程一次（`catalog_started`）；索引就绪后由一个后台任务重建当前 Revision 的快照（`recompute_current`）。重建**必须等该 Revision 收敛**，否则会以新的 `snapshot_seq` 发布一个未完成的快照——`an_index_that_arrives_late_reaches_the_settled_snapshot` 断言「带应用候选的快照必定已 `context_complete`」 |
 | F09 | 候选集在构建期被截断到 Home 上限 | 已修复 | 候选集完整保留，Home 的 7 条上限移到 Flutter 视图；每个 Scope 的 id 都指向存在的候选（`every_scope_id_resolves_to_a_candidate`） |
 | F10 | 所有权（Current App）跨 Context 串味 | 已修复 | 所有权按 Context 计算，环境所有者独立推导，不再沿用循环中上一次的结果 |

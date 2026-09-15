@@ -81,12 +81,27 @@ impl ExecutionContext {
     pub fn is_current(&self) -> bool {
         self.current.load(Ordering::Acquire) == stamp(self.session_id, self.revision)
     }
+
+    /// Resolves once this session or revision is superseded.
+    ///
+    /// Polls the stamp rather than listening for an event: supersession is a single atomic
+    /// store with no notification behind it, and this is only ever awaited alongside the
+    /// work it protects.
+    pub async fn superseded(&self) {
+        while self.is_current() {
+            tokio::time::sleep(SUPERSEDED_POLL).await;
+        }
+    }
+
     pub(crate) fn emit(&self, event: LauncherEvent) {
         if self.is_current() {
             let _ = self.events.send(event);
         }
     }
 }
+
+/// How often a cancelled wait re-checks the execution stamp.
+const SUPERSEDED_POLL: Duration = Duration::from_millis(10);
 
 #[async_trait]
 pub trait ContextProvider: Send + Sync {
@@ -226,7 +241,7 @@ impl ContextProvider for CurrentDirectoryProvider {
     async fn resolve(
         &self,
         input: &ResolvedContext,
-        _: &ExecutionContext,
+        execution: &ExecutionContext,
     ) -> Result<Vec<ResolvedContext>> {
         let ContextValue::Application { bundle_id, .. } = &input.value else {
             return Ok(vec![]);
@@ -235,7 +250,7 @@ impl ContextProvider for CurrentDirectoryProvider {
         if bundle_id != self.memo.bundle_id() {
             return Ok(vec![]);
         }
-        match self.memo.directory().await {
+        match self.memo.directory(execution).await {
             Ok(Some(directory)) => Ok(vec![ResolvedContext::new(
                 DIRECTORY,
                 ContextValue::Directory(directory),
@@ -243,6 +258,12 @@ impl ContextProvider for CurrentDirectoryProvider {
                 &self.descriptor.id,
             )]),
             Ok(None) => Ok(vec![]),
+            // An abandoned capture is not a failure the user should see: the revision that
+            // asked for it no longer exists.
+            Err(error) if !execution.is_current() => {
+                tracing::debug!(error = %error, "directory_capture_abandoned");
+                Ok(vec![])
+            }
             Err(error) => bail!("{error}"),
         }
     }
@@ -294,10 +315,27 @@ impl DirectoryMemo {
     }
 
     /// Wait for the capture. A second caller shares the same result.
-    pub async fn directory(&self) -> Result<Option<PathBuf>, String> {
+    ///
+    /// The wait is abandoned as soon as this call's session or revision is superseded.
+    /// Letting it run to the 30s timeout would keep a blocking worker parked on a result
+    /// no revision can use any more — the caller that is still current has its own wait.
+    pub async fn directory(&self, execution: &ExecutionContext) -> Result<Option<PathBuf>, String> {
         let mut rx = self.rx.clone();
         if rx.borrow().is_none() {
-            let _ = tokio::time::timeout(DIRECTORY_TIMEOUT, rx.changed()).await;
+            tokio::select! {
+                biased;
+                changed = rx.changed() => {
+                    if changed.is_err() {
+                        return Err("original application directory capture ended".into());
+                    }
+                }
+                _ = execution.superseded() => {
+                    return Err("directory capture abandoned: revision superseded".into());
+                }
+                _ = tokio::time::sleep(DIRECTORY_TIMEOUT) => {
+                    return Err("original application directory capture timed out".into());
+                }
+            }
         }
         let settled = rx.borrow().clone();
         match settled {
@@ -333,14 +371,21 @@ impl ContextProvider for GitRepositoryProvider {
     async fn resolve(
         &self,
         input: &ResolvedContext,
-        _: &ExecutionContext,
+        execution: &ExecutionContext,
     ) -> Result<Vec<ResolvedContext>> {
         let Some(path) = input.value.path() else {
             return Ok(vec![]);
         };
+        // The walk touches the file system, so it stops as soon as this revision is gone.
+        if !execution.is_current() {
+            return Ok(vec![]);
+        }
         let Some(root) = repository_root(path) else {
             return Ok(vec![]);
         };
+        if !execution.is_current() {
+            return Ok(vec![]);
+        }
         Ok(vec![ResolvedContext::new(
             GIT_REPOSITORY,
             ContextValue::Repository(root),

@@ -611,6 +611,59 @@ async fn searching_for_actions_matches_partial_words_and_keeps_object_actions() 
     );
 }
 
+/// A capture nobody is waiting for any more must not be waited on.
+///
+/// The wait has a 30s timeout. Letting it run after the revision is superseded keeps a
+/// blocking worker parked for the rest of that timeout, and the caller that replaced the
+/// revision has its own wait for the same memo.
+#[tokio::test]
+async fn a_superseded_revision_does_not_keep_waiting_for_the_directory() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    let platform = Arc::new(TestPlatform {
+        capture_delay: Some(Duration::from_millis(500)),
+        ..TestPlatform::new(root, true)
+    });
+    let app = Arc::new(app_with_budget(platform.clone(), Duration::from_millis(30)));
+    let first = app.activate().await.unwrap().unwrap();
+    let superseded = app
+        .update_input(first.session_id, "hello world".into(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(superseded.revision, 1);
+    // The replaced revision's late pass gave up on its own wait instead of parking on the
+    // memo; nothing about it may reach the user.
+    assert!(
+        !superseded
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("directory")),
+        "an abandoned capture is not a user-visible failure: {:?}",
+        superseded.diagnostics
+    );
+    // Single-flight still holds across revisions: the capture that is already running is
+    // the only one, and the current revision waits for that same one.
+    assert_eq!(
+        platform.directory_captures.load(Ordering::Relaxed),
+        1,
+        "a superseded wait must not start a second capture"
+    );
+    let settled_state = settled(&app, first.session_id, 1).await;
+    assert!(
+        settled_state
+            .context_summary
+            .iter()
+            .any(|context| context.type_id == DIRECTORY),
+        "the current revision still gets the directory: {settled_state:?}"
+    );
+    assert_eq!(
+        platform.directory_captures.load(Ordering::Relaxed),
+        1,
+        "the current revision must reuse the running capture"
+    );
+}
+
 /// Pasted content is not an application search, and must not cost one.
 ///
 /// The host allows 1 MiB of input. Matching that against the application index scans the
