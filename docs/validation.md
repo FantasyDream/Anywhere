@@ -115,6 +115,8 @@ xcrun swift -module-cache-path .tools/swift-cache \
 
 Windows 新增 Shell COM 目录捕获、文件/目录/URL 打开、文件定位、PowerShell 当前目录和 Unicode 剪贴板；保留平台中立 Core。用户授权上传 GitHub 后，私有仓库已创建，Actions 只构建打包，不执行测试。最终构建结果及产物见 [Windows 工作流](https://github.com/FantasyDream/Context-Aware-Launcher/actions/workflows/windows.yml)；Windows 人工验收尚未执行。
 
+2026-09-15（北京时间），提交 `e82a5ec` 的 [Windows x64 构建](https://github.com/FantasyDream/Context-Aware-Launcher/actions/runs/34870418394) 成功，ZIP 已上传到 Artifacts。构建过程中修正 Flutter 已移除的参数、Windows SDK 宏名冲突，以及 VC++ 运行库安装路径。未运行测试或启动 Windows 应用；资源管理器、输入法、焦点与渲染效果仍需按 Windows W01–W18 人工确认。
+
 ## 当前边界
 
 macOS 应用为本机 arm64、adhoc 本地签名包，没有发行证书、公证或 universal packaging。未验证其他 macOS 版本。Windows x64 按用户追加要求加入，尚未完成实机验证。完整验收前仍需解决真实界面运行中发现的问题。

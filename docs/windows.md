@@ -1,10 +1,12 @@
 # Windows x64 交付与人工验证
 
-**状态：Windows x64 已接入 GitHub Actions，首轮构建进行中；尚未进行 Windows 实机运行验收。** 仓库为 [FantasyDream/Context-Aware-Launcher](https://github.com/FantasyDream/Context-Aware-Launcher)，保持私有。Mac 应用成功构建不代表 Windows 通过。
+**状态：Windows x64 已由 GitHub Actions 成功编译并生成 ZIP；尚未进行 Windows 实机运行验收。** 仓库为 [FantasyDream/Context-Aware-Launcher](https://github.com/FantasyDream/Context-Aware-Launcher)，保持私有。[成功构建记录](https://github.com/FantasyDream/Context-Aware-Launcher/actions/runs/34870418394) 对应提交 `e82a5ec`。构建成功不代表人工 case 通过。
 
 ## GitHub Actions 下载
 
 打开 [Package Windows x64](https://github.com/FantasyDream/Context-Aware-Launcher/actions/workflows/windows.yml)，选择成功的运行，在 Artifacts 下载 `Context-Launcher-Windows-x64`。私有仓库需要登录有访问权限的 GitHub 账户。
+
+本次 [Windows x64 产物](https://github.com/FantasyDream/Context-Aware-Launcher/actions/runs/34870418394/artifacts/10359256591) 下载后，解压其中的 `Context-Launcher-Windows-x64.zip`，运行 `context_launcher.exe`。
 
 相关源码推送到 main 会自动构建，也可以选择 Run workflow 手动打包。工作流只编译打包，不运行测试；产物保留 30 天。不要把构建成功标记为全部人工 case 通过。
 
