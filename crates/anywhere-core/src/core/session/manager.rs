@@ -11,6 +11,7 @@ use crate::{
     core::context::registry::ContextProviderRegistry,
     core::context::{ExecutionContext, ResolvedContext},
     core::ranking::usage::UsageRepository,
+    core::search::candidate_source::CandidateSource,
     core::search::engine::SearchEngine,
     core::search::query::Query,
     core::session::facts::SessionFacts,
@@ -423,15 +424,21 @@ impl Resolver {
                 .copied()
                 .unwrap_or_default()
         };
-        let matcher = SearchEngine {
+        let engine = SearchEngine {
             registry: &self.registry,
-            applications: &applications,
             usage: &usage_of,
-            app_usage: &app_usage_of,
             facts: &facts,
             now: now(),
         };
-        let set = matcher.search(&query, &contexts);
+        // The application index is a candidate source like any other; the engine is handed
+        // the sources rather than naming them.
+        let application_source = crate::features::applications::source::ApplicationSource {
+            applications: &applications,
+            app_usage: &app_usage_of,
+            now: now(),
+        };
+        let sources: [&dyn CandidateSource; 1] = [&application_source];
+        let set = engine.search(&query, &contexts, &sources);
         let mut all_diagnostics = session.state.diagnostics.clone();
         all_diagnostics.extend(diagnostics);
         session.snapshot_seq = session.snapshot_seq.saturating_add(1);

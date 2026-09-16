@@ -139,9 +139,7 @@ fn every_candidate_kind_has_a_source_behind_it() {
     let usage = |_: &str, _: &str| anywhere_core::core::ranking::usage::UsageStats::default();
     let search = anywhere_core::core::search::engine::SearchEngine {
         registry: &registry,
-        applications: &[],
         usage: &usage,
-        app_usage: &usage,
         facts: &anywhere_core::core::session::facts::SessionFacts::default(),
         now: 1000,
     };
@@ -151,6 +149,7 @@ fn every_candidate_kind_has_a_source_behind_it() {
     let set = search.search(
         &anywhere_core::core::search::query::Query::parse("copy"),
         &contexts,
+        &[],
     );
     assert!(
         set.candidates

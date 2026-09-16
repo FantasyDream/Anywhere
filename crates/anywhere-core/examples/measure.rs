@@ -9,9 +9,11 @@
 //! `launcher.log` and the manual validation checklist for those.
 use anywhere_core::{
     core::action::descriptor::CommandRegistry, core::ranking::usage::UsageStats,
-    core::search::engine::SearchEngine, core::search::query::Query,
-    core::session::facts::SessionFacts, features::applications::index::IndexedApplication,
-    features::git::provider::repository_root, features::recognized_contexts,
+    core::search::candidate_source::CandidateSource, core::search::engine::SearchEngine,
+    core::search::query::Query, core::session::facts::SessionFacts,
+    features::applications::index::IndexedApplication,
+    features::applications::source::ApplicationSource, features::git::provider::repository_root,
+    features::recognized_contexts,
 };
 use std::time::Instant;
 
@@ -47,12 +49,17 @@ fn main() {
     };
     let engine = SearchEngine {
         registry: &registry,
-        applications: &catalog,
         usage: &empty_usage,
-        app_usage: &empty_usage,
         facts: &facts,
         now: 1000,
     };
+    // The application index is a candidate source, exactly as it is in the launcher.
+    let application_source = ApplicationSource {
+        applications: &catalog,
+        app_usage: &empty_usage,
+        now: 1000,
+    };
+    let sources: [&dyn CandidateSource; 1] = [&application_source];
 
     println!("samples: 100 warmup + 1000 measured, 1000 synthetic applications");
     for input in [
@@ -80,7 +87,7 @@ fn main() {
             let recognized = started.elapsed();
 
             let query = Query::parse(input);
-            let set = engine.search(&query, &contexts);
+            let set = engine.search(&query, &contexts, &sources);
 
             if sample >= 100 {
                 recognize.push(recognized.as_nanos());

@@ -13,23 +13,26 @@ use crate::core::action::matcher::ActionMatcher;
 use crate::core::context::{ContextSource, ResolvedContext};
 use crate::core::ranking::score::UsageStats;
 use crate::core::session::facts::{context_ownership, Ownership, SessionFacts};
-use crate::features::applications::index::IndexedApplication;
-use crate::features::applications::source::ApplicationSource;
 use std::time::Instant;
 
 pub struct SearchEngine<'a> {
     pub registry: &'a CommandRegistry,
-    pub applications: &'a [IndexedApplication],
     /// `(action_id, context_type)` usage, scoped to the current foreground app.
     pub usage: &'a dyn Fn(&str, &str) -> UsageStats,
-    /// `(application usage id, application context type)` usage, over every app.
-    pub app_usage: &'a dyn Fn(&str, &str) -> UsageStats,
     pub facts: &'a SessionFacts,
     pub now: i64,
 }
 
 impl SearchEngine<'_> {
-    pub fn search(&self, query: &Query, contexts: &[ResolvedContext]) -> CandidateSet {
+    /// `sources` are the registered candidate sources beyond the core's own actions: the
+    /// application index today, anything else tomorrow. The engine does not know what they
+    /// contain, which is what makes a new kind of result additive.
+    pub fn search(
+        &self,
+        query: &Query,
+        contexts: &[ResolvedContext],
+        sources: &[&dyn CandidateSource],
+    ) -> CandidateSet {
         let search = SearchContext { query, contexts };
 
         // Matching. Action matching and application matching are timed apart: they are both
@@ -46,12 +49,10 @@ impl SearchEngine<'_> {
         let matcher_us = actions_started.elapsed().as_micros() as u64;
 
         let apps_started = Instant::now();
-        let application_source = ApplicationSource {
-            applications: self.applications,
-            app_usage: self.app_usage,
-            now: self.now,
-        };
-        let mut applications = application_source.candidates(&search);
+        let mut sourced = sources
+            .iter()
+            .flat_map(|source| source.candidates(&search))
+            .collect::<Vec<_>>();
         let apps_us = apps_started.elapsed().as_micros() as u64;
 
         // Ordering. Everything that matched goes through the same sort and the same
@@ -60,9 +61,9 @@ impl SearchEngine<'_> {
         action_candidates.sort_by(compare_candidates);
         deduplicate_actions(&mut action_candidates);
         let mut candidates = action_candidates;
-        if !applications.is_empty() {
-            applications.sort_by(compare_candidates);
-            candidates.extend(applications);
+        if !sourced.is_empty() {
+            sourced.sort_by(compare_candidates);
+            candidates.extend(sourced);
             candidates.sort_by(compare_candidates);
         }
         // Text fallbacks come last, after sorting, so they never displace a real match.
@@ -126,6 +127,7 @@ mod tests {
     use crate::core::session::facts::SessionFacts;
     use crate::features::applications::index::IndexedApplication;
     use crate::features::applications::source::application_candidate_id;
+    use crate::features::applications::source::ApplicationSource;
     use crate::features::recognized_contexts;
     use anywhere_platform::ApplicationInfo;
     use anywhere_protocol::*;
@@ -147,18 +149,28 @@ mod tests {
 
     fn builtin_engine<'a>(
         registry: &'a CommandRegistry,
-        applications: &'a [IndexedApplication],
         usage: &'a dyn Fn(&str, &str) -> UsageStats,
         facts: &'a SessionFacts,
     ) -> SearchEngine<'a> {
         SearchEngine {
             registry,
-            applications,
             usage,
-            app_usage: usage,
             facts,
             now: 1000,
         }
+    }
+
+    /// The application index as a candidate source, for the tests that search it.
+    fn application_sources<'a>(
+        applications: &'a [IndexedApplication],
+        usage: &'a dyn Fn(&str, &str) -> UsageStats,
+    ) -> Vec<&'a dyn crate::core::search::candidate_source::CandidateSource> {
+        // Leaked deliberately: a test-local source only has to outlive the call.
+        vec![Box::leak(Box::new(ApplicationSource {
+            applications,
+            app_usage: usage,
+            now: 1000,
+        }))]
     }
 
     #[test]
@@ -179,11 +191,10 @@ mod tests {
             ContextSource::ApplicationContext,
             "git",
         ));
-        let applications = Vec::new();
         let usage = no_usage;
         let facts = facts();
-        let engine = builtin_engine(&registry, &applications, &usage, &facts);
-        let set = engine.search(&Query::parse(""), &contexts);
+        let engine = builtin_engine(&registry, &usage, &facts);
+        let set = engine.search(&Query::parse(""), &contexts, &[]);
         let titles = set
             .candidates
             .iter()
@@ -196,7 +207,7 @@ mod tests {
         );
 
         contexts.retain(|context| context.type_id != GIT_REPOSITORY);
-        let set = engine.search(&Query::parse(""), &contexts);
+        let set = engine.search(&Query::parse(""), &contexts, &[]);
         let titles = set
             .candidates
             .iter()
@@ -243,11 +254,10 @@ mod tests {
                 "finder",
             ));
         }
-        let applications = Vec::new();
         let usage = no_usage;
         let facts = facts();
-        let engine = builtin_engine(&registry, &applications, &usage, &facts);
-        let set = engine.search(&Query::parse(""), &contexts);
+        let engine = builtin_engine(&registry, &usage, &facts);
+        let set = engine.search(&Query::parse(""), &contexts, &[]);
         assert!(
             set.candidates.len() > crate::core::search::scope::HOME_LIMIT,
             "this fixture must exceed the Home limit to be meaningful: {} candidates",
@@ -276,14 +286,13 @@ mod tests {
             ContextSource::ApplicationContext,
             "finder",
         ));
-        let applications = Vec::new();
         let usage = no_usage;
         let facts = facts();
-        let engine = builtin_engine(&registry, &applications, &usage, &facts);
+        let engine = builtin_engine(&registry, &usage, &facts);
         // Home keeps every candidate; the host limits what it displays.
-        let home = engine.search(&Query::parse(""), &contexts);
+        let home = engine.search(&Query::parse(""), &contexts, &[]);
         assert!(!home.candidates.is_empty());
-        let search = engine.search(&Query::parse("copy"), &contexts);
+        let search = engine.search(&Query::parse("copy"), &contexts, &[]);
         // Search results stay scrollable; only Home is capped at seven rows.
         assert!(!search.candidates.is_empty(), "{:?}", search.candidates);
         assert!(search.candidates.iter().all(|c| c
@@ -313,11 +322,10 @@ mod tests {
                 "git",
             ),
         ];
-        let applications = Vec::new();
         let usage = no_usage;
         let facts = facts();
-        let engine = builtin_engine(&registry, &applications, &usage, &facts);
-        let set = engine.search(&Query::parse(""), &contexts);
+        let engine = builtin_engine(&registry, &usage, &facts);
+        let set = engine.search(&Query::parse(""), &contexts, &[]);
         let scope_ids = set.scopes.iter().map(|s| s.id.as_str()).collect::<Vec<_>>();
         assert_eq!(scope_ids[0], "all");
         assert_eq!(scope_ids[1], "app");
@@ -345,7 +353,6 @@ mod tests {
                 "git",
             ),
         ];
-        let applications = Vec::new();
         let facts = facts();
 
         // Heavy use of the folder actions; the Git group has never been used.
@@ -360,8 +367,8 @@ mod tests {
                 UsageStats::default()
             }
         };
-        let engine = builtin_engine(&registry, &applications, &folder_heavy, &facts);
-        let set = engine.search(&Query::parse(""), &contexts);
+        let engine = builtin_engine(&registry, &folder_heavy, &facts);
+        let set = engine.search(&Query::parse(""), &contexts, &[]);
         let ids = set
             .scopes
             .iter()
@@ -380,8 +387,8 @@ mod tests {
 
         // With the same usage everywhere, the documented order decides.
         let none_used = |_: &str, _: &str| UsageStats::default();
-        let engine = builtin_engine(&registry, &applications, &none_used, &facts);
-        let set = engine.search(&Query::parse(""), &contexts);
+        let engine = builtin_engine(&registry, &none_used, &facts);
+        let set = engine.search(&Query::parse(""), &contexts, &[]);
         let ids = set
             .scopes
             .iter()
@@ -404,8 +411,8 @@ mod tests {
                 UsageStats::default()
             }
         };
-        let engine = builtin_engine(&registry, &applications, &git_heavy, &facts);
-        let set = engine.search(&Query::parse(""), &contexts);
+        let engine = builtin_engine(&registry, &git_heavy, &facts);
+        let set = engine.search(&Query::parse(""), &contexts, &[]);
         let ids = set
             .scopes
             .iter()
@@ -430,20 +437,19 @@ mod tests {
             ContextSource::ApplicationContext,
             "finder",
         )];
-        let applications = Vec::new();
         let usage = no_usage;
         let mut session = facts();
-        let engine = builtin_engine(&registry, &applications, &usage, &session);
+        let engine = builtin_engine(&registry, &usage, &session);
         assert!(engine
-            .search(&Query::parse(""), &contexts)
+            .search(&Query::parse(""), &contexts, &[])
             .candidates
             .iter()
             .any(|c| c.presentation.title == "Copy Path"));
 
         session.clipboard_text = Some(path.to_string_lossy().into_owned());
-        let engine = builtin_engine(&registry, &applications, &usage, &session);
+        let engine = builtin_engine(&registry, &usage, &session);
         assert!(!engine
-            .search(&Query::parse(""), &contexts)
+            .search(&Query::parse(""), &contexts, &[])
             .candidates
             .iter()
             .any(|c| c.presentation.title == "Copy Path"));
@@ -458,11 +464,10 @@ mod tests {
             ContextSource::ApplicationContext,
             "git",
         )];
-        let applications = Vec::new();
         let usage = no_usage;
         let facts = SessionFacts::default();
-        let engine = builtin_engine(&registry, &applications, &usage, &facts);
-        let set = engine.search(&Query::parse(""), &contexts);
+        let engine = builtin_engine(&registry, &usage, &facts);
+        let set = engine.search(&Query::parse(""), &contexts, &[]);
         let status = set
             .candidates
             .iter()
@@ -488,17 +493,22 @@ mod tests {
         let chrome_contexts = contexts("chrome");
         let usage = no_usage;
         let facts = facts();
-        let engine = builtin_engine(&registry, &applications, &usage, &facts);
-        let set = engine.search(&Query::parse("chrome"), &chrome_contexts);
+        let engine = builtin_engine(&registry, &usage, &facts);
+        let sources = application_sources(&applications, &usage);
+        let set = engine.search(&Query::parse("chrome"), &chrome_contexts, &sources);
         assert_eq!(set.candidates[0].presentation.title, "Google Chrome");
         assert_eq!(
             set.candidates[0].presentation.kind,
             CandidateKind::Application
         );
-        let by_keyword = engine.search(&Query::parse("browser"), &self::contexts("browser"));
+        let by_keyword = engine.search(
+            &Query::parse("browser"),
+            &self::contexts("browser"),
+            &sources,
+        );
         assert_eq!(by_keyword.candidates[0].presentation.title, "Google Chrome");
         // Applications never appear in Context Home.
-        let home = engine.search(&Query::parse(""), &chrome_contexts);
+        let home = engine.search(&Query::parse(""), &chrome_contexts, &sources);
         assert!(home
             .candidates
             .iter()
@@ -522,11 +532,10 @@ mod tests {
                 "git",
             ),
         ];
-        let applications = Vec::new();
         let usage = no_usage;
         let facts = facts();
-        let engine = builtin_engine(&registry, &applications, &usage, &facts);
-        let set = engine.search(&Query::parse("git sta"), &contexts);
+        let engine = builtin_engine(&registry, &usage, &facts);
+        let set = engine.search(&Query::parse("git sta"), &contexts, &[]);
         assert_eq!(set.candidates[0].presentation.title, "Git Status");
     }
 
@@ -534,11 +543,10 @@ mod tests {
     fn typed_object_actions_survive_a_query_without_a_title_match() {
         let registry = CommandRegistry::builtin();
         let url_contexts = contexts("https://github.com");
-        let applications = Vec::new();
         let usage = no_usage;
         let facts = facts();
-        let engine = builtin_engine(&registry, &applications, &usage, &facts);
-        let set = engine.search(&Query::parse("https://github.com"), &url_contexts);
+        let engine = builtin_engine(&registry, &usage, &facts);
+        let set = engine.search(&Query::parse("https://github.com"), &url_contexts, &[]);
         let titles = set
             .candidates
             .iter()
@@ -555,7 +563,7 @@ mod tests {
 
         // An unrelated sentence must not surface URL actions for a URL context.
         let unrelated = contexts("hello world");
-        let set = engine.search(&Query::parse("hello"), &unrelated);
+        let set = engine.search(&Query::parse("hello"), &unrelated, &[]);
         assert!(set
             .candidates
             .iter()
@@ -587,12 +595,6 @@ mod tests {
             ContextSource::ApplicationContext,
             "finder",
         )];
-        let applications = vec![IndexedApplication {
-            bundle_id: "com.apple.finder".into(),
-            name: "Finder".into(),
-            path: "/System/Library/CoreServices/Finder.app".into(),
-            ..Default::default()
-        }];
         let usage = no_usage;
         let facts = SessionFacts {
             git_available: true,
@@ -602,8 +604,8 @@ mod tests {
             }),
             ..Default::default()
         };
-        let engine = builtin_engine(&registry, &applications, &usage, &facts);
-        let set = engine.search(&Query::parse(""), &contexts);
+        let engine = builtin_engine(&registry, &usage, &facts);
+        let set = engine.search(&Query::parse(""), &contexts, &[]);
         let app_scope = set.scopes.iter().find(|s| s.id == "app").unwrap();
         assert_eq!(app_scope.label, "Finder");
         assert!(!app_scope.candidate_ids.is_empty());
