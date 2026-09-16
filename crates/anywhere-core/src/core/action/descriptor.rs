@@ -1,5 +1,5 @@
-use crate::context::ResolvedContext;
-use crate::query::SearchFields;
+use crate::core::context::ResolvedContext;
+use crate::core::search::query::SearchFields;
 use anyhow::{bail, Result};
 use anywhere_protocol::*;
 use std::collections::BTreeMap;
@@ -359,7 +359,7 @@ impl CommandRegistry {
                 .chain(command.keywords.iter())
                 .chain(std::iter::once(&command.title))
             {
-                if !crate::query::valid_search_field(field) {
+                if !crate::core::search::query::valid_search_field(field) {
                     bail!("command {id} search field exceeds 200 bytes");
                 }
             }
@@ -399,8 +399,8 @@ impl CommandRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::input::text_context;
-    use crate::input::InputEngine;
+    use crate::core::context::resolvers::text_context;
+    use crate::core::context::resolvers::InputEngine;
 
     fn seed(input: &str) -> Vec<ResolvedContext> {
         let mut contexts = InputEngine.resolve(input);
@@ -432,7 +432,7 @@ mod tests {
         assert_eq!(registry.matching(&json).count(), 3);
         let directory = ResolvedContext::new(
             DIRECTORY,
-            crate::context::ContextValue::Directory("/tmp".into()),
+            crate::core::context::ContextValue::Directory("/tmp".into()),
             ContextSource::ApplicationContext,
             "test",
         );
@@ -457,7 +457,7 @@ mod tests {
         let registry = CommandRegistry::builtin();
         let directory = ResolvedContext::new(
             DIRECTORY,
-            crate::context::ContextValue::Directory("/tmp".into()),
+            crate::core::context::ContextValue::Directory("/tmp".into()),
             ContextSource::ApplicationContext,
             "test",
         );
@@ -466,7 +466,7 @@ mod tests {
             .all(|command| !command.id.starts_with("core.git.")));
         let repository = ResolvedContext::new(
             GIT_REPOSITORY,
-            crate::context::ContextValue::Repository("/tmp".into()),
+            crate::core::context::ContextValue::Repository("/tmp".into()),
             ContextSource::ApplicationContext,
             "test",
         );

@@ -1,14 +1,17 @@
 //! Resolution engine: context stepping, budget control, snapshot publication.
 //!
-//! Deliberately separate from the [`Application`](crate::application::Application)
+//! Deliberately separate from the [`Application`](crate::application::launcher_service::Application)
 //! facade so a background completion task can own a clone and publish late context
 //! without borrowing the facade.
 use crate::{
     applications::ApplicationCatalog,
-    candidates::{Candidate, IndexedApplication, Matcher, SessionFacts},
     command::CommandRegistry,
     context::ResolvedContext,
-    history::UsageHistory,
+    core::search::candidate::Candidate,
+    core::search::engine::SearchEngine,
+    core::session::facts::SessionFacts,
+    features::applications::index::IndexedApplication,
+    history::UsageRepository,
     provider::{
         stamp, ContextGraph, ContextGraphRun, ContextProvider, CurrentDirectoryProvider,
         ExecutionContext, GitRepositoryProvider, GraphStep, InputTypeProvider, TextProvider,
@@ -35,7 +38,7 @@ pub struct Session {
     /// Immutable ambient capture: the original frontmost application.
     pub frontmost: Option<ApplicationInfo>,
     /// Session-scoped single-flight directory capture.
-    pub directory: Option<Arc<crate::provider::DirectoryMemo>>,
+    pub directory: Option<Arc<crate::core::context::provider::DirectoryMemo>>,
     /// Snapshot of the real text clipboard, read once at activation.
     pub clipboard: Option<String>,
     pub git_available: bool,
@@ -75,7 +78,7 @@ pub struct Resolver {
     pub latest_tx: watch::Sender<Option<Arc<LauncherState>>>,
     pub catalog: Arc<Mutex<ApplicationCatalog>>,
     pub catalog_rx: watch::Receiver<bool>,
-    pub history: Arc<Mutex<Box<dyn UsageHistory>>>,
+    pub history: Arc<Mutex<Box<dyn UsageRepository>>>,
 }
 
 /// Outcome of one resolution pass. `run` lets the caller resume an incomplete pass
@@ -92,7 +95,7 @@ impl Resolver {
     pub fn new(
         platform: Arc<dyn Platform>,
         registry: CommandRegistry,
-        history: Box<dyn UsageHistory>,
+        history: Box<dyn UsageRepository>,
     ) -> Self {
         let (latest_tx, _) = watch::channel(None);
         let (_, catalog_rx) = watch::channel(false);
@@ -358,7 +361,7 @@ impl Resolver {
         if session.state.session_id != session_id {
             return None;
         }
-        Some(crate::resolver::seeds_from(&session, input))
+        Some(crate::core::session::manager::seeds_from(&session, input))
     }
 
     /// Publish a snapshot. `None` means this session/revision is no longer current,
@@ -459,7 +462,7 @@ impl Resolver {
                 .copied()
                 .unwrap_or_default()
         };
-        let matcher = Matcher {
+        let matcher = SearchEngine {
             registry: &self.registry,
             applications: &applications,
             usage: &usage_of,
@@ -467,7 +470,7 @@ impl Resolver {
             facts: &facts,
             now: now(),
         };
-        let set = matcher.build(&query, &contexts);
+        let set = matcher.search(&query, &contexts);
         let mut all_diagnostics = session.state.diagnostics.clone();
         all_diagnostics.extend(diagnostics);
         session.snapshot_seq = session.snapshot_seq.saturating_add(1);
@@ -575,9 +578,9 @@ impl Resolver {
 pub fn seeds_from(session: &Session, input: &str) -> Vec<ResolvedContext> {
     let mut seeds = session.context_cache.clone();
     if let Some(frontmost) = &session.frontmost {
-        seeds.push(crate::provider::frontmost_context(frontmost));
+        seeds.push(crate::core::context::provider::frontmost_context(frontmost));
     }
-    if let Some(text) = crate::input::text_context(input) {
+    if let Some(text) = crate::core::context::resolvers::text_context(input) {
         seeds.push(text);
     }
     seeds
@@ -606,7 +609,7 @@ fn visible_contexts(contexts: &[ResolvedContext]) -> Vec<ContextPresentation> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::context::ContextValue;
+    use crate::core::context::ContextValue;
 
     fn fixture() -> Session {
         Session {

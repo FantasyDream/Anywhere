@@ -2,8 +2,8 @@
 //!
 //! Providers never know about budgets or timeouts. The caller decides how long to
 //! wait, then keeps stepping the run to append late context.
-use crate::context::{ContextValue, ResolvedContext};
-use crate::input::{text_context, InputEngine};
+use crate::core::context::resolvers::{text_context, InputEngine};
+use crate::core::context::{ContextValue, ResolvedContext};
 use anyhow::{bail, Context, Result};
 use anywhere_platform::{ApplicationInfo, Platform};
 use anywhere_protocol::*;

@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use anywhere_core::{
-    command::CommandRegistry, history::SqliteHistory, Application, LauncherApplication,
+    core::action::descriptor::CommandRegistry, persistence::usage::SqliteUsageRepository,
+    Application, LauncherApplication,
 };
 use anywhere_protocol as protocol;
 use std::{
@@ -31,7 +32,8 @@ pub fn initialize(data_directory: String, plugin_directory: String) -> Result<()
         .try_init();
     let data = Path::new(&data_directory);
     std::fs::create_dir_all(data)?;
-    let history = SqliteHistory::open(&data.join("usage.sqlite3")).context("open usage history")?;
+    let history =
+        SqliteUsageRepository::open(&data.join("usage.sqlite3")).context("open usage history")?;
     let mut registry = CommandRegistry::builtin();
     let mut diagnostics = Vec::new();
     let user_plugins = data.join("plugins");

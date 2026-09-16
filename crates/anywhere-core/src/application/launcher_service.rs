@@ -1,6 +1,6 @@
 //! Launcher facade: activation capture, request lifecycle, execution, subscription.
 use crate::{
-    applications, command::CommandRegistry, execution, history::UsageHistory,
+    applications, command::CommandRegistry, execution, history::UsageRepository,
     provider::DirectoryMemo, resolver::Resolver,
 };
 use anyhow::{bail, Context, Result};
@@ -69,7 +69,7 @@ impl Application {
     pub fn new(
         platform: Arc<dyn Platform>,
         registry: CommandRegistry,
-        history: Box<dyn UsageHistory>,
+        history: Box<dyn UsageRepository>,
         startup_diagnostics: Vec<String>,
     ) -> Self {
         Self::with_budget(
@@ -84,7 +84,7 @@ impl Application {
     pub fn with_budget(
         platform: Arc<dyn Platform>,
         registry: CommandRegistry,
-        history: Box<dyn UsageHistory>,
+        history: Box<dyn UsageRepository>,
         startup_diagnostics: Vec<String>,
         budget: Duration,
     ) -> Self {
@@ -151,12 +151,12 @@ impl Application {
     /// Extra providers are stacked on the built-ins by priority then id.
     pub fn register_provider(
         &mut self,
-        provider: Arc<dyn crate::provider::ContextProvider>,
+        provider: Arc<dyn crate::core::context::provider::ContextProvider>,
     ) -> Result<()> {
         self.resolver.register_provider(provider)
     }
 
-    fn session(&self) -> Result<std::sync::MutexGuard<'_, crate::resolver::Session>> {
+    fn session(&self) -> Result<std::sync::MutexGuard<'_, crate::core::session::manager::Session>> {
         self.resolver
             .session
             .lock()
@@ -256,7 +256,7 @@ impl Application {
         &self,
         session_id: SessionId,
         revision: Revision,
-        run: crate::provider::ContextGraphRun,
+        run: crate::core::context::provider::ContextGraphRun,
         started: Instant,
         startup_diagnostics: Vec<String>,
     ) {
@@ -310,7 +310,8 @@ impl Application {
     }
 }
 
-type UsageMap = std::collections::HashMap<(String, String), crate::ranking::UsageStats>;
+type UsageMap =
+    std::collections::HashMap<(String, String), crate::core::ranking::score::UsageStats>;
 
 fn dirs_home() -> Option<PathBuf> {
     std::env::var_os("HOME").map(PathBuf::from)
@@ -360,7 +361,7 @@ impl LauncherApplication for Application {
             let directory = frontmost
                 .as_ref()
                 .map(|frontmost| DirectoryMemo::start(self.platform.clone(), frontmost.clone()));
-            *session = crate::resolver::Session {
+            *session = crate::core::session::manager::Session {
                 frontmost: frontmost.clone(),
                 directory,
                 clipboard,
@@ -372,7 +373,7 @@ impl LauncherApplication for Application {
                 ..Default::default()
             };
             self.resolver.current.store(
-                crate::provider::stamp(session_id, 0),
+                crate::core::context::provider::stamp(session_id, 0),
                 std::sync::atomic::Ordering::Release,
             );
             session_id
@@ -466,11 +467,11 @@ impl LauncherApplication for Application {
             session.snapshot_seq = 0;
             session.published_contexts = 0;
             self.resolver.current.store(
-                crate::provider::stamp(session_id, revision),
+                crate::core::context::provider::stamp(session_id, revision),
                 std::sync::atomic::Ordering::Release,
             );
             // Build seeds from the guard we already hold; `seeds_for` would deadlock here.
-            crate::resolver::seeds_from(&session, &input)
+            crate::core::session::manager::seeds_from(&session, &input)
         };
         tracing::info!("input_revision_changed");
         tracing::info!(
@@ -533,7 +534,7 @@ impl LauncherApplication for Application {
                     .resolver
                     .current
                     .load(std::sync::atomic::Ordering::Acquire)
-                    != crate::provider::stamp(session_id, session.state.revision)
+                    != crate::core::context::provider::stamp(session_id, session.state.revision)
                 || session.state.revision != revision
             {
                 bail!("stale session");
@@ -579,14 +580,14 @@ impl LauncherApplication for Application {
                     .presentation
                     .bundle_id
                     .as_ref()
-                    .map(|bundle| crate::history::application_usage_id(bundle))
+                    .map(|bundle| crate::core::ranking::usage::application_usage_id(bundle))
             })
             .context("candidate has no executable identity")?;
         let context_type = candidate
             .context
             .as_ref()
             .map(|context| context.type_id.clone())
-            .unwrap_or_else(|| crate::history::APPLICATION_CONTEXT_TYPE.to_owned());
+            .unwrap_or_else(|| crate::core::ranking::usage::APPLICATION_CONTEXT_TYPE.to_owned());
         tracing::info!(
             session_id,
             revision,
@@ -636,7 +637,7 @@ impl LauncherApplication for Application {
                         &record_id,
                         &context_type,
                         &source_app,
-                        crate::resolver::now(),
+                        crate::core::session::manager::now(),
                     )
                 });
             Ok::<_, anyhow::Error>((output, history_result))
@@ -749,7 +750,7 @@ impl SessionSubscription {
             };
             if session_id == self.session_id
                 && self.current.load(std::sync::atomic::Ordering::Acquire)
-                    == crate::provider::stamp(session_id, revision)
+                    == crate::core::context::provider::stamp(session_id, revision)
             {
                 return Ok(event);
             }

@@ -1,5 +1,6 @@
 //! Deterministic scoring. No ML, no randomness, no clock other than the caller's `now`.
-use crate::query::MatchLevel;
+pub use super::usage::UsageStats;
+use crate::core::search::query::MatchLevel;
 use anywhere_protocol::*;
 
 /// Every term other than `query_match` must stay below the lowest query tier
@@ -87,12 +88,6 @@ pub fn usage_terms(execute_count: u32, last_executed_at: i64, now: i64) -> (i32,
         0
     };
     (frequency, recency)
-}
-
-#[derive(Debug, Default, Clone, Copy)]
-pub struct UsageStats {
-    pub execute_count: u32,
-    pub last_executed_at: i64,
 }
 
 pub fn score(

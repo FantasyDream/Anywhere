@@ -1,102 +1,13 @@
-use crate::ranking::UsageStats;
+//! SQLite-backed usage storage.
+//!
+//! The only module in the crate that knows about `rusqlite`. Everything above it depends on
+//! the `UsageRepository` interface.
+pub use crate::core::ranking::usage::UsageRepository;
+use crate::core::ranking::usage::{merge_json_aliases, merge_usage, UsageSnapshot, UsageStats};
 use anyhow::Result;
-use anywhere_protocol::{JSON_DOCUMENT, JSON_LEGACY};
-use std::collections::HashMap;
 
-/// Key of an action usage row: `(command_id, canonical context_type)`.
-pub type UsageKey = (String, String);
-pub type UsageSnapshot = HashMap<UsageKey, UsageStats>;
-
-/// Context type recorded for application-launch usage rows.
-pub const APPLICATION_CONTEXT_TYPE: &str = "application";
-
-/// Command id used for an application-launch usage row.
-///
-/// Both the recording and the ranking path must use this, from one place.
-pub fn application_usage_id(bundle_id: &str) -> String {
-    format!("app:{bundle_id}")
-}
-
-pub trait UsageHistory: Send {
-    fn load(&self, source_app: &str) -> Result<UsageSnapshot>;
-    /// Usage aggregated across every source application, for application candidates.
-    fn load_global(&self) -> Result<UsageSnapshot>;
-    fn record(
-        &mut self,
-        command_id: &str,
-        context_type: &str,
-        source_app: &str,
-        now: i64,
-    ) -> Result<()>;
-}
-
-/// Merge legacy `core.json` rows into the canonical `json.document` key.
-///
-/// Counts saturate and timestamps take the maximum, so repeated loads are
-/// idempotent and no existing data has to be rewritten.
-pub fn merge_json_aliases(snapshot: &mut UsageSnapshot) {
-    let legacy_prefix = JSON_LEGACY;
-    let legacy = snapshot
-        .iter()
-        .filter(|((_, kind), _)| kind == legacy_prefix)
-        .map(|((command, _), stats)| (command.clone(), *stats))
-        .collect::<Vec<_>>();
-    if legacy.is_empty() {
-        return;
-    }
-    for (command, stats) in legacy {
-        merge_usage(snapshot, (command.clone(), JSON_DOCUMENT.to_owned()), stats);
-        snapshot.remove(&(command, JSON_LEGACY.to_owned()));
-    }
-}
-
-/// Fold one usage row into a snapshot: counts saturate, timestamps keep the latest.
-pub fn merge_usage(snapshot: &mut UsageSnapshot, key: UsageKey, stats: UsageStats) {
-    let entry = snapshot.entry(key).or_default();
-    entry.execute_count = entry.execute_count.saturating_add(stats.execute_count);
-    entry.last_executed_at = entry.last_executed_at.max(stats.last_executed_at);
-}
-
-#[derive(Default)]
-pub struct MemoryHistory(pub HashMap<(String, String, String), UsageStats>);
-impl UsageHistory for MemoryHistory {
-    fn load(&self, source_app: &str) -> Result<UsageSnapshot> {
-        let mut snapshot = self
-            .0
-            .iter()
-            .filter(|((_, _, app), _)| app == source_app)
-            .map(|((command, kind, _), stats)| ((command.clone(), kind.clone()), *stats))
-            .collect::<UsageSnapshot>();
-        merge_json_aliases(&mut snapshot);
-        Ok(snapshot)
-    }
-    fn load_global(&self) -> Result<UsageSnapshot> {
-        let mut snapshot = UsageSnapshot::new();
-        for ((command, kind, _), stats) in &self.0 {
-            merge_usage(&mut snapshot, (command.clone(), kind.clone()), *stats);
-        }
-        merge_json_aliases(&mut snapshot);
-        Ok(snapshot)
-    }
-    fn record(
-        &mut self,
-        command_id: &str,
-        context_type: &str,
-        source_app: &str,
-        now: i64,
-    ) -> Result<()> {
-        let stats = self
-            .0
-            .entry((command_id.into(), context_type.into(), source_app.into()))
-            .or_default();
-        stats.execute_count = stats.execute_count.saturating_add(1);
-        stats.last_executed_at = now;
-        Ok(())
-    }
-}
-
-pub struct SqliteHistory(rusqlite::Connection);
-impl SqliteHistory {
+pub struct SqliteUsageRepository(rusqlite::Connection);
+impl SqliteUsageRepository {
     pub fn open(path: &std::path::Path) -> Result<Self> {
         let connection = rusqlite::Connection::open(path)?;
         connection.busy_timeout(std::time::Duration::from_secs(2))?;
@@ -114,8 +25,8 @@ impl SqliteHistory {
         Ok(Self(connection))
     }
 }
-impl UsageHistory for SqliteHistory {
-    fn load(&self, source_app: &str) -> Result<UsageSnapshot> {
+impl UsageRepository for SqliteUsageRepository {
+    fn load(&self, source_app: &str) -> anyhow::Result<UsageSnapshot> {
         let mut query = self.0.prepare("SELECT command_id, context_type, execute_count, last_executed_at FROM command_usage WHERE source_app = ?1")?;
         let rows = query.query_map([source_app], |row| {
             let count: i64 = row.get(2)?;
@@ -131,7 +42,7 @@ impl UsageHistory for SqliteHistory {
         merge_json_aliases(&mut snapshot);
         Ok(snapshot)
     }
-    fn load_global(&self) -> Result<UsageSnapshot> {
+    fn load_global(&self) -> anyhow::Result<UsageSnapshot> {
         let mut query = self.0.prepare(
             "SELECT command_id, context_type, execute_count, last_executed_at FROM command_usage",
         )?;
@@ -159,7 +70,7 @@ impl UsageHistory for SqliteHistory {
         context_type: &str,
         source_app: &str,
         now: i64,
-    ) -> Result<()> {
+    ) -> anyhow::Result<()> {
         self.0.execute("INSERT INTO command_usage (command_id, context_type, source_app, execute_count, last_executed_at)
             VALUES (?1, ?2, ?3, 1, ?4)
             ON CONFLICT(command_id, context_type, source_app) DO UPDATE SET
@@ -172,6 +83,7 @@ impl UsageHistory for SqliteHistory {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anywhere_protocol::{JSON_DOCUMENT, JSON_LEGACY};
 
     fn legacy_row(count: u32, at: i64) -> UsageStats {
         UsageStats {
@@ -184,7 +96,7 @@ mod tests {
     fn sqlite_upserts_missing_app_and_survives_reopen() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("history.db");
-        let mut history = SqliteHistory::open(&path).unwrap();
+        let mut history = SqliteUsageRepository::open(&path).unwrap();
         for time in 10..13 {
             history.record("copy", "core.url", "", time).unwrap();
         }
@@ -192,7 +104,7 @@ mod tests {
             .record("copy", "core.url", "com.apple.finder", 15)
             .unwrap();
         drop(history);
-        let history = SqliteHistory::open(&path).unwrap();
+        let history = SqliteUsageRepository::open(&path).unwrap();
         let usage = history.load("").unwrap();
         assert_eq!(usage.len(), 1);
         assert_eq!(usage[&("copy".into(), "core.url".into())].execute_count, 3);
@@ -241,7 +153,7 @@ mod tests {
     fn global_usage_aggregates_across_apps_and_stays_separate_from_app_scoped_load() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("global.db");
-        let mut history = SqliteHistory::open(&path).unwrap();
+        let mut history = SqliteUsageRepository::open(&path).unwrap();
         history
             .record("app:com.google.Chrome", "application", "", 10)
             .unwrap();
@@ -279,7 +191,7 @@ mod tests {
 
     #[test]
     fn memory_history_aggregates_the_same_way_as_sqlite() {
-        let mut history = MemoryHistory::default();
+        let mut history = crate::core::ranking::usage::MemoryUsage::default();
         history
             .record("app:com.example", "application", "", 5)
             .unwrap();

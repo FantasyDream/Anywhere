@@ -3,7 +3,7 @@
 //! Resolvers only inspect the raw string. They never touch the filesystem beyond
 //! the explicit path check, never run a process and never reach the network
 //! (`PathResolver` does call `canonicalize`, which is the existing V0.1 behaviour).
-use crate::context::{ContextValue, ResolvedContext};
+use crate::core::context::{ContextValue, ResolvedContext};
 use anywhere_protocol::ContextSource::UserInput;
 use anywhere_protocol::*;
 use std::path::PathBuf;

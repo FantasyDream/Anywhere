@@ -340,7 +340,9 @@ mod tests {
         assert_eq!(MatchLevel::Exact.score(true), 4000);
         assert_eq!(MatchLevel::Substring.score(true), 1000);
         assert_eq!(MatchLevel::Exact.score(false), 0);
-        assert!(MatchLevel::Substring.score(true) > crate::ranking::NON_QUERY_TERM_CEILING);
+        assert!(
+            MatchLevel::Substring.score(true) > crate::core::ranking::score::NON_QUERY_TERM_CEILING
+        );
     }
 
     #[test]

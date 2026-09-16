@@ -2,7 +2,34 @@
 //!
 //! V0.2 builds the index once per process, in the background, and never blocks
 //! the first snapshot on it. No filesystem watcher and no persisted index.
-use crate::candidates::IndexedApplication;
+
+/// An installed application available for direct launch.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct IndexedApplication {
+    pub bundle_id: String,
+    pub name: String,
+    /// Canonical bundle path: both the launch target and the icon source.
+    pub path: String,
+    pub aliases: Vec<String>,
+    pub keywords: Vec<String>,
+}
+
+impl IndexedApplication {
+    /// Icon source for this application.
+    ///
+    /// The bytes are fetched lazily for visible rows only; holding them all in the index
+    /// would cost far more memory than the index itself.
+    pub fn icon_source(&self) -> &str {
+        &self.path
+    }
+
+    /// Usage row this application's history is recorded and read under.
+    ///
+    /// Derived from `bundle_id` so recording and ranking can never drift apart.
+    pub fn usage_id(&self) -> String {
+        crate::core::ranking::usage::application_usage_id(&self.bundle_id)
+    }
+}
 
 /// Local alias so tests can name the crate the way callers do.
 #[cfg(test)]
@@ -514,19 +541,22 @@ mod tests {
         // display name; the canonical one stays searchable as an alias.
         assert_eq!(applications[0].name, "飞书");
         assert_eq!(applications[0].aliases, vec!["Lark".to_owned()]);
-        let fields = crate::query::SearchFields::new(
+        let fields = crate::core::search::query::SearchFields::new(
             &applications[0].name,
             &applications[0].aliases,
             &applications[0].keywords,
         )
-        .with_metadata(&[
-            crate::candidates::searchable_bundle_id(&applications[0].bundle_id).as_str(),
-        ]);
+        .with_metadata(
+            &[crate::features::applications::source::searchable_bundle_id(
+                &applications[0].bundle_id,
+            )
+            .as_str()],
+        );
         assert!(fields
-            .matched(&crate::query::Query::parse("飞书"))
+            .matched(&crate::core::search::query::Query::parse("飞书"))
             .is_some());
         assert!(fields
-            .matched(&crate::query::Query::parse("Lark"))
+            .matched(&crate::core::search::query::Query::parse("Lark"))
             .is_some());
 
         // No languages configured: keep the canonical name and invent no aliases.
@@ -557,14 +587,16 @@ mod tests {
             vec!["Access the Internet".to_owned()]
         );
 
-        let fields = crate::query::SearchFields::new(
+        let fields = crate::core::search::query::SearchFields::new(
             &applications[0].name,
             &applications[0].aliases,
             &applications[0].keywords,
         );
         for query in ["chrome", "Google", "internet"] {
             assert!(
-                fields.matched(&crate::query::Query::parse(query)).is_some(),
+                fields
+                    .matched(&crate::core::search::query::Query::parse(query))
+                    .is_some(),
                 "{query} must find the application"
             );
         }
@@ -594,14 +626,18 @@ mod tests {
             );
         }
         // And the matcher agrees: a "com" fragment is not a match.
-        let fields = crate::query::SearchFields::new(
-            &application.name,
-            &application.aliases,
-            &application.keywords,
-        )
-        .with_metadata(&[crate::candidates::searchable_bundle_id(&application.bundle_id).as_str()]);
+        let fields =
+            crate::core::search::query::SearchFields::new(
+                &application.name,
+                &application.aliases,
+                &application.keywords,
+            )
+            .with_metadata(&[
+                crate::features::applications::source::searchable_bundle_id(&application.bundle_id)
+                    .as_str(),
+            ]);
         assert_eq!(
-            fields.matched(&crate::query::Query::parse("co")),
+            fields.matched(&crate::core::search::query::Query::parse("co")),
             None,
             "name={:?} aliases={:?} metadata={:?}",
             application.name,
@@ -626,7 +662,7 @@ mod tests {
         // Usage is addressed by the same id the launch path records under.
         assert_eq!(
             application.usage_id(),
-            anywhere_core_alias::history::application_usage_id("app.alpha.com")
+            anywhere_core_alias::core::ranking::usage::application_usage_id("app.alpha.com")
         );
     }
 

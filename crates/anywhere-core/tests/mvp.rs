@@ -2,11 +2,12 @@
 use anyhow::{bail, Result};
 use anywhere_core::{
     applications::ApplicationCatalog,
-    candidates::IndexedApplication,
-    command::CommandRegistry,
     context::{ContextValue, ResolvedContext},
-    history::{MemoryHistory, SqliteHistory, UsageHistory},
-    provider::{ContextProvider, ExecutionContext, ProviderDescriptor},
+    core::action::descriptor::CommandRegistry,
+    core::context::provider::{ContextProvider, ExecutionContext, ProviderDescriptor},
+    core::ranking::usage::{MemoryUsage, UsageRepository},
+    features::applications::index::IndexedApplication,
+    persistence::usage::SqliteUsageRepository,
     Application, LauncherApplication,
 };
 use anywhere_platform::{ApplicationInfo, BundleApplication, GitOperation, GitOutput, Platform};
@@ -206,12 +207,12 @@ impl Platform for TestPlatform {
 }
 
 /// Hands the same memory history to the core and to the test.
-struct SharedHistory(Arc<Mutex<MemoryHistory>>);
-impl UsageHistory for SharedHistory {
-    fn load(&self, source_app: &str) -> Result<anywhere_core::history::UsageSnapshot> {
+struct SharedHistory(Arc<Mutex<MemoryUsage>>);
+impl UsageRepository for SharedHistory {
+    fn load(&self, source_app: &str) -> Result<anywhere_core::core::ranking::usage::UsageSnapshot> {
         self.0.lock().unwrap().load(source_app)
     }
-    fn load_global(&self) -> Result<anywhere_core::history::UsageSnapshot> {
+    fn load_global(&self) -> Result<anywhere_core::core::ranking::usage::UsageSnapshot> {
         self.0.lock().unwrap().load_global()
     }
     fn record(
@@ -236,18 +237,13 @@ fn registry() -> CommandRegistry {
     registry
 }
 fn app(platform: Arc<TestPlatform>) -> Application {
-    Application::new(
-        platform,
-        registry(),
-        Box::<MemoryHistory>::default(),
-        vec![],
-    )
+    Application::new(platform, registry(), Box::<MemoryUsage>::default(), vec![])
 }
 fn app_with_budget(platform: Arc<TestPlatform>, budget: Duration) -> Application {
     Application::with_budget(
         platform,
         registry(),
-        Box::<MemoryHistory>::default(),
+        Box::<MemoryUsage>::default(),
         vec![],
         budget,
     )
@@ -827,7 +823,7 @@ async fn launching_an_application_records_usage_under_the_ranked_id() {
         std::fs::create_dir_all(home.join(format!("{name}.app/Contents"))).unwrap();
     }
     let platform = Arc::new(TestPlatform::new(home, false));
-    let history = Arc::new(Mutex::new(MemoryHistory::default()));
+    let history = Arc::new(Mutex::new(MemoryUsage::default()));
     let app = Application::new(
         platform,
         registry(),
@@ -861,8 +857,8 @@ async fn launching_an_application_records_usage_under_the_ranked_id() {
     assert_eq!(
         recorded,
         vec![(
-            anywhere_core::history::application_usage_id("app.googlechrome.com"),
-            anywhere_core::history::APPLICATION_CONTEXT_TYPE.to_owned(),
+            anywhere_core::core::ranking::usage::application_usage_id("app.googlechrome.com"),
+            anywhere_core::core::ranking::usage::APPLICATION_CONTEXT_TYPE.to_owned(),
             "test.editor".to_owned(),
         )],
         "usage must be recorded under the id the matcher reads"
@@ -876,7 +872,7 @@ async fn launching_an_application_records_usage_under_the_ranked_id() {
 async fn activation_loads_history_scoped_to_the_foreground_application() {
     let dir = tempfile::tempdir().unwrap();
     let platform = Arc::new(TestPlatform::new(dir.path().canonicalize().unwrap(), true));
-    let history = Arc::new(Mutex::new(MemoryHistory::default()));
+    let history = Arc::new(Mutex::new(MemoryUsage::default()));
     for _ in 0..12 {
         history
             .lock()
@@ -920,7 +916,7 @@ async fn real_sqlite_history_lifts_a_repeatedly_used_action_to_the_top() {
     let database = dir.path().join("usage.sqlite3");
     let now = 1789445000i64;
     {
-        let mut history = SqliteHistory::open(&database).unwrap();
+        let mut history = SqliteUsageRepository::open(&database).unwrap();
         for (command, count) in [
             ("core.directory.copy", 8u32),
             ("core.directory.terminal", 5),
@@ -938,7 +934,7 @@ async fn real_sqlite_history_lifts_a_repeatedly_used_action_to_the_top() {
     let app = Application::new(
         platform,
         registry(),
-        Box::new(SqliteHistory::open(&database).unwrap()),
+        Box::new(SqliteUsageRepository::open(&database).unwrap()),
         vec![],
     );
     let state = app.activate().await.unwrap().unwrap();
@@ -1005,7 +1001,7 @@ async fn a_disabled_candidate_cannot_execute() {
     let app = Application::new(
         Arc::new(NoGit(inner.clone())),
         registry(),
-        Box::<MemoryHistory>::default(),
+        Box::<MemoryUsage>::default(),
         vec![],
     );
     let state = app.activate().await.unwrap().unwrap();
@@ -1413,7 +1409,7 @@ async fn usage_is_recorded_even_when_the_action_ends_its_own_session() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().canonicalize().unwrap();
     let platform = Arc::new(TestPlatform::new(root, true));
-    let history = Arc::new(Mutex::new(MemoryHistory::default()));
+    let history = Arc::new(Mutex::new(MemoryUsage::default()));
     let app = Arc::new(Application::new(
         platform.clone(),
         registry(),
@@ -1804,11 +1800,11 @@ fn invalid_plugin_does_not_partially_register_and_discovery_continues() {
 #[tokio::test]
 async fn successful_action_with_history_failure_reports_a_warning() {
     struct UnwritableHistory;
-    impl anywhere_core::history::UsageHistory for UnwritableHistory {
-        fn load(&self, _: &str) -> Result<anywhere_core::history::UsageSnapshot> {
+    impl anywhere_core::core::ranking::usage::UsageRepository for UnwritableHistory {
+        fn load(&self, _: &str) -> Result<anywhere_core::core::ranking::usage::UsageSnapshot> {
             Ok(Default::default())
         }
-        fn load_global(&self) -> Result<anywhere_core::history::UsageSnapshot> {
+        fn load_global(&self) -> Result<anywhere_core::core::ranking::usage::UsageSnapshot> {
             Ok(Default::default())
         }
         fn record(&mut self, _: &str, _: &str, _: &str, _: i64) -> Result<()> {

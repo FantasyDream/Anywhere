@@ -8,12 +8,14 @@
 //! Finder Automation, FFI, window rendering and RSS are not measurable here; use
 //! `launcher.log` and the manual validation checklist for those.
 use anywhere_core::{
-    candidates::{IndexedApplication, Matcher, SessionFacts},
-    command::CommandRegistry,
+    core::action::descriptor::CommandRegistry,
+    core::search::engine::SearchEngine,
+    features::applications::index::IndexedApplication,
     input::{text_context, InputEngine},
     provider::{repository_root, text_provider_contexts},
     query::Query,
     ranking::UsageStats,
+    SessionFacts,
 };
 use std::time::Instant;
 
@@ -47,7 +49,7 @@ fn main() {
         git_available: true,
         ..Default::default()
     };
-    let matcher = Matcher {
+    let engine = SearchEngine {
         registry: &registry,
         applications: &catalog,
         usage: &empty_usage,
@@ -85,7 +87,7 @@ fn main() {
             let recognized = started.elapsed();
 
             let query = Query::parse(input);
-            let set = matcher.build(&query, &contexts);
+            let set = engine.search(&query, &contexts);
 
             if sample >= 100 {
                 recognize.push(recognized.as_nanos());
