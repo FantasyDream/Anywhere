@@ -4,20 +4,19 @@
 //! facade so a background completion task can own a clone and publish late context
 //! without borrowing the facade.
 use crate::{
-    applications::ApplicationCatalog,
-    command::CommandRegistry,
-    context::ResolvedContext,
+    core::action::descriptor::CommandRegistry,
+    core::context::engine::{stamp, ContextGraph, ContextGraphRun, GraphStep},
+    core::context::provider::ContextProvider,
+    core::context::registry::ContextProviderRegistry,
+    core::context::{ExecutionContext, ResolvedContext},
+    core::ranking::score::UsageStats,
+    core::ranking::usage::UsageRepository,
     core::search::candidate::Candidate,
     core::search::engine::SearchEngine,
+    core::search::query::Query,
     core::session::facts::SessionFacts,
-    features::applications::index::IndexedApplication,
-    history::UsageRepository,
-    provider::{
-        stamp, ContextGraph, ContextGraphRun, ContextProvider, CurrentDirectoryProvider,
-        ExecutionContext, GitRepositoryProvider, GraphStep, InputTypeProvider, TextProvider,
-    },
-    query::Query,
-    ranking::UsageStats,
+    features::applications::index::{ApplicationCatalog, IndexedApplication},
+    features::filesystem::provider::CurrentDirectoryProvider,
 };
 use anyhow::{anyhow, Result};
 use anywhere_platform::{ApplicationInfo, Platform};
@@ -38,7 +37,7 @@ pub struct Session {
     /// Immutable ambient capture: the original frontmost application.
     pub frontmost: Option<ApplicationInfo>,
     /// Session-scoped single-flight directory capture.
-    pub directory: Option<Arc<crate::core::context::provider::DirectoryMemo>>,
+    pub directory: Option<Arc<crate::features::filesystem::provider::DirectoryMemo>>,
     /// Snapshot of the real text clipboard, read once at activation.
     pub clipboard: Option<String>,
     pub git_available: bool,
@@ -71,7 +70,7 @@ pub struct Resolver {
     pub platform: Arc<dyn Platform>,
     pub registry: Arc<CommandRegistry>,
     /// Stateless providers; the directory provider is added per revision.
-    pub providers: Vec<Arc<dyn ContextProvider>>,
+    pub providers: ContextProviderRegistry,
     pub session: Arc<Mutex<Session>>,
     pub current: Arc<AtomicU64>,
     pub events: broadcast::Sender<LauncherEvent>,
@@ -102,11 +101,14 @@ impl Resolver {
         Self {
             platform,
             registry: Arc::new(registry),
-            providers: vec![
-                Arc::new(TextProvider::default()),
-                Arc::new(InputTypeProvider::default()),
-                Arc::new(GitRepositoryProvider::default()),
-            ],
+            // Registration order does not matter: the registry sorts by priority, then id.
+            providers: {
+                let mut providers = ContextProviderRegistry::default();
+                for provider in crate::features::builtin_providers() {
+                    let _ = providers.register(provider);
+                }
+                providers
+            },
             session: Arc::new(Mutex::new(Session::default())),
             current: Arc::new(AtomicU64::new(0)),
             events: broadcast::channel(256).0,
@@ -118,13 +120,12 @@ impl Resolver {
     }
 
     pub fn register_provider(&mut self, provider: Arc<dyn ContextProvider>) -> Result<()> {
-        let mut graph = ContextGraph::default();
-        for existing in self.providers.drain(..) {
-            graph.register(existing)?;
-        }
-        graph.register(provider)?;
-        self.providers = graph.into_providers();
-        Ok(())
+        self.providers.register(provider)
+    }
+
+    /// The providers every session gets, in the order the registry will run them.
+    pub fn provider_ids(&self) -> Vec<&str> {
+        self.providers.ids()
     }
 
     pub fn execution(&self, session_id: SessionId, revision: Revision) -> ExecutionContext {
@@ -221,15 +222,10 @@ impl Resolver {
             .and_then(|session| session.directory.clone());
         let mut providers = self.providers.clone();
         if let Some(directory) = directory {
-            providers.push(Arc::new(CurrentDirectoryProvider::new(directory)));
+            // The one per-session provider: the capture it wraps is bound to this session.
+            let _ = providers.register(Arc::new(CurrentDirectoryProvider::new(directory)));
         }
-        providers.sort_by(|a, b| {
-            b.descriptor()
-                .priority
-                .cmp(&a.descriptor().priority)
-                .then_with(|| a.descriptor().id.cmp(&b.descriptor().id))
-        });
-        providers
+        providers.providers().to_vec()
     }
 
     pub fn build_run(
@@ -578,9 +574,11 @@ impl Resolver {
 pub fn seeds_from(session: &Session, input: &str) -> Vec<ResolvedContext> {
     let mut seeds = session.context_cache.clone();
     if let Some(frontmost) = &session.frontmost {
-        seeds.push(crate::core::context::provider::frontmost_context(frontmost));
+        seeds.push(crate::features::applications::context::frontmost_context(
+            frontmost,
+        ));
     }
-    if let Some(text) = crate::core::context::resolvers::text_context(input) {
+    if let Some(text) = crate::features::text::provider::text_context(input) {
         seeds.push(text);
     }
     seeds

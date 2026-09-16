@@ -1,12 +1,14 @@
 //! What the user is looking at, and how it is discovered.
 //!
-//! A `Context` is an object plus its type and where it came from; a `ResolvedContext` is one
-//! that a provider produced for a specific session and revision. Providers turn contexts into
-//! further contexts (`core.text` into `core.url`, a directory into a `git.repository`), which
-//! is the whole of the resolution model.
+//! A [`ResolvedContext`] is an object plus its type and where it came from. Providers turn
+//! contexts into further contexts, which is the whole of the resolution model: `core.text`
+//! into `core.url`, a directory into a `git.repository`. The engine walks that graph
+//! sequentially, and the registry holds the providers available to a session.
+pub mod engine;
 pub mod provider;
-/// Input recognizers (URL, JSON, path). Being folded into providers as features migrate.
-pub mod resolvers;
+pub mod registry;
+
+pub use engine::{ContextGraphRun, ExecutionContext, GraphStep, MAX_DEPTH};
 
 // The vocabulary a context is expressed in. Re-exported so callers do not have to reach into
 // the protocol crate for the types this module is built from.

@@ -1,3 +1,4 @@
-//! Installed-application index and its search source.
+//! Installed-application index, its context and its search source.
+pub mod context;
 pub mod index;
 pub mod source;

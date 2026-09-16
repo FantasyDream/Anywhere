@@ -1,7 +1,8 @@
 //! Launcher facade: activation capture, request lifecycle, execution, subscription.
 use crate::{
-    applications, command::CommandRegistry, execution, history::UsageRepository,
-    provider::DirectoryMemo, resolver::Resolver,
+    applications, command::CommandRegistry, core::context::engine::ContextGraphRun,
+    core::session::manager::Resolver, execution, features::filesystem::provider::DirectoryMemo,
+    history::UsageRepository,
 };
 use anyhow::{bail, Context, Result};
 use anywhere_platform::{ApplicationInfo, Platform};
@@ -256,7 +257,7 @@ impl Application {
         &self,
         session_id: SessionId,
         revision: Revision,
-        run: crate::core::context::provider::ContextGraphRun,
+        run: ContextGraphRun,
         started: Instant,
         startup_diagnostics: Vec<String>,
     ) {
@@ -373,7 +374,7 @@ impl LauncherApplication for Application {
                 ..Default::default()
             };
             self.resolver.current.store(
-                crate::core::context::provider::stamp(session_id, 0),
+                crate::core::context::engine::stamp(session_id, 0),
                 std::sync::atomic::Ordering::Release,
             );
             session_id
@@ -467,7 +468,7 @@ impl LauncherApplication for Application {
             session.snapshot_seq = 0;
             session.published_contexts = 0;
             self.resolver.current.store(
-                crate::core::context::provider::stamp(session_id, revision),
+                crate::core::context::engine::stamp(session_id, revision),
                 std::sync::atomic::Ordering::Release,
             );
             // Build seeds from the guard we already hold; `seeds_for` would deadlock here.
@@ -534,7 +535,7 @@ impl LauncherApplication for Application {
                     .resolver
                     .current
                     .load(std::sync::atomic::Ordering::Acquire)
-                    != crate::core::context::provider::stamp(session_id, session.state.revision)
+                    != crate::core::context::engine::stamp(session_id, session.state.revision)
                 || session.state.revision != revision
             {
                 bail!("stale session");
@@ -750,7 +751,7 @@ impl SessionSubscription {
             };
             if session_id == self.session_id
                 && self.current.load(std::sync::atomic::Ordering::Acquire)
-                    == crate::core::context::provider::stamp(session_id, revision)
+                    == crate::core::context::engine::stamp(session_id, revision)
             {
                 return Ok(event);
             }

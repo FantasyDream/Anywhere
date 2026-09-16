@@ -399,15 +399,10 @@ impl CommandRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::context::resolvers::text_context;
-    use crate::core::context::resolvers::InputEngine;
+    use crate::features::recognized_contexts;
 
     fn seed(input: &str) -> Vec<ResolvedContext> {
-        let mut contexts = InputEngine.resolve(input);
-        if let Some(text) = text_context(input) {
-            contexts.insert(0, text);
-        }
-        contexts
+        recognized_contexts(input)
     }
 
     fn json_context() -> ResolvedContext {

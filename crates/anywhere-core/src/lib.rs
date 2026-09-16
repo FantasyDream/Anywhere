@@ -26,7 +26,6 @@ pub use crate::core::action::descriptor as command;
 pub use crate::core::action::executor as execution;
 pub use crate::core::context;
 pub use crate::core::context::provider;
-pub use crate::core::context::resolvers as input;
 pub use crate::core::ranking::score as ranking;
 pub use crate::core::ranking::usage;
 pub use crate::core::search::candidate as candidates;

@@ -8,14 +8,9 @@
 //! Finder Automation, FFI, window rendering and RSS are not measurable here; use
 //! `launcher.log` and the manual validation checklist for those.
 use anywhere_core::{
-    core::action::descriptor::CommandRegistry,
-    core::search::engine::SearchEngine,
-    features::applications::index::IndexedApplication,
-    input::{text_context, InputEngine},
-    provider::{repository_root, text_provider_contexts},
-    query::Query,
-    ranking::UsageStats,
-    SessionFacts,
+    core::action::descriptor::CommandRegistry, core::search::engine::SearchEngine,
+    features::applications::index::IndexedApplication, features::git::provider::repository_root,
+    features::recognized_contexts, query::Query, ranking::UsageStats, SessionFacts,
 };
 use std::time::Instant;
 
@@ -80,10 +75,7 @@ fn main() {
         let mut ranking_times = Vec::new();
         for sample in 0..1100 {
             let started = Instant::now();
-            let mut contexts = InputEngine.resolve(std::hint::black_box(input));
-            if let Some(text) = text_context(input) {
-                contexts.insert(0, text);
-            }
+            let contexts = recognized_contexts(std::hint::black_box(input));
             let recognized = started.elapsed();
 
             let query = Query::parse(input);
@@ -118,6 +110,6 @@ fn main() {
     );
     println!(
         "text provider contexts for \"hello world\": {}",
-        text_provider_contexts("hello world").len()
+        recognized_contexts("hello world").len()
     );
 }

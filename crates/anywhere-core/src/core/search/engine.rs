@@ -120,22 +120,18 @@ impl SearchEngine<'_> {
 mod tests {
     use super::*;
     use crate::core::action::descriptor::CommandRegistry;
-    use crate::core::context::resolvers::{text_context, InputEngine};
     use crate::core::context::{ContextValue, ResolvedContext};
     use crate::core::ranking::usage::UsageStats;
     use crate::core::search::candidate::action_candidate_id;
     use crate::core::session::facts::SessionFacts;
     use crate::features::applications::index::IndexedApplication;
     use crate::features::applications::source::application_candidate_id;
+    use crate::features::recognized_contexts;
     use anywhere_platform::ApplicationInfo;
     use anywhere_protocol::*;
 
     fn contexts(input: &str) -> Vec<ResolvedContext> {
-        let mut contexts = InputEngine.resolve(input);
-        if let Some(text) = text_context(input) {
-            contexts.insert(0, text);
-        }
-        contexts
+        recognized_contexts(input)
     }
 
     fn facts() -> SessionFacts {
