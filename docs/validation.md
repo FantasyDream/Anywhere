@@ -191,8 +191,9 @@ Safari (com.apple.Safari)       aliases=["Safari浏览器"]
 
 - `a_slow_directory_capture_still_shows_context_actions_without_typing`：150ms 捕获 + 40ms 预算，首屏必须已含 Open Terminal Here 与 Folder Scope。
 - `first_snapshot_waits_for_the_step_after_the_directory`：60ms 捕获 + 30ms 预算，首屏必须已含 Git Status 且 Scope 顺序为 `all/app/git/folder`。
-- `first_snapshot_grace_is_bounded_and_late_pass_still_completes`：1200ms 捕获 + 20ms 预算 + 60ms grace，首屏必须在 900ms 内返回且为空，late pass 随后补齐动作。
+- `first_snapshot_grace_is_bounded_and_late_pass_still_completes`：250ms 捕获 + 20ms 预算 + 60ms grace，首屏必须在 600ms 内返回且为空，late pass 随后补齐动作；同时断言 `first_snapshot_budget_reached` 在预算到期时被记录。
 - 原有零预算测试显式关闭 grace，继续覆盖纯预算路径与 late append。
+- `every_named_performance_metric_is_emitted_for_one_activation`：零预算 + 零 grace 走截断与 late append，七项指标必须全部出现。该用例给目录捕获加 50ms 延迟，让首屏**确定**在一次 Provider 调用在飞时被截断——捕获瞬时完成时零预算截断会与 Provider 竞争，谁赢决定 `provider_duration` 是否发出，断言因此不稳定。
 
 ## 第二轮审查发现的缺陷与修复
 

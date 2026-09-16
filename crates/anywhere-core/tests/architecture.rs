@@ -60,13 +60,14 @@ async fn the_provider_chain_is_recursive_and_deduplicates() {
     let execution = anywhere_core::core::context::ExecutionContext::detached(1, 0);
     let seeds = features::recognized_contexts(root.to_str().unwrap());
     let mut run = ContextGraph::start(seeds, &execution);
+    let started = std::time::Instant::now();
     let mut rounds = 0;
     loop {
         rounds += 1;
         assert!(rounds < 64, "the graph never finished");
         match run.step(registry.providers()) {
             GraphStep::Pending => {
-                let Some(outcome) = run.await_pending(None, None).await else {
+                let Some(outcome) = run.await_pending(None, None, started).await else {
                     continue;
                 };
                 run.settle(outcome);

@@ -277,7 +277,9 @@ impl Resolver {
                 GraphStep::Pending => {
                     // Wait on the detached call the run already started: a cut leaves it
                     // running, and the late pass collects this same result.
-                    let Some(outcome) = run.await_pending(budget_deadline, grace_deadline).await
+                    let Some(outcome) = run
+                        .await_pending(budget_deadline, grace_deadline, started)
+                        .await
                     else {
                         return Some(self.cut_short(session_id, revision, run, started));
                     };

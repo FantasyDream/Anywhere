@@ -144,10 +144,14 @@ async fn run_provider(
 ///
 /// `None` means the deadline (and grace) expired first. The call keeps running: the
 /// receiver stays in the run, and the late pass awaits it with no deadline at all.
+///
+/// `started` is the beginning of the resolution this wait belongs to, recorded so the
+/// budget can be reported against the same origin the rest of the timings use.
 async fn await_outcome(
     outcome: &mut oneshot::Receiver<StepOutcome>,
     deadline: Option<Instant>,
     grace: Option<Instant>,
+    started: Instant,
 ) -> Option<StepOutcome> {
     let Some(deadline) = deadline else {
         // The late pass waits however long the provider needs.
@@ -161,6 +165,16 @@ async fn await_outcome(
             _ = tokio::time::sleep(budget) => {}
         }
     }
+    // The budget is spent, whether or not anything was still pending. Recording it here
+    // rather than at publication keeps the field meaning "the budget expired", which is
+    // what the acceptance criterion measures; the grace below only extends the *wait*.
+    tracing::info!(
+        extension_us = grace
+            .map(|grace| grace.saturating_duration_since(Instant::now()).as_micros() as u64)
+            .unwrap_or(0),
+        duration_us = started.elapsed().as_micros() as u64,
+        "first_snapshot_budget_reached"
+    );
     // The budget is gone. Waiting a little longer is worth it because a frame cut here
     // would publish a half-finished list: on the real machine the budget landed exactly
     // before the Git provider ran.
@@ -178,7 +192,6 @@ async fn await_outcome(
     }
 }
 
-/// One resolution pass over the context graph.
 /// One resolution pass over the context graph.
 ///
 /// Deliberately not `Clone`: the run owns the one in-flight provider call, so a budget cut
@@ -249,14 +262,16 @@ impl ContextGraphRun {
     /// Await the started call, or `None` when it has no pending call.
     ///
     /// Returns `None` again if the caller's deadline expires first: the task keeps running
-    /// and a later pass awaits the same receiver.
+    /// and a later pass awaits the same receiver. `started` is the origin of the resolution
+    /// this wait belongs to, used to report the budget against the same clock.
     pub async fn await_pending(
         &mut self,
         deadline: Option<Instant>,
         grace: Option<Instant>,
+        started: Instant,
     ) -> Option<StepOutcome> {
         let pending = self.pending.as_mut()?;
-        await_outcome(&mut pending.outcome, deadline, grace).await
+        await_outcome(&mut pending.outcome, deadline, grace, started).await
     }
 
     /// Whether a started call is still waiting to be polled.
@@ -491,7 +506,10 @@ mod tests {
                 GraphStep::Pending => {
                     // The run owns the started call; this is the same detached task the
                     // resolver awaits and the late pass would collect.
-                    let Some(outcome) = run.await_pending(None, None).await else {
+                    let Some(outcome) = run
+                        .await_pending(None, None, std::time::Instant::now())
+                        .await
+                    else {
                         continue;
                     };
                     run.settle(outcome);

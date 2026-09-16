@@ -1722,6 +1722,8 @@ async fn first_snapshot_waits_for_the_step_after_the_directory() {
 /// first snapshot, and the late pass still fills the actions in.
 #[tokio::test]
 async fn first_snapshot_grace_is_bounded_and_late_pass_still_completes() {
+    let fields = recorded_fields();
+    fields.lock().unwrap().clear();
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().canonicalize().unwrap();
     let platform = Arc::new(TestPlatform {
@@ -1738,6 +1740,15 @@ async fn first_snapshot_grace_is_bounded_and_late_pass_still_completes() {
         "the first snapshot must not wait for the whole capture: {elapsed:?}"
     );
     assert!(titles(&state).is_empty(), "{:?}", titles(&state));
+
+    // ADR 005: the 40ms budget itself is unchanged and still reported when it expires;
+    // the grace below only extends the wait, it does not extend provider work.
+    let seen = fields.lock().unwrap().clone();
+    assert!(
+        seen.iter()
+            .any(|field| field == "first_snapshot_budget_reached"),
+        "the budget must be reported when it expires; saw {seen:?}"
+    );
 
     let ready = settled(&app, state.session_id, state.revision).await;
     assert!(titles(&ready).contains(&"Open Terminal Here"));
@@ -1988,10 +1999,17 @@ async fn every_named_performance_metric_is_emitted_for_one_activation() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().canonicalize().unwrap();
     std::fs::create_dir(root.join(".git")).unwrap();
-    let platform = Arc::new(TestPlatform::new(root, true));
-    // Zero budget so the first snapshot is cut short and a late pass follows.
+    // A capture slower than the budget, so the first snapshot is certainly cut short
+    // *while a provider is in flight* and a late pass follows. With an instantaneous
+    // capture the zero-budget cut races the provider: whichever wins decides whether
+    // `provider_duration` is ever emitted, which made this assertion flaky.
+    let platform = Arc::new(TestPlatform {
+        capture_delay: Some(Duration::from_millis(50)),
+        ..TestPlatform::new(root, true)
+    });
     let app = app_with_budget(platform, Duration::ZERO).with_content_grace(Duration::ZERO);
     let state = app.activate().await.unwrap().unwrap();
+    // The late pass is what settles the cut-short provider and emits its duration.
     let _ = settled(&app, state.session_id, state.revision).await;
 
     let seen = fields.lock().unwrap().clone();
