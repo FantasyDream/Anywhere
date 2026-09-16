@@ -10,12 +10,12 @@ macOS 26.6.2 / Apple Silicon，Rust 1.98.1，Flutter `3.47.0-1.0.pre-1`（Engine
 
 | 检查 | 命令 | 结果 |
 |---|---|---|
-| 工作区测试 | `cargo test --workspace --locked` | 通过：Core lib 56、Facade 32、Platform 10、Plugin 2、Protocol 4（共 104 项） |
+| 工作区测试 | `cargo test --workspace --locked` | 通过：Core lib 57、Facade 32、Platform 10、Plugin 2、Protocol 4（共 105 项） |
 | Clippy | `cargo clippy --workspace --all-targets --locked -- -D warnings` | 通过，无警告 |
 | 格式 | `cargo fmt --all --check` | 通过 |
 | 架构边界 | `python3 scripts/check-architecture.py` | 通过：90 个 Core 依赖，无 UI/Flutter 依赖 |
 | Flutter 静态检查 | `flutter analyze` | No issues found |
-| Flutter 组件测试 | `flutter test` | 通过：17 项 |
+| Flutter 组件测试 | `flutter test` | 通过：18 项 |
 | macOS Release 构建 | `scripts/build-macos.sh` | 通过，签名校验成功 |
 | 微基准 | `cargo run --release -p anywhere-core --example measure` | 见下表 |
 | Windows 类型检查 | `ANYWHERE_SKIP_NATIVE=1 cargo clippy --target x86_64-pc-windows-msvc -p anywhere-platform --all-targets -- -D warnings` | 通过（只含 Rust 侧；`native/windows.cpp` 需 Windows SDK，未编译） |
@@ -251,9 +251,28 @@ Safari (com.apple.Safari)       aliases=["Safari浏览器"]
 
 R2、R3、R6 的修复都补了「修复前必失败」的回归测试；R4、R5 的两个 Flutter 测试同样在修复前失败（R4 的测试最初写得不触达订阅路径，已改写）。
 
+## 第五轮静态复核（S1–S2、C1–C3）
+
+第三轮静态复核的 5 项。S1 按用户决定保持现状；其余 4 项已修复，另有 2 处测试覆盖缺口已补齐。
+
+| 编号 | 发现 | 结论 | 处理 |
+|---|---|---|---|
+| S1 | 默认行为仍不是 budget 到期就生成首屏 | 按用户决定保持现状 | 用户明确「首评预算不用管了，按现有的来」。ADR 005 的「首屏验收口径的变更」保持，不再作为待办 |
+| S2 | 30 秒无更新后退出，迟到结果仍可能无法显示 | 已修复 | `waitForSnapshot` 超时不再返回当前快照，而是返回 `None`；Dart 循环收到 `None` 后**继续等待**而不是结束订阅。会话结束（generation/可见性/换 Session）才退出；桥接发送端关闭时也返回 `None` |
+| C1 | 每次输入都新增监听，旧监听未结束 | 已修复 | 监听改为**每个可见 Session 一个**：激活时启动一次（`_armFollow`），`updateInput` 不再新建，循环自己跟随 Revision。游标改为 `(revision, snapshot_seq)` 组成的会话单调值（`snapshotCursor`），因为 `snapshot_seq` 在每个 Revision 会重置为 1，单独比较无法跨输入排序——桥接侧同样改为 revision-aware 游标。测试断言「可见 Session 始终只有一个监听，等待结束后重新挂载」 |
+| C2 | Windows 把描述当应用名称，真实名称可能搜不到 | 已修复 | 显示名改为快捷方式文件名（stem，即开始菜单里显示、用户会念会打的名字），描述单独返回并进入 `aliases`（可搜索、不显示）。`BundleApplication` 新增 `aliases` 字段承载这类「平台知道但不作为标题」的名字。新增 `platform_aliases_are_searchable_and_never_replace_the_title`：该测试第一版就抓到了实现错误——别名被混进 localized 列表，于是描述又变成了标题 |
+| C3 | 有分配边界，但仍完整扫描超大剪贴板 | 已修复 | 源扫描上限改为 `min(GlobalSize, capacity - 1)`：超出快照容量的部分不再扫描，按无文本处理。激活时的剪贴板读取成本不再随剪贴板大小增长 |
+
+覆盖缺口的补齐（这两处原先的测试没有真正制造目标场景）：
+
+- `the index rebuild reaches the window`：改为**真正投递第二份快照**并断言它出现在界面上，同时参数化覆盖「激活时 `contextComplete` 已为 true」与「false」两种情形，并断言可见 Session 始终只有一个监听。修复前该测试失败。
+- `a selected row stays selectable when late rows push it past Home`：改为在已选项**前面**插入 4 条更高分候选，使选中行从第 7 位降到第 11 位，并断言选中行仍在屏幕上、**Enter 执行的是原选中行**（`action:command.6:c1`）而不是新的第一名。修复前该测试失败。
+
+R12 埋点口径的准确说明：`matcher_duration` 只包含动作匹配，`applications_duration` 只包含应用索引匹配，`ranking_duration` 仍包含去重、**text fallback 构造**与 Scope 构建，不能读作纯排序时间。原先「应用匹配大头错算进 ranking」的问题已处理；是否有性能或内存回归仍需实测，不能由埋点本身推导。
+
 ## 与规格的偏差（有意保留）
 
-- **首屏预算口径已变更**：规格 §2 写「预算到期即返回」，实现改为「预算到期时若仍有 Provider 在飞，最多再等 `DEFAULT_FIRST_CONTENT_GRACE`（400ms）」。这是验收标准的变更（已确认），不是实现偏差——原始口径必然复现用户报告的第一个缺陷（Finder 唤起后必须先输入才显示目录动作）。完整对照、代价与回退方式见 `docs/decisions/005-v0.2-minimal-mvp.md` 的「首屏验收口径的变更」。`hotkey_to_visible < 100ms` 在带慢目录捕获时不再成立，人工清单 R05 已改为分别记录两种情况并与 grace 对照。
+- **首屏预算口径已变更（用户已确认保持现状）**：规格 §2 写「预算到期即返回」，实现改为「预算到期时若仍有 Provider 在飞，最多再等 `DEFAULT_FIRST_CONTENT_GRACE`（400ms）」。完整对照、代价与回退方式见 `docs/decisions/005-v0.2-minimal-mvp.md` 的「首屏验收口径的变更」。`hotkey_to_visible < 100ms` 在带慢目录捕获时不再成立，人工清单 R05 已改为分别记录两种情况并与 grace 对照。后续静态复核仍会把它列为与原规格的差异；这是已知且已决定的产品选择，不再作为待修项。
 - **Home 上限 7**：规格写 5~8，取 7 作为验收默认值，由 Flutter 视图施加；用户手动选中的行会作为第 8 行保留，视图上限不能吞掉选择。
 
 ## 与 V0.1 的对比口径

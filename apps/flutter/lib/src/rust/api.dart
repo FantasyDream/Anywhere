@@ -6,8 +6,9 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `application`, `availability_state`, `kind_name`, `newer_than`, `scope_kind_name`
+// These functions are ignored because they are not marked as `pub`: `application`, `availability_state`, `beyond`, `kind_name`, `scope_kind_name`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`
+// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `cursor`
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
 
@@ -32,15 +33,16 @@ Future<LauncherStateDto?> updateInput(
 Future<LauncherStateDto?> latestState({required int sessionId}) =>
     RustLib.instance.api.crateApiLatestState(sessionId: sessionId);
 
-/// Block until the core publishes a snapshot newer than `after_seq` for this session.
+/// Block until the core publishes a snapshot beyond `after` for this session.
 ///
-/// Late context is committed by a background task, so the core's own update channel
-/// is the only place a caller can observe it. Returns the newest snapshot, or the
-/// current one on timeout, so a Dart-side loop can await context without polling.
+/// Late context is committed by a background task, so the core's own update channel is the
+/// only place a caller can observe it. Returns the newest snapshot when one arrives, or
+/// `None` on timeout, so the caller can wait again from the same cursor — a wait that ends
+/// because nothing happened must not be mistaken for the session being finished.
 Future<LauncherStateDto?> waitForSnapshot(
-        {required int sessionId, required int afterSeq}) =>
+        {required int sessionId, required BigInt after}) =>
     RustLib.instance.api
-        .crateApiWaitForSnapshot(sessionId: sessionId, afterSeq: afterSeq);
+        .crateApiWaitForSnapshot(sessionId: sessionId, after: after);
 
 Future<ActionResultDto> execute(
         {required int sessionId,

@@ -17,10 +17,19 @@ typedef Execute = Future<ActionResultDto> Function(
   int revision,
   String candidate,
 );
+/// Awaits a snapshot beyond `after`, or null when the wait elapsed with nothing new.
+///
+/// `after` is a session-monotonic cursor (see [snapshotCursor]); the core restarts
+/// `snapshot_seq` at 1 for every revision, so the sequence alone cannot order snapshots
+/// across an input change.
 typedef WaitForSnapshot = Future<LauncherStateDto?> Function(
   int session,
-  int afterSeq,
+  int after,
 );
+
+/// Monotonic position of one snapshot within its session.
+int snapshotCursor(LauncherStateDto state) =>
+    (state.revision << 32) | state.snapshotSeq;
 /// Fetches an application icon on demand; presentation only.
 typedef LoadIcon = Future<Uint8List?> Function(String candidateId);
 
@@ -410,8 +419,8 @@ class _LauncherScreenState extends State<LauncherScreen> {
       await _syncWindow(show: true);
       if (mounted && _visible && generation == _generation) {
         _focus.requestFocus();
-        unawaited(
-            _followLateContext(generation, state.sessionId, state.snapshotSeq));
+        // The session's single listener starts here.
+        _armFollow(state.sessionId);
       }
     } catch (error) {
       if (mounted && generation == _generation) {
@@ -429,29 +438,38 @@ class _LauncherScreenState extends State<LauncherScreen> {
     }
   }
 
-  /// Await context published after the first snapshot and fold it in.
+  /// Follow one session for as long as its window is up.
   ///
-  /// Runs for as long as the window is up, not until `contextComplete`: the core publishes
-  /// more than late *context*. The application index arrives after activation and rebuilds
-  /// the committed snapshot, so a search typed in the first moments — before the index
-  /// existed — gets its application candidates from an update that a `contextComplete`
-  /// check would have stopped waiting for. The window is torn down by the generation and
-  /// visibility checks, and `waitForSnapshot` returns immediately when there is nothing
-  /// newer, so staying subscribed costs nothing.
-  Future<void> _followLateContext(
-      int generation, int session, int sequence) async {
+  /// Exactly one of these runs per visible session. It is started once at activation and
+  /// re-armed by [updateInput] when the input changes; starting a second listener per
+  /// keystroke left one bridge wait per input behind, each of them cloning the whole state
+  /// every time anything was published.
+  ///
+  /// An elapsed wait is not the end of the session: the core may still publish the
+  /// application index or a slow late result, so the loop re-arms from the same cursor. It
+  /// ends when the window is hidden, when the session changes, or when the core is gone.
+  Future<void> _followLateContext(int generation, int session) async {
     final wait = widget.waitForSnapshot;
     if (wait == null) return;
-    var lastSeq = sequence;
+    var cursor = _state == null ? 0 : snapshotCursor(_state!);
     while (mounted && _visible && generation == _generation) {
-      final next = await wait(session, lastSeq);
+      final next = await wait(session, cursor);
       if (!mounted || !_visible || generation != _generation) return;
-      if (next == null || next.sessionId != session) return;
-      if (next.snapshotSeq <= lastSeq) return;
-      lastSeq = next.snapshotSeq;
+      // Nothing newer: wait again rather than treat this as the end.
+      if (next == null) continue;
+      if (next.sessionId != session) return;
+      final nextCursor = snapshotCursor(next);
+      if (nextCursor <= cursor) continue;
+      cursor = nextCursor;
       setState(() => _applyState(next, fromLateUpdate: true));
       await _syncWindow();
     }
+  }
+
+  /// Point the session's single listener at the current snapshot.
+  void _armFollow(int session) {
+    final generation = _generation;
+    unawaited(_followLateContext(generation, session));
   }
 
   Future<void> _hide({bool hostAlreadyHidden = false}) async {
@@ -517,7 +535,8 @@ class _LauncherScreenState extends State<LauncherScreen> {
       });
       if (_scroll.hasClients) _scroll.jumpTo(0);
       await _syncWindow();
-      _followLateContext(generation, session, state.snapshotSeq);
+      // The listener started at activation is already following this session and picks the
+      // new revision up from the published cursor; no second subscription is started here.
     } catch (error) {
       if (mounted &&
           _visible &&

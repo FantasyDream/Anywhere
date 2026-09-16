@@ -96,6 +96,7 @@ impl Platform for MacOsPlatform {
             return Ok(None);
         };
         Ok(Some(BundleApplication {
+            aliases: Vec::new(),
             bundle_id,
             name,
             path: string("path"),

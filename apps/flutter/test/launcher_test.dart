@@ -496,8 +496,9 @@ void main() {
       ],
       diagnostics: [],
     );
-    final late = Completer<LauncherStateDto?>();
-    var waits = 0;
+    // Each wait gets its own completer: the listener re-arms after every wait, so handing
+    // back an already-completed future would spin instead of waiting.
+    final pending = <Completer<LauncherStateDto?>>[];
     await tester.pumpWidget(LauncherApp(
       window: channel,
       activate: () async => firstSnapshot,
@@ -505,122 +506,187 @@ void main() {
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
       deactivate: (_) async {},
-      waitForSnapshot: (_, afterSeq) {
-        waits++;
-        return late.future;
-      },
-    ));
-    await toggle(tester);
-    expect(waits, 1, reason: 'late context is awaited once for an incomplete graph');
-    // The user moves down before late context arrives.
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-    await tester.pumpAndSettle();
-    expect(find.text('Second row'), findsOneWidget);
-    late.complete(lateState(keepSecond: true));
-    await tester.pumpAndSettle();
-    // The list reordered, but the user's row is still present and selected.
-    expect(find.text('Second row'), findsOneWidget);
-    expect(windowCalls, isNot(contains('hide')));
-  });
-
-  testWidgets('a context-complete window still receives later snapshots',
-      (tester) async {
-    // The application index arrives after activation and republishes the committed
-    // snapshot. Stopping at `contextComplete` would leave a search typed in the first
-    // moments showing no applications at all.
-    final snapshot = state(0, 'First row', contextComplete: false);
-    final late = Completer<LauncherStateDto?>();
-    var waits = 0;
-    await tester.pumpWidget(LauncherApp(
-      window: channel,
-      activate: () async => snapshot,
-      updateInput: (_, input, revision) async => state(revision, input, input: input),
-      execute: (_, revision, candidate) async => throw StateError('not invoked'),
-      deactivate: (_) async {},
-      waitForSnapshot: (_, afterSeq) {
-        waits++;
-        if (waits > 1) return Future.value(null);
-        return late.future;
-      },
-    ));
-    await toggle(tester);
-    expect(waits, 1);
-
-    // The revision settles first...
-    late.complete(state(0, 'Settled row', snapshotSeq: 2));
-    await tester.pumpAndSettle();
-    expect(find.text('Settled row'), findsWidgets);
-
-    // ...and the window keeps listening, so the index rebuild still lands.
-    final rebuilt = Completer<LauncherStateDto?>();
-    rebuilt.complete(state(0, 'Rebuilt row', snapshotSeq: 3));
-    await tester.pumpAndSettle();
-    expect(find.text('Rebuilt row'), findsNothing,
-        reason: 'nothing newer has been delivered yet');
-    expect(waits, greaterThanOrEqualTo(2),
-        reason: 'the window must keep waiting after the context completed');
-  });
-
-  testWidgets('a selected row stays visible when late context pushes it past Home',
-      (tester) async {
-    // Home shows seven rows. A later update can push the user's row to eighth while it
-    // remains a perfectly valid candidate: the view limit must not silently move their
-    // selection back to the top.
-    LauncherStateDto sizedState(int revision, int snapshotSeq, int count,
-        {bool contextComplete = true}) {
-      final candidates = List.generate(
-          count, (i) => candidate('action:command.$i:c1', 'Row $i', score: 1000.0 - i));
-      return LauncherStateDto(
-        sessionId: 1,
-        revision: revision,
-        snapshotSeq: snapshotSeq,
-        input: '',
-        contextComplete: contextComplete,
-        contexts: [],
-        candidates: candidates,
-        scopes: [
-          ScopeDto(
-              id: 'all',
-              kind: 'all',
-              label: 'All',
-              candidateIds: candidates.map((c) => c.id).toList()),
-        ],
-        diagnostics: [],
-      );
-    }
-
-    final pending = <Completer<LauncherStateDto?>>[];
-    await tester.pumpWidget(LauncherApp(
-      window: channel,
-      // Still being enriched, so the window subscribes to later snapshots.
-      activate: () async => sizedState(0, 1, 8, contextComplete: false),
-      updateInput: (_, input, revision) async => state(revision, input, input: input),
-      execute: (_, revision, candidate) async => throw StateError('not invoked'),
-      deactivate: (_) async {},
-      waitForSnapshot: (_, afterSeq) {
+      waitForSnapshot: (_, after) {
         final completer = Completer<LauncherStateDto?>();
         pending.add(completer);
         return completer.future;
       },
     ));
     await toggle(tester);
-    expect(pending, hasLength(1), reason: 'the window subscribes while enriching');
+    expect(pending, hasLength(1),
+        reason: 'one listener for the visible session');
+    // The user moves down before late context arrives.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    expect(find.text('Second row'), findsOneWidget);
+    pending[0].complete(lateState(keepSecond: true));
+    await tester.pumpAndSettle();
+    // The list reordered, but the user's row is still present and selected.
+    expect(find.text('Second row'), findsOneWidget);
+    expect(windowCalls, isNot(contains('hide')));
+  });
 
-    // The revision settles at eight rows; the user selects the last one Home shows.
-    pending[0].complete(sizedState(0, 2, 8));
+  for (final settledAtStart in [false, true]) {
+    testWidgets(
+        'the index rebuild reaches the window '
+        '(contextComplete at start: $settledAtStart)', (tester) async {
+      // The core rebuilds the committed snapshot when the application index arrives, and
+      // that rebuild is a *newer* snapshot of the same revision. It must reach the list
+      // whether or not the context had already finished, and it must do so without a
+      // second listener being started.
+      LauncherStateDto snapshot(int seq, String title,
+              {required bool complete}) =>
+          LauncherStateDto(
+            sessionId: 1,
+            revision: 0,
+            snapshotSeq: seq,
+            input: 'chrome',
+            contextComplete: complete,
+            contexts: [],
+            candidates: [candidate('action:first:c1', title)],
+            scopes: [
+              ScopeDto(id: 'all', kind: 'all', label: 'All', candidateIds: [
+                'action:first:c1',
+              ]),
+            ],
+            diagnostics: [],
+          );
+
+      final pending = <Completer<LauncherStateDto?>>[];
+      await tester.pumpWidget(LauncherApp(
+        window: channel,
+        activate: () async =>
+            snapshot(1, 'Search the Web', complete: settledAtStart),
+        updateInput: (_, input, revision) async =>
+            state(revision, 'Search the Web', input: input),
+        execute: (_, revision, candidate) async => throw StateError('not invoked'),
+        deactivate: (_) async {},
+        waitForSnapshot: (_, after) {
+          final completer = Completer<LauncherStateDto?>();
+          pending.add(completer);
+          return completer.future;
+        },
+      ));
+      await toggle(tester);
+      expect(find.text('Search the Web'), findsOneWidget);
+      expect(pending, hasLength(1), reason: 'one listener per visible session');
+
+      // The index lands: the core republishes the same revision with the new candidate.
+      pending[0].complete(snapshot(2, 'Google Chrome', complete: true));
+      await tester.pumpAndSettle();
+      expect(find.text('Google Chrome'), findsOneWidget,
+          reason: 'the rebuilt snapshot must be displayed');
+      expect(pending, hasLength(2),
+          reason: 'still exactly one listener, re-armed');
+
+      // Nothing new for a while: the listener waits again instead of giving up, so a slow
+      // index or late provider result still lands.
+      pending[1].complete(null);
+      await tester.pumpAndSettle();
+      expect(pending, hasLength(3),
+          reason: 'an elapsed wait must not end the subscription');
+      pending[2].complete(snapshot(3, 'Later result', complete: true));
+      await tester.pumpAndSettle();
+      expect(find.text('Later result'), findsOneWidget);
+      expect(windowCalls, isNot(contains('hide')));
+    });
+  }
+
+  testWidgets('a selected row stays selectable when late rows push it past Home',
+      (tester) async {
+    // Home shows seven rows. A later update can rank other rows above the user's selection,
+    // pushing it to eighth while it remains a perfectly valid candidate: the view limit
+    // must neither hide it nor move the selection, and Enter must still run *that* row.
+    CandidateDto row(int index, {double score = 100}) => candidate(
+        'action:command.$index:c1', 'Row $index',
+        score: score);
+
+    LauncherStateDto withRows(int snapshotSeq, List<CandidateDto> rows) =>
+        LauncherStateDto(
+          sessionId: 1,
+          revision: 0,
+          snapshotSeq: snapshotSeq,
+          input: '',
+          contextComplete: true,
+          contexts: [],
+          candidates: rows,
+          scopes: [
+            ScopeDto(id: 'all', kind: 'all', label: 'All', candidateIds: [
+              for (final entry in rows) entry.id,
+            ]),
+          ],
+          diagnostics: [],
+        );
+
+    final initial = [for (var i = 0; i < 8; i++) row(i)];
+    // Four rows ranked above every initial row.
+    final pushed = [
+      for (var i = 0; i < 4; i++) row(100 + i, score: 2000),
+      ...initial,
+    ];
+
+    final pending = <Completer<LauncherStateDto?>>[];
+    var executed = '';
+    await tester.pumpWidget(LauncherApp(
+      window: channel,
+      // Still being enriched, so the window subscribes to later snapshots.
+      activate: () async => LauncherStateDto(
+        sessionId: 1,
+        revision: 0,
+        snapshotSeq: 1,
+        input: '',
+        contextComplete: false,
+        contexts: [],
+        candidates: initial,
+        scopes: [
+          ScopeDto(id: 'all', kind: 'all', label: 'All', candidateIds: [
+            for (final entry in initial) entry.id,
+          ]),
+        ],
+        diagnostics: [],
+      ),
+      updateInput: (_, input, revision) async => state(revision, input, input: input),
+      execute: (_, revision, candidate) async {
+        executed = candidate;
+        return ActionResultDto(
+          sessionId: 1,
+          revision: revision,
+          success: true,
+          message: 'Done',
+          closeWindow: false,
+        );
+      },
+      deactivate: (_) async {},
+      waitForSnapshot: (_, after) {
+        final completer = Completer<LauncherStateDto?>();
+        pending.add(completer);
+        return completer.future;
+      },
+    ));
+    await toggle(tester);
+    expect(pending, hasLength(1), reason: 'one listener per visible session');
+
+    // Settle at eight rows and select the last one Home shows (position 7 of 8).
+    pending[0].complete(withRows(2, initial));
     await tester.pumpAndSettle();
     for (var i = 0; i < 6; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     }
     await tester.pumpAndSettle();
-    expect(pending, hasLength(2), reason: 'the window keeps listening');
-    expect(windowCalls, isNot(contains('hide')));
+    expect(pending, hasLength(2), reason: 'the listener re-arms for later snapshots');
 
-    // A later update ranks four rows above the selection, pushing it to eighth.
-    pending[1].complete(sizedState(0, 3, 12));
+    // The later update pushes the selection from position 7 to position 11.
+    pending[1].complete(withRows(3, pushed));
     await tester.pumpAndSettle();
     expect(find.text('Row 6'), findsOneWidget,
-        reason: 'the row the user selected must stay on screen');
+        reason: 'the selected row must stay on screen past the Home limit');
+    expect(find.text('Row 100'), findsOneWidget,
+        reason: 'the higher-ranked rows are listed too');
+
+    // ...and Enter runs the row the user chose, not the new top row.
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(executed, 'action:command.6:c1');
     expect(windowCalls, isNot(contains('hide')));
   });
 
@@ -629,7 +695,7 @@ void main() {
     final first = candidate('action:first:c1', 'First row');
     final second = candidate('action:second:c1', 'Second row');
     final third = candidate('action:third:c1', 'Third row');
-    final late = Completer<LauncherStateDto?>();
+    final pending = <Completer<LauncherStateDto?>>[];
     await tester.pumpWidget(LauncherApp(
       window: channel,
       activate: () async => LauncherStateDto(
@@ -652,12 +718,16 @@ void main() {
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
       deactivate: (_) async {},
-      waitForSnapshot: (_, afterSeq) => late.future,
+      waitForSnapshot: (_, after) {
+        final completer = Completer<LauncherStateDto?>();
+        pending.add(completer);
+        return completer.future;
+      },
     ));
     await toggle(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
-    late.complete(LauncherStateDto(
+    pending[0].complete(LauncherStateDto(
       sessionId: 1,
       revision: 0,
       snapshotSeq: 2,

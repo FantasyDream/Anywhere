@@ -1,3 +1,63 @@
+/// One plain-text clipboard snapshot.
+///
+/// Returns S_OK with `length` set to the copied length, S_FALSE when the clipboard holds
+/// no text, and an error HRESULT otherwise. `capacity` bounds the copy so a huge clipboard
+/// cannot be pulled into the launcher at activation.
+/// Resolve one Start Menu shortcut: its display name, its launch target and its description.
+///
+/// The display name is the shortcut's own file name, which is what the shell shows in the
+/// Start Menu and what users read and type. `GetDescription` is a free-text description, not
+/// a name — `Google Chrome.lnk` can describe itself as "Access the Internet" — so it is
+/// returned separately and used only as a searchable alias. The target is metadata as well:
+/// the shortcut itself stays the launch path, because it carries the arguments and working
+/// directory, and `GetPath` may return a string with unexpanded environment variables.
+extern "C" int32_t launcher_windows_resolve_shortcut(const wchar_t* shortcut,
+                                                     wchar_t* name, uint32_t name_capacity,
+                                                     wchar_t* target, uint32_t target_capacity,
+                                                     wchar_t* description,
+                                                     uint32_t description_capacity) {
+  if (!shortcut || !name || !target || !description) return E_INVALIDARG;
+  name[0] = L'\0';
+  target[0] = L'\0';
+  description[0] = L'\0';
+  ComScope com;
+  if (FAILED(com.result)) return com.result;
+
+  // The file name, without directory or extension.
+  std::wstring stem(shortcut);
+  const size_t slash = stem.find_last_of(L"\\/");
+  if (slash != std::wstring::npos) stem = stem.substr(slash + 1);
+  const size_t dot = stem.find_last_of(L'.');
+  if (dot != std::wstring::npos) stem = stem.substr(0, dot);
+  HRESULT hr = copy_path(stem.c_str(), name, name_capacity);
+  if (FAILED(hr)) return hr;
+
+  ComPtr<IShellLinkW> link;
+  hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&link));
+  if (FAILED(hr)) return hr;
+  ComPtr<IPersistFile> file;
+  if (FAILED(hr = link.As(&file))) return hr;
+  if (FAILED(hr = file->Load(shortcut, STGM_READ))) return hr;
+
+  // `GetPath` with SLGP_RAWPATH returns the recorded target without environment expansion.
+  wchar_t resolved[MAX_PATH] = {};
+  WIN32_FIND_DATAW data{};
+  if (SUCCEEDED(link->GetPath(resolved, MAX_PATH, &data, SLGP_RAWPATH)) && resolved[0]) {
+    hr = copy_path(resolved, target, target_capacity);
+    if (FAILED(hr)) return hr;
+  } else {
+    hr = copy_path(shortcut, target, target_capacity);
+    if (FAILED(hr)) return hr;
+  }
+
+  wchar_t described[INFOTIPSIZE] = {};
+  if (SUCCEEDED(link->GetDescription(described, INFOTIPSIZE)) && described[0]) {
+    hr = copy_path(described, description, description_capacity);
+    if (FAILED(hr)) return hr;
+  }
+  return S_OK;
+}
+
 #define NOMINMAX
 #include <windows.h>
 #include <exdisp.h>
@@ -157,11 +217,6 @@ extern "C" int32_t launcher_windows_copy(const wchar_t* text, uint32_t length) {
   return hr;
 }
 
-/// One plain-text clipboard snapshot.
-///
-/// Returns S_OK with `length` set to the copied length, S_FALSE when the clipboard holds
-/// no text, and an error HRESULT otherwise. `capacity` bounds the copy so a huge clipboard
-/// cannot be pulled into the launcher at activation.
 extern "C" int32_t launcher_windows_clipboard_text(wchar_t* output, uint32_t capacity,
                                                    uint32_t* length) {
   if (!output || capacity == 0 || !length) return E_INVALIDARG;
@@ -180,22 +235,24 @@ extern "C" int32_t launcher_windows_clipboard_text(wchar_t* output, uint32_t cap
       HANDLE handle = GetClipboardData(CF_UNICODETEXT);
       if (handle) {
         // The clipboard belongs to another process and can be malformed, so the source is
-        // never scanned past what the handle actually spans: `GlobalSize` bounds the
-        // search for the terminator, and the copy is capped by both that bound and the
-        // caller's capacity. A missing terminator inside the allocation is treated as no
-        // text rather than read past.
+        // never scanned past what the handle actually spans *or* past what this snapshot
+        // can hold: `GlobalSize` bounds the allocation, the caller's capacity bounds the
+        // useful text, and the search stops at whichever is smaller. Reading to the end of
+        // a huge clipboard only to copy a fraction of it would make activation cost grow
+        // with whatever the user happened to copy. A missing terminator inside that bound is
+        // treated as no text rather than read past.
         const SIZE_T bytes = GlobalSize(handle);
         const wchar_t* text = static_cast<const wchar_t*>(GlobalLock(handle));
         if (text) {
-          const SIZE_T units = bytes / sizeof(wchar_t);
+          const SIZE_T limit = static_cast<SIZE_T>(capacity) - 1;
+          const SIZE_T spanned = bytes / sizeof(wchar_t);
+          const SIZE_T scanned = spanned < limit ? spanned : limit;
           SIZE_T available = 0;
-          while (available < units && text[available] != L'\0') ++available;
-          if (available < units) {
-            const SIZE_T limit = static_cast<SIZE_T>(capacity) - 1;
-            const SIZE_T copied = available < limit ? available : limit;
-            memcpy(output, text, copied * sizeof(wchar_t));
-            output[copied] = L'\0';
-            *length = static_cast<uint32_t>(copied);
+          while (available < scanned && text[available] != L'\0') ++available;
+          if (available < scanned) {
+            memcpy(output, text, available * sizeof(wchar_t));
+            output[available] = L'\0';
+            *length = static_cast<uint32_t>(available);
             hr = S_OK;
           }
           GlobalUnlock(handle);
@@ -210,53 +267,4 @@ extern "C" int32_t launcher_windows_clipboard_text(wchar_t* output, uint32_t cap
   }
   DestroyWindow(owner);
   return hr;
-}
-
-/// Resolve one Start Menu shortcut: its display name and its launch target.
-///
-/// The target is what the launcher starts and what the icon is read from; when a shortcut
-/// points at nothing resolvable (an advertised or MSI shortcut that has never been
-/// installed) the shell resolves it to the `.lnk` itself, which is still launchable, so the
-/// returned path is used directly rather than second-guessed.
-extern "C" int32_t launcher_windows_resolve_shortcut(const wchar_t* shortcut,
-                                                     wchar_t* name, uint32_t name_capacity,
-                                                     wchar_t* target, uint32_t target_capacity) {
-  if (!shortcut || !name || !target) return E_INVALIDARG;
-  name[0] = L'\0';
-  target[0] = L'\0';
-  ComScope com;
-  if (FAILED(com.result)) return com.result;
-  ComPtr<IShellLinkW> link;
-  HRESULT hr = CoCreateInstance(CLSID_ShellLink, nullptr, CLSCTX_INPROC_SERVER,
-                                IID_PPV_ARGS(&link));
-  if (FAILED(hr)) return hr;
-  ComPtr<IPersistFile> file;
-  if (FAILED(hr = link.As(&file))) return hr;
-  if (FAILED(hr = file->Load(shortcut, STGM_READ))) return hr;
-
-  // `GetPath` with SLGP_RAWPATH returns the recorded target without any environment
-  // expansion, which is what launching and icon lookup need.
-  wchar_t resolved[MAX_PATH] = {};
-  WIN32_FIND_DATAW data{};
-  if (SUCCEEDED(link->GetPath(resolved, MAX_PATH, &data, SLGP_RAWPATH)) && resolved[0]) {
-    hr = copy_path(resolved, target, target_capacity);
-    if (FAILED(hr)) return hr;
-  } else {
-    hr = copy_path(shortcut, target, target_capacity);
-    if (FAILED(hr)) return hr;
-  }
-
-  // The description is what the shell shows for a shortcut whose file name is an
-  // implementation detail ("Google Chrome" is stored as `chrome.lnk`).
-  wchar_t description[INFOTIPSIZE] = {};
-  if (SUCCEEDED(link->GetDescription(description, INFOTIPSIZE)) && description[0]) {
-    return copy_path(description, name, name_capacity);
-  }
-  // Fall back to the file name without its extension.
-  std::wstring stem(shortcut);
-  const size_t slash = stem.find_last_of(L"\\/");
-  if (slash != std::wstring::npos) stem = stem.substr(slash + 1);
-  const size_t dot = stem.find_last_of(L'.');
-  if (dot != std::wstring::npos) stem = stem.substr(0, dot);
-  return copy_path(stem.c_str(), name, name_capacity);
 }

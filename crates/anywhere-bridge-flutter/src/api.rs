@@ -92,23 +92,32 @@ pub fn latest_state(session_id: u32) -> Option<LauncherStateDto> {
     application().ok()?.latest_state(session_id).map(Into::into)
 }
 
-/// Block until the core publishes a snapshot newer than `after_seq` for this session.
+/// A snapshot position that is monotonic for the whole session.
 ///
-/// Late context is committed by a background task, so the core's own update channel
-/// is the only place a caller can observe it. Returns the newest snapshot, or the
-/// current one on timeout, so a Dart-side loop can await context without polling.
-pub async fn wait_for_snapshot(
-    session_id: u32,
-    after_seq: u32,
-) -> Result<Option<LauncherStateDto>> {
+/// `snapshot_seq` alone is not monotonic: the core restarts it at 1 for every revision, so
+/// a late snapshot of an older revision can carry a higher sequence than the newest
+/// revision's first snapshot. Pairing the two makes the order unambiguous, which is what
+/// this wait needs. The Dart loop builds the same value from the fields it already has
+/// (`revision` and `snapshotSeq`), which is why it stays private to this module.
+fn cursor(state: &protocol::LauncherState) -> u64 {
+    ((state.revision as u64) << 32) | state.snapshot_seq as u64
+}
+
+/// Block until the core publishes a snapshot beyond `after` for this session.
+///
+/// Late context is committed by a background task, so the core's own update channel is the
+/// only place a caller can observe it. Returns the newest snapshot when one arrives, or
+/// `None` on timeout, so the caller can wait again from the same cursor — a wait that ends
+/// because nothing happened must not be mistaken for the session being finished.
+pub async fn wait_for_snapshot(session_id: u32, after: u64) -> Result<Option<LauncherStateDto>> {
     let app = application()?;
-    if let Some(state) = newer_than(app, session_id, after_seq) {
+    if let Some(state) = beyond(app, session_id, after) {
         return Ok(Some(state.into()));
     }
     let mut updates = app.state_updates();
     let deadline = tokio::time::Instant::now() + SNAPSHOT_WAIT;
     loop {
-        if let Some(state) = newer_than(app, session_id, after_seq) {
+        if let Some(state) = beyond(app, session_id, after) {
             return Ok(Some(state.into()));
         }
         let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
@@ -118,24 +127,19 @@ pub async fn wait_for_snapshot(
         match tokio::time::timeout(remaining, updates.changed()).await {
             // A newer snapshot for another session is fine: the loop re-checks ours.
             Ok(Ok(())) => continue,
-            // Sender gone, or the wait elapsed: report whatever is current.
-            Ok(Err(_)) | Err(_) => break,
+            // Sender gone: the core is shutting down, so report nothing.
+            Ok(Err(_)) => return Ok(None),
+            // The wait elapsed. Nothing newer exists; the caller waits again.
+            Err(_) => break,
         }
     }
-    // On timeout report the current snapshot, so the Dart loop can decide to stop.
-    Ok(newer_than(app, session_id, after_seq)
-        .or_else(|| app.latest_state(session_id))
-        .map(Into::into))
+    Ok(None)
 }
 
-/// The committed snapshot for a session, when it is newer than `after_seq`.
-fn newer_than(
-    app: &Application,
-    session_id: u32,
-    after_seq: u32,
-) -> Option<protocol::LauncherState> {
+/// The committed snapshot for a session, when it is beyond `after`.
+fn beyond(app: &Application, session_id: u32, after: u64) -> Option<protocol::LauncherState> {
     app.latest_state(session_id)
-        .filter(|state| state.snapshot_seq > after_seq)
+        .filter(|state| cursor(state) > after)
 }
 
 pub async fn execute(

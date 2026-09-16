@@ -200,6 +200,10 @@ pub fn scan_in_languages(
                     }
                     first
                 };
+                // Names the platform knows but did not choose as the title — on Windows, a
+                // shortcut's description. They are searchable only: a description is not a
+                // name, so it must not become the title even when it is the only one.
+                localized.extend(application.aliases);
                 applications.push(IndexedApplication {
                     bundle_id: application.bundle_id,
                     name: display,
@@ -231,7 +235,11 @@ pub fn scan_in_languages(
         application
             .aliases
             .retain(|alias| !alias.is_empty() && *alias != canonical);
-        application.aliases.dedup();
+        // The case is kept for display, so equal names can differ in case; compare folded.
+        let mut seen = std::collections::HashSet::new();
+        application
+            .aliases
+            .retain(|alias| seen.insert(alias.to_lowercase()));
     }
     applications
 }
@@ -282,6 +290,9 @@ mod tests {
         missing: bool,
         /// Stands in for data read out of `<lang>.lproj/InfoPlist.strings`.
         localized: Vec<String>,
+        /// Names the platform offers that are searchable but not the title — on Windows,
+        /// a shortcut's description.
+        platform_aliases: Vec<String>,
     }
     impl Platform for FakePlatform {
         fn frontmost_application(&self) -> anyhow::Result<Option<ApplicationInfo>> {
@@ -307,6 +318,7 @@ mod tests {
             Ok(Some(anywhere_platform::BundleApplication {
                 bundle_id,
                 name: stem,
+                aliases: self.platform_aliases.clone(),
                 path: Some(bundle.to_string_lossy().into_owned()),
                 icon: None,
             }))
@@ -521,6 +533,41 @@ mod tests {
         let none = scan_in_languages(&platform, &[root.path().to_path_buf()], &[]);
         assert_eq!(none[0].name, "Lark");
         assert!(none[0].aliases.is_empty());
+    }
+
+    /// A platform's extra names are searchable but never replace the title.
+    ///
+    /// Windows reports a shortcut's file name as the display name and its free-text
+    /// description separately: `Google Chrome.lnk` describes itself as "Access the
+    /// Internet". Using the description as the title would lose the name the user reads and
+    /// types, so it is kept as an alias — searchable, and shown as nothing.
+    #[test]
+    fn platform_aliases_are_searchable_and_never_replace_the_title() {
+        let root = tempfile::tempdir().unwrap();
+        make_apps(root.path(), &["Google Chrome"]);
+        let platform = FakePlatform {
+            platform_aliases: vec!["Access the Internet".into()],
+            ..FakePlatform::default()
+        };
+        let applications = scan_in_languages(&platform, &[root.path().to_path_buf()], &[]);
+        assert_eq!(applications.len(), 1);
+        assert_eq!(applications[0].name, "Google Chrome");
+        assert_eq!(
+            applications[0].aliases,
+            vec!["Access the Internet".to_owned()]
+        );
+
+        let fields = crate::query::SearchFields::new(
+            &applications[0].name,
+            &applications[0].aliases,
+            &applications[0].keywords,
+        );
+        for query in ["chrome", "Google", "internet"] {
+            assert!(
+                fields.matched(&crate::query::Query::parse(query)).is_some(),
+                "{query} must find the application"
+            );
+        }
     }
 
     /// A bundle id must never become a searchable alias.

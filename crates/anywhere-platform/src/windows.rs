@@ -157,8 +157,9 @@ impl Platform for WindowsPlatform {
         let path = wide(shortcut.as_os_str())?;
         let mut name = vec![0u16; 512];
         let mut target = vec![0u16; 32768];
-        // SAFETY: both buffers are caller-owned with their lengths passed alongside;
-        // native code retains no pointer and bounds every copy.
+        let mut description = vec![0u16; 1024];
+        // SAFETY: every buffer is caller-owned with its length passed alongside; native
+        // code retains no pointer and bounds every copy.
         if !status("resolve_shortcut", unsafe {
             launcher_windows_resolve_shortcut(
                 path.as_ptr(),
@@ -166,6 +167,8 @@ impl Platform for WindowsPlatform {
                 name.len() as u32,
                 target.as_mut_ptr(),
                 target.len() as u32,
+                description.as_mut_ptr(),
+                description.len() as u32,
             )
         })? {
             return Ok(None);
@@ -175,16 +178,24 @@ impl Platform for WindowsPlatform {
             return Ok(None);
         }
         let target = utf16_string(&target);
+        let described = utf16_string(&description);
         Ok(Some(BundleApplication {
             // The executable name cannot be the identity: unrelated applications share
             // one (`Update.exe`, `launcher.exe`), and collapsing them would hide every one
             // but the first and share their usage history. The shortcut path is what the
             // shell lists, so it is both unique and stable across scans; the resolved
-            // target is only the subtitle.
+            // target only feeds the subtitle.
             bundle_id: format!("app.{}", identity_of(shortcut)),
-            name,
+            // A description is not a name: `Google Chrome.lnk` may describe itself as
+            // "Access the Internet", so it must not replace the title the user recognizes —
+            // but it is worth searching.
+            aliases: (!described.trim().is_empty() && !described.eq_ignore_ascii_case(&name))
+                .then_some(described)
+                .into_iter()
+                .collect(),
             path: Some(shortcut.to_string_lossy().into_owned()),
             icon: (!target.is_empty()).then_some(target),
+            name,
         }))
     }
     fn application_icon(&self, _path: &str, _size: u32) -> Result<Option<Vec<u8>>> {

@@ -18,6 +18,12 @@ pub struct ApplicationInfo {
 pub struct BundleApplication {
     pub bundle_id: String,
     pub name: String,
+    /// Further names this application answers to, beyond `name`.
+    ///
+    /// Searchable but not shown. A platform whose display name and lookup name disagree —
+    /// a shortcut's description versus its file name — puts the second one here instead of
+    /// choosing between a title the user recognizes and a name they will type.
+    pub aliases: Vec<String>,
     /// Path to launch and to read the icon from. `None` keeps the discovered entry.
     ///
     /// This is the *entry*, not the program: a Windows shortcut carries the arguments and

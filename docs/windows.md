@@ -33,8 +33,8 @@ apps\flutter\build\windows\x64\runner\Release\anywhere.exe
 
 V0.2 的三个新平台能力现在都有 Windows 实现，源码在 macOS 上通过了 `cargo check`/`clippy`（见下文「本地类型检查」），但**没有在 Windows 上运行过**。
 
-- **应用索引**：扫描用户与机器的「开始菜单\\程序」下的 `.lnk`。名称取自快捷方式的描述（`chrome.lnk` 会索引为 “Google Chrome”），目标取自 `IShellLinkW::GetPath(SLGP_RAWPATH)`；身份是目标可执行文件名的 `app.<stem>`。启动走 `ShellExecute`，因此快捷方式参数仍然生效。**未实现**：UWP/Store 应用（它们通过开始菜单快捷方式间接可达）、`App Paths` 注册表项、图标提取（`application_icon` 返回 `None`，界面回退到语义图标）。
-- **剪贴板文本**：`CF_UNICODETEXT`，上限 64K 字符（与 macOS 的快照上限一致）。非文本形式返回 `None`。它只用于「剪贴板已经等于这个路径」这类可用性判断，不参与排序。
+- **应用索引**：扫描用户与机器的「开始菜单\\程序」下的 `.lnk`。**显示名取快捷方式文件名**（开始菜单里显示、用户会念会打的那个名字，如 `Google Chrome.lnk` → `Google Chrome`）；**描述只作为可搜索别名**，因为 `GetDescription` 返回的是自由文本（Chrome 的描述可以是 “Access the Internet”），把它当标题会让 `chrome` 搜不到。目标取自 `IShellLinkW::GetPath(SLGP_RAWPATH)`，仅用于副标题；**启动仍然走 `.lnk` 本身**，因此快捷方式的参数与工作目录都保留。身份是快捷方式完整路径的 `app.<path>`（不同目录下的 `Update.exe` 不会互相合并）。**未实现**：UWP/Store 应用（它们通过开始菜单快捷方式间接可达）、`App Paths` 注册表项、图标提取（`application_icon` 返回 `None`，界面回退到语义图标）。
+- **剪贴板文本**：`CF_UNICODETEXT`，上限 64K 字符（与 macOS 的快照上限一致）。源扫描同时受 `GlobalSize` 与该上限约束，超大剪贴板按无文本处理，激活成本不随剪贴板大小增长。非文本形式返回 `None`。它只用于「剪贴板已经等于这个路径」这类可用性判断，不参与排序。
 - **Git runner**：与 macOS 共用同一份 argv 白名单与输出格式化（`crates/anywhere-platform/src/git.rs`），进程与超时处理在 `windows.rs`；`git.exe` 从 `PATH` 查找，找不到时 `git_available()` 为 false，Git 动作显示 Disabled。仍不实现通用命令通道。
 - **未纳入本版**：Windows 的 `open_terminal`/`reveal_file` 等 V0.1 行为未改动。
 
@@ -93,6 +93,7 @@ $caseRoot
 | W17 | 输入不存在路径、非法 URL、非法 JSON；将实际文件改名后再重新唤醒输入新旧路径 | 不崩溃；不存在对象不给文件动作，新路径重新识别；实际执行失败有错误提示，随后可继续输入 |
 | W18 | 在浅色和彩色背景前观察空搜索栏、列表、JSON 预览；重复 W10；查看日志 | 字体和副标题清晰；圆角不露出黑色直角块；无闪退；日志有 Core Session/Revision、动作事件及 hotkey_to_visible_ms。未支持背景材质的系统记录版本，不按 Win11 毛玻璃验收 |
 | W19 | 输入已安装应用名的前几个字母（例如 `chro`、`code`），再用中文/拼音试一个中文名应用 | 出现对应应用候选（带名称与路径副标题），Home 空输入时**不**出现应用；回车能真正启动；副标题路径是快捷方式的目标而不是 `.lnk` |
+| W19b | 新建一个快捷方式，文件名写 `Google Chrome`、描述写 `Access the Internet`（即描述里不含 “chrome”），重启应用后搜 `chrome` | 能找到该应用，标题显示 `Google Chrome`；再搜 `internet` 也能找到它（描述可搜索）；标题**不**显示为描述 |
 | W20 | 在一个 Git 仓库目录（含子目录）唤醒 | 出现 Git 分组与 Status/Log/Diff；执行 Status 报告改动、Log 报告提交、Diff 报告工作区改动；在非仓库目录不出现 Git 动作；未安装 Git 时三项为 Disabled 且提示说明原因 |
 | W21 | 复制某个目录的完整路径，再从该目录唤醒 | Copy Path 因剪贴板已等于该路径而隐藏；复制别的文本后再唤醒，它重新出现 |
 | W22 | 在「开始菜单」里新建一个指向记事本的快捷方式并改名，重新启动应用 | 新快捷方式出现在搜索结果中；删除后重启应用不再出现（索引每进程重建一次，不热更新） |

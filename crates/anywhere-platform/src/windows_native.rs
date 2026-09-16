@@ -22,12 +22,17 @@ extern "C" {
         capacity: u32,
         length: *mut u32,
     ) -> i32;
-    /// Resolve one Start Menu shortcut into its display name and launch target.
+    /// Resolve one Start Menu shortcut.
+    ///
+    /// Writes the shortcut's display name, its recorded launch target, and its free-text
+    /// description (empty when the shortcut has none).
     pub fn launcher_windows_resolve_shortcut(
         shortcut: *const u16,
         name: *mut u16,
         name_capacity: u32,
         target: *mut u16,
         target_capacity: u32,
+        description: *mut u16,
+        description_capacity: u32,
     ) -> i32;
 }

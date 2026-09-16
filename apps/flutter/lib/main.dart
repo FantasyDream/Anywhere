@@ -41,9 +41,9 @@ Future<void> main() async {
           revision: revision,
           candidateId: candidate,
         ),
-        waitForSnapshot: (session, afterSeq) => bridge.waitForSnapshot(
+        waitForSnapshot: (session, after) => bridge.waitForSnapshot(
           sessionId: session,
-          afterSeq: afterSeq,
+          after: BigInt.from(after),
         ),
         loadIcon: (candidate) =>
             bridge.applicationIcon(candidateId: candidate),

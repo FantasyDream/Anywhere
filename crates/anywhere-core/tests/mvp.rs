@@ -133,6 +133,7 @@ impl Platform for TestPlatform {
         Ok(Some(BundleApplication {
             bundle_id: format!("app.{}.com", stem.replace(' ', "").to_lowercase()),
             name: stem,
+            aliases: Vec::new(),
             path: Some(bundle.to_string_lossy().into_owned()),
             icon: None,
         }))
