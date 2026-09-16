@@ -8,7 +8,7 @@
 //! Finder Automation, FFI, window rendering and RSS are not measurable here; use
 //! `launcher.log` and the manual validation checklist for those.
 use anywhere_core::{
-    core::action::descriptor::CommandRegistry, core::ranking::usage::UsageStats,
+    core::action::descriptor::ActionRegistry, core::ranking::usage::UsageStats,
     core::search::candidate_source::CandidateSource, core::search::engine::SearchEngine,
     core::search::query::Query, core::session::facts::SessionFacts,
     features::applications::index::IndexedApplication,
@@ -40,7 +40,7 @@ fn synthetic_catalog(count: usize) -> Vec<IndexedApplication> {
 }
 
 fn main() {
-    let registry = CommandRegistry::builtin();
+    let registry = ActionRegistry::builtin();
     let catalog = synthetic_catalog(1000);
     let empty_usage = |_: &str, _: &str| UsageStats::default();
     let facts = SessionFacts {

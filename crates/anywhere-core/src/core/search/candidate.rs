@@ -3,7 +3,7 @@
 //! Ordering lives here because it is a property of candidates; *deciding* the order is
 //! ranking's job, and *finding* them is the sources' job.
 use super::query::Query;
-use crate::core::action::descriptor::CommandDescriptor;
+use crate::core::action::descriptor::ActionDescriptor;
 use crate::core::context::ResolvedContext;
 use anywhere_protocol::*;
 use std::collections::BTreeMap;
@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone)]
 pub struct Candidate {
     pub presentation: CandidatePresentation,
-    pub command: Option<CommandDescriptor>,
+    pub action: Option<ActionDescriptor>,
     pub context: Option<ResolvedContext>,
     pub application: Option<crate::features::applications::index::IndexedApplication>,
 }
@@ -69,7 +69,7 @@ pub fn compare_candidates(a: &Candidate, b: &Candidate) -> std::cmp::Ordering {
 /// Scope membership is unioned so ownership survives deduplication.
 pub fn deduplicate_actions(candidates: &mut Vec<Candidate>) {
     let mut merged: Vec<Candidate> = Vec::with_capacity(candidates.len());
-    let mut index: BTreeMap<(CommandId, ContextTypeId, String), usize> = BTreeMap::new();
+    let mut index: BTreeMap<(ActionId, ContextTypeId, String), usize> = BTreeMap::new();
     for candidate in candidates.drain(..) {
         let Some(command) = candidate.presentation.command_id.clone() else {
             merged.push(candidate);

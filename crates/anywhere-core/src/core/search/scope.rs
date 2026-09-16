@@ -104,13 +104,13 @@ pub fn usage_by_group(
 ) -> ScopeUse {
     let mut scope_use = ScopeUse::new();
     for candidate in candidates {
-        let (Some(command), Some(context)) = (
+        let (Some(action), Some(context)) = (
             candidate.presentation.command_id.as_ref(),
             candidate.context.as_ref(),
         ) else {
             continue;
         };
-        let count = usage(command, &context.type_id).execute_count;
+        let count = usage(action, &context.type_id).execute_count;
         *scope_use
             .entry(candidate.presentation.group_id.clone())
             .or_default() += count;

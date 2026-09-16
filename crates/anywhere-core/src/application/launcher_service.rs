@@ -1,6 +1,6 @@
 //! Launcher facade: activation capture, request lifecycle, execution, subscription.
 use crate::{
-    core::action::descriptor::CommandRegistry, core::context::engine::ContextGraphRun,
+    core::action::descriptor::ActionRegistry, core::context::engine::ContextGraphRun,
     core::ranking::usage::UsageRepository, core::session::manager::Resolver,
     features::applications::index as applications,
 };
@@ -69,7 +69,7 @@ pub struct Application {
 impl Application {
     pub fn new(
         platform: Arc<dyn Platform>,
-        registry: CommandRegistry,
+        registry: ActionRegistry,
         history: Box<dyn UsageRepository>,
         startup_diagnostics: Vec<String>,
     ) -> Self {
@@ -84,7 +84,7 @@ impl Application {
 
     pub fn with_budget(
         platform: Arc<dyn Platform>,
-        registry: CommandRegistry,
+        registry: ActionRegistry,
         history: Box<dyn UsageRepository>,
         startup_diagnostics: Vec<String>,
         budget: Duration,

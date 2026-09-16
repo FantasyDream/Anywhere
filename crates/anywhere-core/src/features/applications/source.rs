@@ -81,7 +81,7 @@ impl CandidateSource for ApplicationSource<'_> {
                     bundle_id: Some(application.bundle_id.clone()),
                     owning_app: None,
                 },
-                command: None,
+                action: None,
                 context: None,
                 application: Some(application.clone()),
             });

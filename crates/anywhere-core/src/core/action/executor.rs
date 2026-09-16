@@ -1,4 +1,4 @@
-use crate::core::action::descriptor::{BuiltinExecutor, CommandExecutor, CommandRegistry};
+use crate::core::action::descriptor::{ActionExecutor, ActionRegistry, BuiltinExecutor};
 use crate::core::context::{ContextValue, ResolvedContext};
 use anyhow::{bail, Context, Result};
 use anywhere_platform::{GitOperation, Platform};
@@ -9,14 +9,14 @@ pub struct ExecutionOutput {
 }
 
 pub fn execute(
-    executor: &CommandExecutor,
+    executor: &ActionExecutor,
     context: &ResolvedContext,
     platform: &dyn Platform,
-    registry: &CommandRegistry,
+    registry: &ActionRegistry,
 ) -> Result<ExecutionOutput> {
     match executor {
-        CommandExecutor::Builtin(builtin) => execute_builtin(*builtin, context, platform),
-        CommandExecutor::Declarative(action) => {
+        ActionExecutor::Builtin(builtin) => execute_builtin(*builtin, context, platform),
+        ActionExecutor::Declarative(action) => {
             use anywhere_protocol::DeclarativeAction::*;
             let value = context.value.text();
             match action {
@@ -30,13 +30,13 @@ pub fn execute(
                     platform.copy_text(&anywhere_plugin::interpolate(text, &value, false)?)?
                 }
                 ExecuteBuiltin { command_id } => {
-                    let command = registry
+                    let action = registry
                         .get(command_id)
-                        .context("unknown built-in command")?;
-                    if !command.matches(context) {
-                        bail!("built-in command does not accept this context");
+                        .context("unknown built-in action")?;
+                    if !action.matches(context) {
+                        bail!("built-in action does not accept this context");
                     }
-                    let CommandExecutor::Builtin(builtin) = command.executor else {
+                    let ActionExecutor::Builtin(builtin) = action.executor else {
                         bail!("execute_builtin target is not built-in");
                     };
                     return execute_builtin(builtin, context, platform);

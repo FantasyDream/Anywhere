@@ -5,9 +5,9 @@ use anywhere_protocol::*;
 use std::collections::BTreeMap;
 
 /// Actions that only a repository context can serve.
-pub fn is_git_action(command_id: &str) -> bool {
+pub fn is_git_action(action_id: &str) -> bool {
     matches!(
-        command_id,
+        action_id,
         "core.git.status" | "core.git.log" | "core.git.diff"
     )
 }
@@ -30,18 +30,18 @@ pub enum BuiltinExecutor {
 }
 
 #[derive(Debug, Clone)]
-pub enum CommandExecutor {
+pub enum ActionExecutor {
     Builtin(BuiltinExecutor),
     Declarative(DeclarativeAction),
 }
 
 #[derive(Debug, Clone)]
-pub struct CommandDescriptor {
-    pub id: CommandId,
+pub struct ActionDescriptor {
+    pub id: ActionId,
     pub title: String,
     pub subtitle: Option<String>,
     pub accepts: Vec<ContextMatcher>,
-    pub executor: CommandExecutor,
+    pub executor: ActionExecutor,
     pub base_priority: i32,
     pub icon: String,
     pub group_id: GroupId,
@@ -50,14 +50,14 @@ pub struct CommandDescriptor {
     /// App that owns this action exclusively, beyond ambient provenance.
     ///
     /// No built-in or v1 plugin sets this yet: the Current App scope is currently
-    /// driven by which context a command accepts. It stays so an app-specific action
+    /// driven by which context an action accepts. It stays so an app-specific action
     /// can declare itself without a protocol change.
     pub owning_app: Option<String>,
     /// Precomputed lowercase search fields.
     pub search: SearchFields,
 }
 
-impl CommandDescriptor {
+impl ActionDescriptor {
     pub fn matches(&self, context: &ResolvedContext) -> bool {
         self.accepts
             .iter()
@@ -70,11 +70,11 @@ impl CommandDescriptor {
 /// Registration and lookup only. Matching lives in `ActionMatcher`, availability in
 /// `availability`, execution in `executor`.
 #[derive(Clone, Default)]
-pub struct CommandRegistry {
-    commands: BTreeMap<CommandId, CommandDescriptor>,
+pub struct ActionRegistry {
+    actions: BTreeMap<ActionId, ActionDescriptor>,
 }
 
-impl CommandRegistry {
+impl ActionRegistry {
     /// Every first-party action, registered from the feature bundles.
     pub fn builtin() -> Self {
         let mut registry = Self::default();
@@ -87,32 +87,32 @@ impl CommandRegistry {
         registry
     }
 
-    pub fn register(&mut self, command: CommandDescriptor) -> Result<()> {
-        if self.commands.contains_key(&command.id) {
-            bail!("duplicate command id: {}", command.id);
+    pub fn register(&mut self, action: ActionDescriptor) -> Result<()> {
+        if self.actions.contains_key(&action.id) {
+            bail!("duplicate action id: {}", action.id);
         }
-        if command.group_id.trim().is_empty() {
-            bail!("command {} requires a group id", command.id);
+        if action.group_id.trim().is_empty() {
+            bail!("action {} requires a group id", action.id);
         }
-        self.commands.insert(command.id.clone(), command);
+        self.actions.insert(action.id.clone(), action);
         Ok(())
     }
 
-    pub fn get(&self, id: &str) -> Option<&CommandDescriptor> {
-        self.commands.get(id)
+    pub fn get(&self, id: &str) -> Option<&ActionDescriptor> {
+        self.actions.get(id)
     }
 
     pub fn matching<'a>(
         &'a self,
         context: &'a ResolvedContext,
-    ) -> impl Iterator<Item = &'a CommandDescriptor> {
-        self.commands
+    ) -> impl Iterator<Item = &'a ActionDescriptor> {
+        self.actions
             .values()
             .filter(|command| command.matches(context))
     }
 
-    pub fn commands(&self) -> impl Iterator<Item = &CommandDescriptor> {
-        self.commands.values()
+    pub fn commands(&self) -> impl Iterator<Item = &ActionDescriptor> {
+        self.actions.values()
     }
 
     /// Validate all commands first; a bad plugin never leaves half a registration.
@@ -122,8 +122,8 @@ impl CommandRegistry {
         let mut commands = Vec::new();
         for command in plugin.commands {
             let id = format!("{}.{}", plugin.id, command.id);
-            if self.commands.contains_key(&id)
-                || commands.iter().any(|c: &CommandDescriptor| c.id == id)
+            if self.actions.contains_key(&id)
+                || commands.iter().any(|c: &ActionDescriptor| c.id == id)
             {
                 bail!("duplicate command id: {id}");
             }
@@ -137,7 +137,7 @@ impl CommandRegistry {
                 let Some(builtin) = self.get(command_id) else {
                     bail!("unknown builtin: {command_id}");
                 };
-                if !matches!(builtin.executor, CommandExecutor::Builtin(_))
+                if !matches!(builtin.executor, ActionExecutor::Builtin(_))
                     || accepts
                         .iter()
                         .any(|kind| !builtin.accepts.iter().any(|m| &m.type_id == kind))
@@ -163,7 +163,7 @@ impl CommandRegistry {
             };
             let aliases = command.aliases.clone();
             let keywords = command.keywords.clone();
-            commands.push(CommandDescriptor {
+            commands.push(ActionDescriptor {
                 id,
                 search: SearchFields::new(&command.title, &aliases, &keywords),
                 title: command.title,
@@ -172,7 +172,7 @@ impl CommandRegistry {
                     .into_iter()
                     .map(|type_id| ContextMatcher { type_id })
                     .collect(),
-                executor: CommandExecutor::Declarative(command.action),
+                executor: ActionExecutor::Declarative(command.action),
                 base_priority: command.base_priority,
                 icon: icon.into(),
                 group_id: command.group_id.unwrap_or_else(|| default_group.clone()),
@@ -207,7 +207,7 @@ mod tests {
 
     #[test]
     fn exact_type_match_and_builtin_command_count() {
-        let registry = CommandRegistry::builtin();
+        let registry = ActionRegistry::builtin();
         assert_eq!(registry.commands().count(), 14);
         let url = seed("https://github.com")
             .into_iter()
@@ -229,7 +229,7 @@ mod tests {
 
     #[test]
     fn every_builtin_has_a_group_and_search_fields() {
-        let registry = CommandRegistry::builtin();
+        let registry = ActionRegistry::builtin();
         for command in registry.commands() {
             assert!(!command.group_id.is_empty(), "{}", command.id);
             assert!(
@@ -242,7 +242,7 @@ mod tests {
 
     #[test]
     fn git_actions_only_accept_repository_context() {
-        let registry = CommandRegistry::builtin();
+        let registry = ActionRegistry::builtin();
         let directory = ResolvedContext::new(
             DIRECTORY,
             crate::core::context::ContextValue::Directory("/tmp".into()),
@@ -269,7 +269,7 @@ mod tests {
 
     #[test]
     fn v0_1_json_plugin_is_normalized_and_keeps_working() {
-        let mut registry = CommandRegistry::builtin();
+        let mut registry = ActionRegistry::builtin();
         let raw = r#"
 protocol_version = 1
 id = "legacy"
@@ -294,17 +294,17 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
         bad.commands[0].action = DeclarativeAction::ExecuteBuiltin {
             command_id: "core.url.open".into(),
         };
-        let mut fresh = CommandRegistry::builtin();
+        let mut fresh = ActionRegistry::builtin();
         assert!(fresh.register_plugin(bad).is_err());
     }
 
     #[test]
     fn git_actions_and_dispatch_agree_on_the_same_set() {
-        let registry = CommandRegistry::builtin();
+        let registry = ActionRegistry::builtin();
         for command in registry.commands() {
             let builtin_git = matches!(
                 command.executor,
-                CommandExecutor::Builtin(
+                ActionExecutor::Builtin(
                     BuiltinExecutor::GitStatus | BuiltinExecutor::GitLog | BuiltinExecutor::GitDiff
                 )
             );
@@ -326,7 +326,7 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
 
     #[test]
     fn copy_path_actions_share_one_group_across_object_types() {
-        let registry = CommandRegistry::builtin();
+        let registry = ActionRegistry::builtin();
         for id in ["core.directory.copy", "core.file.copy"] {
             assert_eq!(
                 registry.get(id).unwrap().group_id,
@@ -338,7 +338,7 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
 
     #[test]
     fn known_groups_are_the_only_group_ids_in_the_builtin_registry() {
-        let registry = CommandRegistry::builtin();
+        let registry = ActionRegistry::builtin();
         for command in registry.commands() {
             assert!(
                 [
@@ -358,7 +358,7 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
 
     #[test]
     fn plugins_without_group_metadata_get_an_explicit_default() {
-        let mut registry = CommandRegistry::builtin();
+        let mut registry = ActionRegistry::builtin();
         registry
             .register_plugin(
                 anywhere_plugin::parse_manifest(anywhere_plugin::EXAMPLE_PLUGIN).unwrap(),

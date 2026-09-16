@@ -93,12 +93,12 @@ impl Application {
                 bail!("action expired before it started");
             }
             let output = match (
-                &candidate.command,
+                &candidate.action,
                 &candidate.context,
                 &candidate.application,
             ) {
-                (Some(command), Some(context), _) => {
-                    execution::execute(&command.executor, context, platform.as_ref(), &registry)?
+                (Some(action), Some(context), _) => {
+                    execution::execute(&action.executor, context, platform.as_ref(), &registry)?
                 }
                 (None, None, Some(application)) => {
                     if !platform.launch_application(&application.path)? {

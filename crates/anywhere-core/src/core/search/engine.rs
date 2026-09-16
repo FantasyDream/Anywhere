@@ -8,7 +8,7 @@ use super::candidate_source::{CandidateSource, SearchContext};
 use super::fallback::TextFallbackSource;
 use super::query::Query;
 use super::scope;
-use crate::core::action::descriptor::CommandRegistry;
+use crate::core::action::descriptor::ActionRegistry;
 use crate::core::action::matcher::ActionMatcher;
 use crate::core::context::{ContextSource, ResolvedContext};
 use crate::core::ranking::score::UsageStats;
@@ -16,7 +16,7 @@ use crate::core::session::facts::{context_ownership, Ownership, SessionFacts};
 use std::time::Instant;
 
 pub struct SearchEngine<'a> {
-    pub registry: &'a CommandRegistry,
+    pub registry: &'a ActionRegistry,
     /// `(action_id, context_type)` usage, scoped to the current foreground app.
     pub usage: &'a dyn Fn(&str, &str) -> UsageStats,
     pub facts: &'a SessionFacts,
@@ -120,7 +120,7 @@ impl SearchEngine<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::action::descriptor::CommandRegistry;
+    use crate::core::action::descriptor::ActionRegistry;
     use crate::core::context::{ContextValue, ResolvedContext};
     use crate::core::ranking::usage::UsageStats;
     use crate::core::search::candidate::action_candidate_id;
@@ -148,7 +148,7 @@ mod tests {
     }
 
     fn builtin_engine<'a>(
-        registry: &'a CommandRegistry,
+        registry: &'a ActionRegistry,
         usage: &'a dyn Fn(&str, &str) -> UsageStats,
         facts: &'a SessionFacts,
     ) -> SearchEngine<'a> {
@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn directory_context_orders_the_documented_examples() {
-        let registry = CommandRegistry::builtin();
+        let registry = ActionRegistry::builtin();
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().canonicalize().unwrap();
         std::fs::create_dir(path.join(".git")).unwrap();
@@ -225,7 +225,7 @@ mod tests {
     /// existed, so a populated group could render empty.
     #[test]
     fn every_scope_id_resolves_to_a_candidate() {
-        let registry = CommandRegistry::builtin();
+        let registry = ActionRegistry::builtin();
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().canonicalize().unwrap();
         let mut contexts = vec![
@@ -278,7 +278,7 @@ mod tests {
 
     #[test]
     fn home_is_bounded_while_search_stays_scrollable() {
-        let registry = CommandRegistry::builtin();
+        let registry = ActionRegistry::builtin();
         let mut contexts = contexts(&"a".repeat(60));
         contexts.push(ResolvedContext::new(
             DIRECTORY,
@@ -305,7 +305,7 @@ mod tests {
 
     #[test]
     fn groups_are_visible_before_scope_filtering_and_home_truncation() {
-        let registry = CommandRegistry::builtin();
+        let registry = ActionRegistry::builtin();
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().canonicalize().unwrap();
         let contexts = vec![
@@ -336,7 +336,7 @@ mod tests {
     /// The scope bar leads with what the user actually uses, not a fixed order.
     #[test]
     fn scopes_are_ordered_by_usage_with_a_deterministic_tie_break() {
-        let registry = CommandRegistry::builtin();
+        let registry = ActionRegistry::builtin();
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().canonicalize().unwrap();
         let contexts = vec![
@@ -356,14 +356,14 @@ mod tests {
         let facts = facts();
 
         // Heavy use of the folder actions; the Git group has never been used.
-        let folder_heavy = |command: &str, kind: &str| {
+        let folder_heavy = |action: &str, kind: &str| {
             if kind == DIRECTORY {
                 UsageStats {
                     execute_count: 8,
                     last_executed_at: 1000,
                 }
             } else {
-                let _ = command;
+                let _ = action;
                 UsageStats::default()
             }
         };
@@ -428,7 +428,7 @@ mod tests {
 
     #[test]
     fn copy_path_is_hidden_when_the_clipboard_already_holds_it() {
-        let registry = CommandRegistry::builtin();
+        let registry = ActionRegistry::builtin();
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().canonicalize().unwrap();
         let contexts = vec![ResolvedContext::new(
@@ -457,7 +457,7 @@ mod tests {
 
     #[test]
     fn git_actions_are_disabled_rather_than_hidden_without_git() {
-        let registry = CommandRegistry::builtin();
+        let registry = ActionRegistry::builtin();
         let contexts = vec![ResolvedContext::new(
             GIT_REPOSITORY,
             ContextValue::Repository("/tmp".into()),
@@ -482,7 +482,7 @@ mod tests {
 
     #[test]
     fn application_search_matches_names_aliases_and_keywords() {
-        let registry = CommandRegistry::builtin();
+        let registry = ActionRegistry::builtin();
         let applications = vec![IndexedApplication {
             bundle_id: "com.google.Chrome".into(),
             name: "Google Chrome".into(),
@@ -517,7 +517,7 @@ mod tests {
 
     #[test]
     fn action_search_finds_git_status_by_partial_words() {
-        let registry = CommandRegistry::builtin();
+        let registry = ActionRegistry::builtin();
         let contexts = vec![
             ResolvedContext::new(
                 DIRECTORY,
@@ -541,7 +541,7 @@ mod tests {
 
     #[test]
     fn typed_object_actions_survive_a_query_without_a_title_match() {
-        let registry = CommandRegistry::builtin();
+        let registry = ActionRegistry::builtin();
         let url_contexts = contexts("https://github.com");
         let usage = no_usage;
         let facts = facts();
@@ -588,7 +588,7 @@ mod tests {
 
     #[test]
     fn current_app_scope_uses_ambient_provenance_and_excludes_launch_candidates() {
-        let registry = CommandRegistry::builtin();
+        let registry = ActionRegistry::builtin();
         let contexts = vec![ResolvedContext::new(
             DIRECTORY,
             ContextValue::Directory("/tmp".into()),

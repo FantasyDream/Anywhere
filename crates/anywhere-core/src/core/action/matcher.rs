@@ -3,7 +3,7 @@
 //! Produces candidates only. Ordering belongs to ranking, scope membership to the scope
 //! builder, and visibility to the availability evaluator.
 use super::availability;
-use super::descriptor::{CommandDescriptor, CommandRegistry};
+use super::descriptor::{ActionDescriptor, ActionRegistry};
 use crate::core::context::{ContextSource, ResolvedContext};
 use crate::core::ranking::score::{self, UsageStats};
 use crate::core::search::candidate::{action_candidate_id, Candidate};
@@ -13,7 +13,7 @@ use crate::core::session::facts::{context_ownership, Ownership, SessionFacts};
 use anywhere_protocol::*;
 
 pub struct ActionMatcher<'a> {
-    pub registry: &'a CommandRegistry,
+    pub registry: &'a ActionRegistry,
     pub usage: &'a dyn Fn(&str, &str) -> UsageStats,
     pub facts: &'a SessionFacts,
     pub now: i64,
@@ -40,22 +40,22 @@ impl ActionMatcher<'_> {
                 Ownership::App(app) => Some(app),
                 Ownership::Ambient => None,
             };
-            for command in self.registry.matching(context) {
-                let match_level = command.search.matched(query);
+            for action in self.registry.matching(context) {
+                let match_level = action.search.matched(query);
                 if searching && match_level.is_none() && !availability::is_user_object(context) {
                     continue;
                 }
-                let availability = availability::evaluate(command, context, self.facts);
+                let availability = availability::evaluate(action, context, self.facts);
                 if !availability.is_visible() {
                     continue;
                 }
-                let stats = (self.usage)(&command.id, &context.type_id);
+                let stats = (self.usage)(&action.id, &context.type_id);
                 let mut score = score::score(
                     match_level,
                     searching,
                     context.source,
                     &context.type_id,
-                    command.base_priority,
+                    action.base_priority,
                     stats,
                     self.now,
                 );
@@ -64,21 +64,21 @@ impl ActionMatcher<'_> {
                 }
                 candidates.push(Candidate {
                     presentation: CandidatePresentation {
-                        id: action_candidate_id(&command.id, context),
+                        id: action_candidate_id(&action.id, context),
                         kind: CandidateKind::Action,
-                        title: command.title.clone(),
-                        subtitle: Some(subtitle(command, context)),
+                        title: action.title.clone(),
+                        subtitle: Some(subtitle(action, context)),
                         icon: IconDescriptor {
-                            key: command.icon.clone(),
+                            key: action.icon.clone(),
                         },
                         score,
-                        group_id: command.group_id.clone(),
+                        group_id: action.group_id.clone(),
                         availability,
-                        command_id: Some(command.id.clone()),
+                        command_id: Some(action.id.clone()),
                         bundle_id: None,
-                        owning_app: owned_by.clone().or_else(|| command.owning_app.clone()),
+                        owning_app: owned_by.clone().or_else(|| action.owning_app.clone()),
                     },
-                    command: Some(command.clone()),
+                    action: Some(action.clone()),
                     context: Some(context.clone()),
                     application: None,
                 });
@@ -99,9 +99,9 @@ fn home_bonus(context: &ResolvedContext) -> f32 {
     }
 }
 
-fn subtitle(command: &CommandDescriptor, context: &ResolvedContext) -> String {
+fn subtitle(action: &ActionDescriptor, context: &ResolvedContext) -> String {
     let detail = display_detail(context);
-    match &command.subtitle {
+    match &action.subtitle {
         Some(subtitle) => format!("{subtitle} · {detail}"),
         None => detail,
     }

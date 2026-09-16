@@ -6,7 +6,7 @@
 use anywhere_core::core::context::ResolvedContext;
 use anywhere_core::{
     core::{
-        action::{availability, bundle::ActionBundle, descriptor::CommandRegistry, matcher},
+        action::{availability, bundle::ActionBundle, descriptor::ActionRegistry, matcher},
         context::{
             engine::{ContextGraph, GraphStep, MAX_DEPTH},
             registry::ContextProviderRegistry,
@@ -22,7 +22,7 @@ use anywhere_protocol::*;
 use std::sync::Arc;
 
 /// The action matcher as the pipeline sees it: one source among others.
-fn sources_of(contexts: &[ResolvedContext], registry: &CommandRegistry) -> Vec<Candidate> {
+fn sources_of(contexts: &[ResolvedContext], registry: &ActionRegistry) -> Vec<Candidate> {
     use anywhere_core::core::action::matcher::ActionMatcher;
     use anywhere_core::core::search::candidate_source::{CandidateSource, SearchContext};
     let usage = |_: &str, _: &str| anywhere_core::core::ranking::usage::UsageStats::default();
@@ -103,7 +103,7 @@ async fn the_provider_chain_is_recursive_and_deduplicates() {
 /// separately from applicability.
 #[test]
 fn matching_and_availability_are_separate_steps() {
-    let registry = CommandRegistry::builtin();
+    let registry = ActionRegistry::builtin();
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path().canonicalize().unwrap();
     let contexts = features::recognized_contexts(root.to_str().unwrap());
@@ -154,7 +154,7 @@ fn matching_and_availability_are_separate_steps() {
 /// Applications and actions reach the list through the same contract.
 #[test]
 fn every_candidate_kind_has_a_source_behind_it() {
-    let registry = CommandRegistry::builtin();
+    let registry = ActionRegistry::builtin();
     let usage = |_: &str, _: &str| anywhere_core::core::ranking::usage::UsageStats::default();
     let search = anywhere_core::core::search::engine::SearchEngine {
         registry: &registry,
@@ -211,7 +211,7 @@ fn features_register_through_bundles() {
         bundles.len() >= 4,
         "each feature contributes its own bundle"
     );
-    let registry = CommandRegistry::builtin();
+    let registry = ActionRegistry::builtin();
     for bundle in &bundles {
         assert!(
             bundle.actions.iter().all(|action| !action.id.is_empty()),

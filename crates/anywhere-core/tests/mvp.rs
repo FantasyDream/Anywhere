@@ -1,7 +1,7 @@
 //! Facade-level scenarios through the same public API the host uses.
 use anyhow::{bail, Result};
 use anywhere_core::{
-    core::action::descriptor::CommandRegistry,
+    core::action::descriptor::ActionRegistry,
     core::context::provider::{metrics, ContextProvider, ProviderDescriptor},
     core::context::{ContextValue, ExecutionContext, ResolvedContext},
     core::ranking::usage::{MemoryUsage, UsageRepository},
@@ -228,8 +228,8 @@ impl UsageRepository for SharedHistory {
     }
 }
 
-fn registry() -> CommandRegistry {
-    let mut registry = CommandRegistry::builtin();
+fn registry() -> ActionRegistry {
+    let mut registry = ActionRegistry::builtin();
     registry
         .register_plugin(anywhere_plugin::parse_manifest(anywhere_plugin::EXAMPLE_PLUGIN).unwrap())
         .unwrap();
@@ -1615,12 +1615,14 @@ async fn an_index_that_arrives_late_reaches_the_settled_snapshot() {
         capture_delay: Some(Duration::from_millis(60)),
         ..TestPlatform::new(dir.path().canonicalize().unwrap(), false)
     });
-    let app = Arc::new(
-        app_with_budget(platform, Duration::from_millis(20)).with_content_grace(Duration::ZERO),
-    );
+    // A zero budget is what makes the premise deterministic rather than usually true: the
+    // scan walks the real bundle roots and takes tens of milliseconds, so activation has to
+    // return without waiting for anything for the window below to be reliably open.
+    let app =
+        Arc::new(app_with_budget(platform, Duration::ZERO).with_content_grace(Duration::ZERO));
     let mut index = app.index_updates();
-    // Publish a catalog the scan will replace, so the search below really does run
-    // against an index that does not yet contain the query's application.
+    // Publish a catalog the scan will replace, so the search below really does run against an
+    // index that does not yet contain the query's application.
     *app.resolver.catalog.lock().unwrap() = ApplicationCatalog::new(Vec::new());
     let first = app.activate().await.unwrap().unwrap();
     assert!(

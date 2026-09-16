@@ -49,14 +49,14 @@ pub fn merge_json_aliases(snapshot: &mut UsageSnapshot) {
     let legacy = snapshot
         .iter()
         .filter(|((_, kind), _)| kind == legacy_prefix)
-        .map(|((command, _), stats)| (command.clone(), *stats))
+        .map(|((action, _), stats)| (action.clone(), *stats))
         .collect::<Vec<_>>();
     if legacy.is_empty() {
         return;
     }
-    for (command, stats) in legacy {
-        merge_usage(snapshot, (command.clone(), JSON_DOCUMENT.to_owned()), stats);
-        snapshot.remove(&(command, JSON_LEGACY.to_owned()));
+    for (action, stats) in legacy {
+        merge_usage(snapshot, (action.clone(), JSON_DOCUMENT.to_owned()), stats);
+        snapshot.remove(&(action, JSON_LEGACY.to_owned()));
     }
 }
 
@@ -76,15 +76,15 @@ impl UsageRepository for MemoryUsage {
             .0
             .iter()
             .filter(|((_, _, app), _)| app == source_app)
-            .map(|((command, kind, _), stats)| ((command.clone(), kind.clone()), *stats))
+            .map(|((action, kind, _), stats)| ((action.clone(), kind.clone()), *stats))
             .collect::<UsageSnapshot>();
         merge_json_aliases(&mut snapshot);
         Ok(snapshot)
     }
     fn load_global(&self) -> anyhow::Result<UsageSnapshot> {
         let mut snapshot = UsageSnapshot::new();
-        for ((command, kind, _), stats) in &self.0 {
-            merge_usage(&mut snapshot, (command.clone(), kind.clone()), *stats);
+        for ((action, kind, _), stats) in &self.0 {
+            merge_usage(&mut snapshot, (action.clone(), kind.clone()), *stats);
         }
         merge_json_aliases(&mut snapshot);
         Ok(snapshot)

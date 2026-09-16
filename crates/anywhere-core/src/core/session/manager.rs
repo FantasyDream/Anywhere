@@ -5,7 +5,7 @@
 //! without borrowing the facade.
 use super::LauncherSession;
 use crate::{
-    core::action::descriptor::CommandRegistry,
+    core::action::descriptor::ActionRegistry,
     core::context::engine::{stamp, ContextGraph, ContextGraphRun, GraphStep},
     core::context::provider::ContextProvider,
     core::context::registry::ContextProviderRegistry,
@@ -34,7 +34,7 @@ use tokio::sync::{broadcast, watch};
 #[derive(Clone)]
 pub struct Resolver {
     pub platform: Arc<dyn Platform>,
-    pub registry: Arc<CommandRegistry>,
+    pub registry: Arc<ActionRegistry>,
     /// Stateless providers; the directory provider is added per revision.
     pub providers: ContextProviderRegistry,
     pub session: Arc<Mutex<LauncherSession>>,
@@ -59,7 +59,7 @@ pub struct Resolution {
 impl Resolver {
     pub fn new(
         platform: Arc<dyn Platform>,
-        registry: CommandRegistry,
+        registry: ActionRegistry,
         history: Box<dyn UsageRepository>,
     ) -> Self {
         let (latest_tx, _) = watch::channel(None);

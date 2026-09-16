@@ -8,19 +8,19 @@
 //! Memory only: no file system, no process, no network. The spec forbids availability from
 //! doing IO of its own, so whether a repository still exists is left to execution, which
 //! reports it as a normal failure.
-use super::descriptor::CommandDescriptor;
+use super::descriptor::ActionDescriptor;
 use crate::core::context::{ContextValue, ResolvedContext};
 use crate::core::session::facts::SessionFacts;
 use anywhere_protocol::Availability;
 
 /// Decide what the user sees for one applicable action.
 pub fn evaluate(
-    command: &CommandDescriptor,
+    action: &ActionDescriptor,
     context: &ResolvedContext,
     facts: &SessionFacts,
 ) -> Availability {
     let path = context.value.path();
-    match command.id.as_str() {
+    match action.id.as_str() {
         // The clipboard already holds this exact value, so copying is a no-op.
         "core.directory.copy" | "core.file.copy" => {
             if let Some(path) = path {

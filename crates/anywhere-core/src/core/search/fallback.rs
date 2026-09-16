@@ -3,7 +3,7 @@
 //! The built-in text actions (a plugin's "search the web", for instance) stay reachable
 //! when the query matched none of their own searchable fields. They are appended after
 //! sorting so they can never displace a real query match or a typed-object action.
-use crate::core::action::descriptor::CommandRegistry;
+use crate::core::action::descriptor::ActionRegistry;
 use crate::core::context::{ContextSource, ContextValue, ResolvedContext};
 use crate::core::ranking::score;
 use crate::core::search::candidate::{action_candidate_id, compare_candidates, Candidate};
@@ -11,7 +11,7 @@ use crate::core::search::query::Query;
 use anywhere_protocol::*;
 
 pub struct TextFallbackSource<'a> {
-    pub registry: &'a CommandRegistry,
+    pub registry: &'a ActionRegistry,
 }
 
 impl TextFallbackSource<'_> {
@@ -25,25 +25,25 @@ impl TextFallbackSource<'_> {
         let mut fallbacks = self
             .registry
             .matching(&context)
-            .map(|command| {
-                let level = command.search.matched(query);
+            .map(|action| {
+                let level = action.search.matched(query);
                 Candidate {
                     presentation: CandidatePresentation {
-                        id: action_candidate_id(&command.id, &context),
+                        id: action_candidate_id(&action.id, &context),
                         kind: CandidateKind::Action,
-                        title: command.title.clone(),
+                        title: action.title.clone(),
                         subtitle: Some(display_detail(&context)),
                         icon: IconDescriptor {
-                            key: command.icon.clone(),
+                            key: action.icon.clone(),
                         },
-                        score: score::fallback_score(level, command.base_priority),
-                        group_id: command.group_id.clone(),
+                        score: score::fallback_score(level, action.base_priority),
+                        group_id: action.group_id.clone(),
                         availability: Availability::enabled(),
-                        command_id: Some(command.id.clone()),
+                        command_id: Some(action.id.clone()),
                         bundle_id: None,
                         owning_app: None,
                     },
-                    command: Some(command.clone()),
+                    action: Some(action.clone()),
                     context: Some(context.clone()),
                     application: None,
                 }

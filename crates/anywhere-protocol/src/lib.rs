@@ -7,8 +7,10 @@ pub type Revision = u32;
 pub type ContextId = String;
 pub type ContextTypeId = String;
 pub type ProviderId = String;
-pub type CommandId = String;
+/// Identity of one action, as the plugin manifest and the DTOs spell it.
 pub type ActionId = String;
+/// Identity of one row in the list: an action *or* an application, with its object.
+pub type CandidateId = String;
 pub type GroupId = String;
 pub type ScopeId = String;
 
@@ -77,18 +79,8 @@ pub struct IconDescriptor {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ActionPresentation {
-    pub id: ActionId,
-    pub command_id: CommandId,
-    pub title: String,
-    pub subtitle: Option<String>,
-    pub icon: IconDescriptor,
-    pub score: f32,
-}
-pub type ActionDescriptor = ActionPresentation;
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CandidatePresentation {
-    pub id: ActionId,
+    pub id: CandidateId,
     pub kind: CandidateKind,
     pub title: String,
     pub subtitle: Option<String>,
@@ -97,7 +89,7 @@ pub struct CandidatePresentation {
     pub group_id: GroupId,
     pub availability: Availability,
     /// Action command id; `None` for an application launch candidate.
-    pub command_id: Option<CommandId>,
+    pub command_id: Option<ActionId>,
     /// Bundle identity of an application launch candidate.
     pub bundle_id: Option<String>,
     /// App that owns an action exclusively (Current App scope); `None` for generic actions.
@@ -159,7 +151,7 @@ pub struct ScopeEntry {
     pub kind: ScopeKind,
     pub label: String,
     /// Candidates of this scope in ranked order, after availability and filtering.
-    pub candidate_ids: Vec<ActionId>,
+    pub candidate_ids: Vec<CandidateId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -261,7 +253,7 @@ pub enum DeclarativeAction {
     OpenUrl { url: String },
     OpenFile { path: String },
     Copy { text: String },
-    ExecuteBuiltin { command_id: CommandId },
+    ExecuteBuiltin { command_id: ActionId },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
