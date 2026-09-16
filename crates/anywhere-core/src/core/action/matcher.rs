@@ -7,6 +7,7 @@ use super::descriptor::{CommandDescriptor, CommandRegistry};
 use crate::core::context::{ContextSource, ResolvedContext};
 use crate::core::ranking::score::{self, UsageStats};
 use crate::core::search::candidate::{action_candidate_id, Candidate};
+use crate::core::search::candidate_source::{CandidateSource, SearchContext};
 use crate::core::search::query::Query;
 use crate::core::session::facts::{context_ownership, Ownership, SessionFacts};
 use anywhere_protocol::*;
@@ -16,6 +17,14 @@ pub struct ActionMatcher<'a> {
     pub usage: &'a dyn Fn(&str, &str) -> UsageStats,
     pub facts: &'a SessionFacts,
     pub now: i64,
+}
+
+/// Actions reach the search pipeline through the same contract as any other source; what is
+/// core about them is only that the launcher always has them.
+impl CandidateSource for ActionMatcher<'_> {
+    fn candidates(&self, search: &SearchContext<'_>) -> Vec<Candidate> {
+        self.match_actions(search.query, search.contexts)
+    }
 }
 
 impl ActionMatcher<'_> {

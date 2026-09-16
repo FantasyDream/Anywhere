@@ -3,6 +3,7 @@
 //! These do not check behaviour; they check that the shape the refactor established is still
 //! there. Each one fails if a future change puts a responsibility back where it does not
 //! belong, which is the only way a structure survives contact with new features.
+use anywhere_core::core::context::ResolvedContext;
 use anywhere_core::{
     core::{
         action::{availability, bundle::ActionBundle, descriptor::CommandRegistry, matcher},
@@ -19,6 +20,24 @@ use anywhere_core::{
 };
 use anywhere_protocol::*;
 use std::sync::Arc;
+
+/// The action matcher as the pipeline sees it: one source among others.
+fn sources_of(contexts: &[ResolvedContext], registry: &CommandRegistry) -> Vec<Candidate> {
+    use anywhere_core::core::action::matcher::ActionMatcher;
+    use anywhere_core::core::search::candidate_source::{CandidateSource, SearchContext};
+    let usage = |_: &str, _: &str| anywhere_core::core::ranking::usage::UsageStats::default();
+    let facts = anywhere_core::core::session::facts::SessionFacts::default();
+    let matcher = ActionMatcher {
+        registry,
+        usage: &usage,
+        facts: &facts,
+        now: 1000,
+    };
+    matcher.candidates(&SearchContext {
+        query: &anywhere_core::core::search::query::Query::parse("copy"),
+        contexts,
+    })
+}
 
 /// Recognition is a provider chain, and a chain resolves further than its seeds.
 ///
@@ -164,7 +183,12 @@ fn every_candidate_kind_has_a_source_behind_it() {
         .windows(2)
         .all(|pair| pair[0].presentation.score >= pair[1].presentation.score));
 
-    // A source can be driven directly, which is what makes a new kind of result additive.
+    // Both kinds arrive through the same contract: the core's own actions and whatever a
+    // feature registers. That is what makes a new kind of result additive.
+    let matched = sources_of(&contexts, &registry);
+    assert!(!matched.is_empty(), "actions are a source too");
+
+    // And a source can be driven directly.
     struct Empty;
     impl CandidateSource for Empty {
         fn candidates(&self, _: &SearchContext<'_>) -> Vec<Candidate> {

@@ -45,7 +45,7 @@ impl SearchEngine<'_> {
             facts: self.facts,
             now: self.now,
         };
-        let mut action_candidates = matcher.match_actions(query, contexts);
+        let mut action_candidates = matcher.candidates(&search);
         let matcher_us = actions_started.elapsed().as_micros() as u64;
 
         let apps_started = Instant::now();
