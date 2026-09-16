@@ -1,0 +1,30 @@
+//! The Objective-C shim in `native/macos.m`.
+//!
+//! One file for the whole FFI boundary: every function hands back owned memory that the
+//! matching `launcher_free_*` releases, and no pointer outlives the call that produced it.
+#![allow(non_snake_case)]
+
+use std::os::raw::{c_char, c_uint};
+
+extern "C" {
+    pub fn launcher_frontmost_application() -> *mut c_char;
+    pub fn launcher_free_string(value: *mut c_char);
+    pub fn launcher_free_bytes(value: *mut u8);
+    pub fn launcher_bundle_application(path: *const c_char) -> *mut c_char;
+    pub fn launcher_preferred_languages() -> *mut c_char;
+    pub fn launcher_bundle_localized_names(
+        path: *const c_char,
+        languages: *const c_char,
+    ) -> *mut c_char;
+    pub fn launcher_launch_application(path: *const c_char) -> i32;
+    pub fn launcher_application_icon(
+        path: *const c_char,
+        size: c_uint,
+        out_length: *mut c_uint,
+    ) -> *mut u8;
+    pub fn launcher_clipboard_text(
+        output: *mut c_char,
+        capacity: c_uint,
+        out_length: *mut c_uint,
+    ) -> i32;
+}
