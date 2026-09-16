@@ -1,10 +1,9 @@
 //! Launcher facade: activation capture, request lifecycle, execution, subscription.
 use crate::{
     applications, command::CommandRegistry, core::context::engine::ContextGraphRun,
-    core::session::manager::Resolver, execution, features::filesystem::provider::DirectoryMemo,
-    history::UsageRepository,
+    core::session::manager::Resolver, history::UsageRepository,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::Result;
 use anywhere_platform::{ApplicationInfo, Platform};
 use anywhere_protocol::*;
 use std::{
@@ -13,7 +12,6 @@ use std::{
     time::{Duration, Instant},
 };
 use tokio::sync::watch;
-use tracing::Instrument;
 
 /// Caller-controlled first-snapshot budget. Providers never see it.
 pub const DEFAULT_FIRST_SNAPSHOT_BUDGET: Duration = Duration::from_millis(40);
@@ -26,7 +24,8 @@ pub const DEFAULT_FIRST_SNAPSHOT_BUDGET: Duration = Duration::from_millis(40);
 /// empty launcher that demanded typing first. The extension is bounded by this value
 /// and applies only when a call is actually pending.
 pub const DEFAULT_FIRST_CONTENT_GRACE: Duration = Duration::from_millis(400);
-const MAX_INPUT_BYTES: usize = 1024 * 1024;
+/// Largest input the host may send, in bytes.
+pub(crate) const MAX_INPUT_BYTES: usize = 1024 * 1024;
 /// Icon edge in pixels; small enough that one screen of rows stays cheap.
 const ICON_PIXELS: u32 = 64;
 
@@ -55,15 +54,15 @@ pub trait LauncherApplication: Send + Sync {
 }
 
 pub struct Application {
-    platform: Arc<dyn Platform>,
+    pub(super) platform: Arc<dyn Platform>,
     /// The engine, shared with the background tasks that publish late results.
     pub resolver: Resolver,
-    startup_diagnostics: Vec<String>,
-    budget: Duration,
-    content_grace: Duration,
-    catalog_tx: watch::Sender<bool>,
+    pub(super) startup_diagnostics: Vec<String>,
+    pub(super) budget: Duration,
+    pub(super) content_grace: Duration,
+    pub(super) catalog_tx: watch::Sender<bool>,
     /// The application index is one scan per process; an activation must not redo it.
-    catalog_started: Arc<std::sync::atomic::AtomicBool>,
+    pub(super) catalog_started: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Application {
@@ -157,7 +156,9 @@ impl Application {
         self.resolver.register_provider(provider)
     }
 
-    fn session(&self) -> Result<std::sync::MutexGuard<'_, crate::core::session::manager::Session>> {
+    pub(super) fn session(
+        &self,
+    ) -> Result<std::sync::MutexGuard<'_, crate::core::session::LauncherSession>> {
         self.resolver
             .session
             .lock()
@@ -170,7 +171,7 @@ impl Application {
     /// change between two openings of the launcher, and re-walking every bundle root on
     /// each activation bought nothing. The catalog stays in the resolver, so a later
     /// activation already has it.
-    fn spawn_catalog_scan(&self) {
+    pub(super) fn spawn_catalog_scan(&self) {
         if self
             .catalog_started
             .swap(true, std::sync::atomic::Ordering::AcqRel)
@@ -204,7 +205,7 @@ impl Application {
     /// The rebuild happens after the revision settles. Publishing it earlier would emit a
     /// snapshot that is not final with no late context behind it, and hosts treat a new
     /// `snapshot_seq` as "there is more to show now".
-    fn spawn_index_recompute(&self, session_id: SessionId) {
+    pub(super) fn spawn_index_recompute(&self, session_id: SessionId) {
         let resolver = self.resolver.clone();
         let mut index = self.catalog_tx.subscribe();
         let mut states = self.state_updates();
@@ -253,7 +254,7 @@ impl Application {
     }
 
     /// Late context arrives here; a single resolution per revision.
-    fn spawn_completion(
+    pub(super) fn spawn_completion(
         &self,
         session_id: SessionId,
         revision: Revision,
@@ -290,13 +291,13 @@ impl Application {
     /// Activation must resolve this *before* reading history. Looking the rows up under
     /// an empty key found nothing, so every frequency and recency term read as zero and
     /// repeated use could never lift an action.
-    fn source_app_of(frontmost: Option<&ApplicationInfo>) -> String {
+    pub(super) fn source_app_of(frontmost: Option<&ApplicationInfo>) -> String {
         frontmost
             .map(|application| application.bundle_id.clone())
             .unwrap_or_default()
     }
 
-    fn load_usage(&self, source_app: &str) -> (UsageMap, UsageMap) {
+    pub(super) fn load_usage(&self, source_app: &str) -> (UsageMap, UsageMap) {
         let history = self.resolver.history.clone();
         let source_app = source_app.to_owned();
         let scoped = history
@@ -320,361 +321,31 @@ fn dirs_home() -> Option<PathBuf> {
 
 #[async_trait::async_trait]
 impl LauncherApplication for Application {
+    /// See `activate.rs`.
     async fn activate(&self) -> Result<Option<LauncherState>> {
-        let start = Instant::now();
-        // The original foreground application is captured before the host shows anything.
-        let platform = self.platform.clone();
-        let frontmost = tokio::task::spawn_blocking(move || platform.frontmost_application())
-            .await
-            .context("foreground capture task failed")?
-            .unwrap_or(None);
-        let mut diagnostics = self.startup_diagnostics.clone();
-        let git_available = {
-            let platform = self.platform.clone();
-            tokio::task::spawn_blocking(move || platform.git_available())
-                .await
-                .unwrap_or(false)
-        };
-        let clipboard = match tokio::task::spawn_blocking({
-            let platform = self.platform.clone();
-            move || platform.clipboard_text()
-        })
-        .await
-        {
-            Ok(Ok(text)) => text,
-            Ok(Err(error)) => {
-                diagnostics.push(format!("Clipboard snapshot: {error:#}"));
-                None
-            }
-            Err(error) => {
-                diagnostics.push(format!("Clipboard snapshot task: {error}"));
-                None
-            }
-        };
-        let source_app = Self::source_app_of(frontmost.as_ref());
-        let session_id = {
-            let mut session = self.session()?;
-            let session_id = session
-                .state
-                .session_id
-                .checked_add(1)
-                .context("session id exhausted; restart launcher")?;
-            let directory = frontmost
-                .as_ref()
-                .map(|frontmost| DirectoryMemo::start(self.platform.clone(), frontmost.clone()));
-            *session = crate::core::session::manager::Session {
-                frontmost: frontmost.clone(),
-                directory,
-                clipboard,
-                git_available,
-                state: LauncherState {
-                    session_id,
-                    ..Default::default()
-                },
-                ..Default::default()
-            };
-            self.resolver.current.store(
-                crate::core::context::engine::stamp(session_id, 0),
-                std::sync::atomic::Ordering::Release,
-            );
-            session_id
-        };
-        tracing::info!(
-            session_id,
-            duration_us = start.elapsed().as_micros() as u64,
-            "activation_context_captured"
-        );
-        self.spawn_catalog_scan();
-        let (usage, app_usage) = self.load_usage(&source_app);
-        if let Ok(mut session) = self.resolver.session.lock() {
-            if session.state.session_id == session_id {
-                session.usage = usage;
-                session.app_usage = app_usage;
-                // Same value the commit path would derive, decided once here.
-                session.source_app = source_app;
-            }
-        }
-        let execution = self.resolver.execution(session_id, 0);
-        let Some(seeds) = self.resolver.seeds_for(session_id, "") else {
-            return Ok(None);
-        };
-        let run = self.resolver.build_run(&execution, seeds);
-        let state = async {
-            tracing::info!("session_created");
-            let Some(resolution) = self
-                .resolver
-                .resolve_until_with_grace(session_id, run, self.budget, self.content_grace, start)
-                .await
-            else {
-                return Ok(None);
-            };
-            let complete_by_budget = resolution.complete;
-            let run = resolution.run;
-            let mut diagnostics = diagnostics;
-            diagnostics.extend(resolution.diagnostics);
-            let committed = self.resolver.commit(
-                session_id,
-                0,
-                resolution.contexts,
-                diagnostics.clone(),
-                complete_by_budget,
-                start,
-            )?;
-            if committed.is_some() {
-                tracing::info!(
-                    session_id,
-                    duration_us = start.elapsed().as_micros() as u64,
-                    "activation_actions_ready"
-                );
-            }
-            if !complete_by_budget {
-                self.spawn_completion(session_id, 0, run, start, diagnostics);
-            }
-            Ok(committed)
-        }
-        .instrument(tracing::info_span!("activate", session_id, revision = 0))
-        .await;
-        self.spawn_index_recompute(session_id);
-        state
+        self.activate_use_case().await
     }
 
+    /// See `update_query.rs`.
     async fn update_input(
         &self,
         session_id: SessionId,
         input: String,
         revision: Revision,
     ) -> Result<Option<LauncherState>> {
-        if input.len() > MAX_INPUT_BYTES {
-            bail!("input exceeds 1 MiB");
-        }
-        let start = Instant::now();
-        let execution = {
-            let mut session = self.session()?;
-            if session.state.session_id != session_id
-                || revision <= session.state.revision
-                || self
-                    .resolver
-                    .current
-                    .load(std::sync::atomic::Ordering::Acquire)
-                    == 0
-            {
-                return Ok(None);
-            }
-            // A superseded request never publishes again.
-            session.state.revision = revision;
-            session.state.input = input.clone();
-            session.state.context_complete = false;
-            session.committed_revision = None;
-            session.snapshot_seq = 0;
-            session.published_contexts = 0;
-            self.resolver.current.store(
-                crate::core::context::engine::stamp(session_id, revision),
-                std::sync::atomic::Ordering::Release,
-            );
-            // Build seeds from the guard we already hold; `seeds_for` would deadlock here.
-            crate::core::session::manager::seeds_from(&session, &input)
-        };
-        tracing::info!("input_revision_changed");
-        tracing::info!(
-            session_id,
-            revision,
-            duration_us = start.elapsed().as_micros() as u64,
-            contexts = execution.len(),
-            "input_context_resolved"
-        );
-        let execution_context = self.resolver.execution(session_id, revision);
-        let run = self.resolver.build_run(&execution_context, execution);
-        let state = async {
-            let Some(resolution) = self
-                .resolver
-                .resolve_until_with_grace(session_id, run, self.budget, self.content_grace, start)
-                .await
-            else {
-                return Ok(None);
-            };
-            let complete_by_budget = resolution.complete;
-            let late_run = resolution.run;
-            let mut diagnostics = self.startup_diagnostics.clone();
-            diagnostics.extend(resolution.diagnostics);
-            let committed = self.resolver.commit(
-                session_id,
-                revision,
-                resolution.contexts,
-                diagnostics.clone(),
-                complete_by_budget,
-                start,
-            )?;
-            if committed.is_some() {
-                tracing::info!(
-                    session_id,
-                    revision,
-                    duration_us = start.elapsed().as_micros() as u64,
-                    "input_actions_ready"
-                );
-            }
-            if !complete_by_budget {
-                self.spawn_completion(session_id, revision, late_run, start, diagnostics);
-            }
-            Ok(committed)
-        }
-        .instrument(tracing::info_span!("update_input", session_id, revision))
-        .await;
-        state
+        self.update_query_use_case(session_id, input, revision)
+            .await
     }
 
+    /// See `execute.rs`.
     async fn execute(
         &self,
         session_id: SessionId,
         revision: Revision,
         candidate_id: ActionId,
     ) -> Result<ActionResult> {
-        let (candidate, source_app) = {
-            let session = self.session()?;
-            if session.state.session_id != session_id
-                || self
-                    .resolver
-                    .current
-                    .load(std::sync::atomic::Ordering::Acquire)
-                    != crate::core::context::engine::stamp(session_id, session.state.revision)
-                || session.state.revision != revision
-            {
-                bail!("stale session");
-            }
-            // The revision is current, but its candidates may not be published yet:
-            // `update_input` makes the new revision current before it resolves, so the
-            // map still holds the previous revision's candidates. They carry the previous
-            // context and execution target, so serving them here would execute an action
-            // that belongs to an input the user has already replaced.
-            if session.candidates_revision != Some(revision) {
-                bail!("action expired; choose a current action");
-            }
-            let candidate = session
-                .state_candidates
-                .get(&candidate_id)
-                .cloned()
-                .context("action expired; choose a current action")?;
-            if !candidate.presentation.availability.is_executable() {
-                bail!(
-                    "{}",
-                    candidate
-                        .presentation
-                        .availability
-                        .reason
-                        .clone()
-                        .unwrap_or_else(|| "action is not available".into())
-                );
-            }
-            (candidate, session.source_app.clone())
-        };
-        let platform = self.platform.clone();
-        let registry = self.resolver.registry.clone();
-        let history = self.resolver.history.clone();
-        // Handed to the worker so it can re-check currency when it actually starts running,
-        // rather than trusting a check made while the request was still being queued.
-        let execution_ticket = self.resolver.execution(session_id, revision);
-        let record_id = candidate
-            .presentation
-            .command_id
-            .clone()
-            .or_else(|| {
-                candidate
-                    .presentation
-                    .bundle_id
-                    .as_ref()
-                    .map(|bundle| crate::core::ranking::usage::application_usage_id(bundle))
-            })
-            .context("candidate has no executable identity")?;
-        let context_type = candidate
-            .context
-            .as_ref()
-            .map(|context| context.type_id.clone())
-            .unwrap_or_else(|| crate::core::ranking::usage::APPLICATION_CONTEXT_TYPE.to_owned());
-        tracing::info!(
-            session_id,
-            revision,
-            candidate_id,
-            command_id = record_id,
-            "action_execution_started"
-        );
-        let result = tokio::task::spawn_blocking(move || {
-            // The opening gate ran when the request arrived; this one runs when the worker
-            // actually starts. A blocking worker can wait behind other work, and the user
-            // can dismiss the launcher in that gap — acting then would open a window, or
-            // overwrite the clipboard, for a session that no longer exists.
-            if !execution_ticket.is_current() {
-                bail!("action expired before it started");
-            }
-            let output = match (
-                &candidate.command,
-                &candidate.context,
-                &candidate.application,
-            ) {
-                (Some(command), Some(context), _) => {
-                    execution::execute(&command.executor, context, platform.as_ref(), &registry)?
-                }
-                (None, None, Some(application)) => {
-                    if !platform.launch_application(&application.path)? {
-                        bail!("could not launch {}", application.path);
-                    }
-                    execution::ExecutionOutput {
-                        text: None,
-                        close_window: true,
-                    }
-                }
-                _ => bail!("candidate cannot be executed"),
-            };
-            // No currency re-check *after* the side effect. By then refusing cannot prevent
-            // anything; it only loses the usage record. Every action that closes the window
-            // ends its own session (the host dismisses on focus loss), so checking here
-            // would fail exactly the successful executions whose frequency the ranking
-            // needs, and report "expired" for an action the user watched succeed. Currency
-            // is enforced before the side effect: once when the request arrives, once when
-            // the worker starts.
-            let history_result = history
-                .lock()
-                .map_err(|_| anyhow::anyhow!("history lock poisoned"))
-                .and_then(|mut history| {
-                    history.record(
-                        &record_id,
-                        &context_type,
-                        &source_app,
-                        crate::core::session::manager::now(),
-                    )
-                });
-            Ok::<_, anyhow::Error>((output, history_result))
-        })
-        .await?;
-        match result {
-            Ok((output, history_result)) => {
-                let mut message = "Done".to_owned();
-                let mut close_window = output.close_window;
-                if let Err(error) = history_result {
-                    message = format!("Action completed, but usage could not be saved: {error:#}");
-                    close_window = false;
-                    tracing::error!(session_id, revision, error = %error, "usage_record_failed");
-                }
-                tracing::info!(session_id, revision, "action_execution_completed");
-                Ok(ActionResult {
-                    session_id,
-                    revision,
-                    success: true,
-                    message,
-                    output_text: output.text,
-                    close_window,
-                })
-            }
-            Err(error) => {
-                tracing::error!(session_id, revision, error = %error, "action_execution_failed");
-                Ok(ActionResult {
-                    session_id,
-                    revision,
-                    success: false,
-                    message: format!("{error:#}"),
-                    output_text: None,
-                    close_window: false,
-                })
-            }
-        }
+        self.execute_use_case(session_id, revision, candidate_id)
+            .await
     }
 
     /// Small PNG for an application candidate, fetched on demand for visible rows.

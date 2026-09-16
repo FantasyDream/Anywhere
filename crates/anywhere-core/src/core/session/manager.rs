@@ -3,15 +3,14 @@
 //! Deliberately separate from the [`Application`](crate::application::launcher_service::Application)
 //! facade so a background completion task can own a clone and publish late context
 //! without borrowing the facade.
+use super::LauncherSession;
 use crate::{
     core::action::descriptor::CommandRegistry,
     core::context::engine::{stamp, ContextGraph, ContextGraphRun, GraphStep},
     core::context::provider::ContextProvider,
     core::context::registry::ContextProviderRegistry,
     core::context::{ExecutionContext, ResolvedContext},
-    core::ranking::score::UsageStats,
     core::ranking::usage::UsageRepository,
-    core::search::candidate::Candidate,
     core::search::engine::SearchEngine,
     core::search::query::Query,
     core::session::facts::SessionFacts,
@@ -19,10 +18,9 @@ use crate::{
     features::filesystem::provider::CurrentDirectoryProvider,
 };
 use anyhow::{anyhow, Result};
-use anywhere_platform::{ApplicationInfo, Platform};
+use anywhere_platform::Platform;
 use anywhere_protocol::*;
 use std::{
-    collections::HashMap,
     sync::{
         atomic::{AtomicU64, Ordering},
         Arc, Mutex,
@@ -31,39 +29,6 @@ use std::{
 };
 use tokio::sync::{broadcast, watch};
 
-#[derive(Default)]
-pub struct Session {
-    pub state: LauncherState,
-    /// Immutable ambient capture: the original frontmost application.
-    pub frontmost: Option<ApplicationInfo>,
-    /// Session-scoped single-flight directory capture.
-    pub directory: Option<Arc<crate::features::filesystem::provider::DirectoryMemo>>,
-    /// Snapshot of the real text clipboard, read once at activation.
-    pub clipboard: Option<String>,
-    pub git_available: bool,
-    /// Contexts reusable across revisions without repeating OS work.
-    pub context_cache: Vec<ResolvedContext>,
-    pub committed_revision: Option<Revision>,
-    /// Contexts the committed revision published, for a later re-match against a source
-    /// that arrived late (the application index) without re-resolving anything.
-    pub committed_contexts: Vec<ResolvedContext>,
-    /// Context rows already published for the committed revision, for late counts.
-    pub published_contexts: usize,
-    pub snapshot_seq: u32,
-    pub source_app: String,
-    pub usage: HashMap<(String, String), UsageStats>,
-    pub app_usage: HashMap<(String, String), UsageStats>,
-    /// Committed candidates keyed by stable id, for execution.
-    pub state_candidates: HashMap<ActionId, Candidate>,
-    /// Revision the candidate map above was built for.
-    ///
-    /// A new revision is current from the moment its input arrives, but its candidates
-    /// only exist once `commit` builds them. Without this an execute request that named
-    /// the new revision could still be served from the previous revision's candidates,
-    /// which carry the previous revision's context and execution target.
-    pub candidates_revision: Option<Revision>,
-}
-
 /// Cloneable engine shared by the facade and its background completion tasks.
 #[derive(Clone)]
 pub struct Resolver {
@@ -71,7 +36,7 @@ pub struct Resolver {
     pub registry: Arc<CommandRegistry>,
     /// Stateless providers; the directory provider is added per revision.
     pub providers: ContextProviderRegistry,
-    pub session: Arc<Mutex<Session>>,
+    pub session: Arc<Mutex<LauncherSession>>,
     pub current: Arc<AtomicU64>,
     pub events: broadcast::Sender<LauncherEvent>,
     pub latest_tx: watch::Sender<Option<Arc<LauncherState>>>,
@@ -109,7 +74,7 @@ impl Resolver {
                 }
                 providers
             },
-            session: Arc::new(Mutex::new(Session::default())),
+            session: Arc::new(Mutex::new(LauncherSession::default())),
             current: Arc::new(AtomicU64::new(0)),
             events: broadcast::channel(256).0,
             latest_tx,
@@ -571,7 +536,7 @@ impl Resolver {
 /// application, then the raw input text.
 ///
 /// Callers must already hold the session lock.
-pub fn seeds_from(session: &Session, input: &str) -> Vec<ResolvedContext> {
+pub fn seeds_from(session: &LauncherSession, input: &str) -> Vec<ResolvedContext> {
     let mut seeds = session.context_cache.clone();
     if let Some(frontmost) = &session.frontmost {
         seeds.push(crate::features::applications::context::frontmost_context(
@@ -609,8 +574,8 @@ mod tests {
     use super::*;
     use crate::core::context::ContextValue;
 
-    fn fixture() -> Session {
-        Session {
+    fn fixture() -> LauncherSession {
+        LauncherSession {
             state: LauncherState {
                 session_id: 1,
                 ..Default::default()
