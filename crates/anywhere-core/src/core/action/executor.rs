@@ -1,7 +1,5 @@
-use crate::{
-    command::{BuiltinExecutor, CommandExecutor, CommandRegistry},
-    context::{ContextValue, ResolvedContext},
-};
+use crate::core::action::descriptor::{BuiltinExecutor, CommandExecutor, CommandRegistry};
+use crate::core::context::{ContextValue, ResolvedContext};
 use anyhow::{bail, Context, Result};
 use anywhere_platform::{GitOperation, Platform};
 

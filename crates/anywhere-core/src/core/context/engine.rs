@@ -42,6 +42,21 @@ pub(crate) fn stamp(session: SessionId, revision: Revision) -> u64 {
 }
 
 impl ExecutionContext {
+    /// An execution context for one session and revision, owned by the caller.
+    ///
+    /// For callers that drive the graph themselves with their own provider list — tools and
+    /// tests. The launcher service gets its contexts from the resolver instead, which is what
+    /// makes supersession observable across revisions.
+    pub fn detached(session_id: SessionId, revision: Revision) -> Self {
+        let (events, _) = broadcast::channel(16);
+        Self {
+            session_id,
+            revision,
+            current: Arc::new(AtomicU64::new(stamp(session_id, revision))),
+            events,
+        }
+    }
+
     pub fn is_current(&self) -> bool {
         self.current.load(Ordering::Acquire) == stamp(self.session_id, self.revision)
     }
@@ -82,8 +97,7 @@ impl ContextGraph {
     pub fn start(seeds: Vec<ResolvedContext>, execution: &ExecutionContext) -> ContextGraphRun {
         let mut run = ContextGraphRun {
             execution: execution.clone(),
-            contexts: Vec::new(),
-            equivalents: HashSet::new(),
+            contexts: crate::core::context::ContextSet::new(),
             visited: HashSet::new(),
             diagnostics: Vec::new(),
             cursor: 0,
@@ -200,8 +214,7 @@ pub enum GraphStep {
 
 pub struct ContextGraphRun {
     pub execution: ExecutionContext,
-    pub(crate) contexts: Vec<ResolvedContext>,
-    equivalents: HashSet<(String, String, ContextSource)>,
+    pub(crate) contexts: crate::core::context::ContextSet,
     visited: HashSet<(ProviderId, ContextId, SessionId, Revision)>,
     pub(crate) diagnostics: Vec<String>,
     cursor: usize,
@@ -211,29 +224,26 @@ pub struct ContextGraphRun {
 
 impl ContextGraphRun {
     pub fn contexts(&self) -> &[ResolvedContext] {
-        &self.contexts
+        self.contexts.as_slice()
     }
 
     pub fn diagnostics(&self) -> &[String] {
         &self.diagnostics
     }
 
-    fn insert(&mut self, mut context: ResolvedContext) {
-        // Source is significant: explicit user input must not be swallowed by ambient context.
-        if !self.equivalents.insert((
-            context.type_id.clone(),
-            context.value.text(),
-            context.source,
-        )) {
+    fn insert(&mut self, context: ResolvedContext) {
+        let kept =
+            self.contexts
+                .insert(context, self.execution.session_id, self.execution.revision);
+        if !kept {
             return;
         }
-        context.session_id = self.execution.session_id;
-        context.revision = self.execution.revision;
-        context.id = format!("c{}", self.contexts.len());
+        let Some(context) = self.contexts.as_slice().last() else {
+            return;
+        };
         self.execution.emit(LauncherEvent::ContextAdded {
             context: context.descriptor(),
         });
-        self.contexts.push(context);
     }
 
     /// Await the started call, or `None` when it has no pending call.
@@ -256,7 +266,7 @@ impl ContextGraphRun {
 
     fn finished(&mut self) -> GraphStep {
         GraphStep::Done {
-            contexts: std::mem::take(&mut self.contexts),
+            contexts: self.contexts.take(),
             diagnostics: std::mem::take(&mut self.diagnostics),
         }
     }
@@ -276,7 +286,7 @@ impl ContextGraphRun {
             if self.cursor >= self.contexts.len() {
                 return self.finished();
             }
-            let input = self.contexts[self.cursor].clone();
+            let input = self.contexts.row(self.cursor).clone();
             if input.depth >= MAX_DEPTH {
                 self.cursor += 1;
                 continue;
@@ -346,15 +356,11 @@ impl ContextGraphRun {
         // context — `step` skips a context whose only provider is visited. Finding the input
         // by identity keeps the two in step; the visited marks, not the cursor, are what
         // stop any call from being made twice.
-        let Some(position) = self
-            .contexts
-            .iter()
-            .position(|context| context.id == source_context_id)
-        else {
+        let Some(position) = self.contexts.position(&source_context_id) else {
             return;
         };
         self.cursor = position;
-        let input = self.contexts[self.cursor].clone();
+        let input = self.contexts.row(self.cursor).clone();
         match result {
             Ok(outputs) => {
                 for mut output in outputs {

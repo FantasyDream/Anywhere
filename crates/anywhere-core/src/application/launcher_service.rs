@@ -1,7 +1,8 @@
 //! Launcher facade: activation capture, request lifecycle, execution, subscription.
 use crate::{
-    applications, command::CommandRegistry, core::context::engine::ContextGraphRun,
-    core::session::manager::Resolver, history::UsageRepository,
+    core::action::descriptor::CommandRegistry, core::context::engine::ContextGraphRun,
+    core::ranking::usage::UsageRepository, core::session::manager::Resolver,
+    features::applications::index as applications,
 };
 use anyhow::Result;
 use anywhere_platform::{ApplicationInfo, Platform};

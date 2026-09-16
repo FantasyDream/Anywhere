@@ -8,9 +8,10 @@
 //! Finder Automation, FFI, window rendering and RSS are not measurable here; use
 //! `launcher.log` and the manual validation checklist for those.
 use anywhere_core::{
-    core::action::descriptor::CommandRegistry, core::search::engine::SearchEngine,
-    features::applications::index::IndexedApplication, features::git::provider::repository_root,
-    features::recognized_contexts, query::Query, ranking::UsageStats, SessionFacts,
+    core::action::descriptor::CommandRegistry, core::ranking::usage::UsageStats,
+    core::search::engine::SearchEngine, core::search::query::Query,
+    core::session::facts::SessionFacts, features::applications::index::IndexedApplication,
+    features::git::provider::repository_root, features::recognized_contexts,
 };
 use std::time::Instant;
 

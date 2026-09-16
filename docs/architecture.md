@@ -3,22 +3,70 @@
 ```mermaid
 flowchart TD
   UI[Flutter Presentation] --> B[anywhere-bridge-flutter]
-  B --> C[anywhere-core Application]
+  B --> C[anywhere-core application]
   C --> P[anywhere-protocol DTO]
   C --> PL[anywhere-platform Trait]
   C --> PG[anywhere-plugin]
   PG --> P
   PL --> MAC[macOS Adapter]
-  C --> DB[SQLite UsageHistory]
+  C --> DB[persistence SQLite]
 ```
+
+## 目录结构
+
+```text
+crates/anywhere-core/src/
+├── core/                    框架概念，不知道任何 feature、UI 或平台 API
+│   ├── context/             上下文是什么，以及如何被发现
+│   │   ├── mod.rs           Context / ContextValue / ContextSet
+│   │   ├── provider.rs      ContextProvider 契约
+│   │   ├── engine.rs        顺序遍历、执行去重、detach 与等待
+│   │   └── registry.rs      有哪些 provider，按什么顺序
+│   ├── action/              能对上下文做什么
+│   │   ├── descriptor.rs    动作的静态定义与注册表
+│   │   ├── bundle.rs        ActionBundle / ActionSpec（注册单位）
+│   │   ├── group.rs         ActionGroup（只承载展示信息）
+│   │   ├── matcher.rs       匹配
+│   │   ├── availability.rs  可用性
+│   │   └── executor.rs      执行
+│   ├── search/              查询 + 上下文 → 用户看到的列表
+│   │   ├── query.rs         Query / SearchFields
+│   │   ├── candidate.rs     一行是什么，以及如何比较
+│   │   ├── candidate_source.rs  候选来源契约
+│   │   ├── scope.rs         Scope Bar 的构建与排序
+│   │   ├── fallback.rs      文本兜底
+│   │   └── engine.rs        汇聚来源 → 排序 → 分组
+│   ├── ranking/             score.rs（打分）· usage.rs（UsageRepository）
+│   └── session/             mod.rs（LauncherSession）· facts.rs · manager.rs
+├── application/             用例，一个文件一个入口
+│   ├── launcher_service.rs  服务本体、配置与共享辅助
+│   ├── activate.rs          update_query.rs · execute.rs
+├── features/                第一方产品能力，各自拥有上下文与动作
+│   ├── applications/        index.rs · source.rs · context.rs
+│   ├── filesystem/          provider.rs · actions_folder.rs · actions_file.rs
+│   ├── git/                 provider.rs · actions.rs
+│   ├── json/  url/  text/   provider.rs（· actions.rs）
+├── persistence/             usage.rs（唯一知道 rusqlite 的模块）
+└── lib.rs
+```
+
+新增能力时改哪里：
+
+| 想加 | 只改 |
+|---|---|
+| Maven 上下文 | `features/maven/provider.rs` + 在 `features::builtin_providers` 注册 |
+| 某类对象的动作 | `features/<name>/actions.rs` 的 bundle + 在 `features::builtin_action_bundles` 注册 |
+| 文件搜索候选 | 实现 `core::search::candidate_source::CandidateSource` + 在 `SearchEngine` 注册 |
+
+不需要修改 `LauncherService`、`SearchEngine`、`ContextEngine`、`Ranking` 或 Flutter。
 
 ## 边界
 
 | 模块 | 职责 |
 |---|---|
 | anywhere-protocol | 稳定、可序列化的 Context/Action/State/Manifest/Event DTO |
-| anywhere-core | Session、输入识别 Provider、Context Graph、应用索引、Registry、Matcher、Group/Scope、Availability、Ranking、执行调度、UsageHistory |
-| anywhere-platform | OS-neutral Platform Trait，以及 macOS 的 NSWorkspace / open / osascript / pbcopy，以及 Windows 的 Shell COM / ShellExecute / Unicode Clipboard 实现 |
+| anywhere-core | `core/`（context/action/search/ranking/session）、`application/`（用例）、`features/`（第一方能力）、`persistence/`（存储） |
+| anywhere-platform | OS-neutral Platform Trait；macOS 按能力分文件（application/finder/clipboard/git/shell + native.rs 的 FFI 边界），Windows 同理 |
 | anywhere-plugin | TOML 发现、校验、模板展开，不执行脚本，不提供 UI |
 | anywhere-bridge-flutter | Facade 初始化、FRB 绑定、显式 DTO 转换 |
 | apps/flutter | 仅展示完整 Rust 状态、Scope Bar、键盘、稳定选中 ID、Focus 和窗口可见性 |

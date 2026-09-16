@@ -1,13 +1,11 @@
 //! Facade-level scenarios through the same public API the host uses.
 use anyhow::{bail, Result};
 use anywhere_core::{
-    applications::ApplicationCatalog,
-    context::{ContextValue, ResolvedContext},
     core::action::descriptor::CommandRegistry,
-    core::context::engine::ExecutionContext,
-    core::context::provider::{ContextProvider, ProviderDescriptor},
+    core::context::provider::{metrics, ContextProvider, ProviderDescriptor},
+    core::context::{ContextValue, ExecutionContext, ResolvedContext},
     core::ranking::usage::{MemoryUsage, UsageRepository},
-    features::applications::index::IndexedApplication,
+    features::applications::index::{ApplicationCatalog, IndexedApplication},
     persistence::usage::SqliteUsageRepository,
     Application, LauncherApplication,
 };
@@ -1982,7 +1980,7 @@ fn application_matching_is_not_charged_to_ranking() {
 
 #[tokio::test]
 async fn every_named_performance_metric_is_emitted_for_one_activation() {
-    use anywhere_core::provider::metrics;
+    use metrics;
     let fields = recorded_fields();
     fields.lock().unwrap().clear();
     let dir = tempfile::tempdir().unwrap();
