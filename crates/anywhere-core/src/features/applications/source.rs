@@ -75,7 +75,7 @@ impl CandidateSource for ApplicationSource<'_> {
                         key: "application".into(),
                     },
                     score,
-                    group_id: crate::core::action::descriptor::groups::APP.into(),
+                    group_id: crate::core::action::group::groups::APP.into(),
                     availability: Availability::enabled(),
                     command_id: None,
                     bundle_id: Some(application.bundle_id.clone()),

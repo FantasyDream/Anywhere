@@ -14,6 +14,19 @@ use crate::core::context::provider::ContextProvider;
 use crate::core::context::ResolvedContext;
 use std::sync::Arc;
 
+/// Every action the first-party features contribute, as bundles.
+///
+/// This is the whole registration surface: adding a feature means adding its bundle here.
+pub fn builtin_action_bundles() -> Vec<crate::core::action::bundle::ActionBundle> {
+    vec![
+        git::actions::bundle(),
+        filesystem::actions_folder::bundle(),
+        filesystem::actions_file::bundle(),
+        url::actions::bundle(),
+        json::actions::bundle(),
+    ]
+}
+
 /// Every provider a session gets from the first-party features.
 ///
 /// The registry decides the order (priority, then id); this only says what exists. A new

@@ -4,7 +4,7 @@
 //! application's actions, and one entry per action group. The core builds and orders them
 //! so the host only renders what it is given — otherwise frecency, late scope arrival and
 //! current-app priority would all have to be reimplemented in the UI.
-use crate::core::action::descriptor::groups;
+use crate::core::action::group::groups;
 use crate::core::search::candidate::Candidate;
 use anywhere_protocol::*;
 use std::collections::BTreeMap;

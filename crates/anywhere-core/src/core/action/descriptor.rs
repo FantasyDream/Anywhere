@@ -4,20 +4,6 @@ use anyhow::{bail, Result};
 use anywhere_protocol::*;
 use std::collections::BTreeMap;
 
-/// Group ids of the built-in actions.
-///
-/// Grouping is a presentation concern owned by the registry, so every literal
-/// lives here: ranking bonuses, scope membership and labels all refer to these.
-pub mod groups {
-    pub const GIT: &str = "git";
-    pub const FOLDER: &str = "folder";
-    pub const FILE: &str = "file";
-    pub const WEB: &str = "web";
-    pub const JSON: &str = "json";
-    /// Launch candidates; never a scope of their own.
-    pub const APP: &str = "app";
-}
-
 /// Actions that only a repository context can serve.
 pub fn is_git_action(command_id: &str) -> bool {
     matches!(
@@ -79,220 +65,26 @@ impl CommandDescriptor {
     }
 }
 
-/// Built-in command metadata shared by registration and tests.
-struct Builtin {
-    id: &'static str,
-    title: &'static str,
-    /// Legacy V0.1 type ids are normalized at registration time.
-    accepts: &'static str,
-    executor: BuiltinExecutor,
-    base_priority: i32,
-    icon: &'static str,
-    group_id: &'static str,
-    aliases: &'static [&'static str],
-    keywords: &'static [&'static str],
-}
-
-const BUILTINS: &[Builtin] = &[
-    Builtin {
-        id: "core.git.status",
-        title: "Git Status",
-        accepts: GIT_REPOSITORY,
-        executor: BuiltinExecutor::GitStatus,
-        base_priority: 50,
-        icon: "git",
-        group_id: groups::GIT,
-        aliases: &["status"],
-        keywords: &["repository", "branch"],
-    },
-    Builtin {
-        id: "core.git.log",
-        title: "Git Log",
-        accepts: GIT_REPOSITORY,
-        executor: BuiltinExecutor::GitLog,
-        base_priority: 25,
-        icon: "git",
-        group_id: groups::GIT,
-        aliases: &["log", "history", "commits"],
-        keywords: &["repository"],
-    },
-    Builtin {
-        id: "core.git.diff",
-        title: "Git Diff",
-        accepts: GIT_REPOSITORY,
-        executor: BuiltinExecutor::GitDiff,
-        base_priority: 15,
-        icon: "git",
-        group_id: groups::GIT,
-        aliases: &["diff", "changes"],
-        keywords: &["repository", "worktree"],
-    },
-    Builtin {
-        id: "core.directory.terminal",
-        title: "Open Terminal Here",
-        accepts: DIRECTORY,
-        executor: BuiltinExecutor::OpenTerminal,
-        base_priority: 30,
-        icon: "terminal",
-        group_id: groups::FOLDER,
-        aliases: &["terminal", "shell", "console"],
-        keywords: &["folder"],
-    },
-    Builtin {
-        id: "core.directory.copy",
-        title: "Copy Path",
-        accepts: DIRECTORY,
-        executor: BuiltinExecutor::CopyPath,
-        base_priority: 20,
-        icon: "copy",
-        group_id: groups::FOLDER,
-        aliases: &["copy", "path", "clipboard"],
-        keywords: &["folder"],
-    },
-    Builtin {
-        id: "core.directory.open",
-        title: "Open Directory",
-        accepts: DIRECTORY,
-        executor: BuiltinExecutor::OpenDirectory,
-        base_priority: 10,
-        icon: "folder",
-        group_id: groups::FOLDER,
-        aliases: &["open", "reveal", "finder"],
-        keywords: &["folder"],
-    },
-    Builtin {
-        id: "core.file.open",
-        title: "Open File",
-        accepts: FILE,
-        executor: BuiltinExecutor::OpenFile,
-        base_priority: 30,
-        icon: "file",
-        group_id: groups::FILE,
-        aliases: &["open", "edit"],
-        keywords: &["document"],
-    },
-    Builtin {
-        id: "core.file.reveal",
-        title: "Reveal in File Manager",
-        accepts: FILE,
-        executor: BuiltinExecutor::RevealFile,
-        base_priority: 20,
-        icon: "folder",
-        group_id: groups::FILE,
-        aliases: &["reveal", "finder", "show"],
-        keywords: &["document"],
-    },
-    Builtin {
-        id: "core.file.copy",
-        title: "Copy Path",
-        accepts: FILE,
-        executor: BuiltinExecutor::CopyPath,
-        base_priority: 10,
-        icon: "copy",
-        // Both "Copy Path" actions share one group: they do the same thing to a path.
-        group_id: groups::FOLDER,
-        aliases: &["copy", "path", "clipboard"],
-        keywords: &["document"],
-    },
-    Builtin {
-        id: "core.url.open",
-        title: "Open in Default Browser",
-        accepts: URL,
-        executor: BuiltinExecutor::OpenBrowser,
-        base_priority: 30,
-        icon: "globe",
-        group_id: groups::WEB,
-        aliases: &["browser", "open"],
-        keywords: &["link"],
-    },
-    Builtin {
-        id: "core.url.copy",
-        title: "Copy URL",
-        accepts: URL,
-        executor: BuiltinExecutor::CopyUrl,
-        base_priority: 20,
-        icon: "copy",
-        group_id: groups::WEB,
-        aliases: &["copy", "link", "clipboard"],
-        keywords: &["url"],
-    },
-    Builtin {
-        id: "core.json.format",
-        title: "Format JSON",
-        accepts: JSON_LEGACY,
-        executor: BuiltinExecutor::FormatJson,
-        base_priority: 30,
-        icon: "code",
-        group_id: groups::JSON,
-        aliases: &["pretty", "beautify"],
-        keywords: &["document"],
-    },
-    Builtin {
-        id: "core.json.minify",
-        title: "Minify JSON",
-        accepts: JSON_LEGACY,
-        executor: BuiltinExecutor::MinifyJson,
-        base_priority: 20,
-        icon: "code",
-        group_id: groups::JSON,
-        aliases: &["compact"],
-        keywords: &["document"],
-    },
-    Builtin {
-        id: "core.json.copy",
-        title: "Copy Formatted JSON",
-        accepts: JSON_LEGACY,
-        executor: BuiltinExecutor::CopyFormattedJson,
-        base_priority: 10,
-        icon: "copy",
-        group_id: groups::JSON,
-        aliases: &["copy", "clipboard"],
-        keywords: &["document"],
-    },
-];
-
-#[derive(Default)]
+/// The set of actions available to a session, keyed by id.
+///
+/// Registration and lookup only. Matching lives in `ActionMatcher`, availability in
+/// `availability`, execution in `executor`.
+#[derive(Clone, Default)]
 pub struct CommandRegistry {
     commands: BTreeMap<CommandId, CommandDescriptor>,
 }
 
 impl CommandRegistry {
+    /// Every first-party action, registered from the feature bundles.
     pub fn builtin() -> Self {
-        let commands = BUILTINS
-            .iter()
-            .map(|builtin| {
-                let descriptor = CommandDescriptor {
-                    id: builtin.id.into(),
-                    title: builtin.title.into(),
-                    subtitle: None,
-                    accepts: vec![ContextMatcher {
-                        type_id: canonical_context_type(builtin.accepts).into(),
-                    }],
-                    executor: CommandExecutor::Builtin(builtin.executor),
-                    base_priority: builtin.base_priority,
-                    icon: builtin.icon.into(),
-                    group_id: builtin.group_id.into(),
-                    aliases: builtin.aliases.iter().map(|s| (*s).to_owned()).collect(),
-                    keywords: builtin.keywords.iter().map(|s| (*s).to_owned()).collect(),
-                    owning_app: None,
-                    search: SearchFields::new(
-                        builtin.title,
-                        &builtin
-                            .aliases
-                            .iter()
-                            .map(|s| (*s).to_owned())
-                            .collect::<Vec<_>>(),
-                        &builtin
-                            .keywords
-                            .iter()
-                            .map(|s| (*s).to_owned())
-                            .collect::<Vec<_>>(),
-                    ),
-                };
-                (descriptor.id.clone(), descriptor)
-            })
-            .collect();
-        Self { commands }
+        let mut registry = Self::default();
+        for bundle in crate::features::builtin_action_bundles() {
+            for descriptor in bundle.descriptors() {
+                // A duplicate here is a programming error, not a user-facing condition.
+                let _ = registry.register(descriptor);
+            }
+        }
+        registry
     }
 
     pub fn register(&mut self, command: CommandDescriptor) -> Result<()> {
@@ -399,6 +191,7 @@ impl CommandRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::action::group::groups;
     use crate::features::recognized_contexts;
 
     fn seed(input: &str) -> Vec<ResolvedContext> {
