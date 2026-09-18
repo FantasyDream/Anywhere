@@ -42,6 +42,7 @@ xcrun swiftc -O -target "$ARCH-apple-macos12.0" \
   -F "$APP/Contents/Frameworks" -framework FlutterMacOS -framework App -framework AppKit -framework Carbon -framework ApplicationServices \
   -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
   -Xlinker -export_dynamic \
+  -Xlinker -ld_classic \
   apps/flutter/macos/Runner/Main.swift "$ROOT/build/macos_menu.o" -o "$APP/Contents/MacOS/Anywhere"
 for framework in FlutterMacOS App; do
   codesign --force --sign - "$APP/Contents/Frameworks/$framework.framework"
