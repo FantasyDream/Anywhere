@@ -115,6 +115,15 @@ jobs:
           flutter-version: ${{ steps.flutter-version.outputs.version }}
           channel: stable
           cache: true
+      - name: Prefer an Xcode that can link Flutter App.framework
+        run: |
+          for app in /Applications/Xcode_16.2.app /Applications/Xcode_16.1.app /Applications/Xcode_16.app; do
+            if [ -d "$app" ]; then
+              sudo xcode-select -s "$app/Contents/Developer"
+              break
+            fi
+          done
+          xcodebuild -version
       - name: Build and package
         run: |
           ./scripts/build-macos.sh
