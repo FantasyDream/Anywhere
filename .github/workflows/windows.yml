@@ -146,7 +146,7 @@ jobs:
 
   publish:
     needs: [package, package-macos]
-    if: github.event_name != 'pull_request'
+    if: always() && github.event_name != 'pull_request' && (needs.package.result == 'success' || needs.package-macos.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:

@@ -1,8 +1,32 @@
-/// One plain-text clipboard snapshot.
-///
-/// Returns S_OK with `length` set to the copied length, S_FALSE when the clipboard holds
-/// no text, and an error HRESULT otherwise. `capacity` bounds the copy so a huge clipboard
-/// cannot be pulled into the launcher at activation.
+#define NOMINMAX
+#include <windows.h>
+#include <exdisp.h>
+#include <shlobj.h>
+#include <shobjidl.h>
+#include <wrl/client.h>
+#include <cstdint>
+#include <cstring>
+#include <string>
+
+using Microsoft::WRL::ComPtr;
+namespace {
+struct ComScope {
+  HRESULT result = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+  ~ComScope() { if (SUCCEEDED(result)) CoUninitialize(); }
+};
+HRESULT copy_path(const wchar_t* source, wchar_t* output, uint32_t capacity) {
+  if (wcslen(source) >= capacity) return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
+  wcscpy_s(output, capacity, source);
+  return S_OK;
+}
+HRESULT shell_open(const wchar_t* target, const wchar_t* parameters = nullptr,
+                   const wchar_t* directory = nullptr) {
+  auto status = reinterpret_cast<INT_PTR>(ShellExecuteW(
+      nullptr, L"open", target, parameters, directory, SW_SHOWNORMAL));
+  return status > 32 ? S_OK : HRESULT_FROM_WIN32(static_cast<DWORD>(status ? status : ERROR_GEN_FAILURE));
+}
+}
+
 /// Resolve one Start Menu shortcut: its display name, its launch target and its description.
 ///
 /// The display name is the shortcut's own file name, which is what the shell shows in the
@@ -56,35 +80,6 @@ extern "C" int32_t launcher_windows_resolve_shortcut(const wchar_t* shortcut,
     if (FAILED(hr)) return hr;
   }
   return S_OK;
-}
-
-#define NOMINMAX
-#include <windows.h>
-#include <exdisp.h>
-#include <shlobj.h>
-#include <shobjidl.h>
-#include <wrl/client.h>
-#include <cstdint>
-#include <cstring>
-#include <string>
-
-using Microsoft::WRL::ComPtr;
-namespace {
-struct ComScope {
-  HRESULT result = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
-  ~ComScope() { if (SUCCEEDED(result)) CoUninitialize(); }
-};
-HRESULT copy_path(const wchar_t* source, wchar_t* output, uint32_t capacity) {
-  if (wcslen(source) >= capacity) return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
-  wcscpy_s(output, capacity, source);
-  return S_OK;
-}
-HRESULT shell_open(const wchar_t* target, const wchar_t* parameters = nullptr,
-                   const wchar_t* directory = nullptr) {
-  auto status = reinterpret_cast<INT_PTR>(ShellExecuteW(
-      nullptr, L"open", target, parameters, directory, SW_SHOWNORMAL));
-  return status > 32 ? S_OK : HRESULT_FROM_WIN32(static_cast<DWORD>(status ? status : ERROR_GEN_FAILURE));
-}
 }
 
 extern "C" int32_t launcher_windows_foreground(wchar_t* executable, uint32_t capacity,
@@ -218,6 +213,11 @@ extern "C" int32_t launcher_windows_copy(const wchar_t* text, uint32_t length) {
   return hr;
 }
 
+/// One plain-text clipboard snapshot.
+///
+/// Returns S_OK with `length` set to the copied length, S_FALSE when the clipboard holds
+/// no text, and an error HRESULT otherwise. `capacity` bounds the copy so a huge clipboard
+/// cannot be pulled into the launcher at activation.
 extern "C" int32_t launcher_windows_clipboard_text(wchar_t* output, uint32_t capacity,
                                                    uint32_t* length) {
   if (!output || capacity == 0 || !length) return E_INVALIDARG;
