@@ -1,10 +1,11 @@
 # 001 — Workspace root and macOS build host
 
-The existing `Context-Aware-Launcher` directory is the workspace root; an extra
+The existing repository directory is the workspace root; an extra
 `context-launcher/` wrapper adds no boundary. Crates and app paths follow the plan.
 
 This host initially has only Xcode Command Line Tools, no full Xcode, Flutter or
-Rust. SDKs are installed under ignored `.tools/`, without changing global defaults.
+Rust. Rust and Flutter come from PATH; ignored `.tools/` only holds local
+compiler module caches.
 Phase 1's GUI gate was verified with a real Flutter window, accessibility tree and screenshot.
 
 The CLT build script now assembles FlutterMacOS.framework, Dart AOT App.framework,

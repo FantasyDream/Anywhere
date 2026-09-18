@@ -62,17 +62,21 @@ bool FlutterWindow::OnCreate() {
   if (!RegisterHotKey(GetHandle(), 1, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, VK_SPACE)) {
     hotkey_error = "Ctrl+Alt+Space is unavailable; use the tray icon or release the shortcut.";
   }
+  if (!RegisterHotKey(GetHandle(), 2, MOD_CONTROL | MOD_ALT | MOD_SHIFT | MOD_NOREPEAT, VK_SPACE)) {
+    if (!hotkey_error.empty()) hotkey_error += " ";
+    hotkey_error += "Ctrl+Alt+Shift+Space is unavailable; use the tray icon or release the shortcut.";
+  }
   tray_.cbSize = sizeof(tray_);
   tray_.hWnd = GetHandle();
   tray_.uID = 1;
   tray_.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
   tray_.uCallbackMessage = kTrayMessage;
   tray_.hIcon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON));
-  wcscpy_s(tray_.szTip, L"Context Launcher");
+  wcscpy_s(tray_.szTip, L"Anywhere");
   if (!Shell_NotifyIconW(NIM_ADD, &tray_)) hotkey_error += " Tray icon unavailable.";
 
   channel_ = std::make_unique<flutter::MethodChannel<EncodableValue>>(
-      flutter_controller_->engine()->messenger(), "context_launcher/window",
+      flutter_controller_->engine()->messenger(), "anywhere/window",
       &flutter::StandardMethodCodec::GetInstance());
   channel_->SetMethodCallHandler([this, hotkey_error](const auto& call, auto result) {
     const auto& method = call.method_name();
@@ -82,7 +86,8 @@ bool FlutterWindow::OnCreate() {
       if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &local))) {
         result->Error("paths", "Cannot locate LocalAppData"); return;
       }
-      auto data = std::filesystem::path(local) / L"ContextLauncher";
+      // Same directory the host created at startup, including the one-time adoption.
+      auto data = std::filesystem::path(local) / L"Anywhere";
       CoTaskMemFree(local);
       wchar_t executable[32768] = {};
       GetModuleFileNameW(nullptr, executable, 32768);
@@ -95,7 +100,7 @@ bool FlutterWindow::OnCreate() {
     }
     if (method == "ready") {
       result->Success();
-      Activate();
+      Activate("currentApp");
       return;
     }
     if (method == "show" && generation && *generation >= latest_generation_) {
@@ -123,13 +128,14 @@ bool FlutterWindow::OnCreate() {
   return true;
 }
 
-void FlutterWindow::Activate() {
+void FlutterWindow::Activate(const std::string& mode) {
   if (!channel_) return;
   activation_start_ = std::chrono::steady_clock::now();
-  std::fprintf(stderr, "{\"event\":\"activation_requested\"}\n");
+  std::fprintf(stderr, "{\"event\":\"activation_requested\",\"mode\":\"%s\"}\n", mode.c_str());
   HWND foreground = GetForegroundWindow();
   if (foreground && foreground != GetHandle()) previous_foreground_ = foreground;
-  channel_->InvokeMethod("toggle", nullptr);
+  channel_->InvokeMethod("toggle", std::make_unique<EncodableValue>(
+      EncodableMap{{EncodableValue("mode"), EncodableValue(mode)}}));
 }
 
 void FlutterWindow::Dismiss(bool notify) {
@@ -172,6 +178,7 @@ void FlutterWindow::OnDestroy() {
   if (tray_.hWnd) {
     Shell_NotifyIconW(NIM_DELETE, &tray_);
     UnregisterHotKey(tray_.hWnd, 1);
+    UnregisterHotKey(tray_.hWnd, 2);
     tray_.hWnd = nullptr;
   }
   channel_.reset();
@@ -180,28 +187,31 @@ void FlutterWindow::OnDestroy() {
 }
 
 LRESULT FlutterWindow::MessageHandler(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam) noexcept {
-  if (message == WM_HOTKEY && wparam == 1) { Activate(); return 0; }
+  if (message == WM_HOTKEY && wparam == 1) { Activate("currentApp"); return 0; }
+  if (message == WM_HOTKEY && wparam == 2) { Activate("universal"); return 0; }
   if (message == WM_ACTIVATE && LOWORD(wparam) == WA_INACTIVE) {
     if (presented_) Dismiss(true);
     return 0;
   }
   if (message == WM_CLOSE) { Dismiss(true); return 0; }
   if (message == kTrayMessage) {
-    if (lparam == WM_LBUTTONUP) Activate();
+    if (lparam == WM_LBUTTONUP) Activate("currentApp");
     if (lparam == WM_RBUTTONUP) {
       HWND foreground = GetForegroundWindow();
       if (foreground != hwnd) previous_foreground_ = foreground;
       POINT mouse{};
       GetCursorPos(&mouse);
       HMENU menu = CreatePopupMenu();
-      AppendMenuW(menu, MF_STRING, 1, L"Open Context Launcher  Ctrl+Alt+Space");
-      AppendMenuW(menu, MF_STRING, 2, L"Quit Context Launcher");
+      AppendMenuW(menu, MF_STRING, 1, L"Current App  Ctrl+Alt+Space");
+      AppendMenuW(menu, MF_STRING, 2, L"Universal Search  Ctrl+Alt+Shift+Space");
+      AppendMenuW(menu, MF_STRING, 3, L"Quit Anywhere");
       SetForegroundWindow(hwnd);
       UINT command = TrackPopupMenu(menu, TPM_RETURNCMD | TPM_RIGHTBUTTON, mouse.x, mouse.y, 0, hwnd, nullptr);
       DestroyMenu(menu);
       if (IsWindow(previous_foreground_)) SetForegroundWindow(previous_foreground_);
-      if (command == 1) Activate();
-      if (command == 2) DestroyWindow(hwnd);
+      if (command == 1) Activate("currentApp");
+      if (command == 2) Activate("universal");
+      if (command == 3) DestroyWindow(hwnd);
     }
     return 0;
   }

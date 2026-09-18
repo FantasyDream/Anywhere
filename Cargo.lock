@@ -73,6 +73,73 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
+name = "anywhere-bridge-flutter"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "anywhere-core",
+ "anywhere-platform",
+ "anywhere-plugin",
+ "anywhere-protocol",
+ "flutter_rust_bridge",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "anywhere-core"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "anywhere-platform",
+ "anywhere-plugin",
+ "anywhere-protocol",
+ "async-trait",
+ "rusqlite",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "url",
+]
+
+[[package]]
+name = "anywhere-platform"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "cc",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "anywhere-plugin"
+version = "0.2.0"
+dependencies = [
+ "anyhow",
+ "anywhere-protocol",
+ "serde",
+ "toml",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "anywhere-protocol"
+version = "0.2.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "toml",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.92"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -614,70 +681,6 @@ dependencies = [
  "cfg-if",
  "futures-util",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "launcher-bridge-flutter"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "flutter_rust_bridge",
- "launcher-core",
- "launcher-platform",
- "launcher-plugin",
- "launcher-protocol",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "launcher-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "async-trait",
- "launcher-platform",
- "launcher-plugin",
- "launcher-protocol",
- "rusqlite",
- "serde_json",
- "tempfile",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "launcher-platform"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "cc",
- "serde",
- "serde_json",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "launcher-plugin"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "launcher-protocol",
- "serde",
- "toml",
- "tracing",
- "url",
-]
-
-[[package]]
-name = "launcher-protocol"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
 ]
 
 [[package]]

@@ -1,0 +1,70 @@
+//! URL actions.
+use crate::core::action::availability::AvailabilityRule;
+use crate::core::action::bundle::{ActionBundle, ActionSpec};
+use crate::core::action::group::groups;
+use crate::core::action::handler::{ActionHandler, ExecutionOutput};
+use crate::core::context::{ContextValue, ResolvedContext};
+use anyhow::{bail, Result};
+use anywhere_platform::Platform;
+use anywhere_protocol::*;
+
+struct OpenBrowser;
+struct CopyUrl;
+
+impl ActionHandler for OpenBrowser {
+    fn execute(
+        &self,
+        context: &ResolvedContext,
+        platform: &dyn Platform,
+    ) -> Result<ExecutionOutput> {
+        let ContextValue::Url(url) = &context.value else {
+            bail!("URL context required");
+        };
+        platform.open_url(url.as_str())?;
+        Ok(ExecutionOutput::dismiss())
+    }
+}
+
+impl ActionHandler for CopyUrl {
+    fn execute(
+        &self,
+        context: &ResolvedContext,
+        platform: &dyn Platform,
+    ) -> Result<ExecutionOutput> {
+        let ContextValue::Url(url) = &context.value else {
+            bail!("URL context required");
+        };
+        platform.copy_text(url.as_str())?;
+        Ok(ExecutionOutput::dismiss())
+    }
+}
+
+pub fn bundle() -> ActionBundle {
+    ActionBundle {
+        group: groups::web(),
+        actions: vec![
+            ActionSpec {
+                id: "core.url.open",
+                title: "Open in Default Browser",
+                accepts: URL,
+                handler: &OpenBrowser,
+                availability: AvailabilityRule::Enabled,
+                base_priority: 30,
+                icon: "globe",
+                aliases: &["browser", "open"],
+                keywords: &["link"],
+            },
+            ActionSpec {
+                id: "core.url.copy",
+                title: "Copy URL",
+                accepts: URL,
+                handler: &CopyUrl,
+                availability: AvailabilityRule::Enabled,
+                base_priority: 20,
+                icon: "copy",
+                aliases: &["copy", "link", "clipboard"],
+                keywords: &["url"],
+            },
+        ],
+    }
+}

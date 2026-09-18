@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "context_launcher" "\0"
+            VALUE "FileDescription", "anywhere" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "context_launcher" "\0"
+            VALUE "InternalName", "anywhere" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "context_launcher.exe" "\0"
-            VALUE "ProductName", "context_launcher" "\0"
+            VALUE "OriginalFilename", "anywhere.exe" "\0"
+            VALUE "ProductName", "anywhere" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

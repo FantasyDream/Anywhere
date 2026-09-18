@@ -1,10 +1,10 @@
 # Project-level configuration.
 cmake_minimum_required(VERSION 3.14)
-project(context_launcher LANGUAGES CXX)
+project(anywhere LANGUAGES CXX)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
-set(BINARY_NAME "context_launcher")
+set(BINARY_NAME "anywhere")
 
 # Explicitly opt in to modern CMake behaviors to avoid warnings with recent
 # versions of CMake.
@@ -108,7 +108,7 @@ install(FILES "${AOT_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)
 
 # The PowerShell entrypoint builds Rust before Flutter installs the bundle.
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../../target/x86_64-pc-windows-msvc/release/launcher_bridge_flutter.dll"
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../../target/x86_64-pc-windows-msvc/release/anywhere_bridge_flutter.dll"
   DESTINATION "${INSTALL_BUNDLE_LIB_DIR}" COMPONENT Runtime)
 install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../../../plugins/examples/"
   DESTINATION "${CMAKE_INSTALL_PREFIX}/plugins" COMPONENT Runtime FILES_MATCHING PATTERN "*.toml")

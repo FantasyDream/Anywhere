@@ -25,9 +25,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String dco_decode_String(dynamic raw);
 
   @protected
-  ActionDto dco_decode_action_dto(dynamic raw);
-
-  @protected
   ActionResultDto dco_decode_action_result_dto(dynamic raw);
 
   @protected
@@ -35,6 +32,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LauncherStateDto dco_decode_box_autoadd_launcher_state_dto(dynamic raw);
+
+  @protected
+  CandidateDto dco_decode_candidate_dto(dynamic raw);
 
   @protected
   ContextDto dco_decode_context_dto(dynamic raw);
@@ -49,7 +49,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
-  List<ActionDto> dco_decode_list_action_dto(dynamic raw);
+  List<CandidateDto> dco_decode_list_candidate_dto(dynamic raw);
 
   @protected
   List<ContextDto> dco_decode_list_context_dto(dynamic raw);
@@ -58,13 +58,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<ScopeDto> dco_decode_list_scope_dto(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
   LauncherStateDto? dco_decode_opt_box_autoadd_launcher_state_dto(dynamic raw);
 
   @protected
+  Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  ScopeDto dco_decode_scope_dto(dynamic raw);
+
+  @protected
   int dco_decode_u_32(dynamic raw);
+
+  @protected
+  BigInt dco_decode_u_64(dynamic raw);
 
   @protected
   int dco_decode_u_8(dynamic raw);
@@ -79,9 +91,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String sse_decode_String(SseDeserializer deserializer);
 
   @protected
-  ActionDto sse_decode_action_dto(SseDeserializer deserializer);
-
-  @protected
   ActionResultDto sse_decode_action_result_dto(SseDeserializer deserializer);
 
   @protected
@@ -90,6 +99,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   LauncherStateDto sse_decode_box_autoadd_launcher_state_dto(
       SseDeserializer deserializer);
+
+  @protected
+  CandidateDto sse_decode_candidate_dto(SseDeserializer deserializer);
 
   @protected
   ContextDto sse_decode_context_dto(SseDeserializer deserializer);
@@ -104,13 +116,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
-  List<ActionDto> sse_decode_list_action_dto(SseDeserializer deserializer);
+  List<CandidateDto> sse_decode_list_candidate_dto(
+      SseDeserializer deserializer);
 
   @protected
   List<ContextDto> sse_decode_list_context_dto(SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  List<ScopeDto> sse_decode_list_scope_dto(SseDeserializer deserializer);
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
@@ -120,7 +136,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  ScopeDto sse_decode_scope_dto(SseDeserializer deserializer);
+
+  @protected
   int sse_decode_u_32(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_u_64(SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_8(SseDeserializer deserializer);
@@ -139,9 +164,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_String(String self, SseSerializer serializer);
 
   @protected
-  void sse_encode_action_dto(ActionDto self, SseSerializer serializer);
-
-  @protected
   void sse_encode_action_result_dto(
       ActionResultDto self, SseSerializer serializer);
 
@@ -151,6 +173,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_launcher_state_dto(
       LauncherStateDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_candidate_dto(CandidateDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_context_dto(ContextDto self, SseSerializer serializer);
@@ -166,8 +191,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_action_dto(
-      List<ActionDto> self, SseSerializer serializer);
+  void sse_encode_list_candidate_dto(
+      List<CandidateDto> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_context_dto(
@@ -178,6 +203,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       Uint8List self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_scope_dto(List<ScopeDto> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
@@ -185,7 +213,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       LauncherStateDto? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_list_prim_u_8_strict(
+      Uint8List? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_scope_dto(ScopeDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_u_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_u_64(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_8(int self, SseSerializer serializer);

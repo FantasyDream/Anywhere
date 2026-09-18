@@ -6,8 +6,8 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `application`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`
+// These functions are ignored because they are not marked as `pub`: `application`, `availability_state`, `beyond`, `cursor`, `kind_name`, `scope_kind_name`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
 
@@ -16,7 +16,13 @@ Future<void> initialize(
     RustLib.instance.api.crateApiInitialize(
         dataDirectory: dataDirectory, pluginDirectory: pluginDirectory);
 
-Future<LauncherStateDto?> activate() => RustLib.instance.api.crateApiActivate();
+/// Reserve synchronously so Dart can cancel even before foreground capture finishes.
+int beginActivation() => RustLib.instance.api.crateApiBeginActivation();
+
+Future<LauncherStateDto?> activate(
+        {required int sessionId, required bool promptAccessibility}) =>
+    RustLib.instance.api.crateApiActivate(
+        sessionId: sessionId, promptAccessibility: promptAccessibility);
 
 Future<LauncherStateDto?> updateInput(
         {required int sessionId,
@@ -25,52 +31,40 @@ Future<LauncherStateDto?> updateInput(
     RustLib.instance.api.crateApiUpdateInput(
         sessionId: sessionId, input: input, revision: revision);
 
-Future<ActionResultDto> execute(
-        {required int sessionId, required String actionId}) =>
+/// Latest committed snapshot for a session, read straight from the core.
+///
+/// The core is the only source of truth: a late pass publishes there, and nothing
+/// here has to be kept in step with it.
+Future<LauncherStateDto?> latestState({required int sessionId}) =>
+    RustLib.instance.api.crateApiLatestState(sessionId: sessionId);
+
+/// Block until the core publishes a snapshot beyond `after` for this session.
+///
+/// Late context is committed by a background task, so the core's own update channel is the
+/// only place a caller can observe it. Returns the newest snapshot when one arrives, or
+/// `None` on timeout, so the caller can wait again from the same cursor — a wait that ends
+/// because nothing happened must not be mistaken for the session being finished.
+Future<LauncherStateDto?> waitForSnapshot(
+        {required int sessionId, required BigInt after}) =>
     RustLib.instance.api
-        .crateApiExecute(sessionId: sessionId, actionId: actionId);
+        .crateApiWaitForSnapshot(sessionId: sessionId, after: after);
+
+Future<ActionResultDto> execute(
+        {required int sessionId,
+        required int revision,
+        required String candidateId}) =>
+    RustLib.instance.api.crateApiExecute(
+        sessionId: sessionId, revision: revision, candidateId: candidateId);
+
+/// Small PNG for an application candidate, or `None` when there is no icon.
+Future<Uint8List?> applicationIcon({required String candidateId}) =>
+    RustLib.instance.api.crateApiApplicationIcon(candidateId: candidateId);
 
 Future<void> deactivate({required int sessionId}) =>
     RustLib.instance.api.crateApiDeactivate(sessionId: sessionId);
 
-class ActionDto {
-  final String id;
-  final String commandId;
-  final String title;
-  final String? subtitle;
-  final String iconKey;
-  final double score;
-
-  const ActionDto({
-    required this.id,
-    required this.commandId,
-    required this.title,
-    this.subtitle,
-    required this.iconKey,
-    required this.score,
-  });
-
-  @override
-  int get hashCode =>
-      id.hashCode ^
-      commandId.hashCode ^
-      title.hashCode ^
-      subtitle.hashCode ^
-      iconKey.hashCode ^
-      score.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ActionDto &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          commandId == other.commandId &&
-          title == other.title &&
-          subtitle == other.subtitle &&
-          iconKey == other.iconKey &&
-          score == other.score;
-}
+bool promptAccessibility() =>
+    RustLib.instance.api.crateApiPromptAccessibility();
 
 class ActionResultDto {
   final int sessionId;
@@ -111,6 +105,73 @@ class ActionResultDto {
           closeWindow == other.closeWindow;
 }
 
+class CandidateDto {
+  final String id;
+
+  /// `application` or `action`, mirroring `CandidateKind`.
+  final String kind;
+  final String title;
+  final String? subtitle;
+  final String? shortcut;
+  final String iconKey;
+  final double score;
+  final String groupId;
+
+  /// `enabled`, `disabled` or `hidden`.
+  final String availability;
+  final String? availabilityReason;
+  final String? commandId;
+  final String? bundleId;
+
+  const CandidateDto({
+    required this.id,
+    required this.kind,
+    required this.title,
+    this.subtitle,
+    this.shortcut,
+    required this.iconKey,
+    required this.score,
+    required this.groupId,
+    required this.availability,
+    this.availabilityReason,
+    this.commandId,
+    this.bundleId,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      kind.hashCode ^
+      title.hashCode ^
+      subtitle.hashCode ^
+      shortcut.hashCode ^
+      iconKey.hashCode ^
+      score.hashCode ^
+      groupId.hashCode ^
+      availability.hashCode ^
+      availabilityReason.hashCode ^
+      commandId.hashCode ^
+      bundleId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is CandidateDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          kind == other.kind &&
+          title == other.title &&
+          subtitle == other.subtitle &&
+          shortcut == other.shortcut &&
+          iconKey == other.iconKey &&
+          score == other.score &&
+          groupId == other.groupId &&
+          availability == other.availability &&
+          availabilityReason == other.availabilityReason &&
+          commandId == other.commandId &&
+          bundleId == other.bundleId;
+}
+
 class ContextDto {
   final String id;
   final String typeId;
@@ -142,17 +203,23 @@ class ContextDto {
 class LauncherStateDto {
   final int sessionId;
   final int revision;
+  final int snapshotSeq;
   final String input;
+  final bool contextComplete;
   final List<ContextDto> contexts;
-  final List<ActionDto> actions;
+  final List<CandidateDto> candidates;
+  final List<ScopeDto> scopes;
   final List<String> diagnostics;
 
   const LauncherStateDto({
     required this.sessionId,
     required this.revision,
+    required this.snapshotSeq,
     required this.input,
+    required this.contextComplete,
     required this.contexts,
-    required this.actions,
+    required this.candidates,
+    required this.scopes,
     required this.diagnostics,
   });
 
@@ -160,9 +227,12 @@ class LauncherStateDto {
   int get hashCode =>
       sessionId.hashCode ^
       revision.hashCode ^
+      snapshotSeq.hashCode ^
       input.hashCode ^
+      contextComplete.hashCode ^
       contexts.hashCode ^
-      actions.hashCode ^
+      candidates.hashCode ^
+      scopes.hashCode ^
       diagnostics.hashCode;
 
   @override
@@ -172,8 +242,41 @@ class LauncherStateDto {
           runtimeType == other.runtimeType &&
           sessionId == other.sessionId &&
           revision == other.revision &&
+          snapshotSeq == other.snapshotSeq &&
           input == other.input &&
+          contextComplete == other.contextComplete &&
           contexts == other.contexts &&
-          actions == other.actions &&
+          candidates == other.candidates &&
+          scopes == other.scopes &&
           diagnostics == other.diagnostics;
+}
+
+class ScopeDto {
+  final String id;
+
+  /// `all`, `app` or `group`.
+  final String kind;
+  final String label;
+  final List<String> candidateIds;
+
+  const ScopeDto({
+    required this.id,
+    required this.kind,
+    required this.label,
+    required this.candidateIds,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^ kind.hashCode ^ label.hashCode ^ candidateIds.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ScopeDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          kind == other.kind &&
+          label == other.label &&
+          candidateIds == other.candidateIds;
 }

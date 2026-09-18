@@ -8,6 +8,7 @@
 #include <memory>
 #include <optional>
 #include <chrono>
+#include <string>
 #include "win32_window.h"
 
 class FlutterWindow : public Win32Window {
@@ -19,7 +20,7 @@ class FlutterWindow : public Win32Window {
   void OnDestroy() override;
   LRESULT MessageHandler(HWND window, UINT message, WPARAM wparam, LPARAM lparam) noexcept override;
  private:
-  void Activate();
+  void Activate(const std::string& mode);
   void Dismiss(bool notify);
   void Resize(double height, bool position);
   flutter::DartProject project_;

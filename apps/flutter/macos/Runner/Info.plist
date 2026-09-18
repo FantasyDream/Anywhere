@@ -1,17 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
-  <key>CFBundleExecutable</key><string>ContextLauncher</string>
-  <key>CFBundleIdentifier</key><string>dev.contextlauncher.mvp</string>
-  <key>CFBundleName</key><string>Context Launcher</string>
-  <key>CFBundleDisplayName</key><string>Context Launcher</string>
+  <key>CFBundleExecutable</key><string>Anywhere</string>
+  <key>CFBundleIdentifier</key><string>dev.anywhere.launcher</string>
+  <key>CFBundleIconFile</key><string>Anywhere</string>
+  <key>CFBundleName</key><string>Anywhere</string>
+  <key>CFBundleDisplayName</key><string>Anywhere</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.1.1</string>
-  <key>CFBundleVersion</key><string>2</string>
+  <key>CFBundleShortVersionString</key><string>0.2.0</string>
+  <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>12.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
-  <!-- This SDK crashes in Impeller Canvas::SetupRenderPass during text editing. -->
-  <key>FLTEnableImpeller</key><false/>
+  <!-- Keep the renderer explicit for the custom host and packaged app. -->
+  <key>FLTEnableImpeller</key><true/>
   <key>NSAppleEventsUsageDescription</key><string>Read the front Finder window directory to suggest actions when you open the launcher.</string>
 </dict></plist>

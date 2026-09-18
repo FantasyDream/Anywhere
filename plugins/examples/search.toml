@@ -1,0 +1,24 @@
+# Example declarative plugin: a search shortcut assembled from a template.
+#
+# The host deliberately ships no web search of its own, because macOS exposes no way
+# to read the browser's default search engine: a built-in one could only hardcode a
+# provider. Copy this file to
+#   ~/Library/Application Support/Anywhere/plugins/
+# to add your own.
+protocol_version = 1
+id = "example"
+name = "Example Search"
+
+[[commands]]
+id = "search"
+title = "Search the Web"
+subtitle = "Example plugin"
+accepts = ["core.text"]
+base_priority = 20
+group_id = "web"
+aliases = ["search", "example"]
+keywords = ["query"]
+
+[commands.action]
+type = "open_url"
+url = "https://example.com/search?q={{context.value}}"

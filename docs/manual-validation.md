@@ -1,6 +1,8 @@
-# Context Launcher 手工验收清单
+# Anywhere 手工验收清单
 
-适用版本：2026-09-14 第二轮修订版，含后续毛玻璃/圆角修订（失焦隐藏、输入独占、紧凑界面、UTF-8 剪贴板修复）。下列共 80 个 case，每个编号记录「通过 / 失败 / 未测」。本清单列的是操作和预期，不能据此判定已经通过。
+适用版本：2026-09-15 **V0.2**。原有 A–R case 保持编号；V0.2 新增 **V01–V12**，覆盖 Scope Bar、应用搜索、Git 动作、Availability、late Context 与结果预览。每节列的是操作和预期，不能据此判定已经通过；本清单不含任何实测结果。
+
+V0.2 与原版的差异：无输入进入 Context Home，只显示当前环境动作（最多 7 条）；有输入同时搜索应用、动作和环境动作；搜索栏下方新增 Scope Bar；Git 目录出现 Git Status / Git Log / Git Diff；剪贴板已等于当前路径时 Copy Path 不显示。原有 B/E/H/X 中「有输入必须完全没有环境动作」的预期调整为「环境动作只在匹配输入时出现」。
 
 **本次优先回归：K01/K02/K10/K12。** 已根据 5 份崩溃报告将 macOS 渲染器切回 Skia，结果待人工确认；提高了浅色背景下文字对比度。Windows 专用 18 项 case 见 [Windows 清单](windows.md)。
 
@@ -12,17 +14,17 @@
 
 ## 0. 准备
 
-1. 使用 [Context Launcher.app](</Users/luckincoffee/Documents/Github/Context-Aware-Launcher/build/Context Launcher.app>)。如果后台仍是旧进程，从菜单栏选择 **Quit Context Launcher**，再双击此应用。不要只关闭窗口代替退出。
+1. 使用 [Anywhere.app](</Users/luckincoffee/Documents/Github/Anywhere/build/Anywhere.app>)。如果后台仍是旧进程，从菜单栏选择 **Quit Anywhere**，再双击此应用。不要只关闭窗口代替退出。
 2. 打开 Finder、一个可以粘贴纯文本的编辑器、Terminal 和默认浏览器。
 3. 测试数据已经准备好，不需要你创建文件。
 
 | 数据 | 路径 |
 |---|---|
-| 目录 A | `/Users/luckincoffee/Documents/Github/Context-Aware-Launcher/build/manual-validation/目录 A` |
-| 目录 B | `/Users/luckincoffee/Documents/Github/Context-Aware-Launcher/build/manual-validation/目录 B` |
-| 文本文件 | `/Users/luckincoffee/Documents/Github/Context-Aware-Launcher/build/manual-validation/目录 A/hello world.txt` |
-| 可改名测试文件 | `/Users/luckincoffee/Documents/Github/Context-Aware-Launcher/build/manual-validation/目录 A/temporary.txt` |
-| 插件样例 | `/Users/luckincoffee/Documents/Github/Context-Aware-Launcher/build/manual-validation/` |
+| 目录 A | `/Users/luckincoffee/Documents/Github/Anywhere/build/manual-validation/目录 A` |
+| 目录 B | `/Users/luckincoffee/Documents/Github/Anywhere/build/manual-validation/目录 B` |
+| 文本文件 | `/Users/luckincoffee/Documents/Github/Anywhere/build/manual-validation/目录 A/hello world.txt` |
+| 可改名测试文件 | `/Users/luckincoffee/Documents/Github/Anywhere/build/manual-validation/目录 A/temporary.txt` |
+| 插件样例 | `/Users/luckincoffee/Documents/Github/Anywhere/build/manual-validation/` |
 
 Finder 中用 **⌘⇧G** 粘贴目录路径，再按 Enter。Launcher 中用 **⌘A → 粘贴** 替换输入；这里输入的是路径本身，不要带 Markdown 反引号或引号。
 
@@ -48,7 +50,7 @@ Finder 中用 **⌘⇧G** 粘贴目录路径，再按 Enter。Launcher 中用 **
 | K06 | 选中一个复制动作，按 Enter | 执行高亮的动作，窗口隐藏；粘贴结果与对象一致 |
 | K07 | 按 Esc；再次按 ⌘⌥Space | Esc 隐藏，快捷键重新显示；新一次输入为空并重新捕获当前前台上下文 |
 | K08 | 窗口显示时再次按 ⌘⌥Space | 窗口隐藏；再按一次重新出现，没有额外窗口 |
-| K09 | 从菜单栏选择 Open Context Launcher，再选择 Quit Context Launcher | 能显示窗口；Quit 真正退出，菜单栏图标消失 |
+| K09 | 从菜单栏选择 Open Anywhere，再选择 Quit Anywhere | 能显示窗口；Quit 真正退出，菜单栏图标消失 |
 | K10 | 中文输入法连续输入 `你好世界`，↑/↓ 选词、Enter 确认；再删除已确认文字，组合期间按退格，反复中英文切换输入 | 不闪退；候选选择/确认不移动或执行动作；确认后得到文本动作，删除后正常更新 |
 | K11 | 唤醒后分别点击另一个应用的窗口、用 ⌘Tab 切换应用 | 两种方式都立即隐藏 Launcher；不需要 Esc；再次唤醒输入为空 |
 | K12 | 从非 Finder 应用唤醒，依次输入 `hello world`、`{"a":1}`，再清空 | 默认插件下分别为 0→2→5→0 个动作；窗口随之增高/降低，搜索栏顶边保持不动；空结果没有列表标题和底栏；解析期间可保留上次已提交列表但不可执行；结果提交后按新数量变化；无裁切或明显空白占位；展开/收起后的毛玻璃、四角和阴影跟随新尺寸，不残留矩形底板 |
@@ -62,9 +64,9 @@ Finder 中用 **⌘⇧G** 粘贴目录路径，再按 Enter。Launcher 中用 **
 1. 退出 Launcher，复制已准备的样例：
 
 ```bash
-mkdir -p "$HOME/Library/Application Support/ContextLauncher/plugins"
-cp '/Users/luckincoffee/Documents/Github/Context-Aware-Launcher/plugins/manual-fixtures/manual-window-size.toml' \
-   "$HOME/Library/Application Support/ContextLauncher/plugins/manual-window-size.toml"
+mkdir -p "$HOME/Library/Application Support/Anywhere/plugins"
+cp '/Users/luckincoffee/Documents/Github/Anywhere/plugins/manual-fixtures/manual-window-size.toml' \
+   "$HOME/Library/Application Support/Anywhere/plugins/manual-window-size.toml"
 ```
 
 2. 重启，执行 K13。样例增加 8 条 `Window Size 01`–`08` 文本复制动作，不会自动执行。
@@ -137,13 +139,13 @@ https://github.com
 输入完整路径：
 
 ```text
-/Users/luckincoffee/Documents/Github/Context-Aware-Launcher/build/manual-validation/目录 A/hello world.txt
+/Users/luckincoffee/Documents/Github/Anywhere/build/manual-validation/目录 A/hello world.txt
 ```
 
 | 编号 | 操作 | 通过标准 |
 |---|---|---|
 | D01 | 观察列表 | 有 File + Text；Open File、Reveal in File Manager、Copy Path 优先出现 |
-| D02 | Open File → Enter | 用系统默认应用打开 `hello world.txt`，内容含 `Context Launcher manual validation` |
+| D02 | Open File → Enter | 用系统默认应用打开 `hello world.txt`，内容含 `Anywhere manual validation` |
 | D03 | 重新输入文件路径，Reveal in File Manager → Enter | Finder 定位并选中 `hello world.txt`，不仅是打开父目录 |
 | D04 | 先复制 `clipboard-before-中文`；重新输入文件路径，Copy Path → Enter，再到编辑器连续粘贴两次 | 两次都是完整文件路径，中文、空格、扩展名不丢失，不为空；随后普通文字的复制粘贴仍正常 |
 
@@ -203,7 +205,7 @@ X07 / X08 / X11 是人工冒烟：每项建议重复 3 次。人工无法稳定�
 如需精确确认计数，下面是只读查询，不会清空或修改历史：
 
 ```bash
-sqlite3 "$HOME/Library/Application Support/ContextLauncher/usage.sqlite3" \
+sqlite3 "$HOME/Library/Application Support/Anywhere/usage.sqlite3" \
   'SELECT command_id, context_type, source_app, execute_count, last_executed_at FROM command_usage ORDER BY last_executed_at DESC LIMIT 20;'
 ```
 
@@ -219,9 +221,9 @@ sqlite3 "$HOME/Library/Application Support/ContextLauncher/usage.sqlite3" \
 2. 在终端执行以下命令，把已经准备好的一个合法插件放入插件目录：
 
 ```bash
-mkdir -p "$HOME/Library/Application Support/ContextLauncher/plugins"
-cp '/Users/luckincoffee/Documents/Github/Context-Aware-Launcher/plugins/manual-fixtures/manual-validation-valid.toml' \
-   "$HOME/Library/Application Support/ContextLauncher/plugins/manual-validation-valid.toml"
+mkdir -p "$HOME/Library/Application Support/Anywhere/plugins"
+cp '/Users/luckincoffee/Documents/Github/Anywhere/plugins/manual-fixtures/manual-validation-valid.toml' \
+   "$HOME/Library/Application Support/Anywhere/plugins/manual-validation-valid.toml"
 ```
 
 3. 启动 Launcher，按下表执行：
@@ -239,8 +241,8 @@ cp '/Users/luckincoffee/Documents/Github/Context-Aware-Launcher/plugins/manual-f
 2. 将已准备好的 8 个非法样例复制进去：
 
 ```bash
-cp /Users/luckincoffee/Documents/Github/Context-Aware-Launcher/plugins/manual-fixtures/invalid-plugins/*.toml \
-   "$HOME/Library/Application Support/ContextLauncher/plugins/"
+cp /Users/luckincoffee/Documents/Github/Anywhere/plugins/manual-fixtures/invalid-plugins/*.toml \
+   "$HOME/Library/Application Support/Anywhere/plugins/"
 ```
 
 3. 重新启动。应能继续输入和执行合法命令，并显示 diagnostic；在日志中逐一检查下表错误。启动多条 diagnostic 时，以日志为准。
@@ -268,19 +270,19 @@ cp /Users/luckincoffee/Documents/Github/Context-Aware-Launcher/plugins/manual-fi
 | R02 | 可选：在系统设置中暂时关闭此应用对 Finder 的 Automation 授权，重启并从 Finder 唤醒 | 显示明确失败提示，但 URL/JSON/文本输入仍可用。此项测完恢复原授权；不需要撤销 Codex 的任何权限 |
 | R03 | 若任一实际执行发生失败，观察错误，再把输入改为 `hello world` | 失败有提示，不显示虚假成功；改输入后可以继续执行。若本轮未遇到执行失败，记「未测」，不要将 X02 的不存在路径识别当作执行失败 |
 | R04 | 查看本次日志 | 能看到 Session、Revision、Resolver、Provider、Matcher、Ranking、Action；非法插件测试有 plugin_load_failure；平台失败有错误日志 |
-| R05 | Finder 已授权，从同一实际目录执行「唤醒→Esc」10 次 | 记录各次 hotkey_to_visible_ms，报告中位数、最大值；目标 <100 ms。首次授权的几秒等待单列，不混进正常样本 |
+| R05 | Finder 已授权，从同一实际目录执行「唤醒→Esc」10 次 | 记录各次 hotkey_to_visible_ms，报告中位数、最大值。**目标已从「<100 ms」改为「记录实测值并对照内容 grace」**：首屏在预算到期后最多再等 `DEFAULT_FIRST_CONTENT_GRACE`（400ms）以等回目录/Git 动作，因此带慢目录捕获时中位数预期在 250–350ms、不带捕获时应低于 100ms。两项分开记录，不要用单一样本代表两种情况。首次授权的几秒等待单列，不混进正常样本 |
 | R06 | 输入 URL、JSON、文件、目录、文本，查看耗时 | 记录 input_context_resolved、input_actions_ready、ranking_completed；Resolver 目标 <10 ms、Ranking 目标 <5 ms，超标照实记录 |
 
 日志位置：
 
 ```text
-~/Library/Application Support/ContextLauncher/launcher.log
+~/Library/Application Support/Anywhere/launcher.log
 ```
 
 每次启动会覆盖日志，**发现问题后先保存相关日志，再重启**。可在 Terminal 实时观察：
 
 ```bash
-tail -f "$HOME/Library/Application Support/ContextLauncher/launcher.log"
+tail -f "$HOME/Library/Application Support/Anywhere/launcher.log"
 ```
 
 `duration_us` 除以 1,000 才是 ms；`hotkey_to_visible_ms` 已经是 ms。该 native 事件记录 show 调用完成，不单独证明首帧已被屏幕绘制，所以性能数据需配合你看到的窗口和响应一起判断。
@@ -300,13 +302,35 @@ tail -f "$HOME/Library/Application Support/ContextLauncher/launcher.log"
 可重新运行：
 
 ```bash
-cd /Users/luckincoffee/Documents/Github/Context-Aware-Launcher
+cd /Users/luckincoffee/Documents/Github/Anywhere
 source scripts/env.sh
 scripts/check.sh
 cargo clippy --workspace --all-targets --locked -- -D warnings
 ```
 
-## 13. 结果回传
+## 13. V0.2 新增验收
+
+前置：按第 0 节启动 V0.2 应用。准备两个目录：一个普通目录（如 `~/Documents`），一个 Git 仓库（仓库内任意子目录都可以）；测试用的 `~/.gitconfig` 之外的 Git 配置保持默认。
+
+| 编号 | 操作 | 通过标准 |
+|---|---|---|
+| V01 | 在 Finder 打开普通目录，⌘⌥Space | Scope Bar 显示 `[ All ] [ Finder ] [ Folder ]`；前三项是 Open Terminal Here、Copy Path、Open Directory；All 高亮。唤醒到出现列表约 0.1–0.4s 属正常：首屏会等目录解析完成，而不是先给一个空窗口 |
+| V02 | 在 Finder 打开 Git 仓库（或其子目录），⌘⌥Space | Scope Bar 出现 `[ Git ]` 且排在 Folder 之前；前三项是 Git Status、Open Terminal Here、Git Log |
+| V03 | 承接 V02，按 ⌥ → 或点击 `[ Git ]` | 只剩 Git 分组的三项；再按 ⌥ → 回到 All |
+| V04 | 点击 `[ Finder ]` | 只显示 Finder 该环境的动作；不出现「打开某个应用」的候选 |
+| V05 | 输入 `chrome` | 第一项是 Google Chrome；Enter 打开或激活它，窗口关闭 |
+| V06 | 输入 `git sta` | 第一项是 Git Status；按 Enter 后窗口保持打开，预览区出现 `git status` 文本，底部标签显示 Result 而不是 JSON |
+| V07 | 承接 V06，按 ↑ 回到列表，再执行 Git Log、Git Diff | 两者都显示文本预览；Git Diff 内容与 Terminal 中同一仓库的 `git diff` 一致 |
+| V08 | 在 Dock 或菜单栏查看是否有终端窗口弹出 | V06/V07 不应打开 Terminal 或额外窗口 |
+| V09 | 用 Terminal 把当前目录路径复制到剪贴板（`pwd \| pbcopy`），回到该目录的 Finder 窗口，⌘⌥Space | Copy Path 不出现在列表；Open Terminal Here 仍可用；把剪贴板换成其他内容后重新唤醒，Copy Path 恢复 |
+| V10 | 在 Git 仓库中输入 `git status` 全文与 `status` | 两种输入都能把 Git Status 排到第一项 |
+| V11 | 唤醒后立刻快速输入 `abc`，不要等待 | 先出现基于已有 Context 的列表，随后自动刷新为完整结果；列表刷新时不会把已按 ↑/↓ 选中的行跳走 |
+| V12 | 在 V11 的 late 刷新期间按 Enter | 执行的是当前高亮行；若该动作需要仓库而仓库尚未解析完成，应给出明确失败信息而不是虚假成功 |
+| V13 | 反复唤醒若干次（首次 Automation 授权、系统繁忙时会触发），观察是否有哪一次窗口先出现空列表 | 即使某次首屏为空，列表也应在几百毫秒内**自动**补全，不需要输入任何字符。若必须输入才出现，说明 late 结果没有送达界面——请保存日志并回报 |
+
+若机器未安装 Git，V02/V06/V07 的三项 Git 动作应显示为不可用并给出原因（V09 仍应通过）；请在结果中注明。
+
+## 14. 结果回传
 
 你不必重测所有已通过项：先完成页首重点回归，再继续 H/P/R。下面是结果模板，失败用编号回报即可：
 
@@ -321,7 +345,9 @@ K03：失败
 
 A01–A06：通过
 B01–B05：未测
+V01–V12：未测
+V05：失败（输入 chrome 后第一项是 Web Search）
 R05：10 次，中位数 xx ms，最大 xx ms
 ```
 
-没有执行的项保留「未测」。只有 A–F 的识别与实际动作、键盘流程和必要错误恢复都确认后，才能把实机 MVP 验收标记为完成。
+没有执行的项保留「未测」。只有 A–F 的识别与实际动作、键盘流程、V01–V12 的 V0.2 行为，以及必要错误恢复都确认后，才能把实机 V0.2 验收标记为完成。
