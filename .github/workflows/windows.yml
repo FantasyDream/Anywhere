@@ -1,10 +1,9 @@
-name: Package Windows x64
+name: Package
 
 on:
   workflow_dispatch:
   pull_request:
   push:
-    branches: [main]
     paths:
       - 'Cargo.toml'
       - 'Cargo.lock'
@@ -16,10 +15,10 @@ on:
       - '.github/workflows/windows.yml'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: windows-${{ github.ref }}
+  group: package-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -49,7 +48,6 @@ jobs:
         run: ./scripts/check.sh
 
   package:
-    needs: validate
     runs-on: windows-2022
     timeout-minutes: 35
     steps:
@@ -93,3 +91,74 @@ jobs:
           path: build/Anywhere-Windows-x64.zip
           if-no-files-found: error
           retention-days: 30
+
+  package-macos:
+    runs-on: macos-14
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/cache/restore@v4
+        id: rust-cache
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: macos-rust-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
+          restore-keys: macos-rust-${{ hashFiles('Cargo.lock') }}-
+      - name: Read Flutter version
+        id: flutter-version
+        run: echo "version=$(cat .flutter-version)" >> "$GITHUB_OUTPUT"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ steps.flutter-version.outputs.version }}
+          channel: stable
+          cache: true
+      - name: Build and package
+        run: |
+          ./scripts/build-macos.sh
+          ditto -c -k --keepParent build/Anywhere.app build/Anywhere-macOS.zip
+      - uses: actions/cache/save@v4
+        if: always() && steps.rust-cache.outputs.cache-hit != 'true'
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ steps.rust-cache.outputs.cache-primary-key }}
+      - name: Upload macOS app
+        uses: actions/upload-artifact@v4
+        with:
+          name: Anywhere-macOS
+          path: build/Anywhere-macOS.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    needs: [package, package-macos]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          shopt -s nullglob
+          files=(dist/*/*.zip)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo 'no zip artifacts' >&2
+            exit 1
+          fi
+          notes="Automated build from \`${GITHUB_SHA}\` on \`${GITHUB_REF_NAME}\`."
+          if gh release view latest >/dev/null 2>&1; then
+            gh release upload latest "${files[@]}" --clobber
+            gh release edit latest --title 'Latest build' --notes "$notes" --prerelease
+          else
+            gh release create latest "${files[@]}" --title 'Latest build' --notes "$notes" --prerelease
+          fi
