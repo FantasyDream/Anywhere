@@ -69,6 +69,7 @@ impl ActionMatcher<'_> {
                         kind: CandidateKind::Action,
                         title: action.title.clone(),
                         subtitle: Some(subtitle(action, context)),
+                        shortcut: action.shortcut.clone(),
                         icon: IconDescriptor {
                             key: action.icon.clone(),
                         },

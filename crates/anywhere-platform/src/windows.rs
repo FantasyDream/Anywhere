@@ -75,12 +75,14 @@ impl Platform for WindowsPlatform {
         *snapshot = None;
         let mut executable = vec![0; 32768];
         let mut window = 0;
+        let mut pid = 0i32;
         // SAFETY: output buffers have the supplied capacity; native code retains no pointers.
         if !status("frontmost_application", unsafe {
             launcher_windows_foreground(
                 executable.as_mut_ptr(),
                 executable.len() as u32,
                 &mut window,
+                &mut pid,
             )
         })? {
             return Ok(None);
@@ -97,6 +99,8 @@ impl Platform for WindowsPlatform {
                 .to_string_lossy()
                 .into(),
             bundle_id: executable.to_lowercase(),
+            pid,
+            instance_id: None,
         };
         *snapshot = Some((app.clone(), window));
         Ok(Some(app))

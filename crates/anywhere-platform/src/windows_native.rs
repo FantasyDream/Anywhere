@@ -9,6 +9,7 @@ extern "C" {
         executable: *mut u16,
         capacity: u32,
         window: *mut isize,
+        pid: *mut i32,
     ) -> i32;
     pub fn launcher_windows_directory(window: isize, output: *mut u16, capacity: u32) -> i32;
     pub fn launcher_windows_open(value: *const u16, kind: i32) -> i32;

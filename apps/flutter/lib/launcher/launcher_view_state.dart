@@ -30,7 +30,7 @@ class LauncherViewState {
       scopeHeight = 32.0,
       headerHeight = 28.0,
       footerHeight = 32.0;
-  static const maxRows = 7, homeLimit = 7;
+  static const maxRows = 7;
   List<ScopeDto> get scopes => snapshot?.scopes ?? const [];
   ScopeDto? get scope {
     final id = scopeId;
@@ -66,22 +66,6 @@ class LauncherViewState {
           list.add(candidate);
         }
       }
-    }
-    // An empty input is Context Home, which shows a short list; a query scrolls.
-    final searching = (snapshot?.input ?? '').trim().isNotEmpty;
-    if (!searching && list.length > homeLimit) {
-      final shown = list.sublist(0, homeLimit);
-      // The limit is a *view* limit, so it must never hide the row the user is on: a late
-      // update can push their selection past it while the candidate is still perfectly
-      // present and executable. Keeping it as an extra row preserves the identity they
-      // chose instead of silently jumping them back to the first entry.
-      final selected = selectedId;
-      if (selected != null &&
-          !shown.any((candidate) => candidate.id == selected)) {
-        final held = list.where((candidate) => candidate.id == selected);
-        if (held.isNotEmpty) return [...shown, held.first];
-      }
-      return shown;
     }
     return list;
   }

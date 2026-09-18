@@ -13,6 +13,7 @@ ARCH="$(uname -m)"
 # different checkout path is unusable. Renaming the repository just builds a fresh one.
 SWIFT_MODULE_CACHE="${SWIFT_MODULE_CACHE_PATH:-$(dirname "$ROOT/.tools")/$(basename "$ROOT")-swift-cache}"
 mkdir -p "$SWIFT_MODULE_CACHE"
+export ANYWHERE_MENU_IN_HOST=1
 cargo build --locked --release -p anywhere-bridge-flutter
 (
   cd apps/flutter
@@ -33,11 +34,15 @@ cp apps/flutter/macos/Runner/Assets/Anywhere.icns "$APP/Contents/Resources/Anywh
 ditto build/flutter/FlutterMacOS.framework "$APP/Contents/Frameworks/FlutterMacOS.framework"
 ditto build/flutter/App.framework "$APP/Contents/Frameworks/App.framework"
 cp target/release/libanywhere_bridge_flutter.dylib "$APP/Contents/Frameworks/"
+xcrun clang -c -fobjc-arc -O2 -mmacosx-version-min=12.0 \
+  -o "$ROOT/build/macos_menu.o" \
+  "$ROOT/crates/anywhere-platform/native/macos_menu.m"
 xcrun swiftc -O -target "$ARCH-apple-macos12.0" \
   -module-cache-path "$SWIFT_MODULE_CACHE" \
-  -F "$APP/Contents/Frameworks" -framework FlutterMacOS -framework App -framework AppKit -framework Carbon \
+  -F "$APP/Contents/Frameworks" -framework FlutterMacOS -framework App -framework AppKit -framework Carbon -framework ApplicationServices \
   -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
-  apps/flutter/macos/Runner/Main.swift -o "$APP/Contents/MacOS/Anywhere"
+  -Xlinker -export_dynamic \
+  apps/flutter/macos/Runner/Main.swift "$ROOT/build/macos_menu.o" -o "$APP/Contents/MacOS/Anywhere"
 for framework in FlutterMacOS App; do
   codesign --force --sign - "$APP/Contents/Frameworks/$framework.framework"
 done

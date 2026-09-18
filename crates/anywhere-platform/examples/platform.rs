@@ -22,7 +22,9 @@ fn main() -> Result<()> {
             "{:?}",
             platform.application_directory(&ApplicationInfo {
                 bundle_id: "com.apple.finder".into(),
-                name: "Finder".into()
+                name: "Finder".into(),
+                pid: 0,
+                instance_id: None,
             })?
         ),
         "url" => platform.open_url(value)?,

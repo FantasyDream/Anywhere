@@ -1,4 +1,5 @@
 #import <AppKit/AppKit.h>
+#import "macos_process.h"
 #include <stdlib.h>
 #include <string.h>
 
@@ -9,7 +10,9 @@ char *launcher_frontmost_application(void) {
         if (!application) return NULL;
         NSDictionary *value = @{
             @"bundle_id": application.bundleIdentifier ?: @"",
-            @"name": application.localizedName ?: @"Unknown application"
+            @"name": application.localizedName ?: @"Unknown application",
+            @"pid": @(application.processIdentifier),
+            @"instance_id": launcher_process_instance(application.processIdentifier) ?: (id)NSNull.null
         };
         NSData *data = [NSJSONSerialization dataWithJSONObject:value options:0 error:NULL];
         if (!data) return NULL;

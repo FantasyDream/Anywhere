@@ -156,6 +156,70 @@ pub(super) fn launch_application(path: &str) -> Result<bool> {
     Ok(launched == 1)
 }
 
+pub(super) fn accessibility_trusted(prompt: bool) -> bool {
+    // SAFETY: no pointers; the native side only reads a flag.
+    unsafe { launcher_accessibility_trusted(if prompt { 1 } else { 0 }) == 1 }
+}
+
+pub(super) fn application_version(bundle_id: &str) -> Option<String> {
+    let Ok(path) = super::c_path(bundle_id) else {
+        return None;
+    };
+    // SAFETY: NUL-terminated input outlives the call; the returned string is malloc-owned.
+    unsafe {
+        let raw = launcher_application_version(path.as_ptr());
+        if raw.is_null() {
+            return None;
+        }
+        let value = CStr::from_ptr(raw).to_string_lossy().into_owned();
+        launcher_free_string(raw);
+        (!value.is_empty()).then_some(value)
+    }
+}
+
+pub(super) fn discover_menu_actions(
+    application: &ApplicationInfo,
+) -> Result<Vec<crate::DiscoveredMenuItem>> {
+    if application.pid <= 0 {
+        return Ok(Vec::new());
+    }
+    let identity = c_path(&serde_json::to_string(application)?)?;
+    // SAFETY: native returns a malloc-owned JSON array, freed once.
+    let decoded = unsafe {
+        let raw = launcher_discover_menu_actions(identity.as_ptr());
+        if raw.is_null() {
+            bail!("menu discovery failed, timed out, or application identity changed");
+        }
+        let decoded = serde_json::from_slice(CStr::from_ptr(raw).to_bytes());
+        launcher_free_string(raw);
+        decoded
+    };
+    decoded.context("decode menu actions")
+}
+
+pub(super) fn perform_menu_action(
+    application: &ApplicationInfo,
+    locator: &crate::MenuLocator,
+) -> Result<()> {
+    let identity = super::c_path(&serde_json::to_string(application)?)?;
+    let json = serde_json::to_string(locator).context("encode menu locator")?;
+    let json = super::c_path(&json)?;
+    // SAFETY: both CStrings outlive the synchronous native call.
+    let status = unsafe { launcher_perform_menu_action(identity.as_ptr(), json.as_ptr()) };
+    match status {
+        0 => Ok(()),
+        1 => bail!("application instance changed or is not running"),
+        2 => bail!("menu bar is not available"),
+        3 => bail!("menu item was not found"),
+        4 => bail!("菜单项当前不可用"),
+        5 => bail!("menu item could not be performed"),
+        6 => bail!("menu locator is invalid"),
+        7 => bail!("accessibility permission is not granted"),
+        8 => bail!("could not activate the captured application"),
+        other => bail!("menu action failed ({other})"),
+    }
+}
+
 pub(super) fn application_icon(path: &str, size: u32) -> Result<Option<Vec<u8>>> {
     let path = c_path(path)?;
     let mut length = 0u32;
@@ -206,5 +270,51 @@ mod tests {
         // A plain directory is not an application.
         let plain = tempfile::tempdir().unwrap();
         assert!(platform.bundle_application(plain.path()).unwrap().is_none());
+    }
+
+    #[test]
+    fn frontmost_application_carries_kernel_process_instance() {
+        let platform = MacOsPlatform;
+        let Some(app) = platform.frontmost_application().unwrap() else {
+            return;
+        };
+        assert!(
+            app.instance_id
+                .as_deref()
+                .is_some_and(|id| id.starts_with("proc:")),
+            "pid reuse checks require kernel start time: {app:?}"
+        );
+        if platform.accessibility_trusted(false) {
+            let mut rejected = app.clone();
+            rejected.instance_id = None;
+            assert!(
+                platform.discover_menu_actions(&rejected).is_err(),
+                "a missing instance_id must not discover menus"
+            );
+        }
+    }
+
+    #[test]
+    fn menu_discovery_is_empty_when_untrusted() {
+        let platform = MacOsPlatform;
+        let trusted = platform.accessibility_trusted(false);
+        let Some(app) = platform.frontmost_application().unwrap() else {
+            return;
+        };
+        assert!(app.pid > 0);
+        let items = platform.discover_menu_actions(&app).unwrap();
+        if trusted {
+            assert!(
+                items
+                    .iter()
+                    .all(|item| !item.title.is_empty() && !item.menu_path.is_empty()),
+                "menu leaves must have titles"
+            );
+        } else {
+            assert!(
+                items.is_empty(),
+                "untrusted accessibility must not yield menu actions"
+            );
+        }
     }
 }

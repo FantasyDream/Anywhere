@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1124021458;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -1296305491;
 
 // Section: executor
 
@@ -68,11 +68,13 @@ fn wire__crate__api__activate_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_session_id = <u32>::sse_decode(&mut deserializer);
+            let api_prompt_accessibility = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
-                        let output_ok = crate::api::activate(api_session_id).await?;
+                        let output_ok =
+                            crate::api::activate(api_session_id, api_prompt_accessibility).await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -324,6 +326,37 @@ fn wire__crate__api__ping_impl(
         },
     )
 }
+fn wire__crate__api__prompt_accessibility_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "prompt_accessibility",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                (move || {
+                    let output_ok = crate::api::prompt_accessibility()?;
+                    Ok(output_ok)
+                })(),
+            )
+        },
+    )
+}
 fn wire__crate__api__update_input_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -455,6 +488,7 @@ impl SseDecode for crate::api::CandidateDto {
         let mut var_kind = <String>::sse_decode(deserializer);
         let mut var_title = <String>::sse_decode(deserializer);
         let mut var_subtitle = <Option<String>>::sse_decode(deserializer);
+        let mut var_shortcut = <Option<String>>::sse_decode(deserializer);
         let mut var_iconKey = <String>::sse_decode(deserializer);
         let mut var_score = <f32>::sse_decode(deserializer);
         let mut var_groupId = <String>::sse_decode(deserializer);
@@ -467,6 +501,7 @@ impl SseDecode for crate::api::CandidateDto {
             kind: var_kind,
             title: var_title,
             subtitle: var_subtitle,
+            shortcut: var_shortcut,
             icon_key: var_iconKey,
             score: var_score,
             group_id: var_groupId,
@@ -685,8 +720,8 @@ fn pde_ffi_dispatcher_primary_impl(
         6 => wire__crate__api__initialize_impl(port, ptr, rust_vec_len, data_len),
         7 => wire__crate__api__latest_state_impl(port, ptr, rust_vec_len, data_len),
         8 => wire__crate__api__ping_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__update_input_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__wait_for_snapshot_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__update_input_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__wait_for_snapshot_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -700,6 +735,7 @@ fn pde_ffi_dispatcher_sync_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         3 => wire__crate__api__begin_activation_impl(ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__prompt_accessibility_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -736,6 +772,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::CandidateDto {
             self.kind.into_into_dart().into_dart(),
             self.title.into_into_dart().into_dart(),
             self.subtitle.into_into_dart().into_dart(),
+            self.shortcut.into_into_dart().into_dart(),
             self.icon_key.into_into_dart().into_dart(),
             self.score.into_into_dart().into_dart(),
             self.group_id.into_into_dart().into_dart(),
@@ -855,6 +892,7 @@ impl SseEncode for crate::api::CandidateDto {
         <String>::sse_encode(self.kind, serializer);
         <String>::sse_encode(self.title, serializer);
         <Option<String>>::sse_encode(self.subtitle, serializer);
+        <Option<String>>::sse_encode(self.shortcut, serializer);
         <String>::sse_encode(self.icon_key, serializer);
         <f32>::sse_encode(self.score, serializer);
         <String>::sse_encode(self.group_id, serializer);

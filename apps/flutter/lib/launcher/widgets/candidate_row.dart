@@ -82,6 +82,12 @@ class CandidateRow extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (candidate.shortcut != null) ...[
+                  const SizedBox(width: 12),
+                  Text(candidate.shortcut!,
+                      style: const TextStyle(
+                          fontSize: 12, color: Color(0xffa8abb7))),
+                ],
                 if (selected && !disabled) ...[
                   const SizedBox(width: 12),
                   const Icon(

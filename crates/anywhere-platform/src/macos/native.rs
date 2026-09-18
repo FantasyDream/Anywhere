@@ -27,4 +27,11 @@ extern "C" {
         capacity: c_uint,
         out_length: *mut c_uint,
     ) -> i32;
+    pub fn launcher_accessibility_trusted(prompt: i32) -> i32;
+    pub fn launcher_application_version(bundle_id: *const c_char) -> *mut c_char;
+    pub fn launcher_discover_menu_actions(application_json: *const c_char) -> *mut c_char;
+    pub fn launcher_perform_menu_action(
+        application_json: *const c_char,
+        locator_json: *const c_char,
+    ) -> i32;
 }

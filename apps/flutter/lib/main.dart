@@ -31,7 +31,10 @@ Future<void> main() async {
     runApp(
       LauncherApp(
         beginActivation: bridge.beginActivation,
-        activate: (session) => bridge.activate(sessionId: session),
+        activate: (session, {promptAccessibility = false}) => bridge.activate(
+          sessionId: session,
+          promptAccessibility: promptAccessibility,
+        ),
         updateInput: (session, input, revision) => bridge.updateInput(
           sessionId: session,
           input: input,
@@ -47,6 +50,7 @@ Future<void> main() async {
           after: BigInt.from(after),
         ),
         loadIcon: (candidate) => bridge.applicationIcon(candidateId: candidate),
+        promptAccessibility: () => bridge.promptAccessibility(),
         deactivate: (session) => bridge.deactivate(sessionId: session),
         window: windowChannel,
         startupMessage: paths['hotkeyError'] ?? '',

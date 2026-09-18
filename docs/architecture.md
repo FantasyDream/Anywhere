@@ -122,3 +122,7 @@ Git 检测只读元数据。执行通过类型化 Status/Log/Diff 和固定 argv
 `scripts/check.sh` 运行 Rust fmt、workspace tests、Clippy、架构检查及 Flutter analyze/tests；GitHub Actions 在 macOS/Windows 校验后才打包 Windows。远端是否通过必须以实际运行记录为准。
 
 macOS 继续使用 Flutter assemble + swiftc 的自定义 Host，生成并签名 App.framework、FlutterMacOS.framework 与 Rust 动态库。新增原生插件数量足以需要标准插件装配时，再评估 Xcode runner，见 [ADR 001](decisions/001-workspace-and-host.md)。两端显式启用 Impeller，验证边界见 [ADR 004](decisions/004-windows-and-renderer.md)。
+
+### Current App 原生菜单
+
+菜单动作使用统一 Session ActionRegistry 和普通 feature handler；不可用菜单映射 Hidden，菜单与既有应用环境动作共用 Current App Scope，权限缺失只移除菜单能力。发现任务通过 generation 防止旧结果回写，执行重新校验应用实例并定位菜单。详细边界见 [Current App 菜单动作](current-app-actions.md)。

@@ -310,7 +310,7 @@ impl Resolver {
         loop {
             // Take only immutable inputs while holding the session lock. Search and
             // sorting can be slow; new input and cancellation must remain able to run.
-            let (input, facts, usage, app_usage, expected_sequence) = {
+            let (input, facts, usage, app_usage, expected_sequence, actions) = {
                 let session = self
                     .session
                     .lock()
@@ -337,6 +337,7 @@ impl Resolver {
                     session.usage.clone(),
                     session.app_usage.clone(),
                     session.snapshot_seq,
+                    session.actions.clone(),
                 )
             };
             let query = Query::parse(&input);
@@ -353,7 +354,7 @@ impl Resolver {
                     .copied()
                     .unwrap_or_default()
             };
-            let search = ActionSearch::new(&self.registry, &usage_of, &facts, now());
+            let search = ActionSearch::new(&actions, &usage_of, &facts, now());
             let application_source =
                 super::composition::catalog_source(&catalog, &app_usage_of, now());
             let mut extra: Vec<&dyn CandidateSource> = vec![&application_source];
@@ -374,7 +375,8 @@ impl Resolver {
             {
                 return Ok(None);
             }
-            if session.snapshot_seq != expected_sequence {
+            if session.snapshot_seq != expected_sequence || !Arc::ptr_eq(&session.actions, &actions)
+            {
                 // Another commit won for this same revision. Recompute from its latest
                 // state instead of losing enrichment or publishing out of order.
                 continue;
@@ -542,6 +544,8 @@ mod tests {
             frontmost: Some(anywhere_platform::ApplicationInfo {
                 bundle_id: "com.apple.finder".into(),
                 name: "Finder".into(),
+                pid: 1,
+                instance_id: None,
             }),
             ..Default::default()
         }

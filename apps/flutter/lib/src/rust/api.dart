@@ -19,8 +19,10 @@ Future<void> initialize(
 /// Reserve synchronously so Dart can cancel even before foreground capture finishes.
 int beginActivation() => RustLib.instance.api.crateApiBeginActivation();
 
-Future<LauncherStateDto?> activate({required int sessionId}) =>
-    RustLib.instance.api.crateApiActivate(sessionId: sessionId);
+Future<LauncherStateDto?> activate(
+        {required int sessionId, required bool promptAccessibility}) =>
+    RustLib.instance.api.crateApiActivate(
+        sessionId: sessionId, promptAccessibility: promptAccessibility);
 
 Future<LauncherStateDto?> updateInput(
         {required int sessionId,
@@ -60,6 +62,9 @@ Future<Uint8List?> applicationIcon({required String candidateId}) =>
 
 Future<void> deactivate({required int sessionId}) =>
     RustLib.instance.api.crateApiDeactivate(sessionId: sessionId);
+
+bool promptAccessibility() =>
+    RustLib.instance.api.crateApiPromptAccessibility();
 
 class ActionResultDto {
   final int sessionId;
@@ -107,6 +112,7 @@ class CandidateDto {
   final String kind;
   final String title;
   final String? subtitle;
+  final String? shortcut;
   final String iconKey;
   final double score;
   final String groupId;
@@ -122,6 +128,7 @@ class CandidateDto {
     required this.kind,
     required this.title,
     this.subtitle,
+    this.shortcut,
     required this.iconKey,
     required this.score,
     required this.groupId,
@@ -137,6 +144,7 @@ class CandidateDto {
       kind.hashCode ^
       title.hashCode ^
       subtitle.hashCode ^
+      shortcut.hashCode ^
       iconKey.hashCode ^
       score.hashCode ^
       groupId.hashCode ^
@@ -154,6 +162,7 @@ class CandidateDto {
           kind == other.kind &&
           title == other.title &&
           subtitle == other.subtitle &&
+          shortcut == other.shortcut &&
           iconKey == other.iconKey &&
           score == other.score &&
           groupId == other.groupId &&

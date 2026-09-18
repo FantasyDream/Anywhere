@@ -15,7 +15,7 @@ impl Application {
         revision: Revision,
         candidate_id: ActionId,
     ) -> Result<ActionResult> {
-        let (candidate, source_app) = {
+        let (candidate, source_app, menu_generation, source_bundle) = {
             let session = self.session()?;
             if session.state.session_id != session_id
                 || self
@@ -51,7 +51,12 @@ impl Application {
                         .unwrap_or_else(|| "action is not available".into())
                 );
             }
-            (candidate, session.source_app.clone())
+            (
+                candidate,
+                session.source_app.clone(),
+                session.menu_generation,
+                session.frontmost.as_ref().map(|app| app.bundle_id.clone()),
+            )
         };
         let platform = self.platform.clone();
         let registry = self.resolver.registry.clone();
@@ -144,6 +149,12 @@ impl Application {
                 })
             }
             Err(error) => {
+                if error.is::<crate::features::app_actions::handler::MenuExecutionFailure>() {
+                    if let Some(bundle) = source_bundle.as_deref() {
+                        self.app_actions.invalidate_through(bundle, menu_generation);
+                    }
+                    self.refresh_app_actions(session_id, Some(menu_generation));
+                }
                 tracing::error!(session_id, revision, error = %error, "action_execution_failed");
                 Ok(ActionResult {
                     session_id,

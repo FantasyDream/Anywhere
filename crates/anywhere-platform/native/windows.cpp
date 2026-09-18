@@ -88,7 +88,7 @@ HRESULT shell_open(const wchar_t* target, const wchar_t* parameters = nullptr,
 }
 
 extern "C" int32_t launcher_windows_foreground(wchar_t* executable, uint32_t capacity,
-                                                intptr_t* captured_window) {
+                                                intptr_t* captured_window, int32_t* out_pid) {
   HWND window = GetForegroundWindow();
   if (!window) return S_FALSE;
   DWORD pid = 0;
@@ -101,6 +101,7 @@ extern "C" int32_t launcher_windows_foreground(wchar_t* executable, uint32_t cap
   CloseHandle(process);
   if (!ok) return HRESULT_FROM_WIN32(error);
   *captured_window = reinterpret_cast<intptr_t>(window);
+  if (out_pid) *out_pid = static_cast<int32_t>(pid);
   return S_OK;
 }
 

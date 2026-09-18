@@ -63,6 +63,7 @@ pub struct Application {
     pub(super) catalog_tx: watch::Sender<bool>,
     /// One catalog scan per process; later sessions reuse the immutable snapshot.
     pub(super) catalog_started: Arc<std::sync::atomic::AtomicBool>,
+    pub(super) app_actions: crate::features::app_actions::AppActionCatalog,
 }
 
 impl Application {
@@ -99,6 +100,7 @@ impl Application {
             content_grace: DEFAULT_FIRST_CONTENT_GRACE,
             catalog_tx,
             catalog_started: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            app_actions: crate::features::app_actions::AppActionCatalog::default(),
         }
     }
 

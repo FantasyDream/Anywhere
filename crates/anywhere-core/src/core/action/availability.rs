@@ -23,6 +23,10 @@ pub const GIT_UNCONFIRMED: &str = "无法确认 Git 是否可用";
 pub enum AvailabilityRule {
     #[default]
     Enabled,
+    /// A meaningful action excluded from search and scope membership.
+    Hidden,
+    /// Snapshot of a menu item (or similar) that is visible but not runnable.
+    Disabled { reason: String },
     /// Hide when the named fact already equals this context (text snapshot).
     HideIfFactMatchesContext { fact: String },
     /// Disabled unless the named flag fact is true.
@@ -43,7 +47,8 @@ impl AvailabilityRule {
 
     pub fn validate(&self) -> Result<()> {
         match self {
-            Self::Enabled => Ok(()),
+            Self::Enabled | Self::Hidden => Ok(()),
+            Self::Disabled { .. } => Ok(()),
             Self::HideIfFactMatchesContext { fact } => match fact_kind(fact) {
                 Some(FactKind::Text) => Ok(()),
                 Some(FactKind::Flag) => bail!("availability fact {fact} must be text"),
@@ -66,6 +71,8 @@ pub fn evaluate(
 ) -> Availability {
     match rule {
         AvailabilityRule::Enabled => Availability::enabled(),
+        AvailabilityRule::Hidden => Availability::hidden(),
+        AvailabilityRule::Disabled { reason } => Availability::disabled(reason),
         AvailabilityRule::HideIfFactMatchesContext { fact } => {
             if facts.matches_context(fact, context) {
                 Availability::hidden()
@@ -162,5 +169,23 @@ mod tests {
         assert!(AvailabilityRule::require(GIT, "x").validate().is_ok());
         assert!(AvailabilityRule::hide_if(CLIPBOARD).validate().is_ok());
         assert!(AvailabilityRule::Enabled.validate().is_ok());
+        assert!(AvailabilityRule::Disabled { reason: "x".into() }
+            .validate()
+            .is_ok());
+    }
+
+    #[test]
+    fn disabled_rule_is_visible_and_not_executable() {
+        let availability = evaluate(
+            &AvailabilityRule::Disabled {
+                reason: "菜单项当前不可用".into(),
+            },
+            &text("n/a"),
+            &SessionFacts::default(),
+        );
+        assert_eq!(availability.state, AvailabilityState::Disabled);
+        assert_eq!(availability.reason.as_deref(), Some("菜单项当前不可用"));
+        assert!(availability.is_visible());
+        assert!(!availability.is_executable());
     }
 }

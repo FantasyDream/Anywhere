@@ -45,7 +45,7 @@ void main() {
       final cancelled = <int>[];
       final controller = LauncherController(
         beginActivation: () => ++nextSession,
-        activate: (session) =>
+        activate: (session, {promptAccessibility = false}) =>
             session == 1 ? oldCapture.future : Future.value(snapshot(session)),
         updateInput: (_, __, ___) async => null,
         execute: (_, __, ___) async => throw StateError('not used'),
@@ -78,7 +78,7 @@ void main() {
     final cancelled = <int>[];
     final controller = LauncherController(
       beginActivation: () => 7,
-      activate: (_) => capture.future,
+      activate: (_, {promptAccessibility = false}) => capture.future,
       updateInput: (_, __, ___) async => null,
       execute: (_, __, ___) async => throw StateError('not used'),
       deactivate: (session) async {
@@ -154,11 +154,13 @@ void main() {
     final git = action('action:git', 'Git Status');
     final controller = LauncherController(
       beginActivation: () => 1,
-      activate: (_) async => scoped(
+      activate: (_, {promptAccessibility = false}) async => scoped(
         candidates: [copy, git],
         scopes: [
-          ScopeDto(id: 'app', kind: 'app', label: 'Finder', candidateIds: [copy.id]),
-          ScopeDto(id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
+          ScopeDto(
+              id: 'app', kind: 'app', label: 'Finder', candidateIds: [copy.id]),
+          ScopeDto(
+              id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
         ],
       ),
       updateInput: (_, __, ___) async => null,
@@ -168,7 +170,8 @@ void main() {
     );
     await controller.activate();
     expect(controller.view.scopeId, 'app');
-    expect(controller.view.visibleCandidates.map((c) => c.title), ['Copy Path']);
+    expect(
+        controller.view.visibleCandidates.map((c) => c.title), ['Copy Path']);
     controller.dispose();
   });
 
@@ -176,12 +179,14 @@ void main() {
     final copy = action('action:copy', 'Copy Path');
     final git = action('action:git', 'Git Status');
     final scopes = [
-      ScopeDto(id: 'app', kind: 'app', label: 'Finder', candidateIds: [copy.id]),
+      ScopeDto(
+          id: 'app', kind: 'app', label: 'Finder', candidateIds: [copy.id]),
       ScopeDto(id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
     ];
     final controller = LauncherController(
       beginActivation: () => 1,
-      activate: (_) async => scoped(candidates: [copy, git], scopes: scopes),
+      activate: (_, {promptAccessibility = false}) async =>
+          scoped(candidates: [copy, git], scopes: scopes),
       updateInput: (_, input, revision) async => scoped(
         revision: revision,
         input: input,
@@ -195,7 +200,8 @@ void main() {
     await controller.activate();
     await controller.update('copy');
     expect(controller.view.scopeId, 'app');
-    expect(controller.view.visibleCandidates.map((c) => c.title), ['Copy Path']);
+    expect(
+        controller.view.visibleCandidates.map((c) => c.title), ['Copy Path']);
     controller.dispose();
   });
 
@@ -203,12 +209,14 @@ void main() {
     final copy = action('action:copy', 'Copy Path');
     final git = action('action:git', 'Git Status');
     final scopes = [
-      ScopeDto(id: 'app', kind: 'app', label: 'Finder', candidateIds: [copy.id]),
+      ScopeDto(
+          id: 'app', kind: 'app', label: 'Finder', candidateIds: [copy.id]),
       ScopeDto(id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
     ];
     final controller = LauncherController(
       beginActivation: () => 1,
-      activate: (_) async => scoped(candidates: [copy, git], scopes: scopes),
+      activate: (_, {promptAccessibility = false}) async =>
+          scoped(candidates: [copy, git], scopes: scopes),
       updateInput: (_, input, revision) async => scoped(
         revision: revision,
         input: input,
@@ -239,11 +247,12 @@ void main() {
     final pending = <Completer<LauncherStateDto?>>[];
     final controller = LauncherController(
       beginActivation: () => 1,
-      activate: (_) async => scoped(
+      activate: (_, {promptAccessibility = false}) async => scoped(
         snapshotSeq: 1,
         candidates: [git],
         scopes: [
-          ScopeDto(id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
+          ScopeDto(
+              id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
         ],
       ),
       updateInput: (_, __, ___) async => null,
@@ -262,13 +271,87 @@ void main() {
       snapshotSeq: 2,
       candidates: [copy, git],
       scopes: [
-        ScopeDto(id: 'app', kind: 'app', label: 'Finder', candidateIds: [copy.id]),
-        ScopeDto(id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
+        ScopeDto(
+            id: 'app', kind: 'app', label: 'Finder', candidateIds: [copy.id]),
+        ScopeDto(
+            id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
       ],
     ));
     await Future<void>.delayed(Duration.zero);
     expect(controller.view.scopeId, 'app');
-    expect(controller.view.visibleCandidates.map((c) => c.title), ['Copy Path']);
+    expect(
+        controller.view.visibleCandidates.map((c) => c.title), ['Copy Path']);
+    controller.dispose();
+  });
+
+  test('current app activate asks for accessibility after the window shows',
+      () async {
+    var activatePrompted = true;
+    var prompts = 0;
+    final controller = LauncherController(
+      beginActivation: () => 1,
+      activate: (_, {promptAccessibility = false}) async {
+        activatePrompted = promptAccessibility;
+        return snapshot(1);
+      },
+      updateInput: (_, __, ___) async => null,
+      execute: (_, __, ___) async => throw StateError('not used'),
+      deactivate: (_) async {},
+      window: WindowHost(channel),
+      promptAccessibility: () {
+        prompts += 1;
+        return true;
+      },
+    );
+    await controller.activate();
+    expect(activatePrompted, isFalse);
+    expect(prompts, 1);
+    controller.dispose();
+  });
+
+  test('universal activate does not ask for accessibility', () async {
+    var activatePrompted = true;
+    var prompts = 0;
+    final controller = LauncherController(
+      beginActivation: () => 1,
+      activate: (_, {promptAccessibility = false}) async {
+        activatePrompted = promptAccessibility;
+        return snapshot(1);
+      },
+      updateInput: (_, __, ___) async => null,
+      execute: (_, __, ___) async => throw StateError('not used'),
+      deactivate: (_) async {},
+      window: WindowHost(channel),
+      promptAccessibility: () {
+        prompts += 1;
+        return true;
+      },
+    );
+    await controller.activate(mode: WakeMode.universal);
+    expect(activatePrompted, isFalse);
+    expect(prompts, 0);
+    controller.dispose();
+  });
+
+  test('switching to current app prompts accessibility', () async {
+    var prompts = 0;
+    final controller = LauncherController(
+      beginActivation: () => 1,
+      activate: (_, {promptAccessibility = false}) async => snapshot(1),
+      updateInput: (_, __, ___) async => null,
+      execute: (_, __, ___) async => throw StateError('not used'),
+      deactivate: (_) async {},
+      window: WindowHost(channel),
+      promptAccessibility: () {
+        prompts += 1;
+        return true;
+      },
+    );
+    await controller.activate(mode: WakeMode.universal);
+    expect(prompts, 0);
+    await controller.toggle('currentApp');
+    expect(prompts, 1);
+    expect(controller.view.phase, isNot(LauncherPhase.hidden));
     controller.dispose();
   });
 }

@@ -74,9 +74,12 @@ pub fn begin_activation() -> Result<u32> {
     application()?.begin_activation()
 }
 
-pub async fn activate(session_id: u32) -> Result<Option<LauncherStateDto>> {
+pub async fn activate(
+    session_id: u32,
+    prompt_accessibility: bool,
+) -> Result<Option<LauncherStateDto>> {
     Ok(application()?
-        .activate_session(session_id)
+        .activate_session_with(session_id, prompt_accessibility)
         .await?
         .map(Into::into))
 }
@@ -179,6 +182,11 @@ pub fn deactivate(session_id: u32) -> Result<()> {
     application()?.deactivate(session_id)
 }
 
+#[flutter_rust_bridge::frb(sync)]
+pub fn prompt_accessibility() -> Result<bool> {
+    application()?.prompt_accessibility()
+}
+
 // Explicit conversion keeps generated/Flutter types out of the protocol and core.
 #[derive(Clone, Debug)]
 pub struct LauncherStateDto {
@@ -206,6 +214,7 @@ pub struct CandidateDto {
     pub kind: String,
     pub title: String,
     pub subtitle: Option<String>,
+    pub shortcut: Option<String>,
     pub icon_key: String,
     pub score: f32,
     pub group_id: String,
@@ -259,6 +268,7 @@ impl From<protocol::LauncherState> for LauncherStateDto {
                     kind: kind_name(candidate.kind).into(),
                     title: candidate.title,
                     subtitle: candidate.subtitle,
+                    shortcut: candidate.shortcut,
                     icon_key: candidate.icon.key,
                     score: candidate.score,
                     group_id: candidate.group_id,

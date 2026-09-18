@@ -19,6 +19,7 @@ pub struct SearchEngine<'a> {
     /// `(action_id, context_type)` usage, scoped to the current foreground app.
     pub usage: &'a dyn Fn(&str, &str) -> UsageStats,
     pub facts: &'a SessionFacts,
+    pub now: i64,
 }
 
 /// Action matching plus text fallback, the two sources every search always has.
@@ -39,7 +40,7 @@ impl<'a> ActionSearch<'a> {
         now: i64,
     ) -> Self {
         Self {
-            engine: SearchEngine { usage, facts },
+            engine: SearchEngine { usage, facts, now },
             matcher: ActionMatcher {
                 registry,
                 usage,
@@ -109,7 +110,7 @@ impl SearchEngine<'_> {
 
         // Scope membership is built from every visible candidate, before any view limit, so
         // a group never looks empty just because its rows fall outside the top seven.
-        let scope_use = scope::usage_by_group(&candidates, self.usage);
+        let scope_use = scope::usage_by_group(&candidates, self.usage, self.now);
         let current_app = self.ambient_owner(contexts);
         let scopes = scope::build(
             &candidates,
@@ -457,9 +458,21 @@ mod tests {
         assert_eq!(ids, ["folder", "git"], "folder is used, git is not");
         assert_eq!(
             set.scope_use.get("folder"),
-            Some(&24),
-            "8 uses of 3 folder actions"
+            Some(&(3 * (8 * 8 + 30))),
+            "frequency and recency of three distinct folder actions"
         );
+
+        // Equal counts: recently used folder actions outrank older Git actions.
+        let recent_folder = |_: &str, kind: &str| UsageStats {
+            execute_count: 1,
+            last_executed_at: if kind == DIRECTORY { 1000 } else { -700_000 },
+        };
+        let recent = builtin_engine(&registry, &recent_folder, &facts).search(
+            &Query::parse(""),
+            &contexts,
+            &[],
+        );
+        assert_eq!(recent.scopes.first().unwrap().id, "folder");
 
         // With the same usage everywhere, the documented order decides.
         let none_used = |_: &str, _: &str| UsageStats::default();
@@ -693,6 +706,8 @@ mod tests {
         facts.frontmost = Some(ApplicationInfo {
             bundle_id: "com.apple.finder".into(),
             name: "Finder".into(),
+            pid: 1,
+            instance_id: None,
         });
         let engine = builtin_engine(&registry, &usage, &facts);
         let set = engine.search(&Query::parse(""), &contexts, &[]);

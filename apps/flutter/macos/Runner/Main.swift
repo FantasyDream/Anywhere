@@ -1,4 +1,5 @@
 import AppKit
+import ApplicationServices
 import Carbon
 import FlutterMacOS
 
@@ -105,7 +106,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 self.presentedGeneration = generation
                 let elapsed = (ProcessInfo.processInfo.systemUptime - self.activationStart) * 1000
                 self.log(["event": "launcher_visible", "hotkey_to_visible_ms": elapsed,
-                          "window_width": self.window.frame.width, "window_height": self.window.frame.height])
+                          "window_width": self.window.frame.width, "window_height": self.window.frame.height,
+                          "ax_trusted": AXIsProcessTrusted()])
                 reply(nil)
             case "resize":
                 if let args = call.arguments as? [String: Any],

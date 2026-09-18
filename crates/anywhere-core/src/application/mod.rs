@@ -13,3 +13,5 @@ pub use launcher_service::{Application, LauncherApplication};
 pub mod composition;
 mod session_model;
 mod session_runtime;
+
+mod app_actions;

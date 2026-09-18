@@ -24,6 +24,7 @@ impl Application {
                 session_id,
                 ..Default::default()
             },
+            actions: self.resolver.registry.clone(),
             ..Default::default()
         };
         self.resolver.current.store(
@@ -35,6 +36,14 @@ impl Application {
     }
 
     pub async fn activate_session(&self, session_id: SessionId) -> Result<Option<LauncherState>> {
+        self.activate_session_with(session_id, false).await
+    }
+
+    pub async fn activate_session_with(
+        &self,
+        session_id: SessionId,
+        prompt_accessibility: bool,
+    ) -> Result<Option<LauncherState>> {
         if !self.resolver.is_current(session_id, 0) {
             return Ok(None);
         }
@@ -114,6 +123,8 @@ impl Application {
             duration_us = start.elapsed().as_micros() as u64,
             "activation_context_captured"
         );
+        self.prepare_app_actions(session_id, frontmost.as_ref(), prompt_accessibility)
+            .await;
         self.spawn_catalog_scan();
         let (usage, app_usage, history_diagnostics) = self.load_usage(source_app.clone()).await;
         diagnostics.extend(history_diagnostics);

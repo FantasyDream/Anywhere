@@ -68,7 +68,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => 1124021458;
+  int get rustContentHash => -1296305491;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -79,7 +79,8 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 }
 
 abstract class RustLibApi extends BaseApi {
-  Future<LauncherStateDto?> crateApiActivate({required int sessionId});
+  Future<LauncherStateDto?> crateApiActivate(
+      {required int sessionId, required bool promptAccessibility});
 
   Future<Uint8List?> crateApiApplicationIcon({required String candidateId});
 
@@ -99,6 +100,8 @@ abstract class RustLibApi extends BaseApi {
 
   Future<String> crateApiPing();
 
+  bool crateApiPromptAccessibility();
+
   Future<LauncherStateDto?> crateApiUpdateInput(
       {required int sessionId, required String input, required int revision});
 
@@ -115,11 +118,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   });
 
   @override
-  Future<LauncherStateDto?> crateApiActivate({required int sessionId}) {
+  Future<LauncherStateDto?> crateApiActivate(
+      {required int sessionId, required bool promptAccessibility}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_u_32(sessionId, serializer);
+        sse_encode_bool(promptAccessibility, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
             funcId: 1, port: port_);
       },
@@ -128,14 +133,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: sse_decode_AnyhowException,
       ),
       constMeta: kCrateApiActivateConstMeta,
-      argValues: [sessionId],
+      argValues: [sessionId, promptAccessibility],
       apiImpl: this,
     ));
   }
 
   TaskConstMeta get kCrateApiActivateConstMeta => const TaskConstMeta(
         debugName: "activate",
-        argNames: ["sessionId"],
+        argNames: ["sessionId", "promptAccessibility"],
       );
 
   @override
@@ -311,6 +316,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
+  bool crateApiPromptAccessibility() {
+    return handler.executeSync(SyncTask(
+      callFfi: () {
+        final serializer = SseSerializer(generalizedFrbRustBinding);
+        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
+      },
+      codec: SseCodec(
+        decodeSuccessData: sse_decode_bool,
+        decodeErrorData: sse_decode_AnyhowException,
+      ),
+      constMeta: kCrateApiPromptAccessibilityConstMeta,
+      argValues: [],
+      apiImpl: this,
+    ));
+  }
+
+  TaskConstMeta get kCrateApiPromptAccessibilityConstMeta =>
+      const TaskConstMeta(
+        debugName: "prompt_accessibility",
+        argNames: [],
+      );
+
+  @override
   Future<LauncherStateDto?> crateApiUpdateInput(
       {required int sessionId, required String input, required int revision}) {
     return handler.executeNormal(NormalTask(
@@ -320,7 +348,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_String(input, serializer);
         sse_encode_u_32(revision, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 9, port: port_);
+            funcId: 10, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_opt_box_autoadd_launcher_state_dto,
@@ -346,7 +374,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         sse_encode_u_32(sessionId, serializer);
         sse_encode_u_64(after, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
-            funcId: 10, port: port_);
+            funcId: 11, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_opt_box_autoadd_launcher_state_dto,
@@ -407,20 +435,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   CandidateDto dco_decode_candidate_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 11)
-      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
+    if (arr.length != 12)
+      throw Exception('unexpected arr length: expect 12 but see ${arr.length}');
     return CandidateDto(
       id: dco_decode_String(arr[0]),
       kind: dco_decode_String(arr[1]),
       title: dco_decode_String(arr[2]),
       subtitle: dco_decode_opt_String(arr[3]),
-      iconKey: dco_decode_String(arr[4]),
-      score: dco_decode_f_32(arr[5]),
-      groupId: dco_decode_String(arr[6]),
-      availability: dco_decode_String(arr[7]),
-      availabilityReason: dco_decode_opt_String(arr[8]),
-      commandId: dco_decode_opt_String(arr[9]),
-      bundleId: dco_decode_opt_String(arr[10]),
+      shortcut: dco_decode_opt_String(arr[4]),
+      iconKey: dco_decode_String(arr[5]),
+      score: dco_decode_f_32(arr[6]),
+      groupId: dco_decode_String(arr[7]),
+      availability: dco_decode_String(arr[8]),
+      availabilityReason: dco_decode_opt_String(arr[9]),
+      commandId: dco_decode_opt_String(arr[10]),
+      bundleId: dco_decode_opt_String(arr[11]),
     );
   }
 
@@ -601,6 +630,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_kind = sse_decode_String(deserializer);
     var var_title = sse_decode_String(deserializer);
     var var_subtitle = sse_decode_opt_String(deserializer);
+    var var_shortcut = sse_decode_opt_String(deserializer);
     var var_iconKey = sse_decode_String(deserializer);
     var var_score = sse_decode_f_32(deserializer);
     var var_groupId = sse_decode_String(deserializer);
@@ -613,6 +643,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         kind: var_kind,
         title: var_title,
         subtitle: var_subtitle,
+        shortcut: var_shortcut,
         iconKey: var_iconKey,
         score: var_score,
         groupId: var_groupId,
@@ -841,6 +872,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.kind, serializer);
     sse_encode_String(self.title, serializer);
     sse_encode_opt_String(self.subtitle, serializer);
+    sse_encode_opt_String(self.shortcut, serializer);
     sse_encode_String(self.iconKey, serializer);
     sse_encode_f_32(self.score, serializer);
     sse_encode_String(self.groupId, serializer);

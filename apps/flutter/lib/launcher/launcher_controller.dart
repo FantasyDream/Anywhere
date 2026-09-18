@@ -13,7 +13,11 @@ WakeMode parseWakeMode(String? value) =>
     value == 'universal' ? WakeMode.universal : WakeMode.currentApp;
 
 typedef BeginActivation = int Function();
-typedef Activate = Future<LauncherStateDto?> Function(int session);
+typedef Activate = Future<LauncherStateDto?> Function(
+  int session, {
+  bool promptAccessibility,
+});
+typedef PromptAccessibility = bool Function();
 typedef UpdateInput = Future<LauncherStateDto?> Function(
     int session, String input, int revision);
 typedef Execute = Future<ActionResultDto> Function(
@@ -37,6 +41,7 @@ class LauncherController extends ChangeNotifier {
     required WindowHost window,
     WaitForSnapshot? waitForSnapshot,
     LoadIcon? loadIcon,
+    PromptAccessibility? promptAccessibility,
     String startupMessage = '',
   })  : _begin = beginActivation,
         _activate = activate,
@@ -45,6 +50,7 @@ class LauncherController extends ChangeNotifier {
         _deactivate = deactivate,
         _window = window,
         _wait = waitForSnapshot,
+        _promptAccessibility = promptAccessibility,
         _startupMessage = startupMessage,
         icons = ApplicationIconCache(loadIcon) {
     icons.addListener(_notify);
@@ -57,6 +63,7 @@ class LauncherController extends ChangeNotifier {
   final Future<void> Function(int) _deactivate;
   final WindowHost _window;
   final WaitForSnapshot? _wait;
+  final PromptAccessibility? _promptAccessibility;
   final String _startupMessage;
   final ApplicationIconCache icons;
   LauncherPhase _phase = LauncherPhase.hidden;
@@ -117,7 +124,7 @@ class LauncherController extends ChangeNotifier {
       // identity to cancel while foreground capture was still running.
       final session = _begin();
       _session = session;
-      final state = await _activate(session);
+      final state = await _activate(session, promptAccessibility: false);
       if (!_current(generation)) return;
       if (state == null || state.sessionId != session) {
         await dismiss();
@@ -138,6 +145,7 @@ class LauncherController extends ChangeNotifier {
       _notify();
       await _syncWindow(show: true);
       if (_current(generation) && view.visible) {
+        _promptCurrentAppAccess(mode);
         _notify();
         unawaited(_follow(generation, session));
       }
@@ -374,10 +382,13 @@ class LauncherController extends ChangeNotifier {
     _userMoved = false;
     if (mode == WakeMode.universal) {
       _scopeId = null;
-    } else if (view.scopes.any((scope) => scope.id == 'app')) {
-      _scopeId = 'app';
     } else {
-      _scopeId = null;
+      _promptCurrentAppAccess(mode);
+      if (view.scopes.any((scope) => scope.id == 'app')) {
+        _scopeId = 'app';
+      } else {
+        _scopeId = null;
+      }
     }
     icons.retryFailures();
     _reconcile();
@@ -404,6 +415,13 @@ class LauncherController extends ChangeNotifier {
     _userMoved = true;
     _notify();
     await executeSelected();
+  }
+
+  void _promptCurrentAppAccess(WakeMode mode) {
+    if (mode != WakeMode.currentApp) return;
+    try {
+      _promptAccessibility?.call();
+    } catch (_) {}
   }
 
   Future<void> _syncWindow({bool show = false}) async {

@@ -56,6 +56,7 @@ impl TextFallbackSource<'_> {
                 let level = action.search.matched(query);
                 Some(Candidate {
                     presentation: CandidatePresentation {
+                        shortcut: None,
                         id: action_candidate_id(&action.id, &context),
                         kind: CandidateKind::Action,
                         title: action.title.clone(),

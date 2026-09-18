@@ -4,6 +4,7 @@
 //! handler, an AvailabilityRule on the spec, and a registration. Custom hide rules name a
 //! fact key and an operation; a new snapshot is inserted into SessionFacts at capture, not
 //! a new struct field. A new kind of list row registers a CandidateSource and an Invocation.
+pub mod app_actions;
 pub mod applications;
 pub mod filesystem;
 pub mod git;

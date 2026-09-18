@@ -36,14 +36,19 @@ pub trait ActionHandler: Send + Sync {
     ) -> Result<ExecutionOutput>;
 }
 
-#[derive(Clone, Copy)]
-pub struct ActionHandlerRef {
-    inner: &'static dyn ActionHandler,
+#[derive(Clone)]
+pub enum ActionHandlerRef {
+    Static(&'static dyn ActionHandler),
+    Owned(std::sync::Arc<dyn ActionHandler>),
 }
 
 impl ActionHandlerRef {
     pub const fn new(handler: &'static dyn ActionHandler) -> Self {
-        Self { inner: handler }
+        Self::Static(handler)
+    }
+
+    pub fn owned(handler: impl ActionHandler + 'static) -> Self {
+        Self::Owned(std::sync::Arc::new(handler))
     }
 
     pub fn execute(
@@ -51,7 +56,10 @@ impl ActionHandlerRef {
         context: &ResolvedContext,
         platform: &dyn Platform,
     ) -> Result<ExecutionOutput> {
-        self.inner.execute(context, platform)
+        match self {
+            Self::Static(handler) => handler.execute(context, platform),
+            Self::Owned(handler) => handler.execute(context, platform),
+        }
     }
 }
 

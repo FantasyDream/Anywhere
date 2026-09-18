@@ -11,6 +11,32 @@ use std::path::{Path, PathBuf};
 pub struct ApplicationInfo {
     pub bundle_id: String,
     pub name: String,
+    #[serde(default)]
+    pub pid: i32,
+    /// Process launch identity; prevents accepting a reused PID.
+    #[serde(default)]
+    pub instance_id: Option<String>,
+}
+
+/// How to find a menu item again without holding an Accessibility element.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MenuLocator {
+    pub bundle_id: String,
+    pub titles: Vec<String>,
+    #[serde(default)]
+    pub identifiers: Vec<Option<String>>,
+}
+
+/// One executable menu-bar leaf, captured without retaining AX elements.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DiscoveredMenuItem {
+    pub title: String,
+    pub menu_path: Vec<String>,
+    #[serde(default)]
+    pub identifiers: Vec<Option<String>>,
+    #[serde(default)]
+    pub shortcut: Option<String>,
+    pub enabled: bool,
 }
 
 /// Metadata read from one installed application.
@@ -151,6 +177,38 @@ pub trait Platform: Send + Sync {
     fn run_git(&self, _repository: &Path, _operation: GitOperation) -> Result<GitOutput> {
         bail!("git is not supported on this platform")
     }
+
+    // ---- V0.3 menu actions; unsupported platforms stay empty ----
+
+    /// Whether this process may read other apps' accessibility trees.
+    ///
+    /// `prompt` asks the OS to show the system permission dialog. Universal launcher
+    /// passes false so a search does not nag.
+    fn accessibility_trusted(&self, _prompt: bool) -> bool {
+        false
+    }
+
+    /// Menu-bar leaves of `application`. Empty when untrusted, unsupported, or none.
+    fn discover_menu_actions(
+        &self,
+        _application: &ApplicationInfo,
+    ) -> Result<Vec<DiscoveredMenuItem>> {
+        Ok(Vec::new())
+    }
+
+    /// Activate `application`, relocate the item, and press it. Never panics.
+    fn perform_menu_action(
+        &self,
+        _application: &ApplicationInfo,
+        _locator: &MenuLocator,
+    ) -> Result<()> {
+        bail!("menu actions are not supported on this platform")
+    }
+
+    /// Short version string for cache invalidation. `None` when unknown.
+    fn application_version(&self, _bundle_id: &str) -> Option<String> {
+        None
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -214,6 +272,32 @@ mod tests {
         assert!(platform
             .run_git(Path::new("/tmp"), GitOperation::Status)
             .is_err());
+        assert!(!platform.accessibility_trusted(false));
+        assert!(platform
+            .discover_menu_actions(&ApplicationInfo {
+                bundle_id: "x".into(),
+                name: "x".into(),
+                pid: 0,
+                instance_id: None,
+            })
+            .unwrap()
+            .is_empty());
+        assert!(platform
+            .perform_menu_action(
+                &ApplicationInfo {
+                    bundle_id: "x".into(),
+                    name: "x".into(),
+                    pid: 0,
+                    instance_id: None,
+                },
+                &MenuLocator {
+                    bundle_id: "x".into(),
+                    titles: vec!["File".into()],
+                    identifiers: vec![None],
+                },
+            )
+            .is_err());
+        assert!(platform.application_version("x").is_none());
     }
 
     #[test]

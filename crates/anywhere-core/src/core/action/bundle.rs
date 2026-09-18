@@ -45,6 +45,7 @@ impl ActionSpec {
             id: self.id.into(),
             title: self.title.into(),
             subtitle: None,
+            shortcut: None,
             accepts: vec![ContextMatcher {
                 type_id: anywhere_protocol::canonical_context_type(self.accepts).into(),
             }],

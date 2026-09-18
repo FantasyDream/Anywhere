@@ -83,6 +83,25 @@ impl Platform for MacOsPlatform {
     fn open_terminal(&self, path: &Path) -> Result<()> {
         shell::open_terminal(path)
     }
+    fn accessibility_trusted(&self, prompt: bool) -> bool {
+        application::accessibility_trusted(prompt)
+    }
+    fn discover_menu_actions(
+        &self,
+        app: &ApplicationInfo,
+    ) -> Result<Vec<crate::DiscoveredMenuItem>> {
+        application::discover_menu_actions(app)
+    }
+    fn perform_menu_action(
+        &self,
+        app: &ApplicationInfo,
+        locator: &crate::MenuLocator,
+    ) -> Result<()> {
+        application::perform_menu_action(app, locator)
+    }
+    fn application_version(&self, bundle_id: &str) -> Option<String> {
+        application::application_version(bundle_id)
+    }
 }
 
 fn c_path(path: &str) -> Result<CString> {

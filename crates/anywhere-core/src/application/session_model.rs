@@ -44,6 +44,10 @@ pub struct LauncherSession {
     pub candidates_revision: Option<Revision>,
     /// Scope ids in first-seen order for this session. Hidden groups keep their slot.
     pub frozen_scope_ids: Vec<ScopeId>,
+    /// Built-ins, plugins and discovered actions use one validated registry snapshot.
+    pub actions: Arc<crate::core::action::descriptor::ActionRegistry>,
+    pub menu_generation: u64,
+    pub menu_trusted: bool,
 }
 
 impl LauncherSession {

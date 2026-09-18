@@ -11,6 +11,7 @@ export 'launcher_controller.dart'
     show
         BeginActivation,
         Activate,
+        PromptAccessibility,
         UpdateInput,
         Execute,
         WaitForSnapshot,
@@ -30,6 +31,7 @@ class LauncherApp extends StatelessWidget {
     required this.window,
     this.waitForSnapshot,
     this.loadIcon,
+    this.promptAccessibility,
     this.startupMessage = '',
   });
   final BeginActivation beginActivation;
@@ -44,6 +46,7 @@ class LauncherApp extends StatelessWidget {
 
   /// Loads application icons lazily. Absent in tests that do not need icons.
   final LoadIcon? loadIcon;
+  final PromptAccessibility? promptAccessibility;
   final String startupMessage;
 
   @override
@@ -71,6 +74,7 @@ class LauncherApp extends StatelessWidget {
           window: window,
           waitForSnapshot: waitForSnapshot,
           loadIcon: loadIcon,
+          promptAccessibility: promptAccessibility,
           startupMessage: startupMessage,
         ),
       );
@@ -88,6 +92,7 @@ class LauncherScreen extends StatefulWidget {
     required this.startupMessage,
     this.waitForSnapshot,
     this.loadIcon,
+    this.promptAccessibility,
   });
   final BeginActivation beginActivation;
   final Activate activate;
@@ -97,6 +102,7 @@ class LauncherScreen extends StatefulWidget {
   final MethodChannel window;
   final WaitForSnapshot? waitForSnapshot;
   final LoadIcon? loadIcon;
+  final PromptAccessibility? promptAccessibility;
   final String startupMessage;
   @override
   State<LauncherScreen> createState() => _LauncherScreenState();
@@ -139,6 +145,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
       window: WindowHost(widget.window),
       waitForSnapshot: widget.waitForSnapshot,
       loadIcon: widget.loadIcon,
+      promptAccessibility: widget.promptAccessibility,
       startupMessage: widget.startupMessage,
     );
     _controller.addListener(_refresh);

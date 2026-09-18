@@ -17,6 +17,7 @@ pub struct ActionDescriptor {
     pub id: ActionId,
     pub title: String,
     pub subtitle: Option<String>,
+    pub shortcut: Option<String>,
     pub accepts: Vec<ContextMatcher>,
     pub executor: ActionExecutor,
     pub availability: AvailabilityRule,
@@ -136,6 +137,7 @@ impl ActionRegistry {
             let aliases = command.aliases.clone();
             let keywords = command.keywords.clone();
             commands.push(ActionDescriptor {
+                shortcut: None,
                 id,
                 search: SearchFields::new(&command.title, &aliases, &keywords),
                 title: command.title,

@@ -84,6 +84,8 @@ pub struct CandidatePresentation {
     pub kind: CandidateKind,
     pub title: String,
     pub subtitle: Option<String>,
+    #[serde(default)]
+    pub shortcut: Option<String>,
     pub icon: IconDescriptor,
     pub score: f32,
     pub group_id: GroupId,
@@ -355,6 +357,7 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
                     kind: CandidateKind::Action,
                     title: "Copy Path".into(),
                     subtitle: None,
+                    shortcut: None,
                     icon: IconDescriptor { key: "copy".into() },
                     score: 1.0,
                     group_id: "folder".into(),
@@ -368,6 +371,7 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
                     kind: CandidateKind::Application,
                     title: "Google Chrome".into(),
                     subtitle: None,
+                    shortcut: None,
                     icon: IconDescriptor {
                         key: "application".into(),
                     },

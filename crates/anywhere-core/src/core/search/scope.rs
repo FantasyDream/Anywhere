@@ -20,7 +20,7 @@ pub const HOME_LIMIT: usize = 7;
 /// Reserved id for the current application's visible actions.
 pub const SCOPE_APP: &str = "app";
 
-/// Usage total per group, used to order newly appeared scopes.
+/// Bounded frequency plus recency per distinct action, used to order scopes.
 pub type ScopeUse = BTreeMap<GroupId, u32>;
 
 /// Build the scope bar from every visible candidate, before any view limit.
@@ -108,12 +108,14 @@ pub fn apply_session_order(
         .collect()
 }
 
-/// Usage total per group across the matched candidates.
+/// Frecency per group across distinct visible actions.
 pub fn usage_by_group(
     candidates: &[Candidate],
     usage: &dyn Fn(&str, &str) -> crate::core::ranking::score::UsageStats,
+    now: i64,
 ) -> ScopeUse {
     let mut scope_use = ScopeUse::new();
+    let mut seen = std::collections::HashSet::new();
     for candidate in candidates {
         let (Some(action), Some(context)) = (
             candidate.presentation.command_id.as_ref(),
@@ -121,10 +123,19 @@ pub fn usage_by_group(
         ) else {
             continue;
         };
-        let count = usage(action, &context.type_id).execute_count;
-        *scope_use
+        if !seen.insert((action, &context.type_id)) {
+            continue;
+        }
+        let stats = usage(action, &context.type_id);
+        let (frequency, recency) = crate::core::ranking::score::usage_terms(
+            stats.execute_count,
+            stats.last_executed_at,
+            now,
+        );
+        let score = scope_use
             .entry(candidate.presentation.group_id.clone())
-            .or_default() += count;
+            .or_default();
+        *score = score.saturating_add((frequency + recency) as u32);
     }
     scope_use
 }
