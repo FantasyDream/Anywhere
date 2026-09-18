@@ -1,13 +1,49 @@
 //! Repository actions: status, log and diff.
-//!
-//! Actions are declared as a bundle: the group they appear under plus the actions
-//! themselves. Registering the bundle is all it takes for the feature to show up in search
-//! and in the scope bar; nothing in the engine, the search pipeline or the launcher service
-//! knows this feature exists.
+use crate::core::action::availability::AvailabilityRule;
 use crate::core::action::bundle::{ActionBundle, ActionSpec};
-use crate::core::action::descriptor::BuiltinExecutor;
 use crate::core::action::group::groups;
+use crate::core::action::handler::{ActionHandler, ExecutionOutput};
+use crate::core::context::ResolvedContext;
+use anyhow::{Context, Result};
+use anywhere_platform::{GitOperation, Platform};
 use anywhere_protocol::*;
+
+pub fn is_git_action(action_id: &str) -> bool {
+    matches!(
+        action_id,
+        "core.git.status" | "core.git.log" | "core.git.diff"
+    )
+}
+
+#[derive(Clone, Copy)]
+struct Git {
+    operation: GitOperation,
+}
+
+impl ActionHandler for Git {
+    fn execute(
+        &self,
+        context: &ResolvedContext,
+        platform: &dyn Platform,
+    ) -> Result<ExecutionOutput> {
+        let repository = context
+            .value
+            .path()
+            .context("repository context required")?;
+        let output = platform.run_git(repository, self.operation)?;
+        Ok(ExecutionOutput::preview(output.text))
+    }
+}
+
+const STATUS: Git = Git {
+    operation: GitOperation::Status,
+};
+const LOG: Git = Git {
+    operation: GitOperation::Log,
+};
+const DIFF: Git = Git {
+    operation: GitOperation::Diff,
+};
 
 pub fn bundle() -> ActionBundle {
     ActionBundle {
@@ -17,7 +53,11 @@ pub fn bundle() -> ActionBundle {
                 id: "core.git.status",
                 title: "Git Status",
                 accepts: GIT_REPOSITORY,
-                executor: BuiltinExecutor::GitStatus,
+                handler: &STATUS,
+                availability: AvailabilityRule::require(
+                    crate::core::session::facts::GIT,
+                    crate::core::action::availability::GIT_UNAVAILABLE,
+                ),
                 base_priority: 50,
                 icon: "git",
                 aliases: &["status"],
@@ -27,7 +67,11 @@ pub fn bundle() -> ActionBundle {
                 id: "core.git.log",
                 title: "Git Log",
                 accepts: GIT_REPOSITORY,
-                executor: BuiltinExecutor::GitLog,
+                handler: &LOG,
+                availability: AvailabilityRule::require(
+                    crate::core::session::facts::GIT,
+                    crate::core::action::availability::GIT_UNAVAILABLE,
+                ),
                 base_priority: 25,
                 icon: "git",
                 aliases: &["log", "history", "commits"],
@@ -37,7 +81,11 @@ pub fn bundle() -> ActionBundle {
                 id: "core.git.diff",
                 title: "Git Diff",
                 accepts: GIT_REPOSITORY,
-                executor: BuiltinExecutor::GitDiff,
+                handler: &DIFF,
+                availability: AvailabilityRule::require(
+                    crate::core::session::facts::GIT,
+                    crate::core::action::availability::GIT_UNAVAILABLE,
+                ),
                 base_priority: 15,
                 icon: "git",
                 aliases: &["diff", "changes"],

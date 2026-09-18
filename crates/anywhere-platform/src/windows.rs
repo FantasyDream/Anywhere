@@ -53,6 +53,20 @@ fn open(path: &Path, directory: bool, kind: i32) -> Result<()> {
     Ok(())
 }
 impl Platform for WindowsPlatform {
+    fn application_roots(&self) -> Vec<PathBuf> {
+        ["APPDATA", "ProgramData"]
+            .into_iter()
+            .filter_map(std::env::var_os)
+            .map(|base| {
+                PathBuf::from(base)
+                    .join("Microsoft")
+                    .join("Windows")
+                    .join("Start Menu")
+                    .join("Programs")
+            })
+            .collect()
+    }
+
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
         let mut snapshot = self
             .captured

@@ -31,17 +31,38 @@ char *launcher_bundle_application(const char *utf8_path) {
         if (!bundle) return NULL;
         NSString *identifier = bundle.bundleIdentifier;
         if (identifier.length == 0) return NULL;
-        NSString *name = bundle.infoDictionary[@"CFBundleDisplayName"];
+        NSString *name = [[NSFileManager defaultManager] displayNameAtPath:path];
+        if ([name.lowercaseString hasSuffix:@".app"] && name.length > 4) {
+            name = [name substringToIndex:name.length - 4];
+        }
+        NSString *localized = [bundle objectForInfoDictionaryKey:@"CFBundleDisplayName"];
+        if (![localized isKindOfClass:NSString.class] || localized.length == 0) {
+            localized = [bundle objectForInfoDictionaryKey:@"CFBundleName"];
+        }
         if (![name isKindOfClass:NSString.class] || name.length == 0) {
-            name = bundle.infoDictionary[@"CFBundleName"];
+            name = [localized isKindOfClass:NSString.class] ? localized : nil;
         }
         if (![name isKindOfClass:NSString.class] || name.length == 0) {
             name = path.lastPathComponent.stringByDeletingPathExtension;
+        }
+        NSMutableArray<NSString *> *aliases = [NSMutableArray array];
+        NSMutableSet<NSString *> *seen = [NSMutableSet setWithObject:name];
+        for (id candidate in @[
+                 localized ?: [NSNull null],
+                 bundle.infoDictionary[@"CFBundleDisplayName"] ?: [NSNull null],
+                 bundle.infoDictionary[@"CFBundleName"] ?: [NSNull null],
+             ]) {
+            if (![candidate isKindOfClass:NSString.class]) continue;
+            NSString *alias = (NSString *)candidate;
+            if (alias.length == 0 || [seen containsObject:alias]) continue;
+            [seen addObject:alias];
+            [aliases addObject:alias];
         }
         NSDictionary *value = @{
             @"bundle_id": identifier,
             @"name": name,
             @"path": bundle.bundlePath ?: path,
+            @"aliases": aliases,
         };
         NSData *data = [NSJSONSerialization dataWithJSONObject:value options:0 error:NULL];
         if (!data) return NULL;

@@ -2,7 +2,6 @@
 //!
 //! Ordering lives here because it is a property of candidates; *deciding* the order is
 //! ranking's job, and *finding* them is the sources' job.
-use super::query::Query;
 use crate::core::action::descriptor::ActionDescriptor;
 use crate::core::context::ResolvedContext;
 use anywhere_protocol::*;
@@ -12,9 +11,39 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone)]
 pub struct Candidate {
     pub presentation: CandidatePresentation,
-    pub action: Option<ActionDescriptor>,
-    pub context: Option<ResolvedContext>,
-    pub application: Option<crate::features::applications::index::IndexedApplication>,
+    pub target: CandidateTarget,
+}
+
+/// Execution data for the two candidate types the product currently supports.
+/// Keep this typed until another real execution model requires a wider contract.
+#[derive(Debug, Clone)]
+pub enum CandidateTarget {
+    Action {
+        action: Box<ActionDescriptor>,
+        context: Box<ResolvedContext>,
+    },
+    LaunchApplication {
+        path: String,
+        icon_source: String,
+    },
+}
+
+impl CandidateTarget {
+    pub fn from_action(action: ActionDescriptor, context: ResolvedContext) -> Self {
+        Self::Action {
+            action: Box::new(action),
+            context: Box::new(context),
+        }
+    }
+}
+
+impl Candidate {
+    pub fn context(&self) -> Option<&ResolvedContext> {
+        match &self.target {
+            CandidateTarget::Action { context, .. } => Some(context),
+            CandidateTarget::LaunchApplication { .. } => None,
+        }
+    }
 }
 
 /// Everything the search produced for this revision.
@@ -25,9 +54,8 @@ pub struct CandidateSet {
     pub scope_use: BTreeMap<GroupId, u32>,
     /// Action matching: applicability, availability and query match per context.
     pub matcher_us: u64,
-    /// Application-index matching, reported separately so it cannot be mistaken for
-    /// sorting cost.
-    pub apps_us: u64,
+    /// Every ranked source after the first (application index today, files later).
+    pub sources_us: u64,
     /// Scoring and ordering of the candidates that were matched.
     pub ranking_us: u64,
 }
@@ -76,8 +104,7 @@ pub fn deduplicate_actions(candidates: &mut Vec<Candidate>) {
             continue;
         };
         let context = candidate
-            .context
-            .as_ref()
+            .context()
             .map(|context| (context.type_id.clone(), context.value.text()))
             .unwrap_or_default();
         let key = (command, context.0, context.1);
@@ -95,9 +122,4 @@ pub fn deduplicate_actions(candidates: &mut Vec<Candidate>) {
         }
     }
     *candidates = merged;
-}
-
-/// The query as a candidate source sees it.
-pub fn is_searching(query: &Query) -> bool {
-    !query.is_empty()
 }

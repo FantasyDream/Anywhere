@@ -6,9 +6,8 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `application`, `availability_state`, `beyond`, `kind_name`, `scope_kind_name`
+// These functions are ignored because they are not marked as `pub`: `application`, `availability_state`, `beyond`, `cursor`, `kind_name`, `scope_kind_name`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`
-// These functions are ignored (category: IgnoreBecauseExplicitAttribute): `cursor`
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
 
@@ -17,7 +16,11 @@ Future<void> initialize(
     RustLib.instance.api.crateApiInitialize(
         dataDirectory: dataDirectory, pluginDirectory: pluginDirectory);
 
-Future<LauncherStateDto?> activate() => RustLib.instance.api.crateApiActivate();
+/// Reserve synchronously so Dart can cancel even before foreground capture finishes.
+int beginActivation() => RustLib.instance.api.crateApiBeginActivation();
+
+Future<LauncherStateDto?> activate({required int sessionId}) =>
+    RustLib.instance.api.crateApiActivate(sessionId: sessionId);
 
 Future<LauncherStateDto?> updateInput(
         {required int sessionId,

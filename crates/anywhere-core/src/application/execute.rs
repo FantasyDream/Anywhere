@@ -5,7 +5,6 @@
 // afterwards — by then refusing cannot prevent anything and would only lose the usage record
 // of an action the user watched succeed.
 use super::launcher_service::Application;
-use crate::core::action::executor as execution;
 use anyhow::{bail, Context, Result};
 use anywhere_protocol::*;
 
@@ -73,8 +72,7 @@ impl Application {
             })
             .context("candidate has no executable identity")?;
         let context_type = candidate
-            .context
-            .as_ref()
+            .context()
             .map(|context| context.type_id.clone())
             .unwrap_or_else(|| crate::core::ranking::usage::APPLICATION_CONTEXT_TYPE.to_owned());
         tracing::info!(
@@ -92,24 +90,18 @@ impl Application {
             if !execution_ticket.is_current() {
                 bail!("action expired before it started");
             }
-            let output = match (
-                &candidate.action,
-                &candidate.context,
-                &candidate.application,
-            ) {
-                (Some(action), Some(context), _) => {
-                    execution::execute(&action.executor, context, platform.as_ref(), &registry)?
+            let output = match &candidate.target {
+                crate::core::search::candidate::CandidateTarget::Action { action, context } => {
+                    crate::core::action::execute::execute(
+                        &action.executor,
+                        context,
+                        platform.as_ref(),
+                        &registry,
+                    )?
                 }
-                (None, None, Some(application)) => {
-                    if !platform.launch_application(&application.path)? {
-                        bail!("could not launch {}", application.path);
-                    }
-                    execution::ExecutionOutput {
-                        text: None,
-                        close_window: true,
-                    }
-                }
-                _ => bail!("candidate cannot be executed"),
+                crate::core::search::candidate::CandidateTarget::LaunchApplication {
+                    path, ..
+                } => crate::features::applications::launch::execute(path, platform.as_ref())?,
             };
             // No currency re-check *after* the side effect. By then refusing cannot prevent
             // anything; it only loses the usage record. Every action that closes the window
@@ -126,7 +118,7 @@ impl Application {
                         &record_id,
                         &context_type,
                         &source_app,
-                        crate::core::session::manager::now(),
+                        crate::application::session_runtime::now(),
                     )
                 });
             Ok::<_, anyhow::Error>((output, history_result))

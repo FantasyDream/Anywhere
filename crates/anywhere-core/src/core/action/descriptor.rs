@@ -1,37 +1,14 @@
+use super::availability::AvailabilityRule;
+use super::handler::ActionHandlerRef;
 use crate::core::context::ResolvedContext;
 use crate::core::search::query::SearchFields;
 use anyhow::{bail, Result};
 use anywhere_protocol::*;
 use std::collections::BTreeMap;
 
-/// Actions that only a repository context can serve.
-pub fn is_git_action(action_id: &str) -> bool {
-    matches!(
-        action_id,
-        "core.git.status" | "core.git.log" | "core.git.diff"
-    )
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum BuiltinExecutor {
-    OpenDirectory,
-    OpenTerminal,
-    CopyPath,
-    OpenFile,
-    RevealFile,
-    OpenBrowser,
-    CopyUrl,
-    FormatJson,
-    MinifyJson,
-    CopyFormattedJson,
-    GitStatus,
-    GitLog,
-    GitDiff,
-}
-
 #[derive(Debug, Clone)]
 pub enum ActionExecutor {
-    Builtin(BuiltinExecutor),
+    Native(ActionHandlerRef),
     Declarative(DeclarativeAction),
 }
 
@@ -42,6 +19,7 @@ pub struct ActionDescriptor {
     pub subtitle: Option<String>,
     pub accepts: Vec<ContextMatcher>,
     pub executor: ActionExecutor,
+    pub availability: AvailabilityRule,
     pub base_priority: i32,
     pub icon: String,
     pub group_id: GroupId,
@@ -68,25 +46,13 @@ impl ActionDescriptor {
 /// The set of actions available to a session, keyed by id.
 ///
 /// Registration and lookup only. Matching lives in `ActionMatcher`, availability in
-/// `availability`, execution in `executor`.
+/// `availability`, execution in `execute` and registered feature handlers.
 #[derive(Clone, Default)]
 pub struct ActionRegistry {
     actions: BTreeMap<ActionId, ActionDescriptor>,
 }
 
 impl ActionRegistry {
-    /// Every first-party action, registered from the feature bundles.
-    pub fn builtin() -> Self {
-        let mut registry = Self::default();
-        for bundle in crate::features::builtin_action_bundles() {
-            for descriptor in bundle.descriptors() {
-                // A duplicate here is a programming error, not a user-facing condition.
-                let _ = registry.register(descriptor);
-            }
-        }
-        registry
-    }
-
     pub fn register(&mut self, action: ActionDescriptor) -> Result<()> {
         if self.actions.contains_key(&action.id) {
             bail!("duplicate action id: {}", action.id);
@@ -94,6 +60,7 @@ impl ActionRegistry {
         if action.group_id.trim().is_empty() {
             bail!("action {} requires a group id", action.id);
         }
+        action.availability.validate()?;
         self.actions.insert(action.id.clone(), action);
         Ok(())
     }
@@ -133,18 +100,23 @@ impl ActionRegistry {
                 .iter()
                 .map(|type_id| canonical_context_type(type_id).to_owned())
                 .collect::<Vec<_>>();
-            if let DeclarativeAction::ExecuteBuiltin { command_id } = &command.action {
-                let Some(builtin) = self.get(command_id) else {
-                    bail!("unknown builtin: {command_id}");
+            let availability =
+                if let DeclarativeAction::ExecuteBuiltin { command_id } = &command.action {
+                    let Some(builtin) = self.get(command_id) else {
+                        bail!("unknown builtin: {command_id}");
+                    };
+                    if !matches!(builtin.executor, ActionExecutor::Native(_))
+                        || accepts
+                            .iter()
+                            .any(|kind| !builtin.accepts.iter().any(|m| &m.type_id == kind))
+                    {
+                        bail!("plugin matcher is incompatible with builtin: {command_id}");
+                    }
+                    builtin.availability.clone()
+                } else {
+                    AvailabilityRule::Enabled
                 };
-                if !matches!(builtin.executor, ActionExecutor::Builtin(_))
-                    || accepts
-                        .iter()
-                        .any(|kind| !builtin.accepts.iter().any(|m| &m.type_id == kind))
-                {
-                    bail!("plugin matcher is incompatible with builtin: {command_id}");
-                }
-            }
+            availability.validate()?;
             for field in command
                 .aliases
                 .iter()
@@ -173,6 +145,7 @@ impl ActionRegistry {
                     .map(|type_id| ContextMatcher { type_id })
                     .collect(),
                 executor: ActionExecutor::Declarative(command.action),
+                availability,
                 base_priority: command.base_priority,
                 icon: icon.into(),
                 group_id: command.group_id.unwrap_or_else(|| default_group.clone()),
@@ -192,6 +165,7 @@ impl ActionRegistry {
 mod tests {
     use super::*;
     use crate::core::action::group::groups;
+    use crate::features::git::actions::is_git_action;
     use crate::features::recognized_contexts;
 
     fn seed(input: &str) -> Vec<ResolvedContext> {
@@ -207,7 +181,7 @@ mod tests {
 
     #[test]
     fn exact_type_match_and_builtin_command_count() {
-        let registry = ActionRegistry::builtin();
+        let registry = crate::application::composition::builtin_registry();
         assert_eq!(registry.commands().count(), 14);
         let url = seed("https://github.com")
             .into_iter()
@@ -229,7 +203,7 @@ mod tests {
 
     #[test]
     fn every_builtin_has_a_group_and_search_fields() {
-        let registry = ActionRegistry::builtin();
+        let registry = crate::application::composition::builtin_registry();
         for command in registry.commands() {
             assert!(!command.group_id.is_empty(), "{}", command.id);
             assert!(
@@ -242,7 +216,7 @@ mod tests {
 
     #[test]
     fn git_actions_only_accept_repository_context() {
-        let registry = ActionRegistry::builtin();
+        let registry = crate::application::composition::builtin_registry();
         let directory = ResolvedContext::new(
             DIRECTORY,
             crate::core::context::ContextValue::Directory("/tmp".into()),
@@ -269,7 +243,7 @@ mod tests {
 
     #[test]
     fn v0_1_json_plugin_is_normalized_and_keeps_working() {
-        let mut registry = ActionRegistry::builtin();
+        let mut registry = crate::application::composition::builtin_registry();
         let raw = r#"
 protocol_version = 1
 id = "legacy"
@@ -294,31 +268,18 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
         bad.commands[0].action = DeclarativeAction::ExecuteBuiltin {
             command_id: "core.url.open".into(),
         };
-        let mut fresh = ActionRegistry::builtin();
+        let mut fresh = crate::application::composition::builtin_registry();
         assert!(fresh.register_plugin(bad).is_err());
     }
 
     #[test]
     fn git_actions_and_dispatch_agree_on_the_same_set() {
-        let registry = ActionRegistry::builtin();
+        let registry = crate::application::composition::builtin_registry();
         for command in registry.commands() {
-            let builtin_git = matches!(
-                command.executor,
-                ActionExecutor::Builtin(
-                    BuiltinExecutor::GitStatus | BuiltinExecutor::GitLog | BuiltinExecutor::GitDiff
-                )
-            );
             assert_eq!(
                 is_git_action(&command.id),
-                builtin_git,
-                "{} disagrees between the id predicate and its executor",
-                command.id
-            );
-            // Every git action lives in the git group, so the scope filter agrees too.
-            assert_eq!(
-                builtin_git,
                 command.group_id == groups::GIT,
-                "{} is in the wrong group",
+                "{} disagrees between the id predicate and its group",
                 command.id
             );
         }
@@ -326,7 +287,7 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
 
     #[test]
     fn copy_path_actions_share_one_group_across_object_types() {
-        let registry = ActionRegistry::builtin();
+        let registry = crate::application::composition::builtin_registry();
         for id in ["core.directory.copy", "core.file.copy"] {
             assert_eq!(
                 registry.get(id).unwrap().group_id,
@@ -338,7 +299,7 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
 
     #[test]
     fn known_groups_are_the_only_group_ids_in_the_builtin_registry() {
-        let registry = ActionRegistry::builtin();
+        let registry = crate::application::composition::builtin_registry();
         for command in registry.commands() {
             assert!(
                 [
@@ -358,12 +319,132 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
 
     #[test]
     fn plugins_without_group_metadata_get_an_explicit_default() {
-        let mut registry = ActionRegistry::builtin();
+        let mut registry = crate::application::composition::builtin_registry();
         registry
             .register_plugin(
                 anywhere_plugin::parse_manifest(anywhere_plugin::EXAMPLE_PLUGIN).unwrap(),
             )
             .unwrap();
         assert_eq!(registry.get("example.search").unwrap().group_id, "web");
+    }
+
+    #[test]
+    fn register_rejects_unknown_and_mistyped_availability_facts() {
+        use crate::core::action::bundle::ActionSpec;
+        use crate::core::action::handler::{ActionHandler, ExecutionOutput};
+        use crate::core::session::facts::{CLIPBOARD, GIT};
+
+        struct Noop;
+        impl ActionHandler for Noop {
+            fn execute(
+                &self,
+                _: &ResolvedContext,
+                _: &dyn anywhere_platform::Platform,
+            ) -> anyhow::Result<ExecutionOutput> {
+                Ok(ExecutionOutput::dismiss())
+            }
+        }
+
+        let spec = |id: &'static str, availability: AvailabilityRule| {
+            ActionSpec {
+                id,
+                title: "Bad",
+                accepts: TEXT,
+                handler: &Noop,
+                availability,
+                base_priority: 0,
+                icon: "copy",
+                aliases: &[],
+                keywords: &[],
+            }
+            .descriptor("test")
+        };
+
+        let mut registry = ActionRegistry::default();
+        assert!(registry
+            .register(spec("test.unknown", AvailabilityRule::hide_if("nope")))
+            .is_err());
+        assert!(registry.get("test.unknown").is_none());
+        assert!(registry
+            .register(spec("test.hide-flag", AvailabilityRule::hide_if(GIT)))
+            .is_err());
+        assert!(registry
+            .register(spec(
+                "test.require-text",
+                AvailabilityRule::require(CLIPBOARD, "x"),
+            ))
+            .is_err());
+        assert!(registry
+            .register(spec(
+                "test.require-git",
+                AvailabilityRule::require(GIT, "x"),
+            ))
+            .is_ok());
+        assert!(registry.get("test.require-git").is_some());
+    }
+
+    const WRAP_PLUGIN: &str = r#"
+protocol_version = 1
+id = "wrap"
+name = "Wrap"
+
+[[commands]]
+id = "status"
+title = "Wrapped Git Status"
+accepts = ["git.repository"]
+action = { type = "execute_builtin", command_id = "core.git.status" }
+
+[[commands]]
+id = "copy"
+title = "Wrapped Copy"
+accepts = ["core.directory"]
+action = { type = "execute_builtin", command_id = "core.directory.copy" }
+"#;
+
+    #[test]
+    fn execute_builtin_inherits_the_target_availability_rule() {
+        let mut registry = crate::application::composition::builtin_registry();
+        registry
+            .register_plugin(anywhere_plugin::parse_manifest(WRAP_PLUGIN).unwrap())
+            .unwrap();
+        assert_eq!(
+            registry.get("wrap.status").unwrap().availability,
+            registry.get("core.git.status").unwrap().availability
+        );
+        assert_eq!(
+            registry.get("wrap.copy").unwrap().availability,
+            registry.get("core.directory.copy").unwrap().availability
+        );
+        registry
+            .register_plugin(
+                anywhere_plugin::parse_manifest(anywhere_plugin::EXAMPLE_PLUGIN).unwrap(),
+            )
+            .unwrap();
+        assert_eq!(
+            registry.get("example.search").unwrap().availability,
+            AvailabilityRule::Enabled
+        );
+    }
+
+    #[test]
+    fn a_bad_wrapping_plugin_does_not_leave_a_partial_registration() {
+        let mut registry = crate::application::composition::builtin_registry();
+        let raw = format!(
+            "{WRAP_PLUGIN}
+
+[[commands]]
+id = \"missing\"
+title = \"Missing\"
+accepts = [\"git.repository\"]
+action = {{ type = \"execute_builtin\", command_id = \"core.missing.action\" }}
+"
+        );
+        assert!(anywhere_plugin::parse_manifest(&raw)
+            .and_then(|manifest| registry.register_plugin(manifest))
+            .is_err());
+        assert!(registry.get("wrap.status").is_none());
+        assert!(registry.get("wrap.copy").is_none());
+        assert!(registry.get("wrap.missing").is_none());
+        assert!(registry.get("core.git.status").is_some());
     }
 }

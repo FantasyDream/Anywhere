@@ -104,15 +104,15 @@ async fn the_provider_chain_is_recursive_and_deduplicates() {
 /// separately from applicability.
 #[test]
 fn matching_and_availability_are_separate_steps() {
-    let registry = ActionRegistry::builtin();
+    let registry = anywhere_core::application::composition::builtin_registry();
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path().canonicalize().unwrap();
     let contexts = features::recognized_contexts(root.to_str().unwrap());
 
-    let facts = anywhere_core::core::session::facts::SessionFacts {
-        git_available: true,
-        ..Default::default()
-    };
+    let facts = anywhere_core::core::session::facts::SessionFacts::default().with(
+        anywhere_core::core::session::facts::GIT,
+        anywhere_core::core::session::facts::FactValue::Flag(true),
+    );
     let usage = |_: &str, _: &str| anywhere_core::core::ranking::usage::UsageStats::default();
     let matcher = matcher::ActionMatcher {
         registry: &registry,
@@ -131,11 +131,17 @@ fn matching_and_availability_are_separate_steps() {
 
     // The same applicability with a clipboard that already holds the path is hidden: that is
     // availability, and it is not the matcher's decision to make.
-    let facts = anywhere_core::core::session::facts::SessionFacts {
-        clipboard_text: Some(root.to_string_lossy().into_owned()),
-        git_available: true,
-        ..Default::default()
-    };
+    let facts = anywhere_core::core::session::facts::SessionFacts::default()
+        .with(
+            anywhere_core::core::session::facts::CLIPBOARD,
+            anywhere_core::core::session::facts::FactValue::Text(
+                root.to_string_lossy().into_owned(),
+            ),
+        )
+        .with(
+            anywhere_core::core::session::facts::GIT,
+            anywhere_core::core::session::facts::FactValue::Flag(true),
+        );
     let matcher = matcher::ActionMatcher {
         registry: &registry,
         usage: &usage,
@@ -155,14 +161,11 @@ fn matching_and_availability_are_separate_steps() {
 /// Applications and actions reach the list through the same contract.
 #[test]
 fn every_candidate_kind_has_a_source_behind_it() {
-    let registry = ActionRegistry::builtin();
+    let registry = anywhere_core::application::composition::builtin_registry();
     let usage = |_: &str, _: &str| anywhere_core::core::ranking::usage::UsageStats::default();
-    let search = anywhere_core::core::search::engine::SearchEngine {
-        registry: &registry,
-        usage: &usage,
-        facts: &anywhere_core::core::session::facts::SessionFacts::default(),
-        now: 1000,
-    };
+    let facts = anywhere_core::core::session::facts::SessionFacts::default();
+    let search =
+        anywhere_core::core::search::engine::ActionSearch::new(&registry, &usage, &facts, 1000);
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path().canonicalize().unwrap();
     let contexts = features::recognized_contexts(root.to_str().unwrap());
@@ -189,19 +192,45 @@ fn every_candidate_kind_has_a_source_behind_it() {
     let matched = sources_of(&contexts, &registry);
     assert!(!matched.is_empty(), "actions are a source too");
 
-    // And a source can be driven directly.
-    struct Empty;
-    impl CandidateSource for Empty {
+    struct Marker;
+    impl CandidateSource for Marker {
         fn candidates(&self, _: &SearchContext<'_>) -> Vec<Candidate> {
-            Vec::new()
+            vec![Candidate {
+                presentation: CandidatePresentation {
+                    id: "marker:test".into(),
+                    kind: CandidateKind::Application,
+                    title: "Marker".into(),
+                    subtitle: None,
+                    icon: IconDescriptor {
+                        key: "application".into(),
+                    },
+                    score: 1.0,
+                    group_id: "app".into(),
+                    availability: Availability::enabled(),
+                    command_id: None,
+                    bundle_id: Some("marker".into()),
+                    owning_app: None,
+                },
+                target:
+                    anywhere_core::core::search::candidate::CandidateTarget::LaunchApplication {
+                        path: "/marker".into(),
+                        icon_source: "/marker".into(),
+                    },
+            }]
         }
     }
-    assert!(Empty
-        .candidates(&SearchContext {
-            query: &anywhere_core::core::search::query::Query::parse("x"),
-            contexts: &contexts,
-        })
-        .is_empty());
+    let with_source = search.search(
+        &anywhere_core::core::search::query::Query::parse("copy"),
+        &contexts,
+        &[&Marker],
+    );
+    assert!(
+        with_source
+            .candidates
+            .iter()
+            .any(|candidate| candidate.presentation.id == "marker:test"),
+        "a new source reaches the engine without changing it"
+    );
 }
 
 /// A feature registers a bundle; nothing else has to know it exists.
@@ -212,7 +241,7 @@ fn features_register_through_bundles() {
         bundles.len() >= 4,
         "each feature contributes its own bundle"
     );
-    let registry = ActionRegistry::builtin();
+    let registry = anywhere_core::application::composition::builtin_registry();
     for bundle in &bundles {
         assert!(
             bundle.actions.iter().all(|action| !action.id.is_empty()),

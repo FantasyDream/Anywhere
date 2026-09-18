@@ -45,7 +45,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   GetModuleFileNameW(nullptr, executable, 32768);
   auto data = std::filesystem::path(executable).parent_path() / L"data";
   flutter::DartProject project(data.wstring());
-  project.set_impeller_switch(flutter::ImpellerSwitch::Disabled);
+  project.set_impeller_switch(flutter::ImpellerSwitch::Enabled);
 
   std::vector<std::string> command_line_arguments =
       GetCommandLineArguments();

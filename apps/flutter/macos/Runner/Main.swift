@@ -13,7 +13,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var controller: FlutterViewController!
     var channel: FlutterMethodChannel!
     var statusItem: NSStatusItem!
-    var hotKey: EventHotKeyRef?
+    var currentAppHotKey: EventHotKeyRef?
+    var universalHotKey: EventHotKeyRef?
     var eventHandler: EventHandlerRef?
     var activationStart: TimeInterval = 0
     var hotKeyError: String?
@@ -90,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                        "hotkeyError": self.hotKeyError ?? ""])
             case "ready":
                 reply(nil)
-                self.activate()
+                self.activate(mode: "currentApp")
             case "show":
                 guard let args = call.arguments as? [String: Any],
                       let generation = args["generation"] as? Int,
@@ -169,32 +170,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     func windowDidResignKey(_ notification: Notification) { dismissForFocusLoss() }
     func applicationDidResignActive(_ notification: Notification) { dismissForFocusLoss() }
 
-    @objc func activate() {
+    @objc func activateCurrentApp() { activate(mode: "currentApp") }
+    @objc func activateUniversal() { activate(mode: "universal") }
+
+    func activate(mode: String) {
         activationStart = ProcessInfo.processInfo.systemUptime
-        log(["event": "activation_requested"])
-        // Do not activate NSApp here: Rust must capture the previous foreground app first.
-        channel.invokeMethod("toggle", arguments: nil)
+        log(["event": "activation_requested", "mode": mode])
+        channel.invokeMethod("toggle", arguments: ["mode": mode])
     }
 
     func registerHotKey() {
         var event = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
         let pointer = Unmanaged.passUnretained(self).toOpaque()
-        let handlerStatus = InstallEventHandler(GetApplicationEventTarget(), { _, _, userData in
-            guard let userData else { return OSStatus(eventNotHandledErr) }
+        let handlerStatus = InstallEventHandler(GetApplicationEventTarget(), { _, event, userData in
+            guard let userData, let event else { return OSStatus(eventNotHandledErr) }
+            var hotKeyID = EventHotKeyID()
+            let status = GetEventParameter(
+                event,
+                EventParamName(kEventParamDirectObject),
+                EventParamType(typeEventHotKeyID),
+                nil,
+                MemoryLayout<EventHotKeyID>.size,
+                nil,
+                &hotKeyID
+            )
+            guard status == noErr else { return OSStatus(eventNotHandledErr) }
             let delegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
-            delegate.activate()
+            switch hotKeyID.id {
+            case 1: delegate.activate(mode: "currentApp")
+            case 2: delegate.activate(mode: "universal")
+            default: break
+            }
             return noErr
         }, 1, &event, pointer, &eventHandler)
         guard handlerStatus == noErr else {
             hotKeyError = "Global shortcut handler failed (\(handlerStatus)); use the menu bar icon."
             return
         }
-        let identifier = EventHotKeyID(signature: 0x4354584C, id: 1)
-        let status = RegisterEventHotKey(UInt32(kVK_Space), UInt32(cmdKey | optionKey), identifier,
-                                        GetApplicationEventTarget(), 0, &hotKey)
-        if status != noErr {
-            hotKeyError = "⌘⌥Space is unavailable (\(status)); use the menu bar icon or release the shortcut in another app."
-            log(["event": "hotkey_registration_failed", "status": status])
+        let currentId = EventHotKeyID(signature: 0x4354584C, id: 1)
+        let currentStatus = RegisterEventHotKey(UInt32(kVK_Space), UInt32(cmdKey | optionKey), currentId,
+                                        GetApplicationEventTarget(), 0, &currentAppHotKey)
+        let universalId = EventHotKeyID(signature: 0x4354584C, id: 2)
+        let universalStatus = RegisterEventHotKey(UInt32(kVK_Space), UInt32(cmdKey | optionKey | shiftKey),
+                                        universalId, GetApplicationEventTarget(), 0, &universalHotKey)
+        var errors: [String] = []
+        if currentStatus != noErr {
+            errors.append("⌘⌥Space is unavailable (\(currentStatus))")
+            log(["event": "hotkey_registration_failed", "status": currentStatus, "mode": "currentApp"])
+        }
+        if universalStatus != noErr {
+            errors.append("⌘⌥⇧Space is unavailable (\(universalStatus))")
+            log(["event": "hotkey_registration_failed", "status": universalStatus, "mode": "universal"])
+        }
+        if !errors.isEmpty {
+            hotKeyError = errors.joined(separator: "; ") + "; use the menu bar icon or release the shortcut in another app."
         }
     }
 
@@ -202,9 +231,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
         statusItem.button?.image = NSImage(systemSymbolName: "sparkle.magnifyingglass", accessibilityDescription: "Anywhere")
         let menu = NSMenu()
-        let show = NSMenuItem(title: "Open Anywhere  ⌘⌥Space", action: #selector(activate), keyEquivalent: "")
-        show.target = self
-        menu.addItem(show)
+        let current = NSMenuItem(title: "Current App  ⌘⌥Space", action: #selector(activateCurrentApp), keyEquivalent: "")
+        current.target = self
+        menu.addItem(current)
+        let universal = NSMenuItem(title: "Universal Search  ⌘⌥⇧Space", action: #selector(activateUniversal), keyEquivalent: "")
+        universal.target = self
+        menu.addItem(universal)
         menu.addItem(.separator())
         let quit = NSMenuItem(title: "Quit Anywhere", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
@@ -239,7 +271,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationWillTerminate(_ notification: Notification) {
-        if let hotKey { UnregisterEventHotKey(hotKey) }
+        if let currentAppHotKey { UnregisterEventHotKey(currentAppHotKey) }
+        if let universalHotKey { UnregisterEventHotKey(universalHotKey) }
         if let eventHandler { RemoveEventHandler(eventHandler) }
     }
 }

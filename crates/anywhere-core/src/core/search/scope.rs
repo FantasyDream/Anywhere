@@ -1,15 +1,14 @@
 //! Scope bar construction and ordering.
 //!
-//! A scope is a view over the matched candidates: the unified list, the current
-//! application's actions, and one entry per action group. The core builds and orders them
-//! so the host only renders what it is given — otherwise frecency, late scope arrival and
-//! current-app priority would all have to be reimplemented in the UI.
+//! A scope is a hard filter over matched candidates: the current application's actions
+//! and one entry per action group. Global search is `scope = None` on the host, not a
+//! synthetic All row. The core builds membership; the session freezes presentation order.
 use crate::core::action::group::groups;
 use crate::core::search::candidate::Candidate;
 use anywhere_protocol::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
-/// Rows the host shows for an empty query in the unified scope.
+/// Rows the host shows for an empty query.
 ///
 /// A *view* limit, deliberately not applied here: truncating the candidate set left each
 /// scope's id list pointing at entries that no longer existed, so a group could look
@@ -18,11 +17,10 @@ use std::collections::BTreeMap;
 /// decides how many rows fit.
 pub const HOME_LIMIT: usize = 7;
 
-/// Scope ids reserved by the host: the unified list first, the current application second.
-pub const SCOPE_ALL: &str = "all";
+/// Reserved id for the current application's visible actions.
 pub const SCOPE_APP: &str = "app";
 
-/// Usage total per group, used to order the bar.
+/// Usage total per group, used to order newly appeared scopes.
 pub type ScopeUse = BTreeMap<GroupId, u32>;
 
 /// Build the scope bar from every visible candidate, before any view limit.
@@ -32,24 +30,7 @@ pub fn build(
     app_label: &str,
     scope_use: &ScopeUse,
 ) -> Vec<ScopeEntry> {
-    let all_ids = candidates
-        .iter()
-        .map(|candidate| candidate.presentation.id.clone())
-        .collect::<Vec<_>>();
-    let mut scopes = vec![
-        ScopeEntry {
-            id: SCOPE_ALL.into(),
-            kind: ScopeKind::All,
-            label: "All".into(),
-            candidate_ids: all_ids,
-        },
-        ScopeEntry {
-            id: SCOPE_APP.into(),
-            kind: ScopeKind::App,
-            label: app_label.to_owned(),
-            candidate_ids: Vec::new(),
-        },
-    ];
+    let mut app_ids = Vec::new();
     let mut groups: BTreeMap<GroupId, Vec<ActionId>> = BTreeMap::new();
     for candidate in candidates {
         if candidate.presentation.kind != CandidateKind::Action {
@@ -60,21 +41,23 @@ pub fn build(
             _ => false,
         };
         if owns_current_app {
-            scopes[1]
-                .candidate_ids
-                .push(candidate.presentation.id.clone());
+            app_ids.push(candidate.presentation.id.clone());
         }
         groups
             .entry(candidate.presentation.group_id.clone())
             .or_default()
             .push(candidate.presentation.id.clone());
     }
-    // Presentation order is fixed for the built-in groups so the bar reads the same as the
-    // documented examples (`Git` before `Folder`); anything else follows in id order.
+    let mut scopes = Vec::new();
+    if !app_ids.is_empty() {
+        scopes.push(ScopeEntry {
+            id: SCOPE_APP.into(),
+            kind: ScopeKind::App,
+            label: app_label.to_owned(),
+            candidate_ids: app_ids,
+        });
+    }
     let mut ordered = groups.into_iter().collect::<Vec<_>>();
-    // Most-used scope first. `group_rank` then the id break ties, so a fresh install still
-    // reads like the documented example and the order never depends on the luck of
-    // iteration.
     let use_of = |group: &str| scope_use.get(group).copied().unwrap_or_default();
     ordered.sort_by(|(a, _), (b, _)| {
         use_of(b)
@@ -83,8 +66,7 @@ pub fn build(
             .then_with(|| a.cmp(b))
     });
     for (group, ids) in ordered {
-        // The Current App scope already merges app-owned groups into slot two.
-        if group == groups::APP {
+        if group == groups::APP || ids.is_empty() {
             continue;
         }
         scopes.push(ScopeEntry {
@@ -97,6 +79,35 @@ pub fn build(
     scopes
 }
 
+/// Keep session order: Current App first, already-seen groups in place, newcomers append.
+pub fn apply_session_order(
+    built: Vec<ScopeEntry>,
+    frozen_ids: &mut Vec<ScopeId>,
+) -> Vec<ScopeEntry> {
+    let mut by_id = HashMap::with_capacity(built.len());
+    let mut built_ids = Vec::with_capacity(built.len());
+    for scope in built {
+        built_ids.push(scope.id.clone());
+        by_id.insert(scope.id.clone(), scope);
+    }
+    if by_id.contains_key(SCOPE_APP) && frozen_ids.first().map(String::as_str) != Some(SCOPE_APP) {
+        frozen_ids.retain(|id| id != SCOPE_APP);
+        frozen_ids.insert(0, SCOPE_APP.into());
+    }
+    for id in &built_ids {
+        if id == SCOPE_APP {
+            continue;
+        }
+        if !frozen_ids.iter().any(|frozen| frozen == id) {
+            frozen_ids.push(id.clone());
+        }
+    }
+    frozen_ids
+        .iter()
+        .filter_map(|id| by_id.remove(id))
+        .collect()
+}
+
 /// Usage total per group across the matched candidates.
 pub fn usage_by_group(
     candidates: &[Candidate],
@@ -106,7 +117,7 @@ pub fn usage_by_group(
     for candidate in candidates {
         let (Some(action), Some(context)) = (
             candidate.presentation.command_id.as_ref(),
-            candidate.context.as_ref(),
+            candidate.context(),
         ) else {
             continue;
         };
@@ -118,7 +129,6 @@ pub fn usage_by_group(
     scope_use
 }
 
-/// Display order of the built-in dynamic scopes.
 fn group_rank(group: &str) -> u8 {
     match group {
         groups::GIT => 0,
@@ -130,7 +140,6 @@ fn group_rank(group: &str) -> u8 {
     }
 }
 
-/// Built-in labels for known groups; unknown groups fall back to an id-derived label.
 fn group_label(group: &str) -> String {
     match group {
         groups::GIT => "Git".into(),
@@ -155,5 +164,69 @@ fn capitalize(value: &str) -> String {
     match chars.next() {
         Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
         None => String::new(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(id: &str, kind: ScopeKind) -> ScopeEntry {
+        ScopeEntry {
+            id: id.into(),
+            kind,
+            label: id.into(),
+            candidate_ids: vec!["x".into()],
+        }
+    }
+
+    fn ids(scopes: &[ScopeEntry]) -> Vec<&str> {
+        scopes.iter().map(|scope| scope.id.as_str()).collect()
+    }
+
+    #[test]
+    fn late_groups_append_and_current_app_inserts_first() {
+        let mut frozen = Vec::new();
+        let first = apply_session_order(vec![entry("folder", ScopeKind::Group)], &mut frozen);
+        assert_eq!(ids(&first), ["folder"]);
+        let late = apply_session_order(
+            vec![
+                entry("app", ScopeKind::App),
+                entry("git", ScopeKind::Group),
+                entry("folder", ScopeKind::Group),
+            ],
+            &mut frozen,
+        );
+        assert_eq!(ids(&late), ["app", "folder", "git"]);
+    }
+
+    #[test]
+    fn hidden_groups_keep_their_frozen_slot() {
+        let mut frozen = Vec::new();
+        apply_session_order(
+            vec![
+                entry("app", ScopeKind::App),
+                entry("git", ScopeKind::Group),
+                entry("folder", ScopeKind::Group),
+            ],
+            &mut frozen,
+        );
+        let hidden = apply_session_order(
+            vec![
+                entry("app", ScopeKind::App),
+                entry("folder", ScopeKind::Group),
+            ],
+            &mut frozen,
+        );
+        assert_eq!(ids(&hidden), ["app", "folder"]);
+        let restored = apply_session_order(
+            vec![
+                entry("app", ScopeKind::App),
+                entry("folder", ScopeKind::Group),
+                entry("git", ScopeKind::Group),
+            ],
+            &mut frozen,
+        );
+        assert_eq!(ids(&restored), ["app", "git", "folder"]);
     }
 }

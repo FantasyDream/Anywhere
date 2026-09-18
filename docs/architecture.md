@@ -1,146 +1,124 @@
 # 架构
 
+Rust 负责上下文、搜索、排序、动作执行与历史；Flutter 负责展示和交互状态；原生 Host 负责窗口、焦点与热键。保留现有五个 crate，不为未来功能提前增加服务、运行时或协议。
+
 ```mermaid
 flowchart TD
-  UI[Flutter Presentation] --> B[anywhere-bridge-flutter]
-  B --> C[anywhere-core application]
-  C --> P[anywhere-protocol DTO]
-  C --> PL[anywhere-platform Trait]
-  C --> PG[anywhere-plugin]
-  PG --> P
-  PL --> MAC[macOS Adapter]
-  C --> DB[persistence SQLite]
+  UI[Flutter widgets] --> CTRL[LauncherController]
+  CTRL --> WIN[WindowHost / native Host]
+  CTRL --> BRIDGE[anywhere-bridge-flutter]
+  BRIDGE --> APP[Application / session runtime / composition]
+  APP --> CORE[Core algorithms and contracts]
+  APP --> FEATURE[First-party features]
+  FEATURE --> CORE
+  APP --> DB[UsageRepository / SQLite]
+  APP --> PLATFORM[Platform]
+  FEATURE --> PLATFORM
 ```
 
-## 目录结构
+## 代码组织
 
 ```text
 crates/anywhere-core/src/
-├── core/                    框架概念，不知道任何 feature、UI 或平台 API
-│   ├── context/             上下文是什么，以及如何被发现
-│   │   ├── mod.rs           Context / ContextValue / ContextSet
-│   │   ├── provider.rs      ContextProvider 契约
-│   │   ├── engine.rs        顺序遍历、执行去重、detach 与等待
-│   │   └── registry.rs      有哪些 provider，按什么顺序
-│   ├── action/              能对上下文做什么
-│   │   ├── descriptor.rs    动作的静态定义与注册表
-│   │   ├── bundle.rs        ActionBundle / ActionSpec（注册单位）
-│   │   ├── group.rs         ActionGroup（只承载展示信息）
-│   │   ├── matcher.rs       匹配
-│   │   ├── availability.rs  可用性
-│   │   └── executor.rs      执行
-│   ├── search/              查询 + 上下文 → 用户看到的列表
-│   │   ├── query.rs         Query / SearchFields
-│   │   ├── candidate.rs     一行是什么，以及如何比较
-│   │   ├── candidate_source.rs  候选来源契约
-│   │   ├── scope.rs         Scope Bar 的构建与排序
-│   │   ├── fallback.rs      文本兜底
-│   │   └── engine.rs        汇聚来源 → 排序 → 分组
-│   ├── ranking/             score.rs（打分）· usage.rs（UsageRepository）
-│   └── session/             mod.rs（LauncherSession）· facts.rs · manager.rs
-├── application/             用例，一个文件一个入口
-│   ├── launcher_service.rs  服务本体、配置与共享辅助
-│   ├── activate.rs          update_query.rs · execute.rs
-├── features/                第一方产品能力，各自拥有上下文与动作
-│   ├── applications/        index.rs · source.rs · context.rs
-│   ├── filesystem/          provider.rs · actions_folder.rs · actions_file.rs
-│   ├── git/                 provider.rs · actions.rs
-│   ├── json/  url/  text/   provider.rs（· actions.rs）
-├── persistence/             usage.rs（唯一知道 rusqlite 的模块）
-└── lib.rs
+├── core/
+│   ├── context/       ContextProvider、注册表、顺序 Context Graph
+│   ├── action/        描述、Bundle、Handler 契约、匹配、可用性、声明式执行
+│   ├── search/        Query、Candidate、CandidateSource、排序与 Scope 构建
+│   ├── ranking/       打分、UsageRepository 契约
+│   └── session/       只读 SessionFacts 与归属规则
+├── application/
+│   ├── composition.rs       内建动作、Provider、候选来源及种子装配
+│   ├── launcher_service.rs  公共 Facade、索引与历史协调
+│   ├── session_model.rs     私有会话状态
+│   ├── session_runtime.rs   私有解析、预算、快照提交
+│   ├── activate.rs          激活用例
+│   ├── update_query.rs      输入用例
+│   └── execute.rs           执行用例
+├── features/          applications、filesystem、git、json、url、text
+└── persistence/       SQLite UsageRepository
+
+apps/flutter/lib/
+├── main.dart                         初始化和桥接装配
+├── launcher/
+│   ├── launcher_controller.dart     异步生命周期、版本校验、选中项与 Scope 状态
+│   ├── launcher_view_state.dart     只读展示状态、可见行和高度
+│   ├── launcher_screen.dart         输入、焦点、键盘、列表、预览的组合
+│   └── widgets/candidate_row.dart   候选行和图标展示
+├── infrastructure/
+│   ├── window_host.dart             类型化 MethodChannel
+│   └── application_icon_cache.dart  有界图标缓存和过期响应处理
+└── src/rust/                         FRB 生成代码和 DTO
 ```
 
-新增能力时改哪里：
+`lib/launcher_screen.dart` 暂时保留为兼容导出，不承载逻辑。Session model/runtime 是 Application 的内部实现，不对桥接或测试开放可变状态。
 
-| 想加 | 只改 |
-|---|---|
-| Maven 上下文 | `features/maven/provider.rs` + 在 `features::builtin_providers` 注册 |
-| 某类对象的动作 | `features/<name>/actions.rs` 的 bundle + 在 `features::builtin_action_bundles` 注册 |
-| 文件搜索候选 | 实现 `core::search::candidate_source::CandidateSource` + 在 `SearchEngine` 注册 |
+新增 Context 通过 `ContextProvider` 和 feature 注册点加入；新增当前类型的第一方动作在 feature 中定义 `ActionSpec` 与 `ActionHandler`，随 Bundle 注册。新增候选来源实现 `CandidateSource`，由 Application 装配，沿用同一个搜索、排序、Scope 与提交路径。
 
-不需要修改 `LauncherService`、`SearchEngine`、`ContextEngine`、`Ranking` 或 Flutter。
+`CandidateTarget` 目前只有类型明确的 `Action` 和 `LaunchApplication`；通用 Candidate 不持有具体 `IndexedApplication`。它是进程内实现，不是承诺稳定的 Extension API。出现新的执行模型时再拓展，当前没有字符串字段包或通用 Invocation 注册层。
 
-## 边界
+## 边界与约束
 
-| 模块 | 职责 |
-|---|---|
-| anywhere-protocol | 稳定、可序列化的 Context/Action/State/Manifest/Event DTO |
-| anywhere-core | `core/`（context/action/search/ranking/session）、`application/`（用例）、`features/`（第一方能力）、`persistence/`（存储） |
-| anywhere-platform | OS-neutral Platform Trait；macOS 按能力分文件（application/finder/clipboard/git/shell + native.rs 的 FFI 边界），Windows 同理 |
-| anywhere-plugin | TOML 发现、校验、模板展开，不执行脚本，不提供 UI |
-| anywhere-bridge-flutter | Facade 初始化、FRB 绑定、显式 DTO 转换 |
-| apps/flutter | 仅展示完整 Rust 状态、Scope Bar、键盘、稳定选中 ID、Focus 和窗口可见性 |
+- `anywhere-protocol`：可序列化的 Context / Action / State / Manifest / Event DTO。
+- `anywhere-core`：框架契约与算法、产品用例、第一方 feature、存储适配。
+- `anywhere-platform`：OS-neutral Trait 与 macOS/Windows 实现，包括应用发现路径和扫描策略。
+- `anywhere-plugin`：TOML 发现、校验及模板展开，不执行脚本、不提供 UI。
+- `anywhere-bridge-flutter`：Facade 初始化、FRB 入口和 DTO 转换。
 
-`anywhere-core` **禁止依赖 anywhere-bridge-flutter、Flutter、Dart、WebView、任何 UI 框架**。`scripts/check-architecture.py` 检查真实 Cargo 依赖图。macOS/Windows 原生能力实现只在 anywhere-platform；Core 中没有 Objective-C、AppleScript、COM、条件编译或进程命令。
+`core/` 生产模块不导入 `application`、`features`、`persistence`。`scripts/check-architecture.py` 同时检查这一模块规则和 Cargo 可达依赖没有 UI/Flutter bridge；它是轻量静态护栏，行为边界仍由 Facade 测试验证。
 
-Swift Host 只创建一个承载 FlutterViewController 的窗口，注册 Carbon 热键、控制焦点和菜单栏。它不解析用户输入，不捕获上下文，不执行动作。MethodChannel 只传送窗口生命周期和基础设施目录；语义状态通过 flutter_rust_bridge 传输。
+Swift/Windows Host 不解析输入或执行动作。MethodChannel 只传窗口生命周期和基础设施目录；业务状态通过 FRB 传递。Flutter Controller 不复制 Rust 的识别、匹配和排序规则。
 
-## 激活及输入时序
+## 激活、输入与取消
 
-1. 热键到达 Swift Host，记录 monotonic clock；此时不激活 NSApp、不显示窗口。
-2. Dart 调用 Rust `activate()`；Core 先递增 SessionId，使之前工作失效。
-3. Core 通过 Platform 捕获原前台应用，并读取一次剪贴板文本快照。
-4. Core 为这个 Session 启动单飞的目录捕获（绑定原应用身份），同时从标准目录后台扫描应用索引。
-5. Core 运行顺序 Context Graph，直到完成或到达 `first_snapshot_budget`（默认 40ms）。若预算到期时还没有解析出任何可用 Context 且仍有 Provider 在飞行中，首屏最多再等 `first_content_grace`（默认 400ms），避免打开一个空窗口要求用户先输入；超过 grace 仍照常提交截断快照。随后提交首份 LauncherState。
-6. Flutter 接收状态后调用 Host `show`，才改变前台应用。Host 显式启动隐藏窗口的引擎；ready/show 不等待隐藏窗口的绘制帧，避免启动互相等待。
-7. 若第 5 步被预算截断，后台任务继续解析并提交更高 `snapshot_seq` 的快照；Flutter 通过 `wait_for_snapshot` 接收。
+1. Host 接到唤醒请求，暂不显示窗口，避免丢失原前台应用。
+2. Flutter 调用同步 `begin_activation()` 预留 SessionId，立即使旧工作失效；随后异步调用 `activate_session(id)`。关闭时即使首屏尚未返回，也已经有 SessionId 可取消。
+3. Core 在 blocking worker 捕获前台应用、Git 可用性和剪贴板；每次返回都验证 session。Git 捕获任务失败记入 diagnostics 且不写入 `git` Fact，不会再被当成 `false`。目录捕获绑定原应用并在 Session 内单飞，应用索引独立后台加载。
+4. 历史读取在 `spawn_blocking` 中完成，返回 scoped/global usage 不可变快照；失败以空历史继续并记录 diagnostics，不能阻塞 async worker。
+5. 顺序 Context Graph 受首份快照预算 40ms 和 pending Provider grace 400ms 控制；预算不意味着能中断已经运行的原生阻塞调用。首屏截断后后台继续解析。
+6. Core 提交首份快照，Flutter 才调用 Host show。后续通过 `wait_for_snapshot` 接收更高 snapshot_seq。
 
-每次输入变化递增 Revision，并使 `snapshot_seq` 归零重新计数。Core 在开始工作前原子发布 `(SessionId, Revision)`，在 Provider 完成后、状态提交前重复验证。过期结果返回 None，不更新状态。Flutter 同时检查 session、revision、snapshot_seq 和窗口 generation，防止桥接响应、执行结果或隐藏后的回调覆盖新界面。
+版本分工：SessionId 区分唤醒；Revision 区分输入；SnapshotSeq 区分同一输入的追加快照；Host generation 防止旧窗口消息重新显示/隐藏新窗口。旧结果只丢弃，不能撤销新 session。
 
-非空输入做两件事：对象识别和查询匹配。识别到的对象动作始终保留；环境 Context 的动作只有在匹配查询时才出现；普通文本搜索是最后兜底的候选。空白输入进入 Context Home，只显示当前 Context 的动作（最多 7 条）。该选择在 Core 中完成，UI 只切换 Core 预计算的 Scope 候选列表。
+输入开始时发布新的 `(SessionId, Revision)` 并清空可执行候选。稳定 Candidate ID 表示业务身份，不包含会话版本；执行仍必须同时提供当前 session、revision 和已提交候选 ID。`latest_state` 只暴露仍有效的已提交快照。
 
-Host 在窗口失去 key 或应用失活时立即隐藏，并发送携带 generation 的 dismiss。Dart 在任何 await 之前使 generation 失效、清空状态并请求 deactivate；Host 拒绝旧 generation 的 show/resize/hide。每次唤醒都是新 Session。
+提交分为“锁内取版本与不可变输入 → 锁外匹配/排序 → 锁内复验并发布”。应用目录与历史通过 Arc 快照共享。同版本另一提交先完成时重新计算，避免索引刷新覆盖 late context。执行前及 blocking worker 真正开始时分别检查版本；副作用完成后仍记录成功历史，避免失焦隐藏导致使用记录丢失。
 
-窗口默认宽 648、高 64；Flutter 按动作数量计算高度，每行 52，最多 7 行，额外动作滚动。总高度不超过 520，Host 应用高度时保持顶边位置。输入解析期间保留不可执行的上次已提交列表，只在新结果提交后调整高度；空结果不构建动作区，错误提示和 JSON 预览按需占用空间。macOS 的 NSVisualEffectView 提供窗口后方的原生毛玻璃；窗口和 Flutter 原生背景透明，毛玻璃 mask 与内容裁切保持相同圆角，Flutter 只叠加半透明底色和控件。交互变更见 [ADR 003](decisions/003-transient-launcher.md)。
+Controller 用 hidden / activating / ready / resolving / executing 表达阶段，统一管理取消。图标请求带 epoch，旧回调不能重新填充已清空缓存或删除新请求；缓存最多保留 128 个图标。
 
-可执行 ActionId 包含 Session/Revision；只有当前已提交列表中的 ID 才能执行。输入开始变化即清空可执行列表。执行中不持有 Session 锁，耗时 OS 调用和 SQLite 在 blocking worker 中运行。
+## 当前搜索与 Scope 行为
 
-## 分组
+没有 All Scope；`scope = None` 是全局/综合模式。搜索引擎一次产出全量候选，Scope 是硬过滤，Ranking 只负责 Scope 内排序。
 
-`group_id` 常量集中在 cache 注册表（`command::groups`），排序加成、Scope 成员和标签都引用同一处；「哪些动作属于 Git」由 `command::is_git_action` 与执行器保持一致，测试锁定两者不会分叉。两个 Copy Path 动作同属 `folder`，因为它们对路径做同一件事。
+- **双入口**：Current App Launcher（macOS `⌘⌥Space`，Windows `Ctrl+Alt+Space`）在有 Visible Action 时默认选中 Current App Scope；否则 `scope = None`。Universal Launcher（同一组合加 Shift）默认 `scope = None`。已打开时，同一入口再按一次关闭，另一入口原地切换并保留 Query。托盘/菜单提供两项。
+- Current App 没有 Visible Action 时不出现在 Scope 条。首屏没有、用户未改 Scope 且 Query 仍空时，迟到的 Current App 会自动选中。
+- Scope 激活后输入只搜该 Scope，不会自动退出；切 Scope 保留 Query。`scope = None` 时输入才进入 Universal Search（Apps + Actions）。空输入：Current App 是当前应用 Action 首页，Universal 是综合 Context Home。
+- `Ctrl+Tab` / `Ctrl+Shift+Tab` 循环真实 Scope，`scope = None` 不参与；回到全局用 Esc。Esc 分层：清 Query → 解除 Scope → 关闭 Launcher。
+- Scope 顺序：Current App 固定第一，其余按 Group 已执行 Action 的 frecency → `group_rank` → id。Session 内顺序冻结，Late Scope 只追加；Query 暂时去掉某个 Group 时保留槽位。Scope 是否存在由 Visible Actions 决定。应用启动候选只出现在 `scope = None`。
 
-## 执行与排序
+空输入是 Context Home，Flutter 每屏默认展示最多 7 条；保留用户选中的稳定 ID。搜索结果可滚动。非空输入同时进行对象识别和查询匹配；显式输入对象的动作保留，环境动作需要匹配查询。
 
-内建和插件都进入 `CommandRegistry → applicability → availability → query match → rank → group/scope → execution → Platform`。插件不拥有自己的排序分支。`execute_builtin` 只能指向注册表中的内建命令，而且 matcher 必须兼容，不允许递归调用插件。执行接口是 `execute(session_id, revision, candidate_id)`，Core 只接受当前已提交且 Enabled 的候选。
+动作与应用通过同一个 SearchEngine。ActionSearch 装配 ActionMatcher、额外候选来源及 TextFallbackSource；SourceStage 只表达现有 ranked/fallback 两个阶段，不包含未来调度策略。Scope 成员关系由 Visible Candidates 构建，Ranking 只排序候选。
 
-分值是确定性的：
+Group ID 集中在 `core/action/group.rs`，动作分组由 Bundle 声明。声明式插件 `execute_builtin` 只能引用已注册的原生 Handler，注册和执行均检查 matcher 兼容性，不允许递归引用声明式插件。包装动作在注册时复制目标的 `AvailabilityRule`，保留插件自己的 ID、标题、分组和使用记录；非包装的 v1 动作保持默认 Enabled。TextFallbackSource 与 ActionMatcher 共用同一求值函数：Hidden 不进入候选，也不能从兜底路径重新加入；Disabled 保留原因，执行入口拒绝。
 
-```text
-query_match: Exact=4000, Prefix=3000, WordPrefix=2000, Substring=1000
-context_relevance: UserInput=200, ApplicationContext=120, ForegroundApplication=30；搜索时减半
-semantic: Text=40, 其他已匹配类型=90
-base_priority: -50..50
-frequency: 8 × min(count, 20)，上限 160
-recency: 30 (<1h), 15 (<1d), 8 (<7d), 0
-home bonus: 环境来源 +200，Git 仓库上的 git 分组再 +40
-```
+SessionFacts 是本次唤醒的只读快照，查询变化不重新读取剪贴板或检测 Git。已知键目前是 `clipboard`（Text）和 `git`（Flag）。规则引用未知键或类型不符会在注册时拒绝；快照写入同样校验，不能通过 `from_map` 绕过。剪贴板缺失或读取失败不触发“内容重复”隐藏，读取失败写入诊断（含 Fact 名和原因，不含剪贴板正文）。Git 明确为 false 时 Disabled，原因为「Git 不可用」；捕获任务失败导致键缺失时 Disabled，原因为「无法确认 Git 是否可用」。`Enabled` 只是本次快照的展示判断，不是执行授权。
 
-非查询项之和被限制在 950 以内，低于最低的查询匹配档位（Substring = 1000），因此更高的匹配层级永远胜过使用历史。固定时间和历史快照下，相同输入得到相同顺序；同分先按 command_id 再按稳定候选 ID 排序。文本兜底候选（Web Search 与文本插件）使用 100..600 的低分带并排在列表末尾，不会被真实匹配挤出。
+打分保持现有规则：Exact / Prefix / WordPrefix / Substring 为 4000 / 3000 / 2000 / 1000；其余打分项总和封顶 950。频次每次 8 分，最多 160；最近使用最多 30。同分按 command/bundle ID 和稳定候选 ID 排序。文本兜底使用低分带并放在真实匹配之后。
 
-`frequency` 的权重必须足以改变顺序，否则使用历史只是装饰：早先权重为 2 时，用了 7 次的动作仍然输给只用了 1 次但 `base_priority` 高 30 的动作，实机报告为「执行多次但不上升」。现在一次使用约等于 8 点，重复 8 次即超过任一 `base_priority` 的最大差距（50），因此习惯能压过默认优先级；而 `base_priority` 在没有任何使用记录时仍然决定初始顺序。
+## 平台与扩展取舍
 
-Context Home 与搜索使用不同的权重：Home 提高 context/usage 的相对权重，搜索时 `query_match` 最高。环境来源（含 Finder 捕获目录及其派生 Git 仓库）和显式归属某应用的动作构成 Current App Scope；应用启动候选只出现在 All。
+应用目录由 `Platform::installed_applications` 提供，Core 只负责可搜索字段、别名和去重。macOS 从用户/系统 Applications 扫描，Windows 从开始菜单扫描 `.lnk`，启动保留快捷方式本身的参数与工作目录语义。每进程一次后台扫描，首屏不等索引；发布后重建当前快照。手动刷新、TTL、文件监听留待实际需求。
 
-等价对象的显式输入保留自己的来源，避免被环境上下文吞掉；同 command、同规范对象只保留一行，但合并来源归属，避免去重后丢失 Scope 成员关系。
+Provider 仍顺序执行、深度最多 3、节点最多 128，同版本 Provider/Context 去重。没有网络/AI 分类、并行 scheduler 或消息总线。
 
-## 异步扩展点与首屏
+Git 检测只读元数据。执行通过类型化 Status/Log/Diff 和固定 argv，不经任意 shell；保留超时、输出上限和禁用外部 diff/fsmonitor 的规则。
 
-`ContextProvider` 只有一种执行语义：可能阻塞的本地工作。没有 Network / AI 分类，也没有并发 Scheduler。Provider 不感知超时；`Resolver` 负责顺序 step、预算和 late publication。`Application::subscribe` 继续提供带版本检查的事件接收器；桥接层另外暴露 `wait_for_snapshot`，让 Flutter 在不轮询的情况下接收 late context。
-
-深度限制为 3、每个版本的同一 Provider/Context 最多调用一次、最多 128 个节点。扩展为并行调度前应先测量；不得删除版本校验。
-
-## 应用索引
-
-应用搜索不走 Context Graph。macOS 启动后后台扫描 `~/Applications`、`/Applications`、`/System/Applications`（有界深度，不进入 `.app` 内部），从 bundle 读取 `bundle_id`、显示名和规范路径。同一 `bundle_id` 的重复安装按根目录顺序、路径长度、字典序选一个；不同 bundle_id 的同名应用分别保留。索引只在进程内存在，不持久化、不监听文件系统；首屏不等它。
-
-每个索引项暴露名称、bundle_id、规范路径、图标来源（bundle 路径，按需取回）和 usage 行 ID。图标只为可见候选懒加载并在宿主侧有界缓存，失败时回退语义图标，且不影响排序或执行。usage 行 ID 由 bundle_id 在同一处派生，避免记录与读取漂移。
-
-## Git 执行边界
-
-仓库检测只读文件系统元数据。执行时 Platform 接受类型化的 Status/Log/Diff 操作，使用固定 argv 和仓库 root 作为工作目录，不经 shell，不接受任意命令模板。运行禁用 pager、颜色、external diff/textconv 和 fsmonitor，清理可能覆盖目标仓库的环境变量，并同时读取 stdout/stderr，5 秒超时、1 MiB 上限、截断有提示。Git 缺失时对应 Action 显示 Disabled 而不是消失。
+未来 V0.3 菜单发现先增加平台适配和真实 Action 来源，再决定动态动作生命周期；V0.4/V0.5 复用 Provider/Bundle；V0.6 才定义稳定 Extension API；V0.7 才定义 Host-rendered UI 协议和可选 WebView 边界。V1.0 的大型能力不在本次预建。
 
 ## 构建
 
-Flutter 官方的 [macOS 构建目标](https://github.com/flutter/flutter/blob/stable/packages/flutter_tools/lib/src/build_system/targets/macos.dart) 生成 Dart AOT App.framework 和 FlutterMacOS.framework，`scripts/build-macos.sh` 用 swiftc 编译窗口 Host 并装配签名应用。桥接使用 [flutter_rust_bridge](https://cjycode.com/flutter_rust_bridge/)。构建策略的环境原因见 [ADR 001](decisions/001-workspace-and-host.md)。
+`.flutter-version` 是本地与 CI 共用的版本声明；`scripts/check-flutter.py` 校验 PATH 上的 SDK 并打印 framework/engine/Dart revision。`scripts/env.sh` 只配置本地 clang/swift 缓存，不注入项目内 SDK。当前版本为官方 Flutter 3.47.4。
 
-替换 Host UI 只需调用 Core Facade、转换 protocol DTO 并实现 Presentation；不修改 Core 领域架构。将来新增 OS Adapter 时在 Platform Trait 后实现；Windows 已添加独立 Adapter 和 Flutter runner；Linux 未实现。Windows 构建状态及适配边界见 [ADR 004](decisions/004-windows-and-renderer.md)。
+`scripts/check.sh` 运行 Rust fmt、workspace tests、Clippy、架构检查及 Flutter analyze/tests；GitHub Actions 在 macOS/Windows 校验后才打包 Windows。远端是否通过必须以实际运行记录为准。
+
+macOS 继续使用 Flutter assemble + swiftc 的自定义 Host，生成并签名 App.framework、FlutterMacOS.framework 与 Rust 动态库。新增原生插件数量足以需要标准插件装配时，再评估 Xcode runner，见 [ADR 001](decisions/001-workspace-and-host.md)。两端显式启用 Impeller，验证边界见 [ADR 004](decisions/004-windows-and-renderer.md)。

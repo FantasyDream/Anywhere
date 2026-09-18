@@ -144,7 +144,7 @@ impl Availability {
     }
 }
 
-/// Scope bar entry. `All` is always first, `App` is always second on the host.
+/// Scope bar entry. Current App is first when it has visible actions; there is no All row.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ScopeEntry {
     pub id: ScopeId,
@@ -157,7 +157,6 @@ pub struct ScopeEntry {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ScopeKind {
-    All,
     App,
     Group,
 }

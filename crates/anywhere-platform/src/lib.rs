@@ -44,6 +44,8 @@ pub enum GitOperation {
     Diff,
 }
 
+/// Directory walk used by the default `installed_applications` implementation.
+mod catalog;
 /// Shared bounded draining of a child process's pipes.
 pub(crate) mod drain;
 /// Shared Git argv and formatting, so both desktop platforms run the same command.
@@ -73,6 +75,27 @@ pub struct GitOutput {
 }
 
 pub trait Platform: Send + Sync {
+    /// Ordered application catalog roots for the default directory walk.
+    ///
+    /// Empty means this host has nothing to walk. Ignored by a platform that
+    /// overrides [`Self::installed_applications`].
+    fn application_roots(&self) -> Vec<PathBuf> {
+        Vec::new()
+    }
+
+    /// Installed applications this host can launch.
+    ///
+    /// This is the swap point for the catalog. The default walks [`Self::application_roots`]
+    /// and identifies each entry with [`Self::bundle_application`]. A later indexer
+    /// (Launch Services, Start Menu APIs, a native database) replaces this method only;
+    /// Core keeps matching, ranking and refresh.
+    ///
+    /// `name` is the title shown to the user and must be the system-language display
+    /// name, not the on-disk file name. Extra lookup names go in `aliases`.
+    fn installed_applications(&self) -> Vec<BundleApplication> {
+        catalog::from_roots(self)
+    }
+
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>>;
     fn application_directory(&self, application: &ApplicationInfo) -> Result<Option<PathBuf>>;
     fn open_url(&self, url: &str) -> Result<()>;
@@ -179,6 +202,7 @@ mod tests {
             }
         }
         let platform = Minimal;
+        assert!(platform.installed_applications().is_empty());
         assert!(platform
             .bundle_application(Path::new("/x.app"))
             .unwrap()

@@ -1,13 +1,37 @@
 //! File actions.
-//!
-//! Actions are declared as a bundle: the group they appear under plus the actions
-//! themselves. Registering the bundle is all it takes for the feature to show up in search
-//! and in the scope bar; nothing in the engine, the search pipeline or the launcher service
-//! knows this feature exists.
+use crate::core::action::availability::AvailabilityRule;
 use crate::core::action::bundle::{ActionBundle, ActionSpec};
-use crate::core::action::descriptor::BuiltinExecutor;
 use crate::core::action::group::groups;
+use crate::core::action::handler::{ActionHandler, ExecutionOutput};
+use crate::core::context::ResolvedContext;
+use anyhow::{Context, Result};
+use anywhere_platform::Platform;
 use anywhere_protocol::*;
+
+struct OpenFile;
+struct RevealFile;
+
+impl ActionHandler for OpenFile {
+    fn execute(
+        &self,
+        context: &ResolvedContext,
+        platform: &dyn Platform,
+    ) -> Result<ExecutionOutput> {
+        platform.open_file(context.value.path().context("file context required")?)?;
+        Ok(ExecutionOutput::dismiss())
+    }
+}
+
+impl ActionHandler for RevealFile {
+    fn execute(
+        &self,
+        context: &ResolvedContext,
+        platform: &dyn Platform,
+    ) -> Result<ExecutionOutput> {
+        platform.reveal_file(context.value.path().context("file context required")?)?;
+        Ok(ExecutionOutput::dismiss())
+    }
+}
 
 pub fn bundle() -> ActionBundle {
     ActionBundle {
@@ -17,7 +41,8 @@ pub fn bundle() -> ActionBundle {
                 id: "core.file.open",
                 title: "Open File",
                 accepts: FILE,
-                executor: BuiltinExecutor::OpenFile,
+                handler: &OpenFile,
+                availability: AvailabilityRule::Enabled,
                 base_priority: 30,
                 icon: "file",
                 aliases: &["open", "edit"],
@@ -27,7 +52,8 @@ pub fn bundle() -> ActionBundle {
                 id: "core.file.reveal",
                 title: "Reveal in File Manager",
                 accepts: FILE,
-                executor: BuiltinExecutor::RevealFile,
+                handler: &RevealFile,
+                availability: AvailabilityRule::Enabled,
                 base_priority: 20,
                 icon: "folder",
                 aliases: &["reveal", "finder", "show"],

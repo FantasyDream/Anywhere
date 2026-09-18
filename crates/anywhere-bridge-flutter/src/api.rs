@@ -1,8 +1,5 @@
 use anyhow::{Context, Result};
-use anywhere_core::{
-    core::action::descriptor::ActionRegistry, persistence::usage::SqliteUsageRepository,
-    Application, LauncherApplication,
-};
+use anywhere_core::{persistence::usage::SqliteUsageRepository, Application, LauncherApplication};
 use anywhere_protocol as protocol;
 use std::{
     path::Path,
@@ -34,7 +31,7 @@ pub fn initialize(data_directory: String, plugin_directory: String) -> Result<()
     std::fs::create_dir_all(data)?;
     let history =
         SqliteUsageRepository::open(&data.join("usage.sqlite3")).context("open usage history")?;
-    let mut registry = ActionRegistry::builtin();
+    let mut registry = anywhere_core::application::composition::builtin_registry();
     let mut diagnostics = Vec::new();
     let user_plugins = data.join("plugins");
     std::fs::create_dir_all(&user_plugins)?;
@@ -71,8 +68,17 @@ fn application() -> Result<&'static Application> {
     APPLICATION.get().context("call initialize first")
 }
 
-pub async fn activate() -> Result<Option<LauncherStateDto>> {
-    Ok(application()?.activate().await?.map(Into::into))
+/// Reserve synchronously so Dart can cancel even before foreground capture finishes.
+#[flutter_rust_bridge::frb(sync)]
+pub fn begin_activation() -> Result<u32> {
+    application()?.begin_activation()
+}
+
+pub async fn activate(session_id: u32) -> Result<Option<LauncherStateDto>> {
+    Ok(application()?
+        .activate_session(session_id)
+        .await?
+        .map(Into::into))
 }
 
 pub async fn update_input(
@@ -119,6 +125,9 @@ pub async fn wait_for_snapshot(session_id: u32, after: u64) -> Result<Option<Lau
     let mut updates = app.state_updates();
     let deadline = tokio::time::Instant::now() + SNAPSHOT_WAIT;
     loop {
+        if !app.is_session_active(session_id) {
+            return Ok(None);
+        }
         if let Some(state) = beyond(app, session_id, after) {
             return Ok(Some(state.into()));
         }
@@ -291,7 +300,6 @@ fn availability_state(state: protocol::AvailabilityState) -> &'static str {
 
 fn scope_kind_name(kind: protocol::ScopeKind) -> &'static str {
     match kind {
-        protocol::ScopeKind::All => "all",
         protocol::ScopeKind::App => "app",
         protocol::ScopeKind::Group => "group",
     }

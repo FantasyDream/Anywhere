@@ -4,15 +4,15 @@
 
 ## GitHub Actions 下载
 
-打开 [Package Windows x64](https://github.com/FantasyDream/Anywhere/actions/workflows/windows.yml)，选择成功的运行，在 Artifacts 下载 `Context-Launcher-Windows-x64`。私有仓库需要登录有访问权限的 GitHub 账户。
+打开 [Package Windows x64](https://github.com/FantasyDream/Anywhere/actions/workflows/windows.yml)，选择成功的运行，在 Artifacts 下载 `Anywhere-Windows-x64`（历史运行可能仍使用 `Context-Launcher-Windows-x64` 名称）。私有仓库需要登录有访问权限的 GitHub 账户。
 
 本次 [Windows x64 产物](https://github.com/FantasyDream/Anywhere/actions/runs/34870418394/artifacts/10359256591) 下载后，解压其中的 `Context-Launcher-Windows-x64.zip`，运行 `context_launcher.exe`。
 
-相关源码推送到 main 会自动构建，也可以选择 Run workflow 手动打包。工作流只编译打包，不运行测试；产物保留 30 天。不要把构建成功标记为全部人工 case 通过。
+相关源码推送到 main 会自动构建，也可以选择 Run workflow 手动打包。当前工作流先在 macOS/Windows 运行 Rust 与 Flutter 校验，通过后再编译打包；这一改动尚未在远端触发验证。产物保留 30 天。不要把构建成功标记为全部人工 case 通过。
 
 ## 本地构建
 
-准备 Windows 10/11 x64、Rust stable MSVC 工具链、Flutter 3.47.x Windows SDK、Visual Studio 2022/Build Tools 的「使用 C++ 的桌面开发」工作负载和 Windows SDK。官方说明见 [Flutter Windows 环境](https://docs.flutter.dev/platform-integration/windows/setup)。当前 runner 使用 Flutter 3.47 的 `set_impeller_switch` API。
+准备 Windows 10/11 x64、Rust stable MSVC 工具链、与 `.flutter-version` 一致的 Flutter stable Windows SDK（当前 3.47.4）、Visual Studio 2022/Build Tools 的「使用 C++ 的桌面开发」工作负载和 Windows SDK。官方说明见 [Flutter Windows 环境](https://docs.flutter.dev/platform-integration/windows/setup)。当前 runner 使用 Flutter 3.47 的 `set_impeller_switch` API。
 
 将源码包完整解压，在仓库根目录的 PowerShell 执行：
 
@@ -23,7 +23,7 @@
 若本机脚本策略要求确认，按本机管理规则运行脚本；不必修改全局策略。该脚本只构建、打包，不运行测试或启动应用。使用现有 PATH 中的 Rust/Flutter，生成：
 
 ```text
-build\Context-Launcher-Windows-x64.zip
+build\Anywhere-Windows-x64.zip
 apps\flutter\build\windows\x64\runner\Release\anywhere.exe
 ```
 

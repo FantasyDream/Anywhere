@@ -43,7 +43,7 @@ impl Application {
                 std::sync::atomic::Ordering::Release,
             );
             // Build seeds from the guard we already hold; `seeds_for` would deadlock here.
-            crate::core::session::manager::seeds_from(&session, &input)
+            crate::application::session_runtime::seeds_from(&session, &input)
         };
         tracing::info!("input_revision_changed");
         tracing::info!(

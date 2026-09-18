@@ -21,6 +21,20 @@ use std::{
 pub struct MacOsPlatform;
 
 impl Platform for MacOsPlatform {
+    fn application_roots(&self) -> Vec<PathBuf> {
+        let mut roots = Vec::new();
+        if let Some(home) = std::env::var_os("HOME") {
+            roots.push(PathBuf::from(home).join("Applications"));
+        }
+        roots.push(PathBuf::from("/Applications"));
+        roots.push(PathBuf::from("/System/Applications"));
+        roots
+    }
+
+    fn installed_applications(&self) -> Vec<BundleApplication> {
+        application::installed_applications(&self.application_roots())
+    }
+
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
         application::frontmost_application()
     }

@@ -7,6 +7,8 @@ if ([System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString
 }
 Push-Location $repo
 try {
+    & python scripts/check-flutter.py
+    if ($LASTEXITCODE -ne 0) { throw 'Flutter SDK version mismatch.' }
     & rustup target add x86_64-pc-windows-msvc
     if ($LASTEXITCODE -ne 0) { throw 'Installing the Rust Windows target failed.' }
     & cargo build --locked --release --target x86_64-pc-windows-msvc -p anywhere-bridge-flutter

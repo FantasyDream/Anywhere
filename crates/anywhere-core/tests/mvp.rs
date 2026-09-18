@@ -5,7 +5,6 @@ use anywhere_core::{
     core::context::provider::{metrics, ContextProvider, ProviderDescriptor},
     core::context::{ContextValue, ExecutionContext, ResolvedContext},
     core::ranking::usage::{MemoryUsage, UsageRepository},
-    features::applications::index::{ApplicationCatalog, IndexedApplication},
     persistence::usage::SqliteUsageRepository,
     Application, LauncherApplication,
 };
@@ -70,6 +69,12 @@ struct TestPlatform {
     capture_delay: Option<Duration>,
     /// Names the fake platform reports as this bundle's localized names.
     localized: Vec<String>,
+    frontmost_gate: Mutex<Option<Arc<CaptureGate>>>,
+    frontmost_started: Notify,
+    catalog_gate: Mutex<Option<Arc<CaptureGate>>>,
+    no_git: bool,
+    git_panics: bool,
+    clipboard_error: bool,
 }
 
 impl TestPlatform {
@@ -99,7 +104,16 @@ impl TestPlatform {
 }
 
 impl Platform for TestPlatform {
+    fn application_roots(&self) -> Vec<PathBuf> {
+        vec![self.directory.clone()]
+    }
+
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
+        let gate = self.frontmost_gate.lock().unwrap().take();
+        if let Some(gate) = gate {
+            self.frontmost_started.notify_one();
+            gate.wait();
+        }
         Ok(Some(ApplicationInfo {
             bundle_id: if self.finder {
                 "com.apple.finder"
@@ -126,6 +140,11 @@ impl Platform for TestPlatform {
         Ok(Some(self.directory.clone()))
     }
     fn bundle_application(&self, bundle: &Path) -> Result<Option<BundleApplication>> {
+        let gate = self.catalog_gate.lock().unwrap().take();
+        if let Some(gate) = gate {
+            gate.wait();
+        }
+
         let stem = bundle
             .file_stem()
             .map(|stem| stem.to_string_lossy().into_owned())
@@ -169,10 +188,16 @@ impl Platform for TestPlatform {
         Ok(Some(vec![0x89, b'P', b'N', b'G']))
     }
     fn clipboard_text(&self) -> Result<Option<String>> {
+        if self.clipboard_error {
+            bail!("read failed");
+        }
         Ok(self.clipboard.lock().unwrap().clone())
     }
     fn git_available(&self) -> bool {
-        true
+        if self.git_panics {
+            panic!("git probe exploded");
+        }
+        !self.no_git
     }
     fn run_git(&self, repository: &Path, operation: GitOperation) -> Result<GitOutput> {
         self.git_calls.fetch_add(1, Ordering::Relaxed);
@@ -229,7 +254,7 @@ impl UsageRepository for SharedHistory {
 }
 
 fn registry() -> ActionRegistry {
-    let mut registry = ActionRegistry::builtin();
+    let mut registry = anywhere_core::application::composition::builtin_registry();
     registry
         .register_plugin(anywhere_plugin::parse_manifest(anywhere_plugin::EXAMPLE_PLUGIN).unwrap())
         .unwrap();
@@ -238,6 +263,277 @@ fn registry() -> ActionRegistry {
 fn app(platform: Arc<TestPlatform>) -> Application {
     Application::new(platform, registry(), Box::<MemoryUsage>::default(), vec![])
 }
+
+#[tokio::test]
+async fn a_slow_activation_cannot_replace_a_newer_activation() {
+    let platform = Arc::new(TestPlatform::default());
+    let gate = CaptureGate::new();
+    *platform.frontmost_gate.lock().unwrap() = Some(gate.clone());
+    let application = Arc::new(app(platform.clone()));
+    let first = tokio::spawn({
+        let application = application.clone();
+        async move { application.activate().await }
+    });
+    platform.frontmost_started.notified().await;
+    let second = application.activate().await.unwrap().unwrap();
+    gate.release();
+    let old = first.await.unwrap().unwrap();
+    assert!(
+        old.is_none(),
+        "an older capture must not create a newer session"
+    );
+    let updated = application
+        .update_input(second.session_id, "https://example.com".into(), 1)
+        .await
+        .unwrap()
+        .expect("the newer activation must remain usable");
+    assert_eq!(updated.session_id, second.session_id);
+}
+
+#[tokio::test]
+async fn an_activation_can_be_cancelled_before_capture_finishes() {
+    let platform = Arc::new(TestPlatform::default());
+    let gate = CaptureGate::new();
+    *platform.frontmost_gate.lock().unwrap() = Some(gate.clone());
+    let application = Arc::new(app(platform.clone()));
+    let session = application.begin_activation().unwrap();
+    let capture = tokio::spawn({
+        let application = application.clone();
+        async move { application.activate_session(session).await }
+    });
+    platform.frontmost_started.notified().await;
+    application.deactivate(session).unwrap();
+    gate.release();
+    assert!(capture.await.unwrap().unwrap().is_none());
+    assert!(application.latest_state(session).is_none());
+    assert!(application
+        .activate_session(session)
+        .await
+        .unwrap()
+        .is_none());
+    let next = application.activate().await.unwrap().unwrap();
+    assert!(next.session_id > session);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_slow_candidate_source_does_not_hold_the_session_lock() {
+    use anywhere_core::core::search::{
+        candidate::Candidate,
+        candidate_source::{CandidateSource, SearchContext},
+    };
+    struct SlowSource {
+        gate: Arc<CaptureGate>,
+        started: Arc<Notify>,
+    }
+    impl CandidateSource for SlowSource {
+        fn candidates(&self, search: &SearchContext<'_>) -> Vec<Candidate> {
+            if search.query.raw_input == "hold" {
+                self.started.notify_one();
+                self.gate.wait();
+            }
+            Vec::new()
+        }
+    }
+    let gate = CaptureGate::new();
+    let started = Arc::new(Notify::new());
+    let mut application = app(Arc::new(TestPlatform::default()));
+    application.register_candidate_source(Arc::new(SlowSource {
+        gate: gate.clone(),
+        started: started.clone(),
+    }));
+    let application = Arc::new(application);
+    let state = application.activate().await.unwrap().unwrap();
+    application.catalog_ready().await;
+    let query = tokio::spawn({
+        let application = application.clone();
+        async move {
+            application
+                .update_input(state.session_id, "hold".into(), 1)
+                .await
+        }
+    });
+    started.notified().await;
+    assert!(
+        application.latest_state(state.session_id).is_none(),
+        "an uncommitted revision must not expose stale candidates"
+    );
+    // A watchdog bounds the failure case: even the old implementation can finish.
+    let (tx, rx) = std::sync::mpsc::channel();
+    let dismiss = std::thread::spawn({
+        let application = application.clone();
+        move || {
+            application.deactivate(state.session_id).unwrap();
+            tx.send(()).unwrap();
+        }
+    });
+    let cancelled = rx.recv_timeout(Duration::from_secs(1));
+    gate.release();
+    dismiss.join().unwrap();
+    let result = query.await.unwrap().unwrap();
+    assert!(
+        cancelled.is_ok(),
+        "cancellation waited for a candidate source"
+    );
+    assert!(
+        result.is_none(),
+        "a calculation cancelled outside the lock still published"
+    );
+}
+
+#[tokio::test]
+async fn history_load_errors_remain_visible_without_preventing_activation() {
+    struct BrokenHistory;
+    impl UsageRepository for BrokenHistory {
+        fn load(&self, _: &str) -> Result<anywhere_core::core::ranking::usage::UsageSnapshot> {
+            bail!("read unavailable")
+        }
+        fn load_global(&self) -> Result<anywhere_core::core::ranking::usage::UsageSnapshot> {
+            bail!("global read unavailable")
+        }
+        fn record(&mut self, _: &str, _: &str, _: &str, _: i64) -> Result<()> {
+            Ok(())
+        }
+    }
+    let application = Application::new(
+        Arc::new(TestPlatform::default()),
+        registry(),
+        Box::new(BrokenHistory),
+        vec![],
+    );
+    let state = application.activate().await.unwrap().unwrap();
+    assert!(state
+        .diagnostics
+        .iter()
+        .any(|message| message.contains("read unavailable")));
+    assert!(state
+        .diagnostics
+        .iter()
+        .any(|message| message.contains("global read unavailable")));
+}
+/// A single-thread runtime must remain able to cancel while storage is blocked.
+#[tokio::test]
+async fn slow_history_does_not_block_async_cancellation() {
+    use anywhere_core::core::ranking::usage::UsageSnapshot;
+    struct SlowHistory {
+        gate: Arc<CaptureGate>,
+        started: Arc<Notify>,
+        entered: std::sync::mpsc::Sender<()>,
+    }
+    impl UsageRepository for SlowHistory {
+        fn load(&self, _: &str) -> Result<UsageSnapshot> {
+            self.entered.send(()).unwrap();
+            self.started.notify_one();
+            self.gate.wait();
+            Ok(UsageSnapshot::new())
+        }
+        fn load_global(&self) -> Result<UsageSnapshot> {
+            Ok(UsageSnapshot::new())
+        }
+        fn record(&mut self, _: &str, _: &str, _: &str, _: i64) -> Result<()> {
+            Ok(())
+        }
+    }
+    let gate = CaptureGate::new();
+    let started = Arc::new(Notify::new());
+    let (entered, enter_rx) = std::sync::mpsc::channel();
+    let (cancelled, cancel_rx) = std::sync::mpsc::channel();
+    let watchdog = std::thread::spawn({
+        let gate = gate.clone();
+        move || {
+            let entered = enter_rx.recv_timeout(Duration::from_secs(5)).is_ok();
+            let responsive = entered && cancel_rx.recv_timeout(Duration::from_secs(1)).is_ok();
+            gate.release();
+            responsive
+        }
+    });
+    let application = Arc::new(Application::new(
+        Arc::new(TestPlatform::default()),
+        registry(),
+        Box::new(SlowHistory {
+            gate,
+            started: started.clone(),
+            entered,
+        }),
+        vec![],
+    ));
+    let session = application.begin_activation().unwrap();
+    let capture = tokio::spawn({
+        let application = application.clone();
+        async move { application.activate_session(session).await }
+    });
+    started.notified().await;
+    application.deactivate(session).unwrap();
+    let _ = cancelled.send(());
+    let responsive = watchdog.join().unwrap();
+    assert!(capture.await.unwrap().unwrap().is_none());
+    assert!(
+        responsive,
+        "history IO prevented the async worker from cancelling"
+    );
+}
+
+/// A new first-party action needs a bundle and handler, not a central dispatch arm.
+#[tokio::test]
+async fn a_registered_handler_executes_through_the_public_facade() {
+    use anywhere_core::core::action::{
+        availability::AvailabilityRule,
+        bundle::ActionSpec,
+        handler::{ActionHandler, ExecutionOutput},
+    };
+    struct Marker;
+    impl ActionHandler for Marker {
+        fn execute(
+            &self,
+            context: &ResolvedContext,
+            platform: &dyn Platform,
+        ) -> Result<ExecutionOutput> {
+            platform.copy_text(&format!("marker:{}", context.value.text()))?;
+            Ok(ExecutionOutput::dismiss())
+        }
+    }
+    let mut registry = registry();
+    registry
+        .register(
+            ActionSpec {
+                id: "test.marker",
+                title: "Marker",
+                accepts: URL,
+                handler: &Marker,
+                availability: AvailabilityRule::Enabled,
+                base_priority: 0,
+                icon: "copy",
+                aliases: &[],
+                keywords: &[],
+            }
+            .descriptor("test"),
+        )
+        .unwrap();
+    let platform = Arc::new(TestPlatform::default());
+    let application = Application::new(
+        platform.clone(),
+        registry,
+        Box::<MemoryUsage>::default(),
+        vec![],
+    );
+    let session = application.activate().await.unwrap().unwrap().session_id;
+    let state = application
+        .update_input(session, "https://example.com".into(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    let result = application
+        .execute(session, 1, candidate(&state, "test.marker"))
+        .await
+        .unwrap();
+    assert!(result.success);
+    assert!(platform
+        .calls
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|(kind, text)| kind == "copy" && text.starts_with("marker:https://example.com")));
+}
+
 fn app_with_budget(platform: Arc<TestPlatform>, budget: Duration) -> Application {
     Application::with_budget(
         platform,
@@ -353,8 +649,8 @@ async fn scenarios_a_to_f_use_the_same_facade_and_executor() {
         titles(&state)[..3],
         ["Open Terminal Here", "Copy Path", "Open Directory"]
     );
-    assert_eq!(scope_ids(&state)[0], "all");
-    assert_eq!(scope_ids(&state)[1], "app");
+    assert_eq!(scope_ids(&state)[0], "app");
+    assert!(!scope_ids(&state).contains(&"all"));
     assert_eq!(
         scope(&state, "app").len(),
         3,
@@ -477,8 +773,10 @@ async fn scenarios_a_to_f_use_the_same_facade_and_executor() {
                 .success
         );
     }
+    let nested = dir.path().join("nested");
+    std::fs::create_dir(&nested).unwrap();
     let directory = app
-        .update_input(session, dir.path().to_string_lossy().into_owned(), 4)
+        .update_input(session, nested.to_string_lossy().into_owned(), 4)
         .await
         .unwrap()
         .unwrap();
@@ -574,6 +872,32 @@ async fn git_directory_offers_git_scope_and_runs_git_only_on_request() {
         assert_eq!(result.output_text.as_deref(), Some(expected));
     }
     assert_eq!(platform.git_calls.load(Ordering::Relaxed), 3);
+}
+
+#[tokio::test]
+async fn session_freezes_scope_order_when_a_group_temporarily_disappears() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    std::fs::create_dir(root.join(".git")).unwrap();
+    let app = app(Arc::new(TestPlatform::new(root, true)));
+    let state = settled(&app, app.activate().await.unwrap().unwrap().session_id, 0).await;
+    let session = state.session_id;
+    assert_eq!(scope_ids(&state), ["app", "git", "folder"]);
+
+    let filtered = app
+        .update_input(session, "copy".into(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!scope_ids(&filtered).contains(&"git"));
+    assert!(scope_ids(&filtered).contains(&"folder"));
+
+    let restored = app
+        .update_input(session, String::new(), 2)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(scope_ids(&restored), ["app", "git", "folder"]);
 }
 
 #[tokio::test]
@@ -721,6 +1045,11 @@ async fn copy_path_is_hidden_when_the_clipboard_already_holds_the_directory() {
         titles(&state)
     );
     assert!(titles(&state).contains(&"Open Terminal Here"));
+    assert!(
+        titles(&state).contains(&"Open Directory"),
+        "{:?}",
+        titles(&state)
+    );
 }
 
 #[tokio::test]
@@ -877,7 +1206,7 @@ async fn activation_loads_history_scoped_to_the_foreground_application() {
             .lock()
             .unwrap()
             .record(
-                "core.directory.open",
+                "core.directory.copy",
                 DIRECTORY,
                 "com.apple.finder",
                 1789445000,
@@ -895,7 +1224,7 @@ async fn activation_loads_history_scoped_to_the_foreground_application() {
     let top = state
         .candidates
         .iter()
-        .find(|candidate| candidate.command_id.as_deref() == Some("core.directory.open"))
+        .find(|candidate| candidate.command_id.as_deref() == Some("core.directory.copy"))
         .expect("the directory actions need an ambient context");
     assert!(
         top.score >= 500.0,
@@ -1016,8 +1345,373 @@ async fn a_disabled_candidate_cannot_execute() {
         .execute(state.session_id, state.revision, status.id.clone())
         .await
         .unwrap_err();
-    assert!(error.to_string().contains("git is not installed"));
+    assert!(error.to_string().contains("Git 不可用"));
     assert_eq!(inner.git_calls.load(Ordering::Relaxed), 0);
+}
+
+const WRAP_PLUGIN: &str = r#"
+protocol_version = 1
+id = "wrap"
+name = "Wrap"
+
+[[commands]]
+id = "status"
+title = "Wrapped Git Status"
+accepts = ["git.repository"]
+action = { type = "execute_builtin", command_id = "core.git.status" }
+
+[[commands]]
+id = "copy"
+title = "Wrapped Copy"
+accepts = ["core.directory"]
+action = { type = "execute_builtin", command_id = "core.directory.copy" }
+
+[[commands]]
+id = "pretty"
+title = "Pretty JSON"
+accepts = ["core.json"]
+action = { type = "execute_builtin", command_id = "core.json.format" }
+"#;
+
+fn registry_with_wrap() -> ActionRegistry {
+    let mut registry = registry();
+    registry
+        .register_plugin(anywhere_plugin::parse_manifest(WRAP_PLUGIN).unwrap())
+        .unwrap();
+    registry
+}
+
+#[tokio::test]
+async fn wrapping_a_git_action_is_disabled_when_git_is_unavailable() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    std::fs::create_dir(root.join(".git")).unwrap();
+    let platform = Arc::new(TestPlatform {
+        no_git: true,
+        ..TestPlatform::new(root, true)
+    });
+    let app = Application::new(
+        platform.clone(),
+        registry_with_wrap(),
+        Box::<MemoryUsage>::default(),
+        vec![],
+    );
+    let state = settled(&app, app.activate().await.unwrap().unwrap().session_id, 0).await;
+    for command in ["core.git.status", "wrap.status"] {
+        let status = state
+            .candidates
+            .iter()
+            .find(|candidate| candidate.command_id.as_deref() == Some(command))
+            .unwrap_or_else(|| panic!("missing {command}"));
+        assert_eq!(status.availability.state, AvailabilityState::Disabled);
+        let error = app
+            .execute(state.session_id, state.revision, status.id.clone())
+            .await
+            .unwrap_err();
+        assert!(
+            error.to_string().contains("Git 不可用"),
+            "{command}: {error}"
+        );
+    }
+    assert_eq!(platform.git_calls.load(Ordering::Relaxed), 0);
+}
+
+#[tokio::test]
+async fn wrapping_copy_path_is_hidden_when_the_clipboard_already_holds_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    let platform = Arc::new(TestPlatform {
+        clipboard: Mutex::new(Some(root.to_string_lossy().into_owned())),
+        ..TestPlatform::new(root, true)
+    });
+    let app = Application::new(
+        platform,
+        registry_with_wrap(),
+        Box::<MemoryUsage>::default(),
+        vec![],
+    );
+    let state = settled(&app, app.activate().await.unwrap().unwrap().session_id, 0).await;
+    let visible = state
+        .candidates
+        .iter()
+        .filter(|candidate| candidate.kind == CandidateKind::Action)
+        .filter_map(|candidate| candidate.command_id.as_deref())
+        .collect::<Vec<_>>();
+    assert!(!visible.contains(&"core.directory.copy"), "{visible:?}");
+    assert!(!visible.contains(&"wrap.copy"), "{visible:?}");
+    let searched = app
+        .update_input(state.session_id, "copy".into(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    let searched = searched
+        .candidates
+        .iter()
+        .filter_map(|candidate| candidate.command_id.as_deref())
+        .collect::<Vec<_>>();
+    assert!(!searched.contains(&"core.directory.copy"), "{searched:?}");
+    assert!(!searched.contains(&"wrap.copy"), "{searched:?}");
+}
+
+#[tokio::test]
+async fn wrapping_json_keeps_plugin_identity_and_records_usage() {
+    let history = Arc::new(Mutex::new(MemoryUsage::default()));
+    let app = Application::new(
+        Arc::new(TestPlatform::default()),
+        registry_with_wrap(),
+        Box::new(SharedHistory(history.clone())),
+        vec![],
+    );
+    let session = app.activate().await.unwrap().unwrap().session_id;
+    let json = app
+        .update_input(session, r#"{"a":1}"#.into(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    let pretty = json
+        .candidates
+        .iter()
+        .find(|candidate| candidate.command_id.as_deref() == Some("wrap.pretty"))
+        .expect("wrapped json action");
+    assert_eq!(pretty.title, "Pretty JSON");
+    assert!(pretty
+        .subtitle
+        .as_deref()
+        .is_some_and(|subtitle| subtitle.contains("Wrap")));
+    assert!(
+        app.execute(session, json.revision, pretty.id.clone())
+            .await
+            .unwrap()
+            .success
+    );
+    let recorded = history
+        .lock()
+        .unwrap()
+        .0
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    assert!(
+        recorded
+            .iter()
+            .any(|(action, kind, _)| { action == "wrap.pretty" && kind == JSON_DOCUMENT }),
+        "{recorded:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_disabled_text_fallback_cannot_execute() {
+    use anywhere_core::core::action::{
+        availability::AvailabilityRule,
+        bundle::ActionSpec,
+        handler::{ActionHandler, ExecutionOutput},
+    };
+    struct Marker;
+    impl ActionHandler for Marker {
+        fn execute(
+            &self,
+            context: &ResolvedContext,
+            platform: &dyn Platform,
+        ) -> Result<ExecutionOutput> {
+            platform.copy_text(&format!("marker:{}", context.value.text()))?;
+            Ok(ExecutionOutput::dismiss())
+        }
+    }
+    let mut registry = registry();
+    registry
+        .register(
+            ActionSpec {
+                id: "test.text.require",
+                title: "Need Git Text",
+                accepts: TEXT,
+                handler: &Marker,
+                availability: AvailabilityRule::require(
+                    anywhere_core::core::session::facts::GIT,
+                    "git is not installed",
+                ),
+                base_priority: 0,
+                icon: "copy",
+                aliases: &[],
+                keywords: &[],
+            }
+            .descriptor("test"),
+        )
+        .unwrap();
+    let platform = Arc::new(TestPlatform {
+        no_git: true,
+        ..TestPlatform::default()
+    });
+    let app = Application::new(
+        platform.clone(),
+        registry,
+        Box::<MemoryUsage>::default(),
+        vec![],
+    );
+    let session = app.activate().await.unwrap().unwrap().session_id;
+    let state = app
+        .update_input(session, "zzzznotaname".into(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    let fallback = state
+        .candidates
+        .iter()
+        .find(|candidate| candidate.command_id.as_deref() == Some("test.text.require"))
+        .expect("disabled text fallback stays visible");
+    assert_eq!(fallback.availability.state, AvailabilityState::Disabled);
+    let error = app
+        .execute(session, state.revision, fallback.id.clone())
+        .await
+        .unwrap_err();
+    assert!(
+        error.to_string().contains("git is not installed"),
+        "{error}"
+    );
+    assert!(platform.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn git_false_and_missing_use_different_disabled_reasons() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    std::fs::create_dir(root.join(".git")).unwrap();
+    let unavailable = Arc::new(TestPlatform {
+        no_git: true,
+        ..TestPlatform::new(root.clone(), true)
+    });
+    let unavailable_app = app(unavailable);
+    let state = settled(
+        &unavailable_app,
+        unavailable_app
+            .activate()
+            .await
+            .unwrap()
+            .unwrap()
+            .session_id,
+        0,
+    )
+    .await;
+    let status = state
+        .candidates
+        .iter()
+        .find(|candidate| candidate.command_id.as_deref() == Some("core.git.status"))
+        .unwrap();
+    assert_eq!(status.availability.state, AvailabilityState::Disabled);
+    assert_eq!(status.availability.reason.as_deref(), Some("Git 不可用"));
+
+    let missing = Arc::new(TestPlatform {
+        git_panics: true,
+        ..TestPlatform::new(root, true)
+    });
+    let missing_app = app(missing);
+    let state = settled(
+        &missing_app,
+        missing_app.activate().await.unwrap().unwrap().session_id,
+        0,
+    )
+    .await;
+    let status = state
+        .candidates
+        .iter()
+        .find(|candidate| candidate.command_id.as_deref() == Some("core.git.status"))
+        .unwrap();
+    assert_eq!(status.availability.state, AvailabilityState::Disabled);
+    assert_eq!(
+        status.availability.reason.as_deref(),
+        Some("无法确认 Git 是否可用")
+    );
+    assert!(
+        state
+            .diagnostics
+            .iter()
+            .any(|diagnostic| diagnostic.contains("git")),
+        "{:?}",
+        state.diagnostics
+    );
+}
+
+#[tokio::test]
+async fn clipboard_absence_or_read_failure_does_not_hide_copy_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    let missing = Arc::new(TestPlatform::new(root.clone(), true));
+    let missing_app = app(missing);
+    let state = settled(
+        &missing_app,
+        missing_app.activate().await.unwrap().unwrap().session_id,
+        0,
+    )
+    .await;
+    assert!(
+        titles(&state).contains(&"Copy Path"),
+        "{:?}",
+        titles(&state)
+    );
+
+    let failed = Arc::new(TestPlatform {
+        clipboard_error: true,
+        clipboard: Mutex::new(Some("secret-clipboard-body".into())),
+        ..TestPlatform::new(root, true)
+    });
+    let failed_app = app(failed);
+    let state = settled(
+        &failed_app,
+        failed_app.activate().await.unwrap().unwrap().session_id,
+        0,
+    )
+    .await;
+    assert!(
+        titles(&state).contains(&"Copy Path"),
+        "{:?}",
+        titles(&state)
+    );
+    assert!(
+        state.diagnostics.iter().any(
+            |diagnostic| diagnostic.contains("clipboard") && diagnostic.contains("read failed")
+        ),
+        "{:?}",
+        state.diagnostics
+    );
+    assert!(
+        state
+            .diagnostics
+            .iter()
+            .all(|diagnostic| !diagnostic.contains("secret-clipboard-body")),
+        "{:?}",
+        state.diagnostics
+    );
+}
+
+#[tokio::test]
+async fn a_session_keeps_captured_facts_until_the_next_activation() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    std::fs::create_dir(root.join(".git")).unwrap();
+    let platform = Arc::new(TestPlatform::new(root.clone(), true));
+    let app = app(platform.clone());
+    let first = settled(&app, app.activate().await.unwrap().unwrap().session_id, 0).await;
+    assert!(titles(&first).contains(&"Copy Path"));
+    let git = first
+        .candidates
+        .iter()
+        .find(|candidate| candidate.command_id.as_deref() == Some("core.git.status"))
+        .unwrap();
+    assert_eq!(git.availability.state, AvailabilityState::Enabled);
+
+    *platform.clipboard.lock().unwrap() = Some(root.to_string_lossy().into_owned());
+    let same = app
+        .update_input(first.session_id, String::new(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(titles(&same).contains(&"Copy Path"), "{:?}", titles(&same));
+
+    let second = settled(&app, app.activate().await.unwrap().unwrap().session_id, 0).await;
+    assert!(
+        !titles(&second).contains(&"Copy Path"),
+        "{:?}",
+        titles(&second)
+    );
 }
 
 struct DelayedProvider {
@@ -1608,22 +2302,15 @@ async fn a_slow_directory_capture_still_shows_context_actions_without_typing() {
 #[tokio::test]
 async fn an_index_that_arrives_late_reaches_the_settled_snapshot() {
     let dir = tempfile::tempdir().unwrap();
-    // The real bundle roots are scanned, so the query below is matched against this
-    // machine's applications. `chrome` is present on any developer machine and was the
-    // reported case; the assertion only needs one application candidate to appear.
+    std::fs::create_dir_all(dir.path().join("Google Chrome.app/Contents")).unwrap();
+    let gate = CaptureGate::new();
     let platform = Arc::new(TestPlatform {
-        capture_delay: Some(Duration::from_millis(60)),
+        catalog_gate: Mutex::new(Some(gate.clone())),
         ..TestPlatform::new(dir.path().canonicalize().unwrap(), false)
     });
-    // A zero budget is what makes the premise deterministic rather than usually true: the
-    // scan walks the real bundle roots and takes tens of milliseconds, so activation has to
-    // return without waiting for anything for the window below to be reliably open.
     let app =
         Arc::new(app_with_budget(platform, Duration::ZERO).with_content_grace(Duration::ZERO));
     let mut index = app.index_updates();
-    // Publish a catalog the scan will replace, so the search below really does run against an
-    // index that does not yet contain the query's application.
-    *app.resolver.catalog.lock().unwrap() = ApplicationCatalog::new(Vec::new());
     let first = app.activate().await.unwrap().unwrap();
     assert!(
         !first
@@ -1646,6 +2333,7 @@ async fn an_index_that_arrives_late_reaches_the_settled_snapshot() {
         "the query ran before the index was published: {searched:?}"
     );
 
+    gate.release();
     // The index arrives, and the rebuild republishes revision 1 with it.
     tokio::time::timeout(Duration::from_secs(10), index.changed())
         .await
@@ -1712,7 +2400,7 @@ async fn first_snapshot_waits_for_the_step_after_the_directory() {
         .collect::<Vec<_>>();
     assert_eq!(
         scope_ids,
-        ["all", "app", "git", "folder"],
+        ["app", "git", "folder"],
         "the scope bar must match the documented order"
     );
     assert!(state.context_complete, "one snapshot should be enough here");
@@ -1910,7 +2598,7 @@ fn application_matching_is_not_charged_to_ranking() {
             impl tracing::field::Visit for Visitor<'_> {
                 fn record_u64(&mut self, field: &tracing::field::Field, value: u64) {
                     match field.name() {
-                        "applications_duration" => {
+                        "sources_duration" => {
                             self.0.applications.store(value, AtomicOrdering::Relaxed);
                         }
                         "ranking_duration" => {
@@ -1931,6 +2619,10 @@ fn application_matching_is_not_charged_to_ranking() {
         .unwrap();
     runtime.block_on(async {
         let dir = tempfile::tempdir().unwrap();
+        for index in 0..2_000 {
+            std::fs::create_dir_all(dir.path().join(format!("Example Application {index}.app")))
+                .unwrap();
+        }
         let app = app(Arc::new(TestPlatform::new(
             dir.path().canonicalize().unwrap(),
             false,
@@ -1942,18 +2634,6 @@ fn application_matching_is_not_charged_to_ranking() {
         app.catalog_ready().await;
         // A real-sized index: the application phase has to be measurable for the split to
         // mean anything.
-        *app.resolver.catalog.lock().unwrap() = ApplicationCatalog::new(
-            (0..2_000)
-                .map(|index| IndexedApplication {
-                    bundle_id: format!("com.example.application{index}"),
-                    name: format!("Example Application {index}"),
-                    path: format!("/Applications/Example {index}.app"),
-                    aliases: vec![format!("app{index}")],
-                    keywords: vec!["example".into()],
-                })
-                .collect(),
-        );
-
         let durations = Arc::new(Durations::default());
         {
             use tracing_subscriber::layer::SubscriberExt;

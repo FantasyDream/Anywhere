@@ -3,7 +3,7 @@
 //! Deliberately separate from the [`Application`](crate::application::launcher_service::Application)
 //! facade so a background completion task can own a clone and publish late context
 //! without borrowing the facade.
-use super::LauncherSession;
+use super::session_model::LauncherSession;
 use crate::{
     core::action::descriptor::ActionRegistry,
     core::context::engine::{stamp, ContextGraph, ContextGraphRun, GraphStep},
@@ -12,14 +12,11 @@ use crate::{
     core::context::{ExecutionContext, ResolvedContext},
     core::ranking::usage::UsageRepository,
     core::search::candidate_source::CandidateSource,
-    core::search::engine::SearchEngine,
+    core::search::engine::ActionSearch,
     core::search::query::Query,
-    core::session::facts::SessionFacts,
-    features::applications::index::{ApplicationCatalog, IndexedApplication},
-    features::filesystem::provider::CurrentDirectoryProvider,
+    features::applications::index::ApplicationCatalog,
 };
 use anyhow::{anyhow, Result};
-use anywhere_platform::Platform;
 use anywhere_protocol::*;
 use std::{
     sync::{
@@ -33,15 +30,15 @@ use tokio::sync::{broadcast, watch};
 /// Cloneable engine shared by the facade and its background completion tasks.
 #[derive(Clone)]
 pub struct Resolver {
-    pub platform: Arc<dyn Platform>,
     pub registry: Arc<ActionRegistry>,
     /// Stateless providers; the directory provider is added per revision.
     pub providers: ContextProviderRegistry,
+    pub sources: Vec<Arc<dyn CandidateSource + Send + Sync>>,
     pub session: Arc<Mutex<LauncherSession>>,
     pub current: Arc<AtomicU64>,
     pub events: broadcast::Sender<LauncherEvent>,
     pub latest_tx: watch::Sender<Option<Arc<LauncherState>>>,
-    pub catalog: Arc<Mutex<ApplicationCatalog>>,
+    pub catalog: Arc<Mutex<Arc<ApplicationCatalog>>>,
     pub catalog_rx: watch::Receiver<bool>,
     pub history: Arc<Mutex<Box<dyn UsageRepository>>>,
 }
@@ -57,29 +54,19 @@ pub struct Resolution {
 }
 
 impl Resolver {
-    pub fn new(
-        platform: Arc<dyn Platform>,
-        registry: ActionRegistry,
-        history: Box<dyn UsageRepository>,
-    ) -> Self {
+    pub fn new(registry: ActionRegistry, history: Box<dyn UsageRepository>) -> Self {
         let (latest_tx, _) = watch::channel(None);
         let (_, catalog_rx) = watch::channel(false);
         Self {
-            platform,
             registry: Arc::new(registry),
             // Registration order does not matter: the registry sorts by priority, then id.
-            providers: {
-                let mut providers = ContextProviderRegistry::default();
-                for provider in crate::features::builtin_providers() {
-                    let _ = providers.register(provider);
-                }
-                providers
-            },
+            providers: super::composition::builtin_providers(),
+            sources: Vec::new(),
             session: Arc::new(Mutex::new(LauncherSession::default())),
             current: Arc::new(AtomicU64::new(0)),
             events: broadcast::channel(256).0,
             latest_tx,
-            catalog: Arc::new(Mutex::new(ApplicationCatalog::empty())),
+            catalog: Arc::new(Mutex::new(Arc::new(ApplicationCatalog::empty()))),
             catalog_rx,
             history: Arc::new(Mutex::new(history)),
         }
@@ -87,11 +74,6 @@ impl Resolver {
 
     pub fn register_provider(&mut self, provider: Arc<dyn ContextProvider>) -> Result<()> {
         self.providers.register(provider)
-    }
-
-    /// The providers every session gets, in the order the registry will run them.
-    pub fn provider_ids(&self) -> Vec<&str> {
-        self.providers.ids()
     }
 
     pub fn execution(&self, session_id: SessionId, revision: Revision) -> ExecutionContext {
@@ -107,11 +89,15 @@ impl Resolver {
         self.current.load(Ordering::Acquire) == stamp(session_id, revision)
     }
 
+    pub fn is_session_active(&self, session_id: SessionId) -> bool {
+        let current = self.current.load(Ordering::Acquire);
+        current != 0 && (current >> 32) == u64::from(session_id)
+    }
+
     /// Wait until the background application scan has published its catalog.
     ///
-    /// Checks the current value before waiting: the sender only ever goes `false → true`,
-    /// so a receiver that subscribed after the scan finished would see no further change
-    /// and wait out the whole timeout for a catalog it already has.
+    /// Checks the current value before waiting: `false` means no scan has finished,
+    /// so a receiver that subscribed after the first scan would otherwise wait forever.
     pub async fn catalog_ready(&self) {
         let mut rx = self.catalog_rx.clone();
         if !*rx.borrow_and_update() {
@@ -119,11 +105,8 @@ impl Resolver {
         }
     }
 
-    pub fn catalog_applications(&self) -> Vec<IndexedApplication> {
-        self.catalog
-            .lock()
-            .map(|catalog| catalog.applications().to_vec())
-            .unwrap_or_default()
+    pub fn catalog_snapshot(&self) -> Arc<ApplicationCatalog> {
+        self.catalog.lock().expect("catalog lock poisoned").clone()
     }
 
     /// Revision currently published for the live session, if any.
@@ -139,7 +122,7 @@ impl Resolver {
     /// host's late-update path observes. Returns the new snapshot, or `None` when no
     /// revision is committed or it is no longer current.
     pub fn recompute_current(&self, session_id: SessionId) -> Option<LauncherState> {
-        let (revision, contexts, complete, diagnostics) = {
+        let (revision, contexts, complete) = {
             let session = self.session.lock().ok()?;
             if session.state.session_id != session_id {
                 return None;
@@ -152,30 +135,18 @@ impl Resolver {
                 revision,
                 session.committed_contexts.clone(),
                 session.state.context_complete,
-                session.state.diagnostics.clone(),
             )
         };
-        let state = self
-            .commit(
-                session_id,
-                revision,
-                contexts,
-                Vec::new(),
-                complete,
-                Instant::now(),
-            )
-            .ok()
-            .flatten();
-        // `commit` appends diagnostics; this pass added none, so keep the published list
-        // from growing on every re-match.
-        if state.is_some() {
-            if let Ok(mut session) = self.session.lock() {
-                if session.state.session_id == session_id && session.state.revision == revision {
-                    session.state.diagnostics = diagnostics;
-                }
-            }
-        }
-        state
+        self.commit(
+            session_id,
+            revision,
+            contexts,
+            Vec::new(),
+            complete,
+            Instant::now(),
+        )
+        .ok()
+        .flatten()
     }
 
     /// Providers for one revision: stateless built-ins plus the directory memo.
@@ -186,12 +157,7 @@ impl Resolver {
             .ok()
             .filter(|session| session.state.session_id == session_id)
             .and_then(|session| session.directory.clone());
-        let mut providers = self.providers.clone();
-        if let Some(directory) = directory {
-            // The one per-session provider: the capture it wraps is bound to this session.
-            let _ = providers.register(Arc::new(CurrentDirectoryProvider::new(directory)));
-        }
-        providers.providers().to_vec()
+        super::composition::session_providers(self.providers.clone(), directory)
     }
 
     pub fn build_run(
@@ -325,7 +291,7 @@ impl Resolver {
         if session.state.session_id != session_id {
             return None;
         }
-        Some(crate::core::session::manager::seeds_from(&session, input))
+        Some(super::composition::session_seeds(&session, input))
     }
 
     /// Publish a snapshot. `None` means this session/revision is no longer current,
@@ -339,205 +305,198 @@ impl Resolver {
         resolve_complete: bool,
         started: Instant,
     ) -> Result<Option<LauncherState>> {
-        if !self.is_current(session_id, revision) {
-            tracing::info!(session_id, revision, "snapshot_discarded");
-            return Ok(None);
-        }
-        let mut session = self
-            .session
-            .lock()
-            .map_err(|_| anyhow!("session lock poisoned"))?;
-        // Re-check under the lock: the revision that superseded this one may have taken
-        // the lock first, in which case publishing here would overwrite a newer state
-        // with an older revision's contexts.
-        if session.state.session_id != session_id
-            || session.state.revision != revision
-            || !self.is_current(session_id, revision)
-        {
-            tracing::info!(session_id, revision, "snapshot_discarded_under_lock");
-            return Ok(None);
-        }
-        // Matching always runs again, even for a revision that is already published with a
-        // complete context: the matcher reads sources outside the context graph — the
-        // application index arriving after the first snapshot is the reason — and a
-        // re-publish is the only way a snapshot that was built before such a source
-        // existed can carry it. The contexts themselves are de-duplicated by
-        // `published_contexts`, so a repeat of the same context never double-counts.
-        if session.committed_revision == Some(revision) {
-            let incoming = visible_contexts(&contexts).len();
-            let added = incoming.saturating_sub(session.published_contexts);
-            if added > 0 {
-                tracing::info!(
-                    session_id,
-                    revision,
-                    late_context_count = added,
-                    "late_context_appended"
-                );
+        let mut contexts = contexts;
+        let mut resolve_complete = resolve_complete;
+        loop {
+            // Take only immutable inputs while holding the session lock. Search and
+            // sorting can be slow; new input and cancellation must remain able to run.
+            let (input, facts, usage, app_usage, expected_sequence) = {
+                let session = self
+                    .session
+                    .lock()
+                    .map_err(|_| anyhow!("session lock poisoned"))?;
+                if session.state.session_id != session_id
+                    || session.state.revision != revision
+                    || !self.is_current(session_id, revision)
+                {
+                    return Ok(None);
+                }
+                if session.committed_revision == Some(revision) {
+                    // A source refresh may have captured contexts before a late pass
+                    // completed. Never replace those richer contexts with an old copy.
+                    if session.committed_contexts.len() > contexts.len()
+                        || (session.state.context_complete && !resolve_complete)
+                    {
+                        contexts = session.committed_contexts.clone();
+                    }
+                    resolve_complete |= session.state.context_complete;
+                }
+                (
+                    session.state.input.clone(),
+                    session.facts(),
+                    session.usage.clone(),
+                    session.app_usage.clone(),
+                    session.snapshot_seq,
+                )
+            };
+            let query = Query::parse(&input);
+            let catalog = self.catalog_snapshot();
+            let usage_of = |command: &str, kind: &str| {
+                usage
+                    .get(&(command.to_owned(), kind.to_owned()))
+                    .copied()
+                    .unwrap_or_default()
+            };
+            let app_usage_of = |command: &str, kind: &str| {
+                app_usage
+                    .get(&(command.to_owned(), kind.to_owned()))
+                    .copied()
+                    .unwrap_or_default()
+            };
+            let search = ActionSearch::new(&self.registry, &usage_of, &facts, now());
+            let application_source =
+                super::composition::catalog_source(&catalog, &app_usage_of, now());
+            let mut extra: Vec<&dyn CandidateSource> = vec![&application_source];
+            extra.extend(
+                self.sources
+                    .iter()
+                    .map(|source| source.as_ref() as &dyn CandidateSource),
+            );
+            let set = search.search(&query, &contexts, &extra);
+
+            let mut session = self
+                .session
+                .lock()
+                .map_err(|_| anyhow!("session lock poisoned"))?;
+            if session.state.session_id != session_id
+                || session.state.revision != revision
+                || !self.is_current(session_id, revision)
+            {
+                return Ok(None);
             }
-        }
-        // Cache only the *ambient* environment so the next revision needs no OS work.
-        //
-        // A directory or repository the user typed is an input, not the environment:
-        // caching it made a later query seed from the previous input, so a path typed
-        // once kept contributing its actions (and its execution target) afterwards.
-        // Input-derived context is rebuilt from the input on every revision.
-        for context in &contexts {
-            if context.type_id != DIRECTORY && context.type_id != GIT_REPOSITORY {
+            if session.snapshot_seq != expected_sequence {
+                // Another commit won for this same revision. Recompute from its latest
+                // state instead of losing enrichment or publishing out of order.
                 continue;
             }
-            if context.source == ContextSource::UserInput {
-                continue;
+            for context in &contexts {
+                if !matches!(context.type_id.as_str(), DIRECTORY | GIT_REPOSITORY)
+                    || context.source == ContextSource::UserInput
+                {
+                    continue;
+                }
+                if !session.context_cache.iter().any(|cached| {
+                    cached.type_id == context.type_id && cached.value.text() == context.value.text()
+                }) {
+                    session.context_cache.push(context.clone());
+                }
             }
-            let known = session.context_cache.iter().any(|cached| {
-                cached.type_id == context.type_id && cached.value.text() == context.value.text()
+            let mut all_diagnostics = session.state.diagnostics.clone();
+            for diagnostic in &diagnostics {
+                if !all_diagnostics.contains(diagnostic) {
+                    all_diagnostics.push(diagnostic.clone());
+                }
+            }
+            session.snapshot_seq = session.snapshot_seq.saturating_add(1);
+            let sequence = session.snapshot_seq;
+            let summary = visible_contexts(&contexts);
+            let late_contexts = summary.len().saturating_sub(session.published_contexts);
+            session.published_contexts = summary.len();
+            let scopes = crate::core::search::scope::apply_session_order(
+                set.scopes,
+                &mut session.frozen_scope_ids,
+            );
+            let state = LauncherState {
+                session_id,
+                revision,
+                snapshot_seq: sequence,
+                input: session.state.input.clone(),
+                context_complete: resolve_complete,
+                context_summary: summary,
+                candidates: set
+                    .candidates
+                    .iter()
+                    .map(|candidate| candidate.presentation.clone())
+                    .collect(),
+                scopes,
+                diagnostics: all_diagnostics,
+            };
+            session.committed_revision = Some(revision);
+            session.committed_contexts = contexts;
+            session.state = state.clone();
+            session.state_candidates = set
+                .candidates
+                .iter()
+                .map(|candidate| (candidate.presentation.id.clone(), candidate.clone()))
+                .collect();
+            session.candidates_revision = Some(revision);
+            // `first_snapshot` marks the snapshot the caller's budget produced; its
+            // duration is the spec's `first_snapshot_duration`.
+            let is_first_snapshot = sequence == 1;
+            tracing::info!(
+                session_id,
+                revision,
+                snapshot_seq = sequence,
+                complete = resolve_complete,
+                first_snapshot = is_first_snapshot,
+                candidates = state.candidates.len(),
+                contexts = state.context_summary.len(),
+                scope_ids = ?state
+                    .scopes
+                    .iter()
+                    .map(|scope| scope.id.as_str())
+                    .collect::<Vec<_>>(),
+                scope_candidates = ?state
+                    .scopes
+                    .iter()
+                    .map(|scope| scope.candidate_ids.len())
+                    .collect::<Vec<_>>(),
+                candidate_kinds = ?state
+                    .candidates
+                    .iter()
+                    .map(|candidate| candidate.kind)
+                    .collect::<Vec<_>>(),
+                // Ranked head, so a ranking question can be answered from the log
+                // instead of by reproducing the exact usage history by hand.
+                top_candidates = ?state
+                    .candidates
+                    .iter()
+                    .take(6)
+                    .map(|candidate| format!("{}={:.0}", candidate.title, candidate.score))
+                    .collect::<Vec<_>>(),
+                late_context_count = late_contexts,
+                first_snapshot_duration = if is_first_snapshot {
+                    started.elapsed().as_micros() as u64
+                } else {
+                    0
+                },
+                duration_us = started.elapsed().as_micros() as u64,
+                "snapshot_committed"
+            );
+            // The matcher times itself, so this is the candidate work alone and not the
+            // session lock or the snapshot bookkeeping around it. The application index is
+            // reported separately: matching installed applications is the same kind of work as
+            // matching actions, and folding it into `ranking_duration` made that number
+            // describe sorting when it was really measuring a name search.
+            tracing::info!(
+                session_id,
+                revision,
+                matcher_duration = set.matcher_us,
+                sources_duration = set.sources_us,
+                "matcher_completed"
+            );
+            tracing::info!(
+                session_id,
+                revision,
+                ranking_duration = set.ranking_us,
+                "ranking_completed"
+            );
+            self.latest_tx.send_replace(Some(Arc::new(state.clone())));
+            let _ = self.events.send(LauncherEvent::ActionsUpdated {
+                state: state.clone(),
             });
-            if !known {
-                session.context_cache.push(context.clone());
-            }
+            return Ok(Some(state));
         }
-        // Activation decides this up front, because history is read before the first
-        // commit. This stays as the fallback for a session created without a frontmost
-        // application.
-        if session.source_app.is_empty() {
-            session.source_app = session
-                .frontmost
-                .as_ref()
-                .map(|application| application.bundle_id.clone())
-                .unwrap_or_default();
-        }
-        let query = Query::parse(&session.state.input);
-        let facts = SessionFacts {
-            clipboard_text: session.clipboard.clone(),
-            git_available: session.git_available,
-            frontmost: session.frontmost.clone(),
-        };
-        let applications = self.catalog_applications();
-        let usage = session.usage.clone();
-        let app_usage = session.app_usage.clone();
-        let usage_of = |command: &str, kind: &str| {
-            usage
-                .get(&(command.to_owned(), kind.to_owned()))
-                .copied()
-                .unwrap_or_default()
-        };
-        let app_usage_of = |command: &str, kind: &str| {
-            app_usage
-                .get(&(command.to_owned(), kind.to_owned()))
-                .copied()
-                .unwrap_or_default()
-        };
-        let engine = SearchEngine {
-            registry: &self.registry,
-            usage: &usage_of,
-            facts: &facts,
-            now: now(),
-        };
-        // The application index is a candidate source like any other; the engine is handed
-        // the sources rather than naming them.
-        let application_source = crate::features::applications::source::ApplicationSource {
-            applications: &applications,
-            app_usage: &app_usage_of,
-            now: now(),
-        };
-        let sources: [&dyn CandidateSource; 1] = [&application_source];
-        let set = engine.search(&query, &contexts, &sources);
-        let mut all_diagnostics = session.state.diagnostics.clone();
-        all_diagnostics.extend(diagnostics);
-        session.snapshot_seq = session.snapshot_seq.saturating_add(1);
-        let sequence = session.snapshot_seq;
-        let summary = visible_contexts(&contexts);
-        let late_contexts = summary.len().saturating_sub(session.published_contexts);
-        session.published_contexts = summary.len();
-        let state = LauncherState {
-            session_id,
-            revision,
-            snapshot_seq: sequence,
-            input: session.state.input.clone(),
-            context_complete: resolve_complete,
-            context_summary: summary,
-            candidates: set
-                .candidates
-                .iter()
-                .map(|candidate| candidate.presentation.clone())
-                .collect(),
-            scopes: set.scopes.clone(),
-            diagnostics: all_diagnostics,
-        };
-        session.committed_revision = Some(revision);
-        session.committed_contexts = contexts;
-        session.state = state.clone();
-        session.state_candidates = set
-            .candidates
-            .iter()
-            .map(|candidate| (candidate.presentation.id.clone(), candidate.clone()))
-            .collect();
-        session.candidates_revision = Some(revision);
-        // `first_snapshot` marks the snapshot the caller's budget produced; its
-        // duration is the spec's `first_snapshot_duration`.
-        let is_first_snapshot = sequence == 1;
-        tracing::info!(
-            session_id,
-            revision,
-            snapshot_seq = sequence,
-            complete = resolve_complete,
-            first_snapshot = is_first_snapshot,
-            candidates = state.candidates.len(),
-            contexts = state.context_summary.len(),
-            scope_ids = ?state
-                .scopes
-                .iter()
-                .map(|scope| scope.id.as_str())
-                .collect::<Vec<_>>(),
-            scope_candidates = ?state
-                .scopes
-                .iter()
-                .map(|scope| scope.candidate_ids.len())
-                .collect::<Vec<_>>(),
-            candidate_kinds = ?state
-                .candidates
-                .iter()
-                .map(|candidate| candidate.kind)
-                .collect::<Vec<_>>(),
-            // Ranked head, so a ranking question can be answered from the log
-            // instead of by reproducing the exact usage history by hand.
-            top_candidates = ?state
-                .candidates
-                .iter()
-                .take(6)
-                .map(|candidate| format!("{}={:.0}", candidate.title, candidate.score))
-                .collect::<Vec<_>>(),
-            late_context_count = late_contexts,
-            first_snapshot_duration = if is_first_snapshot {
-                started.elapsed().as_micros() as u64
-            } else {
-                0
-            },
-            duration_us = started.elapsed().as_micros() as u64,
-            "snapshot_committed"
-        );
-        // The matcher times itself, so this is the candidate work alone and not the
-        // session lock or the snapshot bookkeeping around it. The application index is
-        // reported separately: matching installed applications is the same kind of work as
-        // matching actions, and folding it into `ranking_duration` made that number
-        // describe sorting when it was really measuring a name search.
-        tracing::info!(
-            session_id,
-            revision,
-            matcher_duration = set.matcher_us,
-            applications_duration = set.apps_us,
-            "matcher_completed"
-        );
-        tracing::info!(
-            session_id,
-            revision,
-            ranking_duration = set.ranking_us,
-            "ranking_completed"
-        );
-        self.latest_tx.send_replace(Some(Arc::new(state.clone())));
-        let _ = self.events.send(LauncherEvent::ActionsUpdated {
-            state: state.clone(),
-        });
-        Ok(Some(state))
     }
 }
 
@@ -546,16 +505,7 @@ impl Resolver {
 ///
 /// Callers must already hold the session lock.
 pub fn seeds_from(session: &LauncherSession, input: &str) -> Vec<ResolvedContext> {
-    let mut seeds = session.context_cache.clone();
-    if let Some(frontmost) = &session.frontmost {
-        seeds.push(crate::features::applications::context::frontmost_context(
-            frontmost,
-        ));
-    }
-    if let Some(text) = crate::features::text::provider::text_context(input) {
-        seeds.push(text);
-    }
-    seeds
+    super::composition::session_seeds(session, input)
 }
 
 pub fn now() -> i64 {

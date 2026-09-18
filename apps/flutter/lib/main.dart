@@ -30,7 +30,8 @@ Future<void> main() async {
     if (reply != 'pong') throw StateError('Rust bridge ping failed');
     runApp(
       LauncherApp(
-        activate: bridge.activate,
+        beginActivation: bridge.beginActivation,
+        activate: (session) => bridge.activate(sessionId: session),
         updateInput: (session, input, revision) => bridge.updateInput(
           sessionId: session,
           input: input,
@@ -45,8 +46,7 @@ Future<void> main() async {
           sessionId: session,
           after: BigInt.from(after),
         ),
-        loadIcon: (candidate) =>
-            bridge.applicationIcon(candidateId: candidate),
+        loadIcon: (candidate) => bridge.applicationIcon(candidateId: candidate),
         deactivate: (session) => bridge.deactivate(sessionId: session),
         window: windowChannel,
         startupMessage: paths['hotkeyError'] ?? '',
@@ -63,7 +63,9 @@ Future<void> main() async {
         ),
       ),
     );
-    await windowChannel
-        .invokeMethod<void>('show', {'generation': 0, 'height': 180.0});
+    await windowChannel.invokeMethod<void>('show', {
+      'generation': 0,
+      'height': 180.0,
+    });
   }
 }

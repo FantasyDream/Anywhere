@@ -45,7 +45,8 @@ impl ActionMatcher<'_> {
                 if searching && match_level.is_none() && !availability::is_user_object(context) {
                     continue;
                 }
-                let availability = availability::evaluate(action, context, self.facts);
+                let availability =
+                    availability::evaluate(&action.availability, context, self.facts);
                 if !availability.is_visible() {
                     continue;
                 }
@@ -78,9 +79,10 @@ impl ActionMatcher<'_> {
                         bundle_id: None,
                         owning_app: owned_by.clone().or_else(|| action.owning_app.clone()),
                     },
-                    action: Some(action.clone()),
-                    context: Some(context.clone()),
-                    application: None,
+                    target: crate::core::search::candidate::CandidateTarget::from_action(
+                        action.clone(),
+                        context.clone(),
+                    ),
                 });
             }
         }

@@ -3,6 +3,7 @@
 // The capture happens before the host is told to show anything, so the ambient context is
 // frozen at the moment the hotkey was pressed rather than after focus moved.
 use super::launcher_service::Application;
+use crate::core::session::facts::{FactValue, CLIPBOARD, GIT};
 use crate::features::filesystem::provider::DirectoryMemo;
 use anyhow::{Context, Result};
 use anywhere_protocol::*;
@@ -10,7 +11,40 @@ use std::time::Instant;
 use tracing::Instrument;
 
 impl Application {
-    pub(super) async fn activate_use_case(&self) -> Result<Option<LauncherState>> {
+    /// Reserve a session before any asynchronous work. Hosts can cancel it immediately.
+    pub fn begin_activation(&self) -> Result<SessionId> {
+        let mut session = self.session()?;
+        let session_id = session
+            .state
+            .session_id
+            .checked_add(1)
+            .context("session id exhausted; restart launcher")?;
+        *session = crate::application::session_model::LauncherSession {
+            state: LauncherState {
+                session_id,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        self.resolver.current.store(
+            crate::core::context::engine::stamp(session_id, 0),
+            std::sync::atomic::Ordering::Release,
+        );
+        self.resolver.latest_tx.send_replace(None);
+        Ok(session_id)
+    }
+
+    pub async fn activate_session(&self, session_id: SessionId) -> Result<Option<LauncherState>> {
+        if !self.resolver.is_current(session_id, 0) {
+            return Ok(None);
+        }
+        {
+            let mut session = self.session()?;
+            if session.state.session_id != session_id || session.activation_started {
+                return Ok(None);
+            }
+            session.activation_started = true;
+        }
         let start = Instant::now();
         // The original foreground application is captured before the host shows anything.
         let platform = self.platform.clone();
@@ -18,13 +52,25 @@ impl Application {
             .await
             .context("foreground capture task failed")?
             .unwrap_or(None);
+        if !self.resolver.is_current(session_id, 0) {
+            return Ok(None);
+        }
         let mut diagnostics = self.startup_diagnostics.clone();
-        let git_available = {
+        let git_available = match tokio::task::spawn_blocking({
             let platform = self.platform.clone();
-            tokio::task::spawn_blocking(move || platform.git_available())
-                .await
-                .unwrap_or(false)
+            move || platform.git_available()
+        })
+        .await
+        {
+            Ok(available) => Some(available),
+            Err(error) => {
+                diagnostics.push(format!("{GIT}: {error}"));
+                None
+            }
         };
+        if !self.resolver.is_current(session_id, 0) {
+            return Ok(None);
+        }
         let clipboard = match tokio::task::spawn_blocking({
             let platform = self.platform.clone();
             move || platform.clipboard_text()
@@ -33,53 +79,48 @@ impl Application {
         {
             Ok(Ok(text)) => text,
             Ok(Err(error)) => {
-                diagnostics.push(format!("Clipboard snapshot: {error:#}"));
+                diagnostics.push(format!("{CLIPBOARD}: {error:#}"));
                 None
             }
             Err(error) => {
-                diagnostics.push(format!("Clipboard snapshot task: {error}"));
+                diagnostics.push(format!("{CLIPBOARD}: {error}"));
                 None
             }
         };
         let source_app = Self::source_app_of(frontmost.as_ref());
-        let session_id = {
+        {
             let mut session = self.session()?;
-            let session_id = session
-                .state
-                .session_id
-                .checked_add(1)
-                .context("session id exhausted; restart launcher")?;
-            let directory = frontmost
+            if !self.resolver.is_current(session_id, 0) {
+                return Ok(None);
+            }
+            session.frontmost = frontmost.clone();
+            session.directory = frontmost
                 .as_ref()
-                .map(|frontmost| DirectoryMemo::start(self.platform.clone(), frontmost.clone()));
-            *session = crate::core::session::LauncherSession {
-                frontmost: frontmost.clone(),
-                directory,
-                clipboard,
-                git_available,
-                state: LauncherState {
-                    session_id,
-                    ..Default::default()
-                },
-                ..Default::default()
-            };
-            self.resolver.current.store(
-                crate::core::context::engine::stamp(session_id, 0),
-                std::sync::atomic::Ordering::Release,
-            );
-            session_id
-        };
+                .map(|app| DirectoryMemo::start(self.platform.clone(), app.clone()));
+            if let Some(text) = clipboard {
+                if let Err(error) = session.record_fact(CLIPBOARD, FactValue::Text(text)) {
+                    diagnostics.push(format!("{CLIPBOARD}: {error:#}"));
+                }
+            }
+            if let Some(available) = git_available {
+                if let Err(error) = session.record_fact(GIT, FactValue::Flag(available)) {
+                    diagnostics.push(format!("{GIT}: {error:#}"));
+                }
+            }
+            session.source_app = source_app.clone();
+        }
         tracing::info!(
             session_id,
             duration_us = start.elapsed().as_micros() as u64,
             "activation_context_captured"
         );
         self.spawn_catalog_scan();
-        let (usage, app_usage) = self.load_usage(&source_app);
+        let (usage, app_usage, history_diagnostics) = self.load_usage(source_app.clone()).await;
+        diagnostics.extend(history_diagnostics);
         if let Ok(mut session) = self.resolver.session.lock() {
-            if session.state.session_id == session_id {
-                session.usage = usage;
-                session.app_usage = app_usage;
+            if self.resolver.is_current(session_id, 0) {
+                session.usage = std::sync::Arc::new(usage);
+                session.app_usage = std::sync::Arc::new(app_usage);
                 // Same value the commit path would derive, decided once here.
                 session.source_app = source_app;
             }

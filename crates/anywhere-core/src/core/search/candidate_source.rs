@@ -13,7 +13,25 @@ pub struct SearchContext<'a> {
     pub contexts: &'a [ResolvedContext],
 }
 
+/// When a source's rows enter the pipeline.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SourceStage {
+    /// Matched against the query and contexts; participates in ranking.
+    Ranked,
+    /// Appended after ranking so it cannot displace a real match.
+    Fallback,
+}
+
 pub trait CandidateSource {
-    /// Candidates this source contributes for the given query and contexts.
+    fn stage(&self) -> SourceStage {
+        SourceStage::Ranked
+    }
+
     fn candidates(&self, search: &SearchContext<'_>) -> Vec<Candidate>;
+
+    /// Fallback sources receive the ranked list so they can skip duplicates.
+    fn contribute(&self, search: &SearchContext<'_>, existing: &[Candidate]) -> Vec<Candidate> {
+        let _ = existing;
+        self.candidates(search)
+    }
 }

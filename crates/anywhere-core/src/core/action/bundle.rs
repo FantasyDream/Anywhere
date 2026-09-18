@@ -3,8 +3,10 @@
 //! A feature registers a bundle: the group its actions appear under, plus the actions
 //! themselves. Registration is the only wiring — the engine, the search pipeline and the
 //! launcher service never learn the feature's name.
-use super::descriptor::{ActionDescriptor, BuiltinExecutor};
+use super::availability::AvailabilityRule;
+use super::descriptor::{ActionDescriptor, ActionExecutor};
 use super::group::ActionGroup;
+use super::handler::{ActionHandler, ActionHandlerRef};
 use crate::core::search::query::SearchFields;
 use anywhere_protocol::ContextMatcher;
 
@@ -18,7 +20,8 @@ pub struct ActionSpec {
     pub title: &'static str,
     /// Legacy V0.1 type ids are normalized at registration time.
     pub accepts: &'static str,
-    pub executor: BuiltinExecutor,
+    pub handler: &'static dyn ActionHandler,
+    pub availability: AvailabilityRule,
     pub base_priority: i32,
     pub icon: &'static str,
     pub aliases: &'static [&'static str],
@@ -45,7 +48,8 @@ impl ActionSpec {
             accepts: vec![ContextMatcher {
                 type_id: anywhere_protocol::canonical_context_type(self.accepts).into(),
             }],
-            executor: super::descriptor::ActionExecutor::Builtin(self.executor),
+            executor: ActionExecutor::Native(ActionHandlerRef::new(self.handler)),
+            availability: self.availability.clone(),
             base_priority: self.base_priority,
             icon: self.icon.into(),
             group_id: group_id.into(),

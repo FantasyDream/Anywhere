@@ -3,6 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
 source scripts/env.sh
+python3 scripts/check-flutter.py
 if [[ "$(uname -s)" != Darwin ]]; then
   echo 'This MVP builds on macOS only.' >&2
   exit 1

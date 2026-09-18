@@ -2,6 +2,7 @@ name: Package Windows x64
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches: [main]
     paths:
@@ -10,7 +11,8 @@ on:
       - 'crates/**'
       - 'apps/flutter/**'
       - 'plugins/**'
-      - 'scripts/build-windows.ps1'
+      - 'scripts/**'
+      - '.flutter-version'
       - '.github/workflows/windows.yml'
 
 permissions:
@@ -21,7 +23,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  validate:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-2022]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Read Flutter version
+        id: flutter-version
+        shell: bash
+        run: echo "version=$(cat .flutter-version)" >> "$GITHUB_OUTPUT"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ steps.flutter-version.outputs.version }}
+          channel: stable
+          cache: true
+      - name: Check Rust, architecture and Flutter
+        shell: bash
+        run: ./scripts/check.sh
+
   package:
+    needs: validate
     runs-on: windows-2022
     timeout-minutes: 35
     steps:
@@ -38,12 +66,16 @@ jobs:
             target
           key: windows-rust-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}
           restore-keys: windows-rust-${{ hashFiles('Cargo.lock') }}-
+      - name: Read Flutter version
+        id: flutter-version
+        shell: pwsh
+        run: '"version=$(Get-Content .flutter-version -Raw | ForEach-Object { $_.Trim() })" >> $env:GITHUB_OUTPUT'
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.47.2'
+          flutter-version: ${{ steps.flutter-version.outputs.version }}
           channel: stable
           cache: true
-      - name: Build and package (no tests)
+      - name: Build and package
         shell: pwsh
         run: ./scripts/build-windows.ps1
       - uses: actions/cache/save@v4

@@ -3,7 +3,10 @@ use super::c_path;
 use super::native::*;
 use crate::{ApplicationInfo, BundleApplication};
 use anyhow::{bail, Context, Result};
-use std::{ffi::CStr, path::Path};
+use std::{
+    ffi::CStr,
+    path::{Path, PathBuf},
+};
 
 pub(super) fn frontmost_application() -> Result<Option<ApplicationInfo>> {
     // SAFETY: Native side returns a malloc-owned NUL-terminated string, freed exactly once.
@@ -19,7 +22,31 @@ pub(super) fn frontmost_application() -> Result<Option<ApplicationInfo>> {
     result.map(Some).context("decode frontmost application")
 }
 
+pub(super) fn installed_applications(roots: &[PathBuf]) -> Vec<BundleApplication> {
+    let languages = preferred_languages();
+    let mut applications = Vec::new();
+    let mut unreadable = 0usize;
+    for path in crate::catalog::discover(roots) {
+        match read_bundle(&path, &languages) {
+            Ok(Some(application)) => applications.push(application),
+            Ok(None) => unreadable += 1,
+            Err(error) => {
+                unreadable += 1;
+                tracing::debug!(bundle = %path.display(), error = %error, "app_index_skip");
+            }
+        }
+    }
+    if unreadable > 0 {
+        tracing::info!(unreadable, "app_index_incomplete");
+    }
+    applications
+}
+
 pub(super) fn bundle_application(bundle: &Path) -> Result<Option<BundleApplication>> {
+    read_bundle(bundle, &preferred_languages())
+}
+
+fn read_bundle(bundle: &Path, languages: &[String]) -> Result<Option<BundleApplication>> {
     let path = c_path(&bundle.to_string_lossy())?;
     // SAFETY: path outlives the call; the native side returns a malloc-owned JSON string.
     let decoded = unsafe {
@@ -40,11 +67,43 @@ pub(super) fn bundle_application(bundle: &Path) -> Result<Option<BundleApplicati
             .filter(|value| !value.is_empty())
             .map(str::to_owned)
     };
-    let (Some(bundle_id), Some(name)) = (string("bundle_id"), string("name")) else {
+    let (Some(bundle_id), Some(mut name)) = (string("bundle_id"), string("name")) else {
         return Ok(None);
     };
+    let mut aliases = value
+        .get("aliases")
+        .and_then(|value| value.as_array())
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|entry| entry.as_str())
+                .filter(|entry| !entry.is_empty() && *entry != name)
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if !languages.is_empty() {
+        if let Ok(names) = bundle_localized_names(bundle, languages) {
+            if let Some(preferred) = names
+                .first()
+                .map(String::as_str)
+                .filter(|entry| !entry.is_empty())
+            {
+                if !preferred.eq_ignore_ascii_case(&name) {
+                    aliases.insert(0, name);
+                    name = preferred.to_owned();
+                }
+            }
+            for localized in names {
+                if localized != name && !aliases.iter().any(|alias| alias == &localized) {
+                    aliases.push(localized);
+                }
+            }
+        }
+    }
+    aliases.retain(|alias| !alias.eq_ignore_ascii_case(&name));
     Ok(Some(BundleApplication {
-        aliases: Vec::new(),
+        aliases,
         bundle_id,
         name,
         path: string("path"),
@@ -125,6 +184,24 @@ mod tests {
             let bundle = platform.bundle_application(finder).unwrap().unwrap();
             assert_eq!(bundle.bundle_id, "com.apple.finder");
             assert!(!bundle.name.is_empty());
+            assert!(
+                !bundle.name.to_lowercase().ends_with(".app"),
+                "the title is the system display name, not the file name: {}",
+                bundle.name
+            );
+        }
+        let lark = Path::new("/Applications/Lark.app");
+        if lark.exists()
+            && preferred_languages()
+                .iter()
+                .any(|language| language.to_ascii_lowercase().starts_with("zh"))
+        {
+            let bundle = platform.bundle_application(lark).unwrap().unwrap();
+            assert_eq!(
+                bundle.name, "飞书",
+                "preferred-language title, not the English file name; aliases={:?}",
+                bundle.aliases
+            );
         }
         // A plain directory is not an application.
         let plain = tempfile::tempdir().unwrap();

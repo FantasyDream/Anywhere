@@ -12,7 +12,7 @@
   <key>LSMinimumSystemVersion</key><string>12.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
-  <!-- This SDK crashes in Impeller Canvas::SetupRenderPass during text editing. -->
-  <key>FLTEnableImpeller</key><false/>
+  <!-- Keep the renderer explicit for the custom host and packaged app. -->
+  <key>FLTEnableImpeller</key><true/>
   <key>NSAppleEventsUsageDescription</key><string>Read the front Finder window directory to suggest actions when you open the launcher.</string>
 </dict></plist>

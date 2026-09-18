@@ -1,14 +1,13 @@
 //! Launcher facade: activation capture, request lifecycle, execution, subscription.
 use crate::{
-    core::action::descriptor::ActionRegistry, core::context::engine::ContextGraphRun,
-    core::ranking::usage::UsageRepository, core::session::manager::Resolver,
+    application::session_runtime::Resolver, core::action::descriptor::ActionRegistry,
+    core::context::engine::ContextGraphRun, core::ranking::usage::UsageRepository,
     features::applications::index as applications,
 };
 use anyhow::Result;
 use anywhere_platform::{ApplicationInfo, Platform};
 use anywhere_protocol::*;
 use std::{
-    path::PathBuf,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -57,12 +56,12 @@ pub trait LauncherApplication: Send + Sync {
 pub struct Application {
     pub(super) platform: Arc<dyn Platform>,
     /// The engine, shared with the background tasks that publish late results.
-    pub resolver: Resolver,
+    pub(super) resolver: Resolver,
     pub(super) startup_diagnostics: Vec<String>,
     pub(super) budget: Duration,
     pub(super) content_grace: Duration,
     pub(super) catalog_tx: watch::Sender<bool>,
-    /// The application index is one scan per process; an activation must not redo it.
+    /// One catalog scan per process; later sessions reuse the immutable snapshot.
     pub(super) catalog_started: Arc<std::sync::atomic::AtomicBool>,
 }
 
@@ -89,7 +88,7 @@ impl Application {
         startup_diagnostics: Vec<String>,
         budget: Duration,
     ) -> Self {
-        let mut resolver = Resolver::new(platform.clone(), registry, history);
+        let mut resolver = Resolver::new(registry, history);
         let (catalog_tx, catalog_rx) = watch::channel(false);
         resolver.catalog_rx = catalog_rx;
         Self {
@@ -119,12 +118,13 @@ impl Application {
     /// Late context is published by a background task, so this is the only way a
     /// bridge can observe an enrichment that happened after `activate` returned.
     pub fn latest_state(&self, session_id: SessionId) -> Option<LauncherState> {
-        self.resolver
-            .session
-            .lock()
-            .ok()
-            .filter(|session| session.state.session_id == session_id)
-            .map(|session| session.state.clone())
+        let state = self.resolver.latest_tx.borrow().clone()?;
+        (state.session_id == session_id && self.resolver.is_current(session_id, state.revision))
+            .then(|| (*state).clone())
+    }
+
+    pub fn is_session_active(&self, session_id: SessionId) -> bool {
+        self.resolver.is_session_active(session_id)
     }
 
     /// Channel signalled whenever a snapshot is committed.
@@ -149,6 +149,14 @@ impl Application {
         self.catalog_tx.subscribe()
     }
 
+    /// Additional product sources use the same matching, sorting and publication path.
+    pub fn register_candidate_source(
+        &mut self,
+        source: Arc<dyn crate::core::search::candidate_source::CandidateSource + Send + Sync>,
+    ) {
+        self.resolver.sources.push(source);
+    }
+
     /// Extra providers are stacked on the built-ins by priority then id.
     pub fn register_provider(
         &mut self,
@@ -159,19 +167,16 @@ impl Application {
 
     pub(super) fn session(
         &self,
-    ) -> Result<std::sync::MutexGuard<'_, crate::core::session::LauncherSession>> {
+    ) -> Result<std::sync::MutexGuard<'_, crate::application::session_model::LauncherSession>> {
         self.resolver
             .session
             .lock()
             .map_err(|_| anyhow::anyhow!("session lock poisoned"))
     }
 
-    /// One-shot background application scan; never blocks the first snapshot.
+    /// Background application scan; never blocks the first snapshot.
     ///
-    /// Once per process, not once per activation: the applications on this machine do not
-    /// change between two openings of the launcher, and re-walking every bundle root on
-    /// each activation bought nothing. The catalog stays in the resolver, so a later
-    /// activation already has it.
+    /// Concurrent activations share the first scan; refresh is outside this MVP.
     pub(super) fn spawn_catalog_scan(&self) {
         if self
             .catalog_started
@@ -180,28 +185,24 @@ impl Application {
             return;
         }
         let platform = self.platform.clone();
-        let roots = applications::standard_roots(dirs_home().as_deref());
         let catalog = self.resolver.catalog.clone();
         let tx = self.catalog_tx.clone();
         tokio::spawn(async move {
-            let scanned = applications::scan_async(platform, roots).await;
+            let scanned = applications::scan_async(platform).await;
             let count = scanned.applications().len();
             if let Ok(mut handle) = catalog.lock() {
-                *handle = scanned;
+                *handle = Arc::new(scanned);
             }
-            let _ = tx.send(true);
-            // The next input revision or late result publishes the searched applications.
+            tx.send_replace(true);
             tracing::info!(count, "app_index_published");
         });
     }
 
-    /// Re-publish the current snapshot once the application index appears.
+    /// Re-publish the current snapshot once the initial application scan finishes.
     ///
     /// The scan starts at activation and takes ~60ms on a real machine, so a search typed
     /// immediately after opening would match an empty index: the first snapshot never
     /// waits for the scan, and only a new input would otherwise revisit that revision.
-    /// Only the first opening per process has to wait; later activations already have the
-    /// catalog.
     ///
     /// The rebuild happens after the revision settles. Publishing it earlier would emit a
     /// snapshot that is not final with no late context behind it, and hosts treat a new
@@ -211,32 +212,31 @@ impl Application {
         let mut index = self.catalog_tx.subscribe();
         let mut states = self.state_updates();
         tokio::spawn(async move {
-            if !*index.borrow() && index.changed().await.is_err() {
-                return;
+            while !*index.borrow_and_update() {
+                if !resolver.is_session_active(session_id) {
+                    return;
+                }
+                tokio::select! {
+                    changed = index.changed() => { if changed.is_err() { return; } }
+                    changed = states.changed() => { if changed.is_err() { return; } }
+                }
             }
-            let published = states.borrow().clone();
-            let settled = published.is_some_and(|state| {
-                state.session_id == session_id
-                    && Some(state.revision) == resolver.committed_revision()
-                    && state.context_complete
-            });
-            if !settled {
-                // Wait for the late pass to finish this revision; its own commit will
-                // publish the catalog, and this loop only needs to catch a revision that
-                // settled before the scan did.
-                loop {
-                    if states.changed().await.is_err() {
-                        return;
-                    }
-                    let Some(state) = states.borrow().clone() else {
-                        continue;
-                    };
-                    if state.session_id != session_id {
-                        return;
-                    }
-                    if state.context_complete {
-                        break;
-                    }
+            // Cancellation publishes None. Check the session before waiting as well as
+            // after a wake-up, including when this task starts after dismissal.
+            loop {
+                if !resolver.is_session_active(session_id) {
+                    return;
+                }
+                let published = states.borrow_and_update().clone();
+                if published.is_some_and(|state| {
+                    state.session_id == session_id
+                        && Some(state.revision) == resolver.committed_revision()
+                        && state.context_complete
+                }) {
+                    break;
+                }
+                if states.changed().await.is_err() {
+                    return;
                 }
             }
             match resolver.recompute_current(session_id) {
@@ -298,33 +298,48 @@ impl Application {
             .unwrap_or_default()
     }
 
-    pub(super) fn load_usage(&self, source_app: &str) -> (UsageMap, UsageMap) {
+    pub(super) async fn load_usage(&self, source_app: String) -> (UsageMap, UsageMap, Vec<String>) {
         let history = self.resolver.history.clone();
-        let source_app = source_app.to_owned();
-        let scoped = history
-            .lock()
-            .map_err(|_| anyhow::anyhow!("history lock poisoned"))
-            .and_then(|history| history.load(&source_app));
-        let global = history
-            .lock()
-            .map_err(|_| anyhow::anyhow!("history lock poisoned"))
-            .and_then(|history| history.load_global());
-        (scoped.unwrap_or_default(), global.unwrap_or_default())
+        let loaded = tokio::task::spawn_blocking(move || {
+            let history = history
+                .lock()
+                .map_err(|_| anyhow::anyhow!("history lock poisoned"))?;
+            Ok::<_, anyhow::Error>((history.load(&source_app), history.load_global()))
+        })
+        .await;
+        let mut diagnostics = Vec::new();
+        let (scoped, global) = match loaded {
+            Ok(Ok((scoped, global))) => {
+                let mut recover = |result: anyhow::Result<UsageMap>| match result {
+                    Ok(value) => value,
+                    Err(error) => {
+                        tracing::warn!(error = %error, "usage_load_failed");
+                        diagnostics.push(format!("Usage history could not be loaded: {error:#}"));
+                        UsageMap::default()
+                    }
+                };
+                (recover(scoped), recover(global))
+            }
+            failure => {
+                let message = format!("Usage history task failed: {failure:?}");
+                tracing::warn!(%message, "usage_load_failed");
+                diagnostics.push(message);
+                (UsageMap::default(), UsageMap::default())
+            }
+        };
+        (scoped, global, diagnostics)
     }
 }
 
 type UsageMap =
     std::collections::HashMap<(String, String), crate::core::ranking::score::UsageStats>;
 
-fn dirs_home() -> Option<PathBuf> {
-    std::env::var_os("HOME").map(PathBuf::from)
-}
-
 #[async_trait::async_trait]
 impl LauncherApplication for Application {
     /// See `activate.rs`.
     async fn activate(&self) -> Result<Option<LauncherState>> {
-        self.activate_use_case().await
+        let session_id = self.begin_activation()?;
+        self.activate_session(session_id).await
     }
 
     /// See `update_query.rs`.
@@ -359,8 +374,13 @@ impl LauncherApplication for Application {
             session
                 .state_candidates
                 .get(candidate_id)
-                .and_then(|candidate| candidate.application.as_ref())
-                .map(|application| application.icon_source().to_owned())
+                .and_then(|candidate| match &candidate.target {
+                    crate::core::search::candidate::CandidateTarget::LaunchApplication {
+                        icon_source,
+                        ..
+                    } => Some(icon_source.clone()),
+                    _ => None,
+                })
         };
         let Some(path) = path else {
             return Ok(None);
@@ -386,6 +406,7 @@ impl LauncherApplication for Application {
             session.directory = None;
             session.state_candidates.clear();
             session.context_cache.clear();
+            self.resolver.latest_tx.send_replace(None);
         }
         Ok(())
     }

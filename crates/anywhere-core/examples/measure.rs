@@ -8,10 +8,9 @@
 //! Finder Automation, FFI, window rendering and RSS are not measurable here; use
 //! `launcher.log` and the manual validation checklist for those.
 use anywhere_core::{
-    core::action::descriptor::ActionRegistry, core::ranking::usage::UsageStats,
-    core::search::candidate_source::CandidateSource, core::search::engine::SearchEngine,
-    core::search::query::Query, core::session::facts::SessionFacts,
-    features::applications::index::IndexedApplication,
+    core::ranking::usage::UsageStats, core::search::candidate_source::CandidateSource,
+    core::search::engine::ActionSearch, core::search::query::Query,
+    core::session::facts::SessionFacts, features::applications::index::IndexedApplication,
     features::applications::source::ApplicationSource, features::git::provider::repository_root,
     features::recognized_contexts,
 };
@@ -40,19 +39,14 @@ fn synthetic_catalog(count: usize) -> Vec<IndexedApplication> {
 }
 
 fn main() {
-    let registry = ActionRegistry::builtin();
+    let registry = anywhere_core::application::composition::builtin_registry();
     let catalog = synthetic_catalog(1000);
     let empty_usage = |_: &str, _: &str| UsageStats::default();
-    let facts = SessionFacts {
-        git_available: true,
-        ..Default::default()
-    };
-    let engine = SearchEngine {
-        registry: &registry,
-        usage: &empty_usage,
-        facts: &facts,
-        now: 1000,
-    };
+    let facts = SessionFacts::default().with(
+        anywhere_core::core::session::facts::GIT,
+        anywhere_core::core::session::facts::FactValue::Flag(true),
+    );
+    let search = ActionSearch::new(&registry, &empty_usage, &facts, 1000);
     // The application index is a candidate source, exactly as it is in the launcher.
     let application_source = ApplicationSource {
         applications: &catalog,
@@ -87,14 +81,14 @@ fn main() {
             let recognized = started.elapsed();
 
             let query = Query::parse(input);
-            let set = engine.search(&query, &contexts, &sources);
+            let set = search.search(&query, &contexts, &sources);
 
             if sample >= 100 {
                 recognize.push(recognized.as_nanos());
                 // Each phase is timed where it happens, so these three are additive parts
                 // of `build` rather than one number reported under three names.
                 matcher_times.push(set.matcher_us as u128 * 1000);
-                apps_times.push(set.apps_us as u128 * 1000);
+                apps_times.push(set.sources_us as u128 * 1000);
                 ranking_times.push(set.ranking_us as u128 * 1000);
             }
         }
