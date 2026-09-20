@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import '../../src/rust/api.dart';
 
-/// A result row: presentation only, with selection and icon data supplied by its parent.
 class CandidateRow extends StatelessWidget {
   const CandidateRow({
     super.key,
@@ -22,81 +21,46 @@ class CandidateRow extends StatelessWidget {
     return Semantics(
       selected: selected,
       button: true,
-      child: Material(
-        color: selected ? const Color(0x665c6070) : Colors.transparent,
-        borderRadius: BorderRadius.circular(7),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(7),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Row(
-              children: [
-                Container(
-                  width: 30,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    // Only the fallback glyph needs a plate: a real icon is opaque.
-                    color: iconBytes != null
-                        ? Colors.transparent
-                        : const Color(0x4d454955),
-                    borderRadius: BorderRadius.circular(7),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: _iconFor(candidate, disabled),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        candidate.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: disabled
-                              ? const Color(0xff9aa0ad)
-                              : const Color(0xffebebef),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+        child: Material(
+          color: selected ? const Color(0x3d6d8dff) : Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(10),
+            onTap: onTap,
+            child: SizedBox(
+              height: 50,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Row(
+                  children: [
+                    if (selected)
+                      Container(
+                        width: 3,
+                        height: 22,
+                        margin: const EdgeInsets.only(right: 8),
+                        decoration: BoxDecoration(
+                          color: const Color(0xff9eb4ff),
+                          borderRadius: BorderRadius.circular(99),
                         ),
-                      ),
-                      if (candidate.subtitle != null || disabled)
-                        Text(
-                          disabled
-                              ? (candidate.availabilityReason ??
-                                  'Not available right now')
-                              : candidate.subtitle!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11,
-                            height: 1.5,
-                            color: disabled
-                                ? const Color(0xffc9a26b)
-                                : const Color(0xffd0d6e1),
-                          ),
-                        ),
+                      )
+                    else
+                      const SizedBox(width: 11),
+                    _iconPlate(disabled),
+                    const SizedBox(width: 12),
+                    Expanded(child: _labels(disabled)),
+                    if (candidate.shortcut != null) ...[
+                      const SizedBox(width: 8),
+                      _shortcut(candidate.shortcut!),
                     ],
-                  ),
+                    if (selected && !disabled) ...[
+                      const SizedBox(width: 8),
+                      const LauncherKeycap('↵'),
+                    ],
+                  ],
                 ),
-                if (candidate.shortcut != null) ...[
-                  const SizedBox(width: 12),
-                  Text(candidate.shortcut!,
-                      style: const TextStyle(
-                          fontSize: 12, color: Color(0xffa8abb7))),
-                ],
-                if (selected && !disabled) ...[
-                  const SizedBox(width: 12),
-                  const Icon(
-                    Icons.keyboard_return_rounded,
-                    size: 16,
-                    color: Color(0xffa8abb7),
-                  ),
-                ],
-              ],
+              ),
             ),
           ),
         ),
@@ -104,42 +68,238 @@ class CandidateRow extends StatelessWidget {
     );
   }
 
-  /// Real application icon when available, semantic glyph otherwise.
-  Widget _iconFor(CandidateDto candidate, bool disabled) {
+  Widget _iconPlate(bool disabled) {
     final bytes = iconBytes;
-    if (bytes != null) {
-      // `cover` fills the slot the way the system's own icon renderer does. `contain`
-      // letterboxes, which showed up as a transparent frame around the artwork.
-      return Image.memory(
-        bytes,
-        width: 30,
-        height: 30,
-        fit: BoxFit.cover,
-        gaplessPlayback: true,
-        errorBuilder: (_, __, ___) => _glyph(candidate, disabled),
-      );
-    }
-    return _glyph(candidate, disabled);
+    return Container(
+      width: 28,
+      height: 28,
+      decoration: BoxDecoration(
+        gradient: bytes != null
+            ? null
+            : const LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0x59444a5c), Color(0x33282c38)],
+              ),
+        color: bytes != null ? Colors.transparent : null,
+        borderRadius: BorderRadius.circular(8),
+        border: bytes != null
+            ? null
+            : Border.all(color: const Color(0x22ffffff), width: 0.5),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: bytes != null
+          ? Image.memory(
+              bytes,
+              width: 28,
+              height: 28,
+              fit: BoxFit.cover,
+              gaplessPlayback: true,
+              errorBuilder: (_, __, ___) => _glyph(disabled),
+            )
+          : _glyph(disabled),
+    );
   }
 
-  Widget _glyph(CandidateDto candidate, bool disabled) => Icon(
+  Widget _labels(bool disabled) {
+    final subtitle = _visibleSubtitle();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _title(disabled),
+        if (subtitle != null)
+          Text(
+            subtitle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              height: 1.35,
+              color:
+                  disabled ? const Color(0xffc9a26b) : const Color(0x99c5cddd),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _title(bool disabled) {
+    const separator = ' › ';
+    final title = candidate.title;
+    final split = title.lastIndexOf(separator);
+    final leafColor =
+        disabled ? const Color(0xff8b90a0) : const Color(0xfff5f7fc);
+    final pathColor =
+        disabled ? const Color(0xff6f7484) : const Color(0xff8f99ad);
+    if (split <= 0) {
+      return Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 13.5,
+          height: 1.2,
+          fontWeight: FontWeight.w600,
+          letterSpacing: -0.2,
+          color: leafColor,
+        ),
+      );
+    }
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: title.substring(0, split + separator.length),
+            style: TextStyle(
+              fontSize: 12.5,
+              height: 1.2,
+              fontWeight: FontWeight.w500,
+              color: pathColor,
+            ),
+          ),
+          TextSpan(
+            text: title.substring(split + separator.length),
+            style: TextStyle(
+              fontSize: 13.5,
+              height: 1.2,
+              fontWeight: FontWeight.w600,
+              letterSpacing: -0.15,
+              color: leafColor,
+            ),
+          ),
+        ],
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+
+  String? _visibleSubtitle() {
+    final disabled = candidate.availability != 'enabled';
+    if (disabled) {
+      return candidate.availabilityReason ?? 'Not available right now';
+    }
+    final subtitle = candidate.subtitle?.trim();
+    if (subtitle == null || subtitle.isEmpty) return null;
+    if (_isBundleId(subtitle)) return null;
+    if (candidate.title == subtitle ||
+        candidate.title.startsWith('$subtitle ›')) {
+      return null;
+    }
+    return subtitle;
+  }
+
+  bool _isBundleId(String value) =>
+      RegExp(r'^[A-Za-z][A-Za-z0-9-]*(\.[A-Za-z0-9-]+){2,}$').hasMatch(value);
+
+  Widget _shortcut(String shortcut) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (final part in _shortcutParts(shortcut)) ...[
+            const SizedBox(width: 3),
+            LauncherKeycap(part),
+          ],
+        ],
+      );
+
+  List<String> _shortcutParts(String shortcut) {
+    if (shortcut.startsWith('^') && shortcut.length > 1) {
+      return ['⌃', shortcut.substring(1)];
+    }
+    final parts = <String>[];
+    final rest = StringBuffer();
+    for (final rune in shortcut.runes) {
+      final unit = String.fromCharCode(rune);
+      if ('⌃⌘⇧⌥'.contains(unit)) {
+        if (rest.isNotEmpty) {
+          parts.add(rest.toString());
+          rest.clear();
+        }
+        parts.add(unit);
+      } else {
+        rest.write(unit);
+      }
+    }
+    if (rest.isNotEmpty) parts.add(rest.toString());
+    return parts.isEmpty ? [shortcut] : parts;
+  }
+
+  Widget _glyph(bool disabled) => Icon(
         _icon(candidate),
-        size: 17,
-        color: disabled ? const Color(0xff8a8f9c) : const Color(0xffcad0de),
+        size: 15,
+        color: disabled ? const Color(0xff7c8293) : const Color(0xffd5dced),
       );
 
   IconData _icon(CandidateDto candidate) {
     if (candidate.kind == 'application') return Icons.apps_rounded;
-    return switch (candidate.iconKey) {
-      'terminal' => Icons.terminal_rounded,
-      'folder' => Icons.folder_open_rounded,
-      'file' => Icons.insert_drive_file_outlined,
-      'copy' => Icons.content_copy_rounded,
-      'globe' => Icons.language_rounded,
-      'code' => Icons.data_object_rounded,
-      'search' => Icons.search_rounded,
-      'git' => Icons.account_tree_outlined,
-      _ => Icons.bolt_rounded,
-    };
+    switch (candidate.iconKey) {
+      case 'terminal':
+        return Icons.terminal_rounded;
+      case 'folder':
+        return Icons.folder_open_rounded;
+      case 'file':
+        return Icons.insert_drive_file_outlined;
+      case 'copy':
+        return Icons.content_copy_rounded;
+      case 'globe':
+        return Icons.language_rounded;
+      case 'code':
+        return Icons.data_object_rounded;
+      case 'search':
+        return Icons.search_rounded;
+      case 'git':
+        return Icons.account_tree_outlined;
+    }
+    final title = candidate.title.toLowerCase();
+    if (title.contains('quit') ||
+        title.contains('退出') ||
+        title.contains('关闭')) {
+      return Icons.logout_rounded;
+    }
+    if (title.contains('window') ||
+        title.contains('窗口') ||
+        title.contains('填充') ||
+        title.contains('缩放') ||
+        title.contains('居中')) {
+      return Icons.crop_din_rounded;
+    }
+    if (title.contains('update') || title.contains('更新')) {
+      return Icons.system_update_alt_rounded;
+    }
+    if (title.contains('service') || title.contains('服务')) {
+      return Icons.grid_view_rounded;
+    }
+    if (title.contains('hide') || title.contains('隐藏')) {
+      return Icons.visibility_off_outlined;
+    }
+    if (candidate.iconKey == 'app') return Icons.north_east_rounded;
+    return Icons.bolt_rounded;
   }
+}
+
+class LauncherKeycap extends StatelessWidget {
+  const LauncherKeycap(this.label, {super.key});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        constraints: const BoxConstraints(minWidth: 18),
+        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+        decoration: BoxDecoration(
+          color: const Color(0x33222630),
+          borderRadius: BorderRadius.circular(5),
+          border: Border.all(color: const Color(0x33ffffff), width: 0.5),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            fontSize: 10,
+            height: 1.1,
+            fontWeight: FontWeight.w500,
+            color: Color(0xffcdd3e0),
+          ),
+        ),
+      );
 }

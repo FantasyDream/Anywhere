@@ -39,7 +39,8 @@ pub struct Resolver {
     pub events: broadcast::Sender<LauncherEvent>,
     pub latest_tx: watch::Sender<Option<Arc<LauncherState>>>,
     pub catalog: Arc<Mutex<Arc<ApplicationCatalog>>>,
-    pub catalog_rx: watch::Receiver<bool>,
+    pub catalog_rx: watch::Receiver<u64>,
+    pub catalog_issued: Arc<AtomicU64>,
     pub history: Arc<Mutex<Box<dyn UsageRepository>>>,
 }
 
@@ -56,7 +57,7 @@ pub struct Resolution {
 impl Resolver {
     pub fn new(registry: ActionRegistry, history: Box<dyn UsageRepository>) -> Self {
         let (latest_tx, _) = watch::channel(None);
-        let (_, catalog_rx) = watch::channel(false);
+        let (_, catalog_rx) = watch::channel(0);
         Self {
             registry: Arc::new(registry),
             // Registration order does not matter: the registry sorts by priority, then id.
@@ -68,6 +69,7 @@ impl Resolver {
             latest_tx,
             catalog: Arc::new(Mutex::new(Arc::new(ApplicationCatalog::empty()))),
             catalog_rx,
+            catalog_issued: Arc::new(AtomicU64::new(0)),
             history: Arc::new(Mutex::new(history)),
         }
     }
@@ -94,14 +96,20 @@ impl Resolver {
         current != 0 && (current >> 32) == u64::from(session_id)
     }
 
-    /// Wait until the background application scan has published its catalog.
+    /// Wait until the latest issued catalog scan has published.
     ///
-    /// Checks the current value before waiting: `false` means no scan has finished,
-    /// so a receiver that subscribed after the first scan would otherwise wait forever.
+    /// A receiver that subscribed after an earlier scan would otherwise return
+    /// immediately and miss a scan started by the current activation.
     pub async fn catalog_ready(&self) {
+        let expected = self.catalog_issued.load(Ordering::Acquire);
         let mut rx = self.catalog_rx.clone();
-        if !*rx.borrow_and_update() {
-            let _ = tokio::time::timeout(Duration::from_secs(10), rx.changed()).await;
+        while *rx.borrow_and_update() < expected {
+            if tokio::time::timeout(Duration::from_secs(10), rx.changed())
+                .await
+                .is_err()
+            {
+                return;
+            }
         }
     }
 

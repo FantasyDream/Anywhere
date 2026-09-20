@@ -60,9 +60,7 @@ pub struct Application {
     pub(super) startup_diagnostics: Vec<String>,
     pub(super) budget: Duration,
     pub(super) content_grace: Duration,
-    pub(super) catalog_tx: watch::Sender<bool>,
-    /// One catalog scan per process; later sessions reuse the immutable snapshot.
-    pub(super) catalog_started: Arc<std::sync::atomic::AtomicBool>,
+    pub(super) catalog_tx: watch::Sender<u64>,
     pub(super) app_actions: crate::features::app_actions::AppActionCatalog,
 }
 
@@ -90,7 +88,7 @@ impl Application {
         budget: Duration,
     ) -> Self {
         let mut resolver = Resolver::new(registry, history);
-        let (catalog_tx, catalog_rx) = watch::channel(false);
+        let (catalog_tx, catalog_rx) = watch::channel(0);
         resolver.catalog_rx = catalog_rx;
         Self {
             platform,
@@ -99,7 +97,6 @@ impl Application {
             budget,
             content_grace: DEFAULT_FIRST_CONTENT_GRACE,
             catalog_tx,
-            catalog_started: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             app_actions: crate::features::app_actions::AppActionCatalog::default(),
         }
     }
@@ -147,7 +144,7 @@ impl Application {
     /// The scan starts at activation, so an app search typed within the first ~60ms would
     /// otherwise match an empty index and no later input would revisit it. The bridge
     /// re-commits the current snapshot when this fires.
-    pub fn index_updates(&self) -> watch::Receiver<bool> {
+    pub fn index_updates(&self) -> watch::Receiver<u64> {
         self.catalog_tx.subscribe()
     }
 
@@ -178,29 +175,35 @@ impl Application {
 
     /// Background application scan; never blocks the first snapshot.
     ///
-    /// Concurrent activations share the first scan; refresh is outside this MVP.
-    pub(super) fn spawn_catalog_scan(&self) {
-        if self
-            .catalog_started
-            .swap(true, std::sync::atomic::Ordering::AcqRel)
-        {
-            return;
-        }
+    /// Each activation issues a new scan so an app installed after launch is visible
+    /// the next time the launcher opens. A newer scan discards an older one that
+    /// finishes late.
+    pub(super) fn spawn_catalog_scan(&self) -> u64 {
+        let generation = self
+            .resolver
+            .catalog_issued
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel)
+            + 1;
         let platform = self.platform.clone();
         let catalog = self.resolver.catalog.clone();
+        let issued = self.resolver.catalog_issued.clone();
         let tx = self.catalog_tx.clone();
         tokio::spawn(async move {
             let scanned = applications::scan_async(platform).await;
+            if issued.load(std::sync::atomic::Ordering::Acquire) != generation {
+                return;
+            }
             let count = scanned.applications().len();
             if let Ok(mut handle) = catalog.lock() {
                 *handle = Arc::new(scanned);
             }
-            tx.send_replace(true);
-            tracing::info!(count, "app_index_published");
+            tx.send_replace(generation);
+            tracing::info!(count, generation, "app_index_published");
         });
+        generation
     }
 
-    /// Re-publish the current snapshot once the initial application scan finishes.
+    /// Re-publish the current snapshot once the activation's application scan finishes.
     ///
     /// The scan starts at activation and takes ~60ms on a real machine, so a search typed
     /// immediately after opening would match an empty index: the first snapshot never
@@ -209,12 +212,12 @@ impl Application {
     /// The rebuild happens after the revision settles. Publishing it earlier would emit a
     /// snapshot that is not final with no late context behind it, and hosts treat a new
     /// `snapshot_seq` as "there is more to show now".
-    pub(super) fn spawn_index_recompute(&self, session_id: SessionId) {
+    pub(super) fn spawn_index_recompute(&self, session_id: SessionId, generation: u64) {
         let resolver = self.resolver.clone();
         let mut index = self.catalog_tx.subscribe();
         let mut states = self.state_updates();
         tokio::spawn(async move {
-            while !*index.borrow_and_update() {
+            while *index.borrow_and_update() < generation {
                 if !resolver.is_session_active(session_id) {
                     return;
                 }

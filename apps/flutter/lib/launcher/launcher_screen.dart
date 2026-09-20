@@ -57,7 +57,7 @@ class LauncherApp extends StatelessWidget {
           brightness: Brightness.dark,
           useMaterial3: true,
           colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xffa7b4cb),
+            seedColor: const Color(0xff8ea2ff),
             brightness: Brightness.dark,
           ),
           scaffoldBackgroundColor: Colors.transparent,
@@ -240,11 +240,10 @@ class _LauncherScreenState extends State<LauncherScreen> {
         width: 648,
         height: _height,
         child: Material(
-          // AppKit supplies the real behind-window blur; keep this tint translucent.
-          color: const Color(0xcc1b1d23),
+          color: const Color(0x9912171f),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: const BorderSide(color: Color(0x38ffffff), width: 0.7),
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: Color(0x28ffffff), width: 0.6),
           ),
           clipBehavior: Clip.antiAlias,
           child: Focus(
@@ -259,24 +258,27 @@ class _LauncherScreenState extends State<LauncherScreen> {
                       children: [
                         const Icon(
                           Icons.search_rounded,
-                          size: 24,
-                          color: Color(0xffd0d6e1),
+                          size: 22,
+                          color: Color(0xff9aa6bb),
                         ),
-                        const SizedBox(width: 14),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: TextField(
                             controller: _input,
                             focusNode: _focus,
                             autofocus: true,
                             style: const TextStyle(
-                              fontSize: 18,
-                              color: Color(0xfff7f8fc),
+                              fontSize: 17,
+                              fontWeight: FontWeight.w500,
+                              letterSpacing: -0.2,
+                              color: Color(0xfff4f6fb),
                             ),
-                            cursorColor: const Color(0xffd5d7df),
+                            cursorColor: const Color(0xff9eb4ff),
+                            cursorWidth: 1.4,
                             decoration: const InputDecoration(
                               hintText: 'Search for an action or app…',
                               hintStyle: TextStyle(
-                                color: Color(0xffc2c7d2),
+                                color: Color(0x66d5dcea),
                                 fontWeight: FontWeight.w400,
                               ),
                               border: InputBorder.none,
@@ -292,11 +294,11 @@ class _LauncherScreenState extends State<LauncherScreen> {
                             height: 14,
                             child: CircularProgressIndicator(
                               strokeWidth: 1.5,
-                              color: Color(0xffd0d6e1),
+                              color: Color(0xff9eb4ff),
                             ),
                           )
                         else
-                          _keycap('esc'),
+                          const LauncherKeycap('esc'),
                       ],
                     ),
                   ),
@@ -333,7 +335,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
                   const Divider(
                     height: 1,
                     thickness: 1,
-                    color: Color(0x24ffffff),
+                    color: Color(0x14ffffff),
                   ),
                   SizedBox(
                     height: _headerHeight,
@@ -342,11 +344,12 @@ class _LauncherScreenState extends State<LauncherScreen> {
                       child: Row(
                         children: [
                           Text(
-                            _output == null ? 'Suggested actions' : 'Result',
+                            _output == null ? 'Suggested' : 'Result',
                             style: const TextStyle(
                               fontSize: 11,
-                              fontWeight: FontWeight.w500,
-                              color: Color(0xffd0d6e1),
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 0.4,
+                              color: Color(0x8fd0d6e1),
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -358,7 +361,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
                                 fontSize: 11,
-                                color: Color(0xffc2c7d2),
+                                color: Color(0x73c2c7d2),
                               ),
                             ),
                           ),
@@ -387,7 +390,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
                         : ListView.builder(
                             key: const Key('action-list'),
                             controller: _scroll,
-                            padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+                            padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
                             itemExtent: _rowHeight,
                             itemCount: candidates.length,
                             itemBuilder: (context, index) =>
@@ -397,7 +400,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
                   const Divider(
                     height: 1,
                     thickness: 1,
-                    color: Color(0x24ffffff),
+                    color: Color(0x14ffffff),
                   ),
                   SizedBox(
                     height: _footerHeight,
@@ -405,31 +408,26 @@ class _LauncherScreenState extends State<LauncherScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Row(
                         children: [
-                          const Icon(
-                            Icons.bolt_rounded,
-                            size: 14,
-                            color: Color(0xffd0d6e1),
-                          ),
-                          const SizedBox(width: 6),
                           Text(
                             _output == null
                                 ? '${candidates.length} results'
                                 : 'Result',
                             style: const TextStyle(
                               fontSize: 11,
-                              color: Color(0xffc2c7d2),
+                              color: Color(0x8fc2c7d2),
                             ),
                           ),
                           const Spacer(),
                           Text(
-                            _output == null ? 'Run' : 'Back to results',
+                            _output == null ? 'Run' : 'Back',
                             style: const TextStyle(
                               fontSize: 11,
-                              color: Color(0xffd0d6e1),
+                              fontWeight: FontWeight.w500,
+                              color: Color(0xbad0d6e1),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          _keycap(_output == null ? '↵' : '↑ ↓'),
+                          LauncherKeycap(_output == null ? '↵' : 'esc'),
                         ],
                       ),
                     ),
@@ -464,19 +462,26 @@ class _LauncherScreenState extends State<LauncherScreen> {
   }
 
   Widget _scopeChip(ScopeDto scope, bool selected) => Material(
-        color: selected ? const Color(0x59a7b4cb) : Colors.transparent,
-        borderRadius: BorderRadius.circular(6),
+        color: selected ? const Color(0x3d6d8dff) : const Color(0x14ffffff),
+        clipBehavior: Clip.antiAlias,
+        shape: StadiumBorder(
+          side: BorderSide(
+            color: selected ? const Color(0x559eb4ff) : const Color(0x14ffffff),
+          ),
+        ),
         child: InkWell(
-          borderRadius: BorderRadius.circular(6),
+          customBorder: const StadiumBorder(),
           onTap: () => _controller.selectScope(scope.id),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
             child: Text(
               scope.label,
               style: TextStyle(
                 fontSize: 11,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                color: const Color(0xffdbe0ea),
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                color: selected
+                    ? const Color(0xffeef2ff)
+                    : const Color(0xb8dbe0ea),
               ),
             ),
           ),
@@ -488,22 +493,5 @@ class _LauncherScreenState extends State<LauncherScreen> {
         selected: index == _selectedIndex,
         iconBytes: _controller.icons.bytesFor(candidate.id),
         onTap: () => _controller.selectAndExecute(candidate.id),
-      );
-
-  Widget _keycap(String label) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
-        decoration: BoxDecoration(
-          color: const Color(0x4d454955),
-          border: Border.all(color: const Color(0xff484a52), width: 0.5),
-          borderRadius: BorderRadius.circular(4),
-        ),
-        child: Text(
-          label,
-          style: const TextStyle(
-            fontSize: 10,
-            height: 1.1,
-            color: Color(0xffd0d6e1),
-          ),
-        ),
       );
 }

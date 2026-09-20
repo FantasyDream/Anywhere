@@ -113,7 +113,10 @@ fn subtitle(action: &ActionDescriptor, context: &ResolvedContext) -> String {
 /// Short subtitle text; execution still uses the full transport value.
 fn display_detail(context: &ResolvedContext) -> String {
     const MAX: usize = 120;
-    let text = context.value.text();
+    let text = match &context.value {
+        crate::core::context::ContextValue::Application { name, .. } => name.clone(),
+        _ => context.value.text(),
+    };
     if text.chars().count() <= MAX {
         return text;
     }

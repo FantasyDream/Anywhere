@@ -2396,7 +2396,7 @@ async fn an_index_that_arrives_late_reaches_the_settled_snapshot() {
             .any(|candidate| candidate.kind == CandidateKind::Application),
         "the scan must not have published yet: {first:?}"
     );
-    assert!(!*index.borrow(), "the app index is not ready yet");
+    assert_eq!(*index.borrow(), 0, "the app index is not ready yet");
     let searched = app
         .update_input(first.session_id, "chrome".into(), 1)
         .await
@@ -2450,6 +2450,41 @@ async fn an_index_that_arrives_late_reaches_the_settled_snapshot() {
     );
     assert_eq!(complete.revision, 1);
     assert!(complete.context_complete);
+}
+
+#[tokio::test]
+async fn a_new_install_is_found_on_the_next_activation() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    std::fs::create_dir_all(root.join("Old.app/Contents")).unwrap();
+    let app = app(Arc::new(TestPlatform::new(root.clone(), false)));
+
+    let first = app.activate().await.unwrap().unwrap();
+    app.catalog_ready().await;
+    let old = app
+        .update_input(first.session_id, "old".into(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        titles(&old).contains(&"Old"),
+        "the first scan must see what was already installed: {:?}",
+        titles(&old)
+    );
+
+    std::fs::create_dir_all(root.join("NewApp.app/Contents")).unwrap();
+    let second = app.activate().await.unwrap().unwrap();
+    app.catalog_ready().await;
+    let searched = app
+        .update_input(second.session_id, "newapp".into(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        titles(&searched).contains(&"NewApp"),
+        "a newly installed app must be searchable without restarting: {:?}",
+        titles(&searched)
+    );
 }
 
 /// The exact real-machine shape: the budget lands just as the directory is resolved,

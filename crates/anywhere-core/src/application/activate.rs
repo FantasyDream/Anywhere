@@ -125,7 +125,7 @@ impl Application {
         );
         self.prepare_app_actions(session_id, frontmost.as_ref(), prompt_accessibility)
             .await;
-        self.spawn_catalog_scan();
+        let catalog_generation = self.spawn_catalog_scan();
         let (usage, app_usage, history_diagnostics) = self.load_usage(source_app.clone()).await;
         diagnostics.extend(history_diagnostics);
         if let Ok(mut session) = self.resolver.session.lock() {
@@ -176,7 +176,7 @@ impl Application {
         }
         .instrument(tracing::info_span!("activate", session_id, revision = 0))
         .await;
-        self.spawn_index_recompute(session_id);
+        self.spawn_index_recompute(session_id, catalog_generation);
         state
     }
 }

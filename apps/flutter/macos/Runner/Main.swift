@@ -60,7 +60,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window.isMovableByWindowBackground = true
         window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         window.contentView?.wantsLayer = true
-        window.contentView?.layer?.cornerRadius = 12
+        window.contentView?.layer?.cornerRadius = 16
         window.contentView?.layer?.masksToBounds = true
         // Blur the desktop behind the transparent Flutter surface. Keep Flutter's
         // controller and responder chain intact so keyboard/IME handling stays native.
@@ -72,12 +72,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         glass.appearance = NSAppearance(named: .darkAqua)
         // Mask the effect itself as well as the content; a layer corner alone can
         // leave the window-server backdrop rectangular. Stretch only the center.
-        let mask = NSImage(size: NSSize(width: 25, height: 25), flipped: false) { rect in
+        let mask = NSImage(size: NSSize(width: 33, height: 33), flipped: false) { rect in
             NSColor.white.setFill()
-            NSBezierPath(roundedRect: rect, xRadius: 12, yRadius: 12).fill()
+            NSBezierPath(roundedRect: rect, xRadius: 16, yRadius: 16).fill()
             return true
         }
-        mask.capInsets = NSEdgeInsets(top: 12, left: 12, bottom: 12, right: 12)
+        mask.capInsets = NSEdgeInsets(top: 16, left: 16, bottom: 16, right: 16)
         mask.resizingMode = .stretch
         glass.maskImage = mask
         controller.view.addSubview(glass, positioned: .below, relativeTo: nil)
