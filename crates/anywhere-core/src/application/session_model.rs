@@ -12,55 +12,104 @@ use std::{
 };
 
 #[derive(Default)]
+pub struct SessionIdentity {
+    pub frontmost: Option<ApplicationInfo>,
+    pub source_app: String,
+}
+
+#[derive(Default)]
+pub struct SessionResolution {
+    pub context_cache: Vec<ResolvedContext>,
+    pub committed_revision: Option<Revision>,
+    pub committed_contexts: Vec<ResolvedContext>,
+    pub published_contexts: usize,
+    pub snapshot_seq: u32,
+    /// Facts and usage copied for a snapshot. A commit retries when this changes.
+    pub inputs_epoch: u64,
+    pub frozen_scope_ids: Vec<ScopeId>,
+}
+
+#[derive(Default)]
+pub struct SessionExecution {
+    pub candidates: HashMap<ActionId, Candidate>,
+    pub revision: Option<Revision>,
+}
+
+#[derive(Default)]
+pub struct SessionMenu {
+    pub generation: u64,
+    pub trusted: bool,
+}
+
+#[derive(Default)]
 pub struct LauncherSession {
     pub state: LauncherState,
     pub activation_started: bool,
-    /// Session identity: who was in front when we opened.
-    pub frontmost: Option<ApplicationInfo>,
-    /// Session-scoped single-flight directory capture.
-    pub directory: Option<Arc<crate::features::filesystem::provider::DirectoryMemo>>,
-    /// Environment snapshots for availability (clipboard, git, …).
+    pub identity: SessionIdentity,
     pub environment: BTreeMap<String, FactValue>,
-    /// Contexts reusable across revisions without repeating OS work.
-    pub context_cache: Vec<ResolvedContext>,
-    pub committed_revision: Option<Revision>,
-    /// Contexts the committed revision published, for a later re-match against a source
-    /// that arrived late (the application index) without re-resolving anything.
-    pub committed_contexts: Vec<ResolvedContext>,
-    /// Context rows already published for the committed revision, for late counts.
-    pub published_contexts: usize,
-    pub snapshot_seq: u32,
-    pub source_app: String,
+    pub resolution: SessionResolution,
+    pub execution: SessionExecution,
+    pub menu: SessionMenu,
     pub usage: Arc<HashMap<(String, String), UsageStats>>,
     pub app_usage: Arc<HashMap<(String, String), UsageStats>>,
-    /// Committed candidates keyed by stable id, for execution.
-    pub state_candidates: HashMap<ActionId, Candidate>,
-    /// Revision the candidate map above was built for.
-    ///
-    /// A new revision is current from the moment its input arrives, but its candidates
-    /// only exist once `commit` builds them. Without this an execute request that named
-    /// the new revision could still be served from the previous revision's candidates,
-    /// which carry the previous revision's context and execution target.
-    pub candidates_revision: Option<Revision>,
-    /// Scope ids in first-seen order for this session. Hidden groups keep their slot.
-    pub frozen_scope_ids: Vec<ScopeId>,
-    /// Built-ins, plugins and discovered actions use one validated registry snapshot.
     pub actions: Arc<crate::core::action::descriptor::ActionRegistry>,
-    pub menu_generation: u64,
-    pub menu_trusted: bool,
+    /// Clipboard, git availability and history are applied after the first snapshot.
+    pub supplemental_pending: bool,
 }
 
 impl LauncherSession {
+    pub fn reserved(
+        session_id: SessionId,
+        actions: Arc<crate::core::action::descriptor::ActionRegistry>,
+    ) -> Self {
+        Self {
+            state: LauncherState {
+                session_id,
+                ..Default::default()
+            },
+            actions,
+            ..Default::default()
+        }
+    }
+
+    pub fn begin_revision(&mut self, revision: Revision, input: String) {
+        self.state.revision = revision;
+        self.state.input = input;
+        self.state.context_complete = false;
+        self.resolution.committed_revision = None;
+        self.resolution.snapshot_seq = 0;
+        self.resolution.published_contexts = 0;
+    }
+
+    pub fn invalidate_execution(&mut self) {
+        self.execution.candidates.clear();
+        self.resolution.context_cache.clear();
+    }
+
     pub fn record_fact(&mut self, key: impl Into<String>, value: FactValue) -> Result<()> {
         let key = key.into();
         crate::core::session::facts::validate_write(&key, &value)?;
         self.environment.insert(key, value);
+        self.note_snapshot_inputs();
         Ok(())
     }
 
-    /// The read-only environment an availability rule may inspect.
+    pub fn replace_usage(
+        &mut self,
+        usage: Arc<HashMap<(String, String), UsageStats>>,
+        app_usage: Arc<HashMap<(String, String), UsageStats>>,
+    ) {
+        self.usage = usage;
+        self.app_usage = app_usage;
+        self.note_snapshot_inputs();
+    }
+
+    fn note_snapshot_inputs(&mut self) {
+        self.resolution.inputs_epoch = self.resolution.inputs_epoch.saturating_add(1);
+    }
+
     pub fn facts(&self) -> SessionFacts {
-        SessionFacts::from_map(self.frontmost.clone(), self.environment.clone())
+        SessionFacts::from_map(self.identity.frontmost.clone(), self.environment.clone())
             .expect("session facts are validated at capture")
     }
 }

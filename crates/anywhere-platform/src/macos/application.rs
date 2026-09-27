@@ -22,24 +22,27 @@ pub(super) fn frontmost_application() -> Result<Option<ApplicationInfo>> {
     result.map(Some).context("decode frontmost application")
 }
 
-pub(super) fn installed_applications(roots: &[PathBuf]) -> Vec<BundleApplication> {
+pub(super) fn installed_applications(roots: &[PathBuf]) -> crate::InstalledApplications {
     let languages = preferred_languages();
     let mut applications = Vec::new();
-    let mut unreadable = 0usize;
+    let mut skipped = 0usize;
     for path in crate::catalog::discover(roots) {
         match read_bundle(&path, &languages) {
             Ok(Some(application)) => applications.push(application),
-            Ok(None) => unreadable += 1,
+            Ok(None) => skipped += 1,
             Err(error) => {
-                unreadable += 1;
+                skipped += 1;
                 tracing::debug!(bundle = %path.display(), error = %error, "app_index_skip");
             }
         }
     }
-    if unreadable > 0 {
-        tracing::info!(unreadable, "app_index_incomplete");
+    if skipped > 0 {
+        tracing::info!(skipped, "app_index_incomplete");
     }
-    applications
+    crate::InstalledApplications {
+        applications,
+        skipped,
+    }
 }
 
 pub(super) fn bundle_application(bundle: &Path) -> Result<Option<BundleApplication>> {
@@ -177,24 +180,41 @@ pub(super) fn application_version(bundle_id: &str) -> Option<String> {
     }
 }
 
-pub(super) fn discover_menu_actions(
-    application: &ApplicationInfo,
-) -> Result<Vec<crate::DiscoveredMenuItem>> {
+pub(super) fn discover_menu_actions(application: &ApplicationInfo) -> Result<crate::MenuDiscovery> {
     if application.pid <= 0 {
-        return Ok(Vec::new());
+        return Ok(crate::MenuDiscovery::Unavailable);
     }
     let identity = c_path(&serde_json::to_string(application)?)?;
-    // SAFETY: native returns a malloc-owned JSON array, freed once.
+    // SAFETY: native returns a malloc-owned JSON object, freed once.
     let decoded = unsafe {
         let raw = launcher_discover_menu_actions(identity.as_ptr());
         if raw.is_null() {
-            bail!("menu discovery failed, timed out, or application identity changed");
+            return Ok(crate::MenuDiscovery::Unavailable);
         }
         let decoded = serde_json::from_slice(CStr::from_ptr(raw).to_bytes());
         launcher_free_string(raw);
         decoded
     };
-    decoded.context("decode menu actions")
+    decode_menu_discovery(decoded.context("decode menu actions")?)
+}
+
+fn decode_menu_discovery(value: serde_json::Value) -> Result<crate::MenuDiscovery> {
+    if value.is_array() {
+        return Ok(crate::MenuDiscovery::Ready(serde_json::from_value(value)?));
+    }
+    match value.get("status").and_then(|status| status.as_str()) {
+        Some("ok") => {
+            let items = value
+                .get("items")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!([]));
+            Ok(crate::MenuDiscovery::Ready(serde_json::from_value(items)?))
+        }
+        Some("untrusted") => Ok(crate::MenuDiscovery::Untrusted),
+        Some("timeout") => Ok(crate::MenuDiscovery::TimedOut),
+        Some("unavailable") => Ok(crate::MenuDiscovery::Unavailable),
+        _ => anyhow::bail!("unknown menu discovery status"),
+    }
 }
 
 pub(super) fn perform_menu_action(
@@ -216,6 +236,7 @@ pub(super) fn perform_menu_action(
         6 => bail!("menu locator is invalid"),
         7 => bail!("accessibility permission is not granted"),
         8 => bail!("could not activate the captured application"),
+        9 => bail!("menu inspection could not finish; try again"),
         other => bail!("menu action failed ({other})"),
     }
 }
@@ -288,7 +309,10 @@ mod tests {
             let mut rejected = app.clone();
             rejected.instance_id = None;
             assert!(
-                platform.discover_menu_actions(&rejected).is_err(),
+                matches!(
+                    platform.discover_menu_actions(&rejected).unwrap(),
+                    crate::MenuDiscovery::Unavailable | crate::MenuDiscovery::TimedOut
+                ),
                 "a missing instance_id must not discover menus"
             );
         }
@@ -302,17 +326,18 @@ mod tests {
             return;
         };
         assert!(app.pid > 0);
-        let items = platform.discover_menu_actions(&app).unwrap();
+        let discovery = platform.discover_menu_actions(&app).unwrap();
         if trusted {
             assert!(
-                items
+                discovery
+                    .items()
                     .iter()
                     .all(|item| !item.title.is_empty() && !item.menu_path.is_empty()),
                 "menu leaves must have titles"
             );
         } else {
             assert!(
-                items.is_empty(),
+                matches!(discovery, crate::MenuDiscovery::Untrusted) || discovery.is_empty(),
                 "untrusted accessibility must not yield menu actions"
             );
         }

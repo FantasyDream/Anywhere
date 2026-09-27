@@ -96,6 +96,9 @@ pub struct CandidatePresentation {
     pub bundle_id: Option<String>,
     /// App that owns an action exclusively (Current App scope); `None` for generic actions.
     pub owning_app: Option<String>,
+    /// Menu ancestors. Empty when the title is the whole label.
+    #[serde(default)]
+    pub menu_path: Vec<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -206,14 +209,37 @@ impl LauncherState {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ActionStatus {
+    Succeeded,
+    Failed,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ActionResult {
     pub session_id: SessionId,
     pub revision: Revision,
-    pub success: bool,
-    pub message: String,
+    pub status: ActionStatus,
+    /// Present when the action itself failed.
+    pub error: Option<String>,
+    /// Present when the action succeeded but a follow-up step did not.
+    pub warning: Option<String>,
     pub output_text: Option<String>,
     pub close_window: bool,
+}
+
+impl ActionResult {
+    pub fn succeeded(&self) -> bool {
+        self.status == ActionStatus::Succeeded
+    }
+
+    pub fn notice(&self) -> &str {
+        self.error
+            .as_deref()
+            .or(self.warning.as_deref())
+            .unwrap_or("")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -365,6 +391,7 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
                     command_id: Some("core.directory.copy".into()),
                     bundle_id: None,
                     owning_app: None,
+                    menu_path: Vec::new(),
                 },
                 CandidatePresentation {
                     id: "app:com.google.Chrome".into(),
@@ -381,6 +408,7 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
                     command_id: None,
                     bundle_id: Some("com.google.Chrome".into()),
                     owning_app: None,
+                    menu_path: Vec::new(),
                 },
             ],
             ..Default::default()

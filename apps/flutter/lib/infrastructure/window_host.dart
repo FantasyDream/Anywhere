@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
+import '../settings/host_settings.dart';
 
-/// Typed lifecycle messages shared by the macOS and Windows hosts.
+/// Typed lifecycle messages from the macOS host.
 class WindowHost {
   WindowHost(this._channel);
   final MethodChannel _channel;
@@ -8,6 +9,7 @@ class WindowHost {
   void listen({
     required Future<void> Function([String? mode]) toggle,
     required Future<void> Function(int) dismiss,
+    Future<void> Function()? openSettings,
   }) {
     _channel.setMethodCallHandler((call) async {
       switch (call.method) {
@@ -22,13 +24,19 @@ class WindowHost {
         case 'dismiss':
           final generation = (call.arguments as Map?)?['generation'];
           if (generation is int) await dismiss(generation);
+        case 'openSettings':
+          await openSettings?.call();
       }
     });
   }
 
   Future<void> ready() => _channel.invokeMethod<void>('ready');
-  Future<void> show(int generation, double height) => _channel
-      .invokeMethod<void>('show', {'generation': generation, 'height': height});
+  Future<void> show(int generation, double height, {bool settings = false}) =>
+      _channel.invokeMethod<void>('show', {
+        'generation': generation,
+        'height': height,
+        'settings': settings,
+      });
   Future<void> resize(int generation, double height) =>
       _channel.invokeMethod<void>('resize', {
         'generation': generation,
@@ -36,5 +44,31 @@ class WindowHost {
       });
   Future<void> hide(int generation) =>
       _channel.invokeMethod<void>('hide', {'generation': generation});
+
+  Future<HostSettings> readSettings() async {
+    final raw = await _channel.invokeMapMethod<Object?, Object?>('settings');
+    if (raw == null) return HostSettings.defaults;
+    return HostSettings.fromMap(raw);
+  }
+
+  Future<String> readSettingsStatus() async {
+    final raw =
+        await _channel.invokeMapMethod<Object?, Object?>('settingsStatus');
+    if (raw == null) throw StateError('Settings status is unavailable.');
+    return [raw['hotkeyError'], raw['loginError']]
+        .whereType<String>()
+        .where((message) => message.isNotEmpty)
+        .join('\n');
+  }
+
+  Future<String?> writeSettings(HostSettings settings) async {
+    try {
+      await _channel.invokeMethod<void>('saveSettings', settings.toMap());
+      return null;
+    } on PlatformException catch (error) {
+      return error.message ?? 'Settings could not be saved.';
+    }
+  }
+
   void dispose() => _channel.setMethodCallHandler(null);
 }

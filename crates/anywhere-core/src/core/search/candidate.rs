@@ -6,6 +6,7 @@ use crate::core::action::descriptor::ActionDescriptor;
 use crate::core::context::ResolvedContext;
 use anywhere_protocol::*;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 /// A candidate and everything needed to present or execute it.
 #[derive(Debug, Clone)]
@@ -63,9 +64,9 @@ pub struct CandidateSet {
 /// Stable business identity: survives re-ranking, renumbering and late enrichment.
 pub fn action_candidate_id(command: &str, context: &ResolvedContext) -> String {
     format!(
-        "action:{command}:{}:{}",
+        "action:{command}:{}:{:016x}",
         context.type_id,
-        context.value.text()
+        context.value.identity_fingerprint()
     )
 }
 
@@ -97,7 +98,7 @@ pub fn compare_candidates(a: &Candidate, b: &Candidate) -> std::cmp::Ordering {
 /// Scope membership is unioned so ownership survives deduplication.
 pub fn deduplicate_actions(candidates: &mut Vec<Candidate>) {
     let mut merged: Vec<Candidate> = Vec::with_capacity(candidates.len());
-    let mut index: BTreeMap<(ActionId, ContextTypeId, String), usize> = BTreeMap::new();
+    let mut index: BTreeMap<(ActionId, ContextTypeId, Arc<str>), usize> = BTreeMap::new();
     for candidate in candidates.drain(..) {
         let Some(command) = candidate.presentation.command_id.clone() else {
             merged.push(candidate);
@@ -105,8 +106,8 @@ pub fn deduplicate_actions(candidates: &mut Vec<Candidate>) {
         };
         let context = candidate
             .context()
-            .map(|context| (context.type_id.clone(), context.value.text()))
-            .unwrap_or_default();
+            .map(|context| (context.type_id.clone(), context.value.shared_text()))
+            .unwrap_or_else(|| (String::new(), Arc::<str>::from("")));
         let key = (command, context.0, context.1);
         match index.get(&key) {
             Some(position) => {

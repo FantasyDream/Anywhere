@@ -23,6 +23,10 @@ pub enum SourceStage {
 }
 
 pub trait CandidateSource {
+    fn id(&self) -> &'static str {
+        "source"
+    }
+
     fn stage(&self) -> SourceStage {
         SourceStage::Ranked
     }

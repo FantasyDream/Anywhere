@@ -8,7 +8,7 @@ Understand → Enrich → Match → Rank → Execute
 
 在 Finder 中按 **⌘⌥Space**，无需输入即可得到当前环境的动作：普通目录是 Open Terminal Here / Copy Path / Open Directory，Git 目录则以 Git Status 开头。输入 `chrome` 直接打开应用，输入 `git sta` 找到 Git 动作，粘贴 URL、JSON 或路径仍得到对应动作。
 
-macOS 应用可在本机编译；Windows x64 的 Host、资源管理器适配和一键打包脚本已加入，[GitHub Actions](https://github.com/FantasyDream/Anywhere/actions/workflows/windows.yml) 自动编译并提供 ZIP。Windows 实机验收仍待人工执行。见 [Windows 构建与人工验证](docs/windows.md)。
+macOS 应用可在本机编译。
 
 ## 构建与运行
 
@@ -17,6 +17,7 @@ macOS 应用可在本机编译；Windows x64 的 Host、资源管理器适配和
 ```bash
 # 在仓库根目录；使用系统已安装的 cargo / flutter。
 source scripts/env.sh
+scripts/setup-local-signing.sh # 仅首次：在登录钥匙串创建本机签名身份
 scripts/build-macos.sh
 scripts/run-macos.sh
 # 也可以在 Finder 双击 build/Anywhere.app
@@ -24,11 +25,13 @@ scripts/run-macos.sh
 
 `scripts/env.sh` 只设置本机 clang/swift 模块缓存，不再改写 `CARGO_HOME`、`PUB_CACHE` 或把项目内 `.tools` SDK 放到 PATH 前面。
 
-macOS 与 Windows Host 均显式启用 **Impeller**。macOS 新包已通过引擎日志确认使用 Impeller/MetalSDF；SDK 版本和验证范围见 [渲染器决策记录](docs/decisions/004-windows-and-renderer.md#2026-09-17重新启用-impeller)。
+辅助功能授权与代码签名身份关联。构建脚本现在使用登录钥匙串中长期复用的 `Anywhere Local Code Signing` 身份，不再每次用随代码变化的临时签名；从旧签名切换过来时需重新授权一次。同一台 Mac 上重建或替换应用后的授权保留情况仍待实机验收。请勿删除该钥匙串身份。已有 Apple 签名身份时可设置 `ANYWHERE_CODESIGN_IDENTITY`；发布给其他 Mac 的应用应使用 Developer ID 签名，本机自签名身份只供本机开发使用。
 
-首次启动自动显示一次，之后留在菜单栏。**⌘⌥Space** 打开/隐藏；**↑ / ↓** 选择；**Enter** 执行；**Esc** 隐藏；**⌥ ← / →** 在 Scope Bar 中切换分组。失去焦点立即隐藏；重新唤醒会清空输入并重新捕获上下文。无动作时只显示搜索栏，列表随数量增减，最多显示 7 行，更多结果可滚动，窗口高度上限 520。菜单栏可以打开或退出应用。快捷键冲突会显示诊断；释放其他应用对该组合键的占用后重启。
+macOS Host 显式启用 **Impeller**。
 
-Scope Bar 固定在搜索栏下方：`[ All ] [ Finder ] [ Git ] [ Folder ]`。**All** 默认选中；第二项始终是当前应用，只包含它的动作；之后是当前可见动作所属的动态分组，先按当前匹配动作的使用次数排序，同分时按 git → folder → file → web → json 与稳定 ID 排序。切换 Scope 是硬过滤，候选列表由 Rust 预计算，UI 不判断 Context 类型。
+首次启动自动显示一次，之后留在菜单栏。**⌘⌥Space** 打开/隐藏；**↑ / ↓** 选择；**Enter** 执行；**Esc** 隐藏；**Ctrl+Tab** / **Ctrl+Shift+Tab** 在 Scope Bar 中循环分组。失去焦点立即隐藏；重新唤醒会清空输入并重新捕获上下文。无动作时只显示搜索栏，列表随数量增减，最多显示 7 行，更多结果可滚动，窗口高度上限 520。菜单栏可以打开或退出应用。快捷键冲突会显示诊断；释放其他应用对该组合键的占用后重启。
+
+Scope Bar 在搜索栏下方。没有单独的 All：未选中 Scope 就是综合列表。有当前应用动作时，Current App 排在第一位并在 Current App 入口下默认选中；其后是当前可见动作的分组，先按使用次数排序，同分时按注册顺序与稳定 ID 排序。切换 Scope 是硬过滤，候选列表由 Rust 预计算，UI 不判断 Context 类型。
 
 普通目录里 Finder 与 Folder 的内容相同是正常的：Finder 的动作就是它那个目录的动作，两者没有差异。只有在存在其他应用专属动作或 Git 仓库时两个 Scope 才会不同。
 
@@ -47,11 +50,9 @@ scripts/check.sh
 cargo run --release --locked -p anywhere-core --example measure
 ```
 
-`cargo test -p anywhere-core` 不需要 Flutter、Dart 或可见 GUI。完整检查脚本校验共享 Flutter 版本，并运行 Rust fmt / tests / Clippy、架构检查和 Flutter analyze / tests。另有真实剪贴板的编码回归入口，见验收记录；它会临时改写并恢复系统剪贴板。
+`cargo test -p anywhere-core` 不需要 Flutter、Dart 或可见 GUI。完整检查脚本校验共享 Flutter 版本，并运行 Rust fmt / tests / Clippy、架构检查和 Flutter analyze / tests。
 
-Rust 测试使用真实临时文件和 SQLite；OS 动作由 TestPlatform 记录，测试不会打开浏览器、覆盖剪贴板或运行 Git。真实 macOS 验收步骤和实测结果见 [V0.2 验收记录](docs/validation.md)。
-
-自己验证应用请按 [完整手工验收清单](docs/manual-validation.md) 执行；历史清单中的命令和平台范围应以当前实现为准，目前有 14 个内建命令。
+Rust 测试使用真实临时文件和 SQLite；OS 动作由 TestPlatform 记录，测试不会打开浏览器、覆盖剪贴板或运行 Git。目前有 14 个内建命令。
 
 修改桥接公开 API 后重新生成：
 
@@ -90,10 +91,8 @@ Git 动作只在用户按 Enter 时运行，参数是固定的 `status` / `log -
 
 ## 结构与边界
 
-[架构](docs/architecture.md) · [Context 模型](docs/context-model.md) · [插件协议](docs/plugin-protocol.md) · [决策记录](docs/decisions/) · [V0.2 范围](docs/decisions/005-v0.2-minimal-mvp.md)
+[架构](docs/architecture.md) · [新版路线图](docs/roadmap.md) · [V0.3.x MVP](docs/mvp-v0.3x.md) · [Context 模型](docs/context-model.md) · [插件协议](docs/plugin-protocol.md) · [Current App 菜单动作](docs/current-app-actions.md)
 
-本轮架构优化的实现、验证和未来 Roadmap 取舍见 [2026-09-17 实施记录](docs/architecture-review-2026-09-17.md)。
+当前 V0.3.x 范围为 macOS 平台适配、内建上下文、应用搜索、Scope Bar、声明式插件、键盘交互与 Current App 菜单动作。发布前的实机验收状态见 [MVP 文档](docs/mvp-v0.3x.md)。
 
-本次范围为 macOS 与 Windows 平台适配、内建上下文、应用搜索、Scope Bar、声明式插件与键盘交互。Windows 已有开始菜单快捷方式索引、应用启动、剪贴板读取和 Git 执行的实现；应用图标目前使用回退图标。源码支持与 Windows 实机验收是两个不同状态，后者仍待完成。
-
-没有可执行插件运行时、AI、网络 Provider、剪贴板管理器、浏览器捕获、账户或云同步。V0.2 明确不做 Maven/Gradle/Node/Rust/Spring Boot 识别、完整 App Actions 抓取、JSONPath、JSON Workspace、Finder 选中文件、浏览器 URL、选中文本、文件搜索、浏览器历史、插件 UI、WebView、并行 Context Scheduler、复杂 Provider 分类和 ML Ranking。
+Finder 选中文件、浏览器当前 URL、选中文本、开发项目识别、文件搜索和插件 UI 属于后续阶段；可执行插件运行时、AI、账户与云同步尚未纳入当前版本。

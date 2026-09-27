@@ -4,10 +4,9 @@
 //! themselves. Registration is the only wiring — the engine, the search pipeline and the
 //! launcher service never learn the feature's name.
 use super::availability::AvailabilityRule;
-use super::descriptor::{ActionDescriptor, ActionExecutor};
+use super::descriptor::{ActionDefinition, ActionExecutor};
 use super::group::ActionGroup;
 use super::handler::{ActionHandler, ActionHandlerRef};
-use crate::core::search::query::SearchFields;
 use anywhere_protocol::ContextMatcher;
 
 /// One action declaration inside a bundle.
@@ -29,8 +28,8 @@ pub struct ActionSpec {
 }
 
 impl ActionSpec {
-    /// The descriptor this row stands for, in the bundle's group.
-    pub fn descriptor(&self, group_id: &str) -> ActionDescriptor {
+    /// The definition this row stands for, in the bundle's group.
+    pub fn descriptor(&self, group_id: &str) -> ActionDefinition {
         let aliases = self
             .aliases
             .iter()
@@ -41,7 +40,7 @@ impl ActionSpec {
             .iter()
             .map(|keyword| (*keyword).to_owned())
             .collect::<Vec<_>>();
-        ActionDescriptor {
+        ActionDefinition {
             id: self.id.into(),
             title: self.title.into(),
             subtitle: None,
@@ -54,10 +53,11 @@ impl ActionSpec {
             base_priority: self.base_priority,
             icon: self.icon.into(),
             group_id: group_id.into(),
-            aliases: aliases.clone(),
-            keywords: keywords.clone(),
+            aliases,
+            keywords,
             owning_app: None,
-            search: SearchFields::new(self.title, &aliases, &keywords),
+            menu_path: Vec::new(),
+            search_title: None,
         }
     }
 }
@@ -69,7 +69,7 @@ pub struct ActionBundle {
 }
 
 impl ActionBundle {
-    pub fn descriptors(&self) -> Vec<ActionDescriptor> {
+    pub fn descriptors(&self) -> Vec<ActionDefinition> {
         self.actions
             .iter()
             .map(|spec| spec.descriptor(&self.group.id))

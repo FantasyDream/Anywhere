@@ -12,10 +12,10 @@
 //! - [`core`] holds the framework concepts and knows nothing about a feature, a UI or a
 //!   platform API.
 //! - [`application`] orchestrates one launcher invocation from those concepts, one file per
-//!   use case.
+//!   use case. Product assembly lives in [`application::builtin_registry`].
 //! - [`features`] holds first-party product capabilities; each owns its contexts, its actions
-//!   and its candidate sources, and registers them through [`features::builtin_providers`]
-//!   and [`features::builtin_action_bundles`].
+//!   and its candidate sources, and registers them through [`features::builtin_providers`],
+//!   [`features::builtin_action_bundles`] and [`features::session_seeds`].
 //! - [`persistence`] stores data behind repository interfaces.
 pub mod application;
 pub mod core;

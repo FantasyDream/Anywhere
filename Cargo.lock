@@ -74,7 +74,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "anywhere-bridge-flutter"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "anywhere-core",
@@ -89,7 +89,7 @@ dependencies = [
 
 [[package]]
 name = "anywhere-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "anywhere-platform",
@@ -107,7 +107,7 @@ dependencies = [
 
 [[package]]
 name = "anywhere-platform"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "cc",
@@ -120,7 +120,7 @@ dependencies = [
 
 [[package]]
 name = "anywhere-plugin"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "anywhere-protocol",
@@ -132,7 +132,7 @@ dependencies = [
 
 [[package]]
 name = "anywhere-protocol"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",

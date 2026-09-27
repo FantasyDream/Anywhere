@@ -57,15 +57,13 @@ pub fn non_query_terms(
 ///
 /// Home: the ambient object leads, so context dominates usage.
 /// Search: the query dominates, so context only breaks ties.
-pub fn context_relevance(source: ContextSource, type_id: &str, searching: bool) -> i32 {
+pub fn context_relevance(source: ContextSource, searching: bool, semantic: i32) -> i32 {
     let base = match source {
         ContextSource::UserInput => 200,
         ContextSource::ApplicationContext => 120,
         ContextSource::ForegroundApplication => 30,
     };
-    let semantic = if type_id == TEXT { 40 } else { 90 };
     if searching {
-        // Typed object actions stay reachable but never outrank a query match.
         base / 2 + semantic
     } else {
         base + semantic
@@ -94,7 +92,7 @@ pub fn score(
     match_level: Option<MatchLevel>,
     searching: bool,
     source: ContextSource,
-    type_id: &str,
+    semantic: i32,
     base_priority: i32,
     usage: UsageStats,
     now: i64,
@@ -102,7 +100,7 @@ pub fn score(
     let query_match = match_level.map_or(0, |level| level.score(true));
     let (frequency, recency) = usage_terms(usage.execute_count, usage.last_executed_at, now);
     let terms = non_query_terms(
-        context_relevance(source, type_id, searching),
+        context_relevance(source, searching, semantic),
         base_priority,
         frequency,
         recency,
@@ -152,7 +150,7 @@ mod tests {
     #[test]
     fn no_query_term_can_ever_reach_a_query_match_tier() {
         let worst = non_query_terms(
-            context_relevance(ContextSource::UserInput, URL, false),
+            context_relevance(ContextSource::UserInput, false, 90),
             50,
             80,
             40,
@@ -163,12 +161,12 @@ mod tests {
 
     #[test]
     fn home_weights_context_more_than_search_does() {
-        let home = context_relevance(ContextSource::ApplicationContext, DIRECTORY, false);
-        let search = context_relevance(ContextSource::ApplicationContext, DIRECTORY, true);
+        let home = context_relevance(ContextSource::ApplicationContext, false, 90);
+        let search = context_relevance(ContextSource::ApplicationContext, true, 90);
         assert!(home > search);
         assert!(
-            context_relevance(ContextSource::UserInput, URL, false)
-                > context_relevance(ContextSource::ForegroundApplication, APPLICATION, false)
+            context_relevance(ContextSource::UserInput, false, 90)
+                > context_relevance(ContextSource::ForegroundApplication, false, 90)
         );
     }
 
@@ -188,7 +186,7 @@ mod tests {
     #[test]
     fn non_query_terms_are_bounded_and_saturate_at_the_ceiling() {
         let realistic = non_query_terms(
-            context_relevance(ContextSource::UserInput, DIRECTORY, false),
+            context_relevance(ContextSource::UserInput, false, 90),
             50,
             80,
             40,
@@ -212,7 +210,7 @@ mod tests {
             None,
             false,
             ContextSource::ApplicationContext,
-            GIT_REPOSITORY,
+            90,
             50,
             usage(1),
             now,
@@ -221,7 +219,7 @@ mod tests {
             None,
             false,
             ContextSource::ApplicationContext,
-            DIRECTORY,
+            90,
             20,
             usage(7),
             now,
@@ -237,7 +235,7 @@ mod tests {
             None,
             false,
             ContextSource::ApplicationContext,
-            DIRECTORY,
+            90,
             20,
             usage(1),
             now,
@@ -251,7 +249,7 @@ mod tests {
             Some(MatchLevel::Substring),
             true,
             ContextSource::UserInput,
-            DIRECTORY,
+            90,
             50,
             UsageStats {
                 execute_count: u32::MAX,
@@ -263,7 +261,7 @@ mod tests {
             Some(MatchLevel::Prefix),
             true,
             ContextSource::ForegroundApplication,
-            APPLICATION,
+            90,
             -50,
             UsageStats::default(),
             1000,

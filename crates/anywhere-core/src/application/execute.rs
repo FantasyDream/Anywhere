@@ -32,11 +32,12 @@ impl Application {
             // map still holds the previous revision's candidates. They carry the previous
             // context and execution target, so serving them here would execute an action
             // that belongs to an input the user has already replaced.
-            if session.candidates_revision != Some(revision) {
+            if session.execution.revision != Some(revision) {
                 bail!("action expired; choose a current action");
             }
             let candidate = session
-                .state_candidates
+                .execution
+                .candidates
                 .get(&candidate_id)
                 .cloned()
                 .context("action expired; choose a current action")?;
@@ -53,13 +54,17 @@ impl Application {
             }
             (
                 candidate,
-                session.source_app.clone(),
-                session.menu_generation,
-                session.frontmost.as_ref().map(|app| app.bundle_id.clone()),
+                session.identity.source_app.clone(),
+                session.menu.generation,
+                session
+                    .identity
+                    .frontmost
+                    .as_ref()
+                    .map(|app| app.bundle_id.clone()),
             )
         };
         let platform = self.platform.clone();
-        let registry = self.resolver.registry.clone();
+        let registry = self.resolver.base_registry();
         let history = self.resolver.history.clone();
         // Handed to the worker so it can re-check currency when it actually starts running,
         // rather than trusting a check made while the request was still being queued.
@@ -131,19 +136,25 @@ impl Application {
         .await?;
         match result {
             Ok((output, history_result)) => {
-                let mut message = "Done".to_owned();
-                let mut close_window = output.close_window;
-                if let Err(error) = history_result {
-                    message = format!("Action completed, but usage could not be saved: {error:#}");
-                    close_window = false;
-                    tracing::error!(session_id, revision, error = %error, "usage_record_failed");
-                }
+                let (warning, close_window) = match history_result {
+                    Ok(()) => (None, output.close_window),
+                    Err(error) => {
+                        tracing::error!(session_id, revision, error = %error, "usage_record_failed");
+                        (
+                            Some(format!(
+                                "Action completed, but usage could not be saved: {error:#}"
+                            )),
+                            false,
+                        )
+                    }
+                };
                 tracing::info!(session_id, revision, "action_execution_completed");
                 Ok(ActionResult {
                     session_id,
                     revision,
-                    success: true,
-                    message,
+                    status: ActionStatus::Succeeded,
+                    error: None,
+                    warning,
                     output_text: output.text,
                     close_window,
                 })
@@ -159,8 +170,9 @@ impl Application {
                 Ok(ActionResult {
                     session_id,
                     revision,
-                    success: false,
-                    message: format!("{error:#}"),
+                    status: ActionStatus::Failed,
+                    error: Some(format!("{error:#}")),
+                    warning: None,
                     output_text: None,
                     close_window: false,
                 })

@@ -12,9 +12,8 @@ use crate::{
     core::context::{ExecutionContext, ResolvedContext},
     core::ranking::usage::UsageRepository,
     core::search::candidate_source::CandidateSource,
-    core::search::engine::ActionSearch,
-    core::search::query::Query,
     features::applications::index::ApplicationCatalog,
+    features::filesystem::provider::DirectoryMemo,
 };
 use anyhow::{anyhow, Result};
 use anywhere_protocol::*;
@@ -30,22 +29,28 @@ use tokio::sync::{broadcast, watch};
 /// Cloneable engine shared by the facade and its background completion tasks.
 #[derive(Clone)]
 pub struct Resolver {
-    pub registry: Arc<ActionRegistry>,
+    pub(super) registry: Arc<Mutex<Arc<ActionRegistry>>>,
     /// Stateless providers; the directory provider is added per revision.
-    pub providers: ContextProviderRegistry,
-    pub sources: Vec<Arc<dyn CandidateSource + Send + Sync>>,
-    pub session: Arc<Mutex<LauncherSession>>,
-    pub current: Arc<AtomicU64>,
-    pub events: broadcast::Sender<LauncherEvent>,
-    pub latest_tx: watch::Sender<Option<Arc<LauncherState>>>,
-    pub catalog: Arc<Mutex<Arc<ApplicationCatalog>>>,
-    pub catalog_rx: watch::Receiver<u64>,
-    pub catalog_issued: Arc<AtomicU64>,
-    pub history: Arc<Mutex<Box<dyn UsageRepository>>>,
+    pub(super) providers: ContextProviderRegistry,
+    pub(super) sources: Vec<Arc<dyn CandidateSource + Send + Sync>>,
+    pub(super) session: Arc<Mutex<LauncherSession>>,
+    pub(super) current: Arc<AtomicU64>,
+    pub(super) events: broadcast::Sender<LauncherEvent>,
+    pub(super) latest_tx: watch::Sender<Option<Arc<LauncherState>>>,
+    pub(super) catalog: Arc<Mutex<CatalogSlot>>,
+    pub(super) catalog_rx: watch::Receiver<u64>,
+    pub(super) catalog_issued: Arc<AtomicU64>,
+    pub(super) history: Arc<Mutex<Box<dyn UsageRepository>>>,
+    directory: Arc<Mutex<Option<Arc<DirectoryMemo>>>>,
 }
 
-/// Outcome of one resolution pass. `run` lets the caller resume an incomplete pass
-/// with the same `(provider, context, session, revision)` execution-dedup state.
+/// Published application index. The generation check and the write share this lock.
+pub(super) struct CatalogSlot {
+    pub(super) generation: u64,
+    /// Unfiltered scan. Exclusions are applied into `catalog`.
+    pub(super) full: Arc<ApplicationCatalog>,
+    pub(super) catalog: Arc<ApplicationCatalog>,
+}
 pub struct Resolution {
     pub contexts: Vec<ResolvedContext>,
     pub diagnostics: Vec<String>,
@@ -59,7 +64,7 @@ impl Resolver {
         let (latest_tx, _) = watch::channel(None);
         let (_, catalog_rx) = watch::channel(0);
         Self {
-            registry: Arc::new(registry),
+            registry: Arc::new(Mutex::new(Arc::new(registry))),
             // Registration order does not matter: the registry sorts by priority, then id.
             providers: super::composition::builtin_providers(),
             sources: Vec::new(),
@@ -67,11 +72,65 @@ impl Resolver {
             current: Arc::new(AtomicU64::new(0)),
             events: broadcast::channel(256).0,
             latest_tx,
-            catalog: Arc::new(Mutex::new(Arc::new(ApplicationCatalog::empty()))),
+            catalog: Arc::new(Mutex::new(CatalogSlot {
+                generation: 0,
+                full: Arc::new(ApplicationCatalog::empty()),
+                catalog: Arc::new(ApplicationCatalog::empty()),
+            })),
             catalog_rx,
             catalog_issued: Arc::new(AtomicU64::new(0)),
             history: Arc::new(Mutex::new(history)),
+            directory: Arc::new(Mutex::new(None)),
         }
+    }
+
+    pub fn base_registry(&self) -> Arc<ActionRegistry> {
+        self.registry
+            .lock()
+            .map(|slot| slot.clone())
+            .unwrap_or_else(|poisoned| poisoned.into_inner().clone())
+    }
+
+    pub fn replace_base_registry(&self, registry: ActionRegistry) {
+        if let Ok(mut slot) = self.registry.lock() {
+            *slot = Arc::new(registry);
+        }
+    }
+
+    pub(super) fn with_catalog_rx(mut self, catalog_rx: watch::Receiver<u64>) -> Self {
+        self.catalog_rx = catalog_rx;
+        self
+    }
+
+    pub(super) fn set_directory(&self, directory: Option<Arc<DirectoryMemo>>) {
+        if let Ok(mut slot) = self.directory.lock() {
+            *slot = directory;
+        }
+    }
+
+    pub(super) fn clear_directory(&self) {
+        self.set_directory(None);
+    }
+
+    pub(super) fn mark_current(&self, session_id: SessionId, revision: Revision) {
+        self.current
+            .store(stamp(session_id, revision), Ordering::Release);
+    }
+
+    pub(super) fn reset_session(&self, session_id: SessionId) {
+        self.clear_directory();
+        self.mark_current(session_id, 0);
+        self.latest_tx.send_replace(None);
+    }
+
+    pub(super) fn abandon_session(&self) {
+        self.current.store(0, Ordering::Release);
+        self.clear_directory();
+        self.latest_tx.send_replace(None);
+    }
+
+    pub(super) fn is_abandoned(&self) -> bool {
+        self.current.load(Ordering::Acquire) == 0
     }
 
     pub fn register_provider(&mut self, provider: Arc<dyn ContextProvider>) -> Result<()> {
@@ -113,13 +172,16 @@ impl Resolver {
         }
     }
 
-    pub fn catalog_snapshot(&self) -> Arc<ApplicationCatalog> {
-        self.catalog.lock().expect("catalog lock poisoned").clone()
+    fn catalog_view(&self) -> Result<(Arc<ApplicationCatalog>, u64)> {
+        self.catalog
+            .lock()
+            .map(|guard| (guard.catalog.clone(), guard.generation))
+            .map_err(|_| anyhow!("catalog lock poisoned"))
     }
 
     /// Revision currently published for the live session, if any.
     pub fn committed_revision(&self) -> Option<Revision> {
-        self.session.lock().ok()?.committed_revision
+        self.session.lock().ok()?.resolution.committed_revision
     }
 
     /// Rebuild the published snapshot for the revision that is already committed.
@@ -135,13 +197,13 @@ impl Resolver {
             if session.state.session_id != session_id {
                 return None;
             }
-            let revision = session.committed_revision?;
+            let revision = session.resolution.committed_revision?;
             if !self.is_current(session_id, revision) {
                 return None;
             }
             (
                 revision,
-                session.committed_contexts.clone(),
+                session.resolution.committed_contexts.clone(),
                 session.state.context_complete,
             )
         };
@@ -158,13 +220,12 @@ impl Resolver {
     }
 
     /// Providers for one revision: stateless built-ins plus the directory memo.
-    fn providers_for(&self, session_id: SessionId) -> Vec<Arc<dyn ContextProvider>> {
+    fn providers_for(&self, _session_id: SessionId) -> Vec<Arc<dyn ContextProvider>> {
         let directory = self
-            .session
+            .directory
             .lock()
             .ok()
-            .filter(|session| session.state.session_id == session_id)
-            .and_then(|session| session.directory.clone());
+            .and_then(|directory| directory.clone());
         super::composition::session_providers(self.providers.clone(), directory)
     }
 
@@ -299,7 +360,7 @@ impl Resolver {
         if session.state.session_id != session_id {
             return None;
         }
-        Some(super::composition::session_seeds(&session, input))
+        Some(seeds_from(&session, input))
     }
 
     /// Publish a snapshot. `None` means this session/revision is no longer current,
@@ -318,7 +379,16 @@ impl Resolver {
         loop {
             // Take only immutable inputs while holding the session lock. Search and
             // sorting can be slow; new input and cancellation must remain able to run.
-            let (input, facts, usage, app_usage, expected_sequence, actions) = {
+            let (
+                input,
+                facts,
+                usage,
+                app_usage,
+                expected_sequence,
+                actions,
+                prior_diagnostics,
+                inputs_epoch,
+            ) = {
                 let session = self
                     .session
                     .lock()
@@ -329,14 +399,8 @@ impl Resolver {
                 {
                     return Ok(None);
                 }
-                if session.committed_revision == Some(revision) {
-                    // A source refresh may have captured contexts before a late pass
-                    // completed. Never replace those richer contexts with an old copy.
-                    if session.committed_contexts.len() > contexts.len()
-                        || (session.state.context_complete && !resolve_complete)
-                    {
-                        contexts = session.committed_contexts.clone();
-                    }
+                if session.resolution.committed_revision == Some(revision) {
+                    contexts = union_contexts(&session.resolution.committed_contexts, contexts);
                     resolve_complete |= session.state.context_complete;
                 }
                 (
@@ -344,34 +408,26 @@ impl Resolver {
                     session.facts(),
                     session.usage.clone(),
                     session.app_usage.clone(),
-                    session.snapshot_seq,
+                    session.resolution.snapshot_seq,
                     session.actions.clone(),
+                    session.state.diagnostics.clone(),
+                    session.resolution.inputs_epoch,
                 )
             };
-            let query = Query::parse(&input);
-            let catalog = self.catalog_snapshot();
-            let usage_of = |command: &str, kind: &str| {
-                usage
-                    .get(&(command.to_owned(), kind.to_owned()))
-                    .copied()
-                    .unwrap_or_default()
-            };
-            let app_usage_of = |command: &str, kind: &str| {
-                app_usage
-                    .get(&(command.to_owned(), kind.to_owned()))
-                    .copied()
-                    .unwrap_or_default()
-            };
-            let search = ActionSearch::new(&actions, &usage_of, &facts, now());
-            let application_source =
-                super::composition::catalog_source(&catalog, &app_usage_of, now());
-            let mut extra: Vec<&dyn CandidateSource> = vec![&application_source];
-            extra.extend(
-                self.sources
-                    .iter()
-                    .map(|source| source.as_ref() as &dyn CandidateSource),
-            );
-            let set = search.search(&query, &contexts, &extra);
+            let (catalog, catalog_generation) = self.catalog_view()?;
+            let prepared = super::snapshot::prepare(super::snapshot::SnapshotInput {
+                input: &input,
+                facts: &facts,
+                usage: &usage,
+                app_usage: &app_usage,
+                actions: &actions,
+                contexts: &contexts,
+                incoming_diagnostics: &diagnostics,
+                prior_diagnostics: &prior_diagnostics,
+                catalog: &catalog,
+                sources: &self.sources,
+                now: now(),
+            });
 
             let mut session = self
                 .session
@@ -383,38 +439,31 @@ impl Resolver {
             {
                 return Ok(None);
             }
-            if session.snapshot_seq != expected_sequence || !Arc::ptr_eq(&session.actions, &actions)
+            if session.resolution.snapshot_seq != expected_sequence
+                || session.resolution.inputs_epoch != inputs_epoch
+                || !Arc::ptr_eq(&session.actions, &actions)
             {
-                // Another commit won for this same revision. Recompute from its latest
-                // state instead of losing enrichment or publishing out of order.
                 continue;
             }
-            for context in &contexts {
-                if !matches!(context.type_id.as_str(), DIRECTORY | GIT_REPOSITORY)
-                    || context.source == ContextSource::UserInput
-                {
-                    continue;
-                }
-                if !session.context_cache.iter().any(|cached| {
-                    cached.type_id == context.type_id && cached.value.text() == context.value.text()
-                }) {
-                    session.context_cache.push(context.clone());
-                }
+            let catalog_moved = self
+                .catalog
+                .lock()
+                .map(|slot| slot.generation != catalog_generation)
+                .map_err(|_| anyhow!("catalog lock poisoned"))?;
+            if catalog_moved {
+                continue;
             }
-            let mut all_diagnostics = session.state.diagnostics.clone();
-            for diagnostic in &diagnostics {
-                if !all_diagnostics.contains(diagnostic) {
-                    all_diagnostics.push(diagnostic.clone());
-                }
-            }
-            session.snapshot_seq = session.snapshot_seq.saturating_add(1);
-            let sequence = session.snapshot_seq;
-            let summary = visible_contexts(&contexts);
-            let late_contexts = summary.len().saturating_sub(session.published_contexts);
-            session.published_contexts = summary.len();
+            crate::features::remember_environment(&mut session.resolution.context_cache, &contexts);
+            session.resolution.snapshot_seq = session.resolution.snapshot_seq.saturating_add(1);
+            let sequence = session.resolution.snapshot_seq;
+            let summary = prepared.summary;
+            let late_contexts = summary
+                .len()
+                .saturating_sub(session.resolution.published_contexts);
+            session.resolution.published_contexts = summary.len();
             let scopes = crate::core::search::scope::apply_session_order(
-                set.scopes,
-                &mut session.frozen_scope_ids,
+                prepared.set.scopes,
+                &mut session.resolution.frozen_scope_ids,
             );
             let state = LauncherState {
                 session_id,
@@ -423,23 +472,33 @@ impl Resolver {
                 input: session.state.input.clone(),
                 context_complete: resolve_complete,
                 context_summary: summary,
-                candidates: set
+                candidates: prepared
+                    .set
                     .candidates
                     .iter()
                     .map(|candidate| candidate.presentation.clone())
                     .collect(),
                 scopes,
-                diagnostics: all_diagnostics,
+                diagnostics: {
+                    let mut diagnostics = prepared.diagnostics;
+                    for item in &session.state.diagnostics {
+                        if !diagnostics.contains(item) {
+                            diagnostics.push(item.clone());
+                        }
+                    }
+                    diagnostics
+                },
             };
-            session.committed_revision = Some(revision);
-            session.committed_contexts = contexts;
+            session.resolution.committed_revision = Some(revision);
+            session.resolution.committed_contexts = contexts;
             session.state = state.clone();
-            session.state_candidates = set
+            session.execution.candidates = prepared
+                .set
                 .candidates
                 .iter()
                 .map(|candidate| (candidate.presentation.id.clone(), candidate.clone()))
                 .collect();
-            session.candidates_revision = Some(revision);
+            session.execution.revision = Some(revision);
             // `first_snapshot` marks the snapshot the caller's budget produced; its
             // duration is the spec's `first_snapshot_duration`.
             let is_first_snapshot = sequence == 1;
@@ -491,14 +550,14 @@ impl Resolver {
             tracing::info!(
                 session_id,
                 revision,
-                matcher_duration = set.matcher_us,
-                sources_duration = set.sources_us,
+                matcher_duration = prepared.set.matcher_us,
+                sources_duration = prepared.set.sources_us,
                 "matcher_completed"
             );
             tracing::info!(
                 session_id,
                 revision,
-                ranking_duration = set.ranking_us,
+                ranking_duration = prepared.set.ranking_us,
                 "ranking_completed"
             );
             self.latest_tx.send_replace(Some(Arc::new(state.clone())));
@@ -510,12 +569,34 @@ impl Resolver {
     }
 }
 
+fn union_contexts(
+    committed: &[ResolvedContext],
+    incoming: Vec<ResolvedContext>,
+) -> Vec<ResolvedContext> {
+    let mut merged = committed.to_vec();
+    for context in incoming {
+        let exists = merged.iter().any(|held| {
+            held.type_id == context.type_id
+                && held.value.shared_text() == context.value.shared_text()
+                && held.source == context.source
+        });
+        if !exists {
+            merged.push(context);
+        }
+    }
+    merged
+}
+
 /// Seed contexts for one revision: memoized environment data, the frozen frontmost
 /// application, then the raw input text.
 ///
 /// Callers must already hold the session lock.
 pub fn seeds_from(session: &LauncherSession, input: &str) -> Vec<ResolvedContext> {
-    super::composition::session_seeds(session, input)
+    crate::features::session_seeds(
+        session.identity.frontmost.as_ref(),
+        session.resolution.context_cache.clone(),
+        input,
+    )
 }
 
 pub fn now() -> i64 {
@@ -524,18 +605,6 @@ pub fn now() -> i64 {
         .unwrap_or_default()
         .as_secs()
         .min(i64::MAX as u64) as i64
-}
-
-/// Context summary shown by the host; the raw foreground application row stays internal.
-fn visible_contexts(contexts: &[ResolvedContext]) -> Vec<ContextPresentation> {
-    contexts
-        .iter()
-        .filter(|context| {
-            !(context.type_id == APPLICATION
-                && context.source == ContextSource::ForegroundApplication)
-        })
-        .map(ResolvedContext::presentation)
-        .collect()
 }
 
 #[cfg(test)]
@@ -549,12 +618,15 @@ mod tests {
                 session_id: 1,
                 ..Default::default()
             },
-            frontmost: Some(anywhere_platform::ApplicationInfo {
-                bundle_id: "com.apple.finder".into(),
-                name: "Finder".into(),
-                pid: 1,
-                instance_id: None,
-            }),
+            identity: crate::application::session_model::SessionIdentity {
+                frontmost: Some(anywhere_platform::ApplicationInfo {
+                    bundle_id: "com.apple.finder".into(),
+                    name: "Finder".into(),
+                    pid: 1,
+                    instance_id: None,
+                }),
+                ..Default::default()
+            },
             ..Default::default()
         }
     }
@@ -576,7 +648,8 @@ mod tests {
     #[test]
     fn only_ambient_context_is_reusable_across_revisions() {
         let mut session = fixture();
-        session.context_cache = vec![directory("/env", ContextSource::ApplicationContext)];
+        session.resolution.context_cache =
+            vec![directory("/env", ContextSource::ApplicationContext)];
 
         let seeds = seeds_from(&session, "https://example.com");
         assert!(
@@ -584,36 +657,30 @@ mod tests {
             "the ambient directory is reused: {seeds:?}"
         );
 
-        // What `commit` keeps, given a mixed batch: ambient in, user input out.
-        let mut kept: Vec<ResolvedContext> = Vec::new();
-        for context in [
-            directory("/env", ContextSource::ApplicationContext),
-            directory("/typed", ContextSource::UserInput),
-            ResolvedContext::new(
-                GIT_REPOSITORY,
-                ContextValue::Repository("/typed".into()),
-                ContextSource::UserInput,
-                "test",
-            ),
-            ResolvedContext::new(
-                GIT_REPOSITORY,
-                ContextValue::Repository("/env".into()),
-                ContextSource::ApplicationContext,
-                "test",
-            ),
-        ] {
-            if context.type_id != DIRECTORY && context.type_id != GIT_REPOSITORY {
-                continue;
-            }
-            if context.source == ContextSource::UserInput {
-                continue;
-            }
-            kept.push(context);
-        }
+        let mut kept = Vec::new();
+        crate::features::remember_environment(
+            &mut kept,
+            &[
+                directory("/env", ContextSource::ApplicationContext),
+                directory("/typed", ContextSource::UserInput),
+                ResolvedContext::new(
+                    GIT_REPOSITORY,
+                    ContextValue::Repository("/typed".into()),
+                    ContextSource::UserInput,
+                    "test",
+                ),
+                ResolvedContext::new(
+                    GIT_REPOSITORY,
+                    ContextValue::Repository("/env".into()),
+                    ContextSource::ApplicationContext,
+                    "test",
+                ),
+            ],
+        );
         assert_eq!(kept.len(), 2);
         assert!(kept.iter().all(|c| !c.value.text().contains("/typed")));
 
-        session.context_cache = kept;
+        session.resolution.context_cache = kept;
         let seeds = seeds_from(&session, "chrome");
         assert!(
             !seeds

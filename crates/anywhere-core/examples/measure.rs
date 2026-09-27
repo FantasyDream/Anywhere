@@ -28,25 +28,35 @@ fn percentiles(mut samples: Vec<u128>) -> (f64, f64) {
 
 fn synthetic_catalog(count: usize) -> Vec<IndexedApplication> {
     (0..count)
-        .map(|index| IndexedApplication {
-            bundle_id: format!("com.example.application{index}"),
-            name: format!("Example Application {index}"),
-            path: format!("/Applications/Example Application {index}.app"),
-            aliases: vec![format!("app{index}")],
-            keywords: vec!["example".into()],
+        .map(|index| {
+            IndexedApplication {
+                bundle_id: format!("com.example.application{index}"),
+                name: format!("Example Application {index}"),
+                path: format!("/Applications/Example Application {index}.app"),
+                aliases: vec![format!("app{index}")],
+                keywords: vec!["example".into()],
+                ..Default::default()
+            }
+            .prepared()
         })
         .collect()
 }
 
 fn main() {
-    let registry = anywhere_core::application::composition::builtin_registry();
+    let registry = anywhere_core::application::builtin_registry();
     let catalog = synthetic_catalog(1000);
     let empty_usage = |_: &str, _: &str| UsageStats::default();
     let facts = SessionFacts::default().with(
         anywhere_core::core::session::facts::GIT,
         anywhere_core::core::session::facts::FactValue::Flag(true),
     );
-    let search = ActionSearch::new(&registry, &empty_usage, &facts, 1000);
+    let search = ActionSearch::new(
+        &registry,
+        &empty_usage,
+        &facts,
+        1000,
+        anywhere_core::features::context_semantic,
+    );
     // The application index is a candidate source, exactly as it is in the launcher.
     let application_source = ApplicationSource {
         applications: &catalog,

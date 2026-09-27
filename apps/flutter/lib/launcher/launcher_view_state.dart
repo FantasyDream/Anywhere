@@ -1,6 +1,6 @@
 import '../src/rust/api.dart';
 
-enum LauncherPhase { hidden, activating, ready, resolving, executing }
+enum LauncherPhase { hidden, activating, ready, resolving, executing, settings }
 
 /// Immutable presentation state; Rust still owns matching, ranking and scopes.
 class LauncherViewState {
@@ -13,6 +13,9 @@ class LauncherViewState {
     this.selectedId,
     this.message,
     this.output,
+    this.resultSource,
+    this.resultStatus,
+    this.universalShortcut = '⌘⌥⇧Space',
   });
   final LauncherPhase phase;
   final int generation;
@@ -22,7 +25,14 @@ class LauncherViewState {
   final String? selectedId;
   final String? message;
   final String? output;
-  bool get visible => phase == LauncherPhase.ready || resolving || executing;
+  final String? resultSource;
+  final ActionStatusDto? resultStatus;
+  final String universalShortcut;
+  bool get visible =>
+      phase == LauncherPhase.ready ||
+      phase == LauncherPhase.settings ||
+      resolving ||
+      executing;
   bool get resolving => phase == LauncherPhase.resolving;
   bool get executing => phase == LauncherPhase.executing;
   static const rowHeight = 52.0,
@@ -55,14 +65,14 @@ class LauncherViewState {
     final selected = scopeId;
     if (selected == null) {
       for (final candidate in state.candidates) {
-        if (candidate.availability != 'hidden') list.add(candidate);
+        if (candidate.availability != AvailabilityDto.hidden) list.add(candidate);
       }
     } else {
       final ids = scope?.candidateIds;
       if (ids == null) return const [];
       for (final id in ids) {
         final candidate = byId[id];
-        if (candidate != null && candidate.availability != 'hidden') {
+        if (candidate != null && candidate.availability != AvailabilityDto.hidden) {
           list.add(candidate);
         }
       }
@@ -85,10 +95,28 @@ class LauncherViewState {
       ((snapshot?.diagnostics.isNotEmpty ?? false)
           ? snapshot!.diagnostics.join('\n')
           : null);
+
+  String get searchHint {
+    final active = scope;
+    if (active == null) {
+      return 'Search for an action or app…';
+    }
+    return 'Search ${active.label} · $universalShortcut for all apps';
+  }
+
+  String get resultHeading {
+    if (output == null) return 'Suggested';
+    if (resultStatus == ActionStatusDto.failed) return 'Failed';
+    return 'Succeeded';
+  }
+
   double get previewHeight =>
       ((output?.split('\n').length ?? 0).clamp(3, 14) * 20.0) + 24;
 
   double get height {
+    if (phase == LauncherPhase.settings) {
+      return 480;
+    }
     final candidates = visibleCandidates;
     final body = output != null
         ? previewHeight

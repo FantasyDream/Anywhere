@@ -82,6 +82,21 @@ pub mod groups {
     }
 }
 
+/// Title and tie-break rank recorded with a group.
+pub trait GroupMeta {
+    fn label(&self, group_id: &str) -> String;
+    fn rank(&self, group_id: &str) -> u16;
+}
+
+/// Fallback order when a group was never registered: built-in catalogue, then last.
+pub fn rank_for(group_id: &str) -> u16 {
+    groups::builtin()
+        .iter()
+        .position(|group| group.id == group_id)
+        .map(|index| index as u16)
+        .unwrap_or(u16::MAX)
+}
+
 /// Display label for a group id, falling back to a label derived from the id.
 ///
 /// Plugin groups are not in the catalogue, so they are titled from their id rather than

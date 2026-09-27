@@ -8,6 +8,7 @@ pub struct Query {
     pub raw_input: String,
     pub normalized_query: String,
     pub tokens: Vec<String>,
+    compact: String,
 }
 
 impl Query {
@@ -18,10 +19,15 @@ impl Query {
             .filter(|token| !token.is_empty())
             .map(str::to_owned)
             .collect();
+        let compact = normalized_query
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .collect();
         Self {
             raw_input: raw_input.to_owned(),
             normalized_query,
             tokens,
+            compact,
         }
     }
 
@@ -34,11 +40,8 @@ impl Query {
     /// `google 不存在` compacted to `google` and matched Google Chrome even though the
     /// second token matched nothing. That is discarding query information, which is
     /// not the same as "no Chinese segmentation".
-    pub fn compact(&self) -> String {
-        self.normalized_query
-            .chars()
-            .filter(|c| c.is_alphanumeric())
-            .collect()
+    pub fn compact(&self) -> &str {
+        &self.compact
     }
 
     /// A query with no tokens is Context Home, not a search.
@@ -85,7 +88,7 @@ impl MatchLevel {
 /// or a file stem, which the user never sees — only matches exactly or at a word
 /// start; otherwise `co` would surface every app whose bundle id contains those
 /// letters, which is exactly what was reported.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SearchFields {
     name: Vec<String>,
     metadata: Vec<String>,
@@ -172,7 +175,7 @@ fn field_match(field: &str, query: &Query, identifier_only: bool) -> Option<Matc
         .filter(|c| c.is_ascii_alphanumeric())
         .collect::<String>();
     let wanted = query.compact();
-    if !wanted.is_empty() && compact.starts_with(&wanted) {
+    if !wanted.is_empty() && compact.starts_with(wanted) {
         return Some(MatchLevel::Substring);
     }
     if query

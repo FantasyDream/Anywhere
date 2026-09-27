@@ -16,9 +16,7 @@ Future<void> main() async {
     final executable = File(Platform.resolvedExecutable).parent.path;
     await RustLib.init(
       externalLibrary: ExternalLibrary.open(
-        Platform.isWindows
-            ? '$executable/anywhere_bridge_flutter.dll'
-            : '$executable/../Frameworks/libanywhere_bridge_flutter.dylib',
+        '$executable/../Frameworks/libanywhere_bridge_flutter.dylib',
       ),
     );
     final paths = await windowChannel.invokeMapMethod<String, String>('paths');
@@ -26,6 +24,14 @@ Future<void> main() async {
       dataDirectory: paths!['data']!,
       pluginDirectory: paths['plugins']!,
     );
+    final excluded = (paths['excludedApps'] ?? '')
+        .split('\n')
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toList();
+    if (excluded.isNotEmpty) {
+      await bridge.setExcludedApps(bundleIds: excluded);
+    }
     final reply = await bridge.ping();
     if (reply != 'pong') throw StateError('Rust bridge ping failed');
     runApp(
@@ -53,7 +59,10 @@ Future<void> main() async {
         promptAccessibility: () => bridge.promptAccessibility(),
         deactivate: (session) => bridge.deactivate(sessionId: session),
         window: windowChannel,
-        startupMessage: paths['hotkeyError'] ?? '',
+        startupMessage: [
+          paths['hotkeyError'] ?? '',
+          paths['loginError'] ?? '',
+        ].where((item) => item.isNotEmpty).join('\n'),
       ),
     );
   } catch (error) {

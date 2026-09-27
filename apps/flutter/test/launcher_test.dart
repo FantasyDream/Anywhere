@@ -9,8 +9,8 @@ import 'package:anywhere/src/rust/api.dart';
 CandidateDto candidate(
   String id,
   String title, {
-  String kind = 'action',
-  String availability = 'enabled',
+  CandidateKindDto kind = CandidateKindDto.action,
+  AvailabilityDto availability = AvailabilityDto.enabled,
   String? reason,
   String iconKey = 'file',
   String groupId = 'folder',
@@ -20,15 +20,17 @@ CandidateDto candidate(
       id: id,
       kind: kind,
       title: title,
+      menuPath: const [],
       subtitle: 'from Rust',
       iconKey: iconKey,
       score: score,
       groupId: groupId,
       availability: availability,
       availabilityReason: reason,
-      commandId: kind == 'action' ? id.split(':')[1] : null,
-      bundleId:
-          kind == 'application' ? 'com.example.${id.split(':')[1]}' : null,
+      commandId: kind == CandidateKindDto.action ? id.split(':')[1] : null,
+      bundleId: kind == CandidateKindDto.application
+          ? 'com.example.${id.split(':')[1]}'
+          : null,
     );
 
 LauncherStateDto state(
@@ -274,8 +276,7 @@ void main() {
     pending.complete(ActionResultDto(
         sessionId: 1,
         revision: 0,
-        success: true,
-        message: 'Done',
+        status: ActionStatusDto.succeeded,
         outputText: null,
         closeWindow: true));
     await tester.pumpAndSettle();
@@ -327,8 +328,7 @@ void main() {
         return ActionResultDto(
             sessionId: session,
             revision: revision,
-            success: true,
-            message: 'Done',
+            status: ActionStatusDto.succeeded,
             outputText: null,
             closeWindow: false);
       },
@@ -395,8 +395,7 @@ void main() {
     result.complete(ActionResultDto(
         sessionId: 1,
         revision: 0,
-        success: true,
-        message: 'Done',
+        status: ActionStatusDto.succeeded,
         outputText: null,
         closeWindow: true));
     await tester.pumpAndSettle();
@@ -422,12 +421,12 @@ void main() {
           scopes: [
             ScopeDto(
                 id: 'app',
-                kind: 'app',
+                kind: ScopeKindDto.app,
                 label: 'Finder',
                 candidateIds: [appRow.id]),
             ScopeDto(
                 id: 'git',
-                kind: 'group',
+                kind: ScopeKindDto.group,
                 label: 'Git',
                 candidateIds: [all.id, folder.id]),
           ],
@@ -504,7 +503,12 @@ void main() {
       waitForSnapshot: (_, after) {
         final completer = Completer<LauncherStateDto?>();
         pending.add(completer);
-        return completer.future;
+        return completer.future.then((state) => SnapshotWaitDto(
+              kind: state == null
+                  ? SnapshotWaitKindDto.timedOut
+                  : SnapshotWaitKindDto.updated,
+              state: state,
+            ));
       },
     ));
     await toggle(tester);
@@ -557,7 +561,12 @@ void main() {
         waitForSnapshot: (_, after) {
           final completer = Completer<LauncherStateDto?>();
           pending.add(completer);
-          return completer.future;
+          return completer.future.then((state) => SnapshotWaitDto(
+              kind: state == null
+                  ? SnapshotWaitKindDto.timedOut
+                  : SnapshotWaitKindDto.updated,
+              state: state,
+            ));
         },
       ));
       await toggle(tester);
@@ -637,8 +646,7 @@ void main() {
         return ActionResultDto(
           sessionId: 1,
           revision: revision,
-          success: true,
-          message: 'Done',
+          status: ActionStatusDto.succeeded,
           closeWindow: false,
         );
       },
@@ -646,7 +654,12 @@ void main() {
       waitForSnapshot: (_, after) {
         final completer = Completer<LauncherStateDto?>();
         pending.add(completer);
-        return completer.future;
+        return completer.future.then((state) => SnapshotWaitDto(
+              kind: state == null
+                  ? SnapshotWaitKindDto.timedOut
+                  : SnapshotWaitKindDto.updated,
+              state: state,
+            ));
       },
     ));
     await toggle(tester);
@@ -701,7 +714,12 @@ void main() {
       waitForSnapshot: (_, after) {
         final completer = Completer<LauncherStateDto?>();
         pending.add(completer);
-        return completer.future;
+        return completer.future.then((state) => SnapshotWaitDto(
+              kind: state == null
+                  ? SnapshotWaitKindDto.timedOut
+                  : SnapshotWaitKindDto.updated,
+              state: state,
+            ));
       },
     ));
     await toggle(tester);
@@ -727,26 +745,28 @@ void main() {
       (tester) async {
     final chrome = CandidateDto(
       id: 'app:com.google.Chrome:/Applications/Google Chrome.app',
-      kind: 'application',
+      kind: CandidateKindDto.application,
       title: 'Google Chrome',
+      menuPath: const [],
       subtitle: '/Applications/Google Chrome.app',
       iconKey: 'application',
       score: 5000,
       groupId: 'app',
-      availability: 'enabled',
+      availability: AvailabilityDto.enabled,
       availabilityReason: null,
       commandId: null,
       bundleId: 'com.google.Chrome',
     );
     final notes = CandidateDto(
       id: 'app:com.apple.Notes:/System/Applications/Notes.app',
-      kind: 'application',
+      kind: CandidateKindDto.application,
       title: 'Notes',
+      menuPath: const [],
       subtitle: '/System/Applications/Notes.app',
       iconKey: 'application',
       score: 4000,
       groupId: 'app',
-      availability: 'enabled',
+      availability: AvailabilityDto.enabled,
       availabilityReason: null,
       commandId: null,
       bundleId: 'com.apple.Notes',
@@ -794,13 +814,14 @@ void main() {
       (tester) async {
     CandidateDto app(String id, String title) => CandidateDto(
           id: id,
-          kind: 'application',
+          kind: CandidateKindDto.application,
           title: title,
+          menuPath: const [],
           subtitle: '/Applications/$title.app',
           iconKey: 'application',
           score: 5000,
           groupId: 'app',
-          availability: 'enabled',
+          availability: AvailabilityDto.enabled,
           availabilityReason: null,
           commandId: null,
           bundleId: id,
@@ -862,7 +883,7 @@ void main() {
         contexts: [],
         candidates: [
           candidate('action:core.git.status:c1', 'Git Status',
-              availability: 'disabled',
+              availability: AvailabilityDto.disabled,
               reason: 'git is not installed',
               iconKey: 'git'),
         ],
@@ -899,11 +920,11 @@ void main() {
           scopes: [
             ScopeDto(
                 id: 'app',
-                kind: 'app',
+                kind: ScopeKindDto.app,
                 label: 'Finder',
                 candidateIds: [copy.id]),
             ScopeDto(
-                id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
+                id: 'git', kind: ScopeKindDto.group, label: 'Git', candidateIds: [git.id]),
           ],
           diagnostics: [],
         );
@@ -939,11 +960,11 @@ void main() {
           scopes: [
             ScopeDto(
                 id: 'app',
-                kind: 'app',
+                kind: ScopeKindDto.app,
                 label: 'Finder',
                 candidateIds: [copy.id]),
             ScopeDto(
-                id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
+                id: 'git', kind: ScopeKindDto.group, label: 'Git', candidateIds: [git.id]),
           ],
           diagnostics: [],
         );
@@ -995,11 +1016,11 @@ void main() {
           scopes: [
             ScopeDto(
                 id: 'app',
-                kind: 'app',
+                kind: ScopeKindDto.app,
                 label: 'Finder',
                 candidateIds: [copy.id]),
             ScopeDto(
-                id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
+                id: 'git', kind: ScopeKindDto.group, label: 'Git', candidateIds: [git.id]),
           ],
           diagnostics: [],
         );
@@ -1040,7 +1061,7 @@ void main() {
       candidates: [git],
       scopes: [
         ScopeDto(
-            id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
+            id: 'git', kind: ScopeKindDto.group, label: 'Git', candidateIds: [git.id]),
       ],
       diagnostics: [],
     );
@@ -1054,9 +1075,9 @@ void main() {
       candidates: [copy, git],
       scopes: [
         ScopeDto(
-            id: 'app', kind: 'app', label: 'Finder', candidateIds: [copy.id]),
+            id: 'app', kind: ScopeKindDto.app, label: 'Finder', candidateIds: [copy.id]),
         ScopeDto(
-            id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
+            id: 'git', kind: ScopeKindDto.group, label: 'Git', candidateIds: [git.id]),
       ],
       diagnostics: [],
     );
@@ -1072,7 +1093,12 @@ void main() {
       waitForSnapshot: (_, __) {
         final completer = Completer<LauncherStateDto?>();
         pending.add(completer);
-        return completer.future;
+        return completer.future.then((state) => SnapshotWaitDto(
+              kind: state == null
+                  ? SnapshotWaitKindDto.timedOut
+                  : SnapshotWaitKindDto.updated,
+              state: state,
+            ));
       },
     ));
     await toggle(tester);

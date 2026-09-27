@@ -15,15 +15,15 @@ pub use engine::{ContextGraphRun, ExecutionContext, GraphStep, MAX_DEPTH};
 pub use anywhere_protocol::{ContextSource, ContextTypeId, ProviderId};
 
 use anywhere_protocol::*;
-use std::{collections::BTreeMap, path::PathBuf};
+use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
 #[derive(Debug, Clone)]
 pub enum ContextValue {
-    Text(String),
+    Text(Arc<str>),
     Url(url::Url),
     Json {
-        raw: String,
-        parsed: serde_json::Value,
+        raw: Arc<str>,
+        parsed: Arc<serde_json::Value>,
     },
     File(PathBuf),
     Directory(PathBuf),
@@ -33,20 +33,29 @@ pub enum ContextValue {
         bundle_id: String,
         name: String,
     },
-    Extension(String),
+    Extension(Arc<str>),
 }
 
 impl ContextValue {
-    pub fn text(&self) -> String {
+    /// Shared identity text. Cloning this does not copy the body.
+    pub fn shared_text(&self) -> Arc<str> {
         match self {
-            Self::Text(s) | Self::Extension(s) => s.clone(),
-            Self::Url(url) => url.to_string(),
-            Self::Json { raw, .. } => raw.clone(),
-            Self::File(p) | Self::Directory(p) | Self::Repository(p) => {
-                p.to_string_lossy().into_owned()
+            Self::Text(text) | Self::Extension(text) => Arc::clone(text),
+            Self::Json { raw, .. } => Arc::clone(raw),
+            Self::Url(url) => Arc::from(url.as_str()),
+            Self::File(path) | Self::Directory(path) | Self::Repository(path) => {
+                Arc::from(path.to_string_lossy().as_ref())
             }
-            Self::Application { bundle_id, .. } => bundle_id.clone(),
+            Self::Application { bundle_id, .. } => Arc::from(bundle_id.as_str()),
         }
+    }
+
+    pub fn text(&self) -> String {
+        self.shared_text().to_string()
+    }
+
+    pub fn identity_fingerprint(&self) -> u64 {
+        fingerprint(self.shared_text().as_ref())
     }
     pub fn path(&self) -> Option<&std::path::Path> {
         match self {
@@ -54,6 +63,15 @@ impl ContextValue {
             _ => None,
         }
     }
+}
+
+fn fingerprint(text: &str) -> u64 {
+    let mut hash = 0xcbf29ce484222325u64;
+    for byte in text.as_bytes() {
+        hash ^= u64::from(*byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
 }
 
 #[derive(Debug, Clone)]
@@ -85,6 +103,26 @@ impl ResolvedContext {
             revision: 0,
         }
     }
+    pub fn display_detail(&self) -> String {
+        const MAX: usize = 120;
+        let text = match &self.value {
+            ContextValue::Application { name, .. } => Arc::from(name.as_str()),
+            _ => self.value.shared_text(),
+        };
+        let mut shortened = String::new();
+        let mut chars = text.chars();
+        for _ in 0..MAX {
+            match chars.next() {
+                Some(ch) => shortened.push(ch),
+                None => return shortened,
+            }
+        }
+        if chars.next().is_some() {
+            shortened.push('…');
+        }
+        shortened
+    }
+
     pub fn descriptor(&self) -> ContextDescriptor {
         let mut properties = BTreeMap::new();
         if let ContextValue::Application { name, .. } = &self.value {
@@ -119,7 +157,7 @@ impl ResolvedContext {
             id: self.id.clone(),
             type_id: self.type_id.clone(),
             label: label.into(),
-            detail: self.value.text(),
+            detail: self.display_detail(),
             source: self.source,
         }
     }
@@ -134,7 +172,7 @@ impl ResolvedContext {
 #[derive(Default)]
 pub struct ContextSet {
     contexts: Vec<ResolvedContext>,
-    seen: std::collections::HashSet<(ContextTypeId, String, ContextSource)>,
+    seen: std::collections::HashSet<(ContextTypeId, Arc<str>, ContextSource)>,
 }
 
 impl ContextSet {
@@ -154,7 +192,7 @@ impl ContextSet {
     ) -> bool {
         if !self.seen.insert((
             context.type_id.clone(),
-            context.value.text(),
+            context.value.shared_text(),
             context.source,
         )) {
             return false;

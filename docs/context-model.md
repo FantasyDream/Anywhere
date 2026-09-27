@@ -12,7 +12,7 @@ Protocol 使用字符串 type_id 和 transport value，不序列化 Core 的 Con
 | core.url | 明确、合法的 HTTP(S) URL |
 | json.document | serde_json 解析成功，保留 raw 原文和 parsed 值（V0.2 规范名） |
 | core.file | 标准文件系统 API 验证真实存在的文件 |
-| core.directory | 已存在的目录，或激活时的 Finder/Windows 资源管理器当前目录 |
+| core.directory | 已存在的目录，或激活时的 Finder 当前目录 |
 | core.application | 激活前的前台应用 |
 | git.repository | 从目录向上找到的最近仓库 root，只读文件系统元数据 |
 

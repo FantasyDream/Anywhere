@@ -1,10 +1,12 @@
 use super::availability::AvailabilityRule;
+use super::bundle::ActionBundle;
+use super::group::{label_for, ActionGroup, GroupMeta};
 use super::handler::ActionHandlerRef;
 use crate::core::context::ResolvedContext;
 use crate::core::search::query::SearchFields;
 use anyhow::{bail, Result};
 use anywhere_protocol::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone)]
 pub enum ActionExecutor {
@@ -12,6 +14,28 @@ pub enum ActionExecutor {
     Declarative(DeclarativeAction),
 }
 
+/// Author-supplied action. Search text is derived when this is registered.
+#[derive(Debug, Clone)]
+pub struct ActionDefinition {
+    pub id: ActionId,
+    pub title: String,
+    pub subtitle: Option<String>,
+    pub shortcut: Option<String>,
+    pub accepts: Vec<ContextMatcher>,
+    pub executor: ActionExecutor,
+    pub availability: AvailabilityRule,
+    pub base_priority: i32,
+    pub icon: String,
+    pub group_id: GroupId,
+    pub aliases: Vec<String>,
+    pub keywords: Vec<String>,
+    pub owning_app: Option<String>,
+    pub menu_path: Vec<String>,
+    /// Visible title used for search when it differs from the row title.
+    pub search_title: Option<String>,
+}
+
+/// An action after registration. `search` is computed from the definition and cannot be set.
 #[derive(Debug, Clone)]
 pub struct ActionDescriptor {
     pub id: ActionId,
@@ -32,11 +56,41 @@ pub struct ActionDescriptor {
     /// driven by which context an action accepts. It stays so an app-specific action
     /// can declare itself without a protocol change.
     pub owning_app: Option<String>,
-    /// Precomputed lowercase search fields.
-    pub search: SearchFields,
+    /// Ancestor menu titles. The row title is the leaf; display joins the two.
+    pub menu_path: Vec<String>,
+    search: SearchFields,
 }
 
 impl ActionDescriptor {
+    fn from_definition(definition: ActionDefinition) -> Self {
+        let primary = definition
+            .search_title
+            .as_deref()
+            .unwrap_or(definition.title.as_str());
+        let search = SearchFields::new(primary, &definition.aliases, &definition.keywords);
+        Self {
+            id: definition.id,
+            title: definition.title,
+            subtitle: definition.subtitle,
+            shortcut: definition.shortcut,
+            accepts: definition.accepts,
+            executor: definition.executor,
+            availability: definition.availability,
+            base_priority: definition.base_priority,
+            icon: definition.icon,
+            group_id: definition.group_id,
+            aliases: definition.aliases,
+            keywords: definition.keywords,
+            owning_app: definition.owning_app,
+            menu_path: definition.menu_path,
+            search,
+        }
+    }
+
+    pub fn search(&self) -> &SearchFields {
+        &self.search
+    }
+
     pub fn matches(&self, context: &ResolvedContext) -> bool {
         self.accepts
             .iter()
@@ -48,22 +102,85 @@ impl ActionDescriptor {
 ///
 /// Registration and lookup only. Matching lives in `ActionMatcher`, availability in
 /// `availability`, execution in `execute` and registered feature handlers.
+#[derive(Clone, Debug)]
+struct RegisteredGroup {
+    title: String,
+    rank: u16,
+}
+
 #[derive(Clone, Default)]
 pub struct ActionRegistry {
     actions: BTreeMap<ActionId, ActionDescriptor>,
+    groups: BTreeMap<GroupId, RegisteredGroup>,
+    next_rank: u16,
+}
+
+impl GroupMeta for ActionRegistry {
+    fn label(&self, group_id: &str) -> String {
+        self.groups
+            .get(group_id)
+            .map(|group| group.title.clone())
+            .unwrap_or_else(|| label_for(group_id))
+    }
+
+    fn rank(&self, group_id: &str) -> u16 {
+        self.groups
+            .get(group_id)
+            .map(|group| group.rank)
+            .unwrap_or(u16::MAX)
+    }
 }
 
 impl ActionRegistry {
-    pub fn register(&mut self, action: ActionDescriptor) -> Result<()> {
-        if self.actions.contains_key(&action.id) {
-            bail!("duplicate action id: {}", action.id);
+    /// Check every action, then insert. A failure leaves the registry unchanged.
+    fn commit_batch(&mut self, actions: Vec<ActionDefinition>) -> Result<()> {
+        let mut seen = BTreeSet::new();
+        for action in &actions {
+            if !seen.insert(action.id.clone()) || self.actions.contains_key(&action.id) {
+                bail!("duplicate action id: {}", action.id);
+            }
+            if action.group_id.trim().is_empty() {
+                bail!("action {} requires a group id", action.id);
+            }
+            action.availability.validate()?;
         }
-        if action.group_id.trim().is_empty() {
-            bail!("action {} requires a group id", action.id);
+        for action in actions {
+            let action = ActionDescriptor::from_definition(action);
+            self.actions.insert(action.id.clone(), action);
         }
-        action.availability.validate()?;
-        self.actions.insert(action.id.clone(), action);
         Ok(())
+    }
+
+    pub fn register(&mut self, action: ActionDefinition) -> Result<()> {
+        self.commit_batch(vec![action])
+    }
+
+    /// Actions and the group's display title, or neither.
+    pub fn register_bundle(&mut self, bundle: ActionBundle) -> Result<()> {
+        let group = bundle.group.clone();
+        self.commit_batch(bundle.descriptors())?;
+        self.remember_group(group, true);
+        Ok(())
+    }
+
+    fn remember_group(&mut self, group: ActionGroup, ranked: bool) {
+        if group.id.trim().is_empty() || self.groups.contains_key(&group.id) {
+            return;
+        }
+        let rank = if ranked {
+            let rank = self.next_rank;
+            self.next_rank = self.next_rank.saturating_add(1);
+            rank
+        } else {
+            u16::MAX
+        };
+        let title = if group.title.trim().is_empty() {
+            label_for(&group.id)
+        } else {
+            group.title
+        };
+        self.groups
+            .insert(group.id, RegisteredGroup { title, rank });
     }
 
     pub fn get(&self, id: &str) -> Option<&ActionDescriptor> {
@@ -91,7 +208,7 @@ impl ActionRegistry {
         for command in plugin.commands {
             let id = format!("{}.{}", plugin.id, command.id);
             if self.actions.contains_key(&id)
-                || commands.iter().any(|c: &ActionDescriptor| c.id == id)
+                || commands.iter().any(|c: &ActionDefinition| c.id == id)
             {
                 bail!("duplicate command id: {id}");
             }
@@ -136,11 +253,10 @@ impl ActionRegistry {
             };
             let aliases = command.aliases.clone();
             let keywords = command.keywords.clone();
-            commands.push(ActionDescriptor {
+            commands.push(ActionDefinition {
                 shortcut: None,
                 id,
-                search: SearchFields::new(&command.title, &aliases, &keywords),
-                title: command.title,
+                title: command.title.clone(),
                 subtitle: Some(command.subtitle.unwrap_or_else(|| plugin_name.clone())),
                 accepts: accepts
                     .into_iter()
@@ -152,12 +268,26 @@ impl ActionRegistry {
                 icon: icon.into(),
                 group_id: command.group_id.unwrap_or_else(|| default_group.clone()),
                 owning_app: None,
+                menu_path: Vec::new(),
                 aliases,
                 keywords,
+                search_title: None,
             });
         }
-        for command in commands {
-            self.register(command)?;
+        let group_ids = commands
+            .iter()
+            .map(|command| command.group_id.clone())
+            .collect::<Vec<_>>();
+        self.commit_batch(commands)?;
+        for id in group_ids {
+            self.remember_group(
+                ActionGroup {
+                    id: id.clone(),
+                    title: label_for(&id),
+                    icon: None,
+                },
+                false,
+            );
         }
         Ok(())
     }
@@ -183,7 +313,7 @@ mod tests {
 
     #[test]
     fn exact_type_match_and_builtin_command_count() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         assert_eq!(registry.commands().count(), 14);
         let url = seed("https://github.com")
             .into_iter()
@@ -205,11 +335,11 @@ mod tests {
 
     #[test]
     fn every_builtin_has_a_group_and_search_fields() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         for command in registry.commands() {
             assert!(!command.group_id.is_empty(), "{}", command.id);
             assert!(
-                !command.search.names().is_empty(),
+                !command.search().names().is_empty(),
                 "{} needs searchable fields",
                 command.id
             );
@@ -218,7 +348,7 @@ mod tests {
 
     #[test]
     fn git_actions_only_accept_repository_context() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         let directory = ResolvedContext::new(
             DIRECTORY,
             crate::core::context::ContextValue::Directory("/tmp".into()),
@@ -245,7 +375,7 @@ mod tests {
 
     #[test]
     fn v0_1_json_plugin_is_normalized_and_keeps_working() {
-        let mut registry = crate::application::composition::builtin_registry();
+        let mut registry = crate::application::builtin_registry();
         let raw = r#"
 protocol_version = 1
 id = "legacy"
@@ -270,13 +400,13 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
         bad.commands[0].action = DeclarativeAction::ExecuteBuiltin {
             command_id: "core.url.open".into(),
         };
-        let mut fresh = crate::application::composition::builtin_registry();
+        let mut fresh = crate::application::builtin_registry();
         assert!(fresh.register_plugin(bad).is_err());
     }
 
     #[test]
     fn git_actions_and_dispatch_agree_on_the_same_set() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         for command in registry.commands() {
             assert_eq!(
                 is_git_action(&command.id),
@@ -289,7 +419,7 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
 
     #[test]
     fn copy_path_actions_share_one_group_across_object_types() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         for id in ["core.directory.copy", "core.file.copy"] {
             assert_eq!(
                 registry.get(id).unwrap().group_id,
@@ -301,7 +431,7 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
 
     #[test]
     fn known_groups_are_the_only_group_ids_in_the_builtin_registry() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         for command in registry.commands() {
             assert!(
                 [
@@ -321,7 +451,7 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
 
     #[test]
     fn plugins_without_group_metadata_get_an_explicit_default() {
-        let mut registry = crate::application::composition::builtin_registry();
+        let mut registry = crate::application::builtin_registry();
         registry
             .register_plugin(
                 anywhere_plugin::parse_manifest(anywhere_plugin::EXAMPLE_PLUGIN).unwrap(),
@@ -405,7 +535,7 @@ action = { type = "execute_builtin", command_id = "core.directory.copy" }
 
     #[test]
     fn execute_builtin_inherits_the_target_availability_rule() {
-        let mut registry = crate::application::composition::builtin_registry();
+        let mut registry = crate::application::builtin_registry();
         registry
             .register_plugin(anywhere_plugin::parse_manifest(WRAP_PLUGIN).unwrap())
             .unwrap();
@@ -430,7 +560,7 @@ action = { type = "execute_builtin", command_id = "core.directory.copy" }
 
     #[test]
     fn a_bad_wrapping_plugin_does_not_leave_a_partial_registration() {
-        let mut registry = crate::application::composition::builtin_registry();
+        let mut registry = crate::application::builtin_registry();
         let raw = format!(
             "{WRAP_PLUGIN}
 
@@ -448,5 +578,76 @@ action = {{ type = \"execute_builtin\", command_id = \"core.missing.action\" }}
         assert!(registry.get("wrap.copy").is_none());
         assert!(registry.get("wrap.missing").is_none());
         assert!(registry.get("core.git.status").is_some());
+    }
+
+    #[test]
+    fn a_later_invalid_command_does_not_keep_the_earlier_one() {
+        let mut registry = ActionRegistry::default();
+        let raw = r#"
+protocol_version = 1
+id = "partial"
+name = "Partial"
+
+[[commands]]
+id = "ok"
+title = "Ok"
+accepts = ["core.text"]
+group_id = "tools"
+action = { type = "copy", text = "x" }
+
+[[commands]]
+id = "bad"
+title = "Bad"
+accepts = ["core.text"]
+group_id = ""
+action = { type = "copy", text = "y" }
+"#;
+        assert!(anywhere_plugin::parse_manifest(raw)
+            .and_then(|manifest| registry.register_plugin(manifest))
+            .is_err());
+        assert!(registry.get("partial.ok").is_none());
+        assert!(registry.get("partial.bad").is_none());
+    }
+
+    #[test]
+    fn a_bundle_title_is_the_scope_label() {
+        use crate::core::action::bundle::ActionBundle;
+        use crate::core::action::group::ActionGroup;
+        use crate::core::search::candidate::{Candidate, CandidateTarget};
+        use crate::core::search::scope;
+        let mut registry = ActionRegistry::default();
+        registry
+            .register_bundle(ActionBundle {
+                group: ActionGroup {
+                    id: "custom_tools".into(),
+                    title: "Custom tools display title".into(),
+                    icon: None,
+                },
+                actions: Vec::new(),
+            })
+            .unwrap();
+        let candidate = Candidate {
+            presentation: CandidatePresentation {
+                id: "action:custom".into(),
+                kind: CandidateKind::Action,
+                title: "Run".into(),
+                subtitle: None,
+                shortcut: None,
+                icon: IconDescriptor { key: "bolt".into() },
+                score: 1.0,
+                group_id: "custom_tools".into(),
+                availability: Availability::enabled(),
+                command_id: Some("custom.run".into()),
+                bundle_id: None,
+                owning_app: None,
+                menu_path: Vec::new(),
+            },
+            target: CandidateTarget::LaunchApplication {
+                path: "/x".into(),
+                icon_source: "/x".into(),
+            },
+        };
+        let scopes = scope::build(&[candidate], &None, "App", &Default::default(), &registry);
+        assert_eq!(scopes[0].label, "Custom tools display title");
     }
 }

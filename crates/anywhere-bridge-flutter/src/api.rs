@@ -2,15 +2,13 @@ use anyhow::{Context, Result};
 use anywhere_core::{persistence::usage::SqliteUsageRepository, Application, LauncherApplication};
 use anywhere_protocol as protocol;
 use std::{
-    path::Path,
-    sync::{Arc, OnceLock},
-    time::Duration,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex, OnceLock},
 };
 
 static APPLICATION: OnceLock<Application> = OnceLock::new();
-
-/// Longest a single `wait_for_snapshot` call may block before Dart polls again.
-const SNAPSHOT_WAIT: Duration = Duration::from_secs(30);
+static PLUGIN_DIRS: OnceLock<Vec<PathBuf>> = OnceLock::new();
+static PLUGIN_REPORTS: OnceLock<Mutex<Vec<PluginStatusDto>>> = OnceLock::new();
 
 pub fn ping() -> String {
     anywhere_core::ping().to_owned()
@@ -29,37 +27,38 @@ pub fn initialize(data_directory: String, plugin_directory: String) -> Result<()
         .try_init();
     let data = Path::new(&data_directory);
     std::fs::create_dir_all(data)?;
-    let history =
-        SqliteUsageRepository::open(&data.join("usage.sqlite3")).context("open usage history")?;
-    let mut registry = anywhere_core::application::composition::builtin_registry();
     let mut diagnostics = Vec::new();
+    let history = match SqliteUsageRepository::open(&data.join("usage.sqlite3")) {
+        Ok(history) => {
+            Box::new(history) as Box<dyn anywhere_core::core::ranking::usage::UsageRepository>
+        }
+        Err(error) => {
+            tracing::error!(error = %error, "usage_history_unavailable");
+            diagnostics.push(format!(
+                "Usage history is unavailable; this session will not be saved: {error:#}"
+            ));
+            Box::new(anywhere_core::core::ranking::usage::MemoryUsage::default())
+        }
+    };
+    let mut registry = anywhere_core::application::builtin_registry();
     let user_plugins = data.join("plugins");
     std::fs::create_dir_all(&user_plugins)?;
-    for directory in [Path::new(&plugin_directory), user_plugins.as_path()] {
-        let discovery = anywhere_plugin::discover(directory);
-        diagnostics.extend(discovery.diagnostics);
-        for manifest in discovery.manifests {
-            let id = manifest.id.clone();
-            if let Err(error) = registry.register_plugin(manifest) {
-                tracing::error!(plugin_id = id, error = %error, "plugin_load_failure");
-                diagnostics.push(format!("Plugin {id}: {error:#}"));
-            }
+    let dirs = vec![PathBuf::from(&plugin_directory), user_plugins];
+    let _ = PLUGIN_DIRS.set(dirs.clone());
+    let reports = load_plugins(&mut registry, &dirs);
+    for report in &reports {
+        if !report.ok {
+            diagnostics.push(format!("Plugin {}: {}", report.id, report.detail));
         }
     }
+    *plugin_reports().lock().expect("plugin reports") = reports;
     #[cfg(target_os = "macos")]
     let platform = Arc::new(anywhere_platform::MacOsPlatform);
-    #[cfg(target_os = "windows")]
-    let platform = Arc::new(anywhere_platform::WindowsPlatform::default());
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    anyhow::bail!("The host supports macOS and Windows only");
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
+    #[cfg(not(target_os = "macos"))]
+    anyhow::bail!("The host supports macOS only");
+    #[cfg(target_os = "macos")]
     APPLICATION
-        .set(Application::new(
-            platform,
-            registry,
-            Box::new(history),
-            diagnostics,
-        ))
+        .set(Application::new(platform, registry, history, diagnostics))
         .map_err(|_| anyhow::anyhow!("application already initialized"))?;
     Ok(())
 }
@@ -103,57 +102,28 @@ pub fn latest_state(session_id: u32) -> Option<LauncherStateDto> {
     application().ok()?.latest_state(session_id).map(Into::into)
 }
 
-/// A snapshot position that is monotonic for the whole session.
-///
-/// `snapshot_seq` alone is not monotonic: the core restarts it at 1 for every revision, so
-/// a late snapshot of an older revision can carry a higher sequence than the newest
-/// revision's first snapshot. Pairing the two makes the order unambiguous, which is what
-/// this wait needs. The Dart loop builds the same value from the fields it already has
-/// (`revision` and `snapshotSeq`), which is why it stays private to this module.
-fn cursor(state: &protocol::LauncherState) -> u64 {
-    ((state.revision as u64) << 32) | state.snapshot_seq as u64
-}
-
 /// Block until the core publishes a snapshot beyond `after` for this session.
-///
-/// Late context is committed by a background task, so the core's own update channel is the
-/// only place a caller can observe it. Returns the newest snapshot when one arrives, or
-/// `None` on timeout, so the caller can wait again from the same cursor — a wait that ends
-/// because nothing happened must not be mistaken for the session being finished.
-pub async fn wait_for_snapshot(session_id: u32, after: u64) -> Result<Option<LauncherStateDto>> {
-    let app = application()?;
-    if let Some(state) = beyond(app, session_id, after) {
-        return Ok(Some(state.into()));
-    }
-    let mut updates = app.state_updates();
-    let deadline = tokio::time::Instant::now() + SNAPSHOT_WAIT;
-    loop {
-        if !app.is_session_active(session_id) {
-            return Ok(None);
-        }
-        if let Some(state) = beyond(app, session_id, after) {
-            return Ok(Some(state.into()));
-        }
-        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-        if remaining.is_zero() {
-            break;
-        }
-        match tokio::time::timeout(remaining, updates.changed()).await {
-            // A newer snapshot for another session is fine: the loop re-checks ours.
-            Ok(Ok(())) => continue,
-            // Sender gone: the core is shutting down, so report nothing.
-            Ok(Err(_)) => return Ok(None),
-            // The wait elapsed. Nothing newer exists; the caller waits again.
-            Err(_) => break,
-        }
-    }
-    Ok(None)
-}
-
-/// The committed snapshot for a session, when it is beyond `after`.
-fn beyond(app: &Application, session_id: u32, after: u64) -> Option<protocol::LauncherState> {
-    app.latest_state(session_id)
-        .filter(|state| cursor(state) > after)
+pub async fn wait_for_snapshot(session_id: u32, after: u64) -> Result<SnapshotWaitDto> {
+    Ok(
+        match application()?.wait_for_snapshot(session_id, after).await {
+            anywhere_core::application::SnapshotWait::Updated(state) => SnapshotWaitDto {
+                kind: SnapshotWaitKindDto::Updated,
+                state: Some(state.into()),
+            },
+            anywhere_core::application::SnapshotWait::TimedOut => SnapshotWaitDto {
+                kind: SnapshotWaitKindDto::TimedOut,
+                state: None,
+            },
+            anywhere_core::application::SnapshotWait::Closed => SnapshotWaitDto {
+                kind: SnapshotWaitKindDto::Closed,
+                state: None,
+            },
+            anywhere_core::application::SnapshotWait::Superseded => SnapshotWaitDto {
+                kind: SnapshotWaitKindDto::Superseded,
+                state: None,
+            },
+        },
+    )
 }
 
 pub async fn execute(
@@ -187,6 +157,76 @@ pub fn prompt_accessibility() -> Result<bool> {
     application()?.prompt_accessibility()
 }
 
+#[flutter_rust_bridge::frb(sync)]
+pub fn plugin_status() -> Vec<PluginStatusDto> {
+    plugin_reports()
+        .lock()
+        .map(|reports| reports.clone())
+        .unwrap_or_default()
+}
+
+pub fn reload_plugins() -> Result<Vec<PluginStatusDto>> {
+    let dirs = PLUGIN_DIRS
+        .get()
+        .cloned()
+        .context("call initialize first")?;
+    let mut registry = anywhere_core::application::builtin_registry();
+    let reports = load_plugins(&mut registry, &dirs);
+    *plugin_reports().lock().expect("plugin reports") = reports.clone();
+    application()?.replace_registry(registry);
+    Ok(reports)
+}
+
+pub fn excluded_apps() -> Result<Vec<String>> {
+    Ok(application()?.excluded_apps())
+}
+
+pub fn set_excluded_apps(bundle_ids: Vec<String>) -> Result<()> {
+    application()?.set_excluded_apps(bundle_ids);
+    Ok(())
+}
+
+fn plugin_reports() -> &'static Mutex<Vec<PluginStatusDto>> {
+    PLUGIN_REPORTS.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+fn load_plugins(
+    registry: &mut anywhere_core::core::action::descriptor::ActionRegistry,
+    dirs: &[PathBuf],
+) -> Vec<PluginStatusDto> {
+    let mut reports = Vec::new();
+    for directory in dirs {
+        let discovery = anywhere_plugin::discover(directory);
+        for diagnostic in discovery.diagnostics {
+            reports.push(PluginStatusDto {
+                id: directory.display().to_string(),
+                ok: false,
+                detail: diagnostic,
+            });
+        }
+        for manifest in discovery.manifests {
+            let id = manifest.id.clone();
+            let name = manifest.name.clone();
+            match registry.register_plugin(manifest) {
+                Ok(()) => reports.push(PluginStatusDto {
+                    id,
+                    ok: true,
+                    detail: name,
+                }),
+                Err(error) => {
+                    tracing::error!(plugin_id = id, error = %error, "plugin_load_failure");
+                    reports.push(PluginStatusDto {
+                        id,
+                        ok: false,
+                        detail: format!("{error:#}"),
+                    });
+                }
+            }
+        }
+    }
+    reports
+}
+
 // Explicit conversion keeps generated/Flutter types out of the protocol and core.
 #[derive(Clone, Debug)]
 pub struct LauncherStateDto {
@@ -207,19 +247,37 @@ pub struct ContextDto {
     pub label: String,
     pub detail: String,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CandidateKindDto {
+    Application,
+    Action,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AvailabilityDto {
+    Enabled,
+    Disabled,
+    Hidden,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScopeKindDto {
+    App,
+    Group,
+}
+
 #[derive(Clone, Debug)]
 pub struct CandidateDto {
     pub id: String,
-    /// `application` or `action`, mirroring `CandidateKind`.
-    pub kind: String,
+    pub kind: CandidateKindDto,
     pub title: String,
+    pub menu_path: Vec<String>,
     pub subtitle: Option<String>,
     pub shortcut: Option<String>,
     pub icon_key: String,
     pub score: f32,
     pub group_id: String,
-    /// `enabled`, `disabled` or `hidden`.
-    pub availability: String,
+    pub availability: AvailabilityDto,
     pub availability_reason: Option<String>,
     pub command_id: Option<String>,
     pub bundle_id: Option<String>,
@@ -227,19 +285,46 @@ pub struct CandidateDto {
 #[derive(Clone, Debug)]
 pub struct ScopeDto {
     pub id: String,
-    /// `all`, `app` or `group`.
-    pub kind: String,
+    pub kind: ScopeKindDto,
     pub label: String,
     pub candidate_ids: Vec<String>,
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SnapshotWaitKindDto {
+    Updated,
+    TimedOut,
+    Closed,
+    Superseded,
+}
+
+#[derive(Clone, Debug)]
+pub struct SnapshotWaitDto {
+    pub kind: SnapshotWaitKindDto,
+    pub state: Option<LauncherStateDto>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ActionStatusDto {
+    Succeeded,
+    Failed,
+}
+
 #[derive(Clone, Debug)]
 pub struct ActionResultDto {
     pub session_id: u32,
     pub revision: u32,
-    pub success: bool,
-    pub message: String,
+    pub status: ActionStatusDto,
+    pub error: Option<String>,
+    pub warning: Option<String>,
     pub output_text: Option<String>,
     pub close_window: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct PluginStatusDto {
+    pub id: String,
+    pub ok: bool,
+    pub detail: String,
 }
 
 impl From<protocol::LauncherState> for LauncherStateDto {
@@ -265,14 +350,15 @@ impl From<protocol::LauncherState> for LauncherStateDto {
                 .into_iter()
                 .map(|candidate| CandidateDto {
                     id: candidate.id,
-                    kind: kind_name(candidate.kind).into(),
+                    kind: kind_dto(candidate.kind),
                     title: candidate.title,
+                    menu_path: candidate.menu_path,
                     subtitle: candidate.subtitle,
                     shortcut: candidate.shortcut,
                     icon_key: candidate.icon.key,
                     score: candidate.score,
                     group_id: candidate.group_id,
-                    availability: availability_state(candidate.availability.state).into(),
+                    availability: availability_dto(candidate.availability.state),
                     availability_reason: candidate.availability.reason,
                     command_id: candidate.command_id,
                     bundle_id: candidate.bundle_id,
@@ -283,7 +369,7 @@ impl From<protocol::LauncherState> for LauncherStateDto {
                 .into_iter()
                 .map(|scope| ScopeDto {
                     id: scope.id,
-                    kind: scope_kind_name(scope.kind).into(),
+                    kind: scope_kind_dto(scope.kind),
                     label: scope.label,
                     candidate_ids: scope.candidate_ids,
                 })
@@ -293,25 +379,25 @@ impl From<protocol::LauncherState> for LauncherStateDto {
     }
 }
 
-fn kind_name(kind: protocol::CandidateKind) -> &'static str {
+fn kind_dto(kind: protocol::CandidateKind) -> CandidateKindDto {
     match kind {
-        protocol::CandidateKind::Application => "application",
-        protocol::CandidateKind::Action => "action",
+        protocol::CandidateKind::Application => CandidateKindDto::Application,
+        protocol::CandidateKind::Action => CandidateKindDto::Action,
     }
 }
 
-fn availability_state(state: protocol::AvailabilityState) -> &'static str {
+fn availability_dto(state: protocol::AvailabilityState) -> AvailabilityDto {
     match state {
-        protocol::AvailabilityState::Enabled => "enabled",
-        protocol::AvailabilityState::Disabled => "disabled",
-        protocol::AvailabilityState::Hidden => "hidden",
+        protocol::AvailabilityState::Enabled => AvailabilityDto::Enabled,
+        protocol::AvailabilityState::Disabled => AvailabilityDto::Disabled,
+        protocol::AvailabilityState::Hidden => AvailabilityDto::Hidden,
     }
 }
 
-fn scope_kind_name(kind: protocol::ScopeKind) -> &'static str {
+fn scope_kind_dto(kind: protocol::ScopeKind) -> ScopeKindDto {
     match kind {
-        protocol::ScopeKind::App => "app",
-        protocol::ScopeKind::Group => "group",
+        protocol::ScopeKind::App => ScopeKindDto::App,
+        protocol::ScopeKind::Group => ScopeKindDto::Group,
     }
 }
 
@@ -320,8 +406,12 @@ impl From<protocol::ActionResult> for ActionResultDto {
         Self {
             session_id: result.session_id,
             revision: result.revision,
-            success: result.success,
-            message: result.message,
+            status: match result.status {
+                protocol::ActionStatus::Succeeded => ActionStatusDto::Succeeded,
+                protocol::ActionStatus::Failed => ActionStatusDto::Failed,
+            },
+            error: result.error,
+            warning: result.warning,
             output_text: result.output_text,
             close_window: result.close_window,
         }

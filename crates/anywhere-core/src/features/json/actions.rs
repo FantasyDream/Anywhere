@@ -30,9 +30,9 @@ impl ActionHandler for Json {
             bail!("JSON context required");
         };
         let rendered = if matches!(self.mode, JsonMode::Minify) {
-            serde_json::to_string(parsed)?
+            serde_json::to_string(parsed.as_ref())?
         } else {
-            serde_json::to_string_pretty(parsed)?
+            serde_json::to_string_pretty(parsed.as_ref())?
         };
         if matches!(self.mode, JsonMode::CopyPretty) {
             platform.copy_text(&rendered)?;

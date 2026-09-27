@@ -16,6 +16,7 @@ pub struct IndexedApplication {
     pub path: String,
     pub aliases: Vec<String>,
     pub keywords: Vec<String>,
+    pub search: crate::core::search::query::SearchFields,
 }
 
 impl IndexedApplication {
@@ -32,6 +33,18 @@ impl IndexedApplication {
     /// Derived from `bundle_id` so recording and ranking can never drift apart.
     pub fn usage_id(&self) -> String {
         crate::core::ranking::usage::application_usage_id(&self.bundle_id)
+    }
+
+    pub fn prepared(mut self) -> Self {
+        let identifier =
+            crate::features::applications::source::searchable_bundle_id(&self.bundle_id);
+        self.search = crate::core::search::query::SearchFields::new(
+            &self.name,
+            &self.aliases,
+            &self.keywords,
+        )
+        .with_metadata(&[identifier.as_str()]);
+        self
     }
 }
 
@@ -78,6 +91,46 @@ fn push_unique(aliases: &mut Vec<String>, value: String, canonical: &str) {
     aliases.push(value);
 }
 
+fn well_known_aliases(bundle_id: &str) -> &'static [&'static str] {
+    match bundle_id {
+        "com.apple.finder" => &["访达"],
+        "com.apple.Safari" => &["浏览器"],
+        "com.google.Chrome" => &["谷歌浏览器", "Chrome"],
+        "com.google.Chrome.canary" => &["谷歌浏览器"],
+        "com.apple.Terminal" => &["终端"],
+        "com.googlecode.iterm2" => &["终端"],
+        "com.microsoft.VSCode" => &["代码"],
+        "com.apple.Notes" => &["备忘录"],
+        "com.apple.mail" => &["邮件"],
+        "com.apple.iCal" => &["日历"],
+        "com.apple.Preview" => &["预览"],
+        "com.apple.Music" => &["音乐"],
+        "com.apple.Photos" => &["照片"],
+        "com.apple.MobileSMS" => &["信息"],
+        "com.apple.calculator" => &["计算器"],
+        "com.apple.Maps" => &["地图"],
+        "com.apple.AppStore" => &["应用商店"],
+        "com.apple.systempreferences" | "com.apple.systemsettings" => &["系统设置", "系统偏好设置"],
+        "com.apple.TextEdit" => &["文本编辑"],
+        "com.tencent.xinWeChat" => &["微信"],
+        "com.tencent.qq" => &["QQ"],
+        "com.alibaba.DingTalkMac" => &["钉钉"],
+        "com.larksuite.ingee" | "com.electron.lark" | "com.lark.suite" => &["飞书"],
+        "ru.keepcoder.Telegram" => &["电报"],
+        "com.tinyspeck.slackmacgap" => &["Slack"],
+        "com.apple.dt.Xcode" => &["Xcode"],
+        "com.apple.iWork.Pages" => &["文稿"],
+        "com.apple.iWork.Numbers" => &["表格"],
+        "com.apple.iWork.Keynote" => &["演示"],
+        "com.microsoft.Word" => &["Word"],
+        "com.microsoft.Excel" => &["Excel"],
+        "com.microsoft.Powerpoint" => &["PPT"],
+        "us.zoom.xos" => &["Zoom"],
+        "notion.id" => &["Notion"],
+        _ => &[],
+    }
+}
+
 /// Turn platform entries into catalog rows. Display names are kept as given.
 pub fn index_from(entries: Vec<BundleApplication>) -> Vec<IndexedApplication> {
     let mut applications = Vec::new();
@@ -91,22 +144,69 @@ pub fn index_from(entries: Vec<BundleApplication>) -> Vec<IndexedApplication> {
         for alias in entry.aliases {
             push_unique(&mut aliases, alias, &name);
         }
-        applications.push(IndexedApplication {
-            bundle_id: entry.bundle_id,
-            name,
-            path,
-            aliases,
-            keywords: Vec::new(),
-        });
+        for alias in well_known_aliases(&entry.bundle_id) {
+            push_unique(&mut aliases, (*alias).to_owned(), &name);
+        }
+        applications.push(
+            IndexedApplication {
+                bundle_id: entry.bundle_id,
+                name,
+                path,
+                aliases,
+                keywords: Vec::new(),
+                search: crate::core::search::query::SearchFields::default(),
+            }
+            .prepared(),
+        );
     }
     deduplicate(applications)
 }
 
-pub fn scan(platform: &dyn Platform) -> Vec<IndexedApplication> {
-    index_from(platform.installed_applications())
+/// A finished catalog walk. `skipped == 0` and an empty list is an empty machine.
+/// `skipped > 0` is a partial index: the applications that could be read are still usable.
+pub struct ScanReport {
+    pub applications: Vec<IndexedApplication>,
+    pub skipped: usize,
+}
+
+pub fn scan(platform: &dyn Platform) -> ScanReport {
+    let found = platform.installed_applications();
+    let input = found.applications.len();
+    let applications = index_from(found.applications);
+    ScanReport {
+        skipped: found.skipped + input.saturating_sub(applications.len()),
+        applications,
+    }
+}
+
+/// The scan task finished, or it failed and the previous index must stay.
+pub enum ScanStatus {
+    Complete(ScanReport),
+    Failed,
+}
+
+/// Background scan. A failed task is not an empty catalog.
+pub async fn scan_async(platform: Arc<dyn Platform>) -> ScanStatus {
+    let started = std::time::Instant::now();
+    match tokio::task::spawn_blocking(move || scan(platform.as_ref())).await {
+        Ok(report) => {
+            tracing::info!(
+                duration_us = started.elapsed().as_micros() as u64,
+                count = report.applications.len(),
+                skipped = report.skipped,
+                "app_index_ready"
+            );
+            ScanStatus::Complete(report)
+        }
+        Err(error) => {
+            tracing::error!(error = %error, "app_index_failed");
+            ScanStatus::Failed
+        }
+    }
 }
 
 /// Background index handle shared with the application state.
+#[derive(Clone)]
 pub struct ApplicationCatalog {
     applications: Vec<IndexedApplication>,
 }
@@ -126,20 +226,20 @@ impl ApplicationCatalog {
     pub fn is_empty(&self) -> bool {
         self.applications.is_empty()
     }
-}
 
-/// Background scan. The caller stores the catalog when this resolves.
-pub async fn scan_async(platform: Arc<dyn Platform>) -> ApplicationCatalog {
-    let started = std::time::Instant::now();
-    let applications = tokio::task::spawn_blocking(move || scan(platform.as_ref()))
-        .await
-        .unwrap_or_default();
-    tracing::info!(
-        duration_us = started.elapsed().as_micros() as u64,
-        count = applications.len(),
-        "app_index_ready"
-    );
-    ApplicationCatalog::new(applications)
+    pub fn excluding(&self, excluded: &std::collections::BTreeSet<String>) -> Self {
+        if excluded.is_empty() {
+            return self.clone();
+        }
+        Self {
+            applications: self
+                .applications
+                .iter()
+                .filter(|application| !excluded.contains(&application.bundle_id))
+                .cloned()
+                .collect(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -273,7 +373,7 @@ mod tests {
             roots: vec![root.path().to_path_buf()],
             ..FakePlatform::default()
         };
-        let applications = scan(&platform);
+        let applications = scan(&platform).applications;
         assert_eq!(applications.len(), 1);
         assert_eq!(applications[0].name, "Alpha");
         assert!(
@@ -287,7 +387,9 @@ mod tests {
             roots: vec![root.path().to_path_buf()],
             ..FakePlatform::default()
         };
-        assert!(scan(&platform).is_empty());
+        let missing = scan(&platform);
+        assert!(missing.applications.is_empty());
+        assert!(missing.skipped > 0, "unreadable bundles are a partial scan");
     }
 
     #[test]
@@ -338,9 +440,21 @@ mod tests {
         }]);
         assert_eq!(applications.len(), 1);
         assert_eq!(applications[0].name, "Google Chrome");
-        assert_eq!(
-            applications[0].aliases,
-            vec!["Access the Internet".to_owned()]
+        assert!(
+            applications[0]
+                .aliases
+                .iter()
+                .any(|alias| alias == "Access the Internet"),
+            "{:?}",
+            applications[0].aliases
+        );
+        assert!(
+            applications[0]
+                .aliases
+                .iter()
+                .any(|alias| alias == "谷歌浏览器"),
+            "{:?}",
+            applications[0].aliases
         );
 
         let fields = crate::core::search::query::SearchFields::new(
@@ -366,7 +480,7 @@ mod tests {
             roots: vec![root.path().to_path_buf()],
             ..FakePlatform::default()
         };
-        let applications = scan(&platform);
+        let applications = scan(&platform).applications;
         assert_eq!(applications.len(), 1);
         let application = &applications[0];
         assert!(

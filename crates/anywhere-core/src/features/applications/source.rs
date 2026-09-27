@@ -7,7 +7,7 @@ use crate::core::context::{ContextSource, ResolvedContext};
 use crate::core::ranking::score::{self, UsageStats};
 use crate::core::search::candidate::Candidate;
 use crate::core::search::candidate_source::{CandidateSource, SearchContext};
-use crate::features::applications::index::IndexedApplication;
+use crate::features::applications::index::{ApplicationCatalog, IndexedApplication};
 use anywhere_protocol::*;
 
 /// Longest query still matched against the application index.
@@ -27,7 +27,25 @@ pub struct ApplicationSource<'a> {
     pub now: i64,
 }
 
+impl<'a> ApplicationSource<'a> {
+    pub fn from_catalog(
+        catalog: &'a ApplicationCatalog,
+        app_usage: &'a dyn Fn(&str, &str) -> UsageStats,
+        now: i64,
+    ) -> Self {
+        Self {
+            applications: catalog.applications(),
+            app_usage,
+            now,
+        }
+    }
+}
+
 impl CandidateSource for ApplicationSource<'_> {
+    fn id(&self) -> &'static str {
+        "applications"
+    }
+
     fn candidates(&self, search: &SearchContext<'_>) -> Vec<Candidate> {
         let query = search.query;
         let searching = !query.is_empty();
@@ -41,13 +59,7 @@ impl CandidateSource for ApplicationSource<'_> {
             // The bundle id is an identifier, not a name: a two-letter query must not
             // surface every app whose id contains those letters. Reverse-DNS noise is
             // stripped so matching happens on the part that identifies the app.
-            let identifier = searchable_bundle_id(&application.bundle_id);
-            let fields = crate::core::search::query::SearchFields::new(
-                &application.name,
-                &application.aliases,
-                &application.keywords,
-            )
-            .with_metadata(&[identifier.as_str()]);
+            let fields = &application.search;
             let match_level = fields.matched(query);
             if match_level.is_none() {
                 continue;
@@ -60,7 +72,7 @@ impl CandidateSource for ApplicationSource<'_> {
                 match_level,
                 searching,
                 ContextSource::ApplicationContext,
-                crate::core::ranking::usage::APPLICATION_CONTEXT_TYPE,
+                90,
                 10,
                 usage,
                 self.now,
@@ -81,6 +93,7 @@ impl CandidateSource for ApplicationSource<'_> {
                     command_id: None,
                     bundle_id: Some(application.bundle_id.clone()),
                     owning_app: None,
+                    menu_path: Vec::new(),
                 },
                 target: crate::core::search::candidate::CandidateTarget::LaunchApplication {
                     path: application.path.clone(),

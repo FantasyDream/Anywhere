@@ -1,9 +1,12 @@
 //! First-party product features.
 //!
-//! Each owns the contexts it recognizes and the actions it offers. Adding an action is a
-//! handler, an AvailabilityRule on the spec, and a registration. Custom hide rules name a
-//! fact key and an operation; a new snapshot is inserted into SessionFacts at capture, not
-//! a new struct field. A new kind of list row registers a CandidateSource and an Invocation.
+//! Adding a capability is a registration, not a branch in core:
+//! - an [`ActionBundle`](crate::core::action::bundle::ActionBundle) in [`builtin_action_bundles`]
+//! - a [`ContextProvider`] in [`builtin_providers`]
+//! - a seed in [`session_seeds`] if it starts the context graph
+//! - a [`CandidateSource`](crate::core::search::candidate_source::CandidateSource) passed into search
+//!
+//! Hide rules name a fact key; capture writes the fact, not a new struct field.
 pub mod app_actions;
 pub mod applications;
 pub mod filesystem;
@@ -13,12 +16,11 @@ pub mod text;
 pub mod url;
 
 use crate::core::context::provider::ContextProvider;
-use crate::core::context::ResolvedContext;
+use crate::core::context::{ContextSource, ResolvedContext};
+use anywhere_platform::ApplicationInfo;
 use std::sync::Arc;
 
 /// Every action the first-party features contribute, as bundles.
-///
-/// This is the whole registration surface: adding a feature means adding its bundle here.
 pub fn builtin_action_bundles() -> Vec<crate::core::action::bundle::ActionBundle> {
     vec![
         git::actions::bundle(),
@@ -31,8 +33,7 @@ pub fn builtin_action_bundles() -> Vec<crate::core::action::bundle::ActionBundle
 
 /// Every provider a session gets from the first-party features.
 ///
-/// The registry decides the order (priority, then id); this only says what exists. A new
-/// feature adds its provider here and nothing else has to change.
+/// The registry decides the order (priority, then id); this only says what exists.
 pub fn builtin_providers() -> Vec<Arc<dyn ContextProvider>> {
     vec![
         Arc::new(url::provider::UrlProvider::new()),
@@ -41,6 +42,56 @@ pub fn builtin_providers() -> Vec<Arc<dyn ContextProvider>> {
         Arc::new(text::provider::TextProvider::default()),
         Arc::new(git::provider::GitRepositoryProvider::default()),
     ]
+}
+
+/// Contexts that start a revision: memoized environment, frozen frontmost app, typed text.
+pub fn session_seeds(
+    frontmost: Option<&ApplicationInfo>,
+    cache: impl IntoIterator<Item = ResolvedContext>,
+    input: &str,
+) -> Vec<ResolvedContext> {
+    let mut seeds: Vec<_> = cache.into_iter().collect();
+    if let Some(app) = frontmost {
+        seeds.push(applications::context::frontmost_context(app));
+    }
+    if let Some(text) = text::provider::text_context(input) {
+        seeds.push(text);
+    }
+    seeds
+}
+
+/// Ranking bias for a context type. Typed text is weaker than a recognized object.
+pub fn context_semantic(type_id: &str) -> i32 {
+    if type_id == anywhere_protocol::TEXT {
+        40
+    } else {
+        90
+    }
+}
+
+/// Environment context reused by later revisions of the same session.
+///
+/// User-typed objects stay out: caching them made the next query inherit the previous path.
+pub fn reusable_environment(context: &ResolvedContext) -> bool {
+    context.source != ContextSource::UserInput
+        && matches!(
+            context.type_id.as_str(),
+            anywhere_protocol::DIRECTORY | anywhere_protocol::GIT_REPOSITORY
+        )
+}
+
+pub fn remember_environment(cache: &mut Vec<ResolvedContext>, contexts: &[ResolvedContext]) {
+    for context in contexts {
+        if !reusable_environment(context) {
+            continue;
+        }
+        let seen = cache.iter().any(|cached| {
+            cached.type_id == context.type_id && cached.value.text() == context.value.text()
+        });
+        if !seen {
+            cache.push(context.clone());
+        }
+    }
 }
 
 /// Every context the built-in recognizers derive from one input.

@@ -1,8 +1,7 @@
 //! OS capabilities behind a platform-neutral trait.
 //!
-//! V0.2 adds application indexing, application activation, clipboard reading and
-//! Git execution. Every new capability has an explicitly unsupported default so a
-//! platform that does not implement it degrades instead of failing to compile.
+//! Every capability has an explicitly unsupported default so test doubles compile
+//! without implementing unused methods; macOS implements the ones the product uses.
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -39,6 +38,28 @@ pub struct DiscoveredMenuItem {
     pub enabled: bool,
 }
 
+/// Outcome of reading another app's menu bar.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MenuDiscovery {
+    Ready(Vec<DiscoveredMenuItem>),
+    Untrusted,
+    TimedOut,
+    Unavailable,
+}
+
+impl MenuDiscovery {
+    pub fn items(&self) -> &[DiscoveredMenuItem] {
+        match self {
+            Self::Ready(items) => items,
+            _ => &[],
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.items().is_empty()
+    }
+}
+
 /// Metadata read from one installed application.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BundleApplication {
@@ -46,14 +67,11 @@ pub struct BundleApplication {
     pub name: String,
     /// Further names this application answers to, beyond `name`.
     ///
-    /// Searchable but not shown. A platform whose display name and lookup name disagree —
-    /// a shortcut's description versus its file name — puts the second one here instead of
-    /// choosing between a title the user recognizes and a name they will type.
+    /// Searchable but not shown. A platform whose display name and lookup name disagree
+    /// puts the second one here instead of choosing between a title the user recognizes
+    /// and a name they will type.
     pub aliases: Vec<String>,
     /// Path to launch and to read the icon from. `None` keeps the discovered entry.
-    ///
-    /// This is the *entry*, not the program: a Windows shortcut carries the arguments and
-    /// working directory, so launching its target directly silently drops them.
     pub path: Option<String>,
     /// Opaque icon reference; resolved lazily through `application_icon`.
     pub icon: Option<String>,
@@ -74,11 +92,8 @@ pub enum GitOperation {
 mod catalog;
 /// Shared bounded draining of a child process's pipes.
 pub(crate) mod drain;
-/// Shared Git argv and formatting, so both desktop platforms run the same command.
+/// Shared Git argv and formatting.
 pub mod git;
-/// Native shim declarations for the Windows platform.
-#[cfg(target_os = "windows")]
-mod windows_native;
 
 impl GitOperation {
     pub const ALL: [GitOperation; 3] = [Self::Status, Self::Log, Self::Diff];
@@ -100,6 +115,19 @@ pub struct GitOutput {
     pub truncated: bool,
 }
 
+/// What a catalog walk found. `skipped` counts bundles that were seen and not indexed.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct InstalledApplications {
+    pub applications: Vec<BundleApplication>,
+    pub skipped: usize,
+}
+
+impl InstalledApplications {
+    pub fn is_empty(&self) -> bool {
+        self.applications.is_empty() && self.skipped == 0
+    }
+}
+
 pub trait Platform: Send + Sync {
     /// Ordered application catalog roots for the default directory walk.
     ///
@@ -113,12 +141,12 @@ pub trait Platform: Send + Sync {
     ///
     /// This is the swap point for the catalog. The default walks [`Self::application_roots`]
     /// and identifies each entry with [`Self::bundle_application`]. A later indexer
-    /// (Launch Services, Start Menu APIs, a native database) replaces this method only;
+    /// (Launch Services, a native database) replaces this method only;
     /// Core keeps matching, ranking and refresh.
     ///
     /// `name` is the title shown to the user and must be the system-language display
     /// name, not the on-disk file name. Extra lookup names go in `aliases`.
-    fn installed_applications(&self) -> Vec<BundleApplication> {
+    fn installed_applications(&self) -> InstalledApplications {
         catalog::from_roots(self)
     }
 
@@ -188,12 +216,9 @@ pub trait Platform: Send + Sync {
         false
     }
 
-    /// Menu-bar leaves of `application`. Empty when untrusted, unsupported, or none.
-    fn discover_menu_actions(
-        &self,
-        _application: &ApplicationInfo,
-    ) -> Result<Vec<DiscoveredMenuItem>> {
-        Ok(Vec::new())
+    /// Menu-bar leaves of `application`.
+    fn discover_menu_actions(&self, _application: &ApplicationInfo) -> Result<MenuDiscovery> {
+        Ok(MenuDiscovery::Ready(Vec::new()))
     }
 
     /// Activate `application`, relocate the item, and press it. Never panics.
@@ -217,13 +242,6 @@ mod macos;
 pub use macos::MacOsPlatform;
 #[cfg(target_os = "macos")]
 pub use macos::MacOsPlatform as NativePlatform;
-
-#[cfg(target_os = "windows")]
-mod windows;
-#[cfg(target_os = "windows")]
-pub use windows::WindowsPlatform;
-#[cfg(target_os = "windows")]
-pub use windows::WindowsPlatform as NativePlatform;
 
 #[cfg(test)]
 mod tests {

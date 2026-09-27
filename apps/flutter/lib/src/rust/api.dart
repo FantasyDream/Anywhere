@@ -6,8 +6,8 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `application`, `availability_state`, `beyond`, `cursor`, `kind_name`, `scope_kind_name`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`
+// These functions are ignored because they are not marked as `pub`: `application`, `availability_dto`, `kind_dto`, `load_plugins`, `plugin_reports`, `scope_kind_dto`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
 
@@ -39,12 +39,7 @@ Future<LauncherStateDto?> latestState({required int sessionId}) =>
     RustLib.instance.api.crateApiLatestState(sessionId: sessionId);
 
 /// Block until the core publishes a snapshot beyond `after` for this session.
-///
-/// Late context is committed by a background task, so the core's own update channel is the
-/// only place a caller can observe it. Returns the newest snapshot when one arrives, or
-/// `None` on timeout, so the caller can wait again from the same cursor — a wait that ends
-/// because nothing happened must not be mistaken for the session being finished.
-Future<LauncherStateDto?> waitForSnapshot(
+Future<SnapshotWaitDto> waitForSnapshot(
         {required int sessionId, required BigInt after}) =>
     RustLib.instance.api
         .crateApiWaitForSnapshot(sessionId: sessionId, after: after);
@@ -66,19 +61,33 @@ Future<void> deactivate({required int sessionId}) =>
 bool promptAccessibility() =>
     RustLib.instance.api.crateApiPromptAccessibility();
 
+List<PluginStatusDto> pluginStatus() =>
+    RustLib.instance.api.crateApiPluginStatus();
+
+Future<List<PluginStatusDto>> reloadPlugins() =>
+    RustLib.instance.api.crateApiReloadPlugins();
+
+Future<List<String>> excludedApps() =>
+    RustLib.instance.api.crateApiExcludedApps();
+
+Future<void> setExcludedApps({required List<String> bundleIds}) =>
+    RustLib.instance.api.crateApiSetExcludedApps(bundleIds: bundleIds);
+
 class ActionResultDto {
   final int sessionId;
   final int revision;
-  final bool success;
-  final String message;
+  final ActionStatusDto status;
+  final String? error;
+  final String? warning;
   final String? outputText;
   final bool closeWindow;
 
   const ActionResultDto({
     required this.sessionId,
     required this.revision,
-    required this.success,
-    required this.message,
+    required this.status,
+    this.error,
+    this.warning,
     this.outputText,
     required this.closeWindow,
   });
@@ -87,8 +96,9 @@ class ActionResultDto {
   int get hashCode =>
       sessionId.hashCode ^
       revision.hashCode ^
-      success.hashCode ^
-      message.hashCode ^
+      status.hashCode ^
+      error.hashCode ^
+      warning.hashCode ^
       outputText.hashCode ^
       closeWindow.hashCode;
 
@@ -99,26 +109,37 @@ class ActionResultDto {
           runtimeType == other.runtimeType &&
           sessionId == other.sessionId &&
           revision == other.revision &&
-          success == other.success &&
-          message == other.message &&
+          status == other.status &&
+          error == other.error &&
+          warning == other.warning &&
           outputText == other.outputText &&
           closeWindow == other.closeWindow;
 }
 
+enum ActionStatusDto {
+  succeeded,
+  failed,
+  ;
+}
+
+enum AvailabilityDto {
+  enabled,
+  disabled,
+  hidden,
+  ;
+}
+
 class CandidateDto {
   final String id;
-
-  /// `application` or `action`, mirroring `CandidateKind`.
-  final String kind;
+  final CandidateKindDto kind;
   final String title;
+  final List<String> menuPath;
   final String? subtitle;
   final String? shortcut;
   final String iconKey;
   final double score;
   final String groupId;
-
-  /// `enabled`, `disabled` or `hidden`.
-  final String availability;
+  final AvailabilityDto availability;
   final String? availabilityReason;
   final String? commandId;
   final String? bundleId;
@@ -127,6 +148,7 @@ class CandidateDto {
     required this.id,
     required this.kind,
     required this.title,
+    required this.menuPath,
     this.subtitle,
     this.shortcut,
     required this.iconKey,
@@ -143,6 +165,7 @@ class CandidateDto {
       id.hashCode ^
       kind.hashCode ^
       title.hashCode ^
+      menuPath.hashCode ^
       subtitle.hashCode ^
       shortcut.hashCode ^
       iconKey.hashCode ^
@@ -161,6 +184,7 @@ class CandidateDto {
           id == other.id &&
           kind == other.kind &&
           title == other.title &&
+          menuPath == other.menuPath &&
           subtitle == other.subtitle &&
           shortcut == other.shortcut &&
           iconKey == other.iconKey &&
@@ -170,6 +194,12 @@ class CandidateDto {
           availabilityReason == other.availabilityReason &&
           commandId == other.commandId &&
           bundleId == other.bundleId;
+}
+
+enum CandidateKindDto {
+  application,
+  action,
+  ;
 }
 
 class ContextDto {
@@ -251,11 +281,33 @@ class LauncherStateDto {
           diagnostics == other.diagnostics;
 }
 
+class PluginStatusDto {
+  final String id;
+  final bool ok;
+  final String detail;
+
+  const PluginStatusDto({
+    required this.id,
+    required this.ok,
+    required this.detail,
+  });
+
+  @override
+  int get hashCode => id.hashCode ^ ok.hashCode ^ detail.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PluginStatusDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          ok == other.ok &&
+          detail == other.detail;
+}
+
 class ScopeDto {
   final String id;
-
-  /// `all`, `app` or `group`.
-  final String kind;
+  final ScopeKindDto kind;
   final String label;
   final List<String> candidateIds;
 
@@ -279,4 +331,39 @@ class ScopeDto {
           kind == other.kind &&
           label == other.label &&
           candidateIds == other.candidateIds;
+}
+
+enum ScopeKindDto {
+  app,
+  group,
+  ;
+}
+
+class SnapshotWaitDto {
+  final SnapshotWaitKindDto kind;
+  final LauncherStateDto? state;
+
+  const SnapshotWaitDto({
+    required this.kind,
+    this.state,
+  });
+
+  @override
+  int get hashCode => kind.hashCode ^ state.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SnapshotWaitDto &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          state == other.state;
+}
+
+enum SnapshotWaitKindDto {
+  updated,
+  timedOut,
+  closed,
+  superseded,
+  ;
 }

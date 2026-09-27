@@ -10,7 +10,9 @@ mod git;
 mod native;
 mod shell;
 
-use crate::{ApplicationInfo, BundleApplication, GitOperation, GitOutput, Platform};
+use crate::{
+    ApplicationInfo, BundleApplication, GitOperation, GitOutput, InstalledApplications, Platform,
+};
 use anyhow::{Context, Result};
 use std::{
     ffi::CString,
@@ -31,7 +33,7 @@ impl Platform for MacOsPlatform {
         roots
     }
 
-    fn installed_applications(&self) -> Vec<BundleApplication> {
+    fn installed_applications(&self) -> InstalledApplications {
         application::installed_applications(&self.application_roots())
     }
 
@@ -86,10 +88,7 @@ impl Platform for MacOsPlatform {
     fn accessibility_trusted(&self, prompt: bool) -> bool {
         application::accessibility_trusted(prompt)
     }
-    fn discover_menu_actions(
-        &self,
-        app: &ApplicationInfo,
-    ) -> Result<Vec<crate::DiscoveredMenuItem>> {
+    fn discover_menu_actions(&self, app: &ApplicationInfo) -> Result<crate::MenuDiscovery> {
         application::discover_menu_actions(app)
     }
     fn perform_menu_action(

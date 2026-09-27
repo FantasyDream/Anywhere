@@ -9,6 +9,17 @@ if [[ "$(uname -s)" != Darwin ]]; then
   exit 1
 fi
 ARCH="$(uname -m)"
+SIGN_IDENTITY="${ANYWHERE_CODESIGN_IDENTITY:-Anywhere Local Code Signing}"
+if [[ "$SIGN_IDENTITY" == "-" ]]; then
+  echo 'Ad hoc signing changes the app identity on every rebuild and loses Accessibility permission.' >&2
+  echo 'Run scripts/setup-local-signing.sh or set ANYWHERE_CODESIGN_IDENTITY to a persistent signing identity.' >&2
+  exit 1
+fi
+if ! security find-identity -p codesigning | grep -Fq "$SIGN_IDENTITY"; then
+  echo "Code signing identity '$SIGN_IDENTITY' was not found." >&2
+  echo 'Run scripts/setup-local-signing.sh once, or set ANYWHERE_CODESIGN_IDENTITY to an existing identity.' >&2
+  exit 1
+fi
 # Keyed by repo path: clang modules embed absolute paths, so a cache made under a
 # different checkout path is unusable. Renaming the repository just builds a fresh one.
 SWIFT_MODULE_CACHE="${SWIFT_MODULE_CACHE_PATH:-$(dirname "$ROOT/.tools")/$(basename "$ROOT")-swift-cache}"
@@ -22,7 +33,11 @@ cargo build --locked --release -p anywhere-bridge-flutter
     -dTargetPlatform=darwin -dDarwinArchs="$ARCH" -dBuildMode=release \
     -dTargetFile=lib/main.dart release_macos_bundle_flutter_assets
 )
-APP="$ROOT/build/Anywhere.app"
+APP="${ANYWHERE_APP_OUTPUT:-$ROOT/build/Anywhere.app}"
+if [[ "$APP" != "$ROOT"/build/*.app ]]; then
+  echo 'ANYWHERE_APP_OUTPUT must be an .app path inside build/.' >&2
+  exit 1
+fi
 # Rebuild from scratch: the bundle is assembled by copying, so a file removed from the
 # sources would otherwise linger and keep shipping (a deleted plugin did exactly that).
 rm -rf "$APP"
@@ -45,7 +60,7 @@ xcrun swiftc -O -target "$ARCH-apple-macos12.0" \
   -Xlinker -ld_classic \
   apps/flutter/macos/Runner/Main.swift "$ROOT/build/macos_menu.o" -o "$APP/Contents/MacOS/Anywhere"
 for framework in FlutterMacOS App; do
-  codesign --force --sign - "$APP/Contents/Frameworks/$framework.framework"
+  codesign --force --sign "$SIGN_IDENTITY" "$APP/Contents/Frameworks/$framework.framework"
 done
 # The cargo-built dylib records its build path as its install name, which would make
 # the bundle depend on `target/release/deps` still existing, and break as soon as the
@@ -53,16 +68,20 @@ done
 # re-sign because editing the load command invalidates the signature.
 install_name_tool -id "@rpath/libanywhere_bridge_flutter.dylib" \
   "$APP/Contents/Frameworks/libanywhere_bridge_flutter.dylib"
-codesign --force --sign - "$APP/Contents/Frameworks/libanywhere_bridge_flutter.dylib"
-codesign --force --sign - --entitlements apps/flutter/macos/Runner/Release.entitlements "$APP"
+codesign --force --sign "$SIGN_IDENTITY" "$APP/Contents/Frameworks/libanywhere_bridge_flutter.dylib"
+codesign --force --sign "$SIGN_IDENTITY" --entitlements apps/flutter/macos/Runner/Release.entitlements "$APP"
 codesign --verify --deep --strict "$APP"
+if codesign -dr - "$APP" 2>&1 | grep -q 'designated => cdhash'; then
+  echo 'Packaging error: the app still has a version-specific ad hoc identity.' >&2
+  exit 1
+fi
 # The Dart entry point loads this by name; a rename that misses one of the two sides
 # otherwise fails only at runtime, with an unhelpful dlopen error.
 # Re-register with LaunchServices. macOS caches an app's icon and metadata by bundle
 # path and identifier, so a freshly built or renamed bundle otherwise shows a stale
 # icon (or the "no entry" placeholder) until the cache happens to expire.
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
-if [[ -x "$LSREGISTER" ]]; then
+if [[ "$APP" == "$ROOT/build/Anywhere.app" && -x "$LSREGISTER" ]]; then
   "$LSREGISTER" -f "$APP"
 fi
 

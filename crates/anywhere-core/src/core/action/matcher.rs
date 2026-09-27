@@ -13,15 +13,42 @@ use crate::core::session::facts::{context_ownership, Ownership, SessionFacts};
 use anywhere_protocol::*;
 
 pub struct ActionMatcher<'a> {
-    pub registry: &'a ActionRegistry,
-    pub usage: &'a dyn Fn(&str, &str) -> UsageStats,
-    pub facts: &'a SessionFacts,
-    pub now: i64,
+    registry: &'a ActionRegistry,
+    usage: &'a dyn Fn(&str, &str) -> UsageStats,
+    facts: &'a SessionFacts,
+    now: i64,
+    semantic: fn(&str) -> i32,
+}
+
+impl<'a> ActionMatcher<'a> {
+    pub fn new(
+        registry: &'a ActionRegistry,
+        usage: &'a dyn Fn(&str, &str) -> UsageStats,
+        facts: &'a SessionFacts,
+        now: i64,
+        semantic: fn(&str) -> i32,
+    ) -> Self {
+        Self {
+            registry,
+            usage,
+            facts,
+            now,
+            semantic,
+        }
+    }
+
+    pub fn registry(&self) -> &'a ActionRegistry {
+        self.registry
+    }
 }
 
 /// Actions reach the search pipeline through the same contract as any other source; what is
 /// core about them is only that the launcher always has them.
 impl CandidateSource for ActionMatcher<'_> {
+    fn id(&self) -> &'static str {
+        "actions"
+    }
+
     fn candidates(&self, search: &SearchContext<'_>) -> Vec<Candidate> {
         self.match_actions(search.query, search.contexts)
     }
@@ -41,7 +68,7 @@ impl ActionMatcher<'_> {
                 Ownership::Ambient => None,
             };
             for action in self.registry.matching(context) {
-                let match_level = action.search.matched(query);
+                let match_level = action.search().matched(query);
                 if searching && match_level.is_none() && !availability::is_user_object(context) {
                     continue;
                 }
@@ -55,7 +82,7 @@ impl ActionMatcher<'_> {
                     match_level,
                     searching,
                     context.source,
-                    &context.type_id,
+                    (self.semantic)(&context.type_id),
                     action.base_priority,
                     stats,
                     self.now,
@@ -79,6 +106,7 @@ impl ActionMatcher<'_> {
                         command_id: Some(action.id.clone()),
                         bundle_id: None,
                         owning_app: owned_by.clone().or_else(|| action.owning_app.clone()),
+                        menu_path: action.menu_path.clone(),
                     },
                     target: crate::core::search::candidate::CandidateTarget::from_action(
                         action.clone(),
@@ -103,24 +131,9 @@ fn home_bonus(context: &ResolvedContext) -> f32 {
 }
 
 fn subtitle(action: &ActionDescriptor, context: &ResolvedContext) -> String {
-    let detail = display_detail(context);
+    let detail = context.display_detail();
     match &action.subtitle {
         Some(subtitle) => format!("{subtitle} · {detail}"),
         None => detail,
     }
-}
-
-/// Short subtitle text; execution still uses the full transport value.
-fn display_detail(context: &ResolvedContext) -> String {
-    const MAX: usize = 120;
-    let text = match &context.value {
-        crate::core::context::ContextValue::Application { name, .. } => name.clone(),
-        _ => context.value.text(),
-    };
-    if text.chars().count() <= MAX {
-        return text;
-    }
-    let mut shortened = text.chars().take(MAX).collect::<String>();
-    shortened.push('…');
-    shortened
 }

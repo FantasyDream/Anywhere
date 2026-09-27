@@ -3,29 +3,32 @@
 //! Default strategy for [`crate::Platform::installed_applications`]: walk known roots
 //! and identify each entry through [`crate::Platform::bundle_application`]. A later
 //! indexer replaces `installed_applications` and does not have to use this walk.
-use crate::{BundleApplication, Platform};
+use crate::{InstalledApplications, Platform};
 use std::path::{Path, PathBuf};
 
 const MAX_DEPTH: usize = 3;
 const MAX_APPS: usize = 4000;
 
-pub(crate) fn from_roots<P: Platform + ?Sized>(platform: &P) -> Vec<BundleApplication> {
+pub(crate) fn from_roots<P: Platform + ?Sized>(platform: &P) -> InstalledApplications {
     let mut applications = Vec::new();
-    let mut unreadable = 0usize;
+    let mut skipped = 0usize;
     for path in discover(&platform.application_roots()) {
         match platform.bundle_application(&path) {
             Ok(Some(application)) => applications.push(application),
-            Ok(None) => unreadable += 1,
+            Ok(None) => skipped += 1,
             Err(error) => {
-                unreadable += 1;
+                skipped += 1;
                 tracing::debug!(bundle = %path.display(), error = %error, "app_index_skip");
             }
         }
     }
-    if unreadable > 0 {
-        tracing::info!(unreadable, "app_index_incomplete");
+    if skipped > 0 {
+        tracing::info!(skipped, "app_index_incomplete");
     }
-    applications
+    InstalledApplications {
+        applications,
+        skipped,
+    }
 }
 
 pub(crate) fn discover(roots: &[PathBuf]) -> Vec<PathBuf> {
@@ -41,9 +44,8 @@ pub(crate) fn discover(roots: &[PathBuf]) -> Vec<PathBuf> {
 }
 
 fn is_application_path(path: &Path) -> bool {
-    path.extension().is_some_and(|extension| {
-        extension.eq_ignore_ascii_case("app") || extension.eq_ignore_ascii_case("lnk")
-    })
+    path.extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("app"))
 }
 
 fn walk(directory: &Path, depth: usize, bundles: &mut Vec<PathBuf>) {
@@ -95,28 +97,5 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(names, ["Alpha", "Beta", "Gamma"]);
         assert!(!names.iter().any(|name| name == "Nested"));
-    }
-
-    #[test]
-    fn discovery_finds_application_entries_that_are_files() {
-        let root = tempfile::tempdir().unwrap();
-        let programs = root.path().join("Start Menu").join("Programs");
-        std::fs::create_dir_all(&programs).unwrap();
-        std::fs::write(programs.join("Google Chrome.lnk"), b"stub").unwrap();
-        std::fs::create_dir_all(programs.join("Company")).unwrap();
-        std::fs::write(programs.join("Company").join("Tool.LNK"), b"stub").unwrap();
-        std::fs::write(programs.join("notes.txt"), b"stub").unwrap();
-        make_apps(&programs, &["Mac Only"]);
-
-        let mut names = discover(&[root.path().to_path_buf()])
-            .iter()
-            .map(|entry| entry.file_name().unwrap().to_string_lossy().into_owned())
-            .collect::<Vec<_>>();
-        names.sort();
-        assert_eq!(
-            names,
-            ["Google Chrome.lnk", "Mac Only.app", "Tool.LNK"],
-            "shortcut files are applications; other files are not"
-        );
     }
 }

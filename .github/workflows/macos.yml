@@ -1,0 +1,42 @@
+name: macOS checks
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**'
+      - 'apps/flutter/**'
+      - 'plugins/**'
+      - 'scripts/**'
+      - '.flutter-version'
+      - '.github/workflows/macos.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Read Flutter version
+        id: flutter-version
+        run: echo "version=$(cat .flutter-version)" >> "$GITHUB_OUTPUT"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ steps.flutter-version.outputs.version }}
+          channel: stable
+          cache: true
+      - name: Check Rust, native menus, architecture and Flutter
+        run: ./scripts/check.sh

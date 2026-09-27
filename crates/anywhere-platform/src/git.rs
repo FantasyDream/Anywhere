@@ -1,4 +1,4 @@
-//! The Git invocation both desktop platforms share.
+//! Shared Git argv and result formatting.
 //!
 //! Only the argv allowlist and the result formatting live here; spawning, pipes and
 //! deadlines stay per platform because they use different process APIs.

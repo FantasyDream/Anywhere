@@ -10,7 +10,10 @@ static AXError test_actions(AXUIElementRef element, CFArrayRef *out);
 #undef AXUIElementCopyAttributeValue
 #undef AXUIElementCopyActionNames
 static AXError test_attribute(AXUIElementRef element, CFStringRef attribute, CFTypeRef *out) {
-    id value = ((__bridge NSDictionary *)element)[(__bridge NSString *)attribute];
+    NSDictionary *node = (__bridge NSDictionary *)element;
+    NSNumber *fault = node[@"TestAXError"];
+    if (fault) return (AXError)fault.intValue;
+    id value = node[(__bridge NSString *)attribute];
     if (!value) return kAXErrorNoValue;
     *out = CFRetain((__bridge CFTypeRef)value);
     return kAXErrorSuccess;
@@ -25,8 +28,18 @@ static NSDictionary *leaf(NSString *title, NSString *identifier, BOOL enabled) {
 }
 static AXUIElementRef lookup(NSArray *children, NSArray *titles, NSArray *identifiers) {
     menu_deadline = 0; menu_incomplete = NO; menu_visited = 0;
+    menu_ax_failure = kAXErrorSuccess;
     NSDictionary *root = @{@"AXChildren": children};
-    return locate((__bridge AXUIElementRef)root, titles, identifiers);
+    return locate((__bridge AXUIElementRef)root, titles, identifiers, NULL);
+}
+static int lookup_status(NSDictionary *root, NSArray *titles, NSArray *identifiers,
+                         CFAbsoluteTime deadline) {
+    menu_deadline = deadline; menu_incomplete = NO; menu_visited = 0;
+    menu_ax_failure = kAXErrorSuccess;
+    int status = -1;
+    AXUIElementRef found = locate((__bridge AXUIElementRef)root, titles, identifiers, &status);
+    if (found) CFRelease(found);
+    return status;
 }
 int main(void) {
     @autoreleasepool {
@@ -76,14 +89,28 @@ int main(void) {
         assert(items.count == 0);
         NSDictionary *parent = @{@"AXRole": @"AXMenuItem", @"AXTitle": @"File", @"AXEnabled":@NO, @"AXChildren":@[save]};
         assert(!lookup(@[parent], @[@"File", @"Save"], @[NSNull.null, NSNull.null]));
+        assert(lookup_status(@{@"AXChildren":@[parent]}, @[@"File", @"Save"],
+                             @[NSNull.null, NSNull.null], 0) == 4);
+        assert(lookup_status(@{@"AXChildren":@[save]}, @[@"Other"],
+                             @[NSNull.null], 0) == 3);
+        assert(lookup_status(@{@"AXChildren":@[save]}, @[@"Save"],
+                             @[NSNull.null], CFAbsoluteTimeGetCurrent() - 1) == 9);
+        assert(lookup_status(@{@"TestAXError":@(kAXErrorAPIDisabled)}, @[@"Save"],
+                             @[NSNull.null], 0) == 7);
+        assert(lookup_status(@{@"TestAXError":@(kAXErrorCannotComplete)}, @[@"Save"],
+                             @[NSNull.null], 0) == 9);
+        assert(menu_ax_status(kAXErrorAPIDisabled, 2) == 7);
+        assert(menu_ax_status(kAXErrorCannotComplete, 5) == 9);
+        assert(menu_ax_status(kAXErrorActionUnsupported, 5) == 5);
         NSDictionary *identity = @{@"pid":@42, @"bundle_id":@"test.editor", @"instance_id":@"one"};
         assert(application_identity_matches(identity, 42, @"test.editor", @"one"));
         assert(!application_identity_matches(identity, 42, @"other.app", @"one"));
         assert(!application_identity_matches(identity, 43, @"test.editor", @"one"));
         assert(!application_identity_matches(identity, 42, @"test.editor", @"two"));
+        menu_deadline = 0; menu_incomplete = NO; menu_ax_failure = kAXErrorSuccess;
         NSDictionary *shortcut = @{@"AXMenuItemCmdVirtualKey":@123, @"AXMenuItemCmdModifiers":@0};
         assert([shortcut_of((__bridge AXUIElementRef)shortcut) isEqualToString:@"⌘←"]);
-        puts("Native menu regression checks passed (identity, ambiguity, insertion, localization, hidden leaves, shortcuts)");
+        puts("Native menu regression checks passed (identity, ambiguity, insertion, localization, disabled ancestors, incomplete AX, shortcuts)");
     }
     return 0;
 }

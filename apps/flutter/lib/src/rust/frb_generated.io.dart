@@ -28,6 +28,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ActionResultDto dco_decode_action_result_dto(dynamic raw);
 
   @protected
+  ActionStatusDto dco_decode_action_status_dto(dynamic raw);
+
+  @protected
+  AvailabilityDto dco_decode_availability_dto(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
 
   @protected
@@ -37,10 +43,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CandidateDto dco_decode_candidate_dto(dynamic raw);
 
   @protected
+  CandidateKindDto dco_decode_candidate_kind_dto(dynamic raw);
+
+  @protected
   ContextDto dco_decode_context_dto(dynamic raw);
 
   @protected
   double dco_decode_f_32(dynamic raw);
+
+  @protected
+  int dco_decode_i_32(dynamic raw);
 
   @protected
   LauncherStateDto dco_decode_launcher_state_dto(dynamic raw);
@@ -53,6 +65,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ContextDto> dco_decode_list_context_dto(dynamic raw);
+
+  @protected
+  List<PluginStatusDto> dco_decode_list_plugin_status_dto(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
@@ -70,7 +85,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  PluginStatusDto dco_decode_plugin_status_dto(dynamic raw);
+
+  @protected
   ScopeDto dco_decode_scope_dto(dynamic raw);
+
+  @protected
+  ScopeKindDto dco_decode_scope_kind_dto(dynamic raw);
+
+  @protected
+  SnapshotWaitDto dco_decode_snapshot_wait_dto(dynamic raw);
+
+  @protected
+  SnapshotWaitKindDto dco_decode_snapshot_wait_kind_dto(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -94,6 +121,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ActionResultDto sse_decode_action_result_dto(SseDeserializer deserializer);
 
   @protected
+  ActionStatusDto sse_decode_action_status_dto(SseDeserializer deserializer);
+
+  @protected
+  AvailabilityDto sse_decode_availability_dto(SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
@@ -104,10 +137,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CandidateDto sse_decode_candidate_dto(SseDeserializer deserializer);
 
   @protected
+  CandidateKindDto sse_decode_candidate_kind_dto(SseDeserializer deserializer);
+
+  @protected
   ContextDto sse_decode_context_dto(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_32(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer);
 
   @protected
   LauncherStateDto sse_decode_launcher_state_dto(SseDeserializer deserializer);
@@ -121,6 +160,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<ContextDto> sse_decode_list_context_dto(SseDeserializer deserializer);
+
+  @protected
+  List<PluginStatusDto> sse_decode_list_plugin_status_dto(
+      SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
@@ -139,7 +182,20 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  PluginStatusDto sse_decode_plugin_status_dto(SseDeserializer deserializer);
+
+  @protected
   ScopeDto sse_decode_scope_dto(SseDeserializer deserializer);
+
+  @protected
+  ScopeKindDto sse_decode_scope_kind_dto(SseDeserializer deserializer);
+
+  @protected
+  SnapshotWaitDto sse_decode_snapshot_wait_dto(SseDeserializer deserializer);
+
+  @protected
+  SnapshotWaitKindDto sse_decode_snapshot_wait_kind_dto(
+      SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -154,9 +210,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer);
-
-  @protected
   void sse_encode_AnyhowException(
       AnyhowException self, SseSerializer serializer);
 
@@ -166,6 +219,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_action_result_dto(
       ActionResultDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_action_status_dto(
+      ActionStatusDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_availability_dto(
+      AvailabilityDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
@@ -178,10 +239,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_candidate_dto(CandidateDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_candidate_kind_dto(
+      CandidateKindDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_context_dto(ContextDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer);
 
   @protected
   void sse_encode_launcher_state_dto(
@@ -197,6 +265,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_context_dto(
       List<ContextDto> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_plugin_status_dto(
+      List<PluginStatusDto> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_8_strict(
@@ -217,7 +289,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       Uint8List? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_plugin_status_dto(
+      PluginStatusDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_scope_dto(ScopeDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_scope_kind_dto(ScopeKindDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_snapshot_wait_dto(
+      SnapshotWaitDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_snapshot_wait_kind_dto(
+      SnapshotWaitKindDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);
@@ -230,9 +317,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_i_32(int self, SseSerializer serializer);
 }
 
 // Section: wire_class

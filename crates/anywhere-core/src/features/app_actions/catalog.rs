@@ -8,6 +8,8 @@ use std::{
     },
 };
 
+const MAX_CACHED_APPS: usize = 8;
+
 #[derive(Clone, Default)]
 pub struct AppActionCatalog {
     inner: Arc<Mutex<HashMap<String, Entry>>>,
@@ -83,21 +85,38 @@ impl AppActionCatalog {
         items: Option<Vec<DiscoveredMenuItem>>,
         publish: impl FnOnce(),
     ) -> bool {
-        let Ok(mut entries) = self.inner.lock() else {
-            return false;
-        };
-        let Some(entry) = entries.get_mut(&ticket.app.bundle_id) else {
-            return false;
-        };
-        if entry.generation != ticket.generation {
-            return false;
+        {
+            let Ok(mut entries) = self.inner.lock() else {
+                return false;
+            };
+            let Some(entry) = entries.get_mut(&ticket.app.bundle_id) else {
+                return false;
+            };
+            if entry.generation != ticket.generation {
+                return false;
+            }
+            entry.cached = items.map(|items| CachedApp {
+                app: ticket.app.clone(),
+                version,
+                items,
+            });
+            if entries
+                .values()
+                .filter(|entry| entry.cached.is_some())
+                .count()
+                > MAX_CACHED_APPS
+            {
+                let oldest = entries
+                    .iter()
+                    .filter(|(_, entry)| entry.cached.is_some())
+                    .min_by_key(|(_, entry)| entry.generation)
+                    .map(|(bundle, _)| bundle.clone());
+                if let Some(oldest) = oldest {
+                    entries.get_mut(&oldest).unwrap().cached = None;
+                }
+            }
+            publish();
         }
-        entry.cached = items.map(|items| CachedApp {
-            app: ticket.app.clone(),
-            version,
-            items,
-        });
-        publish();
         true
     }
 }
@@ -153,5 +172,25 @@ mod tests {
         let mut changed = app();
         changed.instance_id = Some("two".into());
         assert!(catalog.get(&changed, Some("1")).is_none());
+    }
+
+    #[test]
+    fn menu_metadata_keeps_only_recently_discovered_apps() {
+        let catalog = AppActionCatalog::default();
+        let apps: Vec<_> = (0..=MAX_CACHED_APPS)
+            .map(|index| ApplicationInfo {
+                bundle_id: format!("app-{index}"),
+                ..app()
+            })
+            .collect();
+        for app in &apps {
+            let ticket = catalog.ticket(app.clone());
+            assert!(catalog.begin(&ticket, false));
+            assert!(catalog.finish(&ticket, None, Some(vec![]), || {}));
+        }
+        assert!(catalog.get(&apps[0], None).is_none());
+        for app in &apps[1..] {
+            assert!(catalog.get(app, None).is_some());
+        }
     }
 }

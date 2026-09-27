@@ -60,13 +60,13 @@ apps/flutter/lib/
 
 - `anywhere-protocol`：可序列化的 Context / Action / State / Manifest / Event DTO。
 - `anywhere-core`：框架契约与算法、产品用例、第一方 feature、存储适配。
-- `anywhere-platform`：OS-neutral Trait 与 macOS/Windows 实现，包括应用发现路径和扫描策略。
+- `anywhere-platform`：OS-neutral Trait 与 macOS 实现，包括应用发现路径和扫描策略。
 - `anywhere-plugin`：TOML 发现、校验及模板展开，不执行脚本、不提供 UI。
 - `anywhere-bridge-flutter`：Facade 初始化、FRB 入口和 DTO 转换。
 
 `core/` 生产模块不导入 `application`、`features`、`persistence`。`scripts/check-architecture.py` 同时检查这一模块规则和 Cargo 可达依赖没有 UI/Flutter bridge；它是轻量静态护栏，行为边界仍由 Facade 测试验证。
 
-Swift/Windows Host 不解析输入或执行动作。MethodChannel 只传窗口生命周期和基础设施目录；业务状态通过 FRB 传递。Flutter Controller 不复制 Rust 的识别、匹配和排序规则。
+Swift Host 不解析输入或执行动作。MethodChannel 只传窗口生命周期和基础设施目录；业务状态通过 FRB 传递。Flutter Controller 不复制 Rust 的识别、匹配和排序规则。
 
 ## 激活、输入与取消
 
@@ -89,7 +89,7 @@ Controller 用 hidden / activating / ready / resolving / executing 表达阶段�
 
 没有 All Scope；`scope = None` 是全局/综合模式。搜索引擎一次产出全量候选，Scope 是硬过滤，Ranking 只负责 Scope 内排序。
 
-- **双入口**：Current App Launcher（macOS `⌘⌥Space`，Windows `Ctrl+Alt+Space`）在有 Visible Action 时默认选中 Current App Scope；否则 `scope = None`。Universal Launcher（同一组合加 Shift）默认 `scope = None`。已打开时，同一入口再按一次关闭，另一入口原地切换并保留 Query。托盘/菜单提供两项。
+- **双入口**：Current App Launcher（`⌘⌥Space`）在有 Visible Action 时默认选中 Current App Scope；否则 `scope = None`。Universal Launcher（同一组合加 Shift）默认 `scope = None`。已打开时，同一入口再按一次关闭，另一入口原地切换并保留 Query。托盘/菜单提供两项。
 - Current App 没有 Visible Action 时不出现在 Scope 条。首屏没有、用户未改 Scope 且 Query 仍空时，迟到的 Current App 会自动选中。
 - Scope 激活后输入只搜该 Scope，不会自动退出；切 Scope 保留 Query。`scope = None` 时输入才进入 Universal Search（Apps + Actions）。空输入：Current App 是当前应用 Action 首页，Universal 是综合 Context Home。
 - `Ctrl+Tab` / `Ctrl+Shift+Tab` 循环真实 Scope，`scope = None` 不参与；回到全局用 Esc。Esc 分层：清 Query → 解除 Scope → 关闭 Launcher。
@@ -99,7 +99,7 @@ Controller 用 hidden / activating / ready / resolving / executing 表达阶段�
 
 动作与应用通过同一个 SearchEngine。ActionSearch 装配 ActionMatcher、额外候选来源及 TextFallbackSource；SourceStage 只表达现有 ranked/fallback 两个阶段，不包含未来调度策略。Scope 成员关系由 Visible Candidates 构建，Ranking 只排序候选。
 
-Group ID 集中在 `core/action/group.rs`，动作分组由 Bundle 声明。声明式插件 `execute_builtin` 只能引用已注册的原生 Handler，注册和执行均检查 matcher 兼容性，不允许递归引用声明式插件。包装动作在注册时复制目标的 `AvailabilityRule`，保留插件自己的 ID、标题、分组和使用记录；非包装的 v1 动作保持默认 Enabled。TextFallbackSource 与 ActionMatcher 共用同一求值函数：Hidden 不进入候选，也不能从兜底路径重新加入；Disabled 保留原因，执行入口拒绝。
+Group ID 集中在 `core/action/group.rs`。动作和分组标题由 Bundle 一起注册，Scope 标签读注册结果。声明式插件 `execute_builtin` 只能引用已注册的原生 Handler，注册和执行均检查 matcher 兼容性，不允许递归引用声明式插件。包装动作在注册时复制目标的 `AvailabilityRule`，保留插件自己的 ID、标题、分组和使用记录；非包装的 v1 动作保持默认 Enabled。TextFallbackSource 与 ActionMatcher 共用同一求值函数：Hidden 不进入候选，也不能从兜底路径重新加入；Disabled 保留原因，执行入口拒绝。
 
 SessionFacts 是本次唤醒的只读快照，查询变化不重新读取剪贴板或检测 Git。已知键目前是 `clipboard`（Text）和 `git`（Flag）。规则引用未知键或类型不符会在注册时拒绝；快照写入同样校验，不能通过 `from_map` 绕过。剪贴板缺失或读取失败不触发“内容重复”隐藏，读取失败写入诊断（含 Fact 名和原因，不含剪贴板正文）。Git 明确为 false 时 Disabled，原因为「Git 不可用」；捕获任务失败导致键缺失时 Disabled，原因为「无法确认 Git 是否可用」。`Enabled` 只是本次快照的展示判断，不是执行授权。
 
@@ -107,21 +107,21 @@ SessionFacts 是本次唤醒的只读快照，查询变化不重新读取剪贴�
 
 ## 平台与扩展取舍
 
-应用目录由 `Platform::installed_applications` 提供，Core 只负责可搜索字段、别名和去重。macOS 从用户/系统 Applications 扫描，Windows 从开始菜单扫描 `.lnk`，启动保留快捷方式本身的参数与工作目录语义。每进程一次后台扫描，首屏不等索引；发布后重建当前快照。手动刷新、TTL、文件监听留待实际需求。
+应用目录由 `Platform::installed_applications` 提供，Core 只负责可搜索字段、别名和去重。macOS 从用户/系统 Applications 扫描。每次激活发起一次后台扫描，后完成的旧扫描会被丢弃；首屏不等索引，索引发布后重建当前快照。手动刷新、TTL、文件监听留待实际需求。
 
 Provider 仍顺序执行、深度最多 3、节点最多 128，同版本 Provider/Context 去重。没有网络/AI 分类、并行 scheduler 或消息总线。
 
 Git 检测只读元数据。执行通过类型化 Status/Log/Diff 和固定 argv，不经任意 shell；保留超时、输出上限和禁用外部 diff/fsmonitor 的规则。
 
-未来 V0.3 菜单发现先增加平台适配和真实 Action 来源，再决定动态动作生命周期；V0.4/V0.5 复用 Provider/Bundle；V0.6 才定义稳定 Extension API；V0.7 才定义 Host-rendered UI 协议和可选 WebView 边界。V1.0 的大型能力不在本次预建。
+后续交付顺序及架构调整时机以 [产品路线图](roadmap.md) 为准。当前先按 [V0.3.x 稳定版 MVP](mvp-v0.3x.md) 收尾菜单动作，再扩展 Context 来源；远期能力不在本次预建。
 
 ## 构建
 
 `.flutter-version` 是本地与 CI 共用的版本声明；`scripts/check-flutter.py` 校验 PATH 上的 SDK 并打印 framework/engine/Dart revision。`scripts/env.sh` 只配置本地 clang/swift 缓存，不注入项目内 SDK。当前版本为官方 Flutter 3.47.4。
 
-`scripts/check.sh` 运行 Rust fmt、workspace tests、Clippy、架构检查及 Flutter analyze/tests；GitHub Actions 在 macOS/Windows 校验后才打包 Windows。远端是否通过必须以实际运行记录为准。
+`scripts/check.sh` 运行 Rust fmt、workspace tests、Clippy、架构检查及 Flutter analyze/tests。远端是否通过必须以实际运行记录为准。
 
-macOS 继续使用 Flutter assemble + swiftc 的自定义 Host，生成并签名 App.framework、FlutterMacOS.framework 与 Rust 动态库。新增原生插件数量足以需要标准插件装配时，再评估 Xcode runner，见 [ADR 001](decisions/001-workspace-and-host.md)。两端显式启用 Impeller，验证边界见 [ADR 004](decisions/004-windows-and-renderer.md)。
+macOS 继续使用 Flutter assemble + swiftc 的自定义 Host，生成并签名 App.framework、FlutterMacOS.framework 与 Rust 动态库。新增原生插件数量足以需要标准插件装配时，再评估 Xcode runner。macOS 显式启用 Impeller。
 
 ### Current App 原生菜单
 

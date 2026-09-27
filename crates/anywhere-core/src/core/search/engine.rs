@@ -9,6 +9,7 @@ use super::fallback::TextFallbackSource;
 use super::query::Query;
 use super::scope;
 use crate::core::action::descriptor::ActionRegistry;
+use crate::core::action::group::GroupMeta;
 use crate::core::action::matcher::ActionMatcher;
 use crate::core::context::{ContextSource, ResolvedContext};
 use crate::core::ranking::score::UsageStats;
@@ -25,7 +26,7 @@ pub struct SearchEngine<'a> {
 /// Action matching plus text fallback, the two sources every search always has.
 ///
 /// Extra sources (application index, later files) are passed into [`search`](Self::search).
-/// The first ranked source is timed as `matcher_us`; the rest as `sources_us`.
+/// Ranked sources named `actions` are timed as `matcher_us`; the rest as `sources_us`.
 pub struct ActionSearch<'a> {
     engine: SearchEngine<'a>,
     matcher: ActionMatcher<'a>,
@@ -38,15 +39,11 @@ impl<'a> ActionSearch<'a> {
         usage: &'a dyn Fn(&str, &str) -> UsageStats,
         facts: &'a SessionFacts,
         now: i64,
+        semantic: fn(&str) -> i32,
     ) -> Self {
         Self {
             engine: SearchEngine { usage, facts, now },
-            matcher: ActionMatcher {
-                registry,
-                usage,
-                facts,
-                now,
-            },
+            matcher: ActionMatcher::new(registry, usage, facts, now, semantic),
             fallback: TextFallbackSource { registry, facts },
         }
     }
@@ -61,7 +58,8 @@ impl<'a> ActionSearch<'a> {
         sources.push(&self.matcher);
         sources.extend_from_slice(extra);
         sources.push(&self.fallback);
-        self.engine.search(query, contexts, &sources)
+        self.engine
+            .search(query, contexts, &sources, self.matcher.registry())
     }
 }
 
@@ -72,6 +70,7 @@ impl SearchEngine<'_> {
         query: &Query,
         contexts: &[ResolvedContext],
         sources: &[&dyn CandidateSource],
+        groups: &dyn GroupMeta,
     ) -> CandidateSet {
         let search = SearchContext { query, contexts };
         let mut ranked = Vec::new();
@@ -83,18 +82,18 @@ impl SearchEngine<'_> {
             }
         }
 
-        // Matching. The first ranked source (actions, by convention) and the rest are timed
-        // apart: folding application matching into `ranking_us` once hid a 1.2s regression
-        // behind a metric that was supposed to describe sorting.
+        // Matching. Action matching and other ranked sources are timed apart: folding
+        // application matching into `ranking_us` once hid a 1.2s regression behind a
+        // metric that was supposed to describe sorting.
         let mut matcher_us = 0;
         let mut sources_us = 0;
         let mut candidates = Vec::new();
-        for (index, source) in ranked.iter().enumerate() {
+        for source in ranked {
             let started = Instant::now();
             let batch = source.contribute(&search, &[]);
             let elapsed = started.elapsed().as_micros() as u64;
-            if index == 0 {
-                matcher_us = elapsed;
+            if source.id() == "actions" {
+                matcher_us += elapsed;
             } else {
                 sources_us += elapsed;
             }
@@ -117,6 +116,7 @@ impl SearchEngine<'_> {
             &current_app,
             &self.app_group_label(),
             &scope_use,
+            groups,
         );
         let ranking_us = ranking_started.elapsed().as_micros() as u64;
 
@@ -211,7 +211,7 @@ mod tests {
     }
 
     fn registry_with_text_actions(actions: Vec<ActionSpec>) -> ActionRegistry {
-        let mut registry = crate::application::composition::builtin_registry();
+        let mut registry = crate::application::builtin_registry();
         for spec in actions {
             registry.register(spec.descriptor("test")).unwrap();
         }
@@ -238,7 +238,13 @@ mod tests {
         usage: &'a dyn Fn(&str, &str) -> UsageStats,
         facts: &'a SessionFacts,
     ) -> ActionSearch<'a> {
-        ActionSearch::new(registry, usage, facts, 1000)
+        ActionSearch::new(
+            registry,
+            usage,
+            facts,
+            1000,
+            crate::features::context_semantic,
+        )
     }
 
     /// The application index as a candidate source, for the tests that search it.
@@ -256,7 +262,7 @@ mod tests {
 
     #[test]
     fn directory_context_orders_the_documented_examples() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().canonicalize().unwrap();
         std::fs::create_dir(path.join(".git")).unwrap();
@@ -306,7 +312,7 @@ mod tests {
     /// existed, so a populated group could render empty.
     #[test]
     fn every_scope_id_resolves_to_a_candidate() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().canonicalize().unwrap();
         let mut contexts = vec![
@@ -340,7 +346,7 @@ mod tests {
         let engine = builtin_engine(&registry, &usage, &facts);
         let set = engine.search(&Query::parse(""), &contexts, &[]);
         assert!(
-            set.candidates.len() > crate::core::search::scope::HOME_LIMIT,
+            set.candidates.len() > 7,
             "this fixture must exceed the Home limit to be meaningful: {} candidates",
             set.candidates.len()
         );
@@ -359,7 +365,7 @@ mod tests {
 
     #[test]
     fn home_is_bounded_while_search_stays_scrollable() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         let mut contexts = contexts(&"a".repeat(60));
         contexts.push(ResolvedContext::new(
             DIRECTORY,
@@ -386,7 +392,7 @@ mod tests {
 
     #[test]
     fn groups_are_visible_before_scope_filtering_and_home_truncation() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().canonicalize().unwrap();
         let contexts = vec![
@@ -417,7 +423,7 @@ mod tests {
     /// The scope bar leads with what the user actually uses, not a fixed order.
     #[test]
     fn scopes_are_ordered_by_usage_with_a_deterministic_tie_break() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().canonicalize().unwrap();
         let contexts = vec![
@@ -513,7 +519,7 @@ mod tests {
 
     #[test]
     fn copy_path_is_hidden_when_the_clipboard_already_holds_it() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().canonicalize().unwrap();
         let contexts = vec![ResolvedContext::new(
@@ -547,7 +553,7 @@ mod tests {
 
     #[test]
     fn git_actions_are_disabled_rather_than_hidden_without_git() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         let contexts = vec![ResolvedContext::new(
             GIT_REPOSITORY,
             ContextValue::Repository("/tmp".into()),
@@ -588,14 +594,16 @@ mod tests {
 
     #[test]
     fn application_search_matches_names_aliases_and_keywords() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         let applications = vec![IndexedApplication {
             bundle_id: "com.google.Chrome".into(),
             name: "Google Chrome".into(),
             path: "/Applications/Google Chrome.app".into(),
             aliases: vec!["chrome".into()],
             keywords: vec!["browser".into()],
-        }];
+            ..Default::default()
+        }
+        .prepared()];
         let chrome_contexts = contexts("chrome");
         let usage = no_usage;
         let facts = facts();
@@ -623,7 +631,7 @@ mod tests {
 
     #[test]
     fn action_search_finds_git_status_by_partial_words() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         let contexts = vec![
             ResolvedContext::new(
                 DIRECTORY,
@@ -647,7 +655,7 @@ mod tests {
 
     #[test]
     fn typed_object_actions_survive_a_query_without_a_title_match() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         let url_contexts = contexts("https://github.com");
         let usage = no_usage;
         let facts = facts();
@@ -685,7 +693,9 @@ mod tests {
             "finder",
         );
         let id = action_candidate_id("core.directory.copy", &context);
-        assert_eq!(id, "action:core.directory.copy:core.directory:/tmp");
+        assert!(id.starts_with("action:core.directory.copy:core.directory:"));
+        assert!(!id.contains("/tmp"));
+        assert_eq!(id, action_candidate_id("core.directory.copy", &context));
         assert_eq!(
             application_candidate_id("com.google.Chrome", "/Applications/Chrome.app"),
             "app:com.google.Chrome:/Applications/Chrome.app"
@@ -694,7 +704,7 @@ mod tests {
 
     #[test]
     fn current_app_scope_uses_ambient_provenance_and_excludes_launch_candidates() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         let contexts = vec![ResolvedContext::new(
             DIRECTORY,
             ContextValue::Directory("/tmp".into()),

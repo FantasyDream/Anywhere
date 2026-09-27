@@ -8,7 +8,8 @@ use anyhow::Result;
 use anywhere_platform::{ApplicationInfo, Platform};
 use anywhere_protocol::*;
 use std::{
-    sync::Arc,
+    collections::BTreeSet,
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 use tokio::sync::watch;
@@ -62,6 +63,7 @@ pub struct Application {
     pub(super) content_grace: Duration,
     pub(super) catalog_tx: watch::Sender<u64>,
     pub(super) app_actions: crate::features::app_actions::AppActionCatalog,
+    pub(super) excluded_apps: Arc<Mutex<BTreeSet<String>>>,
 }
 
 impl Application {
@@ -87,9 +89,8 @@ impl Application {
         startup_diagnostics: Vec<String>,
         budget: Duration,
     ) -> Self {
-        let mut resolver = Resolver::new(registry, history);
         let (catalog_tx, catalog_rx) = watch::channel(0);
-        resolver.catalog_rx = catalog_rx;
+        let resolver = Resolver::new(registry, history).with_catalog_rx(catalog_rx);
         Self {
             platform,
             resolver,
@@ -98,6 +99,7 @@ impl Application {
             content_grace: DEFAULT_FIRST_CONTENT_GRACE,
             catalog_tx,
             app_actions: crate::features::app_actions::AppActionCatalog::default(),
+            excluded_apps: Arc::new(Mutex::new(BTreeSet::new())),
         }
     }
 
@@ -120,6 +122,85 @@ impl Application {
         let state = self.resolver.latest_tx.borrow().clone()?;
         (state.session_id == session_id && self.resolver.is_current(session_id, state.revision))
             .then(|| (*state).clone())
+    }
+
+    pub fn replace_registry(&self, registry: crate::core::action::descriptor::ActionRegistry) {
+        self.resolver.replace_base_registry(registry);
+        let session_id = {
+            let Ok(mut session) = self.session() else {
+                return;
+            };
+            session.actions = self.resolver.base_registry();
+            session.state.session_id
+        };
+        self.refresh_app_actions(session_id, None);
+    }
+
+    pub fn excluded_apps(&self) -> Vec<String> {
+        self.excluded_apps
+            .lock()
+            .map(|ids| ids.iter().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    pub fn set_excluded_apps(&self, ids: Vec<String>) {
+        let set: BTreeSet<String> = ids.into_iter().filter(|id| !id.trim().is_empty()).collect();
+        if let Ok(mut excluded) = self.excluded_apps.lock() {
+            *excluded = set.clone();
+        }
+        if let Ok(mut slot) = self.resolver.catalog.lock() {
+            slot.catalog = if set.is_empty() {
+                slot.full.clone()
+            } else {
+                Arc::new(slot.full.excluding(&set))
+            };
+        }
+        if let Ok(session) = self.session() {
+            let session_id = session.state.session_id;
+            drop(session);
+            let _ = self.resolver.recompute_current(session_id);
+        }
+    }
+
+    /// True once clipboard, git availability and history have been applied or abandoned.
+    pub fn supplemental_ready(&self, session_id: SessionId) -> bool {
+        self.session()
+            .map(|session| session.state.session_id == session_id && !session.supplemental_pending)
+            .unwrap_or(false)
+    }
+
+    /// Block until a newer snapshot for `session_id` is committed.
+    pub async fn wait_for_snapshot(&self, session_id: SessionId, after: u64) -> SnapshotWait {
+        if !self.resolver.is_session_active(session_id) {
+            return SnapshotWait::Superseded;
+        }
+        if let Some(state) = self.beyond(session_id, after) {
+            return SnapshotWait::Updated(state);
+        }
+        let mut updates = self.state_updates();
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+        loop {
+            if !self.resolver.is_session_active(session_id) {
+                return SnapshotWait::Superseded;
+            }
+            if let Some(state) = self.beyond(session_id, after) {
+                return SnapshotWait::Updated(state);
+            }
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if remaining.is_zero() {
+                return SnapshotWait::TimedOut;
+            }
+            match tokio::time::timeout(remaining, updates.changed()).await {
+                Ok(Ok(())) => continue,
+                Ok(Err(_)) => return SnapshotWait::Closed,
+                Err(_) => return SnapshotWait::TimedOut,
+            }
+        }
+    }
+
+    fn beyond(&self, session_id: SessionId, after: u64) -> Option<LauncherState> {
+        self.latest_state(session_id)
+            .filter(|state| snapshot_cursor(state) > after)
     }
 
     pub fn is_session_active(&self, session_id: SessionId) -> bool {
@@ -186,19 +267,36 @@ impl Application {
             + 1;
         let platform = self.platform.clone();
         let catalog = self.resolver.catalog.clone();
-        let issued = self.resolver.catalog_issued.clone();
+        let excluded = self.excluded_apps.clone();
         let tx = self.catalog_tx.clone();
         tokio::spawn(async move {
             let scanned = applications::scan_async(platform).await;
-            if issued.load(std::sync::atomic::Ordering::Acquire) != generation {
+            let Ok(mut slot) = catalog.lock() else {
+                return;
+            };
+            if generation < slot.generation {
                 return;
             }
-            let count = scanned.applications().len();
-            if let Ok(mut handle) = catalog.lock() {
-                *handle = Arc::new(scanned);
+            slot.generation = generation;
+            match scanned {
+                applications::ScanStatus::Complete(report) => {
+                    let skipped = report.skipped;
+                    let full = Arc::new(applications::ApplicationCatalog::new(report.applications));
+                    let catalog = match excluded.lock() {
+                        Ok(excluded) if !excluded.is_empty() => Arc::new(full.excluding(&excluded)),
+                        _ => full.clone(),
+                    };
+                    let count = catalog.applications().len();
+                    slot.full = full;
+                    slot.catalog = catalog;
+                    tx.send_replace(generation);
+                    tracing::info!(count, skipped, generation, "app_index_published");
+                }
+                applications::ScanStatus::Failed => {
+                    tx.send_replace(generation);
+                    tracing::error!(generation, "app_index_kept");
+                }
             }
-            tx.send_replace(generation);
-            tracing::info!(count, generation, "app_index_published");
         });
         generation
     }
@@ -303,41 +401,38 @@ impl Application {
             .unwrap_or_default()
     }
 
-    pub(super) async fn load_usage(&self, source_app: String) -> (UsageMap, UsageMap, Vec<String>) {
-        let history = self.resolver.history.clone();
-        let loaded = tokio::task::spawn_blocking(move || {
-            let history = history
-                .lock()
-                .map_err(|_| anyhow::anyhow!("history lock poisoned"))?;
-            Ok::<_, anyhow::Error>((history.load(&source_app), history.load_global()))
-        })
-        .await;
-        let mut diagnostics = Vec::new();
-        let (scoped, global) = match loaded {
-            Ok(Ok((scoped, global))) => {
-                let mut recover = |result: anyhow::Result<UsageMap>| match result {
-                    Ok(value) => value,
-                    Err(error) => {
-                        tracing::warn!(error = %error, "usage_load_failed");
-                        diagnostics.push(format!("Usage history could not be loaded: {error:#}"));
-                        UsageMap::default()
-                    }
-                };
-                (recover(scoped), recover(global))
-            }
-            failure => {
-                let message = format!("Usage history task failed: {failure:?}");
-                tracing::warn!(%message, "usage_load_failed");
-                diagnostics.push(message);
-                (UsageMap::default(), UsageMap::default())
-            }
+    pub(super) async fn publish_resolution(
+        &self,
+        session_id: SessionId,
+        revision: Revision,
+        run: crate::core::context::engine::ContextGraphRun,
+        start: Instant,
+        mut diagnostics: Vec<String>,
+    ) -> Result<Option<LauncherState>> {
+        let Some(resolution) = self
+            .resolver
+            .resolve_until_with_grace(session_id, run, self.budget, self.content_grace, start)
+            .await
+        else {
+            return Ok(None);
         };
-        (scoped, global, diagnostics)
+        let complete_by_budget = resolution.complete;
+        let late_run = resolution.run;
+        diagnostics.extend(resolution.diagnostics);
+        let committed = self.resolver.commit(
+            session_id,
+            revision,
+            resolution.contexts,
+            diagnostics.clone(),
+            complete_by_budget,
+            start,
+        )?;
+        if !complete_by_budget {
+            self.spawn_completion(session_id, revision, late_run, start, diagnostics);
+        }
+        Ok(committed)
     }
 }
-
-type UsageMap =
-    std::collections::HashMap<(String, String), crate::core::ranking::score::UsageStats>;
 
 #[async_trait::async_trait]
 impl LauncherApplication for Application {
@@ -374,19 +469,19 @@ impl LauncherApplication for Application {
     /// Never called while building a snapshot: the icon is presentation only and must
     /// not affect ranking, ordering or the time to first snapshot.
     fn application_icon(&self, candidate_id: &str) -> Result<Option<Vec<u8>>> {
-        let path = {
-            let session = self.session()?;
-            session
-                .state_candidates
-                .get(candidate_id)
-                .and_then(|candidate| match &candidate.target {
-                    crate::core::search::candidate::CandidateTarget::LaunchApplication {
-                        icon_source,
-                        ..
-                    } => Some(icon_source.clone()),
-                    _ => None,
-                })
-        };
+        let path =
+            {
+                let session = self.session()?;
+                session.execution.candidates.get(candidate_id).and_then(
+                    |candidate| match &candidate.target {
+                        crate::core::search::candidate::CandidateTarget::LaunchApplication {
+                            icon_source,
+                            ..
+                        } => Some(icon_source.clone()),
+                        _ => None,
+                    },
+                )
+            };
         let Some(path) = path else {
             return Ok(None);
         };
@@ -405,16 +500,23 @@ impl LauncherApplication for Application {
     fn deactivate(&self, session_id: SessionId) -> Result<()> {
         let mut session = self.session()?;
         if session.state.session_id == session_id {
-            self.resolver
-                .current
-                .store(0, std::sync::atomic::Ordering::Release);
-            session.directory = None;
-            session.state_candidates.clear();
-            session.context_cache.clear();
-            self.resolver.latest_tx.send_replace(None);
+            session.invalidate_execution();
+            self.resolver.abandon_session();
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SnapshotWait {
+    Updated(LauncherState),
+    TimedOut,
+    Closed,
+    Superseded,
+}
+
+fn snapshot_cursor(state: &LauncherState) -> u64 {
+    (u64::from(state.revision) << 32) | u64::from(state.snapshot_seq)
 }
 
 pub struct SessionSubscription {
@@ -425,33 +527,56 @@ pub struct SessionSubscription {
 }
 
 impl SessionSubscription {
-    /// Latest committed state, replayed even if it was published before subscribing.
+    /// Latest committed state for this subscription's session.
     pub fn latest_state(&self) -> Option<LauncherState> {
-        self.latest.borrow().as_ref().map(|state| (**state).clone())
+        let latest = self.latest.borrow();
+        let state = latest.as_ref()?;
+        (state.session_id == self.session_id).then(|| (**state).clone())
+    }
+
+    fn superseded(&self) -> bool {
+        let current = self.current.load(std::sync::atomic::Ordering::Acquire);
+        current == 0 || (current >> 32) != u64::from(self.session_id)
     }
 
     pub async fn recv(&mut self) -> Result<LauncherEvent> {
         loop {
-            let event = self.receiver.recv().await?;
-            let (session_id, revision) = match &event {
-                LauncherEvent::ContextAdded { context } => (context.session_id, context.revision),
-                LauncherEvent::ActionsUpdated { state } => (state.session_id, state.revision),
-                LauncherEvent::ProviderCompleted {
-                    session_id,
-                    revision,
-                    ..
+            if self.superseded() {
+                anyhow::bail!("subscription superseded");
+            }
+            tokio::select! {
+                event = self.receiver.recv() => {
+                    let event = event?;
+                    let (session_id, revision) = match &event {
+                        LauncherEvent::ContextAdded { context } => {
+                            (context.session_id, context.revision)
+                        }
+                        LauncherEvent::ActionsUpdated { state } => {
+                            (state.session_id, state.revision)
+                        }
+                        LauncherEvent::ProviderCompleted {
+                            session_id,
+                            revision,
+                            ..
+                        }
+                        | LauncherEvent::ProviderFailed {
+                            session_id,
+                            revision,
+                            ..
+                        } => (*session_id, *revision),
+                    };
+                    if session_id == self.session_id
+                        && self.current.load(std::sync::atomic::Ordering::Acquire)
+                            == crate::core::context::engine::stamp(session_id, revision)
+                    {
+                        return Ok(event);
+                    }
                 }
-                | LauncherEvent::ProviderFailed {
-                    session_id,
-                    revision,
-                    ..
-                } => (*session_id, *revision),
-            };
-            if session_id == self.session_id
-                && self.current.load(std::sync::atomic::Ordering::Acquire)
-                    == crate::core::context::engine::stamp(session_id, revision)
-            {
-                return Ok(event);
+                changed = self.latest.changed() => {
+                    if changed.is_err() {
+                        anyhow::bail!("subscription closed");
+                    }
+                }
             }
         }
     }

@@ -27,12 +27,13 @@ fn sources_of(contexts: &[ResolvedContext], registry: &ActionRegistry) -> Vec<Ca
     use anywhere_core::core::search::candidate_source::{CandidateSource, SearchContext};
     let usage = |_: &str, _: &str| anywhere_core::core::ranking::usage::UsageStats::default();
     let facts = anywhere_core::core::session::facts::SessionFacts::default();
-    let matcher = ActionMatcher {
+    let matcher = ActionMatcher::new(
         registry,
-        usage: &usage,
-        facts: &facts,
-        now: 1000,
-    };
+        &usage,
+        &facts,
+        1000,
+        anywhere_core::features::context_semantic,
+    );
     matcher.candidates(&SearchContext {
         query: &anywhere_core::core::search::query::Query::parse("copy"),
         contexts,
@@ -104,7 +105,7 @@ async fn the_provider_chain_is_recursive_and_deduplicates() {
 /// separately from applicability.
 #[test]
 fn matching_and_availability_are_separate_steps() {
-    let registry = anywhere_core::application::composition::builtin_registry();
+    let registry = anywhere_core::application::builtin_registry();
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path().canonicalize().unwrap();
     let contexts = features::recognized_contexts(root.to_str().unwrap());
@@ -114,12 +115,13 @@ fn matching_and_availability_are_separate_steps() {
         anywhere_core::core::session::facts::FactValue::Flag(true),
     );
     let usage = |_: &str, _: &str| anywhere_core::core::ranking::usage::UsageStats::default();
-    let matcher = matcher::ActionMatcher {
-        registry: &registry,
-        usage: &usage,
-        facts: &facts,
-        now: 1000,
-    };
+    let matcher = matcher::ActionMatcher::new(
+        &registry,
+        &usage,
+        &facts,
+        1000,
+        anywhere_core::features::context_semantic,
+    );
     let query = anywhere_core::core::search::query::Query::parse("");
     let matched = matcher.match_actions(&query, &contexts);
     assert!(
@@ -142,12 +144,13 @@ fn matching_and_availability_are_separate_steps() {
             anywhere_core::core::session::facts::GIT,
             anywhere_core::core::session::facts::FactValue::Flag(true),
         );
-    let matcher = matcher::ActionMatcher {
-        registry: &registry,
-        usage: &usage,
-        facts: &facts,
-        now: 1000,
-    };
+    let matcher = matcher::ActionMatcher::new(
+        &registry,
+        &usage,
+        &facts,
+        1000,
+        anywhere_core::features::context_semantic,
+    );
     assert!(
         !matcher
             .match_actions(&query, &contexts)
@@ -161,11 +164,16 @@ fn matching_and_availability_are_separate_steps() {
 /// Applications and actions reach the list through the same contract.
 #[test]
 fn every_candidate_kind_has_a_source_behind_it() {
-    let registry = anywhere_core::application::composition::builtin_registry();
+    let registry = anywhere_core::application::builtin_registry();
     let usage = |_: &str, _: &str| anywhere_core::core::ranking::usage::UsageStats::default();
     let facts = anywhere_core::core::session::facts::SessionFacts::default();
-    let search =
-        anywhere_core::core::search::engine::ActionSearch::new(&registry, &usage, &facts, 1000);
+    let search = anywhere_core::core::search::engine::ActionSearch::new(
+        &registry,
+        &usage,
+        &facts,
+        1000,
+        anywhere_core::features::context_semantic,
+    );
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path().canonicalize().unwrap();
     let contexts = features::recognized_contexts(root.to_str().unwrap());
@@ -211,6 +219,7 @@ fn every_candidate_kind_has_a_source_behind_it() {
                     command_id: None,
                     bundle_id: Some("marker".into()),
                     owning_app: None,
+                    menu_path: Vec::new(),
                 },
                 target:
                     anywhere_core::core::search::candidate::CandidateTarget::LaunchApplication {
@@ -242,7 +251,7 @@ fn features_register_through_bundles() {
         bundles.len() >= 4,
         "each feature contributes its own bundle"
     );
-    let registry = anywhere_core::application::composition::builtin_registry();
+    let registry = anywhere_core::application::builtin_registry();
     for bundle in &bundles {
         assert!(
             bundle.actions.iter().all(|action| !action.id.is_empty()),

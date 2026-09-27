@@ -472,7 +472,7 @@ mod tests {
             };
             Ok(vec![ResolvedContext::new(
                 TEXT,
-                ContextValue::Text(value),
+                ContextValue::Text(value.into()),
                 input.source,
                 "chain",
             )])

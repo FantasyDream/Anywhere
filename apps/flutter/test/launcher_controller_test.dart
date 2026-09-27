@@ -5,6 +5,7 @@ import 'package:anywhere/infrastructure/application_icon_cache.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/launcher/launcher_controller.dart';
 import 'package:anywhere/launcher/launcher_view_state.dart';
+import 'package:anywhere/settings/host_settings.dart';
 import 'package:anywhere/src/rust/api.dart';
 
 LauncherStateDto snapshot(int session) => LauncherStateDto(
@@ -21,12 +22,13 @@ LauncherStateDto snapshot(int session) => LauncherStateDto(
 
 CandidateDto appCandidate() => const CandidateDto(
       id: 'app:test',
-      kind: 'application',
+      kind: CandidateKindDto.application,
       title: 'Test',
+      menuPath: [],
       iconKey: 'application',
       score: 0,
       groupId: 'app',
-      availability: 'enabled',
+      availability: AvailabilityDto.enabled,
     );
 
 void main() {
@@ -37,13 +39,79 @@ void main() {
   setUp(() => messenger.setMockMethodCallHandler(channel, (_) async => null));
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
+  LauncherController open({
+    required BeginActivation beginActivation,
+    required Activate activate,
+    required UpdateInput updateInput,
+    required Execute execute,
+    required Future<void> Function(int) deactivate,
+    WaitForSnapshot? waitForSnapshot,
+    LoadIcon? loadIcon,
+    PromptAccessibility? promptAccessibility,
+    String startupMessage = '',
+    ApplyExcludedApps? applyExcludedApps,
+  }) =>
+      LauncherController(
+        backend: LauncherBackend(
+          beginActivation: beginActivation,
+          activate: activate,
+          updateInput: updateInput,
+          execute: execute,
+          deactivate: deactivate,
+          waitForSnapshot: waitForSnapshot,
+          loadIcon: loadIcon,
+          promptAccessibility: promptAccessibility,
+        ),
+        window: WindowHost(channel),
+        startupMessage: startupMessage,
+        applyExcludedApps: applyExcludedApps,
+      );
+
+  test('host warning survives unrelated saves and clears when host recovers',
+      () async {
+    var warning = 'Current App shortcut is unavailable';
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      switch (call.method) {
+        case 'settings':
+          return HostSettings.defaults.toMap();
+        case 'settingsStatus':
+          return {'hotkeyError': warning, 'loginError': ''};
+        default:
+          return null;
+      }
+    });
+    final controller = open(
+      beginActivation: () => 1,
+      activate: (session, {promptAccessibility = false}) async =>
+          snapshot(session),
+      updateInput: (_, __, ___) async => null,
+      execute: (_, __, ___) async => throw StateError('not used'),
+      deactivate: (_) async {},
+      startupMessage: warning,
+      applyExcludedApps: (_) async {},
+    );
+
+    expect(await controller.saveSettings(HostSettings.defaults), isTrue);
+    expect(controller.statusMessage, warning);
+    await controller.activate();
+    expect(controller.view.message, warning);
+    await controller.dismiss();
+
+    warning = '';
+    expect(await controller.saveSettings(HostSettings.defaults), isTrue);
+    expect(controller.statusMessage, isNull);
+    await controller.activate();
+    expect(controller.view.message, isNull);
+    controller.dispose();
+  });
+
   test(
     'dismiss cancels a reserved activation before its first snapshot',
     () async {
       final oldCapture = Completer<LauncherStateDto?>();
       var nextSession = 0;
       final cancelled = <int>[];
-      final controller = LauncherController(
+      final controller = open(
         beginActivation: () => ++nextSession,
         activate: (session, {promptAccessibility = false}) =>
             session == 1 ? oldCapture.future : Future.value(snapshot(session)),
@@ -52,7 +120,6 @@ void main() {
         deactivate: (session) async {
           cancelled.add(session);
         },
-        window: WindowHost(channel),
       );
       final first = controller.activate();
       expect(controller.view.phase, LauncherPhase.activating);
@@ -76,7 +143,7 @@ void main() {
   test('a disposed controller cancels a pending activation', () async {
     final capture = Completer<LauncherStateDto?>();
     final cancelled = <int>[];
-    final controller = LauncherController(
+    final controller = open(
       beginActivation: () => 7,
       activate: (_, {promptAccessibility = false}) => capture.future,
       updateInput: (_, __, ___) async => null,
@@ -84,7 +151,6 @@ void main() {
       deactivate: (session) async {
         cancelled.add(session);
       },
-      window: WindowHost(channel),
     );
     final activation = controller.activate();
     controller.dispose();
@@ -122,12 +188,13 @@ void main() {
 
   CandidateDto action(String id, String title) => CandidateDto(
         id: id,
-        kind: 'action',
+        kind: CandidateKindDto.action,
         title: title,
+        menuPath: const [],
         iconKey: 'file',
         score: 1,
         groupId: 'folder',
-        availability: 'enabled',
+        availability: AvailabilityDto.enabled,
       );
 
   LauncherStateDto scoped({
@@ -152,21 +219,26 @@ void main() {
   test('current app launcher selects the app scope', () async {
     final copy = action('action:copy', 'Copy Path');
     final git = action('action:git', 'Git Status');
-    final controller = LauncherController(
+    final controller = open(
       beginActivation: () => 1,
       activate: (_, {promptAccessibility = false}) async => scoped(
         candidates: [copy, git],
         scopes: [
           ScopeDto(
-              id: 'app', kind: 'app', label: 'Finder', candidateIds: [copy.id]),
+              id: 'app',
+              kind: ScopeKindDto.app,
+              label: 'Finder',
+              candidateIds: [copy.id]),
           ScopeDto(
-              id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
+              id: 'git',
+              kind: ScopeKindDto.group,
+              label: 'Git',
+              candidateIds: [git.id]),
         ],
       ),
       updateInput: (_, __, ___) async => null,
       execute: (_, __, ___) async => throw StateError('not used'),
       deactivate: (_) async {},
-      window: WindowHost(channel),
     );
     await controller.activate();
     expect(controller.view.scopeId, 'app');
@@ -180,10 +252,17 @@ void main() {
     final git = action('action:git', 'Git Status');
     final scopes = [
       ScopeDto(
-          id: 'app', kind: 'app', label: 'Finder', candidateIds: [copy.id]),
-      ScopeDto(id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
+          id: 'app',
+          kind: ScopeKindDto.app,
+          label: 'Finder',
+          candidateIds: [copy.id]),
+      ScopeDto(
+          id: 'git',
+          kind: ScopeKindDto.group,
+          label: 'Git',
+          candidateIds: [git.id]),
     ];
-    final controller = LauncherController(
+    final controller = open(
       beginActivation: () => 1,
       activate: (_, {promptAccessibility = false}) async =>
           scoped(candidates: [copy, git], scopes: scopes),
@@ -195,7 +274,6 @@ void main() {
       ),
       execute: (_, __, ___) async => throw StateError('not used'),
       deactivate: (_) async {},
-      window: WindowHost(channel),
     );
     await controller.activate();
     await controller.update('copy');
@@ -210,10 +288,17 @@ void main() {
     final git = action('action:git', 'Git Status');
     final scopes = [
       ScopeDto(
-          id: 'app', kind: 'app', label: 'Finder', candidateIds: [copy.id]),
-      ScopeDto(id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
+          id: 'app',
+          kind: ScopeKindDto.app,
+          label: 'Finder',
+          candidateIds: [copy.id]),
+      ScopeDto(
+          id: 'git',
+          kind: ScopeKindDto.group,
+          label: 'Git',
+          candidateIds: [git.id]),
     ];
-    final controller = LauncherController(
+    final controller = open(
       beginActivation: () => 1,
       activate: (_, {promptAccessibility = false}) async =>
           scoped(candidates: [copy, git], scopes: scopes),
@@ -225,7 +310,6 @@ void main() {
       ),
       execute: (_, __, ___) async => throw StateError('not used'),
       deactivate: (_) async {},
-      window: WindowHost(channel),
     );
     await controller.activate();
     await controller.update('copy');
@@ -245,24 +329,31 @@ void main() {
     final git = action('action:git', 'Git Status');
     final copy = action('action:copy', 'Copy Path');
     final pending = <Completer<LauncherStateDto?>>[];
-    final controller = LauncherController(
+    final controller = open(
       beginActivation: () => 1,
       activate: (_, {promptAccessibility = false}) async => scoped(
         snapshotSeq: 1,
         candidates: [git],
         scopes: [
           ScopeDto(
-              id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
+              id: 'git',
+              kind: ScopeKindDto.group,
+              label: 'Git',
+              candidateIds: [git.id]),
         ],
       ),
       updateInput: (_, __, ___) async => null,
       execute: (_, __, ___) async => throw StateError('not used'),
       deactivate: (_) async {},
-      window: WindowHost(channel),
       waitForSnapshot: (_, __) {
         final completer = Completer<LauncherStateDto?>();
         pending.add(completer);
-        return completer.future;
+        return completer.future.then((state) => SnapshotWaitDto(
+              kind: state == null
+                  ? SnapshotWaitKindDto.timedOut
+                  : SnapshotWaitKindDto.updated,
+              state: state,
+            ));
       },
     );
     await controller.activate();
@@ -272,9 +363,15 @@ void main() {
       candidates: [copy, git],
       scopes: [
         ScopeDto(
-            id: 'app', kind: 'app', label: 'Finder', candidateIds: [copy.id]),
+            id: 'app',
+            kind: ScopeKindDto.app,
+            label: 'Finder',
+            candidateIds: [copy.id]),
         ScopeDto(
-            id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
+            id: 'git',
+            kind: ScopeKindDto.group,
+            label: 'Git',
+            candidateIds: [git.id]),
       ],
     ));
     await Future<void>.delayed(Duration.zero);
@@ -284,11 +381,68 @@ void main() {
     controller.dispose();
   });
 
+  test('removing the current app scope shows the remaining actions', () async {
+    final menu = action('action:about', 'About');
+    final git = action('action:git', 'Git Status');
+    final pending = <Completer<LauncherStateDto?>>[];
+    final controller = open(
+      beginActivation: () => 1,
+      activate: (_, {promptAccessibility = false}) async => scoped(
+        candidates: [menu, git],
+        scopes: [
+          ScopeDto(
+              id: 'app',
+              kind: ScopeKindDto.app,
+              label: 'Editor',
+              candidateIds: [menu.id]),
+          ScopeDto(
+              id: 'git',
+              kind: ScopeKindDto.group,
+              label: 'Git',
+              candidateIds: [git.id]),
+        ],
+      ),
+      updateInput: (_, __, ___) async => null,
+      execute: (_, __, ___) async => throw StateError('not used'),
+      deactivate: (_) async {},
+      waitForSnapshot: (_, __) {
+        final completer = Completer<LauncherStateDto?>();
+        pending.add(completer);
+        return completer.future.then((state) => SnapshotWaitDto(
+              kind: state == null
+                  ? SnapshotWaitKindDto.timedOut
+                  : SnapshotWaitKindDto.updated,
+              state: state,
+            ));
+      },
+    );
+    await controller.activate();
+    expect(controller.view.scopeId, 'app');
+    expect(controller.view.visibleCandidates.map((c) => c.title), ['About']);
+
+    pending[0].complete(scoped(
+      snapshotSeq: 2,
+      candidates: [git],
+      scopes: [
+        ScopeDto(
+            id: 'git',
+            kind: ScopeKindDto.group,
+            label: 'Git',
+            candidateIds: [git.id]),
+      ],
+    ));
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.view.scopeId, isNull);
+    expect(
+        controller.view.visibleCandidates.map((c) => c.title), ['Git Status']);
+    controller.dispose();
+  });
+
   test('current app activate asks for accessibility after the window shows',
       () async {
     var activatePrompted = true;
     var prompts = 0;
-    final controller = LauncherController(
+    final controller = open(
       beginActivation: () => 1,
       activate: (_, {promptAccessibility = false}) async {
         activatePrompted = promptAccessibility;
@@ -297,7 +451,6 @@ void main() {
       updateInput: (_, __, ___) async => null,
       execute: (_, __, ___) async => throw StateError('not used'),
       deactivate: (_) async {},
-      window: WindowHost(channel),
       promptAccessibility: () {
         prompts += 1;
         return true;
@@ -312,7 +465,7 @@ void main() {
   test('universal activate does not ask for accessibility', () async {
     var activatePrompted = true;
     var prompts = 0;
-    final controller = LauncherController(
+    final controller = open(
       beginActivation: () => 1,
       activate: (_, {promptAccessibility = false}) async {
         activatePrompted = promptAccessibility;
@@ -321,7 +474,6 @@ void main() {
       updateInput: (_, __, ___) async => null,
       execute: (_, __, ___) async => throw StateError('not used'),
       deactivate: (_) async {},
-      window: WindowHost(channel),
       promptAccessibility: () {
         prompts += 1;
         return true;
@@ -335,13 +487,12 @@ void main() {
 
   test('switching to current app prompts accessibility', () async {
     var prompts = 0;
-    final controller = LauncherController(
+    final controller = open(
       beginActivation: () => 1,
       activate: (_, {promptAccessibility = false}) async => snapshot(1),
       updateInput: (_, __, ___) async => null,
       execute: (_, __, ___) async => throw StateError('not used'),
       deactivate: (_) async {},
-      window: WindowHost(channel),
       promptAccessibility: () {
         prompts += 1;
         return true;

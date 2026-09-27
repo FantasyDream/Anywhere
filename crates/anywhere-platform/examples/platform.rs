@@ -4,10 +4,7 @@ use anywhere_platform::{ApplicationInfo, NativePlatform, Platform};
 use std::path::Path;
 
 fn main() -> Result<()> {
-    #[cfg(target_os = "macos")]
     let platform = NativePlatform;
-    #[cfg(target_os = "windows")]
-    let platform = NativePlatform::default();
     let args: Vec<String> = std::env::args().collect();
     let value = args.get(2).map(String::as_str).unwrap_or("");
     match args.get(1).map(String::as_str).unwrap_or("capture") {

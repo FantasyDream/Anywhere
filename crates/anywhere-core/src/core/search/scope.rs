@@ -3,20 +3,13 @@
 //! A scope is a hard filter over matched candidates: the current application's actions
 //! and one entry per action group. Global search is `scope = None` on the host, not a
 //! synthetic All row. The core builds membership; the session freezes presentation order.
-use crate::core::action::group::groups;
+use crate::core::action::group::{groups, GroupMeta};
 use crate::core::search::candidate::Candidate;
 use anywhere_protocol::*;
 use std::collections::{BTreeMap, HashMap};
 
-/// Rows the host shows for an empty query.
-///
-/// A *view* limit, deliberately not applied here: truncating the candidate set left each
-/// scope's id list pointing at entries that no longer existed, so a group could look
-/// populated and then render empty, and a row pushed past the limit lost the identity the
-/// selection was holding on to. The core returns every visible candidate and the host
-/// decides how many rows fit.
-pub const HOME_LIMIT: usize = 7;
-
+/// Scope membership is built from every visible candidate. The host, not core, decides
+/// how many rows fit on screen.
 /// Reserved id for the current application's visible actions.
 pub const SCOPE_APP: &str = "app";
 
@@ -29,6 +22,7 @@ pub fn build(
     current_app: &Option<String>,
     app_label: &str,
     scope_use: &ScopeUse,
+    catalogue: &dyn GroupMeta,
 ) -> Vec<ScopeEntry> {
     let mut app_ids = Vec::new();
     let mut groups: BTreeMap<GroupId, Vec<ActionId>> = BTreeMap::new();
@@ -60,10 +54,12 @@ pub fn build(
     let mut ordered = groups.into_iter().collect::<Vec<_>>();
     let use_of = |group: &str| scope_use.get(group).copied().unwrap_or_default();
     ordered.sort_by(|(a, _), (b, _)| {
-        use_of(b)
-            .cmp(&use_of(a))
-            .then_with(|| group_rank(a).cmp(&group_rank(b)))
-            .then_with(|| a.cmp(b))
+        use_of(b).cmp(&use_of(a)).then_with(|| {
+            catalogue
+                .rank(a)
+                .cmp(&catalogue.rank(b))
+                .then_with(|| a.cmp(b))
+        })
     });
     for (group, ids) in ordered {
         if group == groups::APP || ids.is_empty() {
@@ -72,7 +68,7 @@ pub fn build(
         scopes.push(ScopeEntry {
             id: group.clone(),
             kind: ScopeKind::Group,
-            label: group_label(&group),
+            label: catalogue.label(&group),
             candidate_ids: ids,
         });
     }
@@ -138,44 +134,6 @@ pub fn usage_by_group(
         *score = score.saturating_add((frequency + recency) as u32);
     }
     scope_use
-}
-
-fn group_rank(group: &str) -> u8 {
-    match group {
-        groups::GIT => 0,
-        groups::FOLDER => 1,
-        groups::FILE => 2,
-        groups::WEB => 3,
-        groups::JSON => 4,
-        _ => 5,
-    }
-}
-
-fn group_label(group: &str) -> String {
-    match group {
-        groups::GIT => "Git".into(),
-        groups::FOLDER => "Folder".into(),
-        groups::FILE => "File".into(),
-        groups::WEB => "Web".into(),
-        groups::JSON => "JSON".into(),
-        groups::APP => "Current App".into(),
-        other => match other.strip_prefix("plugin.") {
-            Some(plugin) => plugin
-                .split(['.', '_', '-'])
-                .map(capitalize)
-                .collect::<Vec<_>>()
-                .join(" "),
-            None => capitalize(other),
-        },
-    }
-}
-
-fn capitalize(value: &str) -> String {
-    let mut chars = value.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-        None => String::new(),
-    }
 }
 
 #[cfg(test)]

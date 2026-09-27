@@ -3,7 +3,7 @@ members = ["crates/*"]
 resolver = "2"
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 
@@ -19,4 +19,3 @@ anywhere-protocol = { path = "crates/anywhere-protocol" }
 anywhere-platform = { path = "crates/anywhere-platform" }
 anywhere-plugin = { path = "crates/anywhere-plugin" }
 anywhere-core = { path = "crates/anywhere-core" }
-

@@ -1,16 +1,15 @@
 use super::handler::MenuAction;
 use crate::core::action::{
     availability::AvailabilityRule,
-    descriptor::{ActionDescriptor, ActionExecutor, ActionRegistry},
+    descriptor::{ActionDefinition, ActionExecutor, ActionRegistry},
     group::groups,
     handler::ActionHandlerRef,
 };
-use crate::core::search::query::SearchFields;
 use anywhere_platform::{ApplicationInfo, DiscoveredMenuItem, MenuLocator};
 use anywhere_protocol::{ContextMatcher, APPLICATION};
 use std::collections::HashMap;
 
-/// Merge through normal registration, including duplicate-ID and availability validation.
+/// Merge unambiguous discoveries through normal registration and availability validation.
 pub fn registry(
     base: &ActionRegistry,
     app: &ApplicationInfo,
@@ -23,14 +22,14 @@ pub fn registry(
     Ok(registry)
 }
 
-pub fn descriptors(app: &ApplicationInfo, items: Vec<DiscoveredMenuItem>) -> Vec<ActionDescriptor> {
+pub fn descriptors(app: &ApplicationInfo, items: Vec<DiscoveredMenuItem>) -> Vec<ActionDefinition> {
     let mut counts = HashMap::new();
     for item in &items {
         if let Some(Some(id)) = item.identifiers.last() {
             *counts.entry(id.clone()).or_insert(0usize) += 1;
         }
     }
-    items
+    let actions: Vec<ActionDefinition> = items
         .into_iter()
         .map(|item| {
             // A unique AX identifier survives localization and path movement. Otherwise use
@@ -56,16 +55,23 @@ pub fn descriptors(app: &ApplicationInfo, items: Vec<DiscoveredMenuItem>) -> Vec
                     .collect()
             };
             let id = action_id(&app.bundle_id, &identity);
-            let title = item.menu_path.join(" › ");
-            let mut aliases = vec![item.menu_path.join(" ")];
-            let mut keywords = item.menu_path.clone();
+            let path = item.menu_path.clone();
+            let leaf = path.last().cloned().unwrap_or_default();
+            let parents = if path.len() > 1 {
+                path[..path.len() - 1].to_vec()
+            } else {
+                Vec::new()
+            };
+            let search_title = path.join(" › ");
+            let mut aliases = vec![path.join(" ")];
+            let mut keywords = path.clone();
             if let Some(shortcut) = &item.shortcut {
                 aliases.push(shortcut.clone());
                 keywords.push(shortcut.clone());
             }
-            ActionDescriptor {
+            ActionDefinition {
                 id,
-                title: title.clone(),
+                title: leaf,
                 subtitle: None,
                 shortcut: item.shortcut,
                 accepts: vec![ContextMatcher {
@@ -87,12 +93,36 @@ pub fn descriptors(app: &ApplicationInfo, items: Vec<DiscoveredMenuItem>) -> Vec
                 base_priority: 0,
                 icon: "app".into(),
                 group_id: groups::APP.into(),
-                aliases: aliases.clone(),
-                keywords: keywords.clone(),
+                aliases,
+                keywords,
                 owning_app: Some(app.bundle_id.clone()),
-                search: SearchFields::new(&title, &aliases, &keywords),
+                menu_path: parents,
+                search_title: Some(search_title),
             }
         })
+        .collect();
+
+    // One discovered identity must not resolve to multiple executable menu items.
+    // A duplicate used to make registration fail and prevent every menu action from
+    // being published. Omit both ambiguous items, preserving unrelated actions.
+    let mut id_counts = HashMap::new();
+    for action in &actions {
+        *id_counts.entry(action.id.clone()).or_insert(0usize) += 1;
+    }
+    let ambiguous_count = actions
+        .iter()
+        .filter(|action| id_counts.get(&action.id) != Some(&1))
+        .count();
+    if ambiguous_count > 0 {
+        tracing::warn!(
+            bundle_id = %app.bundle_id,
+            ambiguous_count,
+            "ambiguous_app_actions_omitted"
+        );
+    }
+    actions
+        .into_iter()
+        .filter(|action| id_counts.get(&action.id) == Some(&1))
         .collect()
 }
 
@@ -159,6 +189,47 @@ mod tests {
         assert_eq!(original[0].id, inserted[1].id);
     }
     #[test]
+    fn rescans_and_new_application_instances_keep_the_same_identity() {
+        let original = descriptors(
+            &app(),
+            vec![
+                item(&["File", "Save"], Some("save-document"), true),
+                item(&["File", "Close"], None, true),
+            ],
+        );
+        let mut restarted = app();
+        restarted.pid = 99;
+        restarted.instance_id = Some("two".into());
+        let mut changed_metadata = item(&["File", "Save"], Some("save-document"), false);
+        changed_metadata.shortcut = Some("⌘⇧S".into());
+        let rescan = descriptors(
+            &restarted,
+            vec![changed_metadata, item(&["File", "Close"], None, false)],
+        );
+        assert_eq!(original[0].id, rescan[0].id);
+        assert_eq!(original[1].id, rescan[1].id);
+        assert_eq!(rescan[0].availability, AvailabilityRule::Hidden);
+    }
+    #[test]
+    fn reordering_siblings_does_not_change_their_identities() {
+        let before = descriptors(
+            &app(),
+            vec![
+                item(&["File", "New"], None, true),
+                item(&["File", "Save"], None, true),
+            ],
+        );
+        let after = descriptors(
+            &app(),
+            vec![
+                item(&["File", "Save"], None, true),
+                item(&["File", "New"], None, true),
+            ],
+        );
+        assert_eq!(before[0].id, after[1].id);
+        assert_eq!(before[1].id, after[0].id);
+    }
+    #[test]
     fn ax_identity_survives_localization_and_path_changes() {
         let old = descriptors(
             &app(),
@@ -191,8 +262,66 @@ mod tests {
         assert_ne!(actions[0].id, actions[1].id);
     }
     #[test]
-    fn dynamic_actions_use_registry_collision_validation() {
+    fn a_new_duplicate_ax_identifier_never_inherits_the_old_identity() {
+        let original = descriptors(
+            &app(),
+            vec![item(&["File", "Save"], Some("reused-id"), true)],
+        )[0]
+        .id
+        .clone();
+        let duplicated = descriptors(
+            &app(),
+            vec![
+                item(&["File", "Save"], Some("reused-id"), true),
+                item(&["Window", "Save"], Some("reused-id"), true),
+            ],
+        );
+        assert_eq!(duplicated.len(), 2);
+        assert_ne!(duplicated[0].id, duplicated[1].id);
+        assert!(duplicated.iter().all(|action| action.id != original));
+        let unambiguous = descriptors(
+            &app(),
+            vec![item(&["File", "Save"], Some("reused-id"), true)],
+        );
+        assert_eq!(unambiguous[0].id, original);
+    }
+    #[test]
+    fn title_fallback_changes_identity_when_its_path_changes() {
+        let original = descriptors(&app(), vec![item(&["File", "Save"], None, true)]);
+        let renamed = descriptors(&app(), vec![item(&["File", "Save As"], None, true)]);
+        assert_ne!(original[0].id, renamed[0].id);
+    }
+    #[test]
+    fn identity_parts_and_bundle_ids_do_not_collide() {
+        assert_ne!(
+            action_id("test.editor", &["title:File".into(), "title:Save".into()]),
+            action_id("test.editor", &["title:FileSave".into()]),
+        );
+        assert_ne!(
+            action_id("test.editor", &["ax:save".into()]),
+            action_id("test.other", &["ax:save".into()]),
+        );
+    }
+    #[test]
+    fn ambiguous_identity_omits_only_colliding_actions() {
         let same = item(&["File", "Save"], None, true);
-        assert!(registry(&ActionRegistry::default(), &app(), vec![same.clone(), same]).is_err());
+        let actions = descriptors(
+            &app(),
+            vec![
+                same.clone(),
+                same.clone(),
+                item(&["File", "Open"], None, true),
+            ],
+        );
+        assert_eq!(actions.len(), 1);
+        assert_eq!(actions[0].title, "Open");
+        let registry = registry(
+            &ActionRegistry::default(),
+            &app(),
+            vec![same.clone(), same, item(&["File", "Open"], None, true)],
+        )
+        .unwrap();
+        assert_eq!(registry.commands().count(), 1);
+        assert_eq!(registry.commands().next().unwrap().title, "Open");
     }
 }

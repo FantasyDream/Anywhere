@@ -4,6 +4,7 @@ use crate::core::context::{ContextSource, ContextValue, ExecutionContext, Resolv
 use anyhow::Result;
 use anywhere_protocol::*;
 use async_trait::async_trait;
+use std::sync::Arc;
 
 /// `core.text` to `json.document`.
 pub struct JsonProvider {
@@ -52,7 +53,7 @@ pub fn recognize(input: &str) -> Option<ResolvedContext> {
         JSON_DOCUMENT,
         ContextValue::Json {
             raw: input.into(),
-            parsed,
+            parsed: Arc::new(parsed),
         },
         ContextSource::UserInput,
         "core.json",

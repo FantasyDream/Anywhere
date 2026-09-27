@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import '../../src/rust/api.dart';
+import '../launcher_style.dart';
 
 class CandidateRow extends StatelessWidget {
   const CandidateRow({
@@ -17,18 +18,25 @@ class CandidateRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final disabled = candidate.availability != 'enabled';
+    final disabled = candidate.availability != AvailabilityDto.enabled;
     return Semantics(
       selected: selected,
       button: true,
+      enabled: !disabled,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
         child: Material(
-          color: selected ? const Color(0x3d6d8dff) : Colors.transparent,
-          borderRadius: BorderRadius.circular(10),
+          color: selected ? const Color(0x44778fe0) : Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(11),
+            side: BorderSide(
+              color: selected ? const Color(0x779eb4ff) : Colors.transparent,
+              width: 0.8,
+            ),
+          ),
           child: InkWell(
-            borderRadius: BorderRadius.circular(10),
-            onTap: onTap,
+            borderRadius: BorderRadius.circular(11),
+            onTap: disabled ? null : onTap,
             child: SizedBox(
               height: 50,
               child: Padding(
@@ -41,7 +49,7 @@ class CandidateRow extends StatelessWidget {
                         height: 22,
                         margin: const EdgeInsets.only(right: 8),
                         decoration: BoxDecoration(
-                          color: const Color(0xff9eb4ff),
+                          color: LauncherStyle.accent,
                           borderRadius: BorderRadius.circular(99),
                         ),
                       )
@@ -125,14 +133,12 @@ class CandidateRow extends StatelessWidget {
   }
 
   Widget _title(bool disabled) {
-    const separator = ' › ';
-    final title = candidate.title;
-    final split = title.lastIndexOf(separator);
     final leafColor =
-        disabled ? const Color(0xff8b90a0) : const Color(0xfff5f7fc);
+        disabled ? const Color(0xff8b90a0) : LauncherStyle.primary;
     final pathColor =
         disabled ? const Color(0xff6f7484) : const Color(0xff8f99ad);
-    if (split <= 0) {
+    final title = candidate.title;
+    if (candidate.menuPath.isEmpty) {
       return Text(
         title,
         maxLines: 1,
@@ -150,7 +156,7 @@ class CandidateRow extends StatelessWidget {
       TextSpan(
         children: [
           TextSpan(
-            text: title.substring(0, split + separator.length),
+            text: '${candidate.menuPath.join(' › ')} › ',
             style: TextStyle(
               fontSize: 12.5,
               height: 1.2,
@@ -159,7 +165,7 @@ class CandidateRow extends StatelessWidget {
             ),
           ),
           TextSpan(
-            text: title.substring(split + separator.length),
+            text: title,
             style: TextStyle(
               fontSize: 13.5,
               height: 1.2,
@@ -176,17 +182,15 @@ class CandidateRow extends StatelessWidget {
   }
 
   String? _visibleSubtitle() {
-    final disabled = candidate.availability != 'enabled';
+    final disabled = candidate.availability != AvailabilityDto.enabled;
     if (disabled) {
       return candidate.availabilityReason ?? 'Not available right now';
     }
     final subtitle = candidate.subtitle?.trim();
     if (subtitle == null || subtitle.isEmpty) return null;
     if (_isBundleId(subtitle)) return null;
-    if (candidate.title == subtitle ||
-        candidate.title.startsWith('$subtitle ›')) {
-      return null;
-    }
+    if (candidate.title == subtitle) return null;
+    if (candidate.menuPath.join(' › ') == subtitle) return null;
     return subtitle;
   }
 
@@ -232,7 +236,9 @@ class CandidateRow extends StatelessWidget {
       );
 
   IconData _icon(CandidateDto candidate) {
-    if (candidate.kind == 'application') return Icons.apps_rounded;
+    if (candidate.kind == CandidateKindDto.application) {
+      return Icons.apps_rounded;
+    }
     switch (candidate.iconKey) {
       case 'terminal':
         return Icons.terminal_rounded;
@@ -250,28 +256,6 @@ class CandidateRow extends StatelessWidget {
         return Icons.search_rounded;
       case 'git':
         return Icons.account_tree_outlined;
-    }
-    final title = candidate.title.toLowerCase();
-    if (title.contains('quit') ||
-        title.contains('退出') ||
-        title.contains('关闭')) {
-      return Icons.logout_rounded;
-    }
-    if (title.contains('window') ||
-        title.contains('窗口') ||
-        title.contains('填充') ||
-        title.contains('缩放') ||
-        title.contains('居中')) {
-      return Icons.crop_din_rounded;
-    }
-    if (title.contains('update') || title.contains('更新')) {
-      return Icons.system_update_alt_rounded;
-    }
-    if (title.contains('service') || title.contains('服务')) {
-      return Icons.grid_view_rounded;
-    }
-    if (title.contains('hide') || title.contains('隐藏')) {
-      return Icons.visibility_off_outlined;
     }
     if (candidate.iconKey == 'app') return Icons.north_east_rounded;
     return Icons.bolt_rounded;

@@ -20,6 +20,10 @@ pub struct TextFallbackSource<'a> {
 }
 
 impl CandidateSource for TextFallbackSource<'_> {
+    fn id(&self) -> &'static str {
+        "fallback"
+    }
+
     fn stage(&self) -> SourceStage {
         SourceStage::Fallback
     }
@@ -40,7 +44,7 @@ impl TextFallbackSource<'_> {
     fn build(&self, query: &Query, existing: &[Candidate]) -> Vec<Candidate> {
         let context = ResolvedContext::new(
             TEXT,
-            ContextValue::Text(query.raw_input.clone()),
+            ContextValue::Text(query.raw_input.clone().into()),
             ContextSource::UserInput,
             "core.text_fallback",
         );
@@ -53,14 +57,14 @@ impl TextFallbackSource<'_> {
                 if !availability.is_visible() {
                     return None;
                 }
-                let level = action.search.matched(query);
+                let level = action.search().matched(query);
                 Some(Candidate {
                     presentation: CandidatePresentation {
                         shortcut: None,
                         id: action_candidate_id(&action.id, &context),
                         kind: CandidateKind::Action,
                         title: action.title.clone(),
-                        subtitle: Some(display_detail(&context)),
+                        subtitle: Some(context.display_detail()),
                         icon: IconDescriptor {
                             key: action.icon.clone(),
                         },
@@ -70,6 +74,7 @@ impl TextFallbackSource<'_> {
                         command_id: Some(action.id.clone()),
                         bundle_id: None,
                         owning_app: None,
+                        menu_path: action.menu_path.clone(),
                     },
                     target: crate::core::search::candidate::CandidateTarget::from_action(
                         action.clone(),
@@ -86,16 +91,4 @@ impl TextFallbackSource<'_> {
         fallbacks.sort_by(compare_candidates);
         fallbacks
     }
-}
-
-/// Short subtitle text; execution still uses the full transport value.
-fn display_detail(context: &ResolvedContext) -> String {
-    const MAX: usize = 120;
-    let text = context.value.text();
-    if text.chars().count() <= MAX {
-        return text;
-    }
-    let mut shortened = text.chars().take(MAX).collect::<String>();
-    shortened.push('…');
-    shortened
 }
