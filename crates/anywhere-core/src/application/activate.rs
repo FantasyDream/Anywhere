@@ -1,7 +1,9 @@
 //! Activation: capture the environment, publish the first snapshot.
 //
-// The capture happens before the host is told to show anything, so the ambient context is
-// frozen at the moment the hotkey was pressed rather than after focus moved.
+// The frontmost application identity is captured before the host is told to show
+// anything. Platform sources read that app independently; their values reflect
+// when each read completes, not necessarily the exact hotkey instant.
+use super::context_capture::CapturePolicy;
 use super::launcher_service::Application;
 use super::session_model::{ActivationCapture, CaptureStatus, LauncherSession};
 use super::session_runtime::Resolver;
@@ -10,7 +12,10 @@ use crate::core::session::facts::{FactValue, CLIPBOARD, GIT};
 use crate::features::filesystem::provider::DirectoryMemo;
 use anyhow::{Context, Result};
 use anywhere_protocol::*;
-use std::time::Instant;
+use std::{
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 use tracing::Instrument;
 
 impl Application {
@@ -176,13 +181,19 @@ impl Application {
                         (Default::default(), Default::default())
                     }
                 };
-                publish_supplemental(&resolver, session_id, diagnostics, move |session, _| {
-                    session.replace_usage(
-                        std::sync::Arc::new(usage_map),
-                        std::sync::Arc::new(app_usage),
-                    );
-                    true
-                });
+                publish_supplemental(
+                    &resolver,
+                    session_id,
+                    diagnostics,
+                    None,
+                    move |session, _| {
+                        session.replace_usage(
+                            std::sync::Arc::new(usage_map),
+                            std::sync::Arc::new(app_usage),
+                        );
+                        true
+                    },
+                );
             };
             let git_refresh = async {
                 let mut diagnostics = Vec::new();
@@ -197,6 +208,7 @@ impl Application {
                     &resolver,
                     session_id,
                     diagnostics,
+                    None,
                     move |session, details| {
                         git_flag.is_some_and(|available| {
                             if let Err(error) = session.record_fact(GIT, FactValue::Flag(available))
@@ -213,18 +225,29 @@ impl Application {
             let clipboard_refresh = async {
                 let Some(token) = clipboard_token else { return };
                 let Some(clipboard) = clipboard else { return };
-                let (status, clipboard_text) = match clipboard.await {
+                let (mut status, clipboard_text) = match clipboard.await {
                     Ok(Ok(Some(text))) => (CaptureStatus::Captured, Some(text)),
                     Ok(Ok(None)) => (CaptureStatus::Empty, None),
                     Ok(Err(_)) | Err(_) => (CaptureStatus::Failed, None),
                 };
-                if !capture_policy
-                    .lock()
-                    .is_ok_and(|policy| policy.allows(ContextSource::Clipboard, token))
-                {
-                    return;
+                let captured_at_ms = super::context_capture::now_ms();
+                let mut contexts = clipboard_text
+                    .as_ref()
+                    .and_then(|text| {
+                        super::context_capture::text_context(text.clone(), ContextSource::Clipboard)
+                    })
+                    .into_iter()
+                    .collect::<Vec<_>>();
+                if status == CaptureStatus::Captured && contexts.is_empty() {
+                    status = CaptureStatus::Unavailable;
                 }
-                let fact_text = clipboard_text.clone();
+                // A value too long for Context must not quietly remain available
+                // through SessionFacts while its source reports Unavailable.
+                let fact_text = if contexts.is_empty() {
+                    None
+                } else {
+                    clipboard_text.clone()
+                };
                 publish_supplemental(
                     &resolver,
                     session_id,
@@ -233,6 +256,7 @@ impl Application {
                     } else {
                         Vec::new()
                     },
+                    Some((&capture_policy, ContextSource::Clipboard, token)),
                     move |session, details| {
                         fact_text.is_some_and(|text| {
                             if let Err(error) =
@@ -246,13 +270,6 @@ impl Application {
                         })
                     },
                 );
-                let captured_at_ms = super::context_capture::now_ms();
-                let mut contexts = clipboard_text
-                    .and_then(|text| {
-                        super::context_capture::text_context(text, ContextSource::Clipboard)
-                    })
-                    .into_iter()
-                    .collect::<Vec<_>>();
                 for context in &mut contexts {
                     context.capture = Some(CaptureMetadata {
                         captured_at_ms,
@@ -267,11 +284,7 @@ impl Application {
                     ActivationCapture {
                         source: ContextSource::Clipboard,
                         captured_at_ms,
-                        status: if status == CaptureStatus::Captured && contexts.is_empty() {
-                            CaptureStatus::Unavailable
-                        } else {
-                            status
-                        },
+                        status,
                         contexts,
                     },
                 )
@@ -301,9 +314,21 @@ fn publish_supplemental(
     resolver: &Resolver,
     session_id: SessionId,
     mut diagnostics: Vec<String>,
+    capture: Option<(&Arc<Mutex<CapturePolicy>>, ContextSource, u64)>,
     apply: impl FnOnce(&mut LauncherSession, &mut Vec<String>) -> bool,
 ) {
     let changed = {
+        // Keep the policy check and SessionFacts write under the same lock order
+        // used by publish_capture, so disabling a source cannot race this write.
+        let _policy = if let Some((policy, source, token)) = capture {
+            let Ok(guard) = policy.lock() else { return };
+            if !guard.allows(source, token) {
+                return;
+            }
+            Some(guard)
+        } else {
+            None
+        };
         let Ok(mut session) = resolver.session.lock() else {
             return;
         };
@@ -332,6 +357,7 @@ mod tests {
     use tokio::sync::Notify;
 
     struct HeldClipboard {
+        text: String,
         released: Mutex<bool>,
         signal: Condvar,
         entered: Notify,
@@ -375,13 +401,14 @@ mod tests {
             while !*released {
                 released = self.signal.wait(released).unwrap();
             }
-            Ok(Some("stale clipboard".into()))
+            Ok(Some(self.text.clone()))
         }
     }
 
     #[tokio::test]
     async fn old_clipboard_result_cannot_modify_a_new_session() {
         let platform = Arc::new(HeldClipboard {
+            text: "stale clipboard".into(),
             released: Mutex::new(false),
             signal: Condvar::new(),
             entered: Notify::new(),
@@ -414,5 +441,60 @@ mod tests {
         assert!(session.app_usage.is_empty());
         assert!(session.state.diagnostics.is_empty());
         assert_eq!(session.resolution.inputs_epoch, 0);
+    }
+
+    #[tokio::test]
+    async fn oversized_clipboard_is_unavailable_in_context_and_facts() {
+        let platform = Arc::new(HeldClipboard {
+            text: "x".repeat(super::super::context_capture::MAX_CONTEXT_TEXT_BYTES + 1),
+            released: Mutex::new(true),
+            signal: Condvar::new(),
+            entered: Notify::new(),
+        });
+        let app = Application::new(
+            platform,
+            ActionRegistry::default(),
+            Box::<MemoryUsage>::default(),
+            vec![],
+        );
+        let session_id = app.begin_activation().unwrap();
+        app.spawn_supplemental(session_id, String::new())
+            .await
+            .unwrap();
+        let session = app.session().unwrap();
+        assert!(!session.environment.contains_key(CLIPBOARD));
+        let capture = session
+            .identity
+            .captures
+            .iter()
+            .find(|capture| capture.source == ContextSource::Clipboard)
+            .unwrap();
+        assert_eq!(capture.status, CaptureStatus::Unavailable);
+        assert!(capture.contexts.is_empty());
+    }
+
+    #[tokio::test]
+    async fn disabling_clipboard_during_a_read_discards_its_fact() {
+        let platform = Arc::new(HeldClipboard {
+            text: "https://example.org/copied".into(),
+            released: Mutex::new(false),
+            signal: Condvar::new(),
+            entered: Notify::new(),
+        });
+        let app = Application::new(
+            platform.clone(),
+            ActionRegistry::default(),
+            Box::<MemoryUsage>::default(),
+            vec![],
+        );
+        let session_id = app.begin_activation().unwrap();
+        let worker = app.spawn_supplemental(session_id, String::new());
+        platform.entered.notified().await;
+        app.set_capture_sources(true, true, true, false);
+        platform.release();
+        worker.await.unwrap();
+        let session = app.session().unwrap();
+        assert!(!session.environment.contains_key(CLIPBOARD));
+        assert!(session.identity.captures.is_empty());
     }
 }

@@ -368,6 +368,31 @@ async fn browser_automation_denial_does_not_hide_clipboard_context() {
     panic!("browser permission status was not published");
 }
 
+#[tokio::test]
+async fn recognized_clipboard_url_keeps_actions_but_hides_its_raw_value_in_presentation() {
+    let mut fake = ContextPlatform::new("test.editor");
+    fake.clipboard = Some("https://example.org/?token=private".into());
+    let app = application(Arc::new(fake));
+    let initial = app.activate().await.unwrap().unwrap();
+    let captured = capture_state(&app, initial.session_id, 0, ContextSource::Clipboard, URL).await;
+    assert!(captured.context_summary.iter().any(|context| {
+        context.source == ContextSource::Clipboard
+            && context.type_id == URL
+            && context.detail == "Copied URL"
+    }));
+    assert!(captured
+        .candidates
+        .iter()
+        .any(|candidate| { candidate.command_id.as_deref() == Some("core.url.open") }));
+    assert!(captured.candidates.iter().all(|candidate| {
+        !candidate
+            .subtitle
+            .as_deref()
+            .unwrap_or_default()
+            .contains("token=private")
+    }));
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn late_selected_text_joins_current_revision_and_old_session_is_discarded() {
     let gate = CaptureGate::new();

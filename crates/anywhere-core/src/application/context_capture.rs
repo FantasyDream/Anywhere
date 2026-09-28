@@ -18,7 +18,7 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
-const MAX_CONTEXT_TEXT_BYTES: usize = 16 * 1024;
+pub(super) const MAX_CONTEXT_TEXT_BYTES: usize = 16 * 1024;
 const MAX_FINDER_EXPANSION: usize = 8;
 const CAPTURE_WAIT: Duration = Duration::from_secs(15);
 

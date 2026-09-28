@@ -125,15 +125,25 @@ impl ResolvedContext {
     }
     pub fn display_detail(&self) -> String {
         const MAX: usize = 120;
-        let text = match &self.value {
-            ContextValue::Application { name, .. } => Arc::from(name.as_str()),
-            ContextValue::FileSelection(paths) => {
-                Arc::from(format!("{} selected items", paths.len()))
+        // Clipboard values remain available to actions and providers, but neither
+        // the context summary nor candidate subtitles should echo their contents.
+        let text = if self.source == ContextSource::Clipboard {
+            match &self.value {
+                ContextValue::Text(text) => {
+                    Arc::from(format!("{} characters", text.chars().count()))
+                }
+                ContextValue::Url(_) => Arc::from("Copied URL"),
+                ContextValue::Json { .. } => Arc::from("Copied JSON"),
+                _ => Arc::from("Copied context"),
             }
-            ContextValue::Text(text) if self.source == ContextSource::Clipboard => {
-                Arc::from(format!("{} characters", text.chars().count()))
+        } else {
+            match &self.value {
+                ContextValue::Application { name, .. } => Arc::from(name.as_str()),
+                ContextValue::FileSelection(paths) => {
+                    Arc::from(format!("{} selected items", paths.len()))
+                }
+                _ => self.value.shared_text(),
             }
-            _ => self.value.shared_text(),
         };
         let mut shortened = String::new();
         let mut chars = text.chars();
@@ -316,5 +326,41 @@ mod tests {
         assert_eq!(set.of_type(TEXT).count(), 2);
         assert_eq!(set.take().len(), 3);
         assert!(set.is_empty());
+    }
+
+    #[test]
+    fn clipboard_derived_values_never_expose_their_body_in_display_details() {
+        let secret = "https://example.org/?token=private";
+        let url = ResolvedContext::new(
+            URL,
+            ContextValue::Url(url::Url::parse(secret).unwrap()),
+            ContextSource::Clipboard,
+            "test",
+        );
+        let json = ResolvedContext::new(
+            JSON_DOCUMENT,
+            ContextValue::Json {
+                raw: r#"{"token":"private"}"#.into(),
+                parsed: Arc::new(serde_json::json!({"token":"private"})),
+            },
+            ContextSource::Clipboard,
+            "test",
+        );
+        assert_eq!(url.presentation().detail, "Copied URL");
+        assert_eq!(json.presentation().detail, "Copied JSON");
+        assert_eq!(
+            context(TEXT, "private", ContextSource::Clipboard).display_detail(),
+            "7 characters"
+        );
+        assert_eq!(
+            ResolvedContext::new(
+                URL,
+                ContextValue::Url(url::Url::parse(secret).unwrap()),
+                ContextSource::UserInput,
+                "test"
+            )
+            .display_detail(),
+            secret
+        );
     }
 }
