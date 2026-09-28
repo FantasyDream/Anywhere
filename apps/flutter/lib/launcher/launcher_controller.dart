@@ -62,11 +62,19 @@ class LauncherController extends ChangeNotifier {
     required WindowHost window,
     String startupMessage = '',
     ApplyExcludedApps? applyExcludedApps,
+    Future<void> Function(HostSettings)? applyContextSources,
   })  : _backend = backend,
         _window = window,
         _hostWarning = startupMessage,
         _applyExcludedApps = applyExcludedApps ??
             ((bundleIds) => setExcludedApps(bundleIds: bundleIds)),
+        _applyContextSources = applyContextSources ??
+            ((settings) => setContextSources(
+                  finderSelection: settings.captureFinderSelection,
+                  selectedText: settings.captureSelectedText,
+                  browserCurrentPage: settings.captureBrowserCurrentPage,
+                  clipboard: settings.captureClipboard,
+                )),
         icons = ApplicationIconCache(backend.loadIcon) {
     icons.addListener(_notify);
   }
@@ -74,6 +82,7 @@ class LauncherController extends ChangeNotifier {
   final LauncherBackend _backend;
   final WindowHost _window;
   final ApplyExcludedApps _applyExcludedApps;
+  final Future<void> Function(HostSettings) _applyContextSources;
   String _hostWarning;
   final ApplicationIconCache icons;
   LauncherPhase _phase = LauncherPhase.hidden;
@@ -490,6 +499,11 @@ class LauncherController extends ChangeNotifier {
     ];
     try {
       await _applyExcludedApps(_settings.excludedApps);
+    } catch (failure) {
+      failures.add('$failure');
+    }
+    try {
+      await _applyContextSources(_settings);
     } catch (failure) {
       failures.add('$failure');
     }

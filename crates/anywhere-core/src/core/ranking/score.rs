@@ -60,7 +60,11 @@ pub fn non_query_terms(
 pub fn context_relevance(source: ContextSource, searching: bool, semantic: i32) -> i32 {
     let base = match source {
         ContextSource::UserInput => 200,
+        ContextSource::FinderSelection => 190,
+        ContextSource::SelectedText => 175,
+        ContextSource::BrowserCurrentPage => 160,
         ContextSource::ApplicationContext => 120,
+        ContextSource::Clipboard => 80,
         ContextSource::ForegroundApplication => 30,
     };
     if searching {

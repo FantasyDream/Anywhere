@@ -47,6 +47,32 @@ pub enum MenuDiscovery {
     Unavailable,
 }
 
+/// Why a focused app could not provide selected text. A source can treat these
+/// as an empty context while still reporting the right permission guidance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SelectedTextError {
+    Unsupported,
+    PermissionDenied,
+    ApplicationChanged,
+    TimedOut,
+    Unavailable,
+}
+
+impl std::fmt::Display for SelectedTextError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let message = match self {
+            Self::Unsupported => "focused control does not expose selected text",
+            Self::PermissionDenied => "accessibility permission is not granted",
+            Self::ApplicationChanged => "captured application is no longer running",
+            Self::TimedOut => "selected text inspection timed out",
+            Self::Unavailable => "focused control is unavailable",
+        };
+        f.write_str(message)
+    }
+}
+
+impl std::error::Error for SelectedTextError {}
+
 impl MenuDiscovery {
     pub fn items(&self) -> &[DiscoveredMenuItem] {
         match self {
@@ -196,6 +222,23 @@ pub trait Platform: Send + Sync {
         Ok(None)
     }
 
+    /// Selected text in the captured app's focused control. Never activates
+    /// another app or reads the clipboard. Empty selection is `Ok(None)`;
+    /// unsupported controls and permission failures return typed errors.
+    fn selected_text(&self, _application: &ApplicationInfo) -> Result<Option<String>> {
+        Ok(None)
+    }
+
+    /// Files and directories selected in the captured Finder instance.
+    fn finder_selected_paths(&self, _application: &ApplicationInfo) -> Result<Vec<PathBuf>> {
+        Ok(Vec::new())
+    }
+
+    /// URL of the captured browser's current page, when an adapter exists.
+    fn browser_current_url(&self, _application: &ApplicationInfo) -> Result<Option<String>> {
+        Ok(None)
+    }
+
     /// Whether the read-only Git operations can run at all.
     fn git_available(&self) -> bool {
         false
@@ -285,6 +328,15 @@ mod tests {
             .is_none());
         assert!(platform.application_icon("/x.app", 64).unwrap().is_none());
         assert!(platform.clipboard_text().unwrap().is_none());
+        let app = ApplicationInfo {
+            bundle_id: "x".into(),
+            name: "x".into(),
+            pid: 0,
+            instance_id: None,
+        };
+        assert!(platform.selected_text(&app).unwrap().is_none());
+        assert!(platform.finder_selected_paths(&app).unwrap().is_empty());
+        assert!(platform.browser_current_url(&app).unwrap().is_none());
         assert!(!platform.git_available());
         assert!(platform.launch_application("/x.app").is_err());
         assert!(platform

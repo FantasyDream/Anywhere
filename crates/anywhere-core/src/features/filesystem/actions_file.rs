@@ -3,13 +3,14 @@ use crate::core::action::availability::AvailabilityRule;
 use crate::core::action::bundle::{ActionBundle, ActionSpec};
 use crate::core::action::group::groups;
 use crate::core::action::handler::{ActionHandler, ExecutionOutput};
-use crate::core::context::ResolvedContext;
+use crate::core::context::{ContextValue, ResolvedContext};
 use anyhow::{Context, Result};
 use anywhere_platform::Platform;
 use anywhere_protocol::*;
 
 struct OpenFile;
 struct RevealFile;
+struct CopySelectionPaths;
 
 impl ActionHandler for OpenFile {
     fn execute(
@@ -33,10 +34,41 @@ impl ActionHandler for RevealFile {
     }
 }
 
+impl ActionHandler for CopySelectionPaths {
+    fn execute(
+        &self,
+        context: &ResolvedContext,
+        platform: &dyn Platform,
+    ) -> Result<ExecutionOutput> {
+        let ContextValue::FileSelection(paths) = &context.value else {
+            anyhow::bail!("Finder selection context required");
+        };
+        let json = serde_json::to_string(
+            &paths
+                .iter()
+                .map(|path| path.to_string_lossy())
+                .collect::<Vec<_>>(),
+        )?;
+        platform.copy_text(&json)?;
+        Ok(ExecutionOutput::dismiss())
+    }
+}
+
 pub fn bundle() -> ActionBundle {
     ActionBundle {
         group: groups::file(),
         actions: vec![
+            ActionSpec {
+                id: "core.file_selection.copy_paths",
+                title: "Copy Selected Paths as JSON",
+                accepts: FILE_SELECTION,
+                handler: &CopySelectionPaths,
+                availability: AvailabilityRule::Enabled,
+                base_priority: 30,
+                icon: "copy",
+                aliases: &["copy paths", "selection"],
+                keywords: &["files", "finder", "json"],
+            },
             ActionSpec {
                 id: "core.file.open",
                 title: "Open File",

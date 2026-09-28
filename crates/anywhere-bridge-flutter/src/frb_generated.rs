@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 165027969;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 759873435;
 
 // Section: executor
 
@@ -454,6 +454,49 @@ fn wire__crate__api__reload_plugins_impl(
         },
     )
 }
+fn wire__crate__api__set_context_sources_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "set_context_sources",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_finder_selection = <bool>::sse_decode(&mut deserializer);
+            let api_selected_text = <bool>::sse_decode(&mut deserializer);
+            let api_browser_current_page = <bool>::sse_decode(&mut deserializer);
+            let api_clipboard = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::set_context_sources(
+                            api_finder_selection,
+                            api_selected_text,
+                            api_browser_current_page,
+                            api_clipboard,
+                        )?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__set_excluded_apps_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -686,6 +729,35 @@ impl SseDecode for crate::api::CandidateKindDto {
     }
 }
 
+impl SseDecode for crate::api::ContextCaptureDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_source = <crate::api::ContextSourceDto>::sse_decode(deserializer);
+        let mut var_status = <crate::api::ContextCaptureStatusDto>::sse_decode(deserializer);
+        let mut var_capturedAtMs = <i64>::sse_decode(deserializer);
+        return crate::api::ContextCaptureDto {
+            source: var_source,
+            status: var_status,
+            captured_at_ms: var_capturedAtMs,
+        };
+    }
+}
+
+impl SseDecode for crate::api::ContextCaptureStatusDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::ContextCaptureStatusDto::Captured,
+            1 => crate::api::ContextCaptureStatusDto::Empty,
+            2 => crate::api::ContextCaptureStatusDto::PermissionDenied,
+            3 => crate::api::ContextCaptureStatusDto::Unavailable,
+            4 => crate::api::ContextCaptureStatusDto::Failed,
+            _ => unreachable!("Invalid variant for ContextCaptureStatusDto: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for crate::api::ContextDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -693,11 +765,30 @@ impl SseDecode for crate::api::ContextDto {
         let mut var_typeId = <String>::sse_decode(deserializer);
         let mut var_label = <String>::sse_decode(deserializer);
         let mut var_detail = <String>::sse_decode(deserializer);
+        let mut var_source = <crate::api::ContextSourceDto>::sse_decode(deserializer);
         return crate::api::ContextDto {
             id: var_id,
             type_id: var_typeId,
             label: var_label,
             detail: var_detail,
+            source: var_source,
+        };
+    }
+}
+
+impl SseDecode for crate::api::ContextSourceDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::ContextSourceDto::UserInput,
+            1 => crate::api::ContextSourceDto::ForegroundApplication,
+            2 => crate::api::ContextSourceDto::ApplicationContext,
+            3 => crate::api::ContextSourceDto::FinderSelection,
+            4 => crate::api::ContextSourceDto::SelectedText,
+            5 => crate::api::ContextSourceDto::BrowserCurrentPage,
+            6 => crate::api::ContextSourceDto::Clipboard,
+            _ => unreachable!("Invalid variant for ContextSourceDto: {}", inner),
         };
     }
 }
@@ -716,6 +807,13 @@ impl SseDecode for i32 {
     }
 }
 
+impl SseDecode for i64 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        deserializer.cursor.read_i64::<NativeEndian>().unwrap()
+    }
+}
+
 impl SseDecode for crate::api::LauncherStateDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -725,6 +823,8 @@ impl SseDecode for crate::api::LauncherStateDto {
         let mut var_input = <String>::sse_decode(deserializer);
         let mut var_contextComplete = <bool>::sse_decode(deserializer);
         let mut var_contexts = <Vec<crate::api::ContextDto>>::sse_decode(deserializer);
+        let mut var_contextCaptures =
+            <Vec<crate::api::ContextCaptureDto>>::sse_decode(deserializer);
         let mut var_candidates = <Vec<crate::api::CandidateDto>>::sse_decode(deserializer);
         let mut var_scopes = <Vec<crate::api::ScopeDto>>::sse_decode(deserializer);
         let mut var_diagnostics = <Vec<String>>::sse_decode(deserializer);
@@ -735,6 +835,7 @@ impl SseDecode for crate::api::LauncherStateDto {
             input: var_input,
             context_complete: var_contextComplete,
             contexts: var_contexts,
+            context_captures: var_contextCaptures,
             candidates: var_candidates,
             scopes: var_scopes,
             diagnostics: var_diagnostics,
@@ -761,6 +862,18 @@ impl SseDecode for Vec<crate::api::CandidateDto> {
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<crate::api::CandidateDto>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::ContextCaptureDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::ContextCaptureDto>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -959,9 +1072,10 @@ fn pde_ffi_dispatcher_primary_impl(
         8 => wire__crate__api__latest_state_impl(port, ptr, rust_vec_len, data_len),
         9 => wire__crate__api__ping_impl(port, ptr, rust_vec_len, data_len),
         12 => wire__crate__api__reload_plugins_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__set_excluded_apps_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__update_input_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__wait_for_snapshot_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__set_context_sources_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__set_excluded_apps_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__update_input_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__wait_for_snapshot_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -1089,6 +1203,49 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::CandidateKindDto>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::ContextCaptureDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.source.into_into_dart().into_dart(),
+            self.status.into_into_dart().into_dart(),
+            self.captured_at_ms.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::ContextCaptureDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::ContextCaptureDto>
+    for crate::api::ContextCaptureDto
+{
+    fn into_into_dart(self) -> crate::api::ContextCaptureDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::ContextCaptureStatusDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Captured => 0.into_dart(),
+            Self::Empty => 1.into_dart(),
+            Self::PermissionDenied => 2.into_dart(),
+            Self::Unavailable => 3.into_dart(),
+            Self::Failed => 4.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::ContextCaptureStatusDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::ContextCaptureStatusDto>
+    for crate::api::ContextCaptureStatusDto
+{
+    fn into_into_dart(self) -> crate::api::ContextCaptureStatusDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::ContextDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -1096,6 +1253,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::ContextDto {
             self.type_id.into_into_dart().into_dart(),
             self.label.into_into_dart().into_dart(),
             self.detail.into_into_dart().into_dart(),
+            self.source.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -1103,6 +1261,29 @@ impl flutter_rust_bridge::IntoDart for crate::api::ContextDto {
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::ContextDto {}
 impl flutter_rust_bridge::IntoIntoDart<crate::api::ContextDto> for crate::api::ContextDto {
     fn into_into_dart(self) -> crate::api::ContextDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::ContextSourceDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::UserInput => 0.into_dart(),
+            Self::ForegroundApplication => 1.into_dart(),
+            Self::ApplicationContext => 2.into_dart(),
+            Self::FinderSelection => 3.into_dart(),
+            Self::SelectedText => 4.into_dart(),
+            Self::BrowserCurrentPage => 5.into_dart(),
+            Self::Clipboard => 6.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::ContextSourceDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::ContextSourceDto>
+    for crate::api::ContextSourceDto
+{
+    fn into_into_dart(self) -> crate::api::ContextSourceDto {
         self
     }
 }
@@ -1116,6 +1297,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::LauncherStateDto {
             self.input.into_into_dart().into_dart(),
             self.context_complete.into_into_dart().into_dart(),
             self.contexts.into_into_dart().into_dart(),
+            self.context_captures.into_into_dart().into_dart(),
             self.candidates.into_into_dart().into_dart(),
             self.scopes.into_into_dart().into_dart(),
             self.diagnostics.into_into_dart().into_dart(),
@@ -1328,6 +1510,34 @@ impl SseEncode for crate::api::CandidateKindDto {
     }
 }
 
+impl SseEncode for crate::api::ContextCaptureDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::ContextSourceDto>::sse_encode(self.source, serializer);
+        <crate::api::ContextCaptureStatusDto>::sse_encode(self.status, serializer);
+        <i64>::sse_encode(self.captured_at_ms, serializer);
+    }
+}
+
+impl SseEncode for crate::api::ContextCaptureStatusDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::ContextCaptureStatusDto::Captured => 0,
+                crate::api::ContextCaptureStatusDto::Empty => 1,
+                crate::api::ContextCaptureStatusDto::PermissionDenied => 2,
+                crate::api::ContextCaptureStatusDto::Unavailable => 3,
+                crate::api::ContextCaptureStatusDto::Failed => 4,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
 impl SseEncode for crate::api::ContextDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1335,6 +1545,28 @@ impl SseEncode for crate::api::ContextDto {
         <String>::sse_encode(self.type_id, serializer);
         <String>::sse_encode(self.label, serializer);
         <String>::sse_encode(self.detail, serializer);
+        <crate::api::ContextSourceDto>::sse_encode(self.source, serializer);
+    }
+}
+
+impl SseEncode for crate::api::ContextSourceDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::ContextSourceDto::UserInput => 0,
+                crate::api::ContextSourceDto::ForegroundApplication => 1,
+                crate::api::ContextSourceDto::ApplicationContext => 2,
+                crate::api::ContextSourceDto::FinderSelection => 3,
+                crate::api::ContextSourceDto::SelectedText => 4,
+                crate::api::ContextSourceDto::BrowserCurrentPage => 5,
+                crate::api::ContextSourceDto::Clipboard => 6,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
     }
 }
 
@@ -1352,6 +1584,13 @@ impl SseEncode for i32 {
     }
 }
 
+impl SseEncode for i64 {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        serializer.cursor.write_i64::<NativeEndian>(self).unwrap();
+    }
+}
+
 impl SseEncode for crate::api::LauncherStateDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -1361,6 +1600,7 @@ impl SseEncode for crate::api::LauncherStateDto {
         <String>::sse_encode(self.input, serializer);
         <bool>::sse_encode(self.context_complete, serializer);
         <Vec<crate::api::ContextDto>>::sse_encode(self.contexts, serializer);
+        <Vec<crate::api::ContextCaptureDto>>::sse_encode(self.context_captures, serializer);
         <Vec<crate::api::CandidateDto>>::sse_encode(self.candidates, serializer);
         <Vec<crate::api::ScopeDto>>::sse_encode(self.scopes, serializer);
         <Vec<String>>::sse_encode(self.diagnostics, serializer);
@@ -1383,6 +1623,16 @@ impl SseEncode for Vec<crate::api::CandidateDto> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::CandidateDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::ContextCaptureDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::ContextCaptureDto>::sse_encode(item, serializer);
         }
     }
 }

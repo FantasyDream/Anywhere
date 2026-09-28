@@ -259,7 +259,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
     final candidates = _view.visibleCandidates;
     final hasPanel = _view.output != null || candidates.isNotEmpty;
     final contexts = (_view.snapshot?.contexts ?? []);
-    final labels = contexts.map((c) => c.label).toSet().join(' · ');
+    final labels = contexts.map(_contextLabel).toSet().join(' · ');
     return Align(
       alignment: Alignment.topCenter,
       child: SizedBox(
@@ -580,4 +580,18 @@ class _LauncherScreenState extends State<LauncherScreen> {
         iconBytes: _controller.icons.bytesFor(candidate.id),
         onTap: () => _controller.selectAndExecute(candidate.id),
       );
+}
+
+String _contextLabel(ContextDto context) {
+  final source = switch (context.source) {
+    ContextSourceDto.finderSelection => 'Finder selection',
+    ContextSourceDto.selectedText => 'Selected text',
+    ContextSourceDto.browserCurrentPage => 'Safari current page',
+    ContextSourceDto.clipboard => 'Clipboard',
+    ContextSourceDto.userInput ||
+    ContextSourceDto.foregroundApplication ||
+    ContextSourceDto.applicationContext =>
+      null,
+  };
+  return source == null ? context.label : '$source · ${context.label}';
 }

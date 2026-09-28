@@ -32,6 +32,12 @@ Future<void> main() async {
     if (excluded.isNotEmpty) {
       await bridge.setExcludedApps(bundleIds: excluded);
     }
+    await bridge.setContextSources(
+      finderSelection: paths['captureFinderSelection'] != '0',
+      selectedText: paths['captureSelectedText'] != '0',
+      browserCurrentPage: paths['captureBrowserCurrentPage'] != '0',
+      clipboard: paths['captureClipboard'] != '0',
+    );
     final reply = await bridge.ping();
     if (reply != 'pong') throw StateError('Rust bridge ping failed');
     runApp(

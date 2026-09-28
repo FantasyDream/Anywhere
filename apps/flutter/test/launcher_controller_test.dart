@@ -15,6 +15,7 @@ LauncherStateDto snapshot(int session) => LauncherStateDto(
       input: '',
       contextComplete: true,
       contexts: [],
+      contextCaptures: const [],
       candidates: [],
       scopes: [],
       diagnostics: [],
@@ -39,6 +40,20 @@ void main() {
   setUp(() => messenger.setMockMethodCallHandler(channel, (_) async => null));
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
+  test('older settings enable context sources and a saved toggle round-trips',
+      () {
+    final previous = HostSettings.fromMap(const {
+      'currentAppKeyCode': HostSettings.spaceKey,
+      'excludedApps': <String>[],
+    });
+    expect(previous.captureFinderSelection, isTrue);
+    expect(previous.captureSelectedText, isTrue);
+    expect(previous.captureBrowserCurrentPage, isTrue);
+    expect(previous.captureClipboard, isTrue);
+    final changed = previous.copyWith(captureClipboard: false);
+    expect(HostSettings.fromMap(changed.toMap()).captureClipboard, isFalse);
+  });
+
   LauncherController open({
     required BeginActivation beginActivation,
     required Activate activate,
@@ -50,6 +65,7 @@ void main() {
     PromptAccessibility? promptAccessibility,
     String startupMessage = '',
     ApplyExcludedApps? applyExcludedApps,
+    Future<void> Function(HostSettings)? applyContextSources,
   }) =>
       LauncherController(
         backend: LauncherBackend(
@@ -65,11 +81,13 @@ void main() {
         window: WindowHost(channel),
         startupMessage: startupMessage,
         applyExcludedApps: applyExcludedApps,
+        applyContextSources: applyContextSources,
       );
 
   test('host warning survives unrelated saves and clears when host recovers',
       () async {
     var warning = 'Current App shortcut is unavailable';
+    final appliedSources = <bool>[];
     messenger.setMockMethodCallHandler(channel, (call) async {
       switch (call.method) {
         case 'settings':
@@ -89,9 +107,13 @@ void main() {
       deactivate: (_) async {},
       startupMessage: warning,
       applyExcludedApps: (_) async {},
+      applyContextSources: (settings) async {
+        appliedSources.add(settings.captureClipboard);
+      },
     );
 
     expect(await controller.saveSettings(HostSettings.defaults), isTrue);
+    expect(appliedSources, [true]);
     expect(controller.statusMessage, warning);
     await controller.activate();
     expect(controller.view.message, warning);
@@ -99,6 +121,7 @@ void main() {
 
     warning = '';
     expect(await controller.saveSettings(HostSettings.defaults), isTrue);
+    expect(appliedSources, [true, true]);
     expect(controller.statusMessage, isNull);
     await controller.activate();
     expect(controller.view.message, isNull);
@@ -211,6 +234,7 @@ void main() {
         input: input,
         contextComplete: true,
         contexts: [],
+        contextCaptures: const [],
         candidates: candidates,
         scopes: scopes,
         diagnostics: [],

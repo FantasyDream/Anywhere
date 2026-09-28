@@ -73,7 +73,7 @@ pub fn context_semantic(type_id: &str) -> i32 {
 ///
 /// User-typed objects stay out: caching them made the next query inherit the previous path.
 pub fn reusable_environment(context: &ResolvedContext) -> bool {
-    context.source != ContextSource::UserInput
+    context.source == ContextSource::ApplicationContext
         && matches!(
             context.type_id.as_str(),
             anywhere_protocol::DIRECTORY | anywhere_protocol::GIT_REPOSITORY
@@ -86,7 +86,9 @@ pub fn remember_environment(cache: &mut Vec<ResolvedContext>, contexts: &[Resolv
             continue;
         }
         let seen = cache.iter().any(|cached| {
-            cached.type_id == context.type_id && cached.value.text() == context.value.text()
+            cached.type_id == context.type_id
+                && cached.value.shared_text() == context.value.shared_text()
+                && cached.source == context.source
         });
         if !seen {
             cache.push(context.clone());

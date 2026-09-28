@@ -6,8 +6,8 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `application`, `availability_dto`, `kind_dto`, `load_plugins`, `plugin_reports`, `scope_kind_dto`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`
+// These functions are ignored because they are not marked as `pub`: `application`, `availability_dto`, `context_capture_status_dto`, `context_source_dto`, `kind_dto`, `load_plugins`, `plugin_reports`, `scope_kind_dto`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
 
@@ -72,6 +72,17 @@ Future<List<String>> excludedApps() =>
 
 Future<void> setExcludedApps({required List<String> bundleIds}) =>
     RustLib.instance.api.crateApiSetExcludedApps(bundleIds: bundleIds);
+
+Future<void> setContextSources(
+        {required bool finderSelection,
+        required bool selectedText,
+        required bool browserCurrentPage,
+        required bool clipboard}) =>
+    RustLib.instance.api.crateApiSetContextSources(
+        finderSelection: finderSelection,
+        selectedText: selectedText,
+        browserCurrentPage: browserCurrentPage,
+        clipboard: clipboard);
 
 class ActionResultDto {
   final int sessionId;
@@ -202,22 +213,61 @@ enum CandidateKindDto {
   ;
 }
 
+class ContextCaptureDto {
+  final ContextSourceDto source;
+  final ContextCaptureStatusDto status;
+  final PlatformInt64 capturedAtMs;
+
+  const ContextCaptureDto({
+    required this.source,
+    required this.status,
+    required this.capturedAtMs,
+  });
+
+  @override
+  int get hashCode => source.hashCode ^ status.hashCode ^ capturedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ContextCaptureDto &&
+          runtimeType == other.runtimeType &&
+          source == other.source &&
+          status == other.status &&
+          capturedAtMs == other.capturedAtMs;
+}
+
+enum ContextCaptureStatusDto {
+  captured,
+  empty,
+  permissionDenied,
+  unavailable,
+  failed,
+  ;
+}
+
 class ContextDto {
   final String id;
   final String typeId;
   final String label;
   final String detail;
+  final ContextSourceDto source;
 
   const ContextDto({
     required this.id,
     required this.typeId,
     required this.label,
     required this.detail,
+    required this.source,
   });
 
   @override
   int get hashCode =>
-      id.hashCode ^ typeId.hashCode ^ label.hashCode ^ detail.hashCode;
+      id.hashCode ^
+      typeId.hashCode ^
+      label.hashCode ^
+      detail.hashCode ^
+      source.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -227,7 +277,19 @@ class ContextDto {
           id == other.id &&
           typeId == other.typeId &&
           label == other.label &&
-          detail == other.detail;
+          detail == other.detail &&
+          source == other.source;
+}
+
+enum ContextSourceDto {
+  userInput,
+  foregroundApplication,
+  applicationContext,
+  finderSelection,
+  selectedText,
+  browserCurrentPage,
+  clipboard,
+  ;
 }
 
 class LauncherStateDto {
@@ -237,6 +299,7 @@ class LauncherStateDto {
   final String input;
   final bool contextComplete;
   final List<ContextDto> contexts;
+  final List<ContextCaptureDto> contextCaptures;
   final List<CandidateDto> candidates;
   final List<ScopeDto> scopes;
   final List<String> diagnostics;
@@ -248,6 +311,7 @@ class LauncherStateDto {
     required this.input,
     required this.contextComplete,
     required this.contexts,
+    required this.contextCaptures,
     required this.candidates,
     required this.scopes,
     required this.diagnostics,
@@ -261,6 +325,7 @@ class LauncherStateDto {
       input.hashCode ^
       contextComplete.hashCode ^
       contexts.hashCode ^
+      contextCaptures.hashCode ^
       candidates.hashCode ^
       scopes.hashCode ^
       diagnostics.hashCode;
@@ -276,6 +341,7 @@ class LauncherStateDto {
           input == other.input &&
           contextComplete == other.contextComplete &&
           contexts == other.contexts &&
+          contextCaptures == other.contextCaptures &&
           candidates == other.candidates &&
           scopes == other.scopes &&
           diagnostics == other.diagnostics;

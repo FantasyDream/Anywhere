@@ -26,6 +26,8 @@ pub enum ContextValue {
         parsed: Arc<serde_json::Value>,
     },
     File(PathBuf),
+    /// One Finder selection, preserving the collection as the user's object.
+    FileSelection(Arc<[PathBuf]>),
     Directory(PathBuf),
     /// Git repository root discovered from filesystem metadata only.
     Repository(PathBuf),
@@ -46,6 +48,15 @@ impl ContextValue {
             Self::File(path) | Self::Directory(path) | Self::Repository(path) => {
                 Arc::from(path.to_string_lossy().as_ref())
             }
+            Self::FileSelection(paths) => Arc::from(
+                serde_json::to_string(
+                    &paths
+                        .iter()
+                        .map(|path| path.to_string_lossy())
+                        .collect::<Vec<_>>(),
+                )
+                .expect("path list serializes as JSON"),
+            ),
             Self::Application { bundle_id, .. } => Arc::from(bundle_id.as_str()),
         }
     }
@@ -63,6 +74,13 @@ impl ContextValue {
             _ => None,
         }
     }
+}
+
+/// Provenance of a value captured during activation. Derived contexts inherit it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CaptureMetadata {
+    pub captured_at_ms: i64,
+    pub owning_app: Option<String>,
 }
 
 fn fingerprint(text: &str) -> u64 {
@@ -84,6 +102,7 @@ pub struct ResolvedContext {
     pub confidence: f32,
     pub depth: u8,
     pub source_context_id: Option<ContextId>,
+    pub capture: Option<CaptureMetadata>,
     pub session_id: SessionId,
     pub revision: Revision,
 }
@@ -99,6 +118,7 @@ impl ResolvedContext {
             confidence: 1.0,
             depth: 0,
             source_context_id: None,
+            capture: None,
             session_id: 0,
             revision: 0,
         }
@@ -107,6 +127,12 @@ impl ResolvedContext {
         const MAX: usize = 120;
         let text = match &self.value {
             ContextValue::Application { name, .. } => Arc::from(name.as_str()),
+            ContextValue::FileSelection(paths) => {
+                Arc::from(format!("{} selected items", paths.len()))
+            }
+            ContextValue::Text(text) if self.source == ContextSource::Clipboard => {
+                Arc::from(format!("{} characters", text.chars().count()))
+            }
             _ => self.value.shared_text(),
         };
         let mut shortened = String::new();
@@ -128,6 +154,12 @@ impl ResolvedContext {
         if let ContextValue::Application { name, .. } = &self.value {
             properties.insert("name".into(), name.clone());
         }
+        if let Some(capture) = &self.capture {
+            properties.insert("captured_at_ms".into(), capture.captured_at_ms.to_string());
+            if let Some(owning_app) = &capture.owning_app {
+                properties.insert("owning_app".into(), owning_app.clone());
+            }
+        }
         ContextDescriptor {
             id: self.id.clone(),
             type_id: self.type_id.clone(),
@@ -148,6 +180,7 @@ impl ResolvedContext {
             ContextValue::Url(_) => "URL",
             ContextValue::Json { .. } => "JSON",
             ContextValue::File(_) => "File",
+            ContextValue::FileSelection(_) => "Finder Selection",
             ContextValue::Directory(_) => "Directory",
             ContextValue::Repository(_) => "Git Repository",
             ContextValue::Application { name, .. } => name,

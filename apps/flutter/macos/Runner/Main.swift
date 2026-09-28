@@ -99,7 +99,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                        "plugins": Bundle.main.resourceURL!.appendingPathComponent("plugins", isDirectory: true).path,
                        "hotkeyError": self.hotKeyError ?? "",
                        "loginError": self.loginError ?? "",
-                       "excludedApps": self.stored.excludedApps.joined(separator: "\n")])
+                       "excludedApps": self.stored.excludedApps.joined(separator: "\n"),
+                       "captureFinderSelection": self.stored.captureFinderSelection == false ? "0" : "1",
+                       "captureSelectedText": self.stored.captureSelectedText == false ? "0" : "1",
+                       "captureBrowserCurrentPage": self.stored.captureBrowserCurrentPage == false ? "0" : "1",
+                       "captureClipboard": self.stored.captureClipboard == false ? "0" : "1"])
             case "settings":
                 if let enabled = self.loginItemIsEnabled() {
                     self.stored.launchAtLogin = enabled
@@ -479,6 +483,11 @@ struct StoredSettings: Codable {
     var universalModifiers: UInt32
     var launchAtLogin: Bool
     var excludedApps: [String]
+    // Optional for compatibility with settings.json written before V0.4.
+    var captureFinderSelection: Bool?
+    var captureSelectedText: Bool?
+    var captureBrowserCurrentPage: Bool?
+    var captureClipboard: Bool?
 
     static var fileURL: URL {
         AppDelegate.supportDirectory().appendingPathComponent("settings.json")
@@ -491,7 +500,11 @@ struct StoredSettings: Codable {
             universalKeyCode: UInt32(kVK_Space),
             universalModifiers: UInt32(cmdKey | optionKey | shiftKey),
             launchAtLogin: false,
-            excludedApps: []
+            excludedApps: [],
+            captureFinderSelection: nil,
+            captureSelectedText: nil,
+            captureBrowserCurrentPage: nil,
+            captureClipboard: nil
         )
         guard let data = try? Data(contentsOf: fileURL),
               let stored = try? JSONDecoder().decode(StoredSettings.self, from: data) else {
@@ -517,7 +530,11 @@ struct StoredSettings: Codable {
             "universalKeyCode": Int(universalKeyCode),
             "universalModifiers": Int(universalModifiers),
             "launchAtLogin": launchAtLogin,
-            "excludedApps": excludedApps
+            "excludedApps": excludedApps,
+            "captureFinderSelection": captureFinderSelection ?? true,
+            "captureSelectedText": captureSelectedText ?? true,
+            "captureBrowserCurrentPage": captureBrowserCurrentPage ?? true,
+            "captureClipboard": captureClipboard ?? true
         ]
     }
 
@@ -594,6 +611,10 @@ struct StoredSettings: Codable {
         if let value = args["excludedApps"] as? [String] {
             excludedApps = value
         }
+        if let value = args["captureFinderSelection"] as? Bool { captureFinderSelection = value }
+        if let value = args["captureSelectedText"] as? Bool { captureSelectedText = value }
+        if let value = args["captureBrowserCurrentPage"] as? Bool { captureBrowserCurrentPage = value }
+        if let value = args["captureClipboard"] as? Bool { captureClipboard = value }
     }
 
     static func uint32(_ value: Any?) -> UInt32? {

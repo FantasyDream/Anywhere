@@ -210,6 +210,80 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
+                  _section('CONTEXT SOURCES'),
+                  _card(
+                    child: Column(
+                      children: [
+                        SwitchListTile.adaptive(
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 12),
+                          dense: true,
+                          title: const Text('Finder selection',
+                              style: TextStyle(
+                                  fontSize: 13, color: LauncherStyle.primary)),
+                          subtitle: const Text('Use selected files and folders',
+                              style: TextStyle(
+                                  fontSize: 11, color: LauncherStyle.muted)),
+                          value: _settings.captureFinderSelection,
+                          onChanged: (value) => _save((current) =>
+                              current.copyWith(captureFinderSelection: value)),
+                        ),
+                        const Divider(height: 1, color: LauncherStyle.divider),
+                        SwitchListTile.adaptive(
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 12),
+                          dense: true,
+                          title: const Text('Selected text',
+                              style: TextStyle(
+                                  fontSize: 13, color: LauncherStyle.primary)),
+                          subtitle: const Text(
+                              'Use text selected in the current app',
+                              style: TextStyle(
+                                  fontSize: 11, color: LauncherStyle.muted)),
+                          value: _settings.captureSelectedText,
+                          onChanged: (value) => _save((current) =>
+                              current.copyWith(captureSelectedText: value)),
+                        ),
+                        const Divider(height: 1, color: LauncherStyle.divider),
+                        SwitchListTile.adaptive(
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 12),
+                          dense: true,
+                          title: const Text('Safari current page',
+                              style: TextStyle(
+                                  fontSize: 13, color: LauncherStyle.primary)),
+                          subtitle: const Text(
+                              'Use the active tab’s web address',
+                              style: TextStyle(
+                                  fontSize: 11, color: LauncherStyle.muted)),
+                          value: _settings.captureBrowserCurrentPage,
+                          onChanged: (value) => _save((current) => current
+                              .copyWith(captureBrowserCurrentPage: value)),
+                        ),
+                        const Divider(height: 1, color: LauncherStyle.divider),
+                        SwitchListTile.adaptive(
+                          contentPadding:
+                              const EdgeInsets.symmetric(horizontal: 12),
+                          dense: true,
+                          title: const Text('Clipboard text',
+                              style: TextStyle(
+                                  fontSize: 13, color: LauncherStyle.primary)),
+                          subtitle: const Text('Read once when Anywhere opens',
+                              style: TextStyle(
+                                  fontSize: 11, color: LauncherStyle.muted)),
+                          value: _settings.captureClipboard,
+                          onChanged: (value) => _save((current) =>
+                              current.copyWith(captureClipboard: value)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Changes apply the next time you open Anywhere.',
+                    style: TextStyle(fontSize: 11, color: LauncherStyle.muted),
+                  ),
+                  const SizedBox(height: 18),
                   _section('SEARCH'),
                   _card(
                     child: Padding(

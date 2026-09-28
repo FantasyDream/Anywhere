@@ -15,6 +15,37 @@ use std::{
 pub struct SessionIdentity {
     pub frontmost: Option<ApplicationInfo>,
     pub source_app: String,
+    /// One-shot activation reads. They survive query revisions but never a new session.
+    pub captures: Vec<ActivationCapture>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CaptureStatus {
+    Captured,
+    Empty,
+    PermissionDenied,
+    Unavailable,
+    Failed,
+}
+
+impl From<CaptureStatus> for ContextCaptureStatus {
+    fn from(status: CaptureStatus) -> Self {
+        match status {
+            CaptureStatus::Captured => Self::Captured,
+            CaptureStatus::Empty => Self::Empty,
+            CaptureStatus::PermissionDenied => Self::PermissionDenied,
+            CaptureStatus::Unavailable => Self::Unavailable,
+            CaptureStatus::Failed => Self::Failed,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ActivationCapture {
+    pub source: ContextSource,
+    pub captured_at_ms: i64,
+    pub status: CaptureStatus,
+    pub contexts: Vec<ResolvedContext>,
 }
 
 #[derive(Default)]
@@ -92,6 +123,14 @@ impl LauncherSession {
         self.environment.insert(key, value);
         self.note_snapshot_inputs();
         Ok(())
+    }
+
+    pub fn record_capture(&mut self, capture: ActivationCapture) {
+        self.identity
+            .captures
+            .retain(|held| held.source != capture.source);
+        self.identity.captures.push(capture);
+        self.resolution.inputs_epoch = self.resolution.inputs_epoch.saturating_add(1);
     }
 
     pub fn replace_usage(

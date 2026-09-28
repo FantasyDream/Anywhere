@@ -4,7 +4,7 @@
 //! builder, and visibility to the availability evaluator.
 use super::availability;
 use super::descriptor::{ActionDescriptor, ActionRegistry};
-use crate::core::context::{ContextSource, ResolvedContext};
+use crate::core::context::{ContextSource, ContextValue, ResolvedContext};
 use crate::core::ranking::score::{self, UsageStats};
 use crate::core::search::candidate::{action_candidate_id, Candidate};
 use crate::core::search::candidate_source::{CandidateSource, SearchContext};
@@ -58,8 +58,20 @@ impl ActionMatcher<'_> {
     /// Every action the contexts make applicable, scored but not yet ordered.
     pub fn match_actions(&self, query: &Query, contexts: &[ResolvedContext]) -> Vec<Candidate> {
         let searching = !query.is_empty();
+        let grouped_finder_selection = contexts.iter().any(|context| {
+            context.source == ContextSource::FinderSelection
+                && matches!(&context.value, ContextValue::FileSelection(paths) if paths.len() > 1)
+        });
         let mut candidates = Vec::new();
         for context in contexts {
+            // The collection is the user's object. Expanding selected children for
+            // providers must not create an Open/Reveal row for every selected file.
+            if grouped_finder_selection
+                && context.source == ContextSource::FinderSelection
+                && matches!(context.type_id.as_str(), FILE | DIRECTORY)
+            {
+                continue;
+            }
             // Ownership is per context, never carried over: an input-derived object
             // must not inherit the ambient application just because an ambient context
             // was visited earlier in this loop.
@@ -125,7 +137,11 @@ impl ActionMatcher<'_> {
 /// `git.repository` context, so a rule keyed on a directory could never apply.
 fn home_bonus(context: &ResolvedContext) -> f32 {
     match context.source {
+        ContextSource::FinderSelection => 240.0,
+        ContextSource::SelectedText => 220.0,
+        ContextSource::BrowserCurrentPage => 210.0,
         ContextSource::ApplicationContext | ContextSource::ForegroundApplication => 200.0,
+        ContextSource::Clipboard => 80.0,
         ContextSource::UserInput => 0.0,
     }
 }

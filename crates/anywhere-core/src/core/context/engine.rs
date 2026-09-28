@@ -395,8 +395,14 @@ impl ContextGraphRun {
                     output.provider_id = provider_id.clone();
                     output.depth = input.depth + 1;
                     output.source_context_id = Some(input.id.clone());
-                    if input.source == ContextSource::UserInput {
-                        output.source = ContextSource::UserInput;
+                    // Recognition providers use UserInput as their default. A URL or
+                    // JSON value recognized from a captured source keeps that source;
+                    // providers which explicitly own a different source keep theirs.
+                    if output.source == ContextSource::UserInput {
+                        output.source = input.source;
+                    }
+                    if output.capture.is_none() {
+                        output.capture = input.capture.clone();
                     }
                     self.insert(output);
                 }

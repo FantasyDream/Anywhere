@@ -41,6 +41,11 @@ static int lookup_status(NSDictionary *root, NSArray *titles, NSArray *identifie
     if (found) CFRelease(found);
     return status;
 }
+static NSDictionary *capture_selection(NSDictionary *focused) {
+    NSDictionary *root = focused ? @{ @"AXFocusedUIElement": focused } : @{};
+    return selected_text_for_app((__bridge AXUIElementRef)root, NO,
+                                 CFAbsoluteTimeGetCurrent() + 1.0);
+}
 int main(void) {
     @autoreleasepool {
         NSString *selfInstance = launcher_process_instance(getpid());
@@ -102,6 +107,33 @@ int main(void) {
         assert(menu_ax_status(kAXErrorAPIDisabled, 2) == 7);
         assert(menu_ax_status(kAXErrorCannotComplete, 5) == 9);
         assert(menu_ax_status(kAXErrorActionUnsupported, 5) == 5);
+        assert([capture_selection(@{ @"AXSelectedText": @"hello" })[@"text"] isEqualToString:@"hello"]);
+        assert([capture_selection(@{ @"AXSelectedText": @"" })[@"status"] isEqualToString:@"no_selection"]);
+        assert([capture_selection(nil)[@"status"] isEqualToString:@"no_selection"]);
+        assert([capture_selection(@{ @"TestAXError": @(kAXErrorAttributeUnsupported) })[@"status"]
+                isEqualToString:@"unsupported"]);
+        assert([capture_selection(@{ @"TestAXError": @(kAXErrorAPIDisabled) })[@"status"]
+                isEqualToString:@"untrusted"]);
+        assert([capture_selection(@{ @"TestAXError": @(kAXErrorCannotComplete) })[@"status"]
+                isEqualToString:@"timeout"]);
+        assert([capture_selection(@{ @"AXSelectedText": @42 })[@"status"] isEqualToString:@"unsupported"]);
+        NSDictionary *untrustedFocus = selected_text_for_app(
+            (__bridge AXUIElementRef)@{ @"TestAXError": @(kAXErrorAPIDisabled) }, NO,
+            CFAbsoluteTimeGetCurrent() + 1.0);
+        assert([untrustedFocus[@"status"] isEqualToString:@"untrusted"]);
+        NSDictionary *expiredSelection = selected_text_for_app(
+            (__bridge AXUIElementRef)@{ @"AXFocusedUIElement": @{ @"AXSelectedText": @"hello" } },
+            NO, CFAbsoluteTimeGetCurrent() - 1.0);
+        assert([expiredSelection[@"status"] isEqualToString:@"timeout"]);
+        NSString *longSelection = [@"x" stringByPaddingToLength:5000 withString:@"x" startingAtIndex:0];
+        NSDictionary *capped = capture_selection(@{ @"AXSelectedText": longSelection });
+        assert([capped[@"status"] isEqualToString:@"ok"]);
+        assert([capped[@"text"] length] == 4096 && [capped[@"truncated"] boolValue]);
+        NSString *nearPair = [@"x" stringByPaddingToLength:4095 withString:@"x" startingAtIndex:0];
+        NSString *surrogatePair = [nearPair stringByAppendingString:@"😀suffix"];
+        NSDictionary *cappedPair = capture_selection(@{ @"AXSelectedText": surrogatePair });
+        assert([cappedPair[@"text"] length] == 4095 && [cappedPair[@"truncated"] boolValue]);
+        assert([cappedPair[@"text"] UTF8String] != NULL);
         NSDictionary *identity = @{@"pid":@42, @"bundle_id":@"test.editor", @"instance_id":@"one"};
         assert(application_identity_matches(identity, 42, @"test.editor", @"one"));
         assert(!application_identity_matches(identity, 42, @"other.app", @"one"));
@@ -110,7 +142,7 @@ int main(void) {
         menu_deadline = 0; menu_incomplete = NO; menu_ax_failure = kAXErrorSuccess;
         NSDictionary *shortcut = @{@"AXMenuItemCmdVirtualKey":@123, @"AXMenuItemCmdModifiers":@0};
         assert([shortcut_of((__bridge AXUIElementRef)shortcut) isEqualToString:@"⌘←"]);
-        puts("Native menu regression checks passed (identity, ambiguity, insertion, localization, disabled ancestors, incomplete AX, shortcuts)");
+        puts("Native menu and selection checks passed (identity, ambiguity, insertion, localization, disabled ancestors, AX errors, shortcuts, text cap)");
     }
     return 0;
 }

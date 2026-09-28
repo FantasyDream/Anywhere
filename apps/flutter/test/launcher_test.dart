@@ -50,6 +50,7 @@ LauncherStateDto state(
     input: input,
     contextComplete: contextComplete,
     contexts: [],
+    contextCaptures: const [],
     candidates: [first, second],
     scopes: const [],
     diagnostics: [],
@@ -127,6 +128,7 @@ void main() {
       input: input,
       contextComplete: true,
       contexts: [],
+      contextCaptures: const [],
       candidates: candidates,
       scopes: const [],
       diagnostics: [],
@@ -205,6 +207,7 @@ void main() {
               input: '',
               contextComplete: false,
               contexts: [],
+              contextCaptures: const [],
               candidates: [],
               scopes: const [],
               diagnostics: [],
@@ -216,6 +219,54 @@ void main() {
     await toggle(tester);
     expect(find.textContaining('Looking for actions'), findsNothing);
     expect(find.byKey(const Key('empty-state')), findsNothing);
+  });
+
+  testWidgets(
+      'captured source and permission guidance appear without hiding actions',
+      (tester) async {
+    await tester.pumpWidget(LauncherApp(
+      window: channel,
+      beginActivation: () => 1,
+      activate: (_, {promptAccessibility = false}) async => LauncherStateDto(
+        sessionId: 1,
+        revision: 0,
+        snapshotSeq: 1,
+        input: '',
+        contextComplete: true,
+        contexts: const [
+          ContextDto(
+            id: 'c1',
+            typeId: 'core.url',
+            label: 'URL',
+            detail: 'https://example.org',
+            source: ContextSourceDto.browserCurrentPage,
+          ),
+        ],
+        contextCaptures: const [
+          ContextCaptureDto(
+            source: ContextSourceDto.browserCurrentPage,
+            status: ContextCaptureStatusDto.captured,
+            capturedAtMs: 1,
+          ),
+          ContextCaptureDto(
+            source: ContextSourceDto.selectedText,
+            status: ContextCaptureStatusDto.permissionDenied,
+            capturedAtMs: 1,
+          ),
+        ],
+        candidates: [candidate('action:first:c1', 'Open URL')],
+        scopes: const [],
+        diagnostics: const [],
+      ),
+      updateInput: (_, input, revision) async => state(revision, 'Open URL'),
+      execute: (_, revision, candidate) async =>
+          throw StateError('not invoked'),
+      deactivate: (_) async {},
+    ));
+    await toggle(tester);
+    expect(find.textContaining('Safari current page'), findsOneWidget);
+    expect(find.textContaining('Allow Accessibility'), findsOneWidget);
+    expect(find.text('Open URL'), findsOneWidget);
   });
 
   testWidgets(
@@ -417,6 +468,7 @@ void main() {
           input: '',
           contextComplete: true,
           contexts: [],
+          contextCaptures: const [],
           candidates: [appRow, all, folder],
           scopes: [
             ScopeDto(
@@ -473,6 +525,7 @@ void main() {
           input: '',
           contextComplete: true,
           contexts: [],
+          contextCaptures: const [],
           candidates: [third, first, if (keepSecond) second],
           scopes: const [],
           diagnostics: [],
@@ -484,6 +537,7 @@ void main() {
       input: '',
       contextComplete: false,
       contexts: [],
+      contextCaptures: const [],
       candidates: [first, second],
       scopes: const [],
       diagnostics: [],
@@ -542,6 +596,7 @@ void main() {
             input: 'chrome',
             contextComplete: complete,
             contexts: [],
+            contextCaptures: const [],
             candidates: [candidate('action:first:c1', title)],
             scopes: const [],
             diagnostics: [],
@@ -562,11 +617,11 @@ void main() {
           final completer = Completer<LauncherStateDto?>();
           pending.add(completer);
           return completer.future.then((state) => SnapshotWaitDto(
-              kind: state == null
-                  ? SnapshotWaitKindDto.timedOut
-                  : SnapshotWaitKindDto.updated,
-              state: state,
-            ));
+                kind: state == null
+                    ? SnapshotWaitKindDto.timedOut
+                    : SnapshotWaitKindDto.updated,
+                state: state,
+              ));
         },
       ));
       await toggle(tester);
@@ -594,8 +649,7 @@ void main() {
     });
   }
 
-  testWidgets(
-      'a selected row stays selectable when late rows push it down',
+  testWidgets('a selected row stays selectable when late rows push it down',
       (tester) async {
     // A later update can rank other rows above the user's selection. The window
     // must keep that candidate selected, and Enter must still run *that* row.
@@ -610,6 +664,7 @@ void main() {
           input: '',
           contextComplete: true,
           contexts: [],
+          contextCaptures: const [],
           candidates: rows,
           scopes: const [],
           diagnostics: [],
@@ -635,6 +690,7 @@ void main() {
         input: '',
         contextComplete: false,
         contexts: [],
+        contextCaptures: const [],
         candidates: initial,
         scopes: const [],
         diagnostics: [],
@@ -702,6 +758,7 @@ void main() {
         input: '',
         contextComplete: false,
         contexts: [],
+        contextCaptures: const [],
         candidates: [first, second],
         scopes: const [],
         diagnostics: [],
@@ -732,6 +789,7 @@ void main() {
       input: '',
       contextComplete: true,
       contexts: [],
+      contextCaptures: const [],
       candidates: [third],
       scopes: const [],
       diagnostics: [],
@@ -778,6 +836,7 @@ void main() {
       input: 'app',
       contextComplete: true,
       contexts: [],
+      contextCaptures: const [],
       candidates: [chrome, notes],
       scopes: const [],
       diagnostics: [],
@@ -836,6 +895,7 @@ void main() {
           input: 'edge',
           contextComplete: true,
           contexts: [],
+          contextCaptures: const [],
           candidates: [edge],
           scopes: const [],
           diagnostics: [],
@@ -881,6 +941,7 @@ void main() {
         input: '',
         contextComplete: true,
         contexts: [],
+        contextCaptures: const [],
         candidates: [
           candidate('action:core.git.status:c1', 'Git Status',
               availability: AvailabilityDto.disabled,
@@ -916,6 +977,7 @@ void main() {
           input: input,
           contextComplete: true,
           contexts: [],
+          contextCaptures: const [],
           candidates: [copy, git],
           scopes: [
             ScopeDto(
@@ -924,7 +986,10 @@ void main() {
                 label: 'Finder',
                 candidateIds: [copy.id]),
             ScopeDto(
-                id: 'git', kind: ScopeKindDto.group, label: 'Git', candidateIds: [git.id]),
+                id: 'git',
+                kind: ScopeKindDto.group,
+                label: 'Git',
+                candidateIds: [git.id]),
           ],
           diagnostics: [],
         );
@@ -956,6 +1021,7 @@ void main() {
           input: input,
           contextComplete: true,
           contexts: [],
+          contextCaptures: const [],
           candidates: [copy, git],
           scopes: [
             ScopeDto(
@@ -964,7 +1030,10 @@ void main() {
                 label: 'Finder',
                 candidateIds: [copy.id]),
             ScopeDto(
-                id: 'git', kind: ScopeKindDto.group, label: 'Git', candidateIds: [git.id]),
+                id: 'git',
+                kind: ScopeKindDto.group,
+                label: 'Git',
+                candidateIds: [git.id]),
           ],
           diagnostics: [],
         );
@@ -1012,6 +1081,7 @@ void main() {
           input: input,
           contextComplete: true,
           contexts: [],
+          contextCaptures: const [],
           candidates: [copy, git],
           scopes: [
             ScopeDto(
@@ -1020,7 +1090,10 @@ void main() {
                 label: 'Finder',
                 candidateIds: [copy.id]),
             ScopeDto(
-                id: 'git', kind: ScopeKindDto.group, label: 'Git', candidateIds: [git.id]),
+                id: 'git',
+                kind: ScopeKindDto.group,
+                label: 'Git',
+                candidateIds: [git.id]),
           ],
           diagnostics: [],
         );
@@ -1058,10 +1131,14 @@ void main() {
       input: '',
       contextComplete: false,
       contexts: [],
+      contextCaptures: const [],
       candidates: [git],
       scopes: [
         ScopeDto(
-            id: 'git', kind: ScopeKindDto.group, label: 'Git', candidateIds: [git.id]),
+            id: 'git',
+            kind: ScopeKindDto.group,
+            label: 'Git',
+            candidateIds: [git.id]),
       ],
       diagnostics: [],
     );
@@ -1072,12 +1149,19 @@ void main() {
       input: '',
       contextComplete: true,
       contexts: [],
+      contextCaptures: const [],
       candidates: [copy, git],
       scopes: [
         ScopeDto(
-            id: 'app', kind: ScopeKindDto.app, label: 'Finder', candidateIds: [copy.id]),
+            id: 'app',
+            kind: ScopeKindDto.app,
+            label: 'Finder',
+            candidateIds: [copy.id]),
         ScopeDto(
-            id: 'git', kind: ScopeKindDto.group, label: 'Git', candidateIds: [git.id]),
+            id: 'git',
+            kind: ScopeKindDto.group,
+            label: 'Git',
+            candidateIds: [git.id]),
       ],
       diagnostics: [],
     );

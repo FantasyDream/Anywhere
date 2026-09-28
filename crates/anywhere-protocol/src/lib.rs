@@ -21,6 +21,7 @@ pub const JSON_DOCUMENT: &str = "json.document";
 /// Legacy V0.1 JSON context type. Normalized to `json.document` at the registry boundary.
 pub const JSON_LEGACY: &str = "core.json";
 pub const FILE: &str = "core.file";
+pub const FILE_SELECTION: &str = "core.file_selection";
 pub const DIRECTORY: &str = "core.directory";
 pub const APPLICATION: &str = "core.application";
 pub const GIT_REPOSITORY: &str = "git.repository";
@@ -44,6 +45,10 @@ pub enum ContextSource {
     UserInput,
     ForegroundApplication,
     ApplicationContext,
+    FinderSelection,
+    SelectedText,
+    BrowserCurrentPage,
+    Clipboard,
 }
 
 /// Open type identifier + transport value. New types don't change this protocol.
@@ -70,6 +75,23 @@ pub struct ContextPresentation {
     pub label: String,
     pub detail: String,
     pub source: ContextSource,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContextCaptureStatus {
+    Captured,
+    Empty,
+    PermissionDenied,
+    Unavailable,
+    Failed,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContextCapturePresentation {
+    pub source: ContextSource,
+    pub status: ContextCaptureStatus,
+    pub captured_at_ms: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -178,6 +200,8 @@ pub struct LauncherState {
     #[serde(default)]
     pub context_complete: bool,
     pub context_summary: Vec<ContextPresentation>,
+    #[serde(default)]
+    pub context_captures: Vec<ContextCapturePresentation>,
     pub candidates: Vec<CandidatePresentation>,
     pub scopes: Vec<ScopeEntry>,
     pub diagnostics: Vec<String>,
@@ -350,6 +374,33 @@ mod tests {
         assert_eq!(canonical_context_type(URL), URL);
         assert!(is_json_context(JSON_LEGACY) && is_json_context(JSON_DOCUMENT));
         assert!(!is_json_context(TEXT));
+    }
+
+    #[test]
+    fn capture_status_round_trips_and_old_states_default_to_empty() {
+        let state = LauncherState {
+            context_captures: vec![ContextCapturePresentation {
+                source: ContextSource::SelectedText,
+                status: ContextCaptureStatus::PermissionDenied,
+                captured_at_ms: 42,
+            }],
+            ..Default::default()
+        };
+        let encoded = serde_json::to_value(&state).unwrap();
+        assert_eq!(
+            encoded["context_captures"][0]["status"],
+            "permission_denied"
+        );
+        assert_eq!(
+            serde_json::from_value::<LauncherState>(encoded.clone()).unwrap(),
+            state
+        );
+        let mut previous = encoded;
+        previous.as_object_mut().unwrap().remove("context_captures");
+        assert!(serde_json::from_value::<LauncherState>(previous)
+            .unwrap()
+            .context_captures
+            .is_empty());
     }
 
     #[test]

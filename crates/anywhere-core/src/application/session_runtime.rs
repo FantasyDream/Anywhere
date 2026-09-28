@@ -472,6 +472,16 @@ impl Resolver {
                 input: session.state.input.clone(),
                 context_complete: resolve_complete,
                 context_summary: summary,
+                context_captures: session
+                    .identity
+                    .captures
+                    .iter()
+                    .map(|capture| ContextCapturePresentation {
+                        source: capture.source,
+                        status: capture.status.into(),
+                        captured_at_ms: capture.captured_at_ms,
+                    })
+                    .collect(),
                 candidates: prepared
                     .set
                     .candidates
@@ -574,13 +584,22 @@ fn union_contexts(
     incoming: Vec<ResolvedContext>,
 ) -> Vec<ResolvedContext> {
     let mut merged = committed.to_vec();
-    for context in incoming {
-        let exists = merged.iter().any(|held| {
+    let mut incoming_ids = std::collections::HashMap::new();
+    for mut context in incoming {
+        let existing = merged.iter().find(|held| {
             held.type_id == context.type_id
                 && held.value.shared_text() == context.value.shared_text()
                 && held.source == context.source
         });
-        if !exists {
+        if let Some(held) = existing {
+            incoming_ids.insert(context.id, held.id.clone());
+        } else {
+            let old_id = std::mem::take(&mut context.id);
+            context.id = format!("c{}", merged.len());
+            context.source_context_id = context
+                .source_context_id
+                .and_then(|parent| incoming_ids.get(&parent).cloned());
+            incoming_ids.insert(old_id, context.id.clone());
             merged.push(context);
         }
     }
@@ -592,11 +611,15 @@ fn union_contexts(
 ///
 /// Callers must already hold the session lock.
 pub fn seeds_from(session: &LauncherSession, input: &str) -> Vec<ResolvedContext> {
-    crate::features::session_seeds(
+    let mut seeds = crate::features::session_seeds(
         session.identity.frontmost.as_ref(),
         session.resolution.context_cache.clone(),
         input,
-    )
+    );
+    for capture in &session.identity.captures {
+        seeds.extend(capture.contexts.iter().cloned());
+    }
+    seeds
 }
 
 pub fn now() -> i64 {

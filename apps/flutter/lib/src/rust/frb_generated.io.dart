@@ -46,13 +46,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CandidateKindDto dco_decode_candidate_kind_dto(dynamic raw);
 
   @protected
+  ContextCaptureDto dco_decode_context_capture_dto(dynamic raw);
+
+  @protected
+  ContextCaptureStatusDto dco_decode_context_capture_status_dto(dynamic raw);
+
+  @protected
   ContextDto dco_decode_context_dto(dynamic raw);
+
+  @protected
+  ContextSourceDto dco_decode_context_source_dto(dynamic raw);
 
   @protected
   double dco_decode_f_32(dynamic raw);
 
   @protected
   int dco_decode_i_32(dynamic raw);
+
+  @protected
+  PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
   LauncherStateDto dco_decode_launcher_state_dto(dynamic raw);
@@ -62,6 +74,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<CandidateDto> dco_decode_list_candidate_dto(dynamic raw);
+
+  @protected
+  List<ContextCaptureDto> dco_decode_list_context_capture_dto(dynamic raw);
 
   @protected
   List<ContextDto> dco_decode_list_context_dto(dynamic raw);
@@ -140,13 +155,27 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   CandidateKindDto sse_decode_candidate_kind_dto(SseDeserializer deserializer);
 
   @protected
+  ContextCaptureDto sse_decode_context_capture_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ContextCaptureStatusDto sse_decode_context_capture_status_dto(
+      SseDeserializer deserializer);
+
+  @protected
   ContextDto sse_decode_context_dto(SseDeserializer deserializer);
+
+  @protected
+  ContextSourceDto sse_decode_context_source_dto(SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_32(SseDeserializer deserializer);
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
+
+  @protected
+  PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
   LauncherStateDto sse_decode_launcher_state_dto(SseDeserializer deserializer);
@@ -156,6 +185,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   List<CandidateDto> sse_decode_list_candidate_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  List<ContextCaptureDto> sse_decode_list_context_capture_dto(
       SseDeserializer deserializer);
 
   @protected
@@ -243,13 +276,28 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       CandidateKindDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_context_capture_dto(
+      ContextCaptureDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_context_capture_status_dto(
+      ContextCaptureStatusDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_context_dto(ContextDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_context_source_dto(
+      ContextSourceDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
   void sse_encode_launcher_state_dto(
@@ -261,6 +309,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_candidate_dto(
       List<CandidateDto> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_context_capture_dto(
+      List<ContextCaptureDto> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_context_dto(

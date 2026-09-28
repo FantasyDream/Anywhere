@@ -64,6 +64,7 @@ pub struct Application {
     pub(super) catalog_tx: watch::Sender<u64>,
     pub(super) app_actions: crate::features::app_actions::AppActionCatalog,
     pub(super) excluded_apps: Arc<Mutex<BTreeSet<String>>>,
+    pub(super) capture_policy: Arc<Mutex<super::context_capture::CapturePolicy>>,
 }
 
 impl Application {
@@ -100,6 +101,7 @@ impl Application {
             catalog_tx,
             app_actions: crate::features::app_actions::AppActionCatalog::default(),
             excluded_apps: Arc::new(Mutex::new(BTreeSet::new())),
+            capture_policy: Arc::new(Mutex::new(Default::default())),
         }
     }
 

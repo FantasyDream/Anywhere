@@ -8,6 +8,10 @@ class HostSettings {
     required this.universalModifiers,
     required this.launchAtLogin,
     required this.excludedApps,
+    required this.captureFinderSelection,
+    required this.captureSelectedText,
+    required this.captureBrowserCurrentPage,
+    required this.captureClipboard,
   });
 
   static const cmdKey = 1 << 8;
@@ -23,6 +27,10 @@ class HostSettings {
     universalModifiers: cmdKey | optionKey | shiftKey,
     launchAtLogin: false,
     excludedApps: [],
+    captureFinderSelection: true,
+    captureSelectedText: true,
+    captureBrowserCurrentPage: true,
+    captureClipboard: true,
   );
 
   final int currentAppKeyCode;
@@ -31,6 +39,10 @@ class HostSettings {
   final int universalModifiers;
   final bool launchAtLogin;
   final List<String> excludedApps;
+  final bool captureFinderSelection;
+  final bool captureSelectedText;
+  final bool captureBrowserCurrentPage;
+  final bool captureClipboard;
 
   String get currentAppLabel =>
       formatHotkey(currentAppKeyCode, currentAppModifiers);
@@ -44,6 +56,10 @@ class HostSettings {
     int? universalModifiers,
     bool? launchAtLogin,
     List<String>? excludedApps,
+    bool? captureFinderSelection,
+    bool? captureSelectedText,
+    bool? captureBrowserCurrentPage,
+    bool? captureClipboard,
   }) =>
       HostSettings(
         currentAppKeyCode: currentAppKeyCode ?? this.currentAppKeyCode,
@@ -52,6 +68,12 @@ class HostSettings {
         universalModifiers: universalModifiers ?? this.universalModifiers,
         launchAtLogin: launchAtLogin ?? this.launchAtLogin,
         excludedApps: excludedApps ?? this.excludedApps,
+        captureFinderSelection:
+            captureFinderSelection ?? this.captureFinderSelection,
+        captureSelectedText: captureSelectedText ?? this.captureSelectedText,
+        captureBrowserCurrentPage:
+            captureBrowserCurrentPage ?? this.captureBrowserCurrentPage,
+        captureClipboard: captureClipboard ?? this.captureClipboard,
       );
 
   Map<String, Object?> toMap() => {
@@ -61,6 +83,10 @@ class HostSettings {
         'universalModifiers': universalModifiers,
         'launchAtLogin': launchAtLogin,
         'excludedApps': excludedApps,
+        'captureFinderSelection': captureFinderSelection,
+        'captureSelectedText': captureSelectedText,
+        'captureBrowserCurrentPage': captureBrowserCurrentPage,
+        'captureClipboard': captureClipboard,
       };
 
   static HostSettings fromMap(Map<Object?, Object?> map) {
@@ -73,7 +99,8 @@ class HostSettings {
 
     final excluded = map['excludedApps'];
     return HostSettings(
-      currentAppKeyCode: number('currentAppKeyCode', defaults.currentAppKeyCode),
+      currentAppKeyCode:
+          number('currentAppKeyCode', defaults.currentAppKeyCode),
       currentAppModifiers:
           number('currentAppModifiers', defaults.currentAppModifiers),
       universalKeyCode: number('universalKeyCode', defaults.universalKeyCode),
@@ -86,6 +113,10 @@ class HostSettings {
                 if (item is String && item.trim().isNotEmpty) item.trim()
             ]
           : const [],
+      captureFinderSelection: map['captureFinderSelection'] != false,
+      captureSelectedText: map['captureSelectedText'] != false,
+      captureBrowserCurrentPage: map['captureBrowserCurrentPage'] != false,
+      captureClipboard: map['captureClipboard'] != false,
     );
   }
 }

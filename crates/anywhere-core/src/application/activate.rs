@@ -3,8 +3,9 @@
 // The capture happens before the host is told to show anything, so the ambient context is
 // frozen at the moment the hotkey was pressed rather than after focus moved.
 use super::launcher_service::Application;
-use super::session_model::LauncherSession;
+use super::session_model::{ActivationCapture, CaptureStatus, LauncherSession};
 use super::session_runtime::Resolver;
+use crate::core::context::CaptureMetadata;
 use crate::core::session::facts::{FactValue, CLIPBOARD, GIT};
 use crate::features::filesystem::provider::DirectoryMemo;
 use anyhow::{Context, Result};
@@ -77,6 +78,7 @@ impl Application {
             duration_us = start.elapsed().as_micros() as u64,
             "activation_context_captured"
         );
+        self.spawn_context_captures(session_id, frontmost.clone());
         self.prepare_app_actions(session_id, frontmost.as_ref(), prompt_accessibility)
             .await;
         let catalog_generation = self.spawn_catalog_scan();
@@ -126,15 +128,25 @@ impl Application {
         let platform = self.platform.clone();
         let history = self.resolver.history.clone();
         let resolver = self.resolver.clone();
+        let capture_policy = self.capture_policy.clone();
+        let clipboard_token = self.capture_token(ContextSource::Clipboard);
         tokio::spawn(async move {
             let git_available = tokio::task::spawn_blocking({
                 let platform = platform.clone();
                 move || platform.git_available()
             });
-            let clipboard = tokio::task::spawn_blocking({
-                let platform = platform.clone();
-                move || platform.clipboard_text()
-            });
+            let clipboard = clipboard_token
+                .filter(|token| {
+                    capture_policy
+                        .lock()
+                        .is_ok_and(|policy| policy.allows(ContextSource::Clipboard, *token))
+                })
+                .map(|_| {
+                    tokio::task::spawn_blocking({
+                        let platform = platform.clone();
+                        move || platform.clipboard_text()
+                    })
+                });
             let usage = tokio::task::spawn_blocking(move || {
                 let history = history
                     .lock()
@@ -199,24 +211,30 @@ impl Application {
                 );
             };
             let clipboard_refresh = async {
-                let mut diagnostics = Vec::new();
-                let clipboard_text = match clipboard.await {
-                    Ok(Ok(text)) => text,
-                    Ok(Err(error)) => {
-                        diagnostics.push(format!("{CLIPBOARD}: {error:#}"));
-                        None
-                    }
-                    Err(error) => {
-                        diagnostics.push(format!("{CLIPBOARD}: {error}"));
-                        None
-                    }
+                let Some(token) = clipboard_token else { return };
+                let Some(clipboard) = clipboard else { return };
+                let (status, clipboard_text) = match clipboard.await {
+                    Ok(Ok(Some(text))) => (CaptureStatus::Captured, Some(text)),
+                    Ok(Ok(None)) => (CaptureStatus::Empty, None),
+                    Ok(Err(_)) | Err(_) => (CaptureStatus::Failed, None),
                 };
+                if !capture_policy
+                    .lock()
+                    .is_ok_and(|policy| policy.allows(ContextSource::Clipboard, token))
+                {
+                    return;
+                }
+                let fact_text = clipboard_text.clone();
                 publish_supplemental(
                     &resolver,
                     session_id,
-                    diagnostics,
+                    if status == CaptureStatus::Failed {
+                        vec!["clipboard: read failed".into()]
+                    } else {
+                        Vec::new()
+                    },
                     move |session, details| {
-                        clipboard_text.is_some_and(|text| {
+                        fact_text.is_some_and(|text| {
                             if let Err(error) =
                                 session.record_fact(CLIPBOARD, FactValue::Text(text))
                             {
@@ -228,6 +246,36 @@ impl Application {
                         })
                     },
                 );
+                let captured_at_ms = super::context_capture::now_ms();
+                let mut contexts = clipboard_text
+                    .and_then(|text| {
+                        super::context_capture::text_context(text, ContextSource::Clipboard)
+                    })
+                    .into_iter()
+                    .collect::<Vec<_>>();
+                for context in &mut contexts {
+                    context.capture = Some(CaptureMetadata {
+                        captured_at_ms,
+                        owning_app: None,
+                    });
+                }
+                super::context_capture::publish_capture(
+                    resolver.clone(),
+                    capture_policy.clone(),
+                    token,
+                    session_id,
+                    ActivationCapture {
+                        source: ContextSource::Clipboard,
+                        captured_at_ms,
+                        status: if status == CaptureStatus::Captured && contexts.is_empty() {
+                            CaptureStatus::Unavailable
+                        } else {
+                            status
+                        },
+                        contexts,
+                    },
+                )
+                .await;
             };
             tokio::join!(usage_refresh, git_refresh, clipboard_refresh);
             if let Ok(mut session) = resolver.session.lock() {

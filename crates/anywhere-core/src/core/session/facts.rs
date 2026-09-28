@@ -123,15 +123,20 @@ pub enum Ownership {
 /// the ambient application just because an ambient context was visited earlier.
 pub fn context_ownership(context: &ResolvedContext, facts: &SessionFacts) -> Ownership {
     match context.source {
-        ContextSource::ForegroundApplication | ContextSource::ApplicationContext => match facts
-            .frontmost
+        ContextSource::ForegroundApplication
+        | ContextSource::ApplicationContext
+        | ContextSource::FinderSelection
+        | ContextSource::SelectedText
+        | ContextSource::BrowserCurrentPage => context
+            .capture
             .as_ref()
-            .filter(|app| !app.bundle_id.is_empty())
-        {
-            Some(application) => Ownership::App(application.bundle_id.clone()),
-            None => Ownership::Ambient,
-        },
-        ContextSource::UserInput => Ownership::Ambient,
+            .and_then(|capture| capture.owning_app.as_ref())
+            .filter(|app| !app.is_empty())
+            .cloned()
+            .or_else(|| facts.frontmost.as_ref().map(|app| app.bundle_id.clone()))
+            .filter(|app| !app.is_empty())
+            .map_or(Ownership::Ambient, Ownership::App),
+        ContextSource::UserInput | ContextSource::Clipboard => Ownership::Ambient,
     }
 }
 

@@ -4,6 +4,7 @@
 //! layer: it holds no logic, so a change to how Git is run or how an icon is read touches one
 //! file and cannot reach the others.
 mod application;
+mod browser;
 mod clipboard;
 mod finder;
 mod git;
@@ -60,6 +61,15 @@ impl Platform for MacOsPlatform {
     }
     fn clipboard_text(&self) -> Result<Option<String>> {
         clipboard::clipboard_text()
+    }
+    fn selected_text(&self, application: &ApplicationInfo) -> Result<Option<String>> {
+        application::selected_text(application)
+    }
+    fn finder_selected_paths(&self, application: &ApplicationInfo) -> Result<Vec<PathBuf>> {
+        finder::selected_paths(application)
+    }
+    fn browser_current_url(&self, application: &ApplicationInfo) -> Result<Option<String>> {
+        browser::current_url(application)
     }
     fn copy_text(&self, text: &str) -> Result<()> {
         clipboard::copy_text(text)

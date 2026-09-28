@@ -292,6 +292,87 @@ static NSDictionary *parse_dictionary(const char *json) {
     return [value isKindOfClass:NSDictionary.class] ? value : nil;
 }
 
+static NSString *selected_text_error_status(AXError error) {
+    switch (error) {
+        case kAXErrorAttributeUnsupported: return @"unsupported";
+        case kAXErrorNoValue: return @"no_selection";
+        case kAXErrorAPIDisabled: return @"untrusted";
+        case kAXErrorCannotComplete: return @"timeout";
+        default: return @"unavailable";
+    }
+}
+
+// Limit both the context size and the amount of selected text copied into JSON.
+// AX may supply an arbitrarily large NSString; preserve a valid surrogate pair
+// at the cut point so UTF-8 conversion cannot introduce a replacement glyph.
+static NSString *bounded_selected_text(NSString *text) {
+    static const NSUInteger kMaxSelectedTextUTF16Units = 4096;
+    if (text.length <= kMaxSelectedTextUTF16Units) return text;
+    NSUInteger end = kMaxSelectedTextUTF16Units;
+    unichar last = [text characterAtIndex:end - 1];
+    if (last >= 0xD800 && last <= 0xDBFF) end--;
+    return [text substringToIndex:end];
+}
+
+// Split out for synthetic AX tests; production configures a short timeout on
+// the focused control, while dictionary-backed test nodes cannot accept one.
+static NSDictionary *selected_text_for_app(AXUIElementRef app, BOOL configureTimeout,
+                                           CFAbsoluteTime deadline) {
+    CFTypeRef focused = NULL;
+    AXError focusError = AXUIElementCopyAttributeValue(app, kAXFocusedUIElementAttribute, &focused);
+    if (focusError != kAXErrorSuccess || !focused) {
+        if (focused) CFRelease(focused);
+        return @{ @"status": selected_text_error_status(focusError == kAXErrorSuccess
+                                                             ? kAXErrorNoValue : focusError) };
+    }
+    if (CFAbsoluteTimeGetCurrent() >= deadline) {
+        CFRelease(focused);
+        return @{ @"status": @"timeout" };
+    }
+    if (configureTimeout) AXUIElementSetMessagingTimeout((AXUIElementRef)focused, 0.15);
+    CFTypeRef selected = NULL;
+    AXError selectionError = AXUIElementCopyAttributeValue((AXUIElementRef)focused,
+                                                            kAXSelectedTextAttribute, &selected);
+    CFRelease(focused);
+    if (selectionError != kAXErrorSuccess || !selected) {
+        if (selected) CFRelease(selected);
+        return @{ @"status": selected_text_error_status(selectionError == kAXErrorSuccess
+                                                             ? kAXErrorNoValue : selectionError) };
+    }
+    if (CFAbsoluteTimeGetCurrent() >= deadline) {
+        CFRelease(selected);
+        return @{ @"status": @"timeout" };
+    }
+    if (CFGetTypeID(selected) != CFStringGetTypeID()) {
+        CFRelease(selected);
+        return @{ @"status": @"unsupported" };
+    }
+    NSString *value = (__bridge NSString *)selected;
+    NSString *bounded = bounded_selected_text(value);
+    NSDictionary *result = bounded.length > 0
+        ? @{ @"status": @"ok", @"text": bounded, @"truncated": @(bounded.length < value.length) }
+        : @{ @"status": @"no_selection" };
+    CFRelease(selected);
+    return result;
+}
+
+char *launcher_selected_text(const char *application_json) {
+    @autoreleasepool {
+        if (!AXIsProcessTrusted()) return dup_status(@"untrusted", nil);
+        NSDictionary *identity = parse_dictionary(application_json);
+        NSRunningApplication *running = running_app(identity);
+        if (!running) return dup_status(@"application_changed", nil);
+        CFAbsoluteTime deadline = CFAbsoluteTimeGetCurrent() + 0.5;
+        AXUIElementRef app = AXUIElementCreateApplication(running.processIdentifier);
+        AXUIElementSetMessagingTimeout(app, 0.15);
+        NSDictionary *result = selected_text_for_app(app, YES, deadline);
+        CFRelease(app);
+        if (!running_app(identity)) return dup_status(@"application_changed", nil);
+        if (CFAbsoluteTimeGetCurrent() >= deadline) return dup_status(@"timeout", nil);
+        return dup_json(result);
+    }
+}
+
 int launcher_accessibility_trusted(int prompt) {
     if (AXIsProcessTrusted()) return 1;
     if (!prompt) return 0;

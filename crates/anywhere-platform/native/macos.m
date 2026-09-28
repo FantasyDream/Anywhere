@@ -24,6 +24,24 @@ char *launcher_frontmost_application(void) {
 void launcher_free_string(char *value) { free(value); }
 void launcher_free_bytes(unsigned char *value) { free(value); }
 
+// Recheck the frozen app identity around slower Automation calls. Bundle ID
+// alone cannot detect a restart, and PID alone can be reused by the kernel.
+int launcher_application_identity_matches(int pid, const char *bundle_id,
+                                          const char *instance_id) {
+    @autoreleasepool {
+        if (pid <= 0 || !bundle_id || !instance_id) return 0;
+        NSString *expectedBundle = [NSString stringWithUTF8String:bundle_id];
+        NSString *expectedInstance = [NSString stringWithUTF8String:instance_id];
+        if (expectedBundle.length == 0 || expectedInstance.length == 0) return 0;
+        NSRunningApplication *running =
+            [NSRunningApplication runningApplicationWithProcessIdentifier:(pid_t)pid];
+        NSString *actualInstance = launcher_process_instance((pid_t)pid);
+        return running && !running.terminated &&
+               [running.bundleIdentifier isEqualToString:expectedBundle] &&
+               [actualInstance isEqualToString:expectedInstance] ? 1 : 0;
+    }
+}
+
 // One installed application bundle. Metadata only: no icon is extracted here.
 char *launcher_bundle_application(const char *utf8_path) {
     @autoreleasepool {

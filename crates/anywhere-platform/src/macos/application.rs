@@ -1,7 +1,7 @@
 //! Applications: identity, localized names, launch and icon.
 use super::c_path;
 use super::native::*;
-use crate::{ApplicationInfo, BundleApplication};
+use crate::{ApplicationInfo, BundleApplication, SelectedTextError};
 use anyhow::{bail, Context, Result};
 use std::{
     ffi::CStr,
@@ -164,6 +164,52 @@ pub(super) fn accessibility_trusted(prompt: bool) -> bool {
     unsafe { launcher_accessibility_trusted(if prompt { 1 } else { 0 }) == 1 }
 }
 
+pub(super) fn selected_text(application: &ApplicationInfo) -> Result<Option<String>> {
+    if application.pid <= 0 || application.instance_id.is_none() {
+        return Err(SelectedTextError::ApplicationChanged.into());
+    }
+    let identity = c_path(&serde_json::to_string(application)?)?;
+    // SAFETY: the NUL-terminated identity outlives the call; native returns an
+    // owned JSON string and the matching free runs exactly once.
+    let decoded = unsafe {
+        let raw = launcher_selected_text(identity.as_ptr());
+        if raw.is_null() {
+            bail!("selected text inspection returned no status");
+        }
+        let decoded = serde_json::from_slice(CStr::from_ptr(raw).to_bytes());
+        launcher_free_string(raw);
+        decoded
+    };
+    decode_selected_text(decoded.context("decode selected text status")?)
+}
+
+fn decode_selected_text(value: serde_json::Value) -> Result<Option<String>> {
+    match value.get("status").and_then(|status| status.as_str()) {
+        Some("ok") => {
+            if value.get("truncated").and_then(|flag| flag.as_bool()) == Some(true) {
+                return Err(SelectedTextError::Unavailable.into());
+            }
+            let text = value
+                .get("text")
+                .and_then(|text| text.as_str())
+                .context("selected text status has no text")?;
+            // The native shim already caps the string. Guard the Rust boundary too
+            // in case a future native implementation forgets that contract.
+            if text.len() > 16 * 1024 {
+                bail!("selected text exceeds the platform cap");
+            }
+            Ok((!text.is_empty()).then(|| text.to_owned()))
+        }
+        Some("no_selection") => Ok(None),
+        Some("unsupported") => Err(SelectedTextError::Unsupported.into()),
+        Some("untrusted") => Err(SelectedTextError::PermissionDenied.into()),
+        Some("application_changed") => Err(SelectedTextError::ApplicationChanged.into()),
+        Some("timeout") => Err(SelectedTextError::TimedOut.into()),
+        Some("unavailable") => Err(SelectedTextError::Unavailable.into()),
+        _ => bail!("unknown selected text status"),
+    }
+}
+
 pub(super) fn application_version(bundle_id: &str) -> Option<String> {
     let Ok(path) = super::c_path(bundle_id) else {
         return None;
@@ -260,6 +306,54 @@ mod tests {
     use super::*;
     use crate::macos::MacOsPlatform;
     use crate::Platform;
+
+    #[test]
+    fn selected_text_statuses_remain_distinct_and_bounded() {
+        use serde_json::json;
+
+        assert_eq!(
+            decode_selected_text(json!({"status":"no_selection"})).unwrap(),
+            None
+        );
+        assert_eq!(
+            decode_selected_text(json!({"status":"ok", "text":"hello"})).unwrap(),
+            Some("hello".into())
+        );
+        for (status, expected) in [
+            ("unsupported", SelectedTextError::Unsupported),
+            ("untrusted", SelectedTextError::PermissionDenied),
+            ("application_changed", SelectedTextError::ApplicationChanged),
+            ("timeout", SelectedTextError::TimedOut),
+            ("unavailable", SelectedTextError::Unavailable),
+        ] {
+            let error = decode_selected_text(json!({"status":status})).unwrap_err();
+            assert_eq!(error.downcast_ref::<SelectedTextError>(), Some(&expected));
+        }
+        assert!(
+            decode_selected_text(json!({"status":"ok", "text":"x".repeat(16 * 1024 + 1)})).is_err()
+        );
+        assert_eq!(
+            decode_selected_text(json!({"status":"ok", "text":"truncated", "truncated":true}))
+                .unwrap_err()
+                .downcast_ref::<SelectedTextError>(),
+            Some(&SelectedTextError::Unavailable)
+        );
+    }
+
+    #[test]
+    fn selected_text_requires_a_frozen_process_identity() {
+        let application = ApplicationInfo {
+            bundle_id: "test.editor".into(),
+            name: "Editor".into(),
+            pid: 0,
+            instance_id: None,
+        };
+        let error = selected_text(&application).unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<SelectedTextError>(),
+            Some(&SelectedTextError::ApplicationChanged)
+        );
+    }
 
     #[test]
     fn bundle_metadata_is_reported_for_a_real_system_application() {

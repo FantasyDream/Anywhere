@@ -186,6 +186,21 @@ pub fn set_excluded_apps(bundle_ids: Vec<String>) -> Result<()> {
     Ok(())
 }
 
+pub fn set_context_sources(
+    finder_selection: bool,
+    selected_text: bool,
+    browser_current_page: bool,
+    clipboard: bool,
+) -> Result<()> {
+    application()?.set_capture_sources(
+        finder_selection,
+        selected_text,
+        browser_current_page,
+        clipboard,
+    );
+    Ok(())
+}
+
 fn plugin_reports() -> &'static Mutex<Vec<PluginStatusDto>> {
     PLUGIN_REPORTS.get_or_init(|| Mutex::new(Vec::new()))
 }
@@ -236,6 +251,7 @@ pub struct LauncherStateDto {
     pub input: String,
     pub context_complete: bool,
     pub contexts: Vec<ContextDto>,
+    pub context_captures: Vec<ContextCaptureDto>,
     pub candidates: Vec<CandidateDto>,
     pub scopes: Vec<ScopeDto>,
     pub diagnostics: Vec<String>,
@@ -246,6 +262,31 @@ pub struct ContextDto {
     pub type_id: String,
     pub label: String,
     pub detail: String,
+    pub source: ContextSourceDto,
+}
+#[derive(Clone, Debug)]
+pub struct ContextCaptureDto {
+    pub source: ContextSourceDto,
+    pub status: ContextCaptureStatusDto,
+    pub captured_at_ms: i64,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ContextCaptureStatusDto {
+    Captured,
+    Empty,
+    PermissionDenied,
+    Unavailable,
+    Failed,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ContextSourceDto {
+    UserInput,
+    ForegroundApplication,
+    ApplicationContext,
+    FinderSelection,
+    SelectedText,
+    BrowserCurrentPage,
+    Clipboard,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CandidateKindDto {
@@ -343,6 +384,16 @@ impl From<protocol::LauncherState> for LauncherStateDto {
                     type_id: context.type_id,
                     label: context.label,
                     detail: context.detail,
+                    source: context_source_dto(context.source),
+                })
+                .collect(),
+            context_captures: state
+                .context_captures
+                .into_iter()
+                .map(|capture| ContextCaptureDto {
+                    source: context_source_dto(capture.source),
+                    status: context_capture_status_dto(capture.status),
+                    captured_at_ms: capture.captured_at_ms,
                 })
                 .collect(),
             candidates: state
@@ -383,6 +434,30 @@ fn kind_dto(kind: protocol::CandidateKind) -> CandidateKindDto {
     match kind {
         protocol::CandidateKind::Application => CandidateKindDto::Application,
         protocol::CandidateKind::Action => CandidateKindDto::Action,
+    }
+}
+
+fn context_source_dto(source: protocol::ContextSource) -> ContextSourceDto {
+    match source {
+        protocol::ContextSource::UserInput => ContextSourceDto::UserInput,
+        protocol::ContextSource::ForegroundApplication => ContextSourceDto::ForegroundApplication,
+        protocol::ContextSource::ApplicationContext => ContextSourceDto::ApplicationContext,
+        protocol::ContextSource::FinderSelection => ContextSourceDto::FinderSelection,
+        protocol::ContextSource::SelectedText => ContextSourceDto::SelectedText,
+        protocol::ContextSource::BrowserCurrentPage => ContextSourceDto::BrowserCurrentPage,
+        protocol::ContextSource::Clipboard => ContextSourceDto::Clipboard,
+    }
+}
+
+fn context_capture_status_dto(status: protocol::ContextCaptureStatus) -> ContextCaptureStatusDto {
+    match status {
+        protocol::ContextCaptureStatus::Captured => ContextCaptureStatusDto::Captured,
+        protocol::ContextCaptureStatus::Empty => ContextCaptureStatusDto::Empty,
+        protocol::ContextCaptureStatus::PermissionDenied => {
+            ContextCaptureStatusDto::PermissionDenied
+        }
+        protocol::ContextCaptureStatus::Unavailable => ContextCaptureStatusDto::Unavailable,
+        protocol::ContextCaptureStatus::Failed => ContextCaptureStatusDto::Failed,
     }
 }
 

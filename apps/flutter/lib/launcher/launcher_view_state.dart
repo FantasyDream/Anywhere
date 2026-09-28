@@ -65,14 +65,17 @@ class LauncherViewState {
     final selected = scopeId;
     if (selected == null) {
       for (final candidate in state.candidates) {
-        if (candidate.availability != AvailabilityDto.hidden) list.add(candidate);
+        if (candidate.availability != AvailabilityDto.hidden) {
+          list.add(candidate);
+        }
       }
     } else {
       final ids = scope?.candidateIds;
       if (ids == null) return const [];
       for (final id in ids) {
         final candidate = byId[id];
-        if (candidate != null && candidate.availability != AvailabilityDto.hidden) {
+        if (candidate != null &&
+            candidate.availability != AvailabilityDto.hidden) {
           list.add(candidate);
         }
       }
@@ -94,7 +97,26 @@ class LauncherViewState {
       message ??
       ((snapshot?.diagnostics.isNotEmpty ?? false)
           ? snapshot!.diagnostics.join('\n')
-          : null);
+          : _capturePermissionNotice);
+
+  String? get _capturePermissionNotice {
+    for (final capture
+        in snapshot?.contextCaptures ?? const <ContextCaptureDto>[]) {
+      if (capture.status != ContextCaptureStatusDto.permissionDenied) continue;
+      return switch (capture.source) {
+        ContextSourceDto.finderSelection =>
+          'Allow Finder Automation in System Settings to use selected files.',
+        ContextSourceDto.selectedText =>
+          'Allow Accessibility in System Settings to use selected text.',
+        ContextSourceDto.browserCurrentPage =>
+          'Allow Safari Automation in System Settings to use the current page.',
+        ContextSourceDto.clipboard =>
+          'Allow clipboard access to use copied text.',
+        _ => null,
+      };
+    }
+    return null;
+  }
 
   String get searchHint {
     final active = scope;
