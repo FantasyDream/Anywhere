@@ -7,6 +7,7 @@ struct ContextPlatform {
     finder_paths: Vec<PathBuf>,
     selected: Mutex<Option<String>>,
     browser_url: Option<String>,
+    browser_denied: bool,
     clipboard: Option<String>,
     selected_gate: Option<Arc<CaptureGate>>,
     selected_denied: bool,
@@ -29,6 +30,7 @@ impl ContextPlatform {
             finder_paths: Vec::new(),
             selected: Mutex::new(None),
             browser_url: None,
+            browser_denied: false,
             clipboard: None,
             selected_gate: None,
             selected_denied: false,
@@ -65,7 +67,16 @@ impl Platform for ContextPlatform {
     }
     fn browser_current_url(&self, _: &ApplicationInfo) -> Result<Option<String>> {
         self.browser_reads.fetch_add(1, Ordering::SeqCst);
+        if self.browser_denied {
+            anyhow::bail!("Browser Automation permission denied");
+        }
         Ok(self.browser_url.clone())
+    }
+    fn browser_current_url_supported(&self, application: &ApplicationInfo) -> bool {
+        matches!(
+            application.bundle_id.as_str(),
+            "com.apple.Safari" | "com.google.Chrome" | "com.microsoft.edgemac"
+        )
     }
     fn clipboard_text(&self) -> Result<Option<String>> {
         self.clipboard_reads.fetch_add(1, Ordering::SeqCst);
@@ -270,44 +281,91 @@ async fn selected_text_is_resolved_once_and_survives_typing() {
 }
 
 #[tokio::test]
-async fn safari_url_and_clipboard_have_distinct_sources_across_revisions() {
-    let mut fake = ContextPlatform::new("com.apple.Safari");
+async fn supported_browser_urls_and_clipboard_have_distinct_sources_across_revisions() {
+    for browser in [
+        "com.apple.Safari",
+        "com.google.Chrome",
+        "com.microsoft.edgemac",
+    ] {
+        let mut fake = ContextPlatform::new(browser);
+        fake.browser_url = Some("https://example.org/page".into());
+        fake.clipboard = Some(r#"{"item":42}"#.into());
+        let fake = Arc::new(fake);
+        let app = application(fake.clone());
+        let initial = app.activate().await.unwrap().unwrap();
+        let _ = capture_state(
+            &app,
+            initial.session_id,
+            0,
+            ContextSource::BrowserCurrentPage,
+            URL,
+        )
+        .await;
+        let _ = capture_state(
+            &app,
+            initial.session_id,
+            0,
+            ContextSource::Clipboard,
+            JSON_DOCUMENT,
+        )
+        .await;
+        let revised = app
+            .update_input(initial.session_id, "json".into(), 1)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(revised
+            .context_summary
+            .iter()
+            .any(|context| context.type_id == URL
+                && context.source == ContextSource::BrowserCurrentPage));
+        assert!(revised
+            .context_summary
+            .iter()
+            .any(|context| context.type_id == JSON_DOCUMENT
+                && context.source == ContextSource::Clipboard));
+        assert_eq!(fake.browser_reads.load(Ordering::SeqCst), 1, "{browser}");
+        assert_eq!(fake.clipboard_reads.load(Ordering::SeqCst), 1, "{browser}");
+    }
+}
+
+#[tokio::test]
+async fn unsupported_browser_does_not_attempt_url_capture() {
+    let mut fake = ContextPlatform::new("org.mozilla.firefox");
     fake.browser_url = Some("https://example.org/page".into());
-    fake.clipboard = Some(r#"{"item":42}"#.into());
     let fake = Arc::new(fake);
     let app = application(fake.clone());
     let initial = app.activate().await.unwrap().unwrap();
-    let _ = capture_state(
-        &app,
-        initial.session_id,
-        0,
-        ContextSource::BrowserCurrentPage,
-        URL,
-    )
-    .await;
-    let _ = capture_state(
-        &app,
-        initial.session_id,
-        0,
-        ContextSource::Clipboard,
-        JSON_DOCUMENT,
-    )
-    .await;
-    let revised = app
-        .update_input(initial.session_id, "json".into(), 1)
-        .await
-        .unwrap()
-        .unwrap();
-    assert!(revised.context_summary.iter().any(
-        |context| context.type_id == URL && context.source == ContextSource::BrowserCurrentPage
-    ));
-    assert!(revised
-        .context_summary
+    assert!(initial
+        .context_captures
         .iter()
-        .any(|context| context.type_id == JSON_DOCUMENT
-            && context.source == ContextSource::Clipboard));
-    assert_eq!(fake.browser_reads.load(Ordering::SeqCst), 1);
-    assert_eq!(fake.clipboard_reads.load(Ordering::SeqCst), 1);
+        .all(|capture| capture.source != ContextSource::BrowserCurrentPage));
+    assert_eq!(fake.browser_reads.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn browser_automation_denial_does_not_hide_clipboard_context() {
+    let mut fake = ContextPlatform::new("com.microsoft.edgemac");
+    fake.browser_denied = true;
+    fake.clipboard = Some("https://example.org/copied".into());
+    let app = application(Arc::new(fake));
+    let initial = app.activate().await.unwrap().unwrap();
+    let _ = capture_state(&app, initial.session_id, 0, ContextSource::Clipboard, URL).await;
+    for _ in 0..200 {
+        if let Some(state) = app.latest_state(initial.session_id) {
+            if state.context_captures.iter().any(|capture| {
+                capture.source == ContextSource::BrowserCurrentPage
+                    && capture.status == ContextCaptureStatus::PermissionDenied
+            }) {
+                assert!(state.context_summary.iter().any(|context| {
+                    context.source == ContextSource::Clipboard && context.type_id == URL
+                }));
+                return;
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    panic!("browser permission status was not published");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

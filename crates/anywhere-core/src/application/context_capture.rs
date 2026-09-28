@@ -119,7 +119,7 @@ impl Application {
             }
         }
 
-        if application.bundle_id == "com.apple.Safari" {
+        if self.platform.browser_current_url_supported(&application) {
             if let Some(token) = self.capture_token(ContextSource::BrowserCurrentPage) {
                 let platform = self.platform.clone();
                 let target = application.clone();
@@ -232,7 +232,7 @@ fn browser_context(raw: String) -> Option<ResolvedContext> {
         URL,
         ContextValue::Url(url),
         ContextSource::BrowserCurrentPage,
-        "platform.safari_current_page",
+        "platform.browser_current_page",
     ))
 }
 

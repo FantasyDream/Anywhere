@@ -1,5 +1,6 @@
-//! One Safari current-tab URL snapshot. The foreground app is frozen by Core before
-//! the launcher takes focus; this adapter never activates or searches other browsers.
+//! One current-tab URL snapshot from the captured foreground browser. Core
+//! freezes its identity before the launcher takes focus; this adapter never
+//! activates or searches other browsers.
 use super::native::launcher_application_identity_matches;
 use crate::ApplicationInfo;
 use anyhow::{anyhow, Result};
@@ -13,19 +14,52 @@ use std::{
 };
 
 const SAFARI_BUNDLE_ID: &str = "com.apple.Safari";
+const CHROME_BUNDLE_ID: &str = "com.google.Chrome";
+const EDGE_BUNDLE_ID: &str = "com.microsoft.edgemac";
 const MAX_URL_BYTES: usize = 8 * 1024;
 const MAX_ERROR_BYTES: usize = 4 * 1024;
 // A first Automation prompt can outlive the ordinary fast-path read. The caller
 // runs this off the first-snapshot path; it still needs a finite process deadline.
 const CAPTURE_TIMEOUT: Duration = Duration::from_secs(15);
 const PIPE_TIMEOUT: Duration = Duration::from_secs(1);
-const SCRIPT: &str = include_str!("../../native/safari_url.applescript");
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Browser {
+    Safari,
+    Chrome,
+    Edge,
+}
+
+impl Browser {
+    fn for_bundle_id(bundle_id: &str) -> Option<Self> {
+        match bundle_id {
+            SAFARI_BUNDLE_ID => Some(Self::Safari),
+            CHROME_BUNDLE_ID => Some(Self::Chrome),
+            EDGE_BUNDLE_ID => Some(Self::Edge),
+            _ => None,
+        }
+    }
+
+    fn script(self) -> &'static str {
+        match self {
+            Self::Safari => include_str!("../../native/safari_url.applescript"),
+            Self::Chrome => include_str!("../../native/chrome_url.applescript"),
+            Self::Edge => include_str!("../../native/edge_url.applescript"),
+        }
+    }
+}
+
+pub(super) fn supports(bundle_id: &str) -> bool {
+    Browser::for_bundle_id(bundle_id).is_some()
+}
 
 pub(super) fn current_url(application: &ApplicationInfo) -> Result<Option<String>> {
-    if application.bundle_id != SAFARI_BUNDLE_ID || !same_running_instance(application) {
+    let Some(browser) = Browser::for_bundle_id(&application.bundle_id) else {
+        return Ok(None);
+    };
+    if !same_running_instance(application) {
         return Ok(None);
     }
-    let result = read_current_url();
+    let result = read_current_url(browser);
     // `application id` resolves a bundle, not the PID captured at activation. A quit,
     // relaunch, or PID reuse during the Apple Event must discard the reply.
     if !same_running_instance(application) {
@@ -43,10 +77,10 @@ fn same_running_instance(application: &ApplicationInfo) -> bool {
     else {
         return false;
     };
-    if application.pid <= 0 || application.bundle_id != SAFARI_BUNDLE_ID {
+    if application.pid <= 0 || !supports(&application.bundle_id) {
         return false;
     }
-    let Ok(bundle) = CString::new(SAFARI_BUNDLE_ID) else {
+    let Ok(bundle) = CString::new(application.bundle_id.as_str()) else {
         return false;
     };
     let Ok(instance) = CString::new(instance) else {
@@ -94,46 +128,46 @@ fn spawn_reader(
 fn receive(reader: Receiver<std::io::Result<BoundedOutput>>) -> Result<BoundedOutput> {
     reader
         .recv_timeout(PIPE_TIMEOUT)
-        .map_err(|_| anyhow!("Safari URL capture output did not close"))?
-        .map_err(|_| anyhow!("Safari URL capture output could not be read"))
+        .map_err(|_| anyhow!("Browser URL capture output did not close"))?
+        .map_err(|_| anyhow!("Browser URL capture output could not be read"))
 }
 
-fn read_current_url() -> Result<String> {
+fn read_current_url(browser: Browser) -> Result<String> {
     let mut child = Command::new("/usr/bin/osascript")
         .arg("-e")
-        .arg(SCRIPT)
+        .arg(browser.script())
         .env("LC_ALL", "en_US.UTF-8")
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|_| anyhow!("Safari URL capture could not start"))?;
+        .map_err(|_| anyhow!("Browser URL capture could not start"))?;
     let stdout = spawn_reader(
         child
             .stdout
             .take()
-            .ok_or_else(|| anyhow!("Safari URL capture has no output"))?,
+            .ok_or_else(|| anyhow!("Browser URL capture has no output"))?,
         MAX_URL_BYTES + 2, // osascript adds a line ending
     );
     let stderr = spawn_reader(
         child
             .stderr
             .take()
-            .ok_or_else(|| anyhow!("Safari URL capture has no error pipe"))?,
+            .ok_or_else(|| anyhow!("Browser URL capture has no error pipe"))?,
         MAX_ERROR_BYTES,
     );
     let started = Instant::now();
     let status = loop {
         if let Some(status) = child
             .try_wait()
-            .map_err(|_| anyhow!("Safari URL capture could not be checked"))?
+            .map_err(|_| anyhow!("Browser URL capture could not be checked"))?
         {
             break status;
         }
         if started.elapsed() >= CAPTURE_TIMEOUT {
             let _ = child.kill();
             let _ = child.wait();
-            return Err(anyhow!("Safari URL capture timed out"));
+            return Err(anyhow!("Browser URL capture timed out"));
         }
         thread::sleep(Duration::from_millis(10));
     };
@@ -141,14 +175,14 @@ fn read_current_url() -> Result<String> {
     let errors = receive(stderr)?;
     if !status.success() {
         if errors.bytes.windows(5).any(|window| window == b"-1743") {
-            return Err(anyhow!("Safari Automation permission denied"));
+            return Err(anyhow!("Browser Automation permission denied"));
         }
-        return Err(anyhow!("Safari URL capture failed"));
+        return Err(anyhow!("Browser URL capture failed"));
     }
     if output.exceeded {
-        return Err(anyhow!("Safari URL exceeds the capture size limit"));
+        return Err(anyhow!("Browser URL exceeds the capture size limit"));
     }
-    String::from_utf8(output.bytes).map_err(|_| anyhow!("Safari URL is not UTF-8"))
+    String::from_utf8(output.bytes).map_err(|_| anyhow!("Browser URL is not UTF-8"))
 }
 
 fn validate_url(output: &str) -> Option<String> {
@@ -185,6 +219,8 @@ mod tests {
             "file:///tmp/a",
             "javascript:alert(1)",
             "about:blank",
+            "chrome://settings",
+            "edge://settings",
             "not a URL",
         ] {
             assert!(validate_url(raw).is_none(), "{raw}");
@@ -209,17 +245,21 @@ mod tests {
     #[test]
     fn unsupported_or_unidentified_app_never_requests_automation() {
         let app = ApplicationInfo {
-            bundle_id: "com.google.Chrome".into(),
-            name: "Chrome".into(),
+            bundle_id: "org.mozilla.firefox".into(),
+            name: "Firefox".into(),
             pid: 1,
             instance_id: Some("fake".into()),
         };
         assert!(current_url(&app).unwrap().is_none());
-        let safari = ApplicationInfo {
-            bundle_id: SAFARI_BUNDLE_ID.into(),
-            instance_id: None,
-            ..app
-        };
-        assert!(current_url(&safari).unwrap().is_none());
+        for bundle_id in [SAFARI_BUNDLE_ID, CHROME_BUNDLE_ID, EDGE_BUNDLE_ID] {
+            assert!(supports(bundle_id));
+            let unidentified = ApplicationInfo {
+                bundle_id: bundle_id.into(),
+                instance_id: None,
+                ..app.clone()
+            };
+            assert!(current_url(&unidentified).unwrap().is_none());
+        }
+        assert!(!supports(&app.bundle_id));
     }
 }

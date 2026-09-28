@@ -14,7 +14,7 @@ Anywhere 的核心体验是：在唤醒时理解用户正在操作的对象，�
 |---|---|---|
 | **V0.3.x App Actions 稳定版** | 菜单发现、执行、身份、历史、Scope 与权限降级形成闭环；修复真实应用验收发现的问题 | [MVP 验收清单](mvp-v0.3x.md)完成，不再继续增加 App-specific 功能 |
 | **V0.4a Context 采集** | Finder 选中文件/目录、选中文本、单次剪贴板上下文；来源、归属、权限和失败状态明确 | 三种来源均在实机产生 Context，并复用现有 Action/Scope/Ranking；失败不影响已有能力 |
-| **V0.4b 浏览器当前页** | 先接入一个浏览器的当前 URL，明确授权与降级；其他浏览器逐个适配 | 当前页与用户输入 URL 可区分来源；无权限或无页面时不猜测 URL |
+| **V0.4b 浏览器当前页** | 接入 Safari、Chrome、Edge 的当前 URL，明确授权与降级；其他浏览器按需适配 | 当前页与用户输入 URL 可区分来源；无权限或无页面时不猜测 URL |
 | **V0.5a 进程会话基础** | 有界输出、状态、退出码、停止、返回会话；会话在 Launcher 隐藏后仍可访问 | 一个演示长任务可启动、查看、停止和重新进入，且不会阻塞 Launcher |
 | **V0.5b Developer Context Pack** | 从目录轻量识别 Git、Maven、Gradle、Node、Rust；提供固定的常用 Build/Test/Run 动作 | 识别阶段不运行构建命令；每种已声明项目类型至少有一个实际项目通过端到端验收 |
 | **V0.6 Action Shortcuts** | Launcher 内自定义快捷键；少量全局“意图快捷键”按新捕获的 Context 分派 | 冲突、缺失 Context、权限拒绝和动作失效都有确定行为；配置可迁移 |
@@ -27,7 +27,7 @@ Anywhere 的核心体验是：在唤醒时理解用户正在操作的对象，�
 ### 范围取舍
 
 - **V0.4 的剪贴板是一次唤醒的一次快照，不是历史管理器。** macOS 对程序化访问剪贴板可能询问用户；来源应能独立关闭、失败或无权限，且不拖住历史加载。[Apple NSPasteboard 访问行为](https://developer.apple.com/documentation/appkit/nspasteboard/accessbehavior-swift.enum/default)。
-- **V0.4b 不承诺“一次接入所有浏览器”。** Safari 与 Chromium 系浏览器的当前页访问都有各自的权限和宿主边界；先验证一个适配器，再决定下一个。[Safari 权限](https://developer.apple.com/documentation/safariservices/managing-safari-web-extension-permissions)、[Chrome Tabs 权限](https://developer.chrome.com/docs/extensions/reference/api/tabs)。
+- **V0.4b 先覆盖 Safari、Chrome、Edge。** 当前页通过各浏览器的 AppleScript 字典读取，需分别获得 macOS Automation 授权；其他浏览器按需求和实机验收结果再适配。[Chromium AppleScript 当前标签页示例](https://chromium.googlesource.com/chromium/src/+/f74d7ed2fd9792ed79b26a6512e7ba3df5f90eef/chrome/browser/ui/cocoa/applescript/examples/window_operations.applescript)。
 - **V0.5 的 Provider 只读轻量元数据。** Maven/Gradle/Node/Rust 命令只能由用户选中 Action 后启动。动态列举所有 Gradle task、分析 Spring Boot 多模块依赖和自动运行项目脚本不属于第一批。现有 Git Status/Diff/Log 复用，不重复造动作。
 - **V0.6 先完成快捷键的身份与冲突语义。** 导入/导出要在配置格式稳定后再加；不为了未来社区配置提前冻结格式。
 - **V0.7 先做文件搜索。** Spotlight 提供异步查询；Windows Everything SDK 依赖用户已运行 Everything，且不作为 macOS 版本的发布门槛。[Apple NSMetadataQuery](https://developer.apple.com/documentation/foundation/nsmetadataquery)、[Everything SDK](https://www.voidtools.com/support/everything/sdk/)。剪贴板历史、浏览器历史与书签分别评估隐私、保留策略和授权后再排期。

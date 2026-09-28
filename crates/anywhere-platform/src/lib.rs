@@ -234,6 +234,11 @@ pub trait Platform: Send + Sync {
         Ok(Vec::new())
     }
 
+    /// Whether this platform has a current-page adapter for the captured app.
+    fn browser_current_url_supported(&self, _application: &ApplicationInfo) -> bool {
+        false
+    }
+
     /// URL of the captured browser's current page, when an adapter exists.
     fn browser_current_url(&self, _application: &ApplicationInfo) -> Result<Option<String>> {
         Ok(None)

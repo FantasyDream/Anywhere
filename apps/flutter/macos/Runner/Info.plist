@@ -14,5 +14,5 @@
   <key>NSHighResolutionCapable</key><true/>
   <!-- Keep the renderer explicit for the custom host and packaged app. -->
   <key>FLTEnableImpeller</key><true/>
-  <key>NSAppleEventsUsageDescription</key><string>Read the current Finder location and selection, and Safari's current tab URL to suggest actions when you open Anywhere.</string>
+  <key>NSAppleEventsUsageDescription</key><string>Read the current Finder location and selection, and the active Safari, Chrome, or Edge tab URL to suggest actions when you open Anywhere.</string>
 </dict></plist>

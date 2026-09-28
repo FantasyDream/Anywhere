@@ -249,11 +249,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           contentPadding:
                               const EdgeInsets.symmetric(horizontal: 12),
                           dense: true,
-                          title: const Text('Safari current page',
+                          title: const Text('Browser current page',
                               style: TextStyle(
                                   fontSize: 13, color: LauncherStyle.primary)),
                           subtitle: const Text(
-                              'Use the active tab’s web address',
+                              'Use the active Safari, Chrome, or Edge tab’s web address',
                               style: TextStyle(
                                   fontSize: 11, color: LauncherStyle.muted)),
                           value: _settings.captureBrowserCurrentPage,

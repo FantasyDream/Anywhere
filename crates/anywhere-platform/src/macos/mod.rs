@@ -68,6 +68,9 @@ impl Platform for MacOsPlatform {
     fn finder_selected_paths(&self, application: &ApplicationInfo) -> Result<Vec<PathBuf>> {
         finder::selected_paths(application)
     }
+    fn browser_current_url_supported(&self, application: &ApplicationInfo) -> bool {
+        browser::supports(&application.bundle_id)
+    }
     fn browser_current_url(&self, application: &ApplicationInfo) -> Result<Option<String>> {
         browser::current_url(application)
     }

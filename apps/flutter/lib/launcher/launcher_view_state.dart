@@ -109,7 +109,7 @@ class LauncherViewState {
         ContextSourceDto.selectedText =>
           'Allow Accessibility in System Settings to use selected text.',
         ContextSourceDto.browserCurrentPage =>
-          'Allow Safari Automation in System Settings to use the current page.',
+          'Allow Anywhere to access this browser in System Settings → Privacy & Security → Automation.',
         ContextSourceDto.clipboard =>
           'Allow clipboard access to use copied text.',
         _ => null,

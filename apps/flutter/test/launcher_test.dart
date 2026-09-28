@@ -264,7 +264,7 @@ void main() {
       deactivate: (_) async {},
     ));
     await toggle(tester);
-    expect(find.textContaining('Safari current page'), findsOneWidget);
+    expect(find.textContaining('Browser current page'), findsOneWidget);
     expect(find.textContaining('Allow Accessibility'), findsOneWidget);
     expect(find.text('Open URL'), findsOneWidget);
   });

@@ -586,7 +586,7 @@ String _contextLabel(ContextDto context) {
   final source = switch (context.source) {
     ContextSourceDto.finderSelection => 'Finder selection',
     ContextSourceDto.selectedText => 'Selected text',
-    ContextSourceDto.browserCurrentPage => 'Safari current page',
+    ContextSourceDto.browserCurrentPage => 'Browser current page',
     ContextSourceDto.clipboard => 'Clipboard',
     ContextSourceDto.userInput ||
     ContextSourceDto.foregroundApplication ||
