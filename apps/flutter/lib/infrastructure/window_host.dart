@@ -10,6 +10,7 @@ class WindowHost {
     required Future<void> Function([String? mode]) toggle,
     required Future<void> Function(int) dismiss,
     Future<void> Function()? openSettings,
+    Future<void> Function()? shutdownTasks,
   }) {
     _channel.setMethodCallHandler((call) async {
       switch (call.method) {
@@ -26,6 +27,8 @@ class WindowHost {
           if (generation is int) await dismiss(generation);
         case 'openSettings':
           await openSettings?.call();
+        case 'shutdownExecutionSessions':
+          await shutdownTasks?.call();
       }
     });
   }
@@ -46,6 +49,8 @@ class WindowHost {
       _channel.invokeMethod<void>('hide', {'generation': generation});
   Future<void> openPrivacySettings(String pane) =>
       _channel.invokeMethod<void>('openPrivacySettings', {'pane': pane});
+  Future<void> showExecutionSessions(String id) =>
+      _channel.invokeMethod<void>('showExecutionSessions', {'id': id});
 
   Future<HostSettings> readSettings() async {
     final raw = await _channel.invokeMapMethod<Object?, Object?>('settings');

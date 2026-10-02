@@ -66,6 +66,7 @@ impl Application {
         let platform = self.platform.clone();
         let registry = self.resolver.base_registry();
         let history = self.resolver.history.clone();
+        let executions = self.executions.clone();
         // Handed to the worker so it can re-check currency when it actually starts running,
         // rather than trusting a check made while the request was still being queued.
         let execution_ticket = self.resolver.execution(session_id, revision);
@@ -100,7 +101,7 @@ impl Application {
             if !execution_ticket.is_current() {
                 bail!("action expired before it started");
             }
-            let output = match &candidate.target {
+            let mut output = match &candidate.target {
                 crate::core::search::candidate::CandidateTarget::Action { action, context } => {
                     crate::core::action::execute::execute(
                         &action.executor,
@@ -112,6 +113,16 @@ impl Application {
                 crate::core::search::candidate::CandidateTarget::LaunchApplication {
                     path, ..
                 } => crate::features::applications::launch::execute(path, platform.as_ref())?,
+            };
+            // Planning a process is still side-effect free. Revalidate just before spawn;
+            // the newly started process then has its own lifetime and identity.
+            let execution_session_id = if let Some(request) = output.process.take() {
+                if !execution_ticket.is_current() {
+                    bail!("action expired before the task started");
+                }
+                Some(executions.start(request)?)
+            } else {
+                None
             };
             // No currency re-check *after* the side effect. By then refusing cannot prevent
             // anything; it only loses the usage record. Every action that closes the window
@@ -131,11 +142,11 @@ impl Application {
                         crate::application::session_runtime::now(),
                     )
                 });
-            Ok::<_, anyhow::Error>((output, history_result))
+            Ok::<_, anyhow::Error>((output, history_result, execution_session_id))
         })
         .await?;
         match result {
-            Ok((output, history_result)) => {
+            Ok((output, history_result, execution_session_id)) => {
                 let (warning, close_window) = match history_result {
                     Ok(()) => (None, output.close_window),
                     Err(error) => {
@@ -157,6 +168,7 @@ impl Application {
                     warning,
                     output_text: output.text,
                     close_window,
+                    execution_session_id,
                 })
             }
             Err(error) => {
@@ -175,6 +187,7 @@ impl Application {
                     warning: None,
                     output_text: None,
                     close_window: false,
+                    execution_session_id: None,
                 })
             }
         }

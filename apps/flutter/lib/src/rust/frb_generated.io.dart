@@ -37,6 +37,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  ExecutionSessionDetailDto dco_decode_box_autoadd_execution_session_detail_dto(
+      dynamic raw);
+
+  @protected
+  int dco_decode_box_autoadd_i_32(dynamic raw);
+
+  @protected
+  PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
+
+  @protected
   LauncherStateDto dco_decode_box_autoadd_launcher_state_dto(dynamic raw);
 
   @protected
@@ -56,6 +66,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ContextSourceDto dco_decode_context_source_dto(dynamic raw);
+
+  @protected
+  ExecutionSessionDetailDto dco_decode_execution_session_detail_dto(
+      dynamic raw);
+
+  @protected
+  ExecutionSessionStatusDto dco_decode_execution_session_status_dto(
+      dynamic raw);
+
+  @protected
+  ExecutionSessionSummaryDto dco_decode_execution_session_summary_dto(
+      dynamic raw);
 
   @protected
   double dco_decode_f_32(dynamic raw);
@@ -82,6 +104,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ContextDto> dco_decode_list_context_dto(dynamic raw);
 
   @protected
+  List<ExecutionSessionSummaryDto>
+      dco_decode_list_execution_session_summary_dto(dynamic raw);
+
+  @protected
   List<PluginStatusDto> dco_decode_list_plugin_status_dto(dynamic raw);
 
   @protected
@@ -92,6 +118,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
+
+  @protected
+  ExecutionSessionDetailDto?
+      dco_decode_opt_box_autoadd_execution_session_detail_dto(dynamic raw);
+
+  @protected
+  int? dco_decode_opt_box_autoadd_i_32(dynamic raw);
+
+  @protected
+  PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
 
   @protected
   LauncherStateDto? dco_decode_opt_box_autoadd_launcher_state_dto(dynamic raw);
@@ -142,6 +178,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  ExecutionSessionDetailDto sse_decode_box_autoadd_execution_session_detail_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_box_autoadd_i_32(SseDeserializer deserializer);
+
+  @protected
+  PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
+
+  @protected
   LauncherStateDto sse_decode_box_autoadd_launcher_state_dto(
       SseDeserializer deserializer);
 
@@ -164,6 +210,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ContextSourceDto sse_decode_context_source_dto(SseDeserializer deserializer);
+
+  @protected
+  ExecutionSessionDetailDto sse_decode_execution_session_detail_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ExecutionSessionStatusDto sse_decode_execution_session_status_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ExecutionSessionSummaryDto sse_decode_execution_session_summary_dto(
+      SseDeserializer deserializer);
 
   @protected
   double sse_decode_f_32(SseDeserializer deserializer);
@@ -192,6 +250,11 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ContextDto> sse_decode_list_context_dto(SseDeserializer deserializer);
 
   @protected
+  List<ExecutionSessionSummaryDto>
+      sse_decode_list_execution_session_summary_dto(
+          SseDeserializer deserializer);
+
+  @protected
   List<PluginStatusDto> sse_decode_list_plugin_status_dto(
       SseDeserializer deserializer);
 
@@ -203,6 +266,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  ExecutionSessionDetailDto?
+      sse_decode_opt_box_autoadd_execution_session_detail_dto(
+          SseDeserializer deserializer);
+
+  @protected
+  int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer);
+
+  @protected
+  PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
   LauncherStateDto? sse_decode_opt_box_autoadd_launcher_state_dto(
@@ -259,6 +333,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_execution_session_detail_dto(
+      ExecutionSessionDetailDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_i_64(
+      PlatformInt64 self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_launcher_state_dto(
       LauncherStateDto self, SseSerializer serializer);
 
@@ -283,6 +368,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_context_source_dto(
       ContextSourceDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_execution_session_detail_dto(
+      ExecutionSessionDetailDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_execution_session_status_dto(
+      ExecutionSessionStatusDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_execution_session_summary_dto(
+      ExecutionSessionSummaryDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
@@ -313,6 +410,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<ContextDto> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_execution_session_summary_dto(
+      List<ExecutionSessionSummaryDto> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_plugin_status_dto(
       List<PluginStatusDto> self, SseSerializer serializer);
 
@@ -325,6 +426,17 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_execution_session_detail_dto(
+      ExecutionSessionDetailDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_i_64(
+      PlatformInt64? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_launcher_state_dto(

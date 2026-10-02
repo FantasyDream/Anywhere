@@ -153,6 +153,7 @@ class LauncherController extends ChangeNotifier {
         if (generation == _generation) await dismiss(hostAlreadyHidden: true);
       },
       openSettings: openSettings,
+      shutdownTasks: shutdownExecutionSessions,
     );
     Future<void>.microtask(() async {
       if (_disposed) return;
@@ -439,10 +440,30 @@ class LauncherController extends ChangeNotifier {
           result.revision != revision) {
         return;
       }
-      if (result.status == ActionStatusDto.succeeded && result.closeWindow) {
+      if (result.status == ActionStatusDto.succeeded &&
+          result.executionSessionId != null &&
+          result.warning == null) {
+        try {
+          await _window.showExecutionSessions(result.executionSessionId!);
+          if (_current(generation) && revision == _revision) {
+            await dismiss();
+          }
+        } catch (_) {
+          if (!_current(generation) || revision != _revision) {
+            return;
+          }
+          _message =
+              'Task started. Open Running Tasks from the menu bar to view it.';
+          _notify();
+          await _syncWindow();
+        }
+      } else if (result.status == ActionStatusDto.succeeded &&
+          result.closeWindow) {
         await dismiss();
       } else {
-        _message = result.warning ?? result.error;
+        _message = result.executionSessionId != null && result.warning != null
+            ? 'Task started. ${result.warning} Open Running Tasks from the menu bar to view it.'
+            : result.warning ?? result.error;
         _output = result.outputText;
         _resultStatus = result.status;
         _resultSource = _sourceFor(candidate);

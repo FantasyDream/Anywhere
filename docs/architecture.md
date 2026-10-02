@@ -118,7 +118,16 @@ Provider 仍顺序执行、深度最多 3、节点最多 128，同版本 Provide
 
 Git 检测只读元数据。执行通过类型化 Status/Log/Diff 和固定 argv，不经任意 shell；保留超时、输出上限和禁用外部 diff/fsmonitor 的规则。
 
-后续交付顺序及架构调整时机以 [产品路线图](roadmap.md) 为准。当前 V0.4 Context 来源和 Scope / 菜单交互工程收尾已完成，真实应用及权限矩阵见 [验收记录](v0.4-context-acceptance.md)；远期能力不在本次预建。
+后续交付顺序及架构调整时机以 [产品路线图](roadmap.md) 为准。V0.4 Context 来源和 Scope / 菜单交互工程收尾已完成，真实应用及权限矩阵见 [验收记录](v0.4-context-acceptance.md)。V0.5 第一切片与后续范围见 [MVP](mvp-v0.5.md)。
+
+### V0.5 独立进程会话
+
+- `features/developer` 通过普通 `ContextProvider` 将 Directory 推导为 `project.rust`，只检查最多 32 层祖先的 Cargo.toml 元数据。Action 使用固定参数规划 `ProcessRequest`，不把用户输入拼接进 shell。
+- `ExecutionOutput` 可以返回进程计划；Application 在已有执行凭证检查之后再次复验，再交给 `core/execution/ExecutionSessionManager` 启动。启动成功记录 Action 使用次数，任务最终失败不会抹去用户已启动过动作的记录。
+- `ExecutionSessionId` 与 Launcher SessionId/Revision 分离。管理器属于 Application 生命周期；Launcher 失焦、隐藏、查询变化和再次唤醒都不取消进程。最多 4 个并发、32 个保留结果；只淘汰已完成会话。stdout/stderr 各保留最后 128 KiB，不落盘，也不写进诊断或使用历史。
+- `anywhere-platform::process::OwnedProcess` 负责实际子进程、非阻塞管道和进程组。worker 有界读取两种输出，停止或应用正常退出时杀掉所属进程组并回收主进程；非交互任务完成也清理残留子进程。PTY、stdin 和后台守护进程留到后续阶段。
+- Flutter 任务窗口只调用列表、详情、停止和移除接口。列表不传输出；可见时每 500 ms 刷新选中会话详情，隐藏后停止轮询，用代次检查拒绝旧选择或旧窗口的迟到结果。
+- macOS Host 按需创建独立 Flutter 窗口/engine，任务窗口不随 Launcher 失焦隐藏。窗口关闭后释放视图与 engine，进程仍由同一个 Rust Application 持有；菜单栏 Running Tasks 可再次进入。退出应用等待 Rust 停止会话后再完成终止。
 
 ## 构建
 

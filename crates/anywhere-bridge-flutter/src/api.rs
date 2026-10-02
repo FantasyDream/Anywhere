@@ -153,6 +153,37 @@ pub fn deactivate(session_id: u32) -> Result<()> {
     application()?.deactivate(session_id)
 }
 
+pub fn execution_sessions() -> Result<Vec<ExecutionSessionSummaryDto>> {
+    Ok(application()?
+        .execution_sessions()
+        .into_iter()
+        .map(Into::into)
+        .collect())
+}
+
+pub fn execution_session(id: String) -> Result<Option<ExecutionSessionDetailDto>> {
+    Ok(application()?
+        .execution_session(&id)
+        .map(|detail| ExecutionSessionDetailDto {
+            summary: detail.summary.into(),
+            stdout: detail.stdout,
+            stderr: detail.stderr,
+        }))
+}
+
+pub fn stop_execution_session(id: String) -> Result<()> {
+    application()?.stop_execution_session(&id)
+}
+
+pub fn remove_execution_session(id: String) -> Result<()> {
+    application()?.remove_execution_session(&id)
+}
+
+pub fn shutdown_execution_sessions() -> Result<()> {
+    application()?.shutdown_execution_sessions();
+    Ok(())
+}
+
 #[flutter_rust_bridge::frb(sync)]
 pub fn prompt_accessibility() -> Result<bool> {
     application()?.prompt_accessibility()
@@ -374,6 +405,61 @@ pub struct ActionResultDto {
     pub warning: Option<String>,
     pub output_text: Option<String>,
     pub close_window: bool,
+    pub execution_session_id: Option<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExecutionSessionStatusDto {
+    Running,
+    Stopping,
+    Succeeded,
+    Failed,
+    Stopped,
+}
+
+#[derive(Clone, Debug)]
+pub struct ExecutionSessionSummaryDto {
+    pub id: String,
+    pub title: String,
+    pub directory: String,
+    pub command: Vec<String>,
+    pub status: ExecutionSessionStatusDto,
+    pub exit_code: Option<i32>,
+    pub started_at_ms: i64,
+    pub finished_at_ms: Option<i64>,
+    pub output_truncated: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ExecutionSessionDetailDto {
+    pub summary: ExecutionSessionSummaryDto,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+impl From<protocol::ExecutionSessionSummary> for ExecutionSessionSummaryDto {
+    fn from(summary: protocol::ExecutionSessionSummary) -> Self {
+        use protocol::ExecutionSessionStatus::*;
+        Self {
+            id: summary.id,
+            title: summary.title,
+            directory: summary.directory,
+            command: summary.command,
+            status: match summary.status {
+                Running => ExecutionSessionStatusDto::Running,
+                Stopping => ExecutionSessionStatusDto::Stopping,
+                Succeeded => ExecutionSessionStatusDto::Succeeded,
+                Failed => ExecutionSessionStatusDto::Failed,
+                Stopped => ExecutionSessionStatusDto::Stopped,
+            },
+            exit_code: summary.exit_code,
+            started_at_ms: summary.started_at_ms,
+            finished_at_ms: summary.finished_at_ms,
+            output_truncated: summary.output_truncated,
+            error: summary.error,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -522,6 +608,7 @@ impl From<protocol::ActionResult> for ActionResultDto {
             warning: result.warning,
             output_text: result.output_text,
             close_window: result.close_window,
+            execution_session_id: result.execution_session_id,
         }
     }
 }

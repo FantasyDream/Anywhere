@@ -27,6 +27,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var presentedGeneration: Int?
     var latestGeneration = 0
     var settingsOpen = false
+    var tasksWindow: NSWindow?
+    var tasksController: FlutterViewController?
+    var tasksChannel: FlutterMethodChannel?
+    var tasksReady = false
+    var pendingTaskId: String?
+    var terminationPending = false
     var stored = StoredSettings.load()
 
     /// Application support directory for this app.
@@ -130,6 +136,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     reply(nil)
                 } else {
                     reply(FlutterError(code: "privacy", message: "System Settings could not be opened.", details: nil))
+                }
+            case "showExecutionSessions":
+                let args = call.arguments as? [String: Any]
+                if self.showTasks(id: args?["id"] as? String) {
+                    reply(nil)
+                } else {
+                    reply(FlutterError(code: "tasks", message: "Running Tasks could not start.", details: nil))
                 }
             case "saveSettings":
                 guard let args = call.arguments as? [String: Any] else { reply(nil); return }
@@ -253,7 +266,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         // The hidden window need not retain backing surfaces for seven result rows.
         // `show` restores the requested height before ordering it front again.
         resizeWindow(64)
-        if NSApp.isActive { NSApp.hide(nil) }
+        if NSApp.isActive && tasksWindow?.isVisible != true { NSApp.hide(nil) }
     }
 
     func dismissForFocusLoss() {
@@ -266,13 +279,71 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         channel.invokeMethod("dismiss", arguments: ["generation": generation])
     }
 
-    func windowDidResignKey(_ notification: Notification) { dismissForFocusLoss() }
+    func windowDidResignKey(_ notification: Notification) {
+        if notification.object as? NSWindow === window { dismissForFocusLoss() }
+    }
     func applicationDidResignActive(_ notification: Notification) { dismissForFocusLoss() }
 
     @objc func activateCurrentApp() { activate(mode: "currentApp") }
     @objc func activateUniversal() { activate(mode: "universal") }
     @objc func openSettings() {
         channel.invokeMethod("openSettings", arguments: nil)
+    }
+
+    @objc func openTasks() { _ = showTasks(id: nil) }
+
+    /// Lazy second Flutter engine: releasing its window never destroys Rust process sessions.
+    func showTasks(id: String?) -> Bool {
+        pendingTaskId = id
+        if tasksWindow == nil {
+            let view = FlutterViewController(project: FlutterDartProject())
+            let channel = FlutterMethodChannel(name: "anywhere/executions", binaryMessenger: view.engine.binaryMessenger)
+            channel.setMethodCallHandler { [weak self] call, reply in
+                guard let self else { reply(nil); return }
+                if call.method == "ready" {
+                    self.tasksReady = true
+                    reply(self.pendingTaskId)
+                } else {
+                    reply(FlutterMethodNotImplemented)
+                }
+            }
+            guard view.engine.run(withEntrypoint: "executionSessionsMain") else {
+                channel.setMethodCallHandler(nil)
+                return false
+            }
+            let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 600),
+                                 styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+            panel.title = "Anywhere · Running Tasks"
+            panel.minSize = NSSize(width: 760, height: 420)
+            panel.isReleasedWhenClosed = false
+            panel.delegate = self
+            panel.contentViewController = view
+            panel.setContentSize(NSSize(width: 920, height: 600))
+            panel.center()
+            tasksWindow = panel
+            tasksController = view
+            tasksChannel = channel
+        }
+        NSApp.unhide(nil)
+        NSApp.activate(ignoringOtherApps: true)
+        tasksWindow?.makeKeyAndOrderFront(nil)
+        if tasksReady {
+            tasksChannel?.invokeMethod("visibility", arguments: true)
+            if let id { tasksChannel?.invokeMethod("select", arguments: id) }
+        }
+        return true
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        guard notification.object as? NSWindow === tasksWindow else { return }
+        tasksChannel?.invokeMethod("visibility", arguments: false)
+        tasksChannel?.setMethodCallHandler(nil)
+        tasksWindow?.contentViewController = nil
+        tasksWindow = nil
+        tasksController = nil
+        tasksChannel = nil
+        tasksReady = false
+        pendingTaskId = nil
     }
 
     func activate(mode: String) {
@@ -451,6 +522,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         universal.target = self
         universalItem = universal
         menu.addItem(universal)
+        let tasks = NSMenuItem(title: "Running Tasks…", action: #selector(openTasks), keyEquivalent: "")
+        tasks.target = self
+        menu.addItem(tasks)
         menu.addItem(.separator())
         let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
@@ -488,6 +562,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        if terminationPending { return .terminateLater }
+        terminationPending = true
+        channel.invokeMethod("shutdownExecutionSessions", arguments: nil) { _ in
+            NSApp.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
     func applicationWillTerminate(_ notification: Notification) {
         if let currentAppHotKey { UnregisterEventHotKey(currentAppHotKey) }
         if let universalHotKey { UnregisterEventHotKey(universalHotKey) }

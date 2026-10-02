@@ -10,6 +10,7 @@ use anywhere_platform::Platform;
 pub struct ExecutionOutput {
     pub text: Option<String>,
     pub close_window: bool,
+    pub process: Option<anywhere_platform::process::ProcessRequest>,
 }
 
 impl ExecutionOutput {
@@ -17,6 +18,7 @@ impl ExecutionOutput {
         Self {
             text: None,
             close_window: true,
+            process: None,
         }
     }
 
@@ -24,6 +26,15 @@ impl ExecutionOutput {
         Self {
             text: Some(text),
             close_window: false,
+            process: None,
+        }
+    }
+
+    pub fn process(request: anywhere_platform::process::ProcessRequest) -> Self {
+        Self {
+            text: None,
+            close_window: true,
+            process: Some(request),
         }
     }
 }

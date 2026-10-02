@@ -55,6 +55,7 @@ pub trait LauncherApplication: Send + Sync {
 }
 
 pub struct Application {
+    pub(super) executions: Arc<crate::core::execution::ExecutionSessionManager>,
     pub(super) platform: Arc<dyn Platform>,
     /// The engine, shared with the background tasks that publish late results.
     pub(super) resolver: Resolver,
@@ -93,6 +94,7 @@ impl Application {
         let (catalog_tx, catalog_rx) = watch::channel(0);
         let resolver = Resolver::new(registry, history).with_catalog_rx(catalog_rx);
         Self {
+            executions: Arc::new(Default::default()),
             platform,
             resolver,
             startup_diagnostics,
@@ -103,6 +105,26 @@ impl Application {
             excluded_apps: Arc::new(Mutex::new(BTreeSet::new())),
             capture_policy: Arc::new(Mutex::new(Default::default())),
         }
+    }
+
+    pub fn execution_sessions(&self) -> Vec<ExecutionSessionSummary> {
+        self.executions.list()
+    }
+
+    pub fn execution_session(&self, id: &str) -> Option<ExecutionSessionDetail> {
+        self.executions.detail(id)
+    }
+
+    pub fn stop_execution_session(&self, id: &str) -> Result<()> {
+        self.executions.stop(id)
+    }
+
+    pub fn remove_execution_session(&self, id: &str) -> Result<()> {
+        self.executions.remove(id)
+    }
+
+    pub fn shutdown_execution_sessions(&self) {
+        self.executions.shutdown();
     }
 
     /// Override the first-content grace.

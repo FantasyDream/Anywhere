@@ -192,6 +192,7 @@ impl ResolvedContext {
             ContextValue::Json { .. } => "JSON",
             ContextValue::File(_) => "File",
             ContextValue::FileSelection(_) => "Finder Selection",
+            ContextValue::Directory(_) if self.type_id == PROJECT_RUST => "Rust Project",
             ContextValue::Directory(_) => "Directory",
             ContextValue::Repository(_) => "Git Repository",
             ContextValue::Application { name, .. } => name,

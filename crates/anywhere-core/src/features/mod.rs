@@ -9,6 +9,7 @@
 //! Hide rules name a fact key; capture writes the fact, not a new struct field.
 pub mod app_actions;
 pub mod applications;
+pub mod developer;
 pub mod filesystem;
 pub mod git;
 pub mod json;
@@ -28,6 +29,7 @@ pub fn builtin_action_bundles() -> Vec<crate::core::action::bundle::ActionBundle
         filesystem::actions_file::bundle(),
         url::actions::bundle(),
         json::actions::bundle(),
+        developer::actions::bundle(),
     ]
 }
 
@@ -41,6 +43,7 @@ pub fn builtin_providers() -> Vec<Arc<dyn ContextProvider>> {
         Arc::new(json::provider::JsonProvider::new()),
         Arc::new(text::provider::TextProvider::default()),
         Arc::new(git::provider::GitRepositoryProvider::default()),
+        Arc::new(developer::provider::RustProjectProvider::default()),
     ]
 }
 

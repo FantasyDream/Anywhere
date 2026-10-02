@@ -321,7 +321,7 @@ mod tests {
     #[test]
     fn exact_type_match_and_builtin_command_count() {
         let registry = crate::application::builtin_registry();
-        assert_eq!(registry.commands().count(), 15);
+        assert_eq!(registry.commands().count(), 17);
         let url = seed("https://github.com")
             .into_iter()
             .find(|c| c.type_id == URL)
@@ -447,6 +447,7 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
                     groups::FILE,
                     groups::WEB,
                     groups::JSON,
+                    groups::RUST,
                 ]
                 .contains(&command.group_id.as_str()),
                 "{} uses an unknown group {}",

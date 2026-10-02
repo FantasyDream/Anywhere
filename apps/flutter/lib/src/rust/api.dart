@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `application`, `availability_dto`, `candidate_dto`, `context_capture_status_dto`, `context_source_dto`, `kind_dto`, `load_plugins`, `plugin_reports`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
 
@@ -62,6 +62,21 @@ Future<Uint8List?> applicationIcon({required String candidateId}) =>
 Future<void> deactivate({required int sessionId}) =>
     RustLib.instance.api.crateApiDeactivate(sessionId: sessionId);
 
+Future<List<ExecutionSessionSummaryDto>> executionSessions() =>
+    RustLib.instance.api.crateApiExecutionSessions();
+
+Future<ExecutionSessionDetailDto?> executionSession({required String id}) =>
+    RustLib.instance.api.crateApiExecutionSession(id: id);
+
+Future<void> stopExecutionSession({required String id}) =>
+    RustLib.instance.api.crateApiStopExecutionSession(id: id);
+
+Future<void> removeExecutionSession({required String id}) =>
+    RustLib.instance.api.crateApiRemoveExecutionSession(id: id);
+
+Future<void> shutdownExecutionSessions() =>
+    RustLib.instance.api.crateApiShutdownExecutionSessions();
+
 bool promptAccessibility() =>
     RustLib.instance.api.crateApiPromptAccessibility();
 
@@ -96,6 +111,7 @@ class ActionResultDto {
   final String? warning;
   final String? outputText;
   final bool closeWindow;
+  final String? executionSessionId;
 
   const ActionResultDto({
     required this.sessionId,
@@ -105,6 +121,7 @@ class ActionResultDto {
     this.warning,
     this.outputText,
     required this.closeWindow,
+    this.executionSessionId,
   });
 
   @override
@@ -115,7 +132,8 @@ class ActionResultDto {
       error.hashCode ^
       warning.hashCode ^
       outputText.hashCode ^
-      closeWindow.hashCode;
+      closeWindow.hashCode ^
+      executionSessionId.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -128,7 +146,8 @@ class ActionResultDto {
           error == other.error &&
           warning == other.warning &&
           outputText == other.outputText &&
-          closeWindow == other.closeWindow;
+          closeWindow == other.closeWindow &&
+          executionSessionId == other.executionSessionId;
 }
 
 enum ActionStatusDto {
@@ -347,6 +366,94 @@ enum ContextSourceDto {
   browserCurrentPage,
   clipboard,
   ;
+}
+
+class ExecutionSessionDetailDto {
+  final ExecutionSessionSummaryDto summary;
+  final String stdout;
+  final String stderr;
+
+  const ExecutionSessionDetailDto({
+    required this.summary,
+    required this.stdout,
+    required this.stderr,
+  });
+
+  @override
+  int get hashCode => summary.hashCode ^ stdout.hashCode ^ stderr.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExecutionSessionDetailDto &&
+          runtimeType == other.runtimeType &&
+          summary == other.summary &&
+          stdout == other.stdout &&
+          stderr == other.stderr;
+}
+
+enum ExecutionSessionStatusDto {
+  running,
+  stopping,
+  succeeded,
+  failed,
+  stopped,
+  ;
+}
+
+class ExecutionSessionSummaryDto {
+  final String id;
+  final String title;
+  final String directory;
+  final List<String> command;
+  final ExecutionSessionStatusDto status;
+  final int? exitCode;
+  final PlatformInt64 startedAtMs;
+  final PlatformInt64? finishedAtMs;
+  final bool outputTruncated;
+  final String? error;
+
+  const ExecutionSessionSummaryDto({
+    required this.id,
+    required this.title,
+    required this.directory,
+    required this.command,
+    required this.status,
+    this.exitCode,
+    required this.startedAtMs,
+    this.finishedAtMs,
+    required this.outputTruncated,
+    this.error,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      title.hashCode ^
+      directory.hashCode ^
+      command.hashCode ^
+      status.hashCode ^
+      exitCode.hashCode ^
+      startedAtMs.hashCode ^
+      finishedAtMs.hashCode ^
+      outputTruncated.hashCode ^
+      error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExecutionSessionSummaryDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          title == other.title &&
+          directory == other.directory &&
+          command == other.command &&
+          status == other.status &&
+          exitCode == other.exitCode &&
+          startedAtMs == other.startedAtMs &&
+          finishedAtMs == other.finishedAtMs &&
+          outputTruncated == other.outputTruncated &&
+          error == other.error;
 }
 
 class LauncherStateDto {

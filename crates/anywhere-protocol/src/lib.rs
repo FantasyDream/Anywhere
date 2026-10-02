@@ -14,6 +14,47 @@ pub type CandidateId = String;
 pub type GroupId = String;
 /// Stable semantic identity of a context, independent of snapshot row numbering.
 pub type ContextKey = String;
+/// A process lifetime, independent of Launcher SessionId and query Revision.
+pub type ExecutionSessionId = String;
+pub const PROJECT_RUST: &str = "project.rust";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionSessionStatus {
+    Running,
+    Stopping,
+    Succeeded,
+    Failed,
+    Stopped,
+}
+
+impl ExecutionSessionStatus {
+    pub fn is_active(self) -> bool {
+        matches!(self, Self::Running | Self::Stopping)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExecutionSessionSummary {
+    pub id: ExecutionSessionId,
+    pub title: String,
+    pub directory: String,
+    pub command: Vec<String>,
+    pub status: ExecutionSessionStatus,
+    pub exit_code: Option<i32>,
+    pub started_at_ms: i64,
+    pub finished_at_ms: Option<i64>,
+    pub output_truncated: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExecutionSessionDetail {
+    pub summary: ExecutionSessionSummary,
+    /// Each stream is independently bounded. Cross-stream ordering is not promised.
+    pub stdout: String,
+    pub stderr: String,
+}
 
 pub const TEXT: &str = "core.text";
 pub const URL: &str = "core.url";
@@ -296,6 +337,8 @@ pub struct ActionResult {
     pub warning: Option<String>,
     pub output_text: Option<String>,
     pub close_window: bool,
+    #[serde(default)]
+    pub execution_session_id: Option<ExecutionSessionId>,
 }
 
 impl ActionResult {

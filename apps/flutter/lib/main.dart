@@ -7,18 +7,39 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'src/rust/frb_generated.dart';
 import 'src/rust/api.dart' as bridge;
 import 'launcher_screen.dart';
+import 'execution/execution_sessions_screen.dart';
 
 const windowChannel = MethodChannel('anywhere/window');
+
+Future<void> initializeRustLibrary() async {
+  final executable = File(Platform.resolvedExecutable).parent.path;
+  await RustLib.init(
+      externalLibrary: ExternalLibrary.open(
+    '$executable/../Frameworks/libanywhere_bridge_flutter.dylib',
+  ));
+}
+
+/// A second window owns only its view; the app-lifetime Rust Application is shared.
+@pragma('vm:entry-point')
+Future<void> executionSessionsMain() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await initializeRustLibrary();
+    runApp(const ExecutionSessionsApp());
+  } catch (error) {
+    runApp(MaterialApp(
+        home: Scaffold(
+            body: Padding(
+      padding: const EdgeInsets.all(28),
+      child: SelectableText('Running Tasks could not open.\n$error'),
+    ))));
+  }
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
-    final executable = File(Platform.resolvedExecutable).parent.path;
-    await RustLib.init(
-      externalLibrary: ExternalLibrary.open(
-        '$executable/../Frameworks/libanywhere_bridge_flutter.dylib',
-      ),
-    );
+    await initializeRustLibrary();
     final paths = await windowChannel.invokeMapMethod<String, String>('paths');
     await bridge.initialize(
       dataDirectory: paths!['data']!,

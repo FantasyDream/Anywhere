@@ -25,6 +25,7 @@ pub mod groups {
     pub const FILE: &str = "file";
     pub const WEB: &str = "web";
     pub const JSON: &str = "json";
+    pub const RUST: &str = "rust";
     /// Launch candidates; never a scope of their own.
     pub const APP: &str = "app";
 
@@ -81,8 +82,16 @@ pub mod groups {
     }
 
     /// The built-in catalogue, in the order the scope bar falls back to.
+    pub fn rust() -> ActionGroup {
+        ActionGroup {
+            id: RUST.into(),
+            title: "Rust".into(),
+            icon: Some("code".into()),
+        }
+    }
+
     pub fn builtin() -> Vec<ActionGroup> {
-        vec![git(), folder(), file(), web(), json(), app()]
+        vec![git(), folder(), file(), web(), json(), rust(), app()]
     }
 }
 

@@ -62,7 +62,7 @@ cargo run --release --locked -p anywhere-core --example measure
 
 `cargo test -p anywhere-core` 不需要 Flutter、Dart 或可见 GUI。完整检查脚本校验共享 Flutter 版本，并运行 Rust fmt / tests / Clippy、架构检查和 Flutter analyze / tests。
 
-Rust 测试使用真实临时文件和 SQLite；OS 动作由 TestPlatform 记录，测试不会打开浏览器、覆盖剪贴板或运行 Git。目前有 15 个内建命令。
+Rust 测试使用真实临时文件和 SQLite；OS 动作由 TestPlatform 记录，测试不会打开浏览器、覆盖剪贴板或运行 Git。V0.5 的进程测试会在临时目录启动受控子进程，并对无外部依赖的 Rust 项目执行 Cargo Check。目前有 17 个内建命令。
 
 修改桥接公开 API 后重新生成：
 
@@ -103,6 +103,6 @@ Git 动作只在用户按 Enter 时运行，参数是固定的 `status` / `log -
 
 [架构](docs/architecture.md) · [新版路线图](docs/roadmap.md) · [对象与动作导航设计](docs/action-navigation-design.md) · [V0.3.x MVP](docs/mvp-v0.3x.md) · [Context 模型](docs/context-model.md) · [插件协议](docs/plugin-protocol.md) · [Current App 菜单动作](docs/current-app-actions.md)
 
-当前 V0.4 工程版本为 `0.4.0+3`，包括四种 Context 来源、应用搜索、Scope / 菜单导航、声明式插件与 Current App 动作。工程收尾与实机验收状态见 [0.4 验收记录](docs/v0.4-context-acceptance.md)；当前构建供本机验证，不将自动化检查替代正式实机验收。
+`dev-0.4` 已完成工程收尾并提交；实机验收状态见 [0.4 验收记录](docs/v0.4-context-acceptance.md)。当前 `dev-0.5` 开发版本为 `0.5.0-dev.1`（App `0.5.0+4`），已接入独立进程会话及 Rust 项目的 Cargo Check/Test。任务输出、退出码和停止入口位于菜单栏的 Running Tasks 窗口，关闭 Launcher 或任务窗口不会停止任务；退出 Anywhere 会停止任务。本阶段实现、限制与后续切片见 [0.5 MVP](docs/mvp-v0.5.md)。
 
 开发项目识别、文件搜索和插件 UI 属于后续阶段；可执行插件运行时、AI、账户与云同步尚未纳入当前版本。

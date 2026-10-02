@@ -1,4 +1,5 @@
 mod context_sources;
+mod developer;
 mod history;
 mod menu;
 mod plugin;

@@ -376,6 +376,50 @@ void main() {
           diagnostics: [],
           selectedScope: selectedScope);
 
+  for (final failToOpen in [false, true]) {
+    test(
+        'started task ${failToOpen ? 'survives a window failure' : 'opens before Launcher dismissal'}',
+        () async {
+      final messages = <String>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        messages.add(call.method);
+        if (call.method == 'showExecutionSessions') {
+          expect((call.arguments as Map)['id'], 'execution-1');
+          if (failToOpen) {
+            throw PlatformException(code: 'tasks');
+          }
+        }
+        return null;
+      });
+      final candidate = action('developer.cargo.check', 'Cargo Check', 'rust');
+      final controller = open(
+        beginActivation: () => 1,
+        activate: (_, {promptAccessibility = false}) async =>
+            captured(offers: [candidate]),
+        updateInput: (_, __, ___, {scopeId}) async => null,
+        execute: (session, revision, _) async => ActionResultDto(
+            sessionId: session,
+            revision: revision,
+            status: ActionStatusDto.succeeded,
+            closeWindow: true,
+            executionSessionId: 'execution-1'),
+        deactivate: (_) async {},
+      );
+      await controller.activate();
+      await controller.executeSelected();
+      expect(messages, contains('showExecutionSessions'));
+      if (failToOpen) {
+        expect(controller.view.notice, contains('Task started'));
+        expect(controller.view.visible, isTrue);
+      } else {
+        expect(controller.view.visible, isFalse);
+        expect(messages.indexOf('showExecutionSessions'),
+            lessThan(messages.lastIndexOf('hide')));
+      }
+      controller.dispose();
+    });
+  }
+
   test('Current App aggregates actions and domain cycling preserves the query',
       () async {
     final menu =
