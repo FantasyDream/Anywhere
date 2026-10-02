@@ -3,7 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:anywhere/launcher_screen.dart';
+import 'package:anywhere/launcher/launcher_controller.dart';
+import 'package:anywhere/infrastructure/window_host.dart';
+import 'package:anywhere/settings/settings_screen.dart';
 import 'package:anywhere/src/rust/api.dart';
+import 'launcher_fixtures.dart';
 
 /// Two action candidates with the documented stable ids.
 CandidateDto candidate(
@@ -15,19 +19,33 @@ CandidateDto candidate(
   String iconKey = 'file',
   String groupId = 'folder',
   double score = 100,
+  bool homeEligible = true,
+  String? sectionLabel,
+  String? executionContextId,
+  String? executionTargetLabel,
+  String? subtitle = 'from Rust',
+  List<String> menuPath = const [],
 }) =>
     CandidateDto(
+      contextKeys: const [],
+      homeEligible: homeEligible,
+      primaryAction: false,
       id: id,
       kind: kind,
       title: title,
-      menuPath: const [],
-      subtitle: 'from Rust',
+      menuPath: menuPath,
+      sectionLabel: sectionLabel,
+      executionContextId: executionContextId,
+      executionTargetLabel: executionTargetLabel,
+      subtitle: subtitle,
       iconKey: iconKey,
       score: score,
       groupId: groupId,
       availability: availability,
       availabilityReason: reason,
-      commandId: kind == CandidateKindDto.action ? id.split(':')[1] : null,
+      commandId: kind == CandidateKindDto.action
+          ? (id.contains(':') ? id.split(':')[1] : id)
+          : null,
       bundleId: kind == CandidateKindDto.application
           ? 'com.example.${id.split(':')[1]}'
           : null,
@@ -43,7 +61,7 @@ LauncherStateDto state(
   final first = candidate('action:first:c1', title);
   final second =
       candidate('action:second:c1', 'Second action', iconKey: 'copy');
-  return LauncherStateDto(
+  return launcherSnapshot(
     sessionId: 1,
     revision: revision,
     snapshotSeq: snapshotSeq,
@@ -52,7 +70,7 @@ LauncherStateDto state(
     contexts: [],
     contextCaptures: const [],
     candidates: [first, second],
-    scopes: const [],
+    roots: const [],
     diagnostics: [],
   );
 }
@@ -121,7 +139,7 @@ void main() {
         (i) => candidate('action:command.$i:$scopeFilter',
             scopeFilter.isEmpty ? 'Action $i' : '$scopeFilter $i',
             score: 100.0 - i));
-    return LauncherStateDto(
+    return launcherSnapshot(
       sessionId: 1,
       revision: revision,
       snapshotSeq: 1,
@@ -130,7 +148,7 @@ void main() {
       contexts: [],
       contextCaptures: const [],
       candidates: candidates,
-      scopes: const [],
+      roots: const [],
       diagnostics: [],
     );
   }
@@ -142,7 +160,7 @@ void main() {
         window: channel,
         beginActivation: () => 1,
         activate: (_, {promptAccessibility = false}) async => sizedState(0, 0),
-        updateInput: (_, input, revision) async =>
+        updateInput: (_, input, revision, {scopeId}) async =>
             sizedState(revision, int.parse(input), input: input),
         execute: (_, revision, candidate) async =>
             throw StateError('not invoked'),
@@ -181,7 +199,8 @@ void main() {
         window: channel,
         beginActivation: () => 1,
         activate: (_, {promptAccessibility = false}) async => sizedState(0, 0),
-        updateInput: (_, input, revision) async => sizedState(revision, 0),
+        updateInput: (_, input, revision, {scopeId}) async =>
+            sizedState(revision, 0),
         execute: (_, revision, candidate) async =>
             throw StateError('not invoked'),
         deactivate: (_) async {}));
@@ -196,11 +215,140 @@ void main() {
     expect(tester.getSize(find.byKey(const Key('launcher-panel'))).height, 64);
   });
 
+  testWidgets('scope homes stay short and menu queries flatten the entire app',
+      (tester) async {
+    final sidebar = candidate('app.sidebar', 'Toggle Sidebar',
+        groupId: 'app.editor', menuPath: ['View', 'Appearance']);
+    final terminal = candidate('app.terminal', 'Toggle Terminal',
+        groupId: 'app.editor', menuPath: ['View']);
+    final menus = [
+      for (var i = 0; i < 60; i++)
+        candidate('app.export.$i', 'Export $i',
+            groupId: 'app.editor', menuPath: ['File'], homeEligible: false)
+    ];
+    final git = candidate('git.status', 'Git Status', groupId: 'git');
+    final copy = candidate('copy.path', 'Copy Path');
+    final offers = [sidebar, terminal, ...menus, git, copy];
+    final boundaries = <String?>[];
+    var captures = 0;
+    final executions = <String>[];
+    LauncherStateDto result(int revision, String input, String? scope) =>
+        launcherSnapshot(
+            sessionId: 1,
+            revision: revision,
+            snapshotSeq: 1,
+            input: input,
+            contextComplete: true,
+            contextCandidates: offers,
+            selectedScope: scope,
+            candidates: offers
+                .where((item) =>
+                    (scope == null ||
+                        scope == 'app.editor' ||
+                        item.groupId == scope) &&
+                    input.toLowerCase().split(' ').every((word) =>
+                        '${item.title} ${item.menuPath.join(' ')}'
+                            .toLowerCase()
+                            .contains(word)))
+                .toList(),
+            diagnostics: []);
+    await tester.pumpWidget(LauncherApp(
+        window: channel,
+        beginActivation: () => 1,
+        activate: (_, {promptAccessibility = false}) async {
+          captures++;
+          return result(0, '', null);
+        },
+        updateInput: (_, input, revision, {scopeId}) async {
+          boundaries.add(scopeId);
+          return result(revision, input, scopeId);
+        },
+        execute: (session, revision, id) async {
+          executions.add(id);
+          return ActionResultDto(
+              sessionId: session,
+              revision: revision,
+              status: ActionStatusDto.succeeded,
+              closeWindow: false);
+        },
+        deactivate: (_) async {}));
+    await toggle(tester);
+    expect(find.byKey(const Key('scope-bar')), findsOneWidget);
+    expect(find.byKey(const Key('active-context')), findsNothing);
+    expect(find.text('All'), findsNothing);
+    expect(find.text('5 results'),
+        findsOneWidget); // Menu and context recommendations plus Browse.
+    expect(find.text('Git Status'), findsOneWidget);
+    expect(find.text('Copy Path'), findsOneWidget);
+    expect(find.text('Export 0'), findsNothing);
+    await tester.tap(find.text('Browse Menus…'));
+    await tester.pumpAndSettle();
+    expect(find.text('File'), findsOneWidget);
+    expect(find.text('View'), findsOneWidget);
+    await tester.tap(find.text('View'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Appearance'));
+    await tester.pumpAndSettle();
+    expect(find.text('View › Appearance'), findsOneWidget);
+    expect(executions, isEmpty);
+    expect(boundaries, isEmpty);
+    await tester.enterText(find.byType(TextField), 'File Export 59');
+    await tester.pumpAndSettle();
+    expect(find.text('Export 59'), findsOneWidget);
+    expect(boundaries.last, 'app.editor');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text('Toggle Sidebar'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(executions, ['app.sidebar']);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape); // View
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape); // App Home
+    await tester.pumpAndSettle();
+    expect(find.text('Browse Menus…'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'git status');
+    await tester.pumpAndSettle();
+    expect(boundaries.last, 'app.editor');
+    expect(find.text('Git Status'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(executions, ['app.sidebar', 'git.status']);
+    await tester.enterText(find.byType(TextField), 'copy path');
+    await tester.pumpAndSettle();
+    expect(find.text('Copy Path'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(executions, ['app.sidebar', 'git.status', 'copy.path']);
+    await tester.enterText(find.byType(TextField), 'absent');
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(boundaries.last,
+        'app.editor'); // Enter cannot silently leave the scope.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    expect(boundaries.last, 'git');
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'absent');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape); // Query
+    await tester.pumpAndSettle();
+    expect(find.text('Git Status'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape); // Scope
+    await tester.pumpAndSettle();
+    expect(boundaries.last, isNull);
+    expect(find.text('Copy Path'), findsOneWidget);
+    expect(captures, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('an unresolved context stays on the search bar', (tester) async {
     await tester.pumpWidget(LauncherApp(
         window: channel,
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async => LauncherStateDto(
+        activate: (_, {promptAccessibility = false}) async => launcherSnapshot(
               sessionId: 1,
               revision: 0,
               snapshotSeq: 1,
@@ -209,10 +357,11 @@ void main() {
               contexts: [],
               contextCaptures: const [],
               candidates: [],
-              scopes: const [],
+              roots: const [],
               diagnostics: [],
             ),
-        updateInput: (_, input, revision) async => sizedState(revision, 0),
+        updateInput: (_, input, revision, {scopeId}) async =>
+            sizedState(revision, 0),
         execute: (_, revision, candidate) async =>
             throw StateError('not invoked'),
         deactivate: (_) async {}));
@@ -227,7 +376,7 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => LauncherStateDto(
+      activate: (_, {promptAccessibility = false}) async => launcherSnapshot(
         sessionId: 1,
         revision: 0,
         snapshotSeq: 1,
@@ -236,6 +385,11 @@ void main() {
         contexts: const [
           ContextDto(
             id: 'c1',
+            key: 'c1',
+            rootKey: 'c1',
+            iconKey: 'folder',
+            capabilities: [],
+            candidateIds: ['action:first:c1'],
             typeId: 'core.url',
             label: 'URL',
             detail: 'https://example.org',
@@ -255,18 +409,82 @@ void main() {
           ),
         ],
         candidates: [candidate('action:first:c1', 'Open URL')],
-        scopes: const [],
+        roots: const [],
         diagnostics: const [],
       ),
-      updateInput: (_, input, revision) async => state(revision, 'Open URL'),
+      updateInput: (_, input, revision, {scopeId}) async =>
+          state(revision, 'Open URL'),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
       deactivate: (_) async {},
     ));
     await toggle(tester);
-    expect(find.textContaining('Browser current page'), findsOneWidget);
+    expect(find.textContaining('Browser current page'), findsNothing);
     expect(find.textContaining('Allow Accessibility'), findsOneWidget);
     expect(find.text('Open URL'), findsOneWidget);
+    expect(find.text('Open Settings'), findsOneWidget);
+    await tester.tap(find.text('Open Settings'));
+    await tester.pumpAndSettle();
+    final request = windowMessages
+        .lastWhere((call) => call.method == 'openPrivacySettings');
+    expect(request.arguments, {'pane': 'accessibility'});
+    expect(windowCalls.last, 'hide');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'Settings shows last capture status and opens clipboard privacy settings',
+      (tester) async {
+    final controller = LauncherController(
+      window: WindowHost(channel),
+      backend: LauncherBackend(
+        beginActivation: () => 1,
+        activate: (_, {promptAccessibility = false}) async => launcherSnapshot(
+            sessionId: 1,
+            revision: 0,
+            snapshotSeq: 1,
+            input: '',
+            contextComplete: true,
+            contextCaptures: const [
+              ContextCaptureDto(
+                  source: ContextSourceDto.selectedText,
+                  status: ContextCaptureStatusDto.unsupported,
+                  capturedAtMs: 1),
+              ContextCaptureDto(
+                  source: ContextSourceDto.clipboard,
+                  status: ContextCaptureStatusDto.permissionDenied,
+                  capturedAtMs: 1),
+            ],
+            candidates: [],
+            diagnostics: []),
+        updateInput: (_, input, revision, {scopeId}) async => null,
+        execute: (_, revision, id) async => throw StateError('not invoked'),
+        deactivate: (_) async {},
+      ),
+    );
+    await controller.activate();
+    await controller.dismiss();
+    await tester.pumpWidget(MaterialApp(
+        home: Center(
+            child: SizedBox(
+                width: 648,
+                height: 480,
+                child:
+                    Material(child: SettingsScreen(controller: controller))))));
+    await tester.ensureVisible(find.text('Permission needed'));
+    await tester.pumpAndSettle();
+    expect(find.text('Not supported by this app'), findsOneWidget);
+    expect(find.text('Permission needed'), findsOneWidget);
+    await tester.tap(find.text('Open Settings'));
+    await tester.pumpAndSettle();
+    expect(
+        windowMessages
+            .lastWhere((call) => call.method == 'openPrivacySettings')
+            .arguments,
+        {'pane': 'clipboard'});
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
   });
 
   testWidgets(
@@ -280,7 +498,7 @@ void main() {
         beginActivation: () => 1,
         activate: (_, {promptAccessibility = false}) async =>
             state(0, 'Capture ${++captures}'),
-        updateInput: (_, input, revision) => delayed.future,
+        updateInput: (_, input, revision, {scopeId}) => delayed.future,
         execute: (_, revision, candidate) async =>
             throw StateError('not invoked'),
         deactivate: (_) async {
@@ -316,7 +534,7 @@ void main() {
         beginActivation: () => 1,
         activate: (_, {promptAccessibility = false}) async =>
             state(0, 'Capture ${++captures}'),
-        updateInput: (_, input, revision) async =>
+        updateInput: (_, input, revision, {scopeId}) async =>
             state(revision, input, input: input),
         execute: (_, revision, candidate) => pending.future,
         deactivate: (_) async {}));
@@ -342,7 +560,7 @@ void main() {
       window: channel,
       beginActivation: () => 1,
       activate: (_, {promptAccessibility = false}) => captured.future,
-      updateInput: (_, input, revision) async =>
+      updateInput: (_, input, revision, {scopeId}) async =>
           state(revision, input, input: input),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
@@ -372,7 +590,7 @@ void main() {
       beginActivation: () => 1,
       activate: (_, {promptAccessibility = false}) async =>
           state(0, 'Open Terminal Here'),
-      updateInput: (_, input, revision) async =>
+      updateInput: (_, input, revision, {scopeId}) async =>
           state(revision, input, input: input),
       execute: (session, revision, candidate) async {
         executed.add(candidate);
@@ -410,7 +628,7 @@ void main() {
       beginActivation: () => 1,
       activate: (_, {promptAccessibility = false}) async =>
           state(0, 'Initial action'),
-      updateInput: (_, input, revision) =>
+      updateInput: (_, input, revision, {scopeId}) =>
           revision == 1 ? old.future : fresh.future,
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
@@ -435,7 +653,7 @@ void main() {
       beginActivation: () => 1,
       activate: (_, {promptAccessibility = false}) async =>
           state(0, 'Initial action'),
-      updateInput: (_, input, revision) async =>
+      updateInput: (_, input, revision, {scopeId}) async =>
           state(revision, input, input: input),
       execute: (_, revision, candidate) => result.future,
       deactivate: (_) async {},
@@ -454,14 +672,14 @@ void main() {
     expect(windowCalls, isNot(contains('hide')));
   });
 
-  testWidgets('scope bar switches scopes and stays presentation-only',
+  testWidgets('scope bar changes query boundary without another capture',
       (tester) async {
     final all =
         candidate('action:core.git.status:c1', 'Git Status', groupId: 'git');
     final folder =
         candidate('action:core.git.log:c1', 'Git Log', groupId: 'git');
     final appRow = candidate('action:core.directory.copy:c1', 'Copy Path');
-    LauncherStateDto scoped(int revision) => LauncherStateDto(
+    LauncherStateDto scoped(int revision) => launcherSnapshot(
           sessionId: 1,
           revision: revision,
           snapshotSeq: 1,
@@ -470,17 +688,11 @@ void main() {
           contexts: [],
           contextCaptures: const [],
           candidates: [appRow, all, folder],
-          scopes: [
-            ScopeDto(
-                id: 'app',
-                kind: ScopeKindDto.app,
-                label: 'Finder',
-                candidateIds: [appRow.id]),
-            ScopeDto(
-                id: 'git',
-                kind: ScopeKindDto.group,
-                label: 'Git',
-                candidateIds: [all.id, folder.id]),
+          roots: [
+            contextFixture(
+                id: 'app', label: 'Finder', candidateIds: [appRow.id]),
+            contextFixture(
+                id: 'git', label: 'Git', candidateIds: [all.id, folder.id]),
           ],
           diagnostics: [],
         );
@@ -488,7 +700,7 @@ void main() {
       window: channel,
       beginActivation: () => 1,
       activate: (_, {promptAccessibility = false}) async => scoped(0),
-      updateInput: (_, input, revision) async => scoped(revision),
+      updateInput: (_, input, revision, {scopeId}) async => scoped(revision),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
       deactivate: (_) async {},
@@ -496,11 +708,11 @@ void main() {
     await toggle(tester);
     expect(find.byKey(const Key('scope-bar')), findsOneWidget);
     expect(find.text('All'), findsNothing);
-    expect(find.text('Finder'), findsOneWidget);
+    expect(find.text('Folder'), findsOneWidget);
     expect(find.text('Git'), findsOneWidget);
     expect(find.text('Copy Path'), findsOneWidget);
-    expect(find.text('Git Status'), findsNothing);
-    await tester.tap(find.text('Git'));
+    expect(find.text('Git Status'), findsOneWidget);
+    await tester.tap(find.text('Git').first);
     await tester.pumpAndSettle();
     expect(find.text('Copy Path'), findsNothing);
     expect(find.text('Git Status'), findsOneWidget);
@@ -518,7 +730,7 @@ void main() {
     final first = candidate('action:first:c1', 'First row');
     final second = candidate('action:second:c1', 'Second row');
     final third = candidate('action:third:c1', 'Third row');
-    LauncherStateDto lateState({required bool keepSecond}) => LauncherStateDto(
+    LauncherStateDto lateState({required bool keepSecond}) => launcherSnapshot(
           sessionId: 1,
           revision: 0,
           snapshotSeq: 2,
@@ -527,10 +739,10 @@ void main() {
           contexts: [],
           contextCaptures: const [],
           candidates: [third, first, if (keepSecond) second],
-          scopes: const [],
+          roots: const [],
           diagnostics: [],
         );
-    final firstSnapshot = LauncherStateDto(
+    final firstSnapshot = launcherSnapshot(
       sessionId: 1,
       revision: 0,
       snapshotSeq: 1,
@@ -539,7 +751,7 @@ void main() {
       contexts: [],
       contextCaptures: const [],
       candidates: [first, second],
-      scopes: const [],
+      roots: const [],
       diagnostics: [],
     );
     // Each wait gets its own completer: the listener re-arms after every wait, so handing
@@ -549,7 +761,7 @@ void main() {
       window: channel,
       beginActivation: () => 1,
       activate: (_, {promptAccessibility = false}) async => firstSnapshot,
-      updateInput: (_, input, revision) async =>
+      updateInput: (_, input, revision, {scopeId}) async =>
           state(revision, input, input: input),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
@@ -589,7 +801,7 @@ void main() {
       // second listener being started.
       LauncherStateDto snapshot(int seq, String title,
               {required bool complete}) =>
-          LauncherStateDto(
+          launcherSnapshot(
             sessionId: 1,
             revision: 0,
             snapshotSeq: seq,
@@ -598,7 +810,7 @@ void main() {
             contexts: [],
             contextCaptures: const [],
             candidates: [candidate('action:first:c1', title)],
-            scopes: const [],
+            roots: const [],
             diagnostics: [],
           );
 
@@ -608,7 +820,7 @@ void main() {
         beginActivation: () => 1,
         activate: (_, {promptAccessibility = false}) async =>
             snapshot(1, 'Search the Web', complete: settledAtStart),
-        updateInput: (_, input, revision) async =>
+        updateInput: (_, input, revision, {scopeId}) async =>
             state(revision, 'Search the Web', input: input),
         execute: (_, revision, candidate) async =>
             throw StateError('not invoked'),
@@ -656,17 +868,18 @@ void main() {
     CandidateDto row(int index, {double score = 100}) =>
         candidate('action:command.$index:c1', 'Row $index', score: score);
 
-    LauncherStateDto withRows(int snapshotSeq, List<CandidateDto> rows) =>
-        LauncherStateDto(
+    LauncherStateDto withRows(int snapshotSeq, List<CandidateDto> rows,
+            {int revision = 1, String input = 'row'}) =>
+        launcherSnapshot(
           sessionId: 1,
-          revision: 0,
+          revision: revision,
           snapshotSeq: snapshotSeq,
-          input: '',
+          input: input,
           contextComplete: true,
           contexts: [],
           contextCaptures: const [],
           candidates: rows,
-          scopes: const [],
+          roots: const [],
           diagnostics: [],
         );
 
@@ -683,7 +896,7 @@ void main() {
       window: channel,
       // Still being enriched, so the window subscribes to later snapshots.
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => LauncherStateDto(
+      activate: (_, {promptAccessibility = false}) async => launcherSnapshot(
         sessionId: 1,
         revision: 0,
         snapshotSeq: 1,
@@ -692,11 +905,11 @@ void main() {
         contexts: [],
         contextCaptures: const [],
         candidates: initial,
-        scopes: const [],
+        roots: const [],
         diagnostics: [],
       ),
-      updateInput: (_, input, revision) async =>
-          state(revision, input, input: input),
+      updateInput: (_, input, revision, {scopeId}) async =>
+          withRows(1, initial, revision: revision, input: input),
       execute: (_, revision, candidate) async {
         executed = candidate;
         return ActionResultDto(
@@ -720,6 +933,8 @@ void main() {
     ));
     await toggle(tester);
     expect(pending, hasLength(1), reason: 'one listener per visible session');
+    await tester.enterText(find.byType(TextField), 'row');
+    await tester.pumpAndSettle();
 
     pending[0].complete(withRows(2, initial));
     await tester.pumpAndSettle();
@@ -751,7 +966,7 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => LauncherStateDto(
+      activate: (_, {promptAccessibility = false}) async => launcherSnapshot(
         sessionId: 1,
         revision: 0,
         snapshotSeq: 1,
@@ -760,10 +975,10 @@ void main() {
         contexts: [],
         contextCaptures: const [],
         candidates: [first, second],
-        scopes: const [],
+        roots: const [],
         diagnostics: [],
       ),
-      updateInput: (_, input, revision) async =>
+      updateInput: (_, input, revision, {scopeId}) async =>
           state(revision, input, input: input),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
@@ -782,7 +997,7 @@ void main() {
     await toggle(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
-    pending[0].complete(LauncherStateDto(
+    pending[0].complete(launcherSnapshot(
       sessionId: 1,
       revision: 0,
       snapshotSeq: 2,
@@ -791,7 +1006,7 @@ void main() {
       contexts: [],
       contextCaptures: const [],
       candidates: [third],
-      scopes: const [],
+      roots: const [],
       diagnostics: [],
     ));
     await tester.pumpAndSettle();
@@ -802,6 +1017,9 @@ void main() {
   testWidgets('application icons render when loaded and fall back when absent',
       (tester) async {
     final chrome = CandidateDto(
+      contextKeys: const [],
+      homeEligible: true,
+      primaryAction: false,
       id: 'app:com.google.Chrome:/Applications/Google Chrome.app',
       kind: CandidateKindDto.application,
       title: 'Google Chrome',
@@ -816,6 +1034,9 @@ void main() {
       bundleId: 'com.google.Chrome',
     );
     final notes = CandidateDto(
+      contextKeys: const [],
+      homeEligible: true,
+      primaryAction: false,
       id: 'app:com.apple.Notes:/System/Applications/Notes.app',
       kind: CandidateKindDto.application,
       title: 'Notes',
@@ -829,24 +1050,25 @@ void main() {
       commandId: null,
       bundleId: 'com.apple.Notes',
     );
-    final state = LauncherStateDto(
-      sessionId: 1,
-      revision: 0,
-      snapshotSeq: 1,
-      input: 'app',
-      contextComplete: true,
-      contexts: [],
-      contextCaptures: const [],
-      candidates: [chrome, notes],
-      scopes: const [],
-      diagnostics: [],
-    );
+    LauncherStateDto state(int revision, String input) => launcherSnapshot(
+          sessionId: 1,
+          revision: revision,
+          snapshotSeq: 1,
+          input: input,
+          contextComplete: true,
+          contexts: [],
+          contextCaptures: const [],
+          candidates: [chrome, notes],
+          roots: const [],
+          diagnostics: [],
+        );
     final requested = <String>[];
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => state,
-      updateInput: (_, input, revision) async => state,
+      activate: (_, {promptAccessibility = false}) async => state(0, ''),
+      updateInput: (_, input, revision, {scopeId}) async =>
+          state(revision, input),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
       deactivate: (_) async {},
@@ -860,6 +1082,8 @@ void main() {
       },
     ));
     await toggle(tester);
+    expect(requested, isEmpty, reason: 'Apps are not on empty-query Home');
+    await tester.enterText(find.byType(TextField), 'app');
     await tester.pumpAndSettle();
     expect(requested, contains(chrome.id));
     expect(requested, contains(notes.id));
@@ -872,6 +1096,9 @@ void main() {
   testWidgets('an icon that fails once is retried on the next snapshot',
       (tester) async {
     CandidateDto app(String id, String title) => CandidateDto(
+          contextKeys: const [],
+          homeEligible: true,
+          primaryAction: false,
           id: id,
           kind: CandidateKindDto.application,
           title: title,
@@ -888,7 +1115,7 @@ void main() {
     final edge = app('app:com.microsoft.edgemac', 'Microsoft Edge');
     // Sequence must advance, or the ordering guard correctly ignores the second
     // snapshot and this test would not exercise a retry at all.
-    LauncherStateDto withEdge(int revision) => LauncherStateDto(
+    LauncherStateDto withEdge(int revision) => launcherSnapshot(
           sessionId: 1,
           revision: revision,
           snapshotSeq: revision + 1,
@@ -897,7 +1124,7 @@ void main() {
           contexts: [],
           contextCaptures: const [],
           candidates: [edge],
-          scopes: const [],
+          roots: const [],
           diagnostics: [],
         );
     var attempts = 0;
@@ -905,7 +1132,7 @@ void main() {
       window: channel,
       beginActivation: () => 1,
       activate: (_, {promptAccessibility = false}) async => withEdge(0),
-      updateInput: (_, input, revision) async => withEdge(revision),
+      updateInput: (_, input, revision, {scopeId}) async => withEdge(revision),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
       deactivate: (_) async {},
@@ -917,6 +1144,7 @@ void main() {
       },
     ));
     await toggle(tester);
+    await tester.enterText(find.byType(TextField), 'edge');
     await tester.pumpAndSettle();
     expect(attempts, 1);
     expect(find.byType(Image), findsNothing,
@@ -934,7 +1162,7 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => LauncherStateDto(
+      activate: (_, {promptAccessibility = false}) async => launcherSnapshot(
         sessionId: 1,
         revision: 0,
         snapshotSeq: 1,
@@ -948,10 +1176,10 @@ void main() {
               reason: 'git is not installed',
               iconKey: 'git'),
         ],
-        scopes: const [],
+        roots: const [],
         diagnostics: [],
       ),
-      updateInput: (_, input, revision) async =>
+      updateInput: (_, input, revision, {scopeId}) async =>
           state(revision, input, input: input),
       execute: (_, revision, candidate) async {
         executed++;
@@ -966,11 +1194,12 @@ void main() {
     expect(executed, 0);
   });
 
-  testWidgets('typing keeps the active scope', (tester) async {
-    final copy = candidate('action:core.directory.copy:c1', 'Copy Path');
+  testWidgets('typing keeps the active Scope', (tester) async {
+    final copy = candidate('action:core.directory.copy:c1', 'Copy Path',
+        groupId: 'app.editor');
     final git =
         candidate('action:core.git.status:c1', 'Git Status', groupId: 'git');
-    LauncherStateDto scoped(int revision, String input) => LauncherStateDto(
+    LauncherStateDto scoped(int revision, String input) => launcherSnapshot(
           sessionId: 1,
           revision: revision,
           snapshotSeq: 1,
@@ -978,18 +1207,14 @@ void main() {
           contextComplete: true,
           contexts: [],
           contextCaptures: const [],
-          candidates: [copy, git],
-          scopes: [
-            ScopeDto(
-                id: 'app',
-                kind: ScopeKindDto.app,
-                label: 'Finder',
-                candidateIds: [copy.id]),
-            ScopeDto(
-                id: 'git',
-                kind: ScopeKindDto.group,
-                label: 'Git',
-                candidateIds: [git.id]),
+          contextCandidates: [copy, git],
+          candidates: [copy, git]
+              .where((action) =>
+                  action.title.toLowerCase().contains(input.toLowerCase()))
+              .toList(),
+          roots: [
+            contextFixture(id: 'app', label: 'Finder', candidateIds: [copy.id]),
+            contextFixture(id: 'git', label: 'Git', candidateIds: [git.id]),
           ],
           diagnostics: [],
         );
@@ -997,24 +1222,28 @@ void main() {
       window: channel,
       beginActivation: () => 1,
       activate: (_, {promptAccessibility = false}) async => scoped(0, ''),
-      updateInput: (_, input, revision) async => scoped(revision, input),
+      updateInput: (_, input, revision, {scopeId}) async =>
+          scoped(revision, input),
       execute: (_, __, ___) async => throw StateError('not invoked'),
       deactivate: (_) async {},
     ));
     await toggle(tester);
     expect(find.text('Copy Path'), findsOneWidget);
-    expect(find.text('Git Status'), findsNothing);
+    expect(find.text('Git Status'), findsOneWidget);
+    expect(find.text('Search Editor actions…'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'copy');
     await tester.pumpAndSettle();
     expect(find.text('Copy Path'), findsOneWidget);
     expect(find.text('Git Status'), findsNothing);
   });
 
-  testWidgets('Esc clears query then scope then the window', (tester) async {
-    final copy = candidate('action:core.directory.copy:c1', 'Copy Path');
+  testWidgets('Esc clears query then Scope then closes the window',
+      (tester) async {
+    final copy = candidate('action:core.directory.copy:c1', 'Copy Path',
+        groupId: 'app.editor');
     final git =
         candidate('action:core.git.status:c1', 'Git Status', groupId: 'git');
-    LauncherStateDto scoped(int revision, String input) => LauncherStateDto(
+    LauncherStateDto scoped(int revision, String input) => launcherSnapshot(
           sessionId: 1,
           revision: revision,
           snapshotSeq: 1,
@@ -1022,18 +1251,14 @@ void main() {
           contextComplete: true,
           contexts: [],
           contextCaptures: const [],
-          candidates: [copy, git],
-          scopes: [
-            ScopeDto(
-                id: 'app',
-                kind: ScopeKindDto.app,
-                label: 'Finder',
-                candidateIds: [copy.id]),
-            ScopeDto(
-                id: 'git',
-                kind: ScopeKindDto.group,
-                label: 'Git',
-                candidateIds: [git.id]),
+          contextCandidates: [copy, git],
+          candidates: [copy, git]
+              .where((action) =>
+                  action.title.toLowerCase().contains(input.toLowerCase()))
+              .toList(),
+          roots: [
+            contextFixture(id: 'app', label: 'Finder', candidateIds: [copy.id]),
+            contextFixture(id: 'git', label: 'Git', candidateIds: [git.id]),
           ],
           diagnostics: [],
         );
@@ -1042,7 +1267,8 @@ void main() {
       window: channel,
       beginActivation: () => 1,
       activate: (_, {promptAccessibility = false}) async => scoped(0, ''),
-      updateInput: (_, input, revision) async => scoped(revision, input),
+      updateInput: (_, input, revision, {scopeId}) async =>
+          scoped(revision, input),
       execute: (_, __, ___) async => throw StateError('not invoked'),
       deactivate: (_) async {
         deactivated++;
@@ -1056,12 +1282,13 @@ void main() {
     expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
         isEmpty);
     expect(find.text('Copy Path'), findsOneWidget);
-    expect(find.text('Git Status'), findsNothing);
+    expect(find.text('Git Status'), findsOneWidget);
+    expect(find.text('Search Editor actions…'), findsOneWidget);
     expect(deactivated, 0);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(find.text('Copy Path'), findsOneWidget);
     expect(find.text('Git Status'), findsOneWidget);
+    expect(find.text('Search for an action or app…'), findsOneWidget);
     expect(deactivated, 0);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
@@ -1071,10 +1298,11 @@ void main() {
 
   testWidgets('another wake entry switches mode in place and keeps the query',
       (tester) async {
-    final copy = candidate('action:core.directory.copy:c1', 'Copy Path');
+    final copy = candidate('action:core.directory.copy:c1', 'Copy Path',
+        groupId: 'app.editor');
     final git =
         candidate('action:core.git.status:c1', 'Git Status', groupId: 'git');
-    LauncherStateDto scoped(int revision, String input) => LauncherStateDto(
+    LauncherStateDto scoped(int revision, String input) => launcherSnapshot(
           sessionId: 1,
           revision: revision,
           snapshotSeq: 1,
@@ -1082,18 +1310,14 @@ void main() {
           contextComplete: true,
           contexts: [],
           contextCaptures: const [],
-          candidates: [copy, git],
-          scopes: [
-            ScopeDto(
-                id: 'app',
-                kind: ScopeKindDto.app,
-                label: 'Finder',
-                candidateIds: [copy.id]),
-            ScopeDto(
-                id: 'git',
-                kind: ScopeKindDto.group,
-                label: 'Git',
-                candidateIds: [git.id]),
+          contextCandidates: [copy, git],
+          candidates: [copy, git]
+              .where((action) =>
+                  action.title.toLowerCase().contains(input.toLowerCase()))
+              .toList(),
+          roots: [
+            contextFixture(id: 'app', label: 'Finder', candidateIds: [copy.id]),
+            contextFixture(id: 'git', label: 'Git', candidateIds: [git.id]),
           ],
           diagnostics: [],
         );
@@ -1101,7 +1325,8 @@ void main() {
       window: channel,
       beginActivation: () => 1,
       activate: (_, {promptAccessibility = false}) async => scoped(0, ''),
-      updateInput: (_, input, revision) async => scoped(revision, input),
+      updateInput: (_, input, revision, {scopeId}) async =>
+          scoped(revision, input),
       execute: (_, __, ___) async => throw StateError('not invoked'),
       deactivate: (_) async {},
     ));
@@ -1112,19 +1337,170 @@ void main() {
     expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
         'copy');
     expect(find.text('Copy Path'), findsOneWidget);
-    expect(find.text('Git Status'), findsOneWidget);
+    expect(find.text('Git Status'), findsNothing);
+    expect(find.text('Search for an action or app…'), findsOneWidget);
     expect(windowCalls, isNot(contains('hide')));
     await toggle(tester, mode: 'universal');
     await tester.pumpAndSettle();
     expect(windowCalls.last, 'hide');
   });
 
-  testWidgets('Current App late snapshot is selected while idle',
+  testWidgets(
+      'URL actions show page or clipboard source and execute the selected target',
       (tester) async {
+    const pageUrl = 'https://example.org/current';
+    final pageCopy = candidate('action:core.url.copy:page', 'Copy URL',
+        groupId: 'web', executionContextId: 'page', subtitle: pageUrl);
+    final pageOpen = candidate(
+        'action:core.url.open:page', 'Open in Default Browser',
+        groupId: 'web', executionContextId: 'page', subtitle: pageUrl);
+    final clipboardOpen = candidate(
+        'action:core.url.open:clipboard', 'Open in Default Browser',
+        groupId: 'web',
+        executionContextId: 'clipboard',
+        subtitle: 'Copied URL');
+    // Rust omits redundant Copy URL for the clipboard's own value.
+    final offers = [pageCopy, pageOpen, clipboardOpen];
+    final contexts = [
+      contextFixture(
+          id: 'clipboard',
+          label: 'Clipboard',
+          typeId: 'core.url',
+          source: ContextSourceDto.clipboard,
+          detail: 'Copied URL',
+          candidateIds: [clipboardOpen.id]),
+      contextFixture(
+          id: 'page',
+          label: 'Current page',
+          typeId: 'core.url',
+          source: ContextSourceDto.browserCurrentPage,
+          detail: pageUrl,
+          candidateIds: [pageCopy.id, pageOpen.id]),
+    ];
+    final executed = <String>[];
+    LauncherStateDto snapshot(int revision, String input) => launcherSnapshot(
+            sessionId: 1,
+            revision: revision,
+            snapshotSeq: 1,
+            input: input,
+            contextComplete: true,
+            contexts: contexts,
+            contextCandidates: offers,
+            candidates: offers
+                .where((action) =>
+                    action.title.toLowerCase().contains(input.toLowerCase()))
+                .toList(),
+            scopes: const [
+              ScopeDto(
+                  id: 'app.edge', label: 'Microsoft Edge', isCurrentApp: true),
+              ScopeDto(id: 'web', label: 'Web', isCurrentApp: false),
+            ],
+            diagnostics: []);
+    await tester.pumpWidget(LauncherApp(
+        window: channel,
+        beginActivation: () => 1,
+        activate: (_, {promptAccessibility = false}) async => snapshot(0, ''),
+        updateInput: (_, input, revision, {scopeId}) async =>
+            snapshot(revision, input),
+        execute: (session, revision, id) async {
+          executed.add(id);
+          return ActionResultDto(
+              sessionId: session,
+              revision: revision,
+              status: ActionStatusDto.succeeded,
+              closeWindow: false);
+        },
+        deactivate: (_) async {}));
+    await toggle(tester);
+    expect(find.text('Copy URL'), findsOneWidget);
+    expect(find.text('Open in Default Browser'), findsNWidgets(2));
+    expect(find.text('Current page · $pageUrl'), findsNWidgets(2));
+    expect(find.text('Clipboard · Copied URL'), findsOneWidget);
+    await tester.tap(find.text('Clipboard · Copied URL'));
+    await tester.pumpAndSettle();
+    expect(executed, [clipboardOpen.id]);
+    await tester.enterText(find.byType(TextField), 'copy');
+    await tester.pumpAndSettle();
+    expect(find.text('Current page · $pageUrl'), findsOneWidget);
+    expect(find.text('Clipboard · Copied URL'), findsNothing);
+    await tester.tap(find.text('Current page · $pageUrl'));
+    await tester.pumpAndSettle();
+    expect(executed, [clipboardOpen.id, pageCopy.id]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Current App with no menus shows and searches context actions',
+      (tester) async {
+    final copy = candidate('action:core.directory.copy:c1', 'Copy Path');
     final git =
         candidate('action:core.git.status:c1', 'Git Status', groupId: 'git');
-    final copy = candidate('action:core.directory.copy:c1', 'Copy Path');
-    final first = LauncherStateDto(
+    final hidden = candidate('action:hidden:c1', 'Git Hidden',
+        groupId: 'git', availability: AvailabilityDto.hidden);
+    final application = candidate('app:gittools', 'Git Tools',
+        kind: CandidateKindDto.application, groupId: 'app');
+    final offers = [copy, git, hidden, application];
+    final requests = <String?>[];
+    final executed = <String>[];
+    LauncherStateDto snapshot(int revision, String input) => launcherSnapshot(
+            sessionId: 1,
+            revision: revision,
+            snapshotSeq: 1,
+            input: input,
+            contextComplete: true,
+            contextCandidates: offers,
+            candidates: offers
+                .where((action) =>
+                    action.title.toLowerCase().contains(input.toLowerCase()))
+                .toList(),
+            scopes: const [
+              ScopeDto(id: 'app.finder', label: 'Finder', isCurrentApp: true),
+              ScopeDto(id: 'folder', label: 'Folder', isCurrentApp: false),
+              ScopeDto(id: 'git', label: 'Git', isCurrentApp: false),
+            ],
+            diagnostics: []);
+    await tester.pumpWidget(LauncherApp(
+        window: channel,
+        beginActivation: () => 1,
+        activate: (_, {promptAccessibility = false}) async => snapshot(0, ''),
+        updateInput: (_, input, revision, {scopeId}) async {
+          requests.add(scopeId);
+          return snapshot(revision, input);
+        },
+        execute: (session, revision, id) async {
+          executed.add(id);
+          return ActionResultDto(
+              sessionId: session,
+              revision: revision,
+              status: ActionStatusDto.succeeded,
+              closeWindow: false);
+        },
+        deactivate: (_) async {}));
+    await toggle(tester);
+    expect(find.text('Search Finder actions…'), findsOneWidget);
+    expect(find.text('Copy Path'), findsOneWidget);
+    expect(find.text('Git Status'), findsOneWidget);
+    expect(find.text('Browse Menus…'), findsNothing);
+    expect(find.text('Git Hidden'), findsNothing);
+    expect(find.text('Git Tools'), findsNothing);
+    await tester.enterText(find.byType(TextField), 'git');
+    await tester.pumpAndSettle();
+    expect(requests.last, 'app.finder');
+    expect(find.text('Git Status'), findsOneWidget);
+    expect(find.text('Copy Path'), findsNothing);
+    expect(find.text('Git Hidden'), findsNothing);
+    expect(find.text('Git Tools'), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(executed, [git.id]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('late Current App Scope is selected while idle', (tester) async {
+    final git =
+        candidate('action:core.git.status:c1', 'Git Status', groupId: 'git');
+    final copy = candidate('action:core.directory.copy:c1', 'Copy Path',
+        groupId: 'app.editor');
+    final first = launcherSnapshot(
       sessionId: 1,
       revision: 0,
       snapshotSeq: 1,
@@ -1133,16 +1509,12 @@ void main() {
       contexts: [],
       contextCaptures: const [],
       candidates: [git],
-      scopes: [
-        ScopeDto(
-            id: 'git',
-            kind: ScopeKindDto.group,
-            label: 'Git',
-            candidateIds: [git.id]),
+      roots: [
+        contextFixture(id: 'git', label: 'Git', candidateIds: [git.id]),
       ],
       diagnostics: [],
     );
-    final late = LauncherStateDto(
+    final late = launcherSnapshot(
       sessionId: 1,
       revision: 0,
       snapshotSeq: 2,
@@ -1151,17 +1523,9 @@ void main() {
       contexts: [],
       contextCaptures: const [],
       candidates: [copy, git],
-      scopes: [
-        ScopeDto(
-            id: 'app',
-            kind: ScopeKindDto.app,
-            label: 'Finder',
-            candidateIds: [copy.id]),
-        ScopeDto(
-            id: 'git',
-            kind: ScopeKindDto.group,
-            label: 'Git',
-            candidateIds: [git.id]),
+      roots: [
+        contextFixture(id: 'app', label: 'Finder', candidateIds: [copy.id]),
+        contextFixture(id: 'git', label: 'Git', candidateIds: [git.id]),
       ],
       diagnostics: [],
     );
@@ -1170,7 +1534,7 @@ void main() {
       window: channel,
       beginActivation: () => 1,
       activate: (_, {promptAccessibility = false}) async => first,
-      updateInput: (_, input, revision) async =>
+      updateInput: (_, input, revision, {scopeId}) async =>
           state(revision, input, input: input),
       execute: (_, __, ___) async => throw StateError('not invoked'),
       deactivate: (_) async {},
@@ -1191,6 +1555,7 @@ void main() {
     pending[0].complete(late);
     await tester.pumpAndSettle();
     expect(find.text('Copy Path'), findsOneWidget);
-    expect(find.text('Git Status'), findsNothing);
+    expect(find.text('Git Status'), findsOneWidget);
+    expect(find.text('Search Editor actions…'), findsOneWidget);
   });
 }

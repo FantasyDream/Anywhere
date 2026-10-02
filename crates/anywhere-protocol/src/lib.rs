@@ -12,7 +12,8 @@ pub type ActionId = String;
 /// Identity of one row in the list: an action *or* an application, with its object.
 pub type CandidateId = String;
 pub type GroupId = String;
-pub type ScopeId = String;
+/// Stable semantic identity of a context, independent of snapshot row numbering.
+pub type ContextKey = String;
 
 pub const TEXT: &str = "core.text";
 pub const URL: &str = "core.url";
@@ -75,6 +76,12 @@ pub struct ContextPresentation {
     pub label: String,
     pub detail: String,
     pub source: ContextSource,
+    pub key: ContextKey,
+    pub root_key: ContextKey,
+    pub icon_key: String,
+    pub capabilities: Vec<String>,
+    pub candidate_ids: Vec<CandidateId>,
+    pub primary_candidate_id: Option<CandidateId>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -83,6 +90,11 @@ pub enum ContextCaptureStatus {
     Captured,
     Empty,
     PermissionDenied,
+    Unsupported,
+    ApplicationChanged,
+    TimedOut,
+    TooLarge,
+    TooManyItems,
     Unavailable,
     Failed,
 }
@@ -116,11 +128,30 @@ pub struct CandidatePresentation {
     pub command_id: Option<ActionId>,
     /// Bundle identity of an application launch candidate.
     pub bundle_id: Option<String>,
-    /// App that owns an action exclusively (Current App scope); `None` for generic actions.
+    /// App provenance for an action; generic actions can also appear in Current App.
     pub owning_app: Option<String>,
     /// Menu ancestors. Empty when the title is the whole label.
     #[serde(default)]
     pub menu_path: Vec<String>,
+    /// Context roots that expose this offer. Canonical duplicate targets union membership.
+    #[serde(default)]
+    pub context_keys: Vec<ContextKey>,
+    /// Actual graph node used for execution; may be a capability derived from the root.
+    pub execution_context_id: Option<ContextId>,
+    pub execution_target_label: Option<String>,
+    /// Whether this candidate may be recommended directly on an empty-query home.
+    #[serde(default = "default_true")]
+    pub home_eligible: bool,
+    /// The default operation when Enter is pressed on its context.
+    #[serde(default)]
+    pub primary_action: bool,
+    /// Core-provided visual section within the context action panel.
+    #[serde(default)]
+    pub section_label: Option<String>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -171,21 +202,29 @@ impl Availability {
     }
 }
 
-/// Scope bar entry. Current App is first when it has visible actions; there is no All row.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ScopeEntry {
-    pub id: ScopeId,
-    pub kind: ScopeKind,
-    pub label: String,
-    /// Candidates of this scope in ranked order, after availability and filtering.
-    pub candidate_ids: Vec<CandidateId>,
+/// Query boundary. The current application's entry includes all actions;
+/// other entries filter a domain group independently of Context types.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Scope {
+    #[default]
+    Universal,
+    Group(GroupId),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ScopeKind {
-    App,
-    Group,
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScopeEntry {
+    pub id: GroupId,
+    pub label: String,
+    pub is_current_app: bool,
+}
+
+impl ScopeEntry {
+    pub fn contains(&self, candidate: &CandidatePresentation) -> bool {
+        candidate.kind == CandidateKind::Action
+            && candidate.availability.is_visible()
+            && (self.is_current_app || candidate.group_id == self.id)
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -201,34 +240,40 @@ pub struct LauncherState {
     pub context_complete: bool,
     pub context_summary: Vec<ContextPresentation>,
     #[serde(default)]
+    pub context_candidates: Vec<CandidatePresentation>,
+    pub preferred_context_key: Option<ContextKey>,
+    #[serde(default)]
+    pub scopes: Vec<ScopeEntry>,
+    pub selected_scope: Option<GroupId>,
+    #[serde(default)]
     pub context_captures: Vec<ContextCapturePresentation>,
     pub candidates: Vec<CandidatePresentation>,
-    pub scopes: Vec<ScopeEntry>,
     pub diagnostics: Vec<String>,
 }
 
 impl LauncherState {
     pub fn candidate(&self, id: &str) -> Option<&CandidatePresentation> {
-        self.candidates.iter().find(|candidate| candidate.id == id)
-    }
-    /// Candidate ids of a scope, or every visible candidate when the scope is unknown.
-    pub fn scope_candidate_ids(&self, scope_id: &str) -> Vec<&CandidatePresentation> {
-        let ids = self
-            .scopes
+        self.candidates
             .iter()
-            .find(|scope| scope.id == scope_id)
-            .map(|scope| scope.candidate_ids.as_slice());
-        match ids {
-            Some(ids) => ids
-                .iter()
-                .filter_map(|id| self.candidate(id))
-                .filter(|candidate| candidate.availability.is_visible())
-                .collect(),
-            None => self
+            .chain(&self.context_candidates)
+            .find(|candidate| candidate.id == id)
+    }
+    /// Missing groups remain empty; they never widen to Universal.
+    pub fn scoped_candidates(&self, scope: &Scope) -> Vec<&CandidatePresentation> {
+        match scope {
+            Scope::Universal => self
                 .candidates
                 .iter()
                 .filter(|candidate| candidate.availability.is_visible())
                 .collect(),
+            Scope::Group(key) => match self.scopes.iter().find(|entry| entry.id == *key) {
+                Some(entry) => self
+                    .context_candidates
+                    .iter()
+                    .filter(|candidate| entry.contains(candidate))
+                    .collect(),
+                None => Vec::new(),
+            },
         }
     }
 }
@@ -378,6 +423,19 @@ mod tests {
 
     #[test]
     fn capture_status_round_trips_and_old_states_default_to_empty() {
+        for status in [
+            ContextCaptureStatus::Unsupported,
+            ContextCaptureStatus::ApplicationChanged,
+            ContextCaptureStatus::TimedOut,
+            ContextCaptureStatus::TooLarge,
+            ContextCaptureStatus::TooManyItems,
+        ] {
+            let encoded = serde_json::to_value(status).unwrap();
+            assert_eq!(
+                serde_json::from_value::<ContextCaptureStatus>(encoded).unwrap(),
+                status
+            );
+        }
         let state = LauncherState {
             context_captures: vec![ContextCapturePresentation {
                 source: ContextSource::SelectedText,
@@ -425,7 +483,7 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
     }
 
     #[test]
-    fn scope_lookup_falls_back_to_every_visible_candidate() {
+    fn scope_lookup_hides_unavailable_and_missing_context_does_not_widen() {
         let state = LauncherState {
             session_id: 1,
             candidates: vec![
@@ -443,6 +501,12 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
                     bundle_id: None,
                     owning_app: None,
                     menu_path: Vec::new(),
+                    context_keys: Vec::new(),
+                    execution_context_id: None,
+                    execution_target_label: None,
+                    home_eligible: true,
+                    primary_action: false,
+                    section_label: None,
                 },
                 CandidatePresentation {
                     id: "app:com.google.Chrome".into(),
@@ -460,14 +524,84 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
                     bundle_id: Some("com.google.Chrome".into()),
                     owning_app: None,
                     menu_path: Vec::new(),
+                    context_keys: Vec::new(),
+                    execution_context_id: None,
+                    execution_target_label: None,
+                    home_eligible: true,
+                    primary_action: true,
+                    section_label: None,
                 },
             ],
             ..Default::default()
         };
-        let visible = state.scope_candidate_ids("unknown");
+        let visible = state.scoped_candidates(&Scope::Universal);
         assert_eq!(visible.len(), 1);
+        assert!(state
+            .scoped_candidates(&Scope::Group("missing".into()))
+            .is_empty());
         assert_eq!(visible[0].id, "app:com.google.Chrome");
         assert!(state.candidate("app:com.google.Chrome").is_some());
         assert!(state.candidate("missing").is_none());
+    }
+
+    #[test]
+    fn current_app_membership_includes_domains_and_disabled_actions_only() {
+        let hidden = CandidatePresentation {
+            id: "hidden".into(),
+            kind: CandidateKind::Action,
+            title: "Copy Path".into(),
+            subtitle: None,
+            shortcut: None,
+            icon: IconDescriptor { key: "copy".into() },
+            score: 1.0,
+            group_id: "folder".into(),
+            availability: Availability::hidden(),
+            command_id: Some("core.directory.copy".into()),
+            bundle_id: None,
+            owning_app: None,
+            menu_path: Vec::new(),
+            context_keys: Vec::new(),
+            execution_context_id: None,
+            execution_target_label: None,
+            home_eligible: true,
+            primary_action: false,
+            section_label: None,
+        };
+        let mut folder = hidden.clone();
+        folder.id = "folder-action".into();
+        folder.availability = Availability::enabled();
+        let mut git = folder.clone();
+        git.id = "git-action".into();
+        git.group_id = "git".into();
+        git.availability = Availability::disabled("Git unavailable");
+        let mut application = folder.clone();
+        application.id = "application".into();
+        application.kind = CandidateKind::Application;
+        let state = LauncherState {
+            context_candidates: vec![hidden, folder, git, application],
+            scopes: vec![
+                ScopeEntry {
+                    id: "app.finder".into(),
+                    label: "Finder".into(),
+                    is_current_app: true,
+                },
+                ScopeEntry {
+                    id: "folder".into(),
+                    label: "Folder".into(),
+                    is_current_app: false,
+                },
+            ],
+            ..Default::default()
+        };
+        let ids = |scope: &str| {
+            state
+                .scoped_candidates(&Scope::Group(scope.into()))
+                .iter()
+                .map(|action| action.id.as_str())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(ids("app.finder"), ["folder-action", "git-action"]);
+        assert_eq!(ids("folder"), ["folder-action"]);
+        assert!(ids("app.other").is_empty());
     }
 }

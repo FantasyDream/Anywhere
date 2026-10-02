@@ -6,6 +6,7 @@ import '../infrastructure/application_icon_cache.dart';
 import '../infrastructure/window_host.dart';
 import '../settings/host_settings.dart';
 import 'launcher_view_state.dart';
+import 'context_source_status.dart';
 
 export '../infrastructure/application_icon_cache.dart' show LoadIcon;
 
@@ -21,8 +22,8 @@ typedef Activate = Future<LauncherStateDto?> Function(
 });
 typedef PromptAccessibility = bool Function();
 typedef ApplyExcludedApps = Future<void> Function(List<String> bundleIds);
-typedef UpdateInput = Future<LauncherStateDto?> Function(
-    int session, String input, int revision);
+typedef UpdateInput = Future<LauncherStateDto?>
+    Function(int session, String input, int revision, {String? scopeId});
 typedef Execute = Future<ActionResultDto> Function(
   int session,
   int revision,
@@ -87,10 +88,12 @@ class LauncherController extends ChangeNotifier {
   final ApplicationIconCache icons;
   LauncherPhase _phase = LauncherPhase.hidden;
   LauncherStateDto? _snapshot;
+  List<ContextCaptureDto> _lastCaptures = const [];
   int? _session;
   int _generation = 0, _revision = 0, _requestedRevision = 0;
   String _input = '';
   String? _scopeId;
+  List<String>? _actionPath;
   WakeMode _wakeMode = WakeMode.currentApp;
   bool _scopeTouched = false;
   String? _selectedId, _message, _output, _resultSource;
@@ -107,6 +110,7 @@ class LauncherController extends ChangeNotifier {
         snapshot: _snapshot,
         input: _input,
         scopeId: _scopeId,
+        actionPath: _actionPath,
         selectedId: _selectedId,
         message: _message,
         output: _output,
@@ -118,6 +122,23 @@ class LauncherController extends ChangeNotifier {
   HostSettings get hostSettings => _settings;
   String? get statusMessage => _message;
   List<PluginStatusDto> get plugins => _plugins;
+  List<ContextSourceStatus> get contextSourceStatuses => [
+        for (final source in ContextSourceStatus.sources)
+          ContextSourceStatus(
+              source,
+              _lastCaptures
+                  .where((capture) => capture.source == source)
+                  .firstOrNull,
+              enabled: switch (source) {
+                ContextSourceDto.finderSelection =>
+                  _settings.captureFinderSelection,
+                ContextSourceDto.selectedText => _settings.captureSelectedText,
+                ContextSourceDto.browserCurrentPage =>
+                  _settings.captureBrowserCurrentPage,
+                ContextSourceDto.clipboard => _settings.captureClipboard,
+                _ => false,
+              }),
+      ];
 
   void _notify() {
     if (!_disposed) notifyListeners();
@@ -181,7 +202,9 @@ class LauncherController extends ChangeNotifier {
         return;
       }
       _input = '';
+      _actionPath = null;
       _snapshot = null;
+      _lastCaptures = const [];
       _selectedId = null;
       _userMoved = false;
       _scopeTouched = false;
@@ -218,6 +241,7 @@ class LauncherController extends ChangeNotifier {
     _snapshot = null;
     _phase = LauncherPhase.hidden;
     _input = '';
+    _actionPath = null;
     _scopeId = null;
     _scopeTouched = false;
     _selectedId = _message = _output = _resultSource = null;
@@ -247,25 +271,40 @@ class LauncherController extends ChangeNotifier {
       return;
     }
     _snapshot = state;
+    _lastCaptures = List.unmodifiable(state.contextCaptures);
     _revision = state.revision;
-    // A late menu or permission update can remove the selected scope entirely.
-    // Fall back to the full result list so unrelated actions remain reachable.
-    if (_scopeId != null &&
-        !state.scopes.any((scope) => scope.id == _scopeId)) {
+    if (_scopeId != null && !view.scopes.any((scope) => scope.id == _scopeId)) {
+      final removed = _scopeId;
       _scopeId = null;
+      _actionPath = null;
+      _scopeTouched = true;
+      if (state.selectedScope == removed) {
+        final generation = _generation;
+        final revision = _requestedRevision;
+        Future<void>.microtask(() async {
+          if (_current(generation) &&
+              _session == state.sessionId &&
+              _requestedRevision == revision &&
+              _scopeId == null) {
+            await update(_input);
+          }
+        });
+      }
     }
-    _maybeSelectCurrentApp();
+    // Menu permission can disappear while the aggregate Current App scope stays
+    // available through Folder/Git actions. Return to its home in that case.
+    if (_actionPath != null && !view.canBrowseMenus) _actionPath = null;
+    _maybeSelectScope();
     _reconcile();
     _requestIcons();
   }
 
   void _reconcile() {
-    final candidates = view.visibleCandidates;
-    if (_userMoved &&
-        candidates.any((candidate) => candidate.id == _selectedId)) {
+    final entries = view.visibleEntries;
+    if (_userMoved && entries.any((entry) => entry.key == _selectedId)) {
       return;
     }
-    _selectedId = candidates.isEmpty ? null : candidates.first.id;
+    _selectedId = entries.isEmpty ? null : entries.first.key;
     _userMoved = false;
   }
 
@@ -277,12 +316,16 @@ class LauncherController extends ChangeNotifier {
   }
 
   void _requestIcons() {
-    final candidates = view.visibleCandidates;
-    if (candidates.isEmpty) return;
+    final entries = view.visibleEntries;
+    if (entries.isEmpty) return;
     const prefetch = 4;
-    final start = (_iconFirst - prefetch).clamp(0, candidates.length);
-    final end = (_iconLast + prefetch).clamp(start, candidates.length);
-    icons.request(candidates.sublist(start, end));
+    final start = (_iconFirst - prefetch).clamp(0, entries.length);
+    final end = (_iconLast + prefetch).clamp(start, entries.length);
+    final candidates = <CandidateDto>[];
+    for (final entry in entries.sublist(start, end)) {
+      if (entry.candidate != null) candidates.add(entry.candidate!);
+    }
+    icons.request(candidates);
   }
 
   Future<void> _follow(int generation, int session) async {
@@ -319,13 +362,15 @@ class LauncherController extends ChangeNotifier {
     _requestedRevision = revision;
     final generation = _generation;
     _input = input;
+    _scopeTouched = true;
     _phase = LauncherPhase.resolving;
     _output = _message = null;
     _userMoved = false;
     icons.retryFailures();
     _notify();
     try {
-      final state = await _backend.updateInput(session, input, revision);
+      final state = await _backend.updateInput(session, input, revision,
+          scopeId: _scopeId);
       if (!_current(generation) ||
           !view.visible ||
           revision != _revision ||
@@ -350,14 +395,31 @@ class LauncherController extends ChangeNotifier {
 
   Future<void> executeSelected() async {
     final state = _snapshot;
-    final candidates = view.visibleCandidates;
+    final entries = view.visibleEntries;
     if (_phase != LauncherPhase.ready ||
         state == null ||
-        candidates.isEmpty ||
         state.revision != _revision) {
       return;
     }
-    final candidate = candidates[view.selectedIndex];
+    if (entries.isEmpty) return;
+    final entry = entries[view.selectedIndex];
+    if (entry.navigationPath != null) {
+      _actionPath = entry.navigationPath;
+      _selectedId = null;
+      _refreshPresentation();
+      await _syncWindow();
+      return;
+    }
+    await _executeCandidate(entry.candidate!);
+  }
+
+  Future<void> _executeCandidate(CandidateDto candidate) async {
+    final state = _snapshot;
+    if (_phase != LauncherPhase.ready ||
+        state == null ||
+        state.revision != _revision) {
+      return;
+    }
     if (candidate.availability != AvailabilityDto.enabled) {
       _message = candidate.availabilityReason ??
           'This action is not available right now.';
@@ -401,10 +463,11 @@ class LauncherController extends ChangeNotifier {
   }
 
   void move(int direction) {
-    final candidates = view.visibleCandidates;
-    if (view.resolving || candidates.isEmpty) return;
-    _selectedId =
-        candidates[(view.selectedIndex + direction) % candidates.length].id;
+    final entries = view.visibleEntries;
+    if (view.resolving || entries.isEmpty) return;
+    _selectedId = entries[
+            (view.selectedIndex + direction + entries.length) % entries.length]
+        .key;
     _userMoved = true;
     _output = null;
     _resultSource = null;
@@ -420,26 +483,27 @@ class LauncherController extends ChangeNotifier {
     final next = index < 0
         ? (direction >= 0 ? 0 : scopes.length - 1)
         : (index + direction + scopes.length) % scopes.length;
-    selectScope(scopes[next].id);
+    unawaited(selectScope(scopes[next].id));
   }
 
-  void _refreshPresentation() {
+  void _refreshPresentation({bool preserveSelection = false}) {
     _output = null;
     _resultSource = null;
     _resultStatus = null;
-    _userMoved = false;
+    _userMoved = preserveSelection;
     icons.retryFailures();
     _reconcile();
     _requestIcons();
     _notify();
   }
 
-  void selectScope(String id) {
-    if (!view.scopes.any((scope) => scope.id == id)) return;
+  Future<void> selectScope(String? id) async {
+    if (id != null && !view.scopes.any((scope) => scope.id == id)) return;
     _scopeId = id;
     _scopeTouched = true;
-    _refreshPresentation();
-    unawaited(_syncWindow());
+    _actionPath = null;
+    _selectedId = null;
+    await update(_input);
   }
 
   void back() {
@@ -480,6 +544,21 @@ class LauncherController extends ChangeNotifier {
     }
     _notify();
     await _window.show(generation, view.height, settings: true);
+  }
+
+  Future<void> openPrivacySettings(String pane) async {
+    if (_disposed) return;
+    final generation = _generation;
+    try {
+      await _window.openPrivacySettings(pane);
+      if (_current(generation)) await dismiss();
+    } catch (_) {
+      if (!_current(generation)) return;
+      _message =
+          'System Settings could not be opened. Open it from the Apple menu.';
+      _notify();
+      await _syncWindow();
+    }
   }
 
   Future<bool> saveSettings(HostSettings next) async {
@@ -538,40 +617,36 @@ class LauncherController extends ChangeNotifier {
       await update('');
       return;
     }
+    if (_actionPath != null) {
+      backMenu();
+      return;
+    }
     if (_scopeId != null) {
-      _scopeId = null;
-      _scopeTouched = true;
-      _refreshPresentation();
-      await _syncWindow();
+      await selectScope(null);
       return;
     }
     await dismiss();
   }
 
   void _applyWakeMode(WakeMode mode) {
+    _actionPath = null;
     _wakeMode = mode;
-    _scopeTouched = false;
-    if (mode == WakeMode.universal) {
-      _scopeId = null;
-    } else {
-      _promptCurrentAppAccess(mode);
-      if (view.scopes.any((scope) => scope.id == 'app')) {
-        _scopeId = 'app';
-      } else {
-        _scopeId = null;
-      }
-    }
-    _refreshPresentation();
-    unawaited(_syncWindow());
+    _scopeTouched = true;
+    if (mode == WakeMode.currentApp) _promptCurrentAppAccess(mode);
+    final app = view.scopes.where((scope) => scope.isCurrentApp).firstOrNull;
+    unawaited(selectScope(mode == WakeMode.currentApp ? app?.id : null));
   }
 
-  void _maybeSelectCurrentApp() {
-    if (_wakeMode != WakeMode.currentApp || _scopeTouched) return;
-    if (_input.trim().isNotEmpty) return;
-    if (_scopeId != null) return;
-    if (_snapshot?.scopes.any((scope) => scope.id == 'app') ?? false) {
-      _scopeId = 'app';
+  void _maybeSelectScope() {
+    if (_wakeMode != WakeMode.currentApp ||
+        _scopeTouched ||
+        _userMoved ||
+        _actionPath != null ||
+        _input.isNotEmpty) {
+      return;
     }
+    final app = view.scopes.where((scope) => scope.isCurrentApp).firstOrNull;
+    if (app != null) _scopeId = app.id;
   }
 
   Future<void> selectAndExecute(String id) async {
@@ -579,10 +654,40 @@ class LauncherController extends ChangeNotifier {
         !view.visibleCandidates.any((candidate) => candidate.id == id)) {
       return;
     }
-    _selectedId = id;
+    _selectedId = 'candidate:$id';
     _userMoved = true;
     _notify();
     await executeSelected();
+  }
+
+  Future<void> selectEntry(int index) async {
+    final entries = view.visibleEntries;
+    if (view.resolving || index < 0 || index >= entries.length) return;
+    _selectedId = entries[index].key;
+    _userMoved = true;
+    _notify();
+    await executeSelected();
+  }
+
+  Future<void> browseMenus() async {
+    if (_phase != LauncherPhase.ready ||
+        !view.canBrowseMenus ||
+        _input.isNotEmpty) {
+      return;
+    }
+    _actionPath = const [];
+    _selectedId = null;
+    _refreshPresentation();
+    await _syncWindow();
+  }
+
+  void backMenu() {
+    final path = _actionPath;
+    if (path == null || _input.isNotEmpty) return;
+    _actionPath = path.length <= 1 ? null : path.sublist(0, path.length - 1);
+    _selectedId = null;
+    _refreshPresentation();
+    unawaited(_syncWindow());
   }
 
   void _promptCurrentAppAccess(WakeMode mode) {

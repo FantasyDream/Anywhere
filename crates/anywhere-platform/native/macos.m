@@ -266,12 +266,20 @@ unsigned char *launcher_application_icon(const char *utf8_path, unsigned int siz
 
 // Clipboard text snapshot. Returns 1 and fills the output buffer on success,
 // 2 when the clipboard holds no plain text, 3 when the value exceeds capacity,
-// 0 when reading failed.
+// 4 when access is explicitly denied, 0 when reading failed.
 int launcher_clipboard_text(char *output, unsigned int capacity, unsigned int *out_length) {
     @autoreleasepool {
         if (out_length) *out_length = 0;
         NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
+        if (@available(macOS 15.4, *)) {
+            if (pasteboard.accessBehavior == NSPasteboardAccessBehaviorAlwaysDeny) return 4;
+        }
         NSString *text = [pasteboard stringForType:NSPasteboardTypeString];
+        // A permission prompt can change the policy during this read.
+        if (@available(macOS 15.4, *)) {
+            if (pasteboard.accessBehavior == NSPasteboardAccessBehaviorAlwaysDeny) return 4;
+        }
+        if (!text && [pasteboard.types containsObject:NSPasteboardTypeString]) return 0;
         if (text.length == 0) return 2;
         NSData *data = [text dataUsingEncoding:NSUTF8StringEncoding];
         if (!data) return 2;

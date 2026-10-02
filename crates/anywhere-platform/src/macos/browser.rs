@@ -2,7 +2,7 @@
 //! freezes its identity before the launcher takes focus; this adapter never
 //! activates or searches other browsers.
 use super::native::launcher_application_identity_matches;
-use crate::ApplicationInfo;
+use crate::{ApplicationInfo, ContextReadError};
 use anyhow::{anyhow, Result};
 use std::{
     ffi::CString,
@@ -56,14 +56,17 @@ pub(super) fn current_url(application: &ApplicationInfo) -> Result<Option<String
     let Some(browser) = Browser::for_bundle_id(&application.bundle_id) else {
         return Ok(None);
     };
+    if application.pid <= 0 || application.instance_id.as_deref().is_none_or(str::is_empty) {
+        return Err(ContextReadError::Unavailable.into());
+    }
     if !same_running_instance(application) {
-        return Ok(None);
+        return Err(ContextReadError::ApplicationChanged.into());
     }
     let result = read_current_url(browser);
     // `application id` resolves a bundle, not the PID captured at activation. A quit,
     // relaunch, or PID reuse during the Apple Event must discard the reply.
     if !same_running_instance(application) {
-        return Ok(None);
+        return Err(ContextReadError::ApplicationChanged.into());
     }
     let response = result?;
     Ok(validate_url(&response))
@@ -167,7 +170,7 @@ fn read_current_url(browser: Browser) -> Result<String> {
         if started.elapsed() >= CAPTURE_TIMEOUT {
             let _ = child.kill();
             let _ = child.wait();
-            return Err(anyhow!("Browser URL capture timed out"));
+            return Err(ContextReadError::TimedOut.into());
         }
         thread::sleep(Duration::from_millis(10));
     };
@@ -175,12 +178,12 @@ fn read_current_url(browser: Browser) -> Result<String> {
     let errors = receive(stderr)?;
     if !status.success() {
         if errors.bytes.windows(5).any(|window| window == b"-1743") {
-            return Err(anyhow!("Browser Automation permission denied"));
+            return Err(ContextReadError::PermissionDenied.into());
         }
         return Err(anyhow!("Browser URL capture failed"));
     }
     if output.exceeded {
-        return Err(anyhow!("Browser URL exceeds the capture size limit"));
+        return Err(ContextReadError::TooLarge.into());
     }
     String::from_utf8(output.bytes).map_err(|_| anyhow!("Browser URL is not UTF-8"))
 }
@@ -258,7 +261,12 @@ mod tests {
                 instance_id: None,
                 ..app.clone()
             };
-            assert!(current_url(&unidentified).unwrap().is_none());
+            assert_eq!(
+                current_url(&unidentified)
+                    .unwrap_err()
+                    .downcast_ref::<ContextReadError>(),
+                Some(&ContextReadError::Unavailable)
+            );
         }
         assert!(!supports(&app.bundle_id));
     }

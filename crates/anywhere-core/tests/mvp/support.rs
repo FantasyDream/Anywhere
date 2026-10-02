@@ -370,23 +370,30 @@ pub(crate) fn titles(state: &LauncherState) -> Vec<&str> {
         .map(|candidate| candidate.title.as_str())
         .collect()
 }
-pub(crate) fn scope<'a>(state: &'a LauncherState, id: &str) -> Vec<&'a str> {
+pub(crate) fn context_actions<'a>(state: &'a LauncherState, type_id: &str) -> Vec<&'a str> {
     state
-        .scopes
+        .context_summary
         .iter()
-        .find(|scope| scope.id == id)
-        .map(|scope| {
-            scope
-                .candidate_ids
+        .find(|context| context.type_id == type_id && context.key == context.root_key)
+        .map(|context| {
+            state
+                .context_candidates
                 .iter()
-                .filter_map(|id| state.candidate(id))
+                .filter(|candidate| candidate.context_keys.contains(&context.key))
+                .collect::<Vec<_>>()
+                .into_iter()
                 .map(|candidate| candidate.title.as_str())
                 .collect()
         })
         .unwrap_or_default()
 }
-pub(crate) fn scope_ids(state: &LauncherState) -> Vec<&str> {
-    state.scopes.iter().map(|scope| scope.id.as_str()).collect()
+pub(crate) fn context_types(state: &LauncherState) -> Vec<&str> {
+    state
+        .context_summary
+        .iter()
+        .filter(|context| context.key == context.root_key && !context.candidate_ids.is_empty())
+        .map(|context| context.type_id.as_str())
+        .collect()
 }
 
 /// Records tracing field names emitted while a test is running.

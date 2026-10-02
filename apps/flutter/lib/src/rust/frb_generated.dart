@@ -117,7 +117,10 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiSetExcludedApps({required List<String> bundleIds});
 
   Future<LauncherStateDto?> crateApiUpdateInput(
-      {required int sessionId, required String input, required int revision});
+      {required int sessionId,
+      required String input,
+      required int revision,
+      String? scopeId});
 
   Future<SnapshotWaitDto> crateApiWaitForSnapshot(
       {required int sessionId, required BigInt after});
@@ -482,13 +485,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   @override
   Future<LauncherStateDto?> crateApiUpdateInput(
-      {required int sessionId, required String input, required int revision}) {
+      {required int sessionId,
+      required String input,
+      required int revision,
+      String? scopeId}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_u_32(sessionId, serializer);
         sse_encode_String(input, serializer);
         sse_encode_u_32(revision, serializer);
+        sse_encode_opt_String(scopeId, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
             funcId: 15, port: port_);
       },
@@ -497,14 +504,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: sse_decode_AnyhowException,
       ),
       constMeta: kCrateApiUpdateInputConstMeta,
-      argValues: [sessionId, input, revision],
+      argValues: [sessionId, input, revision, scopeId],
       apiImpl: this,
     ));
   }
 
   TaskConstMeta get kCrateApiUpdateInputConstMeta => const TaskConstMeta(
         debugName: "update_input",
-        argNames: ["sessionId", "input", "revision"],
+        argNames: ["sessionId", "input", "revision", "scopeId"],
       );
 
   @override
@@ -590,22 +597,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   CandidateDto dco_decode_candidate_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 13)
-      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+    if (arr.length != 19)
+      throw Exception('unexpected arr length: expect 19 but see ${arr.length}');
     return CandidateDto(
       id: dco_decode_String(arr[0]),
       kind: dco_decode_candidate_kind_dto(arr[1]),
       title: dco_decode_String(arr[2]),
       menuPath: dco_decode_list_String(arr[3]),
-      subtitle: dco_decode_opt_String(arr[4]),
-      shortcut: dco_decode_opt_String(arr[5]),
-      iconKey: dco_decode_String(arr[6]),
-      score: dco_decode_f_32(arr[7]),
-      groupId: dco_decode_String(arr[8]),
-      availability: dco_decode_availability_dto(arr[9]),
-      availabilityReason: dco_decode_opt_String(arr[10]),
-      commandId: dco_decode_opt_String(arr[11]),
-      bundleId: dco_decode_opt_String(arr[12]),
+      contextKeys: dco_decode_list_String(arr[4]),
+      executionContextId: dco_decode_opt_String(arr[5]),
+      executionTargetLabel: dco_decode_opt_String(arr[6]),
+      homeEligible: dco_decode_bool(arr[7]),
+      primaryAction: dco_decode_bool(arr[8]),
+      sectionLabel: dco_decode_opt_String(arr[9]),
+      subtitle: dco_decode_opt_String(arr[10]),
+      shortcut: dco_decode_opt_String(arr[11]),
+      iconKey: dco_decode_String(arr[12]),
+      score: dco_decode_f_32(arr[13]),
+      groupId: dco_decode_String(arr[14]),
+      availability: dco_decode_availability_dto(arr[15]),
+      availabilityReason: dco_decode_opt_String(arr[16]),
+      commandId: dco_decode_opt_String(arr[17]),
+      bundleId: dco_decode_opt_String(arr[18]),
     );
   }
 
@@ -638,14 +651,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ContextDto dco_decode_context_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 5)
-      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
     return ContextDto(
       id: dco_decode_String(arr[0]),
       typeId: dco_decode_String(arr[1]),
       label: dco_decode_String(arr[2]),
       detail: dco_decode_String(arr[3]),
       source: dco_decode_context_source_dto(arr[4]),
+      key: dco_decode_String(arr[5]),
+      rootKey: dco_decode_String(arr[6]),
+      iconKey: dco_decode_String(arr[7]),
+      capabilities: dco_decode_list_String(arr[8]),
+      candidateIds: dco_decode_list_String(arr[9]),
+      primaryCandidateId: dco_decode_opt_String(arr[10]),
     );
   }
 
@@ -677,8 +696,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   LauncherStateDto dco_decode_launcher_state_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    if (arr.length != 13)
+      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
     return LauncherStateDto(
       sessionId: dco_decode_u_32(arr[0]),
       revision: dco_decode_u_32(arr[1]),
@@ -686,10 +705,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       input: dco_decode_String(arr[3]),
       contextComplete: dco_decode_bool(arr[4]),
       contexts: dco_decode_list_context_dto(arr[5]),
-      contextCaptures: dco_decode_list_context_capture_dto(arr[6]),
-      candidates: dco_decode_list_candidate_dto(arr[7]),
+      contextCandidates: dco_decode_list_candidate_dto(arr[6]),
+      preferredContextKey: dco_decode_opt_String(arr[7]),
       scopes: dco_decode_list_scope_dto(arr[8]),
-      diagnostics: dco_decode_list_String(arr[9]),
+      selectedScope: dco_decode_opt_String(arr[9]),
+      contextCaptures: dco_decode_list_context_capture_dto(arr[10]),
+      candidates: dco_decode_list_candidate_dto(arr[11]),
+      diagnostics: dco_decode_list_String(arr[12]),
     );
   }
 
@@ -770,20 +792,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ScopeDto dco_decode_scope_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return ScopeDto(
       id: dco_decode_String(arr[0]),
-      kind: dco_decode_scope_kind_dto(arr[1]),
-      label: dco_decode_String(arr[2]),
-      candidateIds: dco_decode_list_String(arr[3]),
+      label: dco_decode_String(arr[1]),
+      isCurrentApp: dco_decode_bool(arr[2]),
     );
-  }
-
-  @protected
-  ScopeKindDto dco_decode_scope_kind_dto(dynamic raw) {
-    // Codec=Dco (DartCObject based), see doc to use other codecs
-    return ScopeKindDto.values[raw as int];
   }
 
   @protected
@@ -896,6 +911,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_kind = sse_decode_candidate_kind_dto(deserializer);
     var var_title = sse_decode_String(deserializer);
     var var_menuPath = sse_decode_list_String(deserializer);
+    var var_contextKeys = sse_decode_list_String(deserializer);
+    var var_executionContextId = sse_decode_opt_String(deserializer);
+    var var_executionTargetLabel = sse_decode_opt_String(deserializer);
+    var var_homeEligible = sse_decode_bool(deserializer);
+    var var_primaryAction = sse_decode_bool(deserializer);
+    var var_sectionLabel = sse_decode_opt_String(deserializer);
     var var_subtitle = sse_decode_opt_String(deserializer);
     var var_shortcut = sse_decode_opt_String(deserializer);
     var var_iconKey = sse_decode_String(deserializer);
@@ -910,6 +931,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         kind: var_kind,
         title: var_title,
         menuPath: var_menuPath,
+        contextKeys: var_contextKeys,
+        executionContextId: var_executionContextId,
+        executionTargetLabel: var_executionTargetLabel,
+        homeEligible: var_homeEligible,
+        primaryAction: var_primaryAction,
+        sectionLabel: var_sectionLabel,
         subtitle: var_subtitle,
         shortcut: var_shortcut,
         iconKey: var_iconKey,
@@ -955,12 +982,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_label = sse_decode_String(deserializer);
     var var_detail = sse_decode_String(deserializer);
     var var_source = sse_decode_context_source_dto(deserializer);
+    var var_key = sse_decode_String(deserializer);
+    var var_rootKey = sse_decode_String(deserializer);
+    var var_iconKey = sse_decode_String(deserializer);
+    var var_capabilities = sse_decode_list_String(deserializer);
+    var var_candidateIds = sse_decode_list_String(deserializer);
+    var var_primaryCandidateId = sse_decode_opt_String(deserializer);
     return ContextDto(
         id: var_id,
         typeId: var_typeId,
         label: var_label,
         detail: var_detail,
-        source: var_source);
+        source: var_source,
+        key: var_key,
+        rootKey: var_rootKey,
+        iconKey: var_iconKey,
+        capabilities: var_capabilities,
+        candidateIds: var_candidateIds,
+        primaryCandidateId: var_primaryCandidateId);
   }
 
   @protected
@@ -997,9 +1036,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_input = sse_decode_String(deserializer);
     var var_contextComplete = sse_decode_bool(deserializer);
     var var_contexts = sse_decode_list_context_dto(deserializer);
+    var var_contextCandidates = sse_decode_list_candidate_dto(deserializer);
+    var var_preferredContextKey = sse_decode_opt_String(deserializer);
+    var var_scopes = sse_decode_list_scope_dto(deserializer);
+    var var_selectedScope = sse_decode_opt_String(deserializer);
     var var_contextCaptures = sse_decode_list_context_capture_dto(deserializer);
     var var_candidates = sse_decode_list_candidate_dto(deserializer);
-    var var_scopes = sse_decode_list_scope_dto(deserializer);
     var var_diagnostics = sse_decode_list_String(deserializer);
     return LauncherStateDto(
         sessionId: var_sessionId,
@@ -1008,9 +1050,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         input: var_input,
         contextComplete: var_contextComplete,
         contexts: var_contexts,
+        contextCandidates: var_contextCandidates,
+        preferredContextKey: var_preferredContextKey,
+        scopes: var_scopes,
+        selectedScope: var_selectedScope,
         contextCaptures: var_contextCaptures,
         candidates: var_candidates,
-        scopes: var_scopes,
         diagnostics: var_diagnostics);
   }
 
@@ -1143,21 +1188,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ScopeDto sse_decode_scope_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_String(deserializer);
-    var var_kind = sse_decode_scope_kind_dto(deserializer);
     var var_label = sse_decode_String(deserializer);
-    var var_candidateIds = sse_decode_list_String(deserializer);
+    var var_isCurrentApp = sse_decode_bool(deserializer);
     return ScopeDto(
-        id: var_id,
-        kind: var_kind,
-        label: var_label,
-        candidateIds: var_candidateIds);
-  }
-
-  @protected
-  ScopeKindDto sse_decode_scope_kind_dto(SseDeserializer deserializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    var inner = sse_decode_i_32(deserializer);
-    return ScopeKindDto.values[inner];
+        id: var_id, label: var_label, isCurrentApp: var_isCurrentApp);
   }
 
   @protected
@@ -1259,6 +1293,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_candidate_kind_dto(self.kind, serializer);
     sse_encode_String(self.title, serializer);
     sse_encode_list_String(self.menuPath, serializer);
+    sse_encode_list_String(self.contextKeys, serializer);
+    sse_encode_opt_String(self.executionContextId, serializer);
+    sse_encode_opt_String(self.executionTargetLabel, serializer);
+    sse_encode_bool(self.homeEligible, serializer);
+    sse_encode_bool(self.primaryAction, serializer);
+    sse_encode_opt_String(self.sectionLabel, serializer);
     sse_encode_opt_String(self.subtitle, serializer);
     sse_encode_opt_String(self.shortcut, serializer);
     sse_encode_String(self.iconKey, serializer);
@@ -1301,6 +1341,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.label, serializer);
     sse_encode_String(self.detail, serializer);
     sse_encode_context_source_dto(self.source, serializer);
+    sse_encode_String(self.key, serializer);
+    sse_encode_String(self.rootKey, serializer);
+    sse_encode_String(self.iconKey, serializer);
+    sse_encode_list_String(self.capabilities, serializer);
+    sse_encode_list_String(self.candidateIds, serializer);
+    sse_encode_opt_String(self.primaryCandidateId, serializer);
   }
 
   @protected
@@ -1338,9 +1384,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.input, serializer);
     sse_encode_bool(self.contextComplete, serializer);
     sse_encode_list_context_dto(self.contexts, serializer);
+    sse_encode_list_candidate_dto(self.contextCandidates, serializer);
+    sse_encode_opt_String(self.preferredContextKey, serializer);
+    sse_encode_list_scope_dto(self.scopes, serializer);
+    sse_encode_opt_String(self.selectedScope, serializer);
     sse_encode_list_context_capture_dto(self.contextCaptures, serializer);
     sse_encode_list_candidate_dto(self.candidates, serializer);
-    sse_encode_list_scope_dto(self.scopes, serializer);
     sse_encode_list_String(self.diagnostics, serializer);
   }
 
@@ -1456,15 +1505,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_scope_dto(ScopeDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.id, serializer);
-    sse_encode_scope_kind_dto(self.kind, serializer);
     sse_encode_String(self.label, serializer);
-    sse_encode_list_String(self.candidateIds, serializer);
-  }
-
-  @protected
-  void sse_encode_scope_kind_dto(ScopeKindDto self, SseSerializer serializer) {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    sse_encode_i_32(self.index, serializer);
+    sse_encode_bool(self.isCurrentApp, serializer);
   }
 
   @protected

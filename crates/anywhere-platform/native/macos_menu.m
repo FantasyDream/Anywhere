@@ -302,18 +302,6 @@ static NSString *selected_text_error_status(AXError error) {
     }
 }
 
-// Limit both the context size and the amount of selected text copied into JSON.
-// AX may supply an arbitrarily large NSString; preserve a valid surrogate pair
-// at the cut point so UTF-8 conversion cannot introduce a replacement glyph.
-static NSString *bounded_selected_text(NSString *text) {
-    static const NSUInteger kMaxSelectedTextUTF16Units = 4096;
-    if (text.length <= kMaxSelectedTextUTF16Units) return text;
-    NSUInteger end = kMaxSelectedTextUTF16Units;
-    unichar last = [text characterAtIndex:end - 1];
-    if (last >= 0xD800 && last <= 0xDBFF) end--;
-    return [text substringToIndex:end];
-}
-
 // Split out for synthetic AX tests; production configures a short timeout on
 // the focused control, while dictionary-backed test nodes cannot accept one.
 static NSDictionary *selected_text_for_app(AXUIElementRef app, BOOL configureTimeout,
@@ -348,9 +336,16 @@ static NSDictionary *selected_text_for_app(AXUIElementRef app, BOOL configureTim
         return @{ @"status": @"unsupported" };
     }
     NSString *value = (__bridge NSString *)selected;
-    NSString *bounded = bounded_selected_text(value);
-    NSDictionary *result = bounded.length > 0
-        ? @{ @"status": @"ok", @"text": bounded, @"truncated": @(bounded.length < value.length) }
+    // Reject huge strings before encoding. UTF-16 length is a safe lower bound
+    // for their UTF-8 byte length; the second check handles CJK and emoji.
+    static const NSUInteger kMaxSelectedTextBytes = 16 * 1024;
+    if (value.length > kMaxSelectedTextBytes ||
+        [value lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > kMaxSelectedTextBytes) {
+        CFRelease(selected);
+        return @{ @"status": @"too_large" };
+    }
+    NSDictionary *result = value.length > 0
+        ? @{ @"status": @"ok", @"text": value }
         : @{ @"status": @"no_selection" };
     CFRelease(selected);
     return result;

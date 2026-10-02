@@ -557,13 +557,18 @@ fn wire__crate__api__update_input_impl(
             let api_session_id = <u32>::sse_decode(&mut deserializer);
             let api_input = <String>::sse_decode(&mut deserializer);
             let api_revision = <u32>::sse_decode(&mut deserializer);
+            let api_scope_id = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| async move {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || async move {
-                        let output_ok =
-                            crate::api::update_input(api_session_id, api_input, api_revision)
-                                .await?;
+                        let output_ok = crate::api::update_input(
+                            api_session_id,
+                            api_input,
+                            api_revision,
+                            api_scope_id,
+                        )
+                        .await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -690,6 +695,12 @@ impl SseDecode for crate::api::CandidateDto {
         let mut var_kind = <crate::api::CandidateKindDto>::sse_decode(deserializer);
         let mut var_title = <String>::sse_decode(deserializer);
         let mut var_menuPath = <Vec<String>>::sse_decode(deserializer);
+        let mut var_contextKeys = <Vec<String>>::sse_decode(deserializer);
+        let mut var_executionContextId = <Option<String>>::sse_decode(deserializer);
+        let mut var_executionTargetLabel = <Option<String>>::sse_decode(deserializer);
+        let mut var_homeEligible = <bool>::sse_decode(deserializer);
+        let mut var_primaryAction = <bool>::sse_decode(deserializer);
+        let mut var_sectionLabel = <Option<String>>::sse_decode(deserializer);
         let mut var_subtitle = <Option<String>>::sse_decode(deserializer);
         let mut var_shortcut = <Option<String>>::sse_decode(deserializer);
         let mut var_iconKey = <String>::sse_decode(deserializer);
@@ -704,6 +715,12 @@ impl SseDecode for crate::api::CandidateDto {
             kind: var_kind,
             title: var_title,
             menu_path: var_menuPath,
+            context_keys: var_contextKeys,
+            execution_context_id: var_executionContextId,
+            execution_target_label: var_executionTargetLabel,
+            home_eligible: var_homeEligible,
+            primary_action: var_primaryAction,
+            section_label: var_sectionLabel,
             subtitle: var_subtitle,
             shortcut: var_shortcut,
             icon_key: var_iconKey,
@@ -751,8 +768,13 @@ impl SseDecode for crate::api::ContextCaptureStatusDto {
             0 => crate::api::ContextCaptureStatusDto::Captured,
             1 => crate::api::ContextCaptureStatusDto::Empty,
             2 => crate::api::ContextCaptureStatusDto::PermissionDenied,
-            3 => crate::api::ContextCaptureStatusDto::Unavailable,
-            4 => crate::api::ContextCaptureStatusDto::Failed,
+            3 => crate::api::ContextCaptureStatusDto::Unsupported,
+            4 => crate::api::ContextCaptureStatusDto::ApplicationChanged,
+            5 => crate::api::ContextCaptureStatusDto::TimedOut,
+            6 => crate::api::ContextCaptureStatusDto::TooLarge,
+            7 => crate::api::ContextCaptureStatusDto::TooManyItems,
+            8 => crate::api::ContextCaptureStatusDto::Unavailable,
+            9 => crate::api::ContextCaptureStatusDto::Failed,
             _ => unreachable!("Invalid variant for ContextCaptureStatusDto: {}", inner),
         };
     }
@@ -766,12 +788,24 @@ impl SseDecode for crate::api::ContextDto {
         let mut var_label = <String>::sse_decode(deserializer);
         let mut var_detail = <String>::sse_decode(deserializer);
         let mut var_source = <crate::api::ContextSourceDto>::sse_decode(deserializer);
+        let mut var_key = <String>::sse_decode(deserializer);
+        let mut var_rootKey = <String>::sse_decode(deserializer);
+        let mut var_iconKey = <String>::sse_decode(deserializer);
+        let mut var_capabilities = <Vec<String>>::sse_decode(deserializer);
+        let mut var_candidateIds = <Vec<String>>::sse_decode(deserializer);
+        let mut var_primaryCandidateId = <Option<String>>::sse_decode(deserializer);
         return crate::api::ContextDto {
             id: var_id,
             type_id: var_typeId,
             label: var_label,
             detail: var_detail,
             source: var_source,
+            key: var_key,
+            root_key: var_rootKey,
+            icon_key: var_iconKey,
+            capabilities: var_capabilities,
+            candidate_ids: var_candidateIds,
+            primary_candidate_id: var_primaryCandidateId,
         };
     }
 }
@@ -823,10 +857,13 @@ impl SseDecode for crate::api::LauncherStateDto {
         let mut var_input = <String>::sse_decode(deserializer);
         let mut var_contextComplete = <bool>::sse_decode(deserializer);
         let mut var_contexts = <Vec<crate::api::ContextDto>>::sse_decode(deserializer);
+        let mut var_contextCandidates = <Vec<crate::api::CandidateDto>>::sse_decode(deserializer);
+        let mut var_preferredContextKey = <Option<String>>::sse_decode(deserializer);
+        let mut var_scopes = <Vec<crate::api::ScopeDto>>::sse_decode(deserializer);
+        let mut var_selectedScope = <Option<String>>::sse_decode(deserializer);
         let mut var_contextCaptures =
             <Vec<crate::api::ContextCaptureDto>>::sse_decode(deserializer);
         let mut var_candidates = <Vec<crate::api::CandidateDto>>::sse_decode(deserializer);
-        let mut var_scopes = <Vec<crate::api::ScopeDto>>::sse_decode(deserializer);
         let mut var_diagnostics = <Vec<String>>::sse_decode(deserializer);
         return crate::api::LauncherStateDto {
             session_id: var_sessionId,
@@ -835,9 +872,12 @@ impl SseDecode for crate::api::LauncherStateDto {
             input: var_input,
             context_complete: var_contextComplete,
             contexts: var_contexts,
+            context_candidates: var_contextCandidates,
+            preferred_context_key: var_preferredContextKey,
+            scopes: var_scopes,
+            selected_scope: var_selectedScope,
             context_captures: var_contextCaptures,
             candidates: var_candidates,
-            scopes: var_scopes,
             diagnostics: var_diagnostics,
         };
     }
@@ -978,26 +1018,12 @@ impl SseDecode for crate::api::ScopeDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_id = <String>::sse_decode(deserializer);
-        let mut var_kind = <crate::api::ScopeKindDto>::sse_decode(deserializer);
         let mut var_label = <String>::sse_decode(deserializer);
-        let mut var_candidateIds = <Vec<String>>::sse_decode(deserializer);
+        let mut var_isCurrentApp = <bool>::sse_decode(deserializer);
         return crate::api::ScopeDto {
             id: var_id,
-            kind: var_kind,
             label: var_label,
-            candidate_ids: var_candidateIds,
-        };
-    }
-}
-
-impl SseDecode for crate::api::ScopeKindDto {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <i32>::sse_decode(deserializer);
-        return match inner {
-            0 => crate::api::ScopeKindDto::App,
-            1 => crate::api::ScopeKindDto::Group,
-            _ => unreachable!("Invalid variant for ScopeKindDto: {}", inner),
+            is_current_app: var_isCurrentApp,
         };
     }
 }
@@ -1165,6 +1191,12 @@ impl flutter_rust_bridge::IntoDart for crate::api::CandidateDto {
             self.kind.into_into_dart().into_dart(),
             self.title.into_into_dart().into_dart(),
             self.menu_path.into_into_dart().into_dart(),
+            self.context_keys.into_into_dart().into_dart(),
+            self.execution_context_id.into_into_dart().into_dart(),
+            self.execution_target_label.into_into_dart().into_dart(),
+            self.home_eligible.into_into_dart().into_dart(),
+            self.primary_action.into_into_dart().into_dart(),
+            self.section_label.into_into_dart().into_dart(),
             self.subtitle.into_into_dart().into_dart(),
             self.shortcut.into_into_dart().into_dart(),
             self.icon_key.into_into_dart().into_dart(),
@@ -1228,8 +1260,13 @@ impl flutter_rust_bridge::IntoDart for crate::api::ContextCaptureStatusDto {
             Self::Captured => 0.into_dart(),
             Self::Empty => 1.into_dart(),
             Self::PermissionDenied => 2.into_dart(),
-            Self::Unavailable => 3.into_dart(),
-            Self::Failed => 4.into_dart(),
+            Self::Unsupported => 3.into_dart(),
+            Self::ApplicationChanged => 4.into_dart(),
+            Self::TimedOut => 5.into_dart(),
+            Self::TooLarge => 6.into_dart(),
+            Self::TooManyItems => 7.into_dart(),
+            Self::Unavailable => 8.into_dart(),
+            Self::Failed => 9.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -1254,6 +1291,12 @@ impl flutter_rust_bridge::IntoDart for crate::api::ContextDto {
             self.label.into_into_dart().into_dart(),
             self.detail.into_into_dart().into_dart(),
             self.source.into_into_dart().into_dart(),
+            self.key.into_into_dart().into_dart(),
+            self.root_key.into_into_dart().into_dart(),
+            self.icon_key.into_into_dart().into_dart(),
+            self.capabilities.into_into_dart().into_dart(),
+            self.candidate_ids.into_into_dart().into_dart(),
+            self.primary_candidate_id.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -1297,9 +1340,12 @@ impl flutter_rust_bridge::IntoDart for crate::api::LauncherStateDto {
             self.input.into_into_dart().into_dart(),
             self.context_complete.into_into_dart().into_dart(),
             self.contexts.into_into_dart().into_dart(),
+            self.context_candidates.into_into_dart().into_dart(),
+            self.preferred_context_key.into_into_dart().into_dart(),
+            self.scopes.into_into_dart().into_dart(),
+            self.selected_scope.into_into_dart().into_dart(),
             self.context_captures.into_into_dart().into_dart(),
             self.candidates.into_into_dart().into_dart(),
-            self.scopes.into_into_dart().into_dart(),
             self.diagnostics.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -1337,9 +1383,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::ScopeDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
             self.id.into_into_dart().into_dart(),
-            self.kind.into_into_dart().into_dart(),
             self.label.into_into_dart().into_dart(),
-            self.candidate_ids.into_into_dart().into_dart(),
+            self.is_current_app.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -1347,22 +1392,6 @@ impl flutter_rust_bridge::IntoDart for crate::api::ScopeDto {
 impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::ScopeDto {}
 impl flutter_rust_bridge::IntoIntoDart<crate::api::ScopeDto> for crate::api::ScopeDto {
     fn into_into_dart(self) -> crate::api::ScopeDto {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::ScopeKindDto {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        match self {
-            Self::App => 0.into_dart(),
-            Self::Group => 1.into_dart(),
-            _ => unreachable!(),
-        }
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::ScopeKindDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::ScopeKindDto> for crate::api::ScopeKindDto {
-    fn into_into_dart(self) -> crate::api::ScopeKindDto {
         self
     }
 }
@@ -1482,6 +1511,12 @@ impl SseEncode for crate::api::CandidateDto {
         <crate::api::CandidateKindDto>::sse_encode(self.kind, serializer);
         <String>::sse_encode(self.title, serializer);
         <Vec<String>>::sse_encode(self.menu_path, serializer);
+        <Vec<String>>::sse_encode(self.context_keys, serializer);
+        <Option<String>>::sse_encode(self.execution_context_id, serializer);
+        <Option<String>>::sse_encode(self.execution_target_label, serializer);
+        <bool>::sse_encode(self.home_eligible, serializer);
+        <bool>::sse_encode(self.primary_action, serializer);
+        <Option<String>>::sse_encode(self.section_label, serializer);
         <Option<String>>::sse_encode(self.subtitle, serializer);
         <Option<String>>::sse_encode(self.shortcut, serializer);
         <String>::sse_encode(self.icon_key, serializer);
@@ -1527,8 +1562,13 @@ impl SseEncode for crate::api::ContextCaptureStatusDto {
                 crate::api::ContextCaptureStatusDto::Captured => 0,
                 crate::api::ContextCaptureStatusDto::Empty => 1,
                 crate::api::ContextCaptureStatusDto::PermissionDenied => 2,
-                crate::api::ContextCaptureStatusDto::Unavailable => 3,
-                crate::api::ContextCaptureStatusDto::Failed => 4,
+                crate::api::ContextCaptureStatusDto::Unsupported => 3,
+                crate::api::ContextCaptureStatusDto::ApplicationChanged => 4,
+                crate::api::ContextCaptureStatusDto::TimedOut => 5,
+                crate::api::ContextCaptureStatusDto::TooLarge => 6,
+                crate::api::ContextCaptureStatusDto::TooManyItems => 7,
+                crate::api::ContextCaptureStatusDto::Unavailable => 8,
+                crate::api::ContextCaptureStatusDto::Failed => 9,
                 _ => {
                     unimplemented!("");
                 }
@@ -1546,6 +1586,12 @@ impl SseEncode for crate::api::ContextDto {
         <String>::sse_encode(self.label, serializer);
         <String>::sse_encode(self.detail, serializer);
         <crate::api::ContextSourceDto>::sse_encode(self.source, serializer);
+        <String>::sse_encode(self.key, serializer);
+        <String>::sse_encode(self.root_key, serializer);
+        <String>::sse_encode(self.icon_key, serializer);
+        <Vec<String>>::sse_encode(self.capabilities, serializer);
+        <Vec<String>>::sse_encode(self.candidate_ids, serializer);
+        <Option<String>>::sse_encode(self.primary_candidate_id, serializer);
     }
 }
 
@@ -1600,9 +1646,12 @@ impl SseEncode for crate::api::LauncherStateDto {
         <String>::sse_encode(self.input, serializer);
         <bool>::sse_encode(self.context_complete, serializer);
         <Vec<crate::api::ContextDto>>::sse_encode(self.contexts, serializer);
+        <Vec<crate::api::CandidateDto>>::sse_encode(self.context_candidates, serializer);
+        <Option<String>>::sse_encode(self.preferred_context_key, serializer);
+        <Vec<crate::api::ScopeDto>>::sse_encode(self.scopes, serializer);
+        <Option<String>>::sse_encode(self.selected_scope, serializer);
         <Vec<crate::api::ContextCaptureDto>>::sse_encode(self.context_captures, serializer);
         <Vec<crate::api::CandidateDto>>::sse_encode(self.candidates, serializer);
-        <Vec<crate::api::ScopeDto>>::sse_encode(self.scopes, serializer);
         <Vec<String>>::sse_encode(self.diagnostics, serializer);
     }
 }
@@ -1720,25 +1769,8 @@ impl SseEncode for crate::api::ScopeDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.id, serializer);
-        <crate::api::ScopeKindDto>::sse_encode(self.kind, serializer);
         <String>::sse_encode(self.label, serializer);
-        <Vec<String>>::sse_encode(self.candidate_ids, serializer);
-    }
-}
-
-impl SseEncode for crate::api::ScopeKindDto {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(
-            match self {
-                crate::api::ScopeKindDto::App => 0,
-                crate::api::ScopeKindDto::Group => 1,
-                _ => {
-                    unimplemented!("");
-                }
-            },
-            serializer,
-        );
+        <bool>::sse_encode(self.is_current_app, serializer);
     }
 }
 

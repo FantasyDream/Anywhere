@@ -6,8 +6,8 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `application`, `availability_dto`, `context_capture_status_dto`, `context_source_dto`, `kind_dto`, `load_plugins`, `plugin_reports`, `scope_kind_dto`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`
+// These functions are ignored because they are not marked as `pub`: `application`, `availability_dto`, `candidate_dto`, `context_capture_status_dto`, `context_source_dto`, `kind_dto`, `load_plugins`, `plugin_reports`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
 
@@ -27,9 +27,13 @@ Future<LauncherStateDto?> activate(
 Future<LauncherStateDto?> updateInput(
         {required int sessionId,
         required String input,
-        required int revision}) =>
+        required int revision,
+        String? scopeId}) =>
     RustLib.instance.api.crateApiUpdateInput(
-        sessionId: sessionId, input: input, revision: revision);
+        sessionId: sessionId,
+        input: input,
+        revision: revision,
+        scopeId: scopeId);
 
 /// Latest committed snapshot for a session, read straight from the core.
 ///
@@ -145,6 +149,12 @@ class CandidateDto {
   final CandidateKindDto kind;
   final String title;
   final List<String> menuPath;
+  final List<String> contextKeys;
+  final String? executionContextId;
+  final String? executionTargetLabel;
+  final bool homeEligible;
+  final bool primaryAction;
+  final String? sectionLabel;
   final String? subtitle;
   final String? shortcut;
   final String iconKey;
@@ -160,6 +170,12 @@ class CandidateDto {
     required this.kind,
     required this.title,
     required this.menuPath,
+    required this.contextKeys,
+    this.executionContextId,
+    this.executionTargetLabel,
+    required this.homeEligible,
+    required this.primaryAction,
+    this.sectionLabel,
     this.subtitle,
     this.shortcut,
     required this.iconKey,
@@ -177,6 +193,12 @@ class CandidateDto {
       kind.hashCode ^
       title.hashCode ^
       menuPath.hashCode ^
+      contextKeys.hashCode ^
+      executionContextId.hashCode ^
+      executionTargetLabel.hashCode ^
+      homeEligible.hashCode ^
+      primaryAction.hashCode ^
+      sectionLabel.hashCode ^
       subtitle.hashCode ^
       shortcut.hashCode ^
       iconKey.hashCode ^
@@ -196,6 +218,12 @@ class CandidateDto {
           kind == other.kind &&
           title == other.title &&
           menuPath == other.menuPath &&
+          contextKeys == other.contextKeys &&
+          executionContextId == other.executionContextId &&
+          executionTargetLabel == other.executionTargetLabel &&
+          homeEligible == other.homeEligible &&
+          primaryAction == other.primaryAction &&
+          sectionLabel == other.sectionLabel &&
           subtitle == other.subtitle &&
           shortcut == other.shortcut &&
           iconKey == other.iconKey &&
@@ -241,6 +269,11 @@ enum ContextCaptureStatusDto {
   captured,
   empty,
   permissionDenied,
+  unsupported,
+  applicationChanged,
+  timedOut,
+  tooLarge,
+  tooManyItems,
   unavailable,
   failed,
   ;
@@ -252,6 +285,12 @@ class ContextDto {
   final String label;
   final String detail;
   final ContextSourceDto source;
+  final String key;
+  final String rootKey;
+  final String iconKey;
+  final List<String> capabilities;
+  final List<String> candidateIds;
+  final String? primaryCandidateId;
 
   const ContextDto({
     required this.id,
@@ -259,6 +298,12 @@ class ContextDto {
     required this.label,
     required this.detail,
     required this.source,
+    required this.key,
+    required this.rootKey,
+    required this.iconKey,
+    required this.capabilities,
+    required this.candidateIds,
+    this.primaryCandidateId,
   });
 
   @override
@@ -267,7 +312,13 @@ class ContextDto {
       typeId.hashCode ^
       label.hashCode ^
       detail.hashCode ^
-      source.hashCode;
+      source.hashCode ^
+      key.hashCode ^
+      rootKey.hashCode ^
+      iconKey.hashCode ^
+      capabilities.hashCode ^
+      candidateIds.hashCode ^
+      primaryCandidateId.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -278,7 +329,13 @@ class ContextDto {
           typeId == other.typeId &&
           label == other.label &&
           detail == other.detail &&
-          source == other.source;
+          source == other.source &&
+          key == other.key &&
+          rootKey == other.rootKey &&
+          iconKey == other.iconKey &&
+          capabilities == other.capabilities &&
+          candidateIds == other.candidateIds &&
+          primaryCandidateId == other.primaryCandidateId;
 }
 
 enum ContextSourceDto {
@@ -299,9 +356,12 @@ class LauncherStateDto {
   final String input;
   final bool contextComplete;
   final List<ContextDto> contexts;
+  final List<CandidateDto> contextCandidates;
+  final String? preferredContextKey;
+  final List<ScopeDto> scopes;
+  final String? selectedScope;
   final List<ContextCaptureDto> contextCaptures;
   final List<CandidateDto> candidates;
-  final List<ScopeDto> scopes;
   final List<String> diagnostics;
 
   const LauncherStateDto({
@@ -311,9 +371,12 @@ class LauncherStateDto {
     required this.input,
     required this.contextComplete,
     required this.contexts,
+    required this.contextCandidates,
+    this.preferredContextKey,
+    required this.scopes,
+    this.selectedScope,
     required this.contextCaptures,
     required this.candidates,
-    required this.scopes,
     required this.diagnostics,
   });
 
@@ -325,9 +388,12 @@ class LauncherStateDto {
       input.hashCode ^
       contextComplete.hashCode ^
       contexts.hashCode ^
+      contextCandidates.hashCode ^
+      preferredContextKey.hashCode ^
+      scopes.hashCode ^
+      selectedScope.hashCode ^
       contextCaptures.hashCode ^
       candidates.hashCode ^
-      scopes.hashCode ^
       diagnostics.hashCode;
 
   @override
@@ -341,9 +407,12 @@ class LauncherStateDto {
           input == other.input &&
           contextComplete == other.contextComplete &&
           contexts == other.contexts &&
+          contextCandidates == other.contextCandidates &&
+          preferredContextKey == other.preferredContextKey &&
+          scopes == other.scopes &&
+          selectedScope == other.selectedScope &&
           contextCaptures == other.contextCaptures &&
           candidates == other.candidates &&
-          scopes == other.scopes &&
           diagnostics == other.diagnostics;
 }
 
@@ -373,20 +442,17 @@ class PluginStatusDto {
 
 class ScopeDto {
   final String id;
-  final ScopeKindDto kind;
   final String label;
-  final List<String> candidateIds;
+  final bool isCurrentApp;
 
   const ScopeDto({
     required this.id,
-    required this.kind,
     required this.label,
-    required this.candidateIds,
+    required this.isCurrentApp,
   });
 
   @override
-  int get hashCode =>
-      id.hashCode ^ kind.hashCode ^ label.hashCode ^ candidateIds.hashCode;
+  int get hashCode => id.hashCode ^ label.hashCode ^ isCurrentApp.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -394,15 +460,8 @@ class ScopeDto {
       other is ScopeDto &&
           runtimeType == other.runtimeType &&
           id == other.id &&
-          kind == other.kind &&
           label == other.label &&
-          candidateIds == other.candidateIds;
-}
-
-enum ScopeKindDto {
-  app,
-  group,
-  ;
+          isCurrentApp == other.isCurrentApp;
 }
 
 class SnapshotWaitDto {

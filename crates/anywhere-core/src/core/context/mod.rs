@@ -5,6 +5,7 @@
 //! into `core.url`, a directory into a `git.repository`. The engine walks that graph
 //! sequentially, and the registry holds the providers available to a session.
 pub mod engine;
+pub mod navigation;
 pub mod provider;
 pub mod registry;
 
@@ -202,6 +203,12 @@ impl ResolvedContext {
             label: label.into(),
             detail: self.display_detail(),
             source: self.source,
+            key: navigation::key(self),
+            root_key: navigation::key(self),
+            icon_key: String::new(),
+            capabilities: Vec::new(),
+            candidate_ids: Vec::new(),
+            primary_candidate_id: None,
         }
     }
 }

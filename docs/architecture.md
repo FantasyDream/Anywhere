@@ -87,25 +87,30 @@ Controller 用 hidden / activating / ready / resolving / executing 表达阶段�
 
 ## 当前搜索与 Scope 行为
 
-没有 All Scope；`scope = None` 是全局/综合模式。搜索引擎一次产出全量候选，Scope 是硬过滤，Ranking 只负责 Scope 内排序。
+最新交互以 [Scope / Menu 规范](scope-group-menu-design.md) 为准。Context Graph 保留对象、来源、血缘与执行节点；不直接成为 Scope。没有 Subject 对象模型或 Context 选择标题。Finder 多选采集与图插入仍保留集合血缘重映射，稳定 ContextKey 和执行目标用于 Core 数据与 Offer 归属。
 
-- **双入口**：Current App Launcher（`⌘⌥Space`）在有 Visible Action 时默认选中 Current App Scope；否则 `scope = None`。Universal Launcher（同一组合加 Shift）默认 `scope = None`。已打开时，同一入口再按一次关闭，另一入口原地切换并保留 Query。托盘/菜单提供两项。
-- Current App 没有 Visible Action 时不出现在 Scope 条。首屏没有、用户未改 Scope 且 Query 仍空时，迟到的 Current App 会自动选中。
-- Scope 激活后输入只搜该 Scope，不会自动退出；切 Scope 保留 Query。`scope = None` 时输入才进入 Universal Search（Apps + Actions）。空输入：Current App 是当前应用 Action 首页，Universal 是综合 Context Home。
-- `Ctrl+Tab` / `Ctrl+Shift+Tab` 循环真实 Scope，`scope = None` 不参与；回到全局用 Esc。Esc 分层：清 Query → 解除 Scope → 关闭 Launcher。
-- Scope 顺序：Current App 固定第一，其余按 Group 已执行 Action 的 frecency → `group_rank` → id。Session 内顺序冻结，Late Scope 只追加；Query 暂时去掉某个 Group 时保留槽位。Scope 是否存在由 Visible Actions 决定。应用启动候选只出现在 `scope = None`。
+Current App 是完整可见 Action 的聚合入口，包括所有领域和来源，不要求存在菜单动作；其他 Scope 来自 Action 的 group_id，只有有可见动作的 Group 才展示。Action Group 不绑定 ContextType；Disabled 保留原因，Hidden 不进入候选/Scope/目录。菜单属于 app.<bundle_id>，普通应用启动 Candidate 属于 Universal Search，不生成 Scope。应用名查询不会把全部菜单带出，应用名加动作关键词可直达具体菜单。
 
-空输入是 Context Home，Flutter 每屏默认展示最多 7 条；保留用户选中的稳定 ID。搜索结果可滚动。非空输入同时进行对象识别和查询匹配；显式输入对象的动作保留，环境动作需要匹配查询。
+`LauncherState` 发布查询匹配候选、完整 Action Offer、scopes 和 selected_scope。Scope 元数据使用完整可见动作，不被查询临时删减。`update_scoped_input` 为同一 Session 发起新 Revision，保留唤醒时的系统捕获和缓存；ActionMatcher 在匹配、可用性和打分前应用 Scope 边界：捕获的 Current App ID 聚合全部 Action，其他 Scope 按 Group 硬过滤；动作原 Group、Context、ID 与 Usage key 不变。Scope 查询不运行应用索引和其他 Universal 来源；SearchEngine 在排序前对排名与兜底来源复核同一边界，排除非 Action 候选。当前应用菜单浏览从完整 Offer 中只取该应用菜单，不为层级导航增加 Revision 或 Usage。
 
-动作与应用通过同一个 SearchEngine。ActionSearch 装配 ActionMatcher、额外候选来源及 TextFallbackSource；SourceStage 只表达现有 ranked/fallback 两个阶段，不包含未来调度策略。Scope 成员关系由 Visible Candidates 构建，Ranking 只排序候选。
+- **入口与查询**：Current App 默认选应用 Scope，缺少动作时为 None；Universal 默认 None。同入口再按一次关闭，切入口保留查询。Ctrl+Tab / Ctrl+Shift+Tab 循环可见分组，不包含 None。Scope 激活后查询保持在该域，无匹配时 Enter 不隐式扩大范围。
+- **菜单三态**：空查询最多 7 个推荐动作加 Browse Menus；输入后扁平搜索 Current App 的全部可用 Action（领域 Scope 只搜索其 Group）；Browse 根据 menu_path 的父路径生成子菜单和叶子候选。标题为叶子动作名，副标题为菜单路径。动态菜单推荐使用通用标题规则与真实历史，全部菜单始终可被搜索和浏览。
+- **Host 状态**：input、scopeId、actionPath、selectedId；actionPath null 是首页、[] 是菜单根、非空是子页。输入时忽略浏览边界但保留路径，清空后恢复；Scope 切换保留 Query 并清浏览路径。Esc 清查询、返回菜单（一级返回首页）、清 Scope、关闭。左右键仅在空输入且导航适用时被使用。
+- **顺序与异步更新**：Current App 内部预留首位，不为无动作应用显示空 chip；其他 Group 按实际执行的 frecency、最大动作 base_priority、稳定 group_id 初始化排序。Session 槽位冻结，迟到 Group 追加，Hidden Group 只暂时退出展示。用户移动选择后按稳定 Candidate ID 保持目标；迟到可用动作只在用户尚未操作时可使 Current App 成为默认 Scope。
 
-Group ID 集中在 `core/action/group.rs`。动作和分组标题由 Bundle 一起注册，Scope 标签读注册结果。声明式插件 `execute_builtin` 只能引用已注册的原生 Handler，注册和执行均检查 matcher 兼容性，不允许递归引用声明式插件。包装动作在注册时复制目标的 `AvailabilityRule`，保留插件自己的 ID、标题、分组和使用记录；非包装的 v1 动作保持默认 Enabled。TextFallbackSource 与 ActionMatcher 共用同一求值函数：Hidden 不进入候选，也不能从兜底路径重新加入；Disabled 保留原因，执行入口拒绝。
+执行缓存同时保留查询候选和完整 Offer，Action ID、Candidate ID、Usage key、Session/Revision 以及原生菜单复验沿原路径处理；Host 不猜执行参数。操作浏览、Scope 切换、查询都不计 Usage。旧 Revision、旧 Session、过期菜单定位继续拒绝执行。辅助权限缺失只隐藏菜单，不影响目录、Git 或应用搜索。
 
-SessionFacts 是本次唤醒的只读快照，查询变化不重新读取剪贴板或检测 Git。已知键目前是 `clipboard`（Text）和 `git`（Flag）。规则引用未知键或类型不符会在注册时拒绝；快照写入同样校验，不能通过 `from_map` 绕过。剪贴板缺失或读取失败不触发“内容重复”隐藏，读取失败写入诊断（含 Fact 名和原因，不含剪贴板正文）。Git 明确为 false 时 Disabled，原因为「Git 不可用」；捕获任务失败导致键缺失时 Disabled，原因为「无法确认 Git 是否可用」。`Enabled` 只是本次快照的展示判断，不是执行授权。
+ActionSearch 装配 ActionMatcher、额外 CandidateSource 和 TextFallbackSource。Group 标题由 Bundle 注册；声明式 execute_builtin 只能包装已注册原生 Handler，复制 AvailabilityRule，保留自己的 ID/标题/分组/历史。Hidden 不会从文本兜底重新加入。Core 负责业务、匹配、可用性、Ranking 与 Scope 元数据；Flutter 只负责显示与菜单导航。
+
+SessionFacts 是本次唤醒的只读快照，查询变化不重新读取剪贴板或检测 Git。已知键目前是 `clipboard`（Text）和 `git`（Flag）。规则引用未知键或类型不符会在注册时拒绝；快照写入同样校验，不能通过 `from_map` 绕过。Copy Path / Copy URL 通过同一 `hide_if(clipboard)` 规则隐藏重复复制；URL 上下文将剪贴板文本去掉首尾空白后解析为 URL 再比较，路径和普通文本仍精确比较。URL 查询参数、片段、非默认端口不同不会误判为相同。剪贴板缺失或读取失败不触发“内容重复”隐藏，读取失败写入诊断（含 Fact 名和原因，不含剪贴板正文）。Git 明确为 false 时 Disabled，原因为「Git 不可用」；捕获任务失败导致键缺失时 Disabled，原因为「无法确认 Git 是否可用」。`Enabled` 只是本次快照的展示判断，不是执行授权。
 
 打分保持现有规则：Exact / Prefix / WordPrefix / Substring 为 4000 / 3000 / 2000 / 1000；其余打分项总和封顶 950。频次每次 8 分，最多 160；最近使用最多 30。同分按 command/bundle ID 和稳定候选 ID 排序。文本兜底使用低分带并放在真实匹配之后。
 
 ## 平台与扩展取舍
+
+V0.4 来源的错误由平台层 `ContextReadError` 返回，不通过诊断字符串猜测权限。Core 直接使用协议的 `ContextCaptureStatus`，保留无内容、权限拒绝、控件不支持、实例变化、超时、大小限制、选中项限制和读取失败的区别；Flutter 根据安全状态元数据提示或展示设置。Finder 目录与选区使用同一有界读取路径，实例在读取前后复验，AppleScript 错误正文不进入日志。
+
+设置页只保留上次唤醒的来源/状态/时间，不保留旧 Context 正文。可恢复的异常在 Launcher 提示，空选区和不支持的控件留在设置页，避免正常唤醒被警告淹没。权限恢复只打开系统设置，不更改授权；下一次唤醒重新采集。剪贴板只在 macOS 能明确报告拒绝时展示权限拒绝，其他不可读情况报告不可用。
 
 应用目录由 `Platform::installed_applications` 提供，Core 只负责可搜索字段、别名和去重。macOS 从用户/系统 Applications 扫描。每次激活发起一次后台扫描，后完成的旧扫描会被丢弃；首屏不等索引，索引发布后重建当前快照。手动刷新、TTL、文件监听留待实际需求。
 
@@ -113,7 +118,7 @@ Provider 仍顺序执行、深度最多 3、节点最多 128，同版本 Provide
 
 Git 检测只读元数据。执行通过类型化 Status/Log/Diff 和固定 argv，不经任意 shell；保留超时、输出上限和禁用外部 diff/fsmonitor 的规则。
 
-后续交付顺序及架构调整时机以 [产品路线图](roadmap.md) 为准。当前先按 [V0.3.x 稳定版 MVP](mvp-v0.3x.md) 收尾菜单动作，再扩展 Context 来源；远期能力不在本次预建。
+后续交付顺序及架构调整时机以 [产品路线图](roadmap.md) 为准。当前 V0.4 Context 来源和 Scope / 菜单交互工程收尾已完成，真实应用及权限矩阵见 [验收记录](v0.4-context-acceptance.md)；远期能力不在本次预建。
 
 ## 构建
 

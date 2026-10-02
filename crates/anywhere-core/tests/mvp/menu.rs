@@ -32,7 +32,7 @@ async fn wait_for_title(app: &Application, session: SessionId, title: &str) -> L
 }
 
 #[tokio::test]
-async fn menu_actions_join_the_current_app_scope_and_do_not_create_another() {
+async fn menu_actions_belong_to_application_context_without_a_menu_root() {
     let platform = Arc::new(TestPlatform::new(
         tempfile::tempdir().unwrap().path().into(),
         false,
@@ -48,15 +48,19 @@ async fn menu_actions_join_the_current_app_scope_and_do_not_create_another() {
     let app = app(platform);
     let first = app.activate().await.unwrap().unwrap();
     let state = wait_for_title(&app, first.session_id, "Toggle Terminal").await;
-    assert_eq!(scope_ids(&state), ["app"]);
-    assert!(state.scopes.iter().all(|scope| scope.id == "app"));
+    assert_eq!(context_types(&state), [APPLICATION]);
     let action = state
         .candidates
         .iter()
         .find(|candidate| candidate.title == "Toggle Terminal")
         .unwrap();
-    assert_eq!(action.group_id, "app");
+    assert_eq!(action.group_id, "app.test.editor");
     assert_eq!(action.owning_app.as_deref(), Some("test.editor"));
+    assert!(action.home_eligible);
+    assert_eq!(action.section_label.as_deref(), Some("Editor"));
+    assert!(state.context_summary.iter().any(
+        |context| context.type_id == APPLICATION && action.context_keys.contains(&context.key)
+    ));
     assert!(action
         .command_id
         .as_deref()
@@ -65,7 +69,7 @@ async fn menu_actions_join_the_current_app_scope_and_do_not_create_another() {
 }
 
 #[tokio::test]
-async fn unauthorized_menu_access_hides_the_current_app_scope() {
+async fn unauthorized_menu_access_hides_the_application_context_entry() {
     let platform = Arc::new(TestPlatform::new(
         tempfile::tempdir().unwrap().path().into(),
         false,
@@ -77,9 +81,16 @@ async fn unauthorized_menu_access_hides_the_current_app_scope() {
     tokio::time::sleep(Duration::from_millis(30)).await;
     let latest = app.latest_state(state.session_id).unwrap();
     assert!(
-        !scope_ids(&latest).contains(&"app"),
+        !context_types(&latest).contains(&APPLICATION),
         "an editor without accessibility must not show an empty current app scope: {:?}",
-        scope_ids(&latest)
+        context_types(&latest)
+    );
+    assert!(
+        !latest
+            .context_summary
+            .iter()
+            .any(|context| context.type_id == APPLICATION && !context.candidate_ids.is_empty()),
+        "inaccessible menus have no application entry"
     );
 }
 
@@ -158,7 +169,7 @@ async fn discovery_started_before_access_revocation_cannot_republish_menus() {
         .candidates
         .iter()
         .any(|candidate| candidate.title == "About"));
-    assert!(!scope_ids(&latest).contains(&"app"));
+    assert!(!context_types(&latest).contains(&APPLICATION));
 }
 
 #[tokio::test]
@@ -191,7 +202,7 @@ async fn a_disabled_menu_action_is_hidden() {
 }
 
 #[tokio::test]
-async fn late_menu_discovery_does_not_reorder_existing_scopes() {
+async fn late_menu_discovery_keeps_directory_identity_and_adds_application_context() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().canonicalize().unwrap();
     std::fs::create_dir(root.join(".git")).unwrap();
@@ -211,29 +222,14 @@ async fn late_menu_discovery_does_not_reorder_existing_scopes() {
             .any(|candidate| candidate.title == "New Folder"),
         "slow discovery must not block the first snapshot"
     );
-    let before = scope_ids(&first);
-    assert!(before.contains(&"app") || before.contains(&"folder") || before.contains(&"git"));
+    let preferred = first.preferred_context_key.clone();
+    assert_eq!(context_types(&first), [DIRECTORY]);
     gate.release();
     let late = wait_for_title(&app, first.session_id, "New Folder").await;
-    let after = scope_ids(&late);
-    assert_eq!(after.first().copied(), Some("app"));
-    for id in &before {
-        assert!(
-            after.contains(id),
-            "{id} disappeared after late menus: {after:?}"
-        );
-        if *id != "app" {
-            let before_pos = before.iter().position(|entry| entry == id).unwrap();
-            let after_pos = after.iter().position(|entry| entry == id).unwrap();
-            let before_app = before.iter().position(|entry| *entry == "app");
-            if let Some(app_at) = before_app {
-                if before_pos > app_at {
-                    assert!(after_pos > 0);
-                }
-            }
-        }
-    }
-    assert!(!after.iter().any(|id| id.starts_with("app.")));
+    assert_eq!(context_types(&late), [DIRECTORY, APPLICATION]);
+    assert_eq!(late.preferred_context_key, preferred);
+    assert!(context_actions(&late, DIRECTORY).contains(&"Git Status"));
+    assert!(context_actions(&late, APPLICATION).contains(&"New Folder"));
 }
 
 #[tokio::test]
@@ -386,7 +382,7 @@ async fn successful_menu_execution_records_one_use_and_failure_records_none() {
 }
 
 #[tokio::test]
-async fn trusted_empty_menus_hide_the_current_app_scope() {
+async fn trusted_empty_menus_hide_the_application_context_entry() {
     let platform = Arc::new(TestPlatform::new(
         tempfile::tempdir().unwrap().path().into(),
         false,
@@ -398,9 +394,9 @@ async fn trusted_empty_menus_hide_the_current_app_scope() {
     tokio::time::sleep(Duration::from_millis(30)).await;
     let latest = app.latest_state(state.session_id).unwrap();
     assert!(
-        !scope_ids(&latest).contains(&"app"),
+        !context_types(&latest).contains(&APPLICATION),
         "no menu items must not create a current app scope: {:?}",
-        scope_ids(&latest)
+        context_types(&latest)
     );
 }
 
@@ -523,7 +519,7 @@ async fn menu_permission_does_not_disable_finder_directory_actions() {
     let app = app(platform.clone());
     let first = app.activate().await.unwrap().unwrap();
     let state = settled(&app, first.session_id, first.revision).await;
-    assert!(scope_ids(&state).contains(&"app"));
+    assert!(context_types(&state).contains(&DIRECTORY));
     assert!(state
         .candidates
         .iter()

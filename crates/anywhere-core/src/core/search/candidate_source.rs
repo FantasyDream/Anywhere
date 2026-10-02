@@ -11,6 +11,7 @@ use crate::core::search::query::Query;
 pub struct SearchContext<'a> {
     pub query: &'a Query,
     pub contexts: &'a [ResolvedContext],
+    pub scope_id: Option<&'a str>,
 }
 
 /// When a source's rows enter the pipeline.

@@ -1,11 +1,10 @@
 //! Finder context read through Automation. An empty selection is distinct from a failed read.
 use super::native::launcher_application_identity_matches;
-use super::shell::{require_directory, run};
-use crate::ApplicationInfo;
+use crate::{ApplicationInfo, ContextReadError};
 use anyhow::{bail, Context, Result};
 use std::{
     collections::HashSet,
-    ffi::{CString, OsStr},
+    ffi::CString,
     io::{self, Read},
     path::{Component, Path, PathBuf},
     process::{Command, Stdio},
@@ -21,20 +20,30 @@ pub(super) fn application_directory(application: &ApplicationInfo) -> Result<Opt
     if application.bundle_id != "com.apple.finder" {
         return Ok(None);
     }
+    // The diagnostic CLI can request an unbound directory read with pid=0.
+    // Activation always supplies a captured instance, checked on both sides.
+    let captured = application.pid != 0 || application.instance_id.is_some();
+    if captured {
+        verify_finder_instance(application)?;
+    }
     let script = include_str!("../../native/finder.applescript");
-    let output = run(
-        "/usr/bin/osascript",
-        &[OsStr::new("-e"), OsStr::new(script)],
-        None,
-    )?;
+    let output = run_finder_script(script)?;
+    if captured {
+        verify_finder_instance(application)?;
+    }
     // osascript appends one newline; do not trim valid spaces from a filesystem name.
     let path = output.strip_suffix('\n').unwrap_or(&output);
     if path.is_empty() {
         return Ok(None);
     }
     let path = PathBuf::from(path);
-    require_directory(&path)?;
-    Ok(Some(path.canonicalize()?))
+    if !path.is_dir() {
+        return Err(ContextReadError::Unavailable.into());
+    }
+    Ok(Some(
+        path.canonicalize()
+            .map_err(|_| ContextReadError::Unavailable)?,
+    ))
 }
 
 /// Read the selection associated with the Finder instance captured at activation.
@@ -47,7 +56,7 @@ pub(super) fn selected_paths(application: &ApplicationInfo) -> Result<Vec<PathBu
         return Ok(Vec::new());
     }
     verify_finder_instance(application)?;
-    let output = run_selection_script()?;
+    let output = run_finder_script(include_str!("../../native/finder_selection.applescript"))?;
     verify_finder_instance(application)?;
     parse_selected_paths(&output)
 }
@@ -57,9 +66,9 @@ fn verify_finder_instance(application: &ApplicationInfo) -> Result<()> {
         .instance_id
         .as_deref()
         .filter(|value| !value.is_empty())
-        .context("captured Finder process identity is unavailable")?;
+        .ok_or(ContextReadError::Unavailable)?;
     if application.pid <= 0 {
-        bail!("captured Finder process ID is unavailable");
+        return Err(ContextReadError::Unavailable.into());
     }
     let bundle_id = CString::new(application.bundle_id.as_str())
         .context("captured Finder bundle ID is invalid")?;
@@ -73,13 +82,12 @@ fn verify_finder_instance(application: &ApplicationInfo) -> Result<()> {
         )
     };
     if matches != 1 {
-        bail!("captured Finder process identity changed or is unavailable");
+        return Err(ContextReadError::ApplicationChanged.into());
     }
     Ok(())
 }
 
-fn run_selection_script() -> Result<String> {
-    let script = include_str!("../../native/finder_selection.applescript");
+fn run_finder_script(script: &str) -> Result<String> {
     let mut child = Command::new("/usr/bin/osascript")
         .args(["-e", script])
         .env("LC_ALL", "en_US.UTF-8")
@@ -87,7 +95,7 @@ fn run_selection_script() -> Result<String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .context("start Finder selection capture")?;
+        .context("start Finder context capture")?;
 
     // Drain both pipes while waiting: a selection of 32 long paths can exceed
     // a pipe's capacity, otherwise the child could block until our timeout.
@@ -117,17 +125,17 @@ fn run_selection_script() -> Result<String> {
         .join()
         .map_err(|_| anyhow::anyhow!("Finder error reader failed"))??;
     let Some(status) = status else {
-        bail!("Finder selection capture timed out");
+        return Err(ContextReadError::TimedOut.into());
     };
     if !status.success() {
         // osascript may include a selected filename in its diagnostic. Only
         // return a category; never copy that diagnostic into logs or UI.
         let detail = String::from_utf8_lossy(&error);
         if detail.contains("(-1743)") || detail.contains("not authorized") {
-            bail!("Finder Automation permission is not granted");
+            return Err(ContextReadError::PermissionDenied.into());
         }
         if detail.contains("(17201)") {
-            bail!("Finder selected too many items (maximum {MAX_SELECTED_PATHS})");
+            return Err(ContextReadError::TooManyItems.into());
         }
         bail!("Finder selection is unavailable (osascript failed)");
     }
@@ -197,6 +205,28 @@ fn parse_selected_paths(output: &str) -> Result<Vec<PathBuf>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn captured_finder_directory_rejects_missing_identity_before_automation() {
+        let application = ApplicationInfo {
+            bundle_id: "com.apple.finder".into(),
+            name: "Finder".into(),
+            pid: -1,
+            instance_id: None,
+        };
+        assert_eq!(
+            application_directory(&application)
+                .unwrap_err()
+                .downcast_ref::<ContextReadError>(),
+            Some(&ContextReadError::Unavailable)
+        );
+        assert_eq!(
+            selected_paths(&application)
+                .unwrap_err()
+                .downcast_ref::<ContextReadError>(),
+            Some(&ContextReadError::Unavailable)
+        );
+    }
 
     #[test]
     fn parses_empty_selection() {

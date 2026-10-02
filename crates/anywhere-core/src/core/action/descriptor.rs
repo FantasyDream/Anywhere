@@ -31,6 +31,8 @@ pub struct ActionDefinition {
     pub keywords: Vec<String>,
     pub owning_app: Option<String>,
     pub menu_path: Vec<String>,
+    pub home_eligible: bool,
+    pub primary_action: bool,
     /// Visible title used for search when it differs from the row title.
     pub search_title: Option<String>,
 }
@@ -52,12 +54,13 @@ pub struct ActionDescriptor {
     pub keywords: Vec<String>,
     /// App that owns this action exclusively, beyond ambient provenance.
     ///
-    /// No built-in or v1 plugin sets this yet: the Current App scope is currently
-    /// driven by which context an action accepts. It stays so an app-specific action
-    /// can declare itself without a protocol change.
+    /// Menu discoveries set this to their captured application. Other actions use
+    /// ambient context provenance. Scope membership is always determined by group_id.
     pub owning_app: Option<String>,
     /// Ancestor menu titles. The row title is the leaf; display joins the two.
     pub menu_path: Vec<String>,
+    pub home_eligible: bool,
+    pub primary_action: bool,
     search: SearchFields,
 }
 
@@ -83,6 +86,8 @@ impl ActionDescriptor {
             keywords: definition.keywords,
             owning_app: definition.owning_app,
             menu_path: definition.menu_path,
+            home_eligible: definition.home_eligible,
+            primary_action: definition.primary_action,
             search,
         }
     }
@@ -269,6 +274,8 @@ impl ActionRegistry {
                 group_id: command.group_id.unwrap_or_else(|| default_group.clone()),
                 owning_app: None,
                 menu_path: Vec::new(),
+                home_eligible: true,
+                primary_action: false,
                 aliases,
                 keywords,
                 search_title: None,
@@ -488,6 +495,8 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
                 icon: "copy",
                 aliases: &[],
                 keywords: &[],
+                home_eligible: true,
+                primary_action: false,
             }
             .descriptor("test")
         };
@@ -610,11 +619,9 @@ action = { type = "copy", text = "y" }
     }
 
     #[test]
-    fn a_bundle_title_is_the_scope_label() {
+    fn a_bundle_title_is_the_action_section_label() {
         use crate::core::action::bundle::ActionBundle;
         use crate::core::action::group::ActionGroup;
-        use crate::core::search::candidate::{Candidate, CandidateTarget};
-        use crate::core::search::scope;
         let mut registry = ActionRegistry::default();
         registry
             .register_bundle(ActionBundle {
@@ -626,28 +633,6 @@ action = { type = "copy", text = "y" }
                 actions: Vec::new(),
             })
             .unwrap();
-        let candidate = Candidate {
-            presentation: CandidatePresentation {
-                id: "action:custom".into(),
-                kind: CandidateKind::Action,
-                title: "Run".into(),
-                subtitle: None,
-                shortcut: None,
-                icon: IconDescriptor { key: "bolt".into() },
-                score: 1.0,
-                group_id: "custom_tools".into(),
-                availability: Availability::enabled(),
-                command_id: Some("custom.run".into()),
-                bundle_id: None,
-                owning_app: None,
-                menu_path: Vec::new(),
-            },
-            target: CandidateTarget::LaunchApplication {
-                path: "/x".into(),
-                icon_source: "/x".into(),
-            },
-        };
-        let scopes = scope::build(&[candidate], &None, "App", &Default::default(), &registry);
-        assert_eq!(scopes[0].label, "Custom tools display title");
+        assert_eq!(registry.label("custom_tools"), "Custom tools display title");
     }
 }

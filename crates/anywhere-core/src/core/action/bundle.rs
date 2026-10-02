@@ -25,6 +25,8 @@ pub struct ActionSpec {
     pub icon: &'static str,
     pub aliases: &'static [&'static str],
     pub keywords: &'static [&'static str],
+    pub home_eligible: bool,
+    pub primary_action: bool,
 }
 
 impl ActionSpec {
@@ -57,6 +59,8 @@ impl ActionSpec {
             keywords,
             owning_app: None,
             menu_path: Vec::new(),
+            home_eligible: self.home_eligible,
+            primary_action: self.primary_action,
             search_title: None,
         }
     }

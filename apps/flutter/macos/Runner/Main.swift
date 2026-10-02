@@ -112,6 +112,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             case "settingsStatus":
                 reply(["hotkeyError": self.hotKeyError ?? "",
                        "loginError": self.loginError ?? ""])
+            case "openPrivacySettings":
+                guard let args = call.arguments as? [String: Any],
+                      let pane = args["pane"] as? String,
+                      ["accessibility", "automation", "clipboard"].contains(pane) else {
+                    reply(FlutterError(code: "privacy", message: "Unknown privacy setting.", details: nil))
+                    return
+                }
+                let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.systempreferences")
+                let anchor = pane == "accessibility" ? "Privacy_Accessibility" : "Privacy_Automation"
+                // Clipboard preferences vary by macOS version. Open System Settings
+                // itself rather than guessing an unsupported pane identifier.
+                let link = pane == "clipboard" ? app : URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)")
+                if let link, NSWorkspace.shared.open(link) {
+                    reply(nil)
+                } else if let app, NSWorkspace.shared.open(app) {
+                    reply(nil)
+                } else {
+                    reply(FlutterError(code: "privacy", message: "System Settings could not be opened.", details: nil))
+                }
             case "saveSettings":
                 guard let args = call.arguments as? [String: Any] else { reply(nil); return }
                 let previous = self.stored

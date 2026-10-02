@@ -65,13 +65,14 @@ pub fn descriptors(app: &ApplicationInfo, items: Vec<DiscoveredMenuItem>) -> Vec
             let search_title = path.join(" › ");
             let mut aliases = vec![path.join(" ")];
             let mut keywords = path.clone();
+
             if let Some(shortcut) = &item.shortcut {
                 aliases.push(shortcut.clone());
                 keywords.push(shortcut.clone());
             }
             ActionDefinition {
                 id,
-                title: leaf,
+                title: leaf.clone(),
                 subtitle: None,
                 shortcut: item.shortcut,
                 accepts: vec![ContextMatcher {
@@ -90,13 +91,15 @@ pub fn descriptors(app: &ApplicationInfo, items: Vec<DiscoveredMenuItem>) -> Vec
                 } else {
                     AvailabilityRule::Hidden
                 },
-                base_priority: 0,
+                base_priority: if recommend(&leaf) { 20 } else { 0 },
                 icon: "app".into(),
-                group_id: groups::APP.into(),
+                group_id: groups::for_app(&app.bundle_id),
                 aliases,
                 keywords,
                 owning_app: Some(app.bundle_id.clone()),
                 menu_path: parents,
+                home_eligible: recommend(&leaf),
+                primary_action: false,
                 search_title: Some(search_title),
             }
         })
@@ -141,6 +144,32 @@ pub fn action_id(bundle_id: &str, identity: &[String]) -> String {
     format!("app.{bundle_id}.{hash:016x}")
 }
 
+/// Small generic home heuristic; actual executions can promote any menu later.
+fn recommend(title: &str) -> bool {
+    let title = title.to_lowercase();
+    [
+        "toggle",
+        "terminal",
+        "command palette",
+        "format",
+        "new window",
+        "save",
+        "find",
+        "undo",
+        "redo",
+        "copy",
+        "paste",
+        "新建",
+        "保存",
+        "查找",
+        "复制",
+        "粘贴",
+        "终端",
+    ]
+    .iter()
+    .any(|word| title.contains(word))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -173,7 +202,7 @@ mod tests {
         .unwrap();
         let action = registry.commands().next().unwrap();
         assert_eq!(action.availability, AvailabilityRule::Hidden);
-        assert_eq!(action.group_id, "app");
+        assert_eq!(action.group_id, "app.test.editor");
         assert_eq!(action.shortcut.as_deref(), Some("⌘S"));
     }
     #[test]

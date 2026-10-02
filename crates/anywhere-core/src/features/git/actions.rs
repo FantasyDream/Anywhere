@@ -62,6 +62,8 @@ pub fn bundle() -> ActionBundle {
                 icon: "git",
                 aliases: &["status"],
                 keywords: &["repository", "branch"],
+                home_eligible: true,
+                primary_action: false,
             },
             ActionSpec {
                 id: "core.git.log",
@@ -76,6 +78,8 @@ pub fn bundle() -> ActionBundle {
                 icon: "git",
                 aliases: &["log", "history", "commits"],
                 keywords: &["repository"],
+                home_eligible: true,
+                primary_action: false,
             },
             ActionSpec {
                 id: "core.git.diff",
@@ -90,6 +94,8 @@ pub fn bundle() -> ActionBundle {
                 icon: "git",
                 aliases: &["diff", "changes"],
                 keywords: &["repository", "worktree"],
+                home_eligible: true,
+                primary_action: false,
             },
         ],
     }

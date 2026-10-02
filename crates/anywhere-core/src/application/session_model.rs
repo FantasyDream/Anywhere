@@ -19,26 +19,7 @@ pub struct SessionIdentity {
     pub captures: Vec<ActivationCapture>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CaptureStatus {
-    Captured,
-    Empty,
-    PermissionDenied,
-    Unavailable,
-    Failed,
-}
-
-impl From<CaptureStatus> for ContextCaptureStatus {
-    fn from(status: CaptureStatus) -> Self {
-        match status {
-            CaptureStatus::Captured => Self::Captured,
-            CaptureStatus::Empty => Self::Empty,
-            CaptureStatus::PermissionDenied => Self::PermissionDenied,
-            CaptureStatus::Unavailable => Self::Unavailable,
-            CaptureStatus::Failed => Self::Failed,
-        }
-    }
-}
+pub use anywhere_protocol::ContextCaptureStatus as CaptureStatus;
 
 #[derive(Debug, Clone)]
 pub struct ActivationCapture {
@@ -55,9 +36,9 @@ pub struct SessionResolution {
     pub committed_contexts: Vec<ResolvedContext>,
     pub published_contexts: usize,
     pub snapshot_seq: u32,
+    pub frozen_scope_ids: Vec<GroupId>,
     /// Facts and usage copied for a snapshot. A commit retries when this changes.
     pub inputs_epoch: u64,
-    pub frozen_scope_ids: Vec<ScopeId>,
 }
 
 #[derive(Default)]

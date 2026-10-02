@@ -4,6 +4,7 @@ use crate::core::action::bundle::{ActionBundle, ActionSpec};
 use crate::core::action::group::groups;
 use crate::core::action::handler::{ActionHandler, ExecutionOutput};
 use crate::core::context::{ContextValue, ResolvedContext};
+use crate::core::session::facts::CLIPBOARD;
 use anyhow::{bail, Result};
 use anywhere_platform::Platform;
 use anywhere_protocol::*;
@@ -53,17 +54,21 @@ pub fn bundle() -> ActionBundle {
                 icon: "globe",
                 aliases: &["browser", "open"],
                 keywords: &["link"],
+                home_eligible: true,
+                primary_action: true,
             },
             ActionSpec {
                 id: "core.url.copy",
                 title: "Copy URL",
                 accepts: URL,
                 handler: &CopyUrl,
-                availability: AvailabilityRule::Enabled,
+                availability: AvailabilityRule::hide_if(CLIPBOARD),
                 base_priority: 20,
                 icon: "copy",
                 aliases: &["copy", "link", "clipboard"],
                 keywords: &["url"],
+                home_eligible: true,
+                primary_action: false,
             },
         ],
     }

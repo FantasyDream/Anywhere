@@ -1,14 +1,15 @@
 //! Action matching: which actions apply to the resolved contexts, and what they look like.
 //!
-//! Produces candidates only. Ordering belongs to ranking, scope membership to the scope
-//! builder, and visibility to the availability evaluator.
+//! Produces candidates with Context graph membership. Ordering belongs to ranking,
+//! and visibility to the availability evaluator.
 use super::availability;
 use super::descriptor::{ActionDescriptor, ActionRegistry};
+use super::group::{groups, GroupMeta};
 use crate::core::context::{ContextSource, ContextValue, ResolvedContext};
 use crate::core::ranking::score::{self, UsageStats};
 use crate::core::search::candidate::{action_candidate_id, Candidate};
 use crate::core::search::candidate_source::{CandidateSource, SearchContext};
-use crate::core::search::query::Query;
+use crate::core::search::query::{MatchLevel, Query, SearchFields};
 use crate::core::session::facts::{context_ownership, Ownership, SessionFacts};
 use anywhere_protocol::*;
 
@@ -50,14 +51,25 @@ impl CandidateSource for ActionMatcher<'_> {
     }
 
     fn candidates(&self, search: &SearchContext<'_>) -> Vec<Candidate> {
-        self.match_actions(search.query, search.contexts)
+        self.match_scoped_actions(search.query, search.contexts, search.scope_id)
     }
 }
 
 impl ActionMatcher<'_> {
     /// Every action the contexts make applicable, scored but not yet ordered.
     pub fn match_actions(&self, query: &Query, contexts: &[ResolvedContext]) -> Vec<Candidate> {
+        self.match_scoped_actions(query, contexts, None)
+    }
+
+    fn match_scoped_actions(
+        &self,
+        query: &Query,
+        contexts: &[ResolvedContext],
+        scope_id: Option<&str>,
+    ) -> Vec<Candidate> {
         let searching = !query.is_empty();
+        let group_filter =
+            crate::core::search::scope::group_filter(scope_id, self.facts.frontmost.as_ref());
         let grouped_finder_selection = contexts.iter().any(|context| {
             context.source == ContextSource::FinderSelection
                 && matches!(&context.value, ContextValue::FileSelection(paths) if paths.len() > 1)
@@ -80,7 +92,37 @@ impl ActionMatcher<'_> {
                 Ownership::Ambient => None,
             };
             for action in self.registry.matching(context) {
-                let match_level = action.search().matched(query);
+                let group_id = match &context.value {
+                    ContextValue::Application { bundle_id, .. }
+                        if action.group_id == groups::APP =>
+                    {
+                        groups::for_app(bundle_id)
+                    }
+                    _ => action.group_id.clone(),
+                };
+                // The boundary is applied before query matching, availability and scoring.
+                if group_filter.is_some_and(|scope| scope != group_id) {
+                    continue;
+                }
+                let action_query = if searching && scope_id.is_none() && action.owning_app.is_some()
+                {
+                    // A command such as Finder's "Find" must keep its direct title match
+                    // even when the same token is also a prefix of the application name.
+                    if SearchFields::new(&action.title, &[], &[])
+                        .matched(query)
+                        .is_some_and(|level| level >= MatchLevel::WordPrefix)
+                    {
+                        query.clone()
+                    } else {
+                        match qualified_app_query(query, &context.value) {
+                            Some(query) => query,
+                            None => continue,
+                        }
+                    }
+                } else {
+                    query.clone()
+                };
+                let match_level = action.search().matched(&action_query);
                 if searching && match_level.is_none() && !availability::is_user_object(context) {
                     continue;
                 }
@@ -113,12 +155,28 @@ impl ActionMatcher<'_> {
                             key: action.icon.clone(),
                         },
                         score,
-                        group_id: action.group_id.clone(),
+                        group_id,
                         availability,
                         command_id: Some(action.id.clone()),
                         bundle_id: None,
                         owning_app: owned_by.clone().or_else(|| action.owning_app.clone()),
                         menu_path: action.menu_path.clone(),
+                        context_keys: vec![crate::core::context::navigation::root_key(
+                            context, contexts,
+                        )],
+                        execution_context_id: Some(context.id.clone()),
+                        execution_target_label: Some(context.display_detail()),
+                        home_eligible: action.home_eligible
+                            || (!action.menu_path.is_empty() && stats.execute_count > 0),
+                        primary_action: action.primary_action,
+                        section_label: Some(match &context.value {
+                            ContextValue::Application { name, .. }
+                                if action.owning_app.is_some() =>
+                            {
+                                name.clone()
+                            }
+                            _ => self.registry.label(&action.group_id),
+                        }),
                     },
                     target: crate::core::search::candidate::CandidateTarget::from_action(
                         action.clone(),
@@ -147,9 +205,56 @@ fn home_bonus(context: &ResolvedContext) -> f32 {
 }
 
 fn subtitle(action: &ActionDescriptor, context: &ResolvedContext) -> String {
+    if !action.menu_path.is_empty() {
+        return action.menu_path.join(" › ");
+    }
     let detail = context.display_detail();
     match &action.subtitle {
         Some(subtitle) => format!("{subtitle} · {detail}"),
         None => detail,
+    }
+}
+
+/// Application qualifiers narrow a command query, but app-name-only searches
+/// must not surface every menu of that application.
+fn qualified_app_query(query: &Query, value: &ContextValue) -> Option<Query> {
+    let ContextValue::Application {
+        name, bundle_id, ..
+    } = value
+    else {
+        return Some(query.clone());
+    };
+    let fields = SearchFields::new(
+        name,
+        &[],
+        &[
+            bundle_id.clone(),
+            bundle_id.rsplit('.').next().unwrap_or(bundle_id).into(),
+        ],
+    );
+    let mut qualified = false;
+    let remaining: Vec<_> = query
+        .tokens
+        .iter()
+        .filter(|token| {
+            if matches!(
+                fields.matched(&Query::parse(token)),
+                Some(MatchLevel::Exact | MatchLevel::Prefix | MatchLevel::WordPrefix)
+            ) {
+                qualified = true;
+                false
+            } else {
+                true
+            }
+        })
+        .cloned()
+        .collect();
+    if !qualified {
+        return Some(query.clone());
+    }
+    if remaining.is_empty() {
+        None
+    } else {
+        Some(Query::parse(&remaining.join(" ")))
     }
 }

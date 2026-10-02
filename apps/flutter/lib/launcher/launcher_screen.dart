@@ -116,6 +116,8 @@ class _LauncherScreenState extends State<LauncherScreen> {
   LauncherViewState get _view => _controller.view;
   bool _wasVisible = false;
   int? _displayedRevision;
+  String? _displayedScope;
+  String? _displayedPath;
   String? _submitted;
 
   void _onInput() {
@@ -127,7 +129,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
   }
 
   void _reportIconViewport() {
-    final count = _view.visibleCandidates.length;
+    final count = _view.visibleEntries.length;
     if (count == 0 || _view.output != null) return;
     var first = 0;
     var last = LauncherViewState.maxRows;
@@ -160,16 +162,19 @@ class _LauncherScreenState extends State<LauncherScreen> {
 
   void _refresh() {
     if (!mounted) return;
-    if (!_view.visible || !_wasVisible) {
-      _submitted = '';
-      _input.clear();
-    } else if (_view.input.isEmpty && _input.text.isNotEmpty) {
-      _submitted = '';
-      _input.clear();
+    final searchText = _view.visible ? _view.searchText : '';
+    if (_input.text != searchText) {
+      _submitted = searchText;
+      _input.value = TextEditingValue(
+        text: searchText,
+        selection: TextSelection.collapsed(offset: searchText.length),
+      );
     }
     if (_view.visible) {
       if (!_wasVisible) _focus.requestFocus();
-      if (_view.snapshot?.revision != _displayedRevision &&
+      if ((_view.snapshot?.revision != _displayedRevision ||
+              _view.scopeId != _displayedScope ||
+              _view.actionPath?.join(' / ') != _displayedPath) &&
           _scroll.hasClients) {
         _scroll.jumpTo(0);
       }
@@ -179,6 +184,8 @@ class _LauncherScreenState extends State<LauncherScreen> {
     }
     _wasVisible = _view.visible;
     _displayedRevision = _view.snapshot?.revision;
+    _displayedScope = _view.scopeId;
+    _displayedPath = _view.actionPath?.join(' / ');
     _reportIconViewport();
     setState(() {});
   }
@@ -197,8 +204,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
   void _ensureSelectedVisible() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_view.visible || !_scroll.hasClients) return;
-      final index = _view.selectedIndex;
-      final top = index * LauncherViewState.rowHeight;
+      final top = _view.selectedTop;
       final bottom = top + LauncherViewState.rowHeight;
       if (top < _scroll.offset) _scroll.jumpTo(top);
       if (bottom > _scroll.offset + _scroll.position.viewportDimension) {
@@ -219,8 +225,23 @@ class _LauncherScreenState extends State<LauncherScreen> {
     // Leave candidate selection to the input method until composition has finished.
     if (!_input.value.composing.isCollapsed) return KeyEventResult.ignored;
     final control = HardwareKeyboard.instance.isControlPressed;
+    final command = HardwareKeyboard.instance.isMetaPressed;
     if (event.logicalKey == LogicalKeyboardKey.escape) {
       _controller.escape();
+    } else if (command &&
+        event.logicalKey == LogicalKeyboardKey.keyK &&
+        _view.canBrowseMenus &&
+        _view.input.isEmpty) {
+      _controller.browseMenus();
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowRight &&
+        _view.input.isEmpty &&
+        _view.visibleEntries.isNotEmpty &&
+        _view.visibleEntries[_view.selectedIndex].navigationPath != null) {
+      _controller.executeSelected();
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft &&
+        _view.input.isEmpty &&
+        _view.browsing) {
+      _controller.backMenu();
     } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
       _controller.move(1);
     } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
@@ -256,10 +277,9 @@ class _LauncherScreenState extends State<LauncherScreen> {
         ),
       );
     }
-    final candidates = _view.visibleCandidates;
-    final hasPanel = _view.output != null || candidates.isNotEmpty;
-    final contexts = (_view.snapshot?.contexts ?? []);
-    final labels = contexts.map(_contextLabel).toSet().join(' · ');
+    final entries = _view.visibleEntries;
+    final hasPanel = _view.hasPanel;
+    final labels = _view.selectedScope?.label ?? 'Universal';
     return Align(
       alignment: Alignment.topCenter,
       child: SizedBox(
@@ -292,11 +312,24 @@ class _LauncherScreenState extends State<LauncherScreen> {
                             ),
                             border: Border.all(color: const Color(0x449eb4ff)),
                           ),
-                          child: const Icon(
-                            Icons.search_rounded,
-                            size: 19,
-                            color: LauncherStyle.primary,
-                          ),
+                          child: !_view.browsing
+                              ? const Icon(
+                                  Icons.search_rounded,
+                                  size: 19,
+                                  color: LauncherStyle.primary,
+                                )
+                              : IconButton(
+                                  tooltip: 'Back to results',
+                                  constraints: const BoxConstraints.tightFor(
+                                    width: 34,
+                                    height: 34,
+                                  ),
+                                  padding: EdgeInsets.zero,
+                                  iconSize: 19,
+                                  color: LauncherStyle.primary,
+                                  icon: const Icon(Icons.arrow_back_rounded),
+                                  onPressed: _controller.backMenu,
+                                ),
                         ),
                         const SizedBox(width: 12),
                         Expanded(
@@ -339,9 +372,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
                     ),
                   ),
                 ),
-                // A single scope is not a choice: hide the bar when there is nothing
-                // to switch between, which is exactly the empty case.
-                if (_view.scopes.isNotEmpty) _scopeBar(),
+                if (_view.hasScopeBar) _scopeBar(),
                 if (_view.notice != null)
                   SizedBox(
                     height: 44,
@@ -374,6 +405,14 @@ class _LauncherScreenState extends State<LauncherScreen> {
                                       color: LauncherStyle.warning),
                                 ),
                               ),
+                              if (_view.noticeSettingsPane != null)
+                                TextButton(
+                                  onPressed: () =>
+                                      _controller.openPrivacySettings(
+                                          _view.noticeSettingsPane!),
+                                  child: const Text('Open Settings',
+                                      style: TextStyle(fontSize: 11)),
+                                ),
                             ],
                           ),
                         ),
@@ -435,15 +474,28 @@ class _LauncherScreenState extends State<LauncherScreen> {
                               ),
                             ),
                           )
-                        : ListView.builder(
-                            key: const Key('action-list'),
-                            controller: _scroll,
-                            padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
-                            itemExtent: LauncherViewState.rowHeight,
-                            itemCount: candidates.length,
-                            itemBuilder: (context, index) =>
-                                _candidateRow(candidates[index], index),
-                          ),
+                        : entries.isEmpty
+                            ? Center(
+                                child: Text(
+                                  _view.scopeId == null
+                                      ? 'No results'
+                                      : _view.emptyMessage,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: LauncherStyle.secondary,
+                                  ),
+                                ),
+                              )
+                            : ListView.builder(
+                                key: const Key('action-list'),
+                                controller: _scroll,
+                                padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
+                                itemCount: entries.length,
+                                itemBuilder: (context, index) => SizedBox(
+                                  height: LauncherViewState.rowHeight,
+                                  child: _entryRow(entries[index], index),
+                                ),
+                              ),
                   ),
                   const Divider(
                       height: 1, thickness: 1, color: LauncherStyle.divider),
@@ -455,7 +507,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
                         children: [
                           Text(
                             _view.output == null
-                                ? '${candidates.length} results'
+                                ? '${entries.length} results'
                                 : (_view.resultStatus == ActionStatusDto.failed
                                     ? 'Failed'
                                     : 'Succeeded'),
@@ -485,15 +537,24 @@ class _LauncherScreenState extends State<LauncherScreen> {
                                 style: TextStyle(
                                     fontSize: 11, color: LauncherStyle.muted)),
                             const SizedBox(width: 16),
+                            if (_view.browsing)
+                              TextButton(
+                                  onPressed: _controller.backMenu,
+                                  child: const Text('Back')),
+                            const SizedBox(width: 16),
                           ],
                           if (_view.output == null)
-                            const Text(
-                              'Run',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                                color: LauncherStyle.secondary,
-                              ),
+                            Text(
+                              entries.isNotEmpty &&
+                                      entries[_view.selectedIndex]
+                                              .navigationPath !=
+                                          null
+                                  ? 'Open'
+                                  : 'Run',
+                              style: const TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w500,
+                                  color: LauncherStyle.secondary),
                             )
                           else
                             TextButton(
@@ -523,75 +584,89 @@ class _LauncherScreenState extends State<LauncherScreen> {
     );
   }
 
-  Widget _scopeBar() {
-    final scopes = _view.scopes;
-    final active = _view.scope?.id;
-    return SizedBox(
-      height: LauncherViewState.scopeHeight,
-      child: ListView(
-        key: const Key('scope-bar'),
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 14),
-        children: [
-          for (final scope in scopes)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
-              child: _scopeChip(scope, scope.id == active),
-            ),
-        ],
-      ),
-    );
-  }
-
-  Widget _scopeChip(ScopeDto scope, bool selected) => Semantics(
-        selected: selected,
-        child: Material(
-          color: selected ? const Color(0x4b7e98f2) : const Color(0x18ffffff),
-          clipBehavior: Clip.antiAlias,
-          shape: StadiumBorder(
-            side: BorderSide(
-              color:
-                  selected ? const Color(0x99b5c5ff) : const Color(0x24ffffff),
-            ),
-          ),
-          child: InkWell(
-            customBorder: const StadiumBorder(),
-            onTap: () => _controller.selectScope(scope.id),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 4),
-              child: Text(
-                scope.label,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
-                  color: selected
-                      ? LauncherStyle.primary
-                      : LauncherStyle.secondary,
-                ),
-              ),
-            ),
-          ),
+  Widget _scopeBar() => SizedBox(
+        height: LauncherViewState.scopeHeight,
+        child: ListView(
+          key: const Key('scope-bar'),
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          children: [
+            for (final scope in _view.scopes)
+              _scopeChip(scope.label, scope.id == _view.scopeId,
+                  () => _controller.selectScope(scope.id))
+          ],
         ),
       );
 
-  Widget _candidateRow(CandidateDto candidate, int index) => CandidateRow(
+  Widget _scopeChip(String label, bool selected, VoidCallback onTap) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
+        child: Semantics(
+            selected: selected,
+            child: Material(
+              color:
+                  selected ? const Color(0x4b7e98f2) : const Color(0x18ffffff),
+              clipBehavior: Clip.antiAlias,
+              shape: StadiumBorder(
+                  side: BorderSide(
+                      color: selected
+                          ? const Color(0x99b5c5ff)
+                          : const Color(0x24ffffff))),
+              child: InkWell(
+                  customBorder: const StadiumBorder(),
+                  onTap: onTap,
+                  child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 11, vertical: 4),
+                      child: Text(label,
+                          style: TextStyle(
+                              fontSize: 11,
+                              fontWeight:
+                                  selected ? FontWeight.w600 : FontWeight.w500,
+                              color: selected
+                                  ? LauncherStyle.primary
+                                  : LauncherStyle.secondary)))),
+            )),
+      );
+
+  Widget _entryRow(LauncherEntry entry, int index) {
+    final candidate = entry.candidate;
+    if (candidate != null) {
+      return CandidateRow(
         candidate: candidate,
         selected: index == _view.selectedIndex,
         iconBytes: _controller.icons.bytesFor(candidate.id),
-        onTap: () => _controller.selectAndExecute(candidate.id),
+        sourceLabel: _view.sourceLabelFor(candidate),
+        onTap: () => _controller.selectEntry(index),
       );
-}
-
-String _contextLabel(ContextDto context) {
-  final source = switch (context.source) {
-    ContextSourceDto.finderSelection => 'Finder selection',
-    ContextSourceDto.selectedText => 'Selected text',
-    ContextSourceDto.browserCurrentPage => 'Browser current page',
-    ContextSourceDto.clipboard => 'Clipboard',
-    ContextSourceDto.userInput ||
-    ContextSourceDto.foregroundApplication ||
-    ContextSourceDto.applicationContext =>
-      null,
-  };
-  return source == null ? context.label : '$source · ${context.label}';
+    }
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+      child: Material(
+        color: index == _view.selectedIndex
+            ? const Color(0x44778fe0)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(11),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(11),
+          onTap: () => _controller.selectEntry(index),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 19),
+            child: Row(children: [
+              const Icon(Icons.folder_open_rounded,
+                  size: 23, color: LauncherStyle.secondary),
+              const SizedBox(width: 12),
+              Expanded(
+                  child: Text(entry.title,
+                      style: const TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
+                          color: LauncherStyle.primary))),
+              const Icon(Icons.chevron_right_rounded,
+                  size: 19, color: LauncherStyle.muted),
+            ]),
+          ),
+        ),
+      ),
+    );
+  }
 }

@@ -1,5 +1,6 @@
 use crate::support::*;
 use anywhere_core::application::SnapshotWait;
+use anywhere_platform::ContextReadError;
 use std::sync::atomic::AtomicUsize;
 
 struct ContextPlatform {
@@ -9,6 +10,7 @@ struct ContextPlatform {
     browser_url: Option<String>,
     browser_denied: bool,
     clipboard: Option<String>,
+    capture_error: Option<(ContextSource, ContextReadError)>,
     selected_gate: Option<Arc<CaptureGate>>,
     selected_denied: bool,
     selected_started: Notify,
@@ -16,6 +18,7 @@ struct ContextPlatform {
     browser_reads: AtomicUsize,
     clipboard_reads: AtomicUsize,
     copies: Mutex<Vec<String>>,
+    opened_urls: Mutex<Vec<String>>,
 }
 
 impl ContextPlatform {
@@ -32,6 +35,7 @@ impl ContextPlatform {
             browser_url: None,
             browser_denied: false,
             clipboard: None,
+            capture_error: None,
             selected_gate: None,
             selected_denied: false,
             selected_started: Notify::new(),
@@ -39,7 +43,17 @@ impl ContextPlatform {
             browser_reads: AtomicUsize::new(0),
             clipboard_reads: AtomicUsize::new(0),
             copies: Mutex::new(Vec::new()),
+            opened_urls: Mutex::new(Vec::new()),
         }
+    }
+
+    fn check_capture(&self, source: ContextSource) -> Result<()> {
+        if let Some((failed_source, error)) = self.capture_error {
+            if failed_source == source {
+                return Err(error.into());
+            }
+        }
+        Ok(())
     }
 }
 
@@ -51,9 +65,11 @@ impl Platform for ContextPlatform {
         Ok(None)
     }
     fn finder_selected_paths(&self, _: &ApplicationInfo) -> Result<Vec<PathBuf>> {
+        self.check_capture(ContextSource::FinderSelection)?;
         Ok(self.finder_paths.clone())
     }
     fn selected_text(&self, _: &ApplicationInfo) -> Result<Option<String>> {
+        self.check_capture(ContextSource::SelectedText)?;
         self.selected_reads.fetch_add(1, Ordering::SeqCst);
         if self.selected_denied {
             return Err(anywhere_platform::SelectedTextError::PermissionDenied.into());
@@ -66,9 +82,10 @@ impl Platform for ContextPlatform {
         Ok(selected)
     }
     fn browser_current_url(&self, _: &ApplicationInfo) -> Result<Option<String>> {
+        self.check_capture(ContextSource::BrowserCurrentPage)?;
         self.browser_reads.fetch_add(1, Ordering::SeqCst);
         if self.browser_denied {
-            anyhow::bail!("Browser Automation permission denied");
+            return Err(anywhere_platform::ContextReadError::PermissionDenied.into());
         }
         Ok(self.browser_url.clone())
     }
@@ -79,10 +96,12 @@ impl Platform for ContextPlatform {
         )
     }
     fn clipboard_text(&self) -> Result<Option<String>> {
+        self.check_capture(ContextSource::Clipboard)?;
         self.clipboard_reads.fetch_add(1, Ordering::SeqCst);
         Ok(self.clipboard.clone())
     }
-    fn open_url(&self, _: &str) -> Result<()> {
+    fn open_url(&self, url: &str) -> Result<()> {
+        self.opened_urls.lock().unwrap().push(url.into());
         Ok(())
     }
     fn open_file(&self, _: &Path) -> Result<()> {
@@ -100,6 +119,99 @@ impl Platform for ContextPlatform {
     fn copy_text(&self, text: &str) -> Result<()> {
         self.copies.lock().unwrap().push(text.into());
         Ok(())
+    }
+}
+
+#[tokio::test]
+async fn capture_failures_preserve_precise_status_and_other_sources() {
+    for (source, error, expected) in [
+        (
+            ContextSource::SelectedText,
+            ContextReadError::Unsupported,
+            ContextCaptureStatus::Unsupported,
+        ),
+        (
+            ContextSource::SelectedText,
+            ContextReadError::TimedOut,
+            ContextCaptureStatus::TimedOut,
+        ),
+        (
+            ContextSource::SelectedText,
+            ContextReadError::TooLarge,
+            ContextCaptureStatus::TooLarge,
+        ),
+        (
+            ContextSource::FinderSelection,
+            ContextReadError::TooManyItems,
+            ContextCaptureStatus::TooManyItems,
+        ),
+        (
+            ContextSource::BrowserCurrentPage,
+            ContextReadError::PermissionDenied,
+            ContextCaptureStatus::PermissionDenied,
+        ),
+        (
+            ContextSource::Clipboard,
+            ContextReadError::PermissionDenied,
+            ContextCaptureStatus::PermissionDenied,
+        ),
+        (
+            ContextSource::Clipboard,
+            ContextReadError::Unavailable,
+            ContextCaptureStatus::Unavailable,
+        ),
+    ] {
+        let mut fake = ContextPlatform::new(if source == ContextSource::FinderSelection {
+            "com.apple.finder"
+        } else {
+            "com.microsoft.edgemac"
+        });
+        fake.capture_error = Some((source, error));
+        fake.browser_url = Some("https://example.org/page".into());
+        fake.clipboard = Some("https://example.org/copied".into());
+        let fake = Arc::new(fake);
+        let app = application(fake.clone());
+        let initial = app.activate().await.unwrap().unwrap();
+        let survivor = if source == ContextSource::Clipboard {
+            ContextSource::BrowserCurrentPage
+        } else {
+            ContextSource::Clipboard
+        };
+        capture_state(&app, initial.session_id, 0, survivor, URL).await;
+        let mut checked = false;
+        for _ in 0..200 {
+            let state = app.latest_state(initial.session_id).unwrap();
+            if state
+                .context_captures
+                .iter()
+                .any(|capture| capture.source == source && capture.status == expected)
+            {
+                assert!(state
+                    .context_summary
+                    .iter()
+                    .all(|context| context.source != source));
+                assert!(state
+                    .candidates
+                    .iter()
+                    .any(|offer| offer.command_id.as_deref() == Some("core.url.open")));
+                if source == ContextSource::Clipboard {
+                    assert!(app
+                        .execute(
+                            state.session_id,
+                            state.revision,
+                            candidate(&state, "core.url.copy")
+                        )
+                        .await
+                        .unwrap()
+                        .succeeded());
+                    assert_eq!(*fake.copies.lock().unwrap(), ["https://example.org/page"]);
+                }
+                checked = true;
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(5)).await;
+        }
+        assert!(checked, "{source:?} never published {expected:?}");
     }
 }
 
@@ -194,6 +306,51 @@ async fn capture_state(
 }
 
 #[tokio::test]
+async fn copied_finder_selection_hides_redundant_collection_copy() {
+    let temp = tempfile::tempdir().unwrap();
+    let paths = vec![temp.path().join("one.txt"), temp.path().join("two.txt")];
+    for path in &paths {
+        std::fs::write(path, "data").unwrap();
+    }
+    let mut fake = ContextPlatform::new("com.apple.finder");
+    fake.finder_paths = paths.clone();
+    fake.clipboard = Some(serde_json::to_string(&paths).unwrap());
+    let app = application(Arc::new(fake));
+    let initial = app.activate().await.unwrap().unwrap();
+    capture_state(
+        &app,
+        initial.session_id,
+        0,
+        ContextSource::FinderSelection,
+        FILE_SELECTION,
+    )
+    .await;
+    capture_state(
+        &app,
+        initial.session_id,
+        0,
+        ContextSource::Clipboard,
+        JSON_DOCUMENT,
+    )
+    .await;
+    let state = app
+        .update_input(initial.session_id, "copy".into(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(state
+        .candidates
+        .iter()
+        .chain(&state.context_candidates)
+        .all(|offer| offer.command_id.as_deref() != Some("core.file_selection.copy_paths")));
+    assert!(state.scopes.iter().all(|scope| scope.id != "file"));
+    assert!(state
+        .context_summary
+        .iter()
+        .any(|context| context.type_id == FILE_SELECTION));
+}
+
+#[tokio::test]
 async fn finder_multiselection_keeps_collection_and_uses_one_action() {
     let temp = tempfile::tempdir().unwrap();
     let first = temp.path().join("one.txt");
@@ -234,6 +391,16 @@ async fn finder_multiselection_keeps_collection_and_uses_one_action() {
         })
         .collect::<Vec<_>>();
     assert_eq!(selection_actions.len(), 1);
+    let selection = state
+        .context_summary
+        .iter()
+        .find(|context| context.type_id == FILE_SELECTION)
+        .unwrap();
+    assert!(state
+        .context_summary
+        .iter()
+        .filter(|context| context.type_id == FILE)
+        .all(|context| context.root_key == selection.key));
     assert!(!state
         .candidates
         .iter()
@@ -247,6 +414,280 @@ async fn finder_multiselection_keeps_collection_and_uses_one_action() {
         paths,
         vec![first.to_string_lossy(), second.to_string_lossy()]
     );
+}
+
+#[tokio::test]
+async fn finder_multi_directory_git_enrichment_keeps_one_root_across_queries() {
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().canonicalize().unwrap();
+    std::fs::create_dir(root.join(".git")).unwrap();
+    let first = root.join("one");
+    let second = root.join("two");
+    std::fs::create_dir(&first).unwrap();
+    std::fs::create_dir(&second).unwrap();
+    let mut fake = ContextPlatform::new("com.apple.finder");
+    fake.finder_paths = vec![first, second];
+    let app = application(Arc::new(fake));
+    let initial = app.activate().await.unwrap().unwrap();
+    let state = capture_state(
+        &app,
+        initial.session_id,
+        0,
+        ContextSource::FinderSelection,
+        GIT_REPOSITORY,
+    )
+    .await;
+    let selection = state
+        .context_summary
+        .iter()
+        .find(|context| context.type_id == FILE_SELECTION)
+        .unwrap();
+    let key = selection.key.clone();
+    assert_eq!(state.preferred_context_key.as_deref(), Some(key.as_str()));
+    assert!(state
+        .context_summary
+        .iter()
+        .filter(|context| matches!(context.type_id.as_str(), DIRECTORY | GIT_REPOSITORY))
+        .all(|context| context.root_key == key));
+    assert_eq!(
+        state
+            .context_summary
+            .iter()
+            .filter(|context| !context.candidate_ids.is_empty())
+            .count(),
+        1
+    );
+    let git = state
+        .context_candidates
+        .iter()
+        .find(|offer| offer.command_id.as_deref() == Some("core.git.status"))
+        .unwrap();
+    assert_eq!(git.context_keys.as_slice(), std::slice::from_ref(&key));
+    assert_eq!(
+        git.execution_target_label.as_deref(),
+        Some(root.to_string_lossy().as_ref())
+    );
+    let updated = app
+        .update_input(initial.session_id, "copy".into(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(updated.preferred_context_key.as_deref(), Some(key.as_str()));
+    assert!(updated
+        .context_candidates
+        .iter()
+        .any(
+            |offer| offer.command_id.as_deref() == Some("core.git.status")
+                && offer.context_keys.contains(&key)
+        ));
+}
+
+#[tokio::test]
+async fn canonical_url_offer_keeps_membership_in_both_selected_text_and_page() {
+    let mut fake = ContextPlatform::new("com.google.Chrome");
+    fake.browser_url = Some("https://example.org/page".into());
+    *fake.selected.lock().unwrap() = fake.browser_url.clone();
+    let app = application(Arc::new(fake));
+    let initial = app.activate().await.unwrap().unwrap();
+    let _ = capture_state(
+        &app,
+        initial.session_id,
+        0,
+        ContextSource::SelectedText,
+        URL,
+    )
+    .await;
+    let state = capture_state(
+        &app,
+        initial.session_id,
+        0,
+        ContextSource::BrowserCurrentPage,
+        URL,
+    )
+    .await;
+    let selected = state
+        .context_summary
+        .iter()
+        .find(|context| context.source == ContextSource::SelectedText && context.type_id == TEXT)
+        .unwrap();
+    let page = state
+        .context_summary
+        .iter()
+        .find(|context| context.source == ContextSource::BrowserCurrentPage)
+        .unwrap();
+    let open = state
+        .context_candidates
+        .iter()
+        .find(|offer| offer.command_id.as_deref() == Some("core.url.open"))
+        .unwrap();
+    assert!(open.context_keys.contains(&selected.key));
+    assert!(open.context_keys.contains(&page.key));
+    assert_eq!(
+        state.preferred_context_key.as_deref(),
+        Some(selected.key.as_str())
+    );
+}
+
+#[tokio::test]
+async fn copied_current_page_hides_copy_url_and_merges_open_across_sources() {
+    let mut fake = ContextPlatform::new("com.microsoft.edgemac");
+    fake.browser_url = Some("https://example.org/page".into());
+    fake.clipboard = Some("  https://EXAMPLE.org:443/page\n".into());
+    let fake = Arc::new(fake);
+    let app = application(fake.clone());
+    let initial = app.activate().await.unwrap().unwrap();
+    let _ = capture_state(&app, initial.session_id, 0, ContextSource::Clipboard, URL).await;
+    let _ = capture_state(
+        &app,
+        initial.session_id,
+        0,
+        ContextSource::BrowserCurrentPage,
+        URL,
+    )
+    .await;
+    let state = app
+        .update_scoped_input(
+            initial.session_id,
+            "".into(),
+            1,
+            Some("app.com.microsoft.edgemac".into()),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let browser = state
+        .context_summary
+        .iter()
+        .find(|context| {
+            context.source == ContextSource::BrowserCurrentPage && context.type_id == URL
+        })
+        .unwrap();
+    let clipboard = state
+        .context_summary
+        .iter()
+        .find(|context| context.source == ContextSource::Clipboard && context.type_id == TEXT)
+        .unwrap();
+    let rows: Vec<_> = state
+        .candidates
+        .iter()
+        .filter(|offer| offer.command_id.as_deref() == Some("core.url.open"))
+        .collect();
+    assert_eq!(
+        rows.len(),
+        1,
+        "open must merge identical targets across sources"
+    );
+    assert!(rows[0].context_keys.contains(&browser.key));
+    assert!(rows[0].context_keys.contains(&clipboard.key));
+    assert!(state
+        .candidates
+        .iter()
+        .chain(&state.context_candidates)
+        .all(|offer| offer.command_id.as_deref() != Some("core.url.copy")));
+    assert!(app
+        .execute(
+            state.session_id,
+            state.revision,
+            candidate(&state, "core.url.open")
+        )
+        .await
+        .unwrap()
+        .succeeded());
+    assert_eq!(
+        *fake.opened_urls.lock().unwrap(),
+        ["https://example.org/page"]
+    );
+    assert!(fake.copies.lock().unwrap().is_empty());
+    for (revision, scope) in [
+        (2, Some("app.com.microsoft.edgemac".into())),
+        (3, Some("web".into())),
+        (4, None),
+    ] {
+        let searched = app
+            .update_scoped_input(initial.session_id, "copy".into(), revision, scope)
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(searched
+            .candidates
+            .iter()
+            .chain(&searched.context_candidates)
+            .all(|offer| offer.command_id.as_deref() != Some("core.url.copy")));
+    }
+}
+
+#[tokio::test]
+async fn different_current_page_and_clipboard_urls_keep_distinct_execution_targets() {
+    let mut fake = ContextPlatform::new("com.microsoft.edgemac");
+    fake.browser_url = Some("https://example.org/page".into());
+    fake.clipboard = Some("https://example.org/copied?token=private".into());
+    let fake = Arc::new(fake);
+    let app = application(fake.clone());
+    let initial = app.activate().await.unwrap().unwrap();
+    let _ = capture_state(&app, initial.session_id, 0, ContextSource::Clipboard, URL).await;
+    let _ = capture_state(
+        &app,
+        initial.session_id,
+        0,
+        ContextSource::BrowserCurrentPage,
+        URL,
+    )
+    .await;
+    let state = app
+        .update_scoped_input(
+            initial.session_id,
+            "".into(),
+            1,
+            Some("app.com.microsoft.edgemac".into()),
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    for (command, count) in [("core.url.copy", 1), ("core.url.open", 2)] {
+        assert_eq!(
+            state
+                .candidates
+                .iter()
+                .filter(|offer| offer.command_id.as_deref() == Some(command))
+                .count(),
+            count
+        );
+    }
+    let opens: Vec<_> = state
+        .candidates
+        .iter()
+        .filter(|offer| offer.command_id.as_deref() == Some("core.url.open"))
+        .collect();
+    assert_ne!(opens[0].id, opens[1].id);
+    for offer in &opens {
+        assert!(app
+            .execute(state.session_id, state.revision, offer.id.clone())
+            .await
+            .unwrap()
+            .succeeded());
+    }
+    assert_eq!(
+        *fake.opened_urls.lock().unwrap(),
+        [
+            "https://example.org/page",
+            "https://example.org/copied?token=private"
+        ]
+    );
+    assert!(app
+        .execute(
+            state.session_id,
+            state.revision,
+            candidate(&state, "core.url.copy")
+        )
+        .await
+        .unwrap()
+        .succeeded());
+    assert_eq!(*fake.copies.lock().unwrap(), ["https://example.org/page"]);
+    assert!(state.candidates.iter().all(|offer| !offer
+        .subtitle
+        .as_deref()
+        .unwrap_or_default()
+        .contains("token=private")));
 }
 
 #[tokio::test]

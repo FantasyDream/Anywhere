@@ -177,7 +177,7 @@ impl Application {
             return SnapshotWait::Superseded;
         }
         if let Some(state) = self.beyond(session_id, after) {
-            return SnapshotWait::Updated(state);
+            return SnapshotWait::Updated(Box::new(state));
         }
         let mut updates = self.state_updates();
         let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
@@ -186,7 +186,7 @@ impl Application {
                 return SnapshotWait::Superseded;
             }
             if let Some(state) = self.beyond(session_id, after) {
-                return SnapshotWait::Updated(state);
+                return SnapshotWait::Updated(Box::new(state));
             }
             let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
             if remaining.is_zero() {
@@ -451,7 +451,7 @@ impl LauncherApplication for Application {
         input: String,
         revision: Revision,
     ) -> Result<Option<LauncherState>> {
-        self.update_query_use_case(session_id, input, revision)
+        self.update_query_use_case(session_id, input, revision, None)
             .await
     }
 
@@ -511,7 +511,7 @@ impl LauncherApplication for Application {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum SnapshotWait {
-    Updated(LauncherState),
+    Updated(Box<LauncherState>),
     TimedOut,
     Closed,
     Superseded,

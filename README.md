@@ -6,7 +6,7 @@ Context-Aware Launcher：先理解当前对象，再推荐下一步动作。Host
 Understand → Enrich → Match → Rank → Execute
 ```
 
-在 Finder 中按 **⌘⌥Space**，无需输入即可得到当前环境的动作：普通目录是 Open Terminal Here / Copy Path / Open Directory，Git 目录则以 Git Status 开头。输入 `chrome` 直接打开应用，输入 `git sta` 找到 Git 动作，粘贴 URL、JSON 或路径仍得到对应动作。
+在 Finder 中按 **⌘⌥Space**，首页显示少量推荐动作；Current App 可以搜索当前环境全部动作，Folder / Git 等 Scope 用于缩小范围。输入 `git sta` 可执行 Git 动作，输入 URL、JSON 或路径会得到相应操作；通过 Universal 入口或清除 Scope 后，输入 `chrome` 可搜索应用。菜单层级通过 **Browse Menus…** 探索。
 
 macOS 应用可在本机编译。
 
@@ -29,15 +29,23 @@ scripts/run-macos.sh
 
 macOS Host 显式启用 **Impeller**。
 
-首次启动自动显示一次，之后留在菜单栏。**⌘⌥Space** 打开/隐藏；**↑ / ↓** 选择；**Enter** 执行；**Esc** 隐藏；**Ctrl+Tab** / **Ctrl+Shift+Tab** 在 Scope Bar 中循环分组。失去焦点立即隐藏；重新唤醒会清空输入并重新捕获上下文。无动作时只显示搜索栏，列表随数量增减，最多显示 7 行，更多结果可滚动，窗口高度上限 520。菜单栏可以打开或退出应用。快捷键冲突会显示诊断；释放其他应用对该组合键的占用后重启。
+首次启动自动显示一次，之后留在菜单栏。**⌘⌥Space** 打开 Current App Launcher，有当前应用身份且存在可见动作时默认选择其 Scope；加 **Shift** 打开 Universal Search，不选择 Scope。两个入口共用窗口，切换入口保留查询；重复同一入口关闭。失去焦点隐藏，重新唤醒清空输入并重新捕获上下文。
 
-Scope Bar 在搜索栏下方。没有单独的 All：未选中 Scope 就是综合列表。有当前应用动作时，Current App 排在第一位并在 Current App 入口下默认选中；其后是当前可见动作的分组，先按使用次数排序，同分时按注册顺序与稳定 ID 排序。切换 Scope 是硬过滤，候选列表由 Rust 预计算，UI 不判断 Context 类型。
+界面由搜索框、Scope Bar 和结果列表组成。Current App Scope 聚合当前环境全部可用 Action，包括菜单、Folder、Git、剪贴板及输入识别动作；其他 Scope 按 Action Group 筛选。只显示有可见动作的入口，没有 All 或 Menu Scope。Context 决定动作是否适用，Scope 决定查询范围。当前应用菜单归 `app.<bundle_id>` 分组，顶部显示实际应用名；目录、Git 等分组可作用于多个 Context。
 
-普通目录里 Finder 与 Folder 的内容相同是正常的：Finder 的动作就是它那个目录的动作，两者没有差异。只有在存在其他应用专属动作或 Git 仓库时两个 Scope 才会不同。
+**↑ / ↓** 选择，**Enter** 执行动作或进入子菜单；**Ctrl+Tab / Ctrl+Shift+Tab** 循环可见 Scope，None 不参与。切换 Scope 保留查询，输入不会自动退出 Scope。**Esc** 依次清查询、返回菜单、清 Scope、关闭。空输入时 **→ / ←** 可进入/返回菜单，输入非空时左右键保留光标功能。
+
+空查询只显示少量推荐动作，不显示 Applications；应用首页最多 7 个推荐动作和 **Browse Menus…**。输入后扁平搜索整个 Scope，Browse Menus 按菜单层级探索；子菜单里输入同样搜索整个应用，清空后回到原浏览位置。菜单行采用叶子标题与菜单路径副标题。无匹配时 Enter 保持 Scope；Current App 搜索全部可用 Action；Esc 清 Scope 或使用 Universal 入口后还可搜索 Applications。结果列表最多露出 7 行，更多内容可滚动，窗口高度上限 520。
+
+Current App 固定首位槽位，只有可见动作时才显示；其他分组按真正执行产生的 frecency、base_priority 和稳定 ID 排序。Session 内已有槽位冻结，迟到分组只追加。浏览与切 Scope 不增加使用次数。不可用菜单继续 Hidden，权限失败只影响依赖该权限的动作。
 
 Finder 目录捕获需要 macOS 的 Automation 授权。拒绝授权时保留输入功能并显示诊断；「最近使用」「共享」等虚拟页面没有目录上下文，不作为错误显示。目录上下文在每次唤醒时捕获一次，绑定当时的前台应用，并在该 Session 中保持不变；如果 40ms 内没读完，首屏先用已有 Context 显示，结果到达后再追加。
 
 V0.4 的 Finder 选中项、选中文本和浏览器 URL 也以唤醒时的前台应用实例为目标异步读取。应用身份在显示 Launcher 前冻结；具体值以系统读取时为准，浏览器在等待期间跳转时可能得到跳转后的 URL。
+
+Settings → Context Sources 可独立关闭四种来源，并查看上次唤醒的采集状态。无选区、不支持、超时、内容过长、选中项过多和权限拒绝分别处理；首页只提示需要处理的问题，拒绝授权时可打开系统设置，处理后重新唤醒即可重采集。关闭窗口后只保留状态元数据供设置页查看，不保留旧 Context 正文。
+
+剪贴板只读取一次文本快照，内容上限 16 KiB；已知系统策略拒绝时单独提示权限，无法可靠确定原因时报告不可用，不猜测权限。来源失败不阻塞其他动作。Copy URL 与 Copy Path 在剪贴板已包含相同目标时隐藏；不同 URL 的打开动作保留来源标注，相同目标合并。
 
 JSON 的 Format / Minify 在窗口中显示结果，↑ / ↓ 返回动作列表；Copy Formatted JSON 写剪贴板。文件和 URL 的打开、复制等操作全部由 Rust 调用 Platform Adapter。
 
@@ -54,7 +62,7 @@ cargo run --release --locked -p anywhere-core --example measure
 
 `cargo test -p anywhere-core` 不需要 Flutter、Dart 或可见 GUI。完整检查脚本校验共享 Flutter 版本，并运行 Rust fmt / tests / Clippy、架构检查和 Flutter analyze / tests。
 
-Rust 测试使用真实临时文件和 SQLite；OS 动作由 TestPlatform 记录，测试不会打开浏览器、覆盖剪贴板或运行 Git。目前有 14 个内建命令。
+Rust 测试使用真实临时文件和 SQLite；OS 动作由 TestPlatform 记录，测试不会打开浏览器、覆盖剪贴板或运行 Git。目前有 15 个内建命令。
 
 修改桥接公开 API 后重新生成：
 
@@ -93,8 +101,8 @@ Git 动作只在用户按 Enter 时运行，参数是固定的 `status` / `log -
 
 ## 结构与边界
 
-[架构](docs/architecture.md) · [新版路线图](docs/roadmap.md) · [V0.3.x MVP](docs/mvp-v0.3x.md) · [Context 模型](docs/context-model.md) · [插件协议](docs/plugin-protocol.md) · [Current App 菜单动作](docs/current-app-actions.md)
+[架构](docs/architecture.md) · [新版路线图](docs/roadmap.md) · [对象与动作导航设计](docs/action-navigation-design.md) · [V0.3.x MVP](docs/mvp-v0.3x.md) · [Context 模型](docs/context-model.md) · [插件协议](docs/plugin-protocol.md) · [Current App 菜单动作](docs/current-app-actions.md)
 
-当前 V0.3.x 范围为 macOS 平台适配、内建上下文、应用搜索、Scope Bar、声明式插件、键盘交互与 Current App 菜单动作。发布前的实机验收状态见 [MVP 文档](docs/mvp-v0.3x.md)。
+当前 V0.4 工程版本为 `0.4.0+3`，包括四种 Context 来源、应用搜索、Scope / 菜单导航、声明式插件与 Current App 动作。工程收尾与实机验收状态见 [0.4 验收记录](docs/v0.4-context-acceptance.md)；当前构建供本机验证，不将自动化检查替代正式实机验收。
 
-Finder 选中文件、浏览器当前 URL、选中文本、开发项目识别、文件搜索和插件 UI 属于后续阶段；可执行插件运行时、AI、账户与云同步尚未纳入当前版本。
+开发项目识别、文件搜索和插件 UI 属于后续阶段；可执行插件运行时、AI、账户与云同步尚未纳入当前版本。

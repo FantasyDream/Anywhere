@@ -50,9 +50,6 @@ impl Candidate {
 /// Everything the search produced for this revision.
 pub struct CandidateSet {
     pub candidates: Vec<Candidate>,
-    pub scopes: Vec<ScopeEntry>,
-    /// Usage total per dynamic scope, used to order the scope bar.
-    pub scope_use: BTreeMap<GroupId, u32>,
     /// Action matching: applicability, availability and query match per context.
     pub matcher_us: u64,
     /// Every ranked source after the first (application index today, files later).
@@ -95,7 +92,7 @@ pub fn compare_candidates(a: &Candidate, b: &Candidate) -> std::cmp::Ordering {
 }
 
 /// Keep one row per action and canonical object, preferring the highest-ranked occurrence.
-/// Scope membership is unioned so ownership survives deduplication.
+/// Context root membership is unioned so ownership survives deduplication.
 pub fn deduplicate_actions(candidates: &mut Vec<Candidate>) {
     let mut merged: Vec<Candidate> = Vec::with_capacity(candidates.len());
     let mut index: BTreeMap<(ActionId, ContextTypeId, Arc<str>), usize> = BTreeMap::new();
@@ -112,6 +109,11 @@ pub fn deduplicate_actions(candidates: &mut Vec<Candidate>) {
         match index.get(&key) {
             Some(position) => {
                 let existing = &mut merged[*position];
+                for key in &candidate.presentation.context_keys {
+                    if !existing.presentation.context_keys.contains(key) {
+                        existing.presentation.context_keys.push(key.clone());
+                    }
+                }
                 if existing.presentation.owning_app.is_none() {
                     existing.presentation.owning_app = candidate.presentation.owning_app;
                 }

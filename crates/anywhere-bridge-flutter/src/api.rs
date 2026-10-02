@@ -87,9 +87,10 @@ pub async fn update_input(
     session_id: u32,
     input: String,
     revision: u32,
+    scope_id: Option<String>,
 ) -> Result<Option<LauncherStateDto>> {
     Ok(application()?
-        .update_input(session_id, input, revision)
+        .update_scoped_input(session_id, input, revision, scope_id)
         .await?
         .map(Into::into))
 }
@@ -108,7 +109,7 @@ pub async fn wait_for_snapshot(session_id: u32, after: u64) -> Result<SnapshotWa
         match application()?.wait_for_snapshot(session_id, after).await {
             anywhere_core::application::SnapshotWait::Updated(state) => SnapshotWaitDto {
                 kind: SnapshotWaitKindDto::Updated,
-                state: Some(state.into()),
+                state: Some((*state).into()),
             },
             anywhere_core::application::SnapshotWait::TimedOut => SnapshotWaitDto {
                 kind: SnapshotWaitKindDto::TimedOut,
@@ -251,9 +252,12 @@ pub struct LauncherStateDto {
     pub input: String,
     pub context_complete: bool,
     pub contexts: Vec<ContextDto>,
+    pub context_candidates: Vec<CandidateDto>,
+    pub preferred_context_key: Option<String>,
+    pub scopes: Vec<ScopeDto>,
+    pub selected_scope: Option<String>,
     pub context_captures: Vec<ContextCaptureDto>,
     pub candidates: Vec<CandidateDto>,
-    pub scopes: Vec<ScopeDto>,
     pub diagnostics: Vec<String>,
 }
 #[derive(Clone, Debug)]
@@ -263,6 +267,12 @@ pub struct ContextDto {
     pub label: String,
     pub detail: String,
     pub source: ContextSourceDto,
+    pub key: String,
+    pub root_key: String,
+    pub icon_key: String,
+    pub capabilities: Vec<String>,
+    pub candidate_ids: Vec<String>,
+    pub primary_candidate_id: Option<String>,
 }
 #[derive(Clone, Debug)]
 pub struct ContextCaptureDto {
@@ -275,6 +285,11 @@ pub enum ContextCaptureStatusDto {
     Captured,
     Empty,
     PermissionDenied,
+    Unsupported,
+    ApplicationChanged,
+    TimedOut,
+    TooLarge,
+    TooManyItems,
     Unavailable,
     Failed,
 }
@@ -301,10 +316,11 @@ pub enum AvailabilityDto {
     Hidden,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ScopeKindDto {
-    App,
-    Group,
+#[derive(Clone, Debug)]
+pub struct ScopeDto {
+    pub id: String,
+    pub label: String,
+    pub is_current_app: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -313,6 +329,12 @@ pub struct CandidateDto {
     pub kind: CandidateKindDto,
     pub title: String,
     pub menu_path: Vec<String>,
+    pub context_keys: Vec<String>,
+    pub execution_context_id: Option<String>,
+    pub execution_target_label: Option<String>,
+    pub home_eligible: bool,
+    pub primary_action: bool,
+    pub section_label: Option<String>,
     pub subtitle: Option<String>,
     pub shortcut: Option<String>,
     pub icon_key: String,
@@ -322,13 +344,6 @@ pub struct CandidateDto {
     pub availability_reason: Option<String>,
     pub command_id: Option<String>,
     pub bundle_id: Option<String>,
-}
-#[derive(Clone, Debug)]
-pub struct ScopeDto {
-    pub id: String,
-    pub kind: ScopeKindDto,
-    pub label: String,
-    pub candidate_ids: Vec<String>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SnapshotWaitKindDto {
@@ -385,6 +400,28 @@ impl From<protocol::LauncherState> for LauncherStateDto {
                     label: context.label,
                     detail: context.detail,
                     source: context_source_dto(context.source),
+                    key: context.key,
+                    root_key: context.root_key,
+                    icon_key: context.icon_key,
+                    capabilities: context.capabilities,
+                    candidate_ids: context.candidate_ids,
+                    primary_candidate_id: context.primary_candidate_id,
+                })
+                .collect(),
+            context_candidates: state
+                .context_candidates
+                .into_iter()
+                .map(candidate_dto)
+                .collect(),
+            preferred_context_key: state.preferred_context_key,
+            selected_scope: state.selected_scope,
+            scopes: state
+                .scopes
+                .into_iter()
+                .map(|scope| ScopeDto {
+                    id: scope.id,
+                    label: scope.label,
+                    is_current_app: scope.is_current_app,
                 })
                 .collect(),
             context_captures: state
@@ -396,37 +433,33 @@ impl From<protocol::LauncherState> for LauncherStateDto {
                     captured_at_ms: capture.captured_at_ms,
                 })
                 .collect(),
-            candidates: state
-                .candidates
-                .into_iter()
-                .map(|candidate| CandidateDto {
-                    id: candidate.id,
-                    kind: kind_dto(candidate.kind),
-                    title: candidate.title,
-                    menu_path: candidate.menu_path,
-                    subtitle: candidate.subtitle,
-                    shortcut: candidate.shortcut,
-                    icon_key: candidate.icon.key,
-                    score: candidate.score,
-                    group_id: candidate.group_id,
-                    availability: availability_dto(candidate.availability.state),
-                    availability_reason: candidate.availability.reason,
-                    command_id: candidate.command_id,
-                    bundle_id: candidate.bundle_id,
-                })
-                .collect(),
-            scopes: state
-                .scopes
-                .into_iter()
-                .map(|scope| ScopeDto {
-                    id: scope.id,
-                    kind: scope_kind_dto(scope.kind),
-                    label: scope.label,
-                    candidate_ids: scope.candidate_ids,
-                })
-                .collect(),
+            candidates: state.candidates.into_iter().map(candidate_dto).collect(),
             diagnostics: state.diagnostics,
         }
+    }
+}
+
+fn candidate_dto(candidate: protocol::CandidatePresentation) -> CandidateDto {
+    CandidateDto {
+        id: candidate.id,
+        kind: kind_dto(candidate.kind),
+        title: candidate.title,
+        menu_path: candidate.menu_path,
+        context_keys: candidate.context_keys,
+        execution_context_id: candidate.execution_context_id,
+        execution_target_label: candidate.execution_target_label,
+        home_eligible: candidate.home_eligible,
+        primary_action: candidate.primary_action,
+        section_label: candidate.section_label,
+        subtitle: candidate.subtitle,
+        shortcut: candidate.shortcut,
+        icon_key: candidate.icon.key,
+        score: candidate.score,
+        group_id: candidate.group_id,
+        availability: availability_dto(candidate.availability.state),
+        availability_reason: candidate.availability.reason,
+        command_id: candidate.command_id,
+        bundle_id: candidate.bundle_id,
     }
 }
 
@@ -457,6 +490,13 @@ fn context_capture_status_dto(status: protocol::ContextCaptureStatus) -> Context
             ContextCaptureStatusDto::PermissionDenied
         }
         protocol::ContextCaptureStatus::Unavailable => ContextCaptureStatusDto::Unavailable,
+        protocol::ContextCaptureStatus::Unsupported => ContextCaptureStatusDto::Unsupported,
+        protocol::ContextCaptureStatus::ApplicationChanged => {
+            ContextCaptureStatusDto::ApplicationChanged
+        }
+        protocol::ContextCaptureStatus::TimedOut => ContextCaptureStatusDto::TimedOut,
+        protocol::ContextCaptureStatus::TooLarge => ContextCaptureStatusDto::TooLarge,
+        protocol::ContextCaptureStatus::TooManyItems => ContextCaptureStatusDto::TooManyItems,
         protocol::ContextCaptureStatus::Failed => ContextCaptureStatusDto::Failed,
     }
 }
@@ -466,13 +506,6 @@ fn availability_dto(state: protocol::AvailabilityState) -> AvailabilityDto {
         protocol::AvailabilityState::Enabled => AvailabilityDto::Enabled,
         protocol::AvailabilityState::Disabled => AvailabilityDto::Disabled,
         protocol::AvailabilityState::Hidden => AvailabilityDto::Hidden,
-    }
-}
-
-fn scope_kind_dto(kind: protocol::ScopeKind) -> ScopeKindDto {
-    match kind {
-        protocol::ScopeKind::App => ScopeKindDto::App,
-        protocol::ScopeKind::Group => ScopeKindDto::Group,
     }
 }
 

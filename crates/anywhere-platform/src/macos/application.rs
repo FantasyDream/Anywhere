@@ -187,7 +187,7 @@ fn decode_selected_text(value: serde_json::Value) -> Result<Option<String>> {
     match value.get("status").and_then(|status| status.as_str()) {
         Some("ok") => {
             if value.get("truncated").and_then(|flag| flag.as_bool()) == Some(true) {
-                return Err(SelectedTextError::Unavailable.into());
+                return Err(SelectedTextError::TooLarge.into());
             }
             let text = value
                 .get("text")
@@ -196,7 +196,7 @@ fn decode_selected_text(value: serde_json::Value) -> Result<Option<String>> {
             // The native shim already caps the string. Guard the Rust boundary too
             // in case a future native implementation forgets that contract.
             if text.len() > 16 * 1024 {
-                bail!("selected text exceeds the platform cap");
+                return Err(SelectedTextError::TooLarge.into());
             }
             Ok((!text.is_empty()).then(|| text.to_owned()))
         }
@@ -205,6 +205,7 @@ fn decode_selected_text(value: serde_json::Value) -> Result<Option<String>> {
         Some("untrusted") => Err(SelectedTextError::PermissionDenied.into()),
         Some("application_changed") => Err(SelectedTextError::ApplicationChanged.into()),
         Some("timeout") => Err(SelectedTextError::TimedOut.into()),
+        Some("too_large") => Err(SelectedTextError::TooLarge.into()),
         Some("unavailable") => Err(SelectedTextError::Unavailable.into()),
         _ => bail!("unknown selected text status"),
     }
@@ -324,6 +325,7 @@ mod tests {
             ("untrusted", SelectedTextError::PermissionDenied),
             ("application_changed", SelectedTextError::ApplicationChanged),
             ("timeout", SelectedTextError::TimedOut),
+            ("too_large", SelectedTextError::TooLarge),
             ("unavailable", SelectedTextError::Unavailable),
         ] {
             let error = decode_selected_text(json!({"status":status})).unwrap_err();
@@ -336,7 +338,7 @@ mod tests {
             decode_selected_text(json!({"status":"ok", "text":"truncated", "truncated":true}))
                 .unwrap_err()
                 .downcast_ref::<SelectedTextError>(),
-            Some(&SelectedTextError::Unavailable)
+            Some(&SelectedTextError::TooLarge)
         );
     }
 

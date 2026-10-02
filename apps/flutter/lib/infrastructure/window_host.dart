@@ -44,6 +44,8 @@ class WindowHost {
       });
   Future<void> hide(int generation) =>
       _channel.invokeMethod<void>('hide', {'generation': generation});
+  Future<void> openPrivacySettings(String pane) =>
+      _channel.invokeMethod<void>('openPrivacySettings', {'pane': pane});
 
   Future<HostSettings> readSettings() async {
     final raw = await _channel.invokeMapMethod<Object?, Object?>('settings');

@@ -27,7 +27,7 @@ pub enum AvailabilityRule {
     Hidden,
     /// Snapshot of a menu item (or similar) that is visible but not runnable.
     Disabled { reason: String },
-    /// Hide when the named fact already equals this context (text snapshot).
+    /// Hide when the named text fact represents the same value as this context.
     HideIfFactMatchesContext { fact: String },
     /// Disabled unless the named flag fact is true.
     RequireFlag { fact: String, reason: String },

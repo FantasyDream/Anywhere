@@ -94,6 +94,12 @@ impl CandidateSource for ApplicationSource<'_> {
                     bundle_id: Some(application.bundle_id.clone()),
                     owning_app: None,
                     menu_path: Vec::new(),
+                    context_keys: Vec::new(),
+                    execution_context_id: None,
+                    execution_target_label: None,
+                    home_eligible: true,
+                    primary_action: true,
+                    section_label: None,
                 },
                 target: crate::core::search::candidate::CandidateTarget::LaunchApplication {
                     path: application.path.clone(),

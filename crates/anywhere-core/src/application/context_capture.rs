@@ -10,7 +10,7 @@ use super::{
 };
 use crate::core::context::{CaptureMetadata, ContextValue, ResolvedContext};
 use anyhow::Result;
-use anywhere_platform::{ApplicationInfo, SelectedTextError};
+use anywhere_platform::{ApplicationInfo, ContextReadError};
 use anywhere_protocol::*;
 use std::{
     path::PathBuf,
@@ -131,11 +131,12 @@ impl Application {
                     ContextSource::BrowserCurrentPage,
                     owner.clone(),
                     move || {
-                        Ok(platform
+                        let context = platform
                             .browser_current_url(&target)?
-                            .and_then(browser_context)
-                            .into_iter()
-                            .collect())
+                            .map(browser_context)
+                            .transpose()?
+                            .flatten();
+                        Ok(context.into_iter().collect())
                     },
                 );
             }
@@ -151,11 +152,12 @@ impl Application {
                 ContextSource::SelectedText,
                 owner,
                 move || {
-                    Ok(platform
+                    let context = platform
                         .selected_text(&application)?
-                        .and_then(|text| text_context(text, ContextSource::SelectedText))
-                        .into_iter()
-                        .collect())
+                        .map(|text| text_context(text, ContextSource::SelectedText))
+                        .transpose()?
+                        .flatten();
+                    Ok(context.into_iter().collect())
                 },
             );
         }
@@ -208,32 +210,37 @@ fn spawn_capture(
     });
 }
 
-pub(super) fn text_context(text: String, source: ContextSource) -> Option<ResolvedContext> {
-    if text.trim().is_empty() || text.len() > MAX_CONTEXT_TEXT_BYTES {
-        return None;
+pub(super) fn text_context(text: String, source: ContextSource) -> Result<Option<ResolvedContext>> {
+    if text.len() > MAX_CONTEXT_TEXT_BYTES {
+        return Err(ContextReadError::TooLarge.into());
     }
-    Some(ResolvedContext::new(
+    if text.trim().is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(ResolvedContext::new(
         TEXT,
         ContextValue::Text(text.into()),
         source,
         "platform.activation",
-    ))
+    )))
 }
 
-fn browser_context(raw: String) -> Option<ResolvedContext> {
+fn browser_context(raw: String) -> Result<Option<ResolvedContext>> {
     if raw.len() > 8 * 1024 {
-        return None;
+        return Err(ContextReadError::TooLarge.into());
     }
-    let url = url::Url::parse(&raw).ok()?;
+    let Ok(url) = url::Url::parse(&raw) else {
+        return Ok(None);
+    };
     if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
-        return None;
+        return Ok(None);
     }
-    Some(ResolvedContext::new(
+    Ok(Some(ResolvedContext::new(
         URL,
         ContextValue::Url(url),
         ContextSource::BrowserCurrentPage,
         "platform.browser_current_page",
-    ))
+    )))
 }
 
 fn finder_contexts(paths: Vec<PathBuf>) -> Result<Vec<ResolvedContext>> {
@@ -242,14 +249,17 @@ fn finder_contexts(paths: Vec<PathBuf>) -> Result<Vec<ResolvedContext>> {
     }
     let mut contexts = Vec::new();
     if paths.len() > 1 {
-        contexts.push(ResolvedContext::new(
+        let mut selection = ResolvedContext::new(
             FILE_SELECTION,
             ContextValue::FileSelection(paths.clone().into()),
             ContextSource::FinderSelection,
             "platform.finder_selection",
-        ));
+        );
+        selection.id = "capture.finder.selection".into();
+        contexts.push(selection);
     }
-    for path in paths.into_iter().take(MAX_FINDER_EXPANSION) {
+    let parent = contexts.first().map(|context| context.id.clone());
+    for (index, path) in paths.into_iter().take(MAX_FINDER_EXPANSION).enumerate() {
         let value = if path.is_dir() {
             Some((DIRECTORY, ContextValue::Directory(path)))
         } else if path.is_file() {
@@ -258,35 +268,34 @@ fn finder_contexts(paths: Vec<PathBuf>) -> Result<Vec<ResolvedContext>> {
             None
         };
         if let Some((type_id, value)) = value {
-            contexts.push(ResolvedContext::new(
+            let mut child = ResolvedContext::new(
                 type_id,
                 value,
                 ContextSource::FinderSelection,
                 "platform.finder_selection",
-            ));
+            );
+            child.id = format!("capture.finder.item.{index}");
+            child.source_context_id = parent.clone();
+            child.depth = u8::from(parent.is_some());
+            contexts.push(child);
         }
     }
     Ok(contexts)
 }
 
-fn failure_status(error: &anyhow::Error) -> CaptureStatus {
-    if let Some(status) = error.downcast_ref::<SelectedTextError>() {
+pub(super) fn failure_status(error: &anyhow::Error) -> CaptureStatus {
+    if let Some(status) = error.downcast_ref::<ContextReadError>() {
         return match status {
-            SelectedTextError::PermissionDenied => CaptureStatus::PermissionDenied,
-            SelectedTextError::Unsupported
-            | SelectedTextError::ApplicationChanged
-            | SelectedTextError::Unavailable => CaptureStatus::Unavailable,
-            SelectedTextError::TimedOut => CaptureStatus::Failed,
+            ContextReadError::PermissionDenied => CaptureStatus::PermissionDenied,
+            ContextReadError::Unsupported => CaptureStatus::Unsupported,
+            ContextReadError::ApplicationChanged => CaptureStatus::ApplicationChanged,
+            ContextReadError::Unavailable => CaptureStatus::Unavailable,
+            ContextReadError::TimedOut => CaptureStatus::TimedOut,
+            ContextReadError::TooLarge => CaptureStatus::TooLarge,
+            ContextReadError::TooManyItems => CaptureStatus::TooManyItems,
         };
     }
-    // The Automation adapters replace osascript stderr with fixed categories, so
-    // matching these messages cannot accidentally retain selected paths or URLs.
-    let message = error.to_string();
-    if message.contains("permission") || message.contains("not authorized") {
-        CaptureStatus::PermissionDenied
-    } else {
-        CaptureStatus::Failed
-    }
+    CaptureStatus::Failed
 }
 
 pub(super) fn now_ms() -> i64 {
@@ -405,19 +414,54 @@ mod tests {
 
     #[test]
     fn long_or_blank_capture_is_not_a_text_context() {
-        assert!(text_context(" ".into(), ContextSource::Clipboard).is_none());
+        assert!(text_context(" ".into(), ContextSource::Clipboard)
+            .unwrap()
+            .is_none());
         assert!(text_context(
             "x".repeat(MAX_CONTEXT_TEXT_BYTES + 1),
             ContextSource::Clipboard
         )
-        .is_none());
+        .is_err());
     }
 
     #[test]
     fn browser_seed_requires_a_web_url() {
-        assert!(browser_context("https://example.org/a".into()).is_some());
-        assert!(browser_context("file:///tmp/a".into()).is_none());
-        assert!(browser_context("about:blank".into()).is_none());
+        assert!(browser_context("https://example.org/a".into())
+            .unwrap()
+            .is_some());
+        assert!(browser_context("file:///tmp/a".into()).unwrap().is_none());
+        assert!(browser_context("about:blank".into()).unwrap().is_none());
+        assert_eq!(
+            failure_status(&browser_context("x".repeat(8193)).unwrap_err()),
+            CaptureStatus::TooLarge
+        );
+    }
+
+    #[test]
+    fn source_errors_are_typed_and_never_inferred_from_error_text() {
+        for (error, expected) in [
+            (
+                ContextReadError::PermissionDenied,
+                CaptureStatus::PermissionDenied,
+            ),
+            (ContextReadError::Unsupported, CaptureStatus::Unsupported),
+            (
+                ContextReadError::ApplicationChanged,
+                CaptureStatus::ApplicationChanged,
+            ),
+            (ContextReadError::TimedOut, CaptureStatus::TimedOut),
+            (ContextReadError::TooLarge, CaptureStatus::TooLarge),
+            (ContextReadError::TooManyItems, CaptureStatus::TooManyItems),
+            (ContextReadError::Unavailable, CaptureStatus::Unavailable),
+        ] {
+            assert_eq!(failure_status(&anyhow::Error::new(error)), expected);
+        }
+        assert_eq!(
+            failure_status(&anyhow::anyhow!(
+                "permission is a word in unknown diagnostics"
+            )),
+            CaptureStatus::Failed
+        );
     }
 
     #[test]

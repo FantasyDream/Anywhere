@@ -6,6 +6,7 @@
 //! action.
 use crate::core::action::availability;
 use crate::core::action::descriptor::ActionRegistry;
+use crate::core::action::group::GroupMeta;
 use crate::core::context::{ContextSource, ContextValue, ResolvedContext};
 use crate::core::ranking::score;
 use crate::core::search::candidate::{action_candidate_id, compare_candidates, Candidate};
@@ -29,19 +30,25 @@ impl CandidateSource for TextFallbackSource<'_> {
     }
 
     fn candidates(&self, search: &SearchContext<'_>) -> Vec<Candidate> {
-        self.build(search.query, &[])
+        self.build(search.query, &[], search.scope_id)
     }
 
     fn contribute(&self, search: &SearchContext<'_>, existing: &[Candidate]) -> Vec<Candidate> {
         if search.query.is_empty() {
             return Vec::new();
         }
-        self.build(search.query, existing)
+        self.build(search.query, existing, search.scope_id)
     }
 }
 
 impl TextFallbackSource<'_> {
-    fn build(&self, query: &Query, existing: &[Candidate]) -> Vec<Candidate> {
+    fn build(
+        &self,
+        query: &Query,
+        existing: &[Candidate],
+        scope_id: Option<&str>,
+    ) -> Vec<Candidate> {
+        let group_filter = super::scope::group_filter(scope_id, self.facts.frontmost.as_ref());
         let context = ResolvedContext::new(
             TEXT,
             ContextValue::Text(query.raw_input.clone().into()),
@@ -51,6 +58,7 @@ impl TextFallbackSource<'_> {
         let mut fallbacks = self
             .registry
             .matching(&context)
+            .filter(|action| group_filter.is_none_or(|group| group == action.group_id))
             .filter_map(|action| {
                 let availability =
                     availability::evaluate(&action.availability, &context, self.facts);
@@ -75,6 +83,12 @@ impl TextFallbackSource<'_> {
                         bundle_id: None,
                         owning_app: None,
                         menu_path: action.menu_path.clone(),
+                        context_keys: Vec::new(),
+                        execution_context_id: None,
+                        execution_target_label: None,
+                        home_eligible: action.home_eligible,
+                        primary_action: action.primary_action,
+                        section_label: Some(self.registry.label(&action.group_id)),
                     },
                     target: crate::core::search::candidate::CandidateTarget::from_action(
                         action.clone(),

@@ -47,9 +47,11 @@ Future<void> main() async {
           sessionId: session,
           promptAccessibility: promptAccessibility,
         ),
-        updateInput: (session, input, revision) => bridge.updateInput(
+        updateInput: (session, input, revision, {scopeId}) =>
+            bridge.updateInput(
           sessionId: session,
           input: input,
+          scopeId: scopeId,
           revision: revision,
         ),
         execute: (session, revision, candidate) => bridge.execute(

@@ -28,6 +28,10 @@ pub mod groups {
     /// Launch candidates; never a scope of their own.
     pub const APP: &str = "app";
 
+    pub fn for_app(bundle_id: &str) -> String {
+        format!("app.{bundle_id}")
+    }
+
     pub fn git() -> ActionGroup {
         ActionGroup {
             id: GIT.into(),

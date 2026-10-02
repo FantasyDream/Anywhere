@@ -35,6 +35,7 @@ fn sources_of(contexts: &[ResolvedContext], registry: &ActionRegistry) -> Vec<Ca
         anywhere_core::features::context_semantic,
     );
     matcher.candidates(&SearchContext {
+        scope_id: None,
         query: &anywhere_core::core::search::query::Query::parse("copy"),
         contexts,
     })
@@ -220,6 +221,12 @@ fn every_candidate_kind_has_a_source_behind_it() {
                     bundle_id: Some("marker".into()),
                     owning_app: None,
                     menu_path: Vec::new(),
+                    context_keys: Vec::new(),
+                    execution_context_id: None,
+                    execution_target_label: None,
+                    home_eligible: true,
+                    primary_action: false,
+                    section_label: None,
                 },
                 target:
                     anywhere_core::core::search::candidate::CandidateTarget::LaunchApplication {

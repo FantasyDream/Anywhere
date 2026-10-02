@@ -10,11 +10,13 @@ class CandidateRow extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.iconBytes,
+    this.sourceLabel,
   });
   final CandidateDto candidate;
   final bool selected;
   final VoidCallback onTap;
   final Uint8List? iconBytes;
+  final String? sourceLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -132,66 +134,35 @@ class CandidateRow extends StatelessWidget {
     );
   }
 
-  Widget _title(bool disabled) {
-    final leafColor =
-        disabled ? const Color(0xff8b90a0) : LauncherStyle.primary;
-    final pathColor =
-        disabled ? const Color(0xff6f7484) : const Color(0xff8f99ad);
-    final title = candidate.title;
-    if (candidate.menuPath.isEmpty) {
-      return Text(
-        title,
+  Widget _title(bool disabled) => Text(
+        candidate.title,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          fontSize: 13.5,
-          height: 1.2,
-          fontWeight: FontWeight.w600,
-          letterSpacing: -0.2,
-          color: leafColor,
-        ),
+            fontSize: 13.5,
+            height: 1.2,
+            fontWeight: FontWeight.w600,
+            letterSpacing: -0.2,
+            color: disabled ? const Color(0xff8b90a0) : LauncherStyle.primary),
       );
-    }
-    return Text.rich(
-      TextSpan(
-        children: [
-          TextSpan(
-            text: '${candidate.menuPath.join(' › ')} › ',
-            style: TextStyle(
-              fontSize: 12.5,
-              height: 1.2,
-              fontWeight: FontWeight.w500,
-              color: pathColor,
-            ),
-          ),
-          TextSpan(
-            text: title,
-            style: TextStyle(
-              fontSize: 13.5,
-              height: 1.2,
-              fontWeight: FontWeight.w600,
-              letterSpacing: -0.15,
-              color: leafColor,
-            ),
-          ),
-        ],
-      ),
-      maxLines: 1,
-      overflow: TextOverflow.ellipsis,
-    );
-  }
 
   String? _visibleSubtitle() {
     final disabled = candidate.availability != AvailabilityDto.enabled;
     if (disabled) {
       return candidate.availabilityReason ?? 'Not available right now';
     }
+    final menu = candidate.menuPath.join(' › ');
+    if (menu.isNotEmpty) {
+      return sourceLabel == null ? menu : '$sourceLabel · $menu';
+    }
     final subtitle = candidate.subtitle?.trim();
-    if (subtitle == null || subtitle.isEmpty) return null;
-    if (_isBundleId(subtitle)) return null;
-    if (candidate.title == subtitle) return null;
-    if (candidate.menuPath.join(' › ') == subtitle) return null;
-    return subtitle;
+    if (subtitle == null ||
+        subtitle.isEmpty ||
+        _isBundleId(subtitle) ||
+        candidate.title == subtitle) {
+      return sourceLabel;
+    }
+    return sourceLabel == null ? subtitle : '$sourceLabel · $subtitle';
   }
 
   bool _isBundleId(String value) =>

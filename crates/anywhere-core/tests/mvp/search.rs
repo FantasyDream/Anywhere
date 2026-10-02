@@ -1,7 +1,7 @@
 use crate::support::*;
 
 #[tokio::test]
-async fn git_directory_offers_git_scope_and_runs_git_only_on_request() {
+async fn git_directory_offers_one_context_and_runs_git_only_on_request() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().canonicalize().unwrap();
     std::fs::create_dir(root.join(".git")).unwrap();
@@ -14,8 +14,23 @@ async fn git_directory_offers_git_scope_and_runs_git_only_on_request() {
         titles(&state)[..3],
         ["Git Status", "Open Terminal Here", "Git Log"]
     );
-    assert!(scope_ids(&state).contains(&"git"));
-    assert!(scope_ids(&state).contains(&"folder"));
+    assert_eq!(context_types(&state), [DIRECTORY]);
+    let status = state
+        .candidates
+        .iter()
+        .find(|candidate| candidate.command_id.as_deref() == Some("core.git.status"))
+        .unwrap();
+    let terminal = state
+        .candidates
+        .iter()
+        .find(|candidate| candidate.command_id.as_deref() == Some("core.directory.terminal"))
+        .unwrap();
+    assert_eq!(status.context_keys, terminal.context_keys);
+    assert!(state
+        .context_summary
+        .iter()
+        .any(|context| status.context_keys.contains(&context.key)));
+    assert_eq!(status.section_label.as_deref(), Some("Git"));
     assert_eq!(
         platform.git_calls.load(Ordering::Relaxed),
         0,
@@ -39,29 +54,53 @@ async fn git_directory_offers_git_scope_and_runs_git_only_on_request() {
 }
 
 #[tokio::test]
-async fn session_freezes_scope_order_when_a_group_temporarily_disappears() {
+async fn context_identity_and_all_actions_survive_a_universal_query() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().canonicalize().unwrap();
     std::fs::create_dir(root.join(".git")).unwrap();
     let app = app(Arc::new(TestPlatform::new(root, true)));
     let state = settled(&app, app.activate().await.unwrap().unwrap().session_id, 0).await;
-    let session = state.session_id;
-    assert_eq!(scope_ids(&state), ["app", "git", "folder"]);
-
+    let key = state.preferred_context_key.clone().unwrap();
     let filtered = app
-        .update_input(session, "copy".into(), 1)
+        .update_input(state.session_id, "copy".into(), 1)
         .await
         .unwrap()
         .unwrap();
-    assert!(!scope_ids(&filtered).contains(&"git"));
-    assert!(scope_ids(&filtered).contains(&"folder"));
-
+    assert_eq!(
+        filtered.preferred_context_key.as_deref(),
+        Some(key.as_str())
+    );
+    let offers = filtered
+        .context_candidates
+        .iter()
+        .filter(|candidate| candidate.context_keys.contains(&key))
+        .collect::<Vec<_>>();
+    assert!(offers.iter().any(|offer| offer.title == "Copy Path"));
+    let git = offers
+        .iter()
+        .find(|offer| offer.title == "Git Status")
+        .unwrap();
+    assert!(!filtered
+        .candidates
+        .iter()
+        .any(|candidate| candidate.id == git.id));
+    let result = app
+        .execute(filtered.session_id, filtered.revision, git.id.clone())
+        .await
+        .unwrap();
+    assert!(
+        result.succeeded(),
+        "unfiltered context offers retain execution credentials"
+    );
     let restored = app
-        .update_input(session, String::new(), 2)
+        .update_input(state.session_id, String::new(), 2)
         .await
         .unwrap()
         .unwrap();
-    assert_eq!(scope_ids(&restored), ["app", "git", "folder"]);
+    assert_eq!(
+        restored.preferred_context_key.as_deref(),
+        Some(key.as_str())
+    );
 }
 
 #[tokio::test]
@@ -377,6 +416,8 @@ async fn a_disabled_text_fallback_cannot_execute() {
                 icon: "copy",
                 aliases: &[],
                 keywords: &[],
+                home_eligible: true,
+                primary_action: false,
             }
             .descriptor("test"),
         )
@@ -472,6 +513,41 @@ async fn git_false_and_missing_use_different_disabled_reasons() {
         "{:?}",
         state.diagnostics
     );
+}
+
+#[tokio::test]
+async fn clipboard_absence_or_read_failure_does_not_hide_copy_url() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().canonicalize().unwrap();
+    for clipboard_error in [false, true] {
+        let platform = Arc::new(TestPlatform {
+            clipboard_error,
+            clipboard: Mutex::new(clipboard_error.then(|| "https://example.org/page".into())),
+            ..TestPlatform::new(root.clone(), true)
+        });
+        let app = app(platform.clone());
+        let initial = app.activate().await.unwrap().unwrap();
+        let _ = settled(&app, initial.session_id, 0).await;
+        app.update_input(initial.session_id, "https://example.org/page".into(), 1)
+            .await
+            .unwrap()
+            .unwrap();
+        let state = settled(&app, initial.session_id, 1).await;
+        assert!(app
+            .execute(
+                state.session_id,
+                state.revision,
+                candidate(&state, "core.url.copy")
+            )
+            .await
+            .unwrap()
+            .succeeded());
+        assert!(platform
+            .calls
+            .lock()
+            .unwrap()
+            .contains(&("copy".into(), "https://example.org/page".into())));
+    }
 }
 
 #[tokio::test]

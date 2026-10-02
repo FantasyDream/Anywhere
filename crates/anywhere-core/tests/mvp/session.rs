@@ -147,6 +147,8 @@ async fn a_registered_handler_executes_through_the_public_facade() {
                 icon: "copy",
                 aliases: &[],
                 keywords: &[],
+                home_eligible: true,
+                primary_action: false,
             }
             .descriptor("test"),
         )
@@ -188,14 +190,9 @@ async fn scenarios_a_to_f_use_the_same_facade_and_executor() {
         titles(&state)[..3],
         ["Open Terminal Here", "Copy Path", "Open Directory"]
     );
-    assert_eq!(scope_ids(&state)[0], "app");
-    assert!(!scope_ids(&state).contains(&"all"));
-    assert_eq!(
-        scope(&state, "app").len(),
-        3,
-        "Finder owns the captured directory"
-    );
-    assert!(scope(&state, "folder").contains(&"Copy Path"));
+    assert_eq!(context_types(&state), [DIRECTORY]);
+    assert_eq!(context_actions(&state, DIRECTORY).len(), 3);
+    assert!(context_actions(&state, DIRECTORY).contains(&"Copy Path"));
     assert!(app
         .execute(
             session,
@@ -237,8 +234,9 @@ async fn scenarios_a_to_f_use_the_same_facade_and_executor() {
     assert!(
         url.context_summary
             .iter()
-            .all(|context| context.type_id != APPLICATION),
-        "the raw foreground application row stays internal"
+            .filter(|context| context.type_id == APPLICATION)
+            .all(|context| context.candidate_ids.is_empty()),
+        "foreground application without actions stays in the graph, outside navigation"
     );
     assert!(app
         .execute(session, url.revision, candidate(&url, "core.url.copy"))
@@ -249,9 +247,14 @@ async fn scenarios_a_to_f_use_the_same_facade_and_executor() {
         platform.calls.lock().unwrap().last().unwrap(),
         &("copy".into(), "https://github.com/".into())
     );
-    // An id from a superseded revision must not execute.
+    // Context actions remain executable from the current all-actions panel, even
+    // when the Universal query does not include them. Identity is value-stable.
+    assert!(url
+        .context_candidates
+        .iter()
+        .any(|candidate| candidate.id == state.candidates[0].id));
     assert!(app
-        .execute(session, url.revision, state.candidates[0].id.clone())
+        .execute(session, state.revision, state.candidates[0].id.clone())
         .await
         .is_err());
     // A stale revision number is rejected even with a valid candidate id.
@@ -641,7 +644,10 @@ async fn a_zero_budget_commits_a_partial_snapshot_then_appends_late_context() {
     let late = settled(&app, session, state.revision).await;
     assert!(late.context_complete);
     assert!(titles(&late).contains(&"Open Terminal Here"));
-    assert!(scope_ids(&late).contains(&"git"));
+    assert!(late
+        .context_summary
+        .iter()
+        .any(|context| context.type_id == GIT_REPOSITORY));
     let directory = late
         .context_summary
         .iter()
@@ -924,7 +930,7 @@ async fn late_context_is_visible_through_the_host_facing_snapshot_api() {
             .any(|candidate| candidate.title == "Git Status"),
         "the late snapshot must carry the repository actions"
     );
-    assert!(late.scopes.iter().any(|scope| scope.id == "git"));
+    assert!(context_actions(&late, DIRECTORY).contains(&"Git Status"));
     assert!(late.context_complete);
 }
 
@@ -945,8 +951,8 @@ async fn a_slow_directory_capture_still_shows_context_actions_without_typing() {
         "the first snapshot must wait for the ambient directory: {opened:?}"
     );
     assert!(
-        state.scopes.iter().any(|scope| scope.id == "folder"),
-        "the Folder scope must be present on the first snapshot"
+        context_types(&state).contains(&DIRECTORY),
+        "the directory Context must be present on the first snapshot"
     );
     let ready = settled(&app, state.session_id, state.revision).await;
     assert!(titles(&ready).contains(&"Open Terminal Here"));
@@ -1088,16 +1094,8 @@ async fn first_snapshot_waits_for_the_step_after_the_directory() {
         titles.contains(&"Git Status"),
         "the first snapshot must include the repository actions: {titles:?}"
     );
-    let scope_ids = state
-        .scopes
-        .iter()
-        .map(|scope| scope.id.as_str())
-        .collect::<Vec<_>>();
-    assert_eq!(
-        scope_ids,
-        ["app", "git", "folder"],
-        "the scope bar must match the documented order"
-    );
+    assert_eq!(context_types(&state), [DIRECTORY]);
+    assert!(context_actions(&state, DIRECTORY).contains(&"Git Status"));
     assert!(state.context_complete, "one snapshot should be enough here");
 }
 

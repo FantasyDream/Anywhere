@@ -60,6 +60,8 @@ pub fn bundle() -> ActionBundle {
                 icon: "terminal",
                 aliases: &["terminal", "shell", "console"],
                 keywords: &["folder"],
+                home_eligible: true,
+                primary_action: false,
             },
             ActionSpec {
                 id: "core.directory.copy",
@@ -71,6 +73,8 @@ pub fn bundle() -> ActionBundle {
                 icon: "copy",
                 aliases: &["copy", "path", "clipboard"],
                 keywords: &["folder"],
+                home_eligible: true,
+                primary_action: false,
             },
             ActionSpec {
                 id: "core.directory.open",
@@ -82,6 +86,8 @@ pub fn bundle() -> ActionBundle {
                 icon: "folder",
                 aliases: &["open", "reveal", "finder"],
                 keywords: &["folder"],
+                home_eligible: true,
+                primary_action: true,
             },
             ActionSpec {
                 id: "core.file.copy",
@@ -93,6 +99,8 @@ pub fn bundle() -> ActionBundle {
                 icon: "copy",
                 aliases: &["copy", "path", "clipboard"],
                 keywords: &["document"],
+                home_eligible: true,
+                primary_action: false,
             },
         ],
     }

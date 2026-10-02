@@ -1,7 +1,6 @@
 //! Snapshot contents: search, diagnostics, and the context summary.
 //!
-//! Called with data already copied out of the session lock. Scope order and publication
-//! stay with the session, because they mutate frozen scope ids.
+//! Called with data already copied out of the session lock; publication revalidates it.
 use crate::core::action::descriptor::ActionRegistry;
 use crate::core::context::ResolvedContext;
 use crate::core::ranking::score::UsageStats;
@@ -18,10 +17,14 @@ pub struct PreparedSnapshot {
     pub set: CandidateSet,
     pub diagnostics: Vec<String>,
     pub summary: Vec<ContextPresentation>,
+    pub context_candidates: Vec<crate::core::search::candidate::Candidate>,
+    pub preferred_context_key: Option<ContextKey>,
+    pub scopes: Vec<ScopeEntry>,
 }
 
 pub struct SnapshotInput<'a> {
     pub input: &'a str,
+    pub selected_scope: Option<&'a str>,
     pub facts: &'a SessionFacts,
     pub usage: &'a HashMap<(String, String), UsageStats>,
     pub app_usage: &'a HashMap<(String, String), UsageStats>,
@@ -37,6 +40,7 @@ pub struct SnapshotInput<'a> {
 pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
     let SnapshotInput {
         input,
+        selected_scope,
         facts,
         usage,
         app_usage,
@@ -78,27 +82,41 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
             .iter()
             .map(|source| source.as_ref() as &dyn CandidateSource),
     );
-    let set = search.search(&Query::parse(input), contexts, &extra);
+    let mut set = search.search_scoped(&Query::parse(input), contexts, &extra, selected_scope);
     let mut diagnostics = prior_diagnostics.to_vec();
     for diagnostic in incoming_diagnostics {
         if !diagnostics.contains(diagnostic) {
             diagnostics.push(diagnostic.clone());
         }
     }
+    // Menu browsing and scope generation retain full offers even with a query.
+    let context_candidates = if input.trim().is_empty() && selected_scope.is_none() {
+        set.candidates
+            .iter()
+            .filter(|candidate| candidate.context().is_some())
+            .cloned()
+            .collect()
+    } else {
+        let offers = search.search(&Query::parse(""), contexts, &[]);
+        set.matcher_us += offers.matcher_us;
+        set.ranking_us += offers.ranking_us;
+        offers.candidates
+    };
+    let scopes = crate::core::search::scope::build(
+        &context_candidates,
+        actions,
+        usage,
+        facts.frontmost.as_ref(),
+        now,
+    );
+    let summary = crate::core::context::navigation::build(contexts, &context_candidates);
+    let preferred_context_key = crate::core::context::navigation::preferred(&summary);
     PreparedSnapshot {
         set,
         diagnostics,
-        summary: visible_contexts(contexts),
+        summary,
+        context_candidates,
+        preferred_context_key,
+        scopes,
     }
-}
-
-fn visible_contexts(contexts: &[ResolvedContext]) -> Vec<ContextPresentation> {
-    contexts
-        .iter()
-        .filter(|context| {
-            !(context.type_id == APPLICATION
-                && context.source == crate::core::context::ContextSource::ForegroundApplication)
-        })
-        .map(ResolvedContext::presentation)
-        .collect()
 }

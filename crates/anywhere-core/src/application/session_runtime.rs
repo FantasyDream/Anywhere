@@ -381,6 +381,7 @@ impl Resolver {
             // sorting can be slow; new input and cancellation must remain able to run.
             let (
                 input,
+                selected_scope,
                 facts,
                 usage,
                 app_usage,
@@ -405,6 +406,7 @@ impl Resolver {
                 }
                 (
                     session.state.input.clone(),
+                    session.state.selected_scope.clone(),
                     session.facts(),
                     session.usage.clone(),
                     session.app_usage.clone(),
@@ -417,6 +419,7 @@ impl Resolver {
             let (catalog, catalog_generation) = self.catalog_view()?;
             let prepared = super::snapshot::prepare(super::snapshot::SnapshotInput {
                 input: &input,
+                selected_scope: selected_scope.as_deref(),
                 facts: &facts,
                 usage: &usage,
                 app_usage: &app_usage,
@@ -461,8 +464,19 @@ impl Resolver {
                 .len()
                 .saturating_sub(session.resolution.published_contexts);
             session.resolution.published_contexts = summary.len();
-            let scopes = crate::core::search::scope::apply_session_order(
-                prepared.set.scopes,
+            let mut scopes = prepared.scopes;
+            // Current App has a reserved first slot but is never displayed without
+            // visible actions. Other late groups only append to the session order.
+            if session.resolution.frozen_scope_ids.is_empty() {
+                if let Some(app) = &facts.frontmost {
+                    session
+                        .resolution
+                        .frozen_scope_ids
+                        .push(crate::core::action::group::groups::for_app(&app.bundle_id));
+                }
+            }
+            crate::core::search::scope::freeze(
+                &mut scopes,
                 &mut session.resolution.frozen_scope_ids,
             );
             let state = LauncherState {
@@ -472,13 +486,21 @@ impl Resolver {
                 input: session.state.input.clone(),
                 context_complete: resolve_complete,
                 context_summary: summary,
+                context_candidates: prepared
+                    .context_candidates
+                    .iter()
+                    .map(|candidate| candidate.presentation.clone())
+                    .collect(),
+                preferred_context_key: prepared.preferred_context_key,
+                scopes,
+                selected_scope,
                 context_captures: session
                     .identity
                     .captures
                     .iter()
                     .map(|capture| ContextCapturePresentation {
                         source: capture.source,
-                        status: capture.status.into(),
+                        status: capture.status,
                         captured_at_ms: capture.captured_at_ms,
                     })
                     .collect(),
@@ -488,7 +510,6 @@ impl Resolver {
                     .iter()
                     .map(|candidate| candidate.presentation.clone())
                     .collect(),
-                scopes,
                 diagnostics: {
                     let mut diagnostics = prepared.diagnostics;
                     for item in &session.state.diagnostics {
@@ -506,6 +527,7 @@ impl Resolver {
                 .set
                 .candidates
                 .iter()
+                .chain(&prepared.context_candidates)
                 .map(|candidate| (candidate.presentation.id.clone(), candidate.clone()))
                 .collect();
             session.execution.revision = Some(revision);
@@ -520,16 +542,6 @@ impl Resolver {
                 first_snapshot = is_first_snapshot,
                 candidates = state.candidates.len(),
                 contexts = state.context_summary.len(),
-                scope_ids = ?state
-                    .scopes
-                    .iter()
-                    .map(|scope| scope.id.as_str())
-                    .collect::<Vec<_>>(),
-                scope_candidates = ?state
-                    .scopes
-                    .iter()
-                    .map(|scope| scope.candidate_ids.len())
-                    .collect::<Vec<_>>(),
                 candidate_kinds = ?state
                     .candidates
                     .iter()

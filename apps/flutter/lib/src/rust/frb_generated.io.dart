@@ -106,9 +106,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ScopeDto dco_decode_scope_dto(dynamic raw);
 
   @protected
-  ScopeKindDto dco_decode_scope_kind_dto(dynamic raw);
-
-  @protected
   SnapshotWaitDto dco_decode_snapshot_wait_dto(dynamic raw);
 
   @protected
@@ -219,9 +216,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ScopeDto sse_decode_scope_dto(SseDeserializer deserializer);
-
-  @protected
-  ScopeKindDto sse_decode_scope_kind_dto(SseDeserializer deserializer);
 
   @protected
   SnapshotWaitDto sse_decode_snapshot_wait_dto(SseDeserializer deserializer);
@@ -346,9 +340,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_scope_dto(ScopeDto self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_scope_kind_dto(ScopeKindDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_snapshot_wait_dto(

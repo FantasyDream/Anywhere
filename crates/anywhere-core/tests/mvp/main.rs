@@ -2,6 +2,7 @@ mod context_sources;
 mod history;
 mod menu;
 mod plugin;
+mod scopes;
 mod search;
 mod session;
 mod support;

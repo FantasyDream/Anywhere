@@ -103,8 +103,26 @@ impl ContextGraph {
             cursor: 0,
             pending: None,
         };
-        for seed in seeds {
+        // Captures/cache use local ids. Rebase parent links when row ids are reassigned,
+        // including seeds deduplicated against an earlier value from the same source.
+        let mut seed_ids = std::collections::HashMap::new();
+        for mut seed in seeds {
+            let old_id = seed.id.clone();
+            seed.source_context_id = seed
+                .source_context_id
+                .as_ref()
+                .and_then(|parent| seed_ids.get(parent).cloned());
+            let identity = (seed.type_id.clone(), seed.value.shared_text(), seed.source);
             run.insert(seed);
+            if !old_id.is_empty() {
+                if let Some(held) = run.contexts().iter().find(|held| {
+                    held.type_id == identity.0
+                        && held.value.shared_text() == identity.1
+                        && held.source == identity.2
+                }) {
+                    seed_ids.insert(old_id, held.id.clone());
+                }
+            }
         }
         run
     }

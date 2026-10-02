@@ -1,6 +1,6 @@
 # Anywhere 产品路线图
 
-状态：2026-09-28。版本号表示依赖顺序，不代表发布日期。`dev-0.4` 已开始 Context 来源开发；V0.3.x 的真实应用验收仍以 [MVP 验收清单](mvp-v0.3x.md)为准。V0.4 的当前实现与待验收项见 [验收记录](v0.4-context-acceptance.md)。
+状态：2026-10-01。版本号表示依赖顺序，不代表发布日期。`dev-0.4` 四种 Context 来源及交互工程收尾完成，候选版本为 `0.4.0+3`；真实应用及权限矩阵仍须验收，不能据此标为正式发布。V0.3.x 的遗留验收以 [MVP 验收清单](mvp-v0.3x.md)为准；V0.4 的当前实现与待验收项见 [验收记录](v0.4-context-acceptance.md)。
 
 ## 产品边界
 
@@ -40,6 +40,7 @@ Anywhere 的核心体验是：在唤醒时理解用户正在操作的对象，�
 ```text
 V0.3.x  保持现有 Session / Registry / Candidate 流程，先稳定它
 V0.4    新增 Activation Context 种子采集；Provider 继续负责 Context 推导
+V0.4    按 [Scope / Menu 规范](scope-group-menu-design.md) 稳定分组硬过滤、菜单推荐/搜索/浏览、键盘返回与使用记录
 V0.5a   新增独立 ExecutionSession ID、状态和有界输出；与 Launcher Session 分离
 V0.7    新增异步搜索协调层；保留现有同步 CandidateSource 给内存来源
 V0.8    从真实第一方模块提炼版本化 Extension 协议和能力授权

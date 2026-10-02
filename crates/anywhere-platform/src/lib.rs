@@ -47,31 +47,37 @@ pub enum MenuDiscovery {
     Unavailable,
 }
 
-/// Why a focused app could not provide selected text. A source can treat these
-/// as an empty context while still reporting the right permission guidance.
+/// Safe, typed capture failures shared by application and clipboard sources.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SelectedTextError {
+pub enum ContextReadError {
     Unsupported,
     PermissionDenied,
     ApplicationChanged,
     TimedOut,
+    TooLarge,
+    TooManyItems,
     Unavailable,
 }
 
-impl std::fmt::Display for SelectedTextError {
+/// Kept for callers of the selected-text capability; all sources share typed errors.
+pub type SelectedTextError = ContextReadError;
+
+impl std::fmt::Display for ContextReadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let message = match self {
-            Self::Unsupported => "focused control does not expose selected text",
-            Self::PermissionDenied => "accessibility permission is not granted",
+            Self::Unsupported => "source is not supported by this app",
+            Self::PermissionDenied => "context access permission is not granted",
             Self::ApplicationChanged => "captured application is no longer running",
-            Self::TimedOut => "selected text inspection timed out",
-            Self::Unavailable => "focused control is unavailable",
+            Self::TimedOut => "context capture timed out",
+            Self::TooLarge => "context content exceeds the capture limit",
+            Self::TooManyItems => "selection exceeds the capture item limit",
+            Self::Unavailable => "context source is unavailable",
         };
         f.write_str(message)
     }
 }
 
-impl std::error::Error for SelectedTextError {}
+impl std::error::Error for ContextReadError {}
 
 impl MenuDiscovery {
     pub fn items(&self) -> &[DiscoveredMenuItem] {

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../launcher/launcher_controller.dart';
 import '../launcher/launcher_style.dart';
 import 'host_settings.dart';
+import '../src/rust/api.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key, required this.controller});
@@ -104,6 +105,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
         for (final line in _excluded.text.split(RegExp(r'[\n,]')))
           if (line.trim().isNotEmpty) line.trim(),
       ];
+
+  Widget _sourceStatus(ContextSourceDto source) {
+    final status = _controller.contextSourceStatuses
+        .firstWhere((item) => item.source == source);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      child: Tooltip(
+        message: status.detail,
+        child: Row(children: [
+          Icon(status.attention > 0 ? Icons.info_outline_rounded : Icons.circle,
+              size: 12,
+              color: status.attention > 0
+                  ? LauncherStyle.warning
+                  : LauncherStyle.muted),
+          const SizedBox(width: 6),
+          Expanded(
+              child: Text(status.statusText,
+                  style: const TextStyle(
+                      fontSize: 11, color: LauncherStyle.muted))),
+          if (status.settingsPane != null)
+            TextButton(
+              onPressed: () =>
+                  _controller.openPrivacySettings(status.settingsPane!),
+              child:
+                  const Text('Open Settings', style: TextStyle(fontSize: 11)),
+            ),
+        ]),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -228,6 +259,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           onChanged: (value) => _save((current) =>
                               current.copyWith(captureFinderSelection: value)),
                         ),
+                        _sourceStatus(ContextSourceDto.finderSelection),
                         const Divider(height: 1, color: LauncherStyle.divider),
                         SwitchListTile.adaptive(
                           contentPadding:
@@ -244,6 +276,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           onChanged: (value) => _save((current) =>
                               current.copyWith(captureSelectedText: value)),
                         ),
+                        _sourceStatus(ContextSourceDto.selectedText),
                         const Divider(height: 1, color: LauncherStyle.divider),
                         SwitchListTile.adaptive(
                           contentPadding:
@@ -260,6 +293,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           onChanged: (value) => _save((current) => current
                               .copyWith(captureBrowserCurrentPage: value)),
                         ),
+                        _sourceStatus(ContextSourceDto.browserCurrentPage),
                         const Divider(height: 1, color: LauncherStyle.divider),
                         SwitchListTile.adaptive(
                           contentPadding:
@@ -275,12 +309,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           onChanged: (value) => _save((current) =>
                               current.copyWith(captureClipboard: value)),
                         ),
+                        _sourceStatus(ContextSourceDto.clipboard),
                       ],
                     ),
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    'Changes apply the next time you open Anywhere.',
+                    'Changes apply on the next wake. Status shows the last captured snapshot.',
                     style: TextStyle(fontSize: 11, color: LauncherStyle.muted),
                   ),
                   const SizedBox(height: 18),
@@ -425,14 +460,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       );
 
-  Widget _card({required Widget child}) => Container(
+  Widget _card({required Widget child}) => SizedBox(
         width: double.infinity,
-        decoration: BoxDecoration(
+        child: Material(
           color: const Color(0x24ffffff),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0x2effffff), width: 0.8),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: const BorderSide(color: Color(0x2effffff), width: 0.8),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: child,
         ),
-        child: child,
       );
 
   Widget _hotkeyRow(String label, String value, String id) {

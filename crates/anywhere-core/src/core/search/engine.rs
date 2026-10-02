@@ -1,4 +1,4 @@
-//! The search pipeline: gather from every candidate source, order, and group into scopes.
+//! The search pipeline: gather, rank and deduplicate candidates from every source.
 //!
 //! It knows nothing about what a source contains. Applications, actions and text fallbacks
 //! are all `CandidateSource`s, so adding a new kind of result — files, clipboard entries,
@@ -7,13 +7,11 @@ use super::candidate::{compare_candidates, deduplicate_actions, CandidateSet};
 use super::candidate_source::{CandidateSource, SearchContext, SourceStage};
 use super::fallback::TextFallbackSource;
 use super::query::Query;
-use super::scope;
 use crate::core::action::descriptor::ActionRegistry;
-use crate::core::action::group::GroupMeta;
 use crate::core::action::matcher::ActionMatcher;
-use crate::core::context::{ContextSource, ResolvedContext};
+use crate::core::context::ResolvedContext;
 use crate::core::ranking::score::UsageStats;
-use crate::core::session::facts::{context_ownership, Ownership, SessionFacts};
+use crate::core::session::facts::SessionFacts;
 use std::time::Instant;
 
 pub struct SearchEngine<'a> {
@@ -54,25 +52,50 @@ impl<'a> ActionSearch<'a> {
         contexts: &[ResolvedContext],
         extra: &[&dyn CandidateSource],
     ) -> CandidateSet {
+        self.search_scoped(query, contexts, extra, None)
+    }
+
+    pub fn search_scoped(
+        &self,
+        query: &Query,
+        contexts: &[ResolvedContext],
+        extra: &[&dyn CandidateSource],
+        scope_id: Option<&str>,
+    ) -> CandidateSet {
         let mut sources: Vec<&dyn CandidateSource> = Vec::with_capacity(extra.len() + 2);
         sources.push(&self.matcher);
-        sources.extend_from_slice(extra);
+        if scope_id.is_none() {
+            sources.extend_from_slice(extra);
+        }
         sources.push(&self.fallback);
         self.engine
-            .search(query, contexts, &sources, self.matcher.registry())
+            .search_scoped(query, contexts, &sources, scope_id)
     }
 }
 
 impl SearchEngine<'_> {
-    /// Gather, rank and group. Callers decide which sources run; this does not construct any.
+    /// Gather, rank and deduplicate. Callers decide which sources run.
     pub fn search(
         &self,
         query: &Query,
         contexts: &[ResolvedContext],
         sources: &[&dyn CandidateSource],
-        groups: &dyn GroupMeta,
     ) -> CandidateSet {
-        let search = SearchContext { query, contexts };
+        self.search_scoped(query, contexts, sources, None)
+    }
+
+    pub fn search_scoped(
+        &self,
+        query: &Query,
+        contexts: &[ResolvedContext],
+        sources: &[&dyn CandidateSource],
+        scope_id: Option<&str>,
+    ) -> CandidateSet {
+        let search = SearchContext {
+            query,
+            contexts,
+            scope_id,
+        };
         let mut ranked = Vec::new();
         let mut fallback = Vec::new();
         for source in sources {
@@ -88,9 +111,16 @@ impl SearchEngine<'_> {
         let mut matcher_us = 0;
         let mut sources_us = 0;
         let mut candidates = Vec::new();
+        let group_filter = super::scope::group_filter(scope_id, self.facts.frontmost.as_ref());
         for source in ranked {
             let started = Instant::now();
-            let batch = source.contribute(&search, &[]);
+            let mut batch = source.contribute(&search, &[]);
+            if scope_id.is_some() {
+                batch.retain(|candidate| {
+                    candidate.presentation.kind == anywhere_protocol::CandidateKind::Action
+                        && group_filter.is_none_or(|group| candidate.presentation.group_id == group)
+                });
+            }
             let elapsed = started.elapsed().as_micros() as u64;
             if source.id() == "actions" {
                 matcher_us += elapsed;
@@ -104,53 +134,27 @@ impl SearchEngine<'_> {
         candidates.sort_by(compare_candidates);
         deduplicate_actions(&mut candidates);
         for source in fallback {
-            candidates.extend(source.contribute(&search, &candidates));
+            let mut batch = source.contribute(&search, &candidates);
+            if scope_id.is_some() {
+                batch.retain(|candidate| {
+                    candidate.presentation.kind == anywhere_protocol::CandidateKind::Action
+                        && group_filter.is_none_or(|group| candidate.presentation.group_id == group)
+                });
+            }
+            candidates.extend(batch);
         }
 
-        // Scope membership is built from every visible candidate, before any view limit, so
-        // a group never looks empty just because its rows fall outside the top seven.
-        let scope_use = scope::usage_by_group(&candidates, self.usage, self.now);
-        let current_app = self.ambient_owner(contexts);
-        let scopes = scope::build(
-            &candidates,
-            &current_app,
-            &self.app_group_label(),
-            &scope_use,
-            groups,
-        );
         let ranking_us = ranking_started.elapsed().as_micros() as u64;
 
         CandidateSet {
             candidates,
-            scopes,
-            scope_use,
             matcher_us,
             sources_us,
             ranking_us,
         }
     }
-
-    /// Which application the Current App scope stands for: the ambient owner, taken from
-    /// the ambient contexts only.
-    fn ambient_owner(&self, contexts: &[ResolvedContext]) -> Option<String> {
-        contexts
-            .iter()
-            .filter(|context| context.source != ContextSource::UserInput)
-            .find_map(|context| match context_ownership(context, self.facts) {
-                Ownership::App(app) => Some(app),
-                Ownership::Ambient => None,
-            })
-    }
-
-    fn app_group_label(&self) -> String {
-        self.facts
-            .frontmost
-            .as_ref()
-            .map(|app| app.name.clone())
-            .filter(|name| !name.is_empty())
-            .unwrap_or_else(|| "Current App".into())
-    }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -207,6 +211,8 @@ mod tests {
             icon: "copy",
             aliases: &[],
             keywords: &[],
+            home_eligible: true,
+            primary_action: false,
         }
     }
 
@@ -350,16 +356,16 @@ mod tests {
             "this fixture must exceed the Home limit to be meaningful: {} candidates",
             set.candidates.len()
         );
-        for scope in &set.scopes {
-            for id in &scope.candidate_ids {
-                assert!(
-                    set.candidates
-                        .iter()
-                        .any(|candidate| &candidate.presentation.id == id),
-                    "scope {} refers to a dropped candidate {id}",
-                    scope.id
-                );
-            }
+        for candidate in &set.candidates {
+            assert!(candidate
+                .presentation
+                .context_keys
+                .iter()
+                .all(|key| contexts
+                    .iter()
+                    .any(|context| crate::core::context::navigation::root_key(
+                        context, &contexts
+                    ) == *key)));
         }
     }
 
@@ -391,130 +397,57 @@ mod tests {
     }
 
     #[test]
-    fn groups_are_visible_before_scope_filtering_and_home_truncation() {
+    fn usage_orders_actions_without_creating_group_scopes() {
         let registry = crate::application::builtin_registry();
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().canonicalize().unwrap();
-        let contexts = vec![
-            ResolvedContext::new(
-                DIRECTORY,
-                ContextValue::Directory(path.clone()),
-                ContextSource::ApplicationContext,
-                "finder",
-            ),
-            ResolvedContext::new(
-                GIT_REPOSITORY,
-                ContextValue::Repository(path),
-                ContextSource::ApplicationContext,
-                "git",
-            ),
-        ];
-        let usage = no_usage;
-        let facts = facts();
-        let engine = builtin_engine(&registry, &usage, &facts);
-        let set = engine.search(&Query::parse(""), &contexts, &[]);
-        let scope_ids = set.scopes.iter().map(|s| s.id.as_str()).collect::<Vec<_>>();
-        assert!(!scope_ids.contains(&"all"));
-        assert!(!scope_ids.contains(&"app"));
-        assert!(scope_ids.contains(&"git"));
-        assert!(scope_ids.contains(&"folder"));
-    }
-
-    /// The scope bar leads with what the user actually uses, not a fixed order.
-    #[test]
-    fn scopes_are_ordered_by_usage_with_a_deterministic_tie_break() {
-        let registry = crate::application::builtin_registry();
-        let directory = tempfile::tempdir().unwrap();
-        let path = directory.path().canonicalize().unwrap();
-        let contexts = vec![
-            ResolvedContext::new(
-                DIRECTORY,
-                ContextValue::Directory(path.clone()),
-                ContextSource::ApplicationContext,
-                "finder",
-            ),
-            ResolvedContext::new(
-                GIT_REPOSITORY,
-                ContextValue::Repository(path),
-                ContextSource::ApplicationContext,
-                "git",
-            ),
-        ];
-        let facts = facts();
-
-        // Heavy use of the folder actions; the Git group has never been used.
-        let folder_heavy = |action: &str, kind: &str| {
+        let mut directory = ResolvedContext::new(
+            DIRECTORY,
+            ContextValue::Directory("/tmp/project".into()),
+            ContextSource::ApplicationContext,
+            "finder",
+        );
+        directory.id = "c0".into();
+        let mut git = ResolvedContext::new(
+            GIT_REPOSITORY,
+            ContextValue::Repository("/tmp/project".into()),
+            ContextSource::ApplicationContext,
+            "git",
+        );
+        git.id = "c1".into();
+        git.source_context_id = Some(directory.id.clone());
+        let root = crate::core::context::navigation::key(&directory);
+        let contexts = vec![directory, git];
+        let usage = |_: &str, kind: &str| {
             if kind == DIRECTORY {
                 UsageStats {
-                    execute_count: 8,
-                    last_executed_at: 1000,
-                }
-            } else {
-                let _ = action;
-                UsageStats::default()
-            }
-        };
-        let engine = builtin_engine(&registry, &folder_heavy, &facts);
-        let set = engine.search(&Query::parse(""), &contexts, &[]);
-        let ids = set
-            .scopes
-            .iter()
-            .map(|scope| scope.id.as_str())
-            .collect::<Vec<_>>();
-        assert_eq!(ids, ["folder", "git"], "folder is used, git is not");
-        assert_eq!(
-            set.scope_use.get("folder"),
-            Some(&(3 * (8 * 8 + 30))),
-            "frequency and recency of three distinct folder actions"
-        );
-
-        // Equal counts: recently used folder actions outrank older Git actions.
-        let recent_folder = |_: &str, kind: &str| UsageStats {
-            execute_count: 1,
-            last_executed_at: if kind == DIRECTORY { 1000 } else { -700_000 },
-        };
-        let recent = builtin_engine(&registry, &recent_folder, &facts).search(
-            &Query::parse(""),
-            &contexts,
-            &[],
-        );
-        assert_eq!(recent.scopes.first().unwrap().id, "folder");
-
-        // With the same usage everywhere, the documented order decides.
-        let none_used = |_: &str, _: &str| UsageStats::default();
-        let engine = builtin_engine(&registry, &none_used, &facts);
-        let set = engine.search(&Query::parse(""), &contexts, &[]);
-        let ids = set
-            .scopes
-            .iter()
-            .map(|scope| scope.id.as_str())
-            .collect::<Vec<_>>();
-        assert_eq!(
-            ids,
-            ["git", "folder"],
-            "fresh install keeps the built-in group order"
-        );
-
-        // Using only the Git actions flips the two.
-        let git_heavy = |_: &str, kind: &str| {
-            if kind == GIT_REPOSITORY {
-                UsageStats {
-                    execute_count: 9,
+                    execute_count: 80,
                     last_executed_at: 1000,
                 }
             } else {
                 UsageStats::default()
             }
         };
-        let engine = builtin_engine(&registry, &git_heavy, &facts);
-        let set = engine.search(&Query::parse(""), &contexts, &[]);
-        let ids = set
-            .scopes
+        let facts = facts();
+        let set =
+            builtin_engine(&registry, &usage, &facts).search(&Query::parse(""), &contexts, &[]);
+        assert_eq!(set.candidates[0].context().unwrap().type_id, DIRECTORY);
+        assert!(set
+            .candidates
             .iter()
-            .map(|scope| scope.id.as_str())
-            .collect::<Vec<_>>();
-        assert_eq!(ids, ["git", "folder"], "git use puts git first");
-        assert!(set.scope_use.get("git").copied().unwrap_or_default() > 0);
+            .all(|offer| offer.presentation.context_keys == [root.clone()]));
+        let summary = crate::core::context::navigation::build(&contexts, &set.candidates);
+        let roots: Vec<_> = summary
+            .iter()
+            .filter(|context| !context.candidate_ids.is_empty())
+            .collect();
+        assert_eq!(roots.len(), 1);
+        assert!(set
+            .candidates
+            .iter()
+            .any(|offer| offer.presentation.group_id == "git"));
+        assert!(set
+            .candidates
+            .iter()
+            .any(|offer| offer.presentation.group_id == "folder"));
     }
 
     #[test]
@@ -703,7 +636,7 @@ mod tests {
     }
 
     #[test]
-    fn current_app_scope_uses_ambient_provenance_and_excludes_launch_candidates() {
+    fn application_directory_keeps_its_own_context_identity() {
         let registry = crate::application::builtin_registry();
         let contexts = vec![ResolvedContext::new(
             DIRECTORY,
@@ -721,14 +654,16 @@ mod tests {
         });
         let engine = builtin_engine(&registry, &usage, &facts);
         let set = engine.search(&Query::parse(""), &contexts, &[]);
-        let app_scope = set.scopes.iter().find(|s| s.id == "app").unwrap();
-        assert_eq!(set.scopes[0].id, "app");
-        assert_eq!(app_scope.label, "Finder");
-        assert!(!app_scope.candidate_ids.is_empty());
-        assert!(app_scope
-            .candidate_ids
+        let root = crate::core::context::navigation::key(&contexts[0]);
+        assert!(!set.candidates.is_empty());
+        assert!(set
+            .candidates
             .iter()
-            .all(|id| !id.starts_with("app:")));
+            .all(|candidate| candidate.presentation.context_keys == [root.clone()]));
+        assert!(set
+            .candidates
+            .iter()
+            .all(|candidate| candidate.presentation.kind == CandidateKind::Action));
     }
 
     #[test]

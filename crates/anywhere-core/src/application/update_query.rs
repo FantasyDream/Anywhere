@@ -9,11 +9,23 @@ use std::time::Instant;
 use tracing::Instrument;
 
 impl Application {
+    pub async fn update_scoped_input(
+        &self,
+        session_id: SessionId,
+        input: String,
+        revision: Revision,
+        selected_scope: Option<GroupId>,
+    ) -> Result<Option<LauncherState>> {
+        self.update_query_use_case(session_id, input, revision, selected_scope)
+            .await
+    }
+
     pub(super) async fn update_query_use_case(
         &self,
         session_id: SessionId,
         input: String,
         revision: Revision,
+        selected_scope: Option<GroupId>,
     ) -> Result<Option<LauncherState>> {
         if input.len() > MAX_INPUT_BYTES {
             bail!("input exceeds 1 MiB");
@@ -28,6 +40,7 @@ impl Application {
                 return Ok(None);
             }
             session.begin_revision(revision, input.clone());
+            session.state.selected_scope = selected_scope;
             self.resolver.mark_current(session_id, revision);
             crate::application::session_runtime::seeds_from(&session, &input)
         };

@@ -228,18 +228,20 @@ impl Application {
                 let (mut status, clipboard_text) = match clipboard.await {
                     Ok(Ok(Some(text))) => (CaptureStatus::Captured, Some(text)),
                     Ok(Ok(None)) => (CaptureStatus::Empty, None),
-                    Ok(Err(_)) | Err(_) => (CaptureStatus::Failed, None),
+                    Ok(Err(error)) => (super::context_capture::failure_status(&error), None),
+                    Err(_) => (CaptureStatus::Failed, None),
                 };
                 let captured_at_ms = super::context_capture::now_ms();
-                let mut contexts = clipboard_text
-                    .as_ref()
-                    .and_then(|text| {
-                        super::context_capture::text_context(text.clone(), ContextSource::Clipboard)
-                    })
-                    .into_iter()
-                    .collect::<Vec<_>>();
-                if status == CaptureStatus::Captured && contexts.is_empty() {
-                    status = CaptureStatus::Unavailable;
+                let mut contexts = Vec::new();
+                if let Some(text) = &clipboard_text {
+                    match super::context_capture::text_context(
+                        text.clone(),
+                        ContextSource::Clipboard,
+                    ) {
+                        Ok(Some(context)) => contexts.push(context),
+                        Ok(None) => status = CaptureStatus::Empty,
+                        Err(error) => status = super::context_capture::failure_status(&error),
+                    }
                 }
                 // A value too long for Context must not quietly remain available
                 // through SessionFacts while its source reports Unavailable.
@@ -469,7 +471,7 @@ mod tests {
             .iter()
             .find(|capture| capture.source == ContextSource::Clipboard)
             .unwrap();
-        assert_eq!(capture.status, CaptureStatus::Unavailable);
+        assert_eq!(capture.status, CaptureStatus::TooLarge);
         assert!(capture.contexts.is_empty());
     }
 

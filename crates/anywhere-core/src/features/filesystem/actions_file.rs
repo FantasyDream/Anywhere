@@ -4,6 +4,7 @@ use crate::core::action::bundle::{ActionBundle, ActionSpec};
 use crate::core::action::group::groups;
 use crate::core::action::handler::{ActionHandler, ExecutionOutput};
 use crate::core::context::{ContextValue, ResolvedContext};
+use crate::core::session::facts::CLIPBOARD;
 use anyhow::{Context, Result};
 use anywhere_platform::Platform;
 use anywhere_protocol::*;
@@ -63,11 +64,13 @@ pub fn bundle() -> ActionBundle {
                 title: "Copy Selected Paths as JSON",
                 accepts: FILE_SELECTION,
                 handler: &CopySelectionPaths,
-                availability: AvailabilityRule::Enabled,
+                availability: AvailabilityRule::hide_if(CLIPBOARD),
                 base_priority: 30,
                 icon: "copy",
                 aliases: &["copy paths", "selection"],
                 keywords: &["files", "finder", "json"],
+                home_eligible: true,
+                primary_action: false,
             },
             ActionSpec {
                 id: "core.file.open",
@@ -79,6 +82,8 @@ pub fn bundle() -> ActionBundle {
                 icon: "file",
                 aliases: &["open", "edit"],
                 keywords: &["document"],
+                home_eligible: true,
+                primary_action: true,
             },
             ActionSpec {
                 id: "core.file.reveal",
@@ -90,6 +95,8 @@ pub fn bundle() -> ActionBundle {
                 icon: "folder",
                 aliases: &["reveal", "finder", "show"],
                 keywords: &["document"],
+                home_eligible: true,
+                primary_action: false,
             },
         ],
     }

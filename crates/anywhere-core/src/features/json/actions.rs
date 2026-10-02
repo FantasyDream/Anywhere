@@ -66,6 +66,8 @@ pub fn bundle() -> ActionBundle {
                 icon: "code",
                 aliases: &["pretty", "beautify"],
                 keywords: &["document"],
+                home_eligible: true,
+                primary_action: false,
             },
             ActionSpec {
                 id: "core.json.minify",
@@ -77,6 +79,8 @@ pub fn bundle() -> ActionBundle {
                 icon: "code",
                 aliases: &["compact"],
                 keywords: &["document"],
+                home_eligible: true,
+                primary_action: false,
             },
             ActionSpec {
                 id: "core.json.copy",
@@ -88,6 +92,8 @@ pub fn bundle() -> ActionBundle {
                 icon: "copy",
                 aliases: &["copy", "clipboard"],
                 keywords: &["document"],
+                home_eligible: true,
+                primary_action: false,
             },
         ],
     }
