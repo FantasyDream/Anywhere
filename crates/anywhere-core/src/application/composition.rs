@@ -13,6 +13,7 @@ pub fn builtin_registry() -> ActionRegistry {
             .register_bundle(bundle)
             .expect("invalid built-in action registration");
     }
+    registry.register_factory(crate::features::developer::actions::DeveloperActions);
     registry
 }
 

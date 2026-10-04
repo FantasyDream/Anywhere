@@ -1,82 +1,301 @@
+//! Fixed first-party commands. Project scripts are executed by npm, never interpolated here.
+use super::provider::{script_property, ProjectKind};
 use crate::core::{
     action::{
         availability::AvailabilityRule,
         bundle::{ActionBundle, ActionSpec},
+        group::{groups, ActionGroup},
         handler::{ActionHandler, ExecutionOutput},
     },
     context::ResolvedContext,
 };
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use anywhere_platform::{
     process::{find_executable, ProcessRequest},
     Platform,
 };
-use anywhere_protocol::PROJECT_RUST;
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
-struct Cargo {
+struct ProjectCommand {
+    kind: ProjectKind,
     operation: &'static str,
     title: &'static str,
 }
-const CHECK: Cargo = Cargo {
+static CARGO_CHECK: ProjectCommand = ProjectCommand {
+    kind: ProjectKind::Rust,
     operation: "check",
     title: "Cargo Check",
 };
-const TEST: Cargo = Cargo {
+static CARGO_TEST: ProjectCommand = ProjectCommand {
+    kind: ProjectKind::Rust,
     operation: "test",
     title: "Cargo Test",
 };
+static MAVEN_TEST: ProjectCommand = ProjectCommand {
+    kind: ProjectKind::Maven,
+    operation: "test",
+    title: "Maven Test",
+};
+static MAVEN_PACKAGE: ProjectCommand = ProjectCommand {
+    kind: ProjectKind::Maven,
+    operation: "package",
+    title: "Maven Package",
+};
+static GRADLE_BUILD: ProjectCommand = ProjectCommand {
+    kind: ProjectKind::Gradle,
+    operation: "build",
+    title: "Gradle Build",
+};
+static GRADLE_TEST: ProjectCommand = ProjectCommand {
+    kind: ProjectKind::Gradle,
+    operation: "test",
+    title: "Gradle Test",
+};
+static SPRING_MAVEN: ProjectCommand = ProjectCommand {
+    kind: ProjectKind::SpringBoot,
+    operation: "spring-boot:run",
+    title: "Spring Boot Run · Maven",
+};
+static SPRING_GRADLE: ProjectCommand = ProjectCommand {
+    kind: ProjectKind::SpringBoot,
+    operation: "bootRun",
+    title: "Spring Boot Run · Gradle",
+};
 
-impl ActionHandler for Cargo {
+impl ActionHandler for ProjectCommand {
     fn execute(&self, context: &ResolvedContext, _: &dyn Platform) -> Result<ExecutionOutput> {
+        if context.type_id != self.kind.type_id() {
+            bail!("action requires the matching project context");
+        }
         let directory = context
             .value
             .path()
-            .context("Rust project required")?
+            .context("project directory required")?
             .canonicalize()?;
-        if !directory.join("Cargo.toml").is_file() {
-            anyhow::bail!("Cargo.toml no longer exists");
+        if !self
+            .kind
+            .markers()
+            .iter()
+            .any(|marker| directory.join(marker).is_file())
+        {
+            bail!("project manifest no longer exists; reopen the Launcher");
         }
-        let program = find_executable("cargo")
-            .context("Cargo was not found. Install Rust or add Cargo to PATH, then try again.")?;
+        let (program, arguments) = match self.kind {
+            ProjectKind::Rust => (
+                tool("cargo")?,
+                vec![self.operation.into(), "--color".into(), "never".into()],
+            ),
+            ProjectKind::Maven => {
+                let (program, mut args) = wrapped_tool(&directory, "mvnw", "mvn")?;
+                args.extend(
+                    ["--batch-mode", "--no-transfer-progress", self.operation].map(String::from),
+                );
+                (program, args)
+            }
+            ProjectKind::Gradle => {
+                let (program, mut args) = wrapped_tool(&directory, "gradlew", "gradle")?;
+                args.extend(["--no-daemon", "--console=plain", self.operation].map(String::from));
+                (program, args)
+            }
+            ProjectKind::SpringBoot => {
+                let build_tool = if self.operation == "bootRun" {
+                    "gradle"
+                } else {
+                    "maven"
+                };
+                if !super::spring::build_tools(&directory)?.contains(&build_tool) {
+                    bail!("Spring Boot plugin is no longer declared; reopen the Launcher");
+                }
+                if build_tool == "gradle" {
+                    let (program, mut args) = wrapped_tool(&directory, "gradlew", "gradle")?;
+                    args.extend(
+                        ["--no-daemon", "--console=plain", self.operation].map(String::from),
+                    );
+                    (program, args)
+                } else {
+                    let (program, mut args) = wrapped_tool(&directory, "mvnw", "mvn")?;
+                    args.extend(
+                        ["--batch-mode", "--no-transfer-progress", self.operation]
+                            .map(String::from),
+                    );
+                    (program, args)
+                }
+            }
+            ProjectKind::Node => bail!("Node commands require a declared script"),
+        };
+        let mut environment = BTreeMap::new();
+        if matches!(
+            self.kind,
+            ProjectKind::Maven | ProjectKind::Gradle | ProjectKind::SpringBoot
+        ) && std::env::var_os("JAVA_HOME").is_none()
+        {
+            if let Some(home) = std::env::var_os("HOME") {
+                let java = PathBuf::from(home).join(".sdkman/candidates/java/current");
+                if java.join("bin/java").is_file() {
+                    environment.insert("JAVA_HOME".into(), java.to_string_lossy().into_owned());
+                }
+            }
+        }
+        environment.insert("NO_COLOR".into(), "1".into());
         Ok(ExecutionOutput::process(ProcessRequest {
             title: self.title.into(),
             program,
-            arguments: vec![self.operation.into(), "--color".into(), "never".into()],
+            arguments,
             directory,
+            environment,
         }))
     }
 }
 
-pub fn bundle() -> ActionBundle {
-    ActionBundle {
-        group: crate::core::action::group::groups::rust(),
-        actions: vec![
-            ActionSpec {
-                id: "developer.cargo.check",
-                title: "Cargo Check",
-                accepts: PROJECT_RUST,
-                handler: &CHECK,
-                availability: AvailabilityRule::Enabled,
-                base_priority: 30,
-                icon: "code",
-                aliases: &["check", "compile"],
-                keywords: &["cargo", "rust", "project"],
-                home_eligible: true,
-                primary_action: false,
-            },
-            ActionSpec {
-                id: "developer.cargo.test",
-                title: "Cargo Test",
-                accepts: PROJECT_RUST,
-                handler: &TEST,
-                availability: AvailabilityRule::Enabled,
-                base_priority: 20,
-                icon: "code",
-                aliases: &["test"],
-                keywords: &["cargo", "rust", "project"],
-                home_eligible: false,
-                primary_action: false,
-            },
+pub(super) fn tool(name: &str) -> Result<PathBuf> {
+    find_executable(name).with_context(|| {
+        format!("{name} was not found. Install it or add it to PATH, then try again.")
+    })
+}
+
+/// Wrappers may live at an ancestor of a module. Never fall back when an existing wrapper fails.
+fn wrapped_tool(directory: &Path, wrapper: &str, fallback: &str) -> Result<(PathBuf, Vec<String>)> {
+    if let Some(path) = directory
+        .ancestors()
+        .take(32)
+        .map(|root| root.join(wrapper))
+        .find(|path| path.is_file())
+    {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if path.metadata()?.permissions().mode() & 0o111 != 0 {
+                return Ok((path, Vec::new()));
+            }
+            // Run the wrapper file with sh; do not feed any shell command string.
+            return Ok((
+                PathBuf::from("/bin/sh"),
+                vec![path.to_string_lossy().into_owned()],
+            ));
+        }
+        #[cfg(not(unix))]
+        bail!("project wrappers are currently supported on Unix only");
+    }
+    Ok((tool(fallback)?, Vec::new()))
+}
+
+fn spec(id: &'static str, command: &'static ProjectCommand, home: bool) -> ActionSpec {
+    let availability = if matches!(command.kind, ProjectKind::SpringBoot) {
+        AvailabilityRule::RequireContextProperty {
+            key: format!(
+                "spring.{}",
+                if command.operation == "bootRun" {
+                    "gradle"
+                } else {
+                    "maven"
+                }
+            ),
+        }
+    } else if matches!(command.kind, ProjectKind::Node) {
+        AvailabilityRule::RequireContextProperty {
+            key: script_property(command.operation),
+        }
+    } else {
+        AvailabilityRule::Enabled
+    };
+    let (aliases, keywords): (&'static [&'static str], &'static [&'static str]) = (
+        match command.operation {
+            "check" => &["check", "compile"],
+            "test" => &["test"],
+            "build" => &["build"],
+            "package" => &["package"],
+            "dev" => &["dev"],
+            "start" => &["start"],
+            "lint" => &["lint"],
+            _ => &[],
+        },
+        match command.kind {
+            ProjectKind::Rust => &["cargo", "rust", "project"],
+            ProjectKind::Maven => &["mvn", "maven", "project"],
+            ProjectKind::Gradle => &["gradle", "project"],
+            ProjectKind::Node => &["npm", "node", "script", "project"],
+            ProjectKind::SpringBoot => &["spring", "boot", "run", "java"],
+        },
+    );
+    ActionSpec {
+        id,
+        title: command.title,
+        accepts: command.kind.type_id(),
+        handler: command,
+        availability,
+        base_priority: if home { 30 } else { 20 },
+        icon: "code",
+        aliases,
+        keywords,
+        home_eligible: home,
+        primary_action: false,
+    }
+}
+
+fn bundle(group: ActionGroup, actions: Vec<ActionSpec>) -> ActionBundle {
+    ActionBundle { group, actions }
+}
+
+pub fn rust_bundle() -> ActionBundle {
+    bundle(
+        groups::rust(),
+        vec![
+            spec("developer.cargo.check", &CARGO_CHECK, true),
+            spec("developer.cargo.test", &CARGO_TEST, false),
         ],
+    )
+}
+pub fn maven_bundle() -> ActionBundle {
+    bundle(
+        groups::maven(),
+        vec![
+            spec("developer.maven.test", &MAVEN_TEST, true),
+            spec("developer.maven.package", &MAVEN_PACKAGE, false),
+        ],
+    )
+}
+pub fn gradle_bundle() -> ActionBundle {
+    bundle(
+        groups::gradle(),
+        vec![
+            spec("developer.gradle.build", &GRADLE_BUILD, true),
+            spec("developer.gradle.test", &GRADLE_TEST, false),
+        ],
+    )
+}
+pub fn node_bundle() -> ActionBundle {
+    bundle(groups::node(), Vec::new())
+}
+pub fn spring_bundle() -> ActionBundle {
+    bundle(
+        groups::spring_boot(),
+        vec![
+            spec("developer.spring.maven.run", &SPRING_MAVEN, false),
+            spec("developer.spring.gradle.run", &SPRING_GRADLE, false),
+        ],
+    )
+}
+
+pub use super::dynamic::DeveloperActions;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn a_non_executable_wrapper_with_spaces_is_a_literal_argument_and_has_priority() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir
+            .path()
+            .canonicalize()
+            .unwrap()
+            .join("project ' with spaces");
+        std::fs::create_dir_all(root.join("module")).unwrap();
+        std::fs::write(root.join("mvnw"), "#!/bin/sh\nprintf wrapper").unwrap();
+        let (program, args) = wrapped_tool(&root.join("module"), "mvnw", "missing-tool").unwrap();
+        assert_eq!(program, PathBuf::from("/bin/sh"));
+        assert_eq!(args, [root.join("mvnw").to_string_lossy()]);
     }
 }

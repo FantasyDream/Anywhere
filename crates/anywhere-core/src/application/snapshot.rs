@@ -52,6 +52,8 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
         sources,
         now,
     } = input;
+    let (expanded_actions, action_diagnostics) = actions.for_contexts(contexts);
+    let actions = &expanded_actions;
     let usage_of = |command: &str, kind: &str| {
         usage
             .get(&(command.to_owned(), kind.to_owned()))
@@ -84,6 +86,7 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
     );
     let mut set = search.search_scoped(&Query::parse(input), contexts, &extra, selected_scope);
     let mut diagnostics = prior_diagnostics.to_vec();
+    diagnostics.extend(action_diagnostics);
     for diagnostic in incoming_diagnostics {
         if !diagnostics.contains(diagnostic) {
             diagnostics.push(diagnostic.clone());

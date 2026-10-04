@@ -31,6 +31,8 @@ pub enum AvailabilityRule {
     HideIfFactMatchesContext { fact: String },
     /// Disabled unless the named flag fact is true.
     RequireFlag { fact: String, reason: String },
+    /// Project-local capability metadata; evaluation performs no IO.
+    RequireContextProperty { key: String },
 }
 
 impl AvailabilityRule {
@@ -48,6 +50,12 @@ impl AvailabilityRule {
     pub fn validate(&self) -> Result<()> {
         match self {
             Self::Enabled | Self::Hidden => Ok(()),
+            Self::RequireContextProperty { key } => {
+                if key.trim().is_empty() {
+                    bail!("context property key must not be empty");
+                }
+                Ok(())
+            }
             Self::Disabled { .. } => Ok(()),
             Self::HideIfFactMatchesContext { fact } => match fact_kind(fact) {
                 Some(FactKind::Text) => Ok(()),
@@ -71,6 +79,17 @@ pub fn evaluate(
 ) -> Availability {
     match rule {
         AvailabilityRule::Enabled => Availability::enabled(),
+        AvailabilityRule::RequireContextProperty { key } => {
+            if context
+                .value
+                .property(key)
+                .is_some_and(|value| value == "true")
+            {
+                Availability::enabled()
+            } else {
+                Availability::hidden()
+            }
+        }
         AvailabilityRule::Hidden => Availability::hidden(),
         AvailabilityRule::Disabled { reason } => Availability::disabled(reason),
         AvailabilityRule::HideIfFactMatchesContext { fact } => {

@@ -14,6 +14,22 @@ pub enum ActionExecutor {
     Declarative(DeclarativeAction),
 }
 
+impl ActionExecutor {
+    pub fn records_usage(&self) -> bool {
+        match self {
+            Self::Native(handler) => handler.records_usage(),
+            Self::Declarative(_) => true,
+        }
+    }
+
+    pub fn execution_token(&self) -> Option<u64> {
+        match self {
+            Self::Native(handler) => handler.execution_token(),
+            Self::Declarative(_) => None,
+        }
+    }
+}
+
 /// Author-supplied action. Search text is derived when this is registered.
 #[derive(Debug, Clone)]
 pub struct ActionDefinition {
@@ -118,6 +134,7 @@ pub struct ActionRegistry {
     actions: BTreeMap<ActionId, ActionDescriptor>,
     groups: BTreeMap<GroupId, RegisteredGroup>,
     next_rank: u16,
+    factories: Vec<std::sync::Arc<dyn super::bundle::ContextActionFactory>>,
 }
 
 impl GroupMeta for ActionRegistry {
@@ -137,6 +154,27 @@ impl GroupMeta for ActionRegistry {
 }
 
 impl ActionRegistry {
+    pub fn register_factory(
+        &mut self,
+        factory: impl super::bundle::ContextActionFactory + 'static,
+    ) {
+        self.factories.push(std::sync::Arc::new(factory));
+    }
+
+    /// Build an immutable snapshot registry. Generated handlers travel with candidates.
+    pub fn for_contexts(&self, contexts: &[ResolvedContext]) -> (Self, Vec<String>) {
+        let mut registry = self.clone();
+        registry.factories.clear();
+        let mut diagnostics = Vec::new();
+        for factory in &self.factories {
+            for action in factory.actions(contexts) {
+                if let Err(error) = registry.register(action) {
+                    diagnostics.push(format!("context actions: {error}"));
+                }
+            }
+        }
+        (registry, diagnostics)
+    }
     /// Check every action, then insert. A failure leaves the registry unchanged.
     fn commit_batch(&mut self, actions: Vec<ActionDefinition>) -> Result<()> {
         let mut seen = BTreeSet::new();
@@ -321,7 +359,7 @@ mod tests {
     #[test]
     fn exact_type_match_and_builtin_command_count() {
         let registry = crate::application::builtin_registry();
-        assert_eq!(registry.commands().count(), 17);
+        assert_eq!(registry.commands().count(), 23);
         let url = seed("https://github.com")
             .into_iter()
             .find(|c| c.type_id == URL)
@@ -448,6 +486,10 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
                     groups::WEB,
                     groups::JSON,
                     groups::RUST,
+                    groups::MAVEN,
+                    groups::GRADLE,
+                    groups::NODE,
+                    groups::SPRING_BOOT,
                 ]
                 .contains(&command.group_id.as_str()),
                 "{} uses an unknown group {}",

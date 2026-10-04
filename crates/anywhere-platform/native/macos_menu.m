@@ -204,7 +204,8 @@ static void collect_items(AXUIElementRef element, NSArray *path, NSArray *identi
         if (path.count == 0 && is_apple_menu_title(title)) continue;
         if (is_separator_title(title)) continue;
         NSString *identifier = entry[@"identifier"];
-        if (identifier.length && !unique_entry(children, title, identifier)) identifier = @"";
+        // Do not erase a conflicting identifier and then guess by title.
+        if (identifier.length && !unique_entry(children, title, identifier)) continue;
         // Without a stable identifier, duplicate siblings cannot be relocated safely.
         if (!unique_entry(children, title, identifier)) continue;
         NSArray *nextPath = [path arrayByAddingObject:title];
@@ -240,7 +241,12 @@ static AXUIElementRef locate(AXUIElementRef root, NSArray *titles, NSArray *iden
         }
         NSArray *children = menu_children(current);
         NSDictionary *entry = unique_entry(children, title, identifier == NSNull.null ? nil : identifier);
-        if (!entry || menu_expired()) {
+        // Relocation must agree with the displayed snapshot, not only with an AX ID
+        // which the application may have reassigned. Missing IDs must stay missing.
+        NSString *expectedIdentifier = identifier == NSNull.null ? @"" : identifier;
+        BOOL snapshotMatches = entry && [entry[@"title"] isEqualToString:title] &&
+            [entry[@"identifier"] isEqualToString:expectedIdentifier];
+        if (!snapshotMatches || menu_expired()) {
             if (status) *status = menu_expired() ? menu_interrupted_status() : 3;
             CFRelease(current); return NULL;
         }
@@ -260,6 +266,23 @@ static AXUIElementRef locate(AXUIElementRef root, NSArray *titles, NSArray *iden
     }
     if (status) *status = 0;
     return current;
+}
+
+// Recheck the leaf after Enabled: those AX reads can themselves observe a menu update.
+static int press_snapshot(AXUIElementRef item, NSString *title, id identifier,
+                          BOOL (^targetStillCurrent)(void)) {
+    BOOL enabled = ax_bool(item, kAXEnabledAttribute, NO);
+    if (menu_expired()) return menu_interrupted_status();
+    if (!enabled) return 4;
+    NSString *expectedIdentifier = identifier == NSNull.null ? @"" : identifier;
+    NSString *currentTitle = ax_string(item, kAXTitleAttribute) ?: @"";
+    NSString *currentIdentifier = ax_string(item, kAXIdentifierAttribute) ?: @"";
+    if (menu_expired()) return menu_interrupted_status();
+    if (![currentTitle isEqualToString:title] ||
+        ![currentIdentifier isEqualToString:expectedIdentifier]) return 3;
+    if (!targetStillCurrent()) return 1;
+    AXError press = AXUIElementPerformAction(item, kAXPressAction);
+    return press == kAXErrorSuccess ? 0 : menu_ax_status(press, press == kAXErrorInvalidUIElement ? 3 : 5);
 }
 
 static NSString *process_instance(NSRunningApplication *app) {
@@ -473,12 +496,10 @@ int launcher_perform_menu_action(const char *application_json, const char *locat
         AXUIElementRef item = locate((AXUIElementRef)menuBar, titles, identifiers, &locateStatus);
         CFRelease(menuBar);
         if (!item) return locateStatus;
-        BOOL enabled = ax_bool(item, kAXEnabledAttribute, NO);
-        if (menu_expired()) { CFRelease(item); return menu_interrupted_status(); }
-        if (!enabled) { CFRelease(item); return 4; }
-        if (!running.active || !running_app(identity)) { CFRelease(item); return 1; }
-        AXError press = AXUIElementPerformAction(item, kAXPressAction);
+        int status = press_snapshot(item, titles.lastObject, identifiers.lastObject, ^BOOL {
+            return running.active && running_app(identity) != nil;
+        });
         CFRelease(item);
-        return press == kAXErrorSuccess ? 0 : menu_ax_status(press, press == kAXErrorInvalidUIElement ? 3 : 5);
+        return status;
     }
 }

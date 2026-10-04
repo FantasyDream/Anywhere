@@ -9,6 +9,11 @@ use super::group::ActionGroup;
 use super::handler::{ActionHandler, ActionHandlerRef};
 use anywhere_protocol::ContextMatcher;
 
+/// Pure expansion of captured capabilities into actions. No filesystem or tool execution.
+pub trait ContextActionFactory: Send + Sync {
+    fn actions(&self, contexts: &[crate::core::context::ResolvedContext]) -> Vec<ActionDefinition>;
+}
+
 /// One action declaration inside a bundle.
 ///
 /// A compact table row rather than a `ActionDescriptor` literal: the descriptor is derived

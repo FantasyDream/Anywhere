@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:anywhere/launcher_screen.dart';
 import 'package:anywhere/launcher/launcher_controller.dart';
+import 'package:anywhere/launcher/launcher_view_state.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/settings/settings_screen.dart';
 import 'package:anywhere/src/rust/api.dart';
@@ -106,6 +107,50 @@ void main() {
     });
   });
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+  test(
+      'explicit feature scopes expose run targets and custom scripts without flooding home',
+      () {
+    final actions = [
+      candidate('action:custom:c1', 'pnpm Run · check:types',
+          groupId: 'node', homeEligible: false),
+      candidate('action:run:c2', 'Cargo Run · server / main',
+          groupId: 'rust', homeEligible: false),
+      candidate('action:copy:c3', 'Copy Path'),
+    ];
+    final snapshot = launcherSnapshot(
+        sessionId: 1,
+        revision: 0,
+        snapshotSeq: 1,
+        contextComplete: true,
+        input: '',
+        contexts: [],
+        diagnostics: [],
+        candidates: actions,
+        contextCandidates: actions,
+        scopes: const [
+          ScopeDto(id: 'node', label: 'Node', isCurrentApp: false),
+          ScopeDto(id: 'rust', label: 'Rust', isCurrentApp: false)
+        ]);
+    final home = LauncherViewState(
+        phase: LauncherPhase.ready, generation: 1, snapshot: snapshot);
+    expect(home.visibleCandidates.map((c) => c.title), ['Copy Path']);
+    final node = LauncherViewState(
+        phase: LauncherPhase.ready,
+        generation: 1,
+        snapshot: snapshot,
+        scopeId: 'node');
+    expect(
+        node.visibleCandidates.map((c) => c.title), ['pnpm Run · check:types']);
+    expect(node.resultHeading, 'Actions');
+    final rust = LauncherViewState(
+        phase: LauncherPhase.ready,
+        generation: 1,
+        snapshot: snapshot,
+        scopeId: 'rust');
+    expect(rust.visibleCandidates.map((c) => c.title),
+        ['Cargo Run · server / main']);
+  });
 
   Future<void> toggle(WidgetTester tester, {String mode = 'currentApp'}) async {
     final done = Completer<void>();
@@ -717,6 +762,8 @@ void main() {
     expect(find.text('Copy Path'), findsNothing);
     expect(find.text('Git Status'), findsOneWidget);
     expect(find.text('Git Log'), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField)).focusNode!.hasFocus,
+        isTrue);
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);

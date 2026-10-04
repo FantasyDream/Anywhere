@@ -320,7 +320,7 @@ async fn an_enabled_menu_action_performs() {
 }
 
 #[tokio::test]
-async fn successful_menu_execution_records_one_use_and_failure_records_none() {
+async fn unverified_menu_execution_neither_records_success_nor_failure() {
     let platform = Arc::new(TestPlatform::default());
     with_menus(
         &platform,
@@ -340,7 +340,6 @@ async fn successful_menu_execution_records_one_use_and_failure_records_none() {
         .iter()
         .find(|candidate| candidate.title == "About")
         .unwrap();
-    let command_id = about.command_id.clone().unwrap();
 
     let success = app
         .execute(state.session_id, state.revision, about.id.clone())
@@ -348,20 +347,7 @@ async fn successful_menu_execution_records_one_use_and_failure_records_none() {
         .unwrap();
     assert!(success.succeeded(), "{}", success.notice());
     assert!(success.close_window);
-    assert_eq!(
-        history
-            .lock()
-            .unwrap()
-            .0
-            .get(&(
-                command_id.clone(),
-                APPLICATION.to_owned(),
-                "test.editor".to_owned(),
-            ))
-            .unwrap()
-            .execute_count,
-        1
-    );
+    assert!(history.lock().unwrap().0.is_empty());
 
     *platform.menu_perform_error.lock().unwrap() = Some("menu is unavailable".into());
     let failure = app
@@ -369,16 +355,7 @@ async fn successful_menu_execution_records_one_use_and_failure_records_none() {
         .await
         .unwrap();
     assert!(!failure.succeeded());
-    assert_eq!(
-        history
-            .lock()
-            .unwrap()
-            .0
-            .get(&(command_id, APPLICATION.to_owned(), "test.editor".to_owned()))
-            .unwrap()
-            .execute_count,
-        1
-    );
+    assert!(history.lock().unwrap().0.is_empty());
 }
 
 #[tokio::test]
@@ -397,6 +374,11 @@ async fn trusted_empty_menus_hide_the_application_context_entry() {
         !context_types(&latest).contains(&APPLICATION),
         "no menu items must not create a current app scope: {:?}",
         context_types(&latest)
+    );
+    assert!(
+        latest.diagnostics.is_empty(),
+        "an expected empty menu must not distract universal search: {:?}",
+        latest.diagnostics
     );
 }
 
@@ -702,4 +684,215 @@ async fn hidden_menu_reappears_with_the_same_identity_when_enabled() {
     let save = ready.candidates.iter().find(|c| c.title == "Save").unwrap();
     assert_eq!(save.command_id.as_ref(), Some(&expected));
     assert_eq!(save.shortcut.as_deref(), Some("⌘S"));
+}
+
+#[tokio::test]
+async fn rescan_capabilities_reject_old_requests_even_when_business_id_is_reused() {
+    let platform = Arc::new(TestPlatform::default());
+    let mut save = sample_menu("Save", &["File", "Save"], true);
+    save.identifiers[1] = Some("reused".into());
+    with_menus(&platform, vec![save]);
+    let app = app(platform.clone());
+    let warm = app.activate().await.unwrap().unwrap();
+    wait_for_title(&app, warm.session_id, "Save").await;
+    app.deactivate(warm.session_id).unwrap();
+    let gate = CaptureGate::new();
+    *platform.menu_gate.lock().unwrap() = Some(gate.clone());
+    let old = app.activate().await.unwrap().unwrap();
+    let save = old.candidates.iter().find(|c| c.title == "Save").unwrap();
+    let mut delete = sample_menu("Delete", &["Tools", "Delete"], true);
+    delete.identifiers[1] = Some("reused".into());
+    *platform.menu_items.lock().unwrap() = vec![delete];
+    gate.release();
+    let new = wait_for_title(&app, old.session_id, "Delete").await;
+    let delete = new.candidates.iter().find(|c| c.title == "Delete").unwrap();
+    assert_eq!(old.revision, new.revision);
+    assert!(new.snapshot_seq > old.snapshot_seq);
+    assert_eq!(save.command_id, delete.command_id);
+    assert_ne!(save.id, delete.id);
+    assert!(app
+        .execute(old.session_id, old.revision, save.id.clone())
+        .await
+        .is_err());
+    assert_eq!(platform.menu_performs.load(Ordering::SeqCst), 0);
+    assert!(app
+        .execute(new.session_id, new.revision, delete.id.clone())
+        .await
+        .unwrap()
+        .succeeded());
+    assert_eq!(platform.menu_performs.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn reranking_preserves_the_current_menu_capability() {
+    let platform = Arc::new(TestPlatform::default());
+    with_menus(
+        &platform,
+        vec![sample_menu("Save", &["File", "Save"], true)],
+    );
+    let app = app(platform);
+    let first = app.activate().await.unwrap().unwrap();
+    let first = wait_for_title(&app, first.session_id, "Save").await;
+    let save = first.candidates.iter().find(|c| c.title == "Save").unwrap();
+    let next = app
+        .update_input(first.session_id, "Save".into(), first.revision + 1)
+        .await
+        .unwrap()
+        .unwrap();
+    let next = settled(&app, first.session_id, next.revision).await;
+    let filtered = next.candidates.iter().find(|c| c.title == "Save").unwrap();
+    assert_eq!(save.id, filtered.id);
+    assert_eq!(save.command_id, filtered.command_id);
+}
+
+#[tokio::test]
+async fn sqlite_menu_history_is_quarantined_across_identity_transitions_and_reopen() {
+    use anywhere_core::features::app_actions::descriptors;
+    for scenario in [
+        "reassigned",
+        "duplicate-survivor",
+        "identifier-lost",
+        "renamed-path",
+        "same-path",
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let database = dir.path().join("usage.db");
+        let platform = Arc::new(TestPlatform::default());
+        let identity = platform.frontmost_application().unwrap().unwrap();
+        let mut original = sample_menu("Uncommon", &["File", "Uncommon"], true);
+        if scenario != "renamed-path" && scenario != "same-path" {
+            original.identifiers[1] = Some("reused".into());
+        }
+        let original_id = descriptors(&identity, vec![original.clone()])[0].id.clone();
+        let mut current = original.clone();
+        if scenario == "reassigned" || scenario == "duplicate-survivor" {
+            current.title = "Other Uncommon".into();
+            current.menu_path = vec!["Tools".into(), current.title.clone()];
+        } else if scenario == "identifier-lost" {
+            current.identifiers[1] = None;
+        } else if scenario == "renamed-path" {
+            current.menu_path[0] = "文件".into();
+        } else {
+            current.shortcut = Some("⌘D".into());
+        }
+        let current_id = descriptors(&identity, vec![current.clone()])[0].id.clone();
+        if scenario == "duplicate-survivor" {
+            assert!(descriptors(&identity, vec![original, current.clone()])
+                .iter()
+                .all(|action| action.id != original_id));
+        }
+        if scenario == "identifier-lost" || scenario == "renamed-path" {
+            assert_ne!(original_id, current_id);
+        } else {
+            assert_eq!(original_id, current_id);
+        }
+        let mut history = SqliteUsageRepository::open(&database).unwrap();
+        history
+            .record(&original_id, APPLICATION, "test.editor", 100)
+            .unwrap();
+        drop(history);
+        with_menus(&platform, vec![current.clone()]);
+        let app = Application::new(
+            platform,
+            registry(),
+            Box::new(SqliteUsageRepository::open(&database).unwrap()),
+            vec![],
+        );
+        let state = app.activate().await.unwrap().unwrap();
+        wait_for_title(&app, state.session_id, &current.title).await;
+        let state = settled(&app, state.session_id, state.revision).await;
+        let candidate = state
+            .candidates
+            .iter()
+            .find(|c| c.title == current.title)
+            .unwrap();
+        assert!(!candidate.home_eligible, "legacy usage promoted {scenario}");
+        let score = candidate.score;
+        assert!(app
+            .execute(state.session_id, state.revision, candidate.id.clone())
+            .await
+            .unwrap()
+            .succeeded());
+        app.deactivate(state.session_id).unwrap();
+        drop(app);
+        let mut history = SqliteUsageRepository::open(&database).unwrap();
+        let rows = history.load("test.editor").unwrap();
+        assert_eq!(
+            rows[&(original_id.clone(), APPLICATION.to_owned())].execute_count,
+            1
+        );
+        assert_eq!(rows.len(), 1);
+        // Even a large legacy count cannot affect ranking on the next App instance.
+        for _ in 0..40 {
+            history
+                .record(&current_id, APPLICATION, "test.editor", 200)
+                .unwrap();
+        }
+        drop(history);
+        let platform = Arc::new(TestPlatform::default());
+        with_menus(&platform, vec![current.clone()]);
+        let app = Application::new(
+            platform,
+            registry(),
+            Box::new(SqliteUsageRepository::open(&database).unwrap()),
+            vec![],
+        );
+        let state = app.activate().await.unwrap().unwrap();
+        wait_for_title(&app, state.session_id, &current.title).await;
+        let state = settled(&app, state.session_id, state.revision).await;
+        let candidate = state
+            .candidates
+            .iter()
+            .find(|c| c.title == current.title)
+            .unwrap();
+        assert_eq!(candidate.score, score, "legacy usage affected {scenario}");
+        assert!(!candidate.home_eligible);
+        app.deactivate(state.session_id).unwrap();
+    }
+}
+
+#[test]
+fn queued_menu_execution_rechecks_the_discovery_before_calling_platform() {
+    tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .max_blocking_threads(1)
+        .build()
+        .unwrap()
+        .block_on(async {
+            let platform = Arc::new(TestPlatform::default());
+            with_menus(
+                &platform,
+                vec![sample_menu("Save", &["File", "Save"], true)],
+            );
+            let app = app(platform.clone());
+            let state = app.activate().await.unwrap().unwrap();
+            wait_for_title(&app, state.session_id, "Save").await;
+            let state = settled(&app, state.session_id, state.revision).await;
+            let save = state.candidates.iter().find(|c| c.title == "Save").unwrap();
+            let gate = CaptureGate::new();
+            let worker_gate = gate.clone();
+            let (started, ready) = tokio::sync::oneshot::channel();
+            let blocker = tokio::task::spawn_blocking(move || {
+                started.send(()).unwrap();
+                worker_gate.wait();
+            });
+            ready.await.unwrap();
+            let execution = app.execute(state.session_id, state.revision, save.id.clone());
+            tokio::pin!(execution);
+            tokio::select! {
+                _ = &mut execution => panic!("execution bypassed the occupied worker"),
+                _ = tokio::time::sleep(Duration::from_millis(10)) => {},
+            }
+            *platform.menu_trusted.lock().unwrap() = false;
+            assert!(!app.prompt_accessibility().unwrap());
+            // The platform could now execute the old locator, but its catalog capability
+            // was revoked. Worker validation must prevent the call independently of AX.
+            *platform.menu_trusted.lock().unwrap() = true;
+            gate.release();
+            let result = execution.await.unwrap();
+            assert!(!result.succeeded());
+            assert!(result.notice().contains("discovery expired"));
+            assert_eq!(platform.menu_performs.load(Ordering::SeqCst), 0);
+            blocker.await.unwrap();
+        });
 }

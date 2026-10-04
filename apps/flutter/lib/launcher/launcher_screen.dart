@@ -87,16 +87,7 @@ class _LauncherAppState extends State<LauncherApp> {
   Widget build(BuildContext context) => MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Anywhere',
-        theme: ThemeData(
-          brightness: Brightness.dark,
-          useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xff8ea2ff),
-            brightness: Brightness.dark,
-          ),
-          scaffoldBackgroundColor: Colors.transparent,
-          fontFamily: '.AppleSystemUIFont',
-        ),
+        theme: LauncherStyle.theme,
         home: LauncherScreen(controller: _controller),
       );
 }
@@ -218,6 +209,16 @@ class _LauncherScreenState extends State<LauncherScreen> {
     });
   }
 
+  Future<void> _openEntry(int index) async {
+    await _controller.selectEntry(index);
+    if (mounted && _view.visible) _focus.requestFocus();
+  }
+
+  void _backMenu() {
+    _controller.backMenu();
+    _focus.requestFocus();
+  }
+
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
@@ -328,7 +329,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
                                   iconSize: 19,
                                   color: LauncherStyle.primary,
                                   icon: const Icon(Icons.arrow_back_rounded),
-                                  onPressed: _controller.backMenu,
+                                  onPressed: _backMenu,
                                 ),
                         ),
                         const SizedBox(width: 12),
@@ -539,26 +540,40 @@ class _LauncherScreenState extends State<LauncherScreen> {
                             const SizedBox(width: 16),
                             if (_view.browsing)
                               TextButton(
-                                  onPressed: _controller.backMenu,
+                                  onPressed: _backMenu,
                                   child: const Text('Back')),
                             const SizedBox(width: 16),
                           ],
                           if (_view.output == null)
-                            Text(
-                              entries.isNotEmpty &&
-                                      entries[_view.selectedIndex]
-                                              .navigationPath !=
-                                          null
-                                  ? 'Open'
-                                  : 'Run',
-                              style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w500,
-                                  color: LauncherStyle.secondary),
+                            TextButton(
+                              onPressed: entries.isEmpty ||
+                                      _view.executing ||
+                                      _view.resolving
+                                  ? null
+                                  : _controller.executeSelected,
+                              style: TextButton.styleFrom(
+                                  foregroundColor: LauncherStyle.secondary,
+                                  minimumSize: const Size(42, 28),
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 8)),
+                              child: Text(
+                                  entries.isNotEmpty &&
+                                          entries[_view.selectedIndex]
+                                                  .navigationPath !=
+                                              null
+                                      ? 'Open'
+                                      : 'Run',
+                                  style: const TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w500,
+                                      color: LauncherStyle.secondary)),
                             )
                           else
                             TextButton(
-                              onPressed: _controller.back,
+                              onPressed: () {
+                                _controller.back();
+                                _focus.requestFocus();
+                              },
                               style: TextButton.styleFrom(
                                 minimumSize: const Size(48, 26),
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -592,8 +607,10 @@ class _LauncherScreenState extends State<LauncherScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 14),
           children: [
             for (final scope in _view.scopes)
-              _scopeChip(scope.label, scope.id == _view.scopeId,
-                  () => _controller.selectScope(scope.id))
+              _scopeChip(scope.label, scope.id == _view.scopeId, () {
+                _controller.selectScope(scope.id);
+                _focus.requestFocus();
+              })
           ],
         ),
       );
@@ -636,7 +653,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
         selected: index == _view.selectedIndex,
         iconBytes: _controller.icons.bytesFor(candidate.id),
         sourceLabel: _view.sourceLabelFor(candidate),
-        onTap: () => _controller.selectEntry(index),
+        onTap: () => _openEntry(index),
       );
     }
     return Padding(
@@ -648,7 +665,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
         borderRadius: BorderRadius.circular(11),
         child: InkWell(
           borderRadius: BorderRadius.circular(11),
-          onTap: () => _controller.selectEntry(index),
+          onTap: () => _openEntry(index),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 19),
             child: Row(children: [

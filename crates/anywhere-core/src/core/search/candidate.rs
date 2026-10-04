@@ -30,6 +30,20 @@ pub enum CandidateTarget {
 }
 
 impl CandidateTarget {
+    pub fn records_usage(&self) -> bool {
+        match self {
+            Self::Action { action, .. } => action.executor.records_usage(),
+            Self::LaunchApplication { .. } => true,
+        }
+    }
+
+    pub fn execution_token(&self) -> Option<u64> {
+        match self {
+            Self::Action { action, .. } => action.executor.execution_token(),
+            Self::LaunchApplication { .. } => None,
+        }
+    }
+
     pub fn from_action(action: ActionDescriptor, context: ResolvedContext) -> Self {
         Self::Action {
             action: Box::new(action),
@@ -65,6 +79,18 @@ pub fn action_candidate_id(command: &str, context: &ResolvedContext) -> String {
         context.type_id,
         context.value.identity_fingerprint()
     )
+}
+
+/// Stable for re-ranking this target; a new discovery cannot reuse an old capability.
+pub fn action_execution_candidate_id(
+    action: &ActionDescriptor,
+    context: &ResolvedContext,
+) -> String {
+    let id = action_candidate_id(&action.id, context);
+    match action.executor.execution_token() {
+        Some(token) => format!("{id}:discovery:{token}"),
+        None => id,
+    }
 }
 
 fn candidate_sort_key(candidate: &Candidate) -> (&str, &str) {

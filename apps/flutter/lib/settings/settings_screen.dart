@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../launcher/launcher_controller.dart';
 import '../launcher/launcher_style.dart';
@@ -16,7 +18,8 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _excluded;
   String? _recording;
-  Future<void>? _pending;
+  Future<bool>? _pending;
+  bool _saving = false, _closing = false;
 
   LauncherController get _controller => widget.controller;
   HostSettings get _settings => _controller.hostSettings;
@@ -26,6 +29,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     _excluded = TextEditingController(text: _settings.excludedApps.join('\n'));
     _controller.addListener(_onSettings);
+    _controller.beforeSettingsClose = _prepareClose;
   }
 
   void _onSettings() {
@@ -34,38 +38,99 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
+    if (_controller.beforeSettingsClose == _prepareClose) {
+      _controller.beforeSettingsClose = null;
+    }
     _controller.removeListener(_onSettings);
     _excluded.dispose();
     super.dispose();
   }
 
-  Future<void> _save(
+  Future<bool> _save(
     HostSettings Function(HostSettings current) update, {
     bool excluded = false,
   }) {
-    Future<void> run() async {
-      final saved =
-          await _controller.saveSettings(update(_controller.hostSettings));
-      if (excluded && saved) {
-        _excluded.text = _controller.hostSettings.excludedApps.join('\n');
+    Future<bool> run() async {
+      try {
+        final saved =
+            await _controller.saveSettings(update(_controller.hostSettings));
+        if (excluded && saved && mounted) {
+          _excluded.text = _controller.hostSettings.excludedApps.join('\n');
+        }
+        return saved;
+      } catch (_) {
+        _controller
+            .reportSettingsError('Settings could not be saved. Try again.');
+        return false;
       }
-      if (mounted) setState(() {});
     }
 
-    final previous = _pending ?? Future<void>.value();
-    final next = previous.catchError((_) {}).then((_) => run());
+    final previous = _pending ?? Future<bool>.value(true);
+    final next = previous.then((_) => run());
     _pending = next;
+    setState(() => _saving = true);
+    unawaited(next.then((_) {
+      if (mounted && _pending == next) setState(() => _saving = false);
+    }));
     return next;
   }
 
+  Future<bool> _prepareClose() async {
+    if (!mounted) return false;
+    setState(() => _closing = true);
+    try {
+      final saved = await (_pending ?? Future<bool>.value(true));
+      if (!mounted) return false;
+      final dirty = !listEquals(_excludedIds(), _settings.excludedApps);
+      if (!dirty && saved) return true;
+      final choice = await showDialog<String>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: Text(dirty
+              ? 'Save changes before closing?'
+              : 'Some changes were not saved'),
+          content: Text(dirty
+              ? 'The hidden apps list has unapplied changes.'
+              : (_controller.statusMessage ??
+                  'Settings could not be saved. You can keep editing or close without saving.')),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(context, 'cancel'),
+                child: const Text('Keep editing')),
+            TextButton(
+                onPressed: () => Navigator.pop(context, 'discard'),
+                child: const Text('Close without saving')),
+            if (dirty)
+              FilledButton(
+                  onPressed: () => Navigator.pop(context, 'save'),
+                  child: const Text('Save changes')),
+          ],
+        ),
+      );
+      if (choice == 'discard') return true;
+      if (choice != 'save') return false;
+      return await _save(
+          (current) => current.copyWith(excludedApps: _excludedIds()),
+          excluded: true);
+    } finally {
+      if (mounted) setState(() => _closing = false);
+    }
+  }
+
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (_recording == null || event is! KeyDownEvent) {
+    if (event is! KeyDownEvent) {
       return KeyEventResult.ignored;
     }
     if (event.logicalKey == LogicalKeyboardKey.escape) {
-      setState(() => _recording = null);
+      if (_recording != null) {
+        setState(() => _recording = null);
+      } else {
+        unawaited(_controller.closeSettings());
+      }
       return KeyEventResult.handled;
     }
+    if (_recording == null) return KeyEventResult.ignored;
     final code = carbonKeyCode(event.logicalKey);
     if (code == null) return KeyEventResult.ignored;
     var modifiers = 0;
@@ -142,306 +207,329 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Focus(
       autofocus: true,
       onKeyEvent: _onKey,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: const Color(0x337e98f2),
-                    borderRadius: BorderRadius.circular(11),
-                    border: Border.all(color: const Color(0x559eb4ff)),
-                  ),
-                  child: const Icon(Icons.tune_rounded,
-                      size: 18, color: LauncherStyle.primary),
-                ),
-                const SizedBox(width: 11),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('Settings',
-                        style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
-                            color: LauncherStyle.primary)),
-                    Text('Make Anywhere work your way',
-                        style: TextStyle(
-                            fontSize: 11, color: LauncherStyle.muted)),
-                  ],
-                ),
-                const Spacer(),
-                TextButton(
-                  onPressed: _controller.dismiss,
-                  style: TextButton.styleFrom(
-                      foregroundColor: LauncherStyle.primary),
-                  child: const Text('Done'),
-                ),
-              ],
-            ),
-            if (_controller.statusMessage != null) ...[
-              const SizedBox(height: 8),
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: const Color(0x2ce5b779),
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Text(
-                  _controller.statusMessage!,
-                  style: const TextStyle(
-                      fontSize: 12, color: LauncherStyle.warning),
-                ),
-              ),
-            ],
-            const SizedBox(height: 18),
-            Expanded(
-              child: ListView(
-                padding: EdgeInsets.zero,
+      child: AbsorbPointer(
+        absorbing: _closing,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 46, 20, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
                 children: [
-                  _section('SHORTCUTS'),
-                  _card(
-                    child: Column(
-                      children: [
-                        _hotkeyRow('Current App', _settings.currentAppLabel,
-                            'current'),
-                        const Divider(height: 1, color: LauncherStyle.divider),
-                        _hotkeyRow('Universal Search', _settings.universalLabel,
-                            'universal'),
-                      ],
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: const Color(0x337e98f2),
+                      borderRadius: BorderRadius.circular(11),
+                      border: Border.all(color: const Color(0x559eb4ff)),
                     ),
+                    child: const Icon(Icons.tune_rounded,
+                        size: 18, color: LauncherStyle.primary),
                   ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Choose a shortcut, then press the new key combination. Esc cancels.',
-                    style: TextStyle(fontSize: 11, color: LauncherStyle.muted),
-                  ),
-                  const SizedBox(height: 18),
-                  _section('GENERAL'),
-                  _card(
-                    child: SwitchListTile.adaptive(
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 12),
-                      dense: true,
-                      title: const Text('Open at login',
+                  const SizedBox(width: 11),
+                  const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Settings',
                           style: TextStyle(
-                              fontSize: 13, color: LauncherStyle.primary)),
-                      subtitle: const Text('Start quietly when you sign in',
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: LauncherStyle.primary)),
+                      Text('Make Anywhere work your way',
                           style: TextStyle(
                               fontSize: 11, color: LauncherStyle.muted)),
-                      value: _settings.launchAtLogin,
-                      onChanged: (value) => _save(
-                        (current) => current.copyWith(launchAtLogin: value),
+                    ],
+                  ),
+                  const Spacer(),
+                  if (_saving) ...[
+                    const Text('Saving…',
+                        style: TextStyle(
+                            fontSize: 11, color: LauncherStyle.muted)),
+                    const SizedBox(width: 8),
+                  ],
+                  TextButton(
+                    onPressed: _controller.closeSettings,
+                    style: TextButton.styleFrom(
+                        foregroundColor: LauncherStyle.primary),
+                    child: const Text('Done'),
+                  ),
+                ],
+              ),
+              if (_controller.statusMessage != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0x2ce5b779),
+                    borderRadius: BorderRadius.circular(9),
+                  ),
+                  child: Text(
+                    _controller.statusMessage!,
+                    style: const TextStyle(
+                        fontSize: 12, color: LauncherStyle.warning),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 18),
+              Expanded(
+                child: ListView(
+                  padding: EdgeInsets.zero,
+                  children: [
+                    _section('SHORTCUTS'),
+                    _card(
+                      child: Column(
+                        children: [
+                          _hotkeyRow('Current App', _settings.currentAppLabel,
+                              'current'),
+                          const Divider(
+                              height: 1, color: LauncherStyle.divider),
+                          _hotkeyRow('Universal Search',
+                              _settings.universalLabel, 'universal'),
+                        ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 18),
-                  _section('CONTEXT SOURCES'),
-                  _card(
-                    child: Column(
-                      children: [
-                        SwitchListTile.adaptive(
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 12),
-                          dense: true,
-                          title: const Text('Finder selection',
-                              style: TextStyle(
-                                  fontSize: 13, color: LauncherStyle.primary)),
-                          subtitle: const Text('Use selected files and folders',
-                              style: TextStyle(
-                                  fontSize: 11, color: LauncherStyle.muted)),
-                          value: _settings.captureFinderSelection,
-                          onChanged: (value) => _save((current) =>
-                              current.copyWith(captureFinderSelection: value)),
-                        ),
-                        _sourceStatus(ContextSourceDto.finderSelection),
-                        const Divider(height: 1, color: LauncherStyle.divider),
-                        SwitchListTile.adaptive(
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 12),
-                          dense: true,
-                          title: const Text('Selected text',
-                              style: TextStyle(
-                                  fontSize: 13, color: LauncherStyle.primary)),
-                          subtitle: const Text(
-                              'Use text selected in the current app',
-                              style: TextStyle(
-                                  fontSize: 11, color: LauncherStyle.muted)),
-                          value: _settings.captureSelectedText,
-                          onChanged: (value) => _save((current) =>
-                              current.copyWith(captureSelectedText: value)),
-                        ),
-                        _sourceStatus(ContextSourceDto.selectedText),
-                        const Divider(height: 1, color: LauncherStyle.divider),
-                        SwitchListTile.adaptive(
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 12),
-                          dense: true,
-                          title: const Text('Browser current page',
-                              style: TextStyle(
-                                  fontSize: 13, color: LauncherStyle.primary)),
-                          subtitle: const Text(
-                              'Use the active Safari, Chrome, or Edge tab’s web address',
-                              style: TextStyle(
-                                  fontSize: 11, color: LauncherStyle.muted)),
-                          value: _settings.captureBrowserCurrentPage,
-                          onChanged: (value) => _save((current) => current
-                              .copyWith(captureBrowserCurrentPage: value)),
-                        ),
-                        _sourceStatus(ContextSourceDto.browserCurrentPage),
-                        const Divider(height: 1, color: LauncherStyle.divider),
-                        SwitchListTile.adaptive(
-                          contentPadding:
-                              const EdgeInsets.symmetric(horizontal: 12),
-                          dense: true,
-                          title: const Text('Clipboard text',
-                              style: TextStyle(
-                                  fontSize: 13, color: LauncherStyle.primary)),
-                          subtitle: const Text('Read once when Anywhere opens',
-                              style: TextStyle(
-                                  fontSize: 11, color: LauncherStyle.muted)),
-                          value: _settings.captureClipboard,
-                          onChanged: (value) => _save((current) =>
-                              current.copyWith(captureClipboard: value)),
-                        ),
-                        _sourceStatus(ContextSourceDto.clipboard),
-                      ],
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Choose a shortcut, then press the new key combination. Esc cancels.',
+                      style:
+                          TextStyle(fontSize: 11, color: LauncherStyle.muted),
                     ),
-                  ),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Changes apply on the next wake. Status shows the last captured snapshot.',
-                    style: TextStyle(fontSize: 11, color: LauncherStyle.muted),
-                  ),
-                  const SizedBox(height: 18),
-                  _section('SEARCH'),
-                  _card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
+                    const SizedBox(height: 18),
+                    _section('GENERAL'),
+                    _card(
+                      child: SwitchListTile.adaptive(
+                        contentPadding:
+                            const EdgeInsets.symmetric(horizontal: 12),
+                        dense: true,
+                        title: const Text('Open at login',
+                            style: TextStyle(
+                                fontSize: 13, color: LauncherStyle.primary)),
+                        subtitle: const Text('Start quietly when you sign in',
+                            style: TextStyle(
+                                fontSize: 11, color: LauncherStyle.muted)),
+                        value: _settings.launchAtLogin,
+                        onChanged: (value) => _save(
+                          (current) => current.copyWith(launchAtLogin: value),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    _section('CONTEXT SOURCES'),
+                    _card(
                       child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text('Hidden apps',
-                              style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: LauncherStyle.primary)),
-                          const SizedBox(height: 3),
-                          const Text(
-                              'Enter one app bundle ID per line to keep it out of search.',
-                              style: TextStyle(
-                                  fontSize: 11, color: LauncherStyle.muted)),
-                          const SizedBox(height: 10),
-                          TextField(
-                            controller: _excluded,
-                            minLines: 3,
-                            maxLines: 5,
-                            style: const TextStyle(
-                                fontSize: 12,
-                                fontFamily: 'monospace',
-                                color: LauncherStyle.primary),
-                            decoration: InputDecoration(
-                              isDense: true,
-                              hintText: 'com.apple.Safari',
-                              hintStyle:
-                                  const TextStyle(color: LauncherStyle.muted),
-                              filled: true,
-                              fillColor: const Color(0x3010141d),
-                              border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(9)),
-                            ),
-                            onSubmitted: (_) => _save(
-                              (current) => current.copyWith(
-                                  excludedApps: _excludedIds()),
-                              excluded: true,
-                            ),
-                            onEditingComplete: () => _save(
-                              (current) => current.copyWith(
-                                  excludedApps: _excludedIds()),
-                              excluded: true,
-                            ),
+                          SwitchListTile.adaptive(
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 12),
+                            dense: true,
+                            title: const Text('Finder selection',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    color: LauncherStyle.primary)),
+                            subtitle: const Text(
+                                'Use selected files and folders',
+                                style: TextStyle(
+                                    fontSize: 11, color: LauncherStyle.muted)),
+                            value: _settings.captureFinderSelection,
+                            onChanged: (value) => _save((current) => current
+                                .copyWith(captureFinderSelection: value)),
                           ),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton.icon(
-                              onPressed: () => _save(
+                          _sourceStatus(ContextSourceDto.finderSelection),
+                          const Divider(
+                              height: 1, color: LauncherStyle.divider),
+                          SwitchListTile.adaptive(
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 12),
+                            dense: true,
+                            title: const Text('Selected text',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    color: LauncherStyle.primary)),
+                            subtitle: const Text(
+                                'Use text selected in the current app',
+                                style: TextStyle(
+                                    fontSize: 11, color: LauncherStyle.muted)),
+                            value: _settings.captureSelectedText,
+                            onChanged: (value) => _save((current) =>
+                                current.copyWith(captureSelectedText: value)),
+                          ),
+                          _sourceStatus(ContextSourceDto.selectedText),
+                          const Divider(
+                              height: 1, color: LauncherStyle.divider),
+                          SwitchListTile.adaptive(
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 12),
+                            dense: true,
+                            title: const Text('Browser current page',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    color: LauncherStyle.primary)),
+                            subtitle: const Text(
+                                'Use the active Safari, Chrome, or Edge tab’s web address',
+                                style: TextStyle(
+                                    fontSize: 11, color: LauncherStyle.muted)),
+                            value: _settings.captureBrowserCurrentPage,
+                            onChanged: (value) => _save((current) => current
+                                .copyWith(captureBrowserCurrentPage: value)),
+                          ),
+                          _sourceStatus(ContextSourceDto.browserCurrentPage),
+                          const Divider(
+                              height: 1, color: LauncherStyle.divider),
+                          SwitchListTile.adaptive(
+                            contentPadding:
+                                const EdgeInsets.symmetric(horizontal: 12),
+                            dense: true,
+                            title: const Text('Clipboard text',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    color: LauncherStyle.primary)),
+                            subtitle: const Text(
+                                'Read once when Anywhere opens',
+                                style: TextStyle(
+                                    fontSize: 11, color: LauncherStyle.muted)),
+                            value: _settings.captureClipboard,
+                            onChanged: (value) => _save((current) =>
+                                current.copyWith(captureClipboard: value)),
+                          ),
+                          _sourceStatus(ContextSourceDto.clipboard),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      'Changes apply on the next wake. Status shows the last captured snapshot.',
+                      style:
+                          TextStyle(fontSize: 11, color: LauncherStyle.muted),
+                    ),
+                    const SizedBox(height: 18),
+                    _section('SEARCH'),
+                    _card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Hidden apps',
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: LauncherStyle.primary)),
+                            const SizedBox(height: 3),
+                            const Text(
+                                'Enter one app bundle ID per line to keep it out of search.',
+                                style: TextStyle(
+                                    fontSize: 11, color: LauncherStyle.muted)),
+                            const SizedBox(height: 10),
+                            TextField(
+                              controller: _excluded,
+                              minLines: 3,
+                              maxLines: 5,
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  fontFamily: 'monospace',
+                                  color: LauncherStyle.primary),
+                              decoration: InputDecoration(
+                                isDense: true,
+                                hintText: 'com.apple.Safari',
+                                hintStyle:
+                                    const TextStyle(color: LauncherStyle.muted),
+                                filled: true,
+                                fillColor: const Color(0x3010141d),
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(9)),
+                              ),
+                              onSubmitted: (_) => _save(
                                 (current) => current.copyWith(
                                     excludedApps: _excludedIds()),
                                 excluded: true,
                               ),
-                              icon: const Icon(Icons.check_rounded, size: 15),
-                              label: const Text('Save apps'),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  _section('PLUGINS'),
-                  _card(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (plugins.isEmpty)
-                            const Text('No plugins loaded.',
-                                style: TextStyle(
-                                    fontSize: 12, color: LauncherStyle.muted))
-                          else
-                            for (final plugin in plugins)
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 6),
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                        plugin.ok
-                                            ? Icons.check_circle_outline_rounded
-                                            : Icons.error_outline_rounded,
-                                        size: 15,
-                                        color: plugin.ok
-                                            ? LauncherStyle.accent
-                                            : LauncherStyle.warning),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      child: Text(
-                                          '${plugin.id}  ${plugin.detail}',
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
-                                              fontSize: 12,
-                                              color: plugin.ok
-                                                  ? LauncherStyle.secondary
-                                                  : LauncherStyle.warning)),
-                                    ),
-                                  ],
-                                ),
+                              onEditingComplete: () => _save(
+                                (current) => current.copyWith(
+                                    excludedApps: _excludedIds()),
+                                excluded: true,
                               ),
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: TextButton.icon(
-                              onPressed: () async {
-                                await _controller.refreshPlugins();
-                                if (mounted) setState(() {});
-                              },
-                              icon: const Icon(Icons.refresh_rounded, size: 15),
-                              label: const Text('Reload plugins'),
                             ),
-                          ),
-                        ],
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: () => _save(
+                                  (current) => current.copyWith(
+                                      excludedApps: _excludedIds()),
+                                  excluded: true,
+                                ),
+                                icon: const Icon(Icons.check_rounded, size: 15),
+                                label: const Text('Save apps'),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 18),
+                    _section('PLUGINS'),
+                    _card(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (plugins.isEmpty)
+                              const Text('No plugins loaded.',
+                                  style: TextStyle(
+                                      fontSize: 12, color: LauncherStyle.muted))
+                            else
+                              for (final plugin in plugins)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 6),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                          plugin.ok
+                                              ? Icons
+                                                  .check_circle_outline_rounded
+                                              : Icons.error_outline_rounded,
+                                          size: 15,
+                                          color: plugin.ok
+                                              ? LauncherStyle.accent
+                                              : LauncherStyle.warning),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                            '${plugin.id}  ${plugin.detail}',
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                                fontSize: 12,
+                                                color: plugin.ok
+                                                    ? LauncherStyle.secondary
+                                                    : LauncherStyle.warning)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: () async {
+                                  await _controller.refreshPlugins();
+                                  if (mounted) setState(() {});
+                                },
+                                icon:
+                                    const Icon(Icons.refresh_rounded, size: 15),
+                                label: const Text('Reload plugins'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

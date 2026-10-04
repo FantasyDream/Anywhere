@@ -4,13 +4,25 @@
 #include <assert.h>
 static AXError test_attribute(AXUIElementRef element, CFStringRef attribute, CFTypeRef *out);
 static AXError test_actions(AXUIElementRef element, CFArrayRef *out);
+static AXError test_press(AXUIElementRef element, CFStringRef action);
+static NSUInteger test_press_count;
 #define AXUIElementCopyAttributeValue test_attribute
 #define AXUIElementCopyActionNames test_actions
+#define AXUIElementPerformAction test_press
 #include "../macos_menu.m"
 #undef AXUIElementCopyAttributeValue
 #undef AXUIElementCopyActionNames
+#undef AXUIElementPerformAction
+static AXError test_press(AXUIElementRef element, CFStringRef action) {
+    (void)element; (void)action;
+    test_press_count++;
+    return kAXErrorSuccess;
+}
 static AXError test_attribute(AXUIElementRef element, CFStringRef attribute, CFTypeRef *out) {
     NSDictionary *node = (__bridge NSDictionary *)element;
+    if (node[@"TestTitleAfterEnabled"] && CFEqual(attribute, kAXEnabledAttribute)) {
+        ((NSMutableDictionary *)node)[@"AXTitle"] = node[@"TestTitleAfterEnabled"];
+    }
     NSNumber *fault = node[@"TestAXError"];
     if (fault) return (AXError)fault.intValue;
     id value = node[(__bridge NSString *)attribute];
@@ -81,8 +93,23 @@ int main(void) {
         found = lookup(@[save,a], @[@"Save"], @[NSNull.null]);
         assert(found == (__bridge AXUIElementRef)save); CFRelease(found);
         NSDictionary *localized = leaf(@"保存", @"save", YES);
-        found = lookup(@[localized], @[@"Save"], @[@"save"]);
+        assert(!lookup(@[localized], @[@"Save"], @[@"save"])); // refresh old display first
+        found = lookup(@[localized], @[@"保存"], @[@"save"]);
         assert(found == (__bridge AXUIElementRef)localized); CFRelease(found);
+        assert(press_snapshot((__bridge AXUIElementRef)localized, @"保存", @"save", ^BOOL { return YES; }) == 0);
+        assert(test_press_count == 1);
+        assert(press_snapshot((__bridge AXUIElementRef)localized, @"Save", @"save", ^BOOL { return YES; }) == 3);
+        assert(press_snapshot((__bridge AXUIElementRef)localized, @"保存", NSNull.null, ^BOOL { return YES; }) == 3);
+        assert(press_snapshot((__bridge AXUIElementRef)localized, @"保存", @"save", ^BOOL { return NO; }) == 1);
+        NSMutableDictionary *changing = [leaf(@"Save", @"save", YES) mutableCopy];
+        changing[@"TestTitleAfterEnabled"] = @"Delete";
+        assert(press_snapshot((__bridge AXUIElementRef)changing, @"Save", @"save", ^BOOL { return YES; }) == 3);
+        assert(test_press_count == 1); // No press for stale metadata or target instance.
+        assert(!lookup(@[leaf(@"Delete", @"save", YES)], @[@"Save"], @[@"save"]));
+        assert(!lookup(@[leaf(@"Save", @"other-command", YES)], @[@"Save"], @[NSNull.null]));
+        assert(!lookup(@[leaf(@"Save", @"", YES)], @[@"Save"], @[@"save"]));
+        assert(!lookup(@[leaf(@"Save", @"save", YES), leaf(@"Delete", @"save", YES)],
+                       @[@"Save"], @[@"save"]));
         NSDictionary *disabled = leaf(@"Save", @"save", NO);
         NSDictionary *root = @{@"AXChildren": @[disabled]};
         NSMutableArray *items = [NSMutableArray array];
@@ -92,6 +119,10 @@ int main(void) {
         [items removeAllObjects];
         collect_items((__bridge AXUIElementRef)ambiguous, @[], @[], items, YES);
         assert(items.count == 0);
+        NSDictionary *duplicateIds = @{@"AXChildren": @[leaf(@"Save", @"shared", YES),
+                                                          leaf(@"Delete", @"shared", YES), leaf(@"Open", @"", YES)]};
+        collect_items((__bridge AXUIElementRef)duplicateIds, @[], @[], items, YES);
+        assert(items.count == 1 && [items[0][@"title"] isEqualToString:@"Open"]);
         NSDictionary *parent = @{@"AXRole": @"AXMenuItem", @"AXTitle": @"File", @"AXEnabled":@NO, @"AXChildren":@[save]};
         assert(!lookup(@[parent], @[@"File", @"Save"], @[NSNull.null, NSNull.null]));
         assert(lookup_status(@{@"AXChildren":@[parent]}, @[@"File", @"Save"],

@@ -1,6 +1,6 @@
 # Anywhere 产品路线图
 
-状态：2026-10-02。版本号表示依赖顺序，不代表发布日期。`dev-0.4` 工程收尾已提交到 GitHub（`b622811`）；真实应用及权限矩阵仍须验收，不能据此标为正式发布。`dev-0.5` 已从该提交创建，第一切片实现独立进程会话和 Cargo Check/Test，当前进度见 [V0.5 MVP](mvp-v0.5.md)。V0.3.x 的遗留验收以 [MVP 验收清单](mvp-v0.3x.md)为准；V0.4 的当前实现与待验收项见 [验收记录](v0.4-context-acceptance.md)。
+状态：2026-10-03。版本号表示依赖顺序，不代表发布日期。`dev-0.4` 工程收尾已提交到 GitHub（`b622811`）；真实应用及权限矩阵仍须验收，不能据此标为正式发布。`dev-0.5` 已从该提交创建，已实现独立进程会话、Rust/Maven/Gradle/Node/Spring Boot 识别、Cargo Run 目标与 npm/pnpm/yarn 动态脚本，标准检查、四组真实工具及本机主要窗口生命周期验收通过；功能与工程收尾已完成，完整检查及开发包校验通过，见 [0.5 收尾记录](v0.5-closeout.md)。正式发布仍需安装升级、权限与读屏验收，完整功能说明见 [V0.5 MVP](mvp-v0.5.md)。V0.3.x 的遗留验收以 [MVP 验收清单](mvp-v0.3x.md)为准；V0.4 的当前实现与待验收项见 [验收记录](v0.4-context-acceptance.md)。
 
 ## 产品边界
 
@@ -16,7 +16,7 @@ Anywhere 的核心体验是：在唤醒时理解用户正在操作的对象，�
 | **V0.4a Context 采集** | Finder 选中文件/目录、选中文本、单次剪贴板上下文；来源、归属、权限和失败状态明确 | 三种来源均在实机产生 Context，并复用现有 Action/Scope/Ranking；失败不影响已有能力 |
 | **V0.4b 浏览器当前页** | 接入 Safari、Chrome、Edge 的当前 URL，明确授权与降级；其他浏览器按需适配 | 当前页与用户输入 URL 可区分来源；无权限或无页面时不猜测 URL |
 | **V0.5a 进程会话基础** | 有界输出、状态、退出码、停止、返回会话；会话在 Launcher 隐藏后仍可访问 | 一个演示长任务可启动、查看、停止和重新进入，且不会阻塞 Launcher |
-| **V0.5b Developer Context Pack** | 从目录轻量识别 Git、Maven、Gradle、Node、Rust；提供固定的常用 Build/Test/Run 动作 | 识别阶段不运行构建命令；每种已声明项目类型至少有一个实际项目通过端到端验收 |
+| **V0.5b Developer Context Pack** | 从目录轻量识别 Git、Maven、Gradle、Node、Rust、显式 Spring Boot；常用 Build/Test/Run、Node 全部支持的已声明脚本与 Cargo 运行目标 | 识别阶段不运行构建命令；每种已声明项目类型至少有一个实际项目通过端到端验收 |
 | **V0.6 Action Shortcuts** | Launcher 内自定义快捷键；少量全局“意图快捷键”按新捕获的 Context 分派 | 冲突、缺失 Context、权限拒绝和动作失效都有确定行为；配置可迁移 |
 | **V0.7 File Search** | macOS 使用 Spotlight 的异步结果进入统一 Candidate；可取消、限量、去重 | 连续输入不显示旧结果；文件结果不淹没当前 Context 的动作 |
 | **V0.8 First-party 模块化与 Extension v2** | 已验证的能力逐步迁出集中装配；以真实模块验证版本化 Manifest、Capabilities 和宿主服务 | 至少两个第一方模块使用同一接口，旧声明式插件继续可用，有迁移测试 |
@@ -68,3 +68,7 @@ V0.10   在 ExecutionSession 上增加 PTY；终端通道采用分块与背压
 ## 1.0 之后的候选方向
 
 Agent CLI 模板可复用执行会话；ACP 在有两个真实 Agent 适配需求时评估。通用 Web 插件需单独解决隔离、导航、能力授权和高吞吐通信。剪贴板历史、浏览器历史/书签、截图、OCR、翻译和 JSON Workspace 按使用场景逐项立项，不并入 Core 主流程。
+
+### 菜单身份与 V0.6 绑定门槛（2026-10-05）
+
+菜单当前采用稳定业务 ID 与扫描执行 token 两层身份；长期语义未经验证，菜单历史暂时隔离。V0.6 不得直接持久绑定这些菜单 ID：先取得可验证身份与迁移规则；其他具有明确业务身份的动作可按计划接入快捷键。详见 [菜单动作安全说明](current-app-actions.md)。

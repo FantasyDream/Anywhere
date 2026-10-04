@@ -58,6 +58,7 @@ pub fn build(contexts: &[ResolvedContext], offers: &[Candidate]) -> Vec<ContextP
         presentation.icon_key = match &context.value {
             ContextValue::Application { .. } => "application",
             ContextValue::Directory(_) | ContextValue::Repository(_) => "folder",
+            ContextValue::Project { .. } => "code",
             ContextValue::File(_) | ContextValue::FileSelection(_) => "file",
             ContextValue::Url(_) => "globe",
             ContextValue::Json { .. } => "code",
@@ -76,7 +77,10 @@ pub fn build(contexts: &[ResolvedContext], offers: &[Candidate]) -> Vec<ContextP
             match &context.value {
                 ContextValue::Directory(path)
                 | ContextValue::File(path)
-                | ContextValue::Repository(path) => path
+                | ContextValue::Repository(path)
+                | ContextValue::Project {
+                    directory: path, ..
+                } => path
                     .file_name()
                     .map(|name| name.to_string_lossy().into_owned())
                     .unwrap_or_else(|| path.display().to_string()),

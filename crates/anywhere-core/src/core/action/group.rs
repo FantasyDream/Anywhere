@@ -26,6 +26,10 @@ pub mod groups {
     pub const WEB: &str = "web";
     pub const JSON: &str = "json";
     pub const RUST: &str = "rust";
+    pub const MAVEN: &str = "maven";
+    pub const GRADLE: &str = "gradle";
+    pub const SPRING_BOOT: &str = "spring_boot";
+    pub const NODE: &str = "node";
     /// Launch candidates; never a scope of their own.
     pub const APP: &str = "app";
 
@@ -91,7 +95,39 @@ pub mod groups {
     }
 
     pub fn builtin() -> Vec<ActionGroup> {
-        vec![git(), folder(), file(), web(), json(), rust(), app()]
+        vec![
+            git(),
+            folder(),
+            file(),
+            web(),
+            json(),
+            rust(),
+            maven(),
+            gradle(),
+            node(),
+            spring_boot(),
+            app(),
+        ]
+    }
+
+    pub fn maven() -> ActionGroup {
+        project_group(MAVEN, "Maven")
+    }
+    pub fn gradle() -> ActionGroup {
+        project_group(GRADLE, "Gradle")
+    }
+    pub fn spring_boot() -> ActionGroup {
+        project_group(SPRING_BOOT, "Spring Boot")
+    }
+    pub fn node() -> ActionGroup {
+        project_group(NODE, "Node")
+    }
+    fn project_group(id: &str, title: &str) -> ActionGroup {
+        ActionGroup {
+            id: id.into(),
+            title: title.into(),
+            icon: Some("code".into()),
+        }
     }
 }
 

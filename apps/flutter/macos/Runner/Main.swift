@@ -10,7 +10,7 @@ final class LauncherWindow: NSWindow {
     override var canBecomeMain: Bool { true }
 }
 
-final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation {
     var window: LauncherWindow!
     var controller: FlutterViewController!
     var glass: NSVisualEffectView!
@@ -27,10 +27,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     var presentedGeneration: Int?
     var latestGeneration = 0
     var settingsOpen = false
+    var settingsWindow: NSWindow?
+    var launcherGlassMask: NSImage?
     var tasksWindow: NSWindow?
     var tasksController: FlutterViewController?
     var tasksChannel: FlutterMethodChannel?
     var tasksReady = false
+    var taskStopKeyMonitor: Any?
     var pendingTaskId: String?
     var terminationPending = false
     var stored = StoredSettings.load()
@@ -61,6 +64,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         window = LauncherWindow(contentRect: NSRect(x: 0, y: 0, width: 648, height: 64),
                                 styleMask: [.borderless], backing: .buffered, defer: false)
         window.title = "Anywhere"
+        window.isExcludedFromWindowsMenu = true
         let windowFrame = window.frame
         window.contentViewController = controller
         // Flutter's initial view is 0×0; preserve the requested window size when attaching it.
@@ -92,6 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         mask.capInsets = NSEdgeInsets(top: 18, left: 18, bottom: 18, right: 18)
         mask.resizingMode = .stretch
+        launcherGlassMask = mask
         glass.maskImage = mask
         glass.isHidden = true
         controller.view.addSubview(glass, positioned: .below, relativeTo: nil)
@@ -195,17 +200,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                       generation >= self.latestGeneration else { reply(nil); return }
                 self.latestGeneration = generation
                 self.settingsOpen = args["settings"] as? Bool == true
-                self.resizeWindow(args["height"] as? Double ?? 64)
-                self.positionWindow()
                 self.glass.isHidden = false
                 NSApp.unhide(nil)
                 NSApp.activate(ignoringOtherApps: true)
-                self.window.makeKeyAndOrderFront(nil)
+                if self.settingsOpen {
+                    self.showSettingsWindow(height: args["height"] as? Double ?? 508)
+                } else {
+                    self.restoreLauncherView()
+                    self.resizeWindow(args["height"] as? Double ?? 64)
+                    self.positionWindow()
+                    self.window.makeKeyAndOrderFront(nil)
+                    self.window.makeFirstResponder(self.controller.view)
+                }
                 self.presentedGeneration = generation
                 let elapsed = (ProcessInfo.processInfo.systemUptime - self.activationStart) * 1000
-                self.log(["event": "launcher_visible", "hotkey_to_visible_ms": elapsed,
-                          "window_width": self.window.frame.width, "window_height": self.window.frame.height,
-                          "ax_trusted": AXIsProcessTrusted()])
+                let visibleFrame = (self.settingsOpen ? self.settingsWindow?.frame : self.window.frame) ?? self.window.frame
+                var visibility: [String: Any] = [
+                    "event": self.settingsOpen ? "settings_visible" : "launcher_visible",
+                    "window_width": visibleFrame.width,
+                    "window_height": visibleFrame.height,
+                    "ax_trusted": AXIsProcessTrusted()
+                ]
+                if !self.settingsOpen { visibility["hotkey_to_visible_ms"] = elapsed }
+                self.log(visibility)
                 reply(nil)
             case "resize":
                 if let args = call.arguments as? [String: Any],
@@ -229,6 +246,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             }
         }
         installMenu()
+        // AppKit can route ⌘. as cancelOperation before key-equivalent menus.
+        // Its characters may already be Escape, so match the period key code.
+        // Consume only this task-window shortcut; Escape remains Flutter-owned.
+        taskStopKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, self.tasksReady,
+                  let tasks = self.tasksWindow, NSApp.keyWindow === tasks,
+                  event.keyCode == UInt16(kVK_ANSI_Period),
+                  event.modifierFlags.intersection([.command, .option, .control, .shift]) == .command
+            else { return event }
+            self.stopTask()
+            return nil
+        }
         if let error = applyHotKeys(stored) {
             hotKeyError = error + "; use the menu bar icon or release the shortcut in another app."
         }
@@ -248,8 +277,59 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                                       y: max(frame.minY, frame.maxY - frame.height * 0.20 - window.frame.height)))
     }
 
+    // Settings and Launcher share one engine, but have distinct native window lifecycles.
+    // Moving the view avoids keeping an extra Impeller engine just for preferences.
+    func showSettingsWindow(height: Double) {
+        window.orderOut(nil)
+        if settingsWindow == nil {
+            let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 648, height: 508),
+                                 styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
+                                 backing: .buffered, defer: false)
+            panel.title = "Anywhere · Settings"
+            panel.titleVisibility = .hidden
+            panel.titlebarAppearsTransparent = true
+            panel.appearance = NSAppearance(named: .darkAqua)
+            panel.backgroundColor = .clear
+            panel.isOpaque = false
+            panel.isReleasedWhenClosed = false
+            panel.delegate = self
+            panel.standardWindowButton(.zoomButton)?.isEnabled = false
+            panel.center()
+            settingsWindow = panel
+        }
+        if settingsWindow?.contentViewController !== controller {
+            window.contentViewController = nil
+            settingsWindow?.contentViewController = controller
+            glass.maskImage = nil
+            controller.view.layer?.cornerRadius = 0
+            controller.view.layer?.masksToBounds = false
+        }
+        resizeWindow(height)
+        if settingsWindow?.isMiniaturized == true { settingsWindow?.deminiaturize(nil) }
+        settingsWindow?.makeKeyAndOrderFront(nil)
+        settingsWindow?.makeFirstResponder(controller.view)
+    }
+
+    func restoreLauncherView() {
+        guard settingsWindow?.contentViewController === controller else { return }
+        settingsWindow?.orderOut(nil)
+        settingsWindow?.contentViewController = nil
+        let frame = window.frame
+        window.contentViewController = controller
+        window.setFrame(frame, display: false)
+        glass.maskImage = launcherGlassMask
+        controller.view.layer?.cornerRadius = 18
+        controller.view.layer?.masksToBounds = true
+    }
+
     func resizeWindow(_ requestedHeight: Double) {
         guard requestedHeight.isFinite else { return }
+        if settingsOpen, let panel = settingsWindow {
+            let screen = panel.screen ?? NSScreen.main!
+            let height = min(max(requestedHeight, 300), screen.visibleFrame.height)
+            panel.setContentSize(NSSize(width: 648, height: height))
+            return
+        }
         let screen = window.screen ?? NSScreen.main!
         let height = min(max(requestedHeight, 64), min(520, screen.visibleFrame.height))
         guard window.frame.size != NSSize(width: 648, height: height) else { return }
@@ -261,6 +341,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func hideLauncherWindow() {
+        restoreLauncherView()
         window.orderOut(nil)
         glass.isHidden = true
         // The hidden window need not retain backing surfaces for seven result rows.
@@ -270,7 +351,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func dismissForFocusLoss() {
-        if settingsOpen { return }
+        if settingsOpen || terminationPending { return }
         guard let generation = presentedGeneration else { return }
         presentedGeneration = nil
         latestGeneration = generation + 1
@@ -290,12 +371,49 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         channel.invokeMethod("openSettings", arguments: nil)
     }
 
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        if sender === settingsWindow {
+            // Flutter waits for saving and asks about unapplied drafts before hiding.
+            channel.invokeMethod("closeSettings", arguments: nil)
+            return false
+        }
+        return true
+    }
+
+    @objc func closeActiveWindow() { NSApp.keyWindow?.performClose(nil) }
+    @objc func minimizeActiveWindow() { NSApp.keyWindow?.performMiniaturize(nil) }
+    @objc func zoomActiveWindow() { NSApp.keyWindow?.performZoom(nil) }
+
     @objc func openTasks() { _ = showTasks(id: nil) }
+
+    @objc func findTask() { tasksChannel?.invokeMethod("find", arguments: nil) }
+    @objc func stopTask() { tasksChannel?.invokeMethod("stop", arguments: nil) }
+    @objc func refreshTasks() { tasksChannel?.invokeMethod("refresh", arguments: nil) }
+    @objc func taskLauncher() { activate(mode: "universal") }
+    @objc func hideTasks() { tasksWindow?.performClose(nil) }
+
+    func validateMenuItem(_ item: NSMenuItem) -> Bool {
+        if item.action == #selector(closeActiveWindow) || item.action == #selector(minimizeActiveWindow) {
+            guard let key = NSApp.keyWindow else { return false }
+            return key === settingsWindow || key === tasksWindow
+        }
+        if item.action == #selector(zoomActiveWindow) {
+            guard let key = NSApp.keyWindow else { return false }
+            return key === tasksWindow
+        }
+        let taskActions: [Selector] = [#selector(findTask), #selector(stopTask),
+                                      #selector(refreshTasks), #selector(taskLauncher), #selector(hideTasks)]
+        if let action = item.action, taskActions.contains(action) {
+            return tasksWindow?.isKeyWindow == true && tasksReady
+        }
+        return true
+    }
 
     /// Lazy second Flutter engine: releasing its window never destroys Rust process sessions.
     func showTasks(id: String?) -> Bool {
         pendingTaskId = id
-        if tasksWindow == nil {
+        let created = tasksWindow == nil
+        if created {
             let view = FlutterViewController(project: FlutterDartProject())
             let channel = FlutterMethodChannel(name: "anywhere/executions", binaryMessenger: view.engine.binaryMessenger)
             channel.setMethodCallHandler { [weak self] call, reply in
@@ -303,6 +421,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 if call.method == "ready" {
                     self.tasksReady = true
                     reply(self.pendingTaskId)
+                } else if call.method == "showLauncher" {
+                    reply(nil)
+                    self.activate(mode: "universal")
+                } else if call.method == "hide" {
+                    reply(nil)
+                    DispatchQueue.main.async { [weak self] in self?.tasksWindow?.performClose(nil) }
                 } else {
                     reply(FlutterMethodNotImplemented)
                 }
@@ -312,12 +436,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
                 return false
             }
             let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 600),
-                                 styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+                                 styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
             panel.title = "Anywhere · Running Tasks"
+            panel.titleVisibility = .hidden
+            panel.titlebarAppearsTransparent = true
+            panel.appearance = NSAppearance(named: .darkAqua)
+            panel.backgroundColor = .clear
+            panel.isOpaque = false
             panel.minSize = NSSize(width: 760, height: 420)
             panel.isReleasedWhenClosed = false
             panel.delegate = self
             panel.contentViewController = view
+            view.backgroundColor = .clear
+            let material = NSVisualEffectView(frame: view.view.bounds)
+            material.autoresizingMask = [.width, .height]
+            material.material = .hudWindow
+            material.blendingMode = .behindWindow
+            material.state = .active
+            view.view.addSubview(material, positioned: .below, relativeTo: nil)
             panel.setContentSize(NSSize(width: 920, height: 600))
             panel.center()
             tasksWindow = panel
@@ -326,7 +462,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         NSApp.unhide(nil)
         NSApp.activate(ignoringOtherApps: true)
+        if tasksWindow?.isMiniaturized == true { tasksWindow?.deminiaturize(nil) }
         tasksWindow?.makeKeyAndOrderFront(nil)
+        if created, let view = tasksController?.view {
+            tasksWindow?.makeFirstResponder(view)
+        }
         if tasksReady {
             tasksChannel?.invokeMethod("visibility", arguments: true)
             if let id { tasksChannel?.invokeMethod("select", arguments: id) }
@@ -344,6 +484,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         tasksChannel = nil
         tasksReady = false
         pendingTaskId = nil
+    }
+
+    func windowDidMiniaturize(_ notification: Notification) {
+        if notification.object as? NSWindow === tasksWindow {
+            tasksChannel?.invokeMethod("visibility", arguments: false)
+        }
+    }
+
+    func windowDidDeminiaturize(_ notification: Notification) {
+        if notification.object as? NSWindow === tasksWindow {
+            tasksChannel?.invokeMethod("visibility", arguments: true)
+        }
+    }
+
+    func applicationDidHide(_ notification: Notification) {
+        tasksChannel?.invokeMethod("visibility", arguments: false)
+    }
+
+    func applicationDidUnhide(_ notification: Notification) {
+        if tasksWindow?.isVisible == true && tasksWindow?.isMiniaturized == false {
+            tasksChannel?.invokeMethod("visibility", arguments: true)
+        }
     }
 
     func activate(mode: String) {
@@ -547,6 +709,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
         }
         editItem.submenu = edit
         main.addItem(editItem)
+        // Expose task commands through macOS menus. The local monitor reserves ⌘.;
+        // Flutter owns Escape's clear-filter / hide logic.
+        let taskItem = NSMenuItem(title: "Tasks", action: nil, keyEquivalent: "")
+        let taskMenu = NSMenu(title: "Tasks")
+        for (title, action, key) in [
+            ("Find Task…", #selector(findTask), "f"),
+            ("Stop Selected Task", #selector(stopTask), "."),
+            ("Refresh Tasks", #selector(refreshTasks), "r"),
+            ("Open Launcher", #selector(taskLauncher), "l"),
+            ("Close Task Window", #selector(hideTasks), "")
+        ] {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+            item.target = self
+            taskMenu.addItem(item)
+        }
+        taskItem.submenu = taskMenu
+        main.addItem(taskItem)
+        let windowItem = NSMenuItem(title: "Window", action: nil, keyEquivalent: "")
+        let windowMenu = NSMenu(title: "Window")
+        for (title, action, key) in [
+            ("Close Window", #selector(closeActiveWindow), "w"),
+            ("Minimize", #selector(minimizeActiveWindow), "m"),
+            ("Zoom", #selector(zoomActiveWindow), "")
+        ] {
+            let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
+            item.target = self
+            windowMenu.addItem(item)
+        }
+        windowItem.submenu = windowMenu
+        main.addItem(windowItem)
+        NSApp.windowsMenu = windowMenu
         NSApp.mainMenu = main
     }
 
@@ -562,15 +755,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if !flag {
+            if settingsOpen { openSettings() }
+            else { activate(mode: "currentApp") }
+        }
+        return true
+    }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         if terminationPending { return .terminateLater }
         terminationPending = true
-        channel.invokeMethod("shutdownExecutionSessions", arguments: nil) { _ in
-            NSApp.reply(toApplicationShouldTerminate: true)
+        channel.invokeMethod("prepareToQuit", arguments: nil) { [weak self] result in
+            let allow = result as? Bool == true
+            if !allow { self?.terminationPending = false }
+            NSApp.reply(toApplicationShouldTerminate: allow)
         }
         return .terminateLater
     }
     func applicationWillTerminate(_ notification: Notification) {
+        if let taskStopKeyMonitor { NSEvent.removeMonitor(taskStopKeyMonitor) }
         if let currentAppHotKey { UnregisterEventHotKey(currentAppHotKey) }
         if let universalHotKey { UnregisterEventHotKey(universalHotKey) }
         if let eventHandler { RemoveEventHandler(eventHandler) }

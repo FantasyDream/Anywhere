@@ -78,14 +78,14 @@ pub fn descriptors(app: &ApplicationInfo, items: Vec<DiscoveredMenuItem>) -> Vec
                 accepts: vec![ContextMatcher {
                     type_id: APPLICATION.into(),
                 }],
-                executor: ActionExecutor::Native(ActionHandlerRef::owned(MenuAction {
-                    app: app.clone(),
-                    locator: MenuLocator {
+                executor: ActionExecutor::Native(ActionHandlerRef::owned(MenuAction::new(
+                    app.clone(),
+                    MenuLocator {
                         bundle_id: app.bundle_id.clone(),
                         titles: item.menu_path,
                         identifiers: item.identifiers,
                     },
-                })),
+                ))),
                 availability: if item.enabled {
                     AvailabilityRule::Enabled
                 } else {
@@ -144,7 +144,7 @@ pub fn action_id(bundle_id: &str, identity: &[String]) -> String {
     format!("app.{bundle_id}.{hash:016x}")
 }
 
-/// Small generic home heuristic; actual executions can promote any menu later.
+/// Small generic home heuristic while unverified menu usage is quarantined.
 fn recommend(title: &str) -> bool {
     let title = title.to_lowercase();
     [

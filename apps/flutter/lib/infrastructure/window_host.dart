@@ -11,6 +11,8 @@ class WindowHost {
     required Future<void> Function(int) dismiss,
     Future<void> Function()? openSettings,
     Future<void> Function()? shutdownTasks,
+    Future<bool> Function()? closeSettings,
+    Future<bool> Function()? prepareToQuit,
   }) {
     _channel.setMethodCallHandler((call) async {
       switch (call.method) {
@@ -27,6 +29,10 @@ class WindowHost {
           if (generation is int) await dismiss(generation);
         case 'openSettings':
           await openSettings?.call();
+        case 'closeSettings':
+          return await closeSettings?.call() ?? true;
+        case 'prepareToQuit':
+          return await prepareToQuit?.call() ?? true;
         case 'shutdownExecutionSessions':
           await shutdownTasks?.call();
       }

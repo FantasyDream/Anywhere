@@ -9,7 +9,9 @@ use crate::core::action::descriptor::ActionRegistry;
 use crate::core::action::group::GroupMeta;
 use crate::core::context::{ContextSource, ContextValue, ResolvedContext};
 use crate::core::ranking::score;
-use crate::core::search::candidate::{action_candidate_id, compare_candidates, Candidate};
+use crate::core::search::candidate::{
+    action_execution_candidate_id, compare_candidates, Candidate,
+};
 use crate::core::search::candidate_source::{CandidateSource, SearchContext, SourceStage};
 use crate::core::search::query::Query;
 use crate::core::session::facts::SessionFacts;
@@ -69,7 +71,7 @@ impl TextFallbackSource<'_> {
                 Some(Candidate {
                     presentation: CandidatePresentation {
                         shortcut: None,
-                        id: action_candidate_id(&action.id, &context),
+                        id: action_execution_candidate_id(action, &context),
                         kind: CandidateKind::Action,
                         title: action.title.clone(),
                         subtitle: Some(context.display_detail()),

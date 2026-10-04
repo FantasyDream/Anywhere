@@ -30,6 +30,12 @@ pub enum ContextValue {
     /// One Finder selection, preserving the collection as the user's object.
     FileSelection(Arc<[PathBuf]>),
     Directory(PathBuf),
+    /// A directory capability with safe metadata supplied by its provider.
+    Project {
+        directory: PathBuf,
+        label: Arc<str>,
+        properties: Arc<BTreeMap<String, String>>,
+    },
     /// Git repository root discovered from filesystem metadata only.
     Repository(PathBuf),
     Application {
@@ -49,6 +55,7 @@ impl ContextValue {
             Self::File(path) | Self::Directory(path) | Self::Repository(path) => {
                 Arc::from(path.to_string_lossy().as_ref())
             }
+            Self::Project { directory, .. } => Arc::from(directory.to_string_lossy().as_ref()),
             Self::FileSelection(paths) => Arc::from(
                 serde_json::to_string(
                     &paths
@@ -72,6 +79,14 @@ impl ContextValue {
     pub fn path(&self) -> Option<&std::path::Path> {
         match self {
             Self::File(p) | Self::Directory(p) | Self::Repository(p) => Some(p),
+            Self::Project { directory, .. } => Some(directory),
+            _ => None,
+        }
+    }
+
+    pub fn property(&self, key: &str) -> Option<&str> {
+        match self {
+            Self::Project { properties, .. } => properties.get(key).map(String::as_str),
             _ => None,
         }
     }
@@ -162,6 +177,17 @@ impl ResolvedContext {
 
     pub fn descriptor(&self) -> ContextDescriptor {
         let mut properties = BTreeMap::new();
+        if let ContextValue::Project {
+            properties: metadata,
+            ..
+        } = &self.value
+        {
+            properties.extend(
+                metadata
+                    .iter()
+                    .map(|(key, value)| (key.clone(), value.clone())),
+            );
+        }
         if let ContextValue::Application { name, .. } = &self.value {
             properties.insert("name".into(), name.clone());
         }
@@ -192,7 +218,7 @@ impl ResolvedContext {
             ContextValue::Json { .. } => "JSON",
             ContextValue::File(_) => "File",
             ContextValue::FileSelection(_) => "Finder Selection",
-            ContextValue::Directory(_) if self.type_id == PROJECT_RUST => "Rust Project",
+            ContextValue::Project { label, .. } => label,
             ContextValue::Directory(_) => "Directory",
             ContextValue::Repository(_) => "Git Repository",
             ContextValue::Application { name, .. } => name,

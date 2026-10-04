@@ -28,11 +28,12 @@ class CandidateRow extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
         child: Material(
-          color: selected ? const Color(0x44778fe0) : Colors.transparent,
+          color: selected ? LauncherStyle.selectedSurface : Colors.transparent,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(11),
             side: BorderSide(
-              color: selected ? const Color(0x779eb4ff) : Colors.transparent,
+              color:
+                  selected ? LauncherStyle.selectedBorder : Colors.transparent,
               width: 0.8,
             ),
           ),

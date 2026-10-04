@@ -168,6 +168,14 @@ class LauncherViewState {
         for (final action in actions) LauncherEntry.candidate(action),
       ];
     }
+    // A deliberate feature scope exposes its actions, including scripts and run targets.
+    if (selectedScope != null && selectedScope!.isCurrentApp != true) {
+      return [
+        for (final candidate in allActions)
+          if (!isMenu(candidate)) LauncherEntry.candidate(candidate),
+        if (canBrowseMenus) const LauncherEntry.menu([]),
+      ];
+    }
     // No applications on Context Home; app menus only contribute a small shortlist.
     final source = scopeId == null ? scopedCandidates : allActions;
     final recommended = source
@@ -215,11 +223,13 @@ class LauncherViewState {
           ? 'Results'
           : browsing
               ? ['Menus', ...actionPath!].join(' › ')
-              : 'Suggested';
+              : selectedScope != null && selectedScope!.isCurrentApp != true
+                  ? 'Actions'
+                  : 'Suggested';
   double get previewHeight =>
       ((output?.split('\n').length ?? 0).clamp(3, 14) * 20.0) + 24;
   double get height {
-    if (phase == LauncherPhase.settings) return 480;
+    if (phase == LauncherPhase.settings) return 508;
     final body = output != null
         ? previewHeight
         : visibleEntries.isEmpty

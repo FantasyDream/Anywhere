@@ -28,7 +28,18 @@ class ExecutionSessionsController extends ChangeNotifier {
   List<ExecutionSessionSummaryDto> sessions = const [];
   ExecutionSessionDetailDto? detail;
   String? selectedId;
-  String? error;
+  String? _actionError, _refreshError;
+  String get filter => _filter;
+  String _filter = '';
+  String? get error => _actionError ?? _refreshError;
+  List<ExecutionSessionSummaryDto> get visibleSessions {
+    final words = _filter.toLowerCase().trim().split(RegExp(r'\s+'));
+    return sessions
+        .where((task) => words.every((word) =>
+            '${task.title} ${task.directory}'.toLowerCase().contains(word)))
+        .toList();
+  }
+
   bool busy = false;
   bool _visible = false,
       _disposed = false,
@@ -56,11 +67,45 @@ class ExecutionSessionsController extends ChangeNotifier {
     if (_disposed) {
       return;
     }
+    if (!visibleSessions.any((task) => task.id == id)) _filter = '';
+    if (selectedId == id && detail != null) return;
     selectedId = id;
     detail = null;
     _epoch++;
     notifyListeners();
     unawaited(refresh());
+  }
+
+  void setFilter(String value) {
+    if (_disposed || _filter == value) return;
+    _filter = value;
+    final visible = visibleSessions;
+    if (!visible.any((task) => task.id == selectedId)) {
+      selectedId = visible.firstOrNull?.id;
+      detail = null;
+      _epoch++;
+      unawaited(refresh());
+    }
+    notifyListeners();
+  }
+
+  void moveSelection(int delta) {
+    final visible = visibleSessions;
+    if (visible.isEmpty) return;
+    final index = visible.indexWhere((task) => task.id == selectedId);
+    select(visible[(index + delta).clamp(0, visible.length - 1)].id);
+  }
+
+  void dismissError() {
+    _actionError = null;
+    _refreshError = null;
+    notifyListeners();
+  }
+
+  void reportError(String message) {
+    if (_disposed) return;
+    _actionError = message;
+    notifyListeners();
   }
 
   Future<void> refresh() async {
@@ -78,9 +123,14 @@ class ExecutionSessionsController extends ChangeNotifier {
       if (!_current(epoch)) {
         return;
       }
+      final oldIndex =
+          visibleSessions.indexWhere((task) => task.id == selectedId);
       sessions = next;
-      if (!next.any((session) => session.id == selectedId)) {
-        selectedId = next.firstOrNull?.id;
+      final visible = visibleSessions;
+      if (!visible.any((session) => session.id == selectedId)) {
+        selectedId = visible.isEmpty
+            ? null
+            : visible[oldIndex.clamp(0, visible.length - 1)].id;
         detail = null;
       }
       final id = selectedId;
@@ -89,11 +139,11 @@ class ExecutionSessionsController extends ChangeNotifier {
         return;
       }
       detail = nextDetail;
-      error = null;
+      _refreshError = null;
       notifyListeners();
     } catch (_) {
       if (_current(epoch)) {
-        error = 'Tasks could not be refreshed. Try again.';
+        _refreshError = 'Tasks could not be refreshed. Try again.';
         notifyListeners();
       }
     } finally {
@@ -105,15 +155,38 @@ class ExecutionSessionsController extends ChangeNotifier {
     }
   }
 
-  Future<void> stopSelected() => _act(backend.stop);
-  Future<void> removeSelected() => _act(backend.remove);
+  ExecutionSessionSummaryDto? _task(String id) =>
+      sessions.where((task) => task.id == id).firstOrNull;
 
-  Future<void> _act(Future<void> Function(String) action) async {
+  Future<void> stopSelected() async {
     final id = selectedId;
-    if (id == null || busy || _disposed) {
+    if (id != null) await stop(id);
+  }
+
+  Future<void> removeSelected() async {
+    final id = selectedId;
+    if (id != null) await remove(id);
+  }
+
+  Future<void> stop(String id) async {
+    if (_task(id)?.status == ExecutionSessionStatusDto.running) {
+      await _act(id, backend.stop);
+    }
+  }
+
+  Future<void> remove(String id) async {
+    final task = _task(id);
+    if (task != null && !isTaskActive(task.status)) {
+      await _act(id, backend.remove);
+    }
+  }
+
+  Future<void> _act(String id, Future<void> Function(String) action) async {
+    if (busy || _disposed) {
       return;
     }
     busy = true;
+    _actionError = null;
     notifyListeners();
     try {
       await action(id);
@@ -123,7 +196,7 @@ class ExecutionSessionsController extends ChangeNotifier {
       await refresh();
     } catch (_) {
       if (!_disposed) {
-        error = 'The task could not be updated. Refresh and try again.';
+        _actionError = 'The task could not be updated. Refresh and try again.';
       }
     } finally {
       if (!_disposed) {

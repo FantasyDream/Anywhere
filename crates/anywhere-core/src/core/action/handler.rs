@@ -40,6 +40,16 @@ impl ExecutionOutput {
 }
 
 pub trait ActionHandler: Send + Sync {
+    /// Unverified dynamic identities must neither consume nor produce persistent usage.
+    fn records_usage(&self) -> bool {
+        true
+    }
+
+    /// A capability for this discovered target, independent of its stable business ID.
+    fn execution_token(&self) -> Option<u64> {
+        None
+    }
+
     fn execute(
         &self,
         context: &ResolvedContext,
@@ -54,6 +64,21 @@ pub enum ActionHandlerRef {
 }
 
 impl ActionHandlerRef {
+    fn handler(&self) -> &dyn ActionHandler {
+        match self {
+            Self::Static(handler) => *handler,
+            Self::Owned(handler) => handler.as_ref(),
+        }
+    }
+
+    pub fn records_usage(&self) -> bool {
+        self.handler().records_usage()
+    }
+
+    pub fn execution_token(&self) -> Option<u64> {
+        self.handler().execution_token()
+    }
+
     pub const fn new(handler: &'static dyn ActionHandler) -> Self {
         Self::Static(handler)
     }

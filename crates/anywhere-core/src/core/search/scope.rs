@@ -38,7 +38,7 @@ pub fn build(
         });
         if let (Some(command), Some(context)) = (candidate.command_id.as_ref(), offer.context()) {
             let key = (command.clone(), context.type_id.clone());
-            if counted.insert(key.clone()) {
+            if offer.target.records_usage() && counted.insert(key.clone()) {
                 let stats = usage.get(&key).copied().unwrap_or_default();
                 let (frequency, recency) =
                     usage_terms(stats.execute_count, stats.last_executed_at, now);
@@ -188,6 +188,80 @@ mod tests {
         assert_eq!(
             scopes[0].id, "folder",
             "Group frecency comes from executions, not the leading candidate's context/rank"
+        );
+    }
+    #[test]
+    fn unverified_menu_history_cannot_change_scope_order() {
+        use crate::core::context::{ContextValue, ResolvedContext};
+        use crate::core::search::{engine::ActionSearch, query::Query};
+        use crate::core::session::facts::SessionFacts;
+        use anywhere_platform::{ApplicationInfo, DiscoveredMenuItem};
+        use anywhere_protocol::APPLICATION;
+        let app = ApplicationInfo {
+            bundle_id: "test.editor".into(),
+            name: "Editor".into(),
+            pid: 42,
+            instance_id: Some("one".into()),
+        };
+        let registry = crate::features::app_actions::convert::registry(
+            &crate::application::builtin_registry(),
+            &app,
+            vec![DiscoveredMenuItem {
+                title: "Uncommon".into(),
+                menu_path: vec!["Tools".into(), "Uncommon".into()],
+                identifiers: vec![None, Some("reused".into())],
+                shortcut: None,
+                enabled: true,
+            }],
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let contexts = vec![
+            ResolvedContext::new(
+                DIRECTORY,
+                ContextValue::Directory(directory.path().into()),
+                ContextSource::ApplicationContext,
+                "test",
+            ),
+            ResolvedContext::new(
+                APPLICATION,
+                ContextValue::Application {
+                    bundle_id: app.bundle_id.clone(),
+                    name: app.name.clone(),
+                },
+                ContextSource::ApplicationContext,
+                "test",
+            ),
+        ];
+        let facts = SessionFacts::default();
+        let no_usage = |_: &str, _: &str| UsageStats::default();
+        let search = ActionSearch::new(
+            &registry,
+            &no_usage,
+            &facts,
+            1000,
+            crate::features::context_semantic,
+        );
+        let offers = search.search(&Query::parse(""), &contexts, &[]).candidates;
+        let menu = offers
+            .iter()
+            .find(|offer| offer.presentation.title == "Uncommon")
+            .unwrap();
+        let baseline = build(&offers, &registry, &HashMap::new(), None, 1000);
+        let history = HashMap::from([(
+            (
+                menu.presentation.command_id.clone().unwrap(),
+                APPLICATION.into(),
+            ),
+            UsageStats {
+                execute_count: u32::MAX,
+                last_executed_at: 1000,
+            },
+        )]);
+        let actual = build(&offers, &registry, &history, None, 1000);
+        assert_eq!(
+            actual.iter().map(|scope| &scope.id).collect::<Vec<_>>(),
+            baseline.iter().map(|scope| &scope.id).collect::<Vec<_>>()
         );
     }
 }

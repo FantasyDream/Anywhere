@@ -12,6 +12,7 @@ pub struct ProcessRequest {
     pub program: PathBuf,
     pub arguments: Vec<String>,
     pub directory: PathBuf,
+    pub environment: std::collections::BTreeMap<String, String>,
 }
 
 /// The worker owns the child from spawn through reaping. Cancellation never uses a stale PID.
@@ -35,6 +36,7 @@ impl OwnedProcess {
             .context("executable directory missing")?;
         let search_path = std::iter::once(tool_directory.to_path_buf()).chain(tool_directories());
         command.env("PATH", std::env::join_paths(search_path)?);
+        command.envs(&request.environment);
         command
             .args(&request.arguments)
             .current_dir(&request.directory)
@@ -175,7 +177,20 @@ fn tool_directories() -> Vec<PathBuf> {
         .unwrap_or_default();
     // GUI launches have a smaller PATH than interactive shells.
     if let Some(home) = std::env::var_os("HOME") {
-        directories.push(PathBuf::from(home).join(".cargo/bin"));
+        let home = PathBuf::from(home);
+        directories.push(home.join(".cargo/bin"));
+        for tool in ["maven", "gradle", "java"] {
+            directories.push(home.join(format!(".sdkman/candidates/{tool}/current/bin")));
+        }
+        directories.push(home.join(".volta/bin"));
+        let nvm = std::env::var_os("NVM_DIR")
+            .map(PathBuf::from)
+            .filter(|path| path.is_absolute())
+            .unwrap_or_else(|| home.join(".nvm"));
+        directories.push(nvm.join("current/bin"));
+        if let Some(nvm) = nvm_default_directory(&nvm) {
+            directories.push(nvm);
+        }
     }
     directories
         .extend(["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin"].map(PathBuf::from));
@@ -183,6 +198,60 @@ fn tool_directories() -> Vec<PathBuf> {
         .into_iter()
         .filter(|path| path.is_absolute())
         .collect()
+}
+
+/// Resolve an NVM default selector or a bounded alias chain without sourcing nvm.sh.
+fn nvm_default_directory(root: &std::path::Path) -> Option<PathBuf> {
+    let mut alias = "default".to_owned();
+    for _ in 0..8 {
+        let file = std::fs::File::open(root.join("alias").join(&alias)).ok()?;
+        if !file.metadata().ok()?.is_file() {
+            return None;
+        }
+        let mut bytes = Vec::new();
+        file.take(257).read_to_end(&mut bytes).ok()?;
+        if bytes.len() > 256 {
+            return None;
+        }
+        alias = String::from_utf8(bytes).ok()?.trim().to_owned();
+        let version = alias.strip_prefix('v').unwrap_or(&alias);
+        let parts: Option<Vec<u32>> = version.split('.').map(|part| part.parse().ok()).collect();
+        if let Some(parts) = parts.filter(|parts| !parts.is_empty() && parts.len() <= 3) {
+            return installed_node_directory(root, &parts);
+        }
+        if matches!(alias.as_str(), "node" | "stable") {
+            return installed_node_directory(root, &[]);
+        }
+        if alias.is_empty()
+            || alias.contains("..")
+            || alias.starts_with('/')
+            || !alias
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '/' | '-' | '_' | '*'))
+        {
+            return None;
+        }
+    }
+    None
+}
+
+fn installed_node_directory(root: &std::path::Path, prefix: &[u32]) -> Option<PathBuf> {
+    std::fs::read_dir(root.join("versions/node"))
+        .ok()?
+        .take(128)
+        .filter_map(|entry| {
+            let entry = entry.ok()?;
+            let name = entry.file_name();
+            let version = name.to_str()?.strip_prefix('v')?;
+            let numbers: Option<Vec<u32>> =
+                version.split('.').map(|part| part.parse().ok()).collect();
+            let numbers = numbers?;
+            let directory = entry.path().join("bin");
+            (numbers.len() == 3 && numbers.starts_with(prefix) && directory.is_dir())
+                .then_some((numbers, directory))
+        })
+        .max_by(|(left, _), (right, _)| left.cmp(right))
+        .map(|(_, path)| path)
 }
 
 fn is_executable(path: &std::path::Path) -> bool {
@@ -195,4 +264,36 @@ fn is_executable(path: &std::path::Path) -> bool {
     }
     #[cfg(not(unix))]
     path.is_file()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nvm_default_selection_is_bounded_and_respects_aliases_and_major_versions() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        std::fs::create_dir_all(root.join("alias/lts")).unwrap();
+        for version in ["v22.3.0", "v24.2.0", "v24.14.0"] {
+            std::fs::create_dir_all(root.join("versions/node").join(version).join("bin")).unwrap();
+        }
+        std::fs::write(root.join("alias/default"), "24").unwrap();
+        assert_eq!(
+            nvm_default_directory(root),
+            Some(root.join("versions/node/v24.14.0/bin"))
+        );
+        std::fs::write(root.join("alias/default"), "lts/*").unwrap();
+        std::fs::write(root.join("alias/lts/*"), "v22.3.0").unwrap();
+        assert_eq!(
+            nvm_default_directory(root),
+            Some(root.join("versions/node/v22.3.0/bin"))
+        );
+        std::fs::write(root.join("alias/default"), "../escape").unwrap();
+        assert_eq!(nvm_default_directory(root), None);
+        std::fs::write(root.join("alias/default"), "default").unwrap();
+        assert_eq!(nvm_default_directory(root), None);
+        std::fs::write(root.join("alias/default"), "a".repeat(257)).unwrap();
+        assert_eq!(nvm_default_directory(root), None);
+    }
 }

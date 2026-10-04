@@ -29,7 +29,11 @@ pub fn builtin_action_bundles() -> Vec<crate::core::action::bundle::ActionBundle
         filesystem::actions_file::bundle(),
         url::actions::bundle(),
         json::actions::bundle(),
-        developer::actions::bundle(),
+        developer::actions::rust_bundle(),
+        developer::actions::maven_bundle(),
+        developer::actions::gradle_bundle(),
+        developer::actions::node_bundle(),
+        developer::actions::spring_bundle(),
     ]
 }
 
@@ -37,14 +41,15 @@ pub fn builtin_action_bundles() -> Vec<crate::core::action::bundle::ActionBundle
 ///
 /// The registry decides the order (priority, then id); this only says what exists.
 pub fn builtin_providers() -> Vec<Arc<dyn ContextProvider>> {
-    vec![
+    let mut providers: Vec<Arc<dyn ContextProvider>> = vec![
         Arc::new(url::provider::UrlProvider::new()),
         Arc::new(filesystem::provider::PathProvider::default()),
         Arc::new(json::provider::JsonProvider::new()),
         Arc::new(text::provider::TextProvider::default()),
         Arc::new(git::provider::GitRepositoryProvider::default()),
-        Arc::new(developer::provider::RustProjectProvider::default()),
-    ]
+    ];
+    providers.extend(developer::provider::providers());
+    providers
 }
 
 /// Contexts that start a revision: memoized environment, frozen frontmost app, typed text.

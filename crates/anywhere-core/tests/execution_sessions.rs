@@ -11,6 +11,7 @@ use std::{
 
 fn request(directory: &Path, script: &str) -> ProcessRequest {
     ProcessRequest {
+        environment: Default::default(),
         title: "Test task".into(),
         program: "/bin/sh".into(),
         arguments: vec!["-c".into(), script.into()],
@@ -53,6 +54,7 @@ fn stdout_stderr_and_nonzero_exit_are_retained_and_arguments_are_literal() {
     let literal = "$(touch unexpected); `whoami`";
     let id = manager
         .start(ProcessRequest {
+            environment: Default::default(),
             title: "Literal".into(),
             program: "/usr/bin/printf".into(),
             arguments: vec!["%s".into(), literal.into()],

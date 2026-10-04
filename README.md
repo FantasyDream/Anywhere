@@ -62,7 +62,7 @@ cargo run --release --locked -p anywhere-core --example measure
 
 `cargo test -p anywhere-core` 不需要 Flutter、Dart 或可见 GUI。完整检查脚本校验共享 Flutter 版本，并运行 Rust fmt / tests / Clippy、架构检查和 Flutter analyze / tests。
 
-Rust 测试使用真实临时文件和 SQLite；OS 动作由 TestPlatform 记录，测试不会打开浏览器、覆盖剪贴板或运行 Git。V0.5 的进程测试会在临时目录启动受控子进程，并对无外部依赖的 Rust 项目执行 Cargo Check。目前有 17 个内建命令。
+Rust 测试使用真实临时文件和 SQLite；OS 动作由 TestPlatform 记录，测试不会打开浏览器、覆盖剪贴板或运行 Git。V0.5 的进程测试会在临时目录启动受控子进程，并对无外部依赖的 Rust 项目执行 Cargo Check。基础动作由内建 ActionBundle 提供，Cargo 运行目标和 Node scripts 动作按 Context 动态生成。Maven、Gradle、Node 的真实工具验收单独运行，命令和环境要求见 [0.5 MVP](docs/mvp-v0.5.md)。
 
 修改桥接公开 API 后重新生成：
 
@@ -74,7 +74,7 @@ scripts/generate-bridge.sh
 
 已生成的 Dart/Rust 绑定随源码交付，普通构建无需安装生成器。
 
-## 14 个内建命令
+## 基础对象动作
 
 | 对象 | 动作 |
 |---|---|
@@ -103,6 +103,20 @@ Git 动作只在用户按 Enter 时运行，参数是固定的 `status` / `log -
 
 [架构](docs/architecture.md) · [新版路线图](docs/roadmap.md) · [对象与动作导航设计](docs/action-navigation-design.md) · [V0.3.x MVP](docs/mvp-v0.3x.md) · [Context 模型](docs/context-model.md) · [插件协议](docs/plugin-protocol.md) · [Current App 菜单动作](docs/current-app-actions.md)
 
-`dev-0.4` 已完成工程收尾并提交；实机验收状态见 [0.4 验收记录](docs/v0.4-context-acceptance.md)。当前 `dev-0.5` 开发版本为 `0.5.0-dev.1`（App `0.5.0+4`），已接入独立进程会话及 Rust 项目的 Cargo Check/Test。任务输出、退出码和停止入口位于菜单栏的 Running Tasks 窗口，关闭 Launcher 或任务窗口不会停止任务；退出 Anywhere 会停止任务。本阶段实现、限制与后续切片见 [0.5 MVP](docs/mvp-v0.5.md)。
+`dev-0.4` 已完成工程收尾并提交；实机验收状态见 [0.4 验收记录](docs/v0.4-context-acceptance.md)。当前 `dev-0.5` 开发版本为 `0.5.0-dev.3`（App `0.5.0+10`），已接入独立进程会话，以及 Rust、Maven、Gradle、Node 项目的常用动作。Maven/Gradle 优先使用项目 wrapper；Node 展示 package.json 明确声明的脚本，按 packageManager 或锁文件选择 npm/pnpm/yarn；Cargo Run 按 package/binary 展示明确目标，Spring Boot 提供 Maven/Gradle Run。任务输出、退出码和停止入口位于菜单栏的 Running Tasks 窗口，关闭 Launcher 或任务窗口不会停止任务；退出 Anywhere 会停止任务。设置页使用独立原生窗口，提供关闭和最小化；任务窗口还支持调整大小。⌘W 关闭当前独立窗口，⌘M 最小化；关闭设置会等待保存，并保护未应用的修改。本阶段实现、限制与后续切片见 [0.5 MVP](docs/mvp-v0.5.md)。
 
-开发项目识别、文件搜索和插件 UI 属于后续阶段；可执行插件运行时、AI、账户与云同步尚未纳入当前版本。
+### 0.5 开发包
+
+```bash
+# 独立生成 0.5 开发包，保留 build/Anywhere.app 的已有版本。
+ANYWHERE_APP_OUTPUT="$PWD/build/Anywhere-dev-0.5.app" scripts/build-macos.sh
+scripts/package-macos.sh build/Anywhere-dev-0.5.app
+```
+
+打包前检查 Flutter / 原生版本和固定签名；打包后核对归档中的版本、主程序和 Rust 动态库，生成 ZIP 及 SHA-256 校验文件。复制或运行 `build/Anywhere-dev-0.5.app`，ZIP 用于传输。当前工程验收状态与交付边界见 [0.5 收尾记录](docs/v0.5-closeout.md)。
+
+开发项目识别和常用构建/测试/运行已纳入 0.5；自定义 Action 快捷键、文件搜索和插件 UI 属于后续阶段。可执行插件运行时、AI、账户与云同步尚未纳入当前版本。
+
+### 菜单身份安全降级（0.5.0+10）
+
+菜单重扫后旧候选会失效；标题或标识变化时拒绝旧目标并刷新。未验证长期身份的菜单暂不读取或记录 frecency，旧数据库数据保留，其他动作历史照常使用。原因、回归与长期快捷键限制见 [菜单身份安全说明](docs/current-app-actions.md)。

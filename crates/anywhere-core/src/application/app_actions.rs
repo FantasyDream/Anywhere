@@ -178,12 +178,9 @@ impl Application {
                     Ok(anywhere_platform::MenuDiscovery::Untrusted)
                 };
                 let (items, diagnostic) = match result {
-                    Ok(anywhere_platform::MenuDiscovery::Ready(items)) => {
-                        let diagnostic = items
-                            .is_empty()
-                            .then_some("This app has no executable menu items.");
-                        (Some(items), diagnostic)
-                    }
+                    // An empty menu is an expected context state, not a warning.
+                    // Empty menus contribute no actions; other context sources remain usable.
+                    Ok(anywhere_platform::MenuDiscovery::Ready(items)) => (Some(items), None),
                     Ok(anywhere_platform::MenuDiscovery::Untrusted) => (
                         None,
                         Some("Accessibility is not granted; Current App menus are hidden."),

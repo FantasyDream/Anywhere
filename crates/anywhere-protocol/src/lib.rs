@@ -17,6 +17,10 @@ pub type ContextKey = String;
 /// A process lifetime, independent of Launcher SessionId and query Revision.
 pub type ExecutionSessionId = String;
 pub const PROJECT_RUST: &str = "project.rust";
+pub const PROJECT_MAVEN: &str = "project.maven";
+pub const PROJECT_GRADLE: &str = "project.gradle";
+pub const JAVA_SPRING_BOOT: &str = "java.spring_boot";
+pub const PROJECT_NODE: &str = "project.node";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]

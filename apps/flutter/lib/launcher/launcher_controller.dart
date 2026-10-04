@@ -64,9 +64,11 @@ class LauncherController extends ChangeNotifier {
     String startupMessage = '',
     ApplyExcludedApps? applyExcludedApps,
     Future<void> Function(HostSettings)? applyContextSources,
+    List<PluginStatusDto> Function()? readPlugins,
   })  : _backend = backend,
         _window = window,
         _hostWarning = startupMessage,
+        _readPlugins = readPlugins ?? pluginStatus,
         _applyExcludedApps = applyExcludedApps ??
             ((bundleIds) => setExcludedApps(bundleIds: bundleIds)),
         _applyContextSources = applyContextSources ??
@@ -83,6 +85,7 @@ class LauncherController extends ChangeNotifier {
   final LauncherBackend _backend;
   final WindowHost _window;
   final ApplyExcludedApps _applyExcludedApps;
+  final List<PluginStatusDto> Function() _readPlugins;
   final Future<void> Function(HostSettings) _applyContextSources;
   String _hostWarning;
   final ApplicationIconCache icons;
@@ -101,6 +104,8 @@ class LauncherController extends ChangeNotifier {
   HostSettings _settings = HostSettings.defaults;
   List<PluginStatusDto> _plugins = const [];
   bool _userMoved = false, _disposed = false;
+  Future<bool> Function()? beforeSettingsClose;
+  Future<bool>? _settingsClosing;
   int _iconFirst = 0;
   int _iconLast = LauncherViewState.maxRows;
 
@@ -154,6 +159,8 @@ class LauncherController extends ChangeNotifier {
       },
       openSettings: openSettings,
       shutdownTasks: shutdownExecutionSessions,
+      closeSettings: closeSettings,
+      prepareToQuit: _prepareToQuit,
     );
     Future<void>.microtask(() async {
       if (_disposed) return;
@@ -168,7 +175,7 @@ class LauncherController extends ChangeNotifier {
   Future<void> toggle([String? mode]) async {
     final parsed = parseWakeMode(mode);
     if (_phase == LauncherPhase.settings) {
-      await dismiss();
+      if (!await closeSettings()) return;
       return activate(mode: parsed);
     }
     if (_phase == LauncherPhase.hidden) return activate(mode: parsed);
@@ -182,9 +189,7 @@ class LauncherController extends ChangeNotifier {
 
   Future<void> activate({WakeMode mode = WakeMode.currentApp}) async {
     if (_disposed) return;
-    if (_phase == LauncherPhase.settings) {
-      await dismiss();
-    }
+    if (_phase == LauncherPhase.settings && !await closeSettings()) return;
     if (_phase != LauncherPhase.hidden) return;
     final generation = ++_generation;
     _phase = LauncherPhase.activating;
@@ -552,19 +557,53 @@ class LauncherController extends ChangeNotifier {
 
   Future<void> openSettings() async {
     if (_disposed) return;
-    if (_phase != LauncherPhase.hidden && _phase != LauncherPhase.settings) {
-      await dismiss();
+    if (_phase == LauncherPhase.settings) {
+      // Restore the existing window without rebuilding the draft or recording state.
+      await _window.show(_generation, view.height, settings: true);
+      return;
     }
+    if (_phase != LauncherPhase.hidden) await dismiss();
     final generation = ++_generation;
     _phase = LauncherPhase.settings;
     try {
       _settings = await _window.readSettings();
-      _plugins = pluginStatus();
+      _plugins = _readPlugins();
     } catch (error) {
       _message = '$error';
     }
+    if (!_current(generation) || _phase != LauncherPhase.settings) return;
     _notify();
     await _window.show(generation, view.height, settings: true);
+  }
+
+  /// Native close, Done, Escape and a Launcher hotkey share the same draft guard.
+  Future<bool> closeSettings() {
+    return _settingsClosing ??= _closeSettings().whenComplete(() {
+      _settingsClosing = null;
+    });
+  }
+
+  Future<bool> _closeSettings() async {
+    if (_phase != LauncherPhase.settings) return true;
+    final generation = _generation;
+    if (!await (beforeSettingsClose?.call() ?? Future.value(true))) {
+      return false;
+    }
+    if (!_current(generation) || _phase != LauncherPhase.settings) return false;
+    await dismiss();
+    return true;
+  }
+
+  Future<bool> _prepareToQuit() async {
+    if (!await closeSettings()) return false;
+    await shutdownExecutionSessions();
+    return true;
+  }
+
+  void reportSettingsError(String message) {
+    if (_disposed) return;
+    _message = message;
+    _notify();
   }
 
   Future<void> openPrivacySettings(String pane) async {
@@ -572,7 +611,10 @@ class LauncherController extends ChangeNotifier {
     final generation = _generation;
     try {
       await _window.openPrivacySettings(pane);
-      if (_current(generation)) await dismiss();
+      // The persistent settings window remains open while System Settings is shown.
+      if (_current(generation) && _phase != LauncherPhase.settings) {
+        await dismiss();
+      }
     } catch (_) {
       if (!_current(generation)) return;
       _message =
@@ -627,7 +669,7 @@ class LauncherController extends ChangeNotifier {
 
   Future<void> escape() async {
     if (_phase == LauncherPhase.settings) {
-      await dismiss();
+      await closeSettings();
       return;
     }
     if (_output != null) {

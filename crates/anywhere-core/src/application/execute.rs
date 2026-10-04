@@ -67,6 +67,9 @@ impl Application {
         let registry = self.resolver.base_registry();
         let history = self.resolver.history.clone();
         let executions = self.executions.clone();
+        let session_for_execution = self.resolver.session.clone();
+        let guarded_target = candidate.target.execution_token();
+        let records_usage = candidate.target.records_usage();
         // Handed to the worker so it can re-check currency when it actually starts running,
         // rather than trusting a check made while the request was still being queued.
         let execution_ticket = self.resolver.execution(session_id, revision);
@@ -101,6 +104,22 @@ impl Application {
             if !execution_ticket.is_current() {
                 bail!("action expired before it started");
             }
+            if let Some(token) = guarded_target {
+                let session = session_for_execution
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("session lock poisoned"))?;
+                if !execution_ticket.is_current()
+                    || session.state.session_id != session_id
+                    || session.state.revision != revision
+                    || session
+                        .actions
+                        .get(&record_id)
+                        .and_then(|action| action.executor.execution_token())
+                        != Some(token)
+                {
+                    bail!("menu discovery expired; choose a current action");
+                }
+            }
             let mut output = match &candidate.target {
                 crate::core::search::candidate::CandidateTarget::Action { action, context } => {
                     crate::core::action::execute::execute(
@@ -131,17 +150,21 @@ impl Application {
             // needs, and report "expired" for an action the user watched succeed. Currency
             // is enforced before the side effect: once when the request arrives, once when
             // the worker starts.
-            let history_result = history
-                .lock()
-                .map_err(|_| anyhow::anyhow!("history lock poisoned"))
-                .and_then(|mut history| {
-                    history.record(
-                        &record_id,
-                        &context_type,
-                        &source_app,
-                        crate::application::session_runtime::now(),
-                    )
-                });
+            let history_result = if records_usage {
+                history
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("history lock poisoned"))
+                    .and_then(|mut history| {
+                        history.record(
+                            &record_id,
+                            &context_type,
+                            &source_app,
+                            crate::application::session_runtime::now(),
+                        )
+                    })
+            } else {
+                Ok(())
+            };
             Ok::<_, anyhow::Error>((output, history_result, execution_session_id))
         })
         .await?;

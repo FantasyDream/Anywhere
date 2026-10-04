@@ -7,7 +7,7 @@ use super::descriptor::{ActionDescriptor, ActionRegistry};
 use super::group::{groups, GroupMeta};
 use crate::core::context::{ContextSource, ContextValue, ResolvedContext};
 use crate::core::ranking::score::{self, UsageStats};
-use crate::core::search::candidate::{action_candidate_id, Candidate};
+use crate::core::search::candidate::{action_execution_candidate_id, Candidate};
 use crate::core::search::candidate_source::{CandidateSource, SearchContext};
 use crate::core::search::query::{MatchLevel, Query, SearchFields};
 use crate::core::session::facts::{context_ownership, Ownership, SessionFacts};
@@ -131,7 +131,11 @@ impl ActionMatcher<'_> {
                 if !availability.is_visible() {
                     continue;
                 }
-                let stats = (self.usage)(&action.id, &context.type_id);
+                let stats = if action.executor.records_usage() {
+                    (self.usage)(&action.id, &context.type_id)
+                } else {
+                    Default::default()
+                };
                 let mut score = score::score(
                     match_level,
                     searching,
@@ -146,7 +150,7 @@ impl ActionMatcher<'_> {
                 }
                 candidates.push(Candidate {
                     presentation: CandidatePresentation {
-                        id: action_candidate_id(&action.id, context),
+                        id: action_execution_candidate_id(action, context),
                         kind: CandidateKind::Action,
                         title: action.title.clone(),
                         subtitle: Some(subtitle(action, context)),
