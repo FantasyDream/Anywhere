@@ -37,6 +37,9 @@ struct StoredSettings: Codable {
     var captureSelectedText: Bool?
     var captureBrowserCurrentPage: Bool?
     var captureClipboard: Bool?
+    // Missing fields preserve settings written by 0.5 and earlier.
+    var actionShortcutVersion: Int? = nil
+    var actionShortcuts: [StoredActionShortcut]? = nil
 
     static var fileURL: URL {
         SettingsStore.supportDirectory().appendingPathComponent("settings.json")
@@ -83,7 +86,9 @@ struct StoredSettings: Codable {
             "captureFinderSelection": captureFinderSelection ?? true,
             "captureSelectedText": captureSelectedText ?? true,
             "captureBrowserCurrentPage": captureBrowserCurrentPage ?? true,
-            "captureClipboard": captureClipboard ?? true
+            "captureClipboard": captureClipboard ?? true,
+            "actionShortcutVersion": actionShortcutVersion ?? 1,
+            "actionShortcuts": (actionShortcuts ?? []).map { $0.asMap() }
         ]
     }
 
@@ -109,7 +114,15 @@ struct StoredSettings: Codable {
         NativeHotKeyMap.label(code: code, modifiers: modifiers)
     }
 
-    mutating func apply(_ args: [String: Any]) {
+    mutating func apply(_ args: [String: Any]) -> String? {
+        if let raw = args["actionShortcuts"] {
+            guard args["actionShortcutVersion"] as? Int == 1,
+                  let data = try? JSONSerialization.data(withJSONObject: raw),
+                  let bindings = try? JSONDecoder().decode([StoredActionShortcut].self, from: data)
+            else { return "Unsupported or invalid action shortcut settings." }
+            actionShortcutVersion = 1
+            actionShortcuts = bindings
+        }
         if let value = Self.uint32(args["currentAppKeyCode"]) { currentAppKeyCode = value }
         if let value = Self.uint32(args["currentAppModifiers"]) { currentAppModifiers = value }
         if let value = Self.uint32(args["universalKeyCode"]) { universalKeyCode = value }
@@ -122,6 +135,40 @@ struct StoredSettings: Codable {
         if let value = args["captureSelectedText"] as? Bool { captureSelectedText = value }
         if let value = args["captureBrowserCurrentPage"] as? Bool { captureBrowserCurrentPage = value }
         if let value = args["captureClipboard"] as? Bool { captureClipboard = value }
+        return actionShortcutError()
+    }
+
+    func actionShortcutError() -> String? {
+        guard actionShortcutVersion == nil || actionShortcutVersion == 1 else {
+            return "Unsupported action shortcut settings version."
+        }
+        let bindings = actionShortcuts ?? []
+        if bindings.count > 128 { return "At most 128 action shortcuts are supported." }
+        var actions = Set<String>(), chords = Set<String>()
+        let allowed = UInt32(cmdKey | optionKey | controlKey | shiftKey)
+        for binding in bindings {
+            guard !binding.actionId.isEmpty, binding.actionId.count <= 2048,
+                  binding.title.count <= 512,
+                  let name = NativeHotKeyMap.keys[binding.keyCode], name.count == 1,
+                  name.range(of: "^[A-Z]$", options: .regularExpression) != nil,
+                  binding.modifiers & ~allowed == 0,
+                  binding.modifiers & UInt32(cmdKey | optionKey | controlKey) != 0 else {
+                return "Use a letter key with Command, Option or Control."
+            }
+            if binding.modifiers & UInt32(optionKey | controlKey) == 0 &&
+                NativeHotKeyMap.reservedActionKeyCodes.contains(binding.keyCode) {
+                return "This action shortcut is reserved for editing or window commands."
+            }
+            if (binding.keyCode == currentAppKeyCode && binding.modifiers == currentAppModifiers) ||
+                (binding.keyCode == universalKeyCode && binding.modifiers == universalModifiers) {
+                return "An action shortcut conflicts with the Anywhere wake shortcut."
+            }
+            if !actions.insert(binding.actionId).inserted ||
+                !chords.insert("\(binding.keyCode):\(binding.modifiers)").inserted {
+                return "Action shortcuts must use unique actions and key combinations."
+            }
+        }
+        return nil
     }
 
     static func uint32(_ value: Any?) -> UInt32? {
@@ -132,5 +179,15 @@ struct StoredSettings: Codable {
             return UInt32(number)
         }
         return nil
+    }
+}
+
+struct StoredActionShortcut: Codable {
+    let actionId: String
+    let title: String
+    let keyCode: UInt32
+    let modifiers: UInt32
+    func asMap() -> [String: Any] {
+        ["actionId": actionId, "title": title, "keyCode": Int(keyCode), "modifiers": Int(modifiers)]
     }
 }

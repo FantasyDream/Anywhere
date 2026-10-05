@@ -14,6 +14,36 @@ pub fn ping() -> String {
     anywhere_core::ping().to_owned()
 }
 
+pub struct ShortcutActionDto {
+    pub action_id: String,
+    pub title: String,
+    pub context_types: Vec<String>,
+}
+
+pub async fn shortcut_actions() -> Result<Vec<ShortcutActionDto>> {
+    Ok(application()?
+        .shortcut_actions()?
+        .into_iter()
+        .map(|action| ShortcutActionDto {
+            action_id: action.action_id,
+            title: action.title,
+            context_types: action.context_types,
+        })
+        .collect())
+}
+
+pub async fn resolve_action_binding(
+    session_id: u32,
+    revision: u32,
+    action_id: String,
+) -> Result<Vec<CandidateDto>> {
+    Ok(application()?
+        .resolve_action_binding(session_id, revision, &action_id)?
+        .into_iter()
+        .map(candidate_dto)
+        .collect())
+}
+
 pub fn initialize(data_directory: String, plugin_directory: String) -> Result<()> {
     if APPLICATION.get().is_some() {
         return Ok(());

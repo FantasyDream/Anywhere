@@ -4,6 +4,8 @@
 
 ## 产品边界
 
+2026-10-06：V0.5 收尾及可维护性修复已推送至 `dev-0.5@d03a1f2`，见 [最终功能核对](v0.5-final-acceptance.md)。`dev-0.6` 从该基线开发，Launcher 内动作快捷键切片已实现；全局意图分派与真实全局热键验收仍未完成，见 [V0.6 MVP](mvp-v0.6.md)。
+
 Anywhere 的核心体验是：在唤醒时理解用户正在操作的对象，给出可执行的下一步动作；需要搜索时，应用、动作和其他结果进入统一候选列表。Rust 负责 Context、匹配、排序、执行与历史；Flutter 负责交互；原生平台层负责系统采集、窗口和进程能力。已有的 `ContextProvider`、`ActionBundle`、`CandidateSource`、Scope 与 Ranking 是继续扩展的基础，不为远期插件或 Agent 预建通用运行时。
 
 近期以 macOS 为验收平台。Windows 能力须在 Host、CI 和实机验收恢复后单独排期，不占用这条主线的发布门槛。

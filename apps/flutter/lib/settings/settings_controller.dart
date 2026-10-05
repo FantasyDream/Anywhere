@@ -15,10 +15,12 @@ class SettingsController extends ChangeNotifier {
     Future<void> Function(HostSettings)? applyContextSources,
     List<PluginStatusDto> Function()? readPlugins,
     Future<List<PluginStatusDto>> Function()? reload,
+    Future<List<ShortcutActionDto>> Function()? readShortcutActions,
   })  : _window = window,
         _warning = startupMessage,
         _readPlugins = readPlugins ?? pluginStatus,
         _reload = reload ?? reloadPlugins,
+        _readShortcutActions = readShortcutActions,
         _applyExcludedApps =
             applyExcludedApps ?? ((ids) => setExcludedApps(bundleIds: ids)),
         _applyContextSources = applyContextSources ??
@@ -33,6 +35,9 @@ class SettingsController extends ChangeNotifier {
   final Future<void> Function(HostSettings) _applyContextSources;
   final List<PluginStatusDto> Function() _readPlugins;
   final Future<List<PluginStatusDto>> Function() _reload;
+  final Future<List<ShortcutActionDto>> Function()? _readShortcutActions;
+  List<ShortcutActionDto> _shortcutActions = const [];
+  List<ShortcutActionDto> get shortcutActions => _shortcutActions;
   HostSettings _current = HostSettings.defaults;
   HostSettings get current => _current;
   String _warning;
@@ -54,7 +59,14 @@ class SettingsController extends ChangeNotifier {
     final next = await _window.readSettings();
     if (_disposed) return;
     _current = next;
+    if (next.actionShortcutVersion != 1) {
+      _statusMessage =
+          'Action shortcuts were saved by a newer version. Update Anywhere before changing settings.';
+    }
     if (plugins) _plugins = _readPlugins();
+    if (plugins && _readShortcutActions != null) {
+      _shortcutActions = await _readShortcutActions();
+    }
     _notify();
   }
 
@@ -88,6 +100,23 @@ class SettingsController extends ChangeNotifier {
       await (beforeClose?.call() ?? Future.value(true));
 
   Future<bool> save(HostSettings next) async {
+    if (next.actionShortcutVersion != 1) {
+      reportError(
+          'Unsupported action shortcut settings version. Update Anywhere before changing settings.');
+      return false;
+    }
+    if (next.actionShortcuts.length > 128) {
+      reportError('At most 128 action shortcuts are supported.');
+      return false;
+    }
+    final ids = <String>{};
+    for (final binding in next.actionShortcuts) {
+      final error = binding.validate(next);
+      if (error != null || !ids.add(binding.actionId)) {
+        reportError(error ?? 'An action can only have one shortcut.');
+        return false;
+      }
+    }
     final error = await _window.writeSettings(next);
     try {
       _current = await _window.readSettings();

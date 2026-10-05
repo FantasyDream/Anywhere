@@ -21,10 +21,12 @@ dart += 'final macOSLogicalKeyCodes = <LogicalKeyboardKey, int>{\n'
 dart += ''.join(f"  LogicalKeyboardKey.{k['logicalKey']}: {k['code']},\n" for k in keys) + '};\n'
 dart += 'const nativeModifierLabels = <int, String>{\n'
 dart += ''.join(f"  {m['mask']}: '{m['label']}',\n" for m in modifiers) + '};\n'
+dart += 'const reservedActionKeyCodes = <int>{' + ', '.join(map(str, spec['reservedActionKeyCodes'])) + '};\n'
 swift = header + 'enum NativeHotKeyMap {\n    static let keys: [UInt32: String] = [\n'
 swift += ''.join(f'        {k["code"]}: "{k["name"]}",\n' for k in keys) + '    ]\n'
 swift += '    static let modifiers: [(UInt32, String)] = [\n'
 swift += ''.join(f'        ({m["mask"]}, "{m["label"]}"),\n' for m in modifiers) + '    ]\n'
+swift += '    static let reservedActionKeyCodes: Set<UInt32> = [' + ', '.join(map(str, spec['reservedActionKeyCodes'])) + ']\n'
 swift += '''    static func label(code: UInt32, modifiers mask: UInt32) -> String {
         modifiers.filter { mask & $0.0 != 0 }.map { $0.1 }.joined() + (keys[code] ?? "Key")
     }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'settings_controller.dart';
+import 'action_shortcuts_section.dart';
 import '../launcher/launcher_style.dart';
 import 'host_settings.dart';
 import '../src/rust/api.dart';
@@ -22,6 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _recording;
   Future<bool>? _pending;
   bool _saving = false, _closing = false;
+  bool _shortcutEditing = false;
 
   SettingsController get _controller => widget.controller;
   HostSettings get _settings => _controller.current;
@@ -77,6 +79,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<bool> _prepareClose() async {
     if (!mounted) return false;
+    if (_shortcutEditing) {
+      _controller.reportError(
+          'Finish or cancel editing the action shortcut before closing.');
+      return false;
+    }
     setState(() => _closing = true);
     try {
       final saved = await (_pending ?? Future<bool>.value(true));
@@ -296,6 +303,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       style:
                           TextStyle(fontSize: 11, color: LauncherStyle.muted),
                     ),
+                    const SizedBox(height: 18),
+                    ActionShortcutsSection(
+                        controller: _controller,
+                        onEditingChanged: (editing) {
+                          if (mounted) _shortcutEditing = editing;
+                        },
+                        save: (update) => _save(update)),
                     const SizedBox(height: 18),
                     _section('GENERAL'),
                     _card(

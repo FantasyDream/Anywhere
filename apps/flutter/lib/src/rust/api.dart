@@ -11,6 +11,16 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
 
+Future<List<ShortcutActionDto>> shortcutActions() =>
+    RustLib.instance.api.crateApiShortcutActions();
+
+Future<List<CandidateDto>> resolveActionBinding(
+        {required int sessionId,
+        required int revision,
+        required String actionId}) =>
+    RustLib.instance.api.crateApiResolveActionBinding(
+        sessionId: sessionId, revision: revision, actionId: actionId);
+
 Future<void> initialize(
         {required String dataDirectory, required String pluginDirectory}) =>
     RustLib.instance.api.crateApiInitialize(
@@ -569,6 +579,31 @@ class ScopeDto {
           id == other.id &&
           label == other.label &&
           isCurrentApp == other.isCurrentApp;
+}
+
+class ShortcutActionDto {
+  final String actionId;
+  final String title;
+  final List<String> contextTypes;
+
+  const ShortcutActionDto({
+    required this.actionId,
+    required this.title,
+    required this.contextTypes,
+  });
+
+  @override
+  int get hashCode =>
+      actionId.hashCode ^ title.hashCode ^ contextTypes.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ShortcutActionDto &&
+          runtimeType == other.runtimeType &&
+          actionId == other.actionId &&
+          title == other.title &&
+          contextTypes == other.contextTypes;
 }
 
 class SnapshotWaitDto {

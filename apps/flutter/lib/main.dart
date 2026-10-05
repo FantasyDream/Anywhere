@@ -86,6 +86,10 @@ Future<void> main() async {
         ),
         loadIcon: (candidate) => bridge.applicationIcon(candidateId: candidate),
         promptAccessibility: () => bridge.promptAccessibility(),
+        shortcutActions: bridge.shortcutActions,
+        resolveBinding: (session, revision, action) =>
+            bridge.resolveActionBinding(
+                sessionId: session, revision: revision, actionId: action),
         deactivate: (session) => bridge.deactivate(sessionId: session),
         window: windowChannel,
         startupMessage: [

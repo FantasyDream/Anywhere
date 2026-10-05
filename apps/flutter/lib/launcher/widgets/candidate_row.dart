@@ -11,12 +11,14 @@ class CandidateRow extends StatelessWidget {
     required this.onTap,
     this.iconBytes,
     this.sourceLabel,
+    this.actionShortcut,
   });
   final CandidateDto candidate;
   final bool selected;
   final VoidCallback onTap;
   final Uint8List? iconBytes;
   final String? sourceLabel;
+  final String? actionShortcut;
 
   @override
   Widget build(BuildContext context) {
@@ -61,9 +63,15 @@ class CandidateRow extends StatelessWidget {
                     _iconPlate(disabled),
                     const SizedBox(width: 12),
                     Expanded(child: _labels(disabled)),
-                    if (candidate.shortcut != null) ...[
+                    if (actionShortcut != null ||
+                        candidate.shortcut != null) ...[
                       const SizedBox(width: 8),
-                      _shortcut(candidate.shortcut!),
+                      Tooltip(
+                          message: actionShortcut != null
+                              ? 'Anywhere action shortcut'
+                              : 'Shortcut in the current app',
+                          child:
+                              _shortcut(actionShortcut ?? candidate.shortcut!)),
                     ],
                     if (selected && !disabled) ...[
                       const SizedBox(width: 8),

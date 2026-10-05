@@ -34,6 +34,8 @@ class LauncherApp extends StatefulWidget {
     this.loadIcon,
     this.promptAccessibility,
     this.startupMessage = '',
+    this.shortcutActions,
+    this.resolveBinding,
   });
   final BeginActivation beginActivation;
   final Activate activate;
@@ -49,6 +51,9 @@ class LauncherApp extends StatefulWidget {
   final LoadIcon? loadIcon;
   final PromptAccessibility? promptAccessibility;
   final String startupMessage;
+  final Future<List<ShortcutActionDto>> Function()? shortcutActions;
+  final Future<List<CandidateDto>> Function(
+      int session, int revision, String action)? resolveBinding;
 
   @override
   State<LauncherApp> createState() => _LauncherAppState();
@@ -70,6 +75,8 @@ class _LauncherAppState extends State<LauncherApp> {
         waitForSnapshot: widget.waitForSnapshot,
         loadIcon: widget.loadIcon,
         promptAccessibility: widget.promptAccessibility,
+        shortcutActions: widget.shortcutActions,
+        resolveBinding: widget.resolveBinding,
       ),
       window: WindowHost(widget.window),
       startupMessage: widget.startupMessage,
@@ -225,6 +232,14 @@ class _LauncherScreenState extends State<LauncherScreen> {
     }
     // Leave candidate selection to the input method until composition has finished.
     if (!_input.value.composing.isCollapsed) return KeyEventResult.ignored;
+    if (_view.visible && _view.output == null) {
+      for (final binding in _controller.hostSettings.actionShortcuts) {
+        if (binding.matches(event)) {
+          if (event is KeyDownEvent) _controller.executeShortcut(binding);
+          return KeyEventResult.handled;
+        }
+      }
+    }
     final control = HardwareKeyboard.instance.isControlPressed;
     final command = HardwareKeyboard.instance.isMetaPressed;
     if (event.logicalKey == LogicalKeyboardKey.escape) {
@@ -651,6 +666,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
     final candidate = entry.candidate;
     if (candidate != null) {
       return CandidateRow(
+        actionShortcut: _controller.shortcutLabelFor(entry.candidate!),
         candidate: candidate,
         selected: index == _view.selectedIndex,
         iconBytes: _controller.icons.bytesFor(candidate.id),

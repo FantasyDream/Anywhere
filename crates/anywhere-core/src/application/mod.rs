@@ -20,3 +20,5 @@ mod session_runtime;
 mod snapshot;
 
 mod app_actions;
+mod shortcuts;
+pub use shortcuts::ShortcutAction;

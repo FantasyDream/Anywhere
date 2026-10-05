@@ -103,7 +103,7 @@ Git 动作只在用户按 Enter 时运行，参数是固定的 `status` / `log -
 
 [架构](docs/architecture.md) · [新版路线图](docs/roadmap.md) · [对象与动作导航设计](docs/action-navigation-design.md) · [V0.3.x MVP](docs/mvp-v0.3x.md) · [Context 模型](docs/context-model.md) · [插件协议](docs/plugin-protocol.md) · [Current App 菜单动作](docs/current-app-actions.md)
 
-`dev-0.4` 已完成工程收尾并提交；实机验收状态见 [0.4 验收记录](docs/v0.4-context-acceptance.md)。当前 `dev-0.5` 开发版本为 `0.5.0-dev.3`（App `0.5.0+11`），已接入独立进程会话，以及 Rust、Maven、Gradle、Node 项目的常用动作。Maven/Gradle 优先使用项目 wrapper；Node 展示 package.json 明确声明的脚本，按 packageManager 或锁文件选择 npm/pnpm/yarn；Cargo Run 按 package/binary 展示明确目标，Spring Boot 提供 Maven/Gradle Run。任务输出、退出码和停止入口位于菜单栏的 Running Tasks 窗口，关闭 Launcher 或任务窗口不会停止任务；退出 Anywhere 会停止任务。设置页使用独立原生窗口，提供关闭和最小化；任务窗口还支持调整大小。⌘W 关闭当前独立窗口，⌘M 最小化；关闭设置会等待保存，并保护未应用的修改。本阶段实现、限制与后续切片见 [0.5 MVP](docs/mvp-v0.5.md)。
+`dev-0.4` 已完成工程收尾并提交；实机验收状态见 [0.4 验收记录](docs/v0.4-context-acceptance.md)。已收尾的 `dev-0.5` 版本为 `0.5.0-dev.3`（App `0.5.0+11`），已接入独立进程会话，以及 Rust、Maven、Gradle、Node 项目的常用动作。Maven/Gradle 优先使用项目 wrapper；Node 展示 package.json 明确声明的脚本，按 packageManager 或锁文件选择 npm/pnpm/yarn；Cargo Run 按 package/binary 展示明确目标，Spring Boot 提供 Maven/Gradle Run。任务输出、退出码和停止入口位于菜单栏的 Running Tasks 窗口，关闭 Launcher 或任务窗口不会停止任务；退出 Anywhere 会停止任务。设置页使用独立原生窗口，提供关闭和最小化；任务窗口还支持调整大小。⌘W 关闭当前独立窗口，⌘M 最小化；关闭设置会等待保存，并保护未应用的修改。本阶段实现、限制与后续切片见 [0.5 MVP](docs/mvp-v0.5.md)。
 
 ### 0.5 开发包
 
@@ -120,3 +120,9 @@ scripts/package-macos.sh build/Anywhere-dev-0.5.app
 ### 菜单身份安全降级（0.5.0+11）
 
 菜单重扫后旧候选会失效；标题或标识变化时拒绝旧目标并刷新。未验证长期身份的菜单暂不读取或记录 frecency，旧数据库数据保留，其他动作历史照常使用。原因、回归与长期快捷键限制见 [菜单身份安全说明](docs/current-app-actions.md)。
+
+## V0.6 开发中：Action Shortcuts
+
+当前分支 `dev-0.6`，Rust `0.6.0-dev.1`、App `0.6.0+1`，从已推送的 0.5 收尾基线 `d03a1f2` 开始。Settings → Action Shortcuts 可以搜索动作、录制和保存 Launcher 内快捷键。唤醒 Anywhere 后按组合键，只有一个可用对象时执行，多个对象时先选择；不需要先搜索出该动作。缺少 Context 或动作失效时拒绝执行，菜单长期绑定仍禁止。已有设置兼容读取，配置冲突明确提示。
+
+全局意图快捷键尚未实现，完整进度与契约见 [0.6 MVP](docs/mvp-v0.6.md)。开发 App 为 `build/Anywhere-dev-0.6.app`；0.5 的 App 和 ZIP 单独保留。0.5 的最终功能与验收证据见 [最终核对](docs/v0.5-final-acceptance.md)。

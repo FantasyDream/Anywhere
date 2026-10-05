@@ -66,6 +66,18 @@ async fn menu_actions_belong_to_application_context_without_a_menu_root() {
         .as_deref()
         .unwrap()
         .starts_with("app.test.editor."));
+    let _ = settled(&app, first.session_id, 0).await;
+    let menu_id = action.command_id.as_deref().unwrap();
+    assert!(app
+        .resolve_action_binding(first.session_id, 0, menu_id)
+        .unwrap_err()
+        .to_string()
+        .contains("persistent shortcuts"));
+    assert!(app
+        .shortcut_actions()
+        .unwrap()
+        .iter()
+        .all(|option| option.action_id != menu_id));
 }
 
 #[tokio::test]

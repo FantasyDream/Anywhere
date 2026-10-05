@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import '../infrastructure/hotkey_keymap.dart';
+import 'action_shortcut.dart';
 
 class HostSettings {
   const HostSettings({
@@ -13,6 +14,8 @@ class HostSettings {
     required this.captureSelectedText,
     required this.captureBrowserCurrentPage,
     required this.captureClipboard,
+    this.actionShortcuts = const [],
+    this.actionShortcutVersion = 1,
   });
 
   static const cmdKey = nativeCmdKey;
@@ -44,6 +47,8 @@ class HostSettings {
   final bool captureSelectedText;
   final bool captureBrowserCurrentPage;
   final bool captureClipboard;
+  final List<ActionShortcut> actionShortcuts;
+  final int actionShortcutVersion;
 
   String get currentAppLabel =>
       formatHotkey(currentAppKeyCode, currentAppModifiers);
@@ -61,6 +66,7 @@ class HostSettings {
     bool? captureSelectedText,
     bool? captureBrowserCurrentPage,
     bool? captureClipboard,
+    List<ActionShortcut>? actionShortcuts,
   }) =>
       HostSettings(
         currentAppKeyCode: currentAppKeyCode ?? this.currentAppKeyCode,
@@ -75,6 +81,8 @@ class HostSettings {
         captureBrowserCurrentPage:
             captureBrowserCurrentPage ?? this.captureBrowserCurrentPage,
         captureClipboard: captureClipboard ?? this.captureClipboard,
+        actionShortcuts: actionShortcuts ?? this.actionShortcuts,
+        actionShortcutVersion: actionShortcutVersion,
       );
 
   Map<String, Object?> toMap() => {
@@ -88,6 +96,10 @@ class HostSettings {
         'captureSelectedText': captureSelectedText,
         'captureBrowserCurrentPage': captureBrowserCurrentPage,
         'captureClipboard': captureClipboard,
+        'actionShortcutVersion': actionShortcutVersion,
+        'actionShortcuts': [
+          for (final binding in actionShortcuts) binding.toMap()
+        ],
       };
 
   static HostSettings fromMap(Map<Object?, Object?> map) {
@@ -118,6 +130,14 @@ class HostSettings {
       captureSelectedText: map['captureSelectedText'] != false,
       captureBrowserCurrentPage: map['captureBrowserCurrentPage'] != false,
       captureClipboard: map['captureClipboard'] != false,
+      actionShortcutVersion: number('actionShortcutVersion', 1),
+      actionShortcuts:
+          map['actionShortcutVersion'] == 1 && map['actionShortcuts'] is List
+              ? [
+                  for (final raw in map['actionShortcuts'] as List)
+                    if (ActionShortcut.fromMap(raw) case final binding?) binding
+                ]
+              : const [],
     );
   }
 }

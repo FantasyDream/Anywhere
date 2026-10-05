@@ -84,6 +84,9 @@ final class HotKeyService {
         return nil
     }
     func update(_ proposed: StoredSettings, previous: StoredSettings) -> HotKeyUpdate {
+        if let error = proposed.actionShortcutError() {
+            return HotKeyUpdate(settings: previous, error: error)
+        }
         if proposed.sameHotKeys(as: previous) { return HotKeyUpdate(settings: proposed, error: nil) }
         var next = proposed
         if proposed.hotKeysConflict() {

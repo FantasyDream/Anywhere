@@ -6,6 +6,7 @@ import '../infrastructure/application_icon_cache.dart';
 import '../infrastructure/window_host.dart';
 import '../settings/host_settings.dart';
 import '../settings/settings_controller.dart';
+import '../settings/action_shortcut.dart';
 import '../infrastructure/application_lifecycle.dart';
 import 'launcher_view_state.dart';
 import 'context_source_status.dart';
@@ -46,6 +47,8 @@ class LauncherBackend {
     this.waitForSnapshot,
     this.loadIcon,
     this.promptAccessibility,
+    this.shortcutActions,
+    this.resolveBinding,
   });
 
   final BeginActivation beginActivation;
@@ -56,6 +59,9 @@ class LauncherBackend {
   final WaitForSnapshot? waitForSnapshot;
   final LoadIcon? loadIcon;
   final PromptAccessibility? promptAccessibility;
+  final Future<List<ShortcutActionDto>> Function()? shortcutActions;
+  final Future<List<CandidateDto>> Function(
+      int session, int revision, String action)? resolveBinding;
 }
 
 /// Owns asynchronous presentation lifecycle; matching and execution stay in Rust.
@@ -75,7 +81,8 @@ class LauncherController extends ChangeNotifier {
             startupMessage: startupMessage,
             applyExcludedApps: applyExcludedApps,
             applyContextSources: applyContextSources,
-            readPlugins: readPlugins),
+            readPlugins: readPlugins,
+            readShortcutActions: backend.shortcutActions),
         icons = ApplicationIconCache(backend.loadIcon) {
     icons.addListener(_notify);
     settings.addListener(_notify);
@@ -96,6 +103,8 @@ class LauncherController extends ChangeNotifier {
   String _input = '';
   String? _scopeId;
   List<String>? _actionPath;
+  List<CandidateDto>? _bindingChoices;
+  int _bindingRequest = 0;
   WakeMode _wakeMode = WakeMode.currentApp;
   bool _scopeTouched = false;
   String? _selectedId, _message, _output, _resultSource;
@@ -118,6 +127,7 @@ class LauncherController extends ChangeNotifier {
         resultSource: _resultSource,
         resultStatus: _resultStatus,
         universalShortcut: settings.current.universalLabel,
+        bindingChoices: _bindingChoices,
       );
 
   HostSettings get hostSettings => settings.current;
@@ -227,6 +237,8 @@ class LauncherController extends ChangeNotifier {
     ++_generation;
     _session = null;
     _snapshot = null;
+    _bindingChoices = null;
+    ++_bindingRequest;
     _phase = LauncherPhase.hidden;
     _input = '';
     _actionPath = null;
@@ -259,6 +271,8 @@ class LauncherController extends ChangeNotifier {
       return;
     }
     _snapshot = state;
+    _bindingChoices = null;
+    ++_bindingRequest;
     settings.recordCaptures(state.contextCaptures);
     _revision = state.revision;
     if (_scopeId != null && !view.scopes.any((scope) => scope.id == _scopeId)) {
@@ -350,6 +364,8 @@ class LauncherController extends ChangeNotifier {
     _requestedRevision = revision;
     final generation = _generation;
     _input = input;
+    _bindingChoices = null;
+    ++_bindingRequest;
     _scopeTouched = true;
     _phase = LauncherPhase.resolving;
     _output = _message = null;
@@ -399,6 +415,67 @@ class LauncherController extends ChangeNotifier {
       return;
     }
     await _executeCandidate(entry.candidate!);
+  }
+
+  /// Only called from the visible Launcher. Resolution uses the complete current
+  /// action offers, independently of search text or the selected scope.
+  Future<void> executeShortcut(ActionShortcut binding) async {
+    final resolve = _backend.resolveBinding;
+    final state = _snapshot;
+    if (resolve == null ||
+        state == null ||
+        _phase != LauncherPhase.ready ||
+        _output != null ||
+        state.revision != _requestedRevision) {
+      return;
+    }
+    if (binding.validate(settings.current) != null ||
+        !settings.current.actionShortcuts.any((b) =>
+            b.actionId == binding.actionId &&
+            b.sameChord(binding.keyCode, binding.modifiers))) {
+      return;
+    }
+    final request = ++_bindingRequest;
+    final generation = _generation;
+    final revision = _requestedRevision;
+    try {
+      final candidates =
+          await resolve(state.sessionId, revision, binding.actionId);
+      if (!_current(generation) ||
+          request != _bindingRequest ||
+          revision != _requestedRevision ||
+          _phase != LauncherPhase.ready) {
+        return;
+      }
+      if (candidates.length == 1) {
+        await _executeCandidate(candidates.single);
+      } else if (candidates.isNotEmpty) {
+        _bindingChoices = candidates;
+        _selectedId = null;
+        _message = 'Choose an object for ${binding.title}';
+        _notify();
+        await _syncWindow();
+      }
+    } catch (error) {
+      if (!_current(generation) ||
+          request != _bindingRequest ||
+          revision != _requestedRevision) {
+        return;
+      }
+      _message = '$error';
+      _notify();
+      await _syncWindow();
+    }
+  }
+
+  String? shortcutLabelFor(CandidateDto candidate) {
+    for (final binding in settings.current.actionShortcuts) {
+      if (binding.actionId == candidate.commandId &&
+          binding.validate(settings.current) == null) {
+        return binding.label;
+      }
+    }
+    return null;
   }
 
   Future<void> _executeCandidate(CandidateDto candidate) async {
@@ -598,6 +675,15 @@ class LauncherController extends ChangeNotifier {
   }
 
   Future<void> escape() async {
+    if (_bindingChoices != null) {
+      _bindingChoices = null;
+      ++_bindingRequest;
+      _message = null;
+      _selectedId = null;
+      _notify();
+      await _syncWindow();
+      return;
+    }
     if (_phase == LauncherPhase.settings) {
       await closeSettings();
       return;

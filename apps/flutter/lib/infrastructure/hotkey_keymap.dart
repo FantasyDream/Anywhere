@@ -75,3 +75,4 @@ const nativeModifierLabels = <int, String>{
   512: '⇧',
   256: '⌘',
 };
+const reservedActionKeyCodes = <int>{0, 8, 9, 7, 6, 12, 13, 46, 40};

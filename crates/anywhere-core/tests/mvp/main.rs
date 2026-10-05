@@ -6,5 +6,6 @@ mod plugin;
 mod scopes;
 mod search;
 mod session;
+mod shortcuts;
 mod support;
 mod usage_independence;

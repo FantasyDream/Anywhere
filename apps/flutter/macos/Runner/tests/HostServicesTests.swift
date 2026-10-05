@@ -58,10 +58,34 @@ struct HostServicesTests {
         assert(store.save() == nil)
         let restored = SettingsStore(fileURL: store.fileURL)
         assert(restored.current.excludedApps == ["test.hidden.app"])
+        store.current.actionShortcutVersion = 1
+        store.current.actionShortcuts = [StoredActionShortcut(actionId: "core.directory.terminal", title: "Open Terminal Here", keyCode: 17, modifiers: UInt32(optionKey))]
+        assert(store.current.actionShortcutError() == nil)
+        assert(store.save() == nil)
+        let shortcutRestored = SettingsStore(fileURL: store.fileURL)
+        assert(shortcutRestored.current.actionShortcuts?.first?.actionId == "core.directory.terminal")
+        assert(shortcutRestored.current.actionShortcuts?.first?.keyCode == 17)
+        var conflicting = store.current
+        conflicting.currentAppKeyCode = 17
+        conflicting.currentAppModifiers = UInt32(optionKey)
+        assert(conflicting.actionShortcutError()?.contains("conflicts") == true)
+        assert(service.update(conflicting, previous: store.current).error != nil)
+        conflicting = store.current
+        let duplicate = conflicting.actionShortcuts!.first!
+        conflicting.actionShortcuts?.append(duplicate)
+        assert(conflicting.actionShortcutError()?.contains("unique") == true)
+        conflicting = store.current
+        conflicting.actionShortcuts = [StoredActionShortcut(actionId: "copy", title: "Copy", keyCode: 8, modifiers: UInt32(cmdKey))]
+        assert(conflicting.actionShortcutError()?.contains("reserved") == true)
+        conflicting = store.current
+        assert(conflicting.apply(["actionShortcutVersion": 2, "actionShortcuts": []]) != nil)
         var legacy = store.current.asMap()
         for key in ["captureFinderSelection", "captureSelectedText", "captureBrowserCurrentPage", "captureClipboard"] { legacy.removeValue(forKey: key) }
+        legacy.removeValue(forKey: "actionShortcutVersion")
+        legacy.removeValue(forKey: "actionShortcuts")
         try JSONSerialization.data(withJSONObject: legacy).write(to: store.fileURL)
         assert(SettingsStore(fileURL: store.fileURL).current.captureClipboard == nil)
+        assert(SettingsStore(fileURL: store.fileURL).current.actionShortcuts == nil)
         assert(store.current.save(to: temp) != nil)
         assert(StoredSettings.uint32(-1) == nil)
         assert(StoredSettings.uint32(Int64(UInt32.max) + 1) == nil)

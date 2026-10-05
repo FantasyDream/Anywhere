@@ -91,6 +91,10 @@ Controller 用 hidden / activating / ready / resolving / executing 表达阶段�
 
 ## 当前搜索与 Scope 行为
 
+### V0.6 Launcher 内快捷键
+
+用户 ActionShortcut 与 Candidate 的原应用 shortcut 展示字段分开。Host 保存带版本的业务动作/键位配置；Rust 的配置目录只暴露可持久绑定的动作和 Context 类型，不暴露捕获对象。触发时 `resolve_action_binding` 在当前完整 Offer 中解析 Enabled 候选，并复验 Session/Revision、目录版本、采集完成和持久绑定策略；一个目标走原 execute，多个目标由用户选择。绑定不保存 Candidate/Context 身份，不因 Scope 或查询把适用动作排除。Dart 通过请求代次拒绝迟到解析，并在设置保存队列中校验冲突；原生存储边界再检查键位、数量、唯一性和唤醒键冲突。全局意图分派尚未实现，后续要求见 [V0.6 MVP](mvp-v0.6.md)。
+
 最新交互以 [Scope / Menu 规范](scope-group-menu-design.md) 为准。Context Graph 保留对象、来源、血缘与执行节点；不直接成为 Scope。没有 Subject 对象模型或 Context 选择标题。Finder 多选采集与图插入仍保留集合血缘重映射，稳定 ContextKey 和执行目标用于 Core 数据与 Offer 归属。
 
 Current App 是完整可见 Action 的聚合入口，包括所有领域和来源，不要求存在菜单动作；其他 Scope 来自 Action 的 group_id，只有有可见动作的 Group 才展示。Action Group 不绑定 ContextType；Disabled 保留原因，Hidden 不进入候选/Scope/目录。菜单属于 app.<bundle_id>，普通应用启动 Candidate 属于 Universal Search，不生成 Scope。应用名查询不会把全部菜单带出，应用名加动作关键词可直达具体菜单。

@@ -518,7 +518,7 @@ void main() {
                     child: SettingsScreen(
                         controller: controller.settings,
                         onClose: controller.closeSettings))))));
-    await tester.ensureVisible(find.text('Permission needed'));
+    await tester.scrollUntilVisible(find.text('Permission needed'), 160);
     await tester.pumpAndSettle();
     expect(find.text('Not supported by this app'), findsOneWidget);
     expect(find.text('Permission needed'), findsOneWidget);

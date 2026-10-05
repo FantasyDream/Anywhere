@@ -151,7 +151,9 @@ void main() {
     final gate = Completer<void>();
     h.saveGate = () => gate.future;
     h.failSave = true;
-    await tester.tap(find.byType(SwitchListTile).first);
+    final loginSwitch = find.widgetWithText(SwitchListTile, 'Open at login');
+    await tester.scrollUntilVisible(loginSwitch, 160);
+    await tester.tap(loginSwitch);
     await tester.pump();
     expect(find.text('Saving…'), findsOneWidget);
     final closing = h.native('closeSettings');

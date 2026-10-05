@@ -38,6 +38,7 @@ enum NativeHotKeyMap {
         (512, "⇧"),
         (256, "⌘"),
     ]
+    static let reservedActionKeyCodes: Set<UInt32> = [0, 8, 9, 7, 6, 12, 13, 46, 40]
     static func label(code: UInt32, modifiers mask: UInt32) -> String {
         modifiers.filter { mask & $0.0 != 0 }.map { $0.1 }.joined() + (keys[code] ?? "Key")
     }

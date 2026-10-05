@@ -117,6 +117,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ScopeDto> dco_decode_list_scope_dto(dynamic raw);
 
   @protected
+  List<ShortcutActionDto> dco_decode_list_shortcut_action_dto(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
@@ -140,6 +143,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ScopeDto dco_decode_scope_dto(dynamic raw);
+
+  @protected
+  ShortcutActionDto dco_decode_shortcut_action_dto(dynamic raw);
 
   @protected
   SnapshotWaitDto dco_decode_snapshot_wait_dto(dynamic raw);
@@ -265,6 +271,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ScopeDto> sse_decode_list_scope_dto(SseDeserializer deserializer);
 
   @protected
+  List<ShortcutActionDto> sse_decode_list_shortcut_action_dto(
+      SseDeserializer deserializer);
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
@@ -290,6 +300,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ScopeDto sse_decode_scope_dto(SseDeserializer deserializer);
+
+  @protected
+  ShortcutActionDto sse_decode_shortcut_action_dto(
+      SseDeserializer deserializer);
 
   @protected
   SnapshotWaitDto sse_decode_snapshot_wait_dto(SseDeserializer deserializer);
@@ -425,6 +439,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_scope_dto(List<ScopeDto> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_shortcut_action_dto(
+      List<ShortcutActionDto> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
@@ -452,6 +470,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_scope_dto(ScopeDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_shortcut_action_dto(
+      ShortcutActionDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_snapshot_wait_dto(

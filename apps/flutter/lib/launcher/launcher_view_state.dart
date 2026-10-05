@@ -37,6 +37,7 @@ class LauncherViewState {
     this.resultSource,
     this.resultStatus,
     this.universalShortcut = '⌘⌥⇧Space',
+    this.bindingChoices,
   });
   final LauncherPhase phase;
   final int generation;
@@ -49,6 +50,7 @@ class LauncherViewState {
   final String? selectedId, message, output, resultSource;
   final ActionStatusDto? resultStatus;
   final String universalShortcut;
+  final List<CandidateDto>? bindingChoices;
   bool get visible =>
       phase == LauncherPhase.ready ||
       phase == LauncherPhase.settings ||
@@ -94,7 +96,8 @@ class LauncherViewState {
                   candidate.groupId == scopeId))
             candidate,
       ];
-  bool get canBrowseMenus => scopeId != null && menuActions.isNotEmpty;
+  bool get canBrowseMenus =>
+      bindingChoices == null && scopeId != null && menuActions.isNotEmpty;
   List<CandidateDto> get scopedCandidates => [
         for (final candidate in snapshot?.candidates ?? const <CandidateDto>[])
           if (candidate.availability != AvailabilityDto.hidden &&
@@ -142,6 +145,12 @@ class LauncherViewState {
       List.generate(prefix.length, (i) => path[i] == prefix[i])
           .every((same) => same);
   List<LauncherEntry> get visibleEntries {
+    if (bindingChoices != null) {
+      return [
+        for (final candidate in bindingChoices!)
+          LauncherEntry.candidate(candidate)
+      ];
+    }
     // A query temporarily flattens the whole scope, retaining the browsing path.
     if (input.trim().isNotEmpty) {
       return [

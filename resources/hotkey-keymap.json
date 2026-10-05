@@ -172,5 +172,16 @@
       "mask": 256,
       "label": "⌘"
     }
+  ],
+  "reservedActionKeyCodes": [
+    0,
+    8,
+    9,
+    7,
+    6,
+    12,
+    13,
+    46,
+    40
   ]
 }

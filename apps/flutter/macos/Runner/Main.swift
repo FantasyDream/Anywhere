@@ -154,7 +154,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 guard let args = call.arguments as? [String: Any] else { reply(nil); return }
                 let previous = self.stored
                 var next = previous
-                next.apply(args)
+                if let error = next.apply(args) {
+                    reply(FlutterError(code: "settings", message: error, details: nil))
+                    return
+                }
                 var errors: [String] = []
                 let update = self.hotKeys.update(next, previous: previous)
                 next = update.settings
