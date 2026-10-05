@@ -17,11 +17,15 @@ use std::collections::BTreeMap;
 
 pub struct DeveloperActions;
 impl crate::core::action::bundle::ContextActionFactory for DeveloperActions {
+    fn id(&self) -> &'static str {
+        "developer.actions"
+    }
     fn actions(
         &self,
         contexts: &[ResolvedContext],
-    ) -> Vec<crate::core::action::descriptor::ActionDefinition> {
+    ) -> crate::core::action::bundle::ActionExpansion {
         let mut definitions = BTreeMap::new();
+        let mut diagnostics = Vec::new();
         for context in contexts {
             let crate::core::context::ContextValue::Project {
                 directory,
@@ -32,18 +36,20 @@ impl crate::core::action::bundle::ContextActionFactory for DeveloperActions {
                 continue;
             };
             if context.type_id == anywhere_protocol::PROJECT_NODE {
-                let Some(manager) = properties
-                    .get("node.manager")
-                    .filter(|manager| matches!(manager.as_str(), "npm" | "pnpm" | "yarn"))
-                else {
-                    continue;
+                let metadata = match super::metadata::NodeMetadata::read(properties) {
+                    Ok(metadata) => metadata,
+                    Err(error) => {
+                        diagnostics.push(format!(
+                            "{} / {}: {error}",
+                            context.provider_id, context.type_id
+                        ));
+                        continue;
+                    }
                 };
-                let scripts: Vec<String> = properties
-                    .get("node.scripts")
-                    .and_then(|s| serde_json::from_str(s).ok())
-                    .unwrap_or_default();
+                let manager = metadata.manager.as_str().to_owned();
+                let scripts = metadata.scripts;
                 for script in scripts {
-                    let id = super::node::action_id(manager, &script);
+                    let id = super::node::action_id(&manager, &script);
                     let title = match script.as_str() {
                         "build" => format!("{manager} Build"),
                         "test" => format!("{manager} Test"),
@@ -62,7 +68,7 @@ impl crate::core::action::bundle::ContextActionFactory for DeveloperActions {
                             (id, title),
                             anywhere_protocol::PROJECT_NODE,
                             groups::NODE,
-                            super::node::capability(manager, &script),
+                            super::node::capability(&manager, &script),
                             handler,
                             vec![script.clone(), manager.clone(), "run".into()],
                             script == "build",
@@ -70,22 +76,30 @@ impl crate::core::action::bundle::ContextActionFactory for DeveloperActions {
                     });
                 }
             } else if context.type_id == anywhere_protocol::PROJECT_RUST {
-                for (property, value) in properties
-                    .iter()
-                    .filter(|(key, _)| key.starts_with("rust.run.") && key.ends_with(".target"))
-                {
-                    let Ok([package, binary, manifest]) =
-                        serde_json::from_str::<[String; 3]>(value)
-                    else {
+                let metadata = match super::metadata::CargoMetadata::read(properties) {
+                    Ok(metadata) => metadata,
+                    Err(error) => {
+                        diagnostics.push(format!(
+                            "{} / {}: {error}",
+                            context.provider_id, context.type_id
+                        ));
                         continue;
-                    };
-                    let target = super::rust::RunTarget {
-                        package,
-                        binary,
-                        manifest: directory.join(manifest),
-                    };
-                    let key = property.trim_end_matches(".target").to_owned();
+                    }
+                };
+                if metadata.discovery_failed {
+                    diagnostics.push(format!(
+                        "{} / {}: Cargo targets could not be read; Check/Test remain available",
+                        context.provider_id, context.type_id
+                    ));
+                }
+                for entry in metadata.targets {
+                    let key = entry.key();
                     let id = key.replacen("rust.run.", "developer.cargo.run.", 1);
+                    let target = super::rust::RunTarget {
+                        package: entry.package,
+                        binary: entry.binary,
+                        manifest: directory.join(entry.manifest),
+                    };
                     let title = format!("Cargo Run · {} / {}", target.package, target.binary);
                     let aliases = vec![
                         target.package.clone(),
@@ -110,7 +124,10 @@ impl crate::core::action::bundle::ContextActionFactory for DeveloperActions {
                 }
             }
         }
-        definitions.into_values().collect()
+        crate::core::action::bundle::ActionExpansion {
+            actions: definitions.into_values().collect(),
+            diagnostics,
+        }
     }
 }
 
@@ -221,5 +238,105 @@ impl ActionHandler for CargoRun {
             directory,
             environment: BTreeMap::from([("NO_COLOR".into(), "1".into())]),
         }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::metadata::{CargoMetadata, NodeMetadata, CARGO_METADATA, NODE_METADATA};
+    use super::*;
+    use crate::core::action::bundle::ContextActionFactory;
+    use crate::core::context::{ContextSource, ContextValue};
+    use std::sync::Arc;
+
+    fn context(kind: &str, properties: BTreeMap<String, String>) -> ResolvedContext {
+        ResolvedContext::new(
+            kind,
+            ContextValue::Project {
+                directory: "/project".into(),
+                label: "Test".into(),
+                properties: Arc::new(properties),
+            },
+            ContextSource::UserInput,
+            "test.provider",
+        )
+    }
+    #[test]
+    fn malformed_node_metadata_is_diagnosed_instead_of_becoming_an_empty_project() {
+        let mut valid = BTreeMap::new();
+        NodeMetadata::new("npm", vec!["build".into()])
+            .unwrap()
+            .write(&mut valid)
+            .unwrap();
+        let good = valid[NODE_METADATA].clone();
+        for bad in [
+            "{private-secret".to_owned(),
+            "{}".into(),
+            good.replace("npm", "bun"),
+            good.replace("\"version\":1", "\"version\":2"),
+        ] {
+            let mut properties = valid.clone();
+            properties.insert(NODE_METADATA.into(), bad);
+            let expanded =
+                DeveloperActions.actions(&[context(anywhere_protocol::PROJECT_NODE, properties)]);
+            assert!(expanded.actions.is_empty());
+            assert_eq!(expanded.diagnostics.len(), 1);
+            assert!(expanded.diagnostics[0].contains("test.provider"));
+            assert!(!expanded.diagnostics[0].contains("private-secret"));
+        }
+        valid.remove(NODE_METADATA);
+        assert_eq!(
+            DeveloperActions
+                .actions(&[context(anywhere_protocol::PROJECT_NODE, valid)])
+                .diagnostics
+                .len(),
+            1
+        );
+    }
+    #[test]
+    fn empty_capabilities_are_valid_and_target_read_failure_is_explicit() {
+        let mut properties = BTreeMap::new();
+        NodeMetadata::new("npm", vec![])
+            .unwrap()
+            .write(&mut properties)
+            .unwrap();
+        let empty =
+            DeveloperActions.actions(&[context(anywhere_protocol::PROJECT_NODE, properties)]);
+        assert!(empty.actions.is_empty() && empty.diagnostics.is_empty());
+        for failed in [false, true] {
+            let mut properties = BTreeMap::new();
+            CargoMetadata::new(vec![], failed)
+                .write(&mut properties)
+                .unwrap();
+            let empty =
+                DeveloperActions.actions(&[context(anywhere_protocol::PROJECT_RUST, properties)]);
+            assert!(empty.actions.is_empty());
+            assert_eq!(empty.diagnostics.len(), usize::from(failed));
+        }
+    }
+    #[test]
+    fn invalid_cargo_metadata_and_missing_capabilities_are_diagnosed() {
+        for raw in [
+            "bad",
+            "{}",
+            r#"{"version":2,"targets":[],"discovery_failed":false}"#,
+            r#"{"version":1,"targets":[{"package":"x","binary":"x","manifest":"../Cargo.toml"}],"discovery_failed":false}"#,
+        ] {
+            let properties = BTreeMap::from([(CARGO_METADATA.into(), raw.into())]);
+            let expanded =
+                DeveloperActions.actions(&[context(anywhere_protocol::PROJECT_RUST, properties)]);
+            assert!(expanded.actions.is_empty());
+            assert_eq!(expanded.diagnostics.len(), 1);
+        }
+        let mut properties = BTreeMap::new();
+        NodeMetadata::new("npm", vec!["build".into()])
+            .unwrap()
+            .write(&mut properties)
+            .unwrap();
+        properties.remove(&super::super::node::capability("npm", "build"));
+        let expanded =
+            DeveloperActions.actions(&[context(anywhere_protocol::PROJECT_NODE, properties)]);
+        assert!(expanded.actions.is_empty());
+        assert_eq!(expanded.diagnostics.len(), 1);
     }
 }

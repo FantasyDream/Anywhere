@@ -193,6 +193,21 @@ mod tests {
         }
     }
     #[test]
+    fn menu_identity_is_not_eligible_for_a_persistent_binding() {
+        let registry = registry(
+            &ActionRegistry::default(),
+            &app(),
+            vec![item(&["File", "Save"], Some("save"), true)],
+        )
+        .unwrap();
+        let id = registry.commands().next().unwrap().id.clone();
+        assert!(registry
+            .persistent_binding(&id)
+            .unwrap_err()
+            .to_string()
+            .contains("not verified"));
+    }
+    #[test]
     fn unavailable_actions_are_registered_as_hidden_not_dropped() {
         let registry = registry(
             &ActionRegistry::default(),

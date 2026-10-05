@@ -23,6 +23,7 @@ pub struct PreparedSnapshot {
 }
 
 pub struct SnapshotInput<'a> {
+    pub action_catalog_version: u64,
     pub input: &'a str,
     pub selected_scope: Option<&'a str>,
     pub facts: &'a SessionFacts,
@@ -39,6 +40,7 @@ pub struct SnapshotInput<'a> {
 
 pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
     let SnapshotInput {
+        action_catalog_version,
         input,
         selected_scope,
         facts,
@@ -86,14 +88,18 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
     );
     let mut set = search.search_scoped(&Query::parse(input), contexts, &extra, selected_scope);
     let mut diagnostics = prior_diagnostics.to_vec();
-    diagnostics.extend(action_diagnostics);
+    for diagnostic in action_diagnostics {
+        if !diagnostics.contains(&diagnostic) {
+            diagnostics.push(diagnostic);
+        }
+    }
     for diagnostic in incoming_diagnostics {
         if !diagnostics.contains(diagnostic) {
             diagnostics.push(diagnostic.clone());
         }
     }
     // Menu browsing and scope generation retain full offers even with a query.
-    let context_candidates = if input.trim().is_empty() && selected_scope.is_none() {
+    let mut context_candidates = if input.trim().is_empty() && selected_scope.is_none() {
         set.candidates
             .iter()
             .filter(|candidate| candidate.context().is_some())
@@ -105,6 +111,19 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
         set.ranking_us += offers.ranking_us;
         offers.candidates
     };
+    // A definition reload must not silently substitute a same-ID implementation for
+    // a request selected from an older visible snapshot. Query re-ranking does not
+    // advance this version; persistent bindings use ActionId instead of this row ID.
+    if action_catalog_version > 1 {
+        for candidate in set.candidates.iter_mut().chain(&mut context_candidates) {
+            if candidate.context().is_some() {
+                candidate
+                    .presentation
+                    .id
+                    .push_str(&format!(":catalog:{action_catalog_version}"));
+            }
+        }
+    }
     let scopes = crate::core::search::scope::build(
         &context_candidates,
         actions,

@@ -4,6 +4,7 @@ cd "$(dirname "$0")/.."
 ROOT="$PWD"
 source scripts/env.sh
 python3 scripts/check-flutter.py
+python3 scripts/generate-keymap.py --check
 if [[ "$(uname -s)" != Darwin ]]; then
   echo 'This MVP builds on macOS only.' >&2
   exit 1
@@ -58,7 +59,7 @@ xcrun swiftc -O -target "$ARCH-apple-macos12.0" \
   -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
   -Xlinker -export_dynamic \
   -Xlinker -ld_classic \
-  apps/flutter/macos/Runner/Main.swift "$ROOT/build/macos_menu.o" -o "$APP/Contents/MacOS/Anywhere"
+  apps/flutter/macos/Runner/*.swift "$ROOT/build/macos_menu.o" -o "$APP/Contents/MacOS/Anywhere"
 for framework in FlutterMacOS App; do
   codesign --force --sign "$SIGN_IDENTITY" "$APP/Contents/Frameworks/$framework.framework"
 done

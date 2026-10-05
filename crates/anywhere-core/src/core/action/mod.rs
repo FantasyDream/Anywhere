@@ -14,4 +14,5 @@ pub mod descriptor;
 pub mod execute;
 pub mod group;
 pub mod handler;
+pub mod identity;
 pub mod matcher;

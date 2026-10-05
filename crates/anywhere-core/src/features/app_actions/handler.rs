@@ -38,6 +38,11 @@ impl std::fmt::Display for MenuExecutionFailure {
 impl std::error::Error for MenuExecutionFailure {}
 
 impl ActionHandler for MenuAction {
+    fn binding_policy(&self) -> crate::core::action::identity::BindingPolicy {
+        crate::core::action::identity::BindingPolicy::Unavailable {
+            reason: "Menu identity is not verified for persistent shortcuts",
+        }
+    }
     fn records_usage(&self) -> bool {
         // AXIdentifier and semantic paths can be reused by a different command.
         // Retain existing rows, but quarantine them until a durable identity exists.

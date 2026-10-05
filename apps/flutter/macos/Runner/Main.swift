@@ -16,44 +16,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var glass: NSVisualEffectView!
     var channel: FlutterMethodChannel!
     var statusItem: NSStatusItem!
-    var currentAppHotKey: EventHotKeyRef?
-    var universalHotKey: EventHotKeyRef?
-    var eventHandler: EventHandlerRef?
+    lazy var hotKeys = HotKeyService(onActivate: { [weak self] mode in self?.activate(mode: mode) },
+        onRegistered: { [weak self] settings in self?.updateMenuTitles(settings) },
+        log: { [weak self] value in self?.log(value) })
     var activationStart: TimeInterval = 0
-    var hotKeyError: String?
+    var hotKeyError: String? {
+        get { hotKeys.lastError }
+        set { hotKeys.lastError = newValue }
+    }
     var loginError: String?
     var currentAppItem: NSMenuItem?
     var universalItem: NSMenuItem?
     var presentedGeneration: Int?
     var latestGeneration = 0
-    var settingsOpen = false
-    var settingsWindow: NSWindow?
+    lazy var launcherWindows = LauncherWindowCoordinator(window: window, controller: controller,
+        glass: glass, mask: launcherGlassMask, delegate: self,
+        tasksVisible: { [weak self] in self?.tasksWindow?.isVisible == true })
+    var settingsOpen: Bool {
+        get { launcherWindows.settingsOpen }
+        set { launcherWindows.settingsOpen = newValue }
+    }
+    var settingsWindow: NSWindow? { launcherWindows.settingsWindow }
     var launcherGlassMask: NSImage?
-    var tasksWindow: NSWindow?
-    var tasksController: FlutterViewController?
-    var tasksChannel: FlutterMethodChannel?
-    var tasksReady = false
+    lazy var taskWindows = TasksWindowController(onLauncher: { [weak self] in self?.activate(mode: "universal") })
+    var tasksWindow: NSWindow? { taskWindows.tasksWindow }
+    var tasksChannel: FlutterMethodChannel? { taskWindows.tasksChannel }
+    var tasksReady: Bool { taskWindows.tasksReady }
     var taskStopKeyMonitor: Any?
-    var pendingTaskId: String?
     var terminationPending = false
-    var stored = StoredSettings.load()
+    let settingsStore = SettingsStore()
+    var stored: StoredSettings {
+        get { settingsStore.current }
+        set { settingsStore.current = newValue }
+    }
 
     /// Application support directory for this app.
     ///
     /// On first launch under the new name the previous directory is adopted, so the
     /// usage history and plugins a user already has are kept.
-    static func supportDirectory() -> URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-        let current = base.appendingPathComponent("Anywhere", isDirectory: true)
-        if !FileManager.default.fileExists(atPath: current.path) {
-            let previous = base.appendingPathComponent("ContextLauncher", isDirectory: true)
-            if FileManager.default.fileExists(atPath: previous.path) {
-                try? FileManager.default.moveItem(at: previous, to: current)
-            }
-        }
-        try? FileManager.default.createDirectory(at: current, withIntermediateDirectories: true)
-        return current
-    }
+    static func supportDirectory() -> URL { SettingsStore.supportDirectory() }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let logs = Self.supportDirectory()
@@ -155,24 +156,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 var next = previous
                 next.apply(args)
                 var errors: [String] = []
-                if !next.sameHotKeys(as: previous) {
-                    if next.hotKeysConflict() {
-                        errors.append("Current App and Universal Search use the same shortcut.")
-                        next.restoreHotKeys(from: previous)
-                    } else if let error = self.applyHotKeys(next) {
-                        errors.append(error)
-                        if let restoreError = self.applyHotKeys(previous) {
-                            let restoreMessage = "Previous shortcuts could not be restored: \(restoreError)"
-                            self.hotKeyError = restoreMessage
-                            errors.append(restoreMessage)
-                        } else {
-                            self.hotKeyError = nil
-                        }
-                        next.restoreHotKeys(from: previous)
-                    } else {
-                        self.hotKeyError = nil
-                    }
-                }
+                let update = self.hotKeys.update(next, previous: previous)
+                next = update.settings
+                if let error = update.error { errors.append(error) }
                 self.stored = next
                 if next.launchAtLogin != previous.launchAtLogin {
                     let error = self.applyLoginItem()
@@ -183,7 +169,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                     }
                 }
                 self.stored = next
-                if let error = self.stored.save() {
+                if let error = self.settingsStore.save() {
                     errors.append(error)
                 }
                 if errors.isEmpty {
@@ -269,86 +255,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
     }
 
-    func positionWindow() {
-        let pointer = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { NSMouseInRect(pointer, $0.frame, false) } ?? NSScreen.main!
-        let frame = screen.visibleFrame
-        window.setFrameOrigin(NSPoint(x: frame.midX - window.frame.width / 2,
-                                      y: max(frame.minY, frame.maxY - frame.height * 0.20 - window.frame.height)))
-    }
-
-    // Settings and Launcher share one engine, but have distinct native window lifecycles.
-    // Moving the view avoids keeping an extra Impeller engine just for preferences.
-    func showSettingsWindow(height: Double) {
-        window.orderOut(nil)
-        if settingsWindow == nil {
-            let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 648, height: 508),
-                                 styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
-                                 backing: .buffered, defer: false)
-            panel.title = "Anywhere · Settings"
-            panel.titleVisibility = .hidden
-            panel.titlebarAppearsTransparent = true
-            panel.appearance = NSAppearance(named: .darkAqua)
-            panel.backgroundColor = .clear
-            panel.isOpaque = false
-            panel.isReleasedWhenClosed = false
-            panel.delegate = self
-            panel.standardWindowButton(.zoomButton)?.isEnabled = false
-            panel.center()
-            settingsWindow = panel
-        }
-        if settingsWindow?.contentViewController !== controller {
-            window.contentViewController = nil
-            settingsWindow?.contentViewController = controller
-            glass.maskImage = nil
-            controller.view.layer?.cornerRadius = 0
-            controller.view.layer?.masksToBounds = false
-        }
-        resizeWindow(height)
-        if settingsWindow?.isMiniaturized == true { settingsWindow?.deminiaturize(nil) }
-        settingsWindow?.makeKeyAndOrderFront(nil)
-        settingsWindow?.makeFirstResponder(controller.view)
-    }
-
-    func restoreLauncherView() {
-        guard settingsWindow?.contentViewController === controller else { return }
-        settingsWindow?.orderOut(nil)
-        settingsWindow?.contentViewController = nil
-        let frame = window.frame
-        window.contentViewController = controller
-        window.setFrame(frame, display: false)
-        glass.maskImage = launcherGlassMask
-        controller.view.layer?.cornerRadius = 18
-        controller.view.layer?.masksToBounds = true
-    }
-
-    func resizeWindow(_ requestedHeight: Double) {
-        guard requestedHeight.isFinite else { return }
-        if settingsOpen, let panel = settingsWindow {
-            let screen = panel.screen ?? NSScreen.main!
-            let height = min(max(requestedHeight, 300), screen.visibleFrame.height)
-            panel.setContentSize(NSSize(width: 648, height: height))
-            return
-        }
-        let screen = window.screen ?? NSScreen.main!
-        let height = min(max(requestedHeight, 64), min(520, screen.visibleFrame.height))
-        guard window.frame.size != NSSize(width: 648, height: height) else { return }
-        var frame = window.frame
-        frame.origin.y = max(screen.visibleFrame.minY, frame.maxY - height)
-        frame.size = NSSize(width: 648, height: height)
-        window.setFrame(frame, display: window.isVisible)
-        window.invalidateShadow()
-    }
-
-    func hideLauncherWindow() {
-        restoreLauncherView()
-        window.orderOut(nil)
-        glass.isHidden = true
-        // The hidden window need not retain backing surfaces for seven result rows.
-        // `show` restores the requested height before ordering it front again.
-        resizeWindow(64)
-        if NSApp.isActive && tasksWindow?.isVisible != true { NSApp.hide(nil) }
-    }
+    func positionWindow() { launcherWindows.positionWindow() }
+    func showSettingsWindow(height: Double) { launcherWindows.showSettingsWindow(height: height) }
+    func restoreLauncherView() { launcherWindows.restoreLauncherView() }
+    func resizeWindow(_ height: Double) { launcherWindows.resizeWindow(height) }
+    func hideLauncherWindow() { launcherWindows.hideLauncherWindow() }
 
     func dismissForFocusLoss() {
         if settingsOpen || terminationPending { return }
@@ -410,103 +321,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     /// Lazy second Flutter engine: releasing its window never destroys Rust process sessions.
-    func showTasks(id: String?) -> Bool {
-        pendingTaskId = id
-        let created = tasksWindow == nil
-        if created {
-            let view = FlutterViewController(project: FlutterDartProject())
-            let channel = FlutterMethodChannel(name: "anywhere/executions", binaryMessenger: view.engine.binaryMessenger)
-            channel.setMethodCallHandler { [weak self] call, reply in
-                guard let self else { reply(nil); return }
-                if call.method == "ready" {
-                    self.tasksReady = true
-                    reply(self.pendingTaskId)
-                } else if call.method == "showLauncher" {
-                    reply(nil)
-                    self.activate(mode: "universal")
-                } else if call.method == "hide" {
-                    reply(nil)
-                    DispatchQueue.main.async { [weak self] in self?.tasksWindow?.performClose(nil) }
-                } else {
-                    reply(FlutterMethodNotImplemented)
-                }
-            }
-            guard view.engine.run(withEntrypoint: "executionSessionsMain") else {
-                channel.setMethodCallHandler(nil)
-                return false
-            }
-            let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 600),
-                                 styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
-            panel.title = "Anywhere · Running Tasks"
-            panel.titleVisibility = .hidden
-            panel.titlebarAppearsTransparent = true
-            panel.appearance = NSAppearance(named: .darkAqua)
-            panel.backgroundColor = .clear
-            panel.isOpaque = false
-            panel.minSize = NSSize(width: 760, height: 420)
-            panel.isReleasedWhenClosed = false
-            panel.delegate = self
-            panel.contentViewController = view
-            view.backgroundColor = .clear
-            let material = NSVisualEffectView(frame: view.view.bounds)
-            material.autoresizingMask = [.width, .height]
-            material.material = .hudWindow
-            material.blendingMode = .behindWindow
-            material.state = .active
-            view.view.addSubview(material, positioned: .below, relativeTo: nil)
-            panel.setContentSize(NSSize(width: 920, height: 600))
-            panel.center()
-            tasksWindow = panel
-            tasksController = view
-            tasksChannel = channel
-        }
-        NSApp.unhide(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        if tasksWindow?.isMiniaturized == true { tasksWindow?.deminiaturize(nil) }
-        tasksWindow?.makeKeyAndOrderFront(nil)
-        if created, let view = tasksController?.view {
-            tasksWindow?.makeFirstResponder(view)
-        }
-        if tasksReady {
-            tasksChannel?.invokeMethod("visibility", arguments: true)
-            if let id { tasksChannel?.invokeMethod("select", arguments: id) }
-        }
-        return true
-    }
-
-    func windowWillClose(_ notification: Notification) {
-        guard notification.object as? NSWindow === tasksWindow else { return }
-        tasksChannel?.invokeMethod("visibility", arguments: false)
-        tasksChannel?.setMethodCallHandler(nil)
-        tasksWindow?.contentViewController = nil
-        tasksWindow = nil
-        tasksController = nil
-        tasksChannel = nil
-        tasksReady = false
-        pendingTaskId = nil
-    }
-
-    func windowDidMiniaturize(_ notification: Notification) {
-        if notification.object as? NSWindow === tasksWindow {
-            tasksChannel?.invokeMethod("visibility", arguments: false)
-        }
-    }
-
-    func windowDidDeminiaturize(_ notification: Notification) {
-        if notification.object as? NSWindow === tasksWindow {
-            tasksChannel?.invokeMethod("visibility", arguments: true)
-        }
-    }
-
-    func applicationDidHide(_ notification: Notification) {
-        tasksChannel?.invokeMethod("visibility", arguments: false)
-    }
-
-    func applicationDidUnhide(_ notification: Notification) {
-        if tasksWindow?.isVisible == true && tasksWindow?.isMiniaturized == false {
-            tasksChannel?.invokeMethod("visibility", arguments: true)
-        }
-    }
+    func showTasks(id: String?) -> Bool { taskWindows.showTasks(id: id) }
+    func applicationDidHide(_ notification: Notification) { taskWindows.applicationDidHide(notification) }
+    func applicationDidUnhide(_ notification: Notification) { taskWindows.applicationDidUnhide(notification) }
 
     func activate(mode: String) {
         activationStart = ProcessInfo.processInfo.systemUptime
@@ -514,65 +331,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         channel.invokeMethod("toggle", arguments: ["mode": mode])
     }
 
-    func applyHotKeys(_ settings: StoredSettings) -> String? {
-        if eventHandler == nil {
-            var event = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
-            let pointer = Unmanaged.passUnretained(self).toOpaque()
-            let handlerStatus = InstallEventHandler(GetApplicationEventTarget(), { _, event, userData in
-                guard let userData, let event else { return OSStatus(eventNotHandledErr) }
-                var hotKeyID = EventHotKeyID()
-                let status = GetEventParameter(
-                    event,
-                    EventParamName(kEventParamDirectObject),
-                    EventParamType(typeEventHotKeyID),
-                    nil,
-                    MemoryLayout<EventHotKeyID>.size,
-                    nil,
-                    &hotKeyID
-                )
-                guard status == noErr else { return OSStatus(eventNotHandledErr) }
-                let delegate = Unmanaged<AppDelegate>.fromOpaque(userData).takeUnretainedValue()
-                switch hotKeyID.id {
-                case 1: delegate.activate(mode: "currentApp")
-                case 2: delegate.activate(mode: "universal")
-                default: break
-                }
-                return noErr
-            }, 1, &event, pointer, &eventHandler)
-            guard handlerStatus == noErr else {
-                return "Global shortcut handler failed (\(handlerStatus))"
-            }
-        }
-        if settings.hotKeysConflict() {
-            return "Current App and Universal Search use the same shortcut."
-        }
-        return registerHotKeys(settings)
-    }
-
-    func registerHotKeys(_ settings: StoredSettings) -> String? {
-        if let hotKey = currentAppHotKey { UnregisterEventHotKey(hotKey); currentAppHotKey = nil }
-        if let hotKey = universalHotKey { UnregisterEventHotKey(hotKey); universalHotKey = nil }
-        let currentId = EventHotKeyID(signature: 0x4354584C, id: 1)
-        let currentStatus = RegisterEventHotKey(settings.currentAppKeyCode, settings.currentAppModifiers, currentId,
-                                        GetApplicationEventTarget(), 0, &currentAppHotKey)
-        let universalId = EventHotKeyID(signature: 0x4354584C, id: 2)
-        let universalStatus = RegisterEventHotKey(settings.universalKeyCode, settings.universalModifiers,
-                                        universalId, GetApplicationEventTarget(), 0, &universalHotKey)
-        var errors: [String] = []
-        if currentStatus != noErr {
-            errors.append("Current App shortcut is unavailable (\(currentStatus))")
-            log(["event": "hotkey_registration_failed", "status": currentStatus, "mode": "currentApp"])
-        }
-        if universalStatus != noErr {
-            errors.append("Universal shortcut is unavailable (\(universalStatus))")
-            log(["event": "hotkey_registration_failed", "status": universalStatus, "mode": "universal"])
-        }
-        if !errors.isEmpty {
-            return errors.joined(separator: "; ")
-        }
-        updateMenuTitles(settings)
-        return nil
-    }
+    func applyHotKeys(_ settings: StoredSettings) -> String? { hotKeys.apply(settings) }
 
     func updateMenuTitles(_ settings: StoredSettings) {
         currentAppItem?.title = "Current App  \(settings.shortcutLabel(code: settings.currentAppKeyCode, modifiers: settings.currentAppModifiers))"
@@ -774,163 +533,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func applicationWillTerminate(_ notification: Notification) {
         if let taskStopKeyMonitor { NSEvent.removeMonitor(taskStopKeyMonitor) }
-        if let currentAppHotKey { UnregisterEventHotKey(currentAppHotKey) }
-        if let universalHotKey { UnregisterEventHotKey(universalHotKey) }
-        if let eventHandler { RemoveEventHandler(eventHandler) }
+        hotKeys.shutdown()
     }
 }
 
-struct StoredSettings: Codable {
-    var currentAppKeyCode: UInt32
-    var currentAppModifiers: UInt32
-    var universalKeyCode: UInt32
-    var universalModifiers: UInt32
-    var launchAtLogin: Bool
-    var excludedApps: [String]
-    // Optional for compatibility with settings.json written before V0.4.
-    var captureFinderSelection: Bool?
-    var captureSelectedText: Bool?
-    var captureBrowserCurrentPage: Bool?
-    var captureClipboard: Bool?
 
-    static var fileURL: URL {
-        AppDelegate.supportDirectory().appendingPathComponent("settings.json")
-    }
-
-    static func load() -> StoredSettings {
-        let defaults = StoredSettings(
-            currentAppKeyCode: UInt32(kVK_Space),
-            currentAppModifiers: UInt32(cmdKey | optionKey),
-            universalKeyCode: UInt32(kVK_Space),
-            universalModifiers: UInt32(cmdKey | optionKey | shiftKey),
-            launchAtLogin: false,
-            excludedApps: [],
-            captureFinderSelection: nil,
-            captureSelectedText: nil,
-            captureBrowserCurrentPage: nil,
-            captureClipboard: nil
-        )
-        guard let data = try? Data(contentsOf: fileURL),
-              let stored = try? JSONDecoder().decode(StoredSettings.self, from: data) else {
-            return defaults
-        }
-        return stored
-    }
-
-    func save() -> String? {
-        do {
-            let data = try JSONEncoder().encode(self)
-            try data.write(to: Self.fileURL, options: .atomic)
-            return nil
-        } catch {
-            return "Settings could not be saved: \(error.localizedDescription)"
-        }
-    }
-
-    func asMap() -> [String: Any] {
-        [
-            "currentAppKeyCode": Int(currentAppKeyCode),
-            "currentAppModifiers": Int(currentAppModifiers),
-            "universalKeyCode": Int(universalKeyCode),
-            "universalModifiers": Int(universalModifiers),
-            "launchAtLogin": launchAtLogin,
-            "excludedApps": excludedApps,
-            "captureFinderSelection": captureFinderSelection ?? true,
-            "captureSelectedText": captureSelectedText ?? true,
-            "captureBrowserCurrentPage": captureBrowserCurrentPage ?? true,
-            "captureClipboard": captureClipboard ?? true
-        ]
-    }
-
-    func sameHotKeys(as other: StoredSettings) -> Bool {
-        currentAppKeyCode == other.currentAppKeyCode &&
-            currentAppModifiers == other.currentAppModifiers &&
-            universalKeyCode == other.universalKeyCode &&
-            universalModifiers == other.universalModifiers
-    }
-
-    mutating func restoreHotKeys(from other: StoredSettings) {
-        currentAppKeyCode = other.currentAppKeyCode
-        currentAppModifiers = other.currentAppModifiers
-        universalKeyCode = other.universalKeyCode
-        universalModifiers = other.universalModifiers
-    }
-
-    func hotKeysConflict() -> Bool {
-        currentAppKeyCode == universalKeyCode && currentAppModifiers == universalModifiers
-    }
-
-    func shortcutLabel(code: UInt32, modifiers: UInt32) -> String {
-        var label = ""
-        if modifiers & UInt32(controlKey) != 0 { label += "⌃" }
-        if modifiers & UInt32(optionKey) != 0 { label += "⌥" }
-        if modifiers & UInt32(shiftKey) != 0 { label += "⇧" }
-        if modifiers & UInt32(cmdKey) != 0 { label += "⌘" }
-        label += Self.keyName(code)
-        return label
-    }
-
-    static func keyName(_ code: UInt32) -> String {
-        switch Int(code) {
-        case kVK_Space: return "Space"
-        case kVK_Return: return "Return"
-        case kVK_Tab: return "Tab"
-        case kVK_Escape: return "Esc"
-        case kVK_ANSI_A: return "A"
-        case kVK_ANSI_B: return "B"
-        case kVK_ANSI_C: return "C"
-        case kVK_ANSI_D: return "D"
-        case kVK_ANSI_E: return "E"
-        case kVK_ANSI_F: return "F"
-        case kVK_ANSI_G: return "G"
-        case kVK_ANSI_H: return "H"
-        case kVK_ANSI_I: return "I"
-        case kVK_ANSI_J: return "J"
-        case kVK_ANSI_K: return "K"
-        case kVK_ANSI_L: return "L"
-        case kVK_ANSI_M: return "M"
-        case kVK_ANSI_N: return "N"
-        case kVK_ANSI_O: return "O"
-        case kVK_ANSI_P: return "P"
-        case kVK_ANSI_Q: return "Q"
-        case kVK_ANSI_R: return "R"
-        case kVK_ANSI_S: return "S"
-        case kVK_ANSI_T: return "T"
-        case kVK_ANSI_U: return "U"
-        case kVK_ANSI_V: return "V"
-        case kVK_ANSI_W: return "W"
-        case kVK_ANSI_X: return "X"
-        case kVK_ANSI_Y: return "Y"
-        case kVK_ANSI_Z: return "Z"
-        default: return "Key"
-        }
-    }
-
-    mutating func apply(_ args: [String: Any]) {
-        if let value = Self.uint32(args["currentAppKeyCode"]) { currentAppKeyCode = value }
-        if let value = Self.uint32(args["currentAppModifiers"]) { currentAppModifiers = value }
-        if let value = Self.uint32(args["universalKeyCode"]) { universalKeyCode = value }
-        if let value = Self.uint32(args["universalModifiers"]) { universalModifiers = value }
-        if let value = args["launchAtLogin"] as? Bool { launchAtLogin = value }
-        if let value = args["excludedApps"] as? [String] {
-            excludedApps = value
-        }
-        if let value = args["captureFinderSelection"] as? Bool { captureFinderSelection = value }
-        if let value = args["captureSelectedText"] as? Bool { captureSelectedText = value }
-        if let value = args["captureBrowserCurrentPage"] as? Bool { captureBrowserCurrentPage = value }
-        if let value = args["captureClipboard"] as? Bool { captureClipboard = value }
-    }
-
-    static func uint32(_ value: Any?) -> UInt32? {
-        if let value = value as? UInt32 { return value }
-        if let value = value as? Int { return UInt32(value) }
-        if let value = value as? Int64 { return UInt32(value) }
-        if let value = value as? NSNumber { return value.uint32Value }
-        return nil
+@main
+struct AnywhereHost {
+    static func main() {
+        let application = NSApplication.shared
+        let delegate = AppDelegate()
+        application.delegate = delegate
+        withExtendedLifetime(delegate) { application.run() }
     }
 }
-
-let application = NSApplication.shared
-let delegate = AppDelegate()
-application.delegate = delegate
-application.run()

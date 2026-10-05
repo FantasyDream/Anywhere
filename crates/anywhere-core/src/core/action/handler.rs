@@ -40,6 +40,9 @@ impl ExecutionOutput {
 }
 
 pub trait ActionHandler: Send + Sync {
+    fn binding_policy(&self) -> super::identity::BindingPolicy {
+        super::identity::BindingPolicy::Persistent
+    }
     /// Unverified dynamic identities must neither consume nor produce persistent usage.
     fn records_usage(&self) -> bool {
         true
@@ -64,6 +67,9 @@ pub enum ActionHandlerRef {
 }
 
 impl ActionHandlerRef {
+    pub fn binding_policy(&self) -> super::identity::BindingPolicy {
+        self.handler().binding_policy()
+    }
     fn handler(&self) -> &dyn ActionHandler {
         match self {
             Self::Static(handler) => *handler,

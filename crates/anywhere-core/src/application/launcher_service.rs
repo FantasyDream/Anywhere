@@ -43,7 +43,7 @@ pub trait LauncherApplication: Send + Sync {
         &self,
         session_id: SessionId,
         revision: Revision,
-        candidate_id: ActionId,
+        candidate_id: CandidateId,
     ) -> Result<ActionResult>;
     /// Small PNG for an application candidate, or `None` when there is no icon.
     ///
@@ -149,14 +149,21 @@ impl Application {
     }
 
     pub fn replace_registry(&self, registry: crate::core::action::descriptor::ActionRegistry) {
-        self.resolver.replace_base_registry(registry);
         let session_id = {
             let Ok(mut session) = self.session() else {
                 return;
             };
+            // Catalog invalidation and session replacement are one publication boundary.
+            self.resolver.replace_base_registry(registry);
+            self.resolver
+                .action_catalog_version
+                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
             session.actions = self.resolver.base_registry();
+            session.execution = Default::default();
             session.state.session_id
         };
+        // Also rebuild when foreground capture failed and there is no menu discovery.
+        self.resolver.recompute_current(session_id);
         self.refresh_app_actions(session_id, None);
     }
 
@@ -482,7 +489,7 @@ impl LauncherApplication for Application {
         &self,
         session_id: SessionId,
         revision: Revision,
-        candidate_id: ActionId,
+        candidate_id: CandidateId,
     ) -> Result<ActionResult> {
         self.execute_use_case(session_id, revision, candidate_id)
             .await

@@ -13,9 +13,9 @@ impl Application {
         &self,
         session_id: SessionId,
         revision: Revision,
-        candidate_id: ActionId,
+        candidate_id: CandidateId,
     ) -> Result<ActionResult> {
-        let (candidate, source_app, menu_generation, source_bundle) = {
+        let (candidate, source_app, menu_generation, source_bundle, catalog_version) = {
             let session = self.session()?;
             if session.state.session_id != session_id
                 || self
@@ -32,13 +32,19 @@ impl Application {
             // map still holds the previous revision's candidates. They carry the previous
             // context and execution target, so serving them here would execute an action
             // that belongs to an input the user has already replaced.
-            if session.execution.revision != Some(revision) {
+            let catalog_version = self
+                .resolver
+                .action_catalog_version
+                .load(std::sync::atomic::Ordering::Acquire);
+            if session.execution.revision != Some(revision)
+                || session.execution.action_catalog_version != Some(catalog_version)
+            {
                 bail!("action expired; choose a current action");
             }
             let candidate = session
                 .execution
                 .candidates
-                .get(&candidate_id)
+                .get(candidate_id.as_str())
                 .cloned()
                 .context("action expired; choose a current action")?;
             if !candidate.presentation.availability.is_executable() {
@@ -61,6 +67,7 @@ impl Application {
                     .frontmost
                     .as_ref()
                     .map(|app| app.bundle_id.clone()),
+                catalog_version,
             )
         };
         let platform = self.platform.clone();
@@ -68,23 +75,26 @@ impl Application {
         let history = self.resolver.history.clone();
         let executions = self.executions.clone();
         let session_for_execution = self.resolver.session.clone();
+        let current_catalog_version = self.resolver.action_catalog_version.clone();
         let guarded_target = candidate.target.execution_token();
         let records_usage = candidate.target.records_usage();
         // Handed to the worker so it can re-check currency when it actually starts running,
         // rather than trusting a check made while the request was still being queued.
         let execution_ticket = self.resolver.execution(session_id, revision);
-        let record_id = candidate
-            .presentation
-            .command_id
-            .clone()
-            .or_else(|| {
-                candidate
-                    .presentation
-                    .bundle_id
-                    .as_ref()
-                    .map(|bundle| crate::core::ranking::usage::application_usage_id(bundle))
-            })
-            .context("candidate has no executable identity")?;
+        let record_id = crate::core::action::identity::BusinessActionId::new(
+            candidate
+                .presentation
+                .command_id
+                .clone()
+                .or_else(|| {
+                    candidate
+                        .presentation
+                        .bundle_id
+                        .as_ref()
+                        .map(|bundle| crate::core::ranking::usage::application_usage_id(bundle))
+                })
+                .context("candidate has no executable identity")?,
+        );
         let context_type = candidate
             .context()
             .map(|context| context.type_id.clone())
@@ -93,7 +103,7 @@ impl Application {
             session_id,
             revision,
             candidate_id,
-            command_id = record_id,
+            command_id = record_id.as_str(),
             "action_execution_started"
         );
         let result = tokio::task::spawn_blocking(move || {
@@ -101,7 +111,10 @@ impl Application {
             // actually starts. A blocking worker can wait behind other work, and the user
             // can dismiss the launcher in that gap — acting then would open a window, or
             // overwrite the clipboard, for a session that no longer exists.
-            if !execution_ticket.is_current() {
+            if !execution_ticket.is_current()
+                || current_catalog_version.load(std::sync::atomic::Ordering::Acquire)
+                    != catalog_version
+            {
                 bail!("action expired before it started");
             }
             if let Some(token) = guarded_target {
@@ -113,7 +126,7 @@ impl Application {
                     || session.state.revision != revision
                     || session
                         .actions
-                        .get(&record_id)
+                        .get(record_id.as_str())
                         .and_then(|action| action.executor.execution_token())
                         != Some(token)
                 {
@@ -136,7 +149,10 @@ impl Application {
             // Planning a process is still side-effect free. Revalidate just before spawn;
             // the newly started process then has its own lifetime and identity.
             let execution_session_id = if let Some(request) = output.process.take() {
-                if !execution_ticket.is_current() {
+                if !execution_ticket.is_current()
+                    || current_catalog_version.load(std::sync::atomic::Ordering::Acquire)
+                        != catalog_version
+                {
                     bail!("action expired before the task started");
                 }
                 Some(executions.start(request)?)
@@ -156,7 +172,7 @@ impl Application {
                     .map_err(|_| anyhow::anyhow!("history lock poisoned"))
                     .and_then(|mut history| {
                         history.record(
-                            &record_id,
+                            record_id.as_str(),
                             &context_type,
                             &source_app,
                             crate::application::session_runtime::now(),

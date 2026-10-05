@@ -5,10 +5,13 @@ import '../src/rust/api.dart';
 import '../infrastructure/application_icon_cache.dart';
 import '../infrastructure/window_host.dart';
 import '../settings/host_settings.dart';
+import '../settings/settings_controller.dart';
+import '../infrastructure/application_lifecycle.dart';
 import 'launcher_view_state.dart';
 import 'context_source_status.dart';
 
 export '../infrastructure/application_icon_cache.dart' show LoadIcon;
+export '../settings/settings_controller.dart' show ApplyExcludedApps;
 
 enum WakeMode { currentApp, universal }
 
@@ -21,7 +24,6 @@ typedef Activate = Future<LauncherStateDto?> Function(
   bool promptAccessibility,
 });
 typedef PromptAccessibility = bool Function();
-typedef ApplyExcludedApps = Future<void> Function(List<String> bundleIds);
 typedef UpdateInput = Future<LauncherStateDto?>
     Function(int session, String input, int revision, {String? scopeId});
 typedef Execute = Future<ActionResultDto> Function(
@@ -65,33 +67,30 @@ class LauncherController extends ChangeNotifier {
     ApplyExcludedApps? applyExcludedApps,
     Future<void> Function(HostSettings)? applyContextSources,
     List<PluginStatusDto> Function()? readPlugins,
+    Future<void> Function()? shutdownTasks,
   })  : _backend = backend,
         _window = window,
-        _hostWarning = startupMessage,
-        _readPlugins = readPlugins ?? pluginStatus,
-        _applyExcludedApps = applyExcludedApps ??
-            ((bundleIds) => setExcludedApps(bundleIds: bundleIds)),
-        _applyContextSources = applyContextSources ??
-            ((settings) => setContextSources(
-                  finderSelection: settings.captureFinderSelection,
-                  selectedText: settings.captureSelectedText,
-                  browserCurrentPage: settings.captureBrowserCurrentPage,
-                  clipboard: settings.captureClipboard,
-                )),
+        settings = SettingsController(
+            window: window,
+            startupMessage: startupMessage,
+            applyExcludedApps: applyExcludedApps,
+            applyContextSources: applyContextSources,
+            readPlugins: readPlugins),
         icons = ApplicationIconCache(backend.loadIcon) {
     icons.addListener(_notify);
+    settings.addListener(_notify);
+    lifecycle = ApplicationLifecycle(
+        closeSettings: closeSettings,
+        shutdownTasks: shutdownTasks ?? shutdownExecutionSessions);
   }
 
   final LauncherBackend _backend;
   final WindowHost _window;
-  final ApplyExcludedApps _applyExcludedApps;
-  final List<PluginStatusDto> Function() _readPlugins;
-  final Future<void> Function(HostSettings) _applyContextSources;
-  String _hostWarning;
+  final SettingsController settings;
+  late final ApplicationLifecycle lifecycle;
   final ApplicationIconCache icons;
   LauncherPhase _phase = LauncherPhase.hidden;
   LauncherStateDto? _snapshot;
-  List<ContextCaptureDto> _lastCaptures = const [];
   int? _session;
   int _generation = 0, _revision = 0, _requestedRevision = 0;
   String _input = '';
@@ -101,10 +100,7 @@ class LauncherController extends ChangeNotifier {
   bool _scopeTouched = false;
   String? _selectedId, _message, _output, _resultSource;
   ActionStatusDto? _resultStatus;
-  HostSettings _settings = HostSettings.defaults;
-  List<PluginStatusDto> _plugins = const [];
   bool _userMoved = false, _disposed = false;
-  Future<bool> Function()? beforeSettingsClose;
   Future<bool>? _settingsClosing;
   int _iconFirst = 0;
   int _iconLast = LauncherViewState.maxRows;
@@ -121,29 +117,15 @@ class LauncherController extends ChangeNotifier {
         output: _output,
         resultSource: _resultSource,
         resultStatus: _resultStatus,
-        universalShortcut: _settings.universalLabel,
+        universalShortcut: settings.current.universalLabel,
       );
 
-  HostSettings get hostSettings => _settings;
-  String? get statusMessage => _message;
-  List<PluginStatusDto> get plugins => _plugins;
-  List<ContextSourceStatus> get contextSourceStatuses => [
-        for (final source in ContextSourceStatus.sources)
-          ContextSourceStatus(
-              source,
-              _lastCaptures
-                  .where((capture) => capture.source == source)
-                  .firstOrNull,
-              enabled: switch (source) {
-                ContextSourceDto.finderSelection =>
-                  _settings.captureFinderSelection,
-                ContextSourceDto.selectedText => _settings.captureSelectedText,
-                ContextSourceDto.browserCurrentPage =>
-                  _settings.captureBrowserCurrentPage,
-                ContextSourceDto.clipboard => _settings.captureClipboard,
-                _ => false,
-              }),
-      ];
+  HostSettings get hostSettings => settings.current;
+  String? get statusMessage =>
+      _phase == LauncherPhase.settings ? settings.statusMessage : _message;
+  List<PluginStatusDto> get plugins => settings.plugins;
+  List<ContextSourceStatus> get contextSourceStatuses =>
+      settings.contextSourceStatuses;
 
   void _notify() {
     if (!_disposed) notifyListeners();
@@ -158,14 +140,14 @@ class LauncherController extends ChangeNotifier {
         if (generation == _generation) await dismiss(hostAlreadyHidden: true);
       },
       openSettings: openSettings,
-      shutdownTasks: shutdownExecutionSessions,
+      shutdownTasks: lifecycle.shutdownTasks,
       closeSettings: closeSettings,
-      prepareToQuit: _prepareToQuit,
+      prepareToQuit: lifecycle.prepareToQuit,
     );
     Future<void>.microtask(() async {
       if (_disposed) return;
       try {
-        _settings = await _window.readSettings();
+        await settings.load();
         _notify();
       } catch (_) {}
       if (!_disposed) await _window.ready();
@@ -210,13 +192,13 @@ class LauncherController extends ChangeNotifier {
       _input = '';
       _actionPath = null;
       _snapshot = null;
-      _lastCaptures = const [];
+      settings.recordCaptures(const []);
       _selectedId = null;
       _userMoved = false;
       _scopeTouched = false;
       _scopeId = null;
       _revision = _requestedRevision = state.revision;
-      _message = _hostWarning.isEmpty ? null : _hostWarning;
+      _message = settings.warning.isEmpty ? null : settings.warning;
       _output = null;
       _resultSource = null;
       _resultStatus = null;
@@ -277,7 +259,7 @@ class LauncherController extends ChangeNotifier {
       return;
     }
     _snapshot = state;
-    _lastCaptures = List.unmodifiable(state.contextCaptures);
+    settings.recordCaptures(state.contextCaptures);
     _revision = state.revision;
     if (_scopeId != null && !view.scopes.any((scope) => scope.id == _scopeId)) {
       final removed = _scopeId;
@@ -566,10 +548,9 @@ class LauncherController extends ChangeNotifier {
     final generation = ++_generation;
     _phase = LauncherPhase.settings;
     try {
-      _settings = await _window.readSettings();
-      _plugins = _readPlugins();
+      await settings.load(plugins: true);
     } catch (error) {
-      _message = '$error';
+      settings.reportError('$error');
     }
     if (!_current(generation) || _phase != LauncherPhase.settings) return;
     _notify();
@@ -586,7 +567,7 @@ class LauncherController extends ChangeNotifier {
   Future<bool> _closeSettings() async {
     if (_phase != LauncherPhase.settings) return true;
     final generation = _generation;
-    if (!await (beforeSettingsClose?.call() ?? Future.value(true))) {
+    if (!await settings.prepareClose()) {
       return false;
     }
     if (!_current(generation) || _phase != LauncherPhase.settings) return false;
@@ -594,77 +575,26 @@ class LauncherController extends ChangeNotifier {
     return true;
   }
 
-  Future<bool> _prepareToQuit() async {
-    if (!await closeSettings()) return false;
-    await shutdownExecutionSessions();
-    return true;
-  }
-
-  void reportSettingsError(String message) {
-    if (_disposed) return;
-    _message = message;
+  // Compatibility facade; settings behavior belongs to SettingsController.
+  Future<bool> saveSettings(HostSettings next) async {
+    final saved = await settings.save(next);
+    _message = settings.statusMessage;
     _notify();
+    return saved;
   }
 
   Future<void> openPrivacySettings(String pane) async {
     if (_disposed) return;
     final generation = _generation;
-    try {
-      await _window.openPrivacySettings(pane);
-      // The persistent settings window remains open while System Settings is shown.
-      if (_current(generation) && _phase != LauncherPhase.settings) {
-        await dismiss();
-      }
-    } catch (_) {
-      if (!_current(generation)) return;
-      _message =
-          'System Settings could not be opened. Open it from the Apple menu.';
+    final opened = await settings.openPrivacySettings(pane);
+    if (!_current(generation)) return;
+    if (opened && _phase != LauncherPhase.settings) {
+      await dismiss();
+    } else if (!opened) {
+      _message = settings.statusMessage;
       _notify();
       await _syncWindow();
     }
-  }
-
-  Future<bool> saveSettings(HostSettings next) async {
-    final error = await _window.writeSettings(next);
-    try {
-      _settings = await _window.readSettings();
-    } catch (_) {
-      _settings = next;
-    }
-    try {
-      _hostWarning = await _window.readSettingsStatus();
-    } catch (_) {
-      // Keep the last known warning when the host cannot report its status.
-    }
-    final failures = <String>[
-      if (error != null && error.isNotEmpty) error,
-    ];
-    try {
-      await _applyExcludedApps(_settings.excludedApps);
-    } catch (failure) {
-      failures.add('$failure');
-    }
-    try {
-      await _applyContextSources(_settings);
-    } catch (failure) {
-      failures.add('$failure');
-    }
-    if (failures.isEmpty) {
-      _message = _hostWarning.isEmpty ? null : _hostWarning;
-    } else {
-      _message = failures.join('\n');
-    }
-    _notify();
-    return failures.isEmpty;
-  }
-
-  Future<void> refreshPlugins() async {
-    try {
-      _plugins = await reloadPlugins();
-    } catch (error) {
-      _message = '$error';
-    }
-    _notify();
   }
 
   Future<void> escape() async {
@@ -778,6 +708,8 @@ class LauncherController extends ChangeNotifier {
     if (session != null) {
       unawaited(_backend.deactivate(session).catchError((Object _) {}));
     }
+    settings.removeListener(_notify);
+    settings.dispose();
     icons.removeListener(_notify);
     icons.dispose();
     _window.dispose();

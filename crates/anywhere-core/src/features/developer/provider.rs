@@ -139,38 +139,33 @@ fn recognize(path: &Path, kind: ProjectKind) -> Result<Option<ContextValue>> {
     if matches!(kind, ProjectKind::Node) {
         // Only safe presence flags cross the Context boundary, never script bodies.
         let project = super::node::inspect(&directory)?;
-        properties.insert("node.manager".into(), project.manager.clone());
-        properties.insert(
-            "node.scripts".into(),
-            serde_json::to_string(&project.scripts)?,
-        );
-        for script in project.scripts {
-            properties.insert(
-                super::node::capability(&project.manager, &script),
-                "true".into(),
-            );
-            properties.insert(script_property(&script), "true".into());
-        }
+        super::metadata::NodeMetadata::new(
+            &project.manager,
+            project.scripts.into_iter().collect(),
+        )?
+        .write(&mut properties)?;
     }
     if matches!(kind, ProjectKind::Rust) {
-        // Check/Test remain available even if target discovery cannot parse a broken manifest.
-        if let Ok(targets) = super::rust::targets(&directory) {
-            for target in targets {
-                properties.insert(target.key(), "true".into());
-                properties.insert(
-                    format!("{}.target", target.key()),
-                    serde_json::to_string(&[
-                        target.package,
-                        target.binary,
-                        target
-                            .manifest
-                            .strip_prefix(&directory)?
-                            .to_string_lossy()
-                            .into_owned(),
-                    ])?,
-                );
-            }
-        }
+        // A malformed manifest keeps Check/Test but reports why Run is unavailable.
+        let (targets, failed) = match super::rust::targets(&directory) {
+            Ok(targets) => (targets, false),
+            Err(_) => (Vec::new(), true),
+        };
+        let metadata = targets
+            .into_iter()
+            .map(|target| {
+                Ok(super::metadata::CargoTargetMetadata {
+                    package: target.package,
+                    binary: target.binary,
+                    manifest: target
+                        .manifest
+                        .strip_prefix(&directory)?
+                        .to_string_lossy()
+                        .into_owned(),
+                })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        super::metadata::CargoMetadata::new(metadata, failed).write(&mut properties)?;
     }
     if matches!(kind, ProjectKind::SpringBoot) {
         let tools = super::spring::build_tools(&directory)?;

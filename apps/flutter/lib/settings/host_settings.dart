@@ -1,4 +1,5 @@
 import 'package:flutter/services.dart';
+import '../infrastructure/hotkey_keymap.dart';
 
 class HostSettings {
   const HostSettings({
@@ -14,10 +15,10 @@ class HostSettings {
     required this.captureClipboard,
   });
 
-  static const cmdKey = 1 << 8;
-  static const shiftKey = 1 << 9;
-  static const optionKey = 1 << 11;
-  static const controlKey = 1 << 12;
+  static const cmdKey = nativeCmdKey;
+  static const shiftKey = nativeShiftKey;
+  static const optionKey = nativeOptionKey;
+  static const controlKey = nativeControlKey;
   static const spaceKey = 0x31;
 
   static const defaults = HostSettings(
@@ -123,85 +124,11 @@ class HostSettings {
 
 String formatHotkey(int keyCode, int modifiers) {
   final buffer = StringBuffer();
-  if (modifiers & HostSettings.controlKey != 0) buffer.write('⌃');
-  if (modifiers & HostSettings.optionKey != 0) buffer.write('⌥');
-  if (modifiers & HostSettings.shiftKey != 0) buffer.write('⇧');
-  if (modifiers & HostSettings.cmdKey != 0) buffer.write('⌘');
-  buffer.write(_keyName(keyCode));
+  for (final entry in nativeModifierLabels.entries) {
+    if (modifiers & entry.key != 0) buffer.write(entry.value);
+  }
+  buffer.write(macOSKeyNames[keyCode] ?? 'Key');
   return buffer.toString();
 }
 
-String _keyName(int keyCode) {
-  const named = {
-    0x31: 'Space',
-    0x24: 'Return',
-    0x30: 'Tab',
-    0x35: 'Esc',
-  };
-  if (named.containsKey(keyCode)) return named[keyCode]!;
-  const letters = {
-    0x00: 'A',
-    0x0B: 'B',
-    0x08: 'C',
-    0x02: 'D',
-    0x0E: 'E',
-    0x03: 'F',
-    0x05: 'G',
-    0x04: 'H',
-    0x22: 'I',
-    0x26: 'J',
-    0x28: 'K',
-    0x25: 'L',
-    0x2E: 'M',
-    0x2D: 'N',
-    0x1F: 'O',
-    0x23: 'P',
-    0x0C: 'Q',
-    0x0F: 'R',
-    0x01: 'S',
-    0x11: 'T',
-    0x20: 'U',
-    0x09: 'V',
-    0x0D: 'W',
-    0x07: 'X',
-    0x10: 'Y',
-    0x06: 'Z',
-  };
-  return letters[keyCode] ?? 'Key';
-}
-
-int? carbonKeyCode(LogicalKeyboardKey key) {
-  final letters = {
-    LogicalKeyboardKey.keyA: 0x00,
-    LogicalKeyboardKey.keyB: 0x0B,
-    LogicalKeyboardKey.keyC: 0x08,
-    LogicalKeyboardKey.keyD: 0x02,
-    LogicalKeyboardKey.keyE: 0x0E,
-    LogicalKeyboardKey.keyF: 0x03,
-    LogicalKeyboardKey.keyG: 0x05,
-    LogicalKeyboardKey.keyH: 0x04,
-    LogicalKeyboardKey.keyI: 0x22,
-    LogicalKeyboardKey.keyJ: 0x26,
-    LogicalKeyboardKey.keyK: 0x28,
-    LogicalKeyboardKey.keyL: 0x25,
-    LogicalKeyboardKey.keyM: 0x2E,
-    LogicalKeyboardKey.keyN: 0x2D,
-    LogicalKeyboardKey.keyO: 0x1F,
-    LogicalKeyboardKey.keyP: 0x23,
-    LogicalKeyboardKey.keyQ: 0x0C,
-    LogicalKeyboardKey.keyR: 0x0F,
-    LogicalKeyboardKey.keyS: 0x01,
-    LogicalKeyboardKey.keyT: 0x11,
-    LogicalKeyboardKey.keyU: 0x20,
-    LogicalKeyboardKey.keyV: 0x09,
-    LogicalKeyboardKey.keyW: 0x0D,
-    LogicalKeyboardKey.keyX: 0x07,
-    LogicalKeyboardKey.keyY: 0x10,
-    LogicalKeyboardKey.keyZ: 0x06,
-    LogicalKeyboardKey.space: 0x31,
-    LogicalKeyboardKey.enter: 0x24,
-    LogicalKeyboardKey.tab: 0x30,
-    LogicalKeyboardKey.escape: 0x35,
-  };
-  return letters[key];
-}
+int? carbonKeyCode(LogicalKeyboardKey key) => macOSLogicalKeyCodes[key];

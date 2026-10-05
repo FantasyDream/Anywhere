@@ -514,8 +514,10 @@ void main() {
             child: SizedBox(
                 width: 648,
                 height: 480,
-                child:
-                    Material(child: SettingsScreen(controller: controller))))));
+                child: Material(
+                    child: SettingsScreen(
+                        controller: controller.settings,
+                        onClose: controller.closeSettings))))));
     await tester.ensureVisible(find.text('Permission needed'));
     await tester.pumpAndSettle();
     expect(find.text('Not supported by this app'), findsOneWidget);

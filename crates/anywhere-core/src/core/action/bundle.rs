@@ -11,7 +11,14 @@ use anywhere_protocol::ContextMatcher;
 
 /// Pure expansion of captured capabilities into actions. No filesystem or tool execution.
 pub trait ContextActionFactory: Send + Sync {
-    fn actions(&self, contexts: &[crate::core::context::ResolvedContext]) -> Vec<ActionDefinition>;
+    fn id(&self) -> &'static str;
+    fn actions(&self, contexts: &[crate::core::context::ResolvedContext]) -> ActionExpansion;
+}
+
+#[derive(Default)]
+pub struct ActionExpansion {
+    pub actions: Vec<ActionDefinition>,
+    pub diagnostics: Vec<String>,
 }
 
 /// One action declaration inside a bundle.

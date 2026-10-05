@@ -43,8 +43,9 @@ pub struct SessionResolution {
 
 #[derive(Default)]
 pub struct SessionExecution {
-    pub candidates: HashMap<ActionId, Candidate>,
+    pub candidates: HashMap<crate::core::action::identity::ExecutionCandidateId, Candidate>,
     pub revision: Option<Revision>,
+    pub action_catalog_version: Option<u64>,
 }
 
 #[derive(Default)]

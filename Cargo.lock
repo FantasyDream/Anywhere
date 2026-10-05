@@ -99,6 +99,7 @@ dependencies = [
  "glob",
  "roxmltree",
  "rusqlite",
+ "serde",
  "serde_json",
  "tempfile",
  "tokio",

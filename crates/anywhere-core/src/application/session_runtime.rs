@@ -35,6 +35,8 @@ pub struct Resolver {
     pub(super) sources: Vec<Arc<dyn CandidateSource + Send + Sync>>,
     pub(super) session: Arc<Mutex<LauncherSession>>,
     pub(super) current: Arc<AtomicU64>,
+    /// Definition/authorization lifetime, independent of query and menu discovery.
+    pub(super) action_catalog_version: Arc<AtomicU64>,
     pub(super) events: broadcast::Sender<LauncherEvent>,
     pub(super) latest_tx: watch::Sender<Option<Arc<LauncherState>>>,
     pub(super) catalog: Arc<Mutex<CatalogSlot>>,
@@ -70,6 +72,7 @@ impl Resolver {
             sources: Vec::new(),
             session: Arc::new(Mutex::new(LauncherSession::default())),
             current: Arc::new(AtomicU64::new(0)),
+            action_catalog_version: Arc::new(AtomicU64::new(1)),
             events: broadcast::channel(256).0,
             latest_tx,
             catalog: Arc::new(Mutex::new(CatalogSlot {
@@ -389,6 +392,7 @@ impl Resolver {
                 actions,
                 prior_diagnostics,
                 inputs_epoch,
+                action_catalog_version,
             ) = {
                 let session = self
                     .session
@@ -414,10 +418,12 @@ impl Resolver {
                     session.actions.clone(),
                     session.state.diagnostics.clone(),
                     session.resolution.inputs_epoch,
+                    self.action_catalog_version.load(Ordering::Acquire),
                 )
             };
             let (catalog, catalog_generation) = self.catalog_view()?;
             let prepared = super::snapshot::prepare(super::snapshot::SnapshotInput {
+                action_catalog_version,
                 input: &input,
                 selected_scope: selected_scope.as_deref(),
                 facts: &facts,
@@ -444,6 +450,7 @@ impl Resolver {
             }
             if session.resolution.snapshot_seq != expected_sequence
                 || session.resolution.inputs_epoch != inputs_epoch
+                || self.action_catalog_version.load(Ordering::Acquire) != action_catalog_version
                 || !Arc::ptr_eq(&session.actions, &actions)
             {
                 continue;
@@ -528,9 +535,10 @@ impl Resolver {
                 .candidates
                 .iter()
                 .chain(&prepared.context_candidates)
-                .map(|candidate| (candidate.presentation.id.clone(), candidate.clone()))
+                .map(|candidate| (candidate.presentation.id.clone().into(), candidate.clone()))
                 .collect();
             session.execution.revision = Some(revision);
+            session.execution.action_catalog_version = Some(action_catalog_version);
             // `first_snapshot` marks the snapshot the caller's budget produced; its
             // duration is the spec's `first_snapshot_duration`.
             let is_first_snapshot = sequence == 1;

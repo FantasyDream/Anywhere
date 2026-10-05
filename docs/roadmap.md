@@ -1,6 +1,6 @@
 # Anywhere 产品路线图
 
-状态：2026-10-03。版本号表示依赖顺序，不代表发布日期。`dev-0.4` 工程收尾已提交到 GitHub（`b622811`）；真实应用及权限矩阵仍须验收，不能据此标为正式发布。`dev-0.5` 已从该提交创建，已实现独立进程会话、Rust/Maven/Gradle/Node/Spring Boot 识别、Cargo Run 目标与 npm/pnpm/yarn 动态脚本，标准检查、四组真实工具及本机主要窗口生命周期验收通过；功能与工程收尾已完成，完整检查及开发包校验通过，见 [0.5 收尾记录](v0.5-closeout.md)。正式发布仍需安装升级、权限与读屏验收，完整功能说明见 [V0.5 MVP](mvp-v0.5.md)。V0.3.x 的遗留验收以 [MVP 验收清单](mvp-v0.3x.md)为准；V0.4 的当前实现与待验收项见 [验收记录](v0.4-context-acceptance.md)。
+状态：2026-10-06。版本号表示依赖顺序，不代表发布日期。`dev-0.4` 工程收尾已提交到 GitHub（`b622811`）；真实应用及权限矩阵仍须验收，不能据此标为正式发布。`dev-0.5` 已从该提交创建，已实现独立进程会话、Rust/Maven/Gradle/Node/Spring Boot 识别、Cargo Run 目标与 npm/pnpm/yarn 动态脚本，标准检查、四组真实工具及本机主要窗口生命周期验收通过；功能与工程收尾已完成，完整检查及开发包校验通过，见 [0.5 收尾记录](v0.5-closeout.md)。正式发布仍需安装升级、权限与读屏验收，完整功能说明见 [V0.5 MVP](mvp-v0.5.md)。V0.3.x 的遗留验收以 [MVP 验收清单](mvp-v0.3x.md)为准；V0.4 的当前实现与待验收项见 [验收记录](v0.4-context-acceptance.md)。
 
 ## 产品边界
 
@@ -42,6 +42,7 @@ V0.3.x  保持现有 Session / Registry / Candidate 流程，先稳定它
 V0.4    新增 Activation Context 种子采集；Provider 继续负责 Context 推导
 V0.4    按 [Scope / Menu 规范](scope-group-menu-design.md) 稳定分组硬过滤、菜单推荐/搜索/浏览、键盘返回与使用记录
 V0.5a   新增独立 ExecutionSession ID、状态和有界输出；与 Launcher Session 分离
+V0.6    目录重载失效、身份/绑定资格、Host/Settings 拆职责已就绪；接入配置、冲突与 Context 分派
 V0.7    新增异步搜索协调层；保留现有同步 CandidateSource 给内存来源
 V0.8    从真实第一方模块提炼版本化 Extension 协议和能力授权
 V0.9    给 Action 结果增加受限 UI 描述，不把插件 Widget 放进 Core

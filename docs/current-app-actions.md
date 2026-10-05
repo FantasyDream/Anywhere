@@ -21,6 +21,7 @@
 - 首屏可复用当前应用实例和版本对应的缓存。每次打开后台刷新；显示窗口后的授权检查不会重复启动已授权的 Discovery。
 - 每次发现分配单调递增 generation。缓存写入和 Session 发布均拒绝旧任务；执行失败失效旧 generation，且不能抹掉新 Session 的结果。
 - 发布时同时校验 Registry 快照与 Session / Revision / snapshot sequence，避免搜索中途更新动作后提交旧列表。
+- 动作目录重载另推进 catalog version，清除执行缓存并重算快照；菜单缓存与发现发布同时检查该版本。重载后的 Action 行带版本，旧行不能命中同 ID 的新实现；blocking worker 与进程启动前复验版本。它与菜单 discovery token 分别管理定义失效和扫描目标失效。
 - locator 失效、菜单不可用或实例改变时返回失败，清除相应旧缓存；Session 仍活动时立即重新发现。
 
 ## 身份与定位边界
@@ -31,6 +32,7 @@
 - 每次执行重新逐级定位，标题与标识都须和所显示的快照一致。AXIdentifier 消失或出现新标识时不会按同名菜单执行；同一级重复标识或无法区分的重名节点不提供动作。稳定 AXIdentifier 的本地化仍保持 ActionId，但旧文案候选须刷新后重新选择。支持不同菜单路径中的重复标题。
 - Discovery 限制遍历深度、访问节点数和总时长；AX 消息设置超时。超时或不完整树不会写成成功缓存，既有非菜单功能继续可用。
 - 快捷键作为独立 Action / Candidate 字段经 bridge 传至 UI，同时保留为搜索别名；支持字符键及常见特殊键。
+- 此字段只展示原应用快捷键。MenuAction 的 BindingPolicy 明确拒绝持久绑定；Registry 生成持久绑定时会检查该策略，`execute_builtin` 包装也检查其目标，不能绕过限制。
 
 ## 验证
 

@@ -2,14 +2,16 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import '../launcher/launcher_controller.dart';
+import 'settings_controller.dart';
 import '../launcher/launcher_style.dart';
 import 'host_settings.dart';
 import '../src/rust/api.dart';
 
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key, required this.controller});
-  final LauncherController controller;
+  const SettingsScreen(
+      {super.key, required this.controller, required this.onClose});
+  final SettingsController controller;
+  final Future<bool> Function() onClose;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -21,15 +23,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<bool>? _pending;
   bool _saving = false, _closing = false;
 
-  LauncherController get _controller => widget.controller;
-  HostSettings get _settings => _controller.hostSettings;
+  SettingsController get _controller => widget.controller;
+  HostSettings get _settings => _controller.current;
 
   @override
   void initState() {
     super.initState();
     _excluded = TextEditingController(text: _settings.excludedApps.join('\n'));
     _controller.addListener(_onSettings);
-    _controller.beforeSettingsClose = _prepareClose;
+    _controller.beforeClose = _prepareClose;
   }
 
   void _onSettings() {
@@ -38,8 +40,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
-    if (_controller.beforeSettingsClose == _prepareClose) {
-      _controller.beforeSettingsClose = null;
+    if (_controller.beforeClose == _prepareClose) {
+      _controller.beforeClose = null;
     }
     _controller.removeListener(_onSettings);
     _excluded.dispose();
@@ -52,15 +54,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }) {
     Future<bool> run() async {
       try {
-        final saved =
-            await _controller.saveSettings(update(_controller.hostSettings));
+        final saved = await _controller.save(update(_controller.current));
         if (excluded && saved && mounted) {
-          _excluded.text = _controller.hostSettings.excludedApps.join('\n');
+          _excluded.text = _controller.current.excludedApps.join('\n');
         }
         return saved;
       } catch (_) {
-        _controller
-            .reportSettingsError('Settings could not be saved. Try again.');
+        _controller.reportError('Settings could not be saved. Try again.');
         return false;
       }
     }
@@ -126,7 +126,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       if (_recording != null) {
         setState(() => _recording = null);
       } else {
-        unawaited(_controller.closeSettings());
+        unawaited(widget.onClose());
       }
       return KeyEventResult.handled;
     }
@@ -249,7 +249,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SizedBox(width: 8),
                   ],
                   TextButton(
-                    onPressed: _controller.closeSettings,
+                    onPressed: widget.onClose,
                     style: TextButton.styleFrom(
                         foregroundColor: LauncherStyle.primary),
                     child: const Text('Done'),

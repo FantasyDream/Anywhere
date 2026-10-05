@@ -154,6 +154,37 @@ impl GroupMeta for ActionRegistry {
 }
 
 impl ActionRegistry {
+    /// Return only a stable business identity, never a scan token or candidate row ID.
+    pub fn persistent_binding(&self, id: &str) -> Result<super::identity::PersistentActionBinding> {
+        use super::identity::{BindingPolicy, BusinessActionId, PersistentActionBinding};
+        let action = self
+            .get(id)
+            .ok_or_else(|| anyhow::anyhow!("action no longer exists"))?;
+        let policy = match &action.executor {
+            ActionExecutor::Native(handler) => handler.binding_policy(),
+            ActionExecutor::Declarative(DeclarativeAction::ExecuteBuiltin { command_id }) => {
+                let target = self
+                    .get(command_id)
+                    .ok_or_else(|| anyhow::anyhow!("built-in action no longer exists"))?;
+                match &target.executor {
+                    ActionExecutor::Native(handler) => handler.binding_policy(),
+                    _ => bail!("execute_builtin target is not built-in"),
+                }
+            }
+            ActionExecutor::Declarative(_) => BindingPolicy::Persistent,
+        };
+        if let BindingPolicy::Unavailable { reason } = policy {
+            bail!("{reason}");
+        }
+        Ok(PersistentActionBinding {
+            action_id: BusinessActionId::new(action.id.clone()),
+            context_types: action
+                .accepts
+                .iter()
+                .map(|matcher| matcher.type_id.clone())
+                .collect(),
+        })
+    }
     pub fn register_factory(
         &mut self,
         factory: impl super::bundle::ContextActionFactory + 'static,
@@ -167,9 +198,16 @@ impl ActionRegistry {
         registry.factories.clear();
         let mut diagnostics = Vec::new();
         for factory in &self.factories {
-            for action in factory.actions(contexts) {
+            let expansion = factory.actions(contexts);
+            diagnostics.extend(
+                expansion
+                    .diagnostics
+                    .into_iter()
+                    .map(|message| format!("context actions [{}]: {message}", factory.id())),
+            );
+            for action in expansion.actions {
                 if let Err(error) = registry.register(action) {
-                    diagnostics.push(format!("context actions: {error}"));
+                    diagnostics.push(format!("context actions [{}]: {error}", factory.id()));
                 }
             }
         }

@@ -273,7 +273,9 @@ class _LauncherScreenState extends State<LauncherScreen> {
             color: LauncherStyle.surface,
             shape: LauncherStyle.panelShape,
             clipBehavior: Clip.antiAlias,
-            child: SettingsScreen(controller: _controller),
+            child: SettingsScreen(
+                controller: _controller.settings,
+                onClose: _controller.closeSettings),
           ),
         ),
       );

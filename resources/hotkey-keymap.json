@@ -1,0 +1,176 @@
+{
+  "keys": [
+    {
+      "code": 49,
+      "name": "Space",
+      "logicalKey": "space"
+    },
+    {
+      "code": 36,
+      "name": "Return",
+      "logicalKey": "enter"
+    },
+    {
+      "code": 48,
+      "name": "Tab",
+      "logicalKey": "tab"
+    },
+    {
+      "code": 53,
+      "name": "Esc",
+      "logicalKey": "escape"
+    },
+    {
+      "code": 0,
+      "name": "A",
+      "logicalKey": "keyA"
+    },
+    {
+      "code": 11,
+      "name": "B",
+      "logicalKey": "keyB"
+    },
+    {
+      "code": 8,
+      "name": "C",
+      "logicalKey": "keyC"
+    },
+    {
+      "code": 2,
+      "name": "D",
+      "logicalKey": "keyD"
+    },
+    {
+      "code": 14,
+      "name": "E",
+      "logicalKey": "keyE"
+    },
+    {
+      "code": 3,
+      "name": "F",
+      "logicalKey": "keyF"
+    },
+    {
+      "code": 5,
+      "name": "G",
+      "logicalKey": "keyG"
+    },
+    {
+      "code": 4,
+      "name": "H",
+      "logicalKey": "keyH"
+    },
+    {
+      "code": 34,
+      "name": "I",
+      "logicalKey": "keyI"
+    },
+    {
+      "code": 38,
+      "name": "J",
+      "logicalKey": "keyJ"
+    },
+    {
+      "code": 40,
+      "name": "K",
+      "logicalKey": "keyK"
+    },
+    {
+      "code": 37,
+      "name": "L",
+      "logicalKey": "keyL"
+    },
+    {
+      "code": 46,
+      "name": "M",
+      "logicalKey": "keyM"
+    },
+    {
+      "code": 45,
+      "name": "N",
+      "logicalKey": "keyN"
+    },
+    {
+      "code": 31,
+      "name": "O",
+      "logicalKey": "keyO"
+    },
+    {
+      "code": 35,
+      "name": "P",
+      "logicalKey": "keyP"
+    },
+    {
+      "code": 12,
+      "name": "Q",
+      "logicalKey": "keyQ"
+    },
+    {
+      "code": 15,
+      "name": "R",
+      "logicalKey": "keyR"
+    },
+    {
+      "code": 1,
+      "name": "S",
+      "logicalKey": "keyS"
+    },
+    {
+      "code": 17,
+      "name": "T",
+      "logicalKey": "keyT"
+    },
+    {
+      "code": 32,
+      "name": "U",
+      "logicalKey": "keyU"
+    },
+    {
+      "code": 9,
+      "name": "V",
+      "logicalKey": "keyV"
+    },
+    {
+      "code": 13,
+      "name": "W",
+      "logicalKey": "keyW"
+    },
+    {
+      "code": 7,
+      "name": "X",
+      "logicalKey": "keyX"
+    },
+    {
+      "code": 16,
+      "name": "Y",
+      "logicalKey": "keyY"
+    },
+    {
+      "code": 6,
+      "name": "Z",
+      "logicalKey": "keyZ"
+    }
+  ],
+  "modifiers": [
+    {
+      "name": "controlKey",
+      "mask": 4096,
+      "label": "⌃"
+    },
+    {
+      "name": "optionKey",
+      "mask": 2048,
+      "label": "⌥"
+    },
+    {
+      "name": "shiftKey",
+      "mask": 512,
+      "label": "⇧"
+    },
+    {
+      "name": "cmdKey",
+      "mask": 256,
+      "label": "⌘"
+    }
+  ]
+}

@@ -164,6 +164,7 @@ pub struct CandidatePresentation {
     pub title: String,
     pub subtitle: Option<String>,
     #[serde(default)]
+    /// Display-only shortcut reported by the source application; never a user binding.
     pub shortcut: Option<String>,
     pub icon: IconDescriptor,
     pub score: f32,

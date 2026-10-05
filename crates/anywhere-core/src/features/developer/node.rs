@@ -3,6 +3,12 @@ use super::metadata::read_manifest;
 use anyhow::{bail, Context, Result};
 use std::{collections::BTreeSet, path::Path};
 pub const MAX_SCRIPTS: usize = 128;
+pub fn supported_script_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 200
+        && !name.starts_with('-')
+        && !name.chars().any(char::is_control)
+}
 #[derive(Debug, Clone)]
 pub struct NodeProject {
     pub manager: String,
@@ -28,10 +34,7 @@ pub fn inspect(root: &Path) -> Result<NodeProject> {
             scripts
                 .iter()
                 .filter(|(name, body)| {
-                    !name.is_empty()
-                        && name.len() <= 200
-                        && !name.starts_with('-')
-                        && !name.chars().any(char::is_control)
+                    supported_script_name(name)
                         && body.as_str().is_some_and(|body| !body.trim().is_empty())
                 })
                 .map(|(name, _)| name.clone())

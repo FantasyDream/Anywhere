@@ -1,8 +1,8 @@
 # V0.5 MVP：Developer Actions 与可返回的进程会话
 
-日期：2026-10-05。分支 `dev-0.5`，基线为 `dev-0.4` 的 `b622811`。Rust 开发版本 `0.5.0-dev.3`，macOS App `0.5.0+10`。
+日期：2026-10-06。分支 `dev-0.5`，基线为 `dev-0.4` 的 `b622811`。Rust 开发版本 `0.5.0-dev.3`，macOS App `0.5.0+11`。
 
-V0.5 规划的功能与工程收尾已完成；2026-10-03 完整标准检查通过，四组真实工具和本机主要窗口生命周期此前验收通过。交付为开发包，不将这些结果等同于正式发布、跨平台或完整安装升级验收。最终清单与复现入口见 [0.5 收尾记录](v0.5-closeout.md)。
+V0.5 规划的功能与工程收尾已完成；2026-10-03 完整标准检查通过，四组真实工具和本机主要窗口生命周期此前验收通过。交付为开发包，不将这些结果等同于正式发布、跨平台或完整安装升级验收。2026-10-06 再次完成完整检查、四组真实工具验收和当前源码构建。逐项证据见 [最终功能核对](v0.5-final-acceptance.md)，交付清单与复现入口见 [0.5 收尾记录](v0.5-closeout.md)。
 
 ## 功能与入口
 
@@ -138,7 +138,7 @@ cargo test -p anywhere-core --test mvp --locked developer:: -- --ignored
 
 ## 交付与范围
 
-- 开发 App：`build/Anywhere-dev-0.5.app`；ZIP：`build/Anywhere-dev-0.5-macos-arm64.zip`；校验文件：同名 `.zip.sha256`。版本 0.5.0，构建号 8，使用固定本机签名。原 0.4 App 单独保留。
+- 开发 App：`build/Anywhere-dev-0.5.app`；ZIP：`build/Anywhere-dev-0.5-macos-arm64.zip`；校验文件：同名 `.zip.sha256`。版本 0.5.0，当前构建号 11，使用固定本机签名。原 0.4 App 单独保留。
 - `scripts/package-macos.sh` 校验源码与 App 版本、固定签名及归档内的主程序/Rust 库一致性，避免打包旧版 App；从当前 checkout 构建与打包的命令见 [收尾记录](v0.5-closeout.md)。
 - 本轮没有改变 bridge 公共 DTO 字段；沿用已有生成绑定。新增的 Context 类型走现有通用 Project 和字符串属性。
 - 0.5 功能范围已交付。正式发布前仍需多机器安装升级/权限验收和读屏检查，不能把开发包当作已完成这些验证的正式发行版。
@@ -147,3 +147,7 @@ cargo test -p anywhere-core --test mvp --locked developer:: -- --ignored
 ## 菜单身份安全修复（0.5.0+10）
 
 菜单 ActionId 与扫描执行 token 分离，旧候选、排队请求及标题/标识变化不会执行替代动作。菜单 frecency 暂停读取和记录，保留旧数据；Developer Actions 与其他动作历史正常。长期菜单身份仍待验证，修复和限制见 [菜单动作说明](current-app-actions.md)。本轮原生验证使用合成 AX 节点，未重复真实应用菜单与四组真实工具验收。
+
+## 可维护性修复（0.5.0+11）
+
+统一 Registry 重载失效凭证，拒绝排队中的旧动作与旧列表项；补持久绑定资格、内部身份边界。设置、退出、热键和窗口管理拆出独立职责，键码与标签由同一配置生成。Node/Cargo 项目元数据采用共享结构与版本校验，非法格式有诊断。完整检查通过：259 项 Rust、66 项 Flutter 测试及原生服务回归。尚未实现 V0.6 用户快捷键产品功能；真实窗口、物理热键与权限未在本轮重复验收。详见 [修复记录](review-maintainability-v0.5.md)。
