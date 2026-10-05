@@ -134,4 +134,3 @@ struct StoredSettings: Codable {
         return nil
     }
 }
-
