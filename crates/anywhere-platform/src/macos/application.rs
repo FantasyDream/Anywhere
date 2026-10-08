@@ -26,7 +26,9 @@ pub(super) fn installed_applications(roots: &[PathBuf]) -> crate::InstalledAppli
     let languages = preferred_languages();
     let mut applications = Vec::new();
     let mut skipped = 0usize;
-    for path in crate::catalog::discover(roots) {
+    for path in crate::catalog::discover(roots, &|path| {
+        crate::Platform::is_application_entry(&super::MacOsPlatform, path)
+    }) {
         match read_bundle(&path, &languages) {
             Ok(Some(application)) => applications.push(application),
             Ok(None) => skipped += 1,
@@ -85,6 +87,11 @@ fn read_bundle(bundle: &Path, languages: &[String]) -> Result<Option<BundleAppli
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
+    aliases.extend(
+        super::aliases::well_known_aliases(&bundle_id)
+            .iter()
+            .map(|alias| (*alias).to_owned()),
+    );
     if !languages.is_empty() {
         if let Ok(names) = bundle_localized_names(bundle, languages) {
             if let Some(preferred) = names

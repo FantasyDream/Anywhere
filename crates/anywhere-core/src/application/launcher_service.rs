@@ -91,6 +91,7 @@ impl Application {
         startup_diagnostics: Vec<String>,
         budget: Duration,
     ) -> Self {
+        platform.start_clipboard_tracking();
         let (catalog_tx, catalog_rx) = watch::channel(0);
         let resolver = Resolver::new(registry, history).with_catalog_rx(catalog_rx);
         Self {

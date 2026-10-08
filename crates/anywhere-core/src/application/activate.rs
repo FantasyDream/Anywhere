@@ -44,6 +44,21 @@ impl Application {
         session_id: SessionId,
         prompt_accessibility: bool,
     ) -> Result<Option<LauncherState>> {
+        self.activate_session_in_mode(
+            session_id,
+            prompt_accessibility,
+            InputMode::CapturedEnvironment,
+        )
+        .await
+    }
+
+    /// Select the input graph before any asynchronous capture can publish.
+    pub async fn activate_session_in_mode(
+        &self,
+        session_id: SessionId,
+        prompt_accessibility: bool,
+        input_mode: InputMode,
+    ) -> Result<Option<LauncherState>> {
         if !self.resolver.is_current(session_id, 0) {
             return Ok(None);
         }
@@ -52,6 +67,7 @@ impl Application {
             if session.state.session_id != session_id || session.activation_started {
                 return Ok(None);
             }
+            session.input_mode = input_mode;
             session.activation_started = true;
         }
         let start = Instant::now();
@@ -149,7 +165,7 @@ impl Application {
                 .map(|_| {
                     tokio::task::spawn_blocking({
                         let platform = platform.clone();
-                        move || platform.clipboard_text()
+                        move || platform.clipboard_snapshot()
                     })
                 });
             let usage = tokio::task::spawn_blocking(move || {
@@ -225,11 +241,18 @@ impl Application {
             let clipboard_refresh = async {
                 let Some(token) = clipboard_token else { return };
                 let Some(clipboard) = clipboard else { return };
-                let (mut status, clipboard_text) = match clipboard.await {
-                    Ok(Ok(Some(text))) => (CaptureStatus::Captured, Some(text)),
-                    Ok(Ok(None)) => (CaptureStatus::Empty, None),
-                    Ok(Err(error)) => (super::context_capture::failure_status(&error), None),
-                    Err(_) => (CaptureStatus::Failed, None),
+                let (mut status, clipboard_text, clipboard_age_ms) = match clipboard.await {
+                    Ok(Ok(snapshot)) => (
+                        if snapshot.text.is_some() {
+                            CaptureStatus::Captured
+                        } else {
+                            CaptureStatus::Empty
+                        },
+                        snapshot.text,
+                        snapshot.age_ms,
+                    ),
+                    Ok(Err(error)) => (super::context_capture::failure_status(&error), None, None),
+                    Err(_) => (CaptureStatus::Failed, None, None),
                 };
                 let captured_at_ms = super::context_capture::now_ms();
                 let mut contexts = Vec::new();
@@ -260,6 +283,7 @@ impl Application {
                     },
                     Some((&capture_policy, ContextSource::Clipboard, token)),
                     move |session, details| {
+                        session.identity.clipboard_age_ms = clipboard_age_ms;
                         fact_text.is_some_and(|text| {
                             if let Err(error) =
                                 session.record_fact(CLIPBOARD, FactValue::Text(text))

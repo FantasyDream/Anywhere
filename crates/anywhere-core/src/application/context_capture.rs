@@ -103,7 +103,7 @@ impl Application {
         let Some(application) = frontmost else { return };
         let owner = Some(application.bundle_id.clone());
 
-        if application.bundle_id == "com.apple.finder" {
+        if self.platform.file_selection_supported(&application) {
             if let Some(token) = self.capture_token(ContextSource::FinderSelection) {
                 let platform = self.platform.clone();
                 let target = application.clone();
@@ -114,7 +114,7 @@ impl Application {
                     session_id,
                     ContextSource::FinderSelection,
                     owner.clone(),
-                    move || finder_contexts(platform.finder_selected_paths(&target)?),
+                    move || finder_contexts(platform.selected_file_paths(&target)?),
                 );
             }
         }
@@ -330,6 +330,19 @@ pub(super) async fn publish_capture(
         session.record_capture(capture);
     }
     if contexts.is_empty() {
+        let _ = resolver.recompute_current(session_id);
+        return;
+    }
+    if resolver.session.lock().is_ok_and(|session| {
+        matches!(session.input_mode, InputMode::Content | InputMode::Search)
+            || (session.input_mode == InputMode::Environment
+                && contexts.iter().all(|context| {
+                    matches!(
+                        context.source,
+                        ContextSource::Clipboard | ContextSource::SelectedText
+                    )
+                }))
+    }) {
         let _ = resolver.recompute_current(session_id);
         return;
     }

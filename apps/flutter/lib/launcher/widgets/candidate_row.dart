@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import '../../ui/app_components.dart';
 import 'package:flutter/foundation.dart';
 import '../../src/rust/api.dart';
-import '../launcher_style.dart';
+import '../../ui/app_style.dart';
+import '../launcher_view_state.dart';
+import 'candidate_icon.dart';
 
 class CandidateRow extends StatelessWidget {
   const CandidateRow({
@@ -28,40 +31,27 @@ class CandidateRow extends StatelessWidget {
       button: true,
       enabled: !disabled,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+        padding: const EdgeInsets.symmetric(vertical: 2),
         child: Material(
-          color: selected ? LauncherStyle.selectedSurface : Colors.transparent,
+          color: selected ? AppStyle.selectedSurface : Colors.transparent,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(11),
+            borderRadius: BorderRadius.circular(AppStyle.resultRadius),
             side: BorderSide(
-              color:
-                  selected ? LauncherStyle.selectedBorder : Colors.transparent,
-              width: 0.8,
-            ),
+                color:
+                    selected ? AppStyle.selectionOutline : Colors.transparent,
+                width: .5),
           ),
           child: InkWell(
-            borderRadius: BorderRadius.circular(11),
+            borderRadius: BorderRadius.circular(AppStyle.resultRadius),
             onTap: disabled ? null : onTap,
             child: SizedBox(
-              height: 50,
+              height: LauncherViewState.rowHeight - 4,
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: Row(
                   children: [
-                    if (selected)
-                      Container(
-                        width: 3,
-                        height: 22,
-                        margin: const EdgeInsets.only(right: 8),
-                        decoration: BoxDecoration(
-                          color: LauncherStyle.accent,
-                          borderRadius: BorderRadius.circular(99),
-                        ),
-                      )
-                    else
-                      const SizedBox(width: 11),
-                    _iconPlate(disabled),
-                    const SizedBox(width: 12),
+                    CandidateIcon(candidate: candidate, bytes: iconBytes),
+                    const SizedBox(width: 14),
                     Expanded(child: _labels(disabled)),
                     if (actionShortcut != null ||
                         candidate.shortcut != null) ...[
@@ -75,7 +65,7 @@ class CandidateRow extends StatelessWidget {
                     ],
                     if (selected && !disabled) ...[
                       const SizedBox(width: 8),
-                      const LauncherKeycap('↵'),
+                      const AppKeycap('↵'),
                     ],
                   ],
                 ),
@@ -87,39 +77,6 @@ class CandidateRow extends StatelessWidget {
     );
   }
 
-  Widget _iconPlate(bool disabled) {
-    final bytes = iconBytes;
-    return Container(
-      width: 28,
-      height: 28,
-      decoration: BoxDecoration(
-        gradient: bytes != null
-            ? null
-            : const LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [Color(0x59444a5c), Color(0x33282c38)],
-              ),
-        color: bytes != null ? Colors.transparent : null,
-        borderRadius: BorderRadius.circular(8),
-        border: bytes != null
-            ? null
-            : Border.all(color: const Color(0x22ffffff), width: 0.5),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: bytes != null
-          ? Image.memory(
-              bytes,
-              width: 28,
-              height: 28,
-              fit: BoxFit.cover,
-              gaplessPlayback: true,
-              errorBuilder: (_, __, ___) => _glyph(disabled),
-            )
-          : _glyph(disabled),
-    );
-  }
-
   Widget _labels(bool disabled) {
     final subtitle = _visibleSubtitle();
     return Column(
@@ -127,18 +84,23 @@ class CandidateRow extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         _title(disabled),
-        if (subtitle != null)
+        if (subtitle != null) ...[
+          const SizedBox(height: 2),
           Text(
             subtitle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              fontSize: 11,
+              fontSize: 12,
+              fontWeight: FontWeight.w400,
+              shadows: AppStyle.textShadows,
               height: 1.35,
-              color:
-                  disabled ? const Color(0xffc9a26b) : const Color(0x99c5cddd),
+              color: disabled
+                  ? AppStyle.warning
+                  : (selected ? AppStyle.primary : AppStyle.secondary),
             ),
           ),
+        ],
       ],
     );
   }
@@ -148,11 +110,12 @@ class CandidateRow extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-            fontSize: 13.5,
+            fontSize: 15,
             height: 1.2,
-            fontWeight: FontWeight.w600,
-            letterSpacing: -0.2,
-            color: disabled ? const Color(0xff8b90a0) : LauncherStyle.primary),
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            shadows: AppStyle.textShadows,
+            letterSpacing: 0,
+            color: disabled ? AppStyle.muted : AppStyle.primary),
       );
 
   String? _visibleSubtitle() {
@@ -182,7 +145,7 @@ class CandidateRow extends StatelessWidget {
         children: [
           for (final part in _shortcutParts(shortcut)) ...[
             const SizedBox(width: 3),
-            LauncherKeycap(part),
+            AppKeycap(part),
           ],
         ],
       );
@@ -208,62 +171,4 @@ class CandidateRow extends StatelessWidget {
     if (rest.isNotEmpty) parts.add(rest.toString());
     return parts.isEmpty ? [shortcut] : parts;
   }
-
-  Widget _glyph(bool disabled) => Icon(
-        _icon(candidate),
-        size: 15,
-        color: disabled ? const Color(0xff7c8293) : const Color(0xffd5dced),
-      );
-
-  IconData _icon(CandidateDto candidate) {
-    if (candidate.kind == CandidateKindDto.application) {
-      return Icons.apps_rounded;
-    }
-    switch (candidate.iconKey) {
-      case 'terminal':
-        return Icons.terminal_rounded;
-      case 'folder':
-        return Icons.folder_open_rounded;
-      case 'file':
-        return Icons.insert_drive_file_outlined;
-      case 'copy':
-        return Icons.content_copy_rounded;
-      case 'globe':
-        return Icons.language_rounded;
-      case 'code':
-        return Icons.data_object_rounded;
-      case 'search':
-        return Icons.search_rounded;
-      case 'git':
-        return Icons.account_tree_outlined;
-    }
-    if (candidate.iconKey == 'app') return Icons.north_east_rounded;
-    return Icons.bolt_rounded;
-  }
-}
-
-class LauncherKeycap extends StatelessWidget {
-  const LauncherKeycap(this.label, {super.key});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        constraints: const BoxConstraints(minWidth: 18),
-        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
-        decoration: BoxDecoration(
-          color: const Color(0x33222630),
-          borderRadius: BorderRadius.circular(5),
-          border: Border.all(color: const Color(0x33ffffff), width: 0.5),
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            fontSize: 10,
-            height: 1.1,
-            fontWeight: FontWeight.w500,
-            color: Color(0xffcdd3e0),
-          ),
-        ),
-      );
 }

@@ -162,3 +162,307 @@ async fn shortcut_catalog_expands_declared_scripts_without_context_or_row_ids() 
         .iter()
         .any(|a| a.action_id == script.action_id));
 }
+
+#[tokio::test]
+async fn global_binding_waits_for_new_capture_and_can_be_cancelled() {
+    let dir = tempfile::tempdir().unwrap();
+    let gate = CaptureGate::new();
+    let platform = Arc::new(TestPlatform {
+        clipboard_gate: Mutex::new(Some(gate.clone())),
+        ..TestPlatform::new(dir.path().canonicalize().unwrap(), true)
+    });
+    let app = Arc::new(app(platform.clone()));
+    let first = app.activate().await.unwrap().unwrap();
+    platform.clipboard_started.notified().await;
+    let pending = tokio::spawn({
+        let app = app.clone();
+        async move {
+            app.wait_action_binding(first.session_id, 0, "core.directory.copy")
+                .await
+        }
+    });
+    tokio::time::sleep(Duration::from_millis(40)).await;
+    assert!(!pending.is_finished());
+    app.deactivate(first.session_id).unwrap();
+    assert!(pending
+        .await
+        .unwrap()
+        .unwrap_err()
+        .to_string()
+        .contains("expired"));
+    gate.release();
+    let second = app.activate().await.unwrap().unwrap();
+    assert_ne!(second.session_id, first.session_id);
+    let result = app
+        .wait_action_binding(second.session_id, 0, "core.directory.copy")
+        .await
+        .unwrap();
+    assert_eq!(result.state.session_id, second.session_id);
+    assert!(result.state.context_complete);
+    assert_eq!(result.candidates.len(), 1);
+    assert!(platform.calls.lock().unwrap().is_empty()); // Resolution has no side effects.
+    assert!(app
+        .wait_action_binding(first.session_id, 0, "core.directory.copy")
+        .await
+        .is_err());
+}
+
+#[tokio::test]
+async fn global_binding_times_out_without_executing_when_permission_read_is_blocked() {
+    let gate = CaptureGate::new();
+    let platform = Arc::new(TestPlatform {
+        clipboard_gate: Mutex::new(Some(gate.clone())),
+        ..Default::default()
+    });
+    let app = app(platform.clone());
+    let state = app.activate().await.unwrap().unwrap();
+    platform.clipboard_started.notified().await;
+    let result = app
+        .wait_action_binding(state.session_id, 0, "core.url.open")
+        .await;
+    gate.release();
+    assert!(result.unwrap_err().to_string().contains("timed out"));
+    assert!(platform.calls.lock().unwrap().is_empty());
+    app.deactivate(state.session_id).unwrap();
+}
+
+fn route(
+    action: &str,
+    app: Option<&str>,
+    context: Option<&str>,
+) -> anywhere_core::application::ShortcutRoute {
+    anywhere_core::application::ShortcutRoute {
+        action_id: action.into(),
+        app_bundle_id: app.map(Into::into),
+        context_type: context.map(Into::into),
+    }
+}
+
+#[tokio::test]
+async fn intent_matches_captured_app_and_context_before_availability_outside_scope() {
+    let dir = tempfile::tempdir().unwrap();
+    let platform = Arc::new(TestPlatform::new(dir.path().canonicalize().unwrap(), true));
+    let app = app(platform.clone());
+    let first = app.activate().await.unwrap().unwrap();
+    let _ = settled(&app, first.session_id, 0).await;
+    app.update_scoped_input(
+        first.session_id,
+        "https://example.org/current".into(),
+        1,
+        Some("git".into()),
+    )
+    .await
+    .unwrap();
+    let _ = settled(&app, first.session_id, 1).await;
+    let rules = [
+        route("core.directory.copy", None, None),
+        route("core.directory.copy", None, Some(DIRECTORY)),
+        route("core.url.open", Some("com.apple.finder"), Some(URL)),
+    ];
+    let chosen = app
+        .resolve_shortcut_intent(first.session_id, 1, &rules)
+        .unwrap();
+    assert!(!chosen.requires_choice);
+    assert_eq!(chosen.candidates.len(), 1);
+    assert_eq!(
+        chosen.candidates[0].command_id.as_deref(),
+        Some("core.url.open")
+    );
+    assert!(platform.calls.lock().unwrap().is_empty());
+    assert!(app
+        .execute(first.session_id, 1, chosen.candidates[0].id.clone())
+        .await
+        .unwrap()
+        .succeeded());
+    assert!(platform
+        .calls
+        .lock()
+        .unwrap()
+        .iter()
+        .any(|(op, value)| op == "url" && value == "https://example.org/current"));
+    assert!(app
+        .shortcut_applications()
+        .unwrap()
+        .iter()
+        .any(|a| a.bundle_id == "com.apple.finder" && a.title == "Finder"));
+}
+
+#[tokio::test]
+async fn intent_equal_specificity_forces_choice_even_after_deduplicating_same_target() {
+    let dir = tempfile::tempdir().unwrap();
+    let app = app(Arc::new(TestPlatform::new(
+        dir.path().canonicalize().unwrap(),
+        true,
+    )));
+    let state = app.activate().await.unwrap().unwrap();
+    let _ = settled(&app, state.session_id, 0).await;
+    let rules = [
+        route("core.directory.copy", Some("com.apple.finder"), None),
+        route("core.directory.copy", None, Some(DIRECTORY)),
+    ];
+    let result = app
+        .resolve_shortcut_intent(state.session_id, 0, &rules)
+        .unwrap();
+    assert!(result.requires_choice);
+    assert_eq!(result.candidates.len(), 1); // No automatic execution even for the same target.
+    let different = [
+        route("core.directory.copy", Some("com.apple.finder"), None),
+        route("core.directory.terminal", None, Some(DIRECTORY)),
+    ];
+    let result = app
+        .resolve_shortcut_intent(state.session_id, 0, &different)
+        .unwrap();
+    assert!(result.requires_choice);
+    assert_eq!(result.candidates.len(), 2);
+}
+
+#[tokio::test]
+async fn intent_unavailable_specific_action_never_uses_fallback_or_wrong_context_target() {
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::create_dir(dir.path().join(".git")).unwrap();
+    let platform = Arc::new(TestPlatform {
+        no_git: true,
+        ..TestPlatform::new(dir.path().canonicalize().unwrap(), true)
+    });
+    let app = app(platform.clone());
+    let state = app.activate().await.unwrap().unwrap();
+    let _ = settled(&app, state.session_id, 0).await;
+    let rules = [
+        route("core.directory.copy", None, None),
+        route(
+            "core.git.status",
+            Some("com.apple.finder"),
+            Some(GIT_REPOSITORY),
+        ),
+    ];
+    assert!(app
+        .resolve_shortcut_intent(state.session_id, 0, &rules)
+        .unwrap_err()
+        .to_string()
+        .contains("Git 不可用"));
+    let wrong_type = [
+        route("core.directory.copy", None, None),
+        route(
+            "core.directory.copy",
+            Some("com.apple.finder"),
+            Some(GIT_REPOSITORY),
+        ),
+    ];
+    assert!(app
+        .resolve_shortcut_intent(state.session_id, 0, &wrong_type)
+        .unwrap_err()
+        .to_string()
+        .contains("required context type"));
+    assert!(platform.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn intent_rejects_no_match_duplicate_predicates_bad_input_and_stale_catalog() {
+    let dir = tempfile::tempdir().unwrap();
+    let app = app(Arc::new(TestPlatform::new(
+        dir.path().canonicalize().unwrap(),
+        true,
+    )));
+    let state = app.activate().await.unwrap().unwrap();
+    let _ = settled(&app, state.session_id, 0).await;
+    let nomatch = [route("core.directory.copy", Some("com.apple.safari"), None)];
+    assert!(app
+        .resolve_shortcut_intent(state.session_id, 0, &nomatch)
+        .unwrap_err()
+        .to_string()
+        .contains("No shortcut rule"));
+    let duplicate = [
+        route("core.directory.copy", None, None),
+        route("core.directory.terminal", None, None),
+    ];
+    assert!(app
+        .resolve_shortcut_intent(state.session_id, 0, &duplicate)
+        .unwrap_err()
+        .to_string()
+        .contains("distinct"));
+    let malformed = [route(
+        "core.directory.copy",
+        None,
+        Some("core.directory/../../"),
+    )];
+    assert!(app
+        .resolve_shortcut_intent(state.session_id, 0, &malformed)
+        .is_err());
+    assert!(app
+        .resolve_shortcut_intent(state.session_id, 0, &[])
+        .is_err());
+    let rules = [route("core.directory.copy", None, None)];
+    let resolved = app
+        .wait_shortcut_intent(state.session_id, 0, &rules)
+        .await
+        .unwrap();
+    assert_eq!(resolved.candidates.len(), 1);
+    app.replace_registry(ActionRegistry::default());
+    assert!(app
+        .resolve_shortcut_intent(state.session_id, 0, &rules)
+        .is_err());
+    assert!(app
+        .execute(state.session_id, 0, resolved.candidates[0].id.clone())
+        .await
+        .is_err());
+}
+
+#[tokio::test]
+async fn registration_catalog_distinguishes_revocation_from_missing_project() {
+    let app = Application::new(
+        Arc::new(TestPlatform::default()),
+        registry(),
+        Box::<MemoryUsage>::default(),
+        vec![],
+    );
+    let script = "developer.node.pnpm.script.636865636b3a7479706573";
+    let cargo = "developer.cargo.run.61707000617070";
+    let ids = vec![
+        "core.directory.copy",
+        script,
+        cargo,
+        "removed.plugin.action",
+        "developer.node.pnpm.script.00",
+        "developer.cargo.run.00",
+        "developer.node.pnpm.script.636865636B",
+        "menu:untrusted",
+    ]
+    .into_iter()
+    .map(String::from)
+    .collect::<Vec<_>>();
+    let supported = app.supported_shortcut_actions(&ids).unwrap();
+    assert_eq!(supported, vec!["core.directory.copy", cargo, script]);
+    // No node/rust Context exists: the installed factory still supports future capture.
+    assert!(!app
+        .shortcut_actions()
+        .unwrap()
+        .iter()
+        .any(|a| a.action_id == script));
+    app.replace_registry(ActionRegistry::default());
+    assert!(app.supported_shortcut_actions(&ids).unwrap().is_empty());
+    app.replace_registry(registry());
+    assert_eq!(app.supported_shortcut_actions(&ids).unwrap(), supported);
+    assert!(app
+        .supported_shortcut_actions(&vec!["x".into(); 2049])
+        .is_err());
+}
+
+#[tokio::test]
+async fn plugin_binding_registration_tracks_catalog_replacement_without_context() {
+    let mut installed = registry();
+    installed
+        .register_plugin(anywhere_plugin::parse_manifest(crate::search::WRAP_PLUGIN).unwrap())
+        .unwrap();
+    let app = Application::new(
+        Arc::new(TestPlatform::default()),
+        installed.clone(),
+        Box::<MemoryUsage>::default(),
+        vec![],
+    );
+    let ids = vec!["wrap.status".into()];
+    assert_eq!(app.supported_shortcut_actions(&ids).unwrap(), ids);
+    app.replace_registry(registry());
+    assert!(app.supported_shortcut_actions(&ids).unwrap().is_empty());
+    app.replace_registry(installed);
+    assert_eq!(app.supported_shortcut_actions(&ids).unwrap(), ids);
+}

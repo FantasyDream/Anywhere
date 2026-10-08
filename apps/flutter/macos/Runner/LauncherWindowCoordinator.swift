@@ -5,15 +5,16 @@ import FlutterMacOS
 final class LauncherWindowCoordinator {
     let window: NSWindow
     let controller: FlutterViewController
-    let glass: NSVisualEffectView
+    let host: WindowMaterialController
+    let glass: WindowMaterial
     let launcherGlassMask: NSImage?
     weak var delegate: NSWindowDelegate?
     let tasksVisible: () -> Bool
     var settingsOpen = false
     var settingsWindow: NSWindow?
-    init(window: NSWindow, controller: FlutterViewController, glass: NSVisualEffectView,
+    init(window: NSWindow, controller: FlutterViewController, host: WindowMaterialController, glass: WindowMaterial,
          mask: NSImage?, delegate: NSWindowDelegate, tasksVisible: @escaping () -> Bool) {
-        self.window = window; self.controller = controller; self.glass = glass
+        self.window = window; self.controller = controller; self.host = host; self.glass = glass
         launcherGlassMask = mask; self.delegate = delegate; self.tasksVisible = tasksVisible
     }
     func positionWindow() {
@@ -44,12 +45,11 @@ final class LauncherWindowCoordinator {
             panel.center()
             settingsWindow = panel
         }
-        if settingsWindow?.contentViewController !== controller {
+        if settingsWindow?.contentViewController !== host {
             window.contentViewController = nil
-            settingsWindow?.contentViewController = controller
+            settingsWindow?.contentViewController = host
             glass.maskImage = nil
-            controller.view.layer?.cornerRadius = 0
-            controller.view.layer?.masksToBounds = false
+            glass.cornerRadius = 0
         }
         resizeWindow(height)
         if settingsWindow?.isMiniaturized == true { settingsWindow?.deminiaturize(nil) }
@@ -58,15 +58,14 @@ final class LauncherWindowCoordinator {
     }
 
     func restoreLauncherView() {
-        guard settingsWindow?.contentViewController === controller else { return }
+        guard settingsWindow?.contentViewController === host else { return }
         settingsWindow?.orderOut(nil)
         settingsWindow?.contentViewController = nil
         let frame = window.frame
-        window.contentViewController = controller
+        window.contentViewController = host
         window.setFrame(frame, display: false)
         glass.maskImage = launcherGlassMask
-        controller.view.layer?.cornerRadius = 18
-        controller.view.layer?.masksToBounds = true
+        glass.cornerRadius = 18
     }
 
     func resizeWindow(_ requestedHeight: Double) {

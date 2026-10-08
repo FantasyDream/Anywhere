@@ -38,7 +38,7 @@ struct StoredSettings: Codable {
     var captureBrowserCurrentPage: Bool?
     var captureClipboard: Bool?
     // Missing fields preserve settings written by 0.5 and earlier.
-    var actionShortcutVersion: Int? = nil
+    var actionShortcutVersion: Int? = 4
     var actionShortcuts: [StoredActionShortcut]? = nil
 
     static var fileURL: URL {
@@ -58,16 +58,54 @@ struct StoredSettings: Codable {
             captureBrowserCurrentPage: nil,
             captureClipboard: nil
         )
-        guard let data = try? Data(contentsOf: fileURL),
-              let stored = try? JSONDecoder().decode(StoredSettings.self, from: data) else {
+        guard let data = try? Data(contentsOf: fileURL) else { return defaults }
+        guard var stored = try? JSONDecoder().decode(StoredSettings.self, from: data) else {
+            if let raw = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+               let version = raw["actionShortcutVersion"] as? Int, ![1, 2, 3, 4].contains(version) {
+                var protected = defaults
+                protected.actionShortcutVersion = version
+                return protected // Never allow an older writer to replace an unknown schema.
+            }
             return defaults
         }
+        if let version = stored.actionShortcutVersion, ![1, 2, 3, 4].contains(version) {
+            var protected = defaults; protected.actionShortcutVersion = version
+            return protected // The key encoding of an unknown schema must never be guessed.
+        }
+        if stored.actionShortcutVersion == 4 {
+            guard let currentCode = NativeHotKeyMap.nativeCode(stored.currentAppKeyCode),
+                  let currentMask = NativeHotKeyMap.nativeMask(stored.currentAppModifiers),
+                  let universalCode = NativeHotKeyMap.nativeCode(stored.universalKeyCode),
+                  let universalMask = NativeHotKeyMap.nativeMask(stored.universalModifiers),
+                  let bindings = StoredActionShortcut.nativeBindings(stored.actionShortcuts ?? []) else {
+                var protected = defaults
+                protected.actionShortcutVersion = Int.max // Invalid portable data must not be overwritten.
+                return protected
+            }
+            stored.currentAppKeyCode = currentCode; stored.currentAppModifiers = currentMask
+            stored.universalKeyCode = universalCode; stored.universalModifiers = universalMask
+            if stored.actionShortcuts != nil { stored.actionShortcuts = bindings }
+        }
+        if stored.actionShortcutVersion == nil || stored.actionShortcutVersion == 1 {
+            stored.actionShortcutVersion = 4
+            stored.actionShortcuts = stored.actionShortcuts?.map { binding in
+                var local = binding; local.global = false; local.routes = nil; return local
+            }
+        }
+        if stored.actionShortcutVersion == 2 {
+            stored.actionShortcutVersion = 4
+            stored.actionShortcuts = stored.actionShortcuts?.map { binding in var fixed = binding; fixed.routes = nil; return fixed }
+        }
+        if stored.actionShortcutVersion == 3 { stored.actionShortcutVersion = 4 }
         return stored
     }
 
     func save(to fileURL: URL = Self.fileURL) -> String? {
+        guard actionShortcutVersion == nil || actionShortcutVersion == 4 else {
+            return "Unsupported action shortcut settings version."
+        }
         do {
-            let data = try JSONEncoder().encode(self)
+            let data = try JSONSerialization.data(withJSONObject: asMap(), options: [.sortedKeys])
             try data.write(to: fileURL, options: .atomic)
             return nil
         } catch {
@@ -77,26 +115,32 @@ struct StoredSettings: Codable {
 
     func asMap() -> [String: Any] {
         [
-            "currentAppKeyCode": Int(currentAppKeyCode),
-            "currentAppModifiers": Int(currentAppModifiers),
-            "universalKeyCode": Int(universalKeyCode),
-            "universalModifiers": Int(universalModifiers),
+            "currentAppKeyCode": Int(NativeHotKeyMap.portableKeys[currentAppKeyCode] ?? UInt32.max),
+            "currentAppModifiers": Int(NativeHotKeyMap.portableMask(currentAppModifiers)),
+            "universalKeyCode": Int(NativeHotKeyMap.portableKeys[universalKeyCode] ?? UInt32.max),
+            "universalModifiers": Int(NativeHotKeyMap.portableMask(universalModifiers)),
             "launchAtLogin": launchAtLogin,
             "excludedApps": excludedApps,
             "captureFinderSelection": captureFinderSelection ?? true,
             "captureSelectedText": captureSelectedText ?? true,
             "captureBrowserCurrentPage": captureBrowserCurrentPage ?? true,
             "captureClipboard": captureClipboard ?? true,
-            "actionShortcutVersion": actionShortcutVersion ?? 1,
+            "actionShortcutVersion": actionShortcutVersion ?? 4,
             "actionShortcuts": (actionShortcuts ?? []).map { $0.asMap() }
         ]
     }
 
+    /// Legacy files can omit the entire list; transport normalizes it to empty.
+    func sameActionShortcutConfiguration(as other: StoredSettings) -> Bool {
+        (actionShortcutVersion ?? 4) == (other.actionShortcutVersion ?? 4) &&
+            (actionShortcuts ?? []) == (other.actionShortcuts ?? [])
+    }
     func sameHotKeys(as other: StoredSettings) -> Bool {
         currentAppKeyCode == other.currentAppKeyCode &&
             currentAppModifiers == other.currentAppModifiers &&
             universalKeyCode == other.universalKeyCode &&
-            universalModifiers == other.universalModifiers
+            universalModifiers == other.universalModifiers &&
+            globalActionShortcuts == other.globalActionShortcuts
     }
 
     mutating func restoreHotKeys(from other: StoredSettings) {
@@ -104,6 +148,13 @@ struct StoredSettings: Codable {
         currentAppModifiers = other.currentAppModifiers
         universalKeyCode = other.universalKeyCode
         universalModifiers = other.universalModifiers
+        // Global registration is transactional with its persisted bindings.
+        actionShortcutVersion = other.actionShortcutVersion
+        actionShortcuts = other.actionShortcuts
+    }
+
+    var globalActionShortcuts: [StoredActionShortcut] {
+        (actionShortcuts ?? []).filter { $0.global == true }
     }
 
     func hotKeysConflict() -> Bool {
@@ -115,18 +166,26 @@ struct StoredSettings: Codable {
     }
 
     mutating func apply(_ args: [String: Any]) -> String? {
+        guard actionShortcutVersion == nil || actionShortcutVersion == 4 else {
+            return "Unsupported action shortcut settings version."
+        }
         if let raw = args["actionShortcuts"] {
-            guard args["actionShortcutVersion"] as? Int == 1,
+            guard args["actionShortcutVersion"] as? Int == 4,
                   let data = try? JSONSerialization.data(withJSONObject: raw),
-                  let bindings = try? JSONDecoder().decode([StoredActionShortcut].self, from: data)
+                  let portable = try? JSONDecoder().decode([StoredActionShortcut].self, from: data),
+                  let bindings = StoredActionShortcut.nativeBindings(portable)
             else { return "Unsupported or invalid action shortcut settings." }
-            actionShortcutVersion = 1
+            actionShortcutVersion = 4
             actionShortcuts = bindings
         }
-        if let value = Self.uint32(args["currentAppKeyCode"]) { currentAppKeyCode = value }
-        if let value = Self.uint32(args["currentAppModifiers"]) { currentAppModifiers = value }
-        if let value = Self.uint32(args["universalKeyCode"]) { universalKeyCode = value }
-        if let value = Self.uint32(args["universalModifiers"]) { universalModifiers = value }
+        for key in ["currentAppKeyCode", "universalKeyCode"] where args[key] != nil {
+            guard let value = Self.uint32(args[key]), let code = NativeHotKeyMap.nativeCode(value) else { return "Invalid portable shortcut key." }
+            if key == "currentAppKeyCode" { currentAppKeyCode = code } else { universalKeyCode = code }
+        }
+        for key in ["currentAppModifiers", "universalModifiers"] where args[key] != nil {
+            guard let value = Self.uint32(args[key]), let mask = NativeHotKeyMap.nativeMask(value) else { return "Invalid portable shortcut modifiers." }
+            if key == "currentAppModifiers" { currentAppModifiers = mask } else { universalModifiers = mask }
+        }
         if let value = args["launchAtLogin"] as? Bool { launchAtLogin = value }
         if let value = args["excludedApps"] as? [String] {
             excludedApps = value
@@ -139,7 +198,7 @@ struct StoredSettings: Codable {
     }
 
     func actionShortcutError() -> String? {
-        guard actionShortcutVersion == nil || actionShortcutVersion == 1 else {
+        guard actionShortcutVersion == nil || actionShortcutVersion == 4 else {
             return "Unsupported action shortcut settings version."
         }
         let bindings = actionShortcuts ?? []
@@ -163,6 +222,7 @@ struct StoredSettings: Codable {
                 (binding.keyCode == universalKeyCode && binding.modifiers == universalModifiers) {
                 return "An action shortcut conflicts with the Anywhere wake shortcut."
             }
+            if let error = binding.routeError() { return error }
             if !actions.insert(binding.actionId).inserted ||
                 !chords.insert("\(binding.keyCode):\(binding.modifiers)").inserted {
                 return "Action shortcuts must use unique actions and key combinations."
@@ -182,12 +242,62 @@ struct StoredSettings: Codable {
     }
 }
 
-struct StoredActionShortcut: Codable {
+struct StoredActionShortcut: Codable, Equatable {
     let actionId: String
     let title: String
     let keyCode: UInt32
     let modifiers: UInt32
+    var global: Bool? = nil
+    var routes: [StoredShortcutRoute]? = nil
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.actionId == rhs.actionId && lhs.title == rhs.title && lhs.keyCode == rhs.keyCode && lhs.modifiers == rhs.modifiers &&
+            (lhs.global == true) == (rhs.global == true) && (lhs.routes ?? []) == (rhs.routes ?? [])
+    }
+    /// Native representation exists only inside the macOS adapter.
+    static func nativeBindings(_ portable: [StoredActionShortcut]) -> [StoredActionShortcut]? {
+        var result: [StoredActionShortcut] = []
+        for binding in portable {
+            guard let code = NativeHotKeyMap.nativeCode(binding.keyCode),
+                  let mask = NativeHotKeyMap.nativeMask(binding.modifiers) else { return nil }
+            result.append(StoredActionShortcut(actionId: binding.actionId, title: binding.title,
+                keyCode: code, modifiers: mask, global: binding.global, routes: binding.routes))
+        }
+        return result
+    }
+    func routeError() -> String? {
+        let rules = routes ?? []
+        if (!rules.isEmpty) != actionId.hasPrefix("intent:") { return "Invalid shortcut intent identity." }
+        if rules.count > 16 || (!rules.isEmpty && title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) { return "An intent needs a name and at most 16 rules." }
+        var conditions = Set<String>()
+        for rule in rules {
+            if !rule.valid { return "Invalid shortcut rule." }
+            if !conditions.insert("\(rule.appBundleId ?? "")/\(rule.contextType ?? "")").inserted { return "Shortcut rules must use distinct app and context conditions." }
+        }
+        return nil
+    }
     func asMap() -> [String: Any] {
-        ["actionId": actionId, "title": title, "keyCode": Int(keyCode), "modifiers": Int(modifiers)]
+        ["actionId": actionId, "title": title, "keyCode": Int(NativeHotKeyMap.portableKeys[keyCode] ?? UInt32.max), "modifiers": Int(NativeHotKeyMap.portableMask(modifiers)), "global": global == true, "routes": (routes ?? []).map { $0.asMap() }]
+    }
+}
+
+struct StoredShortcutRoute: Codable, Equatable {
+    let actionId: String
+    let title: String
+    var appBundleId: String? = nil
+    var appName: String? = nil
+    var contextType: String? = nil
+    var valid: Bool {
+        func condition(_ value: String?, max: Int) -> Bool {
+            guard let value else { return true }
+            return !value.isEmpty && value.count <= max && value.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil
+        }
+        return !actionId.isEmpty && actionId.count <= 2048 && title.count <= 512 && (appName?.count ?? 0) <= 512 && condition(appBundleId, max: 256) && condition(contextType, max: 128)
+    }
+    func asMap() -> [String: Any] {
+        var map: [String: Any] = ["actionId": actionId, "title": title]
+        if let appBundleId { map["appBundleId"] = appBundleId }
+        if let appName { map["appName"] = appName }
+        if let contextType { map["contextType"] = contextType }
+        return map
     }
 }

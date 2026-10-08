@@ -16,16 +16,23 @@ impl Application {
         revision: Revision,
         selected_scope: Option<GroupId>,
     ) -> Result<Option<LauncherState>> {
-        self.update_query_use_case(session_id, input, revision, selected_scope)
-            .await
+        self.update_context_input(
+            session_id,
+            input,
+            revision,
+            selected_scope,
+            InputMode::CapturedEnvironment,
+        )
+        .await
     }
 
-    pub(super) async fn update_query_use_case(
+    pub async fn update_context_input(
         &self,
         session_id: SessionId,
         input: String,
         revision: Revision,
         selected_scope: Option<GroupId>,
+        input_mode: InputMode,
     ) -> Result<Option<LauncherState>> {
         if input.len() > MAX_INPUT_BYTES {
             bail!("input exceeds 1 MiB");
@@ -39,6 +46,7 @@ impl Application {
             {
                 return Ok(None);
             }
+            session.input_mode = input_mode;
             session.begin_revision(revision, input.clone());
             session.state.selected_scope = selected_scope;
             self.resolver.mark_current(session_id, revision);
@@ -75,6 +83,25 @@ impl Application {
             Ok(committed)
         }
         .instrument(tracing::info_span!("update_input", session_id, revision))
+        .await
+    }
+}
+
+impl Application {
+    pub(super) async fn update_query_use_case(
+        &self,
+        session_id: SessionId,
+        input: String,
+        revision: Revision,
+        selected_scope: Option<GroupId>,
+    ) -> Result<Option<LauncherState>> {
+        self.update_context_input(
+            session_id,
+            input,
+            revision,
+            selected_scope,
+            InputMode::CapturedEnvironment,
+        )
         .await
     }
 }

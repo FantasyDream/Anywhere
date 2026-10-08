@@ -34,6 +34,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AvailabilityDto dco_decode_availability_dto(dynamic raw);
 
   @protected
+  BindingResolutionDto dco_decode_binding_resolution_dto(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
 
   @protected
@@ -48,6 +51,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LauncherStateDto dco_decode_box_autoadd_launcher_state_dto(dynamic raw);
+
+  @protected
+  BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
   CandidateDto dco_decode_candidate_dto(dynamic raw);
@@ -89,6 +95,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 dco_decode_i_64(dynamic raw);
 
   @protected
+  InputModeDto dco_decode_input_mode_dto(dynamic raw);
+
+  @protected
   LauncherStateDto dco_decode_launcher_state_dto(dynamic raw);
 
   @protected
@@ -120,6 +129,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ShortcutActionDto> dco_decode_list_shortcut_action_dto(dynamic raw);
 
   @protected
+  List<ShortcutApplicationDto> dco_decode_list_shortcut_application_dto(
+      dynamic raw);
+
+  @protected
+  List<ShortcutRouteDto> dco_decode_list_shortcut_route_dto(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
@@ -136,6 +152,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LauncherStateDto? dco_decode_opt_box_autoadd_launcher_state_dto(dynamic raw);
 
   @protected
+  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
 
   @protected
@@ -146,6 +165,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ShortcutActionDto dco_decode_shortcut_action_dto(dynamic raw);
+
+  @protected
+  ShortcutApplicationDto dco_decode_shortcut_application_dto(dynamic raw);
+
+  @protected
+  ShortcutRouteDto dco_decode_shortcut_route_dto(dynamic raw);
 
   @protected
   SnapshotWaitDto dco_decode_snapshot_wait_dto(dynamic raw);
@@ -181,6 +206,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AvailabilityDto sse_decode_availability_dto(SseDeserializer deserializer);
 
   @protected
+  BindingResolutionDto sse_decode_binding_resolution_dto(
+      SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
@@ -196,6 +225,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   LauncherStateDto sse_decode_box_autoadd_launcher_state_dto(
       SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
   CandidateDto sse_decode_candidate_dto(SseDeserializer deserializer);
@@ -239,6 +271,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
 
   @protected
+  InputModeDto sse_decode_input_mode_dto(SseDeserializer deserializer);
+
+  @protected
   LauncherStateDto sse_decode_launcher_state_dto(SseDeserializer deserializer);
 
   @protected
@@ -275,6 +310,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<ShortcutApplicationDto> sse_decode_list_shortcut_application_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  List<ShortcutRouteDto> sse_decode_list_shortcut_route_dto(
+      SseDeserializer deserializer);
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
@@ -293,6 +336,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
@@ -304,6 +350,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   ShortcutActionDto sse_decode_shortcut_action_dto(
       SseDeserializer deserializer);
+
+  @protected
+  ShortcutApplicationDto sse_decode_shortcut_application_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ShortcutRouteDto sse_decode_shortcut_route_dto(SseDeserializer deserializer);
 
   @protected
   SnapshotWaitDto sse_decode_snapshot_wait_dto(SseDeserializer deserializer);
@@ -344,6 +397,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       AvailabilityDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_binding_resolution_dto(
+      BindingResolutionDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
@@ -360,6 +417,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_launcher_state_dto(
       LauncherStateDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
   void sse_encode_candidate_dto(CandidateDto self, SseSerializer serializer);
@@ -405,6 +465,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
 
   @protected
+  void sse_encode_input_mode_dto(InputModeDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_launcher_state_dto(
       LauncherStateDto self, SseSerializer serializer);
 
@@ -443,6 +506,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<ShortcutActionDto> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_shortcut_application_dto(
+      List<ShortcutApplicationDto> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_shortcut_route_dto(
+      List<ShortcutRouteDto> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
@@ -461,6 +532,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       LauncherStateDto? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_list_prim_u_8_strict(
       Uint8List? self, SseSerializer serializer);
 
@@ -474,6 +548,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_shortcut_action_dto(
       ShortcutActionDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_shortcut_application_dto(
+      ShortcutApplicationDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_shortcut_route_dto(
+      ShortcutRouteDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_snapshot_wait_dto(

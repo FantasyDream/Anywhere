@@ -6,10 +6,14 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `application`, `availability_dto`, `candidate_dto`, `context_capture_status_dto`, `context_source_dto`, `kind_dto`, `load_plugins`, `plugin_reports`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`
+// These functions are ignored because they are not marked as `pub`: `application`, `availability_dto`, `binding_resolution_dto`, `candidate_dto`, `context_capture_status_dto`, `context_source_dto`, `kind_dto`, `load_plugins`, `plugin_reports`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
+
+Future<List<String>> supportedShortcutActions(
+        {required List<String> actionIds}) =>
+    RustLib.instance.api.crateApiSupportedShortcutActions(actionIds: actionIds);
 
 Future<List<ShortcutActionDto>> shortcutActions() =>
     RustLib.instance.api.crateApiShortcutActions();
@@ -21,29 +25,60 @@ Future<List<CandidateDto>> resolveActionBinding(
     RustLib.instance.api.crateApiResolveActionBinding(
         sessionId: sessionId, revision: revision, actionId: actionId);
 
+/// Fresh global activation only: wait for capture and retain exact execution targets.
+Future<BindingResolutionDto> waitActionBinding(
+        {required int sessionId,
+        required int revision,
+        required String actionId}) =>
+    RustLib.instance.api.crateApiWaitActionBinding(
+        sessionId: sessionId, revision: revision, actionId: actionId);
+
 Future<void> initialize(
         {required String dataDirectory, required String pluginDirectory}) =>
     RustLib.instance.api.crateApiInitialize(
         dataDirectory: dataDirectory, pluginDirectory: pluginDirectory);
 
+Future<List<ShortcutApplicationDto>> shortcutApplications() =>
+    RustLib.instance.api.crateApiShortcutApplications();
+
+Future<BindingResolutionDto> resolveShortcutIntent(
+        {required int sessionId,
+        required int revision,
+        required List<ShortcutRouteDto> routes}) =>
+    RustLib.instance.api.crateApiResolveShortcutIntent(
+        sessionId: sessionId, revision: revision, routes: routes);
+
+Future<BindingResolutionDto> waitShortcutIntent(
+        {required int sessionId,
+        required int revision,
+        required List<ShortcutRouteDto> routes}) =>
+    RustLib.instance.api.crateApiWaitShortcutIntent(
+        sessionId: sessionId, revision: revision, routes: routes);
+
 /// Reserve synchronously so Dart can cancel even before foreground capture finishes.
 int beginActivation() => RustLib.instance.api.crateApiBeginActivation();
 
 Future<LauncherStateDto?> activate(
-        {required int sessionId, required bool promptAccessibility}) =>
+        {required int sessionId,
+        required bool promptAccessibility,
+        required bool capturedEnvironment}) =>
     RustLib.instance.api.crateApiActivate(
-        sessionId: sessionId, promptAccessibility: promptAccessibility);
+        sessionId: sessionId,
+        promptAccessibility: promptAccessibility,
+        capturedEnvironment: capturedEnvironment);
 
 Future<LauncherStateDto?> updateInput(
         {required int sessionId,
         required String input,
         required int revision,
-        String? scopeId}) =>
+        String? scopeId,
+        required InputModeDto inputMode}) =>
     RustLib.instance.api.crateApiUpdateInput(
         sessionId: sessionId,
         input: input,
         revision: revision,
-        scopeId: scopeId);
+        scopeId: scopeId,
+        inputMode: inputMode);
 
 /// Latest committed snapshot for a session, read straight from the core.
 ///
@@ -173,6 +208,31 @@ enum AvailabilityDto {
   ;
 }
 
+class BindingResolutionDto {
+  final LauncherStateDto state;
+  final List<CandidateDto> candidates;
+  final bool requiresChoice;
+
+  const BindingResolutionDto({
+    required this.state,
+    required this.candidates,
+    required this.requiresChoice,
+  });
+
+  @override
+  int get hashCode =>
+      state.hashCode ^ candidates.hashCode ^ requiresChoice.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BindingResolutionDto &&
+          runtimeType == other.runtimeType &&
+          state == other.state &&
+          candidates == other.candidates &&
+          requiresChoice == other.requiresChoice;
+}
+
 class CandidateDto {
   final String id;
   final CandidateKindDto kind;
@@ -271,24 +331,35 @@ enum CandidateKindDto {
 }
 
 class ContextCaptureDto {
+  final String? text;
+  final BigInt? clipboardAgeMs;
   final ContextSourceDto source;
   final ContextCaptureStatusDto status;
   final PlatformInt64 capturedAtMs;
 
   const ContextCaptureDto({
+    this.text,
+    this.clipboardAgeMs,
     required this.source,
     required this.status,
     required this.capturedAtMs,
   });
 
   @override
-  int get hashCode => source.hashCode ^ status.hashCode ^ capturedAtMs.hashCode;
+  int get hashCode =>
+      text.hashCode ^
+      clipboardAgeMs.hashCode ^
+      source.hashCode ^
+      status.hashCode ^
+      capturedAtMs.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is ContextCaptureDto &&
           runtimeType == other.runtimeType &&
+          text == other.text &&
+          clipboardAgeMs == other.clipboardAgeMs &&
           source == other.source &&
           status == other.status &&
           capturedAtMs == other.capturedAtMs;
@@ -420,6 +491,7 @@ class ExecutionSessionSummaryDto {
   final int? exitCode;
   final PlatformInt64 startedAtMs;
   final PlatformInt64? finishedAtMs;
+  final PlatformInt64 outputRevision;
   final bool outputTruncated;
   final String? error;
 
@@ -432,6 +504,7 @@ class ExecutionSessionSummaryDto {
     this.exitCode,
     required this.startedAtMs,
     this.finishedAtMs,
+    required this.outputRevision,
     required this.outputTruncated,
     this.error,
   });
@@ -446,6 +519,7 @@ class ExecutionSessionSummaryDto {
       exitCode.hashCode ^
       startedAtMs.hashCode ^
       finishedAtMs.hashCode ^
+      outputRevision.hashCode ^
       outputTruncated.hashCode ^
       error.hashCode;
 
@@ -462,8 +536,16 @@ class ExecutionSessionSummaryDto {
           exitCode == other.exitCode &&
           startedAtMs == other.startedAtMs &&
           finishedAtMs == other.finishedAtMs &&
+          outputRevision == other.outputRevision &&
           outputTruncated == other.outputTruncated &&
           error == other.error;
+}
+
+enum InputModeDto {
+  environment,
+  content,
+  search,
+  ;
 }
 
 class LauncherStateDto {
@@ -604,6 +686,52 @@ class ShortcutActionDto {
           actionId == other.actionId &&
           title == other.title &&
           contextTypes == other.contextTypes;
+}
+
+class ShortcutApplicationDto {
+  final String bundleId;
+  final String title;
+
+  const ShortcutApplicationDto({
+    required this.bundleId,
+    required this.title,
+  });
+
+  @override
+  int get hashCode => bundleId.hashCode ^ title.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ShortcutApplicationDto &&
+          runtimeType == other.runtimeType &&
+          bundleId == other.bundleId &&
+          title == other.title;
+}
+
+class ShortcutRouteDto {
+  final String actionId;
+  final String? appBundleId;
+  final String? contextType;
+
+  const ShortcutRouteDto({
+    required this.actionId,
+    this.appBundleId,
+    this.contextType,
+  });
+
+  @override
+  int get hashCode =>
+      actionId.hashCode ^ appBundleId.hashCode ^ contextType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ShortcutRouteDto &&
+          runtimeType == other.runtimeType &&
+          actionId == other.actionId &&
+          appBundleId == other.appBundleId &&
+          contextType == other.contextType;
 }
 
 class SnapshotWaitDto {

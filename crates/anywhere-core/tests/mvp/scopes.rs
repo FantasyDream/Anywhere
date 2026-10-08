@@ -37,9 +37,17 @@ async fn existing_scopes_keep_slots_and_scoped_search_filters_before_other_sourc
         .unwrap()
         .unwrap();
     assert!(
-        filtered.candidates.is_empty(),
+        filtered
+            .candidates
+            .iter()
+            .all(|candidate| candidate.group_id == "git"
+                && candidate.command_id.as_deref() != Some("core.directory.copy")),
         "Git must not include Folder's matching Copy Path"
     );
+    assert!(filtered
+        .candidates
+        .iter()
+        .any(|candidate| candidate.command_id.as_deref() == Some("core.git.copy_branch_name")));
     assert_eq!(
         filtered.scopes[..scope_ids.len()]
             .iter()

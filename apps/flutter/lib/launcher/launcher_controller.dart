@@ -1,4 +1,6 @@
+import 'activation_prefill.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../src/rust/api.dart';
@@ -23,10 +25,12 @@ typedef BeginActivation = int Function();
 typedef Activate = Future<LauncherStateDto?> Function(
   int session, {
   bool promptAccessibility,
+  bool capturedEnvironment,
 });
 typedef PromptAccessibility = bool Function();
-typedef UpdateInput = Future<LauncherStateDto?>
-    Function(int session, String input, int revision, {String? scopeId});
+typedef UpdateInput = Future<LauncherStateDto?> Function(
+    int session, String input, int revision,
+    {String? scopeId, InputModeDto inputMode});
 typedef Execute = Future<ActionResultDto> Function(
   int session,
   int revision,
@@ -48,7 +52,12 @@ class LauncherBackend {
     this.loadIcon,
     this.promptAccessibility,
     this.shortcutActions,
+    this.supportedShortcutActions,
+    this.shortcutApplications,
+    this.resolveIntent,
+    this.waitIntent,
     this.resolveBinding,
+    this.waitBinding,
   });
 
   final BeginActivation beginActivation;
@@ -60,39 +69,62 @@ class LauncherBackend {
   final LoadIcon? loadIcon;
   final PromptAccessibility? promptAccessibility;
   final Future<List<ShortcutActionDto>> Function()? shortcutActions;
+  final Future<List<String>> Function(List<String>)? supportedShortcutActions;
+  final Future<List<ShortcutApplicationDto>> Function()? shortcutApplications;
+  final Future<BindingResolutionDto> Function(
+      int session, int revision, List<ShortcutRouteDto> routes)? resolveIntent;
+  final Future<BindingResolutionDto> Function(
+      int session, int revision, List<ShortcutRouteDto> routes)? waitIntent;
   final Future<List<CandidateDto>> Function(
       int session, int revision, String action)? resolveBinding;
+  final Future<BindingResolutionDto> Function(
+      int session, int revision, String action)? waitBinding;
 }
 
 /// Owns asynchronous presentation lifecycle; matching and execution stay in Rust.
 class LauncherController extends ChangeNotifier {
   LauncherController({
     required LauncherBackend backend,
-    required WindowHost window,
+    required DesktopHost window,
     String startupMessage = '',
     ApplyExcludedApps? applyExcludedApps,
     Future<void> Function(HostSettings)? applyContextSources,
     List<PluginStatusDto> Function()? readPlugins,
     Future<void> Function()? shutdownTasks,
+    int Function()? nowMillis,
   })  : _backend = backend,
         _window = window,
+        _nowMillis = nowMillis ?? (() => DateTime.now().millisecondsSinceEpoch),
         settings = SettingsController(
             window: window,
             startupMessage: startupMessage,
             applyExcludedApps: applyExcludedApps,
             applyContextSources: applyContextSources,
             readPlugins: readPlugins,
-            readShortcutActions: backend.shortcutActions),
+            readShortcutActions: backend.shortcutActions,
+            readSupportedShortcutActions: backend.supportedShortcutActions,
+            readShortcutApplications: backend.shortcutApplications),
         icons = ApplicationIconCache(backend.loadIcon) {
-    icons.addListener(_notify);
     settings.addListener(_notify);
     lifecycle = ApplicationLifecycle(
         closeSettings: closeSettings,
+        cancelLauncher: () async {
+          if (_phase != LauncherPhase.hidden) await dismiss();
+        },
         shutdownTasks: shutdownTasks ?? shutdownExecutionSessions);
   }
 
   final LauncherBackend _backend;
-  final WindowHost _window;
+  final DesktopHost _window;
+  final int Function() _nowMillis;
+  InputModeDto _inputMode = InputModeDto.environment;
+  InputModeDto _snapshotInputMode = InputModeDto.environment;
+  ContextSourceDto? _contentSource;
+  bool _prefillAllowed = false,
+      _prefillGracePassed = false,
+      _pendingAppHome = false;
+  Timer? _prefillTimer;
+  Future<void>? _prefillUpdate;
   final SettingsController settings;
   late final ApplicationLifecycle lifecycle;
   final ApplicationIconCache icons;
@@ -105,6 +137,7 @@ class LauncherController extends ChangeNotifier {
   List<String>? _actionPath;
   List<CandidateDto>? _bindingChoices;
   int _bindingRequest = 0;
+  bool _globalWaiting = false;
   WakeMode _wakeMode = WakeMode.currentApp;
   bool _scopeTouched = false;
   String? _selectedId, _message, _output, _resultSource;
@@ -114,21 +147,51 @@ class LauncherController extends ChangeNotifier {
   int _iconFirst = 0;
   int _iconLast = LauncherViewState.maxRows;
 
-  LauncherViewState get view => LauncherViewState(
-        phase: _phase,
-        generation: _generation,
-        snapshot: _snapshot,
-        input: _input,
-        scopeId: _scopeId,
-        actionPath: _actionPath,
-        selectedId: _selectedId,
-        message: _message,
-        output: _output,
-        resultSource: _resultSource,
-        resultStatus: _resultStatus,
-        universalShortcut: settings.current.universalLabel,
-        bindingChoices: _bindingChoices,
-      );
+  Record? _viewKey;
+  LauncherViewState? _cachedView;
+
+  LauncherViewState get view {
+    // Include every presentation input. Changes before notifyListeners must also
+    // invalidate the view (reconciliation and icon prefetch read it internally).
+    final key = (
+      _phase,
+      _generation,
+      _snapshot,
+      _input,
+      _inputMode,
+      _snapshotInputMode,
+      _contentSource,
+      _scopeId,
+      _actionPath,
+      _selectedId,
+      _message,
+      _output,
+      _resultSource,
+      _resultStatus,
+      settings.current.universalLabel,
+      _bindingChoices
+    );
+    if (key == _viewKey && _cachedView != null) return _cachedView!;
+    _viewKey = key;
+    return _cachedView = LauncherViewState(
+      phase: _phase,
+      generation: _generation,
+      snapshot: _snapshot,
+      input: _input,
+      inputMode: _inputMode,
+      inputModeReady: _snapshotInputMode == _inputMode,
+      contentSource: _contentSource,
+      scopeId: _scopeId,
+      actionPath: _actionPath,
+      selectedId: _selectedId,
+      message: _message,
+      output: _output,
+      resultSource: _resultSource,
+      resultStatus: _resultStatus,
+      universalShortcut: settings.current.universalLabel,
+      bindingChoices: _bindingChoices,
+    );
+  }
 
   HostSettings get hostSettings => settings.current;
   String? get statusMessage =>
@@ -146,6 +209,8 @@ class LauncherController extends ChangeNotifier {
   void attach() {
     _window.listen(
       toggle: toggle,
+      actionShortcut: (id, binding) =>
+          triggerGlobalShortcut(id, requestedBinding: binding),
       dismiss: (generation) async {
         if (generation == _generation) await dismiss(hostAlreadyHidden: true);
       },
@@ -165,6 +230,7 @@ class LauncherController extends ChangeNotifier {
   }
 
   Future<void> toggle([String? mode]) async {
+    if (lifecycle.isQuitting) return;
     final parsed = parseWakeMode(mode);
     if (_phase == LauncherPhase.settings) {
       if (!await closeSettings()) return;
@@ -179,8 +245,43 @@ class LauncherController extends ChangeNotifier {
     _applyWakeMode(parsed);
   }
 
-  Future<void> activate({WakeMode mode = WakeMode.currentApp}) async {
-    if (_disposed) return;
+  /// Native global events carry only business identity, never cached object data.
+  bool _bindingIsCurrent(ActionShortcut binding) =>
+      settings.current.actionShortcuts.any((b) =>
+          b.actionId == binding.actionId &&
+          jsonEncode(b.toMap()) == jsonEncode(binding.toMap()));
+
+  Future<void> triggerGlobalShortcut(String actionId,
+      {ActionShortcut? requestedBinding}) async {
+    if (_disposed || lifecycle.isQuitting || _phase == LauncherPhase.settings) {
+      return;
+    }
+    final binding = settings.current.actionShortcuts
+        .where((b) =>
+            b.actionId == actionId &&
+            b.global &&
+            b.validate(settings.current) == null)
+        .firstOrNull;
+    if (binding == null ||
+        (requestedBinding != null && !_bindingIsCurrent(requestedBinding))) {
+      return; // Removed/edited queued event.
+    }
+    if (_phase == LauncherPhase.hidden) {
+      if (binding.isIntent
+          ? _backend.waitIntent == null
+          : _backend.waitBinding == null) {
+        return;
+      }
+      await activate(mode: WakeMode.universal, globalBinding: binding);
+    } else if (_phase == LauncherPhase.ready) {
+      await executeShortcut(binding);
+    }
+  }
+
+  Future<void> activate(
+      {WakeMode mode = WakeMode.currentApp,
+      ActionShortcut? globalBinding}) async {
+    if (_disposed || lifecycle.isQuitting) return;
     if (_phase == LauncherPhase.settings && !await closeSettings()) return;
     if (_phase != LauncherPhase.hidden) return;
     final generation = ++_generation;
@@ -192,14 +293,30 @@ class LauncherController extends ChangeNotifier {
       // identity to cancel while foreground capture was still running.
       final session = _backend.beginActivation();
       _session = session;
-      final state =
-          await _backend.activate(session, promptAccessibility: false);
+      final state = await _backend.activate(session,
+          promptAccessibility: false,
+          capturedEnvironment: globalBinding != null);
       if (!_current(generation)) return;
       if (state == null || state.sessionId != session) {
         await dismiss();
         return;
       }
       _input = '';
+      _inputMode = InputModeDto.environment;
+      _contentSource = null;
+      _prefillUpdate = null;
+      _pendingAppHome = false;
+      _prefillAllowed = mode == WakeMode.currentApp && globalBinding == null;
+      _prefillGracePassed = false;
+      _prefillTimer?.cancel();
+      if (_prefillAllowed) {
+        _prefillTimer = Timer(const Duration(milliseconds: 500), () {
+          if (_current(generation)) {
+            _prefillGracePassed = true;
+            _maybePrefill();
+          }
+        });
+      }
       _actionPath = null;
       _snapshot = null;
       settings.recordCaptures(const []);
@@ -212,14 +329,31 @@ class LauncherController extends ChangeNotifier {
       _output = null;
       _resultSource = null;
       _resultStatus = null;
-      _phase = LauncherPhase.ready;
+      _phase =
+          globalBinding == null ? LauncherPhase.ready : LauncherPhase.resolving;
+      _globalWaiting = globalBinding != null;
+      if (_globalWaiting) {
+        _message = 'Capturing context for ${globalBinding!.title}…';
+      }
       _apply(state);
+      if (_prefillUpdate != null) {
+        await _prefillUpdate;
+      }
+      if (!_current(generation)) return;
+      if (mode == WakeMode.universal && globalBinding == null) {
+        _inputMode = InputModeDto.search;
+        await update('', automatic: true);
+      }
       _notify();
       await _syncWindow(show: true);
       if (_current(generation) && view.visible) {
-        _promptCurrentAppAccess(mode);
+        if (globalBinding == null) _promptCurrentAppAccess(mode);
         _notify();
         unawaited(_follow(generation, session));
+        if (globalBinding != null) {
+          await _completeGlobalBinding(
+              globalBinding, generation, state.revision);
+        }
       }
     } catch (error) {
       if (!_current(generation)) return;
@@ -230,17 +364,64 @@ class LauncherController extends ChangeNotifier {
     }
   }
 
+  Future<void> _completeGlobalBinding(
+      ActionShortcut binding, int generation, int revision) async {
+    bool current() =>
+        _current(generation) &&
+        _globalWaiting &&
+        _requestedRevision == revision &&
+        _phase == LauncherPhase.resolving;
+    try {
+      final resolved = binding.isIntent
+          ? await _backend.waitIntent!(_session!, revision,
+              binding.routes.map((r) => r.toDto()).toList())
+          : await _backend.waitBinding!(_session!, revision, binding.actionId);
+      if (!current() ||
+          resolved.state.sessionId != _session ||
+          resolved.state.revision != revision) {
+        return;
+      }
+      if (!_bindingIsCurrent(binding)) {
+        _globalWaiting = false;
+        _phase = LauncherPhase.ready;
+        _message = 'Shortcut settings changed. Try again.';
+        _notify();
+        await _syncWindow();
+        return;
+      }
+      _globalWaiting = false;
+      _apply(resolved.state);
+      _phase = LauncherPhase.ready;
+      _message = null;
+      await _presentBinding(binding, resolved.candidates,
+          requiresChoice: resolved.requiresChoice);
+    } catch (error) {
+      if (!current()) return;
+      _globalWaiting = false;
+      _phase = LauncherPhase.ready;
+      _message = '$error';
+      _notify();
+      await _syncWindow();
+    }
+  }
+
   Future<void> dismiss({bool hostAlreadyHidden = false}) async {
     if (_disposed) return;
     final generation = _generation;
     final session = _session;
     ++_generation;
+    _globalWaiting = false;
     _session = null;
     _snapshot = null;
+    _cachedView = null;
+    _viewKey = null;
     _bindingChoices = null;
     ++_bindingRequest;
     _phase = LauncherPhase.hidden;
     _input = '';
+    _prefillAllowed = false;
+    _prefillTimer?.cancel();
+    _contentSource = null;
     _actionPath = null;
     _scopeId = null;
     _scopeTouched = false;
@@ -271,6 +452,7 @@ class LauncherController extends ChangeNotifier {
       return;
     }
     _snapshot = state;
+    _snapshotInputMode = _inputMode;
     _bindingChoices = null;
     ++_bindingRequest;
     settings.recordCaptures(state.contextCaptures);
@@ -296,7 +478,15 @@ class LauncherController extends ChangeNotifier {
     // Menu permission can disappear while the aggregate Current App scope stays
     // available through Folder/Git actions. Return to its home in that case.
     if (_actionPath != null && !view.canBrowseMenus) _actionPath = null;
+    if (_pendingAppHome) {
+      final app = view.scopes.where((scope) => scope.isCurrentApp).firstOrNull;
+      if (app != null) {
+        _scopeId = app.id;
+        _pendingAppHome = false;
+      }
+    }
     _maybeSelectScope();
+    _maybePrefill();
     _reconcile();
     _requestIcons();
   }
@@ -357,16 +547,22 @@ class LauncherController extends ChangeNotifier {
     }
   }
 
-  Future<void> update(String input) async {
+  Future<void> update(String input, {bool automatic = false}) async {
     final session = _session;
     if (session == null || !view.visible) return;
     final revision = ++_revision;
     _requestedRevision = revision;
     final generation = _generation;
     _input = input;
+    if (!automatic) {
+      _prefillAllowed = false;
+      _prefillTimer?.cancel();
+      _pendingAppHome = false;
+      _scopeTouched = true;
+    }
+    _globalWaiting = false;
     _bindingChoices = null;
     ++_bindingRequest;
-    _scopeTouched = true;
     _phase = LauncherPhase.resolving;
     _output = _message = null;
     _userMoved = false;
@@ -374,7 +570,7 @@ class LauncherController extends ChangeNotifier {
     _notify();
     try {
       final state = await _backend.updateInput(session, input, revision,
-          scopeId: _scopeId);
+          scopeId: _scopeId, inputMode: _inputMode);
       if (!_current(generation) ||
           !view.visible ||
           revision != _revision ||
@@ -385,6 +581,7 @@ class LauncherController extends ChangeNotifier {
       }
       _selectedId = null;
       _apply(state);
+      if (revision != _requestedRevision) return;
       _phase = LauncherPhase.ready;
       _notify();
       await _syncWindow();
@@ -395,6 +592,58 @@ class LauncherController extends ChangeNotifier {
       _notify();
       await _syncWindow();
     }
+  }
+
+  void _maybePrefill() {
+    if (!_prefillAllowed ||
+        _scopeTouched ||
+        _userMoved ||
+        _input.isNotEmpty ||
+        !view.visible ||
+        _globalWaiting) {
+      return;
+    }
+    final captures = _snapshot?.contextCaptures ?? const <ContextCaptureDto>[];
+    final prefill = ActivationPrefill.choose(captures, _nowMillis(),
+        selectedEnabled: settings.current.captureSelectedText,
+        clipboardEnabled: settings.current.captureClipboard,
+        allowPendingSelection: _prefillGracePassed);
+    if (prefill == null) {
+      return;
+    }
+    _prefillAllowed = false;
+    _prefillTimer?.cancel();
+    _inputMode = InputModeDto.content;
+    _contentSource = prefill.source;
+    _wakeMode = WakeMode.universal;
+    _scopeId = null;
+    _actionPath = null;
+    _prefillUpdate = update(prefill.text, automatic: true);
+    unawaited(_prefillUpdate);
+  }
+
+  Future<void> _returnToCurrentApp() async {
+    _prefillAllowed = false;
+    _prefillTimer?.cancel();
+    _inputMode = InputModeDto.environment;
+    _contentSource = null;
+    _wakeMode = WakeMode.currentApp;
+    _scopeId = null;
+    _actionPath = null;
+    _pendingAppHome = true;
+    await update('', automatic: true);
+  }
+
+  Future<void> _emptyGlobalSearch() async {
+    _prefillAllowed = false;
+    _prefillTimer?.cancel();
+    _inputMode = InputModeDto.search;
+    _contentSource = null;
+    _wakeMode = WakeMode.universal;
+    _scopeId = null;
+    _actionPath = null;
+    _pendingAppHome = false;
+    await update('', automatic: true);
   }
 
   Future<void> executeSelected() async {
@@ -422,7 +671,7 @@ class LauncherController extends ChangeNotifier {
   Future<void> executeShortcut(ActionShortcut binding) async {
     final resolve = _backend.resolveBinding;
     final state = _snapshot;
-    if (resolve == null ||
+    if ((binding.isIntent ? _backend.resolveIntent == null : resolve == null) ||
         state == null ||
         _phase != LauncherPhase.ready ||
         _output != null ||
@@ -439,23 +688,33 @@ class LauncherController extends ChangeNotifier {
     final generation = _generation;
     final revision = _requestedRevision;
     try {
-      final candidates =
-          await resolve(state.sessionId, revision, binding.actionId);
+      final intent = binding.isIntent
+          ? await _backend.resolveIntent!(state.sessionId, revision,
+              binding.routes.map((r) => r.toDto()).toList())
+          : null;
+      final candidates = intent?.candidates ??
+          await resolve!(state.sessionId, revision, binding.actionId);
       if (!_current(generation) ||
           request != _bindingRequest ||
           revision != _requestedRevision ||
           _phase != LauncherPhase.ready) {
         return;
       }
-      if (candidates.length == 1) {
-        await _executeCandidate(candidates.single);
-      } else if (candidates.isNotEmpty) {
-        _bindingChoices = candidates;
-        _selectedId = null;
-        _message = 'Choose an object for ${binding.title}';
+      if (!_bindingIsCurrent(binding)) {
+        _message = 'Shortcut settings changed. Try again.';
         _notify();
         await _syncWindow();
+        return;
       }
+      if (intent != null) {
+        if (intent.state.sessionId != state.sessionId ||
+            intent.state.revision != revision) {
+          return;
+        }
+        _apply(intent.state);
+      }
+      await _presentBinding(binding, candidates,
+          requiresChoice: intent?.requiresChoice ?? false);
     } catch (error) {
       if (!_current(generation) ||
           request != _bindingRequest ||
@@ -463,6 +722,22 @@ class LauncherController extends ChangeNotifier {
         return;
       }
       _message = '$error';
+      _notify();
+      await _syncWindow();
+    }
+  }
+
+  Future<void> _presentBinding(
+      ActionShortcut binding, List<CandidateDto> candidates,
+      {bool requiresChoice = false}) async {
+    if (candidates.length == 1 && !requiresChoice) {
+      await _executeCandidate(candidates.single);
+    } else if (candidates.isNotEmpty) {
+      _bindingChoices = candidates;
+      _selectedId = null;
+      _message = binding.isIntent
+          ? 'Choose an action or object for ${binding.title}'
+          : 'Choose an object for ${binding.title}';
       _notify();
       await _syncWindow();
     }
@@ -555,6 +830,8 @@ class LauncherController extends ChangeNotifier {
         .key;
     _userMoved = true;
     _output = null;
+    _prefillAllowed = false;
+    _prefillTimer?.cancel();
     _resultSource = null;
     _resultStatus = null;
     _notify();
@@ -615,7 +892,7 @@ class LauncherController extends ChangeNotifier {
   }
 
   Future<void> openSettings() async {
-    if (_disposed) return;
+    if (_disposed || lifecycle.isQuitting) return;
     if (_phase == LauncherPhase.settings) {
       // Restore the existing window without rebuilding the draft or recording state.
       await _window.show(_generation, view.height, settings: true);
@@ -648,6 +925,22 @@ class LauncherController extends ChangeNotifier {
       return false;
     }
     if (!_current(generation) || _phase != LauncherPhase.settings) return false;
+    // Quitting only needs the draft decision; it does not need to reacquire keys.
+    if (!lifecycle.isQuitting) {
+      try {
+        await _window.resumeActionShortcuts();
+      } catch (error) {
+        if (_current(generation) && _phase == LauncherPhase.settings) {
+          final detail = error is PlatformException ? error.message : '$error';
+          settings.reportShortcutRestoreError(detail ?? '');
+        }
+        return false;
+      }
+      if (!_current(generation) || _phase != LauncherPhase.settings) {
+        return false;
+      }
+      settings.shortcutsRestored();
+    }
     await dismiss();
     return true;
   }
@@ -675,6 +968,10 @@ class LauncherController extends ChangeNotifier {
   }
 
   Future<void> escape() async {
+    if (_globalWaiting) {
+      await dismiss();
+      return;
+    }
     if (_bindingChoices != null) {
       _bindingChoices = null;
       ++_bindingRequest;
@@ -692,6 +989,10 @@ class LauncherController extends ChangeNotifier {
       back();
       return;
     }
+    if (_inputMode == InputModeDto.content) {
+      await _returnToCurrentApp();
+      return;
+    }
     if (_input.isNotEmpty) {
       await update('');
       return;
@@ -700,8 +1001,8 @@ class LauncherController extends ChangeNotifier {
       backMenu();
       return;
     }
-    if (_scopeId != null) {
-      await selectScope(null);
+    if (_scopeId != null || _wakeMode == WakeMode.currentApp) {
+      await _emptyGlobalSearch();
       return;
     }
     await dismiss();
@@ -709,6 +1010,13 @@ class LauncherController extends ChangeNotifier {
 
   void _applyWakeMode(WakeMode mode) {
     _actionPath = null;
+    _contentSource = null;
+    _prefillAllowed = false;
+    _prefillTimer?.cancel();
+    _inputMode = mode == WakeMode.currentApp
+        ? InputModeDto.environment
+        : InputModeDto.search;
+    _pendingAppHome = mode == WakeMode.currentApp;
     _wakeMode = mode;
     _scopeTouched = true;
     if (mode == WakeMode.currentApp) _promptCurrentAppAccess(mode);
@@ -735,6 +1043,8 @@ class LauncherController extends ChangeNotifier {
     }
     _selectedId = 'candidate:$id';
     _userMoved = true;
+    _prefillAllowed = false;
+    _prefillTimer?.cancel();
     _notify();
     await executeSelected();
   }
@@ -744,6 +1054,8 @@ class LauncherController extends ChangeNotifier {
     if (view.resolving || index < 0 || index >= entries.length) return;
     _selectedId = entries[index].key;
     _userMoved = true;
+    _prefillAllowed = false;
+    _prefillTimer?.cancel();
     _notify();
     await executeSelected();
   }
@@ -788,7 +1100,10 @@ class LauncherController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _prefillTimer?.cancel();
     _disposed = true;
+    _cachedView = null;
+    _viewKey = null;
     ++_generation;
     final session = _session;
     if (session != null) {
@@ -796,7 +1111,6 @@ class LauncherController extends ChangeNotifier {
     }
     settings.removeListener(_notify);
     settings.dispose();
-    icons.removeListener(_notify);
     icons.dispose();
     _window.dispose();
     super.dispose();

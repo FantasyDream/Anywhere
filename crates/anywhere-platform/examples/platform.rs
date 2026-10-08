@@ -1,10 +1,10 @@
 //! Read-only by default. Explicit subcommands opt into OS side effects.
 use anyhow::{bail, Result};
-use anywhere_platform::{ApplicationInfo, NativePlatform, Platform};
+use anywhere_platform::{native_platform, ApplicationInfo};
 use std::path::Path;
 
 fn main() -> Result<()> {
-    let platform = NativePlatform;
+    let platform = native_platform()?;
     let args: Vec<String> = std::env::args().collect();
     let value = args.get(2).map(String::as_str).unwrap_or("");
     match args.get(1).map(String::as_str).unwrap_or("capture") {

@@ -1,3 +1,4 @@
+import 'package:anywhere/infrastructure/desktop_environment.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -6,11 +7,14 @@ import 'package:anywhere/execution/execution_sessions_controller.dart';
 import 'package:anywhere/execution/execution_sessions_screen.dart';
 import 'package:anywhere/execution/execution_output_view.dart';
 import 'package:anywhere/execution/execution_command.dart';
+import 'package:anywhere/execution/execution_sessions_view.dart';
+import 'package:anywhere/ui/app_style.dart';
 import 'package:anywhere/src/rust/api.dart';
 
 ExecutionSessionSummaryDto summary(String id,
         {ExecutionSessionStatusDto status = ExecutionSessionStatusDto.running,
         bool truncated = false,
+        int outputRevision = 0,
         String title = 'Cargo Check',
         String directory = '/tmp/project'}) =>
     ExecutionSessionSummaryDto(
@@ -20,6 +24,7 @@ ExecutionSessionSummaryDto summary(String id,
         command: const ['/tmp/cargo', 'check'],
         status: status,
         startedAtMs: 1,
+        outputRevision: outputRevision,
         outputTruncated: truncated,
         exitCode: status == ExecutionSessionStatusDto.failed ? 7 : null);
 ExecutionSessionDetailDto detail(String id,
@@ -31,7 +36,105 @@ ExecutionSessionDetailDto detail(String id,
         stderr: 'Diagnostic $id');
 
 void main() {
+  setUp(() => DesktopEnvironment.configure(
+      const DesktopEnvironment(platform: TargetPlatform.macOS)));
+  tearDown(DesktopEnvironment.reset);
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('unchanged polls retain output and do not rebuild the task window',
+      () async {
+    var outputReads = 0;
+    var notifications = 0;
+    var revision = 1;
+    var status = ExecutionSessionStatusDto.running;
+    final controller = ExecutionSessionsController(ExecutionSessionsBackend(
+      // Fresh command lists reproduce allocations made by the Rust bridge.
+      list: () async =>
+          [summary('a', outputRevision: revision, status: status)],
+      detail: (_) async {
+        outputReads++;
+        return ExecutionSessionDetailDto(
+            summary: summary('a', outputRevision: revision, status: status),
+            stdout: 'x' * (128 * 1024),
+            stderr: '');
+      },
+    ));
+    controller.addListener(() => notifications++);
+    controller.setVisible(true);
+    await Future<void>.delayed(Duration.zero);
+    final originalOutput = controller.detail;
+    final originalRows = controller.visibleSessions;
+    notifications = 0;
+    for (var poll = 0; poll < 100; poll++) {
+      await controller.refresh();
+    }
+    expect(outputReads, 1);
+    expect(notifications, 0);
+    expect(identical(controller.detail, originalOutput), isTrue);
+    expect(identical(controller.visibleSessions, originalRows), isTrue);
+    expect(controller.pollInterval,
+        ExecutionSessionsController.activePollInterval);
+    revision++;
+    await controller.refresh();
+    expect(outputReads, 2);
+    expect(controller.detail?.summary.outputRevision, 2);
+    status = ExecutionSessionStatusDto.succeeded;
+    await controller.refresh();
+    expect(outputReads, 3);
+    expect(controller.detail?.summary.status, status);
+    expect(
+        controller.pollInterval, ExecutionSessionsController.idlePollInterval);
+    controller.dispose();
+  });
+
+  test(
+      'completed task polling still discovers new tasks and filtering is cached',
+      () async {
+    var tasks = [summary('a', status: ExecutionSessionStatusDto.succeeded)];
+    final controller = ExecutionSessionsController(ExecutionSessionsBackend(
+      list: () async => tasks,
+      detail: (id) async => ExecutionSessionDetailDto(
+          summary: tasks.firstWhere((task) => task.id == id),
+          stdout: id,
+          stderr: ''),
+    ));
+    controller.setVisible(true);
+    await Future<void>.delayed(Duration.zero);
+    controller.setFilter('rust project');
+    expect(controller.visibleSessions, isEmpty);
+    tasks = [summary('b', title: 'Rust Check'), ...tasks];
+    await controller.refresh();
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.visibleSessions.single.id, 'b');
+    expect(controller.selectedId, 'b');
+    expect(controller.detail?.stdout, 'b');
+    expect(identical(controller.visibleSessions, controller.visibleSessions),
+        isTrue);
+    expect(controller.pollInterval,
+        ExecutionSessionsController.activePollInterval);
+    controller.dispose();
+  });
+
+  test('empty task lists and idempotent visibility do not generate UI updates',
+      () async {
+    var reads = 0, updates = 0;
+    final controller = ExecutionSessionsController(ExecutionSessionsBackend(
+      list: () async {
+        reads++;
+        return [];
+      },
+    ));
+    controller.addListener(() => updates++);
+    controller.setVisible(true);
+    await Future<void>.delayed(Duration.zero);
+    for (var poll = 0; poll < 10; poll++) {
+      await controller.refresh();
+      controller.setVisible(true);
+    }
+    expect(reads, 11);
+    expect(updates, 0);
+    controller.dispose();
+  });
 
   test('late output from a previous selection cannot replace the current task',
       () async {
@@ -198,6 +301,7 @@ void main() {
         command: ['pnpm', 'run', List.filled(30, 'long argument').join(' ')],
         status: ExecutionSessionStatusDto.running,
         startedAtMs: 1,
+        outputRevision: 0,
         outputTruncated: false);
     var stopped = false;
     final controller = ExecutionSessionsController(ExecutionSessionsBackend(
@@ -221,6 +325,47 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
+  testWidgets('minimum task window supports larger text and long project names',
+      (tester) async {
+    tester.view.physicalSize = const Size(760, 420);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final task = summary('large',
+        status: ExecutionSessionStatusDto.failed,
+        title: 'Build a project with a deliberately long task title',
+        directory: '/tmp/a-project-with-a-deliberately-long-name');
+    final controller = ExecutionSessionsController(ExecutionSessionsBackend(
+        list: () async => [task],
+        detail: (_) async => ExecutionSessionDetailDto(
+            summary: task,
+            stdout: 'Build output',
+            stderr: 'Build diagnostic')));
+    addTearDown(controller.dispose);
+    controller.setVisible(true);
+    await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme,
+        builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context)
+                .copyWith(textScaler: const TextScaler.linear(1.4)),
+            child: child!),
+        home: ListenableBuilder(
+            listenable: controller,
+            builder: (_, __) => ExecutionSessionsView(
+                controller: controller,
+                onOpenLauncher: () async {},
+                onHide: () async {}))));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Build diagnostic'), findsOneWidget);
+    await tester.tap(find.text('Output'));
+    await tester.pump();
+    expect(find.text('Build output'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    controller.setVisible(false);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   test('task filtering and explicit action targets preserve user intent',
       () async {
     var tasks = [

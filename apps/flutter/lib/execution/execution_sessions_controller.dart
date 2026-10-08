@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../src/rust/api.dart';
+import 'execution_snapshot.dart';
 
 bool isTaskActive(ExecutionSessionStatusDto status) =>
     status == ExecutionSessionStatusDto.running ||
@@ -25,19 +26,38 @@ class ExecutionSessionsBackend {
 class ExecutionSessionsController extends ChangeNotifier {
   ExecutionSessionsController(this.backend);
   final ExecutionSessionsBackend backend;
-  List<ExecutionSessionSummaryDto> sessions = const [];
+  List<ExecutionSessionSummaryDto> _sessions = const [];
+  List<ExecutionSessionSummaryDto> get sessions => _sessions;
   ExecutionSessionDetailDto? detail;
   String? selectedId;
   String? _actionError, _refreshError;
   String get filter => _filter;
   String _filter = '';
   String? get error => _actionError ?? _refreshError;
-  List<ExecutionSessionSummaryDto> get visibleSessions {
+  List<ExecutionSessionSummaryDto> _visibleSessions = const [];
+  List<ExecutionSessionSummaryDto> get visibleSessions => _visibleSessions;
+
+  void _updateVisibleSessions() {
     final words = _filter.toLowerCase().trim().split(RegExp(r'\s+'));
-    return sessions
-        .where((task) => words.every((word) =>
-            '${task.title} ${task.directory}'.toLowerCase().contains(word)))
-        .toList();
+    _visibleSessions = _filter.trim().isEmpty
+        ? sessions
+        : List.unmodifiable(sessions.where((task) {
+            final text = '${task.title} ${task.directory}'.toLowerCase();
+            return words.every(text.contains);
+          }));
+  }
+
+  static const activePollInterval = Duration(milliseconds: 500);
+  static const idlePollInterval = Duration(seconds: 2);
+  Duration get pollInterval => sessions.any((task) => isTaskActive(task.status))
+      ? activePollInterval
+      : idlePollInterval;
+
+  void _scheduleRefresh() {
+    _timer?.cancel();
+    if (_visible && !_disposed) {
+      _timer = Timer(pollInterval, () => unawaited(refresh()));
+    }
   }
 
   bool busy = false;
@@ -49,7 +69,7 @@ class ExecutionSessionsController extends ChangeNotifier {
   Timer? _timer;
 
   void setVisible(bool visible) {
-    if (_disposed) {
+    if (_disposed || _visible == visible) {
       return;
     }
     _visible = visible;
@@ -57,8 +77,6 @@ class ExecutionSessionsController extends ChangeNotifier {
     _timer?.cancel();
     _timer = null;
     if (visible) {
-      _timer = Timer.periodic(
-          const Duration(milliseconds: 500), (_) => unawaited(refresh()));
       unawaited(refresh());
     }
   }
@@ -67,7 +85,10 @@ class ExecutionSessionsController extends ChangeNotifier {
     if (_disposed) {
       return;
     }
-    if (!visibleSessions.any((task) => task.id == id)) _filter = '';
+    if (!visibleSessions.any((task) => task.id == id)) {
+      _filter = '';
+      _updateVisibleSessions();
+    }
     if (selectedId == id && detail != null) return;
     selectedId = id;
     detail = null;
@@ -79,6 +100,7 @@ class ExecutionSessionsController extends ChangeNotifier {
   void setFilter(String value) {
     if (_disposed || _filter == value) return;
     _filter = value;
+    _updateVisibleSessions();
     final visible = visibleSessions;
     if (!visible.any((task) => task.id == selectedId)) {
       selectedId = visible.firstOrNull?.id;
@@ -117,7 +139,9 @@ class ExecutionSessionsController extends ChangeNotifier {
       return;
     }
     _refreshing = true;
+    _timer?.cancel();
     final epoch = _epoch;
+    var changed = false;
     try {
       final next = await backend.list();
       if (!_current(epoch)) {
@@ -125,32 +149,53 @@ class ExecutionSessionsController extends ChangeNotifier {
       }
       final oldIndex =
           visibleSessions.indexWhere((task) => task.id == selectedId);
-      sessions = next;
+      changed = !sameTaskList(sessions, next);
+      if (changed) {
+        _sessions = List.unmodifiable(next);
+        _updateVisibleSessions();
+      }
       final visible = visibleSessions;
-      if (!visible.any((session) => session.id == selectedId)) {
-        selectedId = visible.isEmpty
-            ? null
-            : visible[oldIndex.clamp(0, visible.length - 1)].id;
+      final nextSelection = visible.any((session) => session.id == selectedId)
+          ? selectedId
+          : visible.isEmpty
+              ? null
+              : visible[oldIndex.clamp(0, visible.length - 1)].id;
+      if (nextSelection != selectedId) {
+        selectedId = nextSelection;
         detail = null;
+        changed = true;
       }
       final id = selectedId;
-      final nextDetail = id == null ? null : await backend.detail(id);
+      final summary = id == null ? null : _task(id);
+      final needsDetail = id != null &&
+          (detail == null || !sameTaskSummary(summary, detail?.summary));
+      final nextDetail = id == null
+          ? null
+          : needsDetail
+              ? await backend.detail(id)
+              : detail;
       if (!_current(epoch) || id != selectedId) {
         return;
       }
+      changed = changed || needsDetail || _refreshError != null;
       detail = nextDetail;
       _refreshError = null;
-      notifyListeners();
+      if (changed) notifyListeners();
     } catch (_) {
       if (_current(epoch)) {
-        _refreshError = 'Tasks could not be refreshed. Try again.';
-        notifyListeners();
+        const message = 'Tasks could not be refreshed. Try again.';
+        if (_refreshError != message || changed) {
+          _refreshError = message;
+          notifyListeners();
+        }
       }
     } finally {
       _refreshing = false;
       if (_queued) {
         _queued = false;
         unawaited(refresh());
+      } else {
+        _scheduleRefresh();
       }
     }
   }

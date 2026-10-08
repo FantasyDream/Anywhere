@@ -91,9 +91,9 @@ Controller 用 hidden / activating / ready / resolving / executing 表达阶段�
 
 ## 当前搜索与 Scope 行为
 
-### V0.6 Launcher 内快捷键
+### V0.6 Action Shortcuts
 
-用户 ActionShortcut 与 Candidate 的原应用 shortcut 展示字段分开。Host 保存带版本的业务动作/键位配置；Rust 的配置目录只暴露可持久绑定的动作和 Context 类型，不暴露捕获对象。触发时 `resolve_action_binding` 在当前完整 Offer 中解析 Enabled 候选，并复验 Session/Revision、目录版本、采集完成和持久绑定策略；一个目标走原 execute，多个目标由用户选择。绑定不保存 Candidate/Context 身份，不因 Scope 或查询把适用动作排除。Dart 通过请求代次拒绝迟到解析，并在设置保存队列中校验冲突；原生存储边界再检查键位、数量、唯一性和唤醒键冲突。全局意图分派尚未实现，后续要求见 [V0.6 MVP](mvp-v0.6.md)。
+用户 ActionShortcut 与 Candidate 的原应用 shortcut 展示字段分开。Host 保存带版本的业务动作/键位配置；Rust 的配置目录只暴露可持久绑定的动作和 Context 类型，不暴露捕获对象。触发时 `resolve_action_binding` 在当前完整 Offer 中解析 Enabled 候选，并复验 Session/Revision、目录版本、采集完成和持久绑定策略；一个目标走原 execute，多个目标由用户选择。绑定不保存 Candidate/Context 身份，不因 Scope 或查询把适用动作排除。Dart 通过请求代次拒绝迟到解析，并在设置保存队列中校验冲突；原生存储边界再检查键位、数量、唯一性和唤醒键冲突。固定动作全局触发在隐藏时预留新 Session，显示窗口前采集前台身份，再由 Rust `wait_action_binding` 在 5 秒内等待完整图/补充采集，原子返回快照与精确候选。UI 用 generation/revision 保护迟到完成，退出先撤销会话再关任务。Carbon 对动作键独占注册固定动作/意图配置 ID（原有唤醒键保留共享注册），发送配置元数据快照供 Dart 拒绝编辑后的旧消息，事件 ID 不复用并等待释放才接受下一次按下；设置期间暂停动作键，恢复时保留两个唤醒键。版本 4 使用通用 HID 键位与语义修饰位，并保留版本 3 的意图条件；版本 1 保持 local，版本 2 保持其 global 生效范围。意图条件选择由 Rust 在当前 Session 锁下完成，应用 + Context 优先于单条件再优先于通用规则；同优先级强制选择（含同目标去重），已选规则不可执行时整次失败，不降级另一命令。Context 条件同时约束实际执行节点类型；Context 图中的另一类型不能用于执行不相干对象。Core 以当前基础 Registry 与 ContextActionFactory 声明的持久身份判断注册支持状态，与当前对象的 Enabled/Hidden 状态分开。Flutter 在启动、保存和插件重载后同步业务 ID 支持列表；原生仅注册受支持的固定动作或仍含受支持规则的意图，撤销时释放系统键位、保留配置，恢复时重新注册且不复用事件 ID。动态脚本暂未捕获不会被误判为插件撤销。保存新配置携带其支持列表，注册失败同时回退配置和支持状态；异步同步附带配置快照，Host 拒绝过时写入。Settings 关闭前先恢复动作键，失败时清理部分注册并留在原页；正常退出不依赖键位恢复。macOS 录制只读取活跃设置窗口内的键码/修饰位，取消和回复以请求 ID 与前端代次保护。离开项目的配置只用保存的展示元数据编辑，不改变业务身份或增加执行权限。后续验收要求见 [V0.6 MVP](mvp-v0.6.md)。
 
 最新交互以 [Scope / Menu 规范](scope-group-menu-design.md) 为准。Context Graph 保留对象、来源、血缘与执行节点；不直接成为 Scope。没有 Subject 对象模型或 Context 选择标题。Finder 多选采集与图插入仍保留集合血缘重映射，稳定 ContextKey 和执行目标用于 Core 数据与 Offer 归属。
 
@@ -124,7 +124,9 @@ V0.4 来源的错误由平台层 `ContextReadError` 返回，不通过诊断字�
 
 Provider 仍顺序执行、深度最多 3、节点最多 128，同版本 Provider/Context 去重。没有网络/AI 分类、并行 scheduler 或消息总线。
 
-Git 检测只读元数据。执行通过类型化 Status/Log/Diff 和固定 argv，不经任意 shell；保留超时、输出上限和禁用外部 diff/fsmonitor 的规则。
+Git 检测只读元数据。执行通过封闭的 `GitOperation`（Status、Log、Diff、StagedDiff、Branches、BranchName、CommitHash、ShortCommitHash、RemoteUrl）和固定 argv，不经任意 shell；保留超时、输出上限和禁用外部 diff/fsmonitor 的规则。复制分支/哈希/remote URL 只接受完整单值；失败不写剪贴板、不计 Usage。remote 先选 origin 或唯一名字，再读默认 fetch URL，两个只读命令共享截止；不联系网络。Copy Repository Path 直接使用仓库根目录，不依赖 Git 命令。新动作由 Git ActionBundle 注册，复用 Scope、快捷键与执行凭证，不在 Provider 或查询阶段执行 Git，详见 [Git 常用动作](git-actions-v0.6.md)。
+
+IDEA 项目目录沿 `Platform::application_directory` 接入：macOS Adapter 只读取捕获应用实例的聚焦窗口标题；共享 Rust 解析器验证明确路径与 `.idea` 目录，继续使用 session 单飞 DirectoryMemo 与已有 Directory/Git/Developer Providers。Core 与 Flutter 不识别 IDEA bundle、标题格式或 AX API。多目录 Editor/Agent Bridge 尚属设计，见 [探索与接入边界](editor-agent-context.md)。
 
 后续交付顺序及架构调整时机以 [产品路线图](roadmap.md) 为准。V0.4 Context 来源和 Scope / 菜单交互工程收尾已完成，真实应用及权限矩阵见 [验收记录](v0.4-context-acceptance.md)。V0.5 当前交付与后续范围见 [MVP](mvp-v0.5.md)。
 
@@ -157,4 +159,38 @@ macOS 继续使用 Flutter assemble + swiftc 的自定义 Host，生成并签名
 
 内部 ExecutionCandidateId 只用于已提交执行缓存，BusinessActionId 用于成功使用记录及持久绑定。对外 DTO 保持字符串兼容。ActionRegistry::persistent_binding 只返回当前目录存在且 Handler 明确允许绑定的业务动作与 Context 类型；execute_builtin 包装动作还检查被包装 Handler 的绑定资格。菜单 Handler 显式拒绝长期绑定，独立于 records_usage；应用菜单 shortcut 是显示标签，不是 Launcher 或全局快捷键配置。
 
-当前仍未实现 V0.6 的快捷键配置、冲突分派与 Context 调用；该阶段必须重新捕获 Context，解析当前 Candidate 后走既有执行凭证校验。
+当前 V0.6 已实现快捷键配置、冲突回退与固定动作 Context 调用；按应用/Context 路由的意图配置已接入；插件撤销与恢复后的系统注册联动已接入，真实系统验收待完成。隐藏时全局入口重新捕获 Context，解析当前 Candidate 后走既有执行凭证校验。
+
+## 默认唤醒与输入图
+
+Scope 继续表示既有动作范围，Host 不添加文本来源 Scope 或并列入口。默认唤醒由 `ActivationPrefill` 根据成功采集的正文、来源设置和剪贴板年龄选择内容；选中文本优先，剪贴板有效期为 15 秒。
+
+Core 的 `InputMode` 在激活前或新 Revision 中确定图的来源：Environment 保留当前应用及 Finder/浏览器环境，Content 仅由输入派生并使用空查询，Search 仅解析显式输入并进行搜索。显式全局动作激活使用 CapturedEnvironment，保留完整采集图。模式过滤发生在 Provider seeds 与提交处，Scope 匹配和执行凭证仍走原有流程。
+
+macOS 平台只观测 pasteboard changeCount，以单调时钟跟踪新复制的年龄；重复读取不更新时间，启动前内容年龄未知。捕获正文只用于当前输入；Settings 丢弃正文和年龄，仅保留来源状态。详细契约见 [Context 输入与默认唤醒](context-input-navigation.md)。
+
+## 共享 UI 与窗口材质
+
+所有页面使用 `lib/ui/AppStyle` 与共享组件，功能层只决定内容、动作和页面状态。Settings/Execution 不依赖 Launcher 候选行来获得通用 keycap 或样式。Host 使用 `WindowMaterial` 创建相同的 AppKit 背景材质，窗口控制、Scope 与 Context 逻辑沿原有边界。设计与验证见 [UI 系统梳理](ui-system-v0.6.md)。
+
+`AppIcons` 集中定义语义图标，统一使用 Cupertino 字体资源；`AppToolbar` 与 `AppSidebarItem` 提供工具栏和导航项。内容列表使用蓝色选中背景，分类导航使用中性灰；新增页面沿用共享主题与组件，不在功能层另建色板。设置列表中的快捷键编辑组件保留稳定 key，动态插入状态提示时不会销毁持有弹窗结果的所有者。
+
+设置页和其弹窗通过 `settings/SettingsStyle` 继承共享视觉规则并收紧桌面控件尺寸；`SettingsToggleRow` 将内容、来源状态及开关放在同一背景中，控件独立提供点击/键盘与语义。设置窗口内容使用稳定底色，避免背后窗口和整行悬停造成视觉分割。布局重构不改变 SettingsController 的保存队列、草稿或关闭保护。
+
+窗口材质层在 macOS 26+ 将 Flutter 内容放入原生 `NSGlassEffectView.contentView`；旧系统回退到 `NSVisualEffectView`。`WindowMaterialController` 作为根控制器持有原 Flutter controller，Launcher/Settings 重用并移动同一个 host，以保留引擎、响应链和窗口生命周期。Root 材质几何与内容所有权由原生测试保护。
+
+
+## 平台无关边界
+
+共享业务通过 `Platform` 接口采集和执行，不识别 Finder 的应用 ID。文件管理器适配器声明 `file_selection_supported` 并提供 `selected_file_paths`；保留 `FinderSelection` / `captureFinderSelection` 作为既有 DTO 与记录的兼容名称。默认目录扫描以适配器的 `is_application_entry` 判断入口，`.app` 判断仅位于 macOS 实现。Bridge 通过 `native_platform()` 组装，未实现的系统适配器返回明确错误。
+
+Flutter Controller 依赖 `DesktopHost`；`WindowHost` 是 MethodChannel 实现。启动通过 `RuntimePaths` 获取动态库、数据和插件路径，不猜测 dylib、Frameworks 或用户目录。Launcher 和 Tasks 使用同一协议，Tasks 只要求 library 路径。`DesktopEnvironment` 集中字体、命令键、标题栏留白和 Host 背景/录制能力；没有背景能力或系统降低透明度时，用不透明根背景承托共享透明组件。材质本身仍可由原生 Host 提供。
+
+`actionShortcutVersion=4` 的 keyCode 是 USB HID keyboard usage（支持集合由 keymap 生成），modifiers 为 Control=1 / Alt=2 / Shift=4 / Meta=8；物理键与逻辑字符分离。版本 1–3 的 Carbon 数据仅在迁移器和 macOS Host 中读取。macOS 内部转换回 Carbon 后注册，保存、导出到 Dart 和录制响应都使用通用编码。Meta 保持 Meta，跨平台不会自动变成 Control；页面标准命令则在 macOS 使用 Command、Windows 使用 Control。未知版本/键位不能猜测注册，未知文件版本不能覆盖。
+
+Git 的 argv、进程执行、限时排空和报告完全复用 Rust 标准库。Developer Action 只描述工具/参数/目录，GUI PATH、Java 环境和 wrapper 解释位于 platform 的工具服务。ProcessRequest 与会话生命周期保持通用；Unix 进程组/非阻塞管道集中在 `process/unix.rs`，未实现进程树后端的平台在启动子进程前拒绝，不退化成只杀父进程。详见 [跨平台架构与接入契约](platform-portability.md)。
+
+
+## 展示缓存与资源预算
+
+LauncherViewState 只缓存自身快照的派生结果，控制器按完整展示输入复用该对象；输入、Scope、导航、候选或状态改变时失效，隐藏时释放。图标更新仅通知应用行。任务摘要的 output_revision 与输出在同一个锁内提交；Flutter 值比较摘要，仅在所选详情变化时读取正文，并且无变化时不通知 UI。缓存预算与轮询间隔集中在 infrastructure 和 Execution Sessions 中；功能组件不自行设置全局缓存策略。具体限制和验证见 [V0.6 性能与资源策略](performance-v0.6.md)。

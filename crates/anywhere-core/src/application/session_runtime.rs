@@ -384,6 +384,7 @@ impl Resolver {
             // sorting can be slow; new input and cancellation must remain able to run.
             let (
                 input,
+                input_mode,
                 selected_scope,
                 facts,
                 usage,
@@ -404,12 +405,24 @@ impl Resolver {
                 {
                     return Ok(None);
                 }
+                if session.input_mode == InputMode::Environment {
+                    contexts.retain(|context| {
+                        !matches!(
+                            context.source,
+                            ContextSource::Clipboard | ContextSource::SelectedText
+                        )
+                    });
+                }
+                if matches!(session.input_mode, InputMode::Content | InputMode::Search) {
+                    contexts.retain(|context| context.source == ContextSource::UserInput);
+                }
                 if session.resolution.committed_revision == Some(revision) {
                     contexts = union_contexts(&session.resolution.committed_contexts, contexts);
                     resolve_complete |= session.state.context_complete;
                 }
                 (
                     session.state.input.clone(),
+                    session.input_mode,
                     session.state.selected_scope.clone(),
                     session.facts(),
                     session.usage.clone(),
@@ -425,6 +438,7 @@ impl Resolver {
             let prepared = super::snapshot::prepare(super::snapshot::SnapshotInput {
                 action_catalog_version,
                 input: &input,
+                input_mode,
                 selected_scope: selected_scope.as_deref(),
                 facts: &facts,
                 usage: &usage,
@@ -506,6 +520,21 @@ impl Resolver {
                     .captures
                     .iter()
                     .map(|capture| ContextCapturePresentation {
+                        text: if capture.status == ContextCaptureStatus::Captured {
+                            capture.contexts.iter().find_map(|ctx| match &ctx.value {
+                                crate::core::context::ContextValue::Text(text) => {
+                                    Some(text.to_string())
+                                }
+                                _ => None,
+                            })
+                        } else {
+                            None
+                        },
+                        clipboard_age_ms: if capture.source == ContextSource::Clipboard {
+                            session.identity.clipboard_age_ms
+                        } else {
+                            None
+                        },
                         source: capture.source,
                         status: capture.status,
                         captured_at_ms: capture.captured_at_ms,
@@ -631,12 +660,25 @@ fn union_contexts(
 ///
 /// Callers must already hold the session lock.
 pub fn seeds_from(session: &LauncherSession, input: &str) -> Vec<ResolvedContext> {
+    if matches!(session.input_mode, InputMode::Content | InputMode::Search) {
+        return crate::features::text::provider::text_context(input)
+            .into_iter()
+            .collect();
+    }
     let mut seeds = crate::features::session_seeds(
         session.identity.frontmost.as_ref(),
         session.resolution.context_cache.clone(),
         input,
     );
     for capture in &session.identity.captures {
+        if session.input_mode == InputMode::Environment
+            && matches!(
+                capture.source,
+                ContextSource::Clipboard | ContextSource::SelectedText
+            )
+        {
+            continue;
+        }
         seeds.extend(capture.contexts.iter().cloned());
     }
     seeds

@@ -25,6 +25,7 @@ pub struct PreparedSnapshot {
 pub struct SnapshotInput<'a> {
     pub action_catalog_version: u64,
     pub input: &'a str,
+    pub input_mode: InputMode,
     pub selected_scope: Option<&'a str>,
     pub facts: &'a SessionFacts,
     pub usage: &'a HashMap<(String, String), UsageStats>,
@@ -42,6 +43,7 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
     let SnapshotInput {
         action_catalog_version,
         input,
+        input_mode,
         selected_scope,
         facts,
         usage,
@@ -86,7 +88,12 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
             .iter()
             .map(|source| source.as_ref() as &dyn CandidateSource),
     );
-    let mut set = search.search_scoped(&Query::parse(input), contexts, &extra, selected_scope);
+    let query = Query::parse(if input_mode == InputMode::Content {
+        ""
+    } else {
+        input
+    });
+    let mut set = search.search_scoped(&query, contexts, &extra, selected_scope);
     let mut diagnostics = prior_diagnostics.to_vec();
     for diagnostic in action_diagnostics {
         if !diagnostics.contains(&diagnostic) {

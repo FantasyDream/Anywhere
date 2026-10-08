@@ -1,3 +1,4 @@
+import '../infrastructure/desktop_environment.dart';
 import '../src/rust/api.dart';
 
 /// Presentation of safe capture metadata. No context values or system reads.
@@ -15,7 +16,8 @@ class ContextSourceStatus {
   ];
 
   String get label => switch (source) {
-        ContextSourceDto.finderSelection => 'Finder selection',
+        ContextSourceDto.finderSelection =>
+          DesktopEnvironment.current.fileSelectionLabel,
         ContextSourceDto.selectedText => 'Selected text',
         ContextSourceDto.browserCurrentPage => 'Browser current page',
         ContextSourceDto.clipboard => 'Clipboard',

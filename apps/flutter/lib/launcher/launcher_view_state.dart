@@ -1,3 +1,4 @@
+import '../settings/host_settings.dart';
 import 'dart:convert';
 import '../src/rust/api.dart';
 import 'context_source_status.dart';
@@ -24,11 +25,14 @@ class LauncherEntry {
 
 /// Core supplies available scopes and ranked offers; Host owns menu navigation.
 class LauncherViewState {
-  const LauncherViewState({
+  LauncherViewState({
     required this.phase,
     required this.generation,
     this.snapshot,
     this.input = '',
+    this.inputMode = InputModeDto.environment,
+    this.inputModeReady = true,
+    this.contentSource,
     this.scopeId,
     this.actionPath,
     this.selectedId,
@@ -36,20 +40,30 @@ class LauncherViewState {
     this.output,
     this.resultSource,
     this.resultStatus,
-    this.universalShortcut = '⌘⌥⇧Space',
+    String? universalShortcut,
     this.bindingChoices,
-  });
+  }) : _universalShortcut = universalShortcut;
   final LauncherPhase phase;
   final int generation;
   final LauncherStateDto? snapshot;
   final String input;
+  final InputModeDto inputMode;
+  final bool inputModeReady;
+  final ContextSourceDto? contentSource;
+  bool get isContent => inputMode == InputModeDto.content;
+  String get contentLabel => contentSource == ContextSourceDto.selectedText
+      ? 'Selected text'
+      : 'Recent clipboard';
+  double get inputAreaHeight => inputHeight + (isContent ? 24 : 0);
   final String? scopeId;
 
   /// null = scope home, [] = menu root, [View, Appearance] = submenu.
   final List<String>? actionPath;
   final String? selectedId, message, output, resultSource;
   final ActionStatusDto? resultStatus;
-  final String universalShortcut;
+  final String? _universalShortcut;
+  String get universalShortcut =>
+      _universalShortcut ?? HostSettings.defaults.universalLabel;
   final List<CandidateDto>? bindingChoices;
   bool get visible =>
       phase == LauncherPhase.ready ||
@@ -58,14 +72,15 @@ class LauncherViewState {
       executing;
   bool get resolving => phase == LauncherPhase.resolving;
   bool get executing => phase == LauncherPhase.executing;
-  static const rowHeight = 52.0,
-      inputHeight = 64.0,
-      scopeHeight = 32.0,
-      headerHeight = 28.0,
-      footerHeight = 32.0;
+  static const rowHeight = 56.0,
+      inputHeight = 72.0,
+      scopeHeight = 36.0,
+      headerHeight = 24.0,
+      footerHeight = 44.0;
   static const maxRows = 7;
   List<ScopeDto> get scopes => snapshot?.scopes ?? const [];
-  ScopeDto? get selectedScope {
+  late final ScopeDto? selectedScope = _findSelectedScope();
+  ScopeDto? _findSelectedScope() {
     for (final scope in scopes) {
       if (scope.id == scopeId) return scope;
     }
@@ -78,34 +93,33 @@ class LauncherViewState {
       scopeId == null ||
       selectedScope?.isCurrentApp == true ||
       candidate.groupId == scopeId;
-  List<CandidateDto> get allActions => [
-        for (final candidate
-            in snapshot?.contextCandidates ?? const <CandidateDto>[])
-          if (candidate.kind == CandidateKindDto.action &&
-              candidate.availability != AvailabilityDto.hidden &&
-              _includesGroup(candidate))
-            candidate,
-      ];
+  late final List<CandidateDto> allActions = List.unmodifiable([
+    for (final candidate
+        in snapshot?.contextCandidates ?? const <CandidateDto>[])
+      if (candidate.kind == CandidateKindDto.action &&
+          candidate.availability != AvailabilityDto.hidden &&
+          _includesGroup(candidate))
+        candidate,
+  ]);
   bool isMenu(CandidateDto candidate) =>
       candidate.menuPath.isNotEmpty ||
       (candidate.commandId?.startsWith('app.') ?? false);
-  List<CandidateDto> get menuActions => [
-        for (final candidate in allActions)
-          if (isMenu(candidate) &&
-              (selectedScope?.isCurrentApp != true ||
-                  candidate.groupId == scopeId))
-            candidate,
-      ];
+  late final List<CandidateDto> menuActions = List.unmodifiable([
+    for (final candidate in allActions)
+      if (isMenu(candidate) &&
+          (selectedScope?.isCurrentApp != true || candidate.groupId == scopeId))
+        candidate,
+  ]);
   bool get canBrowseMenus =>
       bindingChoices == null && scopeId != null && menuActions.isNotEmpty;
-  List<CandidateDto> get scopedCandidates => [
-        for (final candidate in snapshot?.candidates ?? const <CandidateDto>[])
-          if (candidate.availability != AvailabilityDto.hidden &&
-              (scopeId == null ||
-                  (candidate.kind == CandidateKindDto.action &&
-                      _includesGroup(candidate))))
-            candidate,
-      ];
+  late final List<CandidateDto> scopedCandidates = List.unmodifiable([
+    for (final candidate in snapshot?.candidates ?? const <CandidateDto>[])
+      if (candidate.availability != AvailabilityDto.hidden &&
+          (scopeId == null ||
+              (candidate.kind == CandidateKindDto.action &&
+                  _includesGroup(candidate))))
+        candidate,
+  ]);
 
   /// Show the source of the execution target, rather than inferring it from a
   /// title or subtitle. Identical targets can have several merged context roots.
@@ -140,14 +154,30 @@ class LauncherViewState {
     };
   }
 
-  bool _hasPrefix(List<String> path, List<String> prefix) =>
-      path.length >= prefix.length &&
-      List.generate(prefix.length, (i) => path[i] == prefix[i])
-          .every((same) => same);
-  List<LauncherEntry> get visibleEntries {
+  bool _hasPrefix(List<String> path, List<String> prefix) {
+    if (path.length < prefix.length) return false;
+    for (var index = 0; index < prefix.length; index++) {
+      if (path[index] != prefix[index]) return false;
+    }
+    return true;
+  }
+
+  late final List<LauncherEntry> visibleEntries =
+      List.unmodifiable(_buildEntries());
+  List<LauncherEntry> _buildEntries() {
+    if (!inputModeReady ||
+        (inputMode == InputModeDto.search && input.isEmpty)) {
+      return const [];
+    }
     if (bindingChoices != null) {
       return [
         for (final candidate in bindingChoices!)
+          LauncherEntry.candidate(candidate)
+      ];
+    }
+    if (isContent) {
+      return [
+        for (final candidate in scopedCandidates)
           LauncherEntry.candidate(candidate)
       ];
     }
@@ -197,10 +227,10 @@ class LauncherViewState {
     ];
   }
 
-  List<CandidateDto> get visibleCandidates => [
-        for (final entry in visibleEntries)
-          if (entry.candidate != null) entry.candidate!,
-      ];
+  late final List<CandidateDto> visibleCandidates = List.unmodifiable([
+    for (final entry in visibleEntries)
+      if (entry.candidate != null) entry.candidate!,
+  ]);
   int get selectedIndex {
     final index = visibleEntries.indexWhere((entry) => entry.key == selectedId);
     return index < 0 ? 0 : index;
@@ -209,7 +239,10 @@ class LauncherViewState {
   double get selectedTop => selectedIndex * rowHeight;
   bool get hasScopeBar => scopes.isNotEmpty;
   bool get hasPanel =>
-      output != null || visibleEntries.isNotEmpty || scopeId != null;
+      output != null ||
+      visibleEntries.isNotEmpty ||
+      scopeId != null ||
+      isContent;
   String get emptyMessage =>
       input.isNotEmpty ? 'No matching actions' : 'No actions available';
   String? get notice =>
@@ -223,18 +256,29 @@ class LauncherViewState {
   String? get noticeSettingsPane =>
       message == null ? captureNotice?.settingsPane : null;
 
-  String get searchHint => selectedScope == null
-      ? 'Search for an action or app…'
-      : 'Search ${selectedScope!.label} actions…';
+  String get searchHint => isContent
+      ? 'Edit captured content…'
+      : selectedScope == null
+          ? 'Search for an action or app…'
+          : 'Search ${selectedScope!.label} actions…';
   String get resultHeading => output != null
       ? (resultStatus == ActionStatusDto.failed ? 'Failed' : 'Succeeded')
-      : input.trim().isNotEmpty
-          ? 'Results'
-          : browsing
-              ? ['Menus', ...actionPath!].join(' › ')
-              : selectedScope != null && selectedScope!.isCurrentApp != true
-                  ? 'Actions'
-                  : 'Suggested';
+      : bindingChoices != null
+          ? 'Choose a target'
+          : isContent
+              ? 'Actions for this content'
+              : input.trim().isNotEmpty
+                  ? 'Results'
+                  : browsing
+                      ? ['Menus', ...actionPath!].join(' › ')
+                      : selectedScope != null &&
+                              selectedScope!.isCurrentApp != true
+                          ? 'Actions'
+                          : 'Suggested';
+  // App and query are already visible in the input and Scope bar. Keep headings
+  // for content, navigation, binding choices and execution results only.
+  bool get hasResultHeading =>
+      output != null || browsing || isContent || bindingChoices != null;
   double get previewHeight =>
       ((output?.split('\n').length ?? 0).clamp(3, 14) * 20.0) + 24;
   double get height {
@@ -245,10 +289,13 @@ class LauncherViewState {
             ? 64.0
             : (visibleEntries.length * rowHeight + 8)
                 .clamp(8, maxRows * rowHeight + 8);
-    return (inputHeight +
+    return (inputAreaHeight +
             (hasScopeBar ? scopeHeight : 0) +
+            (hasPanel || hasScopeBar ? 1 : 0) +
             (notice == null ? 0 : 44) +
-            (hasPanel ? headerHeight + body + footerHeight + 2 : 0))
+            (hasPanel
+                ? (hasResultHeading ? headerHeight : 0) + body + footerHeight
+                : 0))
         .clamp(inputHeight, 520.0);
   }
 }

@@ -13,10 +13,11 @@ final class LauncherWindow: NSWindow {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation {
     var window: LauncherWindow!
     var controller: FlutterViewController!
-    var glass: NSVisualEffectView!
+    var glass: WindowMaterial!
+    var materialController: WindowMaterialController!
     var channel: FlutterMethodChannel!
     var statusItem: NSStatusItem!
-    lazy var hotKeys = HotKeyService(onActivate: { [weak self] mode in self?.activate(mode: mode) },
+    lazy var hotKeys = HotKeyService(supportedActionIds: [], onActivate: { [weak self] mode in self?.activate(mode: mode) },
         onRegistered: { [weak self] settings in self?.updateMenuTitles(settings) },
         log: { [weak self] value in self?.log(value) })
     var activationStart: TimeInterval = 0
@@ -30,7 +31,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var presentedGeneration: Int?
     var latestGeneration = 0
     lazy var launcherWindows = LauncherWindowCoordinator(window: window, controller: controller,
-        glass: glass, mask: launcherGlassMask, delegate: self,
+        host: materialController, glass: glass, mask: launcherGlassMask, delegate: self,
         tasksVisible: { [weak self] in self?.tasksWindow?.isVisible == true })
     var settingsOpen: Bool {
         get { launcherWindows.settingsOpen }
@@ -42,7 +43,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var tasksWindow: NSWindow? { taskWindows.tasksWindow }
     var tasksChannel: FlutterMethodChannel? { taskWindows.tasksChannel }
     var tasksReady: Bool { taskWindows.tasksReady }
-    var taskStopKeyMonitor: Any?
+    var localKeyMonitor: Any?
+    let shortcutRecorder = ShortcutRecorder()
+    var shortcutRecordingChannel: FlutterMethodChannel!
     var terminationPending = false
     let settingsStore = SettingsStore()
     var stored: StoredSettings {
@@ -67,7 +70,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.title = "Anywhere"
         window.isExcludedFromWindowsMenu = true
         let windowFrame = window.frame
-        window.contentViewController = controller
+        materialController = WindowMaterialController(contentController: controller,
+            frame: NSRect(origin: .zero, size: windowFrame.size), cornerRadius: 18)
+        glass = materialController.material
+        window.contentViewController = materialController
         // Flutter's initial view is 0×0; preserve the requested window size when attaching it.
         window.setFrame(windowFrame, display: false)
         window.delegate = self
@@ -80,14 +86,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         window.contentView?.wantsLayer = true
         window.contentView?.layer?.cornerRadius = 18
         window.contentView?.layer?.masksToBounds = true
-        // Blur the desktop behind the transparent Flutter surface. Keep Flutter's
-        // controller and responder chain intact so keyboard/IME handling stays native.
-        glass = NSVisualEffectView(frame: controller.view.bounds)
-        glass.autoresizingMask = [.width, .height]
-        glass.material = .hudWindow
-        glass.blendingMode = .behindWindow
-        glass.state = .active
-        glass.appearance = NSAppearance(named: .darkAqua)
         // Mask the effect itself as well as the content; a layer corner alone can
         // leave the window-server backdrop rectangular. Stretch only the center.
         let mask = NSImage(size: NSSize(width: 37, height: 37), flipped: false) { rect in
@@ -100,14 +98,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         launcherGlassMask = mask
         glass.maskImage = mask
         glass.isHidden = true
-        controller.view.addSubview(glass, positioned: .below, relativeTo: nil)
+        log(["event": "window_material", "backend": glass.usesLiquidGlass ? "liquidGlass" : "visualEffect"])
         channel = FlutterMethodChannel(name: "anywhere/window", binaryMessenger: controller.engine.binaryMessenger)
+        shortcutRecordingChannel = FlutterMethodChannel(name: "anywhere/shortcut-recorder", binaryMessenger: controller.engine.binaryMessenger)
+        shortcutRecordingChannel.setMethodCallHandler { [weak self] call, reply in
+            guard let self, let args = call.arguments as? [String: Any],
+                  let id = args["id"] as? Int else { reply(nil); return }
+            switch call.method {
+            case "record":
+                guard self.settingsOpen, NSApp.isActive, NSApp.keyWindow === self.settingsWindow else {
+                    reply(FlutterError(code: "recording_unavailable", message: "Open Settings to record a shortcut.", details: nil))
+                    return
+                }
+                self.shortcutRecorder.start(id: id) { reply($0) }
+            case "cancel": self.shortcutRecorder.cancel(id: id); reply(nil)
+            default: reply(FlutterMethodNotImplemented)
+            }
+        }
         channel.setMethodCallHandler { [weak self] call, reply in
             guard let self else { return }
             switch call.method {
+            case "capabilities":
+                reply(HostRuntime.capabilities)
             case "paths":
                 let data = Self.supportDirectory()
-                reply(["data": data.path,
+                reply(["library": HostRuntime.libraryPath, "data": data.path,
                        "plugins": Bundle.main.resourceURL!.appendingPathComponent("plugins", isDirectory: true).path,
                        "hotkeyError": self.hotKeyError ?? "",
                        "loginError": self.loginError ?? "",
@@ -121,9 +136,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                     self.stored.launchAtLogin = enabled
                 }
                 reply(self.stored.asMap())
+            case "syncActionShortcutCatalog":
+                guard let args = call.arguments as? [String: Any],
+                      let ids = args["supportedActionIds"] as? [String], ids.count <= 2048,
+                      ids.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 2048 }),
+                      let snapshot = args["settings"] as? [String: Any] else {
+                    reply(FlutterError(code: "shortcuts", message: "Invalid shortcut catalog.", details: nil)); return
+                }
+                var expected = self.stored
+                guard expected.apply(snapshot) == nil,
+                      expected.sameActionShortcutConfiguration(as: self.stored) else {
+                    reply(FlutterError(code: "shortcuts", message: "Shortcut configuration changed. Refresh settings and try again.", details: nil)); return
+                }
+                if let error = self.hotKeys.syncActionCatalog(Set(ids)) {
+                    reply(FlutterError(code: "shortcuts", message: error, details: nil))
+                } else { reply(nil) }
             case "settingsStatus":
                 reply(["hotkeyError": self.hotKeyError ?? "",
                        "loginError": self.loginError ?? ""])
+            case "resumeActionShortcuts":
+                if let error = self.hotKeys.resumeForSettingsClose() {
+                    reply(FlutterError(code: "shortcuts", message: error, details: nil))
+                } else { reply(nil) }
             case "openPrivacySettings":
                 guard let args = call.arguments as? [String: Any],
                       let pane = args["pane"] as? String,
@@ -159,7 +193,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                     return
                 }
                 var errors: [String] = []
-                let update = self.hotKeys.update(next, previous: previous)
+                var support: Set<String>? = nil
+                if let raw = args["supportedActionIds"] {
+                    guard let ids = raw as? [String], ids.count <= 2048,
+                          ids.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 2048 }) else {
+                        reply(FlutterError(code: "settings", message: "Invalid shortcut catalog.", details: nil)); return
+                    }
+                    support = Set(ids)
+                }
+                let update = self.hotKeys.update(next, previous: previous, supportedActionIds: support)
                 next = update.settings
                 if let error = update.error { errors.append(error) }
                 self.stored = next
@@ -189,6 +231,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                       generation >= self.latestGeneration else { reply(nil); return }
                 self.latestGeneration = generation
                 self.settingsOpen = args["settings"] as? Bool == true
+                self.hotKeys.setActionShortcutsSuspended(self.settingsOpen)
                 self.glass.isHidden = false
                 NSApp.unhide(nil)
                 NSApp.activate(ignoringOtherApps: true)
@@ -228,6 +271,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                     self.latestGeneration = generation + 1
                     self.presentedGeneration = nil
                     self.settingsOpen = false
+                    self.shortcutRecorder.cancel()
+                    self.hotKeys.setActionShortcutsSuspended(false)
                     self.hideLauncherWindow()
                 }
                 reply(nil)
@@ -237,8 +282,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         installMenu()
         // AppKit can route ⌘. as cancelOperation before key-equivalent menus.
         // Its characters may already be Escape, so match the period key code.
-        // Consume only this task-window shortcut; Escape remains Flutter-owned.
-        taskStopKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+        // Shortcut recording consumes Settings keys only while explicitly requested.
+        // Outside recording, only the task-window stop shortcut is consumed.
+        localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            if let self, self.shortcutRecorder.isRecording, self.settingsOpen,
+               NSApp.isActive, let settings = self.settingsWindow,
+               event.window === settings, NSApp.keyWindow === settings,
+               self.shortcutRecorder.handle(code: event.keyCode, flags: event.modifierFlags, repeatKey: event.isARepeat) {
+                return nil
+            }
             guard let self, self.tasksReady,
                   let tasks = self.tasksWindow, NSApp.keyWindow === tasks,
                   event.keyCode == UInt16(kVK_ANSI_Period),
@@ -275,9 +327,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     func windowDidResignKey(_ notification: Notification) {
+        if notification.object as? NSWindow === settingsWindow { shortcutRecorder.cancel() }
         if notification.object as? NSWindow === window { dismissForFocusLoss() }
     }
-    func applicationDidResignActive(_ notification: Notification) { dismissForFocusLoss() }
+    func applicationDidResignActive(_ notification: Notification) { shortcutRecorder.cancel(); dismissForFocusLoss() }
 
     @objc func activateCurrentApp() { activate(mode: "currentApp") }
     @objc func activateUniversal() { activate(mode: "universal") }
@@ -329,9 +382,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func applicationDidUnhide(_ notification: Notification) { taskWindows.applicationDidUnhide(notification) }
 
     func activate(mode: String) {
+        guard !terminationPending else { return }
+        if settingsOpen, shortcutRecorder.isRecording {
+            switch mode {
+            case "currentApp":
+                _ = shortcutRecorder.accept(code: stored.currentAppKeyCode, modifiers: stored.currentAppModifiers)
+                return
+            case "universal":
+                _ = shortcutRecorder.accept(code: stored.universalKeyCode, modifiers: stored.universalModifiers)
+                return
+            default: break
+            }
+        }
         activationStart = ProcessInfo.processInfo.systemUptime
         log(["event": "activation_requested", "mode": mode])
-        channel.invokeMethod("toggle", arguments: ["mode": mode])
+        if mode.hasPrefix("action:") {
+            guard !settingsOpen, !terminationPending else { return }
+            // Do not foreground Anywhere here: Rust must capture the real source app first.
+            let id = String(mode.dropFirst(7))
+            guard let binding = stored.actionShortcuts?.first(where: { $0.actionId == id && $0.global == true }) else { return }
+            channel.invokeMethod("actionShortcut", arguments: ["actionId": id, "binding": binding.asMap()])
+        } else {
+            channel.invokeMethod("toggle", arguments: ["mode": mode])
+        }
     }
 
     func applyHotKeys(_ settings: StoredSettings) -> String? { hotKeys.apply(settings) }
@@ -535,7 +608,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         return .terminateLater
     }
     func applicationWillTerminate(_ notification: Notification) {
-        if let taskStopKeyMonitor { NSEvent.removeMonitor(taskStopKeyMonitor) }
+        shortcutRecorder.cancel()
+        if let localKeyMonitor { NSEvent.removeMonitor(localKeyMonitor) }
         hotKeys.shutdown()
     }
 }

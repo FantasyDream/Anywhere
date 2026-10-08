@@ -185,6 +185,16 @@ impl ActionRegistry {
                 .collect(),
         })
     }
+    /// An absent generated action can still belong to an installed factory. This
+    /// does not grant an execution offer or bypass the handler's binding policy.
+    pub fn supports_persistent_binding(&self, id: &str) -> bool {
+        if self.get(id).is_some() {
+            return self.persistent_binding(id).is_ok();
+        }
+        self.factories
+            .iter()
+            .any(|factory| factory.supports_persistent_binding(id))
+    }
     pub fn register_factory(
         &mut self,
         factory: impl super::bundle::ContextActionFactory + 'static,
@@ -397,7 +407,7 @@ mod tests {
     #[test]
     fn exact_type_match_and_builtin_command_count() {
         let registry = crate::application::builtin_registry();
-        assert_eq!(registry.commands().count(), 23);
+        assert_eq!(registry.commands().count(), 30);
         let url = seed("https://github.com")
             .into_iter()
             .find(|c| c.type_id == URL)
@@ -453,7 +463,21 @@ mod tests {
             .map(|command| command.id.as_str())
             .collect::<Vec<_>>();
         ids.sort_unstable();
-        assert_eq!(ids, ["core.git.diff", "core.git.log", "core.git.status"]);
+        assert_eq!(
+            ids,
+            [
+                "core.git.branches",
+                "core.git.copy_branch_name",
+                "core.git.copy_commit_hash",
+                "core.git.copy_remote_url",
+                "core.git.copy_repository_path",
+                "core.git.copy_short_commit_hash",
+                "core.git.diff",
+                "core.git.log",
+                "core.git.staged_diff",
+                "core.git.status"
+            ]
+        );
     }
 
     #[test]

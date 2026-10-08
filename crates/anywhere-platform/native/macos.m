@@ -264,6 +264,11 @@ unsigned char *launcher_application_icon(const char *utf8_path, unsigned int siz
     }
 }
 
+// Reading the generation does not read clipboard contents or prompt for access.
+long long launcher_clipboard_change_count(void) {
+    @autoreleasepool { return (long long)NSPasteboard.generalPasteboard.changeCount; }
+}
+
 // Clipboard text snapshot. Returns 1 and fills the output buffer on success,
 // 2 when the clipboard holds no plain text, 3 when the value exceeds capacity,
 // 4 when access is explicitly denied, 0 when reading failed.

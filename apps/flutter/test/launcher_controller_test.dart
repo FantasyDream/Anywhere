@@ -1,3 +1,4 @@
+import 'package:anywhere/infrastructure/desktop_environment.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -36,6 +37,9 @@ CandidateDto appCandidate() => const CandidateDto(
     );
 
 void main() {
+  setUp(() => DesktopEnvironment.configure(
+      const DesktopEnvironment(platform: TargetPlatform.macOS)));
+  tearDown(DesktopEnvironment.reset);
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('test/controller-window');
   final messenger =
@@ -91,21 +95,26 @@ void main() {
       () async {
     final controller = open(
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => launcherSnapshot(
-          sessionId: 1,
-          revision: 0,
-          snapshotSeq: 1,
-          input: '',
-          contextComplete: true,
-          contextCaptures: const [
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          launcherSnapshot(
+              sessionId: 1,
+              revision: 0,
+              snapshotSeq: 1,
+              input: '',
+              contextComplete: true,
+              contextCaptures: const [
             ContextCaptureDto(
                 source: ContextSourceDto.clipboard,
                 status: ContextCaptureStatusDto.permissionDenied,
                 capturedAtMs: 1)
           ],
-          candidates: [],
-          diagnostics: []),
-      updateInput: (_, input, revision, {scopeId}) async => null,
+              candidates: [],
+              diagnostics: []),
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          null,
       execute: (_, revision, candidate) async => throw StateError('not used'),
       deactivate: (_) async {},
     );
@@ -129,8 +138,13 @@ void main() {
     });
     final controller = open(
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => snapshot(1),
-      updateInput: (_, input, revision, {scopeId}) async => null,
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          snapshot(1),
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          null,
       execute: (_, revision, candidate) async => throw StateError('not used'),
       deactivate: (_) async {},
     );
@@ -158,9 +172,13 @@ void main() {
     });
     final controller = open(
       beginActivation: () => 1,
-      activate: (session, {promptAccessibility = false}) async =>
+      activate: (session,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
           snapshot(session),
-      updateInput: (_, __, ___, {scopeId}) async => null,
+      updateInput: (_, __, ___,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          null,
       execute: (_, __, ___) async => throw StateError('not used'),
       deactivate: (_) async {},
       startupMessage: warning,
@@ -194,9 +212,12 @@ void main() {
       final cancelled = <int>[];
       final controller = open(
         beginActivation: () => ++nextSession,
-        activate: (session, {promptAccessibility = false}) =>
+        activate: (session,
+                {promptAccessibility = false, capturedEnvironment = false}) =>
             session == 1 ? oldCapture.future : Future.value(snapshot(session)),
-        updateInput: (_, __, ___, {scopeId}) async => null,
+        updateInput: (_, __, ___,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
+            null,
         execute: (_, __, ___) async => throw StateError('not used'),
         deactivate: (session) async {
           cancelled.add(session);
@@ -226,8 +247,12 @@ void main() {
     final cancelled = <int>[];
     final controller = open(
       beginActivation: () => 7,
-      activate: (_, {promptAccessibility = false}) => capture.future,
-      updateInput: (_, __, ___, {scopeId}) async => null,
+      activate: (_,
+              {promptAccessibility = false, capturedEnvironment = false}) =>
+          capture.future,
+      updateInput: (_, __, ___,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          null,
       execute: (_, __, ___) async => throw StateError('not used'),
       deactivate: (session) async {
         cancelled.add(session);
@@ -267,17 +292,56 @@ void main() {
     },
   );
 
+  test(
+      'view projection is reused and icon completion does not notify the launcher',
+      () async {
+    final icon = Completer<Uint8List?>();
+    final controller = open(
+      beginActivation: () => 1,
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          snapshot(1),
+      updateInput: (_, __, ___,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          null,
+      execute: (_, __, ___) async => throw StateError('not used'),
+      deactivate: (_) async {},
+      loadIcon: (_) => icon.future,
+    );
+    await controller.activate();
+    final initialView = controller.view;
+    expect(identical(initialView, controller.view), isTrue);
+    expect(identical(initialView.visibleEntries, initialView.visibleEntries),
+        isTrue);
+    var updates = 0;
+    controller.addListener(() => updates++);
+    controller.icons.request([appCandidate()]);
+    icon.complete(Uint8List.fromList([1]));
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.icons.bytesFor('app:test'), [1]);
+    expect(updates, 0);
+    await controller.dismiss();
+    expect(identical(initialView, controller.view), isFalse);
+    expect(controller.view.snapshot, isNull);
+    expect(controller.icons.retainedBytes, 0);
+    controller.dispose();
+  });
+
   test('current app activate asks for accessibility after the window shows',
       () async {
     var activatePrompted = true;
     var prompts = 0;
     final controller = open(
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async {
+      activate: (_,
+          {promptAccessibility = false, capturedEnvironment = false}) async {
         activatePrompted = promptAccessibility;
         return snapshot(1);
       },
-      updateInput: (_, __, ___, {scopeId}) async => null,
+      updateInput: (_, __, ___,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          null,
       execute: (_, __, ___) async => throw StateError('not used'),
       deactivate: (_) async {},
       promptAccessibility: () {
@@ -296,11 +360,14 @@ void main() {
     var prompts = 0;
     final controller = open(
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async {
+      activate: (_,
+          {promptAccessibility = false, capturedEnvironment = false}) async {
         activatePrompted = promptAccessibility;
         return snapshot(1);
       },
-      updateInput: (_, __, ___, {scopeId}) async => null,
+      updateInput: (_, __, ___,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          null,
       execute: (_, __, ___) async => throw StateError('not used'),
       deactivate: (_) async {},
       promptAccessibility: () {
@@ -318,8 +385,13 @@ void main() {
     var prompts = 0;
     final controller = open(
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => snapshot(1),
-      updateInput: (_, __, ___, {scopeId}) async => null,
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          snapshot(1),
+      updateInput: (_, __, ___,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          null,
       execute: (_, __, ___) async => throw StateError('not used'),
       deactivate: (_) async {},
       promptAccessibility: () {
@@ -394,9 +466,13 @@ void main() {
       final candidate = action('developer.cargo.check', 'Cargo Check', 'rust');
       final controller = open(
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async =>
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
             captured(offers: [candidate]),
-        updateInput: (_, __, ___, {scopeId}) async => null,
+        updateInput: (_, __, ___,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
+            null,
         execute: (session, revision, _) async => ActionResultDto(
             sessionId: session,
             revision: revision,
@@ -430,9 +506,12 @@ void main() {
     final requests = <String?>[];
     final controller = open(
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async =>
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
             captured(offers: offers),
-        updateInput: (_, input, revision, {scopeId}) async {
+        updateInput: (_, input, revision,
+            {scopeId, inputMode = InputModeDto.environment}) async {
           requests.add(scopeId);
           return captured(
               revision: revision,
@@ -485,9 +564,12 @@ void main() {
     final executed = <String>[];
     final controller = open(
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async =>
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
             captured(offers: offers),
-        updateInput: (_, input, revision, {scopeId}) async {
+        updateInput: (_, input, revision,
+            {scopeId, inputMode = InputModeDto.environment}) async {
           queries++;
           return captured(
               revision: revision,
@@ -537,14 +619,18 @@ void main() {
     final copy = action('copy', 'Copy Path', 'folder');
     final controller = open(
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async =>
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
             captured(offers: [copy], scopes: [folderScope]),
-        updateInput: (_, input, revision, {scopeId}) async => captured(
-            revision: revision,
-            input: input,
-            offers: [copy],
-            scopes: [folderScope],
-            results: input.isEmpty ? [copy] : []),
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
+            captured(
+                revision: revision,
+                input: input,
+                offers: [copy],
+                scopes: [folderScope],
+                results: input.isEmpty ? [copy] : []),
         execute: (_, __, ___) async => throw StateError('unused'),
         deactivate: (_) async {});
     await controller.activate();
@@ -571,13 +657,17 @@ void main() {
     final queue = <Completer<SnapshotWaitDto>>[];
     final controller = open(
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async =>
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
             captured(offers: [copy], scopes: [folderScope]),
-        updateInput: (_, input, revision, {scopeId}) async => captured(
-            revision: revision,
-            input: input,
-            offers: [copy, menu],
-            scopes: [folderScope, appScope]),
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
+            captured(
+                revision: revision,
+                input: input,
+                offers: [copy, menu],
+                scopes: [folderScope, appScope]),
         execute: (_, __, ___) async => throw StateError('unused'),
         deactivate: (_) async {},
         waitForSnapshot: (_, __) {
@@ -615,9 +705,12 @@ void main() {
     final pending = <Completer<SnapshotWaitDto>>[];
     final controller = open(
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async =>
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
             captured(offers: [copy, menu]),
-        updateInput: (_, input, revision, {scopeId}) async =>
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
             captured(revision: revision, input: input, offers: [copy, menu]),
         execute: (_, __, ___) async => throw StateError('unused'),
         deactivate: (_) async {},
@@ -648,9 +741,12 @@ void main() {
     final pending = Completer<SnapshotWaitDto>();
     final controller = open(
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async =>
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
             captured(offers: [copy, menu]),
-        updateInput: (_, input, revision, {scopeId}) async =>
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
             captured(revision: revision, input: input, offers: [copy]),
         execute: (_, __, ___) async => throw StateError('unused'),
         deactivate: (_) async {},

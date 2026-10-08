@@ -1,10 +1,10 @@
 # Anywhere 产品路线图
 
-状态：2026-10-06。版本号表示依赖顺序，不代表发布日期。`dev-0.4` 工程收尾已提交到 GitHub（`b622811`）；真实应用及权限矩阵仍须验收，不能据此标为正式发布。`dev-0.5` 已从该提交创建，已实现独立进程会话、Rust/Maven/Gradle/Node/Spring Boot 识别、Cargo Run 目标与 npm/pnpm/yarn 动态脚本，标准检查、四组真实工具及本机主要窗口生命周期验收通过；功能与工程收尾已完成，完整检查及开发包校验通过，见 [0.5 收尾记录](v0.5-closeout.md)。正式发布仍需安装升级、权限与读屏验收，完整功能说明见 [V0.5 MVP](mvp-v0.5.md)。V0.3.x 的遗留验收以 [MVP 验收清单](mvp-v0.3x.md)为准；V0.4 的当前实现与待验收项见 [验收记录](v0.4-context-acceptance.md)。
+状态：2026-10-08。版本号表示依赖顺序，不代表发布日期。`dev-0.4` 工程收尾已提交到 GitHub（`b622811`）；真实应用及权限矩阵仍须验收，不能据此标为正式发布。`dev-0.5` 已从该提交创建，已实现独立进程会话、Rust/Maven/Gradle/Node/Spring Boot 识别、Cargo Run 目标与 npm/pnpm/yarn 动态脚本，标准检查、四组真实工具及本机主要窗口生命周期验收通过；功能与工程收尾已完成，完整检查及开发包校验通过，见 [0.5 收尾记录](v0.5-closeout.md)。正式发布仍需安装升级、权限与读屏验收，完整功能说明见 [V0.5 MVP](mvp-v0.5.md)。V0.3.x 的遗留验收以 [MVP 验收清单](mvp-v0.3x.md)为准；V0.4 的当前实现与待验收项见 [验收记录](v0.4-context-acceptance.md)。
 
 ## 产品边界
 
-2026-10-06：V0.5 收尾及可维护性修复已推送至 `dev-0.5@d03a1f2`，见 [最终功能核对](v0.5-final-acceptance.md)。`dev-0.6` 从该基线开发，Launcher 内动作快捷键切片已实现；全局意图分派与真实全局热键验收仍未完成，见 [V0.6 MVP](mvp-v0.6.md)。
+2026-10-06：V0.5 收尾及可维护性修复已推送至 `dev-0.5@d03a1f2`，见 [最终功能核对](v0.5-final-acceptance.md)。`dev-0.6` 从该基线开发，Launcher 内、固定动作全局快捷键与应用/Context 意图分派已实现；插件重载后的注册释放/恢复已实现，快捷键功能及工程收尾已核对，真实全局热键验收仍未完成，见 [V0.6 MVP](mvp-v0.6.md) 和 [0.6 收尾记录](v0.6-final-acceptance.md)。
 
 Anywhere 的核心体验是：在唤醒时理解用户正在操作的对象，给出可执行的下一步动作；需要搜索时，应用、动作和其他结果进入统一候选列表。Rust 负责 Context、匹配、排序、执行与历史；Flutter 负责交互；原生平台层负责系统采集、窗口和进程能力。已有的 `ContextProvider`、`ActionBundle`、`CandidateSource`、Scope 与 Ranking 是继续扩展的基础，不为远期插件或 Agent 预建通用运行时。
 

@@ -8,6 +8,13 @@ xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   apps/flutter/macos/Runner/SettingsStore.swift \
   apps/flutter/macos/Runner/HotKeyMap.swift \
   apps/flutter/macos/Runner/HotKeyService.swift \
+  apps/flutter/macos/Runner/ShortcutRecorder.swift \
   apps/flutter/macos/Runner/tests/HostServicesTests.swift \
   -o "$host_test_directory/host-test"
 "$host_test_directory/host-test"
+# Native material ownership and resizing must survive the shared-engine window move.
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  apps/flutter/macos/Runner/WindowMaterial.swift \
+  apps/flutter/macos/Runner/tests/WindowMaterialTests.swift \
+  -o "$host_test_directory/material-test"
+"$host_test_directory/material-test"

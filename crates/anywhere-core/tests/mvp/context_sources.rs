@@ -64,6 +64,9 @@ impl Platform for ContextPlatform {
     fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
         Ok(None)
     }
+    fn file_selection_supported(&self, application: &ApplicationInfo) -> bool {
+        application.bundle_id == "com.apple.finder" || application.bundle_id == "test.file-manager"
+    }
     fn finder_selected_paths(&self, _: &ApplicationInfo) -> Result<Vec<PathBuf>> {
         self.check_capture(ContextSource::FinderSelection)?;
         Ok(self.finder_paths.clone())
@@ -120,6 +123,33 @@ impl Platform for ContextPlatform {
         self.copies.lock().unwrap().push(text.into());
         Ok(())
     }
+}
+
+#[tokio::test]
+async fn file_selection_uses_adapter_capability_instead_of_finder_identity() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().canonicalize().unwrap();
+    let mut fake = ContextPlatform::new("test.file-manager");
+    fake.finder_paths = vec![path.clone()];
+    let app = application(Arc::new(fake));
+    let initial = app.activate().await.unwrap().unwrap();
+    let state = capture_state(
+        &app,
+        initial.session_id,
+        0,
+        ContextSource::FinderSelection,
+        DIRECTORY,
+    )
+    .await;
+    let result = app
+        .execute(
+            state.session_id,
+            state.revision,
+            candidate(&state, "core.directory.copy"),
+        )
+        .await
+        .unwrap();
+    assert!(result.succeeded());
 }
 
 #[tokio::test]
@@ -887,4 +917,190 @@ async fn late_selected_text_joins_current_revision_and_old_session_is_discarded(
         application.wait_for_snapshot(stale.session_id, 0).await,
         SnapshotWait::Superseded
     ));
+}
+
+#[tokio::test]
+async fn content_input_search_and_current_app_use_separate_graphs_without_changing_scopes() {
+    let mut fake = ContextPlatform::new("com.microsoft.edgemac");
+    fake.browser_url = Some("https://example.org/page".into());
+    fake.clipboard = Some("https://example.org/copied".into());
+    *fake.selected.lock().unwrap() = Some("https://example.org/selected".into());
+    let fake = Arc::new(fake);
+    let app = application(fake.clone());
+    let initial = app.activate().await.unwrap().unwrap();
+    app.wait_action_binding(initial.session_id, 0, "core.url.open")
+        .await
+        .unwrap();
+    for (revision, text) in [
+        (1, "https://example.org/selected"),
+        (2, "https://example.org/edited"),
+    ] {
+        let state = app
+            .update_context_input(
+                initial.session_id,
+                text.into(),
+                revision,
+                None,
+                InputMode::Content,
+            )
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(state
+            .context_summary
+            .iter()
+            .all(|ctx| ctx.source == ContextSource::UserInput));
+        let opens: Vec<_> = state
+            .candidates
+            .iter()
+            .filter(|c| c.command_id.as_deref() == Some("core.url.open"))
+            .collect();
+        assert_eq!(opens.len(), 1);
+        assert_eq!(opens[0].execution_target_label.as_deref(), Some(text));
+        assert!(app
+            .execute(state.session_id, revision, opens[0].id.clone())
+            .await
+            .unwrap()
+            .succeeded());
+    }
+    assert_eq!(
+        *fake.opened_urls.lock().unwrap(),
+        ["https://example.org/selected", "https://example.org/edited"]
+    );
+    let home = app
+        .update_context_input(
+            initial.session_id,
+            "".into(),
+            3,
+            None,
+            InputMode::Environment,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(home.context_summary.iter().all(|c| !matches!(
+        c.source,
+        ContextSource::Clipboard | ContextSource::SelectedText
+    )));
+    assert!(home
+        .scopes
+        .iter()
+        .any(|s| s.id == "app.com.microsoft.edgemac" && s.is_current_app));
+    assert_eq!(
+        home.candidates
+            .iter()
+            .filter(|c| c.command_id.as_deref() == Some("core.url.open"))
+            .count(),
+        1
+    );
+    let empty = app
+        .update_context_input(initial.session_id, "".into(), 4, None, InputMode::Search)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(empty.context_summary.is_empty());
+    assert!(empty.candidates.is_empty());
+    assert!(empty.scopes.is_empty());
+    assert_eq!(fake.clipboard_reads.load(Ordering::SeqCst), 1);
+    assert_eq!(fake.selected_reads.load(Ordering::SeqCst), 1);
+    assert_eq!(fake.browser_reads.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn late_capture_updates_metadata_without_joining_the_content_graph() {
+    let gate = CaptureGate::new();
+    let mut fake = ContextPlatform::new("test.editor");
+    *fake.selected.lock().unwrap() = Some("https://example.org/late".into());
+    fake.selected_gate = Some(gate.clone());
+    let fake = Arc::new(fake);
+    let app = application(fake.clone());
+    let initial = app.activate().await.unwrap().unwrap();
+    fake.selected_started.notified().await;
+    let content = app
+        .update_context_input(
+            initial.session_id,
+            "https://example.org/input".into(),
+            1,
+            None,
+            InputMode::Content,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let seq = content.snapshot_seq;
+    gate.release();
+    for _ in 0..200 {
+        let state = app.latest_state(initial.session_id).unwrap();
+        if state.snapshot_seq > seq
+            && state.context_captures.iter().any(|c| {
+                c.source == ContextSource::SelectedText
+                    && c.text.as_deref() == Some("https://example.org/late")
+            })
+        {
+            assert!(state
+                .context_summary
+                .iter()
+                .all(|ctx| ctx.source == ContextSource::UserInput));
+            assert!(state
+                .candidates
+                .iter()
+                .filter(|c| c.command_id.as_deref() == Some("core.url.open"))
+                .all(|c| c.execution_target_label.as_deref() == Some("https://example.org/input")));
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    panic!("late source metadata was not published");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn environment_activation_never_exposes_captured_text_actions() {
+    let gate = CaptureGate::new();
+    let mut fake = ContextPlatform::new("com.microsoft.edgemac");
+    fake.browser_url = Some("https://example.org/page".into());
+    fake.clipboard = Some("https://example.org/copied".into());
+    *fake.selected.lock().unwrap() = Some("https://example.org/selected".into());
+    fake.selected_gate = Some(gate.clone());
+    let fake = Arc::new(fake);
+    let app = application(fake.clone());
+    let session = app.begin_activation().unwrap();
+    let initial = app
+        .activate_session_in_mode(session, false, InputMode::Environment)
+        .await
+        .unwrap()
+        .unwrap();
+    fake.selected_started.notified().await;
+    assert!(initial.context_summary.iter().all(|c| !matches!(
+        c.source,
+        ContextSource::Clipboard | ContextSource::SelectedText
+    )));
+    gate.release();
+    for _ in 0..200 {
+        let state = app.latest_state(session).unwrap();
+        assert!(state.context_summary.iter().all(|c| !matches!(
+            c.source,
+            ContextSource::Clipboard | ContextSource::SelectedText
+        )));
+        if state.context_complete
+            && state.context_captures.iter().any(|c| {
+                c.source == ContextSource::SelectedText
+                    && c.text.as_deref() == Some("https://example.org/selected")
+            })
+            && state
+                .context_summary
+                .iter()
+                .any(|c| c.source == ContextSource::BrowserCurrentPage && c.type_id == URL)
+        {
+            let targets: Vec<_> = state
+                .candidates
+                .iter()
+                .filter(|c| c.command_id.as_deref() == Some("core.url.open"))
+                .map(|c| c.execution_target_label.as_deref())
+                .collect();
+            assert_eq!(targets, [Some("https://example.org/page")]);
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(5)).await;
+    }
+    panic!("environment activation did not finish");
 }

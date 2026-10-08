@@ -43,3 +43,53 @@ enum NativeHotKeyMap {
         modifiers.filter { mask & $0.0 != 0 }.map { $0.1 }.joined() + (keys[code] ?? "Key")
     }
 }
+extension NativeHotKeyMap {
+    static let portableKeys: [UInt32: UInt32] = [
+        49: 44,
+        36: 40,
+        48: 43,
+        53: 41,
+        0: 4,
+        11: 5,
+        8: 6,
+        2: 7,
+        14: 8,
+        3: 9,
+        5: 10,
+        4: 11,
+        34: 12,
+        38: 13,
+        40: 14,
+        37: 15,
+        46: 16,
+        45: 17,
+        31: 18,
+        35: 19,
+        12: 20,
+        15: 21,
+        1: 22,
+        17: 23,
+        32: 24,
+        9: 25,
+        13: 26,
+        7: 27,
+        16: 28,
+        6: 29,
+    ]
+    static let portableModifiers: [(UInt32, UInt32)] = [
+        (4096, 1),
+        (2048, 2),
+        (512, 4),
+        (256, 8),
+    ]
+    static func nativeCode(_ usage: UInt32) -> UInt32? {
+        portableKeys.first { $0.value == usage }?.key
+    }
+    static func nativeMask(_ mask: UInt32) -> UInt32? {
+        guard mask & ~UInt32(15) == 0 else { return nil }
+        return portableModifiers.reduce(0) { $0 | (mask & $1.1 != 0 ? $1.0 : 0) }
+    }
+    static func portableMask(_ mask: UInt32) -> UInt32 {
+        portableModifiers.reduce(0) { $0 | (mask & $1.0 != 0 ? $1.1 : 0) }
+    }
+}

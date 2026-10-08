@@ -48,6 +48,9 @@ pub struct ExecutionSessionSummary {
     pub exit_code: Option<i32>,
     pub started_at_ms: i64,
     pub finished_at_ms: Option<i64>,
+    /// Advances when either output stream changes, including a full rolling tail.
+    #[serde(default)]
+    pub output_revision: i64,
     pub output_truncated: bool,
     pub error: Option<String>,
 }
@@ -144,8 +147,24 @@ pub enum ContextCaptureStatus {
     Failed,
 }
 
+/// How a revision obtains Context, independently of Scope filtering.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InputMode {
+    /// Full activation graph for explicit global action resolution.
+    #[default]
+    CapturedEnvironment,
+    Environment,
+    Content,
+    Search,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContextCapturePresentation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    /// Age of this exact clipboard snapshot at capture, not time of reading it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clipboard_age_ms: Option<u64>,
     pub source: ContextSource,
     pub status: ContextCaptureStatus,
     pub captured_at_ms: i64,
@@ -489,6 +508,8 @@ mod tests {
                 source: ContextSource::SelectedText,
                 status: ContextCaptureStatus::PermissionDenied,
                 captured_at_ms: 42,
+                text: None,
+                clipboard_age_ms: None,
             }],
             ..Default::default()
         };

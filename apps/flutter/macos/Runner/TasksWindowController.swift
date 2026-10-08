@@ -18,7 +18,11 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
             let channel = FlutterMethodChannel(name: "anywhere/executions", binaryMessenger: view.engine.binaryMessenger)
             channel.setMethodCallHandler { [weak self] call, reply in
                 guard let self else { reply(nil); return }
-                if call.method == "ready" {
+                if call.method == "paths" {
+                    reply(["library": HostRuntime.libraryPath])
+                } else if call.method == "capabilities" {
+                    reply(HostRuntime.capabilities)
+                } else if call.method == "ready" {
                     self.tasksReady = true
                     reply(self.pendingTaskId)
                 } else if call.method == "showLauncher" {
@@ -46,14 +50,9 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
             panel.minSize = NSSize(width: 760, height: 420)
             panel.isReleasedWhenClosed = false
             panel.delegate = self
-            panel.contentViewController = view
             view.backgroundColor = .clear
-            let material = NSVisualEffectView(frame: view.view.bounds)
-            material.autoresizingMask = [.width, .height]
-            material.material = .hudWindow
-            material.blendingMode = .behindWindow
-            material.state = .active
-            view.view.addSubview(material, positioned: .below, relativeTo: nil)
+            panel.contentViewController = WindowMaterialController(contentController: view,
+                frame: NSRect(x: 0, y: 0, width: 920, height: 600), cornerRadius: 0)
             panel.setContentSize(NSSize(width: 920, height: 600))
             panel.center()
             tasksWindow = panel

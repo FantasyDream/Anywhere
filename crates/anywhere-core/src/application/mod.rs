@@ -21,4 +21,4 @@ mod snapshot;
 
 mod app_actions;
 mod shortcuts;
-pub use shortcuts::ShortcutAction;
+pub use shortcuts::{BindingResolution, ShortcutAction, ShortcutApplication, ShortcutRoute};

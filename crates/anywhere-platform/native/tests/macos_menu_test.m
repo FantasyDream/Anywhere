@@ -5,33 +5,60 @@
 static AXError test_attribute(AXUIElementRef element, CFStringRef attribute, CFTypeRef *out);
 static AXError test_actions(AXUIElementRef element, CFArrayRef *out);
 static AXError test_press(AXUIElementRef element, CFStringRef action);
+static AXError test_timeout(AXUIElementRef element, float timeout);
 static NSUInteger test_press_count;
+static NSUInteger test_window_reads;
+static AXUIElementRef test_prepared_element;
+static float test_prepared_timeout;
+static BOOL test_require_bound;
+static NSUInteger test_attribute_count;
 #define AXUIElementCopyAttributeValue test_attribute
 #define AXUIElementCopyActionNames test_actions
 #define AXUIElementPerformAction test_press
+#define AXUIElementSetMessagingTimeout test_timeout
 #include "../macos_menu.m"
 #undef AXUIElementCopyAttributeValue
 #undef AXUIElementCopyActionNames
 #undef AXUIElementPerformAction
+#undef AXUIElementSetMessagingTimeout
+static AXError test_timeout(AXUIElementRef element, float timeout) {
+    test_prepared_element = element;
+    test_prepared_timeout = timeout;
+    NSDictionary *node = (__bridge NSDictionary *)element;
+    return node[@"TestTimeoutError"] ? (AXError)[node[@"TestTimeoutError"] intValue] : kAXErrorSuccess;
+}
+static void test_bound(AXUIElementRef element) {
+    if (!test_require_bound) return;
+    assert(element == test_prepared_element);
+    assert(test_prepared_timeout > 0 && test_prepared_timeout <= 0.101);
+    test_prepared_element = NULL; // Every read/press needs its own preparation.
+}
 static AXError test_press(AXUIElementRef element, CFStringRef action) {
-    (void)element; (void)action;
+    test_bound(element); (void)action;
     test_press_count++;
     return kAXErrorSuccess;
 }
 static AXError test_attribute(AXUIElementRef element, CFStringRef attribute, CFTypeRef *out) {
+    test_bound(element);
+    test_attribute_count++;
     NSDictionary *node = (__bridge NSDictionary *)element;
     if (node[@"TestTitleAfterEnabled"] && CFEqual(attribute, kAXEnabledAttribute)) {
         ((NSMutableDictionary *)node)[@"AXTitle"] = node[@"TestTitleAfterEnabled"];
     }
     NSNumber *fault = node[@"TestAXError"];
     if (fault) return (AXError)fault.intValue;
+    if (node[@"TestSecondWindow"] && CFEqual(attribute, kAXFocusedWindowAttribute)) {
+        id window = test_window_reads++ == 0 ? node[@"AXFocusedWindow"] : node[@"TestSecondWindow"];
+        *out = CFRetain((__bridge CFTypeRef)window);
+        return kAXErrorSuccess;
+    }
     id value = node[(__bridge NSString *)attribute];
     if (!value) return kAXErrorNoValue;
     *out = CFRetain((__bridge CFTypeRef)value);
     return kAXErrorSuccess;
 }
 static AXError test_actions(AXUIElementRef element, CFArrayRef *out) {
-    (void)element;
+    test_bound(element);
     *out = CFRetain((__bridge CFArrayRef)@[@"AXPress"]);
     return kAXErrorSuccess;
 }
@@ -108,8 +135,11 @@ int main(void) {
         assert(!lookup(@[leaf(@"Delete", @"save", YES)], @[@"Save"], @[@"save"]));
         assert(!lookup(@[leaf(@"Save", @"other-command", YES)], @[@"Save"], @[NSNull.null]));
         assert(!lookup(@[leaf(@"Save", @"", YES)], @[@"Save"], @[@"save"]));
-        assert(!lookup(@[leaf(@"Save", @"save", YES), leaf(@"Delete", @"save", YES)],
-                       @[@"Save"], @[@"save"]));
+        found = lookup(@[leaf(@"Save", @"save", YES), leaf(@"Delete", @"save", YES)],
+                       @[@"Save"], @[@"save"]);
+        assert(found); CFRelease(found); // Shared IDs remain distinguishable by exact title.
+        assert(!lookup(@[leaf(@"Save", @"save", YES), leaf(@"Save", @"save", YES)],
+                       @[@"Save"], @[@"save"])); // Duplicate pairs still rejected.
         NSDictionary *disabled = leaf(@"Save", @"save", NO);
         NSDictionary *root = @{@"AXChildren": @[disabled]};
         NSMutableArray *items = [NSMutableArray array];
@@ -122,7 +152,40 @@ int main(void) {
         NSDictionary *duplicateIds = @{@"AXChildren": @[leaf(@"Save", @"shared", YES),
                                                           leaf(@"Delete", @"shared", YES), leaf(@"Open", @"", YES)]};
         collect_items((__bridge AXUIElementRef)duplicateIds, @[], @[], items, YES);
+        assert(items.count == 3);
+        assert([items[0][@"title"] isEqualToString:@"Save"]);
+        assert([items[1][@"title"] isEqualToString:@"Delete"]);
+        [items removeAllObjects];
+        collect_items((__bridge AXUIElementRef)@{@"AXChildren": @[leaf(@"Save", @"shared", YES),
+                          leaf(@"Save", @"shared", YES), leaf(@"Open", @"", YES)]},
+                      @[], @[], items, YES);
         assert(items.count == 1 && [items[0][@"title"] isEqualToString:@"Open"]);
+        // IDEA-like menus reuse a selector ID at every level, including menu headers.
+        NSDictionary *fileMenu = @{@"AXRole": @"AXMenuBarItem", @"AXTitle": @"File",
+            @"AXIdentifier": @"handleAction:", @"AXEnabled": @YES,
+            @"AXChildren": @[@{@"AXRole": @"AXMenu", @"AXChildren": @[
+                leaf(@"Open…", @"handleAction:", YES), leaf(@"Save All", @"handleAction:", YES)]}]};
+        NSDictionary *editMenu = @{@"AXRole": @"AXMenuBarItem", @"AXTitle": @"Edit",
+            @"AXIdentifier": @"handleAction:", @"AXEnabled": @YES,
+            @"AXChildren": @[@{@"AXRole": @"AXMenu", @"AXChildren": @[
+                leaf(@"Copy", @"handleAction:", YES), leaf(@"Paste", @"handleAction:", NO)]}]};
+        NSDictionary *sharedMenus = @{@"AXChildren": @[fileMenu, editMenu]};
+        [items removeAllObjects];
+        collect_items((__bridge AXUIElementRef)sharedMenus, @[], @[], items, YES);
+        assert(items.count == 4);
+        assert(([items[1][@"menu_path"] isEqual:@[@"File", @"Save All"]]));
+        assert(([items[1][@"identifiers"] isEqual:@[@"handleAction:", @"handleAction:"]]));
+        assert(![items[3][@"enabled"] boolValue]);
+        found = lookup(@[editMenu, fileMenu], @[@"File", @"Save All"],
+                       @[@"handleAction:", @"handleAction:"]);
+        assert(found);
+        assert(press_snapshot(found, @"Save All", @"handleAction:", ^BOOL { return YES; }) == 0);
+        CFRelease(found);
+        assert(test_press_count == 2);
+        assert(!lookup(@[editMenu, fileMenu], @[@"File", @"Save As"],
+                       @[@"handleAction:", @"handleAction:"]));
+        assert(!lookup(@[editMenu, fileMenu], @[@"File", @"Save All"],
+                       @[@"handleAction:", @"missing-id"]));
         NSDictionary *parent = @{@"AXRole": @"AXMenuItem", @"AXTitle": @"File", @"AXEnabled":@NO, @"AXChildren":@[save]};
         assert(!lookup(@[parent], @[@"File", @"Save"], @[NSNull.null, NSNull.null]));
         assert(lookup_status(@{@"AXChildren":@[parent]}, @[@"File", @"Save"],
@@ -138,6 +201,38 @@ int main(void) {
         assert(menu_ax_status(kAXErrorAPIDisabled, 2) == 7);
         assert(menu_ax_status(kAXErrorCannotComplete, 5) == 9);
         assert(menu_ax_status(kAXErrorActionUnsupported, 5) == 5);
+        menu_deadline = 0; menu_incomplete = NO; menu_ax_failure = kAXErrorSuccess;
+        NSDictionary *projectWindow = @{ @"AXTitle": @"project [~/repo] – Foo.java" };
+        NSDictionary *projectApp = @{ @"AXFocusedWindow": projectWindow };
+        test_require_bound = YES;
+        NSDictionary *projectResult = editor_project_window_for_app((__bridge AXUIElementRef)projectApp);
+        assert([projectResult[@"status"] isEqualToString:@"ok"]);
+        assert([projectResult[@"title"] isEqual:projectWindow[@"AXTitle"]]);
+        // The focused window is a separate AX object; app-only timeout fails this.
+        menu_deadline = CFAbsoluteTimeGetCurrent() + 0.03;
+        assert(ax_value((__bridge AXUIElementRef)projectWindow, kAXTitleAttribute));
+        assert(test_prepared_timeout <= 0.03);
+        menu_deadline = 0;
+        assert(ax_has_press((__bridge AXUIElementRef)save));
+        assert(press_snapshot((__bridge AXUIElementRef)save, @"Save", NSNull.null, ^BOOL { return YES; }) == 0);
+        NSUInteger readsBeforeFailure = test_attribute_count;
+        NSDictionary *invalidWindow = @{ @"TestTimeoutError": @(kAXErrorInvalidUIElement), @"AXTitle": @"stale" };
+        assert(!ax_value((__bridge AXUIElementRef)invalidWindow, kAXTitleAttribute));
+        assert(menu_incomplete && test_attribute_count == readsBeforeFailure);
+        menu_incomplete = NO; menu_ax_failure = kAXErrorSuccess;
+        test_require_bound = NO;
+        test_window_reads = 0;
+        NSDictionary *changingWindow = @{ @"AXFocusedWindow": projectWindow,
+            @"TestSecondWindow": @{ @"AXTitle": @"different [~/other] – Bar.java" } };
+        assert([editor_project_window_for_app((__bridge AXUIElementRef)changingWindow)[@"status"] isEqualToString:@"changed"]);
+        assert([editor_project_window_for_app((__bridge AXUIElementRef)@{})[@"status"] isEqualToString:@"no_window"]);
+        NSString *largeTitle = [@"x" stringByPaddingToLength:8193 withString:@"x" startingAtIndex:0];
+        assert([editor_project_window_for_app((__bridge AXUIElementRef)@{@"AXFocusedWindow": @{@"AXTitle": largeTitle}})[@"status"] isEqualToString:@"too_large"]);
+        menu_deadline = CFAbsoluteTimeGetCurrent() - 1;
+        assert([editor_project_window_for_app((__bridge AXUIElementRef)projectApp)[@"status"] isEqualToString:@"timeout"]);
+        menu_deadline = 0; menu_incomplete = NO; menu_ax_failure = kAXErrorSuccess;
+        assert([editor_project_window_for_app((__bridge AXUIElementRef)@{@"TestAXError": @(kAXErrorAPIDisabled)})[@"status"] isEqualToString:@"untrusted"]);
+        menu_deadline = 0; menu_incomplete = NO; menu_ax_failure = kAXErrorSuccess;
         assert([capture_selection(@{ @"AXSelectedText": @"hello" })[@"text"] isEqualToString:@"hello"]);
         assert([capture_selection(@{ @"AXSelectedText": @"" })[@"status"] isEqualToString:@"no_selection"]);
         assert([capture_selection(nil)[@"status"] isEqualToString:@"no_selection"]);

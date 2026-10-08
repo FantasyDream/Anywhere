@@ -12,6 +12,7 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 python3 scripts/check-architecture.py
 (
   cd apps/flutter
-  flutter analyze
-  flutter test
+  # The SDK was checked above; keep this gate independent of SDK freshness fetches.
+  flutter --no-version-check analyze
+  flutter --no-version-check test
 )

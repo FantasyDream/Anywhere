@@ -62,7 +62,7 @@ cargo run --release --locked -p anywhere-core --example measure
 
 `cargo test -p anywhere-core` 不需要 Flutter、Dart 或可见 GUI。完整检查脚本校验共享 Flutter 版本和生成键码映射，并运行原生菜单/采集与 Host 服务回归、Rust fmt / tests / Clippy、架构检查和 Flutter analyze / tests。热键键码及显示标签只修改 `resources/hotkey-keymap.json`，随后执行 `python3 scripts/generate-keymap.py` 同步 Dart/Swift。
 
-Rust 测试使用真实临时文件和 SQLite；OS 动作由 TestPlatform 记录，测试不会打开浏览器、覆盖剪贴板或运行 Git。V0.5 的进程测试会在临时目录启动受控子进程，并对无外部依赖的 Rust 项目执行 Cargo Check。基础动作由内建 ActionBundle 提供，Cargo 运行目标和 Node scripts 动作按 Context 动态生成。Maven、Gradle、Node 的真实工具验收单独运行，命令和环境要求见 [0.5 MVP](docs/mvp-v0.5.md)。
+Rust 测试使用真实临时文件和 SQLite；Core 的 OS 动作由 TestPlatform 记录，不打开浏览器或覆盖系统剪贴板。平台 Git 回归会在临时仓库执行初始化、提交及只读查询，不修改当前项目仓库。V0.5 的进程测试会在临时目录启动受控子进程，并对无外部依赖的 Rust 项目执行 Cargo Check。基础动作由内建 ActionBundle 提供，Cargo 运行目标和 Node scripts 动作按 Context 动态生成。Maven、Gradle、Node 的真实工具验收单独运行，命令和环境要求见 [0.5 MVP](docs/mvp-v0.5.md)。
 
 修改桥接公开 API 后重新生成：
 
@@ -79,7 +79,7 @@ scripts/generate-bridge.sh
 | 对象 | 动作 |
 |---|---|
 | Directory | Open Terminal Here / Copy Path / Open Directory |
-| Git repository | Git Status / Git Log / Git Diff |
+| Git repository | Git Status / Git Log / Git Diff / Git Staged Diff / Git Branches；Copy Branch Name / Copy Commit Hash / Copy Short Commit Hash / Copy Repository Path / Copy Remote URL |
 | File | Open File / Reveal in File Manager / Copy Path |
 | URL | Open in Default Browser / Copy URL |
 | JSON | Format JSON / Minify JSON / Copy Formatted JSON |
@@ -88,9 +88,11 @@ scripts/generate-bridge.sh
 
 只识别明确的 HTTP(S) URL，不推断裸域名。路径必须真实存在，支持绝对路径；相对路径以进程工作目录为准，不解释 shell 语法或 `~`。JSON 支持对象、数组及合法 primitive，并保留原始文本。输入最大 1 MiB。
 
-Git 动作只在用户按 Enter 时运行，参数是固定的 `status` / `log --oneline -n 100` / `diff --no-color`；发现仓库只做文件系统检查，从不调用 Git。Git 未安装时这三个动作显示 Disabled 并给出原因。剪贴板只在唤醒时读取一次文本快照；当它已经等于当前路径时 Copy Path 隐藏。
+Git 动作只在执行时运行固定的只读命令；发现仓库只做文件系统检查，从不调用 Git。Git 未安装时依赖 Git 的动作显示 Disabled 并给出原因，Copy Repository Path 仍可使用。新增动作在 Git Scope 和搜索中显示，可绑定快捷键，默认首页保留原有推荐数量。分支和提交信息在执行时读取，边界与命令见 [Git 常用动作](docs/git-actions-v0.6.md)。剪贴板只在唤醒时读取一次文本快照；当它已经等于当前路径时 Copy Path / Copy Repository Path 隐藏。
 
 ## 数据与插件
+
+IDEA 的项目窗口目录可通过已有 Directory Context 识别：窗口须显示明确项目路径，目录真实存在且包含 `.idea`，读取需要辅助功能权限。Git 与 Developer Actions 继续复用该目录。VS Code、Cursor Agent 和 ChatGPT 当前对话目录尚未接入；探索结论与统一 Bridge 设计见 [编辑器与 Agent Context](docs/editor-agent-context.md)。
 
 - 历史：`~/Library/Application Support/Anywhere/usage.sqlite3`。
 - 自定义插件：`~/Library/Application Support/Anywhere/plugins/*.toml`，或 `<plugin>/manifest.toml`。
@@ -123,6 +125,16 @@ scripts/package-macos.sh build/Anywhere-dev-0.5.app
 
 ## V0.6 开发中：Action Shortcuts
 
-当前分支 `dev-0.6`，Rust `0.6.0-dev.1`、App `0.6.0+1`，从已推送的 0.5 收尾基线 `d03a1f2` 开始。Settings → Action Shortcuts 可以搜索动作、录制和保存 Launcher 内快捷键。唤醒 Anywhere 后按组合键，只有一个可用对象时执行，多个对象时先选择；不需要先搜索出该动作。缺少 Context 或动作失效时拒绝执行，菜单长期绑定仍禁止。已有设置兼容读取，配置冲突明确提示。
+当前分支 `dev-0.6`，Rust `0.6.0-dev.13`、App `0.6.0+13`，从已推送的 0.5 收尾基线 `d03a1f2` 开始。Settings → Action Shortcuts 可以搜索动作、录制和保存 Launcher 内快捷键。唤醒 Anywhere 后按组合键，只有一个可用对象时执行，多个对象时先选择；不需要先搜索出该动作。缺少 Context 或动作失效时拒绝执行，菜单长期绑定仍禁止。已有设置兼容读取，配置冲突明确提示。macOS 的唤醒键、固定动作与 Context 意图统一使用原生按键录制，录制取消和弹窗生命周期有保护；真实物理全局触发和不同键盘布局仍待验收。
 
-全局意图快捷键尚未实现，完整进度与契约见 [0.6 MVP](docs/mvp-v0.6.md)。开发 App 为 `build/Anywhere-dev-0.6.app`；0.5 的 App 和 ZIP 单独保留。0.5 的最终功能与验收证据见 [最终核对](docs/v0.5-final-acceptance.md)。
+编辑时开启 Global shortcut 可从其他应用触发固定动作：重新捕获 Context，等待时 Esc 取消，超时不执行。旧配置保持仅在 Launcher 内生效。Add context shortcut 可让同一组键按源应用与 Context 类型分派不同动作：更具体的条件优先，同等匹配由用户选择，已匹配动作失效时不回退到另一命令。旧版本 1/2 配置保留原有生效范围。插件重载会暂停被撤销动作的快捷键，动作恢复后重新注册；配置保留。关闭设置时恢复失败会留在原页反馈并允许重试，冲突不阻止退出；离开项目后仍能编辑已保存脚本的键位和生效范围，动作身份保持。真实系统验收尚未完成，完整进度与契约见 [0.6 MVP](docs/mvp-v0.6.md)，功能核对见 [0.6 收尾记录](docs/v0.6-final-acceptance.md)。开发 App 为 `build/Anywhere-dev-0.6.app`；0.5 的 App 和 ZIP 单独保留。0.5 的最终功能与验收证据见 [最终核对](docs/v0.5-final-acceptance.md)。
+
+### 默认唤醒与内容输入
+
+默认唤醒优先填入选中文本，否则使用 15 秒内新复制的剪贴板文本；输入框显示来源，Global Search 只解析这份内容。按 Esc 清空内容并返回 Current App，再按 Esc 进入空白 Global Search。旧剪贴板或复制时间未知时直接进入 Current App。原有 Scope 分类与筛选保持不变，详见 [交互契约](docs/context-input-navigation.md)。
+
+### 统一视觉与页面导航
+
+所有窗口、表单和弹窗共用 UI 主题与组件。设置按 General、Shortcuts、Context、Search、Plugins 分类；输入框、主要操作、状态与选中项有明确视觉区分。设计与验收见 [UI 系统梳理](docs/ui-system-v0.6.md)。
+
+跨平台共享层与 Host 接入边界见 [platform-portability.md](docs/platform-portability.md)。当前完整系统适配器仍为 macOS；新增 Linux/Windows 共享代码 CI 不代表已交付 Windows App。

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
@@ -7,43 +5,51 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'src/rust/frb_generated.dart';
 import 'src/rust/api.dart' as bridge;
 import 'launcher_screen.dart';
+import 'ui/app_style.dart';
+import 'ui/app_components.dart';
+import 'infrastructure/runtime_paths.dart';
+import 'infrastructure/desktop_image_cache.dart';
+import 'infrastructure/desktop_environment.dart';
 import 'execution/execution_sessions_screen.dart';
 
 const windowChannel = MethodChannel('anywhere/window');
 
-Future<void> initializeRustLibrary() async {
-  final executable = File(Platform.resolvedExecutable).parent.path;
-  await RustLib.init(
-      externalLibrary: ExternalLibrary.open(
-    '$executable/../Frameworks/libanywhere_bridge_flutter.dylib',
-  ));
+Future<void> initializeRustLibrary(RuntimePaths paths) async {
+  await RustLib.init(externalLibrary: ExternalLibrary.open(paths.library));
 }
 
 /// A second window owns only its view; the app-lifetime Rust Application is shared.
 @pragma('vm:entry-point')
 Future<void> executionSessionsMain() async {
   WidgetsFlutterBinding.ensureInitialized();
+  configureDesktopImageCache();
   try {
-    await initializeRustLibrary();
+    const channel = MethodChannel('anywhere/executions');
+    final paths = await RuntimePaths.read(channel);
+    DesktopEnvironment.configure(await DesktopEnvironment.read(channel));
+    await initializeRustLibrary(paths);
     runApp(const ExecutionSessionsApp());
   } catch (error) {
     runApp(MaterialApp(
-        home: Scaffold(
-            body: Padding(
-      padding: const EdgeInsets.all(28),
-      child: SelectableText('Running Tasks could not open.\n$error'),
-    ))));
+        debugShowCheckedModeBanner: false,
+        theme: AppStyle.theme,
+        builder: AppStyle.windowBuilder,
+        home: AppFailureView(
+            title: 'Running Tasks could not open', detail: '$error')));
   }
 }
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  configureDesktopImageCache();
   try {
-    await initializeRustLibrary();
-    final paths = await windowChannel.invokeMapMethod<String, String>('paths');
+    final runtime = await RuntimePaths.read(windowChannel);
+    DesktopEnvironment.configure(await DesktopEnvironment.read(windowChannel));
+    await initializeRustLibrary(runtime);
+    final paths = runtime.values;
     await bridge.initialize(
-      dataDirectory: paths!['data']!,
-      pluginDirectory: paths['plugins']!,
+      dataDirectory: runtime.requiredPath('data'),
+      pluginDirectory: runtime.requiredPath('plugins'),
     );
     final excluded = (paths['excludedApps'] ?? '')
         .split('\n')
@@ -64,15 +70,20 @@ Future<void> main() async {
     runApp(
       LauncherApp(
         beginActivation: bridge.beginActivation,
-        activate: (session, {promptAccessibility = false}) => bridge.activate(
+        activate: (session,
+                {promptAccessibility = false, capturedEnvironment = false}) =>
+            bridge.activate(
           sessionId: session,
           promptAccessibility: promptAccessibility,
+          capturedEnvironment: capturedEnvironment,
         ),
-        updateInput: (session, input, revision, {scopeId}) =>
+        updateInput: (session, input, revision,
+                {scopeId, inputMode = bridge.InputModeDto.environment}) =>
             bridge.updateInput(
           sessionId: session,
           input: input,
           scopeId: scopeId,
+          inputMode: inputMode,
           revision: revision,
         ),
         execute: (session, revision, candidate) => bridge.execute(
@@ -87,9 +98,19 @@ Future<void> main() async {
         loadIcon: (candidate) => bridge.applicationIcon(candidateId: candidate),
         promptAccessibility: () => bridge.promptAccessibility(),
         shortcutActions: bridge.shortcutActions,
+        supportedShortcutActions: (ids) =>
+            bridge.supportedShortcutActions(actionIds: ids),
+        shortcutApplications: bridge.shortcutApplications,
+        resolveIntent: (session, revision, routes) =>
+            bridge.resolveShortcutIntent(
+                sessionId: session, revision: revision, routes: routes),
+        waitIntent: (session, revision, routes) => bridge.waitShortcutIntent(
+            sessionId: session, revision: revision, routes: routes),
         resolveBinding: (session, revision, action) =>
             bridge.resolveActionBinding(
                 sessionId: session, revision: revision, actionId: action),
+        waitBinding: (session, revision, action) => bridge.waitActionBinding(
+            sessionId: session, revision: revision, actionId: action),
         deactivate: (session) => bridge.deactivate(sessionId: session),
         window: windowChannel,
         startupMessage: [
@@ -99,16 +120,12 @@ Future<void> main() async {
       ),
     );
   } catch (error) {
-    runApp(
-      MaterialApp(
-        home: Scaffold(
-          body: Padding(
-            padding: const EdgeInsets.all(28),
-            child: SelectableText('Launcher could not start.\n$error'),
-          ),
-        ),
-      ),
-    );
+    runApp(MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppStyle.theme,
+        builder: AppStyle.windowBuilder,
+        home: AppFailureView(
+            title: 'Launcher could not start', detail: '$error')));
     await windowChannel.invokeMethod<void>('show', {
       'generation': 0,
       'height': 180.0,

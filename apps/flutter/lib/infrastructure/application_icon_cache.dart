@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:collection';
 import 'package:flutter/foundation.dart';
 import '../src/rust/api.dart';
 
@@ -6,14 +7,21 @@ typedef LoadIcon = Future<Uint8List?> Function(String candidateId);
 
 /// Bounded icon cache. Only the requested rows are pinned, and the cap always holds.
 class ApplicationIconCache extends ChangeNotifier {
-  ApplicationIconCache(this._load);
+  ApplicationIconCache(this._load,
+      {this.byteBudget = 2 * 1024 * 1024, this.maxEntryBytes = 256 * 1024})
+      : assert(byteBudget > 0),
+        assert(maxEntryBytes > 0);
+  final int byteBudget, maxEntryBytes;
+  int _retainedBytes = 0;
+  int get retainedBytes => _retainedBytes;
+  int get entryCount => _bytes.length;
   static const capacity = 128;
   static const maxInFlight = 4;
   final LoadIcon? _load;
   final _bytes = <String, Uint8List>{};
   final _pending = <String>{};
   final _failed = <String>{};
-  final _queue = <String>[];
+  final _queue = Queue<String>();
   var _pinned = <String>{};
   var _active = 0;
   var _epoch = 0;
@@ -35,6 +43,8 @@ class ApplicationIconCache extends ChangeNotifier {
     _failed.clear();
     _queue.clear();
     _bytes.clear();
+    _pinned.clear();
+    _retainedBytes = 0;
     _active = 0;
   }
 
@@ -64,8 +74,10 @@ class ApplicationIconCache extends ChangeNotifier {
     final load = _load;
     if (load == null || _disposed) return;
     while (_active < maxInFlight && _queue.isNotEmpty) {
-      final id = _queue.removeAt(0);
-      if (!_pending.contains(id) || _bytes.containsKey(id) || _failed.contains(id)) {
+      final id = _queue.removeFirst();
+      if (!_pending.contains(id) ||
+          _bytes.containsKey(id) ||
+          _failed.contains(id)) {
         _pending.remove(id);
         continue;
       }
@@ -84,8 +96,12 @@ class ApplicationIconCache extends ChangeNotifier {
         }
         _active--;
         _pending.remove(id);
-        if (bytes == null || bytes.isEmpty) {
+        if (bytes == null ||
+            bytes.isEmpty ||
+            bytes.lengthInBytes > maxEntryBytes ||
+            bytes.lengthInBytes > byteBudget) {
           _failed.add(id);
+          if (_failed.length > capacity) _failed.remove(_failed.first);
         } else {
           _store(id, bytes);
         }
@@ -96,9 +112,10 @@ class ApplicationIconCache extends ChangeNotifier {
   }
 
   void _store(String id, Uint8List bytes) {
-    _bytes.remove(id);
+    _retainedBytes -= _bytes.remove(id)?.lengthInBytes ?? 0;
     _bytes[id] = bytes;
-    while (_bytes.length > capacity) {
+    _retainedBytes += bytes.lengthInBytes;
+    while (_bytes.length > capacity || _retainedBytes > byteBudget) {
       String? evict;
       for (final key in _bytes.keys) {
         if (!_pinned.contains(key)) {
@@ -107,8 +124,7 @@ class ApplicationIconCache extends ChangeNotifier {
         }
       }
       evict ??= _bytes.keys.first;
-      if (evict == id && _bytes.length == 1) break;
-      _bytes.remove(evict);
+      _retainedBytes -= _bytes.remove(evict)!.lengthInBytes;
     }
   }
 

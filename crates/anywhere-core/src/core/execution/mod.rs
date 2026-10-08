@@ -62,10 +62,10 @@ impl TailBuffer {
             .extend(&bytes[bytes.len().saturating_sub(MAX_STREAM_BYTES)..]);
     }
 
-    fn text(&self) -> String {
+    fn text(&mut self) -> String {
         // A tail may begin mid-codepoint; skip that incomplete prefix only. Invalid
         // process bytes elsewhere are displayed as replacement characters.
-        let bytes: Vec<_> = self.bytes.iter().copied().collect();
+        let bytes = self.bytes.make_contiguous();
         let skip = if self.truncated {
             bytes
                 .iter()
@@ -126,6 +126,7 @@ impl ExecutionSessionManager {
                     exit_code: None,
                     started_at_ms: now(),
                     finished_at_ms: None,
+                    output_revision: 0,
                     output_truncated: false,
                     error: None,
                 },
@@ -179,7 +180,9 @@ impl ExecutionSessionManager {
 
     pub fn detail(&self, id: &str) -> Option<ExecutionSessionDetail> {
         let manager = self.state.lock().ok()?;
-        let state = manager.sessions.get(id)?.record.state.lock().ok()?;
+        let record = manager.sessions.get(id)?.record.clone();
+        drop(manager);
+        let mut state = record.state.lock().ok()?;
         Some(ExecutionSessionDetail {
             summary: state.summary.clone(),
             stdout: state.stdout.text(),
@@ -259,14 +262,15 @@ impl Drop for ExecutionSessionManager {
 fn run(mut process: OwnedProcess, record: Arc<Record>) {
     let result = (|| -> Result<std::process::ExitStatus> {
         loop {
-            drain(&mut process, &record, 4)?;
+            let received_output = drain(&mut process, &record, 4)?;
             if record.cancel.load(Ordering::Acquire) {
                 break process.stop();
             }
             if let Some(status) = process.poll()? {
                 break Ok(status);
             }
-            thread::sleep(Duration::from_millis(10));
+            // Idle tasks need fewer wakeups; active streams are drained promptly.
+            thread::sleep(Duration::from_millis(if received_output { 10 } else { 50 }));
         }
     })();
     // Finite final drain: a descendant cannot hold the session open forever.
@@ -296,34 +300,40 @@ fn run(mut process: OwnedProcess, record: Arc<Record>) {
     }
 }
 
-fn drain(process: &mut OwnedProcess, record: &Record, rounds: usize) -> Result<()> {
+fn drain(process: &mut OwnedProcess, record: &Record, rounds: usize) -> Result<bool> {
     let mut buffer = [0; 8192];
+    let mut received_output = false;
     for _ in 0..rounds {
         let stdout = process.read_stdout(&mut buffer)?;
+        // Publish stdout even if reading stderr fails afterwards.
         if stdout > 0 {
-            record
-                .state
-                .lock()
-                .unwrap()
-                .stdout
-                .append(&buffer[..stdout]);
+            let mut state = record.state.lock().unwrap();
+            state.append_output(&buffer[..stdout], &[]);
+            received_output = true;
         }
         let stderr = process.read_stderr(&mut buffer)?;
         if stderr > 0 {
-            record
-                .state
-                .lock()
-                .unwrap()
-                .stderr
-                .append(&buffer[..stderr]);
+            let mut state = record.state.lock().unwrap();
+            state.append_output(&[], &buffer[..stderr]);
+            received_output = true;
         }
         if stdout == 0 && stderr == 0 {
             break;
         }
     }
-    let mut state = record.state.lock().unwrap();
-    state.summary.output_truncated = state.stdout.truncated || state.stderr.truncated;
-    Ok(())
+    Ok(received_output)
+}
+
+impl RecordState {
+    fn append_output(&mut self, stdout: &[u8], stderr: &[u8]) {
+        if stdout.is_empty() && stderr.is_empty() {
+            return;
+        }
+        self.stdout.append(stdout);
+        self.stderr.append(stderr);
+        self.summary.output_revision = self.summary.output_revision.saturating_add(1);
+        self.summary.output_truncated = self.stdout.truncated || self.stderr.truncated;
+    }
 }
 
 fn now() -> i64 {

@@ -1,12 +1,17 @@
+import '../infrastructure/desktop_environment.dart';
+import '../ui/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../src/rust/api.dart';
 import '../infrastructure/window_host.dart';
 import 'launcher_controller.dart';
-import 'launcher_style.dart';
+import '../ui/app_style.dart';
 import 'launcher_view_state.dart';
 import 'widgets/candidate_row.dart';
+import 'widgets/candidate_icon.dart';
+import 'widgets/launcher_components.dart';
 import '../settings/settings_screen.dart';
+import '../settings/settings_components.dart';
 
 export 'launcher_controller.dart'
     show
@@ -35,7 +40,12 @@ class LauncherApp extends StatefulWidget {
     this.promptAccessibility,
     this.startupMessage = '',
     this.shortcutActions,
+    this.supportedShortcutActions,
+    this.shortcutApplications,
+    this.resolveIntent,
+    this.waitIntent,
     this.resolveBinding,
+    this.waitBinding,
   });
   final BeginActivation beginActivation;
   final Activate activate;
@@ -52,8 +62,16 @@ class LauncherApp extends StatefulWidget {
   final PromptAccessibility? promptAccessibility;
   final String startupMessage;
   final Future<List<ShortcutActionDto>> Function()? shortcutActions;
+  final Future<List<String>> Function(List<String>)? supportedShortcutActions;
+  final Future<List<ShortcutApplicationDto>> Function()? shortcutApplications;
+  final Future<BindingResolutionDto> Function(
+      int session, int revision, List<ShortcutRouteDto> routes)? resolveIntent;
+  final Future<BindingResolutionDto> Function(
+      int session, int revision, List<ShortcutRouteDto> routes)? waitIntent;
   final Future<List<CandidateDto>> Function(
       int session, int revision, String action)? resolveBinding;
+  final Future<BindingResolutionDto> Function(
+      int session, int revision, String action)? waitBinding;
 
   @override
   State<LauncherApp> createState() => _LauncherAppState();
@@ -76,7 +94,12 @@ class _LauncherAppState extends State<LauncherApp> {
         loadIcon: widget.loadIcon,
         promptAccessibility: widget.promptAccessibility,
         shortcutActions: widget.shortcutActions,
+        supportedShortcutActions: widget.supportedShortcutActions,
+        shortcutApplications: widget.shortcutApplications,
+        resolveIntent: widget.resolveIntent,
+        waitIntent: widget.waitIntent,
         resolveBinding: widget.resolveBinding,
+        waitBinding: widget.waitBinding,
       ),
       window: WindowHost(widget.window),
       startupMessage: widget.startupMessage,
@@ -94,7 +117,8 @@ class _LauncherAppState extends State<LauncherApp> {
   Widget build(BuildContext context) => MaterialApp(
         debugShowCheckedModeBanner: false,
         title: 'Anywhere',
-        theme: LauncherStyle.theme,
+        theme: AppStyle.theme,
+        builder: AppStyle.windowBuilder,
         home: LauncherScreen(controller: _controller),
       );
 }
@@ -241,7 +265,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
       }
     }
     final control = HardwareKeyboard.instance.isControlPressed;
-    final command = HardwareKeyboard.instance.isMetaPressed;
+    final command = DesktopEnvironment.current.commandPressed;
     if (event.logicalKey == LogicalKeyboardKey.escape) {
       _controller.escape();
     } else if (command &&
@@ -285,423 +309,188 @@ class _LauncherScreenState extends State<LauncherScreen> {
           width: 648,
           height: _view.height,
           child: Material(
-            color: LauncherStyle.surface,
-            shape: LauncherStyle.panelShape,
+            color: SettingsStyle.window,
+            shape: AppStyle.panelShape,
             clipBehavior: Clip.antiAlias,
-            child: SettingsScreen(
-                controller: _controller.settings,
-                onClose: _controller.closeSettings),
+            child: Theme(
+                data: SettingsStyle.theme(Theme.of(context)),
+                child: SettingsScreen(
+                    controller: _controller.settings,
+                    onClose: _controller.closeSettings)),
           ),
         ),
       );
     }
-    final entries = _view.visibleEntries;
-    final hasPanel = _view.hasPanel;
-    final labels = _view.selectedScope?.label ?? 'Universal';
+    final view = _view;
+    final entries = view.visibleEntries;
+    final selected =
+        entries.isEmpty ? null : entries[view.selectedIndex].candidate;
+    Widget? selectedIcon;
+    if (selected?.kind == CandidateKindDto.application) {
+      selectedIcon = ListenableBuilder(
+          listenable: _controller.icons,
+          builder: (_, __) => CandidateIcon(
+              candidate: selected!,
+              bytes: _controller.icons.bytesFor(selected.id),
+              size: 32));
+    }
     return Align(
-      alignment: Alignment.topCenter,
-      child: SizedBox(
-        key: const Key('launcher-panel'),
-        width: 648,
-        height: _view.height,
-        child: Material(
-          color: LauncherStyle.surface,
-          shape: LauncherStyle.panelShape,
-          clipBehavior: Clip.antiAlias,
-          child: Focus(
-            onKeyEvent: _onKey,
-            child: Column(
-              children: [
-                SizedBox(
-                  height: LauncherViewState.inputHeight,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 34,
-                          height: 34,
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(11),
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [Color(0x448ba5ff), Color(0x225769ae)],
-                            ),
-                            border: Border.all(color: const Color(0x449eb4ff)),
-                          ),
-                          child: !_view.browsing
-                              ? const Icon(
-                                  Icons.search_rounded,
-                                  size: 19,
-                                  color: LauncherStyle.primary,
-                                )
-                              : IconButton(
-                                  tooltip: 'Back to results',
-                                  constraints: const BoxConstraints.tightFor(
-                                    width: 34,
-                                    height: 34,
-                                  ),
-                                  padding: EdgeInsets.zero,
-                                  iconSize: 19,
-                                  color: LauncherStyle.primary,
-                                  icon: const Icon(Icons.arrow_back_rounded),
-                                  onPressed: _backMenu,
-                                ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: TextField(
-                            controller: _input,
-                            focusNode: _focus,
-                            autofocus: true,
-                            style: const TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w500,
-                              letterSpacing: -0.2,
-                              color: LauncherStyle.primary,
-                            ),
-                            cursorColor: LauncherStyle.accent,
-                            cursorWidth: 1.4,
-                            decoration: InputDecoration(
-                              hintText: _view.searchHint,
-                              hintStyle: const TextStyle(
-                                color: LauncherStyle.muted,
-                                fontWeight: FontWeight.w400,
-                              ),
-                              border: InputBorder.none,
-                              isDense: true,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        if (_view.resolving || _view.executing)
-                          const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 1.5,
-                              color: LauncherStyle.accent,
-                            ),
-                          )
-                        else
-                          const LauncherKeycap('esc'),
-                      ],
-                    ),
-                  ),
-                ),
-                if (_view.hasScopeBar) _scopeBar(),
-                if (_view.notice != null)
-                  SizedBox(
-                    height: 44,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 4,
-                      ),
-                      child: Tooltip(
-                        message: _view.notice!,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          decoration: BoxDecoration(
-                            color: const Color(0x2ce5b779),
-                            borderRadius: BorderRadius.circular(9),
-                            border: Border.all(color: const Color(0x44e5b779)),
-                          ),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.info_outline_rounded,
-                                  size: 15, color: LauncherStyle.warning),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  _view.notice!,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                      fontSize: 11,
-                                      color: LauncherStyle.warning),
-                                ),
-                              ),
-                              if (_view.noticeSettingsPane != null)
-                                TextButton(
-                                  onPressed: () =>
-                                      _controller.openPrivacySettings(
-                                          _view.noticeSettingsPane!),
-                                  child: const Text('Open Settings',
-                                      style: TextStyle(fontSize: 11)),
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                if (hasPanel) ...[
-                  const Divider(
-                      height: 1, thickness: 1, color: LauncherStyle.divider),
-                  SizedBox(
-                    height: LauncherViewState.headerHeight,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 18),
-                      child: Row(
-                        children: [
-                          Text(
-                            _view.resultHeading,
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 0.4,
-                              color: LauncherStyle.secondary,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Text(
-                              _view.output == null
-                                  ? labels
-                                  : (_view.resultSource ?? labels),
-                              textAlign: TextAlign.right,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: LauncherStyle.muted,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: _view.output != null
-                        ? SingleChildScrollView(
-                            key: const Key('result-preview'),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 20,
-                              vertical: 12,
-                            ),
-                            child: SelectableText(
-                              _view.output!,
-                              style: const TextStyle(
-                                fontFamily: 'monospace',
-                                fontSize: 12,
-                                height: 1.65,
-                                color: Color(0xffe2e3e8),
-                              ),
-                            ),
-                          )
-                        : entries.isEmpty
-                            ? Center(
-                                child: Text(
-                                  _view.scopeId == null
-                                      ? 'No results'
-                                      : _view.emptyMessage,
-                                  style: const TextStyle(
-                                    fontSize: 12,
-                                    color: LauncherStyle.secondary,
-                                  ),
-                                ),
-                              )
-                            : ListView.builder(
-                                key: const Key('action-list'),
-                                controller: _scroll,
-                                padding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
-                                itemCount: entries.length,
-                                itemBuilder: (context, index) => SizedBox(
-                                  height: LauncherViewState.rowHeight,
-                                  child: _entryRow(entries[index], index),
-                                ),
-                              ),
-                  ),
-                  const Divider(
-                      height: 1, thickness: 1, color: LauncherStyle.divider),
-                  SizedBox(
-                    height: LauncherViewState.footerHeight,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Row(
-                        children: [
-                          Text(
-                            _view.output == null
-                                ? '${entries.length} results'
-                                : (_view.resultStatus == ActionStatusDto.failed
-                                    ? 'Failed'
-                                    : 'Succeeded'),
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: LauncherStyle.secondary,
-                            ),
-                          ),
-                          const Spacer(),
-                          if (_view.output != null) ...[
-                            TextButton(
-                              onPressed: _controller.copyResult,
-                              style: TextButton.styleFrom(
-                                minimumSize: const Size(48, 26),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 8),
-                                foregroundColor: LauncherStyle.primary,
-                                textStyle: const TextStyle(fontSize: 11),
-                              ),
-                              child: const Text('Copy'),
-                            ),
-                            const SizedBox(width: 8),
-                          ],
-                          if (_view.output == null) ...[
-                            const Text('↑↓  Navigate',
-                                style: TextStyle(
-                                    fontSize: 11, color: LauncherStyle.muted)),
-                            const SizedBox(width: 16),
-                            if (_view.browsing)
-                              TextButton(
-                                  onPressed: _backMenu,
-                                  child: const Text('Back')),
-                            const SizedBox(width: 16),
-                          ],
-                          if (_view.output == null)
-                            TextButton(
-                              onPressed: entries.isEmpty ||
-                                      _view.executing ||
-                                      _view.resolving
-                                  ? null
-                                  : _controller.executeSelected,
-                              style: TextButton.styleFrom(
-                                  foregroundColor: LauncherStyle.secondary,
-                                  minimumSize: const Size(42, 28),
+        alignment: Alignment.topCenter,
+        child: SizedBox(
+          key: const Key('launcher-panel'),
+          width: 648,
+          height: view.height,
+          child: Material(
+              color: AppStyle.surface,
+              shape: AppStyle.panelShape,
+              clipBehavior: Clip.antiAlias,
+              child: Focus(
+                  onKeyEvent: _onKey,
+                  child: Column(children: [
+                    LauncherSearchArea(
+                        state: view,
+                        input: _input,
+                        focus: _focus,
+                        onBack: view.browsing ? _backMenu : null,
+                        trailing: selectedIcon),
+                    if (view.hasPanel || view.hasScopeBar)
+                      const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 20),
+                          child: Divider(height: 1)),
+                    if (view.hasScopeBar)
+                      LauncherScopeBar(
+                          scopes: view.scopes,
+                          selectedId: view.scopeId,
+                          onSelect: (id) {
+                            _controller.selectScope(id);
+                            _focus.requestFocus();
+                          }),
+                    if (view.notice != null) _notice(view),
+                    if (view.hasPanel) ...[
+                      if (view.hasResultHeading)
+                        LauncherResultHeading(
+                            title: view.resultHeading,
+                            detail: view.output != null
+                                ? view.resultSource
+                                : view.isContent
+                                    ? 'Global Search'
+                                    : null),
+                      Expanded(
+                          child: view.output != null
+                              ? SingleChildScrollView(
+                                  key: const Key('result-preview'),
                                   padding: const EdgeInsets.symmetric(
-                                      horizontal: 8)),
-                              child: Text(
-                                  entries.isNotEmpty &&
-                                          entries[_view.selectedIndex]
-                                                  .navigationPath !=
-                                              null
-                                      ? 'Open'
-                                      : 'Run',
-                                  style: const TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w500,
-                                      color: LauncherStyle.secondary)),
-                            )
-                          else
-                            TextButton(
-                              onPressed: () {
-                                _controller.back();
-                                _focus.requestFocus();
-                              },
-                              style: TextButton.styleFrom(
-                                minimumSize: const Size(48, 26),
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 8),
-                                foregroundColor: LauncherStyle.primary,
-                                textStyle: const TextStyle(fontSize: 11),
-                              ),
-                              child: const Text('Back'),
-                            ),
-                          const SizedBox(width: 6),
-                          LauncherKeycap(_view.output == null ? '↵' : 'esc'),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+                                      horizontal: 22, vertical: 12),
+                                  child: SelectableText(view.output!,
+                                      style: const TextStyle(
+                                          fontFamily: 'monospace',
+                                          fontSize: 12,
+                                          height: 1.65,
+                                          color: AppStyle.primary)))
+                              : entries.isEmpty
+                                  ? Center(
+                                      child: Text(
+                                          view.isContent
+                                              ? 'No actions for this content'
+                                              : view.scopeId == null
+                                                  ? 'No results'
+                                                  : view.emptyMessage,
+                                          style: const TextStyle(
+                                              fontSize: 13,
+                                              color: AppStyle.secondary)))
+                                  : ListView.builder(
+                                      key: const Key('action-list'),
+                                      controller: _scroll,
+                                      padding: const EdgeInsets.fromLTRB(
+                                          10, 0, 10, 8),
+                                      itemCount: entries.length,
+                                      itemBuilder: (_, index) => SizedBox(
+                                          height: LauncherViewState.rowHeight,
+                                          child: _entryRow(
+                                              entries[index], index)))),
+                      LauncherFooter(
+                          label: view.output == null
+                              ? '${entries.length} results'
+                              : view.resultStatus == ActionStatusDto.failed
+                                  ? 'Failed'
+                                  : 'Succeeded',
+                          primaryLabel: entries.isNotEmpty &&
+                                  entries[view.selectedIndex].navigationPath !=
+                                      null
+                              ? 'Open'
+                              : 'Run',
+                          onPrimary: entries.isEmpty ||
+                                  view.executing ||
+                                  view.resolving
+                              ? null
+                              : _controller.executeSelected,
+                          result: view.output != null,
+                          onCopy: view.output == null
+                              ? null
+                              : _controller.copyResult,
+                          onBack: view.output != null
+                              ? () {
+                                  _controller.back();
+                                  _focus.requestFocus();
+                                }
+                              : view.browsing
+                                  ? _backMenu
+                                  : null),
+                    ],
+                  ]))),
+        ));
   }
 
-  Widget _scopeBar() => SizedBox(
-        height: LauncherViewState.scopeHeight,
-        child: ListView(
-          key: const Key('scope-bar'),
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          children: [
-            for (final scope in _view.scopes)
-              _scopeChip(scope.label, scope.id == _view.scopeId, () {
-                _controller.selectScope(scope.id);
-                _focus.requestFocus();
-              })
-          ],
-        ),
-      );
-
-  Widget _scopeChip(String label, bool selected, VoidCallback onTap) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 4),
-        child: Semantics(
-            selected: selected,
-            child: Material(
-              color:
-                  selected ? const Color(0x4b7e98f2) : const Color(0x18ffffff),
-              clipBehavior: Clip.antiAlias,
-              shape: StadiumBorder(
-                  side: BorderSide(
-                      color: selected
-                          ? const Color(0x99b5c5ff)
-                          : const Color(0x24ffffff))),
-              child: InkWell(
-                  customBorder: const StadiumBorder(),
-                  onTap: onTap,
-                  child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 11, vertical: 4),
-                      child: Text(label,
-                          style: TextStyle(
-                              fontSize: 11,
-                              fontWeight:
-                                  selected ? FontWeight.w600 : FontWeight.w500,
-                              color: selected
-                                  ? LauncherStyle.primary
-                                  : LauncherStyle.secondary)))),
-            )),
-      );
+  Widget _notice(LauncherViewState view) => SizedBox(
+      height: 44,
+      child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+          child: Tooltip(
+              message: view.notice!,
+              child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(
+                      color: AppStyle.warning.withValues(alpha: .09),
+                      borderRadius: BorderRadius.circular(10)),
+                  child: Row(children: [
+                    const Icon(AppIcons.info,
+                        size: 15, color: AppStyle.warning),
+                    const SizedBox(width: 8),
+                    Expanded(
+                        child: Text(view.notice!,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 11, color: AppStyle.warning))),
+                    if (view.noticeSettingsPane != null)
+                      TextButton(
+                          onPressed: () => _controller
+                              .openPrivacySettings(view.noticeSettingsPane!),
+                          child: const Text('Open Settings',
+                              style: TextStyle(fontSize: 11))),
+                  ])))));
 
   Widget _entryRow(LauncherEntry entry, int index) {
     final candidate = entry.candidate;
     if (candidate != null) {
-      return CandidateRow(
-        actionShortcut: _controller.shortcutLabelFor(entry.candidate!),
-        candidate: candidate,
-        selected: index == _view.selectedIndex,
-        iconBytes: _controller.icons.bytesFor(candidate.id),
-        sourceLabel: _view.sourceLabelFor(candidate),
-        onTap: () => _openEntry(index),
-      );
+      final selected = index == _view.selectedIndex;
+      final sourceLabel = _view.sourceLabelFor(candidate);
+      final shortcut = _controller.shortcutLabelFor(candidate);
+      Widget row() => CandidateRow(
+          actionShortcut: shortcut,
+          candidate: candidate,
+          selected: selected,
+          iconBytes: _controller.icons.bytesFor(candidate.id),
+          sourceLabel: sourceLabel,
+          onTap: () => _openEntry(index));
+      return candidate.kind == CandidateKindDto.application
+          ? ListenableBuilder(
+              listenable: _controller.icons, builder: (_, __) => row())
+          : row();
     }
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
-      child: Material(
-        color: index == _view.selectedIndex
-            ? const Color(0x44778fe0)
-            : Colors.transparent,
-        borderRadius: BorderRadius.circular(11),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(11),
-          onTap: () => _openEntry(index),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 19),
-            child: Row(children: [
-              const Icon(Icons.folder_open_rounded,
-                  size: 23, color: LauncherStyle.secondary),
-              const SizedBox(width: 12),
-              Expanded(
-                  child: Text(entry.title,
-                      style: const TextStyle(
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w600,
-                          color: LauncherStyle.primary))),
-              const Icon(Icons.chevron_right_rounded,
-                  size: 19, color: LauncherStyle.muted),
-            ]),
-          ),
-        ),
-      ),
-    );
+    return MenuNavigationRow(
+        title: entry.title,
+        selected: index == _view.selectedIndex,
+        onTap: () => _openEntry(index));
   }
 }

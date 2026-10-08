@@ -7,6 +7,7 @@
 @property(nonatomic) NSInteger accessBehavior;
 @property(nonatomic) BOOL denyAfterRead;
 @property(nonatomic) NSUInteger reads;
+@property(nonatomic) NSInteger changeCount;
 + (instancetype)generalPasteboard;
 - (NSString *)stringForType:(NSString *)type;
 @end

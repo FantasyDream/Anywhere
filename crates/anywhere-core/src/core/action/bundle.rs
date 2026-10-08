@@ -11,6 +11,10 @@ use anywhere_protocol::ContextMatcher;
 
 /// Pure expansion of captured capabilities into actions. No filesystem or tool execution.
 pub trait ContextActionFactory: Send + Sync {
+    /// Registration eligibility only. Invocation still requires a fresh expanded action.
+    fn supports_persistent_binding(&self, _id: &str) -> bool {
+        false
+    }
     fn id(&self) -> &'static str;
     fn actions(&self, contexts: &[crate::core::context::ResolvedContext]) -> ActionExpansion;
 }

@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import 'package:anywhere/infrastructure/desktop_environment.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -5,7 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/launcher/launcher_controller.dart';
 import 'package:anywhere/launcher/launcher_screen.dart';
-import 'package:anywhere/launcher/launcher_style.dart';
+import 'package:anywhere/ui/app_style.dart';
 import 'package:anywhere/launcher/launcher_view_state.dart';
 import 'package:anywhere/settings/action_shortcut.dart';
 import 'package:anywhere/settings/host_settings.dart';
@@ -15,8 +17,8 @@ import 'launcher_fixtures.dart';
 const binding = ActionShortcut(
     actionId: 'core.directory.terminal',
     title: 'Open Terminal Here',
-    keyCode: 17,
-    modifiers: HostSettings.optionKey);
+    keyCode: 23,
+    modifiers: HostSettings.altKey);
 CandidateDto row(String id) => CandidateDto(
     id: id,
     commandId: binding.actionId,
@@ -31,8 +33,8 @@ CandidateDto row(String id) => CandidateDto(
     score: 1,
     groupId: 'folder',
     availability: AvailabilityDto.enabled);
-LauncherStateDto state() => launcherSnapshot(
-    sessionId: 1,
+LauncherStateDto state({int session = 1}) => launcherSnapshot(
+    sessionId: session,
     revision: 0,
     snapshotSeq: 1,
     input: '',
@@ -41,15 +43,21 @@ LauncherStateDto state() => launcherSnapshot(
     diagnostics: []);
 
 void main() {
+  setUp(() => DesktopEnvironment.configure(
+      const DesktopEnvironment(platform: TargetPlatform.macOS)));
+  tearDown(DesktopEnvironment.reset);
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('test/action-shortcuts');
   late HostSettings stored;
   final executions = <String>[];
+  final hostCalls = <String>[];
   setUp(() {
     stored = HostSettings.defaults.copyWith(actionShortcuts: [binding]);
     executions.clear();
+    hostCalls.clear();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
+      hostCalls.add(call.method);
       if (call.method == 'settings') return stored.toMap();
       if (call.method == 'settingsStatus') return {};
       if (call.method == 'saveSettings') {
@@ -63,12 +71,25 @@ void main() {
       .setMockMethodCallHandler(channel, null));
 
   Future<LauncherController> controller(
-      Future<List<CandidateDto>> Function(int, int, String) resolve) async {
+      Future<List<CandidateDto>> Function(int, int, String) resolve,
+      {Future<BindingResolutionDto> Function(int, int, String)? wait,
+      Future<void> Function()? shutdown,
+      Future<BindingResolutionDto> Function(int, int, List<ShortcutRouteDto>)?
+          intent,
+      Future<BindingResolutionDto> Function(int, int, List<ShortcutRouteDto>)?
+          waitIntent}) async {
+    var sessionCount = 0;
     final c = LauncherController(
         backend: LauncherBackend(
-            beginActivation: () => 1,
-            activate: (_, {promptAccessibility = false}) async => state(),
-            updateInput: (session, input, revision, {scopeId}) async =>
+            beginActivation: () => ++sessionCount,
+            activate: (session,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async {
+              hostCalls.add('capture:$session');
+              return state(session: session);
+            },
+            updateInput: (session, input, revision,
+                    {scopeId, inputMode = InputModeDto.environment}) async =>
                 launcherSnapshot(
                     sessionId: session,
                     revision: revision,
@@ -85,8 +106,17 @@ void main() {
                   status: ActionStatusDto.succeeded,
                   closeWindow: false);
             },
-            deactivate: (_) async {},
+            deactivate: (_) async {
+              hostCalls.add('deactivate');
+            },
             resolveBinding: resolve,
+            waitBinding: wait,
+            resolveIntent: intent,
+            waitIntent: waitIntent,
+            shortcutApplications: () async => const [
+                  ShortcutApplicationDto(
+                      bundleId: 'com.apple.finder', title: 'Finder')
+                ],
             shortcutActions: () async => const [
                   ShortcutActionDto(
                       actionId: 'core.directory.terminal',
@@ -96,7 +126,8 @@ void main() {
         window: WindowHost(channel),
         readPlugins: () => [],
         applyExcludedApps: (_) async {},
-        applyContextSources: (_) async {});
+        applyContextSources: (_) async {},
+        shutdownTasks: shutdown ?? () async {});
     addTearDown(c.dispose);
     await c.settings.load();
     await c.activate();
@@ -111,13 +142,28 @@ void main() {
         HostSettings.fromMap(stored.toMap()).actionShortcuts.single;
     expect(restored.actionId, binding.actionId);
     expect(restored.label, '⌥T');
+    expect(restored.global, isFalse);
+    expect(ActionShortcut.fromMap(binding.withGlobal(true).toMap())!.global,
+        isTrue);
+    expect(
+        ActionShortcut.fromMap({...binding.toMap(), 'global': 'yes'}), isNull);
     expect(restored.toMap().keys, isNot(contains('candidateId')));
     final future =
-        HostSettings.fromMap({...stored.toMap(), 'actionShortcutVersion': 2});
+        HostSettings.fromMap({...stored.toMap(), 'actionShortcutVersion': 5});
     expect(future.actionShortcuts, isEmpty);
     expect(
         future.copyWith(launchAtLogin: true).toMap()['actionShortcutVersion'],
-        2);
+        5);
+    final localMigration = HostSettings.fromMap({
+      ...stored.toMap(),
+      'actionShortcutVersion': 1,
+      'actionShortcuts': [
+        {...binding.withGlobal(true).toMap(), 'keyCode': 17, 'modifiers': 2048}
+      ]
+    });
+    expect(localMigration.actionShortcutVersion, 4);
+    expect(localMigration.actionShortcuts.single.actionId, binding.actionId);
+    expect(localMigration.actionShortcuts.single.global, isFalse);
   });
 
   test(
@@ -127,20 +173,19 @@ void main() {
     final other = ActionShortcut(
         actionId: 'another',
         title: 'Another',
-        keyCode: 17,
-        modifiers: HostSettings.optionKey);
+        keyCode: 23,
+        modifiers: HostSettings.altKey);
     expect(other.validate(stored), contains('assigned'));
     expect(
         binding.validate(stored.copyWith(
-            currentAppKeyCode: 17,
-            currentAppModifiers: HostSettings.optionKey)),
+            currentAppKeyCode: 23, currentAppModifiers: HostSettings.altKey)),
         contains('opens Anywhere'));
-    for (final modifier in [0, HostSettings.shiftKey, HostSettings.cmdKey]) {
+    for (final modifier in [0, HostSettings.shiftKey, HostSettings.metaKey]) {
       expect(
           ActionShortcut(
                   actionId: 'copy',
                   title: 'Copy',
-                  keyCode: 8,
+                  keyCode: 6,
                   modifiers: modifier)
               .chordError,
           isNotNull);
@@ -179,12 +224,374 @@ void main() {
     expect(executions, isEmpty);
   });
 
+  test(
+      'global trigger captures a new session before showing and ignores repeats while waiting',
+      () async {
+    stored = stored.copyWith(actionShortcuts: [binding.withGlobal(true)]);
+    final pending = Completer<BindingResolutionDto>();
+    var waitCalls = 0;
+    final c = await controller((_, __, ___) async => [row('one')],
+        wait: (session, revision, id) {
+      waitCalls++;
+      expect(session, 2);
+      expect(revision, 0);
+      expect(id, binding.actionId);
+      return pending.future;
+    });
+    await c.dismiss();
+    hostCalls.clear();
+    final trigger = c.triggerGlobalShortcut(binding.actionId);
+    await Future<void>.delayed(Duration.zero);
+    expect(c.view.phase, LauncherPhase.resolving);
+    expect(hostCalls.indexOf('capture:2'), lessThan(hostCalls.indexOf('show')));
+    await c.triggerGlobalShortcut(binding.actionId);
+    expect(waitCalls, 1);
+    pending.complete(BindingResolutionDto(
+        requiresChoice: false,
+        state: state(session: 2),
+        candidates: [row('fresh')]));
+    await trigger;
+    expect(executions, ['fresh']);
+  });
+
+  test(
+      'Escape cancels pending global capture and a late completion cannot execute',
+      () async {
+    stored = stored.copyWith(actionShortcuts: [binding.withGlobal(true)]);
+    final pending = Completer<BindingResolutionDto>();
+    final c = await controller((_, __, ___) async => [row('one')],
+        wait: (_, __, ___) => pending.future);
+    await c.dismiss();
+    final trigger = c.triggerGlobalShortcut(binding.actionId);
+    await Future<void>.delayed(Duration.zero);
+    await c.escape();
+    pending.complete(BindingResolutionDto(
+        requiresChoice: false,
+        state: state(session: 2),
+        candidates: [row('late')]));
+    await trigger;
+    expect(executions, isEmpty);
+    expect(c.view.phase, LauncherPhase.hidden);
+  });
+
+  test(
+      'typing revokes pending global execution; timeout and missing targets give feedback',
+      () async {
+    stored = stored.copyWith(actionShortcuts: [binding.withGlobal(true)]);
+    final pending = Completer<BindingResolutionDto>();
+    final c = await controller((_, __, ___) async => [row('one')],
+        wait: (_, __, ___) => pending.future);
+    await c.dismiss();
+    final trigger = c.triggerGlobalShortcut(binding.actionId);
+    await Future<void>.delayed(Duration.zero);
+    await c.update('copy');
+    pending.complete(BindingResolutionDto(
+        requiresChoice: false,
+        state: state(session: 2),
+        candidates: [row('old revision')]));
+    await trigger;
+    expect(executions, isEmpty);
+    expect(c.view.input, 'copy');
+    await c.dismiss();
+    final failure = await controller((_, __, ___) async => [],
+        wait: (_, __, ___) async =>
+            throw StateError('Context capture timed out'));
+    await failure.dismiss();
+    await failure.triggerGlobalShortcut(binding.actionId);
+    expect(failure.view.message, contains('timed out'));
+    expect(failure.view.phase, LauncherPhase.ready);
+    expect(executions, isEmpty);
+  });
+
+  test('quit cancels capture before stopping tasks and rejects new activations',
+      () async {
+    stored = stored.copyWith(actionShortcuts: [binding.withGlobal(true)]);
+    final pending = Completer<BindingResolutionDto>();
+    final stopping = Completer<void>();
+    final stopStarted = Completer<void>();
+    final c = await controller((_, __, ___) async => [row('one')],
+        wait: (_, __, ___) => pending.future,
+        shutdown: () async {
+          hostCalls.add('shutdownTasks');
+          stopStarted.complete();
+          await stopping.future;
+        });
+    await c.dismiss();
+    hostCalls.clear();
+    final trigger = c.triggerGlobalShortcut(binding.actionId);
+    await Future<void>.delayed(Duration.zero);
+    final quitting = c.lifecycle.prepareToQuit();
+    await stopStarted.future;
+    expect(hostCalls.indexOf('deactivate'),
+        lessThan(hostCalls.indexOf('shutdownTasks')));
+    await c.triggerGlobalShortcut(binding.actionId);
+    await c.toggle();
+    expect(c.view.phase, LauncherPhase.hidden);
+    pending.complete(BindingResolutionDto(
+        requiresChoice: false,
+        state: state(session: 2),
+        candidates: [row('late')]));
+    await trigger;
+    stopping.complete();
+    expect(await quitting, isTrue);
+    await c.triggerGlobalShortcut(
+        binding.actionId); // A queued event after shutdown is also rejected.
+    await c.toggle();
+    await c.openSettings();
+    expect(c.view.phase, LauncherPhase.hidden);
+    expect(executions, isEmpty);
+  });
+
+  test(
+      'global multi-object capture requires selection; local and removed event IDs do nothing',
+      () async {
+    final c = await controller((_, __, ___) async => [row('one')],
+        wait: (session, _, __) async => BindingResolutionDto(
+            requiresChoice: false,
+            state: state(session: session),
+            candidates: [row('one'), row('two')]));
+    await c.dismiss();
+    await c.triggerGlobalShortcut(binding.actionId); // local-only configuration
+    expect(c.view.phase, LauncherPhase.hidden);
+    stored = stored.copyWith(actionShortcuts: [binding.withGlobal(true)]);
+    await c.settings.load();
+    await c.triggerGlobalShortcut('removed.action');
+    expect(c.view.phase, LauncherPhase.hidden);
+    await c.triggerGlobalShortcut(binding.actionId);
+    expect(executions, isEmpty);
+    expect(c.view.visibleCandidates.map((a) => a.id), ['one', 'two']);
+    await c.selectEntry(1);
+    expect(executions, ['two']);
+  });
+
+  test(
+      'intent roundtrip preserves conditions, rejects duplicates, and upgrades fixed global v2',
+      () {
+    const rule = ShortcutRoute(
+        actionId: 'core.directory.terminal',
+        title: 'Open Terminal Here',
+        appBundleId: 'com.apple.finder',
+        appName: 'Finder',
+        contextType: 'core.directory');
+    const intent = ActionShortcut(
+        actionId: 'intent:test',
+        title: 'Terminal',
+        keyCode: 23,
+        modifiers: HostSettings.altKey,
+        global: true,
+        routes: [rule]);
+    final settings = HostSettings.defaults.copyWith(actionShortcuts: [intent]);
+    final restored =
+        HostSettings.fromMap(settings.toMap()).actionShortcuts.single;
+    expect(restored.validate(settings), isNull);
+    expect(restored.routes.single.toMap(), rule.toMap());
+    expect(restored.routes.single.toDto().contextType, 'core.directory');
+    expect(restored.toMap().toString(), isNot(contains('contextKey')));
+    const duplicated = ActionShortcut(
+        actionId: 'intent:duplicate',
+        title: 'Duplicate',
+        keyCode: 21,
+        modifiers: HostSettings.altKey,
+        routes: [rule, rule]);
+    expect(duplicated.configurationError, contains('different'));
+    final v2 = HostSettings.fromMap({
+      ...stored.toMap(),
+      'actionShortcutVersion': 2,
+      'actionShortcuts': [
+        {...binding.withGlobal(true).toMap(), 'keyCode': 17, 'modifiers': 2048}
+      ]
+    });
+    expect(v2.actionShortcutVersion, 4);
+    expect(v2.actionShortcuts.single.global, isTrue);
+    expect(v2.actionShortcuts.single.isIntent, isFalse);
+  });
+
+  test('ambiguous intent forces a chooser even for one deduplicated target',
+      () async {
+    const configured = ActionShortcut(
+        actionId: 'intent:test',
+        title: 'Terminal',
+        keyCode: 23,
+        modifiers: HostSettings.altKey,
+        routes: [
+          ShortcutRoute(
+              actionId: 'core.directory.terminal',
+              title: 'Terminal',
+              contextType: 'core.directory'),
+          ShortcutRoute(
+              actionId: 'core.directory.terminal',
+              title: 'Terminal',
+              appBundleId: 'com.apple.finder')
+        ]);
+    stored = HostSettings.defaults.copyWith(actionShortcuts: [configured]);
+    var fixedCalls = 0;
+    final c = await controller((_, __, ___) async {
+      fixedCalls++;
+      return [row('wrong')];
+    }, intent: (session, revision, routes) async {
+      expect(routes.length, 2);
+      return BindingResolutionDto(
+          state: state(), candidates: [row('one')], requiresChoice: true);
+    });
+    await c.executeShortcut(configured);
+    expect(executions, isEmpty);
+    expect(fixedCalls, 0);
+    expect(c.view.bindingChoices!.single.id, 'one');
+    await c.selectEntry(0);
+    expect(executions, ['one']);
+  });
+
+  test('global intent uses fresh session and late resolution is cancelled',
+      () async {
+    const configured = ActionShortcut(
+        actionId: 'intent:global',
+        title: 'Terminal',
+        keyCode: 23,
+        modifiers: HostSettings.altKey,
+        global: true,
+        routes: [
+          ShortcutRoute(
+              actionId: 'core.directory.terminal',
+              title: 'Terminal',
+              appBundleId: 'com.apple.finder')
+        ]);
+    stored = HostSettings.defaults.copyWith(actionShortcuts: [configured]);
+    final pending = Completer<BindingResolutionDto>();
+    final c = await controller(
+        (_, __, ___) async =>
+            throw StateError('Fixed resolver must not be called'),
+        waitIntent: (session, revision, rules) {
+      expect(session, 2);
+      expect(revision, 0);
+      expect(rules.single.appBundleId, 'com.apple.finder');
+      return pending.future;
+    });
+    await c.dismiss();
+    final trigger = c.triggerGlobalShortcut(configured.actionId);
+    await Future<void>.delayed(Duration.zero);
+    await c.escape();
+    pending.complete(BindingResolutionDto(
+        state: state(session: 2),
+        candidates: [row('late')],
+        requiresChoice: false));
+    await trigger;
+    expect(executions, isEmpty);
+  });
+
+  test(
+      'an old host event cannot run an edited intent with the same binding identity',
+      () async {
+    const old = ActionShortcut(
+        actionId: 'intent:event',
+        title: 'Terminal',
+        keyCode: 23,
+        modifiers: HostSettings.altKey,
+        global: true,
+        routes: [
+          ShortcutRoute(
+              actionId: 'core.directory.terminal',
+              title: 'Terminal',
+              appBundleId: 'com.apple.finder')
+        ]);
+    const edited = ActionShortcut(
+        actionId: 'intent:event',
+        title: 'Terminal',
+        keyCode: 23,
+        modifiers: HostSettings.altKey,
+        global: true,
+        routes: [
+          ShortcutRoute(
+              actionId: 'core.directory.terminal',
+              title: 'Terminal',
+              contextType: 'core.directory')
+        ]);
+    stored = HostSettings.defaults.copyWith(actionShortcuts: [edited]);
+    var calls = 0;
+    final c = await controller((_, __, ___) async => [],
+        waitIntent: (session, _, routes) async {
+      calls++;
+      return BindingResolutionDto(
+          state: state(session: session),
+          candidates: [row('current')],
+          requiresChoice: false);
+    });
+    await c.dismiss();
+    await c.triggerGlobalShortcut(old.actionId, requestedBinding: old);
+    expect(calls, 0);
+    expect(c.view.phase, LauncherPhase.hidden);
+    await c.triggerGlobalShortcut(edited.actionId, requestedBinding: edited);
+    expect(calls, 1);
+    expect(executions, ['current']);
+  });
+
+  testWidgets(
+      'settings can create, edit and remove a context shortcut with app and context rules',
+      (tester) async {
+    stored = HostSettings.defaults;
+    tester.view.physicalSize = const Size(648, 508);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final c = await controller((_, __, ___) async => [row('one')]);
+    await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme, home: LauncherScreen(controller: c)));
+    await c.openSettings();
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Add context shortcut'), 180);
+    await tester.ensureVisible(
+        find.widgetWithText(OutlinedButton, 'Add context shortcut'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add context shortcut'));
+    await tester.pumpAndSettle();
+    expect(await c.closeSettings(), isFalse);
+    await tester.enterText(find.byKey(const ValueKey('context-shortcut-name')),
+        'Terminal by context');
+    await tester.tap(find.text('Add rule'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Open Terminal Here'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('rule-app')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Finder').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('rule-context')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Folder').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save rule'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Record shortcut'));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyT);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.keyT);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save context shortcut'));
+    await tester.pumpAndSettle();
+    final configured = stored.actionShortcuts.single;
+    expect(configured.isIntent, isTrue);
+    expect(configured.global, isTrue);
+    expect(configured.routes.single.appBundleId, 'com.apple.finder');
+    expect(configured.routes.single.contextType, 'core.directory');
+    await tester.tap(find.text('⌥T'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('context-shortcut-name')),
+        'Renamed terminal');
+    await tester.tap(find.text('Save context shortcut'));
+    await tester.pumpAndSettle();
+    expect(stored.actionShortcuts.single.actionId, configured.actionId);
+    expect(stored.actionShortcuts.single.title, 'Renamed terminal');
+    await tester.tap(find.byTooltip('Remove shortcut for Renamed terminal'));
+    await tester.pumpAndSettle();
+    expect(stored.actionShortcuts, isEmpty);
+  });
+
   testWidgets(
       'visible Launcher handles the configured chord once, including key repeat',
       (tester) async {
     final c = await controller((_, __, ___) async => [row('one')]);
     await tester.pumpWidget(MaterialApp(
-        theme: LauncherStyle.theme, home: LauncherScreen(controller: c)));
+        theme: AppStyle.theme, home: LauncherScreen(controller: c)));
     await tester.pumpAndSettle();
     await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
     await tester.sendKeyDownEvent(LogicalKeyboardKey.keyT);
@@ -197,36 +604,108 @@ void main() {
   });
 
   testWidgets(
-      'settings can record, save and remove a binding; native close cannot orphan the editor',
+      'an undetected saved script can change keys and scope without changing action identity',
       (tester) async {
-    stored = HostSettings.defaults;
+    const script = ActionShortcut(
+        actionId: 'developer.node.script.test',
+        title: 'npm test',
+        keyCode: 23,
+        modifiers: HostSettings.altKey);
+    stored = HostSettings.defaults.copyWith(actionShortcuts: [script]);
     tester.view.physicalSize = const Size(648, 508);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    final c = await controller((_, __, ___) async => [row('one')]);
+    final c = await controller((_, __, ___) async => []);
     await tester.pumpWidget(MaterialApp(
-        theme: LauncherStyle.theme, home: LauncherScreen(controller: c)));
+        theme: AppStyle.theme, home: LauncherScreen(controller: c)));
     await c.openSettings();
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Add action shortcut'), 180);
-    await tester.tap(find.text('Add action shortcut'));
+    await tester.tap(find.text('⌥T'));
     await tester.pumpAndSettle();
-    expect(await c.closeSettings(), isFalse);
-    await tester.tap(find.text('Open Terminal Here'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Record shortcut'));
+    expect(
+        find.descendant(
+            of: find.byType(AlertDialog), matching: find.text('npm test')),
+        findsOneWidget);
+    expect(find.text('Choose another action'), findsNothing);
+    // A selected action form should fit without the old empty list area.
+    final dialogSurface = find.descendant(
+        of: find.byType(AlertDialog), matching: find.byType(Material));
+    expect(tester.getSize(dialogSurface.first).height, lessThan(440));
+    await tester.tap(find.text('⌥T').last);
     await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyT);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.keyT);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyT);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
     await tester.pumpAndSettle();
+    await tester.tap(find.text('Global shortcut'));
     await tester.tap(find.text('Save shortcut'));
     await tester.pumpAndSettle();
-    expect(stored.actionShortcuts.single.actionId, binding.actionId);
-    await tester.tap(find.byTooltip('Remove shortcut for Open Terminal Here'));
-    await tester.pumpAndSettle();
-    expect(stored.actionShortcuts, isEmpty);
-    expect(await c.closeSettings(), isTrue);
+    expect(stored.actionShortcuts.single.actionId, script.actionId);
+    expect(stored.actionShortcuts.single.title, script.title);
+    expect(stored.actionShortcuts.single.modifiers,
+        HostSettings.altKey | HostSettings.shiftKey);
+    expect(stored.actionShortcuts.single.global, isTrue);
+  });
+
+  testWidgets(
+      'settings records native chords, saves and removes bindings; close cannot orphan the editor',
+      (tester) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+    DesktopEnvironment.configure(const DesktopEnvironment(
+        platform: TargetPlatform.macOS, nativeShortcutRecording: true));
+    try {
+      const recorderChannel = MethodChannel('anywhere/shortcut-recorder');
+      final nativeChord = Completer<Map<String, int>>();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(recorderChannel, (call) async {
+        return call.method == 'record' ? nativeChord.future : null;
+      });
+      addTearDown(() => TestDefaultBinaryMessengerBinding
+          .instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(recorderChannel, null));
+      stored = HostSettings.defaults;
+      tester.view.physicalSize = const Size(648, 508);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final c = await controller((_, __, ___) async => [row('one')]);
+      await tester.pumpWidget(MaterialApp(
+          theme: AppStyle.theme, home: LauncherScreen(controller: c)));
+      await c.openSettings();
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('Add action shortcut'), 180);
+      await tester.tap(find.text('Add action shortcut'));
+      await tester.pumpAndSettle();
+      expect(await c.closeSettings(), isFalse);
+      await tester.tap(find.text('Open Terminal Here'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Record shortcut'));
+      await tester.pump();
+      nativeChord.complete({'keyCode': 23, 'modifiers': HostSettings.altKey});
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Global shortcut'));
+      await tester.pumpAndSettle();
+      expect(
+          tester
+              .widget<FilledButton>(
+                  find.widgetWithText(FilledButton, 'Save shortcut'))
+              .onPressed,
+          isNotNull);
+      await tester.tap(find.text('Save shortcut'));
+      await tester.pumpAndSettle();
+      expect(stored.actionShortcuts, isNotEmpty,
+          reason: c.settings.statusMessage);
+      expect(stored.actionShortcuts.single.actionId, binding.actionId);
+      expect(stored.actionShortcuts.single.global, isTrue);
+      await tester
+          .tap(find.byTooltip('Remove shortcut for Open Terminal Here'));
+      await tester.pumpAndSettle();
+      expect(stored.actionShortcuts, isEmpty);
+      expect(await c.closeSettings(), isTrue);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 }

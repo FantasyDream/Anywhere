@@ -144,6 +144,10 @@ cargo test -p anywhere-core --test mvp --locked developer:: -- --ignored
 - 0.5 功能范围已交付。正式发布前仍需多机器安装升级/权限验收和读屏检查，不能把开发包当作已完成这些验证的正式发行版。
 - 任意 Gradle task、Spring 多模块分析、交互式 stdin/PTY、任意自定义 shell、跨 App 退出存活的守护服务属于后续版本。Git 已有 Status/Diff/Log 继续原预览，不重复开发或强制迁移。
 
+## 后续 Git 扩展（0.6.0+20）
+
+后续 `0.6.0+20` 已扩展 Git 分支/提交哈希/仓库路径复制、本地分支和暂存区差异，仍复用原只读预览与执行路径，见 [Git 常用动作](git-actions-v0.6.md)。
+
 ## 菜单身份安全修复（0.5.0+10）
 
 菜单 ActionId 与扫描执行 token 分离，旧候选、排队请求及标题/标识变化不会执行替代动作。菜单 frecency 暂停读取和记录，保留旧数据；Developer Actions 与其他动作历史正常。长期菜单身份仍待验证，修复和限制见 [菜单动作说明](current-app-actions.md)。本轮原生验证使用合成 AX 节点，未重复真实应用菜单与四组真实工具验收。

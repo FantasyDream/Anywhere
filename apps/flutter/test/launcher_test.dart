@@ -1,3 +1,6 @@
+import 'package:anywhere/infrastructure/desktop_environment.dart';
+import 'package:anywhere/ui/app_icons.dart';
+import 'package:anywhere/ui/app_components.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -90,6 +93,9 @@ const _onePixelPng = <int>[
 ];
 
 void main() {
+  setUp(() => DesktopEnvironment.configure(
+      const DesktopEnvironment(platform: TargetPlatform.macOS)));
+  tearDown(DesktopEnvironment.reset);
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('test/launcher-window');
   const codec = StandardMethodCodec();
@@ -204,8 +210,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
         window: channel,
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async => sizedState(0, 0),
-        updateInput: (_, input, revision, {scopeId}) async =>
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
+            sizedState(0, 0),
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
             sizedState(revision, int.parse(input), input: input),
         execute: (_, revision, candidate) async =>
             throw StateError('not invoked'),
@@ -215,7 +225,7 @@ void main() {
     expect(find.byKey(const Key('empty-state')), findsNothing);
     final emptyHeight =
         tester.getSize(find.byKey(const Key('launcher-panel'))).height;
-    expect(emptyHeight, 64);
+    expect(emptyHeight, LauncherViewState.inputHeight);
     await tester.enterText(find.byType(TextField), '2');
     await tester.pumpAndSettle();
     final twoRows =
@@ -243,8 +253,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
         window: channel,
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async => sizedState(0, 0),
-        updateInput: (_, input, revision, {scopeId}) async =>
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
+            sizedState(0, 0),
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
             sizedState(revision, 0),
         execute: (_, revision, candidate) async =>
             throw StateError('not invoked'),
@@ -252,12 +266,14 @@ void main() {
     await toggle(tester);
     expect(find.text('No actions for this context'), findsNothing);
     expect(find.byKey(const Key('empty-state')), findsNothing);
-    expect(tester.getSize(find.byKey(const Key('launcher-panel'))).height, 64);
+    expect(tester.getSize(find.byKey(const Key('launcher-panel'))).height,
+        LauncherViewState.inputHeight);
     await tester.enterText(find.byType(TextField), 'zzz');
     await tester.pumpAndSettle();
     expect(find.textContaining('zzz'), findsWidgets);
     expect(find.textContaining('match'), findsNothing);
-    expect(tester.getSize(find.byKey(const Key('launcher-panel'))).height, 64);
+    expect(tester.getSize(find.byKey(const Key('launcher-panel'))).height,
+        LauncherViewState.inputHeight);
   });
 
   testWidgets('scope homes stay short and menu queries flatten the entire app',
@@ -300,11 +316,13 @@ void main() {
     await tester.pumpWidget(LauncherApp(
         window: channel,
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async {
+        activate: (_,
+            {promptAccessibility = false, capturedEnvironment = false}) async {
           captures++;
           return result(0, '', null);
         },
-        updateInput: (_, input, revision, {scopeId}) async {
+        updateInput: (_, input, revision,
+            {scopeId, inputMode = InputModeDto.environment}) async {
           boundaries.add(scopeId);
           return result(revision, input, scopeId);
         },
@@ -384,7 +402,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape); // Scope
     await tester.pumpAndSettle();
     expect(boundaries.last, isNull);
-    expect(find.text('Copy Path'), findsOneWidget);
+    expect(find.text('Copy Path'), findsNothing);
     expect(captures, 1);
     expect(tester.takeException(), isNull);
   });
@@ -393,7 +411,10 @@ void main() {
     await tester.pumpWidget(LauncherApp(
         window: channel,
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async => launcherSnapshot(
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
+            launcherSnapshot(
               sessionId: 1,
               revision: 0,
               snapshotSeq: 1,
@@ -405,7 +426,8 @@ void main() {
               roots: const [],
               diagnostics: [],
             ),
-        updateInput: (_, input, revision, {scopeId}) async =>
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
             sizedState(revision, 0),
         execute: (_, revision, candidate) async =>
             throw StateError('not invoked'),
@@ -421,7 +443,10 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => launcherSnapshot(
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          launcherSnapshot(
         sessionId: 1,
         revision: 0,
         snapshotSeq: 1,
@@ -457,7 +482,8 @@ void main() {
         roots: const [],
         diagnostics: const [],
       ),
-      updateInput: (_, input, revision, {scopeId}) async =>
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           state(revision, 'Open URL'),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
@@ -484,13 +510,16 @@ void main() {
       window: WindowHost(channel),
       backend: LauncherBackend(
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async => launcherSnapshot(
-            sessionId: 1,
-            revision: 0,
-            snapshotSeq: 1,
-            input: '',
-            contextComplete: true,
-            contextCaptures: const [
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
+            launcherSnapshot(
+                sessionId: 1,
+                revision: 0,
+                snapshotSeq: 1,
+                input: '',
+                contextComplete: true,
+                contextCaptures: const [
               ContextCaptureDto(
                   source: ContextSourceDto.selectedText,
                   status: ContextCaptureStatusDto.unsupported,
@@ -500,9 +529,11 @@ void main() {
                   status: ContextCaptureStatusDto.permissionDenied,
                   capturedAtMs: 1),
             ],
-            candidates: [],
-            diagnostics: []),
-        updateInput: (_, input, revision, {scopeId}) async => null,
+                candidates: [],
+                diagnostics: []),
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
+            null,
         execute: (_, revision, id) async => throw StateError('not invoked'),
         deactivate: (_) async {},
       ),
@@ -518,6 +549,8 @@ void main() {
                     child: SettingsScreen(
                         controller: controller.settings,
                         onClose: controller.closeSettings))))));
+    await tester.tap(find.byKey(const ValueKey('settings-context')));
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(find.text('Permission needed'), 160);
     await tester.pumpAndSettle();
     expect(find.text('Not supported by this app'), findsOneWidget);
@@ -543,9 +576,13 @@ void main() {
     await tester.pumpWidget(LauncherApp(
         window: channel,
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async =>
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
             state(0, 'Capture ${++captures}'),
-        updateInput: (_, input, revision, {scopeId}) => delayed.future,
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) =>
+            delayed.future,
         execute: (_, revision, candidate) async =>
             throw StateError('not invoked'),
         deactivate: (_) async {
@@ -579,9 +616,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
         window: channel,
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async =>
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
             state(0, 'Capture ${++captures}'),
-        updateInput: (_, input, revision, {scopeId}) async =>
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
             state(revision, input, input: input),
         execute: (_, revision, candidate) => pending.future,
         deactivate: (_) async {}));
@@ -606,8 +646,11 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) => captured.future,
-      updateInput: (_, input, revision, {scopeId}) async =>
+      activate: (_,
+              {promptAccessibility = false, capturedEnvironment = false}) =>
+          captured.future,
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           state(revision, input, input: input),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
@@ -635,9 +678,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async =>
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
           state(0, 'Open Terminal Here'),
-      updateInput: (_, input, revision, {scopeId}) async =>
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           state(revision, input, input: input),
       execute: (session, revision, candidate) async {
         executed.add(candidate);
@@ -662,6 +708,10 @@ void main() {
     expect(executed, ['action:second:c1']);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
+    expect(deactivated, 0);
+    expect(find.byKey(const Key('action-list')), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
     expect(deactivated, 1);
     expect(windowCalls.last, 'hide');
   });
@@ -673,9 +723,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async =>
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
           state(0, 'Initial action'),
-      updateInput: (_, input, revision, {scopeId}) =>
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) =>
           revision == 1 ? old.future : fresh.future,
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
@@ -698,9 +751,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async =>
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
           state(0, 'Initial action'),
-      updateInput: (_, input, revision, {scopeId}) async =>
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           state(revision, input, input: input),
       execute: (_, revision, candidate) => result.future,
       deactivate: (_) async {},
@@ -746,8 +802,13 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => scoped(0),
-      updateInput: (_, input, revision, {scopeId}) async => scoped(revision),
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          scoped(0),
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          scoped(revision),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
       deactivate: (_) async {},
@@ -809,8 +870,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => firstSnapshot,
-      updateInput: (_, input, revision, {scopeId}) async =>
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          firstSnapshot,
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           state(revision, input, input: input),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
@@ -867,9 +932,12 @@ void main() {
       await tester.pumpWidget(LauncherApp(
         window: channel,
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async =>
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
             snapshot(1, 'Search the Web', complete: settledAtStart),
-        updateInput: (_, input, revision, {scopeId}) async =>
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
             state(revision, 'Search the Web', input: input),
         execute: (_, revision, candidate) async =>
             throw StateError('not invoked'),
@@ -945,7 +1013,10 @@ void main() {
       window: channel,
       // Still being enriched, so the window subscribes to later snapshots.
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => launcherSnapshot(
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          launcherSnapshot(
         sessionId: 1,
         revision: 0,
         snapshotSeq: 1,
@@ -957,7 +1028,8 @@ void main() {
         roots: const [],
         diagnostics: [],
       ),
-      updateInput: (_, input, revision, {scopeId}) async =>
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           withRows(1, initial, revision: revision, input: input),
       execute: (_, revision, candidate) async {
         executed = candidate;
@@ -1015,7 +1087,10 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => launcherSnapshot(
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          launcherSnapshot(
         sessionId: 1,
         revision: 0,
         snapshotSeq: 1,
@@ -1027,7 +1102,8 @@ void main() {
         roots: const [],
         diagnostics: [],
       ),
-      updateInput: (_, input, revision, {scopeId}) async =>
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           state(revision, input, input: input),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
@@ -1061,6 +1137,58 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Third row'), findsOneWidget);
     expect(find.text('Second row'), findsNothing);
+  });
+
+  testWidgets('keyboard selection scrolls the last result above the footer',
+      (tester) async {
+    tester.view.physicalSize = const Size(648, 520);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final actions = List.generate(
+        15, (index) => candidate('action:$index', 'Action $index'));
+    LauncherStateDto state(int revision, String input) => launcherSnapshot(
+        sessionId: 1,
+        revision: revision,
+        snapshotSeq: revision + 1,
+        input: input,
+        contextComplete: true,
+        candidates: actions,
+        diagnostics: []);
+    await tester.pumpWidget(LauncherApp(
+        window: channel,
+        beginActivation: () => 1,
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
+            state(0, ''),
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
+            state(revision, input),
+        execute: (_, __, ___) async => throw StateError('not invoked'),
+        deactivate: (_) async {}));
+    await toggle(tester);
+    await tester.enterText(find.byType(TextField), 'action');
+    await tester.pumpAndSettle();
+    for (var index = 0; index < 14; index++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+    }
+    final last = find.text('Action 14');
+    expect(last.hitTestable(), findsOneWidget);
+    expect(tester.getRect(last).bottom,
+        lessThanOrEqualTo(tester.getRect(find.text('Run')).top));
+    expect(find.text('15 results'), findsOneWidget);
+    final panel = tester.getRect(find.byKey(const Key('launcher-panel')));
+    final footerKeycap = tester.getRect(find.descendant(
+        of: find.byKey(const Key('launcher-footer')),
+        matching: find.byType(AppKeycap)));
+    final runButton = tester.getRect(find.ancestor(
+        of: find.text('Run'), matching: find.byType(OutlinedButton)));
+    expect(panel.bottom - footerKeycap.bottom, greaterThanOrEqualTo(10));
+    expect(panel.right - footerKeycap.right, greaterThanOrEqualTo(24));
+    expect(panel.bottom - runButton.bottom, greaterThanOrEqualTo(10));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('application icons render when loaded and fall back when absent',
@@ -1115,8 +1243,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => state(0, ''),
-      updateInput: (_, input, revision, {scopeId}) async =>
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          state(0, ''),
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           state(revision, input),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
@@ -1136,9 +1268,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(requested, contains(chrome.id));
     expect(requested, contains(notes.id));
-    expect(find.byType(Image), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('action-list')),
+            matching: find.byType(Image)),
+        findsOneWidget);
     // The failing icon falls back to a glyph instead of breaking the row.
-    expect(find.byIcon(Icons.apps_rounded), findsOneWidget);
+    expect(find.byIcon(AppIcons.apps), findsOneWidget);
     expect(find.text('Notes'), findsOneWidget);
   });
 
@@ -1180,8 +1316,13 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => withEdge(0),
-      updateInput: (_, input, revision, {scopeId}) async => withEdge(revision),
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          withEdge(0),
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          withEdge(revision),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
       deactivate: (_) async {},
@@ -1196,13 +1337,21 @@ void main() {
     await tester.enterText(find.byType(TextField), 'edge');
     await tester.pumpAndSettle();
     expect(attempts, 1);
-    expect(find.byType(Image), findsNothing,
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('action-list')),
+            matching: find.byType(Image)),
+        findsNothing,
         reason: 'the first attempt failed');
     // A later snapshot must try again rather than cache the absence forever.
     await tester.enterText(find.byType(TextField), 'edge again');
     await tester.pumpAndSettle();
     expect(attempts, greaterThan(1));
-    expect(find.byType(Image), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('action-list')),
+            matching: find.byType(Image)),
+        findsOneWidget);
   });
 
   testWidgets('disabled candidates show their reason and cannot execute',
@@ -1211,7 +1360,10 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => launcherSnapshot(
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          launcherSnapshot(
         sessionId: 1,
         revision: 0,
         snapshotSeq: 1,
@@ -1228,7 +1380,8 @@ void main() {
         roots: const [],
         diagnostics: [],
       ),
-      updateInput: (_, input, revision, {scopeId}) async =>
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           state(revision, input, input: input),
       execute: (_, revision, candidate) async {
         executed++;
@@ -1270,8 +1423,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => scoped(0, ''),
-      updateInput: (_, input, revision, {scopeId}) async =>
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          scoped(0, ''),
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           scoped(revision, input),
       execute: (_, __, ___) async => throw StateError('not invoked'),
       deactivate: (_) async {},
@@ -1315,8 +1472,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => scoped(0, ''),
-      updateInput: (_, input, revision, {scopeId}) async =>
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          scoped(0, ''),
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           scoped(revision, input),
       execute: (_, __, ___) async => throw StateError('not invoked'),
       deactivate: (_) async {
@@ -1336,7 +1497,7 @@ void main() {
     expect(deactivated, 0);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(find.text('Git Status'), findsOneWidget);
+    expect(find.text('Git Status'), findsNothing);
     expect(find.text('Search for an action or app…'), findsOneWidget);
     expect(deactivated, 0);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -1373,8 +1534,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => scoped(0, ''),
-      updateInput: (_, input, revision, {scopeId}) async =>
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          scoped(0, ''),
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           scoped(revision, input),
       execute: (_, __, ___) async => throw StateError('not invoked'),
       deactivate: (_) async {},
@@ -1448,8 +1613,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
         window: channel,
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async => snapshot(0, ''),
-        updateInput: (_, input, revision, {scopeId}) async =>
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
+            snapshot(0, ''),
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
             snapshot(revision, input),
         execute: (session, revision, id) async {
           executed.add(id);
@@ -1510,8 +1679,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
         window: channel,
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async => snapshot(0, ''),
-        updateInput: (_, input, revision, {scopeId}) async {
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
+            snapshot(0, ''),
+        updateInput: (_, input, revision,
+            {scopeId, inputMode = InputModeDto.environment}) async {
           requests.add(scopeId);
           return snapshot(revision, input);
         },
@@ -1582,8 +1755,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => first,
-      updateInput: (_, input, revision, {scopeId}) async =>
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          first,
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           state(revision, input, input: input),
       execute: (_, __, ___) async => throw StateError('not invoked'),
       deactivate: (_) async {},

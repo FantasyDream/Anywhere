@@ -1,7 +1,8 @@
+import '../ui/app_icons.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../launcher/launcher_style.dart';
+import '../ui/app_style.dart';
 import '../src/rust/api.dart';
 import 'execution_sessions_controller.dart';
 
@@ -97,56 +98,34 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
   @override
   Widget build(BuildContext context) => Container(
         decoration: BoxDecoration(
-            color: const Color(0x6510141d),
-            borderRadius: BorderRadius.circular(11),
-            border: Border.all(color: LauncherStyle.divider, width: .6)),
+            color: AppStyle.field,
+            borderRadius: BorderRadius.circular(AppStyle.controlRadius),
+            border: Border.all(color: AppStyle.border, width: .8)),
         clipBehavior: Clip.antiAlias,
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              child: Row(children: [
-                _tab('Output', false),
-                _tab('Diagnostics', true),
-                const Spacer(),
-                Tooltip(
-                    message: _following
-                        ? 'Follow new output'
-                        : 'Jump to latest output',
-                    child: TextButton.icon(
-                        key: const Key('follow-output'),
-                        onPressed: () {
-                          setState(() => _following = true);
-                          _toLatest();
-                        },
-                        icon: Icon(
-                            _following
-                                ? Icons.vertical_align_bottom_rounded
-                                : Icons.arrow_downward_rounded,
-                            size: 15),
-                        label: Text(_following ? 'Following' : 'Latest'),
-                        style: TextButton.styleFrom(
-                            foregroundColor: _following
-                                ? LauncherStyle.muted
-                                : LauncherStyle.accent,
-                            textStyle: const TextStyle(fontSize: 11),
-                            minimumSize: const Size(0, 32),
-                            padding:
-                                const EdgeInsets.symmetric(horizontal: 8)))),
-                IconButton(
-                    tooltip: _copied ? 'Copied' : 'Copy output',
-                    onPressed: _text.isEmpty ? null : _copy,
-                    constraints:
-                        const BoxConstraints.tightFor(width: 34, height: 34),
-                    padding: EdgeInsets.zero,
-                    icon: Icon(
-                        _copied ? Icons.check_rounded : Icons.copy_rounded,
-                        size: 15,
-                        color: _copied
-                            ? LauncherStyle.success
-                            : LauncherStyle.secondary)),
-              ])),
-          const Divider(height: 1, color: LauncherStyle.divider),
+              child: LayoutBuilder(
+                  builder: (context, constraints) => Row(children: [
+                        _tab('Output', false),
+                        _tab('Diagnostics', true),
+                        const Spacer(),
+                        _followButton(constraints.maxWidth < 500 ||
+                            MediaQuery.textScalerOf(context).scale(11) > 13),
+                        IconButton(
+                            tooltip: _copied ? 'Copied' : 'Copy output',
+                            onPressed: _text.isEmpty ? null : _copy,
+                            constraints: const BoxConstraints.tightFor(
+                                width: 34, height: 34),
+                            padding: EdgeInsets.zero,
+                            icon: Icon(_copied ? AppIcons.check : AppIcons.copy,
+                                size: 15,
+                                color: _copied
+                                    ? AppStyle.success
+                                    : AppStyle.secondary)),
+                      ]))),
+          const Divider(height: 1, color: AppStyle.divider),
           Expanded(
               child: Scrollbar(
                   controller: _scroll,
@@ -170,11 +149,41 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
                             fontSize: 12,
                             height: 1.65,
                             color: _diagnostics
-                                ? LauncherStyle.warning
-                                : LauncherStyle.secondary)),
+                                ? AppStyle.warning
+                                : AppStyle.secondary)),
                   ))),
         ]),
       );
+
+  Widget _followButton(bool compact) {
+    void follow() {
+      setState(() => _following = true);
+      _toLatest();
+    }
+
+    final icon = Icon(_following ? AppIcons.latest : AppIcons.down, size: 15);
+    final message = _following ? 'Follow new output' : 'Jump to latest output';
+    if (compact) {
+      return IconButton(
+          key: const Key('follow-output'),
+          tooltip: message,
+          onPressed: follow,
+          icon: icon,
+          color: _following ? AppStyle.muted : AppStyle.accent);
+    }
+    return Tooltip(
+        message: message,
+        child: TextButton.icon(
+            key: const Key('follow-output'),
+            onPressed: follow,
+            icon: icon,
+            label: Text(_following ? 'Following' : 'Latest'),
+            style: TextButton.styleFrom(
+                foregroundColor: _following ? AppStyle.muted : AppStyle.accent,
+                textStyle: const TextStyle(fontSize: 11),
+                minimumSize: const Size(0, 32),
+                padding: const EdgeInsets.symmetric(horizontal: 8))));
+  }
 
   Widget _tab(String label, bool diagnostics) => Semantics(
       selected: _diagnostics == diagnostics,
@@ -182,10 +191,10 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
           onPressed: () => _switchStream(diagnostics),
           style: TextButton.styleFrom(
               foregroundColor: _diagnostics == diagnostics
-                  ? LauncherStyle.primary
-                  : LauncherStyle.muted,
+                  ? AppStyle.primary
+                  : AppStyle.muted,
               backgroundColor: _diagnostics == diagnostics
-                  ? const Color(0x12ffffff)
+                  ? AppStyle.sidebarSelection
                   : Colors.transparent,
               minimumSize: const Size(0, 32),
               padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -203,7 +212,7 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
                   width: 5,
                   height: 5,
                   decoration: const BoxDecoration(
-                      color: LauncherStyle.warning, shape: BoxShape.circle)),
+                      color: AppStyle.warning, shape: BoxShape.circle)),
             ],
           ])));
 }

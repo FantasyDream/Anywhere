@@ -1,5 +1,7 @@
 import 'package:flutter/services.dart';
 import '../infrastructure/hotkey_keymap.dart';
+import '../infrastructure/legacy_macos_shortcuts.dart';
+import '../infrastructure/desktop_environment.dart';
 import 'action_shortcut.dart';
 
 class HostSettings {
@@ -15,20 +17,20 @@ class HostSettings {
     required this.captureBrowserCurrentPage,
     required this.captureClipboard,
     this.actionShortcuts = const [],
-    this.actionShortcutVersion = 1,
+    this.actionShortcutVersion = 4,
   });
 
-  static const cmdKey = nativeCmdKey;
-  static const shiftKey = nativeShiftKey;
-  static const optionKey = nativeOptionKey;
-  static const controlKey = nativeControlKey;
-  static const spaceKey = 0x31;
+  static const metaKey = shortcutMetaKey;
+  static const shiftKey = shortcutShiftKey;
+  static const altKey = shortcutAltKey;
+  static const controlKey = shortcutControlKey;
+  static const spaceKey = 0x2c;
 
   static const defaults = HostSettings(
     currentAppKeyCode: spaceKey,
-    currentAppModifiers: cmdKey | optionKey,
+    currentAppModifiers: metaKey | altKey,
     universalKeyCode: spaceKey,
-    universalModifiers: cmdKey | optionKey | shiftKey,
+    universalModifiers: metaKey | altKey | shiftKey,
     launchAtLogin: false,
     excludedApps: [],
     captureFinderSelection: true,
@@ -110,7 +112,13 @@ class HostSettings {
       return fallback;
     }
 
+    // Legacy native codes are converted once, before validation or matching.
+    if (number('actionShortcutVersion', 1) < 4) {
+      map = migrateLegacyMacSettings(map);
+    }
     final excluded = map['excludedApps'];
+    final version = number('actionShortcutVersion', 1);
+    final supported = version >= 1 && version <= 4;
     return HostSettings(
       currentAppKeyCode:
           number('currentAppKeyCode', defaults.currentAppKeyCode),
@@ -130,25 +138,58 @@ class HostSettings {
       captureSelectedText: map['captureSelectedText'] != false,
       captureBrowserCurrentPage: map['captureBrowserCurrentPage'] != false,
       captureClipboard: map['captureClipboard'] != false,
-      actionShortcutVersion: number('actionShortcutVersion', 1),
-      actionShortcuts:
-          map['actionShortcutVersion'] == 1 && map['actionShortcuts'] is List
-              ? [
-                  for (final raw in map['actionShortcuts'] as List)
-                    if (ActionShortcut.fromMap(raw) case final binding?) binding
-                ]
-              : const [],
+      actionShortcutVersion: supported ? 4 : version,
+      actionShortcuts: supported && map['actionShortcuts'] is List
+          ? [
+              for (final raw in map['actionShortcuts'] as List)
+                if (ActionShortcut.fromMap(version < 3 && raw is Map
+                        ? {...raw, 'routes': []}
+                        : raw)
+                    case final binding?)
+                  version == 1 ? binding.withGlobal(false) : binding
+            ]
+          : const [],
     );
   }
 }
 
 String formatHotkey(int keyCode, int modifiers) {
   final buffer = StringBuffer();
-  for (final entry in nativeModifierLabels.entries) {
+  for (final entry in DesktopEnvironment.current.modifierLabels.entries) {
     if (modifiers & entry.key != 0) buffer.write(entry.value);
   }
-  buffer.write(macOSKeyNames[keyCode] ?? 'Key');
+  buffer.write(shortcutKeyNames[keyCode] ?? 'Key');
   return buffer.toString();
 }
 
-int? carbonKeyCode(LogicalKeyboardKey key) => macOSLogicalKeyCodes[key];
+int? shortcutKeyCode(LogicalKeyboardKey key) => shortcutLogicalKeyCodes[key];
+
+/// USB HID keyboard usages preserve physical positions across OS and layouts.
+int? shortcutEventKeyCode(KeyEvent event) =>
+    shortcutPhysicalKeyCodes[event.physicalKey];
+
+Map<Object?, Object?> migrateLegacyMacSettings(Map<Object?, Object?> raw) {
+  int? key(Object? value) => value is int ? legacyMacKeyCodes[value] : null;
+  int? modifiers(Object? value) {
+    if (value is! int || value & ~6912 != 0) return null;
+    return legacyMacModifiers.entries.fold<int>(
+        0, (mask, entry) => mask | (value & entry.key != 0 ? entry.value : 0));
+  }
+
+  Object? binding(Object? value) => value is Map
+      ? {
+          ...value,
+          'keyCode': key(value['keyCode']),
+          'modifiers': modifiers(value['modifiers'])
+        }
+      : value;
+  return {
+    ...raw,
+    for (final prefix in ['currentApp', 'universal']) ...{
+      '${prefix}KeyCode': key(raw['${prefix}KeyCode']),
+      '${prefix}Modifiers': modifiers(raw['${prefix}Modifiers']),
+    },
+    if (raw['actionShortcuts'] is List)
+      'actionShortcuts': (raw['actionShortcuts'] as List).map(binding).toList(),
+  };
+}

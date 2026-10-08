@@ -79,6 +79,8 @@ pub(crate) struct TestPlatform {
     pub(crate) frontmost_started: Notify,
     pub(crate) catalog_gate: Mutex<Option<Arc<CaptureGate>>>,
     pub(crate) no_git: bool,
+    pub(crate) git_output: Mutex<Option<GitOutput>>,
+    pub(crate) git_error: Mutex<Option<String>>,
     pub(crate) git_panics: bool,
     pub(crate) clipboard_error: bool,
     pub(crate) menu_trusted: Mutex<bool>,
@@ -121,6 +123,9 @@ impl TestPlatform {
 }
 
 impl Platform for TestPlatform {
+    fn is_application_entry(&self, path: &Path) -> bool {
+        path.extension().is_some_and(|extension| extension == "app")
+    }
     fn application_roots(&self) -> Vec<PathBuf> {
         vec![self.directory.clone()]
     }
@@ -243,8 +248,20 @@ impl Platform for TestPlatform {
             "git",
             &format!("{}:{}", operation.as_str(), repository.display()),
         )?;
+        if let Some(error) = self.git_error.lock().unwrap().as_ref() {
+            bail!("{error}");
+        }
+        if let Some(output) = self.git_output.lock().unwrap().clone() {
+            return Ok(output);
+        }
         Ok(GitOutput {
-            text: format!("git {} output", operation.as_str()),
+            text: match operation {
+                GitOperation::BranchName => "feature/current".into(),
+                GitOperation::CommitHash => "0123456789abcdef0123456789abcdef01234567".into(),
+                GitOperation::ShortCommitHash => "0123456".into(),
+                GitOperation::RemoteUrl => "git@example.com:team/repo.git".into(),
+                _ => format!("git {} output", operation.as_str()),
+            },
             truncated: false,
         })
     }

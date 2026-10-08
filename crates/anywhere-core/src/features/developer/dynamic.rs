@@ -17,6 +17,35 @@ use std::collections::BTreeMap;
 
 pub struct DeveloperActions;
 impl crate::core::action::bundle::ContextActionFactory for DeveloperActions {
+    fn supports_persistent_binding(&self, id: &str) -> bool {
+        if matches!(
+            id,
+            "developer.node.build"
+                | "developer.node.test"
+                | "developer.node.dev"
+                | "developer.node.start"
+                | "developer.node.lint"
+        ) {
+            return true;
+        }
+        for manager in ["npm", "pnpm", "yarn"] {
+            if let Some(encoded) = id.strip_prefix(&format!("developer.node.{manager}.script.")) {
+                return decode_identity(encoded).is_some_and(|script| {
+                    super::node::supported_script_name(&script)
+                        && super::node::action_id(manager, &script) == id
+                });
+            }
+        }
+        id.strip_prefix("developer.cargo.run.")
+            .and_then(decode_identity)
+            .is_some_and(|target| {
+                let parts: Vec<_> = target.split('\0').collect();
+                parts.len() == 2
+                    && parts.iter().all(|p| {
+                        !p.is_empty() && p.len() <= 200 && !p.chars().any(char::is_control)
+                    })
+            })
+    }
     fn id(&self) -> &'static str {
         "developer.actions"
     }
@@ -129,6 +158,22 @@ impl crate::core::action::bundle::ContextActionFactory for DeveloperActions {
             diagnostics,
         }
     }
+}
+
+fn decode_identity(encoded: &str) -> Option<String> {
+    if encoded.is_empty() || encoded.len() > 2048 || !encoded.len().is_multiple_of(2) {
+        return None;
+    }
+    let bytes = (0..encoded.len())
+        .step_by(2)
+        .map(|i| {
+            let pair = encoded.as_bytes().get(i..i + 2)?;
+            let pair = std::str::from_utf8(pair).ok()?;
+            u8::from_str_radix(pair, 16).ok()
+        })
+        .collect::<Option<Vec<_>>>()?;
+    let value = String::from_utf8(bytes).ok()?;
+    (super::metadata::encoded(&value) == encoded).then_some(value)
 }
 
 fn dynamic_definition(

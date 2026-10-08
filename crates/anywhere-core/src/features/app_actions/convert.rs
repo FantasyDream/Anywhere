@@ -33,7 +33,8 @@ pub fn descriptors(app: &ApplicationInfo, items: Vec<DiscoveredMenuItem>) -> Vec
         .into_iter()
         .map(|item| {
             // A unique AX identifier survives localization and path movement. Otherwise use
-            // the full semantic path, substituting AX identifiers wherever available.
+            // the full semantic path, pairing available IDs with titles. Repeated
+            // selector-like IDs must not collapse distinct sibling menu paths.
             let unique_leaf = item
                 .identifiers
                 .last()
@@ -49,7 +50,7 @@ pub fn descriptors(app: &ApplicationInfo, items: Vec<DiscoveredMenuItem>) -> Vec
                         item.identifiers
                             .get(i)
                             .and_then(Option::as_ref)
-                            .map(|id| format!("ax:{id}"))
+                            .map(|id| format!("ax:{}:{id}:title:{title}", id.len()))
                             .unwrap_or_else(|| format!("title:{title}"))
                     })
                     .collect()
@@ -201,6 +202,7 @@ mod tests {
         )
         .unwrap();
         let id = registry.commands().next().unwrap().id.clone();
+        assert!(!registry.supports_persistent_binding(&id));
         assert!(registry
             .persistent_binding(&id)
             .unwrap_err()
@@ -328,6 +330,54 @@ mod tests {
             vec![item(&["File", "Save"], Some("reused-id"), true)],
         );
         assert_eq!(unambiguous[0].id, original);
+    }
+    #[test]
+    fn shared_selector_ids_preserve_each_full_menu_path_and_rescan_identity() {
+        let shared = |path: &[&str]| {
+            let mut value = item(path, Some("handleAction:"), true);
+            value.identifiers = vec![Some("handleAction:".into()); path.len()];
+            value
+        };
+        let items = vec![
+            shared(&["File", "New", "File"]),
+            shared(&["File", "Save All"]),
+            shared(&["Edit", "Copy"]),
+            shared(&["Edit", "Paste"]),
+            shared(&["View", "Copy"]),
+        ];
+        let actions = descriptors(&app(), items.clone());
+        assert_eq!(actions.len(), 5);
+        let ids: std::collections::HashSet<_> = actions.iter().map(|a| &a.id).collect();
+        assert_eq!(ids.len(), 5);
+        let mut reordered = items.clone();
+        reordered.reverse();
+        reordered.push(shared(&["Git", "Commit"]));
+        let rescanned = descriptors(&app(), reordered);
+        for action in &actions {
+            let same_path = rescanned
+                .iter()
+                .find(|a| a.search_title == action.search_title)
+                .unwrap();
+            assert_eq!(same_path.id, action.id);
+        }
+        let registered = registry(&ActionRegistry::default(), &app(), items).unwrap();
+        assert_eq!(registered.commands().count(), 5);
+        // The same ID and full path is still ambiguous: omit both, preserve others.
+        let ambiguous = descriptors(
+            &app(),
+            vec![
+                shared(&["File", "Save All"]),
+                shared(&["File", "Save All"]),
+                shared(&["Edit", "Copy"]),
+            ],
+        );
+        assert_eq!(ambiguous.len(), 1);
+        assert_eq!(ambiguous[0].title, "Copy");
+        let renamed = descriptors(
+            &app(),
+            vec![shared(&["File", "Save As"]), shared(&["Edit", "Copy"])],
+        );
+        assert_ne!(renamed[0].id, actions[1].id);
     }
     #[test]
     fn title_fallback_changes_identity_when_its_path_changes() {

@@ -5,6 +5,8 @@
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+#[cfg(any(target_os = "macos", test))]
+pub(crate) mod editor_context;
 pub mod process;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -110,15 +112,21 @@ pub struct BundleApplication {
     pub icon: Option<String>,
 }
 
-/// The only Git operations V0.2 exposes. Never a general command channel.
+/// Read-only Git operations. Never a general command channel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GitOperation {
-    /// `git status --porcelain=v1 --branch`
+    /// `git status --porcelain=v1`
     Status,
     /// `git log --oneline -n 100`
     Log,
     /// `git diff --no-color` (unstaged working tree changes only)
     Diff,
+    StagedDiff,
+    Branches,
+    BranchName,
+    CommitHash,
+    ShortCommitHash,
+    RemoteUrl,
 }
 
 /// Directory walk used by the default `installed_applications` implementation.
@@ -129,13 +137,36 @@ pub(crate) mod drain;
 pub mod git;
 
 impl GitOperation {
-    pub const ALL: [GitOperation; 3] = [Self::Status, Self::Log, Self::Diff];
+    pub const ALL: [GitOperation; 9] = [
+        Self::Status,
+        Self::Log,
+        Self::Diff,
+        Self::StagedDiff,
+        Self::Branches,
+        Self::BranchName,
+        Self::CommitHash,
+        Self::ShortCommitHash,
+        Self::RemoteUrl,
+    ];
+
+    pub fn returns_value(self) -> bool {
+        matches!(
+            self,
+            Self::BranchName | Self::CommitHash | Self::ShortCommitHash | Self::RemoteUrl
+        )
+    }
 
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Status => "status",
             Self::Log => "log",
             Self::Diff => "diff",
+            Self::StagedDiff => "staged-diff",
+            Self::Branches => "branches",
+            Self::BranchName => "branch-name",
+            Self::CommitHash => "commit-hash",
+            Self::ShortCommitHash => "short-commit-hash",
+            Self::RemoteUrl => "remote-url",
         }
     }
 }
@@ -161,6 +192,13 @@ impl InstalledApplications {
     }
 }
 
+/// A single clipboard read paired with the age of that exact pasteboard generation.
+#[derive(Debug, Default)]
+pub struct ClipboardSnapshot {
+    pub text: Option<String>,
+    pub age_ms: Option<u64>,
+}
+
 pub trait Platform: Send + Sync {
     /// Ordered application catalog roots for the default directory walk.
     ///
@@ -168,6 +206,11 @@ pub trait Platform: Send + Sync {
     /// overrides [`Self::installed_applications`].
     fn application_roots(&self) -> Vec<PathBuf> {
         Vec::new()
+    }
+
+    /// The adapter decides which entries the shared directory walker treats as applications.
+    fn is_application_entry(&self, _path: &Path) -> bool {
+        false
     }
 
     /// Installed applications this host can launch.
@@ -194,7 +237,7 @@ pub trait Platform: Send + Sync {
 
     // ---- V0.2 capabilities; unsupported platforms keep their V0.1 behaviour ----
 
-    /// Metadata for one `.app` bundle. `Ok(None)` means "not an application".
+    /// Metadata for one application entry (bundle, executable, or shortcut). `Ok(None)` means "not an application".
     fn bundle_application(&self, _bundle: &Path) -> Result<Option<BundleApplication>> {
         Ok(None)
     }
@@ -224,6 +267,16 @@ pub trait Platform: Send + Sync {
         Ok(None)
     }
 
+    /// Observe generation changes only, without reading or retaining clipboard text.
+    fn start_clipboard_tracking(&self) {}
+
+    fn clipboard_snapshot(&self) -> Result<ClipboardSnapshot> {
+        Ok(ClipboardSnapshot {
+            text: self.clipboard_text()?,
+            age_ms: None,
+        })
+    }
+
     /// One plain-text clipboard snapshot. `Ok(None)` covers non-text and empty.
     fn clipboard_text(&self) -> Result<Option<String>> {
         Ok(None)
@@ -236,7 +289,17 @@ pub trait Platform: Send + Sync {
         Ok(None)
     }
 
-    /// Files and directories selected in the captured Finder instance.
+    /// Whether this captured application can supply a file selection.
+    fn file_selection_supported(&self, _application: &ApplicationInfo) -> bool {
+        false
+    }
+
+    /// Selected files/directories, independent of the file manager's identity.
+    fn selected_file_paths(&self, application: &ApplicationInfo) -> Result<Vec<PathBuf>> {
+        self.finder_selected_paths(application)
+    }
+
+    /// Legacy adapter hook retained for callers; new adapters implement selected_file_paths.
     fn finder_selected_paths(&self, _application: &ApplicationInfo) -> Result<Vec<PathBuf>> {
         Ok(Vec::new())
     }
@@ -253,12 +316,12 @@ pub trait Platform: Send + Sync {
 
     /// Whether the read-only Git operations can run at all.
     fn git_available(&self) -> bool {
-        false
+        git::available()
     }
 
     /// Run one allowlisted read-only Git operation inside `repository`.
-    fn run_git(&self, _repository: &Path, _operation: GitOperation) -> Result<GitOutput> {
-        bail!("git is not supported on this platform")
+    fn run_git(&self, repository: &Path, operation: GitOperation) -> Result<GitOutput> {
+        git::run(repository, operation)
     }
 
     // ---- V0.3 menu actions; unsupported platforms stay empty ----
@@ -297,6 +360,18 @@ mod macos;
 pub use macos::MacOsPlatform;
 #[cfg(target_os = "macos")]
 pub use macos::MacOsPlatform as NativePlatform;
+
+/// Composition root selects the OS adapter; shared bridge code does not name an OS.
+pub fn native_platform() -> Result<std::sync::Arc<dyn Platform>> {
+    #[cfg(target_os = "macos")]
+    {
+        Ok(std::sync::Arc::new(MacOsPlatform))
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        bail!("This build has no native system adapter. Shared Core remains available with an injected Platform.")
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -349,7 +424,7 @@ mod tests {
         assert!(platform.selected_text(&app).unwrap().is_none());
         assert!(platform.finder_selected_paths(&app).unwrap().is_empty());
         assert!(platform.browser_current_url(&app).unwrap().is_none());
-        assert!(!platform.git_available());
+        assert_eq!(platform.git_available(), git::available());
         assert!(platform.launch_application("/x.app").is_err());
         assert!(platform
             .run_git(Path::new("/tmp"), GitOperation::Status)
@@ -383,10 +458,20 @@ mod tests {
     }
 
     #[test]
-    fn git_operations_expose_only_status_log_and_diff() {
+    fn git_operations_are_an_explicit_read_only_allowlist() {
         assert_eq!(
             GitOperation::ALL.map(GitOperation::as_str),
-            ["status", "log", "diff"]
+            [
+                "status",
+                "log",
+                "diff",
+                "staged-diff",
+                "branches",
+                "branch-name",
+                "commit-hash",
+                "short-commit-hash",
+                "remote-url"
+            ]
         );
     }
 }

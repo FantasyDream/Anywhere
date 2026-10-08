@@ -13,6 +13,7 @@ use std::{
 
 #[derive(Default)]
 pub struct SessionIdentity {
+    pub clipboard_age_ms: Option<u64>,
     pub frontmost: Option<ApplicationInfo>,
     pub source_app: String,
     /// One-shot activation reads. They survive query revisions but never a new session.
@@ -56,6 +57,7 @@ pub struct SessionMenu {
 
 #[derive(Default)]
 pub struct LauncherSession {
+    pub input_mode: InputMode,
     pub state: LauncherState,
     pub activation_started: bool,
     pub identity: SessionIdentity,

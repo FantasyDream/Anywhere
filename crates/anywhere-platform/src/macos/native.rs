@@ -27,6 +27,7 @@ extern "C" {
         size: c_uint,
         out_length: *mut c_uint,
     ) -> *mut u8;
+    pub fn launcher_clipboard_change_count() -> i64;
     pub fn launcher_clipboard_text(
         output: *mut c_char,
         capacity: c_uint,
@@ -37,6 +38,7 @@ extern "C" {
     pub fn launcher_discover_menu_actions(application_json: *const c_char) -> *mut c_char;
     /// JSON status and optional bounded text; returned memory uses launcher_free_string.
     pub fn launcher_selected_text(application_json: *const c_char) -> *mut c_char;
+    pub fn launcher_editor_project_window(application_json: *const c_char) -> *mut c_char;
     pub fn launcher_perform_menu_action(
         application_json: *const c_char,
         locator_json: *const c_char,

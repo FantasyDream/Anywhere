@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../launcher/launcher_style.dart';
+import '../ui/app_style.dart';
 import 'execution_sessions_view.dart';
 import 'execution_sessions_controller.dart';
 
@@ -71,7 +71,8 @@ class _ExecutionSessionsAppState extends State<ExecutionSessionsApp> {
   @override
   Widget build(BuildContext context) => MaterialApp(
         debugShowCheckedModeBanner: false,
-        theme: LauncherStyle.theme,
+        theme: AppStyle.theme,
+        builder: AppStyle.windowBuilder,
         home: ListenableBuilder(
           listenable: controller,
           builder: (context, _) => ExecutionSessionsView(

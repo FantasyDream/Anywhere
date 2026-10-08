@@ -29,8 +29,10 @@ export ANYWHERE_MENU_IN_HOST=1
 cargo build --locked --release -p anywhere-bridge-flutter
 (
   cd apps/flutter
-  flutter pub get
-  flutter assemble --output="$ROOT/build/flutter" \
+  # check-flutter.py already verifies the pinned SDK. Packaging must not wait
+  # for an unrelated Flutter SDK freshness fetch.
+  flutter --no-version-check pub get
+  flutter --no-version-check assemble --output="$ROOT/build/flutter" \
     -dTargetPlatform=darwin -dDarwinArchs="$ARCH" -dBuildMode=release \
     -dTargetFile=lib/main.dart release_macos_bundle_flutter_assets
 )
@@ -76,8 +78,8 @@ if codesign -dr - "$APP" 2>&1 | grep -q 'designated => cdhash'; then
   echo 'Packaging error: the app still has a version-specific ad hoc identity.' >&2
   exit 1
 fi
-# The Dart entry point loads this by name; a rename that misses one of the two sides
-# otherwise fails only at runtime, with an unhelpful dlopen error.
+# HostRuntime supplies the library path to each Flutter engine. Validate the
+# native path contract rather than expecting Dart to hard-code the bundle layout.
 # Re-register with LaunchServices. macOS caches an app's icon and metadata by bundle
 # path and identifier, so a freshly built or renamed bundle otherwise shows a stale
 # icon (or the "no entry" placeholder) until the cache happens to expire.
@@ -86,9 +88,9 @@ if [[ "$APP" == "$ROOT/build/Anywhere.app" && -x "$LSREGISTER" ]]; then
   "$LSREGISTER" -f "$APP"
 fi
 
-expected_library="$(sed -n "s/.*Frameworks\/\(lib[a-z_]*\.dylib\)'.*/\1/p" apps/flutter/lib/main.dart)"
+expected_library="$(sed -n 's/.*"Contents\/Frameworks\/\(lib[a-z_]*\.dylib\)".*/\1/p' apps/flutter/macos/Runner/HostRuntime.swift)"
 if [[ -z "$expected_library" || ! -f "$APP/Contents/Frameworks/$expected_library" ]]; then
-  echo "packaging error: the Dart host loads '${expected_library:-unknown}', which is not in the bundle" >&2
+  echo "packaging error: HostRuntime supplies '${expected_library:-unknown}', which is not in the bundle" >&2
   ls "$APP/Contents/Frameworks" >&2
   exit 1
 fi

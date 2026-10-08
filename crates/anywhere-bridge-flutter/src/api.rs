@@ -3,7 +3,7 @@ use anywhere_core::{persistence::usage::SqliteUsageRepository, Application, Laun
 use anywhere_protocol as protocol;
 use std::{
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, OnceLock},
+    sync::{Mutex, OnceLock},
 };
 
 static APPLICATION: OnceLock<Application> = OnceLock::new();
@@ -18,6 +18,10 @@ pub struct ShortcutActionDto {
     pub action_id: String,
     pub title: String,
     pub context_types: Vec<String>,
+}
+
+pub async fn supported_shortcut_actions(action_ids: Vec<String>) -> Result<Vec<String>> {
+    application()?.supported_shortcut_actions(&action_ids)
 }
 
 pub async fn shortcut_actions() -> Result<Vec<ShortcutActionDto>> {
@@ -42,6 +46,29 @@ pub async fn resolve_action_binding(
         .into_iter()
         .map(candidate_dto)
         .collect())
+}
+
+#[derive(Clone, Debug)]
+pub struct BindingResolutionDto {
+    pub state: LauncherStateDto,
+    pub candidates: Vec<CandidateDto>,
+    pub requires_choice: bool,
+}
+
+/// Fresh global activation only: wait for capture and retain exact execution targets.
+pub async fn wait_action_binding(
+    session_id: u32,
+    revision: u32,
+    action_id: String,
+) -> Result<BindingResolutionDto> {
+    let resolved = application()?
+        .wait_action_binding(session_id, revision, &action_id)
+        .await?;
+    Ok(BindingResolutionDto {
+        state: resolved.state.into(),
+        candidates: resolved.candidates.into_iter().map(candidate_dto).collect(),
+        requires_choice: resolved.requires_choice,
+    })
 }
 
 pub fn initialize(data_directory: String, plugin_directory: String) -> Result<()> {
@@ -82,11 +109,7 @@ pub fn initialize(data_directory: String, plugin_directory: String) -> Result<()
         }
     }
     *plugin_reports().lock().expect("plugin reports") = reports;
-    #[cfg(target_os = "macos")]
-    let platform = Arc::new(anywhere_platform::MacOsPlatform);
-    #[cfg(not(target_os = "macos"))]
-    anyhow::bail!("The host supports macOS only");
-    #[cfg(target_os = "macos")]
+    let platform = anywhere_platform::native_platform()?;
     APPLICATION
         .set(Application::new(platform, registry, history, diagnostics))
         .map_err(|_| anyhow::anyhow!("application already initialized"))?;
@@ -95,6 +118,67 @@ pub fn initialize(data_directory: String, plugin_directory: String) -> Result<()
 
 fn application() -> Result<&'static Application> {
     APPLICATION.get().context("call initialize first")
+}
+
+#[derive(Clone, Debug)]
+pub struct ShortcutApplicationDto {
+    pub bundle_id: String,
+    pub title: String,
+}
+pub fn shortcut_applications() -> Result<Vec<ShortcutApplicationDto>> {
+    Ok(application()?
+        .shortcut_applications()?
+        .into_iter()
+        .map(|app| ShortcutApplicationDto {
+            bundle_id: app.bundle_id,
+            title: app.title,
+        })
+        .collect())
+}
+#[derive(Clone, Debug)]
+pub struct ShortcutRouteDto {
+    pub action_id: String,
+    pub app_bundle_id: Option<String>,
+    pub context_type: Option<String>,
+}
+impl From<ShortcutRouteDto> for anywhere_core::application::ShortcutRoute {
+    fn from(route: ShortcutRouteDto) -> Self {
+        Self {
+            action_id: route.action_id,
+            app_bundle_id: route.app_bundle_id,
+            context_type: route.context_type,
+        }
+    }
+}
+pub fn resolve_shortcut_intent(
+    session_id: u32,
+    revision: u32,
+    routes: Vec<ShortcutRouteDto>,
+) -> Result<BindingResolutionDto> {
+    let routes: Vec<_> = routes.into_iter().map(Into::into).collect();
+    let resolved = application()?.resolve_shortcut_intent(session_id, revision, &routes)?;
+    Ok(binding_resolution_dto(resolved))
+}
+pub async fn wait_shortcut_intent(
+    session_id: u32,
+    revision: u32,
+    routes: Vec<ShortcutRouteDto>,
+) -> Result<BindingResolutionDto> {
+    let routes: Vec<_> = routes.into_iter().map(Into::into).collect();
+    Ok(binding_resolution_dto(
+        application()?
+            .wait_shortcut_intent(session_id, revision, &routes)
+            .await?,
+    ))
+}
+fn binding_resolution_dto(
+    resolved: anywhere_core::application::BindingResolution,
+) -> BindingResolutionDto {
+    BindingResolutionDto {
+        state: resolved.state.into(),
+        candidates: resolved.candidates.into_iter().map(candidate_dto).collect(),
+        requires_choice: resolved.requires_choice,
+    }
 }
 
 /// Reserve synchronously so Dart can cancel even before foreground capture finishes.
@@ -106,9 +190,18 @@ pub fn begin_activation() -> Result<u32> {
 pub async fn activate(
     session_id: u32,
     prompt_accessibility: bool,
+    captured_environment: bool,
 ) -> Result<Option<LauncherStateDto>> {
     Ok(application()?
-        .activate_session_with(session_id, prompt_accessibility)
+        .activate_session_in_mode(
+            session_id,
+            prompt_accessibility,
+            if captured_environment {
+                protocol::InputMode::CapturedEnvironment
+            } else {
+                protocol::InputMode::Environment
+            },
+        )
         .await?
         .map(Into::into))
 }
@@ -118,9 +211,20 @@ pub async fn update_input(
     input: String,
     revision: u32,
     scope_id: Option<String>,
+    input_mode: InputModeDto,
 ) -> Result<Option<LauncherStateDto>> {
     Ok(application()?
-        .update_scoped_input(session_id, input, revision, scope_id)
+        .update_context_input(
+            session_id,
+            input,
+            revision,
+            scope_id,
+            match input_mode {
+                InputModeDto::Environment => protocol::InputMode::Environment,
+                InputModeDto::Content => protocol::InputMode::Content,
+                InputModeDto::Search => protocol::InputMode::Search,
+            },
+        )
         .await?
         .map(Into::into))
 }
@@ -337,9 +441,17 @@ pub struct ContextDto {
 }
 #[derive(Clone, Debug)]
 pub struct ContextCaptureDto {
+    pub text: Option<String>,
+    pub clipboard_age_ms: Option<u64>,
     pub source: ContextSourceDto,
     pub status: ContextCaptureStatusDto,
     pub captured_at_ms: i64,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InputModeDto {
+    Environment,
+    Content,
+    Search,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ContextCaptureStatusDto {
@@ -457,6 +569,7 @@ pub struct ExecutionSessionSummaryDto {
     pub exit_code: Option<i32>,
     pub started_at_ms: i64,
     pub finished_at_ms: Option<i64>,
+    pub output_revision: i64,
     pub output_truncated: bool,
     pub error: Option<String>,
 }
@@ -486,6 +599,7 @@ impl From<protocol::ExecutionSessionSummary> for ExecutionSessionSummaryDto {
             exit_code: summary.exit_code,
             started_at_ms: summary.started_at_ms,
             finished_at_ms: summary.finished_at_ms,
+            output_revision: summary.output_revision,
             output_truncated: summary.output_truncated,
             error: summary.error,
         }
@@ -544,6 +658,8 @@ impl From<protocol::LauncherState> for LauncherStateDto {
                 .context_captures
                 .into_iter()
                 .map(|capture| ContextCaptureDto {
+                    text: capture.text,
+                    clipboard_age_ms: capture.clipboard_age_ms,
                     source: context_source_dto(capture.source),
                     status: context_capture_status_dto(capture.status),
                     captured_at_ms: capture.captured_at_ms,

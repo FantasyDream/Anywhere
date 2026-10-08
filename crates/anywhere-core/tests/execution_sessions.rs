@@ -134,3 +134,33 @@ fn completed_results_are_evicted_but_running_tasks_are_retained() {
     manager.stop(&active).unwrap();
     wait(&manager, &active);
 }
+
+#[test]
+fn output_revision_detects_full_tail_changes_and_completed_output_is_stable() {
+    let dir = tempfile::tempdir().unwrap();
+    let manager = ExecutionSessionManager::default();
+    let id = manager.start(request(dir.path(),
+        "head -c 131072 /dev/zero | tr '\\000' a; while [ ! -f continue ]; do sleep 0.01; done; printf b"
+    )).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let first = loop {
+        let detail = manager.detail(&id).unwrap();
+        if detail.stdout.len() == MAX_STREAM_BYTES {
+            break detail;
+        }
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    assert!(first.summary.output_revision > 0);
+    let unchanged = manager.detail(&id).unwrap();
+    assert_eq!(
+        unchanged.summary.output_revision,
+        first.summary.output_revision
+    );
+    std::fs::write(dir.path().join("continue"), "").unwrap();
+    let final_detail = wait(&manager, &id);
+    assert_eq!(final_detail.stdout.len(), first.stdout.len());
+    assert!(final_detail.stdout.ends_with('b'));
+    assert!(final_detail.summary.output_revision > first.summary.output_revision);
+    assert_eq!(manager.detail(&id).unwrap(), final_detail);
+}

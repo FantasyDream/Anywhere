@@ -1,10 +1,16 @@
+import '../infrastructure/desktop_environment.dart';
+import '../ui/app_icons.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'settings_controller.dart';
+import 'settings_components.dart';
 import 'action_shortcuts_section.dart';
-import '../launcher/launcher_style.dart';
+import 'shortcut_recorder.dart';
+import 'action_shortcut.dart';
+import '../ui/app_style.dart';
+import '../ui/app_components.dart';
 import 'host_settings.dart';
 import '../src/rust/api.dart';
 
@@ -21,9 +27,11 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   late final TextEditingController _excluded;
   String? _recording;
+  final _recorder = ShortcutRecorder();
   Future<bool>? _pending;
   bool _saving = false, _closing = false;
   bool _shortcutEditing = false;
+  String _page = 'shortcuts';
 
   SettingsController get _controller => widget.controller;
   HostSettings get _settings => _controller.current;
@@ -46,6 +54,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _controller.beforeClose = null;
     }
     _controller.removeListener(_onSettings);
+    _recorder.cancel();
     _excluded.dispose();
     super.dispose();
   }
@@ -131,6 +140,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     if (event.logicalKey == LogicalKeyboardKey.escape) {
       if (_recording != null) {
+        _recorder.cancel();
         setState(() => _recording = null);
       } else {
         unawaited(widget.onClose());
@@ -138,29 +148,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
       return KeyEventResult.handled;
     }
     if (_recording == null) return KeyEventResult.ignored;
-    final code = carbonKeyCode(event.logicalKey);
+    if (_recorder.nativePending) return KeyEventResult.handled;
+    final code = shortcutEventKeyCode(event);
     if (code == null) return KeyEventResult.ignored;
-    var modifiers = 0;
-    final keys = HardwareKeyboard.instance.logicalKeysPressed;
-    if (keys.contains(LogicalKeyboardKey.metaLeft) ||
-        keys.contains(LogicalKeyboardKey.metaRight)) {
-      modifiers |= HostSettings.cmdKey;
-    }
-    if (keys.contains(LogicalKeyboardKey.altLeft) ||
-        keys.contains(LogicalKeyboardKey.altRight)) {
-      modifiers |= HostSettings.optionKey;
-    }
-    if (keys.contains(LogicalKeyboardKey.shiftLeft) ||
-        keys.contains(LogicalKeyboardKey.shiftRight)) {
-      modifiers |= HostSettings.shiftKey;
-    }
-    if (keys.contains(LogicalKeyboardKey.controlLeft) ||
-        keys.contains(LogicalKeyboardKey.controlRight)) {
-      modifiers |= HostSettings.controlKey;
-    }
-    if (modifiers == 0) return KeyEventResult.handled;
+    _acceptChord(code, pressedModifiers());
+    return KeyEventResult.handled;
+  }
+
+  bool _acceptChord(int code, int modifiers) {
+    if (modifiers == 0) return false;
     final universal = _recording == 'universal';
-    _recording = null;
+    setState(() => _recording = null);
     _save((current) => universal
         ? current.copyWith(
             universalKeyCode: code,
@@ -170,7 +168,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             currentAppKeyCode: code,
             currentAppModifiers: modifiers,
           ));
-    return KeyEventResult.handled;
+    return true;
   }
 
   List<String> _excludedIds() => [
@@ -181,423 +179,407 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget _sourceStatus(ContextSourceDto source) {
     final status = _controller.contextSourceStatuses
         .firstWhere((item) => item.source == source);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-      child: Tooltip(
-        message: status.detail,
-        child: Row(children: [
-          Icon(status.attention > 0 ? Icons.info_outline_rounded : Icons.circle,
-              size: 12,
-              color: status.attention > 0
-                  ? LauncherStyle.warning
-                  : LauncherStyle.muted),
-          const SizedBox(width: 6),
-          Expanded(
-              child: Text(status.statusText,
-                  style: const TextStyle(
-                      fontSize: 11, color: LauncherStyle.muted))),
-          if (status.settingsPane != null)
-            TextButton(
-              onPressed: () =>
-                  _controller.openPrivacySettings(status.settingsPane!),
-              child:
-                  const Text('Open Settings', style: TextStyle(fontSize: 11)),
-            ),
-        ]),
-      ),
+    return Tooltip(
+      message: status.detail,
+      child: Row(children: [
+        Icon(
+            status.attention > 0
+                ? AppIcons.info
+                : (status.capture?.status == ContextCaptureStatusDto.captured
+                    ? AppIcons.success
+                    : AppIcons.dot),
+            size: 10,
+            color: status.attention > 0 ? AppStyle.warning : AppStyle.muted),
+        const SizedBox(width: 6),
+        Expanded(
+            child: Text(status.statusText,
+                style: const TextStyle(fontSize: 10, color: AppStyle.muted))),
+        if (status.settingsPane != null)
+          TextButton(
+            onPressed: () =>
+                _controller.openPrivacySettings(status.settingsPane!),
+            child: const Text('Open Settings', style: TextStyle(fontSize: 11)),
+          ),
+      ]),
     );
+  }
+
+  static const _pages = <(String, String, IconData)>[
+    ('general', 'General', AppIcons.settings),
+    ('shortcuts', 'Shortcuts', AppIcons.keyboard),
+    ('context', 'Context', AppIcons.layers),
+    ('search', 'Search', AppIcons.search),
+    ('plugins', 'Plugins', AppIcons.plugin),
+  ];
+
+  void _selectPage(String id) {
+    if (_page == id) return;
+    _recorder.cancel();
+    setState(() {
+      _page = id;
+      _recording = null;
+    });
   }
 
   @override
-  Widget build(BuildContext context) {
-    final plugins = _controller.plugins;
-    return Focus(
+  Widget build(BuildContext context) => Focus(
       autofocus: true,
       onKeyEvent: _onKey,
       child: AbsorbPointer(
-        absorbing: _closing,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 46, 20, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 34,
-                    height: 34,
-                    decoration: BoxDecoration(
-                      color: const Color(0x337e98f2),
-                      borderRadius: BorderRadius.circular(11),
-                      border: Border.all(color: const Color(0x559eb4ff)),
-                    ),
-                    child: const Icon(Icons.tune_rounded,
-                        size: 18, color: LauncherStyle.primary),
-                  ),
-                  const SizedBox(width: 11),
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+          absorbing: _closing,
+          child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            SizedBox(
+                width: 164,
+                child: ColoredBox(
+                    color: AppStyle.sidebar,
+                    child: Padding(
+                        padding: const EdgeInsets.fromLTRB(10, 42, 10, 12),
+                        child: Column(
+                            key: const Key('settings-navigation'),
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const Padding(
+                                  padding: EdgeInsets.fromLTRB(8, 0, 0, 10),
+                                  child: Text('Settings',
+                                      style: AppStyle.caption)),
+                              for (final page in _pages)
+                                Padding(
+                                    padding: const EdgeInsets.only(bottom: 3),
+                                    child: AppSidebarItem(
+                                        key: ValueKey('settings-${page.$1}'),
+                                        label: page.$2,
+                                        icon: page.$3,
+                                        iconColor: switch (page.$1) {
+                                          'general' => const Color(0xff707070),
+                                          'shortcuts' =>
+                                            const Color(0xff925acb),
+                                          'context' => AppStyle.accentFill,
+                                          'search' => const Color(0xff4c9b71),
+                                          _ => const Color(0xffc6833e),
+                                        },
+                                        selected: _page == page.$1,
+                                        onPressed: () => _selectPage(page.$1))),
+                            ])))),
+            const VerticalDivider(width: 1),
+            Expanded(
+                child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('Settings',
-                          style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w600,
-                              color: LauncherStyle.primary)),
-                      Text('Make Anywhere work your way',
-                          style: TextStyle(
-                              fontSize: 11, color: LauncherStyle.muted)),
-                    ],
+                  const SizedBox(height: 28),
+                  AppToolbar(
+                      title: _pages.firstWhere((p) => p.$1 == _page).$2,
+                      actions: [
+                        if (_saving) ...[
+                          const SizedBox.square(
+                              dimension: 12,
+                              child:
+                                  CircularProgressIndicator(strokeWidth: 1.5)),
+                          const SizedBox(width: 6),
+                          const Text('Saving…', style: AppStyle.caption),
+                          const SizedBox(width: 8),
+                        ],
+                        OutlinedButton(
+                            onPressed: widget.onClose,
+                            child: const Text('Done')),
+                      ]),
+                  const Divider(),
+                  Expanded(
+                      child: Scrollbar(
+                          child: ListView(
+                              key: PageStorageKey('settings-content-$_page'),
+                              primary: true,
+                              padding:
+                                  const EdgeInsets.fromLTRB(20, 18, 20, 20),
+                              children: [
+                        if (_controller.statusMessage != null) ...[
+                          AppNotice(_controller.statusMessage!),
+                          const SizedBox(height: 12),
+                        ],
+                        ..._pageContent(),
+                      ]))),
+                ])),
+          ])));
+
+  List<Widget> _pageContent() {
+    final plugins = _controller.plugins;
+    return switch (_page) {
+      'shortcuts' => [
+          _section('SHORTCUTS'),
+          _card(
+            child: Column(
+              children: [
+                _hotkeyRow('Current App', _settings.currentAppLabel, 'current'),
+                const Divider(height: 1, color: AppStyle.divider),
+                _hotkeyRow(
+                    'Universal Search', _settings.universalLabel, 'universal'),
+              ],
+            ),
+          ),
+          const SizedBox(height: 6),
+          const Text(
+            'Choose a shortcut, then press the new key combination. Esc cancels.',
+            style: TextStyle(fontSize: 11, color: AppStyle.muted),
+          ),
+          SizedBox(height: DesktopEnvironment.current.titleBarInset),
+          ActionShortcutsSection(
+              // Keep the editor owner alive when a status notice shifts the list.
+              key: const ValueKey('action-shortcuts-section'),
+              controller: _controller,
+              onEditingChanged: (editing) {
+                if (mounted) {
+                  if (editing) _recorder.cancel();
+                  setState(() {
+                    _shortcutEditing = editing;
+                    if (editing) _recording = null;
+                  });
+                }
+              },
+              save: (update) => _save(update)),
+          SizedBox(height: DesktopEnvironment.current.titleBarInset),
+        ],
+      'general' => [
+          _section('GENERAL'),
+          _card(
+              child: SettingsToggleRow(
+                  title: 'Open at login',
+                  description: 'Start quietly when you sign in',
+                  icon: AppIcons.power,
+                  value: _settings.launchAtLogin,
+                  onChanged: (value) => _save(
+                      (current) => current.copyWith(launchAtLogin: value)))),
+        ],
+      'context' => [
+          _section('CONTEXT SOURCES'),
+          const Text('Choose what Anywhere can use when you open it.',
+              style: AppStyle.caption),
+          const SizedBox(height: 10),
+          _card(
+              child: Column(children: [
+            SettingsToggleRow(
+                title: DesktopEnvironment.current.fileSelectionLabel,
+                description: 'Selected files and folders',
+                icon: AppIcons.folder,
+                value: _settings.captureFinderSelection,
+                status: _sourceStatus(ContextSourceDto.finderSelection),
+                onChanged: (value) => _save((current) =>
+                    current.copyWith(captureFinderSelection: value))),
+            const Divider(),
+            SettingsToggleRow(
+                title: 'Selected text',
+                description: 'Text selected in the current app',
+                icon: AppIcons.quote,
+                value: _settings.captureSelectedText,
+                status: _sourceStatus(ContextSourceDto.selectedText),
+                onChanged: (value) => _save(
+                    (current) => current.copyWith(captureSelectedText: value))),
+            const Divider(),
+            SettingsToggleRow(
+                title: 'Browser current page',
+                description: DesktopEnvironment.current.browserDescription,
+                icon: AppIcons.globe,
+                value: _settings.captureBrowserCurrentPage,
+                status: _sourceStatus(ContextSourceDto.browserCurrentPage),
+                onChanged: (value) => _save((current) =>
+                    current.copyWith(captureBrowserCurrentPage: value))),
+            const Divider(),
+            SettingsToggleRow(
+                title: 'Clipboard text',
+                description: 'Auto-fill new copies for 15 seconds',
+                icon: AppIcons.clipboard,
+                value: _settings.captureClipboard,
+                status: _sourceStatus(ContextSourceDto.clipboard),
+                onChanged: (value) => _save(
+                    (current) => current.copyWith(captureClipboard: value))),
+          ])),
+          const SizedBox(height: 8),
+          const Text(
+              'Changes apply on the next wake. Status refers to the last capture.',
+              style: AppStyle.caption),
+        ],
+      'search' => [
+          _section('SEARCH'),
+          _card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Hidden apps',
+                      style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppStyle.primary)),
+                  const SizedBox(height: 3),
+                  const Text(
+                      'Enter one application ID per line to keep it out of search.',
+                      style: TextStyle(fontSize: 11, color: AppStyle.muted)),
+                  const SizedBox(height: 10),
+                  TextField(
+                    controller: _excluded,
+                    minLines: 3,
+                    maxLines: 5,
+                    style: const TextStyle(
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                        color: AppStyle.primary),
+                    decoration: InputDecoration(
+                      isDense: true,
+                      hintText: DesktopEnvironment.current.applicationIdHint,
+                      hintStyle: const TextStyle(color: AppStyle.muted),
+                      filled: true,
+                      fillColor: AppStyle.field,
+                      border: OutlineInputBorder(
+                          borderRadius:
+                              BorderRadius.circular(AppStyle.controlRadius)),
+                    ),
+                    onSubmitted: (_) => _save(
+                      (current) =>
+                          current.copyWith(excludedApps: _excludedIds()),
+                      excluded: true,
+                    ),
+                    onEditingComplete: () => _save(
+                      (current) =>
+                          current.copyWith(excludedApps: _excludedIds()),
+                      excluded: true,
+                    ),
                   ),
-                  const Spacer(),
-                  if (_saving) ...[
-                    const Text('Saving…',
-                        style: TextStyle(
-                            fontSize: 11, color: LauncherStyle.muted)),
-                    const SizedBox(width: 8),
-                  ],
-                  TextButton(
-                    onPressed: widget.onClose,
-                    style: TextButton.styleFrom(
-                        foregroundColor: LauncherStyle.primary),
-                    child: const Text('Done'),
+                  const SizedBox(height: 10),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton(
+                      onPressed: () => _save(
+                        (current) =>
+                            current.copyWith(excludedApps: _excludedIds()),
+                        excluded: true,
+                      ),
+                      child: const Text('Save apps'),
+                    ),
                   ),
                 ],
               ),
-              if (_controller.statusMessage != null) ...[
-                const SizedBox(height: 8),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(
-                    color: const Color(0x2ce5b779),
-                    borderRadius: BorderRadius.circular(9),
-                  ),
-                  child: Text(
-                    _controller.statusMessage!,
-                    style: const TextStyle(
-                        fontSize: 12, color: LauncherStyle.warning),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 18),
-              Expanded(
-                child: ListView(
-                  padding: EdgeInsets.zero,
-                  children: [
-                    _section('SHORTCUTS'),
-                    _card(
-                      child: Column(
-                        children: [
-                          _hotkeyRow('Current App', _settings.currentAppLabel,
-                              'current'),
-                          const Divider(
-                              height: 1, color: LauncherStyle.divider),
-                          _hotkeyRow('Universal Search',
-                              _settings.universalLabel, 'universal'),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Choose a shortcut, then press the new key combination. Esc cancels.',
-                      style:
-                          TextStyle(fontSize: 11, color: LauncherStyle.muted),
-                    ),
-                    const SizedBox(height: 18),
-                    ActionShortcutsSection(
-                        controller: _controller,
-                        onEditingChanged: (editing) {
-                          if (mounted) _shortcutEditing = editing;
-                        },
-                        save: (update) => _save(update)),
-                    const SizedBox(height: 18),
-                    _section('GENERAL'),
-                    _card(
-                      child: SwitchListTile.adaptive(
-                        contentPadding:
-                            const EdgeInsets.symmetric(horizontal: 12),
-                        dense: true,
-                        title: const Text('Open at login',
-                            style: TextStyle(
-                                fontSize: 13, color: LauncherStyle.primary)),
-                        subtitle: const Text('Start quietly when you sign in',
-                            style: TextStyle(
-                                fontSize: 11, color: LauncherStyle.muted)),
-                        value: _settings.launchAtLogin,
-                        onChanged: (value) => _save(
-                          (current) => current.copyWith(launchAtLogin: value),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    _section('CONTEXT SOURCES'),
-                    _card(
-                      child: Column(
-                        children: [
-                          SwitchListTile.adaptive(
-                            contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 12),
-                            dense: true,
-                            title: const Text('Finder selection',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    color: LauncherStyle.primary)),
-                            subtitle: const Text(
-                                'Use selected files and folders',
-                                style: TextStyle(
-                                    fontSize: 11, color: LauncherStyle.muted)),
-                            value: _settings.captureFinderSelection,
-                            onChanged: (value) => _save((current) => current
-                                .copyWith(captureFinderSelection: value)),
-                          ),
-                          _sourceStatus(ContextSourceDto.finderSelection),
-                          const Divider(
-                              height: 1, color: LauncherStyle.divider),
-                          SwitchListTile.adaptive(
-                            contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 12),
-                            dense: true,
-                            title: const Text('Selected text',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    color: LauncherStyle.primary)),
-                            subtitle: const Text(
-                                'Use text selected in the current app',
-                                style: TextStyle(
-                                    fontSize: 11, color: LauncherStyle.muted)),
-                            value: _settings.captureSelectedText,
-                            onChanged: (value) => _save((current) =>
-                                current.copyWith(captureSelectedText: value)),
-                          ),
-                          _sourceStatus(ContextSourceDto.selectedText),
-                          const Divider(
-                              height: 1, color: LauncherStyle.divider),
-                          SwitchListTile.adaptive(
-                            contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 12),
-                            dense: true,
-                            title: const Text('Browser current page',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    color: LauncherStyle.primary)),
-                            subtitle: const Text(
-                                'Use the active Safari, Chrome, or Edge tab’s web address',
-                                style: TextStyle(
-                                    fontSize: 11, color: LauncherStyle.muted)),
-                            value: _settings.captureBrowserCurrentPage,
-                            onChanged: (value) => _save((current) => current
-                                .copyWith(captureBrowserCurrentPage: value)),
-                          ),
-                          _sourceStatus(ContextSourceDto.browserCurrentPage),
-                          const Divider(
-                              height: 1, color: LauncherStyle.divider),
-                          SwitchListTile.adaptive(
-                            contentPadding:
-                                const EdgeInsets.symmetric(horizontal: 12),
-                            dense: true,
-                            title: const Text('Clipboard text',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    color: LauncherStyle.primary)),
-                            subtitle: const Text(
-                                'Read once when Anywhere opens',
-                                style: TextStyle(
-                                    fontSize: 11, color: LauncherStyle.muted)),
-                            value: _settings.captureClipboard,
-                            onChanged: (value) => _save((current) =>
-                                current.copyWith(captureClipboard: value)),
-                          ),
-                          _sourceStatus(ContextSourceDto.clipboard),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Changes apply on the next wake. Status shows the last captured snapshot.',
-                      style:
-                          TextStyle(fontSize: 11, color: LauncherStyle.muted),
-                    ),
-                    const SizedBox(height: 18),
-                    _section('SEARCH'),
-                    _card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('Hidden apps',
-                                style: TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w600,
-                                    color: LauncherStyle.primary)),
-                            const SizedBox(height: 3),
-                            const Text(
-                                'Enter one app bundle ID per line to keep it out of search.',
-                                style: TextStyle(
-                                    fontSize: 11, color: LauncherStyle.muted)),
-                            const SizedBox(height: 10),
-                            TextField(
-                              controller: _excluded,
-                              minLines: 3,
-                              maxLines: 5,
-                              style: const TextStyle(
-                                  fontSize: 12,
-                                  fontFamily: 'monospace',
-                                  color: LauncherStyle.primary),
-                              decoration: InputDecoration(
-                                isDense: true,
-                                hintText: 'com.apple.Safari',
-                                hintStyle:
-                                    const TextStyle(color: LauncherStyle.muted),
-                                filled: true,
-                                fillColor: const Color(0x3010141d),
-                                border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(9)),
-                              ),
-                              onSubmitted: (_) => _save(
-                                (current) => current.copyWith(
-                                    excludedApps: _excludedIds()),
-                                excluded: true,
-                              ),
-                              onEditingComplete: () => _save(
-                                (current) => current.copyWith(
-                                    excludedApps: _excludedIds()),
-                                excluded: true,
-                              ),
-                            ),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: TextButton.icon(
-                                onPressed: () => _save(
-                                  (current) => current.copyWith(
-                                      excludedApps: _excludedIds()),
-                                  excluded: true,
-                                ),
-                                icon: const Icon(Icons.check_rounded, size: 15),
-                                label: const Text('Save apps'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    _section('PLUGINS'),
-                    _card(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (plugins.isEmpty)
-                              const Text('No plugins loaded.',
-                                  style: TextStyle(
-                                      fontSize: 12, color: LauncherStyle.muted))
-                            else
-                              for (final plugin in plugins)
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 6),
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                          plugin.ok
-                                              ? Icons
-                                                  .check_circle_outline_rounded
-                                              : Icons.error_outline_rounded,
-                                          size: 15,
-                                          color: plugin.ok
-                                              ? LauncherStyle.accent
-                                              : LauncherStyle.warning),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                            '${plugin.id}  ${plugin.detail}',
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: TextStyle(
-                                                fontSize: 12,
-                                                color: plugin.ok
-                                                    ? LauncherStyle.secondary
-                                                    : LauncherStyle.warning)),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                            Align(
-                              alignment: Alignment.centerRight,
-                              child: TextButton.icon(
-                                onPressed: () async {
-                                  await _controller.refreshPlugins();
-                                  if (mounted) setState(() {});
-                                },
-                                icon:
-                                    const Icon(Icons.refresh_rounded, size: 15),
-                                label: const Text('Reload plugins'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
-      ),
-    );
+          SizedBox(height: DesktopEnvironment.current.titleBarInset),
+        ],
+      'plugins' => [
+          _section('PLUGINS'),
+          _card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (plugins.isEmpty)
+                    Row(children: [
+                      const Expanded(
+                          child: Text('No plugins loaded.',
+                              style: TextStyle(
+                                  fontSize: 12, color: AppStyle.muted))),
+                      _reloadPluginsButton(),
+                    ])
+                  else
+                    for (final plugin in plugins)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Row(
+                          children: [
+                            Icon(plugin.ok ? AppIcons.success : AppIcons.error,
+                                size: 15,
+                                color: plugin.ok
+                                    ? AppStyle.accent
+                                    : AppStyle.warning),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text('${plugin.id}  ${plugin.detail}',
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                      fontSize: 12,
+                                      color: plugin.ok
+                                          ? AppStyle.secondary
+                                          : AppStyle.warning)),
+                            ),
+                          ],
+                        ),
+                      ),
+                  if (plugins.isNotEmpty)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: _reloadPluginsButton(),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      _ => const [],
+    };
   }
 
-  Widget _section(String title) => Padding(
-        padding: const EdgeInsets.only(left: 3, bottom: 8),
-        child: Text(
-          title,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w600,
-            letterSpacing: 1.0,
-            color: LauncherStyle.secondary,
-          ),
-        ),
-      );
+  Widget _section(String title) => AppSectionHeading(
+      switch (title) {
+        'SHORTCUTS' => 'Wake shortcuts',
+        'GENERAL' => 'Startup',
+        'CONTEXT SOURCES' => 'Context sources',
+        'SEARCH' => 'Search results',
+        'PLUGINS' => 'Extensions',
+        _ => title,
+      },
+      icon: switch (title) {
+        'SHORTCUTS' => AppIcons.keyboard,
+        'GENERAL' => AppIcons.power,
+        'CONTEXT SOURCES' => AppIcons.layers,
+        'SEARCH' => AppIcons.search,
+        _ => AppIcons.plugin,
+      });
 
-  Widget _card({required Widget child}) => SizedBox(
-        width: double.infinity,
-        child: Material(
-          color: const Color(0x24ffffff),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-            side: const BorderSide(color: Color(0x2effffff), width: 0.8),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: child,
-        ),
-      );
+  Widget _card({required Widget child}) => AppCard(child: child);
+
+  Widget _reloadPluginsButton() => OutlinedButton.icon(
+      onPressed: _controller.refreshingPlugins
+          ? null
+          : () async {
+              await _controller.refreshPlugins();
+              if (mounted) setState(() {});
+            },
+      icon: const Icon(AppIcons.refresh, size: 14),
+      label: const Text('Reload plugins'));
 
   Widget _hotkeyRow(String label, String value, String id) {
     final recording = _recording == id;
     return SizedBox(
-      height: 48,
+      height: 42,
       child: Row(
         children: [
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               label,
-              style:
-                  const TextStyle(fontSize: 13, color: LauncherStyle.primary),
+              style: const TextStyle(fontSize: 13, color: AppStyle.primary),
             ),
           ),
           OutlinedButton(
-            onPressed: () => setState(() => _recording = id),
+            onPressed: () {
+              setState(() => _recording = id);
+              _recorder.start(
+                  onChord: _acceptChord,
+                  onCancel: () {
+                    if (mounted) setState(() => _recording = null);
+                  },
+                  onError: () {
+                    if (mounted) {
+                      setState(() => _recording = null);
+                      _controller
+                          .reportError('Shortcut recording failed. Try again.');
+                    }
+                  });
+            },
             style: OutlinedButton.styleFrom(
-              minimumSize: const Size(125, 30),
+              minimumSize: const Size(98, 26),
               side: BorderSide(
-                  color:
-                      recording ? LauncherStyle.accent : LauncherStyle.divider),
+                  color: recording ? AppStyle.accent : AppStyle.divider),
               backgroundColor:
-                  recording ? const Color(0x337e98f2) : const Color(0x2210141d),
+                  recording ? AppStyle.buttonSelection : Colors.transparent,
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(8)),
             ),
@@ -605,8 +587,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               recording ? 'Press a shortcut' : value,
               style: TextStyle(
                 fontSize: 12,
-                color:
-                    recording ? LauncherStyle.accent : LauncherStyle.secondary,
+                color: recording ? AppStyle.accent : AppStyle.secondary,
               ),
             ),
           ),

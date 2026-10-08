@@ -14,10 +14,7 @@ use anywhere_platform::{
     process::{find_executable, ProcessRequest},
     Platform,
 };
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeMap, path::PathBuf};
 
 struct ProjectCommand {
     kind: ProjectKind,
@@ -130,14 +127,8 @@ impl ActionHandler for ProjectCommand {
         if matches!(
             self.kind,
             ProjectKind::Maven | ProjectKind::Gradle | ProjectKind::SpringBoot
-        ) && std::env::var_os("JAVA_HOME").is_none()
-        {
-            if let Some(home) = std::env::var_os("HOME") {
-                let java = PathBuf::from(home).join(".sdkman/candidates/java/current");
-                if java.join("bin/java").is_file() {
-                    environment.insert("JAVA_HOME".into(), java.to_string_lossy().into_owned());
-                }
-            }
+        ) {
+            environment.extend(anywhere_platform::process::java_environment());
         }
         environment.insert("NO_COLOR".into(), "1".into());
         Ok(ExecutionOutput::process(ProcessRequest {
@@ -156,31 +147,7 @@ pub(super) fn tool(name: &str) -> Result<PathBuf> {
     })
 }
 
-/// Wrappers may live at an ancestor of a module. Never fall back when an existing wrapper fails.
-fn wrapped_tool(directory: &Path, wrapper: &str, fallback: &str) -> Result<(PathBuf, Vec<String>)> {
-    if let Some(path) = directory
-        .ancestors()
-        .take(32)
-        .map(|root| root.join(wrapper))
-        .find(|path| path.is_file())
-    {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            if path.metadata()?.permissions().mode() & 0o111 != 0 {
-                return Ok((path, Vec::new()));
-            }
-            // Run the wrapper file with sh; do not feed any shell command string.
-            return Ok((
-                PathBuf::from("/bin/sh"),
-                vec![path.to_string_lossy().into_owned()],
-            ));
-        }
-        #[cfg(not(unix))]
-        bail!("project wrappers are currently supported on Unix only");
-    }
-    Ok((tool(fallback)?, Vec::new()))
-}
+use anywhere_platform::process::wrapped_tool;
 
 fn spec(id: &'static str, command: &'static ProjectCommand, home: bool) -> ActionSpec {
     let availability = if matches!(command.kind, ProjectKind::SpringBoot) {
@@ -284,6 +251,7 @@ pub use super::dynamic::DeveloperActions;
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
     #[test]
     fn a_non_executable_wrapper_with_spaces_is_a_literal_argument_and_has_priority() {
         let dir = tempfile::tempdir().unwrap();

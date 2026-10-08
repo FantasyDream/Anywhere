@@ -3,11 +3,12 @@
 //! Each capability is its own module, and the `Platform` impl below is only a delegation
 //! layer: it holds no logic, so a change to how Git is run or how an icon is read touches one
 //! file and cannot reach the others.
+mod aliases;
 mod application;
 mod browser;
 mod clipboard;
+mod editor;
 mod finder;
-mod git;
 mod native;
 mod shell;
 
@@ -34,6 +35,10 @@ impl Platform for MacOsPlatform {
         roots
     }
 
+    fn is_application_entry(&self, path: &Path) -> bool {
+        path.extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("app"))
+    }
     fn installed_applications(&self) -> InstalledApplications {
         application::installed_applications(&self.application_roots())
     }
@@ -42,7 +47,11 @@ impl Platform for MacOsPlatform {
         application::frontmost_application()
     }
     fn application_directory(&self, application: &ApplicationInfo) -> Result<Option<PathBuf>> {
-        finder::application_directory(application)
+        if application.bundle_id == "com.apple.finder" {
+            finder::application_directory(application)
+        } else {
+            editor::application_directory(application)
+        }
     }
     fn bundle_application(&self, bundle: &Path) -> Result<Option<BundleApplication>> {
         application::bundle_application(bundle)
@@ -59,11 +68,20 @@ impl Platform for MacOsPlatform {
     fn application_icon(&self, path: &str, size: u32) -> Result<Option<Vec<u8>>> {
         application::application_icon(path, size)
     }
+    fn start_clipboard_tracking(&self) {
+        clipboard::start_tracking();
+    }
+    fn clipboard_snapshot(&self) -> Result<crate::ClipboardSnapshot> {
+        clipboard::snapshot()
+    }
     fn clipboard_text(&self) -> Result<Option<String>> {
         clipboard::clipboard_text()
     }
     fn selected_text(&self, application: &ApplicationInfo) -> Result<Option<String>> {
         application::selected_text(application)
+    }
+    fn file_selection_supported(&self, application: &ApplicationInfo) -> bool {
+        application.bundle_id == "com.apple.finder"
     }
     fn finder_selected_paths(&self, application: &ApplicationInfo) -> Result<Vec<PathBuf>> {
         finder::selected_paths(application)
@@ -78,10 +96,10 @@ impl Platform for MacOsPlatform {
         clipboard::copy_text(text)
     }
     fn git_available(&self) -> bool {
-        git::git_available()
+        crate::git::available()
     }
     fn run_git(&self, repository: &Path, operation: GitOperation) -> Result<GitOutput> {
-        git::run_git(repository, operation)
+        crate::git::run(repository, operation)
     }
     fn open_url(&self, value: &str) -> Result<()> {
         shell::open_url(value)

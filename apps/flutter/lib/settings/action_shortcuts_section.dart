@@ -1,12 +1,16 @@
+import '../ui/app_icons.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../ui/app_components.dart';
 import 'package:flutter/services.dart';
-import '../launcher/launcher_style.dart';
-import '../launcher/widgets/candidate_row.dart';
+import '../ui/app_style.dart';
 import '../src/rust/api.dart';
 import 'action_shortcut.dart';
+import 'intent_shortcut_dialog.dart';
 import 'host_settings.dart';
+import 'shortcut_recorder.dart';
 import 'settings_controller.dart';
+import 'settings_components.dart';
 
 /// Uses the settings page's existing save queue and close protection.
 class ActionShortcutsSection extends StatefulWidget {
@@ -24,22 +28,26 @@ class ActionShortcutsSection extends StatefulWidget {
 
 class _ActionShortcutsSectionState extends State<ActionShortcutsSection> {
   bool _busy = false;
-  Future<void> _edit([ActionShortcut? existing]) async {
+  final _rowKeys = <String, GlobalKey>{};
+  Future<void> _edit({ActionShortcut? existing, bool intent = false}) async {
     final options = widget.controller.shortcutActions;
-    if (options.isEmpty) return;
-    if (existing != null &&
-        !options.any((a) => a.actionId == existing.actionId)) {
-      return;
-    }
+    intent = intent || (existing?.isIntent ?? false);
+    if (options.isEmpty && existing == null) return;
     widget.onEditingChanged(true);
     ActionShortcut? binding;
     try {
       binding = await showDialog<ActionShortcut>(
           context: context,
-          builder: (_) => _ShortcutDialog(
-              options: options,
-              settings: widget.controller.current,
-              existing: existing));
+          builder: (_) => intent
+              ? IntentShortcutDialog(
+                  actions: options,
+                  applications: widget.controller.shortcutApplications,
+                  settings: widget.controller.current,
+                  existing: existing)
+              : _ShortcutDialog(
+                  options: options,
+                  settings: widget.controller.current,
+                  existing: existing));
     } finally {
       widget.onEditingChanged(false);
     }
@@ -50,6 +58,15 @@ class _ActionShortcutsSectionState extends State<ActionShortcutsSection> {
             if (b.actionId != selected.actionId) b,
           selected,
         ]));
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final row = _rowKeys[selected.actionId]?.currentContext;
+      if (row != null) {
+        Scrollable.ensureVisible(row,
+            alignment: 0.2, duration: const Duration(milliseconds: 120));
+      }
+    });
   }
 
   Future<void> _save(HostSettings Function(HostSettings) update) async {
@@ -57,30 +74,29 @@ class _ActionShortcutsSectionState extends State<ActionShortcutsSection> {
     try {
       await widget.save(update);
     } finally {
-      if (mounted) setState(() => _busy = false);
+      if (mounted) {
+        _rowKeys.removeWhere((id, _) => !widget
+            .controller.current.actionShortcuts
+            .any((b) => b.actionId == id));
+        setState(() => _busy = false);
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Text('ACTION SHORTCUTS',
-            style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 1,
-                color: LauncherStyle.secondary)),
+        const AppSectionHeading('Action shortcuts', icon: AppIcons.bolt),
+        const Text('Bind a key to an action, or choose actions by context.',
+            style: TextStyle(fontSize: 11, color: AppStyle.muted)),
         const SizedBox(height: 8),
-        const Text(
-            'Run an action while Anywhere is open. Uses the current context; multiple objects let you choose.',
-            style: TextStyle(fontSize: 11, color: LauncherStyle.muted)),
-        const SizedBox(height: 8),
-        Material(
-            color: const Color(0x24ffffff),
-            borderRadius: BorderRadius.circular(12),
-            child: Column(children: [
+        AppCard(
+            child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
               for (final binding in widget.controller.current.actionShortcuts)
                 Padding(
+                    key: _rowKeys.putIfAbsent(binding.actionId, GlobalKey.new),
                     padding: const EdgeInsets.fromLTRB(12, 5, 4, 5),
                     child: Row(children: [
                       Expanded(
@@ -91,22 +107,50 @@ class _ActionShortcutsSectionState extends State<ActionShortcutsSection> {
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(
-                                    fontSize: 13,
-                                    color: LauncherStyle.primary)),
-                            if (!widget.controller.shortcutActions
-                                .any((a) => a.actionId == binding.actionId))
+                                    fontSize: 13, color: AppStyle.primary)),
+                            Text(
+                                binding.global
+                                    ? 'Global · captures fresh context'
+                                    : 'While Anywhere is open',
+                                style: const TextStyle(
+                                    fontSize: 11, color: AppStyle.muted)),
+                            if (binding.isIntent)
+                              Text('${binding.routes.length} context rules',
+                                  style: const TextStyle(
+                                      fontSize: 11, color: AppStyle.muted)),
+                            if (!binding.isIntent &&
+                                !widget.controller
+                                    .shortcutSupported(binding.actionId))
+                              const Text('Action unavailable · shortcut paused',
+                                  style: TextStyle(
+                                      fontSize: 11, color: AppStyle.warning)),
+                            if (binding.isIntent &&
+                                binding.routes.any((r) => !widget.controller
+                                    .shortcutSupported(r.actionId)))
+                              Text(
+                                  binding.routes.every((r) => !widget.controller
+                                          .shortcutSupported(r.actionId))
+                                      ? 'Actions unavailable · shortcut paused'
+                                      : 'Some rules are unavailable',
+                                  style: const TextStyle(
+                                      fontSize: 11, color: AppStyle.warning)),
+                            if (!binding.isIntent &&
+                                widget.controller
+                                    .shortcutSupported(binding.actionId) &&
+                                !widget.controller.shortcutActions
+                                    .any((a) => a.actionId == binding.actionId))
                               const Text('Not detected in the last context',
                                   style: TextStyle(
-                                      fontSize: 11,
-                                      color: LauncherStyle.muted)),
+                                      fontSize: 11, color: AppStyle.muted)),
                           ])),
-                      TextButton(
-                          onPressed: _busy ||
-                                  !widget.controller.shortcutActions.any(
-                                      (a) => a.actionId == binding.actionId)
-                              ? null
-                              : () => _edit(binding),
-                          child: LauncherKeycap(binding.label)),
+                      Tooltip(
+                          message: 'Edit shortcut for ${binding.title}',
+                          child: OutlinedButton.icon(
+                              onPressed:
+                                  _busy ? null : () => _edit(existing: binding),
+                              icon: const Icon(AppIcons.edit, size: 13),
+                              label: Text(binding.label,
+                                  style: const TextStyle(fontSize: 11)))),
                       IconButton(
                           tooltip: 'Remove shortcut for ${binding.title}',
                           iconSize: 16,
@@ -117,23 +161,32 @@ class _ActionShortcutsSectionState extends State<ActionShortcutsSection> {
                                       .where(
                                           (b) => b.actionId != binding.actionId)
                                       .toList())),
-                          icon: const Icon(Icons.close_rounded,
-                              color: LauncherStyle.muted)),
+                          icon: const Icon(AppIcons.close,
+                              color: AppStyle.muted)),
                     ])),
-              Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                      onPressed:
-                          _busy || widget.controller.shortcutActions.isEmpty
-                              ? null
-                              : () => _edit(),
-                      icon: const Icon(Icons.add_rounded, size: 16),
-                      label: const Text('Add action shortcut'))),
+              Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Wrap(spacing: 8, runSpacing: 8, children: [
+                    OutlinedButton.icon(
+                        onPressed:
+                            _busy || widget.controller.shortcutActions.isEmpty
+                                ? null
+                                : () => _edit(),
+                        icon: const Icon(AppIcons.add, size: 14),
+                        label: const Text('Add action shortcut')),
+                    OutlinedButton.icon(
+                        onPressed:
+                            _busy || widget.controller.shortcutActions.isEmpty
+                                ? null
+                                : () => _edit(intent: true),
+                        icon: const Icon(AppIcons.route, size: 14),
+                        label: const Text('Add context shortcut')),
+                  ])),
             ])),
         const SizedBox(height: 6),
         const Text(
-            'Project scripts appear after opening Anywhere in that project. App menu shortcuts remain displayed by the app and cannot be saved here.',
-            style: TextStyle(fontSize: 11, color: LauncherStyle.muted)),
+            'Project actions appear when their project is active. App menu keys are managed by the app.',
+            style: TextStyle(fontSize: 11, color: AppStyle.muted)),
       ]);
 }
 
@@ -149,22 +202,33 @@ class _ShortcutDialog extends StatefulWidget {
 
 class _ShortcutDialogState extends State<_ShortcutDialog> {
   final _focus = FocusNode();
+  final _recorder = ShortcutRecorder();
   final _search = TextEditingController();
   ShortcutActionDto? _action;
   ActionShortcut? _binding;
   String? _error;
   bool _recording = false;
+  bool _global = false;
   @override
   void initState() {
     super.initState();
     _binding = widget.existing;
+    _global = widget.existing?.global ?? false;
     for (final action in widget.options) {
       if (action.actionId == widget.existing?.actionId) _action = action;
+    }
+    final saved = widget.existing;
+    if (saved != null && _action == null) {
+      // Display saved metadata only; Core still checks registration eligibility
+      // and resolves fresh execution targets when invoked.
+      _action = ShortcutActionDto(
+          actionId: saved.actionId, title: saved.title, contextTypes: const []);
     }
   }
 
   @override
   void dispose() {
+    _recorder.cancel();
     _focus.dispose();
     _search.dispose();
     super.dispose();
@@ -172,18 +236,29 @@ class _ShortcutDialogState extends State<_ShortcutDialog> {
 
   KeyEventResult _key(FocusNode node, KeyEvent event) {
     if (!_recording || event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (_recorder.nativePending) return KeyEventResult.handled;
     if (event.logicalKey == LogicalKeyboardKey.escape) {
-      setState(() => _recording = false);
+      _recorder.cancel();
+      setState(() {
+        _recording = false;
+        _error = null;
+      });
       return KeyEventResult.handled;
     }
-    final code = carbonKeyCode(event.logicalKey);
+    final code = shortcutEventKeyCode(event);
     if (code == null) return KeyEventResult.handled;
+    _acceptChord(code, pressedModifiers());
+    return KeyEventResult.handled;
+  }
+
+  bool _acceptChord(int code, int modifiers) {
     final action = _action!;
     final binding = ActionShortcut(
         actionId: action.actionId,
         title: action.title,
         keyCode: code,
-        modifiers: pressedModifiers());
+        modifiers: modifiers,
+        global: _global);
     final error = binding.validate(widget.settings);
     setState(() {
       _error = error;
@@ -192,26 +267,29 @@ class _ShortcutDialogState extends State<_ShortcutDialog> {
         _recording = false;
       }
     });
-    return KeyEventResult.handled;
+    return error == null;
   }
 
   @override
   Widget build(BuildContext context) {
     final query = _search.text.toLowerCase();
     final actions = widget.options
-        .where((a) => '${a.title} ${a.contextTypes.join(' ')}'
-            .toLowerCase()
-            .contains(query))
+        .where((a) =>
+            '${a.title} ${a.contextTypes.map(contextTypeLabel).join(' ')} ${a.contextTypes.join(' ')}'
+                .toLowerCase()
+                .contains(query))
         .toList();
     return AlertDialog(
+      scrollable: _action != null,
       title: const Text('Action shortcut'),
       content: Focus(
           focusNode: _focus,
           onKeyEvent: _key,
           child: SizedBox(
               width: 420,
-              height: 300,
+              height: _action == null ? 350 : null,
               child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     if (_action == null) ...[
@@ -219,7 +297,9 @@ class _ShortcutDialogState extends State<_ShortcutDialog> {
                           controller: _search,
                           autofocus: true,
                           decoration: const InputDecoration(
-                              hintText: 'Find an action…', isDense: true),
+                              hintText: 'Find an action…',
+                              prefixIcon: Icon(AppIcons.search, size: 17),
+                              isDense: true),
                           onChanged: (_) => setState(() {})),
                       const SizedBox(height: 8),
                       Expanded(
@@ -228,7 +308,11 @@ class _ShortcutDialogState extends State<_ShortcutDialog> {
                           ListTile(
                               dense: true,
                               title: Text(action.title),
-                              subtitle: Text(action.contextTypes.join(' · ')),
+                              subtitle: Text(
+                                  action.contextTypes
+                                      .map(contextTypeLabel)
+                                      .join(' · '),
+                                  style: AppStyle.caption),
                               onTap: () {
                                 setState(() {
                                   _action = action;
@@ -240,9 +324,17 @@ class _ShortcutDialogState extends State<_ShortcutDialog> {
                     ] else ...[
                       Text(_action!.title,
                           style: const TextStyle(fontWeight: FontWeight.w600)),
-                      Text(_action!.contextTypes.join(' · '),
+                      Text(
+                          _action!.contextTypes
+                              .map(contextTypeLabel)
+                              .join(' · '),
                           style: const TextStyle(
-                              fontSize: 11, color: LauncherStyle.muted)),
+                              fontSize: 11, color: AppStyle.muted)),
+                      if (_action!.contextTypes.isEmpty)
+                        const Text(
+                            'Not detected in the last context. The saved action is retained.',
+                            style:
+                                TextStyle(fontSize: 11, color: AppStyle.muted)),
                       const SizedBox(height: 16),
                       OutlinedButton(
                           onPressed: () {
@@ -250,6 +342,25 @@ class _ShortcutDialogState extends State<_ShortcutDialog> {
                               _recording = true;
                               _error = null;
                             });
+                            _recorder.start(
+                                onChord: _acceptChord,
+                                onCancel: () {
+                                  if (mounted) {
+                                    setState(() {
+                                      _recording = false;
+                                      _error = null;
+                                    });
+                                  }
+                                },
+                                onError: () {
+                                  if (mounted) {
+                                    setState(() {
+                                      _recording = false;
+                                      _error =
+                                          'Shortcut recording failed. Try again.';
+                                    });
+                                  }
+                                });
                             _focus.requestFocus();
                           },
                           child: Text(_recording
@@ -258,23 +369,36 @@ class _ShortcutDialogState extends State<_ShortcutDialog> {
                       const SizedBox(height: 8),
                       const Text(
                           'Use Command, Option or Control with a letter. Esc cancels recording.',
-                          style: TextStyle(
-                              fontSize: 12, color: LauncherStyle.muted)),
+                          style:
+                              TextStyle(fontSize: 12, color: AppStyle.muted)),
+                      SettingsToggleRow(
+                          title: 'Global shortcut',
+                          description:
+                              'Works from other apps. Captures their current context.',
+                          value: _global,
+                          onChanged: _recording
+                              ? null
+                              : (value) => setState(() {
+                                    _global = value;
+                                    _binding = _binding?.withGlobal(value);
+                                  })),
                       if (_error != null)
                         Padding(
                             padding: const EdgeInsets.only(top: 10),
                             child: Text(_error!,
                                 style: const TextStyle(
-                                    fontSize: 12,
-                                    color: LauncherStyle.warning))),
-                      const Spacer(),
+                                    fontSize: 12, color: AppStyle.warning))),
                       if (widget.existing == null)
                         TextButton(
-                            onPressed: () => setState(() {
-                                  _action = null;
-                                  _binding = null;
-                                  _error = null;
-                                }),
+                            onPressed: () {
+                              _recorder.cancel();
+                              setState(() {
+                                _recording = false;
+                                _action = null;
+                                _binding = null;
+                                _error = null;
+                              });
+                            },
                             child: const Text('Choose another action')),
                     ],
                   ]))),
