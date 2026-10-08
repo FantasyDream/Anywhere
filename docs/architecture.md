@@ -191,6 +191,14 @@ Flutter Controller 依赖 `DesktopHost`；`WindowHost` 是 MethodChannel 实现�
 Git 的 argv、进程执行、限时排空和报告完全复用 Rust 标准库。Developer Action 只描述工具/参数/目录，GUI PATH、Java 环境和 wrapper 解释位于 platform 的工具服务。ProcessRequest 与会话生命周期保持通用；Unix 进程组/非阻塞管道集中在 `process/unix.rs`，未实现进程树后端的平台在启动子进程前拒绝，不退化成只杀父进程。详见 [跨平台架构与接入契约](platform-portability.md)。
 
 
+## V0.7 异步文件来源
+
+慢来源实现 `AsyncCandidateSource`，自行声明查询适用条件；`application/search_sources.rs` 处理防抖、等待上限、Session/Revision 取消和批次提交。搜索结果作为本 Revision 的有界输入推进 `inputs_epoch`，经 `ReadySource` 进入现有排序与快照发布；同步 CandidateSource 继续处理内存来源。Context 完成与快捷键解析不等待文件来源。
+
+`Platform.search_files` 的查询、数量和取消回调保持跨平台；macOS Adapter 使用固定参数的 mdfind/NUL 管道，不读正文、不建索引。阻塞 worker 持有单查询信号量，取消等待不会提前释放正在查询的槽位；取消或超时设置 worker 的停止标志并回收查询进程。
+
+文件结果使用 `CandidateKind::File` 与既有打开动作。它们不进入 Context Graph、Context offers 或 Scope；快照重建时重新验证当前动作定义与 Availability，执行时复验路径与类型。隐藏与新 Revision 清除批次；文件名不进入排名日志，Usage 只记录业务动作/类型。范围、固定策略及尚未完成的来源设置与反馈见 [V0.7 MVP](mvp-v0.7.md)。
+
 ## 展示缓存与资源预算
 
 LauncherViewState 只缓存自身快照的派生结果，控制器按完整展示输入复用该对象；输入、Scope、导航、候选或状态改变时失效，隐藏时释放。图标更新仅通知应用行。任务摘要的 output_revision 与输出在同一个锁内提交；Flutter 值比较摘要，仅在所选详情变化时读取正文，并且无变化时不通知 UI。缓存预算与轮询间隔集中在 infrastructure 和 Execution Sessions 中；功能组件不自行设置全局缓存策略。具体限制和验证见 [V0.6 性能与资源策略](performance-v0.6.md)。

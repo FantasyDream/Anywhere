@@ -224,6 +224,7 @@ fn default_true() -> bool {
 pub enum CandidateKind {
     Application,
     Action,
+    File,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]

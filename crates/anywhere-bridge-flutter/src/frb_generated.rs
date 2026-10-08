@@ -1213,6 +1213,7 @@ impl SseDecode for crate::api::CandidateKindDto {
         return match inner {
             0 => crate::api::CandidateKindDto::Application,
             1 => crate::api::CandidateKindDto::Action,
+            2 => crate::api::CandidateKindDto::File,
             _ => unreachable!("Invalid variant for CandidateKindDto: {}", inner),
         };
     }
@@ -1943,6 +1944,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::CandidateKindDto {
         match self {
             Self::Application => 0.into_dart(),
             Self::Action => 1.into_dart(),
+            Self::File => 2.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -2421,6 +2423,7 @@ impl SseEncode for crate::api::CandidateKindDto {
             match self {
                 crate::api::CandidateKindDto::Application => 0,
                 crate::api::CandidateKindDto::Action => 1,
+                crate::api::CandidateKindDto::File => 2,
                 _ => {
                     unimplemented!("");
                 }

@@ -12,6 +12,7 @@ pub use launcher_service::{Application, LauncherApplication, SnapshotWait};
 
 mod composition;
 mod context_capture;
+mod search_sources;
 pub use crate::features::context_semantic;
 pub use composition::builtin_registry;
 

@@ -114,6 +114,8 @@ void main() {
   });
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
+
+
   test(
       'explicit feature scopes expose run targets and custom scripts without flooding home',
       () {
@@ -1783,5 +1785,59 @@ void main() {
     expect(find.text('Copy Path'), findsOneWidget);
     expect(find.text('Git Status'), findsOneWidget);
     expect(find.text('Search Editor actions…'), findsOneWidget);
+  });
+
+  testWidgets(
+      'global file result uses existing row style and opens exact candidate',
+      (tester) async {
+    const fileId = 'action:core.file.open:core.file:fixture';
+    final invoked = <String>[];
+    await tester.pumpWidget(LauncherApp(
+      window: channel,
+      beginActivation: () => 1,
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          state(0, 'Initial action'),
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          launcherSnapshot(
+        sessionId: 1,
+        revision: revision,
+        snapshotSeq: 2,
+        input: input,
+        contextComplete: true,
+        contexts: const [],
+        contextCandidates: const [],
+        candidates: [
+          candidate(fileId, 'report.txt',
+              kind: CandidateKindDto.file,
+              groupId: 'files',
+              subtitle: '~/Documents',
+              homeEligible: false)
+        ],
+        diagnostics: const [],
+        scopes: const [],
+      ),
+      execute: (_, revision, candidate) async {
+        invoked.add(candidate);
+        return ActionResultDto(
+            sessionId: 1,
+            revision: revision,
+            status: ActionStatusDto.succeeded,
+            closeWindow: true);
+      },
+      deactivate: (_) async {},
+    ));
+    await toggle(tester);
+    await tester.enterText(find.byType(TextField), 'report');
+    await tester.pumpAndSettle();
+    expect(find.text('report.txt'), findsOneWidget);
+    expect(find.text('~/Documents'), findsOneWidget);
+    expect(find.text('Open'), findsOneWidget);
+    expect(find.text('Folder'), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(invoked, [fileId]);
   });
 }

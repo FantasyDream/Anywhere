@@ -36,6 +36,7 @@ pub struct SnapshotInput<'a> {
     pub prior_diagnostics: &'a [String],
     pub catalog: &'a ApplicationCatalog,
     pub sources: &'a [Arc<dyn CandidateSource + Send + Sync>],
+    pub search_candidates: &'a [crate::core::search::candidate::Candidate],
     pub now: i64,
 }
 
@@ -54,6 +55,7 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
         prior_diagnostics,
         catalog,
         sources,
+        search_candidates,
         now,
     } = input;
     let (expanded_actions, action_diagnostics) = actions.for_contexts(contexts);
@@ -83,6 +85,27 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
         now,
     );
     let mut extra: Vec<&dyn CandidateSource> = vec![&application_source];
+    // Cached objects cannot authorize an old or revoked action implementation.
+    let mut ready_candidates = search_candidates.to_vec();
+    ready_candidates.retain_mut(|candidate| {
+        if let crate::core::search::candidate::CandidateTarget::Action { action, context } =
+            &mut candidate.target
+        {
+            let Some(current) = actions.get(&action.id) else {
+                return false;
+            };
+            if !current.matches(context) {
+                return false;
+            }
+            candidate.presentation.availability =
+                crate::core::action::availability::evaluate(&current.availability, context, facts);
+            **action = current.clone();
+            return candidate.presentation.availability.is_visible();
+        }
+        true
+    });
+    let ready_source = crate::core::search::candidate_source::ReadySource(&ready_candidates);
+    extra.push(&ready_source);
     extra.extend(
         sources
             .iter()
@@ -109,7 +132,10 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
     let mut context_candidates = if input.trim().is_empty() && selected_scope.is_none() {
         set.candidates
             .iter()
-            .filter(|candidate| candidate.context().is_some())
+            .filter(|candidate| {
+                candidate.presentation.kind == CandidateKind::Action
+                    && candidate.context().is_some()
+            })
             .cloned()
             .collect()
     } else {

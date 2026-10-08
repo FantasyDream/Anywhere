@@ -327,6 +327,7 @@ class CandidateDto {
 enum CandidateKindDto {
   application,
   action,
+  file,
   ;
 }
 

@@ -32,6 +32,7 @@ pub struct ActivationCapture {
 
 #[derive(Default)]
 pub struct SessionResolution {
+    pub search_candidates: Vec<Candidate>,
     pub context_cache: Vec<ResolvedContext>,
     pub committed_revision: Option<Revision>,
     pub committed_contexts: Vec<ResolvedContext>,
@@ -88,6 +89,7 @@ impl LauncherSession {
     }
 
     pub fn begin_revision(&mut self, revision: Revision, input: String) {
+        self.resolution.search_candidates.clear();
         self.state.revision = revision;
         self.state.input = input;
         self.state.context_complete = false;
@@ -98,6 +100,7 @@ impl LauncherSession {
 
     pub fn invalidate_execution(&mut self) {
         self.execution.candidates.clear();
+        self.resolution.search_candidates.clear();
         self.resolution.context_cache.clear();
     }
 
@@ -127,7 +130,7 @@ impl LauncherSession {
         self.note_snapshot_inputs();
     }
 
-    fn note_snapshot_inputs(&mut self) {
+    pub(super) fn note_snapshot_inputs(&mut self) {
         self.resolution.inputs_epoch = self.resolution.inputs_epoch.saturating_add(1);
     }
 

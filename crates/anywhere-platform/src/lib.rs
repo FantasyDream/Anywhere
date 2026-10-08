@@ -8,6 +8,11 @@ use std::path::{Path, PathBuf};
 #[cfg(any(target_os = "macos", test))]
 pub(crate) mod editor_context;
 pub mod process;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileSearchHit {
+    pub path: PathBuf,
+    pub is_directory: bool,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApplicationInfo {
@@ -200,6 +205,19 @@ pub struct ClipboardSnapshot {
 }
 
 pub trait Platform: Send + Sync {
+    fn file_search_supported(&self) -> bool {
+        false
+    }
+
+    /// Read the system index; callers own cancellation and result limits.
+    fn search_files(
+        &self,
+        _query: &str,
+        _limit: usize,
+        _cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<Vec<FileSearchHit>> {
+        bail!("file search is not supported on this platform")
+    }
     /// Ordered application catalog roots for the default directory walk.
     ///
     /// Empty means this host has nothing to walk. Ignored by a platform that

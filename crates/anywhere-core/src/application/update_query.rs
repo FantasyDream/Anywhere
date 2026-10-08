@@ -48,11 +48,18 @@ impl Application {
             }
             session.input_mode = input_mode;
             session.begin_revision(revision, input.clone());
-            session.state.selected_scope = selected_scope;
+            session.state.selected_scope = selected_scope.clone();
             self.resolver.mark_current(session_id, revision);
             crate::application::session_runtime::seeds_from(&session, &input)
         };
         tracing::info!("input_revision_changed");
+        self.spawn_search_sources(
+            session_id,
+            revision,
+            &input,
+            selected_scope.as_deref(),
+            input_mode,
+        );
         tracing::info!(
             session_id,
             revision,

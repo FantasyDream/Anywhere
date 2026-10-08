@@ -744,6 +744,7 @@ class LauncherController extends ChangeNotifier {
   }
 
   String? shortcutLabelFor(CandidateDto candidate) {
+    if (candidate.kind != CandidateKindDto.action) return null;
     for (final binding in settings.current.actionShortcuts) {
       if (binding.actionId == candidate.commandId &&
           binding.validate(settings.current) == null) {

@@ -10,6 +10,8 @@ Understand → Enrich → Match → Rank → Execute
 
 macOS 应用可在本机编译。
 
+`dev-0.7` 已接入 Spotlight 文件名搜索首个切片：在空白 Global Search 中输入至少两个字符，异步加入至多 8 条文件/目录结果，Enter 打开。新查询和关闭窗口撤销旧搜索；现有 Scope 与内容输入模式不触发文件检索。来源设置、加载/失败反馈和次级动作仍待完善，范围与验收见 [V0.7 MVP](docs/mvp-v0.7.md)。
+
 ## 构建与运行
 
 需要 macOS 12 或以上、PATH 上的 Rust stable、与 `.flutter-version` 相同的 Flutter stable，以及 Apple Command Line Tools。项目使用程序化的 Flutter macOS Host，构建脚本直接调用 Flutter assemble、swiftc 和 codesign；不依赖 CocoaPods 或 Xcode GUI 工程。生成物为本机架构的本地签名应用，不是跨架构发布包。

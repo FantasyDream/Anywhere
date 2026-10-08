@@ -24,7 +24,21 @@ use std::{
 /// The macOS implementation of the platform port.
 pub struct MacOsPlatform;
 
+mod file_search;
+
 impl Platform for MacOsPlatform {
+    fn file_search_supported(&self) -> bool {
+        true
+    }
+
+    fn search_files(
+        &self,
+        query: &str,
+        limit: usize,
+        cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<Vec<crate::FileSearchHit>> {
+        file_search::search(query, limit, cancelled)
+    }
     fn application_roots(&self) -> Vec<PathBuf> {
         let mut roots = Vec::new();
         if let Some(home) = std::env::var_os("HOME") {

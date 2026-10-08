@@ -2,3 +2,4 @@
 pub mod actions_file;
 pub mod actions_folder;
 pub mod provider;
+pub mod search;

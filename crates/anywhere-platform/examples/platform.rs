@@ -30,7 +30,12 @@ fn main() -> Result<()> {
         "directory" => platform.open_directory(Path::new(value))?,
         "terminal" => platform.open_terminal(Path::new(value))?,
         "copy" => platform.copy_text(value)?,
-        _ => bail!("capture | finder | url | file | reveal | directory | terminal | copy [value]"),
+        "search-files" => {
+            let hits = platform.search_files(value, 64, &|| false)?;
+            println!("file_search_hits={}", hits.len());
+            assert!(hits.iter().all(|hit| hit.path.is_absolute() && hit.path.exists()));
+        }
+        _ => bail!("capture | finder | search-files | url | file | reveal | directory | terminal | copy [value]"),
     }
     Ok(())
 }

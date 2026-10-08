@@ -33,6 +33,8 @@ pub struct Resolver {
     /// Stateless providers; the directory provider is added per revision.
     pub(super) providers: ContextProviderRegistry,
     pub(super) sources: Vec<Arc<dyn CandidateSource + Send + Sync>>,
+    pub(super) async_sources:
+        Vec<Arc<dyn crate::core::search::candidate_source::AsyncCandidateSource>>,
     pub(super) session: Arc<Mutex<LauncherSession>>,
     pub(super) current: Arc<AtomicU64>,
     /// Definition/authorization lifetime, independent of query and menu discovery.
@@ -70,6 +72,7 @@ impl Resolver {
             // Registration order does not matter: the registry sorts by priority, then id.
             providers: super::composition::builtin_providers(),
             sources: Vec::new(),
+            async_sources: Vec::new(),
             session: Arc::new(Mutex::new(LauncherSession::default())),
             current: Arc::new(AtomicU64::new(0)),
             action_catalog_version: Arc::new(AtomicU64::new(1)),
@@ -394,6 +397,7 @@ impl Resolver {
                 prior_diagnostics,
                 inputs_epoch,
                 action_catalog_version,
+                search_candidates,
             ) = {
                 let session = self
                     .session
@@ -432,6 +436,7 @@ impl Resolver {
                     session.state.diagnostics.clone(),
                     session.resolution.inputs_epoch,
                     self.action_catalog_version.load(Ordering::Acquire),
+                    session.resolution.search_candidates.clone(),
                 )
             };
             let (catalog, catalog_generation) = self.catalog_view()?;
@@ -449,6 +454,7 @@ impl Resolver {
                 prior_diagnostics: &prior_diagnostics,
                 catalog: &catalog,
                 sources: &self.sources,
+                search_candidates: &search_candidates,
                 now: now(),
             });
 
@@ -590,7 +596,7 @@ impl Resolver {
                     .candidates
                     .iter()
                     .take(6)
-                    .map(|candidate| format!("{}={:.0}", candidate.title, candidate.score))
+                    .map(|candidate| format!("{}={:.0}", if candidate.kind == CandidateKind::File { "file" } else { &candidate.title }, candidate.score))
                     .collect::<Vec<_>>(),
                 late_context_count = late_contexts,
                 first_snapshot_duration = if is_first_snapshot {

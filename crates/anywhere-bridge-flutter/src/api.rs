@@ -480,6 +480,7 @@ pub enum ContextSourceDto {
 pub enum CandidateKindDto {
     Application,
     Action,
+    File,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -699,6 +700,7 @@ fn kind_dto(kind: protocol::CandidateKind) -> CandidateKindDto {
     match kind {
         protocol::CandidateKind::Application => CandidateKindDto::Application,
         protocol::CandidateKind::Action => CandidateKindDto::Action,
+        protocol::CandidateKind::File => CandidateKindDto::File,
     }
 }
 

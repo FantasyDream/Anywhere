@@ -93,7 +93,15 @@ impl Application {
     ) -> Self {
         platform.start_clipboard_tracking();
         let (catalog_tx, catalog_rx) = watch::channel(0);
-        let resolver = Resolver::new(registry, history).with_catalog_rx(catalog_rx);
+        let mut resolver = Resolver::new(registry, history).with_catalog_rx(catalog_rx);
+        if platform.file_search_supported() {
+            resolver.async_sources.push(Arc::new(
+                crate::features::filesystem::search::FileSearchSource::new(
+                    platform.clone(),
+                    resolver.base_registry(),
+                ),
+            ));
+        }
         Self {
             executions: Arc::new(Default::default()),
             platform,
@@ -267,6 +275,13 @@ impl Application {
         source: Arc<dyn crate::core::search::candidate_source::CandidateSource + Send + Sync>,
     ) {
         self.resolver.sources.push(source);
+    }
+
+    pub fn register_async_candidate_source(
+        &mut self,
+        source: Arc<dyn crate::core::search::candidate_source::AsyncCandidateSource>,
+    ) {
+        self.resolver.async_sources.push(source);
     }
 
     /// Extra providers are stacked on the built-ins by priority then id.

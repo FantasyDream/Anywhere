@@ -135,6 +135,9 @@ impl Application {
             }
             let mut output = match &candidate.target {
                 crate::core::search::candidate::CandidateTarget::Action { action, context } => {
+                    if candidate.presentation.kind == CandidateKind::File {
+                        crate::features::filesystem::search::validate_target(context)?;
+                    }
                     crate::core::action::execute::execute(
                         &action.executor,
                         context,

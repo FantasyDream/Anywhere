@@ -415,8 +415,12 @@ class _LauncherScreenState extends State<LauncherScreen> {
                                   ? 'Failed'
                                   : 'Succeeded',
                           primaryLabel: entries.isNotEmpty &&
-                                  entries[view.selectedIndex].navigationPath !=
-                                      null
+                                  (entries[view.selectedIndex].navigationPath !=
+                                          null ||
+                                      entries[view.selectedIndex]
+                                              .candidate
+                                              ?.kind ==
+                                          CandidateKindDto.file)
                               ? 'Open'
                               : 'Run',
                           onPrimary: entries.isEmpty ||

@@ -40,3 +40,28 @@ pub trait CandidateSource {
         self.candidates(search)
     }
 }
+
+/// Slow sources run outside snapshot preparation. Their batches are published only
+/// for the initiating revision, then enter the normal synchronous ranking pipeline.
+#[async_trait::async_trait]
+pub trait AsyncCandidateSource: Send + Sync {
+    fn id(&self) -> &'static str;
+    fn accepts(&self, query: &str) -> bool {
+        !query.trim().is_empty()
+    }
+    async fn candidates(
+        &self,
+        query: &str,
+        execution: crate::core::context::ExecutionContext,
+    ) -> anyhow::Result<Vec<Candidate>>;
+}
+
+pub struct ReadySource<'a>(pub &'a [Candidate]);
+impl CandidateSource for ReadySource<'_> {
+    fn id(&self) -> &'static str {
+        "async-results"
+    }
+    fn candidates(&self, _: &SearchContext<'_>) -> Vec<Candidate> {
+        self.0.to_vec()
+    }
+}
