@@ -39,6 +39,15 @@ impl Platform for MacOsPlatform {
     ) -> Result<Vec<crate::FileSearchHit>> {
         file_search::search(query, limit, cancelled)
     }
+    fn search_files_with_options(
+        &self,
+        query: &str,
+        limit: usize,
+        options: &crate::FileSearchOptions,
+        cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<Vec<crate::FileSearchHit>> {
+        file_search::search_with_options(query, limit, options, cancelled)
+    }
     fn application_roots(&self) -> Vec<PathBuf> {
         let mut roots = Vec::new();
         if let Some(home) = std::env::var_os("HOME") {

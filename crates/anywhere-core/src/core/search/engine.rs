@@ -434,7 +434,7 @@ mod tests {
             .candidates
             .iter()
             .all(|offer| offer.presentation.context_keys == [root.clone()]));
-        let summary = crate::core::context::navigation::build(&contexts, &set.candidates);
+        let summary = crate::application::context_projection::build(&contexts, &set.candidates);
         let roots: Vec<_> = summary
             .iter()
             .filter(|context| !context.candidate_ids.is_empty())

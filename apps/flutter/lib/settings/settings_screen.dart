@@ -12,6 +12,7 @@ import 'action_shortcut.dart';
 import '../ui/app_style.dart';
 import '../ui/app_components.dart';
 import 'host_settings.dart';
+import 'file_search_settings.dart';
 import '../src/rust/api.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -25,7 +26,7 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  late final TextEditingController _excluded;
+  late final TextEditingController _excluded, _fileRoots, _fileExclusions;
   String? _recording;
   final _recorder = ShortcutRecorder();
   Future<bool>? _pending;
@@ -40,6 +41,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _excluded = TextEditingController(text: _settings.excludedApps.join('\n'));
+    _fileRoots =
+        TextEditingController(text: _settings.fileSearchRoots.join('\n'));
+    _fileExclusions = TextEditingController(
+        text: _settings.fileSearchExcludedNames.join('\n'));
     _controller.addListener(_onSettings);
     _controller.beforeClose = _prepareClose;
   }
@@ -56,18 +61,43 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _controller.removeListener(_onSettings);
     _recorder.cancel();
     _excluded.dispose();
+    _fileRoots.dispose();
+    _fileExclusions.dispose();
     super.dispose();
   }
 
   Future<bool> _save(
     HostSettings Function(HostSettings current) update, {
     bool excluded = false,
+    bool fileSearch = false,
   }) {
+    // Save the draft the user submitted, and keep any newer edits made while a
+    // previous save or Host response is pending.
+    final submittedApps = _excluded.text;
+    final submittedRoots = _fileRoots.text;
+    final submittedExclusions = _fileExclusions.text;
     Future<bool> run() async {
       try {
-        final saved = await _controller.save(update(_controller.current));
-        if (excluded && saved && mounted) {
+        var next = update(_controller.current);
+        if (excluded) {
+          next = next.copyWith(excludedApps: _parseLines(submittedApps));
+        }
+        if (fileSearch) {
+          next = next.copyWith(
+              fileSearchRoots: _parseLines(submittedRoots),
+              fileSearchExcludedNames: _parseLines(submittedExclusions));
+        }
+        final saved = await _controller.save(next);
+        if (excluded && saved && mounted && _excluded.text == submittedApps) {
           _excluded.text = _controller.current.excludedApps.join('\n');
+        }
+        if (fileSearch && saved && mounted) {
+          if (_fileRoots.text == submittedRoots) {
+            _fileRoots.text = _settings.fileSearchRoots.join('\n');
+          }
+          if (_fileExclusions.text == submittedExclusions) {
+            _fileExclusions.text = _settings.fileSearchExcludedNames.join('\n');
+          }
         }
         return saved;
       } catch (_) {
@@ -86,6 +116,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return next;
   }
 
+  List<String> _lines(TextEditingController field) => _parseLines(field.text);
+  List<String> _parseLines(String text) => text
+      .split('\n')
+      .map((s) => s.trim())
+      .where((s) => s.isNotEmpty)
+      .toSet()
+      .toList();
+
+  bool get _hasSearchDrafts =>
+      !listEquals(_excludedIds(), _settings.excludedApps) ||
+      !listEquals(_lines(_fileRoots), _settings.fileSearchRoots) ||
+      !listEquals(_lines(_fileExclusions), _settings.fileSearchExcludedNames);
+
   Future<bool> _prepareClose() async {
     if (!mounted) return false;
     if (_shortcutEditing) {
@@ -97,7 +140,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final saved = await (_pending ?? Future<bool>.value(true));
       if (!mounted) return false;
-      final dirty = !listEquals(_excludedIds(), _settings.excludedApps);
+      final dirty = _hasSearchDrafts;
       if (!dirty && saved) return true;
       final choice = await showDialog<String>(
         context: context,
@@ -107,7 +150,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ? 'Save changes before closing?'
               : 'Some changes were not saved'),
           content: Text(dirty
-              ? 'The hidden apps list has unapplied changes.'
+              ? 'Search settings have unapplied changes.'
               : (_controller.statusMessage ??
                   'Settings could not be saved. You can keep editing or close without saving.')),
           actions: [
@@ -126,9 +169,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
       );
       if (choice == 'discard') return true;
       if (choice != 'save') return false;
-      return await _save(
-          (current) => current.copyWith(excludedApps: _excludedIds()),
-          excluded: true);
+      final applied = await _save(
+          (current) => current.copyWith(
+              excludedApps: _excludedIds(),
+              fileSearchRoots: _lines(_fileRoots),
+              fileSearchExcludedNames: _lines(_fileExclusions)),
+          excluded: true,
+          fileSearch: true);
+      if (applied && mounted && _hasSearchDrafts) {
+        _controller.reportError(
+            'New edits were made while saving. Save them before closing.');
+        return false;
+      }
+      return applied;
     } finally {
       if (mounted) setState(() => _closing = false);
     }
@@ -399,6 +452,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
       'search' => [
           _section('SEARCH'),
           _card(
+              child: FileSearchSettings(
+                  enabled: _settings.fileSearchEnabled,
+                  includeHidden: _settings.fileSearchIncludeHidden,
+                  onHidden: (value) => _save((current) =>
+                      current.copyWith(fileSearchIncludeHidden: value)),
+                  roots: _fileRoots,
+                  exclusions: _fileExclusions,
+                  onAuthorize: !_settings.fileSearchEnabled ||
+                          _saving ||
+                          _controller.authorizingFiles
+                      ? null
+                      : _controller.authorizeFileSearch,
+                  onDiskAccess: () =>
+                      _controller.openPrivacySettings('fullDiskAccess'),
+                  onToggle: (value) => _save(
+                      (current) => current.copyWith(fileSearchEnabled: value)),
+                  onSave: _saving
+                      ? null
+                      : () => _save(
+                          (current) => current.copyWith(
+                              fileSearchRoots: _lines(_fileRoots),
+                              fileSearchExcludedNames: _lines(_fileExclusions)),
+                          fileSearch: true))),
+          const SizedBox(height: 14),
+          _card(
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column(
@@ -415,6 +493,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       style: TextStyle(fontSize: 11, color: AppStyle.muted)),
                   const SizedBox(height: 10),
                   TextField(
+                    key: const Key('hidden-apps'),
                     controller: _excluded,
                     minLines: 3,
                     maxLines: 5,

@@ -64,7 +64,9 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
         if tasksWindow?.isMiniaturized == true { tasksWindow?.deminiaturize(nil) }
         tasksWindow?.makeKeyAndOrderFront(nil)
         if created, let view = tasksController?.view {
-            tasksWindow?.makeFirstResponder(view)
+            if let panel = tasksWindow {
+                WindowInputFocus.restore(in: panel, content: view)
+            }
         }
         if tasksReady {
             tasksChannel?.invokeMethod("visibility", arguments: true)

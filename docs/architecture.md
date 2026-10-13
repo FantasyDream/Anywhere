@@ -32,6 +32,11 @@ crates/anywhere-core/src/
 │   ├── session_model.rs     私有会话状态
 │   ├── session_runtime.rs   私有解析、预算、快照提交
 │   ├── activate.rs          激活用例
+│   ├── context_projection.rs Context 导航 read model，图身份留在 Core
+│   ├── input_policy.rs      输入推荐策略（选中文本 / 剪贴板时效）
+│   ├── source_runtime.rs    通用异步执行、admission、取消和批次
+│   ├── search_sources.rs    普通来源的查询装配与结果预算
+│   ├── file_workspace.rs    文件配置、冻结、追加和进度发布
 │   ├── update_query.rs      输入用例
 │   └── execute.rs           执行用例
 ├── features/          applications、filesystem、git、json、url、text
@@ -40,7 +45,10 @@ crates/anywhere-core/src/
 apps/flutter/lib/
 ├── main.dart                         初始化和桥接装配
 ├── launcher/
-│   ├── launcher_controller.dart     异步生命周期、版本校验、选中项与 Scope 状态
+│   ├── launcher_controller.dart     UI 编排、输入/选中项、窗口和后端调用
+│   ├── launcher_session_coordinator.dart 请求身份、15 秒保留、delta 合并
+│   ├── file_workspace_coordinator.dart 工具返回位置、追加/对象请求隔离
+│   ├── launcher_navigation.dart     Scope/菜单/overlay 的纯导航状态
 │   ├── launcher_view_state.dart     只读展示状态、可见行和高度
 │   ├── launcher_screen.dart         输入、焦点、键盘、列表、预览的组合
 │   └── widgets/candidate_row.dart   候选行和图标展示
@@ -70,7 +78,7 @@ apps/flutter/lib/
 
 `core/` 生产模块不导入 `application`、`features`、`persistence`。`scripts/check-architecture.py` 同时检查这一模块规则和 Cargo 可达依赖没有 UI/Flutter bridge；它是轻量静态护栏，行为边界仍由 Facade 测试验证。
 
-Swift Host 不解析输入或执行动作。MethodChannel 只传窗口生命周期和基础设施目录；业务状态通过 FRB 传递。Flutter Controller 不复制 Rust 的识别、匹配和排序规则。
+Swift Host 不解析输入或执行动作。MethodChannel 提供窗口生命周期、目录授权、设置和系统热键等 OS 服务；业务查询、Context 与执行状态通过 FRB 传递。Flutter Controller 不复制 Rust 的识别、匹配和排序规则。
 
 ## 激活、输入与取消
 
@@ -193,12 +201,57 @@ Git 的 argv、进程执行、限时排空和报告完全复用 Rust 标准库�
 
 ## V0.7 异步文件来源
 
-慢来源实现 `AsyncCandidateSource`，自行声明查询适用条件；`application/search_sources.rs` 处理防抖、等待上限、Session/Revision 取消和批次提交。搜索结果作为本 Revision 的有界输入推进 `inputs_epoch`，经 `ReadySource` 进入现有排序与快照发布；同步 CandidateSource 继续处理内存来源。Context 完成与快捷键解析不等待文件来源。
+慢来源实现 `AsyncCandidateSource`，自行声明查询适用条件、独立防抖和超时。通用请求/批次使用可类型复验的领域 payload、Replace / Append 语义，不导入文件过滤或进度；每个来源独立运行并持有自己的结果，单个来源清空不会覆盖其他来源。文件工具在 Application 适配自己的请求/进度；`application/search_sources.rs` 处理防抖、等待上限、Session/Revision 取消和批次提交。搜索结果作为本 Revision 的有界输入推进 `inputs_epoch`，经快照发布；普通来源沿用 ReadySource 排名，File Search 保留自身稳定连续列表顺序。同步 CandidateSource 继续处理内存来源。Context 完成与快捷键解析不等待文件来源。
 
-`Platform.search_files` 的查询、数量和取消回调保持跨平台；macOS Adapter 使用固定参数的 mdfind/NUL 管道，不读正文、不建索引。阻塞 worker 持有单查询信号量，取消等待不会提前释放正在查询的槽位；取消或超时设置 worker 的停止标志并回收查询进程。
+`FileSearchSource` 在共享 Rust Feature 内协调系统索引与完整遍历。`Platform.search_files_with_options` 只作为 macOS mdfind 快速适配器；生产查询固定使用 SystemIndex，旧 rg / Combined 留作兼容诊断。`scan::ScanStore` 使用磁盘 FIFO 目录队列、临时命中记录、统一 Unicode 名称匹配与前置类型过滤；首批和追加批次最多 64 项，UI 以连续列表按需积累；追加从最新已提交记录中排除已展示原始路径，晚发现的高排名对象仍可达。目录遍历、系统查询、追加读取与准备各有单 worker 信号量；阻塞任务持有 permit 至实际结束，避免取消等待后线程堆积。临时存储/原始路径编码/隐藏属性留在 platform，业务不含 OS 分支。
 
-文件结果使用 `CandidateKind::File` 与既有打开动作。它们不进入 Context Graph、Context offers 或 Scope；快照重建时重新验证当前动作定义与 Availability，执行时复验路径与类型。隐藏与新 Revision 清除批次；文件名不进入排名日志，Usage 只记录业务动作/类型。范围、固定策略及尚未完成的来源设置与反馈见 [V0.7 MVP](mvp-v0.7.md)。
+文件结果使用 `CandidateKind::File` 与既有打开动作。它们不进入 Context Graph、Context offers 或 Scope；快照重建时重新验证当前动作定义与 Availability，执行时复验路径与类型。新 Revision 清除批次；隐藏立即撤销执行资格，15 秒内可恢复状态，超时整体替换 Session 并释放捕获内容、查询与候选容器；文件名不进入排名日志，Usage 只记录业务动作/类型。来源设置（包含引擎和隐藏开关）的 generation 守卫阻止旧配置发布和执行，状态独立于 Context 完成。结果的常用操作通过 `file_actions` 按选中对象延迟生成，通用 result_actions 协议绑定原 execution_context_id，文件操作集合留在 filesystem Feature 中；不加入全局结果排名或 Scope。范围、默认策略及验收边界见 [V0.7 MVP](mvp-v0.7.md)。
 
 ## 展示缓存与资源预算
 
-LauncherViewState 只缓存自身快照的派生结果，控制器按完整展示输入复用该对象；输入、Scope、导航、候选或状态改变时失效，隐藏时释放。图标更新仅通知应用行。任务摘要的 output_revision 与输出在同一个锁内提交；Flutter 值比较摘要，仅在所选详情变化时读取正文，并且无变化时不通知 UI。缓存预算与轮询间隔集中在 infrastructure 和 Execution Sessions 中；功能组件不自行设置全局缓存策略。具体限制和验证见 [V0.6 性能与资源策略](performance-v0.6.md)。
+LauncherViewState 只缓存自身快照的派生结果，控制器按完整展示输入复用该对象；输入、Scope、导航、候选或状态改变时失效，隐藏超过 15 秒时释放。实际图标请求计数独立于缓存 epoch；clear / dispose 不把仍在执行的请求名额清零，完成后统一释放名额。图标更新仅通知应用行。任务摘要的 output_revision 与输出在同一个锁内提交；Flutter 值比较摘要，仅在所选详情变化时读取正文，并且无变化时不通知 UI。缓存预算与轮询间隔集中在 infrastructure 和 Execution Sessions 中；功能组件不自行设置全局缓存策略。具体限制和验证见 [V0.6 性能与资源策略](performance-v0.6.md)。
+
+
+### File Search Action 与专用页面
+
+`filesystem/workspace.rs` 注册真实入口 Action，`EntrySource` 提供全局候选。入口的内部 Launcher capability 不参与 Context Graph / Scope，`home_eligible=false`；空查询不提供常驻工具候选。`binding_offers()` 与可见候选独立，完整 Host Action 保留在执行表中供快捷键解析。执行结果通过 `HostView` 类型请求 Flutter 导航；这个契约可以继续用于其他 Host-rendered 工具页。
+
+文件来源仅在 `InputMode::FileSearch` 运行，该模式不解析环境/内容 Context，页面的结果只来自文件来源。普通查询只检索应用与 Actions；Scope 行为不变。Flutter 保存父页面的查询/Scope/菜单路径，返回时创建新 Revision，沿用取消和快照 publication 复验。
+
+可见候选只来自与当前输入一致的快照，异步查询期间不复用旧输入的结果；完整执行 Offer 不受该展示过滤影响。LauncherSearchArea 的输入父容器与 TextField 均使用固定 Key，避免异步执行 / Host 导航同时替换左右控件时销毁 EditableText。窗口激活、输入模式转换或 Host show 完成后，按帧调用 EditableTextState.requestKeyboard，显式请求输入连接；不以 unfocus / requestFocus 循环代替连接确认。Controller 的 windowPresentation 只在当前可见 Launcher 的 show 回复后递增，关闭后的迟到回复不递增；请求代次、可见性和模式校验阻止迟到恢复。macOS WindowInputFocus 保留内容中的有效第一响应者，仅在缺失时选择接受键盘的子视图，不强制把 FlutterViewController.view 外层 wrapper 设为第一响应者。
+
+FileSearchController 管理类型选择和预览展示状态；生产过滤由 Rust 查询执行，Dart FileFilter 的分类仅用于旧适配器/测试的兼容展示；两端由 `resources/file-types.json` 生成并在 check gate 校验，图标分类是独立展示策略。FileFilter 定义分类标签与后缀集，不访问文件系统，不把目录误归为同名后缀文件。Launcher 的列表快捷键仅在输入框聚焦时生效，全窗口统一取消裸 Tab / Shift Tab 遍历，组合键与快捷键录入保留。文件搜索复用 LauncherScreen 的主布局、LauncherSearchArea、CandidateRow 和 LauncherFooter；类型过滤与 Scope 共用 LauncherFilterBar 标签组件与 Ctrl Tab / Ctrl Shift Tab 循环键，所选标签自动滚动可见；Preview 为二级 Actions 的 Host presentation entry（不伪造 Core Candidate），通过既有校验预览接口读取当前文件；工具操作 / 输出层隐藏这些控制；预览按需扩展结果区域，不维护独立工具页布局。只读预览由 `application/file_preview.rs` 校验当前 Candidate，再交给 filesystem Feature 读取最多 64 KiB 普通文本；单 worker 与最新选择请求 guards 限制并发及过期显示。不会通过预览动作打开外部程序、写 Usage 或构造 Context。页面和预览均使用平台无关的 Flutter/Rust；只有索引查询与文件打开等 OS 能力在 Platform Adapter。
+
+主窗口统一入口、工具 Action 与键盘规则见 [Launcher 交互模型](launcher-ui-v0.7.md)。工具页 Esc / 返回先关闭预览或操作层并保留查询与文件选择；列表中 Esc 先清空查询再回父页，返回按钮直接回父页。全局 Action 快捷键直接进入工具时，父页为空白 Global Search。
+
+文件引擎发布批次可重复更新；LauncherState.file_search 提供范围、计数、追加可用性、错误和完整性。Session/Revision/policy generation 拒绝旧批次，scanned/finished 守卫阻止迟到索引覆盖遍历；去重追加和发布在同一 session/policy 锁下提交。用户导航冻结当前行，后续扫描仅更新元数据和追加标记；已有对象及其执行目标保留，加载下一批不会替换前面的行。换查询、设置变化、隐藏超过 15 秒时撤销工作区与候选；后台执行系统不参与文件扫描。
+
+### 第一方能力装配与导航
+
+`FeatureContribution` 汇总 Bundle、Provider、动态 Factory 和可用的异步来源，composition 使用统一入口组装。Git / Node 等模块持有业务定义，产品 Group 元数据位于 features，Core 只保留通用标识与注册规则。这是内部装配契约；外部 Extension 的版本、序列化、能力授权和 UI 协议仍待 V0.8+ 实现。
+
+Flutter 使用 sealed `LauncherOverlay` 表达主页、根模式选择、快捷键目标选择和文件对象 Actions；payload 与父页面由对应状态持有。生命周期、Session 请求与平台窗口仍由 Controller 协调。导航整理保留既有 Context / Scope 语义。
+
+完整隐藏 / 恢复契约见 [15 秒状态保留](launcher-retention-v0.7.md)。Core 的 execution epoch 在隐藏、恢复、结束时更新；已排队的旧执行即使原 Session 恢复也不能复活。后台 ProcessSession、应用目录和有界快捷键标签目录持有各自生命周期。
+
+## build 21 职责收口
+
+- `CandidatePresentation.is_menu` 来自动作 Handler 的明确语义；`file_kind` 表示文件目标类型，独立于行的 `kind`。文件结果仍是 File；文件二级操作是 Action。Flutter 不通过 `app.*`、默认执行命令或父菜单路径猜测类型。
+- Scope 的 `action_ids` / `menu_ids` 由 Rust 基于当前 offers 构建。Flutter 按这些成员组织空查询首页和菜单层级；输入查询直接消费 Rust 筛选后的候选。Current App 聚合全部适用 Actions 的契约保持。
+- 文件执行资格仍以真实 execution target 的 Context/provider 验证；`file_kind` 是展示语义，不能代替目录授权或执行凭证。
+- `SettingsController` 拥有保存队列、配置版本和授权 readback 原子发布。每次异步回读之后检查版本/销毁，过期授权完成也通知 UI 解除 busy。Widget 只负责草稿采集和关闭选择。
+- `resources/runtime-policies.json` 生成 Rust / Dart / Swift 的保留期限、预填期限和配置限制；`resources/file-types.json` 生成协议枚举、wire 映射、Rust 分类和 Flutter 标签。文件过滤只在 Rust；Flutter 的 FileTypeAppearance 只选择视觉。
+- Bridge 保留公开 DTO / FRB 门面，内部按 queries、files、shortcuts、settings、executions、conversions 分开。生成代码不手工修改。
+- Source 注册拒绝空/重复 ID，来源声明接受的模式。通用 runner 有 4 个 worker、2 个批次的 channel；普通来源每来源最多 64 行。文件专用 adapter 承载 filter / 目录配置 / 覆盖状态，文件连续结果不受普通来源 64 行上限限制。内部 Any payload 不是第三方扩展协议。
+
+### 大列表传输
+
+Rust 快照候选使用 `Arc<Vec<...>>`。完整替换/重排递增 `candidate_list_version`；冻结列表的合法追加保留版本。文件进度提交复用候选和执行表，追加只复验/注册新行，catalog 变更仍走完整重建。
+
+订阅与 load-more 都支持 Replace / Retain / Append：版本一致且客户端已加载数量合法时，仅传新增行或进度；错过替换返回全量。Flutter 复验 Session、Revision、列表版本和请求时数量；不一致时重取，过期回包不能污染新查询。进度更新复用已有行集合及选择索引。保留旧完整 API 作为兼容端口，生产装配使用两个 delta 端口。
+
+保留连续列表和早期行执行能力；已加载候选/执行表随结果数量增长，追加的 copy-on-write 可能复制展示数组，不能宣称整 App 恒定内存。测量与限制见 [build 21 重构记录](refactor-boundaries-build21.md)。
+
+## build 22 文件工作区交互
+
+文件初始批次按目标去重并追加到既有前缀，自动增长有 64 行预算；后续仍连续加载。文件候选的合法追加维持列表版本，用户无需操作就能获得稳定顺序。固定预览消费选中对象或对象操作层的原目标，预览与普通操作行分开；相关本地 Preview Action / toggle 状态已经移除。920×600 文件工具尺寸由 Flutter 通过 DesktopHost width/height 请求，Native 只约束屏幕范围；详情与验证见 [build 22](files-fixed-preview-build22.md)。

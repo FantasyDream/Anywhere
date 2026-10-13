@@ -56,6 +56,7 @@ void main() {
       SettingsController(
           window: WindowHost(channel),
           applyExcludedApps: (_) async {},
+          applyFileSearch: (_) async {},
           applyContextSources: (_) async {},
           readPlugins: () => [],
           reload: reload ?? () async => [],

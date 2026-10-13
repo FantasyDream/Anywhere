@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
-import 'package:anywhere/launcher/activation_prefill.dart';
 import 'package:anywhere/launcher/launcher_controller.dart';
 import 'package:anywhere/launcher/launcher_screen.dart';
 import 'package:anywhere/launcher/launcher_view_state.dart';
@@ -45,6 +44,8 @@ LauncherStateDto snapshot(int revision, String input, InputModeDto mode,
         snapshotSeq: sequence,
         input: input,
         contextComplete: true,
+        searchSources: const [],
+        resultActions: const [],
         diagnostics: [],
         contextCaptures: captures,
         candidates: mode == InputModeDto.content
@@ -64,11 +65,21 @@ void main() {
   setUp(() => messenger.setMockMethodCallHandler(channel, (_) async => null));
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
   LauncherController host(List<ContextCaptureDto> captures,
-          {WaitForSnapshot? wait, List<InputModeDto>? requests}) =>
+          {WaitForSnapshot? wait,
+          List<InputModeDto>? requests,
+          bool clipboardEligible = true}) =>
       LauncherController(
           window: WindowHost(channel),
           nowMillis: () => 1000,
           backend: LauncherBackend(
+              chooseActivationInput: (captures, nowMs,
+                      {required selectedEnabled,
+                      required clipboardEnabled,
+                      required allowPendingSelection}) =>
+                  fixtureInputSuggestion(captures, nowMs,
+                      selectedEnabled: selectedEnabled,
+                      clipboardEnabled: clipboardEnabled && clipboardEligible,
+                      allowPendingSelection: allowPendingSelection),
               beginActivation: () => 1,
               activate: (_,
                       {promptAccessibility = false,
@@ -82,23 +93,6 @@ void main() {
               execute: (_, __, ___) async => throw StateError('unused'),
               deactivate: (_) async {},
               waitForSnapshot: wait));
-
-  test(
-      'selection wins; clipboard expires after 15 seconds and unknown age fails closed',
-      () {
-    ActivationPrefill? choose(List<ContextCaptureDto> values, int now) =>
-        ActivationPrefill.choose(values, now,
-            selectedEnabled: true, clipboardEnabled: true);
-    expect(choose([clipboard(), selected], 1000)?.source,
-        ContextSourceDto.selectedText);
-    expect(choose([noSelection, clipboard(age: 14999)], 1000)?.text, isNotNull);
-    expect(choose([noSelection, clipboard(age: 15000)], 1000)?.text, isNotNull);
-    expect(choose([noSelection, clipboard(age: 15001)], 1000), isNull);
-    expect(choose([noSelection, clipboard(age: null)], 1000), isNull);
-    expect(choose([noSelection, clipboard(age: 14900)], 1101), isNull);
-    expect(choose([clipboard()], 1000), isNull,
-        reason: 'Wait for selection before falling back');
-  });
 
   test(
       'prefill uses Global Search then Escape returns Current App then an empty Global Search',
@@ -133,7 +127,8 @@ void main() {
 
   for (final age in <int?>[15001, null]) {
     test('expired or unknown clipboard keeps Current App: age=$age', () async {
-      final controller = host([noSelection, clipboard(age: age)]);
+      final controller =
+          host([noSelection, clipboard(age: age)], clipboardEligible: false);
       await controller.activate();
       expect(controller.view.input, '');
       expect(controller.view.inputMode, InputModeDto.environment);

@@ -12,6 +12,7 @@ pub use launcher_service::{Application, LauncherApplication, SnapshotWait};
 
 mod composition;
 mod context_capture;
+mod file_preview;
 mod search_sources;
 pub use crate::features::context_semantic;
 pub use composition::builtin_registry;
@@ -23,3 +24,12 @@ mod snapshot;
 mod app_actions;
 mod shortcuts;
 pub use shortcuts::{BindingResolution, ShortcutAction, ShortcutApplication, ShortcutRoute};
+
+mod object_actions;
+
+pub mod input_policy;
+
+mod file_workspace;
+mod source_runtime;
+
+pub mod context_projection;

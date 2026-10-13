@@ -324,7 +324,8 @@ class _RuleDialogState extends State<_RuleDialog> {
           bundleId: _app!, title: widget.existing?.appName ?? 'Saved app'));
     }
     final types = <String>{
-      ...?_action?.contextTypes,
+      // The host capability is an Action target, not captured ambient Context.
+      ...?_action?.contextTypes.where((type) => type != 'core.launcher'),
       if (_context != null) _context!
     };
     return AlertDialog(

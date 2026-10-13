@@ -54,7 +54,9 @@ final class LauncherWindowCoordinator {
         resizeWindow(height)
         if settingsWindow?.isMiniaturized == true { settingsWindow?.deminiaturize(nil) }
         settingsWindow?.makeKeyAndOrderFront(nil)
-        settingsWindow?.makeFirstResponder(controller.view)
+        if let panel = settingsWindow {
+            WindowInputFocus.restore(in: panel, content: controller.view)
+        }
     }
 
     func restoreLauncherView() {
@@ -68,8 +70,8 @@ final class LauncherWindowCoordinator {
         glass.cornerRadius = 18
     }
 
-    func resizeWindow(_ requestedHeight: Double) {
-        guard requestedHeight.isFinite else { return }
+    func resizeWindow(_ requestedHeight: Double, width requestedWidth: Double = 648) {
+        guard requestedWidth.isFinite, requestedHeight.isFinite else { return }
         if settingsOpen, let panel = settingsWindow {
             let screen = panel.screen ?? NSScreen.main!
             let height = min(max(requestedHeight, 300), screen.visibleFrame.height)
@@ -77,11 +79,13 @@ final class LauncherWindowCoordinator {
             return
         }
         let screen = window.screen ?? NSScreen.main!
-        let height = min(max(requestedHeight, 64), min(520, screen.visibleFrame.height))
-        guard window.frame.size != NSSize(width: 648, height: height) else { return }
+        let height = min(max(requestedHeight, 64), min(600, screen.visibleFrame.height))
+        let width = min(max(requestedWidth, 400), screen.visibleFrame.width)
+        guard window.frame.size != NSSize(width: width, height: height) else { return }
         var frame = window.frame
         frame.origin.y = max(screen.visibleFrame.minY, frame.maxY - height)
-        frame.size = NSSize(width: 648, height: height)
+        frame.origin.x = min(max(screen.visibleFrame.minX, frame.midX - width / 2), screen.visibleFrame.maxX - width)
+        frame.size = NSSize(width: width, height: height)
         window.setFrame(frame, display: window.isVisible)
         window.invalidateShadow()
     }

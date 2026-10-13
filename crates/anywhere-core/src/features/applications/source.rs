@@ -82,6 +82,8 @@ impl CandidateSource for ApplicationSource<'_> {
                     shortcut: None,
                     id: application_candidate_id(&application.bundle_id, &application.path),
                     kind: CandidateKind::Application,
+                    is_menu: false,
+                    file_kind: None,
                     title: application.name.clone(),
                     subtitle: Some(application.path.clone()),
                     icon: IconDescriptor {

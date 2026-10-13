@@ -38,6 +38,9 @@ impl std::fmt::Display for MenuExecutionFailure {
 impl std::error::Error for MenuExecutionFailure {}
 
 impl ActionHandler for MenuAction {
+    fn is_menu(&self) -> bool {
+        true
+    }
     fn binding_policy(&self) -> crate::core::action::identity::BindingPolicy {
         crate::core::action::identity::BindingPolicy::Unavailable {
             reason: "Menu identity is not verified for persistent shortcuts",

@@ -7,7 +7,7 @@ source scripts/env.sh
 hotkey_test_directory="$(mktemp -d "${TMPDIR:-/tmp}/anywhere-hotkeys-live.XXXXXX")"
 trap 'rm -rf "$hotkey_test_directory"' EXIT
 xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
-  apps/flutter/macos/Runner/SettingsStore.swift \
+  apps/flutter/macos/Runner/RuntimePolicy.swift apps/flutter/macos/Runner/SettingsStore.swift \
   apps/flutter/macos/Runner/HotKeyMap.swift \
   apps/flutter/macos/Runner/HotKeyService.swift \
   apps/flutter/macos/Runner/tests/HotKeyIntegrationTests.swift \

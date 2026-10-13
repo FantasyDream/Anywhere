@@ -37,6 +37,11 @@ struct StoredSettings: Codable {
     var captureSelectedText: Bool?
     var captureBrowserCurrentPage: Bool?
     var captureClipboard: Bool?
+    var fileSearchEnabled: Bool? = nil
+    var fileSearchEngine: String? = nil
+    var fileSearchIncludeHidden: Bool? = nil
+    var fileSearchRoots: [String]? = nil
+    var fileSearchExcludedNames: [String]? = nil
     // Missing fields preserve settings written by 0.5 and earlier.
     var actionShortcutVersion: Int? = 4
     var actionShortcuts: [StoredActionShortcut]? = nil
@@ -56,7 +61,8 @@ struct StoredSettings: Codable {
             captureFinderSelection: nil,
             captureSelectedText: nil,
             captureBrowserCurrentPage: nil,
-            captureClipboard: nil
+            captureClipboard: nil,
+            fileSearchIncludeHidden: true
         )
         guard let data = try? Data(contentsOf: fileURL) else { return defaults }
         guard var stored = try? JSONDecoder().decode(StoredSettings.self, from: data) else {
@@ -104,6 +110,7 @@ struct StoredSettings: Codable {
         guard actionShortcutVersion == nil || actionShortcutVersion == 4 else {
             return "Unsupported action shortcut settings version."
         }
+        if let error = fileSearchError() { return error }
         do {
             let data = try JSONSerialization.data(withJSONObject: asMap(), options: [.sortedKeys])
             try data.write(to: fileURL, options: .atomic)
@@ -125,6 +132,11 @@ struct StoredSettings: Codable {
             "captureSelectedText": captureSelectedText ?? true,
             "captureBrowserCurrentPage": captureBrowserCurrentPage ?? true,
             "captureClipboard": captureClipboard ?? true,
+            "fileSearchEnabled": fileSearchEnabled ?? true,
+            "fileSearchEngine": fileSearchEngine ?? "systemIndex",
+            "fileSearchIncludeHidden": fileSearchIncludeHidden ?? false,
+            "fileSearchRoots": fileSearchRoots ?? [],
+            "fileSearchExcludedNames": fileSearchExcludedNames ?? [],
             "actionShortcutVersion": actionShortcutVersion ?? 4,
             "actionShortcuts": (actionShortcuts ?? []).map { $0.asMap() }
         ]
@@ -194,7 +206,24 @@ struct StoredSettings: Codable {
         if let value = args["captureSelectedText"] as? Bool { captureSelectedText = value }
         if let value = args["captureBrowserCurrentPage"] as? Bool { captureBrowserCurrentPage = value }
         if let value = args["captureClipboard"] as? Bool { captureClipboard = value }
-        return actionShortcutError()
+        if let value = args["fileSearchEnabled"] as? Bool { fileSearchEnabled = value }
+        if let value = args["fileSearchEngine"] as? String { fileSearchEngine = value }
+        if let value = args["fileSearchIncludeHidden"] as? Bool { fileSearchIncludeHidden = value }
+        if let value = args["fileSearchRoots"] as? [String] { fileSearchRoots = value }
+        if let value = args["fileSearchExcludedNames"] as? [String] { fileSearchExcludedNames = value }
+        return fileSearchError() ?? actionShortcutError()
+    }
+
+    func fileSearchError() -> String? {
+        if !["systemIndex", "ripgrep", "combined"].contains(fileSearchEngine ?? "systemIndex") {
+            return "Unsupported file search engine."
+        }
+        let roots = fileSearchRoots ?? [], names = fileSearchExcludedNames ?? []
+        if roots.count > RuntimePolicy.maxSearchRoots || names.count > RuntimePolicy.maxSearchExclusions { return "Use at most 8 directories and 32 exclusions." }
+        func controls(_ text: String) -> Bool { text.unicodeScalars.contains { $0.value <= 31 || (127...159).contains($0.value) } }
+        if roots.contains(where: { !$0.hasPrefix("/") || $0.utf8.count > RuntimePolicy.maxSearchPathBytes || controls($0) }) { return "Search directories must be absolute paths." }
+        if names.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || $0.utf8.count > RuntimePolicy.maxSearchExclusionBytes || $0.contains("/") || $0.contains("\\") || controls($0) || $0 == "." || $0 == ".." }) { return "Exclusions must be directory names." }
+        return nil
     }
 
     func actionShortcutError() -> String? {
@@ -202,12 +231,12 @@ struct StoredSettings: Codable {
             return "Unsupported action shortcut settings version."
         }
         let bindings = actionShortcuts ?? []
-        if bindings.count > 128 { return "At most 128 action shortcuts are supported." }
+        if bindings.count > RuntimePolicy.maxActionShortcuts { return "At most 128 action shortcuts are supported." }
         var actions = Set<String>(), chords = Set<String>()
         let allowed = UInt32(cmdKey | optionKey | controlKey | shiftKey)
         for binding in bindings {
-            guard !binding.actionId.isEmpty, binding.actionId.count <= 2048,
-                  binding.title.count <= 512,
+            guard !binding.actionId.isEmpty, binding.actionId.utf8.count <= RuntimePolicy.maxActionIdBytes,
+                  binding.title.utf8.count <= RuntimePolicy.maxActionTitleBytes,
                   let name = NativeHotKeyMap.keys[binding.keyCode], name.count == 1,
                   name.range(of: "^[A-Z]$", options: .regularExpression) != nil,
                   binding.modifiers & ~allowed == 0,
@@ -291,7 +320,7 @@ struct StoredShortcutRoute: Codable, Equatable {
             guard let value else { return true }
             return !value.isEmpty && value.count <= max && value.range(of: "^[A-Za-z0-9._-]+$", options: .regularExpression) != nil
         }
-        return !actionId.isEmpty && actionId.count <= 2048 && title.count <= 512 && (appName?.count ?? 0) <= 512 && condition(appBundleId, max: 256) && condition(contextType, max: 128)
+        return !actionId.isEmpty && actionId.utf8.count <= RuntimePolicy.maxActionIdBytes && title.utf8.count <= RuntimePolicy.maxActionTitleBytes && (appName?.utf8.count ?? 0) <= RuntimePolicy.maxActionTitleBytes && condition(appBundleId, max: 256) && condition(contextType, max: 128)
     }
     func asMap() -> [String: Any] {
         var map: [String: Any] = ["actionId": actionId, "title": title]

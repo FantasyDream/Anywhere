@@ -1120,7 +1120,7 @@ async fn first_snapshot_grace_is_bounded_and_late_pass_still_completes() {
         elapsed < Duration::from_millis(600),
         "the first snapshot must not wait for the whole capture: {elapsed:?}"
     );
-    assert!(titles(&state).is_empty(), "{:?}", titles(&state));
+    assert!(titles(&state).is_empty());
 
     // ADR 005: the 40ms budget itself is unchanged and still reported when it expires;
     // the grace below only extends the wait, it does not extend provider work.
@@ -1241,4 +1241,74 @@ async fn every_named_performance_metric_is_emitted_for_one_activation() {
             "{metric} was never emitted; saw {seen:?}"
         );
     }
+}
+
+#[test]
+fn a_queued_action_does_not_run_after_hidden_session_resumes() {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .max_blocking_threads(2)
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().canonicalize().unwrap();
+        let platform = Arc::new(TestPlatform::new(root, true));
+        let app = Arc::new(app(platform.clone()));
+        let state = settled(&app, app.activate().await.unwrap().unwrap().session_id, 0).await;
+        let copy_id = candidate(&state, "core.directory.copy");
+
+        let gate = CaptureGate::new();
+        let holding = Arc::new(AtomicUsize::new(0));
+        let mut holders = Vec::new();
+        for _ in 0..2 {
+            let (gate, holding) = (gate.clone(), holding.clone());
+            holders.push(tokio::task::spawn_blocking(move || {
+                holding.fetch_add(1, Ordering::Relaxed);
+                // Bounded hold: a broken test fails instead of hanging the suite.
+                let deadline = std::time::Instant::now() + Duration::from_secs(10);
+                while !gate.released() && std::time::Instant::now() < deadline {
+                    std::thread::sleep(Duration::from_millis(2));
+                }
+            }));
+        }
+        tokio::time::timeout(Duration::from_secs(5), async {
+            while holding.load(Ordering::Relaxed) < 2 {
+                tokio::time::sleep(Duration::from_millis(1)).await;
+            }
+        })
+        .await
+        .expect("the blocking pool was never saturated");
+
+        let queued = tokio::spawn({
+            let app = app.clone();
+            let session = state.session_id;
+            let revision = state.revision;
+            async move { app.execute(session, revision, copy_id).await }
+        });
+        // Let the request pass its opening gate and queue its worker, then dismiss.
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        assert!(
+            platform.calls.lock().unwrap().is_empty(),
+            "the action must still be queued: {:?}",
+            platform.calls.lock().unwrap()
+        );
+        app.suspend_session(state.session_id).await.unwrap();
+        assert!(app.resume_session(state.session_id).unwrap().is_some());
+        gate.release();
+        for holder in holders {
+            let _ = holder.await;
+        }
+
+        let result = queued.await.unwrap().unwrap();
+        assert!(
+            !result.succeeded(),
+            "the queued action must be refused: {result:?}"
+        );
+        assert!(
+            platform.calls.lock().unwrap().is_empty(),
+            "a dismissed action must not reach the platform: {:?}",
+            platform.calls.lock().unwrap()
+        );
+    });
 }

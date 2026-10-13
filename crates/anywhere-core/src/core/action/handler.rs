@@ -9,6 +9,7 @@ use anywhere_platform::Platform;
 
 pub struct ExecutionOutput {
     pub text: Option<String>,
+    pub view: Option<anywhere_protocol::HostView>,
     pub close_window: bool,
     pub process: Option<anywhere_platform::process::ProcessRequest>,
 }
@@ -17,6 +18,7 @@ impl ExecutionOutput {
     pub fn dismiss() -> Self {
         Self {
             text: None,
+            view: None,
             close_window: true,
             process: None,
         }
@@ -25,6 +27,16 @@ impl ExecutionOutput {
     pub fn preview(text: String) -> Self {
         Self {
             text: Some(text),
+            view: None,
+            close_window: false,
+            process: None,
+        }
+    }
+
+    pub fn view(view: anywhere_protocol::HostView) -> Self {
+        Self {
+            text: None,
+            view: Some(view),
             close_window: false,
             process: None,
         }
@@ -33,6 +45,7 @@ impl ExecutionOutput {
     pub fn process(request: anywhere_platform::process::ProcessRequest) -> Self {
         Self {
             text: None,
+            view: None,
             close_window: true,
             process: Some(request),
         }
@@ -40,6 +53,10 @@ impl ExecutionOutput {
 }
 
 pub trait ActionHandler: Send + Sync {
+    /// Navigation metadata is supplied by the feature, never inferred from an ID.
+    fn is_menu(&self) -> bool {
+        false
+    }
     fn binding_policy(&self) -> super::identity::BindingPolicy {
         super::identity::BindingPolicy::Persistent
     }
@@ -67,6 +84,9 @@ pub enum ActionHandlerRef {
 }
 
 impl ActionHandlerRef {
+    pub fn is_menu(&self) -> bool {
+        self.handler().is_menu()
+    }
     pub fn binding_policy(&self) -> super::identity::BindingPolicy {
         self.handler().binding_policy()
     }

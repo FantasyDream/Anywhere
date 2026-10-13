@@ -4,7 +4,7 @@ use crate::core::{
     action::{
         availability::AvailabilityRule,
         bundle::{ActionBundle, ActionSpec},
-        group::{groups, ActionGroup},
+        group::ActionGroup,
         handler::{ActionHandler, ExecutionOutput},
     },
     context::ResolvedContext,
@@ -208,7 +208,7 @@ fn bundle(group: ActionGroup, actions: Vec<ActionSpec>) -> ActionBundle {
 
 pub fn rust_bundle() -> ActionBundle {
     bundle(
-        groups::rust(),
+        crate::features::groups::rust(),
         vec![
             spec("developer.cargo.check", &CARGO_CHECK, true),
             spec("developer.cargo.test", &CARGO_TEST, false),
@@ -217,7 +217,7 @@ pub fn rust_bundle() -> ActionBundle {
 }
 pub fn maven_bundle() -> ActionBundle {
     bundle(
-        groups::maven(),
+        crate::features::groups::maven(),
         vec![
             spec("developer.maven.test", &MAVEN_TEST, true),
             spec("developer.maven.package", &MAVEN_PACKAGE, false),
@@ -226,7 +226,7 @@ pub fn maven_bundle() -> ActionBundle {
 }
 pub fn gradle_bundle() -> ActionBundle {
     bundle(
-        groups::gradle(),
+        crate::features::groups::gradle(),
         vec![
             spec("developer.gradle.build", &GRADLE_BUILD, true),
             spec("developer.gradle.test", &GRADLE_TEST, false),
@@ -234,11 +234,11 @@ pub fn gradle_bundle() -> ActionBundle {
     )
 }
 pub fn node_bundle() -> ActionBundle {
-    bundle(groups::node(), Vec::new())
+    bundle(crate::features::groups::node(), Vec::new())
 }
 pub fn spring_bundle() -> ActionBundle {
     bundle(
-        groups::spring_boot(),
+        crate::features::groups::spring_boot(),
         vec![
             spec("developer.spring.maven.run", &SPRING_MAVEN, false),
             spec("developer.spring.gradle.run", &SPRING_GRADLE, false),

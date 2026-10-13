@@ -1,3 +1,6 @@
+import '../infrastructure/runtime_policy.dart';
+import '../src/rust/api.dart' show FileSearchEngineDto;
+import 'dart:convert';
 import 'package:flutter/services.dart';
 import '../infrastructure/hotkey_keymap.dart';
 import '../infrastructure/legacy_macos_shortcuts.dart';
@@ -16,6 +19,12 @@ class HostSettings {
     required this.captureSelectedText,
     required this.captureBrowserCurrentPage,
     required this.captureClipboard,
+    this.fileSearchEnabled = true,
+    this.fileSearchAccessReady,
+    this.fileSearchEngine = FileSearchEngineDto.systemIndex,
+    this.fileSearchIncludeHidden = true,
+    this.fileSearchRoots = const [],
+    this.fileSearchExcludedNames = const [],
     this.actionShortcuts = const [],
     this.actionShortcutVersion = 4,
   });
@@ -49,6 +58,37 @@ class HostSettings {
   final bool captureSelectedText;
   final bool captureBrowserCurrentPage;
   final bool captureClipboard;
+  final bool fileSearchEnabled;
+
+  /// Read-only Host status; never persisted as a user preference.
+  final bool? fileSearchAccessReady;
+  final FileSearchEngineDto fileSearchEngine;
+  final bool fileSearchIncludeHidden;
+  final List<String> fileSearchRoots, fileSearchExcludedNames;
+  String? get fileSearchError {
+    if (fileSearchRoots.length > RuntimePolicy.maxSearchRoots ||
+        fileSearchExcludedNames.length > RuntimePolicy.maxSearchExclusions) {
+      return 'Use at most 8 directories and 32 exclusions.';
+    }
+    if (fileSearchRoots.any((p) =>
+        !(DesktopEnvironment.current.platform == TargetPlatform.windows
+            ? (RegExp(r'^[A-Za-z]:[\\/]').hasMatch(p) || p.startsWith(r'\\'))
+            : p.startsWith('/')) ||
+        utf8.encode(p).length > RuntimePolicy.maxSearchPathBytes ||
+        p.contains(RegExp(r'[\x00-\x1f\x7f-\x9f]')))) {
+      return 'Search directories must be absolute paths, one per line.';
+    }
+    if (fileSearchExcludedNames.any((n) =>
+        n.trim().isEmpty ||
+        utf8.encode(n).length > RuntimePolicy.maxSearchExclusionBytes ||
+        n.contains(RegExp(r'[/\\\x00-\x1f\x7f-\x9f]')) ||
+        n == '.' ||
+        n == '..')) {
+      return 'Exclusions must be directory names, one per line.';
+    }
+    return null;
+  }
+
   final List<ActionShortcut> actionShortcuts;
   final int actionShortcutVersion;
 
@@ -68,6 +108,11 @@ class HostSettings {
     bool? captureSelectedText,
     bool? captureBrowserCurrentPage,
     bool? captureClipboard,
+    bool? fileSearchEnabled,
+    FileSearchEngineDto? fileSearchEngine,
+    bool? fileSearchIncludeHidden,
+    List<String>? fileSearchRoots,
+    List<String>? fileSearchExcludedNames,
     List<ActionShortcut>? actionShortcuts,
   }) =>
       HostSettings(
@@ -83,6 +128,14 @@ class HostSettings {
         captureBrowserCurrentPage:
             captureBrowserCurrentPage ?? this.captureBrowserCurrentPage,
         captureClipboard: captureClipboard ?? this.captureClipboard,
+        fileSearchEnabled: fileSearchEnabled ?? this.fileSearchEnabled,
+        fileSearchAccessReady: fileSearchAccessReady,
+        fileSearchEngine: fileSearchEngine ?? this.fileSearchEngine,
+        fileSearchIncludeHidden:
+            fileSearchIncludeHidden ?? this.fileSearchIncludeHidden,
+        fileSearchRoots: fileSearchRoots ?? this.fileSearchRoots,
+        fileSearchExcludedNames:
+            fileSearchExcludedNames ?? this.fileSearchExcludedNames,
         actionShortcuts: actionShortcuts ?? this.actionShortcuts,
         actionShortcutVersion: actionShortcutVersion,
       );
@@ -98,11 +151,23 @@ class HostSettings {
         'captureSelectedText': captureSelectedText,
         'captureBrowserCurrentPage': captureBrowserCurrentPage,
         'captureClipboard': captureClipboard,
+        'fileSearchEnabled': fileSearchEnabled,
+        'fileSearchEngine': fileSearchEngine.name,
+        'fileSearchIncludeHidden': fileSearchIncludeHidden,
+        'fileSearchRoots': fileSearchRoots,
+        'fileSearchExcludedNames': fileSearchExcludedNames,
         'actionShortcutVersion': actionShortcutVersion,
         'actionShortcuts': [
           for (final binding in actionShortcuts) binding.toMap()
         ],
       };
+
+  static List<String> _strings(Object? value) => value is List
+      ? [
+          for (final item in value)
+            if (item is String && item.trim().isNotEmpty) item.trim()
+        ]
+      : const [];
 
   static HostSettings fromMap(Map<Object?, Object?> map) {
     int number(String key, int fallback) {
@@ -138,6 +203,17 @@ class HostSettings {
       captureSelectedText: map['captureSelectedText'] != false,
       captureBrowserCurrentPage: map['captureBrowserCurrentPage'] != false,
       captureClipboard: map['captureClipboard'] != false,
+      fileSearchEnabled: map['fileSearchEnabled'] != false,
+      fileSearchAccessReady: map['fileSearchAccessReady'] is bool
+          ? map['fileSearchAccessReady'] as bool
+          : null,
+      fileSearchEngine: FileSearchEngineDto.values
+              .where((engine) => engine.name == map['fileSearchEngine'])
+              .firstOrNull ??
+          FileSearchEngineDto.systemIndex,
+      fileSearchIncludeHidden: map['fileSearchIncludeHidden'] == true,
+      fileSearchRoots: _strings(map['fileSearchRoots']),
+      fileSearchExcludedNames: _strings(map['fileSearchExcludedNames']),
       actionShortcutVersion: supported ? 4 : version,
       actionShortcuts: supported && map['actionShortcuts'] is List
           ? [

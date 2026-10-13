@@ -15,6 +15,7 @@ class CandidateRow extends StatelessWidget {
     this.iconBytes,
     this.sourceLabel,
     this.actionShortcut,
+    this.fileObject = true,
   });
   final CandidateDto candidate;
   final bool selected;
@@ -22,6 +23,7 @@ class CandidateRow extends StatelessWidget {
   final Uint8List? iconBytes;
   final String? sourceLabel;
   final String? actionShortcut;
+  final bool fileObject;
 
   @override
   Widget build(BuildContext context) {
@@ -50,8 +52,12 @@ class CandidateRow extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: Row(
                   children: [
-                    CandidateIcon(candidate: candidate, bytes: iconBytes),
-                    const SizedBox(width: 14),
+                    CandidateIcon(
+                        candidate: candidate,
+                        bytes: iconBytes,
+                        size: 32,
+                        fileObject: fileObject),
+                    const SizedBox(width: 12),
                     Expanded(child: _labels(disabled)),
                     if (actionShortcut != null ||
                         candidate.shortcut != null) ...[
@@ -62,10 +68,6 @@ class CandidateRow extends StatelessWidget {
                               : 'Shortcut in the current app',
                           child:
                               _shortcut(actionShortcut ?? candidate.shortcut!)),
-                    ],
-                    if (selected && !disabled) ...[
-                      const SizedBox(width: 8),
-                      const AppKeycap('↵'),
                     ],
                   ],
                 ),
@@ -86,20 +88,20 @@ class CandidateRow extends StatelessWidget {
         _title(disabled),
         if (subtitle != null) ...[
           const SizedBox(height: 2),
-          Text(
-            subtitle,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w400,
-              shadows: AppStyle.textShadows,
-              height: 1.35,
-              color: disabled
-                  ? AppStyle.warning
-                  : (selected ? AppStyle.primary : AppStyle.secondary),
-            ),
-          ),
+          Tooltip(
+              message: subtitle,
+              child: Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w400,
+                  shadows: AppStyle.textShadows,
+                  height: 1.35,
+                  color: disabled ? AppStyle.warning : AppStyle.secondary,
+                ),
+              )),
         ],
       ],
     );
@@ -140,35 +142,5 @@ class CandidateRow extends StatelessWidget {
   bool _isBundleId(String value) =>
       RegExp(r'^[A-Za-z][A-Za-z0-9-]*(\.[A-Za-z0-9-]+){2,}$').hasMatch(value);
 
-  Widget _shortcut(String shortcut) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (final part in _shortcutParts(shortcut)) ...[
-            const SizedBox(width: 3),
-            AppKeycap(part),
-          ],
-        ],
-      );
-
-  List<String> _shortcutParts(String shortcut) {
-    if (shortcut.startsWith('^') && shortcut.length > 1) {
-      return ['⌃', shortcut.substring(1)];
-    }
-    final parts = <String>[];
-    final rest = StringBuffer();
-    for (final rune in shortcut.runes) {
-      final unit = String.fromCharCode(rune);
-      if ('⌃⌘⇧⌥'.contains(unit)) {
-        if (rest.isNotEmpty) {
-          parts.add(rest.toString());
-          rest.clear();
-        }
-        parts.add(unit);
-      } else {
-        rest.write(unit);
-      }
-    }
-    if (rest.isNotEmpty) parts.add(rest.toString());
-    return parts.isEmpty ? [shortcut] : parts;
-  }
+  Widget _shortcut(String shortcut) => AppKeycap(shortcut);
 }

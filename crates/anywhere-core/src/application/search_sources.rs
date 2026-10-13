@@ -1,8 +1,8 @@
-//! Debounced async sources enrich only the query that started them.
-use super::Application;
-use anywhere_protocol::{InputMode, Revision, SessionId};
-use std::time::Duration;
-
+//! Independent generic source orchestration. Domain workspaces adapt their own queries.
+use super::{session_runtime::Resolver, Application};
+use crate::core::search::candidate_source::{AsyncCandidateBatch, AsyncSearchRequest, BatchUpdate};
+use anywhere_protocol::*;
+use std::{collections::HashSet, sync::Arc};
 impl Application {
     pub(super) fn spawn_search_sources(
         &self,
@@ -12,60 +12,129 @@ impl Application {
         scope: Option<&str>,
         mode: InputMode,
     ) {
-        if scope.is_some() || mode == InputMode::Content || self.resolver.async_sources.is_empty() {
+        if scope.is_some() || mode == InputMode::Content {
             return;
         }
-        let resolver = self.resolver.clone();
-        let sources: Vec<_> = resolver
+        let sources: Vec<_> = self
+            .resolver
             .async_sources
             .iter()
-            .filter(|source| source.accepts(input))
+            .filter(|s| s.accepts_mode(mode) && s.accepts(input))
             .cloned()
             .collect();
-        if sources.is_empty() {
+        // Product workspace dispatch lives at the Application boundary, never in
+        // the generic runner, request or publication protocol.
+        if mode == InputMode::FileSearch {
+            self.spawn_file_search_sources(session_id, revision, input, sources);
             return;
         }
-        let query = input.to_owned();
-        let ticket = resolver.execution(session_id, revision);
-        tokio::spawn(async move {
-            tokio::select! {
-                _ = tokio::time::sleep(Duration::from_millis(150)) => {},
-                _ = ticket.superseded() => return,
+        mark_sources_loading(
+            &self.resolver,
+            session_id,
+            revision,
+            &sources
+                .iter()
+                .map(|s| SearchSourcePresentation {
+                    id: s.id().into(),
+                    state: SearchSourceState::Loading,
+                })
+                .collect::<Vec<_>>(),
+        );
+        for source in sources {
+            let id = source.id();
+            let resolver = self.resolver.clone();
+            super::source_runtime::spawn_source(
+                source,
+                AsyncSearchRequest {
+                    text: input.into(),
+                    options: None,
+                },
+                self.resolver.execution(session_id, revision),
+                self.resolver.source_workers.clone(),
+                Arc::new(|| true),
+                Arc::new(move |batch| {
+                    commit_plain_batch(&resolver, session_id, revision, id, batch)
+                }),
+            );
+        }
+    }
+}
+pub(super) fn mark_sources_loading(
+    resolver: &Resolver,
+    session_id: SessionId,
+    revision: Revision,
+    states: &[SearchSourcePresentation],
+) {
+    let Ok(mut session) = resolver.session.lock() else {
+        return;
+    };
+    if !resolver.is_current(session_id, revision) {
+        return;
+    }
+    session.resolution.search_sources = states.to_vec();
+    session.note_snapshot_inputs();
+}
+fn commit_plain_batch(
+    resolver: &Resolver,
+    session_id: SessionId,
+    revision: Revision,
+    id: &str,
+    batch: AsyncCandidateBatch,
+) {
+    let committed = {
+        let Ok(mut session) = resolver.session.lock() else {
+            return;
+        };
+        if !resolver.is_current(session_id, revision)
+            || session.state.session_id != session_id
+            || session.state.revision != revision
+        {
+            return;
+        }
+        let rows = session
+            .resolution
+            .source_candidates
+            .entry(id.into())
+            .or_default();
+        match batch.update {
+            BatchUpdate::Replace => {
+                *rows = batch
+                    .candidates
+                    .into_iter()
+                    .take(policy::MAX_SEARCH_SOURCE_ROWS as usize)
+                    .collect()
             }
-            if !ticket.is_current() {
-                return;
-            }
-            let mut candidates = Vec::new();
-            for source in &sources {
-                let result = tokio::select! {
-                    result = tokio::time::timeout(Duration::from_secs(3), source.candidates(&query, ticket.clone())) => result.unwrap_or_else(|_| Err(anyhow::anyhow!("search source timed out"))),
-                    _ = ticket.superseded() => return,
-                };
-                if !ticket.is_current() {
-                    return;
+            BatchUpdate::Append => {
+                let mut ids: HashSet<_> = rows.iter().map(|c| c.presentation.id.clone()).collect();
+                for c in batch.candidates {
+                    if rows.len() >= policy::MAX_SEARCH_SOURCE_ROWS as usize {
+                        break;
+                    }
+                    if ids.insert(c.presentation.id.clone()) {
+                        rows.push(c);
+                    }
                 }
-                match result {
-                    Ok(rows) => candidates.extend(rows.into_iter().take(64)),
-                    Err(_) => tracing::warn!(source = source.id(), "search_source_unavailable"),
-                }
             }
-            let committed = {
-                let Ok(mut session) = resolver.session.lock() else {
-                    return;
-                };
-                if !ticket.is_current()
-                    || session.state.session_id != session_id
-                    || session.state.revision != revision
-                {
-                    return;
-                }
-                session.resolution.search_candidates = candidates;
-                session.note_snapshot_inputs();
-                session.resolution.committed_revision == Some(revision)
-            };
-            if committed {
-                resolver.recompute_current(session_id);
-            }
-        });
+        }
+        session.resolution.search_candidates = session
+            .resolution
+            .source_candidates
+            .values()
+            .flatten()
+            .cloned()
+            .collect();
+        if let Some(s) = session
+            .resolution
+            .search_sources
+            .iter_mut()
+            .find(|s| s.id == id)
+        {
+            s.state = batch.state;
+        }
+        session.note_snapshot_inputs();
+        session.resolution.committed_revision == Some(revision)
+    };
+    if committed {
+        resolver.recompute_current(session_id);
     }
 }

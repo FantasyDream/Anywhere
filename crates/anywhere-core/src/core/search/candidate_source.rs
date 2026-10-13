@@ -41,11 +41,50 @@ pub trait CandidateSource {
     }
 }
 
+/// Domain filters travel with the initiating revision, never through global policy.
+#[derive(Clone)]
+pub struct AsyncSearchRequest {
+    pub text: String,
+    pub options: Option<std::sync::Arc<dyn std::any::Any + Send + Sync>>,
+}
+
+#[derive(Clone, Copy)]
+pub enum BatchUpdate {
+    Replace,
+    Append,
+}
+
+pub struct AsyncCandidateBatch {
+    pub update: BatchUpdate,
+    pub candidates: Vec<Candidate>,
+    pub state: anywhere_protocol::SearchSourceState,
+    pub metadata: Option<std::sync::Arc<dyn std::any::Any + Send + Sync>>,
+}
+
+impl AsyncSearchRequest {
+    pub fn options<T: std::any::Any>(&self) -> Option<&T> {
+        self.options.as_deref()?.downcast_ref()
+    }
+}
+impl AsyncCandidateBatch {
+    pub fn metadata<T: std::any::Any>(&self) -> Option<&T> {
+        self.metadata.as_deref()?.downcast_ref()
+    }
+}
+
 /// Slow sources run outside snapshot preparation. Their batches are published only
 /// for the initiating revision, then enter the normal synchronous ranking pipeline.
 #[async_trait::async_trait]
-pub trait AsyncCandidateSource: Send + Sync {
+pub trait AsyncCandidateSource: std::any::Any + Send + Sync {
     fn id(&self) -> &'static str;
+    fn accepts_mode(&self, mode: anywhere_protocol::InputMode) -> bool {
+        matches!(
+            mode,
+            anywhere_protocol::InputMode::Environment
+                | anywhere_protocol::InputMode::Search
+                | anywhere_protocol::InputMode::CapturedEnvironment
+        )
+    }
     fn accepts(&self, query: &str) -> bool {
         !query.trim().is_empty()
     }
@@ -54,6 +93,29 @@ pub trait AsyncCandidateSource: Send + Sync {
         query: &str,
         execution: crate::core::context::ExecutionContext,
     ) -> anyhow::Result<Vec<Candidate>>;
+    fn debounce(&self) -> std::time::Duration {
+        std::time::Duration::from_millis(150)
+    }
+    fn timeout(&self) -> Option<std::time::Duration> {
+        Some(std::time::Duration::from_secs(3))
+    }
+    async fn stream(
+        &self,
+        request: AsyncSearchRequest,
+        execution: crate::core::context::ExecutionContext,
+        sender: tokio::sync::mpsc::Sender<AsyncCandidateBatch>,
+    ) -> anyhow::Result<()> {
+        let candidates = self.candidates(&request.text, execution).await?;
+        let _ = sender
+            .send(AsyncCandidateBatch {
+                update: BatchUpdate::Replace,
+                candidates,
+                state: anywhere_protocol::SearchSourceState::Ready,
+                metadata: None,
+            })
+            .await;
+        Ok(())
+    }
 }
 
 pub struct ReadySource<'a>(pub &'a [Candidate]);

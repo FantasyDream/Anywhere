@@ -74,4 +74,38 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     cache.dispose();
   });
+  test('physical concurrency stays bounded across repeated clear and dispose',
+      () async {
+    var active = 0, peak = 0;
+    final reads = <Completer<Uint8List?>>[];
+    final cache = ApplicationIconCache((_) async {
+      ++active;
+      if (active > peak) peak = active;
+      final result = Completer<Uint8List?>();
+      reads.add(result);
+      try {
+        return await result.future;
+      } finally {
+        --active;
+      }
+    });
+    cache.request(List.generate(4, (i) => app('old$i')));
+    for (var round = 0; round < 5; round++) {
+      cache.clear();
+      cache.request(List.generate(4, (i) => app('new$round-$i')));
+    }
+    expect(peak, ApplicationIconCache.maxInFlight);
+    for (final read in reads.toList()) {
+      read.complete(Uint8List(1));
+    }
+    await Future<void>.delayed(Duration.zero);
+    expect(reads.length, 8);
+    cache.dispose();
+    for (final read in reads.skip(4)) {
+      read.complete(null);
+    }
+    await Future<void>.delayed(Duration.zero);
+    expect(active, 0);
+    expect(peak, ApplicationIconCache.maxInFlight);
+  });
 }

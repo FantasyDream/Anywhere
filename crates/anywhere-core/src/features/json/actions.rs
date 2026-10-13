@@ -1,7 +1,6 @@
 //! JSON document actions.
 use crate::core::action::availability::AvailabilityRule;
 use crate::core::action::bundle::{ActionBundle, ActionSpec};
-use crate::core::action::group::groups;
 use crate::core::action::handler::{ActionHandler, ExecutionOutput};
 use crate::core::context::{ContextValue, ResolvedContext};
 use anyhow::{bail, Result};
@@ -54,7 +53,7 @@ const COPY: Json = Json {
 
 pub fn bundle() -> ActionBundle {
     ActionBundle {
-        group: groups::json(),
+        group: crate::features::groups::json(),
         actions: vec![
             ActionSpec {
                 id: "core.json.format",

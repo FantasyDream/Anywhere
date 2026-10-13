@@ -9,9 +9,11 @@
 //! Hide rules name a fact key; capture writes the fact, not a new struct field.
 pub mod app_actions;
 pub mod applications;
+pub mod contribution;
 pub mod developer;
 pub mod filesystem;
 pub mod git;
+pub mod groups;
 pub mod json;
 pub mod text;
 pub mod url;
@@ -23,33 +25,17 @@ use std::sync::Arc;
 
 /// Every action the first-party features contribute, as bundles.
 pub fn builtin_action_bundles() -> Vec<crate::core::action::bundle::ActionBundle> {
-    vec![
-        git::actions::bundle(),
-        filesystem::actions_folder::bundle(),
-        filesystem::actions_file::bundle(),
-        url::actions::bundle(),
-        json::actions::bundle(),
-        developer::actions::rust_bundle(),
-        developer::actions::maven_bundle(),
-        developer::actions::gradle_bundle(),
-        developer::actions::node_bundle(),
-        developer::actions::spring_bundle(),
-    ]
+    contribution::builtins()
+        .into_iter()
+        .flat_map(|c| c.bundles)
+        .collect()
 }
 
-/// Every provider a session gets from the first-party features.
-///
-/// The registry decides the order (priority, then id); this only says what exists.
 pub fn builtin_providers() -> Vec<Arc<dyn ContextProvider>> {
-    let mut providers: Vec<Arc<dyn ContextProvider>> = vec![
-        Arc::new(url::provider::UrlProvider::new()),
-        Arc::new(filesystem::provider::PathProvider::default()),
-        Arc::new(json::provider::JsonProvider::new()),
-        Arc::new(text::provider::TextProvider::default()),
-        Arc::new(git::provider::GitRepositoryProvider::default()),
-    ];
-    providers.extend(developer::provider::providers());
-    providers
+    contribution::builtins()
+        .into_iter()
+        .flat_map(|c| c.providers)
+        .collect()
 }
 
 /// Contexts that start a revision: memoized environment, frozen frontmost app, typed text.

@@ -15,9 +15,17 @@ impl Application {
         revision: Revision,
         candidate_id: CandidateId,
     ) -> Result<ActionResult> {
+        let epoch = self.resolver.execution_epoch.clone();
+        let execution_epoch = epoch.load(std::sync::atomic::Ordering::Acquire);
+        let file_policy = self.file_search_policy.clone();
+        let file_generation = file_policy
+            .read()
+            .map_err(|_| anyhow::anyhow!("search settings unavailable"))?
+            .generation;
         let (candidate, source_app, menu_generation, source_bundle, catalog_version) = {
             let session = self.session()?;
-            if session.state.session_id != session_id
+            if session.suspended
+                || session.state.session_id != session_id
                 || self
                     .resolver
                     .current
@@ -112,6 +120,7 @@ impl Application {
             // can dismiss the launcher in that gap — acting then would open a window, or
             // overwrite the clipboard, for a session that no longer exists.
             if !execution_ticket.is_current()
+                || epoch.load(std::sync::atomic::Ordering::Acquire) != execution_epoch
                 || current_catalog_version.load(std::sync::atomic::Ordering::Acquire)
                     != catalog_version
             {
@@ -122,6 +131,7 @@ impl Application {
                     .lock()
                     .map_err(|_| anyhow::anyhow!("session lock poisoned"))?;
                 if !execution_ticket.is_current()
+                    || epoch.load(std::sync::atomic::Ordering::Acquire) != execution_epoch
                     || session.state.session_id != session_id
                     || session.state.revision != revision
                     || session
@@ -135,7 +145,13 @@ impl Application {
             }
             let mut output = match &candidate.target {
                 crate::core::search::candidate::CandidateTarget::Action { action, context } => {
-                    if candidate.presentation.kind == CandidateKind::File {
+                    if crate::features::filesystem::search::is_search_target(&candidate) {
+                        if !file_policy
+                            .read()
+                            .is_ok_and(|p| p.enabled && p.generation == file_generation)
+                        {
+                            bail!("file search settings changed; search again");
+                        }
                         crate::features::filesystem::search::validate_target(context)?;
                     }
                     crate::core::action::execute::execute(
@@ -153,6 +169,7 @@ impl Application {
             // the newly started process then has its own lifetime and identity.
             let execution_session_id = if let Some(request) = output.process.take() {
                 if !execution_ticket.is_current()
+                    || epoch.load(std::sync::atomic::Ordering::Acquire) != execution_epoch
                     || current_catalog_version.load(std::sync::atomic::Ordering::Acquire)
                         != catalog_version
                 {
@@ -209,6 +226,7 @@ impl Application {
                     error: None,
                     warning,
                     output_text: output.text,
+                    view: output.view,
                     close_window,
                     execution_session_id,
                 })
@@ -228,6 +246,7 @@ impl Application {
                     error: Some(format!("{error:#}")),
                     warning: None,
                     output_text: None,
+                    view: None,
                     close_window: false,
                     execution_session_id: None,
                 })

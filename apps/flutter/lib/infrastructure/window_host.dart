@@ -16,8 +16,9 @@ abstract interface class DesktopHost {
   });
 
   Future<void> ready();
-  Future<void> show(int generation, double height, {bool settings = false});
-  Future<void> resize(int generation, double height);
+  Future<void> show(int generation, double height,
+      {bool settings = false, double width = 648});
+  Future<void> resize(int generation, double height, {double width = 648});
   Future<void> hide(int generation);
   Future<void> resumeActionShortcuts();
   Future<void> openPrivacySettings(String pane);
@@ -81,17 +82,20 @@ class WindowHost implements DesktopHost {
   @override
   Future<void> ready() => _channel.invokeMethod<void>('ready');
   @override
-  Future<void> show(int generation, double height, {bool settings = false}) =>
+  Future<void> show(int generation, double height,
+          {bool settings = false, double width = 648}) =>
       _channel.invokeMethod<void>('show', {
         'generation': generation,
         'height': height,
+        'width': width,
         'settings': settings,
       });
   @override
-  Future<void> resize(int generation, double height) =>
+  Future<void> resize(int generation, double height, {double width = 648}) =>
       _channel.invokeMethod<void>('resize', {
         'generation': generation,
         'height': height,
+        'width': width,
       });
   @override
   Future<void> hide(int generation) =>
@@ -118,7 +122,7 @@ class WindowHost implements DesktopHost {
     final raw =
         await _channel.invokeMapMethod<Object?, Object?>('settingsStatus');
     if (raw == null) throw StateError('Settings status is unavailable.');
-    return [raw['hotkeyError'], raw['loginError']]
+    return [raw['hotkeyError'], raw['loginError'], raw['fileAccessError']]
         .whereType<String>()
         .where((message) => message.isNotEmpty)
         .join('\n');

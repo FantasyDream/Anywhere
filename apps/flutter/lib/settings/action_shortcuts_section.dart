@@ -110,7 +110,7 @@ class _ActionShortcutsSectionState extends State<ActionShortcutsSection> {
                                     fontSize: 13, color: AppStyle.primary)),
                             Text(
                                 binding.global
-                                    ? 'Global · captures fresh context'
+                                    ? 'Global · works from other apps'
                                     : 'While Anywhere is open',
                                 style: const TextStyle(
                                     fontSize: 11, color: AppStyle.muted)),
@@ -185,7 +185,7 @@ class _ActionShortcutsSectionState extends State<ActionShortcutsSection> {
             ])),
         const SizedBox(height: 6),
         const Text(
-            'Project actions appear when their project is active. App menu keys are managed by the app.',
+            'Tools such as File Search are always available to bind. Project actions appear when their project is active.',
             style: TextStyle(fontSize: 11, color: AppStyle.muted)),
       ]);
 }
@@ -374,7 +374,7 @@ class _ShortcutDialogState extends State<_ShortcutDialog> {
                       SettingsToggleRow(
                           title: 'Global shortcut',
                           description:
-                              'Works from other apps. Captures their current context.',
+                              'Works from other apps. Uses fresh context when needed.',
                           value: _global,
                           onChanged: _recording
                               ? null

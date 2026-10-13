@@ -25,6 +25,8 @@ CandidateDto withRoots(CandidateDto candidate, List<ContextDto> roots) =>
     CandidateDto(
       id: candidate.id,
       kind: candidate.kind,
+      isMenu: candidate.isMenu,
+      fileKind: candidate.fileKind,
       title: candidate.title,
       menuPath: candidate.menuPath,
       contextKeys: {
@@ -52,8 +54,12 @@ LauncherStateDto launcherSnapshot(
     {required int sessionId,
     required int revision,
     required int snapshotSeq,
+    int candidateListVersion = 0,
     required String input,
     required bool contextComplete,
+    List<SearchSourceDto> searchSources = const [],
+    FileSearchProgressDto? fileSearch,
+    List<CandidateDto> resultActions = const [],
     List<ContextDto> contexts = const [],
     List<ContextDto> roots = const [],
     required List<CandidateDto> candidates,
@@ -69,28 +75,51 @@ LauncherStateDto launcherSnapshot(
       sessionId: sessionId,
       revision: revision,
       snapshotSeq: snapshotSeq,
+      candidateListVersion: candidateListVersion,
       input: input,
       contextComplete: contextComplete,
+      searchSources: searchSources,
+      fileSearch: fileSearch,
+      resultActions: resultActions,
       selectedScope: selectedScope,
-      scopes: scopes ??
-          [
-            for (final group in {
-              for (final offer in offers)
-                if (offer.kind == CandidateKindDto.action &&
-                    offer.availability != AvailabilityDto.hidden)
-                  offer.groupId
-            })
-              ScopeDto(
-                  id: group,
-                  label: group == 'folder'
-                      ? 'Folder'
-                      : group == 'git'
-                          ? 'Git'
-                          : group.startsWith('app.')
-                              ? 'Editor'
-                              : group,
-                  isCurrentApp: group.startsWith('app.')),
-          ],
+      scopes: (scopes ??
+              [
+                for (final group in {
+                  for (final offer in offers)
+                    if (offer.kind == CandidateKindDto.action &&
+                        offer.availability != AvailabilityDto.hidden)
+                      offer.groupId
+                })
+                  ScopeDto(
+                      id: group,
+                      label: group == 'folder'
+                          ? 'Folder'
+                          : group == 'git'
+                              ? 'Git'
+                              : group.startsWith('app.')
+                                  ? 'Editor'
+                                  : group,
+                      isCurrentApp: group.startsWith('app.')),
+              ])
+          .map((scope) => ScopeDto(
+                  id: scope.id,
+                  label: scope.label,
+                  isCurrentApp: scope.isCurrentApp,
+                  actionIds: [
+                    for (final c in offers)
+                      if (c.kind == CandidateKindDto.action &&
+                          c.availability != AvailabilityDto.hidden &&
+                          (scope.isCurrentApp || c.groupId == scope.id))
+                        c.id
+                  ],
+                  menuIds: [
+                    for (final c in offers)
+                      if (c.isMenu &&
+                          c.groupId == scope.id &&
+                          c.availability != AvailabilityDto.hidden)
+                        c.id
+                  ]))
+          .toList(),
       contexts: allRoots,
       preferredContextKey:
           preferredContextKey ?? (allRoots.isEmpty ? null : allRoots.first.key),
@@ -102,4 +131,32 @@ LauncherStateDto launcherSnapshot(
         for (final candidate in offers) withRoots(candidate, allRoots)
       ],
       diagnostics: diagnostics);
+}
+
+// Test Host supplies an explicit fake Rust recommendation. Eligibility/expiry
+// boundary tests live in Rust input_policy; this is only for Widget flow tests.
+ActivationInputDto? fixtureInputSuggestion(
+    List<ContextCaptureDto> captures, int nowMs,
+    {required bool selectedEnabled,
+    required bool clipboardEnabled,
+    required bool allowPendingSelection}) {
+  final selected = captures
+      .where((c) => c.source == ContextSourceDto.selectedText)
+      .firstOrNull;
+  if (selectedEnabled && selected == null && !allowPendingSelection) {
+    return null;
+  }
+  final value =
+      (selectedEnabled && selected?.status == ContextCaptureStatusDto.captured)
+          ? selected
+          : (clipboardEnabled
+              ? captures
+                  .where((c) =>
+                      c.source == ContextSourceDto.clipboard &&
+                      c.status == ContextCaptureStatusDto.captured)
+                  .firstOrNull
+              : null);
+  return value?.text == null
+      ? null
+      : ActivationInputDto(source: value!.source, text: value.text!);
 }

@@ -1,4 +1,5 @@
 import 'package:anywhere/ui/app_style.dart';
+import 'package:anywhere/ui/file_type_appearance.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -11,6 +12,50 @@ double contrast(Color foreground, Color background) {
 }
 
 void main() {
+  test('neutral glass veil separates labels from a bright native material', () {
+    // Representative native glass colors, not a claim that Flutter can sample
+    // the desktop underneath an AppKit surface. Native appearance is checked live.
+    for (final material in [const Color(0xff808080), const Color(0xff969696)]) {
+      final glass = Color.alphaBlend(AppStyle.surface, material);
+      final selected = Color.alphaBlend(AppStyle.selectedSurface, glass);
+      for (final ink in [
+        AppStyle.primary,
+        AppStyle.secondary,
+        AppStyle.muted
+      ]) {
+        expect(contrast(ink, glass), greaterThanOrEqualTo(4.5));
+        expect(contrast(ink, selected), greaterThanOrEqualTo(4.5));
+      }
+    }
+  });
+
+  test('menu labels use an opaque, readable surface in Material 3', () {
+    final menu = AppStyle.theme.popupMenuTheme;
+    expect(menu.color, AppStyle.menuSurface);
+    expect(menu.color!.a, 1);
+    for (final states in <Set<WidgetState>>[
+      {},
+      {WidgetState.focused},
+      {WidgetState.hovered}
+    ]) {
+      final ink = menu.labelTextStyle!.resolve(states)!.color!;
+      expect(contrast(ink, menu.color!), greaterThanOrEqualTo(4.5));
+    }
+  });
+
+  test('file glyphs remain distinct on bright glass and selected rows', () {
+    final glass = Color.alphaBlend(AppStyle.surface, const Color(0xff969696));
+    for (final surface in [
+      glass,
+      Color.alphaBlend(AppStyle.selectedSurface, glass)
+    ]) {
+      for (final type in FileTypeAppearance.values) {
+        expect(contrast(type.tint, surface), greaterThanOrEqualTo(3),
+            reason: type.label);
+      }
+    }
+  });
+
   test('input labels carry contrast independently of the backdrop', () {
     for (final behind in [
       Colors.white,

@@ -27,16 +27,100 @@ pub(super) fn search(
     {
         return Ok(Vec::new());
     }
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .context("home directory unavailable")?;
-    let mut command = Command::new("/usr/bin/mdfind");
-    command
-        .args(["-0", "-onlyin"])
-        .arg(home)
-        .arg("-name")
-        .arg(query.trim());
-    collect(command, limit.min(64), cancelled, TIMEOUT)
+    search_with_options(
+        query,
+        limit,
+        &crate::FileSearchOptions::default(),
+        cancelled,
+    )
+}
+
+pub(super) fn search_with_options(
+    query: &str,
+    limit: usize,
+    options: &crate::FileSearchOptions,
+    cancelled: &(dyn Fn() -> bool + Sync),
+) -> Result<Vec<FileSearchHit>> {
+    use crate::FileSearchEngine;
+    match options.engine {
+        FileSearchEngine::SystemIndex => index_search(query, limit, options, cancelled, TIMEOUT),
+        FileSearchEngine::Ripgrep => {
+            crate::file_search::ripgrep(query, limit, options, cancelled, TIMEOUT)
+        }
+        FileSearchEngine::Combined => {
+            let index = index_search(query, limit, options, cancelled, Duration::from_millis(700));
+            if cancelled() {
+                return Ok(Vec::new());
+            }
+            let scan = crate::file_search::ripgrep(
+                query,
+                limit,
+                options,
+                cancelled,
+                Duration::from_millis(1600),
+            );
+            if cancelled() {
+                return Ok(Vec::new());
+            }
+            crate::file_search::merge(index, scan, limit)
+        }
+    }
+}
+
+fn index_search(
+    query: &str,
+    limit: usize,
+    options: &crate::FileSearchOptions,
+    cancelled: &(dyn Fn() -> bool + Sync),
+    timeout: Duration,
+) -> Result<Vec<FileSearchHit>> {
+    if query.len() > 256
+        || query.trim().chars().count() < 2
+        || query.chars().any(char::is_control)
+        || limit == 0
+        || cancelled()
+    {
+        return Ok(Vec::new());
+    }
+    let roots = crate::file_search::roots(options)?;
+    let deadline = Instant::now() + timeout;
+    let mut hits = Vec::new();
+    let mut seen = BTreeSet::new();
+    for root in roots {
+        if cancelled() {
+            return Ok(Vec::new());
+        }
+        let root = root
+            .canonicalize()
+            .context("search directory unavailable")?;
+        if !root.is_dir() {
+            bail!("search root is not a directory");
+        }
+        let mut command = Command::new("/usr/bin/mdfind");
+        command
+            .args(["-0", "-onlyin"])
+            .arg(&root)
+            .arg("-name")
+            .arg(query.trim());
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        let batch = collect_configured(
+            command,
+            limit.min(64),
+            cancelled,
+            remaining,
+            options,
+            Some(&root),
+        )?;
+        for hit in batch {
+            if seen.insert(hit.path.clone()) {
+                hits.push(hit);
+            }
+            if hits.len() >= limit.min(64) {
+                return Ok(hits);
+            }
+        }
+    }
+    Ok(hits)
 }
 
 struct SearchChild(Child);
@@ -47,35 +131,45 @@ impl Drop for SearchChild {
     }
 }
 
+#[cfg(test)]
 fn visible_path(path: &Path) -> bool {
-    path.is_absolute()
-        && !path.components().any(|component| {
-            let Component::Normal(part) = component else {
-                return false;
-            };
-            let part = part.to_string_lossy();
-            part.starts_with('.')
-                || matches!(
-                    part.as_ref(),
-                    "Library" | "node_modules" | "target" | "build"
-                )
-                || part.ends_with(".app")
-                || part.ends_with(".framework")
-        })
+    crate::file_search::searchable_path(path, false)
 }
 
-fn accept(bytes: &[u8], seen: &mut BTreeSet<PathBuf>) -> Option<FileSearchHit> {
+fn accept(
+    bytes: &[u8],
+    seen: &mut BTreeSet<PathBuf>,
+    options: &crate::FileSearchOptions,
+    root: Option<&Path>,
+) -> Option<FileSearchHit> {
     let raw = std::str::from_utf8(bytes).ok()?;
     let path = Path::new(raw);
-    if !visible_path(path) {
+    if !crate::file_search::searchable_path(path, options.include_hidden) {
         return None;
     }
     let canonical = path.canonicalize().ok()?;
-    if !visible_path(&canonical) || seen.contains(&canonical) {
+    if !crate::file_search::searchable_path(&canonical, options.include_hidden)
+        || seen.contains(&canonical)
+        || root.is_some_and(|root| !canonical.starts_with(root))
+    {
         return None;
     }
     let metadata = canonical.metadata().ok()?;
     if !metadata.is_file() && !metadata.is_dir() {
+        return None;
+    }
+    let directories = if metadata.is_dir() {
+        canonical.as_path()
+    } else {
+        canonical.parent()?
+    };
+    if directories.components().any(|part| match part {
+        Component::Normal(name) => options
+            .excluded_directory_names
+            .iter()
+            .any(|excluded| name == excluded.as_str()),
+        _ => false,
+    }) {
         return None;
     }
     seen.insert(canonical.clone());
@@ -85,14 +179,36 @@ fn accept(bytes: &[u8], seen: &mut BTreeSet<PathBuf>) -> Option<FileSearchHit> {
     })
 }
 
+#[cfg(test)]
 fn collect(
-    mut command: Command,
+    command: Command,
     limit: usize,
     cancelled: &(dyn Fn() -> bool + Sync),
     timeout: Duration,
 ) -> Result<Vec<FileSearchHit>> {
+    collect_configured(
+        command,
+        limit,
+        cancelled,
+        timeout,
+        &crate::FileSearchOptions::default(),
+        None,
+    )
+}
+
+fn collect_configured(
+    mut command: Command,
+    limit: usize,
+    cancelled: &(dyn Fn() -> bool + Sync),
+    timeout: Duration,
+    options: &crate::FileSearchOptions,
+    root: Option<&Path>,
+) -> Result<Vec<FileSearchHit>> {
     if cancelled() {
         return Ok(Vec::new());
+    }
+    if timeout.is_zero() {
+        bail!("file index query timed out");
     }
     let mut child = SearchChild(
         command
@@ -144,7 +260,7 @@ fn collect(
                 }
                 for byte in &buffer[..count] {
                     if *byte == 0 {
-                        if let Some(hit) = accept(&pending, &mut seen) {
+                        if let Some(hit) = accept(&pending, &mut seen, options, root) {
                             hits.push(hit);
                         }
                         pending.clear();
@@ -240,5 +356,97 @@ mod tests {
             .to_string()
             .contains("limit"));
         assert!(collect(Command::new("/usr/bin/false"), 8, &|| false, TIMEOUT).is_err());
+    }
+    #[test]
+    fn configured_roots_and_directory_exclusions_filter_canonical_targets() {
+        let root = tempfile::Builder::new()
+            .prefix("anywhere-config-")
+            .tempdir_in("/tmp")
+            .unwrap();
+        let root = root.path().canonicalize().unwrap();
+        let logs = root.join("logs");
+        std::fs::create_dir(&logs).unwrap();
+        let file = logs.join("report.txt");
+        std::fs::write(&file, "data").unwrap();
+        let same_name_file = root.join("cache");
+        std::fs::write(&same_name_file, "data").unwrap();
+        let outside = tempfile::Builder::new()
+            .prefix("anywhere-outside-")
+            .tempdir_in("/tmp")
+            .unwrap();
+        let outside_file = outside.path().join("report.txt");
+        std::fs::write(&outside_file, "data").unwrap();
+        let link = root.join("link.txt");
+        std::os::unix::fs::symlink(&outside_file, &link).unwrap();
+        let options = crate::FileSearchOptions {
+            roots: vec![root.clone()],
+            excluded_directory_names: vec!["logs".into(), "cache".into()],
+            ..Default::default()
+        };
+        let mut seen = BTreeSet::new();
+        assert!(accept(
+            file.to_str().unwrap().as_bytes(),
+            &mut seen,
+            &options,
+            Some(&root)
+        )
+        .is_none());
+        assert!(accept(
+            link.to_str().unwrap().as_bytes(),
+            &mut seen,
+            &options,
+            Some(&root)
+        )
+        .is_none());
+        assert!(accept(
+            same_name_file.to_str().unwrap().as_bytes(),
+            &mut seen,
+            &options,
+            Some(&root)
+        )
+        .is_some());
+    }
+    #[test]
+    fn cancellation_and_timeout_reap_the_actual_child_pid() {
+        for cancel in [true, false] {
+            let temp = tempfile::tempdir().unwrap();
+            let pid_file = temp.path().join("pid");
+            // Only this deterministic fixture uses a shell; production queries never do.
+            let mut command = Command::new("/bin/sh");
+            command
+                .args([
+                    "-c",
+                    r#"printf '%s' "$$" > "$1"; exec /bin/sleep 5"#,
+                    "fixture",
+                ])
+                .arg(&pid_file);
+            let result = collect(
+                command,
+                8,
+                &|| cancel && pid_file.exists(),
+                Duration::from_millis(200),
+            );
+            if cancel {
+                assert!(result.unwrap().is_empty());
+            } else {
+                assert!(result.is_err());
+            }
+            let pid: libc::pid_t = std::fs::read_to_string(&pid_file).unwrap().parse().unwrap();
+            // SAFETY: kill(pid, 0) only probes the fixture PID; waitpid uses valid storage.
+            unsafe {
+                assert_eq!(libc::kill(pid, 0), -1, "query child is still alive");
+                assert_eq!(
+                    std::io::Error::last_os_error().raw_os_error(),
+                    Some(libc::ESRCH)
+                );
+                let mut status = 0;
+                assert_eq!(libc::waitpid(pid, &mut status, libc::WNOHANG), -1);
+                assert_eq!(
+                    std::io::Error::last_os_error().raw_os_error(),
+                    Some(libc::ECHILD),
+                    "query child was not reaped"
+                );
+            }
+        }
     }
 }

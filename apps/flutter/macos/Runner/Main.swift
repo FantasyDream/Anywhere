@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var materialController: WindowMaterialController!
     var channel: FlutterMethodChannel!
     var statusItem: NSStatusItem!
+    lazy var fileSearchAccess = FileSearchAccess()
     lazy var hotKeys = HotKeyService(supportedActionIds: [], onActivate: { [weak self] mode in self?.activate(mode: mode) },
         onRegistered: { [weak self] settings in self?.updateMenuTitles(settings) },
         log: { [weak self] value in self?.log(value) })
@@ -135,11 +136,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 if let enabled = self.loginItemIsEnabled() {
                     self.stored.launchAtLogin = enabled
                 }
-                reply(self.stored.asMap())
+                var snapshot = self.stored.asMap()
+                snapshot["fileSearchAccessReady"] = self.fileSearchAccess.ready
+                reply(snapshot)
             case "syncActionShortcutCatalog":
                 guard let args = call.arguments as? [String: Any],
-                      let ids = args["supportedActionIds"] as? [String], ids.count <= 2048,
-                      ids.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 2048 }),
+                      let ids = args["supportedActionIds"] as? [String], ids.count <= RuntimePolicy.maxShortcutCatalogRequestIds,
+                      ids.allSatisfy({ !$0.isEmpty && $0.utf8.count <= RuntimePolicy.maxActionIdBytes }),
                       let snapshot = args["settings"] as? [String: Any] else {
                     reply(FlutterError(code: "shortcuts", message: "Invalid shortcut catalog.", details: nil)); return
                 }
@@ -151,9 +154,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 if let error = self.hotKeys.syncActionCatalog(Set(ids)) {
                     reply(FlutterError(code: "shortcuts", message: error, details: nil))
                 } else { reply(nil) }
+            case "prepareFileSearchAccess":
+                guard let args = call.arguments as? [String: Any],
+                      let enabled = args["enabled"] as? Bool,
+                      let roots = args["roots"] as? [String], roots.count <= RuntimePolicy.maxSearchRoots,
+                      roots.allSatisfy({ $0.hasPrefix("/") && $0.utf8.count <= RuntimePolicy.maxSearchPathBytes }) else {
+                    reply(FlutterError(code: "file_access", message: "Invalid search scope.", details: nil)); return
+                }
+                self.fileSearchAccess.prepare(enabled: enabled, roots: roots,
+                    force: args["force"] as? Bool == true) { reply($0) }
             case "settingsStatus":
                 reply(["hotkeyError": self.hotKeyError ?? "",
-                       "loginError": self.loginError ?? ""])
+                       "loginError": self.loginError ?? "",
+                       "fileAccessError": self.fileSearchAccess.status])
             case "resumeActionShortcuts":
                 if let error = self.hotKeys.resumeForSettingsClose() {
                     reply(FlutterError(code: "shortcuts", message: error, details: nil))
@@ -161,12 +174,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             case "openPrivacySettings":
                 guard let args = call.arguments as? [String: Any],
                       let pane = args["pane"] as? String,
-                      ["accessibility", "automation", "clipboard"].contains(pane) else {
+                      ["accessibility", "automation", "clipboard", "fullDiskAccess"].contains(pane) else {
                     reply(FlutterError(code: "privacy", message: "Unknown privacy setting.", details: nil))
                     return
                 }
                 let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.systempreferences")
-                let anchor = pane == "accessibility" ? "Privacy_Accessibility" : "Privacy_Automation"
+                let anchor = pane == "accessibility" ? "Privacy_Accessibility"
+                    : pane == "fullDiskAccess" ? "Privacy_AllFiles" : "Privacy_Automation"
                 // Clipboard preferences vary by macOS version. Open System Settings
                 // itself rather than guessing an unsupported pane identifier.
                 let link = pane == "clipboard" ? app : URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)")
@@ -195,8 +209,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 var errors: [String] = []
                 var support: Set<String>? = nil
                 if let raw = args["supportedActionIds"] {
-                    guard let ids = raw as? [String], ids.count <= 2048,
-                          ids.allSatisfy({ !$0.isEmpty && $0.utf8.count <= 2048 }) else {
+                    guard let ids = raw as? [String], ids.count <= RuntimePolicy.maxShortcutCatalogRequestIds,
+                          ids.allSatisfy({ !$0.isEmpty && $0.utf8.count <= RuntimePolicy.maxActionIdBytes }) else {
                         reply(FlutterError(code: "settings", message: "Invalid shortcut catalog.", details: nil)); return
                     }
                     support = Set(ids)
@@ -239,10 +253,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                     self.showSettingsWindow(height: args["height"] as? Double ?? 508)
                 } else {
                     self.restoreLauncherView()
-                    self.resizeWindow(args["height"] as? Double ?? 64)
+                    self.resizeWindow(args["height"] as? Double ?? 64, width: args["width"] as? Double ?? 648)
                     self.positionWindow()
                     self.window.makeKeyAndOrderFront(nil)
-                    self.window.makeFirstResponder(self.controller.view)
+                    WindowInputFocus.restore(in: self.window, content: self.controller.view)
                 }
                 self.presentedGeneration = generation
                 let elapsed = (ProcessInfo.processInfo.systemUptime - self.activationStart) * 1000
@@ -261,7 +275,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                    let generation = args["generation"] as? Int,
                    generation == self.presentedGeneration,
                    let height = args["height"] as? Double {
-                    self.resizeWindow(height)
+                    self.resizeWindow(height, width: args["width"] as? Double ?? 648)
                 }
                 reply(nil)
             case "hide":
@@ -313,7 +327,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func positionWindow() { launcherWindows.positionWindow() }
     func showSettingsWindow(height: Double) { launcherWindows.showSettingsWindow(height: height) }
     func restoreLauncherView() { launcherWindows.restoreLauncherView() }
-    func resizeWindow(_ height: Double) { launcherWindows.resizeWindow(height) }
+    func resizeWindow(_ height: Double, width: Double = 648) { launcherWindows.resizeWindow(height, width: width) }
     func hideLauncherWindow() { launcherWindows.hideLauncherWindow() }
 
     func dismissForFocusLoss() {

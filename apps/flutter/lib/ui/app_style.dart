@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/services.dart';
 import '../infrastructure/desktop_environment.dart';
 
 /// One palette and control vocabulary for every window and sheet.
 /// Native AppKit supplies the blur; content surfaces stabilize text contrast.
 abstract final class AppStyle {
-  static const surface = Color(0x14101820);
+  // A neutral veil over the native blur softens bright backgrounds without
+  // adding a second blur layer or replacing glass with a flat opaque panel.
+  static const surface = Color(0xa0303438);
   static const overlay = Color(0xf22b2e35);
+  static const menuSurface = Color(0xff2b2e35);
   static const actionSurface = Color(0x0cffffff);
   static const primaryButtonSurface = Color(0x242869bf);
   static const buttonSelection = Color(0x10ffffff);
@@ -28,17 +32,17 @@ abstract final class AppStyle {
   static const List<Shadow> textShadows = [];
   static const primary = Color(0xfff7f8fa);
   static const secondary = Color(0xffe0e3e9);
-  static const muted = Color(0xffcbd0d9);
+  static const muted = Color(0xffd6dbe2);
   static const accent = Color(0xffa7caff);
   static const accentFill = Color(0xff2869bf);
   static const warning = Color(0xffffc66d);
   static const danger = Color(0xffff8078);
   static const selectedSurface = Color(0x0cffffff);
-  static const selectionOutline = Color(0x28ffffff);
+  static const selectionOutline = Color(0x18ffffff);
   static const selectedBorder = Color(0xffb6c2d7);
   static const success = Color(0xff73cc91);
   static const radius = 18.0;
-  static const resultRadius = 14.0;
+  static const resultRadius = 10.0;
   static const controlRadius = 8.0;
   static const cardRadius = 12.0;
   static const body = TextStyle(
@@ -58,12 +62,18 @@ abstract final class AppStyle {
 
   /// Native glass remains fully visible. Only unsupported hosts and reduced
   /// transparency use the original opaque fallback.
-  static Widget windowBuilder(BuildContext context, Widget? child) =>
-      ColoredBox(
-          color: DesktopEnvironment.current.hasBackdrop
-              ? Colors.transparent
-              : const Color(0xff24262b),
-          child: child ?? const SizedBox.shrink());
+  static Widget windowBuilder(BuildContext context, Widget? child) => Shortcuts(
+          shortcuts: const {
+            SingleActivator(LogicalKeyboardKey.tab):
+                DoNothingAndStopPropagationIntent(),
+            SingleActivator(LogicalKeyboardKey.tab, shift: true):
+                DoNothingAndStopPropagationIntent(),
+          },
+          child: ColoredBox(
+              color: DesktopEnvironment.current.hasBackdrop
+                  ? Colors.transparent
+                  : const Color(0xff24262b),
+              child: child ?? const SizedBox.shrink()));
 
   static ThemeData get theme {
     final shape = RoundedRectangleBorder(
@@ -228,10 +238,19 @@ abstract final class AppStyle {
           trackColor: WidgetStateProperty.resolveWith((states) =>
               states.contains(WidgetState.selected) ? accentFill : elevated)),
       popupMenuTheme: PopupMenuThemeData(
-          color: overlay,
+          color: menuSurface,
+          elevation: 3,
+          shadowColor: const Color(0x40000000),
           surfaceTintColor: Colors.transparent,
-          textStyle: body.copyWith(fontSize: 12),
-          shape: shape),
+          textStyle: body.copyWith(
+              fontSize: 12, fontFamily: DesktopEnvironment.current.fontFamily),
+          labelTextStyle: WidgetStatePropertyAll(body.copyWith(
+              fontSize: 12,
+              color: primary,
+              fontFamily: DesktopEnvironment.current.fontFamily)),
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(controlRadius),
+              side: const BorderSide(color: controlBorder, width: .5))),
       tooltipTheme: TooltipThemeData(
           decoration: BoxDecoration(
               color: overlay,

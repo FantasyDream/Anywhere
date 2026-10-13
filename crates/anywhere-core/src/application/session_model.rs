@@ -33,6 +33,11 @@ pub struct ActivationCapture {
 #[derive(Default)]
 pub struct SessionResolution {
     pub search_candidates: Vec<Candidate>,
+    pub object_actions: Vec<Candidate>,
+    pub source_candidates: BTreeMap<String, Vec<Candidate>>,
+    pub search_sources: Vec<SearchSourcePresentation>,
+    pub file_search: Option<FileSearchProgress>,
+    pub file_results_frozen: bool,
     pub context_cache: Vec<ResolvedContext>,
     pub committed_revision: Option<Revision>,
     pub committed_contexts: Vec<ResolvedContext>,
@@ -59,8 +64,10 @@ pub struct SessionMenu {
 #[derive(Default)]
 pub struct LauncherSession {
     pub input_mode: InputMode,
+    pub file_filter: FileSearchFilter,
     pub state: LauncherState,
     pub activation_started: bool,
+    pub suspended: bool,
     pub identity: SessionIdentity,
     pub environment: BTreeMap<String, FactValue>,
     pub resolution: SessionResolution,
@@ -90,6 +97,11 @@ impl LauncherSession {
 
     pub fn begin_revision(&mut self, revision: Revision, input: String) {
         self.resolution.search_candidates.clear();
+        self.resolution.object_actions.clear();
+        self.resolution.source_candidates.clear();
+        self.resolution.search_sources.clear();
+        self.resolution.file_search = None;
+        self.resolution.file_results_frozen = false;
         self.state.revision = revision;
         self.state.input = input;
         self.state.context_complete = false;
@@ -99,9 +111,10 @@ impl LauncherSession {
     }
 
     pub fn invalidate_execution(&mut self) {
-        self.execution.candidates.clear();
-        self.resolution.search_candidates.clear();
-        self.resolution.context_cache.clear();
+        // End an activation, rather than merely emptying retained allocations.
+        let id = self.state.session_id;
+        let actions = self.actions.clone();
+        *self = Self::reserved(id, actions);
     }
 
     pub fn record_fact(&mut self, key: impl Into<String>, value: FactValue) -> Result<()> {

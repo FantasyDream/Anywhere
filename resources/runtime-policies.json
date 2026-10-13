@@ -1,0 +1,17 @@
+{
+  "launcherRetentionMs": 15000,
+  "clipboardPrefillLifetimeMs": 15000,
+  "selectionPrefillGraceMs": 500,
+  "filePreviewDebounceMs": 120,
+  "maxSearchRoots": 8,
+  "maxSearchExclusions": 32,
+  "maxSearchPathBytes": 4096,
+  "maxSearchExclusionBytes": 128,
+  "maxActionShortcuts": 128,
+  "maxActionIdBytes": 2048,
+  "maxActionTitleBytes": 512,
+  "maxShortcutRoutes": 16,
+  "maxConcurrentSearchSources": 4,
+  "maxSearchSourceRows": 64,
+  "maxShortcutCatalogRequestIds": 2048
+}

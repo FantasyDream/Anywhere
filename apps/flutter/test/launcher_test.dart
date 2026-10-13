@@ -29,6 +29,8 @@ CandidateDto candidate(
   String? executionTargetLabel,
   String? subtitle = 'from Rust',
   List<String> menuPath = const [],
+  bool? isMenu,
+  FileObjectKindDto? fileKind,
 }) =>
     CandidateDto(
       contextKeys: const [],
@@ -36,6 +38,8 @@ CandidateDto candidate(
       primaryAction: false,
       id: id,
       kind: kind,
+      isMenu: isMenu ?? menuPath.isNotEmpty,
+      fileKind: fileKind,
       title: title,
       menuPath: menuPath,
       sectionLabel: sectionLabel,
@@ -71,6 +75,8 @@ LauncherStateDto state(
     snapshotSeq: snapshotSeq,
     input: input,
     contextComplete: contextComplete,
+    searchSources: const [],
+    resultActions: const [],
     contexts: [],
     contextCaptures: const [],
     candidates: [first, second],
@@ -114,8 +120,6 @@ void main() {
   });
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
-
-
   test(
       'explicit feature scopes expose run targets and custom scripts without flooding home',
       () {
@@ -131,6 +135,8 @@ void main() {
         revision: 0,
         snapshotSeq: 1,
         contextComplete: true,
+        searchSources: const [],
+        resultActions: const [],
         input: '',
         contexts: [],
         diagnostics: [],
@@ -151,6 +157,15 @@ void main() {
     expect(
         node.visibleCandidates.map((c) => c.title), ['pnpm Run · check:types']);
     expect(node.resultHeading, 'Actions');
+    final scopedSearch = LauncherViewState(
+        phase: LauncherPhase.ready,
+        generation: 1,
+        snapshot: snapshot,
+        inputMode: InputModeDto.search,
+        scopeId: 'node');
+    expect(scopedSearch.hasScopeBar, isTrue);
+    expect(scopedSearch.visibleCandidates.map((c) => c.title),
+        ['pnpm Run · check:types']);
     final rust = LauncherViewState(
         phase: LauncherPhase.ready,
         generation: 1,
@@ -198,6 +213,8 @@ void main() {
       snapshotSeq: 1,
       input: input,
       contextComplete: true,
+      searchSources: const [],
+      resultActions: const [],
       contexts: [],
       contextCaptures: const [],
       candidates: candidates,
@@ -302,6 +319,8 @@ void main() {
             snapshotSeq: 1,
             input: input,
             contextComplete: true,
+            searchSources: const [],
+            resultActions: const [],
             contextCandidates: offers,
             selectedScope: scope,
             candidates: offers
@@ -422,6 +441,8 @@ void main() {
               snapshotSeq: 1,
               input: '',
               contextComplete: false,
+              searchSources: const [],
+              resultActions: const [],
               contexts: [],
               contextCaptures: const [],
               candidates: [],
@@ -454,6 +475,8 @@ void main() {
         snapshotSeq: 1,
         input: '',
         contextComplete: true,
+        searchSources: const [],
+        resultActions: const [],
         contexts: const [
           ContextDto(
             id: 'c1',
@@ -521,6 +544,8 @@ void main() {
                 snapshotSeq: 1,
                 input: '',
                 contextComplete: true,
+                searchSources: const [],
+                resultActions: const [],
                 contextCaptures: const [
               ContextCaptureDto(
                   source: ContextSourceDto.selectedText,
@@ -739,9 +764,9 @@ void main() {
     await toggle(tester);
     await tester.enterText(find.byType(TextField), 'old');
     await tester.enterText(find.byType(TextField), 'fresh');
-    fresh.complete(state(2, 'Fresh action'));
+    fresh.complete(state(2, 'Fresh action', input: 'fresh'));
     await tester.pumpAndSettle();
-    old.complete(state(1, 'Old action'));
+    old.complete(state(1, 'Old action', input: 'old'));
     await tester.pumpAndSettle();
     expect(find.text('Fresh action'), findsOneWidget);
     expect(find.text('Old action'), findsNothing);
@@ -790,6 +815,8 @@ void main() {
           snapshotSeq: 1,
           input: '',
           contextComplete: true,
+          searchSources: const [],
+          resultActions: const [],
           contexts: [],
           contextCaptures: const [],
           candidates: [appRow, all, folder],
@@ -848,6 +875,8 @@ void main() {
           snapshotSeq: 2,
           input: '',
           contextComplete: true,
+          searchSources: const [],
+          resultActions: const [],
           contexts: [],
           contextCaptures: const [],
           candidates: [third, first, if (keepSecond) second],
@@ -860,6 +889,8 @@ void main() {
       snapshotSeq: 1,
       input: '',
       contextComplete: false,
+      searchSources: const [],
+      resultActions: const [],
       contexts: [],
       contextCaptures: const [],
       candidates: [first, second],
@@ -921,8 +952,11 @@ void main() {
             sessionId: 1,
             revision: 0,
             snapshotSeq: seq,
-            input: 'chrome',
+            // Activation and index republishes share the empty environment query.
+            input: '',
             contextComplete: complete,
+            searchSources: const [],
+            resultActions: const [],
             contexts: [],
             contextCaptures: const [],
             candidates: [candidate('action:first:c1', title)],
@@ -995,6 +1029,8 @@ void main() {
           snapshotSeq: snapshotSeq,
           input: input,
           contextComplete: true,
+          searchSources: const [],
+          resultActions: const [],
           contexts: [],
           contextCaptures: const [],
           candidates: rows,
@@ -1024,6 +1060,8 @@ void main() {
         snapshotSeq: 1,
         input: '',
         contextComplete: false,
+        searchSources: const [],
+        resultActions: const [],
         contexts: [],
         contextCaptures: const [],
         candidates: initial,
@@ -1098,6 +1136,8 @@ void main() {
         snapshotSeq: 1,
         input: '',
         contextComplete: false,
+        searchSources: const [],
+        resultActions: const [],
         contexts: [],
         contextCaptures: const [],
         candidates: [first, second],
@@ -1130,6 +1170,8 @@ void main() {
       snapshotSeq: 2,
       input: '',
       contextComplete: true,
+      searchSources: const [],
+      resultActions: const [],
       contexts: [],
       contextCaptures: const [],
       candidates: [third],
@@ -1155,6 +1197,8 @@ void main() {
         snapshotSeq: revision + 1,
         input: input,
         contextComplete: true,
+        searchSources: const [],
+        resultActions: const [],
         candidates: actions,
         diagnostics: []);
     await tester.pumpWidget(LauncherApp(
@@ -1235,6 +1279,8 @@ void main() {
           snapshotSeq: 1,
           input: input,
           contextComplete: true,
+          searchSources: const [],
+          resultActions: const [],
           contexts: [],
           contextCaptures: const [],
           candidates: [chrome, notes],
@@ -1302,12 +1348,15 @@ void main() {
     final edge = app('app:com.microsoft.edgemac', 'Microsoft Edge');
     // Sequence must advance, or the ordering guard correctly ignores the second
     // snapshot and this test would not exercise a retry at all.
-    LauncherStateDto withEdge(int revision) => launcherSnapshot(
+    LauncherStateDto withEdge(int revision, {String input = ''}) =>
+        launcherSnapshot(
           sessionId: 1,
           revision: revision,
           snapshotSeq: revision + 1,
-          input: 'edge',
+          input: input,
           contextComplete: true,
+          searchSources: const [],
+          resultActions: const [],
           contexts: [],
           contextCaptures: const [],
           candidates: [edge],
@@ -1324,7 +1373,7 @@ void main() {
           withEdge(0),
       updateInput: (_, input, revision,
               {scopeId, inputMode = InputModeDto.environment}) async =>
-          withEdge(revision),
+          withEdge(revision, input: input),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
       deactivate: (_) async {},
@@ -1371,6 +1420,8 @@ void main() {
         snapshotSeq: 1,
         input: '',
         contextComplete: true,
+        searchSources: const [],
+        resultActions: const [],
         contexts: [],
         contextCaptures: const [],
         candidates: [
@@ -1409,6 +1460,8 @@ void main() {
           snapshotSeq: 1,
           input: input,
           contextComplete: true,
+          searchSources: const [],
+          resultActions: const [],
           contexts: [],
           contextCaptures: const [],
           contextCandidates: [copy, git],
@@ -1457,6 +1510,8 @@ void main() {
           snapshotSeq: 1,
           input: input,
           contextComplete: true,
+          searchSources: const [],
+          resultActions: const [],
           contexts: [],
           contextCaptures: const [],
           contextCandidates: [copy, git],
@@ -1500,7 +1555,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
     expect(find.text('Git Status'), findsNothing);
-    expect(find.text('Search for an action or app…'), findsOneWidget);
+    expect(find.text('Search apps and actions…'), findsOneWidget);
     expect(deactivated, 0);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
@@ -1520,6 +1575,8 @@ void main() {
           snapshotSeq: 1,
           input: input,
           contextComplete: true,
+          searchSources: const [],
+          resultActions: const [],
           contexts: [],
           contextCaptures: const [],
           contextCandidates: [copy, git],
@@ -1554,7 +1611,7 @@ void main() {
         'copy');
     expect(find.text('Copy Path'), findsOneWidget);
     expect(find.text('Git Status'), findsNothing);
-    expect(find.text('Search for an action or app…'), findsOneWidget);
+    expect(find.text('Search apps and actions…'), findsOneWidget);
     expect(windowCalls, isNot(contains('hide')));
     await toggle(tester, mode: 'universal');
     await tester.pumpAndSettle();
@@ -1595,23 +1652,24 @@ void main() {
     ];
     final executed = <String>[];
     LauncherStateDto snapshot(int revision, String input) => launcherSnapshot(
-            sessionId: 1,
-            revision: revision,
-            snapshotSeq: 1,
-            input: input,
-            contextComplete: true,
-            contexts: contexts,
-            contextCandidates: offers,
-            candidates: offers
-                .where((action) =>
-                    action.title.toLowerCase().contains(input.toLowerCase()))
-                .toList(),
-            scopes: const [
-              ScopeDto(
-                  id: 'app.edge', label: 'Microsoft Edge', isCurrentApp: true),
-              ScopeDto(id: 'web', label: 'Web', isCurrentApp: false),
-            ],
-            diagnostics: []);
+        sessionId: 1,
+        revision: revision,
+        snapshotSeq: 1,
+        input: input,
+        contextComplete: true,
+        searchSources: const [],
+        resultActions: const [],
+        contexts: contexts,
+        contextCandidates: offers,
+        candidates: offers
+            .where((action) =>
+                action.title.toLowerCase().contains(input.toLowerCase()))
+            .toList(),
+        scopes: const [
+          ScopeDto(id: 'app.edge', label: 'Microsoft Edge', isCurrentApp: true),
+          ScopeDto(id: 'web', label: 'Web', isCurrentApp: false),
+        ],
+        diagnostics: []);
     await tester.pumpWidget(LauncherApp(
         window: channel,
         beginActivation: () => 1,
@@ -1638,12 +1696,18 @@ void main() {
     expect(find.text('Clipboard · Copied URL'), findsOneWidget);
     await tester.tap(find.text('Clipboard · Copied URL'));
     await tester.pumpAndSettle();
+    expect(executed, isEmpty);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
     expect(executed, [clipboardOpen.id]);
     await tester.enterText(find.byType(TextField), 'copy');
     await tester.pumpAndSettle();
     expect(find.text('Current page · $pageUrl'), findsOneWidget);
     expect(find.text('Clipboard · Copied URL'), findsNothing);
     await tester.tap(find.text('Current page · $pageUrl'));
+    await tester.pumpAndSettle();
+    expect(executed, [clipboardOpen.id]);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(executed, [clipboardOpen.id, pageCopy.id]);
     expect(tester.takeException(), isNull);
@@ -1661,16 +1725,23 @@ void main() {
     final offers = [copy, git, hidden, application];
     final requests = <String?>[];
     final executed = <String>[];
-    LauncherStateDto snapshot(int revision, String input) => launcherSnapshot(
+    LauncherStateDto snapshot(int revision, String input,
+            {String? selectedScope}) =>
+        launcherSnapshot(
             sessionId: 1,
             revision: revision,
             snapshotSeq: 1,
             input: input,
             contextComplete: true,
+            searchSources: const [],
+            resultActions: const [],
             contextCandidates: offers,
+            selectedScope: selectedScope,
             candidates: offers
                 .where((action) =>
-                    action.title.toLowerCase().contains(input.toLowerCase()))
+                    action.title.toLowerCase().contains(input.toLowerCase()) &&
+                    (selectedScope == null ||
+                        action.kind == CandidateKindDto.action))
                 .toList(),
             scopes: const [
               ScopeDto(id: 'app.finder', label: 'Finder', isCurrentApp: true),
@@ -1688,7 +1759,7 @@ void main() {
         updateInput: (_, input, revision,
             {scopeId, inputMode = InputModeDto.environment}) async {
           requests.add(scopeId);
-          return snapshot(revision, input);
+          return snapshot(revision, input, selectedScope: scopeId);
         },
         execute: (session, revision, id) async {
           executed.add(id);
@@ -1730,6 +1801,8 @@ void main() {
       snapshotSeq: 1,
       input: '',
       contextComplete: false,
+      searchSources: const [],
+      resultActions: const [],
       contexts: [],
       contextCaptures: const [],
       candidates: [git],
@@ -1744,6 +1817,8 @@ void main() {
       snapshotSeq: 2,
       input: '',
       contextComplete: true,
+      searchSources: const [],
+      resultActions: const [],
       contexts: [],
       contextCaptures: const [],
       candidates: [copy, git],
@@ -1785,59 +1860,5 @@ void main() {
     expect(find.text('Copy Path'), findsOneWidget);
     expect(find.text('Git Status'), findsOneWidget);
     expect(find.text('Search Editor actions…'), findsOneWidget);
-  });
-
-  testWidgets(
-      'global file result uses existing row style and opens exact candidate',
-      (tester) async {
-    const fileId = 'action:core.file.open:core.file:fixture';
-    final invoked = <String>[];
-    await tester.pumpWidget(LauncherApp(
-      window: channel,
-      beginActivation: () => 1,
-      activate: (_,
-              {promptAccessibility = false,
-              capturedEnvironment = false}) async =>
-          state(0, 'Initial action'),
-      updateInput: (_, input, revision,
-              {scopeId, inputMode = InputModeDto.environment}) async =>
-          launcherSnapshot(
-        sessionId: 1,
-        revision: revision,
-        snapshotSeq: 2,
-        input: input,
-        contextComplete: true,
-        contexts: const [],
-        contextCandidates: const [],
-        candidates: [
-          candidate(fileId, 'report.txt',
-              kind: CandidateKindDto.file,
-              groupId: 'files',
-              subtitle: '~/Documents',
-              homeEligible: false)
-        ],
-        diagnostics: const [],
-        scopes: const [],
-      ),
-      execute: (_, revision, candidate) async {
-        invoked.add(candidate);
-        return ActionResultDto(
-            sessionId: 1,
-            revision: revision,
-            status: ActionStatusDto.succeeded,
-            closeWindow: true);
-      },
-      deactivate: (_) async {},
-    ));
-    await toggle(tester);
-    await tester.enterText(find.byType(TextField), 'report');
-    await tester.pumpAndSettle();
-    expect(find.text('report.txt'), findsOneWidget);
-    expect(find.text('~/Documents'), findsOneWidget);
-    expect(find.text('Open'), findsOneWidget);
-    expect(find.text('Folder'), findsNothing);
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-    await tester.pumpAndSettle();
-    expect(invoked, [fileId]);
   });
 }

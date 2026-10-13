@@ -1,0 +1,385 @@
+{
+  "date": "2026-10-10",
+  "status": "design storage prototype; not production engine",
+  "hardware": {
+    "architecture": "arm64",
+    "macos": "27.0.1",
+    "cpu": "Apple M5"
+  },
+  "reports": [
+    {
+      "dataset": {
+        "rows": 200000,
+        "build_seconds": 3.179,
+        "db_mib": 24.4
+      },
+      "synthetic": true,
+      "os_cache_cleared": false,
+      "runtime": "Python storage prototype; not Rust/GUI measurements",
+      "indexed": {
+        "strategy": "bigram_fts",
+        "sqlite_version": "3.53.4",
+        "peak_rss_mib": 25.81,
+        "peak_increase_over_pre_query_mib": 3.56,
+        "cases": [
+          {
+            "query": "settings",
+            "type": null,
+            "first_connection_ms": 4.746,
+            "warm_p50_ms": 2.697,
+            "warm_p95_ms": 2.876,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "settings",
+            "type": "pdf",
+            "first_connection_ms": 2.826,
+            "warm_p50_ms": 2.624,
+            "warm_p95_ms": 2.988,
+            "returned": 1,
+            "verified": 1,
+            "complete_within_index": true
+          },
+          {
+            "query": "port",
+            "type": "pdf",
+            "first_connection_ms": 2.409,
+            "warm_p50_ms": 2.354,
+            "warm_p95_ms": 2.522,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "配置",
+            "type": null,
+            "first_connection_ms": 2.296,
+            "warm_p50_ms": 2.148,
+            "warm_p95_ms": 2.377,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "季度",
+            "type": null,
+            "first_connection_ms": 2.22,
+            "warm_p50_ms": 2.284,
+            "warm_p95_ms": 2.351,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "rs",
+            "type": "code",
+            "first_connection_ms": 2.379,
+            "warm_p50_ms": 2.342,
+            "warm_p95_ms": 2.577,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "zznomatch",
+            "type": null,
+            "first_connection_ms": 0.039,
+            "warm_p50_ms": 0.011,
+            "warm_p95_ms": 0.012,
+            "returned": 0,
+            "verified": 0,
+            "complete_within_index": true
+          },
+          {
+            "query": "aba",
+            "type": null,
+            "first_connection_ms": 0.124,
+            "warm_p50_ms": 0.112,
+            "warm_p95_ms": 0.159,
+            "returned": 0,
+            "verified": 0,
+            "complete_within_index": true
+          }
+        ]
+      },
+      "linear": {
+        "strategy": "linear_sql",
+        "sqlite_version": "3.53.4",
+        "peak_rss_mib": 27.39,
+        "peak_increase_over_pre_query_mib": 5.0,
+        "cases": [
+          {
+            "query": "settings",
+            "type": null,
+            "first_connection_ms": 6.1,
+            "warm_p50_ms": 2.764,
+            "warm_p95_ms": 2.886,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "settings",
+            "type": "pdf",
+            "first_connection_ms": 7.5,
+            "warm_p50_ms": 9.026,
+            "warm_p95_ms": 11.765,
+            "returned": 1,
+            "verified": 1,
+            "complete_within_index": true
+          },
+          {
+            "query": "port",
+            "type": "pdf",
+            "first_connection_ms": 3.53,
+            "warm_p50_ms": 3.1,
+            "warm_p95_ms": 3.634,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "配置",
+            "type": null,
+            "first_connection_ms": 2.819,
+            "warm_p50_ms": 2.942,
+            "warm_p95_ms": 3.087,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "季度",
+            "type": null,
+            "first_connection_ms": 2.988,
+            "warm_p50_ms": 3.106,
+            "warm_p95_ms": 3.809,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "rs",
+            "type": "code",
+            "first_connection_ms": 3.384,
+            "warm_p50_ms": 3.014,
+            "warm_p95_ms": 3.252,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "zznomatch",
+            "type": null,
+            "first_connection_ms": 7.519,
+            "warm_p50_ms": 7.557,
+            "warm_p95_ms": 10.122,
+            "returned": 0,
+            "verified": 0,
+            "complete_within_index": true
+          },
+          {
+            "query": "aba",
+            "type": null,
+            "first_connection_ms": 7.791,
+            "warm_p50_ms": 7.994,
+            "warm_p95_ms": 8.585,
+            "returned": 0,
+            "verified": 0,
+            "complete_within_index": true
+          }
+        ]
+      }
+    },
+    {
+      "dataset": {
+        "rows": 500000,
+        "build_seconds": 5.404,
+        "db_mib": 55.72,
+        "writer_peak_rss_mib": 27.97,
+        "writer_peak_increase_over_pre_build_mib": 6.31
+      },
+      "synthetic": true,
+      "os_cache_cleared": false,
+      "runtime": "Python storage prototype; not Rust/GUI measurements",
+      "indexed": {
+        "strategy": "bigram_fts",
+        "sqlite_version": "3.53.4",
+        "peak_rss_mib": 26.42,
+        "peak_increase_over_pre_query_mib": 4.23,
+        "cases": [
+          {
+            "query": "settings",
+            "type": null,
+            "first_connection_ms": 3.044,
+            "warm_p50_ms": 2.398,
+            "warm_p95_ms": 2.476,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "settings",
+            "type": "pdf",
+            "first_connection_ms": 6.704,
+            "warm_p50_ms": 6.737,
+            "warm_p95_ms": 6.928,
+            "returned": 1,
+            "verified": 1,
+            "complete_within_index": true
+          },
+          {
+            "query": "port",
+            "type": "pdf",
+            "first_connection_ms": 2.199,
+            "warm_p50_ms": 2.176,
+            "warm_p95_ms": 2.218,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "配置",
+            "type": null,
+            "first_connection_ms": 2.041,
+            "warm_p50_ms": 2.044,
+            "warm_p95_ms": 2.084,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "季度",
+            "type": null,
+            "first_connection_ms": 2.149,
+            "warm_p50_ms": 2.129,
+            "warm_p95_ms": 2.189,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "rs",
+            "type": "code",
+            "first_connection_ms": 2.219,
+            "warm_p50_ms": 2.166,
+            "warm_p95_ms": 2.21,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "zznomatch",
+            "type": null,
+            "first_connection_ms": 0.034,
+            "warm_p50_ms": 0.011,
+            "warm_p95_ms": 0.012,
+            "returned": 0,
+            "verified": 0,
+            "complete_within_index": true
+          },
+          {
+            "query": "aba",
+            "type": null,
+            "first_connection_ms": 0.019,
+            "warm_p50_ms": 0.011,
+            "warm_p95_ms": 0.012,
+            "returned": 0,
+            "verified": 0,
+            "complete_within_index": true
+          }
+        ]
+      },
+      "linear": {
+        "strategy": "linear_sql",
+        "sqlite_version": "3.53.4",
+        "peak_rss_mib": 27.45,
+        "peak_increase_over_pre_query_mib": 5.09,
+        "cases": [
+          {
+            "query": "settings",
+            "type": null,
+            "first_connection_ms": 3.681,
+            "warm_p50_ms": 2.944,
+            "warm_p95_ms": 15.292,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "settings",
+            "type": "pdf",
+            "first_connection_ms": 20.088,
+            "warm_p50_ms": 19.213,
+            "warm_p95_ms": 21.256,
+            "returned": 1,
+            "verified": 1,
+            "complete_within_index": true
+          },
+          {
+            "query": "port",
+            "type": "pdf",
+            "first_connection_ms": 3.095,
+            "warm_p50_ms": 2.772,
+            "warm_p95_ms": 2.853,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "配置",
+            "type": null,
+            "first_connection_ms": 2.883,
+            "warm_p50_ms": 2.853,
+            "warm_p95_ms": 3.091,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "季度",
+            "type": null,
+            "first_connection_ms": 3.079,
+            "warm_p50_ms": 2.882,
+            "warm_p95_ms": 2.986,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "rs",
+            "type": "code",
+            "first_connection_ms": 2.974,
+            "warm_p50_ms": 3.058,
+            "warm_p95_ms": 3.418,
+            "returned": 64,
+            "verified": 4096,
+            "complete_within_index": false
+          },
+          {
+            "query": "zznomatch",
+            "type": null,
+            "first_connection_ms": 22.512,
+            "warm_p50_ms": 18.66,
+            "warm_p95_ms": 23.505,
+            "returned": 0,
+            "verified": 0,
+            "complete_within_index": true
+          },
+          {
+            "query": "aba",
+            "type": null,
+            "first_connection_ms": 56.908,
+            "warm_p50_ms": 21.542,
+            "warm_p95_ms": 48.585,
+            "returned": 0,
+            "verified": 0,
+            "complete_within_index": true
+          }
+        ]
+      }
+    }
+  ]
+}

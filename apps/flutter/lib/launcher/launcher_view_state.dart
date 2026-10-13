@@ -1,11 +1,12 @@
 import '../settings/host_settings.dart';
+import 'file_search_controller.dart';
 import 'dart:convert';
 import '../src/rust/api.dart';
 import 'context_source_status.dart';
 
 enum LauncherPhase { hidden, activating, ready, resolving, executing, settings }
 
-/// A row is either an executable offer or an explicit menu navigation step.
+/// Executable offers and menu navigation remain explicit.
 class LauncherEntry {
   const LauncherEntry.candidate(CandidateDto action)
       : candidate = action,
@@ -21,6 +22,17 @@ class LauncherEntry {
   String get title =>
       candidate?.title ??
       (navigationPath!.isEmpty ? 'Browse Menus…' : navigationPath!.last);
+}
+
+class LauncherEntries {
+  LauncherEntries(Iterable<LauncherEntry> entries)
+      : rows = List.unmodifiable(entries) {
+    for (var i = 0; i < rows.length; i++) {
+      indices[rows[i].key] = i;
+    }
+  }
+  final List<LauncherEntry> rows;
+  final Map<String, int> indices = {};
 }
 
 /// Core supplies available scopes and ranked offers; Host owns menu navigation.
@@ -42,6 +54,10 @@ class LauncherViewState {
     this.resultStatus,
     String? universalShortcut,
     this.bindingChoices,
+    this.fileActionTitle,
+    this.fileFilter = FileFilter.all,
+    this.navigationMode,
+    this.retainedFileEntries,
   }) : _universalShortcut = universalShortcut;
   final LauncherPhase phase;
   final int generation;
@@ -50,6 +66,18 @@ class LauncherViewState {
   final InputModeDto inputMode;
   final bool inputModeReady;
   final ContextSourceDto? contentSource;
+  final FileFilter fileFilter;
+  final InputModeDto? navigationMode;
+  final LauncherEntries? retainedFileEntries;
+  bool get navigationOpen => navigationMode != null;
+  static const navigationHeight = 108.0;
+  bool get hasFilePreview => isFileSearch;
+  double get width =>
+      phase == LauncherPhase.settings || !isFileSearch ? 648 : 920;
+  bool get hasFileControls =>
+      isFileSearch && bindingChoices == null && output == null;
+  bool get hasControls => hasScopeBar || hasFileControls;
+  bool get isFileSearch => inputMode == InputModeDto.fileSearch;
   bool get isContent => inputMode == InputModeDto.content;
   String get contentLabel => contentSource == ContextSourceDto.selectedText
       ? 'Selected text'
@@ -65,6 +93,7 @@ class LauncherViewState {
   String get universalShortcut =>
       _universalShortcut ?? HostSettings.defaults.universalLabel;
   final List<CandidateDto>? bindingChoices;
+  final String? fileActionTitle;
   bool get visible =>
       phase == LauncherPhase.ready ||
       phase == LauncherPhase.settings ||
@@ -89,41 +118,38 @@ class LauncherViewState {
 
   bool get browsing => actionPath != null;
   String get searchText => input;
-  bool _includesGroup(CandidateDto candidate) =>
-      scopeId == null ||
-      selectedScope?.isCurrentApp == true ||
-      candidate.groupId == scopeId;
+  late final Set<String>? _scopeActions = selectedScope?.actionIds.toSet();
+  late final Set<String>? _scopeMenus = selectedScope?.menuIds.toSet();
   late final List<CandidateDto> allActions = List.unmodifiable([
     for (final candidate
         in snapshot?.contextCandidates ?? const <CandidateDto>[])
-      if (candidate.kind == CandidateKindDto.action &&
-          candidate.availability != AvailabilityDto.hidden &&
-          _includesGroup(candidate))
+      if (candidate.availability != AvailabilityDto.hidden &&
+          (scopeId == null || (_scopeActions?.contains(candidate.id) ?? false)))
         candidate,
   ]);
-  bool isMenu(CandidateDto candidate) =>
-      candidate.menuPath.isNotEmpty ||
-      (candidate.commandId?.startsWith('app.') ?? false);
+  bool isMenu(CandidateDto candidate) => candidate.isMenu;
   late final List<CandidateDto> menuActions = List.unmodifiable([
     for (final candidate in allActions)
-      if (isMenu(candidate) &&
-          (selectedScope?.isCurrentApp != true || candidate.groupId == scopeId))
+      if (scopeId == null
+          ? candidate.isMenu
+          : (_scopeMenus?.contains(candidate.id) ?? false))
         candidate,
   ]);
   bool get canBrowseMenus =>
       bindingChoices == null && scopeId != null && menuActions.isNotEmpty;
+  // These are already matched, scoped and ranked by Rust. UI only protects stale
+  // input and organizes the authoritative offers into navigation rows.
   late final List<CandidateDto> scopedCandidates = List.unmodifiable([
     for (final candidate in snapshot?.candidates ?? const <CandidateDto>[])
-      if (candidate.availability != AvailabilityDto.hidden &&
-          (scopeId == null ||
-              (candidate.kind == CandidateKindDto.action &&
-                  _includesGroup(candidate))))
-        candidate,
+      if (candidate.availability != AvailabilityDto.hidden) candidate,
   ]);
 
   /// Show the source of the execution target, rather than inferring it from a
   /// title or subtitle. Identical targets can have several merged context roots.
   String? sourceLabelFor(CandidateDto candidate) {
+    if (candidate.kind == CandidateKindDto.file) {
+      return isFileSearch || fileActionTitle != null ? null : 'Files';
+    }
     if (candidate.kind != CandidateKindDto.action) return null;
     if (isMenu(candidate)) {
       return scopeId == null ? candidate.sectionLabel : null;
@@ -162,11 +188,11 @@ class LauncherViewState {
     return true;
   }
 
-  late final List<LauncherEntry> visibleEntries =
-      List.unmodifiable(_buildEntries());
+  late final LauncherEntries entryCollection =
+      retainedFileEntries ?? LauncherEntries(_buildEntries());
+  List<LauncherEntry> get visibleEntries => entryCollection.rows;
   List<LauncherEntry> _buildEntries() {
-    if (!inputModeReady ||
-        (inputMode == InputModeDto.search && input.isEmpty)) {
+    if (!inputModeReady || (snapshot != null && snapshot!.input != input)) {
       return const [];
     }
     if (bindingChoices != null) {
@@ -174,6 +200,17 @@ class LauncherViewState {
         for (final candidate in bindingChoices!)
           LauncherEntry.candidate(candidate)
       ];
+    }
+    if (isFileSearch) {
+      return [
+        for (final candidate in scopedCandidates)
+          LauncherEntry.candidate(candidate)
+      ];
+    }
+    if (inputMode == InputModeDto.search &&
+        scopeId == null &&
+        input.trim().isEmpty) {
+      return const [];
     }
     if (isContent) {
       return [
@@ -232,39 +269,109 @@ class LauncherViewState {
       if (entry.candidate != null) entry.candidate!,
   ]);
   int get selectedIndex {
-    final index = visibleEntries.indexWhere((entry) => entry.key == selectedId);
-    return index < 0 ? 0 : index;
+    return entryCollection.indices[selectedId] ?? 0;
   }
 
   double get selectedTop => selectedIndex * rowHeight;
-  bool get hasScopeBar => scopes.isNotEmpty;
+  bool get hasScopeBar =>
+      !isFileSearch &&
+      !(inputMode == InputModeDto.search &&
+          scopeId == null &&
+          input.trim().isEmpty) &&
+      scopes.isNotEmpty;
+  bool get searchLoading =>
+      snapshot?.searchSources
+          .any((s) => s.state == SearchSourceStateDto.loading) ??
+      false;
+  bool get searchUnavailable =>
+      snapshot?.searchSources
+          .any((s) => s.state == SearchSourceStateDto.unavailable) ??
+      false;
+  bool get searchPartial =>
+      snapshot?.searchSources
+          .any((s) => s.state == SearchSourceStateDto.partial) ??
+      false;
+  String get fileRangeLabel {
+    final roots = snapshot?.fileSearch?.roots ?? const <String>[];
+    if (roots.isEmpty) return 'File Search';
+    if (roots.length > 1) return 'File Search · ${roots.length} locations';
+    final name = roots.single
+            .split(RegExp(r'[/\\]'))
+            .where((part) => part.isNotEmpty)
+            .lastOrNull ??
+        roots.single;
+    return 'File Search · $name';
+  }
+
+  String get fileRangeDetail =>
+      (snapshot?.fileSearch?.roots ?? const <String>[]).join('\n');
+  String? get searchStatus {
+    final progress = isFileSearch && bindingChoices == null && output == null
+        ? snapshot?.fileSearch
+        : null;
+    if (progress != null) {
+      final count = '${progress.confirmedMatches}';
+      if (searchPartial) {
+        return '$count found · Partial results · ${progress.issueCount} issues';
+      }
+      if (!progress.finished) return '$count found · Searching…';
+      if (progress.inaccessibleCount > BigInt.zero) {
+        return '$count found · ${progress.inaccessibleCount} restricted locations skipped';
+      }
+      return '$count found · Search complete';
+    }
+    return searchLoading
+        ? 'Searching files…'
+        : searchUnavailable
+            ? isFileSearch
+                ? 'File search unavailable'
+                : 'File search unavailable · Other results are still usable'
+            : null;
+  }
+
   bool get hasPanel =>
       output != null ||
+      (snapshot?.searchSources.isNotEmpty ?? false) ||
       visibleEntries.isNotEmpty ||
       scopeId != null ||
-      isContent;
+      isContent ||
+      isFileSearch;
   String get emptyMessage =>
       input.isNotEmpty ? 'No matching actions' : 'No actions available';
-  String? get notice =>
-      message ??
-      captureNotice?.detail ??
-      ((snapshot?.diagnostics.isNotEmpty ?? false)
-          ? snapshot!.diagnostics.join('\n')
-          : null);
-  ContextSourceStatus? get captureNotice => ContextSourceStatus.notice(
-      snapshot?.contextCaptures ?? const <ContextCaptureDto>[]);
+  String? get notice {
+    if (message != null) return message;
+    // File Search owns a separate query: ambient app/menu diagnostics must not
+    // appear as errors for a completed file query. File coverage errors remain.
+    if (isFileSearch) {
+      final issues = snapshot?.fileSearch?.issueExamples ?? const <String>[];
+      return searchPartial && issues.isNotEmpty
+          ? 'Some locations could not be searched. Available results are still usable.'
+          : null;
+    }
+    return captureNotice?.detail ??
+        ((snapshot?.diagnostics.isNotEmpty ?? false)
+            ? snapshot!.diagnostics.join('\n')
+            : null);
+  }
+
+  ContextSourceStatus? get captureNotice => isFileSearch
+      ? null
+      : ContextSourceStatus.notice(
+          snapshot?.contextCaptures ?? const <ContextCaptureDto>[]);
   String? get noticeSettingsPane =>
       message == null ? captureNotice?.settingsPane : null;
 
-  String get searchHint => isContent
-      ? 'Edit captured content…'
-      : selectedScope == null
-          ? 'Search for an action or app…'
-          : 'Search ${selectedScope!.label} actions…';
+  String get searchHint => isFileSearch
+      ? 'Search files and folders…'
+      : isContent
+          ? 'Edit captured content…'
+          : selectedScope == null
+              ? 'Search apps and actions…'
+              : 'Search ${selectedScope!.label} actions…';
   String get resultHeading => output != null
       ? (resultStatus == ActionStatusDto.failed ? 'Failed' : 'Succeeded')
       : bindingChoices != null
-          ? 'Choose a target'
+          ? fileActionTitle ?? 'Choose a target'
           : isContent
               ? 'Actions for this content'
               : input.trim().isNotEmpty
@@ -283,6 +390,8 @@ class LauncherViewState {
       ((output?.split('\n').length ?? 0).clamp(3, 14) * 20.0) + 24;
   double get height {
     if (phase == LauncherPhase.settings) return 508;
+    if (isFileSearch) return 600;
+    if (navigationOpen) return inputAreaHeight + 1 + navigationHeight;
     final body = output != null
         ? previewHeight
         : visibleEntries.isEmpty
@@ -290,8 +399,8 @@ class LauncherViewState {
             : (visibleEntries.length * rowHeight + 8)
                 .clamp(8, maxRows * rowHeight + 8);
     return (inputAreaHeight +
-            (hasScopeBar ? scopeHeight : 0) +
-            (hasPanel || hasScopeBar ? 1 : 0) +
+            (hasControls ? scopeHeight : 0) +
+            (hasPanel || hasControls ? 1 : 0) +
             (notice == null ? 0 : 44) +
             (hasPanel
                 ? (hasResultHeading ? headerHeight : 0) + body + footerHeight

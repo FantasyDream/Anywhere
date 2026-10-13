@@ -1,7 +1,6 @@
 //! Read-only repository reports and clipboard actions.
 use crate::core::action::availability::AvailabilityRule;
 use crate::core::action::bundle::{ActionBundle, ActionSpec};
-use crate::core::action::group::groups;
 use crate::core::action::handler::{ActionHandler, ExecutionOutput};
 use crate::core::context::ResolvedContext;
 use anyhow::{bail, Context, Result};
@@ -106,7 +105,7 @@ impl ActionHandler for CopyRepositoryPath {
 
 pub fn bundle() -> ActionBundle {
     ActionBundle {
-        group: groups::git(),
+        group: crate::features::groups::git(),
         actions: vec![
             ActionSpec {
                 id: "core.git.copy_remote_url",

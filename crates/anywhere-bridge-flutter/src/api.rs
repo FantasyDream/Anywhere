@@ -1,3 +1,10 @@
+mod conversions;
+use conversions::*;
+mod executions;
+mod files;
+mod queries;
+mod settings;
+mod shortcuts;
 use anyhow::{Context, Result};
 use anywhere_core::{persistence::usage::SqliteUsageRepository, Application, LauncherApplication};
 use anywhere_protocol as protocol;
@@ -11,7 +18,7 @@ static PLUGIN_DIRS: OnceLock<Vec<PathBuf>> = OnceLock::new();
 static PLUGIN_REPORTS: OnceLock<Mutex<Vec<PluginStatusDto>>> = OnceLock::new();
 
 pub fn ping() -> String {
-    anywhere_core::ping().to_owned()
+    queries::ping()
 }
 
 pub struct ShortcutActionDto {
@@ -21,19 +28,11 @@ pub struct ShortcutActionDto {
 }
 
 pub async fn supported_shortcut_actions(action_ids: Vec<String>) -> Result<Vec<String>> {
-    application()?.supported_shortcut_actions(&action_ids)
+    shortcuts::supported_shortcut_actions(action_ids).await
 }
 
 pub async fn shortcut_actions() -> Result<Vec<ShortcutActionDto>> {
-    Ok(application()?
-        .shortcut_actions()?
-        .into_iter()
-        .map(|action| ShortcutActionDto {
-            action_id: action.action_id,
-            title: action.title,
-            context_types: action.context_types,
-        })
-        .collect())
+    shortcuts::shortcut_actions().await
 }
 
 pub async fn resolve_action_binding(
@@ -41,11 +40,7 @@ pub async fn resolve_action_binding(
     revision: u32,
     action_id: String,
 ) -> Result<Vec<CandidateDto>> {
-    Ok(application()?
-        .resolve_action_binding(session_id, revision, &action_id)?
-        .into_iter()
-        .map(candidate_dto)
-        .collect())
+    shortcuts::resolve_action_binding(session_id, revision, action_id).await
 }
 
 #[derive(Clone, Debug)]
@@ -61,59 +56,11 @@ pub async fn wait_action_binding(
     revision: u32,
     action_id: String,
 ) -> Result<BindingResolutionDto> {
-    let resolved = application()?
-        .wait_action_binding(session_id, revision, &action_id)
-        .await?;
-    Ok(BindingResolutionDto {
-        state: resolved.state.into(),
-        candidates: resolved.candidates.into_iter().map(candidate_dto).collect(),
-        requires_choice: resolved.requires_choice,
-    })
+    shortcuts::wait_action_binding(session_id, revision, action_id).await
 }
 
 pub fn initialize(data_directory: String, plugin_directory: String) -> Result<()> {
-    if APPLICATION.get().is_some() {
-        return Ok(());
-    }
-    let _ = tracing_subscriber::fmt()
-        .json()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
-        .with_writer(std::io::stderr)
-        .try_init();
-    let data = Path::new(&data_directory);
-    std::fs::create_dir_all(data)?;
-    let mut diagnostics = Vec::new();
-    let history = match SqliteUsageRepository::open(&data.join("usage.sqlite3")) {
-        Ok(history) => {
-            Box::new(history) as Box<dyn anywhere_core::core::ranking::usage::UsageRepository>
-        }
-        Err(error) => {
-            tracing::error!(error = %error, "usage_history_unavailable");
-            diagnostics.push(format!(
-                "Usage history is unavailable; this session will not be saved: {error:#}"
-            ));
-            Box::new(anywhere_core::core::ranking::usage::MemoryUsage::default())
-        }
-    };
-    let mut registry = anywhere_core::application::builtin_registry();
-    let user_plugins = data.join("plugins");
-    std::fs::create_dir_all(&user_plugins)?;
-    let dirs = vec![PathBuf::from(&plugin_directory), user_plugins];
-    let _ = PLUGIN_DIRS.set(dirs.clone());
-    let reports = load_plugins(&mut registry, &dirs);
-    for report in &reports {
-        if !report.ok {
-            diagnostics.push(format!("Plugin {}: {}", report.id, report.detail));
-        }
-    }
-    *plugin_reports().lock().expect("plugin reports") = reports;
-    let platform = anywhere_platform::native_platform()?;
-    APPLICATION
-        .set(Application::new(platform, registry, history, diagnostics))
-        .map_err(|_| anyhow::anyhow!("application already initialized"))?;
-    Ok(())
+    settings::initialize(data_directory, plugin_directory)
 }
 
 fn application() -> Result<&'static Application> {
@@ -126,14 +73,7 @@ pub struct ShortcutApplicationDto {
     pub title: String,
 }
 pub fn shortcut_applications() -> Result<Vec<ShortcutApplicationDto>> {
-    Ok(application()?
-        .shortcut_applications()?
-        .into_iter()
-        .map(|app| ShortcutApplicationDto {
-            bundle_id: app.bundle_id,
-            title: app.title,
-        })
-        .collect())
+    shortcuts::shortcut_applications()
 }
 #[derive(Clone, Debug)]
 pub struct ShortcutRouteDto {
@@ -141,50 +81,26 @@ pub struct ShortcutRouteDto {
     pub app_bundle_id: Option<String>,
     pub context_type: Option<String>,
 }
-impl From<ShortcutRouteDto> for anywhere_core::application::ShortcutRoute {
-    fn from(route: ShortcutRouteDto) -> Self {
-        Self {
-            action_id: route.action_id,
-            app_bundle_id: route.app_bundle_id,
-            context_type: route.context_type,
-        }
-    }
-}
+
 pub fn resolve_shortcut_intent(
     session_id: u32,
     revision: u32,
     routes: Vec<ShortcutRouteDto>,
 ) -> Result<BindingResolutionDto> {
-    let routes: Vec<_> = routes.into_iter().map(Into::into).collect();
-    let resolved = application()?.resolve_shortcut_intent(session_id, revision, &routes)?;
-    Ok(binding_resolution_dto(resolved))
+    shortcuts::resolve_shortcut_intent(session_id, revision, routes)
 }
 pub async fn wait_shortcut_intent(
     session_id: u32,
     revision: u32,
     routes: Vec<ShortcutRouteDto>,
 ) -> Result<BindingResolutionDto> {
-    let routes: Vec<_> = routes.into_iter().map(Into::into).collect();
-    Ok(binding_resolution_dto(
-        application()?
-            .wait_shortcut_intent(session_id, revision, &routes)
-            .await?,
-    ))
-}
-fn binding_resolution_dto(
-    resolved: anywhere_core::application::BindingResolution,
-) -> BindingResolutionDto {
-    BindingResolutionDto {
-        state: resolved.state.into(),
-        candidates: resolved.candidates.into_iter().map(candidate_dto).collect(),
-        requires_choice: resolved.requires_choice,
-    }
+    shortcuts::wait_shortcut_intent(session_id, revision, routes).await
 }
 
 /// Reserve synchronously so Dart can cancel even before foreground capture finishes.
 #[flutter_rust_bridge::frb(sync)]
 pub fn begin_activation() -> Result<u32> {
-    application()?.begin_activation()
+    queries::begin_activation()
 }
 
 pub async fn activate(
@@ -192,18 +108,7 @@ pub async fn activate(
     prompt_accessibility: bool,
     captured_environment: bool,
 ) -> Result<Option<LauncherStateDto>> {
-    Ok(application()?
-        .activate_session_in_mode(
-            session_id,
-            prompt_accessibility,
-            if captured_environment {
-                protocol::InputMode::CapturedEnvironment
-            } else {
-                protocol::InputMode::Environment
-            },
-        )
-        .await?
-        .map(Into::into))
+    queries::activate(session_id, prompt_accessibility, captured_environment).await
 }
 
 pub async fn update_input(
@@ -213,20 +118,33 @@ pub async fn update_input(
     scope_id: Option<String>,
     input_mode: InputModeDto,
 ) -> Result<Option<LauncherStateDto>> {
-    Ok(application()?
-        .update_context_input(
-            session_id,
-            input,
-            revision,
-            scope_id,
-            match input_mode {
-                InputModeDto::Environment => protocol::InputMode::Environment,
-                InputModeDto::Content => protocol::InputMode::Content,
-                InputModeDto::Search => protocol::InputMode::Search,
-            },
-        )
-        .await?
-        .map(Into::into))
+    queries::update_input(session_id, input, revision, scope_id, input_mode).await
+}
+
+/// File filters are part of the initiating query, before enumeration/page limits.
+pub async fn update_file_input(
+    session_id: u32,
+    input: String,
+    revision: u32,
+    filter: String,
+) -> Result<Option<LauncherStateDto>> {
+    files::update_file_input(session_id, input, revision, filter).await
+}
+
+pub fn file_actions(
+    session_id: u32,
+    revision: u32,
+    candidate_id: String,
+) -> Result<Vec<CandidateDto>> {
+    files::file_actions(session_id, revision, candidate_id)
+}
+
+pub async fn load_more_files(session_id: u32, revision: u32) -> Result<Option<LauncherStateDto>> {
+    files::load_more_files(session_id, revision).await
+}
+
+pub fn freeze_file_results(session_id: u32, revision: u32) -> Result<()> {
+    files::freeze_file_results(session_id, revision)
 }
 
 /// Latest committed snapshot for a session, read straight from the core.
@@ -234,31 +152,12 @@ pub async fn update_input(
 /// The core is the only source of truth: a late pass publishes there, and nothing
 /// here has to be kept in step with it.
 pub fn latest_state(session_id: u32) -> Option<LauncherStateDto> {
-    application().ok()?.latest_state(session_id).map(Into::into)
+    queries::latest_state(session_id)
 }
 
 /// Block until the core publishes a snapshot beyond `after` for this session.
 pub async fn wait_for_snapshot(session_id: u32, after: u64) -> Result<SnapshotWaitDto> {
-    Ok(
-        match application()?.wait_for_snapshot(session_id, after).await {
-            anywhere_core::application::SnapshotWait::Updated(state) => SnapshotWaitDto {
-                kind: SnapshotWaitKindDto::Updated,
-                state: Some((*state).into()),
-            },
-            anywhere_core::application::SnapshotWait::TimedOut => SnapshotWaitDto {
-                kind: SnapshotWaitKindDto::TimedOut,
-                state: None,
-            },
-            anywhere_core::application::SnapshotWait::Closed => SnapshotWaitDto {
-                kind: SnapshotWaitKindDto::Closed,
-                state: None,
-            },
-            anywhere_core::application::SnapshotWait::Superseded => SnapshotWaitDto {
-                kind: SnapshotWaitKindDto::Superseded,
-                state: None,
-            },
-        },
-    )
+    queries::wait_for_snapshot(session_id, after).await
 }
 
 pub async fn execute(
@@ -266,90 +165,91 @@ pub async fn execute(
     revision: u32,
     candidate_id: String,
 ) -> Result<ActionResultDto> {
-    Ok(application()?
-        .execute(session_id, revision, candidate_id)
-        .await?
-        .into())
+    queries::execute(session_id, revision, candidate_id).await
 }
 
 /// Small PNG for an application candidate, or `None` when there is no icon.
 pub fn application_icon(candidate_id: String) -> Result<Option<Vec<u8>>> {
-    let result = application()?.application_icon(&candidate_id);
-    match &result {
-        Ok(Some(bytes)) => tracing::debug!(candidate_id, bytes = bytes.len(), "app_icon_served"),
-        Ok(None) => tracing::info!(candidate_id, "app_icon_absent"),
-        Err(error) => tracing::error!(candidate_id, error = %error, "app_icon_failed"),
-    }
-    result
+    queries::application_icon(candidate_id)
+}
+
+pub async fn suspend_launcher(session_id: u32) -> Result<()> {
+    queries::suspend_launcher(session_id).await
+}
+
+pub fn resume_launcher(session_id: u32) -> Result<Option<LauncherStateDto>> {
+    queries::resume_launcher(session_id)
 }
 
 pub fn deactivate(session_id: u32) -> Result<()> {
-    application()?.deactivate(session_id)
+    queries::deactivate(session_id)
 }
 
 pub fn execution_sessions() -> Result<Vec<ExecutionSessionSummaryDto>> {
-    Ok(application()?
-        .execution_sessions()
-        .into_iter()
-        .map(Into::into)
-        .collect())
+    executions::execution_sessions()
 }
 
 pub fn execution_session(id: String) -> Result<Option<ExecutionSessionDetailDto>> {
-    Ok(application()?
-        .execution_session(&id)
-        .map(|detail| ExecutionSessionDetailDto {
-            summary: detail.summary.into(),
-            stdout: detail.stdout,
-            stderr: detail.stderr,
-        }))
+    executions::execution_session(id)
 }
 
 pub fn stop_execution_session(id: String) -> Result<()> {
-    application()?.stop_execution_session(&id)
+    executions::stop_execution_session(id)
 }
 
 pub fn remove_execution_session(id: String) -> Result<()> {
-    application()?.remove_execution_session(&id)
+    executions::remove_execution_session(id)
 }
 
 pub fn shutdown_execution_sessions() -> Result<()> {
-    application()?.shutdown_execution_sessions();
-    Ok(())
+    executions::shutdown_execution_sessions()
 }
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn prompt_accessibility() -> Result<bool> {
-    application()?.prompt_accessibility()
+    queries::prompt_accessibility()
 }
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn plugin_status() -> Vec<PluginStatusDto> {
-    plugin_reports()
-        .lock()
-        .map(|reports| reports.clone())
-        .unwrap_or_default()
+    settings::plugin_status()
 }
 
 pub fn reload_plugins() -> Result<Vec<PluginStatusDto>> {
-    let dirs = PLUGIN_DIRS
-        .get()
-        .cloned()
-        .context("call initialize first")?;
-    let mut registry = anywhere_core::application::builtin_registry();
-    let reports = load_plugins(&mut registry, &dirs);
-    *plugin_reports().lock().expect("plugin reports") = reports.clone();
-    application()?.replace_registry(registry);
-    Ok(reports)
+    settings::reload_plugins()
 }
 
 pub fn excluded_apps() -> Result<Vec<String>> {
-    Ok(application()?.excluded_apps())
+    settings::excluded_apps()
 }
 
 pub fn set_excluded_apps(bundle_ids: Vec<String>) -> Result<()> {
-    application()?.set_excluded_apps(bundle_ids);
-    Ok(())
+    settings::set_excluded_apps(bundle_ids)
+}
+
+pub fn set_file_search(
+    enabled: bool,
+    roots: Vec<String>,
+    excluded_directory_names: Vec<String>,
+    engine: FileSearchEngineDto,
+    include_hidden: bool,
+    restrict_to_roots: bool,
+) -> Result<()> {
+    settings::set_file_search(
+        enabled,
+        roots,
+        excluded_directory_names,
+        engine,
+        include_hidden,
+        restrict_to_roots,
+    )
+}
+
+#[derive(Clone, Copy)]
+pub enum FileSearchEngineDto {
+    SystemIndex,
+    Ripgrep,
+    Combined,
 }
 
 pub fn set_context_sources(
@@ -358,13 +258,12 @@ pub fn set_context_sources(
     browser_current_page: bool,
     clipboard: bool,
 ) -> Result<()> {
-    application()?.set_capture_sources(
+    settings::set_context_sources(
         finder_selection,
         selected_text,
         browser_current_page,
         clipboard,
-    );
-    Ok(())
+    )
 }
 
 fn plugin_reports() -> &'static Mutex<Vec<PluginStatusDto>> {
@@ -410,12 +309,18 @@ fn load_plugins(
 
 // Explicit conversion keeps generated/Flutter types out of the protocol and core.
 #[derive(Clone, Debug)]
+#[flutter_rust_bridge::frb]
 pub struct LauncherStateDto {
     pub session_id: u32,
     pub revision: u32,
     pub snapshot_seq: u32,
+    #[frb(default = "0")]
+    pub candidate_list_version: u32,
     pub input: String,
     pub context_complete: bool,
+    pub search_sources: Vec<SearchSourceDto>,
+    pub file_search: Option<FileSearchProgressDto>,
+    pub result_actions: Vec<CandidateDto>,
     pub contexts: Vec<ContextDto>,
     pub context_candidates: Vec<CandidateDto>,
     pub preferred_context_key: Option<String>,
@@ -425,6 +330,35 @@ pub struct LauncherStateDto {
     pub candidates: Vec<CandidateDto>,
     pub diagnostics: Vec<String>,
 }
+#[derive(Clone, Debug)]
+pub struct FileSearchProgressDto {
+    pub query_id: u64,
+    pub roots: Vec<String>,
+    pub scanned_entries: u64,
+    pub confirmed_matches: u64,
+    pub finished: bool,
+    pub issue_count: u64,
+    pub inaccessible_count: u64,
+    pub issue_examples: Vec<String>,
+    pub next_cursor: Option<String>,
+    pub previous_cursor: Option<String>,
+    pub page: u32,
+    pub needs_refresh: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct SearchSourceDto {
+    pub id: String,
+    pub state: SearchSourceStateDto,
+}
+#[derive(Clone, Copy, Debug)]
+pub enum SearchSourceStateDto {
+    Loading,
+    Ready,
+    Unavailable,
+    Partial,
+}
+
 #[derive(Clone, Debug)]
 pub struct ContextDto {
     pub id: String,
@@ -452,6 +386,7 @@ pub enum InputModeDto {
     Environment,
     Content,
     Search,
+    FileSearch,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ContextCaptureStatusDto {
@@ -491,16 +426,31 @@ pub enum AvailabilityDto {
 }
 
 #[derive(Clone, Debug)]
+#[flutter_rust_bridge::frb]
 pub struct ScopeDto {
     pub id: String,
     pub label: String,
     pub is_current_app: bool,
+    #[frb(default = "const []")]
+    pub action_ids: Vec<String>,
+    #[frb(default = "const []")]
+    pub menu_ids: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileObjectKindDto {
+    File,
+    Directory,
 }
 
 #[derive(Clone, Debug)]
+#[flutter_rust_bridge::frb]
 pub struct CandidateDto {
     pub id: String,
     pub kind: CandidateKindDto,
+    #[frb(default = "false")]
+    pub is_menu: bool,
+    pub file_kind: Option<FileObjectKindDto>,
     pub title: String,
     pub menu_path: Vec<String>,
     pub context_keys: Vec<String>,
@@ -528,8 +478,11 @@ pub enum SnapshotWaitKindDto {
 }
 
 #[derive(Clone, Debug)]
+#[flutter_rust_bridge::frb]
 pub struct SnapshotWaitDto {
     pub kind: SnapshotWaitKindDto,
+    #[frb(default = "CandidateUpdateDto.replace")]
+    pub candidate_update: CandidateUpdateDto,
     pub state: Option<LauncherStateDto>,
 }
 
@@ -547,6 +500,7 @@ pub struct ActionResultDto {
     pub error: Option<String>,
     pub warning: Option<String>,
     pub output_text: Option<String>,
+    pub view: Option<HostViewDto>,
     pub close_window: bool,
     pub execution_session_id: Option<String>,
 }
@@ -582,31 +536,6 @@ pub struct ExecutionSessionDetailDto {
     pub stderr: String,
 }
 
-impl From<protocol::ExecutionSessionSummary> for ExecutionSessionSummaryDto {
-    fn from(summary: protocol::ExecutionSessionSummary) -> Self {
-        use protocol::ExecutionSessionStatus::*;
-        Self {
-            id: summary.id,
-            title: summary.title,
-            directory: summary.directory,
-            command: summary.command,
-            status: match summary.status {
-                Running => ExecutionSessionStatusDto::Running,
-                Stopping => ExecutionSessionStatusDto::Stopping,
-                Succeeded => ExecutionSessionStatusDto::Succeeded,
-                Failed => ExecutionSessionStatusDto::Failed,
-                Stopped => ExecutionSessionStatusDto::Stopped,
-            },
-            exit_code: summary.exit_code,
-            started_at_ms: summary.started_at_ms,
-            finished_at_ms: summary.finished_at_ms,
-            output_revision: summary.output_revision,
-            output_truncated: summary.output_truncated,
-            error: summary.error,
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct PluginStatusDto {
     pub id: String,
@@ -614,149 +543,164 @@ pub struct PluginStatusDto {
     pub detail: String,
 }
 
-impl From<protocol::LauncherState> for LauncherStateDto {
-    fn from(state: protocol::LauncherState) -> Self {
-        Self {
-            session_id: state.session_id,
-            revision: state.revision,
-            snapshot_seq: state.snapshot_seq,
-            input: state.input,
-            context_complete: state.context_complete,
-            contexts: state
-                .context_summary
-                .into_iter()
-                .map(|context| ContextDto {
-                    id: context.id,
-                    type_id: context.type_id,
-                    label: context.label,
-                    detail: context.detail,
-                    source: context_source_dto(context.source),
-                    key: context.key,
-                    root_key: context.root_key,
-                    icon_key: context.icon_key,
-                    capabilities: context.capabilities,
-                    candidate_ids: context.candidate_ids,
-                    primary_candidate_id: context.primary_candidate_id,
-                })
-                .collect(),
-            context_candidates: state
-                .context_candidates
-                .into_iter()
-                .map(candidate_dto)
-                .collect(),
-            preferred_context_key: state.preferred_context_key,
-            selected_scope: state.selected_scope,
-            scopes: state
-                .scopes
-                .into_iter()
-                .map(|scope| ScopeDto {
-                    id: scope.id,
-                    label: scope.label,
-                    is_current_app: scope.is_current_app,
-                })
-                .collect(),
-            context_captures: state
-                .context_captures
-                .into_iter()
-                .map(|capture| ContextCaptureDto {
-                    text: capture.text,
-                    clipboard_age_ms: capture.clipboard_age_ms,
-                    source: context_source_dto(capture.source),
-                    status: context_capture_status_dto(capture.status),
-                    captured_at_ms: capture.captured_at_ms,
-                })
-                .collect(),
-            candidates: state.candidates.into_iter().map(candidate_dto).collect(),
-            diagnostics: state.diagnostics,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HostViewDto {
+    FileSearch,
+}
+
+#[derive(Clone, Debug)]
+pub struct FilePreviewDto {
+    pub path: String,
+    pub is_directory: bool,
+    pub size_bytes: u64,
+    pub modified_ms: Option<i64>,
+    pub text: Option<String>,
+    pub notice: Option<String>,
+}
+
+pub async fn preview_file(
+    session_id: u32,
+    revision: u32,
+    candidate_id: String,
+) -> Result<FilePreviewDto> {
+    files::preview_file(session_id, revision, candidate_id).await
+}
+
+#[derive(Clone, Debug)]
+pub struct ActivationInputDto {
+    pub source: ContextSourceDto,
+    pub text: String,
+}
+/// Pure bounded policy; safe for the Host's synchronous activation decision.
+#[flutter_rust_bridge::frb(sync)]
+pub fn choose_activation_input(
+    captures: Vec<ContextCaptureDto>,
+    now_ms: i64,
+    selected_enabled: bool,
+    clipboard_enabled: bool,
+    allow_pending_selection: bool,
+) -> Option<ActivationInputDto> {
+    queries::choose_activation_input(
+        captures,
+        now_ms,
+        selected_enabled,
+        clipboard_enabled,
+        allow_pending_selection,
+    )
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CandidateUpdateDto {
+    Replace,
+    Retain,
+    Append,
+}
+/// A client missing a list replacement receives a full snapshot. Stable list
+/// generations permit a bounded tail transfer; progress-only updates send no rows.
+pub async fn wait_for_snapshot_delta(
+    session_id: u32,
+    after: u64,
+    candidate_list_version: u32,
+    loaded_count: u32,
+) -> Result<SnapshotWaitDto> {
+    queries::wait_for_snapshot_delta(session_id, after, candidate_list_version, loaded_count).await
+}
+fn snapshot_delivery(
+    mut state: protocol::LauncherState,
+    version: u32,
+    count: u32,
+) -> SnapshotWaitDto {
+    let update = if state.file_search.is_some()
+        && version != 0
+        && version == state.candidate_list_version
+        && count as usize <= state.candidates.len()
+    {
+        let tail = state.candidates[count as usize..].to_vec();
+        let kind = if tail.is_empty() {
+            CandidateUpdateDto::Retain
+        } else {
+            CandidateUpdateDto::Append
+        };
+        state.candidates = std::sync::Arc::new(tail);
+        kind
+    } else {
+        CandidateUpdateDto::Replace
+    };
+    SnapshotWaitDto {
+        kind: SnapshotWaitKindDto::Updated,
+        state: Some(state.into()),
+        candidate_update: update,
+    }
+}
+
+pub async fn load_more_files_delta(
+    session_id: u32,
+    revision: u32,
+    candidate_list_version: u32,
+    loaded_count: u32,
+) -> Result<SnapshotWaitDto> {
+    files::load_more_files_delta(session_id, revision, candidate_list_version, loaded_count).await
+}
+
+#[cfg(test)]
+mod delivery_tests {
+    use super::*;
+    fn row(i: usize) -> protocol::CandidatePresentation {
+        protocol::CandidatePresentation {
+            id: format!("row-{i}"),
+            kind: protocol::CandidateKind::File,
+            is_menu: false,
+            file_kind: Some(protocol::FileObjectKind::File),
+            title: format!("report-{i}.txt"),
+            subtitle: Some(format!("/fixture/{}", "directory/".repeat(24))),
+            shortcut: None,
+            icon: protocol::IconDescriptor { key: "file".into() },
+            score: 0.0,
+            group_id: "files".into(),
+            availability: protocol::Availability::enabled(),
+            command_id: Some("core.file.open".into()),
+            bundle_id: None,
+            owning_app: None,
+            menu_path: vec![],
+            context_keys: vec![],
+            execution_context_id: None,
+            execution_target_label: None,
+            home_eligible: false,
+            primary_action: true,
+            section_label: None,
         }
     }
-}
-
-fn candidate_dto(candidate: protocol::CandidatePresentation) -> CandidateDto {
-    CandidateDto {
-        id: candidate.id,
-        kind: kind_dto(candidate.kind),
-        title: candidate.title,
-        menu_path: candidate.menu_path,
-        context_keys: candidate.context_keys,
-        execution_context_id: candidate.execution_context_id,
-        execution_target_label: candidate.execution_target_label,
-        home_eligible: candidate.home_eligible,
-        primary_action: candidate.primary_action,
-        section_label: candidate.section_label,
-        subtitle: candidate.subtitle,
-        shortcut: candidate.shortcut,
-        icon_key: candidate.icon.key,
-        score: candidate.score,
-        group_id: candidate.group_id,
-        availability: availability_dto(candidate.availability.state),
-        availability_reason: candidate.availability.reason,
-        command_id: candidate.command_id,
-        bundle_id: candidate.bundle_id,
-    }
-}
-
-fn kind_dto(kind: protocol::CandidateKind) -> CandidateKindDto {
-    match kind {
-        protocol::CandidateKind::Application => CandidateKindDto::Application,
-        protocol::CandidateKind::Action => CandidateKindDto::Action,
-        protocol::CandidateKind::File => CandidateKindDto::File,
-    }
-}
-
-fn context_source_dto(source: protocol::ContextSource) -> ContextSourceDto {
-    match source {
-        protocol::ContextSource::UserInput => ContextSourceDto::UserInput,
-        protocol::ContextSource::ForegroundApplication => ContextSourceDto::ForegroundApplication,
-        protocol::ContextSource::ApplicationContext => ContextSourceDto::ApplicationContext,
-        protocol::ContextSource::FinderSelection => ContextSourceDto::FinderSelection,
-        protocol::ContextSource::SelectedText => ContextSourceDto::SelectedText,
-        protocol::ContextSource::BrowserCurrentPage => ContextSourceDto::BrowserCurrentPage,
-        protocol::ContextSource::Clipboard => ContextSourceDto::Clipboard,
-    }
-}
-
-fn context_capture_status_dto(status: protocol::ContextCaptureStatus) -> ContextCaptureStatusDto {
-    match status {
-        protocol::ContextCaptureStatus::Captured => ContextCaptureStatusDto::Captured,
-        protocol::ContextCaptureStatus::Empty => ContextCaptureStatusDto::Empty,
-        protocol::ContextCaptureStatus::PermissionDenied => {
-            ContextCaptureStatusDto::PermissionDenied
-        }
-        protocol::ContextCaptureStatus::Unavailable => ContextCaptureStatusDto::Unavailable,
-        protocol::ContextCaptureStatus::Unsupported => ContextCaptureStatusDto::Unsupported,
-        protocol::ContextCaptureStatus::ApplicationChanged => {
-            ContextCaptureStatusDto::ApplicationChanged
-        }
-        protocol::ContextCaptureStatus::TimedOut => ContextCaptureStatusDto::TimedOut,
-        protocol::ContextCaptureStatus::TooLarge => ContextCaptureStatusDto::TooLarge,
-        protocol::ContextCaptureStatus::TooManyItems => ContextCaptureStatusDto::TooManyItems,
-        protocol::ContextCaptureStatus::Failed => ContextCaptureStatusDto::Failed,
-    }
-}
-
-fn availability_dto(state: protocol::AvailabilityState) -> AvailabilityDto {
-    match state {
-        protocol::AvailabilityState::Enabled => AvailabilityDto::Enabled,
-        protocol::AvailabilityState::Disabled => AvailabilityDto::Disabled,
-        protocol::AvailabilityState::Hidden => AvailabilityDto::Hidden,
-    }
-}
-
-impl From<protocol::ActionResult> for ActionResultDto {
-    fn from(result: protocol::ActionResult) -> Self {
-        Self {
-            session_id: result.session_id,
-            revision: result.revision,
-            status: match result.status {
-                protocol::ActionStatus::Succeeded => ActionStatusDto::Succeeded,
-                protocol::ActionStatus::Failed => ActionStatusDto::Failed,
-            },
-            error: result.error,
-            warning: result.warning,
-            output_text: result.output_text,
-            close_window: result.close_window,
-            execution_session_id: result.execution_session_id,
+    #[test]
+    fn large_snapshots_deliver_only_progress_or_new_rows_and_resync_missed_replacements() {
+        for count in [1000, 10000] {
+            let state = protocol::LauncherState {
+                candidate_list_version: 3,
+                candidates: (0..count).map(row).collect::<Vec<_>>().into(),
+                file_search: Some(Box::default()),
+                ..Default::default()
+            };
+            let start = std::time::Instant::now();
+            for _ in 0..100 {
+                let packet = snapshot_delivery(state.clone(), 3, count as u32);
+                assert_eq!(packet.candidate_update, CandidateUpdateDto::Retain);
+                assert!(packet.state.unwrap().candidates.is_empty());
+            }
+            let delta_us = start.elapsed().as_micros();
+            let start = std::time::Instant::now();
+            for _ in 0..100 {
+                let full: LauncherStateDto = state.clone().into();
+                assert_eq!(full.candidates.len(), count);
+            }
+            let full_us = start.elapsed().as_micros();
+            println!("{count} rows / 100 DTO updates: full={full_us}us, metadata={delta_us}us; metadata transfers 0 rows");
+            let tail = snapshot_delivery(state.clone(), 3, (count - 64) as u32);
+            assert_eq!(tail.candidate_update, CandidateUpdateDto::Append);
+            assert_eq!(tail.state.unwrap().candidates.len(), 64);
+            for (version, length) in [(2, count as u32), (3, count as u32 + 1)] {
+                let replacement = snapshot_delivery(state.clone(), version, length);
+                assert_eq!(replacement.candidate_update, CandidateUpdateDto::Replace);
+                assert_eq!(replacement.state.unwrap().candidates.len(), count);
+            }
         }
     }
 }

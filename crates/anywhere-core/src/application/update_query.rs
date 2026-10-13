@@ -34,6 +34,44 @@ impl Application {
         selected_scope: Option<GroupId>,
         input_mode: InputMode,
     ) -> Result<Option<LauncherState>> {
+        self.update_input_request(
+            session_id,
+            input,
+            revision,
+            selected_scope,
+            input_mode,
+            FileSearchFilter::All,
+        )
+        .await
+    }
+
+    pub async fn update_file_search_input(
+        &self,
+        session_id: SessionId,
+        input: String,
+        revision: Revision,
+        filter: FileSearchFilter,
+    ) -> Result<Option<LauncherState>> {
+        self.update_input_request(
+            session_id,
+            input,
+            revision,
+            None,
+            InputMode::FileSearch,
+            filter,
+        )
+        .await
+    }
+
+    async fn update_input_request(
+        &self,
+        session_id: SessionId,
+        input: String,
+        revision: Revision,
+        selected_scope: Option<GroupId>,
+        input_mode: InputMode,
+        filter: FileSearchFilter,
+    ) -> Result<Option<LauncherState>> {
         if input.len() > MAX_INPUT_BYTES {
             bail!("input exceeds 1 MiB");
         }
@@ -46,6 +84,8 @@ impl Application {
             {
                 return Ok(None);
             }
+            self.file_search_source.clear();
+            session.file_filter = filter;
             session.input_mode = input_mode;
             session.begin_revision(revision, input.clone());
             session.state.selected_scope = selected_scope.clone();

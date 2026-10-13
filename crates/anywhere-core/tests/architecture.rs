@@ -209,6 +209,8 @@ fn every_candidate_kind_has_a_source_behind_it() {
                     shortcut: None,
                     id: "marker:test".into(),
                     kind: CandidateKind::Application,
+                    is_menu: false,
+                    file_kind: None,
                     title: "Marker".into(),
                     subtitle: None,
                     icon: IconDescriptor {
@@ -284,4 +286,52 @@ fn features_register_through_bundles() {
     // Availability is reachable without going through matching or execution.
     let _ = availability::is_user_object;
     let _ = Arc::new(());
+}
+
+#[test]
+fn feature_contributions_have_unique_ownership_and_share_registration_contract() {
+    let contributions = features::contribution::builtins();
+    let mut ids = std::collections::HashSet::new();
+    for feature in &contributions {
+        assert!(ids.insert(feature.id));
+    }
+    let git = contributions.iter().find(|c| c.id == "git").unwrap();
+    let node = contributions.iter().find(|c| c.id == "node").unwrap();
+    assert!(!git.providers.is_empty() && !git.bundles.is_empty());
+    assert!(!node.providers.is_empty() && !node.bundles.is_empty() && !node.factories.is_empty());
+    assert!(contributions
+        .iter()
+        .find(|c| c.id == "filesystem")
+        .unwrap()
+        .source
+        .is_some());
+}
+
+#[test]
+fn menu_semantics_are_explicit_and_plugin_ids_are_opaque() {
+    let raw = anywhere_plugin::EXAMPLE_PLUGIN.replace("id = \"example\"", "id = \"app\"");
+    let mut registry = anywhere_core::application::builtin_registry();
+    registry
+        .register_plugin(anywhere_plugin::parse_manifest(&raw).unwrap())
+        .unwrap();
+    assert!(!registry.get("app.search").unwrap().executor.is_menu());
+    let app = anywhere_platform::ApplicationInfo {
+        bundle_id: "test.editor".into(),
+        name: "Editor".into(),
+        pid: 1,
+        instance_id: Some("one".into()),
+    };
+    let mut menus = anywhere_core::features::app_actions::convert::descriptors(
+        &app,
+        vec![anywhere_platform::DiscoveredMenuItem {
+            title: "Root Leaf".into(),
+            menu_path: vec!["Root Leaf".into()],
+            identifiers: vec![None],
+            shortcut: None,
+            enabled: true,
+        }],
+    );
+    let leaf = menus.pop().unwrap();
+    assert!(leaf.menu_path.is_empty());
+    assert!(leaf.executor.is_menu());
 }

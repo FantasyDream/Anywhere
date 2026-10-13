@@ -39,6 +39,8 @@ LauncherStateDto state({int session = 1}) => launcherSnapshot(
     snapshotSeq: 1,
     input: '',
     contextComplete: true,
+    searchSources: const [],
+    resultActions: const [],
     candidates: [row('one')],
     diagnostics: []);
 
@@ -70,9 +72,23 @@ void main() {
       .instance.defaultBinaryMessenger
       .setMockMethodCallHandler(channel, null));
 
+  test('shortcut limits count UTF-8 bytes consistently with the Host', () {
+    ActionShortcut withLabels(String id, String title) => ActionShortcut(
+        actionId: id,
+        title: title,
+        keyCode: binding.keyCode,
+        modifiers: binding.modifiers);
+    final title = List.filled(128, '😀').join();
+    final id = List.filled(512, '😀').join();
+    expect(withLabels(id, title).chordError, isNull);
+    expect(withLabels('${id}a', title).chordError, isNotNull);
+    expect(withLabels(id, '${title}a').chordError, isNotNull);
+  });
+
   Future<LauncherController> controller(
       Future<List<CandidateDto>> Function(int, int, String) resolve,
-      {Future<BindingResolutionDto> Function(int, int, String)? wait,
+      {HostViewDto? hostView,
+      Future<BindingResolutionDto> Function(int, int, String)? wait,
       Future<void> Function()? shutdown,
       Future<BindingResolutionDto> Function(int, int, List<ShortcutRouteDto>)?
           intent,
@@ -96,6 +112,8 @@ void main() {
                     snapshotSeq: 1,
                     input: input,
                     contextComplete: true,
+                    searchSources: const [],
+                    resultActions: const [],
                     candidates: [row('one')],
                     diagnostics: []),
             execute: (session, revision, id) async {
@@ -104,7 +122,8 @@ void main() {
                   sessionId: session,
                   revision: revision,
                   status: ActionStatusDto.succeeded,
-                  closeWindow: false);
+                  closeWindow: false,
+                  view: hostView);
             },
             deactivate: (_) async {
               hostCalls.add('deactivate');
@@ -121,11 +140,16 @@ void main() {
                   ShortcutActionDto(
                       actionId: 'core.directory.terminal',
                       title: 'Open Terminal Here',
-                      contextTypes: ['core.directory'])
+                      contextTypes: ['core.directory']),
+                  ShortcutActionDto(
+                      actionId: 'core.files.search',
+                      title: 'File Search',
+                      contextTypes: ['core.launcher'])
                 ]),
         window: WindowHost(channel),
         readPlugins: () => [],
         applyExcludedApps: (_) async {},
+        applyFileSearch: (_) async {},
         applyContextSources: (_) async {},
         shutdownTasks: shutdown ?? () async {});
     addTearDown(c.dispose);
@@ -133,6 +157,60 @@ void main() {
     await c.activate();
     return c;
   }
+
+  test(
+      'File Search uses ordinary local and global Action shortcuts with a hidden entry',
+      () async {
+    const files = ActionShortcut(
+        actionId: 'core.files.search',
+        title: 'File Search',
+        keyCode: 9,
+        modifiers: HostSettings.altKey,
+        global: true);
+    final offer = CandidateDto(
+        id: 'file-search-binding',
+        commandId: files.actionId,
+        title: files.title,
+        kind: CandidateKindDto.action,
+        contextKeys: [],
+        menuPath: [],
+        homeEligible: false,
+        primaryAction: false,
+        iconKey: 'search',
+        score: 1,
+        groupId: 'tools',
+        availability: AvailabilityDto.enabled);
+    stored = stored.copyWith(actionShortcuts: [files]);
+    final c = await controller(
+        (_, __, action) async {
+          expect(action, files.actionId);
+          return [offer];
+        },
+        hostView: HostViewDto.fileSearch,
+        wait: (session, revision, action) async {
+          expect(action, files.actionId);
+          return BindingResolutionDto(
+              state: state(session: session),
+              candidates: [offer],
+              requiresChoice: false);
+        });
+    await c.navigateRoot(WakeMode.universal);
+    expect(c.view.visibleEntries, isEmpty);
+    await c.executeShortcut(files);
+    expect(c.view.isFileSearch, isTrue);
+    await c.escape();
+    expect(c.view.inputMode, InputModeDto.search);
+    expect(c.view.visibleEntries, isEmpty);
+    await c.dismiss();
+    await c.triggerGlobalShortcut(files.actionId);
+    expect(c.view.isFileSearch, isTrue);
+    expect(executions, [offer.id, offer.id]);
+    await c.escape();
+    expect(c.view.inputMode, InputModeDto.search);
+    expect(c.view.visibleEntries, isEmpty);
+    await c.escape();
+    expect(c.view.phase, LauncherPhase.hidden);
+  });
 
   test(
       'old settings migrate, bindings round-trip, future schema remains protected',
@@ -522,6 +600,58 @@ void main() {
     await c.triggerGlobalShortcut(edited.actionId, requestedBinding: edited);
     expect(calls, 1);
     expect(executions, ['current']);
+  });
+
+  testWidgets(
+      'settings assigns File Search normally and keeps its capability out of context conditions',
+      (tester) async {
+    stored = HostSettings.defaults;
+    tester.view.physicalSize = const Size(648, 508);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final c = await controller((_, __, ___) async => []);
+    await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme, home: LauncherScreen(controller: c)));
+    await c.openSettings();
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(find.text('Add action shortcut'), 180);
+    await tester.tap(find.text('Add action shortcut'));
+    await tester.pumpAndSettle();
+    expect(find.text('Anywhere tool'), findsOneWidget);
+    expect(find.text('core.launcher'), findsNothing);
+    await tester.tap(find.text('File Search'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Record shortcut'));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.keyF);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.keyF);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Global shortcut'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save shortcut'));
+    await tester.pumpAndSettle();
+    final saved = stored.actionShortcuts.single;
+    expect(saved.actionId, 'core.files.search');
+    expect(saved.label, '⌥F');
+    expect(saved.global, isTrue);
+    await tester.scrollUntilVisible(find.text('Add context shortcut'), 180);
+    await tester.tap(find.text('Add context shortcut'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Add rule'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('File Search').last);
+    await tester.pumpAndSettle();
+    final conditions = tester.widget<DropdownButton<String>>(find.descendant(
+        of: find.byKey(const ValueKey('rule-context')),
+        matching: find.byType(DropdownButton<String>)));
+    expect(conditions.items!.map((item) => item.value), ['']);
+    await tester.tap(find.text('Cancel').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancel').last);
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(

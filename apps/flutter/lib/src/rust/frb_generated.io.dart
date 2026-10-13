@@ -31,6 +31,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ActionStatusDto dco_decode_action_status_dto(dynamic raw);
 
   @protected
+  ActivationInputDto dco_decode_activation_input_dto(dynamic raw);
+
+  @protected
   AvailabilityDto dco_decode_availability_dto(dynamic raw);
 
   @protected
@@ -40,8 +43,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool dco_decode_bool(dynamic raw);
 
   @protected
+  ActivationInputDto dco_decode_box_autoadd_activation_input_dto(dynamic raw);
+
+  @protected
   ExecutionSessionDetailDto dco_decode_box_autoadd_execution_session_detail_dto(
       dynamic raw);
+
+  @protected
+  FileObjectKindDto dco_decode_box_autoadd_file_object_kind_dto(dynamic raw);
+
+  @protected
+  FileSearchProgressDto dco_decode_box_autoadd_file_search_progress_dto(
+      dynamic raw);
+
+  @protected
+  HostViewDto dco_decode_box_autoadd_host_view_dto(dynamic raw);
 
   @protected
   int dco_decode_box_autoadd_i_32(dynamic raw);
@@ -60,6 +76,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CandidateKindDto dco_decode_candidate_kind_dto(dynamic raw);
+
+  @protected
+  CandidateUpdateDto dco_decode_candidate_update_dto(dynamic raw);
 
   @protected
   ContextCaptureDto dco_decode_context_capture_dto(dynamic raw);
@@ -87,6 +106,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   double dco_decode_f_32(dynamic raw);
+
+  @protected
+  FileObjectKindDto dco_decode_file_object_kind_dto(dynamic raw);
+
+  @protected
+  FilePreviewDto dco_decode_file_preview_dto(dynamic raw);
+
+  @protected
+  FileSearchEngineDto dco_decode_file_search_engine_dto(dynamic raw);
+
+  @protected
+  FileSearchProgressDto dco_decode_file_search_progress_dto(dynamic raw);
+
+  @protected
+  HostViewDto dco_decode_host_view_dto(dynamic raw);
 
   @protected
   int dco_decode_i_32(dynamic raw);
@@ -126,6 +160,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ScopeDto> dco_decode_list_scope_dto(dynamic raw);
 
   @protected
+  List<SearchSourceDto> dco_decode_list_search_source_dto(dynamic raw);
+
+  @protected
   List<ShortcutActionDto> dco_decode_list_shortcut_action_dto(dynamic raw);
 
   @protected
@@ -139,8 +176,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
+  ActivationInputDto? dco_decode_opt_box_autoadd_activation_input_dto(
+      dynamic raw);
+
+  @protected
   ExecutionSessionDetailDto?
       dco_decode_opt_box_autoadd_execution_session_detail_dto(dynamic raw);
+
+  @protected
+  FileObjectKindDto? dco_decode_opt_box_autoadd_file_object_kind_dto(
+      dynamic raw);
+
+  @protected
+  FileSearchProgressDto? dco_decode_opt_box_autoadd_file_search_progress_dto(
+      dynamic raw);
+
+  @protected
+  HostViewDto? dco_decode_opt_box_autoadd_host_view_dto(dynamic raw);
 
   @protected
   int? dco_decode_opt_box_autoadd_i_32(dynamic raw);
@@ -162,6 +214,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ScopeDto dco_decode_scope_dto(dynamic raw);
+
+  @protected
+  SearchSourceDto dco_decode_search_source_dto(dynamic raw);
+
+  @protected
+  SearchSourceStateDto dco_decode_search_source_state_dto(dynamic raw);
 
   @protected
   ShortcutActionDto dco_decode_shortcut_action_dto(dynamic raw);
@@ -203,6 +261,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ActionStatusDto sse_decode_action_status_dto(SseDeserializer deserializer);
 
   @protected
+  ActivationInputDto sse_decode_activation_input_dto(
+      SseDeserializer deserializer);
+
+  @protected
   AvailabilityDto sse_decode_availability_dto(SseDeserializer deserializer);
 
   @protected
@@ -213,7 +275,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   bool sse_decode_bool(SseDeserializer deserializer);
 
   @protected
+  ActivationInputDto sse_decode_box_autoadd_activation_input_dto(
+      SseDeserializer deserializer);
+
+  @protected
   ExecutionSessionDetailDto sse_decode_box_autoadd_execution_session_detail_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  FileObjectKindDto sse_decode_box_autoadd_file_object_kind_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  FileSearchProgressDto sse_decode_box_autoadd_file_search_progress_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  HostViewDto sse_decode_box_autoadd_host_view_dto(
       SseDeserializer deserializer);
 
   @protected
@@ -234,6 +312,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CandidateKindDto sse_decode_candidate_kind_dto(SseDeserializer deserializer);
+
+  @protected
+  CandidateUpdateDto sse_decode_candidate_update_dto(
+      SseDeserializer deserializer);
 
   @protected
   ContextCaptureDto sse_decode_context_capture_dto(
@@ -263,6 +345,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   double sse_decode_f_32(SseDeserializer deserializer);
+
+  @protected
+  FileObjectKindDto sse_decode_file_object_kind_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  FilePreviewDto sse_decode_file_preview_dto(SseDeserializer deserializer);
+
+  @protected
+  FileSearchEngineDto sse_decode_file_search_engine_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  FileSearchProgressDto sse_decode_file_search_progress_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  HostViewDto sse_decode_host_view_dto(SseDeserializer deserializer);
 
   @protected
   int sse_decode_i_32(SseDeserializer deserializer);
@@ -306,6 +406,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ScopeDto> sse_decode_list_scope_dto(SseDeserializer deserializer);
 
   @protected
+  List<SearchSourceDto> sse_decode_list_search_source_dto(
+      SseDeserializer deserializer);
+
+  @protected
   List<ShortcutActionDto> sse_decode_list_shortcut_action_dto(
       SseDeserializer deserializer);
 
@@ -321,9 +425,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
+  ActivationInputDto? sse_decode_opt_box_autoadd_activation_input_dto(
+      SseDeserializer deserializer);
+
+  @protected
   ExecutionSessionDetailDto?
       sse_decode_opt_box_autoadd_execution_session_detail_dto(
           SseDeserializer deserializer);
+
+  @protected
+  FileObjectKindDto? sse_decode_opt_box_autoadd_file_object_kind_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  FileSearchProgressDto? sse_decode_opt_box_autoadd_file_search_progress_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  HostViewDto? sse_decode_opt_box_autoadd_host_view_dto(
+      SseDeserializer deserializer);
 
   @protected
   int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer);
@@ -346,6 +466,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ScopeDto sse_decode_scope_dto(SseDeserializer deserializer);
+
+  @protected
+  SearchSourceDto sse_decode_search_source_dto(SseDeserializer deserializer);
+
+  @protected
+  SearchSourceStateDto sse_decode_search_source_state_dto(
+      SseDeserializer deserializer);
 
   @protected
   ShortcutActionDto sse_decode_shortcut_action_dto(
@@ -393,6 +520,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       ActionStatusDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_activation_input_dto(
+      ActivationInputDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_availability_dto(
       AvailabilityDto self, SseSerializer serializer);
 
@@ -404,8 +535,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_bool(bool self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_activation_input_dto(
+      ActivationInputDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_execution_session_detail_dto(
       ExecutionSessionDetailDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_file_object_kind_dto(
+      FileObjectKindDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_file_search_progress_dto(
+      FileSearchProgressDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_host_view_dto(
+      HostViewDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer);
@@ -427,6 +574,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_candidate_kind_dto(
       CandidateKindDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_candidate_update_dto(
+      CandidateUpdateDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_context_capture_dto(
@@ -457,6 +608,25 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_file_object_kind_dto(
+      FileObjectKindDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_file_preview_dto(
+      FilePreviewDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_file_search_engine_dto(
+      FileSearchEngineDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_file_search_progress_dto(
+      FileSearchProgressDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_host_view_dto(HostViewDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_i_32(int self, SseSerializer serializer);
@@ -502,6 +672,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_scope_dto(List<ScopeDto> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_search_source_dto(
+      List<SearchSourceDto> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_shortcut_action_dto(
       List<ShortcutActionDto> self, SseSerializer serializer);
 
@@ -517,8 +691,24 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_activation_input_dto(
+      ActivationInputDto? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_execution_session_detail_dto(
       ExecutionSessionDetailDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_file_object_kind_dto(
+      FileObjectKindDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_file_search_progress_dto(
+      FileSearchProgressDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_host_view_dto(
+      HostViewDto? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer);
@@ -544,6 +734,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_scope_dto(ScopeDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_search_source_dto(
+      SearchSourceDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_search_source_state_dto(
+      SearchSourceStateDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_shortcut_action_dto(

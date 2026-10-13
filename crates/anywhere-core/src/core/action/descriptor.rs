@@ -15,6 +15,12 @@ pub enum ActionExecutor {
 }
 
 impl ActionExecutor {
+    pub fn is_menu(&self) -> bool {
+        match self {
+            Self::Native(handler) => handler.is_menu(),
+            Self::Declarative(_) => false,
+        }
+    }
     pub fn records_usage(&self) -> bool {
         match self {
             Self::Native(handler) => handler.records_usage(),
@@ -131,7 +137,7 @@ struct RegisteredGroup {
 
 #[derive(Clone, Default)]
 pub struct ActionRegistry {
-    actions: BTreeMap<ActionId, ActionDescriptor>,
+    actions: BTreeMap<ActionId, std::sync::Arc<ActionDescriptor>>,
     groups: BTreeMap<GroupId, RegisteredGroup>,
     next_rank: u16,
     factories: Vec<std::sync::Arc<dyn super::bundle::ContextActionFactory>>,
@@ -199,7 +205,14 @@ impl ActionRegistry {
         &mut self,
         factory: impl super::bundle::ContextActionFactory + 'static,
     ) {
-        self.factories.push(std::sync::Arc::new(factory));
+        self.register_factory_ref(std::sync::Arc::new(factory));
+    }
+
+    pub fn register_factory_ref(
+        &mut self,
+        factory: std::sync::Arc<dyn super::bundle::ContextActionFactory>,
+    ) {
+        self.factories.push(factory);
     }
 
     /// Build an immutable snapshot registry. Generated handlers travel with candidates.
@@ -237,7 +250,8 @@ impl ActionRegistry {
         }
         for action in actions {
             let action = ActionDescriptor::from_definition(action);
-            self.actions.insert(action.id.clone(), action);
+            self.actions
+                .insert(action.id.clone(), std::sync::Arc::new(action));
         }
         Ok(())
     }
@@ -275,7 +289,11 @@ impl ActionRegistry {
     }
 
     pub fn get(&self, id: &str) -> Option<&ActionDescriptor> {
-        self.actions.get(id)
+        self.actions.get(id).map(std::sync::Arc::as_ref)
+    }
+
+    pub fn get_shared(&self, id: &str) -> Option<std::sync::Arc<ActionDescriptor>> {
+        self.actions.get(id).cloned()
     }
 
     pub fn matching<'a>(
@@ -284,11 +302,12 @@ impl ActionRegistry {
     ) -> impl Iterator<Item = &'a ActionDescriptor> {
         self.actions
             .values()
+            .map(std::sync::Arc::as_ref)
             .filter(|command| command.matches(context))
     }
 
     pub fn commands(&self) -> impl Iterator<Item = &ActionDescriptor> {
-        self.actions.values()
+        self.actions.values().map(std::sync::Arc::as_ref)
     }
 
     /// Validate all commands first; a bad plugin never leaves half a registration.
@@ -407,7 +426,7 @@ mod tests {
     #[test]
     fn exact_type_match_and_builtin_command_count() {
         let registry = crate::application::builtin_registry();
-        assert_eq!(registry.commands().count(), 30);
+        assert_eq!(registry.commands().count(), 31);
         let url = seed("https://github.com")
             .into_iter()
             .find(|c| c.type_id == URL)
@@ -552,6 +571,7 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
                     groups::GRADLE,
                     groups::NODE,
                     groups::SPRING_BOOT,
+                    groups::TOOLS,
                 ]
                 .contains(&command.group_id.as_str()),
                 "{} uses an unknown group {}",

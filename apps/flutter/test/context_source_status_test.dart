@@ -51,6 +51,8 @@ void main() {
               snapshotSeq: 1,
               input: '',
               contextComplete: true,
+              searchSources: const [],
+              resultActions: const [],
               candidates: [],
               contextCaptures: captures,
               diagnostics: ['clipboard: read failed']));

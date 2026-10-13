@@ -35,15 +35,18 @@ pub struct Resolver {
     pub(super) sources: Vec<Arc<dyn CandidateSource + Send + Sync>>,
     pub(super) async_sources:
         Vec<Arc<dyn crate::core::search::candidate_source::AsyncCandidateSource>>,
+    pub(super) source_workers: Arc<tokio::sync::Semaphore>,
     pub(super) session: Arc<Mutex<LauncherSession>>,
     pub(super) current: Arc<AtomicU64>,
     /// Definition/authorization lifetime, independent of query and menu discovery.
     pub(super) action_catalog_version: Arc<AtomicU64>,
+    pub(super) execution_epoch: Arc<AtomicU64>,
     pub(super) events: broadcast::Sender<LauncherEvent>,
     pub(super) latest_tx: watch::Sender<Option<Arc<LauncherState>>>,
     pub(super) catalog: Arc<Mutex<CatalogSlot>>,
     pub(super) catalog_rx: watch::Receiver<u64>,
     pub(super) catalog_issued: Arc<AtomicU64>,
+    pub(super) shortcut_catalog: Arc<Mutex<Vec<super::shortcuts::ShortcutAction>>>,
     pub(super) history: Arc<Mutex<Box<dyn UsageRepository>>>,
     directory: Arc<Mutex<Option<Arc<DirectoryMemo>>>>,
 }
@@ -73,9 +76,13 @@ impl Resolver {
             providers: super::composition::builtin_providers(),
             sources: Vec::new(),
             async_sources: Vec::new(),
+            source_workers: Arc::new(tokio::sync::Semaphore::new(
+                anywhere_protocol::policy::MAX_CONCURRENT_SEARCH_SOURCES as usize,
+            )),
             session: Arc::new(Mutex::new(LauncherSession::default())),
             current: Arc::new(AtomicU64::new(0)),
             action_catalog_version: Arc::new(AtomicU64::new(1)),
+            execution_epoch: Arc::new(AtomicU64::new(0)),
             events: broadcast::channel(256).0,
             latest_tx,
             catalog: Arc::new(Mutex::new(CatalogSlot {
@@ -85,6 +92,7 @@ impl Resolver {
             })),
             catalog_rx,
             catalog_issued: Arc::new(AtomicU64::new(0)),
+            shortcut_catalog: Arc::new(Mutex::new(Vec::new())),
             history: Arc::new(Mutex::new(history)),
             directory: Arc::new(Mutex::new(None)),
         }
@@ -398,6 +406,7 @@ impl Resolver {
                 inputs_epoch,
                 action_catalog_version,
                 search_candidates,
+                object_actions,
             ) = {
                 let session = self
                     .session
@@ -416,6 +425,9 @@ impl Resolver {
                             ContextSource::Clipboard | ContextSource::SelectedText
                         )
                     });
+                }
+                if session.input_mode == InputMode::FileSearch {
+                    contexts.clear();
                 }
                 if matches!(session.input_mode, InputMode::Content | InputMode::Search) {
                     contexts.retain(|context| context.source == ContextSource::UserInput);
@@ -437,6 +449,7 @@ impl Resolver {
                     session.resolution.inputs_epoch,
                     self.action_catalog_version.load(Ordering::Acquire),
                     session.resolution.search_candidates.clone(),
+                    session.resolution.object_actions.clone(),
                 )
             };
             let (catalog, catalog_generation) = self.catalog_view()?;
@@ -455,6 +468,7 @@ impl Resolver {
                 catalog: &catalog,
                 sources: &self.sources,
                 search_candidates: &search_candidates,
+                object_actions: &object_actions,
                 now: now(),
             });
 
@@ -506,12 +520,19 @@ impl Resolver {
                 &mut scopes,
                 &mut session.resolution.frozen_scope_ids,
             );
-            let state = LauncherState {
+            let mut state = LauncherState {
                 session_id,
                 revision,
                 snapshot_seq: sequence,
                 input: session.state.input.clone(),
                 context_complete: resolve_complete,
+                result_actions: prepared
+                    .result_actions
+                    .iter()
+                    .map(|c| c.presentation.clone())
+                    .collect(),
+                search_sources: session.resolution.search_sources.clone(),
+                file_search: session.resolution.file_search.clone().map(Box::new),
                 context_summary: summary,
                 context_candidates: prepared
                     .context_candidates
@@ -551,7 +572,9 @@ impl Resolver {
                     .candidates
                     .iter()
                     .map(|candidate| candidate.presentation.clone())
-                    .collect(),
+                    .collect::<Vec<_>>()
+                    .into(),
+                candidate_list_version: session.state.candidate_list_version,
                 diagnostics: {
                     let mut diagnostics = prepared.diagnostics;
                     for item in &session.state.diagnostics {
@@ -562,6 +585,31 @@ impl Resolver {
                     diagnostics
                 },
             };
+            if !contexts.is_empty() {
+                let base = self.base_registry();
+                let options = prepared.shortcut_catalog;
+                if let Ok(mut catalog) = self.shortcut_catalog.lock() {
+                    *catalog = options
+                        .into_iter()
+                        .filter(|a| {
+                            base.get(&a.action_id).is_none()
+                                && base.supports_persistent_binding(&a.action_id)
+                        })
+                        .take(256)
+                        .collect();
+                }
+            }
+            if *state.candidates != *session.state.candidates {
+                let append = session.input_mode == InputMode::FileSearch
+                    && state.candidates.starts_with(&session.state.candidates);
+                if !append || session.state.candidate_list_version == 0 {
+                    state.candidate_list_version = session
+                        .state
+                        .candidate_list_version
+                        .checked_add(1)
+                        .ok_or_else(|| anyhow!("candidate list version exhausted"))?;
+                }
+            }
             session.resolution.committed_revision = Some(revision);
             session.resolution.committed_contexts = contexts;
             session.state = state.clone();
@@ -570,6 +618,8 @@ impl Resolver {
                 .candidates
                 .iter()
                 .chain(&prepared.context_candidates)
+                .chain(&prepared.result_actions)
+                .chain(&prepared.host_actions)
                 .map(|candidate| (candidate.presentation.id.clone().into(), candidate.clone()))
                 .collect();
             session.execution.revision = Some(revision);
@@ -666,6 +716,9 @@ fn union_contexts(
 ///
 /// Callers must already hold the session lock.
 pub fn seeds_from(session: &LauncherSession, input: &str) -> Vec<ResolvedContext> {
+    if session.input_mode == InputMode::FileSearch {
+        return Vec::new();
+    }
     if matches!(session.input_mode, InputMode::Content | InputMode::Search) {
         return crate::features::text::provider::text_context(input)
             .into_iter()

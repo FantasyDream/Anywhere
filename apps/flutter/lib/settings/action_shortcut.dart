@@ -1,3 +1,5 @@
+import 'dart:convert';
+import '../infrastructure/runtime_policy.dart';
 import '../infrastructure/desktop_environment.dart';
 import 'package:flutter/services.dart';
 import '../src/rust/api.dart';
@@ -56,7 +58,9 @@ class ActionShortcut {
 
   String? get chordError {
     final name = shortcutKeyNames[keyCode];
-    if (actionId.isEmpty || actionId.length > 2048 || title.length > 512) {
+    if (actionId.isEmpty ||
+        utf8.encode(actionId).length > RuntimePolicy.maxActionIdBytes ||
+        utf8.encode(title).length > RuntimePolicy.maxActionTitleBytes) {
       return 'Invalid action identity.';
     }
     if (name == null ||
@@ -104,7 +108,8 @@ class ActionShortcut {
       return 'Invalid shortcut intent identity.';
     }
     if (!isIntent) return null;
-    if (routes.length > 16 || title.trim().isEmpty) {
+    if (routes.length > RuntimePolicy.maxShortcutRoutes ||
+        title.trim().isEmpty) {
       return 'Name the shortcut and use at most 16 rules.';
     }
     final conditions = <String>{};
@@ -161,11 +166,11 @@ class ShortcutRoute {
             value.length <= max &&
             RegExp(r'^[A-Za-z0-9._-]+$').hasMatch(value));
     if (actionId.isEmpty ||
-        actionId.length > 2048 ||
-        title.length > 512 ||
+        utf8.encode(actionId).length > RuntimePolicy.maxActionIdBytes ||
+        utf8.encode(title).length > RuntimePolicy.maxActionTitleBytes ||
         !valid(appBundleId, 256) ||
         !valid(contextType, 128) ||
-        (appName?.length ?? 0) > 512) {
+        utf8.encode(appName ?? '').length > RuntimePolicy.maxActionTitleBytes) {
       return 'Invalid shortcut rule.';
     }
     return null;
@@ -217,5 +222,6 @@ String contextTypeLabel(String id) =>
       'project.rust': 'Rust project',
       'java.spring_boot': 'Spring Boot project',
       'core.application': 'Current app',
+      'core.launcher': 'Anywhere tool',
     }[id] ??
     id;

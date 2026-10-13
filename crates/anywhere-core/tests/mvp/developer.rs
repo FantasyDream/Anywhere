@@ -229,7 +229,7 @@ async fn npm_declared_scripts_execute_in_sessions_and_missing_scripts_stay_hidde
         assert!(!state
             .context_candidates
             .iter()
-            .chain(&state.candidates)
+            .chain(state.candidates.iter())
             .any(|c| c.command_id.as_deref() == Some(missing)));
     }
     assert!(!root.join("built.txt").exists());
@@ -266,7 +266,7 @@ async fn npm_declared_scripts_execute_in_sessions_and_missing_scripts_stay_hidde
     assert!(!refreshed
         .context_candidates
         .iter()
-        .chain(&refreshed.candidates)
+        .chain(refreshed.candidates.iter())
         .any(|c| c
             .command_id
             .as_deref()
@@ -307,7 +307,7 @@ async fn missing_node_scripts_stay_hidden_without_running_tools() {
     assert!(!state
         .context_candidates
         .iter()
-        .chain(&state.candidates)
+        .chain(state.candidates.iter())
         .any(|c| c
             .command_id
             .as_deref()

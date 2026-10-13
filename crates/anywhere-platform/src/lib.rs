@@ -2,11 +2,13 @@
 //!
 //! Every capability has an explicitly unsupported default so test doubles compile
 //! without implementing unused methods; macOS implements the ones the product uses.
+pub mod search_storage;
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 #[cfg(any(target_os = "macos", test))]
 pub(crate) mod editor_context;
+pub mod file_search;
 pub mod process;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileSearchHit {
@@ -204,6 +206,25 @@ pub struct ClipboardSnapshot {
     pub age_ms: Option<u64>,
 }
 
+/// Platform-neutral search scope. Empty roots mean the user home directory.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FileSearchOptions {
+    /// Host-authorized scope: explicit path queries cannot escape these roots.
+    pub restrict_to_roots: bool,
+    pub roots: Vec<PathBuf>,
+    pub excluded_directory_names: Vec<String>,
+    pub engine: FileSearchEngine,
+    pub include_hidden: bool,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum FileSearchEngine {
+    #[default]
+    SystemIndex,
+    Ripgrep,
+    Combined,
+}
+
 pub trait Platform: Send + Sync {
     fn file_search_supported(&self) -> bool {
         false
@@ -217,6 +238,28 @@ pub trait Platform: Send + Sync {
         _cancelled: &(dyn Fn() -> bool + Sync),
     ) -> Result<Vec<FileSearchHit>> {
         bail!("file search is not supported on this platform")
+    }
+    fn search_files_with_options(
+        &self,
+        query: &str,
+        limit: usize,
+        options: &FileSearchOptions,
+        cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<Vec<FileSearchHit>> {
+        // Adapters must not silently ignore a configured search scope.
+        if options.engine == FileSearchEngine::Ripgrep {
+            return file_search::ripgrep(
+                query,
+                limit,
+                options,
+                cancelled,
+                std::time::Duration::from_secs(2),
+            );
+        }
+        if options != &FileSearchOptions::default() {
+            bail!("configured file search is unsupported");
+        }
+        self.search_files(query, limit, cancelled)
     }
     /// Ordered application catalog roots for the default directory walk.
     ///

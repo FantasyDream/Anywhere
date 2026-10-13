@@ -1,7 +1,6 @@
 //! Directory actions.
 use crate::core::action::availability::AvailabilityRule;
 use crate::core::action::bundle::{ActionBundle, ActionSpec};
-use crate::core::action::group::groups;
 use crate::core::action::handler::{ActionHandler, ExecutionOutput};
 use crate::core::context::ResolvedContext;
 use anyhow::{Context, Result};
@@ -48,7 +47,7 @@ impl ActionHandler for OpenDirectory {
 
 pub fn bundle() -> ActionBundle {
     ActionBundle {
-        group: groups::folder(),
+        group: crate::features::groups::folder(),
         actions: vec![
             ActionSpec {
                 id: "core.directory.terminal",

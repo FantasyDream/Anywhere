@@ -7,6 +7,6 @@ enum HostRuntime {
     }
     static var capabilities: [String: Any] {
         ["backdrop": !NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency,
-         "shortcutRecording": true]
+         "shortcutRecording": true, "fileSearchAccess": true]
     }
 }

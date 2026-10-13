@@ -65,6 +65,10 @@ pub struct Application {
     pub(super) catalog_tx: watch::Sender<u64>,
     pub(super) app_actions: crate::features::app_actions::AppActionCatalog,
     pub(super) excluded_apps: Arc<Mutex<BTreeSet<String>>>,
+    pub(super) file_search_policy:
+        Arc<std::sync::RwLock<crate::features::filesystem::search::FileSearchPolicy>>,
+    pub(super) file_search_source: Arc<crate::features::filesystem::search::FileSearchSource>,
+    pub(super) preview_worker: Arc<tokio::sync::Semaphore>,
     pub(super) capture_policy: Arc<Mutex<super::context_capture::CapturePolicy>>,
 }
 
@@ -94,18 +98,17 @@ impl Application {
         platform.start_clipboard_tracking();
         let (catalog_tx, catalog_rx) = watch::channel(0);
         let mut resolver = Resolver::new(registry, history).with_catalog_rx(catalog_rx);
-        if platform.file_search_supported() {
-            resolver.async_sources.push(Arc::new(
-                crate::features::filesystem::search::FileSearchSource::new(
-                    platform.clone(),
-                    resolver.base_registry(),
-                ),
-            ));
-        }
+        let (source, sources) =
+            super::composition::builtin_sources(platform.clone(), resolver.base_registry());
+        let file_search_policy = source.policy.clone();
+        resolver.async_sources.extend(sources);
         Self {
             executions: Arc::new(Default::default()),
             platform,
             resolver,
+            file_search_policy,
+            file_search_source: source,
+            preview_worker: Arc::new(tokio::sync::Semaphore::new(1)),
             startup_diagnostics,
             budget,
             content_grace: DEFAULT_FIRST_CONTENT_GRACE,
@@ -145,6 +148,78 @@ impl Application {
     pub fn with_content_grace(mut self, grace: Duration) -> Self {
         self.content_grace = grace;
         self
+    }
+
+    /// Presentation may resume for 15 seconds; side effects are revoked immediately.
+    pub async fn suspend_session(&self, session_id: SessionId) -> Result<()> {
+        let epoch = {
+            let mut session = self.session()?;
+            if session.state.session_id != session_id || self.resolver.is_abandoned() {
+                return Ok(());
+            }
+            session.suspended = true;
+            self.resolver
+                .execution_epoch
+                .fetch_add(1, std::sync::atomic::Ordering::AcqRel)
+                + 1
+        };
+        let resolver = self.resolver.clone();
+        let files = self.file_search_source.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(
+                anywhere_protocol::policy::LAUNCHER_RETENTION_MS,
+            ))
+            .await;
+            let Ok(mut session) = resolver.session.lock() else {
+                return;
+            };
+            if session.state.session_id == session_id
+                && session.suspended
+                && resolver
+                    .execution_epoch
+                    .load(std::sync::atomic::Ordering::Acquire)
+                    == epoch
+            {
+                session.invalidate_execution();
+                resolver.abandon_session();
+                files.clear();
+            }
+        });
+        Ok(())
+    }
+
+    pub fn resume_session(&self, session_id: SessionId) -> Result<Option<LauncherState>> {
+        {
+            let mut session = self.session()?;
+            if session.state.session_id != session_id
+                || !session.suspended
+                || self.resolver.is_abandoned()
+            {
+                return Ok(None);
+            }
+            session.suspended = false;
+            self.resolver
+                .execution_epoch
+                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        }
+        self.resolver.recompute_current(session_id);
+        if let Some(state) = self.latest_state(session_id) {
+            return Ok(Some(state));
+        }
+        // A pending query has no committed execution offers yet. Preserve its
+        // input so the Host can resume/reissue it without displaying stale rows.
+        let session = self.session()?;
+        if session.state.session_id != session_id
+            || session.suspended
+            || self.resolver.is_abandoned()
+        {
+            return Ok(None);
+        }
+        let mut state = session.state.clone();
+        state.candidates = Arc::new(Vec::new());
+        state.result_actions.clear();
+        state.context_candidates.clear();
+        Ok(Some(state))
     }
 
     /// Latest committed snapshot for a session, whatever task published it.
@@ -280,8 +355,18 @@ impl Application {
     pub fn register_async_candidate_source(
         &mut self,
         source: Arc<dyn crate::core::search::candidate_source::AsyncCandidateSource>,
-    ) {
+    ) -> Result<()> {
+        if source.id().is_empty()
+            || self
+                .resolver
+                .async_sources
+                .iter()
+                .any(|s| s.id() == source.id())
+        {
+            anyhow::bail!("duplicate or empty search source id: {}", source.id());
+        }
         self.resolver.async_sources.push(source);
+        Ok(())
     }
 
     /// Extra providers are stacked on the built-ins by priority then id.
@@ -547,8 +632,12 @@ impl LauncherApplication for Application {
     fn deactivate(&self, session_id: SessionId) -> Result<()> {
         let mut session = self.session()?;
         if session.state.session_id == session_id {
+            self.resolver
+                .execution_epoch
+                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
             session.invalidate_execution();
             self.resolver.abandon_session();
+            self.file_search_source.clear();
         }
         Ok(())
     }

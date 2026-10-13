@@ -1,7 +1,6 @@
 //! File actions.
 use crate::core::action::availability::AvailabilityRule;
 use crate::core::action::bundle::{ActionBundle, ActionSpec};
-use crate::core::action::group::groups;
 use crate::core::action::handler::{ActionHandler, ExecutionOutput};
 use crate::core::context::{ContextValue, ResolvedContext};
 use crate::core::session::facts::CLIPBOARD;
@@ -57,7 +56,7 @@ impl ActionHandler for CopySelectionPaths {
 
 pub fn bundle() -> ActionBundle {
     ActionBundle {
-        group: groups::file(),
+        group: crate::features::groups::file(),
         actions: vec![
             ActionSpec {
                 id: "core.file_selection.copy_paths",

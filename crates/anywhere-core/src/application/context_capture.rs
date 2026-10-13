@@ -334,14 +334,16 @@ pub(super) async fn publish_capture(
         return;
     }
     if resolver.session.lock().is_ok_and(|session| {
-        matches!(session.input_mode, InputMode::Content | InputMode::Search)
-            || (session.input_mode == InputMode::Environment
-                && contexts.iter().all(|context| {
-                    matches!(
-                        context.source,
-                        ContextSource::Clipboard | ContextSource::SelectedText
-                    )
-                }))
+        matches!(
+            session.input_mode,
+            InputMode::Content | InputMode::Search | InputMode::FileSearch
+        ) || (session.input_mode == InputMode::Environment
+            && contexts.iter().all(|context| {
+                matches!(
+                    context.source,
+                    ContextSource::Clipboard | ContextSource::SelectedText
+                )
+            }))
     }) {
         let _ = resolver.recompute_current(session_id);
         return;

@@ -18,8 +18,11 @@ pub struct PreparedSnapshot {
     pub diagnostics: Vec<String>,
     pub summary: Vec<ContextPresentation>,
     pub context_candidates: Vec<crate::core::search::candidate::Candidate>,
+    pub result_actions: Vec<crate::core::search::candidate::Candidate>,
+    pub host_actions: Vec<crate::core::search::candidate::Candidate>,
     pub preferred_context_key: Option<ContextKey>,
     pub scopes: Vec<ScopeEntry>,
+    pub shortcut_catalog: Vec<super::shortcuts::ShortcutAction>,
 }
 
 pub struct SnapshotInput<'a> {
@@ -37,6 +40,7 @@ pub struct SnapshotInput<'a> {
     pub catalog: &'a ApplicationCatalog,
     pub sources: &'a [Arc<dyn CandidateSource + Send + Sync>],
     pub search_candidates: &'a [crate::core::search::candidate::Candidate],
+    pub object_actions: &'a [crate::core::search::candidate::Candidate],
     pub now: i64,
 }
 
@@ -56,6 +60,7 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
         catalog,
         sources,
         search_candidates,
+        object_actions,
         now,
     } = input;
     let (expanded_actions, action_diagnostics) = actions.for_contexts(contexts);
@@ -87,25 +92,13 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
     let mut extra: Vec<&dyn CandidateSource> = vec![&application_source];
     // Cached objects cannot authorize an old or revoked action implementation.
     let mut ready_candidates = search_candidates.to_vec();
-    ready_candidates.retain_mut(|candidate| {
-        if let crate::core::search::candidate::CandidateTarget::Action { action, context } =
-            &mut candidate.target
-        {
-            let Some(current) = actions.get(&action.id) else {
-                return false;
-            };
-            if !current.matches(context) {
-                return false;
-            }
-            candidate.presentation.availability =
-                crate::core::action::availability::evaluate(&current.availability, context, facts);
-            **action = current.clone();
-            return candidate.presentation.availability.is_visible();
-        }
-        true
-    });
+    validate_ready_candidates(&mut ready_candidates, actions, facts);
     let ready_source = crate::core::search::candidate_source::ReadySource(&ready_candidates);
     extra.push(&ready_source);
+    let workspace = crate::features::filesystem::workspace::EntrySource { search: &search };
+    if input_mode != InputMode::Content {
+        extra.push(&workspace);
+    }
     extra.extend(
         sources
             .iter()
@@ -116,7 +109,16 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
     } else {
         input
     });
-    let mut set = search.search_scoped(&query, contexts, &extra, selected_scope);
+    let mut set = if input_mode == InputMode::FileSearch {
+        CandidateSet {
+            candidates: std::mem::take(&mut ready_candidates),
+            matcher_us: 0,
+            sources_us: 0,
+            ranking_us: 0,
+        }
+    } else {
+        search.search_scoped(&query, contexts, &extra, selected_scope)
+    };
     let mut diagnostics = prior_diagnostics.to_vec();
     for diagnostic in action_diagnostics {
         if !diagnostics.contains(&diagnostic) {
@@ -134,7 +136,9 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
             .iter()
             .filter(|candidate| {
                 candidate.presentation.kind == CandidateKind::Action
-                    && candidate.context().is_some()
+                    && candidate.context().is_some_and(|c| {
+                        c.type_id != crate::features::filesystem::workspace::ENTRY_CONTEXT
+                    })
             })
             .cloned()
             .collect()
@@ -144,11 +148,43 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
         set.ranking_us += offers.ranking_us;
         offers.candidates
     };
+    let mut host_actions = workspace.binding_offers();
+    let mut result_actions: Vec<_> = object_actions
+        .iter()
+        .filter_map(|candidate| {
+            let mut candidate = candidate.clone();
+            if let crate::core::search::candidate::CandidateTarget::Action { action, context } =
+                &mut candidate.target
+            {
+                let current = actions.get_shared(&action.id)?;
+                if !current.matches(context) {
+                    return None;
+                }
+                candidate.presentation.availability = crate::core::action::availability::evaluate(
+                    &current.availability,
+                    context,
+                    facts,
+                );
+                *action = current;
+            }
+            candidate
+                .presentation
+                .availability
+                .is_visible()
+                .then_some(candidate)
+        })
+        .collect();
     // A definition reload must not silently substitute a same-ID implementation for
     // a request selected from an older visible snapshot. Query re-ranking does not
     // advance this version; persistent bindings use ActionId instead of this row ID.
     if action_catalog_version > 1 {
-        for candidate in set.candidates.iter_mut().chain(&mut context_candidates) {
+        for candidate in set
+            .candidates
+            .iter_mut()
+            .chain(&mut context_candidates)
+            .chain(&mut result_actions)
+            .chain(&mut host_actions)
+        {
             if candidate.context().is_some() {
                 candidate
                     .presentation
@@ -164,14 +200,42 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
         facts.frontmost.as_ref(),
         now,
     );
-    let summary = crate::core::context::navigation::build(contexts, &context_candidates);
-    let preferred_context_key = crate::core::context::navigation::preferred(&summary);
+    let summary = crate::application::context_projection::build(contexts, &context_candidates);
+    let preferred_context_key = crate::application::context_projection::preferred(&summary);
+    let shortcut_catalog = super::shortcuts::catalog_options(actions);
     PreparedSnapshot {
+        shortcut_catalog,
         set,
         diagnostics,
         summary,
         context_candidates,
         preferred_context_key,
+        result_actions,
+        host_actions,
         scopes,
     }
+}
+
+pub(super) fn validate_ready_candidates(
+    candidates: &mut Vec<crate::core::search::candidate::Candidate>,
+    actions: &ActionRegistry,
+    facts: &SessionFacts,
+) {
+    candidates.retain_mut(|candidate| {
+        if let crate::core::search::candidate::CandidateTarget::Action { action, context } =
+            &mut candidate.target
+        {
+            let Some(current) = actions.get_shared(&action.id) else {
+                return false;
+            };
+            if !current.matches(context) {
+                return false;
+            }
+            candidate.presentation.availability =
+                crate::core::action::availability::evaluate(&current.availability, context, facts);
+            *action = current;
+            return candidate.presentation.availability.is_visible();
+        }
+        true
+    });
 }

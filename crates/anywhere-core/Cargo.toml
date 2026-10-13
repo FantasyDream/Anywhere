@@ -18,8 +18,11 @@ roxmltree = "0.20"
 tokio.workspace = true
 tracing.workspace = true
 url.workspace = true
+unicode-normalization = "0.1"
+unicode-casefold = "0.2"
 rusqlite = { version = "0.32", features = ["bundled"] }
 
 [dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
 tempfile = "3"
 tracing-subscriber = { version = "0.3", features = ["registry"] }

@@ -20,8 +20,8 @@ pub struct Candidate {
 #[derive(Debug, Clone)]
 pub enum CandidateTarget {
     Action {
-        action: Box<ActionDescriptor>,
-        context: Box<ResolvedContext>,
+        action: Arc<ActionDescriptor>,
+        context: Arc<ResolvedContext>,
     },
     LaunchApplication {
         path: String,
@@ -44,10 +44,17 @@ impl CandidateTarget {
         }
     }
 
+    pub fn from_shared_action(action: Arc<ActionDescriptor>, context: ResolvedContext) -> Self {
+        Self::Action {
+            action,
+            context: Arc::new(context),
+        }
+    }
+
     pub fn from_action(action: ActionDescriptor, context: ResolvedContext) -> Self {
         Self::Action {
-            action: Box::new(action),
-            context: Box::new(context),
+            action: Arc::new(action),
+            context: Arc::new(context),
         }
     }
 }

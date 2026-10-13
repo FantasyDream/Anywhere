@@ -1,3 +1,4 @@
+import '../../infrastructure/desktop_environment.dart';
 import 'package:flutter/material.dart';
 import '../../src/rust/api.dart';
 import '../../ui/app_components.dart';
@@ -12,11 +13,13 @@ class LauncherSearchArea extends StatelessWidget {
       required this.state,
       required this.input,
       required this.focus,
+      this.onToggleNavigation,
       this.onBack,
       this.trailing});
   final LauncherViewState state;
   final TextEditingController input;
   final FocusNode focus;
+  final VoidCallback? onToggleNavigation;
   final VoidCallback? onBack;
   final Widget? trailing;
 
@@ -30,7 +33,36 @@ class LauncherSearchArea extends StatelessWidget {
               IconButton(
                   tooltip: 'Back to results',
                   onPressed: onBack,
-                  icon: const Icon(AppIcons.back, size: 23))
+                  icon: const Icon(AppIcons.back, size: 20))
+            else if (!state.isContent && onToggleNavigation != null)
+              Semantics(
+                  button: true,
+                  expanded: state.navigationOpen,
+                  label: 'Global Search / Current App',
+                  child: Tooltip(
+                      message: 'Global Search / Current App',
+                      child: InkWell(
+                          key: const Key('launcher-navigation'),
+                          borderRadius:
+                              BorderRadius.circular(AppStyle.controlRadius),
+                          onTap: state.resolving || state.executing
+                              ? null
+                              : onToggleNavigation,
+                          child: SizedBox.square(
+                              dimension: 36,
+                              child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(AppIcons.search,
+                                        size: 24, color: AppStyle.primary),
+                                    const SizedBox(width: 3),
+                                    RotatedBox(
+                                        quarterTurns:
+                                            state.navigationOpen ? 2 : 0,
+                                        child: const Icon(AppIcons.chevronDown,
+                                            size: 9,
+                                            color: AppStyle.secondary)),
+                                  ])))))
             else
               AppIconPlate(
                   state.isContent
@@ -38,48 +70,66 @@ class LauncherSearchArea extends StatelessWidget {
                           ? AppIcons.quote
                           : AppIcons.clipboard)
                       : AppIcons.search,
-                  size: 40),
+                  size: 36),
             const SizedBox(width: 12),
             Expanded(
+                // Both neighboring controls change during an asynchronous Host
+                // transition. The parent slot must survive, not just TextField.
+                key: const Key('launcher-input-slot'),
                 child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                  if (state.isContent)
-                    Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Text('${state.contentLabel} · Esc → Current App',
-                            key: const Key('captured-content-label'),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w500,
-                                color: AppStyle.secondary))),
-                  TextField(
-                      controller: input,
-                      focusNode: focus,
-                      autofocus: true,
-                      maxLines: state.isContent ? 2 : 1,
-                      style: TextStyle(
-                          fontSize: state.isContent ? 17 : 23,
-                          height: 1.25,
-                          fontWeight: FontWeight.w400,
-                          color: AppStyle.primary),
-                      cursorColor: AppStyle.primary,
-                      cursorWidth: 1.4,
-                      decoration: InputDecoration(
-                          hintText: state.searchHint,
-                          hintStyle: const TextStyle(
-                              color: AppStyle.secondary,
-                              fontWeight: FontWeight.w400),
-                          filled: false,
-                          contentPadding: EdgeInsets.zero,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          border: InputBorder.none,
-                          isDense: true)),
-                ])),
+                      if (state.isFileSearch)
+                        Padding(
+                            padding: const EdgeInsets.only(bottom: 3),
+                            child: Tooltip(
+                                message: state.fileRangeDetail,
+                                child: Text(state.fileRangeLabel,
+                                    key: const Key('launcher-mode-label'),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppStyle.caption.copyWith(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w500)))),
+                      if (state.isContent)
+                        Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Text(
+                                '${state.contentLabel} · Esc → Current App',
+                                key: const Key('captured-content-label'),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppStyle.secondary))),
+                      TextField(
+                          // Keep the editing connection alive across host view changes.
+                          key: const Key('launcher-search-input'),
+                          controller: input,
+                          focusNode: focus,
+                          autofocus: true,
+                          maxLines: state.isContent ? 2 : 1,
+                          style: TextStyle(
+                              fontSize: state.isContent ? 17 : 21,
+                              height: 1.25,
+                              fontWeight: FontWeight.w400,
+                              color: AppStyle.primary),
+                          cursorColor: AppStyle.primary,
+                          cursorWidth: 1.4,
+                          decoration: InputDecoration(
+                              hintText: state.searchHint,
+                              hintStyle: const TextStyle(
+                                  color: AppStyle.muted,
+                                  fontWeight: FontWeight.w400),
+                              filled: false,
+                              contentPadding: EdgeInsets.zero,
+                              enabledBorder: InputBorder.none,
+                              focusedBorder: InputBorder.none,
+                              border: InputBorder.none,
+                              isDense: true)),
+                    ])),
             const SizedBox(width: 14),
             if (state.resolving || state.executing)
               const SizedBox.square(
@@ -88,6 +138,80 @@ class LauncherSearchArea extends StatelessWidget {
                       strokeWidth: 1.5, color: AppStyle.secondary))
             else
               trailing ?? const AppKeycap('esc'),
+          ])));
+}
+
+/// Search mode choices live inside the resized glass window, never in an
+/// overlay constrained by the one-line empty Launcher.
+class LauncherRootNavigation extends StatelessWidget {
+  const LauncherRootNavigation(
+      {super.key, required this.state, required this.onSelect});
+  final LauncherViewState state;
+  final ValueChanged<InputModeDto> onSelect;
+
+  @override
+  Widget build(BuildContext context) => SizedBox(
+      key: const Key('launcher-mode-chooser'),
+      height: LauncherViewState.navigationHeight,
+      child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: Column(children: [
+            for (final mode in [
+              InputModeDto.search,
+              InputModeDto.environment
+            ]) ...[
+              if (mode == InputModeDto.environment) const SizedBox(height: 4),
+              Semantics(
+                  button: true,
+                  selected: state.navigationMode == mode,
+                  child: Material(
+                      color: state.navigationMode == mode
+                          ? AppStyle.selectedSurface
+                          : Colors.transparent,
+                      borderRadius:
+                          BorderRadius.circular(AppStyle.resultRadius),
+                      child: InkWell(
+                          key: Key('launcher-navigation-${mode.name}'),
+                          borderRadius:
+                              BorderRadius.circular(AppStyle.resultRadius),
+                          onTap: () => onSelect(mode),
+                          child: SizedBox(
+                              height: 44,
+                              child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 12),
+                                  child: Row(children: [
+                                    Icon(
+                                        mode == InputModeDto.search
+                                            ? AppIcons.search
+                                            : AppIcons.apps,
+                                        size: 20,
+                                        color: AppStyle.secondary),
+                                    const SizedBox(width: 14),
+                                    Expanded(
+                                        child: Column(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                          Text(
+                                              mode == InputModeDto.search
+                                                  ? 'Global Search'
+                                                  : 'Current App',
+                                              style: AppStyle.body.copyWith(
+                                                  fontWeight: FontWeight.w500)),
+                                          Text(
+                                              mode == InputModeDto.search
+                                                  ? 'Find apps and actions'
+                                                  : 'Actions for your current environment',
+                                              style: AppStyle.caption),
+                                        ])),
+                                    if (state.inputMode == mode)
+                                      const Icon(AppIcons.check,
+                                          size: 15, color: AppStyle.secondary),
+                                  ])))))),
+            ]
           ])));
 }
 
@@ -102,47 +226,161 @@ class LauncherScopeBar extends StatelessWidget {
   final ValueChanged<String> onSelect;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-      height: LauncherViewState.scopeHeight,
-      child: ListView(
-          key: const Key('scope-bar'),
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          children: [
-            for (final scope in scopes)
-              Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
-                  child: Semantics(
-                      selected: scope.id == selectedId,
-                      button: true,
-                      child: Tooltip(
-                          message: scope.isCurrentApp
-                              ? 'All actions available in the current app'
-                              : 'Filter ${scope.label} actions',
-                          child: Material(
-                              color: scope.id == selectedId
-                                  ? AppStyle.buttonSelection
-                                  : Colors.transparent,
-                              shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  side: BorderSide(
-                                      color: scope.id == selectedId
-                                          ? AppStyle.controlBorder
-                                          : Colors.transparent,
-                                      width: .6)),
-                              clipBehavior: Clip.antiAlias,
-                              child: InkWell(
-                                  borderRadius: BorderRadius.circular(10),
-                                  onTap: () => onSelect(scope.id),
-                                  child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          horizontal: 12),
-                                      child: Center(
-                                          child: Text(scope.label,
-                                              style:
-                                                  TextStyle(fontSize: 12, fontWeight: scope.id == selectedId ? FontWeight.w600 : FontWeight.w400, color: scope.id == selectedId ? AppStyle.primary : AppStyle.secondary))))))))),
-          ]));
+  Widget build(BuildContext context) => LauncherFilterBar(
+      key: const Key('scope-bar'),
+      selectedId: selectedId,
+      options: [
+        for (final scope in scopes)
+          LauncherFilterOption(
+              scope.id,
+              scope.label,
+              scope.isCurrentApp
+                  ? 'All actions available in the current app'
+                  : 'Filter ${scope.label} actions'),
+      ],
+      onSelect: onSelect);
+}
+
+class LauncherFilterOption {
+  const LauncherFilterOption(this.id, this.label, this.tooltip);
+  final String id, label, tooltip;
+}
+
+/// One chip bar for Scope and tool filters; keyboard selection stays visible.
+class LauncherFilterBar extends StatefulWidget {
+  const LauncherFilterBar(
+      {super.key,
+      required this.options,
+      required this.selectedId,
+      required this.onSelect,
+      this.enabled = true,
+      this.keyPrefix = 'filter'});
+  final List<LauncherFilterOption> options;
+  final String? selectedId;
+  final ValueChanged<String> onSelect;
+  final bool enabled;
+  final String keyPrefix;
+
+  @override
+  State<LauncherFilterBar> createState() => _LauncherFilterBarState();
+}
+
+class _LauncherFilterBarState extends State<LauncherFilterBar> {
+  final _scroll = ScrollController();
+  final Map<String, GlobalKey> _keys = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _revealSelection();
+  }
+
+  @override
+  void didUpdateWidget(LauncherFilterBar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.selectedId != widget.selectedId) _revealSelection();
+  }
+
+  void _revealSelection() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scroll.hasClients) return;
+      final selected = _keys[widget.selectedId]?.currentContext;
+      if (selected != null) {
+        Scrollable.ensureVisible(selected,
+            alignment: .5, duration: const Duration(milliseconds: 120));
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ids = widget.options.map((option) => option.id).toSet();
+    _keys.removeWhere((id, _) => !ids.contains(id));
+    return SizedBox(
+        height: LauncherViewState.scopeHeight,
+        child: SingleChildScrollView(
+            controller: _scroll,
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Row(children: [
+              for (final option in widget.options)
+                Padding(
+                    key: _keys.putIfAbsent(option.id, () => GlobalKey()),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 3, vertical: 5),
+                    child: LauncherFilterButton(
+                        key: Key('${widget.keyPrefix}-${option.id}'),
+                        label: option.label,
+                        selected: option.id == widget.selectedId,
+                        tooltip: option.tooltip,
+                        onSelect: widget.enabled
+                            ? () => widget.onSelect(option.id)
+                            : null)),
+            ])));
+  }
+}
+
+/// Shared appearance for scope choices and secondary-page filters.
+class LauncherFilterButton extends StatelessWidget {
+  const LauncherFilterButton(
+      {super.key,
+      required this.label,
+      required this.selected,
+      required this.onSelect,
+      this.icon,
+      this.tooltip});
+  final String label;
+  final bool selected;
+  final VoidCallback? onSelect;
+  final String? tooltip;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
+    final button = Semantics(
+        selected: selected,
+        button: true,
+        child: Material(
+            color: selected ? AppStyle.buttonSelection : Colors.transparent,
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+                side: BorderSide(
+                    color:
+                        selected ? AppStyle.controlBorder : Colors.transparent,
+                    width: .6)),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: onSelect,
+                child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Center(
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      if (icon != null) ...[
+                        Icon(icon,
+                            size: 12,
+                            color: selected
+                                ? AppStyle.primary
+                                : AppStyle.secondary),
+                        const SizedBox(width: 5)
+                      ],
+                      Text(label,
+                          style: TextStyle(
+                              fontSize: 12,
+                              fontWeight:
+                                  selected ? FontWeight.w600 : FontWeight.w400,
+                              color: selected
+                                  ? AppStyle.primary
+                                  : AppStyle.secondary))
+                    ]))))));
+    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
+  }
 }
 
 /// Retained for Context, menu breadcrumbs and result status; no duplicate app title.
@@ -183,44 +421,100 @@ class LauncherFooter extends StatelessWidget {
       required this.label,
       required this.primaryLabel,
       required this.onPrimary,
+      this.onRetry,
+      this.onActions,
       this.onCopy,
       this.onBack,
       this.result = false});
   final String label, primaryLabel;
-  final VoidCallback? onPrimary, onCopy, onBack;
+  final VoidCallback? onPrimary, onCopy, onBack, onActions, onRetry;
   final bool result;
   @override
   Widget build(BuildContext context) => SizedBox(
       key: const Key('launcher-footer'),
       height: LauncherViewState.footerHeight,
+      child: Column(children: [
+        const Divider(height: 1),
+        Expanded(
+            child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 3, 24, 10),
+                child: Row(children: [
+                  Expanded(
+                      child: Text(label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppStyle.caption.copyWith(fontSize: 10.5))),
+                  if (onRetry != null)
+                    TextButton(onPressed: onRetry, child: const Text('Retry')),
+                  if (onActions != null)
+                    Tooltip(
+                        message: 'More actions for the selected item',
+                        child: TextButton(
+                            key: const Key('launcher-actions'),
+                            onPressed: onActions,
+                            child: Text(
+                                'Actions · ${DesktopEnvironment.current.usesMetaCommand ? '⌘' : 'Ctrl'}K'))),
+                  if (onCopy != null)
+                    TextButton(onPressed: onCopy, child: const Text('Copy')),
+                  if (onBack != null)
+                    TextButton(onPressed: onBack, child: const Text('Back')),
+                  if (!result && onPrimary != null) ...[
+                    const SizedBox(width: 6),
+                    Tooltip(
+                        message:
+                            '↑ / ↓ to select · Return or double-click to activate',
+                        child: OutlinedButton(
+                            onPressed: onPrimary,
+                            style: OutlinedButton.styleFrom(
+                                backgroundColor: AppStyle.actionSurface,
+                                foregroundColor: AppStyle.primary,
+                                padding:
+                                    const EdgeInsets.symmetric(horizontal: 10),
+                                minimumSize: const Size(0, 24)),
+                            child: Text(primaryLabel,
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w500)))),
+                    const SizedBox(width: 6),
+                    const AppKeycap('↵'),
+                  ],
+                  if (result) const AppKeycap('esc'),
+                ]))),
+      ]));
+}
+
+/// Compact guidance fits the same result region as ordinary rows.
+class LauncherEmptyState extends StatelessWidget {
+  const LauncherEmptyState(
+      {super.key,
+      required this.icon,
+      required this.title,
+      required this.detail});
+  final IconData icon;
+  final String title, detail;
+  @override
+  Widget build(BuildContext context) => Center(
       child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 6, 24, 10),
-          child: Row(children: [
-            Text(label,
-                style: const TextStyle(fontSize: 11, color: AppStyle.muted)),
-            const Spacer(),
-            if (!result) ...[
-              const Text('↑↓  Navigate',
-                  style: TextStyle(fontSize: 11, color: AppStyle.muted)),
-              const SizedBox(width: 14),
-            ],
-            if (onCopy != null)
-              TextButton(onPressed: onCopy, child: const Text('Copy')),
-            if (onBack != null)
-              TextButton(onPressed: onBack, child: const Text('Back')),
-            if (!result)
-              OutlinedButton(
-                  onPressed: onPrimary,
-                  style: OutlinedButton.styleFrom(
-                      backgroundColor: AppStyle.actionSurface,
-                      foregroundColor: AppStyle.primary,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      minimumSize: const Size(0, 24)),
-                  child: Text(primaryLabel,
-                      style: const TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.w500))),
-            const SizedBox(width: 4),
-            AppKeycap(result ? 'esc' : '↵'),
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 12),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(icon, size: 28, color: AppStyle.muted),
+            const SizedBox(height: 10),
+            Flexible(
+                child: Text(title,
+                    textAlign: TextAlign.center,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style:
+                        AppStyle.body.copyWith(fontWeight: FontWeight.w500))),
+            const SizedBox(height: 5),
+            Flexible(
+                child: Tooltip(
+                    message: detail,
+                    child: Text(detail,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppStyle.caption))),
           ])));
 }
 
@@ -229,7 +523,9 @@ class MenuNavigationRow extends StatelessWidget {
       {super.key,
       required this.title,
       required this.selected,
-      required this.onTap});
+      required this.onTap,
+      this.icon = AppIcons.folder});
+  final IconData icon;
   final String title;
   final bool selected;
   final VoidCallback onTap;
@@ -259,8 +555,11 @@ class MenuNavigationRow extends StatelessWidget {
                             SizedBox(
                                 width: 36,
                                 height: 36,
-                                child: const Icon(AppIcons.folder,
-                                    size: 22, color: Color(0xff92c9f6))),
+                                child: Icon(icon,
+                                    size: 22,
+                                    color: icon == AppIcons.folder
+                                        ? const Color(0xff92c9f6)
+                                        : AppStyle.secondary)),
                             const SizedBox(width: 14),
                             Expanded(
                                 child: Text(title,

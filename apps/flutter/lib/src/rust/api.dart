@@ -6,8 +6,8 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `application`, `availability_dto`, `binding_resolution_dto`, `candidate_dto`, `context_capture_status_dto`, `context_source_dto`, `kind_dto`, `load_plugins`, `plugin_reports`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`, `from`, `from`
+// These functions are ignored because they are not marked as `pub`: `application`, `load_plugins`, `plugin_reports`, `snapshot_delivery`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
 
@@ -80,6 +80,32 @@ Future<LauncherStateDto?> updateInput(
         scopeId: scopeId,
         inputMode: inputMode);
 
+/// File filters are part of the initiating query, before enumeration/page limits.
+Future<LauncherStateDto?> updateFileInput(
+        {required int sessionId,
+        required String input,
+        required int revision,
+        required String filter}) =>
+    RustLib.instance.api.crateApiUpdateFileInput(
+        sessionId: sessionId, input: input, revision: revision, filter: filter);
+
+Future<List<CandidateDto>> fileActions(
+        {required int sessionId,
+        required int revision,
+        required String candidateId}) =>
+    RustLib.instance.api.crateApiFileActions(
+        sessionId: sessionId, revision: revision, candidateId: candidateId);
+
+Future<LauncherStateDto?> loadMoreFiles(
+        {required int sessionId, required int revision}) =>
+    RustLib.instance.api
+        .crateApiLoadMoreFiles(sessionId: sessionId, revision: revision);
+
+Future<void> freezeFileResults(
+        {required int sessionId, required int revision}) =>
+    RustLib.instance.api
+        .crateApiFreezeFileResults(sessionId: sessionId, revision: revision);
+
 /// Latest committed snapshot for a session, read straight from the core.
 ///
 /// The core is the only source of truth: a late pass publishes there, and nothing
@@ -103,6 +129,12 @@ Future<ActionResultDto> execute(
 /// Small PNG for an application candidate, or `None` when there is no icon.
 Future<Uint8List?> applicationIcon({required String candidateId}) =>
     RustLib.instance.api.crateApiApplicationIcon(candidateId: candidateId);
+
+Future<void> suspendLauncher({required int sessionId}) =>
+    RustLib.instance.api.crateApiSuspendLauncher(sessionId: sessionId);
+
+Future<LauncherStateDto?> resumeLauncher({required int sessionId}) =>
+    RustLib.instance.api.crateApiResumeLauncher(sessionId: sessionId);
 
 Future<void> deactivate({required int sessionId}) =>
     RustLib.instance.api.crateApiDeactivate(sessionId: sessionId);
@@ -137,6 +169,21 @@ Future<List<String>> excludedApps() =>
 Future<void> setExcludedApps({required List<String> bundleIds}) =>
     RustLib.instance.api.crateApiSetExcludedApps(bundleIds: bundleIds);
 
+Future<void> setFileSearch(
+        {required bool enabled,
+        required List<String> roots,
+        required List<String> excludedDirectoryNames,
+        required FileSearchEngineDto engine,
+        required bool includeHidden,
+        required bool restrictToRoots}) =>
+    RustLib.instance.api.crateApiSetFileSearch(
+        enabled: enabled,
+        roots: roots,
+        excludedDirectoryNames: excludedDirectoryNames,
+        engine: engine,
+        includeHidden: includeHidden,
+        restrictToRoots: restrictToRoots);
+
 Future<void> setContextSources(
         {required bool finderSelection,
         required bool selectedText,
@@ -148,6 +195,51 @@ Future<void> setContextSources(
         browserCurrentPage: browserCurrentPage,
         clipboard: clipboard);
 
+Future<FilePreviewDto> previewFile(
+        {required int sessionId,
+        required int revision,
+        required String candidateId}) =>
+    RustLib.instance.api.crateApiPreviewFile(
+        sessionId: sessionId, revision: revision, candidateId: candidateId);
+
+/// Pure bounded policy; safe for the Host's synchronous activation decision.
+ActivationInputDto? chooseActivationInput(
+        {required List<ContextCaptureDto> captures,
+        required PlatformInt64 nowMs,
+        required bool selectedEnabled,
+        required bool clipboardEnabled,
+        required bool allowPendingSelection}) =>
+    RustLib.instance.api.crateApiChooseActivationInput(
+        captures: captures,
+        nowMs: nowMs,
+        selectedEnabled: selectedEnabled,
+        clipboardEnabled: clipboardEnabled,
+        allowPendingSelection: allowPendingSelection);
+
+/// A client missing a list replacement receives a full snapshot. Stable list
+/// generations permit a bounded tail transfer; progress-only updates send no rows.
+Future<SnapshotWaitDto> waitForSnapshotDelta(
+        {required int sessionId,
+        required BigInt after,
+        required int candidateListVersion,
+        required int loadedCount}) =>
+    RustLib.instance.api.crateApiWaitForSnapshotDelta(
+        sessionId: sessionId,
+        after: after,
+        candidateListVersion: candidateListVersion,
+        loadedCount: loadedCount);
+
+Future<SnapshotWaitDto> loadMoreFilesDelta(
+        {required int sessionId,
+        required int revision,
+        required int candidateListVersion,
+        required int loadedCount}) =>
+    RustLib.instance.api.crateApiLoadMoreFilesDelta(
+        sessionId: sessionId,
+        revision: revision,
+        candidateListVersion: candidateListVersion,
+        loadedCount: loadedCount);
+
 class ActionResultDto {
   final int sessionId;
   final int revision;
@@ -155,6 +247,7 @@ class ActionResultDto {
   final String? error;
   final String? warning;
   final String? outputText;
+  final HostViewDto? view;
   final bool closeWindow;
   final String? executionSessionId;
 
@@ -165,6 +258,7 @@ class ActionResultDto {
     this.error,
     this.warning,
     this.outputText,
+    this.view,
     required this.closeWindow,
     this.executionSessionId,
   });
@@ -177,6 +271,7 @@ class ActionResultDto {
       error.hashCode ^
       warning.hashCode ^
       outputText.hashCode ^
+      view.hashCode ^
       closeWindow.hashCode ^
       executionSessionId.hashCode;
 
@@ -191,6 +286,7 @@ class ActionResultDto {
           error == other.error &&
           warning == other.warning &&
           outputText == other.outputText &&
+          view == other.view &&
           closeWindow == other.closeWindow &&
           executionSessionId == other.executionSessionId;
 }
@@ -199,6 +295,27 @@ enum ActionStatusDto {
   succeeded,
   failed,
   ;
+}
+
+class ActivationInputDto {
+  final ContextSourceDto source;
+  final String text;
+
+  const ActivationInputDto({
+    required this.source,
+    required this.text,
+  });
+
+  @override
+  int get hashCode => source.hashCode ^ text.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ActivationInputDto &&
+          runtimeType == other.runtimeType &&
+          source == other.source &&
+          text == other.text;
 }
 
 enum AvailabilityDto {
@@ -236,6 +353,8 @@ class BindingResolutionDto {
 class CandidateDto {
   final String id;
   final CandidateKindDto kind;
+  final bool isMenu;
+  final FileObjectKindDto? fileKind;
   final String title;
   final List<String> menuPath;
   final List<String> contextKeys;
@@ -257,6 +376,8 @@ class CandidateDto {
   const CandidateDto({
     required this.id,
     required this.kind,
+    this.isMenu = false,
+    this.fileKind,
     required this.title,
     required this.menuPath,
     required this.contextKeys,
@@ -280,6 +401,8 @@ class CandidateDto {
   int get hashCode =>
       id.hashCode ^
       kind.hashCode ^
+      isMenu.hashCode ^
+      fileKind.hashCode ^
       title.hashCode ^
       menuPath.hashCode ^
       contextKeys.hashCode ^
@@ -305,6 +428,8 @@ class CandidateDto {
           runtimeType == other.runtimeType &&
           id == other.id &&
           kind == other.kind &&
+          isMenu == other.isMenu &&
+          fileKind == other.fileKind &&
           title == other.title &&
           menuPath == other.menuPath &&
           contextKeys == other.contextKeys &&
@@ -328,6 +453,13 @@ enum CandidateKindDto {
   application,
   action,
   file,
+  ;
+}
+
+enum CandidateUpdateDto {
+  replace,
+  retain,
+  append,
   ;
 }
 
@@ -542,10 +674,131 @@ class ExecutionSessionSummaryDto {
           error == other.error;
 }
 
+enum FileObjectKindDto {
+  file,
+  directory,
+  ;
+}
+
+class FilePreviewDto {
+  final String path;
+  final bool isDirectory;
+  final BigInt sizeBytes;
+  final PlatformInt64? modifiedMs;
+  final String? text;
+  final String? notice;
+
+  const FilePreviewDto({
+    required this.path,
+    required this.isDirectory,
+    required this.sizeBytes,
+    this.modifiedMs,
+    this.text,
+    this.notice,
+  });
+
+  @override
+  int get hashCode =>
+      path.hashCode ^
+      isDirectory.hashCode ^
+      sizeBytes.hashCode ^
+      modifiedMs.hashCode ^
+      text.hashCode ^
+      notice.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FilePreviewDto &&
+          runtimeType == other.runtimeType &&
+          path == other.path &&
+          isDirectory == other.isDirectory &&
+          sizeBytes == other.sizeBytes &&
+          modifiedMs == other.modifiedMs &&
+          text == other.text &&
+          notice == other.notice;
+}
+
+enum FileSearchEngineDto {
+  systemIndex,
+  ripgrep,
+  combined,
+  ;
+}
+
+class FileSearchProgressDto {
+  final BigInt queryId;
+  final List<String> roots;
+  final BigInt scannedEntries;
+  final BigInt confirmedMatches;
+  final bool finished;
+  final BigInt issueCount;
+  final BigInt inaccessibleCount;
+  final List<String> issueExamples;
+  final String? nextCursor;
+  final String? previousCursor;
+  final int page;
+  final bool needsRefresh;
+
+  const FileSearchProgressDto({
+    required this.queryId,
+    required this.roots,
+    required this.scannedEntries,
+    required this.confirmedMatches,
+    required this.finished,
+    required this.issueCount,
+    required this.inaccessibleCount,
+    required this.issueExamples,
+    this.nextCursor,
+    this.previousCursor,
+    required this.page,
+    required this.needsRefresh,
+  });
+
+  @override
+  int get hashCode =>
+      queryId.hashCode ^
+      roots.hashCode ^
+      scannedEntries.hashCode ^
+      confirmedMatches.hashCode ^
+      finished.hashCode ^
+      issueCount.hashCode ^
+      inaccessibleCount.hashCode ^
+      issueExamples.hashCode ^
+      nextCursor.hashCode ^
+      previousCursor.hashCode ^
+      page.hashCode ^
+      needsRefresh.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FileSearchProgressDto &&
+          runtimeType == other.runtimeType &&
+          queryId == other.queryId &&
+          roots == other.roots &&
+          scannedEntries == other.scannedEntries &&
+          confirmedMatches == other.confirmedMatches &&
+          finished == other.finished &&
+          issueCount == other.issueCount &&
+          inaccessibleCount == other.inaccessibleCount &&
+          issueExamples == other.issueExamples &&
+          nextCursor == other.nextCursor &&
+          previousCursor == other.previousCursor &&
+          page == other.page &&
+          needsRefresh == other.needsRefresh;
+}
+
+enum HostViewDto {
+  fileSearch,
+  ;
+}
+
 enum InputModeDto {
   environment,
   content,
   search,
+  fileSearch,
   ;
 }
 
@@ -553,8 +806,12 @@ class LauncherStateDto {
   final int sessionId;
   final int revision;
   final int snapshotSeq;
+  final int candidateListVersion;
   final String input;
   final bool contextComplete;
+  final List<SearchSourceDto> searchSources;
+  final FileSearchProgressDto? fileSearch;
+  final List<CandidateDto> resultActions;
   final List<ContextDto> contexts;
   final List<CandidateDto> contextCandidates;
   final String? preferredContextKey;
@@ -568,8 +825,12 @@ class LauncherStateDto {
     required this.sessionId,
     required this.revision,
     required this.snapshotSeq,
+    this.candidateListVersion = 0,
     required this.input,
     required this.contextComplete,
+    required this.searchSources,
+    this.fileSearch,
+    required this.resultActions,
     required this.contexts,
     required this.contextCandidates,
     this.preferredContextKey,
@@ -585,8 +846,12 @@ class LauncherStateDto {
       sessionId.hashCode ^
       revision.hashCode ^
       snapshotSeq.hashCode ^
+      candidateListVersion.hashCode ^
       input.hashCode ^
       contextComplete.hashCode ^
+      searchSources.hashCode ^
+      fileSearch.hashCode ^
+      resultActions.hashCode ^
       contexts.hashCode ^
       contextCandidates.hashCode ^
       preferredContextKey.hashCode ^
@@ -604,8 +869,12 @@ class LauncherStateDto {
           sessionId == other.sessionId &&
           revision == other.revision &&
           snapshotSeq == other.snapshotSeq &&
+          candidateListVersion == other.candidateListVersion &&
           input == other.input &&
           contextComplete == other.contextComplete &&
+          searchSources == other.searchSources &&
+          fileSearch == other.fileSearch &&
+          resultActions == other.resultActions &&
           contexts == other.contexts &&
           contextCandidates == other.contextCandidates &&
           preferredContextKey == other.preferredContextKey &&
@@ -644,15 +913,24 @@ class ScopeDto {
   final String id;
   final String label;
   final bool isCurrentApp;
+  final List<String> actionIds;
+  final List<String> menuIds;
 
   const ScopeDto({
     required this.id,
     required this.label,
     required this.isCurrentApp,
+    this.actionIds = const [],
+    this.menuIds = const [],
   });
 
   @override
-  int get hashCode => id.hashCode ^ label.hashCode ^ isCurrentApp.hashCode;
+  int get hashCode =>
+      id.hashCode ^
+      label.hashCode ^
+      isCurrentApp.hashCode ^
+      actionIds.hashCode ^
+      menuIds.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -661,7 +939,38 @@ class ScopeDto {
           runtimeType == other.runtimeType &&
           id == other.id &&
           label == other.label &&
-          isCurrentApp == other.isCurrentApp;
+          isCurrentApp == other.isCurrentApp &&
+          actionIds == other.actionIds &&
+          menuIds == other.menuIds;
+}
+
+class SearchSourceDto {
+  final String id;
+  final SearchSourceStateDto state;
+
+  const SearchSourceDto({
+    required this.id,
+    required this.state,
+  });
+
+  @override
+  int get hashCode => id.hashCode ^ state.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SearchSourceDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          state == other.state;
+}
+
+enum SearchSourceStateDto {
+  loading,
+  ready,
+  unavailable,
+  partial,
+  ;
 }
 
 class ShortcutActionDto {
@@ -737,15 +1046,17 @@ class ShortcutRouteDto {
 
 class SnapshotWaitDto {
   final SnapshotWaitKindDto kind;
+  final CandidateUpdateDto candidateUpdate;
   final LauncherStateDto? state;
 
   const SnapshotWaitDto({
     required this.kind,
+    this.candidateUpdate = CandidateUpdateDto.replace,
     this.state,
   });
 
   @override
-  int get hashCode => kind.hashCode ^ state.hashCode;
+  int get hashCode => kind.hashCode ^ candidateUpdate.hashCode ^ state.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -753,6 +1064,7 @@ class SnapshotWaitDto {
       other is SnapshotWaitDto &&
           runtimeType == other.runtimeType &&
           kind == other.kind &&
+          candidateUpdate == other.candidateUpdate &&
           state == other.state;
 }
 

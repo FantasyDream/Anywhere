@@ -55,6 +55,14 @@ struct HostServicesTests {
         defer { try? FileManager.default.removeItem(at: temp) }
         let store = SettingsStore(fileURL: temp.appendingPathComponent("settings.json"))
         let previous = store.current
+        assert(previous.asMap()["fileSearchEngine"] as? String == "systemIndex")
+        assert(previous.asMap()["fileSearchIncludeHidden"] as? Bool == true)
+        var searchSettings = previous
+        assert(searchSettings.apply(["fileSearchEngine": "combined", "fileSearchIncludeHidden": true]) == nil)
+        assert(searchSettings.save(to: temp.appendingPathComponent("search.json")) == nil)
+        let loadedSearch = StoredSettings.load(from: temp.appendingPathComponent("search.json"))
+        assert(loadedSearch.fileSearchEngine == "combined" && loadedSearch.fileSearchIncludeHidden == true)
+        assert(searchSettings.apply(["fileSearchEngine": "arbitrary"]) != nil)
         var normalizedLegacy = previous
         assert(normalizedLegacy.apply(previous.asMap()) == nil)
         assert(normalizedLegacy.actionShortcuts == [])
@@ -64,6 +72,15 @@ struct HostServicesTests {
         assert(!altered.sameActionShortcutConfiguration(as: previous))
         altered.actionShortcutVersion = 5
         assert(!altered.sameActionShortcutConfiguration(as: normalizedLegacy))
+        var byteLimits = previous
+        let byteId = String(repeating: "😀", count: 512)
+        let byteTitle = String(repeating: "😀", count: 128)
+        byteLimits.actionShortcuts = [StoredActionShortcut(actionId: byteId, title: byteTitle, keyCode: 17, modifiers: UInt32(optionKey))]
+        assert(byteLimits.actionShortcutError() == nil)
+        byteLimits.actionShortcuts = [StoredActionShortcut(actionId: byteId + "a", title: byteTitle, keyCode: 17, modifiers: UInt32(optionKey))]
+        assert(byteLimits.actionShortcutError() != nil)
+        byteLimits.actionShortcuts = [StoredActionShortcut(actionId: byteId, title: byteTitle + "a", keyCode: 17, modifiers: UInt32(optionKey))]
+        assert(byteLimits.actionShortcutError() != nil)
         let backend = FakeHotKeys()
         let service = HotKeyService(backend: backend, onActivate: { _ in })
         assert(service.apply(previous) == nil)
@@ -200,10 +217,21 @@ struct HostServicesTests {
         assert(!presses.accept(100, pressed: false))
         assert(presses.accept(100, pressed: true))
 
+        store.current.fileSearchEnabled = false
+        store.current.fileSearchRoots = ["/Users/test/Documents"]
+        store.current.fileSearchExcludedNames = ["logs"]
         store.current.excludedApps = ["test.hidden.app"]
         assert(store.save() == nil)
         let restored = SettingsStore(fileURL: store.fileURL)
         assert(restored.current.excludedApps == ["test.hidden.app"])
+        assert(restored.current.fileSearchEnabled == false)
+        assert(restored.current.fileSearchRoots == ["/Users/test/Documents"])
+        assert(restored.current.fileSearchExcludedNames == ["logs"])
+        var invalidSearch = restored.current
+        invalidSearch.fileSearchRoots = ["relative"]
+        assert(invalidSearch.fileSearchError() != nil)
+        assert(invalidSearch.save(to: store.fileURL) != nil)
+        assert(SettingsStore(fileURL: store.fileURL).current.fileSearchRoots == ["/Users/test/Documents"])
         store.current.actionShortcutVersion = 4
         store.current.actionShortcuts = [StoredActionShortcut(actionId: "core.directory.terminal", title: "Open Terminal Here", keyCode: 17, modifiers: UInt32(optionKey))]
         assert(store.current.actionShortcutError() == nil)

@@ -9,10 +9,12 @@ class DesktopEnvironment {
   const DesktopEnvironment(
       {required this.platform,
       this.hasBackdrop = false,
-      this.nativeShortcutRecording = false});
+      this.nativeShortcutRecording = false,
+      this.fileSearchAccess = false});
   final TargetPlatform platform;
   final bool hasBackdrop;
   final bool nativeShortcutRecording;
+  final bool fileSearchAccess;
   static DesktopEnvironment? _current;
   static DesktopEnvironment get current =>
       _current ?? DesktopEnvironment(platform: defaultTargetPlatform);
@@ -27,7 +29,8 @@ class DesktopEnvironment {
       return DesktopEnvironment(
           platform: defaultTargetPlatform,
           hasBackdrop: capabilities?['backdrop'] == true,
-          nativeShortcutRecording: capabilities?['shortcutRecording'] == true);
+          nativeShortcutRecording: capabilities?['shortcutRecording'] == true,
+          fileSearchAccess: capabilities?['fileSearchAccess'] == true);
     } on MissingPluginException {
       return DesktopEnvironment(platform: defaultTargetPlatform);
     }

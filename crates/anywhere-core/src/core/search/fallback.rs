@@ -73,6 +73,8 @@ impl TextFallbackSource<'_> {
                         shortcut: None,
                         id: action_execution_candidate_id(action, &context),
                         kind: CandidateKind::Action,
+                        is_menu: false,
+                        file_kind: None,
                         title: action.title.clone(),
                         subtitle: Some(context.display_detail()),
                         icon: IconDescriptor {

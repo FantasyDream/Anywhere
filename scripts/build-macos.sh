@@ -5,6 +5,8 @@ ROOT="$PWD"
 source scripts/env.sh
 python3 scripts/check-flutter.py
 python3 scripts/generate-keymap.py --check
+python3 scripts/generate-file-types.py --check
+python3 scripts/generate-runtime-policies.py --check
 if [[ "$(uname -s)" != Darwin ]]; then
   echo 'This MVP builds on macOS only.' >&2
   exit 1

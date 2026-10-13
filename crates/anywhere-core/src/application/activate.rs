@@ -27,6 +27,7 @@ impl Application {
             .session_id
             .checked_add(1)
             .context("session id exhausted; restart launcher")?;
+        self.file_search_source.clear();
         *session = crate::application::session_model::LauncherSession::reserved(
             session_id,
             self.resolver.base_registry(),
@@ -522,5 +523,63 @@ mod tests {
         let session = app.session().unwrap();
         assert!(!session.environment.contains_key(CLIPBOARD));
         assert!(session.identity.captures.is_empty());
+    }
+    #[tokio::test(start_paused = true)]
+    async fn hidden_session_retains_for_fifteen_seconds_but_revokes_side_effects() {
+        let app = Application::new(
+            Arc::new(HeldClipboard {
+                text: String::new(),
+                released: Mutex::new(true),
+                signal: Condvar::new(),
+                entered: Notify::new(),
+            }),
+            crate::application::builtin_registry(),
+            Box::<MemoryUsage>::default(),
+            vec![],
+        );
+        let id = app.begin_activation().unwrap();
+        let file = std::env::temp_dir().join("retained-report.txt");
+        let rows = crate::features::filesystem::search::file_candidates(
+            vec![anywhere_platform::FileSearchHit {
+                path: file,
+                is_directory: false,
+            }],
+            "",
+            &app.resolver.base_registry(),
+        );
+        let candidate = rows[0].presentation.id.clone();
+        {
+            let mut session = app.session().unwrap();
+            session.input_mode = InputMode::FileSearch;
+            session.state.input = "report".into();
+            session.resolution.search_candidates = rows;
+            session.resolution.committed_revision = Some(0);
+        }
+        app.resolver.recompute_current(id).unwrap();
+        app.suspend_session(id).await.unwrap();
+        tokio::task::yield_now().await;
+        assert!(app
+            .execute_use_case(id, 0, candidate.clone())
+            .await
+            .is_err());
+        tokio::time::advance(Duration::from_secs(14)).await;
+        assert_eq!(app.session().unwrap().state.candidates.len(), 1);
+        assert_eq!(app.resume_session(id).unwrap().unwrap().input, "report");
+        // The first deadline must not clear a resumed session.
+        tokio::time::advance(Duration::from_secs(1)).await;
+        tokio::task::yield_now().await;
+        assert!(app.latest_state(id).is_some());
+        app.suspend_session(id).await.unwrap();
+        tokio::task::yield_now().await;
+        tokio::time::advance(Duration::from_secs(15)).await;
+        tokio::task::yield_now().await;
+        assert!(app.resume_session(id).unwrap().is_none());
+        let session = app.session().unwrap();
+        assert!(session.state.input.is_empty() && session.state.candidates.is_empty());
+        assert_eq!(session.resolution.search_candidates.capacity(), 0);
+        assert_eq!(session.execution.candidates.capacity(), 0);
+        assert!(session.identity.captures.is_empty());
+        drop(session);
+        assert_eq!(app.begin_activation().unwrap(), id + 1);
     }
 }

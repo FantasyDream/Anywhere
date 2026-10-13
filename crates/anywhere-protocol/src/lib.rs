@@ -1,4 +1,5 @@
 //! Stable, serializable boundary types. No UI or OS dependencies.
+pub mod policy;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -156,6 +157,8 @@ pub enum InputMode {
     Environment,
     Content,
     Search,
+    /// Dedicated file workspace; no captured Context or application candidates.
+    FileSearch,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -176,10 +179,20 @@ pub struct IconDescriptor {
     pub key: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FileObjectKind {
+    File,
+    Directory,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CandidatePresentation {
     pub id: CandidateId,
     pub kind: CandidateKind,
+    #[serde(default)]
+    pub is_menu: bool,
+    #[serde(default)]
+    pub file_kind: Option<FileObjectKind>,
     pub title: String,
     pub subtitle: Option<String>,
     #[serde(default)]
@@ -283,6 +296,10 @@ pub struct ScopeEntry {
     pub id: GroupId,
     pub label: String,
     pub is_current_app: bool,
+    #[serde(default)]
+    pub action_ids: Vec<CandidateId>,
+    #[serde(default)]
+    pub menu_ids: Vec<CandidateId>,
 }
 
 impl ScopeEntry {
@@ -291,6 +308,41 @@ impl ScopeEntry {
             && candidate.availability.is_visible()
             && (self.is_current_app || candidate.group_id == self.id)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SearchSourceState {
+    Loading,
+    Ready,
+    Unavailable,
+    Partial,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchSourcePresentation {
+    pub id: String,
+    pub state: SearchSourceState,
+}
+
+mod file_filter;
+pub use file_filter::FileSearchFilter;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileSearchProgress {
+    pub query_id: u64,
+    #[serde(default)]
+    pub roots: Vec<String>,
+    pub scanned_entries: u64,
+    pub confirmed_matches: u64,
+    pub finished: bool,
+    pub issue_count: u64,
+    #[serde(default)]
+    pub inaccessible_count: u64,
+    pub issue_examples: Vec<String>,
+    pub next_cursor: Option<String>,
+    pub previous_cursor: Option<String>,
+    pub page: u32,
+    pub needs_refresh: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -304,6 +356,12 @@ pub struct LauncherState {
     /// True once the context graph for this revision has no pending work.
     #[serde(default)]
     pub context_complete: bool,
+    #[serde(default)]
+    pub search_sources: Vec<SearchSourcePresentation>,
+    #[serde(default)]
+    pub file_search: Option<Box<FileSearchProgress>>,
+    #[serde(default)]
+    pub result_actions: Vec<CandidatePresentation>,
     pub context_summary: Vec<ContextPresentation>,
     #[serde(default)]
     pub context_candidates: Vec<CandidatePresentation>,
@@ -313,7 +371,10 @@ pub struct LauncherState {
     pub selected_scope: Option<GroupId>,
     #[serde(default)]
     pub context_captures: Vec<ContextCapturePresentation>,
-    pub candidates: Vec<CandidatePresentation>,
+    pub candidates: std::sync::Arc<Vec<CandidatePresentation>>,
+    /// Stable across append/progress; changes when the object list is replaced.
+    #[serde(default)]
+    pub candidate_list_version: u32,
     pub diagnostics: Vec<String>,
 }
 
@@ -351,6 +412,13 @@ pub enum ActionStatus {
     Failed,
 }
 
+/// Host-rendered destinations requested by a successfully executed Action.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostView {
+    FileSearch,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ActionResult {
     pub session_id: SessionId,
@@ -361,6 +429,8 @@ pub struct ActionResult {
     /// Present when the action succeeded but a follow-up step did not.
     pub warning: Option<String>,
     pub output_text: Option<String>,
+    #[serde(default)]
+    pub view: Option<HostView>,
     pub close_window: bool,
     #[serde(default)]
     pub execution_session_id: Option<ExecutionSessionId>,
@@ -560,6 +630,8 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
                 CandidatePresentation {
                     id: "action:core.directory.copy:c1".into(),
                     kind: CandidateKind::Action,
+                    is_menu: false,
+                    file_kind: None,
                     title: "Copy Path".into(),
                     subtitle: None,
                     shortcut: None,
@@ -581,6 +653,8 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
                 CandidatePresentation {
                     id: "app:com.google.Chrome".into(),
                     kind: CandidateKind::Application,
+                    is_menu: false,
+                    file_kind: None,
                     title: "Google Chrome".into(),
                     subtitle: None,
                     shortcut: None,
@@ -601,7 +675,8 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
                     primary_action: true,
                     section_label: None,
                 },
-            ],
+            ]
+            .into(),
             ..Default::default()
         };
         let visible = state.scoped_candidates(&Scope::Universal);
@@ -619,6 +694,8 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
         let hidden = CandidatePresentation {
             id: "hidden".into(),
             kind: CandidateKind::Action,
+            is_menu: false,
+            file_kind: None,
             title: "Copy Path".into(),
             subtitle: None,
             shortcut: None,
@@ -654,11 +731,15 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
                     id: "app.finder".into(),
                     label: "Finder".into(),
                     is_current_app: true,
+                    action_ids: Vec::new(),
+                    menu_ids: Vec::new(),
                 },
                 ScopeEntry {
                     id: "folder".into(),
                     label: "Folder".into(),
                     is_current_app: false,
+                    action_ids: Vec::new(),
+                    menu_ids: Vec::new(),
                 },
             ],
             ..Default::default()

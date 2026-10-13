@@ -45,7 +45,6 @@ class ApplicationIconCache extends ChangeNotifier {
     _bytes.clear();
     _pinned.clear();
     _retainedBytes = 0;
-    _active = 0;
   }
 
   void request(Iterable<CandidateDto> candidates) {
@@ -90,11 +89,12 @@ class ApplicationIconCache extends ChangeNotifier {
         } catch (_) {
           bytes = null;
         }
+        // Physical work survives clear(); release its slot for every epoch.
+        _active--;
         if (_disposed || epoch != _epoch) {
           _pump();
           return;
         }
-        _active--;
         _pending.remove(id);
         if (bytes == null ||
             bytes.isEmpty ||

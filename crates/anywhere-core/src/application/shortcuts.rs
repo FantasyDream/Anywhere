@@ -37,7 +37,11 @@ pub struct ShortcutApplication {
 impl Application {
     /// Catalog eligibility is independent of the active project and availability.
     pub fn supported_shortcut_actions(&self, ids: &[String]) -> Result<Vec<String>> {
-        if ids.len() > 2048 || ids.iter().any(|id| id.is_empty() || id.len() > 2048) {
+        if ids.len() > anywhere_protocol::policy::MAX_SHORTCUT_CATALOG_REQUEST_IDS as usize
+            || ids.iter().any(|id| {
+                id.is_empty() || id.len() > anywhere_protocol::policy::MAX_ACTION_ID_BYTES as usize
+            })
+        {
             bail!("Invalid shortcut catalog request.");
         }
         let registry = self.resolver.base_registry();
@@ -53,22 +57,19 @@ impl Application {
     /// Includes static actions and scripts from the last captured context. No object
     /// values or execution capabilities cross this configuration boundary.
     pub fn shortcut_actions(&self) -> Result<Vec<ShortcutAction>> {
-        let session = self.session()?;
-        let (actions, _) = self
+        let base = self.resolver.base_registry();
+        let mut options = catalog_options(&base);
+        let catalog = self
             .resolver
-            .base_registry()
-            .for_contexts(&session.resolution.committed_contexts);
-        let mut options: Vec<_> = actions
-            .commands()
-            .filter_map(|action| {
-                let binding = actions.persistent_binding(&action.id).ok()?;
-                Some(ShortcutAction {
-                    action_id: binding.action_id.as_str().into(),
-                    title: action.title.clone(),
-                    context_types: binding.context_types,
-                })
-            })
-            .collect();
+            .shortcut_catalog
+            .lock()
+            .map_err(|_| anyhow::anyhow!("shortcut catalog unavailable"))?;
+        options.extend(
+            catalog
+                .iter()
+                .filter(|a| base.supports_persistent_binding(&a.action_id))
+                .cloned(),
+        );
         options.sort_by(|a, b| a.title.cmp(&b.title).then(a.action_id.cmp(&b.action_id)));
         Ok(options)
     }
@@ -326,7 +327,7 @@ fn validate_routes(routes: &[ShortcutRoute]) -> Result<()> {
     let mut conditions = BTreeSet::new();
     for route in routes {
         if route.action_id.is_empty()
-            || route.action_id.len() > 2048
+            || route.action_id.len() > anywhere_protocol::policy::MAX_ACTION_ID_BYTES as usize
             || route
                 .app_bundle_id
                 .as_ref()
@@ -350,4 +351,23 @@ fn valid_condition(id: &str, max: usize) -> bool {
         && id
             .bytes()
             .all(|c| c.is_ascii_alphanumeric() || b"._-".contains(&c))
+}
+
+/// Labels only: no captured values, paths, script body or execution capability.
+pub(super) fn catalog_options(
+    actions: &crate::core::action::descriptor::ActionRegistry,
+) -> Vec<ShortcutAction> {
+    let mut options: Vec<_> = actions
+        .commands()
+        .filter_map(|action| {
+            let binding = actions.persistent_binding(&action.id).ok()?;
+            Some(ShortcutAction {
+                action_id: binding.action_id.as_str().into(),
+                title: action.title.clone(),
+                context_types: binding.context_types,
+            })
+        })
+        .collect();
+    options.sort_by(|a, b| a.title.cmp(&b.title).then(a.action_id.cmp(&b.action_id)));
+    options
 }

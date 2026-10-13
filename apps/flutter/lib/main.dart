@@ -1,3 +1,4 @@
+import 'infrastructure/file_search_access.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
@@ -8,6 +9,7 @@ import 'launcher_screen.dart';
 import 'ui/app_style.dart';
 import 'ui/app_components.dart';
 import 'infrastructure/runtime_paths.dart';
+import 'infrastructure/window_host.dart';
 import 'infrastructure/desktop_image_cache.dart';
 import 'infrastructure/desktop_environment.dart';
 import 'execution/execution_sessions_screen.dart';
@@ -65,11 +67,43 @@ Future<void> main() async {
       browserCurrentPage: paths['captureBrowserCurrentPage'] != '0',
       clipboard: paths['captureClipboard'] != '0',
     );
+    var fileSearchInitializationFailed = false;
+    try {
+      final preferences = await WindowHost(windowChannel).readSettings();
+      await FileSearchAccess.apply(preferences);
+    } catch (_) {
+      await bridge.setFileSearch(
+          enabled: false,
+          roots: [],
+          excludedDirectoryNames: [],
+          engine: bridge.FileSearchEngineDto.systemIndex,
+          includeHidden: false,
+          restrictToRoots: true);
+      fileSearchInitializationFailed = true;
+    }
     final reply = await bridge.ping();
     if (reply != 'pong') throw StateError('Rust bridge ping failed');
     runApp(
       LauncherApp(
+        waitForSnapshotDelta: (session, after, version, count) =>
+            bridge.waitForSnapshotDelta(
+                sessionId: session,
+                after: BigInt.from(after),
+                candidateListVersion: version,
+                loadedCount: count),
         beginActivation: bridge.beginActivation,
+        chooseActivationInput: (captures, nowMs,
+                {required selectedEnabled,
+                required clipboardEnabled,
+                required allowPendingSelection}) =>
+            bridge.chooseActivationInput(
+                captures: captures,
+                nowMs: nowMs,
+                selectedEnabled: selectedEnabled,
+                clipboardEnabled: clipboardEnabled,
+                allowPendingSelection: allowPendingSelection),
+        suspend: (session) => bridge.suspendLauncher(sessionId: session),
+        resume: (session) async => bridge.resumeLauncher(sessionId: session),
         activate: (session,
                 {promptAccessibility = false, capturedEnvironment = false}) =>
             bridge.activate(
@@ -77,6 +111,26 @@ Future<void> main() async {
           promptAccessibility: promptAccessibility,
           capturedEnvironment: capturedEnvironment,
         ),
+        updateFiles: (session, input, revision, filter) =>
+            bridge.updateFileInput(
+                sessionId: session,
+                input: input,
+                revision: revision,
+                filter: filter),
+        fileMoreDelta: (session, revision, version, count) =>
+            bridge.loadMoreFilesDelta(
+                sessionId: session,
+                revision: revision,
+                candidateListVersion: version,
+                loadedCount: count),
+        fileMore: (session, revision) =>
+            bridge.loadMoreFiles(sessionId: session, revision: revision),
+        fileActions: (session, revision, candidate) async => bridge.fileActions(
+            sessionId: session, revision: revision, candidateId: candidate),
+        freezeFiles: (session, revision) =>
+            bridge.freezeFileResults(sessionId: session, revision: revision),
+        loadFilePreview: (session, revision, candidate) => bridge.previewFile(
+            sessionId: session, revision: revision, candidateId: candidate),
         updateInput: (session, input, revision,
                 {scopeId, inputMode = bridge.InputModeDto.environment}) =>
             bridge.updateInput(
@@ -113,6 +167,7 @@ Future<void> main() async {
             sessionId: session, revision: revision, actionId: action),
         deactivate: (session) => bridge.deactivate(sessionId: session),
         window: windowChannel,
+        fileSearchInitializationFailed: fileSearchInitializationFailed,
         startupMessage: [
           paths['hotkeyError'] ?? '',
           paths['loginError'] ?? '',

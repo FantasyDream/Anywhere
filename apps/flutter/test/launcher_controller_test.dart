@@ -16,6 +16,8 @@ LauncherStateDto snapshot(int session) => launcherSnapshot(
       snapshotSeq: 1,
       input: '',
       contextComplete: true,
+      searchSources: const [],
+      resultActions: const [],
       contexts: [],
       contextCaptures: const [],
       candidates: [],
@@ -88,6 +90,7 @@ void main() {
         window: WindowHost(channel),
         startupMessage: startupMessage,
         applyExcludedApps: applyExcludedApps,
+        applyFileSearch: (_) async {},
         applyContextSources: applyContextSources,
       );
 
@@ -104,6 +107,8 @@ void main() {
               snapshotSeq: 1,
               input: '',
               contextComplete: true,
+              searchSources: const [],
+              resultActions: const [],
               contextCaptures: const [
             ContextCaptureDto(
                 source: ContextSourceDto.clipboard,
@@ -415,6 +420,7 @@ void main() {
           id: id,
           title: title,
           kind: CandidateKindDto.action,
+          isMenu: path.isNotEmpty,
           groupId: group,
           menuPath: path,
           contextKeys: const [],
@@ -442,6 +448,8 @@ void main() {
           snapshotSeq: seq,
           input: input,
           contextComplete: true,
+          searchSources: const [],
+          resultActions: const [],
           scopes: scopes,
           contextCandidates: offers,
           candidates: results ?? offers,

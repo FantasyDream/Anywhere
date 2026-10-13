@@ -152,6 +152,8 @@ impl ActionMatcher<'_> {
                     presentation: CandidatePresentation {
                         id: action_execution_candidate_id(action, context),
                         kind: CandidateKind::Action,
+                        is_menu: action.executor.is_menu(),
+                        file_kind: None,
                         title: action.title.clone(),
                         subtitle: Some(subtitle(action, context)),
                         shortcut: action.shortcut.clone(),

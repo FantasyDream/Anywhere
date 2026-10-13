@@ -3,18 +3,31 @@ import 'package:flutter/material.dart';
 import '../../src/rust/api.dart';
 import '../../ui/app_icons.dart';
 import '../../ui/app_style.dart';
+import '../../ui/file_type_appearance.dart';
 
 /// The same icon vocabulary is used by result rows and the selected-app hint.
 class CandidateIcon extends StatelessWidget {
   const CandidateIcon(
-      {super.key, required this.candidate, this.bytes, this.size = 36});
+      {super.key,
+      required this.candidate,
+      this.bytes,
+      this.size = 36,
+      this.fileObject = true});
   final CandidateDto candidate;
   final Uint8List? bytes;
   final double size;
+  final bool fileObject;
 
   @override
   Widget build(BuildContext context) {
     final disabled = candidate.availability != AvailabilityDto.enabled;
+    if (fileObject && candidate.kind == CandidateKindDto.file) {
+      return FileTypeIcon(
+          appearance: FileTypeAppearance.forName(candidate.title,
+              isDirectory: candidate.fileKind == FileObjectKindDto.directory),
+          size: size,
+          disabled: disabled);
+    }
     final (glyph, tint) = switch (candidate.iconKey) {
       'terminal' => (AppIcons.terminal, const Color(0xffa0ceb9)),
       'folder' => (AppIcons.folder, const Color(0xff92c9f6)),

@@ -1,4 +1,9 @@
+import 'launcher_session_coordinator.dart';
+import 'file_workspace_coordinator.dart';
+import '../infrastructure/runtime_policy.dart';
 import 'activation_prefill.dart';
+import 'launcher_navigation.dart';
+import 'file_search_controller.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -16,10 +21,7 @@ import 'context_source_status.dart';
 export '../infrastructure/application_icon_cache.dart' show LoadIcon;
 export '../settings/settings_controller.dart' show ApplyExcludedApps;
 
-enum WakeMode { currentApp, universal }
-
-WakeMode parseWakeMode(String? value) =>
-    value == 'universal' ? WakeMode.universal : WakeMode.currentApp;
+export 'launcher_navigation.dart' show WakeMode, parseWakeMode;
 
 typedef BeginActivation = int Function();
 typedef Activate = Future<LauncherStateDto?> Function(
@@ -49,6 +51,7 @@ class LauncherBackend {
     required this.execute,
     required this.deactivate,
     this.waitForSnapshot,
+    this.waitForSnapshotDelta,
     this.loadIcon,
     this.promptAccessibility,
     this.shortcutActions,
@@ -58,14 +61,35 @@ class LauncherBackend {
     this.waitIntent,
     this.resolveBinding,
     this.waitBinding,
+    this.loadFilePreview,
+    this.updateFiles,
+    this.fileMore,
+    this.fileMoreDelta,
+    this.freezeFiles,
+    this.fileActions,
+    this.suspend,
+    this.resume,
+    this.chooseActivationInput,
   });
 
+  final Future<LauncherStateDto?> Function(
+      int session, String input, int revision, String filter)? updateFiles;
+  final Future<LauncherStateDto?> Function(int session, int revision)? fileMore;
+  final Future<SnapshotWaitDto> Function(int, int, int, int)? fileMoreDelta;
+  final Future<void> Function(int session, int revision)? freezeFiles;
+  final Future<List<CandidateDto>> Function(int, int, String)? fileActions;
+  final LoadFilePreview? loadFilePreview;
+  final ChooseActivationInput? chooseActivationInput;
   final BeginActivation beginActivation;
   final Activate activate;
   final UpdateInput updateInput;
   final Execute execute;
   final Future<void> Function(int) deactivate;
+  final Future<void> Function(int)? suspend;
+  final Future<LauncherStateDto?> Function(int)? resume;
   final WaitForSnapshot? waitForSnapshot;
+  final Future<SnapshotWaitDto> Function(int, int, int, int)?
+      waitForSnapshotDelta;
   final LoadIcon? loadIcon;
   final PromptAccessibility? promptAccessibility;
   final Future<List<ShortcutActionDto>> Function()? shortcutActions;
@@ -87,8 +111,10 @@ class LauncherController extends ChangeNotifier {
     required LauncherBackend backend,
     required DesktopHost window,
     String startupMessage = '',
+    bool fileSearchInitializationFailed = false,
     ApplyExcludedApps? applyExcludedApps,
     Future<void> Function(HostSettings)? applyContextSources,
+    Future<void> Function(HostSettings)? applyFileSearch,
     List<PluginStatusDto> Function()? readPlugins,
     Future<void> Function()? shutdownTasks,
     int Function()? nowMillis,
@@ -98,22 +124,36 @@ class LauncherController extends ChangeNotifier {
         settings = SettingsController(
             window: window,
             startupMessage: startupMessage,
+            fileSearchInitializationFailed: fileSearchInitializationFailed,
             applyExcludedApps: applyExcludedApps,
             applyContextSources: applyContextSources,
+            applyFileSearch: applyFileSearch,
             readPlugins: readPlugins,
             readShortcutActions: backend.shortcutActions,
             readSupportedShortcutActions: backend.supportedShortcutActions,
             readShortcutApplications: backend.shortcutApplications),
         icons = ApplicationIconCache(backend.loadIcon) {
+    _sessionFlow = LauncherSessionCoordinator(_nowMillis);
+    files = FileWorkspaceCoordinator(backend.loadFilePreview);
+    files.addListener(_filePresentationChanged);
     settings.addListener(_notify);
     lifecycle = ApplicationLifecycle(
         closeSettings: closeSettings,
         cancelLauncher: () async {
-          if (_phase != LauncherPhase.hidden) await dismiss();
+          if (hasRetainedState) {
+            await _discardRetained();
+          } else if (_phase != LauncherPhase.hidden) {
+            await dismiss(retain: false);
+          }
         },
         shutdownTasks: shutdownTasks ?? shutdownExecutionSessions);
   }
 
+  late final FileWorkspaceCoordinator files;
+  late final LauncherSessionCoordinator _sessionFlow;
+  FileFilter _lastFileFilter = FileFilter.all;
+  LauncherLocation? get _fileReturn => files.returnLocation;
+  set _fileReturn(LauncherLocation? value) => files.returnLocation = value;
   final LauncherBackend _backend;
   final DesktopHost _window;
   final int Function() _nowMillis;
@@ -130,19 +170,63 @@ class LauncherController extends ChangeNotifier {
   final ApplicationIconCache icons;
   LauncherPhase _phase = LauncherPhase.hidden;
   LauncherStateDto? _snapshot;
-  int? _session;
-  int _generation = 0, _revision = 0, _requestedRevision = 0;
+  int? get _session => _sessionFlow.session;
+  set _session(int? value) => _sessionFlow.session = value;
+  int get _generation => _sessionFlow.generation;
+  set _generation(int value) => _sessionFlow.generation = value;
+  int get _revision => _sessionFlow.revision;
+  set _revision(int value) => _sessionFlow.revision = value;
+  int get _requestedRevision => _sessionFlow.requestedRevision;
+  set _requestedRevision(int value) => _sessionFlow.requestedRevision = value;
+  int _windowPresentation = 0;
+
+  /// Advances only after Host show completes for the current visible Launcher.
+  int get windowPresentation => _windowPresentation;
   String _input = '';
-  String? _scopeId;
-  List<String>? _actionPath;
-  List<CandidateDto>? _bindingChoices;
+  final LauncherNavigation _navigation = LauncherNavigation();
+  LauncherOverlay get _overlay => _navigation.overlay;
+  set _overlay(LauncherOverlay value) => _navigation.overlay = value;
+  InputModeDto? get _navigationMode => _navigation.chooserMode;
+  set _navigationMode(InputModeDto? mode) => _navigation.chooserMode = mode;
+
+  List<CandidateDto>? get _bindingChoices => switch (_overlay) {
+        BindingChoices(:final items) || FileActions(:final items) => items,
+        _ => null,
+      };
+  String? get _fileActionTarget =>
+      switch (_overlay) { FileActions(:final target) => target, _ => null };
+  String? get _fileActionTitle =>
+      switch (_overlay) { FileActions(:final title) => title, _ => null };
+  String? get _fileActionParent =>
+      switch (_overlay) { FileActions(:final parent) => parent, _ => null };
+  static const retention =
+      Duration(milliseconds: RuntimePolicy.launcherRetentionMs);
+  int? get _hiddenAt => _sessionFlow.hiddenAt;
+  LauncherPhase? _retainedPhase;
+
+  Object get _capturePolicy => (
+        hostSettings.captureFinderSelection,
+        hostSettings.captureSelectedText,
+        hostSettings.captureBrowserCurrentPage,
+        hostSettings.captureClipboard
+      );
+
+  bool get hasRetainedState => _hiddenAt != null;
+
+  String? get _scopeId => _navigation.scope;
+  set _scopeId(String? value) => _navigation.scope = value;
+  List<String>? get _actionPath => _navigation.menu;
+  set _actionPath(List<String>? value) => _navigation.menu = value;
   int _bindingRequest = 0;
   bool _globalWaiting = false;
-  WakeMode _wakeMode = WakeMode.currentApp;
+  WakeMode get _wakeMode => _navigation.wakeMode;
+  set _wakeMode(WakeMode value) => _navigation.wakeMode = value;
   bool _scopeTouched = false;
   String? _selectedId, _message, _output, _resultSource;
   ActionStatusDto? _resultStatus;
   bool _userMoved = false, _disposed = false;
+  bool get _fileMoreLoading => files.moreLoading;
+
   Future<bool>? _settingsClosing;
   int _iconFirst = 0;
   int _iconLast = LauncherViewState.maxRows;
@@ -169,11 +253,25 @@ class LauncherController extends ChangeNotifier {
       _resultSource,
       _resultStatus,
       settings.current.universalLabel,
-      _bindingChoices
+      _overlay,
+      files.filter,
     );
     if (key == _viewKey && _cachedView != null) return _cachedView!;
     _viewKey = key;
+    final previous = _cachedView;
+    final retainEntries = _inputMode == InputModeDto.fileSearch &&
+        _snapshotInputMode == _inputMode &&
+        _snapshot?.input == _input &&
+        previous?.isFileSearch == true &&
+        previous?.bindingChoices == null &&
+        _bindingChoices == null &&
+        previous?.output == null &&
+        _output == null &&
+        previous?.input == _input &&
+        previous?.fileFilter == files.filter &&
+        identical(previous?.snapshot?.candidates, _snapshot?.candidates);
     return _cachedView = LauncherViewState(
+      retainedFileEntries: retainEntries ? previous!.entryCollection : null,
       phase: _phase,
       generation: _generation,
       snapshot: _snapshot,
@@ -190,6 +288,9 @@ class LauncherController extends ChangeNotifier {
       resultStatus: _resultStatus,
       universalShortcut: settings.current.universalLabel,
       bindingChoices: _bindingChoices,
+      fileActionTitle: _fileActionTitle,
+      fileFilter: files.filter,
+      navigationMode: _navigationMode,
     );
   }
 
@@ -200,11 +301,54 @@ class LauncherController extends ChangeNotifier {
   List<ContextSourceStatus> get contextSourceStatuses =>
       settings.contextSourceStatuses;
 
-  void _notify() {
-    if (!_disposed) notifyListeners();
+  void _resetFiles() {
+    files.reset();
+    _lastFileFilter = files.filter;
   }
 
-  bool _current(int generation) => !_disposed && generation == _generation;
+  void _filePresentationChanged() {
+    if (_lastFileFilter != files.filter) {
+      _lastFileFilter = files.filter;
+      _selectedId = null;
+      _userMoved = false;
+      _overlay = const LauncherHome();
+      if (!_disposed && view.isFileSearch && _backend.updateFiles != null) {
+        unawaited(update(_input));
+        return;
+      }
+    }
+    if (_disposed) return;
+    final previousHeight = _cachedView?.height;
+    _notify();
+    if (view.isFileSearch && previousHeight != view.height) {
+      unawaited(_syncWindow());
+    }
+  }
+
+  void _notify() {
+    if (_disposed) return;
+    if (_phase == LauncherPhase.hidden) {
+      notifyListeners();
+      return;
+    }
+    final entries = view.visibleEntries;
+    final parentKey = _fileActionParent;
+    final file = view.isFileSearch && !view.resolving
+        ? parentKey != null
+            ? _snapshot?.candidates
+                .where((c) => 'candidate:${c.id}' == parentKey)
+                .firstOrNull
+            : _bindingChoices == null && entries.isNotEmpty
+                ? entries[view.selectedIndex].candidate
+                : null
+        : null;
+    files.sync(view.isFileSearch ? _session : null, _revision,
+        file?.kind == CandidateKindDto.file ? file : null);
+    notifyListeners();
+  }
+
+  bool _current(int generation) =>
+      !_disposed && _sessionFlow.current(generation);
 
   void attach() {
     _window.listen(
@@ -242,7 +386,7 @@ class LauncherController extends ChangeNotifier {
       await dismiss();
       return activate(mode: parsed);
     }
-    _applyWakeMode(parsed);
+    await _applyWakeMode(parsed);
   }
 
   /// Native global events carry only business identity, never cached object data.
@@ -284,6 +428,15 @@ class LauncherController extends ChangeNotifier {
     if (_disposed || lifecycle.isQuitting) return;
     if (_phase == LauncherPhase.settings && !await closeSettings()) return;
     if (_phase != LauncherPhase.hidden) return;
+    if (_hiddenAt != null) {
+      if (globalBinding == null && await _resumeRetained()) {
+        return;
+      }
+      await _discardRetained();
+      if (_disposed || lifecycle.isQuitting || _phase != LauncherPhase.hidden) {
+        return;
+      }
+    }
     final generation = ++_generation;
     _phase = LauncherPhase.activating;
     _wakeMode = mode;
@@ -310,7 +463,9 @@ class LauncherController extends ChangeNotifier {
       _prefillGracePassed = false;
       _prefillTimer?.cancel();
       if (_prefillAllowed) {
-        _prefillTimer = Timer(const Duration(milliseconds: 500), () {
+        _prefillTimer = Timer(
+            const Duration(milliseconds: RuntimePolicy.selectionPrefillGraceMs),
+            () {
           if (_current(generation)) {
             _prefillGracePassed = true;
             _maybePrefill();
@@ -405,19 +560,50 @@ class LauncherController extends ChangeNotifier {
     }
   }
 
-  Future<void> dismiss({bool hostAlreadyHidden = false}) async {
+  Future<void> dismiss(
+      {bool hostAlreadyHidden = false,
+      bool retain = true,
+      bool preserveSettings = false}) async {
     if (_disposed) return;
+    if (retain &&
+        _phase != LauncherPhase.hidden &&
+        _phase != LauncherPhase.settings &&
+        _session != null &&
+        _snapshot != null &&
+        _backend.suspend != null &&
+        _backend.resume != null) {
+      final generation = _generation, session = _session!;
+      _retainedPhase = _phase;
+      ++_generation;
+      ++_bindingRequest;
+      _phase = LauncherPhase.hidden;
+      _prefillAllowed = false;
+      _prefillTimer?.cancel();
+      files.invalidateOperations();
+      _notify();
+      _sessionFlow.retain(_capturePolicy, _backend.suspend!(session),
+          () => unawaited(_discardRetained()));
+      try {
+        if (!hostAlreadyHidden) await _window.hide(generation);
+      } finally {
+        await _sessionFlow.suspension;
+      }
+      return;
+    }
     final generation = _generation;
     final session = _session;
     ++_generation;
     _globalWaiting = false;
+    _navigationMode = null;
     _session = null;
     _snapshot = null;
     _cachedView = null;
     _viewKey = null;
-    _bindingChoices = null;
+    _overlay = const LauncherHome();
+    _fileReturn = null;
+    _resetFiles();
     ++_bindingRequest;
-    _phase = LauncherPhase.hidden;
+    _phase = preserveSettings ? LauncherPhase.settings : LauncherPhase.hidden;
     _input = '';
     _prefillAllowed = false;
     _prefillTimer?.cancel();
@@ -440,6 +626,64 @@ class LauncherController extends ChangeNotifier {
     }
   }
 
+  Future<void> _discardRetained() =>
+      _sessionFlow.discardOnce(_discardHiddenState);
+  Future<void> _discardHiddenState() async {
+    if (_hiddenAt == null) return;
+    _retainedPhase = null;
+    final pending = _sessionFlow.clearRetention();
+    try {
+      await pending;
+    } catch (_) {}
+    // Hidden cleanup must never clear a newer settings window or activation.
+    if (_phase == LauncherPhase.hidden || _phase == LauncherPhase.settings) {
+      await dismiss(
+          hostAlreadyHidden: true,
+          retain: false,
+          preserveSettings: _phase == LauncherPhase.settings);
+    }
+  }
+
+  Future<bool> _resumeRetained() =>
+      _sessionFlow.restoreOnce(_restoreHiddenState);
+  Future<bool> _restoreHiddenState() async {
+    final hidden = _hiddenAt, session = _session, resume = _backend.resume;
+    if (hidden == null ||
+        session == null ||
+        resume == null ||
+        !_sessionFlow.canResume(_capturePolicy)) {
+      return false;
+    }
+    _sessionFlow.cancelDeadline();
+    final generation = ++_generation;
+    try {
+      await _sessionFlow.suspension;
+      if (!_current(generation) || _phase != LauncherPhase.hidden) return false;
+      final state = await resume(session);
+      if (!_current(generation) ||
+          state == null ||
+          state.sessionId != session) {
+        return false;
+      }
+      _sessionFlow.clearRetention();
+      _phase = LauncherPhase.ready;
+      _apply(state);
+      if (_retainedPhase == LauncherPhase.resolving ||
+          (view.isFileSearch &&
+              state.fileSearch == null &&
+              _input.isNotEmpty)) {
+        await update(_input, automatic: true);
+      }
+      _retainedPhase = null;
+      _notify();
+      await _syncWindow(show: true);
+      unawaited(_follow(generation, session));
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   void _apply(LauncherStateDto state) {
     if (state.sessionId != _session || state.revision < _requestedRevision) {
       return;
@@ -451,10 +695,30 @@ class LauncherController extends ChangeNotifier {
                 state.snapshotSeq <= held.snapshotSeq))) {
       return;
     }
+    final fileTarget = _fileActionTarget,
+        fileTitle = _fileActionTitle,
+        fileParent = _fileActionParent;
+    final overlay = _overlay;
     _snapshot = state;
     _snapshotInputMode = _inputMode;
-    _bindingChoices = null;
+    _overlay = overlay is RootChooser ? overlay : const LauncherHome();
     ++_bindingRequest;
+    if (fileTarget != null && held?.revision == state.revision) {
+      final actions = state.resultActions
+          .where((c) => c.executionContextId == fileTarget)
+          .toList();
+      if (actions.isNotEmpty ||
+          (view.isFileSearch &&
+              state.candidates.any((candidate) =>
+                  candidate.kind == CandidateKindDto.file &&
+                  candidate.executionContextId == fileTarget))) {
+        _overlay = FileActions(
+            target: fileTarget,
+            title: fileTitle!,
+            parent: fileParent,
+            items: actions);
+      }
+    }
     settings.recordCaptures(state.contextCaptures);
     _revision = state.revision;
     if (_scopeId != null && !view.scopes.any((scope) => scope.id == _scopeId)) {
@@ -487,8 +751,14 @@ class LauncherController extends ChangeNotifier {
     }
     _maybeSelectScope();
     _maybePrefill();
-    _reconcile();
-    _requestIcons();
+    final stableFileRows = view.isFileSearch &&
+        held?.revision == state.revision &&
+        identical(held?.candidates, state.candidates) &&
+        _bindingChoices == null;
+    if (!stableFileRows) {
+      _reconcile();
+      _requestIcons();
+    }
   }
 
   void _reconcile() {
@@ -522,18 +792,34 @@ class LauncherController extends ChangeNotifier {
 
   Future<void> _follow(int generation, int session) async {
     final wait = _backend.waitForSnapshot;
-    if (wait == null) return;
+    final waitDelta = _backend.waitForSnapshotDelta;
+    if (wait == null && waitDelta == null) return;
     var cursor = _snapshot == null ? 0 : snapshotCursor(_snapshot!);
     try {
       while (_current(generation) && view.visible) {
-        final notice = await wait(session, cursor);
+        final baseCount = _snapshot?.candidates.length ?? 0;
+        final notice = waitDelta == null
+            ? await wait!(session, cursor)
+            : await waitDelta(session, cursor,
+                _snapshot?.candidateListVersion ?? 0, baseCount);
         if (!_current(generation) || !view.visible) return;
         if (notice.kind == SnapshotWaitKindDto.timedOut) continue;
         if (notice.kind != SnapshotWaitKindDto.updated) return;
-        final next = notice.state;
-        if (next == null || next.sessionId != session) return;
-        final nextCursor = snapshotCursor(next);
-        if (nextCursor <= cursor) continue;
+        final packet = notice.state;
+        if (packet == null || packet.sessionId != session) return;
+        final heldCursor =
+            _snapshot == null ? cursor : snapshotCursor(_snapshot!);
+        final nextCursor = snapshotCursor(packet);
+        if (nextCursor <= heldCursor) {
+          cursor = heldCursor;
+          continue;
+        }
+        final next = LauncherSessionCoordinator.materialize(
+            _snapshot, notice, baseCount);
+        if (next == null) {
+          cursor = heldCursor;
+          continue;
+        }
         cursor = nextCursor;
         _apply(next);
         _notify();
@@ -550,8 +836,11 @@ class LauncherController extends ChangeNotifier {
   Future<void> update(String input, {bool automatic = false}) async {
     final session = _session;
     if (session == null || !view.visible) return;
+    _navigationMode = null;
     final revision = ++_revision;
     _requestedRevision = revision;
+    files.invalidateOperations();
+
     final generation = _generation;
     _input = input;
     if (!automatic) {
@@ -561,7 +850,7 @@ class LauncherController extends ChangeNotifier {
       _scopeTouched = true;
     }
     _globalWaiting = false;
-    _bindingChoices = null;
+    _overlay = const LauncherHome();
     ++_bindingRequest;
     _phase = LauncherPhase.resolving;
     _output = _message = null;
@@ -569,8 +858,12 @@ class LauncherController extends ChangeNotifier {
     icons.retryFailures();
     _notify();
     try {
-      final state = await _backend.updateInput(session, input, revision,
-          scopeId: _scopeId, inputMode: _inputMode);
+      final state =
+          _inputMode == InputModeDto.fileSearch && _backend.updateFiles != null
+              ? await _backend.updateFiles!(
+                  session, input, revision, files.filter.name)
+              : await _backend.updateInput(session, input, revision,
+                  scopeId: _scopeId, inputMode: _inputMode);
       if (!_current(generation) ||
           !view.visible ||
           revision != _revision ||
@@ -603,8 +896,11 @@ class LauncherController extends ChangeNotifier {
         _globalWaiting) {
       return;
     }
+    final choose = _backend.chooseActivationInput;
+    if (choose == null) return;
     final captures = _snapshot?.contextCaptures ?? const <ContextCaptureDto>[];
     final prefill = ActivationPrefill.choose(captures, _nowMillis(),
+        choose: choose,
         selectedEnabled: settings.current.captureSelectedText,
         clipboardEnabled: settings.current.captureClipboard,
         allowPendingSelection: _prefillGracePassed);
@@ -644,6 +940,214 @@ class LauncherController extends ChangeNotifier {
     _actionPath = null;
     _pendingAppHome = false;
     await update('', automatic: true);
+  }
+
+  Future<void> openFileSearch() async {
+    if (_phase != LauncherPhase.ready || view.isFileSearch) return;
+    // A global Action shortcut opens a tool directly, before the user has
+    // visited a parent page. Its back destination is empty Global Search.
+    final parentMode = _wakeMode == WakeMode.universal &&
+            _input.isEmpty &&
+            _inputMode == InputModeDto.environment
+        ? InputModeDto.search
+        : _inputMode;
+    _fileReturn = LauncherLocation(
+        input: _input,
+        scope: _scopeId,
+        menu: _actionPath,
+        mode: parentMode,
+        universal: _wakeMode == WakeMode.universal,
+        source: _contentSource);
+    _prefillAllowed = false;
+    _prefillTimer?.cancel();
+    _pendingAppHome = false;
+    _scopeTouched = true;
+    _scopeId = null;
+    _actionPath = null;
+    _contentSource = null;
+    _inputMode = InputModeDto.fileSearch;
+    _resetFiles();
+    await update('', automatic: true);
+  }
+
+  Future<void> closeFileSearch() async {
+    final previous = _fileReturn;
+    if (previous == null) {
+      return;
+    }
+    _fileReturn = null;
+    _resetFiles();
+    _scopeId = previous.scope;
+    _actionPath = previous.menu;
+    _inputMode = previous.mode;
+    _wakeMode = previous.universal ? WakeMode.universal : WakeMode.currentApp;
+    _contentSource = previous.source;
+    await update(previous.input, automatic: true);
+  }
+
+  Future<void> selectFile(int index) async {
+    if (view.isFileSearch) selectResult(index);
+  }
+
+  /// Selecting a result is safe; activation is a separate, deliberate gesture.
+  bool selectResult(int index) {
+    final entries = view.visibleEntries;
+    if (_phase != LauncherPhase.ready || index < 0 || index >= entries.length) {
+      return false;
+    }
+    _selectedId = entries[index].key;
+    _userMoved = true;
+    freezeFileResults();
+    _prefillAllowed = false;
+    _prefillTimer?.cancel();
+    _notify();
+    return true;
+  }
+
+  void freezeFileResults() {
+    if (!view.isFileSearch ||
+        _session == null ||
+        _backend.freezeFiles == null) {
+      return;
+    }
+    unawaited(_backend.freezeFiles!(_session!, _revision).catchError((_) {}));
+  }
+
+  bool get fileMoreLoading => _fileMoreLoading;
+  bool get canLoadMoreFiles =>
+      view.hasFileControls &&
+      _phase == LauncherPhase.ready &&
+      !_fileMoreLoading &&
+      (_backend.fileMore != null || _backend.fileMoreDelta != null) &&
+      ((_snapshot?.fileSearch?.nextCursor != null) ||
+          (_snapshot?.fileSearch?.needsRefresh ?? false));
+
+  /// The backend returns the accumulated list and keeps all displayed targets
+  /// executable. Loading never clears selection or resets the scroll position.
+  Future<void> loadMoreFiles({bool advanceSelection = false}) async {
+    final session = _session;
+    if (session == null || !canLoadMoreFiles) return;
+    final baseCount = _snapshot?.candidates.length ?? 0;
+    final version = _snapshot?.candidateListVersion ?? 0;
+    Future<LauncherStateDto?> load(int id, int revision) async {
+      if (_backend.fileMoreDelta == null) {
+        return _backend.fileMore!(id, revision);
+      }
+      final packet =
+          await _backend.fileMoreDelta!(id, revision, version, baseCount);
+      final held = _snapshot;
+      if (held?.sessionId == id &&
+          held?.revision == revision &&
+          packet.state != null &&
+          snapshotCursor(packet.state!) <= snapshotCursor(held!)) {
+        return held;
+      }
+      return LauncherSessionCoordinator.materialize(held, packet, baseCount);
+    }
+
+    final generation = _generation, revision = _revision;
+    final selection = _selectedId;
+    final previousCount = view.visibleEntries.length;
+    _notify();
+    try {
+      final state = await files.loadMore(session, revision, load,
+          () => _current(generation) && revision == _revision && view.visible);
+      if (!_current(generation) ||
+          revision != _revision ||
+          state == null ||
+          !view.visible ||
+          state.sessionId != session ||
+          state.revision != revision) {
+        return;
+      }
+      _apply(state);
+      if (advanceSelection &&
+          _selectedId == selection &&
+          view.visibleEntries.length > previousCount &&
+          view.hasFileControls) {
+        _selectedId = view.visibleEntries[previousCount].key;
+        _userMoved = true;
+      }
+      _message = null;
+      _notify();
+      await _syncWindow();
+    } catch (_) {
+      if (_current(generation) && revision == _revision) {
+        _message = 'Could not load more files. Scroll or press ↓ to retry.';
+        _notify();
+      }
+    }
+  }
+
+  Future<void> retrySearch() async {
+    if (_phase != LauncherPhase.ready ||
+        !(view.searchUnavailable || view.searchPartial) ||
+        _scopeId != null ||
+        view.isContent) {
+      return;
+    }
+    await update(_input);
+  }
+
+  bool get canShowFileActions {
+    final entries = view.visibleEntries;
+    return _fileActionTarget == null &&
+        entries.isNotEmpty &&
+        (view.isFileSearch ||
+            (_snapshot?.resultActions.any((c) =>
+                    c.executionContextId ==
+                    entries[view.selectedIndex]
+                        .candidate
+                        ?.executionContextId) ??
+                false)) &&
+        entries[view.selectedIndex].candidate?.kind == CandidateKindDto.file;
+  }
+
+  Future<void> showFileActions() async {
+    if (_phase != LauncherPhase.ready || !canShowFileActions) return;
+    freezeFileResults();
+    final file = view.visibleEntries[view.selectedIndex].candidate!;
+    final generation = _generation, revision = _revision;
+    final parent = _selectedId;
+    List<CandidateDto>? actions;
+    try {
+      actions = await files.loadActions(
+          () async => _backend.fileActions != null
+              ? await _backend.fileActions!(_session!, revision, file.id)
+              : _snapshot?.resultActions
+                      .where((c) =>
+                          c.executionContextId == file.executionContextId)
+                      .toList() ??
+                  [],
+          () =>
+              _current(generation) &&
+              revision == _revision &&
+              view.visible &&
+              _selectedId == parent);
+    } catch (_) {
+      if (_current(generation) && view.visible) {
+        _message =
+            'File actions could not be loaded. Select the file and try again.';
+        _notify();
+      }
+      return;
+    }
+    if (!_current(generation) ||
+        revision != _revision ||
+        !view.visible ||
+        actions == null ||
+        _selectedId != parent) {
+      return;
+    }
+    if (actions.isEmpty && !view.isFileSearch) return;
+    _overlay = FileActions(
+        target: file.executionContextId!,
+        title: file.title,
+        parent: _selectedId,
+        items: actions);
+    _selectedId = null;
+    _notify();
+    await _syncWindow();
   }
 
   Future<void> executeSelected() async {
@@ -733,7 +1237,7 @@ class LauncherController extends ChangeNotifier {
     if (candidates.length == 1 && !requiresChoice) {
       await _executeCandidate(candidates.single);
     } else if (candidates.isNotEmpty) {
-      _bindingChoices = candidates;
+      _overlay = BindingChoices(candidates);
       _selectedId = null;
       _message = binding.isIntent
           ? 'Choose an action or object for ${binding.title}'
@@ -781,6 +1285,14 @@ class LauncherController extends ChangeNotifier {
         return;
       }
       if (result.status == ActionStatusDto.succeeded &&
+          result.view == HostViewDto.fileSearch) {
+        _phase = LauncherPhase.ready;
+        await openFileSearch();
+        if (result.warning != null) {
+          _message = result.warning;
+          _notify();
+        }
+      } else if (result.status == ActionStatusDto.succeeded &&
           result.executionSessionId != null &&
           result.warning == null) {
         try {
@@ -826,10 +1338,18 @@ class LauncherController extends ChangeNotifier {
   void move(int direction) {
     final entries = view.visibleEntries;
     if (view.resolving || entries.isEmpty) return;
+    if (view.isFileSearch && view.hasFileControls) {
+      if (direction > 0 && view.selectedIndex == entries.length - 1) {
+        if (canLoadMoreFiles) unawaited(loadMoreFiles(advanceSelection: true));
+        return;
+      }
+      if (direction < 0 && view.selectedIndex == 0) return;
+    }
     _selectedId = entries[
             (view.selectedIndex + direction + entries.length) % entries.length]
         .key;
     _userMoved = true;
+    freezeFileResults();
     _output = null;
     _prefillAllowed = false;
     _prefillTimer?.cancel();
@@ -840,6 +1360,12 @@ class LauncherController extends ChangeNotifier {
   }
 
   void cycleScope(int direction) {
+    if (view.isFileSearch) {
+      if (_phase == LauncherPhase.ready && view.hasFileControls) {
+        files.cycleFilter(direction);
+      }
+      return;
+    }
     final scopes = view.scopes;
     if (scopes.isEmpty) return;
     final index = scopes.indexWhere((scope) => scope.id == _scopeId);
@@ -862,9 +1388,8 @@ class LauncherController extends ChangeNotifier {
 
   Future<void> selectScope(String? id) async {
     if (id != null && !view.scopes.any((scope) => scope.id == id)) return;
-    _scopeId = id;
+    _navigation.selectScope(id);
     _scopeTouched = true;
-    _actionPath = null;
     _selectedId = null;
     await update(_input);
   }
@@ -942,7 +1467,14 @@ class LauncherController extends ChangeNotifier {
       }
       settings.shortcutsRestored();
     }
-    await dismiss();
+    if (hasRetainedState) {
+      _phase = LauncherPhase.hidden;
+      ++_generation;
+      _notify();
+      await _window.hide(generation);
+    } else {
+      await dismiss();
+    }
     return true;
   }
 
@@ -969,15 +1501,20 @@ class LauncherController extends ChangeNotifier {
   }
 
   Future<void> escape() async {
+    if (_navigationMode != null) {
+      await toggleNavigation();
+      return;
+    }
     if (_globalWaiting) {
       await dismiss();
       return;
     }
     if (_bindingChoices != null) {
-      _bindingChoices = null;
+      final parent = _fileActionParent;
+      _overlay = const LauncherHome();
       ++_bindingRequest;
       _message = null;
-      _selectedId = null;
+      _selectedId = parent;
       _notify();
       await _syncWindow();
       return;
@@ -988,6 +1525,14 @@ class LauncherController extends ChangeNotifier {
     }
     if (_output != null) {
       back();
+      return;
+    }
+    if (view.isFileSearch) {
+      if (_input.isNotEmpty) {
+        await update('');
+      } else {
+        await closeFileSearch();
+      }
       return;
     }
     if (_inputMode == InputModeDto.content) {
@@ -1009,7 +1554,43 @@ class LauncherController extends ChangeNotifier {
     await dismiss();
   }
 
-  void _applyWakeMode(WakeMode mode) {
+  /// Explicit root navigation never uses the visibility-toggle semantics.
+  Future<void> toggleNavigation() async {
+    if (_phase != LauncherPhase.ready || view.isContent || view.isFileSearch) {
+      return;
+    }
+    _navigationMode = _navigationMode == null ? _inputMode : null;
+    // Opening the chooser is a deliberate interaction; late captured content
+    // must not replace the input while the user is choosing a search mode.
+    _prefillAllowed = false;
+    _prefillTimer?.cancel();
+    _notify();
+    await _syncWindow();
+  }
+
+  void moveNavigation(int direction) {
+    if (_navigationMode == null || direction == 0) return;
+    _navigation.cycleRoot();
+    _notify();
+  }
+
+  Future<void> chooseNavigation() async {
+    final mode = _navigationMode;
+    if (mode == null) return;
+    await navigateRoot(
+        mode == InputModeDto.search ? WakeMode.universal : WakeMode.currentApp);
+  }
+
+  Future<void> navigateRoot(WakeMode mode) async {
+    if (_phase != LauncherPhase.ready) return;
+    _navigationMode = null;
+    await _applyWakeMode(mode);
+  }
+
+  Future<void> _applyWakeMode(WakeMode mode) async {
+    _navigationMode = null;
+    _fileReturn = null;
+    _resetFiles();
     _actionPath = null;
     _contentSource = null;
     _prefillAllowed = false;
@@ -1022,7 +1603,11 @@ class LauncherController extends ChangeNotifier {
     _scopeTouched = true;
     if (mode == WakeMode.currentApp) _promptCurrentAppAccess(mode);
     final app = view.scopes.where((scope) => scope.isCurrentApp).firstOrNull;
-    unawaited(selectScope(mode == WakeMode.currentApp ? app?.id : null));
+    _scopeId = mode == WakeMode.currentApp ? app?.id : null;
+    _selectedId = null;
+    // Keep pending App selection until the environment snapshot arrives. This
+    // transition is navigation, not user typing (which cancels auto-selection).
+    await update(_input, automatic: true);
   }
 
   void _maybeSelectScope() {
@@ -1051,13 +1636,7 @@ class LauncherController extends ChangeNotifier {
   }
 
   Future<void> selectEntry(int index) async {
-    final entries = view.visibleEntries;
-    if (view.resolving || index < 0 || index >= entries.length) return;
-    _selectedId = entries[index].key;
-    _userMoved = true;
-    _prefillAllowed = false;
-    _prefillTimer?.cancel();
-    _notify();
+    if (!selectResult(index)) return;
     await executeSelected();
   }
 
@@ -1076,7 +1655,7 @@ class LauncherController extends ChangeNotifier {
   void backMenu() {
     final path = _actionPath;
     if (path == null || _input.isNotEmpty) return;
-    _actionPath = path.length <= 1 ? null : path.sublist(0, path.length - 1);
+    _navigation.backMenu();
     _selectedId = null;
     _refreshPresentation();
     unawaited(_syncWindow());
@@ -1092,16 +1671,24 @@ class LauncherController extends ChangeNotifier {
   Future<void> _syncWindow({bool show = false}) async {
     if (_disposed || !view.visible) return;
     if (show) {
-      await _window.show(_generation, view.height,
-          settings: _phase == LauncherPhase.settings);
+      final generation = _generation;
+      await _window.show(generation, view.height,
+          width: view.width, settings: _phase == LauncherPhase.settings);
+      if (_current(generation) &&
+          view.visible &&
+          _phase != LauncherPhase.settings) {
+        ++_windowPresentation;
+        _notify();
+      }
     } else {
-      await _window.resize(_generation, view.height);
+      await _window.resize(_generation, view.height, width: view.width);
     }
   }
 
   @override
   void dispose() {
     _prefillTimer?.cancel();
+    _sessionFlow.dispose();
     _disposed = true;
     _cachedView = null;
     _viewKey = null;
@@ -1110,6 +1697,8 @@ class LauncherController extends ChangeNotifier {
     if (session != null) {
       unawaited(_backend.deactivate(session).catchError((Object _) {}));
     }
+    files.removeListener(_filePresentationChanged);
+    files.dispose();
     settings.removeListener(_notify);
     settings.dispose();
     icons.dispose();

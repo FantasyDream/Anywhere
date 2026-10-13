@@ -10,7 +10,13 @@ Understand → Enrich → Match → Rank → Execute
 
 macOS 应用可在本机编译。
 
-`dev-0.7` 已接入 Spotlight 文件名搜索首个切片：在空白 Global Search 中输入至少两个字符，异步加入至多 8 条文件/目录结果，Enter 打开。新查询和关闭窗口撤销旧搜索；现有 Scope 与内容输入模式不触发文件检索。来源设置、加载/失败反馈和次级动作仍待完善，范围与验收见 [V0.7 MVP](docs/mvp-v0.7.md)。
+`dev-0.7` 的文件搜索是普通 **File Search** Action：在 Global Search 输入“文件搜索”或 `files` 查找，也可在 Settings → Shortcuts → Action shortcuts 中设置用户自定义快捷键，并按需开启 Global。空白首页不常驻工具入口；搜索图标菜单可在 Global Search / Current App 间切换。 文件页提供文档、PDF、图片、音频、视频、压缩包、代码等类型过滤（查询时按后缀分类，先过滤再加载）；类型栏与 Scope 共用标签样式，通过 Ctrl Tab / Ctrl Shift Tab 切换；裸 Tab / Shift Tab 不再遍历焦点。结果为按需追加的连续列表，没有分页按钮或页码。预览在 ⌘K / Ctrl K 的二级 Actions 中选择 Preview 打开，Esc / 返回先关闭预览并保留查询。
+
+文件搜索自动结合 Spotlight 快速候选与 Rust 完整文件名遍历，不需要安装 `rg` 或选择引擎。遍历同时搜索文件和文件夹，包含未索引、隐藏（按设置）和被 `.gitignore` 忽略的对象；仅用户明确的排除项缩小范围。Settings → Search 配置范围（空列表为 Home）和隐藏开关，新安装默认包含隐藏文件，保留旧配置。所有命中写入查询临时文件，隐藏超过 15 秒或换查询后清理，不维护长期文件索引。
+
+文件候选按类型使用统一透明线性图标，预览区共用；PDF、文档、表格、图片、音视频、压缩包、源码与配置等有对应形状和淡色。图标按文件名提示分类，不读取正文，也不生成逐文件缩略图。当前预览仍为文本 / 元数据，其他产品调研与后续富预览方案见 [文件预览与图标](docs/file-preview-and-icons-v0.7.md)。
+
+文件页扩展主 Launcher 的搜索栏、结果行和底栏，输入一个字符即可检索，支持字面标点、Unicode 和路径导航。内部按 64 项批次追加，方向键和滚动在同一连续列表中导航；底栏显示已找到数量及搜索中/完成/部分结果。类型栏与预览仅在文件页出现。单击选择，Enter / Open 或双击打开，Actions / ⌘K 提供已有文件操作。Esc 先清空文件查询，再返回原页面；返回按钮直接回父页。普通 Launcher 查询、现有 Scope 与内容输入模式不触发文件检索。Search 设置支持开关、目录与排除项，失败可 Retry。完整规则见 [统一交互模型](docs/launcher-ui-v0.7.md)，验收边界见 [V0.7 MVP](docs/mvp-v0.7.md)。
 
 ## 构建与运行
 
@@ -31,7 +37,9 @@ scripts/run-macos.sh
 
 macOS Host 显式启用 **Impeller**。
 
-首次启动自动显示一次，之后留在菜单栏。**⌘⌥Space** 打开 Current App Launcher，有当前应用身份且存在可见动作时默认选择其 Scope；加 **Shift** 打开 Universal Search，不选择 Scope。两个入口共用窗口，切换入口保留查询；重复同一入口关闭。失去焦点隐藏，重新唤醒清空输入并重新捕获上下文。
+首次启动自动显示一次，之后留在菜单栏。**⌘⌥Space** 打开 Current App Launcher，有当前应用身份且存在可见动作时默认选择其 Scope；加 **Shift** 打开 Universal Search，不选择 Scope。两个入口共用窗口，切换入口保留查询；重复同一入口关闭。失去焦点隐藏，15 秒内重新唤醒恢复原页面、查询、Scope、文件类型和预览；超过 15 秒清理会话，下一次唤醒重新捕获上下文。详见 [状态保留规则](docs/launcher-retention-v0.7.md)。
+
+Current App 唤醒时，如果存在选中文本，或复制时间可确认且距今不超过 **15 秒** 的剪贴板文本，会先进入定制的 Global 内容输入页面并自动填入，只解析该输入的 Context。Esc 先返回 Current App 并恢复环境 Context，再按 Esc 返回空白 Global；不会因自填内容改变 Scope 的定义。
 
 界面由搜索框、Scope Bar 和结果列表组成。Current App Scope 聚合当前环境全部可用 Action，包括菜单、Folder、Git、剪贴板及输入识别动作；其他 Scope 按 Action Group 筛选。只显示有可见动作的入口，没有 All 或 Menu Scope。Context 决定动作是否适用，Scope 决定查询范围。当前应用菜单归 `app.<bundle_id>` 分组，顶部显示实际应用名；目录、Git 等分组可作用于多个 Context。
 
@@ -45,7 +53,7 @@ Finder 目录捕获需要 macOS 的 Automation 授权。拒绝授权时保留输
 
 V0.4 的 Finder 选中项、选中文本和浏览器 URL 也以唤醒时的前台应用实例为目标异步读取。应用身份在显示 Launcher 前冻结；具体值以系统读取时为准，浏览器在等待期间跳转时可能得到跳转后的 URL。
 
-Settings → Context Sources 可独立关闭四种来源，并查看上次唤醒的采集状态。无选区、不支持、超时、内容过长、选中项过多和权限拒绝分别处理；首页只提示需要处理的问题，拒绝授权时可打开系统设置，处理后重新唤醒即可重采集。关闭窗口后只保留状态元数据供设置页查看，不保留旧 Context 正文。
+Settings → Context Sources 可独立关闭四种来源，并查看上次唤醒的采集状态。无选区、不支持、超时、内容过长、选中项过多和权限拒绝分别处理；首页只提示需要处理的问题，拒绝授权时可打开系统设置，处理后重新唤醒即可重采集。隐藏后的 15 秒内保留原 Context 以恢复操作，超时后只保留状态元数据供设置页查看，不保留旧 Context 正文。
 
 剪贴板只读取一次文本快照，内容上限 16 KiB；已知系统策略拒绝时单独提示权限，无法可靠确定原因时报告不可用，不猜测权限。来源失败不阻塞其他动作。Copy URL 与 Copy Path 在剪贴板已包含相同目标时隐藏；不同 URL 的打开动作保留来源标注，相同目标合并。
 
@@ -119,7 +127,7 @@ scripts/package-macos.sh build/Anywhere-dev-0.5.app
 
 打包前检查 Flutter / 原生版本和固定签名；打包后核对归档中的版本、主程序和 Rust 动态库，生成 ZIP 及 SHA-256 校验文件。复制或运行 `build/Anywhere-dev-0.5.app`，ZIP 用于传输。当前工程验收状态与交付边界见 [0.5 收尾记录](docs/v0.5-closeout.md)。
 
-开发项目识别和常用构建/测试/运行已纳入 0.5；自定义 Action 快捷键、文件搜索和插件 UI 属于后续阶段。可执行插件运行时、AI、账户与云同步尚未纳入当前版本。
+开发项目识别和常用构建/测试/运行已纳入 0.5；自定义 Action 快捷键已纳入 0.6，文件搜索在 0.7 开发中；插件 UI 属于后续阶段。可执行插件运行时、AI、账户与云同步尚未纳入当前版本。
 
 ### 菜单身份安全降级（0.5.0+11）
 
@@ -140,3 +148,9 @@ scripts/package-macos.sh build/Anywhere-dev-0.5.app
 所有窗口、表单和弹窗共用 UI 主题与组件。设置按 General、Shortcuts、Context、Search、Plugins 分类；输入框、主要操作、状态与选中项有明确视觉区分。设计与验收见 [UI 系统梳理](docs/ui-system-v0.6.md)。
 
 跨平台共享层与 Host 接入边界见 [platform-portability.md](docs/platform-portability.md)。当前完整系统适配器仍为 macOS；新增 Linux/Windows 共享代码 CI 不代表已交付 Windows App。
+
+### 文件搜索目录授权（V0.7 build 19）
+
+macOS 首次启动或保存新的搜索范围时，会先准备目录访问；选择所需文件夹后保存只读授权书签。只搜索有效授权范围，取消时不默认放开 Home；受保护位置会跳过并在底部注明。Settings → Search 可重新授权保存范围，或打开完全磁盘访问设置（需用户手动授予）。见 [授权流程](docs/file-search-access-v0.7.md)。
+
+当前职责边界重构及增量快照验证：[build 21 记录](docs/refactor-boundaries-build21.md)。
