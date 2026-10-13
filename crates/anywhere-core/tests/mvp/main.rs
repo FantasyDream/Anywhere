@@ -1,5 +1,6 @@
 mod context_sources;
 mod developer;
+mod extensions;
 mod file_search;
 mod git;
 mod history;

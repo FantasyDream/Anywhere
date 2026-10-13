@@ -19,6 +19,7 @@
 //! - [`persistence`] stores data behind repository interfaces.
 pub mod application;
 pub mod core;
+pub mod extensions;
 pub mod features;
 pub mod persistence;
 

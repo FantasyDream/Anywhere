@@ -34,7 +34,7 @@ impl ActionHandler for Json {
             serde_json::to_string_pretty(parsed.as_ref())?
         };
         if matches!(self.mode, JsonMode::CopyPretty) {
-            platform.copy_text(&rendered)?;
+            super::super::services(super::manifest(), platform)?.copy_text(&rendered)?;
             return Ok(ExecutionOutput::dismiss());
         }
         Ok(ExecutionOutput::preview(rendered))

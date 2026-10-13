@@ -1,6 +1,7 @@
 //! Declarative manifests; no executable runtime or UI.
 use anyhow::{bail, Context, Result};
 use anywhere_protocol::{DeclarativeAction, PluginManifest};
+pub mod extension;
 use std::{collections::HashSet, path::Path};
 
 pub const EXAMPLE_PLUGIN: &str = include_str!("../../../plugins/examples/search.toml");
@@ -11,12 +12,18 @@ pub fn parse_manifest(raw: &str) -> Result<PluginManifest> {
         bail!("manifest exceeds 256 KiB");
     }
     let manifest: PluginManifest = toml::from_str(raw).context("invalid plugin TOML")?;
-    if manifest.protocol_version != 1 {
-        bail!(
-            "unsupported protocol_version {}; expected 1",
-            manifest.protocol_version
-        );
+    if manifest.protocol_version == 1
+        && (manifest.version.is_some() || !manifest.capabilities.is_empty())
+    {
+        bail!("v1 manifests cannot declare v2 metadata");
     }
+    validate_manifest(&manifest)?;
+    Ok(manifest)
+}
+
+/// Revalidate at registration too; callers may construct protocol DTOs directly.
+pub fn validate_manifest(manifest: &PluginManifest) -> Result<()> {
+    extension::validate_plugin_metadata(manifest)?;
     if !identifier(&manifest.id) || manifest.id == "core" || manifest.id.starts_with("core.") {
         bail!("invalid or reserved plugin id");
     }
@@ -64,7 +71,7 @@ pub fn parse_manifest(raw: &str) -> Result<PluginManifest> {
             }
         }
     }
-    Ok(manifest)
+    Ok(())
 }
 
 fn identifier(value: &str) -> bool {
@@ -213,7 +220,7 @@ mod tests {
     fn valid_manifest_and_all_validation_failures() {
         assert_eq!(parse_manifest(EXAMPLE_PLUGIN).unwrap().commands.len(), 1);
         for raw in [
-            EXAMPLE_PLUGIN.replace("protocol_version = 1", "protocol_version = 2"),
+            EXAMPLE_PLUGIN.replace("protocol_version = 1", "protocol_version = 3"),
             EXAMPLE_PLUGIN.replace("open_url", "run_shell"),
             EXAMPLE_PLUGIN.replace("context.value", "context.secret"),
             EXAMPLE_PLUGIN.replace("core.text", "bad matcher"),

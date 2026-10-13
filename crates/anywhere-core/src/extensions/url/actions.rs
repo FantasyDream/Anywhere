@@ -20,7 +20,7 @@ impl ActionHandler for OpenBrowser {
         let ContextValue::Url(url) = &context.value else {
             bail!("URL context required");
         };
-        platform.open_url(url.as_str())?;
+        super::super::services(super::manifest(), platform)?.open_url(url.as_str())?;
         Ok(ExecutionOutput::dismiss())
     }
 }
@@ -34,7 +34,7 @@ impl ActionHandler for CopyUrl {
         let ContextValue::Url(url) = &context.value else {
             bail!("URL context required");
         };
-        platform.copy_text(url.as_str())?;
+        super::super::services(super::manifest(), platform)?.copy_text(url.as_str())?;
         Ok(ExecutionOutput::dismiss())
     }
 }

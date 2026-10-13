@@ -12,26 +12,30 @@ use std::collections::{BTreeMap, BTreeSet};
 pub enum ActionExecutor {
     Native(ActionHandlerRef),
     Declarative(DeclarativeAction),
+    ScopedDeclarative {
+        action: DeclarativeAction,
+        grant: super::capabilities::CapabilityGrant,
+    },
 }
 
 impl ActionExecutor {
     pub fn is_menu(&self) -> bool {
         match self {
             Self::Native(handler) => handler.is_menu(),
-            Self::Declarative(_) => false,
+            Self::Declarative(_) | Self::ScopedDeclarative { .. } => false,
         }
     }
     pub fn records_usage(&self) -> bool {
         match self {
             Self::Native(handler) => handler.records_usage(),
-            Self::Declarative(_) => true,
+            Self::Declarative(_) | Self::ScopedDeclarative { .. } => true,
         }
     }
 
     pub fn execution_token(&self) -> Option<u64> {
         match self {
             Self::Native(handler) => handler.execution_token(),
-            Self::Declarative(_) => None,
+            Self::Declarative(_) | Self::ScopedDeclarative { .. } => None,
         }
     }
 }
@@ -177,7 +181,9 @@ impl ActionRegistry {
                     _ => bail!("execute_builtin target is not built-in"),
                 }
             }
-            ActionExecutor::Declarative(_) => BindingPolicy::Persistent,
+            ActionExecutor::Declarative(_) | ActionExecutor::ScopedDeclarative { .. } => {
+                BindingPolicy::Persistent
+            }
         };
         if let BindingPolicy::Unavailable { reason } = policy {
             bail!("{reason}");
@@ -312,6 +318,25 @@ impl ActionRegistry {
 
     /// Validate all commands first; a bad plugin never leaves half a registration.
     pub fn register_plugin(&mut self, plugin: PluginManifest) -> Result<()> {
+        self.register_plugin_with_capabilities(plugin, &[])
+    }
+
+    /// The caller supplies grants independently of the manifest. Default loading
+    /// grants nothing to v2; v1 retains its existing explicit-install behavior.
+    pub fn register_plugin_with_capabilities(
+        &mut self,
+        plugin: PluginManifest,
+        allowed: &[extension::ExtensionCapability],
+    ) -> Result<()> {
+        anywhere_plugin::validate_manifest(&plugin)?;
+        let grant = if plugin.protocol_version == 2 {
+            Some(super::capabilities::CapabilityGrant::approve(
+                &plugin.capabilities,
+                allowed,
+            )?)
+        } else {
+            None
+        };
         let default_group = format!("plugin.{}", plugin.id);
         let plugin_name = plugin.name.clone();
         let mut commands = Vec::new();
@@ -372,7 +397,14 @@ impl ActionRegistry {
                     .into_iter()
                     .map(|type_id| ContextMatcher { type_id })
                     .collect(),
-                executor: ActionExecutor::Declarative(command.action),
+                executor: if let Some(grant) = &grant {
+                    ActionExecutor::ScopedDeclarative {
+                        action: command.action,
+                        grant: grant.clone(),
+                    }
+                } else {
+                    ActionExecutor::Declarative(command.action)
+                },
                 availability,
                 base_priority: command.base_priority,
                 icon: icon.into(),

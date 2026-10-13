@@ -20,7 +20,7 @@ pub struct RuntimeSource {
     pub available: bool,
 }
 impl FeatureContribution {
-    fn new(
+    pub(crate) fn new(
         id: &'static str,
         bundles: Vec<ActionBundle>,
         providers: Vec<Arc<dyn ContextProvider>>,
@@ -82,22 +82,13 @@ pub fn builtins() -> Vec<FeatureContribution> {
             vec![Arc::new(git::provider::GitRepositoryProvider::default())],
         ),
         filesystem,
-        FeatureContribution::new(
-            "url",
-            vec![url::actions::bundle()],
-            vec![Arc::new(url::provider::UrlProvider::new())],
-        ),
-        FeatureContribution::new(
-            "json",
-            vec![json::actions::bundle()],
-            vec![Arc::new(json::provider::JsonProvider::new())],
-        ),
-        FeatureContribution::new(
-            "text",
-            vec![],
-            vec![Arc::new(text::provider::TextProvider::default())],
-        ),
     ];
+    result.extend(crate::extensions::builtins().expect("invalid first-party extension"));
+    result.push(FeatureContribution::new(
+        "text",
+        vec![],
+        vec![Arc::new(text::provider::TextProvider::default())],
+    ));
     for (id, kind, bundle) in [
         ("rust", ProjectKind::Rust, developer::actions::rust_bundle()),
         (

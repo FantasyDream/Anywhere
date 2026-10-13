@@ -1,4 +1,5 @@
 //! Stable, serializable boundary types. No UI or OS dependencies.
+pub mod extension;
 pub mod policy;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -460,6 +461,10 @@ pub struct PluginManifest {
     pub protocol_version: u32,
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub capabilities: Vec<extension::ExtensionCapability>,
     pub commands: Vec<PluginCommand>,
 }
 

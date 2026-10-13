@@ -154,3 +154,5 @@ scripts/package-macos.sh build/Anywhere-dev-0.5.app
 macOS 首次启动或保存新的搜索范围时，会先准备目录访问；选择所需文件夹后保存只读授权书签。只搜索有效授权范围，取消时不默认放开 Home；受保护位置会跳过并在底部注明。Settings → Search 可重新授权保存范围，或打开完全磁盘访问设置（需用户手动授予）。见 [授权流程](docs/file-search-access-v0.7.md)。
 
 当前职责边界重构及增量快照验证：[build 21 记录](docs/refactor-boundaries-build21.md)。
+
+V0.7 工程收尾已提交，当前开发分支为 dev-0.8：[第一方模块与 Extension v2 MVP](docs/mvp-v0.8.md)。

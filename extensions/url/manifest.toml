@@ -1,0 +1,5 @@
+protocol_version = 2
+id = "url"
+name = "URL"
+version = "0.8.0"
+capabilities = ["url.open", "clipboard.write"]

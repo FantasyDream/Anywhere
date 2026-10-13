@@ -10,6 +10,7 @@
 //! [`ActionBundle`]: bundle::ActionBundle
 pub mod availability;
 pub mod bundle;
+pub mod capabilities;
 pub mod descriptor;
 pub mod execute;
 pub mod group;

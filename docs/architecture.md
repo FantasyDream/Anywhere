@@ -255,3 +255,9 @@ Rust 快照候选使用 `Arc<Vec<...>>`。完整替换/重排递增 `candidate_l
 ## build 22 文件工作区交互
 
 文件初始批次按目标去重并追加到既有前缀，自动增长有 64 行预算；后续仍连续加载。文件候选的合法追加维持列表版本，用户无需操作就能获得稳定顺序。固定预览消费选中对象或对象操作层的原目标，预览与普通操作行分开；相关本地 Preview Action / toggle 状态已经移除。920×600 文件工具尺寸由 Flutter 通过 DesktopHost width/height 请求，Native 只约束屏幕范围；详情与验证见 [build 22](files-fixed-preview-build22.md)。
+
+## V0.8 S1：模块与受限服务
+
+JSON / URL 实际实现迁到 `src/extensions`，分别以编译时 manifest 和相同 FirstPartyExtension 接口贡献 Provider/Bundle；旧 features 路径仅兼容导出。集中装配消费贡献，不新增 Launcher 分支。稳定 ActionId / Context / Provider 身份保留。
+
+protocol/extension 定义 metadata 与能力名，plugin/extension 做版本/字段/请求校验；core/action/capabilities 持有宿主批准与窄服务，每次副作用检查；ActionExecutor::ScopedDeclarative 保存批准。默认外部 v2 无批准；第一方批准由宿主固定允许表提供，manifest 本身不能批准。旧 v1 继续既有执行行为。第三方 Native ABI、进程沙箱、Storage 和外部 CandidateSource 尚未开放，详见 [V0.8 MVP](mvp-v0.8.md)。
