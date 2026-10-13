@@ -14,8 +14,9 @@ use std::{
 };
 
 static APPLICATION: OnceLock<Application> = OnceLock::new();
-static PLUGIN_DIRS: OnceLock<Vec<PathBuf>> = OnceLock::new();
-static PLUGIN_REPORTS: OnceLock<Mutex<Vec<PluginStatusDto>>> = OnceLock::new();
+static EXTENSIONS: OnceLock<
+    Mutex<anywhere_core::application::extension_manager::ExtensionManager>,
+> = OnceLock::new();
 
 pub fn ping() -> String {
     queries::ping()
@@ -131,6 +132,15 @@ pub async fn update_file_input(
     files::update_file_input(session_id, input, revision, filter).await
 }
 
+/// Resolve secondary actions for the selected object through the shared host flow.
+pub fn object_actions(
+    session_id: u32,
+    revision: u32,
+    candidate_id: String,
+) -> Result<Vec<CandidateDto>> {
+    files::file_actions(session_id, revision, candidate_id)
+}
+
 pub fn file_actions(
     session_id: u32,
     revision: u32,
@@ -219,6 +229,66 @@ pub fn reload_plugins() -> Result<Vec<PluginStatusDto>> {
     settings::reload_plugins()
 }
 
+/// Modern reload returns the same authoritative catalog as enable/grant/revoke.
+pub fn reload_extensions() -> Result<Vec<ExtensionStatusDto>> {
+    settings::reload_extensions()
+}
+
+pub fn extension_status() -> Result<Vec<ExtensionStatusDto>> {
+    settings::extension_status()
+}
+pub fn set_extension_enabled(key: String, enabled: bool) -> Result<Vec<ExtensionStatusDto>> {
+    settings::change_extension(
+        anywhere_core::application::extension_manager::ExtensionChange::Enable { key, enabled },
+    )
+}
+pub fn approve_extension(key: String, token: String) -> Result<Vec<ExtensionStatusDto>> {
+    settings::change_extension(
+        anywhere_core::application::extension_manager::ExtensionChange::Approve { key, token },
+    )
+}
+pub fn revoke_extension(key: String) -> Result<Vec<ExtensionStatusDto>> {
+    settings::change_extension(
+        anywhere_core::application::extension_manager::ExtensionChange::Revoke { key },
+    )
+}
+
+#[derive(Clone, Debug)]
+pub struct ExtensionStatusDto {
+    pub key: String,
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub first_party: bool,
+    pub legacy: bool,
+    pub enabled: bool,
+    pub active: bool,
+    pub needs_approval: bool,
+    pub configurable: bool,
+    pub capabilities: Vec<String>,
+    pub approval_token: String,
+    pub detail: String,
+}
+impl From<anywhere_core::application::extension_manager::ExtensionStatus> for ExtensionStatusDto {
+    fn from(s: anywhere_core::application::extension_manager::ExtensionStatus) -> Self {
+        Self {
+            key: s.key,
+            id: s.id,
+            name: s.name,
+            version: s.version,
+            first_party: s.first_party,
+            legacy: s.legacy,
+            enabled: s.enabled,
+            active: s.active,
+            needs_approval: s.needs_approval,
+            configurable: s.configurable,
+            capabilities: s.capabilities,
+            approval_token: s.approval_token,
+            detail: s.detail,
+        }
+    }
+}
+
 pub fn excluded_apps() -> Result<Vec<String>> {
     settings::excluded_apps()
 }
@@ -264,47 +334,6 @@ pub fn set_context_sources(
         browser_current_page,
         clipboard,
     )
-}
-
-fn plugin_reports() -> &'static Mutex<Vec<PluginStatusDto>> {
-    PLUGIN_REPORTS.get_or_init(|| Mutex::new(Vec::new()))
-}
-
-fn load_plugins(
-    registry: &mut anywhere_core::core::action::descriptor::ActionRegistry,
-    dirs: &[PathBuf],
-) -> Vec<PluginStatusDto> {
-    let mut reports = Vec::new();
-    for directory in dirs {
-        let discovery = anywhere_plugin::discover(directory);
-        for diagnostic in discovery.diagnostics {
-            reports.push(PluginStatusDto {
-                id: directory.display().to_string(),
-                ok: false,
-                detail: diagnostic,
-            });
-        }
-        for manifest in discovery.manifests {
-            let id = manifest.id.clone();
-            let name = manifest.name.clone();
-            match registry.register_plugin(manifest) {
-                Ok(()) => reports.push(PluginStatusDto {
-                    id,
-                    ok: true,
-                    detail: name,
-                }),
-                Err(error) => {
-                    tracing::error!(plugin_id = id, error = %error, "plugin_load_failure");
-                    reports.push(PluginStatusDto {
-                        id,
-                        ok: false,
-                        detail: format!("{error:#}"),
-                    });
-                }
-            }
-        }
-    }
-    reports
 }
 
 // Explicit conversion keeps generated/Flutter types out of the protocol and core.

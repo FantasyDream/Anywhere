@@ -97,11 +97,17 @@ impl Application {
     ) -> Self {
         platform.start_clipboard_tracking();
         let (catalog_tx, catalog_rx) = watch::channel(0);
-        let mut resolver = Resolver::new(registry, history).with_catalog_rx(catalog_rx);
+        let resolver = Resolver::new(registry, history).with_catalog_rx(catalog_rx);
         let (source, sources) =
             super::composition::builtin_sources(platform.clone(), resolver.base_registry());
         let file_search_policy = source.policy.clone();
-        resolver.async_sources.extend(sources);
+        resolver
+            .sources
+            .lock()
+            .expect("sources lock poisoned")
+            .base
+            .asynchronous
+            .extend(sources);
         Self {
             executions: Arc::new(Default::default()),
             platform,
@@ -251,6 +257,60 @@ impl Application {
         self.refresh_app_actions(session_id, None);
     }
 
+    /// Commit policy persistence before atomically publishing the new catalog.
+    /// Provider runs, retained contexts and execution offers belong to the old configuration.
+    pub(crate) fn replace_extension_runtime(
+        &self,
+        registry: ActionRegistry,
+        providers: crate::core::context::registry::ContextProviderRegistry,
+        sources: crate::core::search::candidate_source::SourceSet,
+        persist: impl FnOnce() -> Result<()>,
+    ) -> Result<()> {
+        let mut session = self.session()?;
+        let mut provider_slot = self
+            .resolver
+            .providers
+            .lock()
+            .map_err(|_| anyhow::anyhow!("providers lock poisoned"))?;
+        let mut registry_slot = self
+            .resolver
+            .registry
+            .lock()
+            .map_err(|_| anyhow::anyhow!("registry lock poisoned"))?;
+        let mut source_slot = self
+            .resolver
+            .sources
+            .lock()
+            .map_err(|_| anyhow::anyhow!("sources lock poisoned"))?;
+        let mut source_ids: BTreeSet<_> = source_slot.base.ids().collect();
+        for id in sources.ids() {
+            anyhow::ensure!(
+                !id.is_empty() && source_ids.insert(id),
+                "duplicate or empty source id: {id}"
+            );
+        }
+        persist()?;
+        let retired = std::mem::replace(&mut source_slot.extensions, sources);
+        *provider_slot = providers;
+        *registry_slot = Arc::new(registry);
+        self.resolver
+            .action_catalog_version
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        self.resolver
+            .execution_epoch
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        session.actions = registry_slot.clone();
+        session.invalidate_execution();
+        self.resolver.abandon_session();
+        drop(source_slot);
+        drop(registry_slot);
+        drop(provider_slot);
+        drop(session);
+        retired.reset();
+        self.file_search_source.clear();
+        Ok(())
+    }
+
     pub fn excluded_apps(&self) -> Vec<String> {
         self.excluded_apps
             .lock()
@@ -347,25 +407,33 @@ impl Application {
     /// Additional product sources use the same matching, sorting and publication path.
     pub fn register_candidate_source(
         &mut self,
-        source: Arc<dyn crate::core::search::candidate_source::CandidateSource + Send + Sync>,
+        source: crate::core::search::candidate_source::CandidateSourceRef,
     ) {
-        self.resolver.sources.push(source);
+        self.resolver
+            .sources
+            .lock()
+            .expect("sources lock poisoned")
+            .base
+            .synchronous
+            .push(source);
     }
 
     pub fn register_async_candidate_source(
         &mut self,
         source: Arc<dyn crate::core::search::candidate_source::AsyncCandidateSource>,
     ) -> Result<()> {
+        let mut catalog = self
+            .resolver
+            .sources
+            .lock()
+            .map_err(|_| anyhow::anyhow!("sources lock poisoned"))?;
         if source.id().is_empty()
-            || self
-                .resolver
-                .async_sources
-                .iter()
-                .any(|s| s.id() == source.id())
+            || catalog.asynchronous().iter().any(|s| s.id() == source.id())
+            || catalog.synchronous().iter().any(|s| s.id() == source.id())
         {
             anyhow::bail!("duplicate or empty search source id: {}", source.id());
         }
-        self.resolver.async_sources.push(source);
+        catalog.base.asynchronous.push(source);
         Ok(())
     }
 

@@ -161,7 +161,10 @@ void main() {
                         id: 'files',
                         state: failFirst && attempt == 1
                             ? SearchSourceStateDto.unavailable
-                            : SearchSourceStateDto.ready)
+                            : (progress?.issueCount ?? BigInt.zero) >
+                                    BigInt.zero
+                                ? SearchSourceStateDto.partial
+                                : SearchSourceStateDto.ready)
                   ],
             fileSearch: mode == InputModeDto.fileSearch ? progress : null,
             diagnostics: []);
@@ -284,6 +287,8 @@ void main() {
   FileSearchProgressDto searchProgress(
           {int page = 0,
           int inaccessible = 0,
+          int issues = 0,
+          List<String> examples = const [],
           String? next,
           String? previous,
           bool refresh = false}) =>
@@ -293,13 +298,49 @@ void main() {
           scannedEntries: BigInt.from(5),
           confirmedMatches: BigInt.from(5),
           finished: true,
-          issueCount: BigInt.zero,
+          issueCount: BigInt.from(issues),
           inaccessibleCount: BigInt.from(inaccessible),
-          issueExamples: const [],
+          issueExamples: examples,
           page: page,
           nextCursor: next,
           previousCursor: previous,
           needsRefresh: refresh);
+
+  testWidgets(
+      'incomplete search keeps results and exposes the actual diagnostic',
+      (tester) async {
+    const example = 'Non-Unicode filename: /project/unsupported-name';
+    await mount(tester,
+        progress: searchProgress(issues: 1, examples: const [example]));
+    await openFiles(tester);
+    await tester.enterText(find.byType(TextField), 'report');
+    await tester.pumpAndSettle();
+    expect(
+        find.text(
+            'File search encountered 1 issue. Available results are still usable.'),
+        findsOneWidget);
+    expect(find.textContaining('Partial results · 1 issue'), findsOneWidget);
+    expect(find.byTooltip(example), findsOneWidget);
+    expect(fileRow('report.txt'), findsOneWidget);
+    expect(find.text('Retry'), findsOneWidget);
+    expect(find.textContaining('Some locations could not'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'missing issue examples do not suppress the incomplete-search notice',
+      (tester) async {
+    await mount(tester, progress: searchProgress(issues: 2));
+    await openFiles(tester);
+    await tester.enterText(find.byType(TextField), 'report');
+    await tester.pumpAndSettle();
+    const notice =
+        'File search encountered 2 issues. Available results are still usable.';
+    expect(find.text(notice), findsOneWidget);
+    expect(find.byTooltip(notice), findsOneWidget);
+    expect(fileRow('report.txt'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets(
       'restricted locations are skipped without a warning or permission retry',

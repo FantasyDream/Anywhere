@@ -161,7 +161,26 @@ pub struct Discovery {
 
 /// Discover flat *.toml manifests and <plugin>/manifest.toml; deterministic path order.
 pub fn discover(directory: &Path) -> Discovery {
-    let mut result = Discovery::default();
+    let located = discover_with_paths(directory);
+    Discovery {
+        manifests: located
+            .manifests
+            .into_iter()
+            .map(|(_, manifest)| manifest)
+            .collect(),
+        diagnostics: located.diagnostics,
+    }
+}
+
+#[derive(Default)]
+pub struct LocatedDiscovery {
+    pub manifests: Vec<(std::path::PathBuf, PluginManifest)>,
+    pub diagnostics: Vec<String>,
+}
+
+/// Preserve the inspected origin so approval cannot migrate to a different installation.
+pub fn discover_with_paths(directory: &Path) -> LocatedDiscovery {
+    let mut result = LocatedDiscovery::default();
     if !directory.exists() {
         return result;
     }
@@ -202,7 +221,7 @@ pub fn discover(directory: &Path) -> Discovery {
             parse_manifest(&std::fs::read_to_string(&path)?)
         })();
         match load {
-            Ok(manifest) => result.manifests.push(manifest),
+            Ok(manifest) => result.manifests.push((path, manifest)),
             Err(error) => {
                 let diagnostic = format!("{}: {error:#}", path.display());
                 tracing::error!(path = %path.display(), error = %error, "plugin_load_failure");

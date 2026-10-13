@@ -59,7 +59,7 @@ class LauncherApp extends StatefulWidget {
     this.fileMore,
     this.fileMoreDelta,
     this.freezeFiles,
-    this.fileActions,
+    this.objectActions,
     this.suspend,
     this.resume,
     this.chooseActivationInput,
@@ -69,7 +69,7 @@ class LauncherApp extends StatefulWidget {
   final Future<LauncherStateDto?> Function(int, int)? fileMore;
   final Future<SnapshotWaitDto> Function(int, int, int, int)? fileMoreDelta;
   final Future<void> Function(int, int)? freezeFiles;
-  final Future<List<CandidateDto>> Function(int, int, String)? fileActions;
+  final Future<List<CandidateDto>> Function(int, int, String)? objectActions;
   final LoadFilePreview? loadFilePreview;
   final ChooseActivationInput? chooseActivationInput;
   final BeginActivation beginActivation;
@@ -139,7 +139,7 @@ class _LauncherAppState extends State<LauncherApp> {
         fileMore: widget.fileMore,
         fileMoreDelta: widget.fileMoreDelta,
         freezeFiles: widget.freezeFiles,
-        fileActions: widget.fileActions,
+        objectActions: widget.objectActions,
       ),
       window: WindowHost(widget.window),
       startupMessage: widget.startupMessage,
@@ -191,8 +191,8 @@ class _LauncherScreenState extends State<LauncherScreen> {
   Object? _moreRequestedFor;
   String? _displayedFileSelection;
   int? _displayedFileIndex;
-  bool _displayedFileActions = false;
-  (Object, double)? _fileResultsPosition;
+  bool _displayedObjectActions = false;
+  (Object, double)? _objectResultsPosition;
 
   Object get _fileQuery => (
         _view.snapshot?.sessionId,
@@ -263,22 +263,24 @@ class _LauncherScreenState extends State<LauncherScreen> {
         }
       });
     }
-    final fileActions = _view.isFileSearch && _view.fileActionTitle != null;
-    if (fileActions && !_displayedFileActions && _scroll.hasClients) {
+    final objectActions = _view.objectActionTitle != null;
+    if (objectActions && !_displayedObjectActions && _scroll.hasClients) {
       // Actions temporarily replace the list with a much shorter one. Save its
       // position before layout clamps the shared scroll controller to zero.
-      _fileResultsPosition = (_fileQuery, _scroll.offset);
+      _objectResultsPosition = (_fileQuery, _scroll.offset);
     }
-    final savedPosition = _fileResultsPosition;
-    final restoreFilePosition = _displayedFileActions &&
-        !fileActions &&
-        _view.hasFileControls &&
+    final savedPosition = _objectResultsPosition;
+    final restoreFilePosition = _displayedObjectActions &&
+        !objectActions &&
+        _view.bindingChoices == null &&
+        _view.output == null &&
         savedPosition?.$1 == _fileQuery;
     if (restoreFilePosition) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted ||
             !_view.visible ||
-            !_view.hasFileControls ||
+            _view.bindingChoices != null ||
+            _view.output != null ||
             _fileQuery != savedPosition!.$1 ||
             !_scroll.hasClients) {
           return;
@@ -287,10 +289,10 @@ class _LauncherScreenState extends State<LauncherScreen> {
             _scroll.position.maxScrollExtent));
       });
     }
-    if (!_view.isFileSearch || savedPosition?.$1 != _fileQuery) {
-      _fileResultsPosition = null;
+    if (savedPosition?.$1 != _fileQuery) {
+      _objectResultsPosition = null;
     }
-    _displayedFileActions = fileActions;
+    _displayedObjectActions = objectActions;
     final inputVisible = _view.visible && _view.phase != LauncherPhase.settings;
     final searchText =
         _view.visible || _controller.hasRetainedState ? _view.searchText : '';
@@ -457,8 +459,8 @@ class _LauncherScreenState extends State<LauncherScreen> {
       _controller.escape();
     } else if (command &&
         event.logicalKey == LogicalKeyboardKey.keyK &&
-        _controller.canShowFileActions) {
-      _controller.showFileActions();
+        _controller.canShowObjectActions) {
+      _controller.showObjectActions();
     } else if (command &&
         event.logicalKey == LogicalKeyboardKey.keyK &&
         _view.canBrowseMenus &&
@@ -575,7 +577,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
                           files: _controller.files,
                           enabled: !view.resolving &&
                               !view.executing &&
-                              view.fileActionTitle == null &&
+                              view.objectActionTitle == null &&
                               view.output == null,
                           onSelect: _focus.requestFocus),
                     if (!view.navigationOpen && view.notice != null)
@@ -613,11 +615,12 @@ class _LauncherScreenState extends State<LauncherScreen> {
                                       !view.executing &&
                                       !view.resolving &&
                                       view.output == null &&
-                                      view.fileActionTitle == null
+                                      view.objectActionTitle == null
                                   ? () => _runAndFocus(_controller.retrySearch)
                                   : null,
-                          onActions: _controller.canShowFileActions
-                              ? () => _runAndFocus(_controller.showFileActions)
+                          onActions: _controller.canShowObjectActions
+                              ? () =>
+                                  _runAndFocus(_controller.showObjectActions)
                               : null,
                           label: view.output == null
                               ? (view.hasFileControls && _controller.fileMoreLoading
@@ -629,13 +632,11 @@ class _LauncherScreenState extends State<LauncherScreen> {
                               : view.resultStatus == ActionStatusDto.failed
                                   ? 'Failed'
                                   : 'Succeeded',
-                          primaryLabel: view.fileActionTitle == null &&
+                          primaryLabel: view.objectActionTitle == null &&
                                   entries.isNotEmpty &&
                                   (entries[view.selectedIndex].navigationPath !=
                                           null ||
-                                      entries[view.selectedIndex]
-                                              .candidate
-                                              ?.kind ==
+                                      entries[view.selectedIndex].candidate?.kind ==
                                           CandidateKindDto.file)
                               ? 'Open'
                               : selected?.commandId == 'core.files.search'
@@ -650,14 +651,15 @@ class _LauncherScreenState extends State<LauncherScreen> {
                               ? null
                               : () => _runAndFocus(_controller.executeSelected),
                           result: view.output != null,
-                          onCopy:
-                              view.output == null ? null : _controller.copyResult,
+                          onCopy: view.output == null
+                              ? null
+                              : _controller.copyResult,
                           onBack: view.output != null
                               ? () {
                                   _controller.back();
                                   _focus.requestFocus();
                                 }
-                              : view.fileActionTitle != null
+                              : view.objectActionTitle != null
                                   ? _backFiles
                                   : view.browsing
                                       ? _backMenu
@@ -789,7 +791,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
     }
     if (view.searchLoading) return 'Searching files…';
     if (view.searchPartial) {
-      return 'Some locations could not be searched. Check the search details and retry.';
+      return 'File search is incomplete. Check the issue details and retry.';
     }
     if (view.searchUnavailable) return 'File search unavailable';
     if (_controller.files.filter != FileFilter.all) {
@@ -808,9 +810,11 @@ class _LauncherScreenState extends State<LauncherScreen> {
       child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
           child: Tooltip(
-              message: view.isFileSearch && view.searchPartial
-                  ? view.snapshot?.fileSearch?.issueExamples.join('\n') ??
-                      view.notice!
+              message: view.isFileSearch &&
+                      view.searchPartial &&
+                      (view.snapshot?.fileSearch?.issueExamples.isNotEmpty ??
+                          false)
+                  ? view.snapshot!.fileSearch!.issueExamples.join('\n')
                   : view.notice!,
               child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10),
@@ -854,7 +858,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
       final sourceLabel = _view.sourceLabelFor(candidate);
       final shortcut = _controller.shortcutLabelFor(candidate);
       Widget row() => CandidateRow(
-          fileObject: _view.fileActionTitle == null,
+          fileObject: _view.objectActionTitle == null,
           actionShortcut: shortcut,
           candidate: candidate,
           selected: selected,

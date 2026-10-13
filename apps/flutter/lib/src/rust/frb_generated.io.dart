@@ -105,6 +105,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  ExtensionStatusDto dco_decode_extension_status_dto(dynamic raw);
+
+  @protected
   double dco_decode_f_32(dynamic raw);
 
   @protected
@@ -149,6 +152,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   List<ExecutionSessionSummaryDto>
       dco_decode_list_execution_session_summary_dto(dynamic raw);
+
+  @protected
+  List<ExtensionStatusDto> dco_decode_list_extension_status_dto(dynamic raw);
 
   @protected
   List<PluginStatusDto> dco_decode_list_plugin_status_dto(dynamic raw);
@@ -344,6 +350,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  ExtensionStatusDto sse_decode_extension_status_dto(
+      SseDeserializer deserializer);
+
+  @protected
   double sse_decode_f_32(SseDeserializer deserializer);
 
   @protected
@@ -394,6 +404,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ExecutionSessionSummaryDto>
       sse_decode_list_execution_session_summary_dto(
           SseDeserializer deserializer);
+
+  @protected
+  List<ExtensionStatusDto> sse_decode_list_extension_status_dto(
+      SseDeserializer deserializer);
 
   @protected
   List<PluginStatusDto> sse_decode_list_plugin_status_dto(
@@ -607,6 +621,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       ExecutionSessionSummaryDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_extension_status_dto(
+      ExtensionStatusDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
 
   @protected
@@ -659,6 +677,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_list_execution_session_summary_dto(
       List<ExecutionSessionSummaryDto> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_extension_status_dto(
+      List<ExtensionStatusDto> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_plugin_status_dto(

@@ -26,8 +26,10 @@ void launcher_free_bytes(unsigned char *value) { free(value); }
 
 // Recheck the frozen app identity around slower Automation calls. Bundle ID
 // alone cannot detect a restart, and PID alone can be reused by the kernel.
-int launcher_application_identity_matches(int pid, const char *bundle_id,
-                                          const char *instance_id) {
+// 1 = match, 0 = invalid arguments, 2 = missing process, 3 = terminated,
+// 4 = bundle mismatch, 5 = process-start mismatch. No app content is returned.
+int launcher_application_identity_status(int pid, const char *bundle_id,
+                                         const char *instance_id) {
     @autoreleasepool {
         if (pid <= 0 || !bundle_id || !instance_id) return 0;
         NSString *expectedBundle = [NSString stringWithUTF8String:bundle_id];
@@ -36,10 +38,17 @@ int launcher_application_identity_matches(int pid, const char *bundle_id,
         NSRunningApplication *running =
             [NSRunningApplication runningApplicationWithProcessIdentifier:(pid_t)pid];
         NSString *actualInstance = launcher_process_instance((pid_t)pid);
-        return running && !running.terminated &&
-               [running.bundleIdentifier isEqualToString:expectedBundle] &&
-               [actualInstance isEqualToString:expectedInstance] ? 1 : 0;
+        if (!running || actualInstance.length == 0) return 2;
+        if (running.terminated) return 3;
+        if (![running.bundleIdentifier isEqualToString:expectedBundle]) return 4;
+        if (![actualInstance isEqualToString:expectedInstance]) return 5;
+        return 1;
     }
+}
+
+int launcher_application_identity_matches(int pid, const char *bundle_id,
+                                          const char *instance_id) {
+    return launcher_application_identity_status(pid, bundle_id, instance_id) == 1;
 }
 
 // One installed application bundle. Metadata only: no icon is extracted here.

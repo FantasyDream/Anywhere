@@ -1,6 +1,7 @@
 import 'dart:async';
 import '../infrastructure/runtime_policy.dart';
 import '../src/rust/api.dart';
+import 'stable_list.dart';
 
 /// Request identity and retained-session lifetime. This service has no Scope,
 /// menu, ranking, keyboard or Widget decisions.
@@ -71,8 +72,10 @@ class LauncherSessionCoordinator {
     }
     final rows = packet.candidateUpdate == CandidateUpdateDto.retain
         ? held.candidates
-        : List<CandidateDto>.unmodifiable(
-            [...held.candidates, ...next.candidates]);
+        : (held.candidates is StableList<CandidateDto>
+                ? held.candidates as StableList<CandidateDto>
+                : StableList<CandidateDto>.from(held.candidates))
+            .append(next.candidates);
     return LauncherStateDto(
         sessionId: next.sessionId,
         revision: next.revision,

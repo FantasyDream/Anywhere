@@ -1,6 +1,6 @@
 import '../src/rust/api.dart';
 
-/// Overlays are mutually exclusive; a file action panel always carries its target
+/// Overlays are mutually exclusive; an object action panel always carries its target
 /// and return selection together with its offers.
 sealed class LauncherOverlay {
   const LauncherOverlay();
@@ -20,8 +20,8 @@ final class BindingChoices extends LauncherOverlay {
   final List<CandidateDto> items;
 }
 
-final class FileActions extends LauncherOverlay {
-  FileActions(
+final class ObjectActions extends LauncherOverlay {
+  ObjectActions(
       {required this.target,
       required this.title,
       required this.parent,

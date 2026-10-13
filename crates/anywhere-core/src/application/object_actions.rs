@@ -28,8 +28,8 @@ impl Application {
                 .get(candidate_id.as_str())
                 .context("file expired")?
                 .clone();
-            if file.presentation.kind != CandidateKind::File || !file.presentation.primary_action {
-                bail!("choose a file result");
+            if !file.presentation.primary_action || file.context().is_none() {
+                bail!("choose an object result");
             }
             (
                 file,
@@ -54,7 +54,22 @@ impl Application {
             super::session_runtime::now(),
             crate::features::context_semantic,
         );
-        let actions = search::result_actions(std::slice::from_ref(&file), &engine);
+        let mut actions = if file.presentation.kind == CandidateKind::File {
+            search::result_actions(std::slice::from_ref(&file), &engine)
+        } else {
+            engine
+                .search(
+                    &crate::core::search::query::Query::parse(""),
+                    std::slice::from_ref(file.context().expect("validated object context")),
+                    &[],
+                )
+                .candidates
+        };
+        // Opening an object's actions preserves its default operation first.
+        // Other operations retain the shared ranking, including Usage. A new
+        // object's default must not become Forget merely due to an ID tie.
+        actions
+            .sort_by_key(|action| action.presentation.command_id != file.presentation.command_id);
         {
             let mut session = self.session()?;
             if session.suspended

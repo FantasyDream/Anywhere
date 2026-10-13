@@ -73,6 +73,7 @@ pub(crate) struct TestPlatform {
     pub(crate) gates: Mutex<Vec<Arc<CaptureGate>>>,
     /// Simulates Finder Automation latency so the first snapshot budget cuts short.
     pub(crate) capture_delay: Option<Duration>,
+    pub(crate) directory_error: Mutex<Option<anywhere_platform::ContextReadError>>,
     /// Names the fake platform reports as this bundle's localized names.
     pub(crate) localized: Vec<String>,
     pub(crate) frontmost_gate: Mutex<Option<Arc<CaptureGate>>>,
@@ -173,6 +174,9 @@ impl Platform for TestPlatform {
         }
         if let Some(delay) = self.capture_delay {
             std::thread::sleep(delay);
+        }
+        if let Some(error) = *self.directory_error.lock().unwrap() {
+            return Err(anyhow::Error::new(error).context("original directory capture"));
         }
         Ok(Some(self.directory.clone()))
     }

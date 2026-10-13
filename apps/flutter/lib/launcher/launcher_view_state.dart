@@ -1,6 +1,8 @@
 import '../settings/host_settings.dart';
 import 'file_search_controller.dart';
 import 'dart:convert';
+import 'dart:collection';
+import 'stable_list.dart';
 import '../src/rust/api.dart';
 import 'context_source_status.dart';
 
@@ -27,12 +29,72 @@ class LauncherEntry {
 class LauncherEntries {
   LauncherEntries(Iterable<LauncherEntry> entries)
       : rows = List.unmodifiable(entries) {
-    for (var i = 0; i < rows.length; i++) {
-      indices[rows[i].key] = i;
+    indices = EntryIndex.entries(rows);
+  }
+  LauncherEntries.files(List<CandidateDto> candidates) {
+    // Core has already filtered hidden offers. Protect injected/test snapshots
+    // without copying an ordinary visible list on each append.
+    final visible =
+        candidates.any((c) => c.availability == AvailabilityDto.hidden)
+            ? candidates.where((c) => c.availability != AvailabilityDto.hidden)
+            : candidates;
+    final stable = visible is StableList<CandidateDto>
+        ? visible
+        : StableList<CandidateDto>.from(visible);
+    rows = CandidateRows(stable);
+    indices = EntryIndex.files(stable);
+  }
+  late final List<LauncherEntry> rows;
+  late final EntryIndex indices;
+}
+
+/// Only visible rows allocate a presentation wrapper. File chunks also share
+/// their key lookup across append snapshots, preserving fast keyboard selection.
+class CandidateRows extends ListBase<LauncherEntry> {
+  CandidateRows(this.candidates);
+  final List<CandidateDto> candidates;
+  @override
+  int get length => candidates.length;
+  @override
+  set length(int value) => throw UnsupportedError('Immutable entries');
+  @override
+  LauncherEntry operator [](int index) =>
+      LauncherEntry.candidate(candidates[index]);
+  @override
+  void operator []=(int index, LauncherEntry value) =>
+      throw UnsupportedError('Immutable entries');
+}
+
+class EntryIndex {
+  EntryIndex.entries(List<LauncherEntry> entries)
+      : chunks = [
+          (
+            0,
+            {
+              for (var i = 0; i < entries.length; i++) entries[i].key: i,
+            }
+          )
+        ];
+  EntryIndex.files(StableList<CandidateDto> candidates) : chunks = [] {
+    var offset = 0;
+    for (final chunk in candidates.chunks) {
+      final local = _fileKeys[chunk] ??= {
+        for (var i = 0; i < chunk.length; i++) 'candidate:${chunk[i].id}': i,
+      };
+      chunks.add((offset, local));
+      offset += chunk.length;
     }
   }
-  final List<LauncherEntry> rows;
-  final Map<String, int> indices = {};
+  static final _fileKeys = Expando<Map<String, int>>();
+  final List<(int, Map<String, int>)> chunks;
+  int? operator [](String? key) {
+    if (key == null) return null;
+    for (final (offset, local) in chunks.reversed) {
+      final index = local[key];
+      if (index != null) return offset + index;
+    }
+    return null;
+  }
 }
 
 /// Core supplies available scopes and ranked offers; Host owns menu navigation.
@@ -54,7 +116,7 @@ class LauncherViewState {
     this.resultStatus,
     String? universalShortcut,
     this.bindingChoices,
-    this.fileActionTitle,
+    this.objectActionTitle,
     this.fileFilter = FileFilter.all,
     this.navigationMode,
     this.retainedFileEntries,
@@ -93,7 +155,7 @@ class LauncherViewState {
   String get universalShortcut =>
       _universalShortcut ?? HostSettings.defaults.universalLabel;
   final List<CandidateDto>? bindingChoices;
-  final String? fileActionTitle;
+  final String? objectActionTitle;
   bool get visible =>
       phase == LauncherPhase.ready ||
       phase == LauncherPhase.settings ||
@@ -148,7 +210,7 @@ class LauncherViewState {
   /// title or subtitle. Identical targets can have several merged context roots.
   String? sourceLabelFor(CandidateDto candidate) {
     if (candidate.kind == CandidateKindDto.file) {
-      return isFileSearch || fileActionTitle != null ? null : 'Files';
+      return isFileSearch || objectActionTitle != null ? null : 'Files';
     }
     if (candidate.kind != CandidateKindDto.action) return null;
     if (isMenu(candidate)) {
@@ -188,8 +250,14 @@ class LauncherViewState {
     return true;
   }
 
-  late final LauncherEntries entryCollection =
-      retainedFileEntries ?? LauncherEntries(_buildEntries());
+  late final LauncherEntries entryCollection = retainedFileEntries ??
+      (isFileSearch &&
+              bindingChoices == null &&
+              inputModeReady &&
+              snapshot != null &&
+              snapshot!.input == input
+          ? LauncherEntries.files(snapshot!.candidates)
+          : LauncherEntries(_buildEntries()));
   List<LauncherEntry> get visibleEntries => entryCollection.rows;
   List<LauncherEntry> _buildEntries() {
     if (!inputModeReady || (snapshot != null && snapshot!.input != input)) {
@@ -312,7 +380,8 @@ class LauncherViewState {
     if (progress != null) {
       final count = '${progress.confirmedMatches}';
       if (searchPartial) {
-        return '$count found · Partial results · ${progress.issueCount} issues';
+        final unit = progress.issueCount == BigInt.one ? 'issue' : 'issues';
+        return '$count found · Partial results · ${progress.issueCount} $unit';
       }
       if (!progress.finished) return '$count found · Searching…';
       if (progress.inaccessibleCount > BigInt.zero) {
@@ -343,21 +412,28 @@ class LauncherViewState {
     // File Search owns a separate query: ambient app/menu diagnostics must not
     // appear as errors for a completed file query. File coverage errors remain.
     if (isFileSearch) {
-      final issues = snapshot?.fileSearch?.issueExamples ?? const <String>[];
-      return searchPartial && issues.isNotEmpty
-          ? 'Some locations could not be searched. Available results are still usable.'
-          : null;
+      if (!searchPartial) return null;
+      final count = snapshot?.fileSearch?.issueCount ?? BigInt.zero;
+      final detail = count > BigInt.zero
+          ? 'File search encountered $count ${count == BigInt.one ? 'issue' : 'issues'}.'
+          : 'File search is incomplete.';
+      return '$detail Available results are still usable.';
     }
+    // Global search and explicit content do not consume ambient app contexts.
+    // Keep their capture diagnostics in Settings/logs instead of carrying an
+    // unrelated warning into these pages. Execution notices above still apply.
+    if (inputMode != InputModeDto.environment) return null;
     return captureNotice?.detail ??
         ((snapshot?.diagnostics.isNotEmpty ?? false)
-            ? snapshot!.diagnostics.join('\n')
+            ? 'Some actions could not be loaded. Reopen Anywhere to try again; other actions are still available.'
             : null);
   }
 
-  ContextSourceStatus? get captureNotice => isFileSearch
-      ? null
-      : ContextSourceStatus.notice(
-          snapshot?.contextCaptures ?? const <ContextCaptureDto>[]);
+  ContextSourceStatus? get captureNotice =>
+      inputMode != InputModeDto.environment
+          ? null
+          : ContextSourceStatus.notice(
+              snapshot?.contextCaptures ?? const <ContextCaptureDto>[]);
   String? get noticeSettingsPane =>
       message == null ? captureNotice?.settingsPane : null;
 
@@ -371,7 +447,7 @@ class LauncherViewState {
   String get resultHeading => output != null
       ? (resultStatus == ActionStatusDto.failed ? 'Failed' : 'Succeeded')
       : bindingChoices != null
-          ? fileActionTitle ?? 'Choose a target'
+          ? objectActionTitle ?? 'Choose a target'
           : isContent
               ? 'Actions for this content'
               : input.trim().isNotEmpty

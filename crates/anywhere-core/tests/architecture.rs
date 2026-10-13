@@ -36,6 +36,7 @@ fn sources_of(contexts: &[ResolvedContext], registry: &ActionRegistry) -> Vec<Ca
     );
     matcher.candidates(&SearchContext {
         scope_id: None,
+        ranking: Default::default(),
         query: &anywhere_core::core::search::query::Query::parse("copy"),
         contexts,
     })
@@ -299,12 +300,19 @@ fn feature_contributions_have_unique_ownership_and_share_registration_contract()
     let node = contributions.iter().find(|c| c.id == "node").unwrap();
     assert!(!git.providers.is_empty() && !git.bundles.is_empty());
     assert!(!node.providers.is_empty() && !node.bundles.is_empty() && !node.factories.is_empty());
-    assert!(contributions
-        .iter()
-        .find(|c| c.id == "filesystem")
-        .unwrap()
-        .source
-        .is_some());
+    use anywhere_core::extensions::FirstPartyExtension;
+    let runtime = anywhere_core::extensions::saved_directories::Extension
+        .runtime(Some(
+            anywhere_core::persistence::module_storage::ModuleStorageHost::memory()
+                .unwrap()
+                .bind("saved_directories")
+                .unwrap(),
+        ))
+        .unwrap();
+    assert_eq!(
+        runtime.sources.ids().collect::<Vec<_>>(),
+        ["saved_directories"]
+    );
 }
 
 #[test]

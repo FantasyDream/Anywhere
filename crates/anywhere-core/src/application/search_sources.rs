@@ -17,10 +17,12 @@ impl Application {
         }
         let sources: Vec<_> = self
             .resolver
-            .async_sources
-            .iter()
+            .sources
+            .lock()
+            .expect("sources lock poisoned")
+            .asynchronous()
+            .into_iter()
             .filter(|s| s.accepts_mode(mode) && s.accepts(input))
-            .cloned()
             .collect();
         // Product workspace dispatch lives at the Application boundary, never in
         // the generic runner, request or publication protocol.

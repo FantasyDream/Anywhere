@@ -1,6 +1,86 @@
 use crate::support::*;
 
 #[tokio::test]
+async fn expired_directory_identity_does_not_poison_search_or_the_next_activation() {
+    let dir = tempfile::tempdir().unwrap();
+    let platform = Arc::new(TestPlatform::new(dir.path().canonicalize().unwrap(), true));
+    *platform.directory_error.lock().unwrap() =
+        Some(anywhere_platform::ContextReadError::ApplicationChanged);
+    let app = app(platform.clone());
+    let first = app.activate().await.unwrap().unwrap();
+    let first = settled(&app, first.session_id, first.revision).await;
+    assert!(first.diagnostics.is_empty(), "{:?}", first.diagnostics);
+    assert!(!first.context_summary.iter().any(|c| c.type_id == DIRECTORY));
+
+    let searched = app
+        .update_context_input(
+            first.session_id,
+            "https://example.com".into(),
+            1,
+            None,
+            InputMode::Search,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    let searched = settled(&app, searched.session_id, searched.revision).await;
+    assert!(searched.diagnostics.is_empty());
+    assert!(app
+        .execute(
+            searched.session_id,
+            searched.revision,
+            candidate(&searched, "core.url.copy")
+        )
+        .await
+        .unwrap()
+        .succeeded());
+    assert_eq!(
+        platform.directory_captures.load(Ordering::Relaxed),
+        1,
+        "never retry against the newly foreground launcher or another application"
+    );
+
+    *platform.directory_error.lock().unwrap() = None;
+    let next = app.activate().await.unwrap().unwrap();
+    let next = settled(&app, next.session_id, next.revision).await;
+    assert!(next.context_summary.iter().any(|c| c.type_id == DIRECTORY));
+    assert_eq!(platform.directory_captures.load(Ordering::Relaxed), 2);
+}
+
+#[tokio::test]
+async fn unsupported_directory_stays_quiet_but_permission_failures_are_diagnosed() {
+    let dir = tempfile::tempdir().unwrap();
+    let platform = Arc::new(TestPlatform::new(dir.path().canonicalize().unwrap(), true));
+    let app = app(platform.clone());
+    for (error, quiet) in [
+        (anywhere_platform::ContextReadError::Unsupported, true),
+        (anywhere_platform::ContextReadError::PermissionDenied, false),
+    ] {
+        *platform.directory_error.lock().unwrap() = Some(error);
+        let state = app.activate().await.unwrap().unwrap();
+        let state = settled(&app, state.session_id, state.revision).await;
+        assert_eq!(
+            state.diagnostics.is_empty(),
+            quiet,
+            "{:?}",
+            state.diagnostics
+        );
+        if !quiet {
+            assert!(
+                state
+                    .diagnostics
+                    .iter()
+                    .any(|diagnostic| diagnostic
+                        .contains("context access permission is not granted")),
+                "the original error chain must remain available: {:?}",
+                state.diagnostics
+            );
+        }
+        assert!(!state.context_summary.iter().any(|c| c.type_id == DIRECTORY));
+    }
+}
+
+#[tokio::test]
 async fn a_slow_activation_cannot_replace_a_newer_activation() {
     let platform = Arc::new(TestPlatform::default());
     let gate = CaptureGate::new();

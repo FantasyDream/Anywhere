@@ -1,11 +1,15 @@
 import 'launcher_session_coordinator.dart';
+import 'launcher_backend.dart';
+export 'launcher_backend.dart';
 import 'file_workspace_coordinator.dart';
 import '../infrastructure/runtime_policy.dart';
-import 'activation_prefill.dart';
+import 'activation_flow.dart';
+import 'object_action_coordinator.dart';
+import 'host_view_navigator.dart';
+import 'shortcut_coordinator.dart';
 import 'launcher_navigation.dart';
 import 'file_search_controller.dart';
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../src/rust/api.dart';
@@ -16,94 +20,11 @@ import '../settings/settings_controller.dart';
 import '../settings/action_shortcut.dart';
 import '../infrastructure/application_lifecycle.dart';
 import 'launcher_view_state.dart';
-import 'context_source_status.dart';
 
 export '../infrastructure/application_icon_cache.dart' show LoadIcon;
 export '../settings/settings_controller.dart' show ApplyExcludedApps;
 
 export 'launcher_navigation.dart' show WakeMode, parseWakeMode;
-
-typedef BeginActivation = int Function();
-typedef Activate = Future<LauncherStateDto?> Function(
-  int session, {
-  bool promptAccessibility,
-  bool capturedEnvironment,
-});
-typedef PromptAccessibility = bool Function();
-typedef UpdateInput = Future<LauncherStateDto?> Function(
-    int session, String input, int revision,
-    {String? scopeId, InputModeDto inputMode});
-typedef Execute = Future<ActionResultDto> Function(
-  int session,
-  int revision,
-  String candidate,
-);
-typedef WaitForSnapshot = Future<SnapshotWaitDto> Function(
-    int session, int after);
-int snapshotCursor(LauncherStateDto state) =>
-    (state.revision << 32) | state.snapshotSeq;
-
-class LauncherBackend {
-  const LauncherBackend({
-    required this.beginActivation,
-    required this.activate,
-    required this.updateInput,
-    required this.execute,
-    required this.deactivate,
-    this.waitForSnapshot,
-    this.waitForSnapshotDelta,
-    this.loadIcon,
-    this.promptAccessibility,
-    this.shortcutActions,
-    this.supportedShortcutActions,
-    this.shortcutApplications,
-    this.resolveIntent,
-    this.waitIntent,
-    this.resolveBinding,
-    this.waitBinding,
-    this.loadFilePreview,
-    this.updateFiles,
-    this.fileMore,
-    this.fileMoreDelta,
-    this.freezeFiles,
-    this.fileActions,
-    this.suspend,
-    this.resume,
-    this.chooseActivationInput,
-  });
-
-  final Future<LauncherStateDto?> Function(
-      int session, String input, int revision, String filter)? updateFiles;
-  final Future<LauncherStateDto?> Function(int session, int revision)? fileMore;
-  final Future<SnapshotWaitDto> Function(int, int, int, int)? fileMoreDelta;
-  final Future<void> Function(int session, int revision)? freezeFiles;
-  final Future<List<CandidateDto>> Function(int, int, String)? fileActions;
-  final LoadFilePreview? loadFilePreview;
-  final ChooseActivationInput? chooseActivationInput;
-  final BeginActivation beginActivation;
-  final Activate activate;
-  final UpdateInput updateInput;
-  final Execute execute;
-  final Future<void> Function(int) deactivate;
-  final Future<void> Function(int)? suspend;
-  final Future<LauncherStateDto?> Function(int)? resume;
-  final WaitForSnapshot? waitForSnapshot;
-  final Future<SnapshotWaitDto> Function(int, int, int, int)?
-      waitForSnapshotDelta;
-  final LoadIcon? loadIcon;
-  final PromptAccessibility? promptAccessibility;
-  final Future<List<ShortcutActionDto>> Function()? shortcutActions;
-  final Future<List<String>> Function(List<String>)? supportedShortcutActions;
-  final Future<List<ShortcutApplicationDto>> Function()? shortcutApplications;
-  final Future<BindingResolutionDto> Function(
-      int session, int revision, List<ShortcutRouteDto> routes)? resolveIntent;
-  final Future<BindingResolutionDto> Function(
-      int session, int revision, List<ShortcutRouteDto> routes)? waitIntent;
-  final Future<List<CandidateDto>> Function(
-      int session, int revision, String action)? resolveBinding;
-  final Future<BindingResolutionDto> Function(
-      int session, int revision, String action)? waitBinding;
-}
 
 /// Owns asynchronous presentation lifecycle; matching and execution stay in Rust.
 class LauncherController extends ChangeNotifier {
@@ -136,6 +57,7 @@ class LauncherController extends ChangeNotifier {
     _sessionFlow = LauncherSessionCoordinator(_nowMillis);
     files = FileWorkspaceCoordinator(backend.loadFilePreview);
     files.addListener(_filePresentationChanged);
+    hostViews.register(HostViewDto.fileSearch, openFileSearch);
     settings.addListener(_notify);
     lifecycle = ApplicationLifecycle(
         closeSettings: closeSettings,
@@ -157,14 +79,10 @@ class LauncherController extends ChangeNotifier {
   final LauncherBackend _backend;
   final DesktopHost _window;
   final int Function() _nowMillis;
-  InputModeDto _inputMode = InputModeDto.environment;
+  final ActivationFlow _activation = ActivationFlow();
+  final ObjectActionCoordinator _objectActions = ObjectActionCoordinator();
+  final HostViewNavigator hostViews = HostViewNavigator();
   InputModeDto _snapshotInputMode = InputModeDto.environment;
-  ContextSourceDto? _contentSource;
-  bool _prefillAllowed = false,
-      _prefillGracePassed = false,
-      _pendingAppHome = false;
-  Timer? _prefillTimer;
-  Future<void>? _prefillUpdate;
   final SettingsController settings;
   late final ApplicationLifecycle lifecycle;
   final ApplicationIconCache icons;
@@ -190,15 +108,15 @@ class LauncherController extends ChangeNotifier {
   set _navigationMode(InputModeDto? mode) => _navigation.chooserMode = mode;
 
   List<CandidateDto>? get _bindingChoices => switch (_overlay) {
-        BindingChoices(:final items) || FileActions(:final items) => items,
+        BindingChoices(:final items) || ObjectActions(:final items) => items,
         _ => null,
       };
-  String? get _fileActionTarget =>
-      switch (_overlay) { FileActions(:final target) => target, _ => null };
-  String? get _fileActionTitle =>
-      switch (_overlay) { FileActions(:final title) => title, _ => null };
-  String? get _fileActionParent =>
-      switch (_overlay) { FileActions(:final parent) => parent, _ => null };
+  String? get _objectActionTarget =>
+      switch (_overlay) { ObjectActions(:final target) => target, _ => null };
+  String? get _objectActionTitle =>
+      switch (_overlay) { ObjectActions(:final title) => title, _ => null };
+  String? get _objectActionParent =>
+      switch (_overlay) { ObjectActions(:final parent) => parent, _ => null };
   static const retention =
       Duration(milliseconds: RuntimePolicy.launcherRetentionMs);
   int? get _hiddenAt => _sessionFlow.hiddenAt;
@@ -213,12 +131,22 @@ class LauncherController extends ChangeNotifier {
 
   bool get hasRetainedState => _hiddenAt != null;
 
+  // Restore ongoing work, while an empty root is an entry point for the app
+  // that is foreground now. Resuming its old frozen environment would ignore
+  // the requested wake mode and could keep showing a blank Global Search.
+  bool get _hasRetainedWorkspace =>
+      _input.isNotEmpty ||
+      _activation.mode == InputModeDto.fileSearch ||
+      _actionPath != null ||
+      _overlay is! LauncherHome ||
+      _output != null ||
+      (_scopeId != null && view.selectedScope?.isCurrentApp == false);
+
   String? get _scopeId => _navigation.scope;
   set _scopeId(String? value) => _navigation.scope = value;
   List<String>? get _actionPath => _navigation.menu;
   set _actionPath(List<String>? value) => _navigation.menu = value;
-  int _bindingRequest = 0;
-  bool _globalWaiting = false;
+  late final ShortcutCoordinator _shortcuts = ShortcutCoordinator(_backend);
   WakeMode get _wakeMode => _navigation.wakeMode;
   set _wakeMode(WakeMode value) => _navigation.wakeMode = value;
   bool _scopeTouched = false;
@@ -242,9 +170,9 @@ class LauncherController extends ChangeNotifier {
       _generation,
       _snapshot,
       _input,
-      _inputMode,
+      _activation.mode,
       _snapshotInputMode,
-      _contentSource,
+      _activation.source,
       _scopeId,
       _actionPath,
       _selectedId,
@@ -259,8 +187,8 @@ class LauncherController extends ChangeNotifier {
     if (key == _viewKey && _cachedView != null) return _cachedView!;
     _viewKey = key;
     final previous = _cachedView;
-    final retainEntries = _inputMode == InputModeDto.fileSearch &&
-        _snapshotInputMode == _inputMode &&
+    final retainEntries = _activation.mode == InputModeDto.fileSearch &&
+        _snapshotInputMode == _activation.mode &&
         _snapshot?.input == _input &&
         previous?.isFileSearch == true &&
         previous?.bindingChoices == null &&
@@ -276,9 +204,9 @@ class LauncherController extends ChangeNotifier {
       generation: _generation,
       snapshot: _snapshot,
       input: _input,
-      inputMode: _inputMode,
-      inputModeReady: _snapshotInputMode == _inputMode,
-      contentSource: _contentSource,
+      inputMode: _activation.mode,
+      inputModeReady: _snapshotInputMode == _activation.mode,
+      contentSource: _activation.source,
       scopeId: _scopeId,
       actionPath: _actionPath,
       selectedId: _selectedId,
@@ -288,18 +216,13 @@ class LauncherController extends ChangeNotifier {
       resultStatus: _resultStatus,
       universalShortcut: settings.current.universalLabel,
       bindingChoices: _bindingChoices,
-      fileActionTitle: _fileActionTitle,
+      objectActionTitle: _objectActionTitle,
       fileFilter: files.filter,
       navigationMode: _navigationMode,
     );
   }
 
   HostSettings get hostSettings => settings.current;
-  String? get statusMessage =>
-      _phase == LauncherPhase.settings ? settings.statusMessage : _message;
-  List<PluginStatusDto> get plugins => settings.plugins;
-  List<ContextSourceStatus> get contextSourceStatuses =>
-      settings.contextSourceStatuses;
 
   void _resetFiles() {
     files.reset();
@@ -332,7 +255,7 @@ class LauncherController extends ChangeNotifier {
       return;
     }
     final entries = view.visibleEntries;
-    final parentKey = _fileActionParent;
+    final parentKey = _objectActionParent;
     final file = view.isFileSearch && !view.resolving
         ? parentKey != null
             ? _snapshot?.candidates
@@ -391,9 +314,7 @@ class LauncherController extends ChangeNotifier {
 
   /// Native global events carry only business identity, never cached object data.
   bool _bindingIsCurrent(ActionShortcut binding) =>
-      settings.current.actionShortcuts.any((b) =>
-          b.actionId == binding.actionId &&
-          jsonEncode(b.toMap()) == jsonEncode(binding.toMap()));
+      _shortcuts.bindingCurrent(binding, settings.current);
 
   Future<void> triggerGlobalShortcut(String actionId,
       {ActionShortcut? requestedBinding}) async {
@@ -429,7 +350,9 @@ class LauncherController extends ChangeNotifier {
     if (_phase == LauncherPhase.settings && !await closeSettings()) return;
     if (_phase != LauncherPhase.hidden) return;
     if (_hiddenAt != null) {
-      if (globalBinding == null && await _resumeRetained()) {
+      if (globalBinding == null &&
+          _hasRetainedWorkspace &&
+          await _resumeRetained()) {
         return;
       }
       await _discardRetained();
@@ -455,23 +378,10 @@ class LauncherController extends ChangeNotifier {
         return;
       }
       _input = '';
-      _inputMode = InputModeDto.environment;
-      _contentSource = null;
-      _prefillUpdate = null;
-      _pendingAppHome = false;
-      _prefillAllowed = mode == WakeMode.currentApp && globalBinding == null;
-      _prefillGracePassed = false;
-      _prefillTimer?.cancel();
-      if (_prefillAllowed) {
-        _prefillTimer = Timer(
-            const Duration(milliseconds: RuntimePolicy.selectionPrefillGraceMs),
-            () {
-          if (_current(generation)) {
-            _prefillGracePassed = true;
-            _maybePrefill();
-          }
-        });
-      }
+      _activation.begin(
+          prefill: mode == WakeMode.currentApp && globalBinding == null,
+          current: () => _current(generation),
+          reconsider: _maybePrefill);
       _actionPath = null;
       _snapshot = null;
       settings.recordCaptures(const []);
@@ -486,17 +396,17 @@ class LauncherController extends ChangeNotifier {
       _resultStatus = null;
       _phase =
           globalBinding == null ? LauncherPhase.ready : LauncherPhase.resolving;
-      _globalWaiting = globalBinding != null;
-      if (_globalWaiting) {
+      _shortcuts.waiting = globalBinding != null;
+      if (_shortcuts.waiting) {
         _message = 'Capturing context for ${globalBinding!.title}…';
       }
       _apply(state);
-      if (_prefillUpdate != null) {
-        await _prefillUpdate;
+      if (_activation.pendingPrefill != null) {
+        await _activation.pendingPrefill;
       }
       if (!_current(generation)) return;
       if (mode == WakeMode.universal && globalBinding == null) {
-        _inputMode = InputModeDto.search;
+        _activation.mode = InputModeDto.search;
         await update('', automatic: true);
       }
       _notify();
@@ -523,36 +433,30 @@ class LauncherController extends ChangeNotifier {
       ActionShortcut binding, int generation, int revision) async {
     bool current() =>
         _current(generation) &&
-        _globalWaiting &&
+        _shortcuts.waiting &&
         _requestedRevision == revision &&
         _phase == LauncherPhase.resolving;
     try {
-      final resolved = binding.isIntent
-          ? await _backend.waitIntent!(_session!, revision,
-              binding.routes.map((r) => r.toDto()).toList())
-          : await _backend.waitBinding!(_session!, revision, binding.actionId);
-      if (!current() ||
-          resolved.state.sessionId != _session ||
-          resolved.state.revision != revision) {
-        return;
-      }
+      final resolved =
+          await _shortcuts.resolve(binding, _session!, revision, wait: true);
+      if (!current()) return;
       if (!_bindingIsCurrent(binding)) {
-        _globalWaiting = false;
+        _shortcuts.waiting = false;
         _phase = LauncherPhase.ready;
         _message = 'Shortcut settings changed. Try again.';
         _notify();
         await _syncWindow();
         return;
       }
-      _globalWaiting = false;
-      _apply(resolved.state);
+      _shortcuts.waiting = false;
+      _apply(resolved.state!);
       _phase = LauncherPhase.ready;
       _message = null;
       await _presentBinding(binding, resolved.candidates,
           requiresChoice: resolved.requiresChoice);
     } catch (error) {
       if (!current()) return;
-      _globalWaiting = false;
+      _shortcuts.waiting = false;
       _phase = LauncherPhase.ready;
       _message = '$error';
       _notify();
@@ -575,11 +479,11 @@ class LauncherController extends ChangeNotifier {
       final generation = _generation, session = _session!;
       _retainedPhase = _phase;
       ++_generation;
-      ++_bindingRequest;
+      _shortcuts.invalidate();
       _phase = LauncherPhase.hidden;
-      _prefillAllowed = false;
-      _prefillTimer?.cancel();
+      _activation.stopPrefill();
       files.invalidateOperations();
+      _objectActions.invalidate();
       _notify();
       _sessionFlow.retain(_capturePolicy, _backend.suspend!(session),
           () => unawaited(_discardRetained()));
@@ -593,7 +497,7 @@ class LauncherController extends ChangeNotifier {
     final generation = _generation;
     final session = _session;
     ++_generation;
-    _globalWaiting = false;
+    _shortcuts.waiting = false;
     _navigationMode = null;
     _session = null;
     _snapshot = null;
@@ -602,12 +506,11 @@ class LauncherController extends ChangeNotifier {
     _overlay = const LauncherHome();
     _fileReturn = null;
     _resetFiles();
-    ++_bindingRequest;
+    _shortcuts.invalidate();
     _phase = preserveSettings ? LauncherPhase.settings : LauncherPhase.hidden;
     _input = '';
-    _prefillAllowed = false;
-    _prefillTimer?.cancel();
-    _contentSource = null;
+    _activation.stopPrefill();
+    _activation.source = null;
     _actionPath = null;
     _scopeId = null;
     _scopeTouched = false;
@@ -695,24 +598,23 @@ class LauncherController extends ChangeNotifier {
                 state.snapshotSeq <= held.snapshotSeq))) {
       return;
     }
-    final fileTarget = _fileActionTarget,
-        fileTitle = _fileActionTitle,
-        fileParent = _fileActionParent;
+    final fileTarget = _objectActionTarget,
+        fileTitle = _objectActionTitle,
+        fileParent = _objectActionParent;
     final overlay = _overlay;
     _snapshot = state;
-    _snapshotInputMode = _inputMode;
+    _snapshotInputMode = _activation.mode;
     _overlay = overlay is RootChooser ? overlay : const LauncherHome();
-    ++_bindingRequest;
+    _shortcuts.invalidate();
     if (fileTarget != null && held?.revision == state.revision) {
       final actions = state.resultActions
           .where((c) => c.executionContextId == fileTarget)
           .toList();
       if (actions.isNotEmpty ||
-          (view.isFileSearch &&
-              state.candidates.any((candidate) =>
-                  candidate.kind == CandidateKindDto.file &&
-                  candidate.executionContextId == fileTarget))) {
-        _overlay = FileActions(
+          state.candidates.any((candidate) =>
+              candidate.primaryAction &&
+              candidate.executionContextId == fileTarget)) {
+        _overlay = ObjectActions(
             target: fileTarget,
             title: fileTitle!,
             parent: fileParent,
@@ -742,11 +644,11 @@ class LauncherController extends ChangeNotifier {
     // Menu permission can disappear while the aggregate Current App scope stays
     // available through Folder/Git actions. Return to its home in that case.
     if (_actionPath != null && !view.canBrowseMenus) _actionPath = null;
-    if (_pendingAppHome) {
+    if (_activation.pendingAppHome) {
       final app = view.scopes.where((scope) => scope.isCurrentApp).firstOrNull;
       if (app != null) {
         _scopeId = app.id;
-        _pendingAppHome = false;
+        _activation.pendingAppHome = false;
       }
     }
     _maybeSelectScope();
@@ -763,7 +665,7 @@ class LauncherController extends ChangeNotifier {
 
   void _reconcile() {
     final entries = view.visibleEntries;
-    if (_userMoved && entries.any((entry) => entry.key == _selectedId)) {
+    if (_userMoved && view.entryCollection.indices[_selectedId] != null) {
       return;
     }
     _selectedId = entries.isEmpty ? null : entries.first.key;
@@ -840,30 +742,30 @@ class LauncherController extends ChangeNotifier {
     final revision = ++_revision;
     _requestedRevision = revision;
     files.invalidateOperations();
+    _objectActions.invalidate();
 
     final generation = _generation;
     _input = input;
     if (!automatic) {
-      _prefillAllowed = false;
-      _prefillTimer?.cancel();
-      _pendingAppHome = false;
+      _activation.stopPrefill();
+      _activation.pendingAppHome = false;
       _scopeTouched = true;
     }
-    _globalWaiting = false;
+    _shortcuts.waiting = false;
     _overlay = const LauncherHome();
-    ++_bindingRequest;
+    _shortcuts.invalidate();
     _phase = LauncherPhase.resolving;
     _output = _message = null;
     _userMoved = false;
     icons.retryFailures();
     _notify();
     try {
-      final state =
-          _inputMode == InputModeDto.fileSearch && _backend.updateFiles != null
-              ? await _backend.updateFiles!(
-                  session, input, revision, files.filter.name)
-              : await _backend.updateInput(session, input, revision,
-                  scopeId: _scopeId, inputMode: _inputMode);
+      final state = _activation.mode == InputModeDto.fileSearch &&
+              _backend.updateFiles != null
+          ? await _backend.updateFiles!(
+              session, input, revision, files.filter.name)
+          : await _backend.updateInput(session, input, revision,
+              scopeId: _scopeId, inputMode: _activation.mode);
       if (!_current(generation) ||
           !view.visible ||
           revision != _revision ||
@@ -888,57 +790,43 @@ class LauncherController extends ChangeNotifier {
   }
 
   void _maybePrefill() {
-    if (!_prefillAllowed ||
-        _scopeTouched ||
-        _userMoved ||
-        _input.isNotEmpty ||
-        !view.visible ||
-        _globalWaiting) {
-      return;
-    }
-    final choose = _backend.chooseActivationInput;
-    if (choose == null) return;
-    final captures = _snapshot?.contextCaptures ?? const <ContextCaptureDto>[];
-    final prefill = ActivationPrefill.choose(captures, _nowMillis(),
-        choose: choose,
+    final offer = _activation.take(
+        _snapshot?.contextCaptures ?? const [], _nowMillis(),
+        choose: _backend.chooseActivationInput,
+        interacted: _scopeTouched ||
+            _userMoved ||
+            _input.isNotEmpty ||
+            _shortcuts.waiting,
+        visible: view.visible,
         selectedEnabled: settings.current.captureSelectedText,
-        clipboardEnabled: settings.current.captureClipboard,
-        allowPendingSelection: _prefillGracePassed);
-    if (prefill == null) {
-      return;
-    }
-    _prefillAllowed = false;
-    _prefillTimer?.cancel();
-    _inputMode = InputModeDto.content;
-    _contentSource = prefill.source;
+        clipboardEnabled: settings.current.captureClipboard);
+    if (offer == null) return;
     _wakeMode = WakeMode.universal;
     _scopeId = null;
     _actionPath = null;
-    _prefillUpdate = update(prefill.text, automatic: true);
-    unawaited(_prefillUpdate);
+    _activation.pendingPrefill = update(offer.text, automatic: true);
+    unawaited(_activation.pendingPrefill);
   }
 
   Future<void> _returnToCurrentApp() async {
-    _prefillAllowed = false;
-    _prefillTimer?.cancel();
-    _inputMode = InputModeDto.environment;
-    _contentSource = null;
+    _activation.stopPrefill();
+    _activation.mode = InputModeDto.environment;
+    _activation.source = null;
     _wakeMode = WakeMode.currentApp;
     _scopeId = null;
     _actionPath = null;
-    _pendingAppHome = true;
+    _activation.pendingAppHome = true;
     await update('', automatic: true);
   }
 
   Future<void> _emptyGlobalSearch() async {
-    _prefillAllowed = false;
-    _prefillTimer?.cancel();
-    _inputMode = InputModeDto.search;
-    _contentSource = null;
+    _activation.stopPrefill();
+    _activation.mode = InputModeDto.search;
+    _activation.source = null;
     _wakeMode = WakeMode.universal;
     _scopeId = null;
     _actionPath = null;
-    _pendingAppHome = false;
+    _activation.pendingAppHome = false;
     await update('', automatic: true);
   }
 
@@ -948,24 +836,23 @@ class LauncherController extends ChangeNotifier {
     // visited a parent page. Its back destination is empty Global Search.
     final parentMode = _wakeMode == WakeMode.universal &&
             _input.isEmpty &&
-            _inputMode == InputModeDto.environment
+            _activation.mode == InputModeDto.environment
         ? InputModeDto.search
-        : _inputMode;
+        : _activation.mode;
     _fileReturn = LauncherLocation(
         input: _input,
         scope: _scopeId,
         menu: _actionPath,
         mode: parentMode,
         universal: _wakeMode == WakeMode.universal,
-        source: _contentSource);
-    _prefillAllowed = false;
-    _prefillTimer?.cancel();
-    _pendingAppHome = false;
+        source: _activation.source);
+    _activation.stopPrefill();
+    _activation.pendingAppHome = false;
     _scopeTouched = true;
     _scopeId = null;
     _actionPath = null;
-    _contentSource = null;
-    _inputMode = InputModeDto.fileSearch;
+    _activation.source = null;
+    _activation.mode = InputModeDto.fileSearch;
     _resetFiles();
     await update('', automatic: true);
   }
@@ -979,14 +866,10 @@ class LauncherController extends ChangeNotifier {
     _resetFiles();
     _scopeId = previous.scope;
     _actionPath = previous.menu;
-    _inputMode = previous.mode;
+    _activation.mode = previous.mode;
     _wakeMode = previous.universal ? WakeMode.universal : WakeMode.currentApp;
-    _contentSource = previous.source;
+    _activation.source = previous.source;
     await update(previous.input, automatic: true);
-  }
-
-  Future<void> selectFile(int index) async {
-    if (view.isFileSearch) selectResult(index);
   }
 
   /// Selecting a result is safe; activation is a separate, deliberate gesture.
@@ -998,8 +881,7 @@ class LauncherController extends ChangeNotifier {
     _selectedId = entries[index].key;
     _userMoved = true;
     freezeFileResults();
-    _prefillAllowed = false;
-    _prefillTimer?.cancel();
+    _activation.stopPrefill();
     _notify();
     return true;
   }
@@ -1027,30 +909,16 @@ class LauncherController extends ChangeNotifier {
   Future<void> loadMoreFiles({bool advanceSelection = false}) async {
     final session = _session;
     if (session == null || !canLoadMoreFiles) return;
-    final baseCount = _snapshot?.candidates.length ?? 0;
-    final version = _snapshot?.candidateListVersion ?? 0;
-    Future<LauncherStateDto?> load(int id, int revision) async {
-      if (_backend.fileMoreDelta == null) {
-        return _backend.fileMore!(id, revision);
-      }
-      final packet =
-          await _backend.fileMoreDelta!(id, revision, version, baseCount);
-      final held = _snapshot;
-      if (held?.sessionId == id &&
-          held?.revision == revision &&
-          packet.state != null &&
-          snapshotCursor(packet.state!) <= snapshotCursor(held!)) {
-        return held;
-      }
-      return LauncherSessionCoordinator.materialize(held, packet, baseCount);
-    }
-
     final generation = _generation, revision = _revision;
     final selection = _selectedId;
     final previousCount = view.visibleEntries.length;
     _notify();
     try {
-      final state = await files.loadMore(session, revision, load,
+      final state = await files.loadSnapshot(
+          session,
+          revision,
+          _backend,
+          () => _snapshot,
           () => _current(generation) && revision == _revision && view.visible);
       if (!_current(generation) ||
           revision != _revision ||
@@ -1089,31 +957,32 @@ class LauncherController extends ChangeNotifier {
     await update(_input);
   }
 
-  bool get canShowFileActions {
+  bool get canShowObjectActions {
     final entries = view.visibleEntries;
-    return _fileActionTarget == null &&
-        entries.isNotEmpty &&
+    final candidate =
+        entries.isEmpty ? null : entries[view.selectedIndex].candidate;
+    return _objectActionTarget == null &&
+        candidate != null &&
+        candidate.primaryAction &&
+        candidate.executionContextId != null &&
         (view.isFileSearch ||
+            _backend.objectActions != null ||
             (_snapshot?.resultActions.any((c) =>
-                    c.executionContextId ==
-                    entries[view.selectedIndex]
-                        .candidate
-                        ?.executionContextId) ??
-                false)) &&
-        entries[view.selectedIndex].candidate?.kind == CandidateKindDto.file;
+                    c.executionContextId == candidate.executionContextId) ??
+                false));
   }
 
-  Future<void> showFileActions() async {
-    if (_phase != LauncherPhase.ready || !canShowFileActions) return;
+  Future<void> showObjectActions() async {
+    if (_phase != LauncherPhase.ready || !canShowObjectActions) return;
     freezeFileResults();
     final file = view.visibleEntries[view.selectedIndex].candidate!;
     final generation = _generation, revision = _revision;
     final parent = _selectedId;
     List<CandidateDto>? actions;
     try {
-      actions = await files.loadActions(
-          () async => _backend.fileActions != null
-              ? await _backend.fileActions!(_session!, revision, file.id)
+      actions = await _objectActions.load(
+          () async => _backend.objectActions != null
+              ? await _backend.objectActions!(_session!, revision, file.id)
               : _snapshot?.resultActions
                       .where((c) =>
                           c.executionContextId == file.executionContextId)
@@ -1127,7 +996,7 @@ class LauncherController extends ChangeNotifier {
     } catch (_) {
       if (_current(generation) && view.visible) {
         _message =
-            'File actions could not be loaded. Select the file and try again.';
+            'Actions could not be loaded. Select the item and try again.';
         _notify();
       }
       return;
@@ -1140,7 +1009,7 @@ class LauncherController extends ChangeNotifier {
       return;
     }
     if (actions.isEmpty && !view.isFileSearch) return;
-    _overlay = FileActions(
+    _overlay = ObjectActions(
         target: file.executionContextId!,
         title: file.title,
         parent: _selectedId,
@@ -1188,18 +1057,14 @@ class LauncherController extends ChangeNotifier {
             b.sameChord(binding.keyCode, binding.modifiers))) {
       return;
     }
-    final request = ++_bindingRequest;
+    final request = _shortcuts.reserve();
     final generation = _generation;
     final revision = _requestedRevision;
     try {
-      final intent = binding.isIntent
-          ? await _backend.resolveIntent!(state.sessionId, revision,
-              binding.routes.map((r) => r.toDto()).toList())
-          : null;
-      final candidates = intent?.candidates ??
-          await resolve!(state.sessionId, revision, binding.actionId);
+      final offers =
+          await _shortcuts.resolve(binding, state.sessionId, revision);
       if (!_current(generation) ||
-          request != _bindingRequest ||
+          !_shortcuts.current(request) ||
           revision != _requestedRevision ||
           _phase != LauncherPhase.ready) {
         return;
@@ -1210,18 +1075,12 @@ class LauncherController extends ChangeNotifier {
         await _syncWindow();
         return;
       }
-      if (intent != null) {
-        if (intent.state.sessionId != state.sessionId ||
-            intent.state.revision != revision) {
-          return;
-        }
-        _apply(intent.state);
-      }
-      await _presentBinding(binding, candidates,
-          requiresChoice: intent?.requiresChoice ?? false);
+      if (offers.state != null) _apply(offers.state!);
+      await _presentBinding(binding, offers.candidates,
+          requiresChoice: offers.requiresChoice);
     } catch (error) {
       if (!_current(generation) ||
-          request != _bindingRequest ||
+          !_shortcuts.current(request) ||
           revision != _requestedRevision) {
         return;
       }
@@ -1285,9 +1144,9 @@ class LauncherController extends ChangeNotifier {
         return;
       }
       if (result.status == ActionStatusDto.succeeded &&
-          result.view == HostViewDto.fileSearch) {
+          hostViews.accepts(result.view)) {
         _phase = LauncherPhase.ready;
-        await openFileSearch();
+        await hostViews.open(result.view);
         if (result.warning != null) {
           _message = result.warning;
           _notify();
@@ -1351,8 +1210,7 @@ class LauncherController extends ChangeNotifier {
     _userMoved = true;
     freezeFileResults();
     _output = null;
-    _prefillAllowed = false;
-    _prefillTimer?.cancel();
+    _activation.stopPrefill();
     _resultSource = null;
     _resultStatus = null;
     _notify();
@@ -1478,14 +1336,6 @@ class LauncherController extends ChangeNotifier {
     return true;
   }
 
-  // Compatibility facade; settings behavior belongs to SettingsController.
-  Future<bool> saveSettings(HostSettings next) async {
-    final saved = await settings.save(next);
-    _message = settings.statusMessage;
-    _notify();
-    return saved;
-  }
-
   Future<void> openPrivacySettings(String pane) async {
     if (_disposed) return;
     final generation = _generation;
@@ -1505,14 +1355,14 @@ class LauncherController extends ChangeNotifier {
       await toggleNavigation();
       return;
     }
-    if (_globalWaiting) {
+    if (_shortcuts.waiting) {
       await dismiss();
       return;
     }
     if (_bindingChoices != null) {
-      final parent = _fileActionParent;
+      final parent = _objectActionParent;
       _overlay = const LauncherHome();
-      ++_bindingRequest;
+      _shortcuts.invalidate();
       _message = null;
       _selectedId = parent;
       _notify();
@@ -1535,7 +1385,7 @@ class LauncherController extends ChangeNotifier {
       }
       return;
     }
-    if (_inputMode == InputModeDto.content) {
+    if (_activation.mode == InputModeDto.content) {
       await _returnToCurrentApp();
       return;
     }
@@ -1559,11 +1409,10 @@ class LauncherController extends ChangeNotifier {
     if (_phase != LauncherPhase.ready || view.isContent || view.isFileSearch) {
       return;
     }
-    _navigationMode = _navigationMode == null ? _inputMode : null;
+    _navigationMode = _navigationMode == null ? _activation.mode : null;
     // Opening the chooser is a deliberate interaction; late captured content
     // must not replace the input while the user is choosing a search mode.
-    _prefillAllowed = false;
-    _prefillTimer?.cancel();
+    _activation.stopPrefill();
     _notify();
     await _syncWindow();
   }
@@ -1592,13 +1441,12 @@ class LauncherController extends ChangeNotifier {
     _fileReturn = null;
     _resetFiles();
     _actionPath = null;
-    _contentSource = null;
-    _prefillAllowed = false;
-    _prefillTimer?.cancel();
-    _inputMode = mode == WakeMode.currentApp
+    _activation.source = null;
+    _activation.stopPrefill();
+    _activation.mode = mode == WakeMode.currentApp
         ? InputModeDto.environment
         : InputModeDto.search;
-    _pendingAppHome = mode == WakeMode.currentApp;
+    _activation.pendingAppHome = mode == WakeMode.currentApp;
     _wakeMode = mode;
     _scopeTouched = true;
     if (mode == WakeMode.currentApp) _promptCurrentAppAccess(mode);
@@ -1624,13 +1472,12 @@ class LauncherController extends ChangeNotifier {
 
   Future<void> selectAndExecute(String id) async {
     if (view.resolving ||
-        !view.visibleCandidates.any((candidate) => candidate.id == id)) {
+        view.entryCollection.indices['candidate:$id'] == null) {
       return;
     }
     _selectedId = 'candidate:$id';
     _userMoved = true;
-    _prefillAllowed = false;
-    _prefillTimer?.cancel();
+    _activation.stopPrefill();
     _notify();
     await executeSelected();
   }
@@ -1687,7 +1534,7 @@ class LauncherController extends ChangeNotifier {
 
   @override
   void dispose() {
-    _prefillTimer?.cancel();
+    _activation.dispose();
     _sessionFlow.dispose();
     _disposed = true;
     _cachedView = null;

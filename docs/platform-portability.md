@@ -1,5 +1,7 @@
 # 跨平台架构与接入契约
 
+当前契约：V0.8；最后核对：2026-10-13。Windows 尚未交付可用 App。
+
 目标：共享 Flutter 展示与 Rust 业务；只有必须与操作系统交互的接口使用平台适配器。
 
 ## 已落地
@@ -9,7 +11,7 @@
 | Flutter UI | 所有页面、控件、导航、Context 输入、Scope、交互状态 | DesktopEnvironment 提供字体、命令键与背景能力 |
 | Flutter Host port | DesktopHost 窗口/设置契约，RuntimePaths 启动契约 | MethodChannel Host 实现窗口生命周期、焦点、托盘与注册热键 |
 | Rust Core | Context Graph、Action、候选、搜索、Ranking、持久使用记录、Execution Sessions | Platform 采集/执行；不判断 Finder ID 或启动 Unix shell |
-| Rust 平台服务 | 目录遍历、Git 执行、工具解析、ProcessRequest | 应用入口识别、OS Context 采集、打开资源、进程树/管道后端 |
+| Rust 共享业务 / 平台服务 | 文件匹配与遍历编排在 filesystem Feature；Git 执行、工具解析与 ProcessRequest 经 Platform | 应用入口识别、OS Context 采集、打开资源、进程树/管道后端 |
 | 快捷键配置 | schema 4 物理 HID usages 与语义修饰位、动作身份与意图规则 | macOS 转换 Carbon；其他系统转换各自注册格式 |
 
 Flutter 控件不是 AppKit 控件。原生背景是可选能力，不影响共享页面运行；未确认背景能力时不透明显示。Mac 玻璃、Windows 背景材质或无材质可以挂在同一个 Flutter 内容层下。
@@ -63,10 +65,8 @@ Flutter 控件不是 AppKit 控件。原生背景是可选能力，不影响共�
 
 `.github/workflows/portable.yml` 增加 Linux/Windows Rust 目标编译和共享 Flutter 检查，Linux 还运行 Rust 回归。它验证共享代码，不代替 Windows 窗口、权限、实际菜单、后台任务或安装包验收。
 
-## 本次验证（2026-10-07）
+## 验证边界
 
-本机 macOS：Rust 全量 277 项通过，4 项既有测试保持 ignored；Flutter 122 项通过，analyze 无问题；Clippy（warnings 为错误）、格式与架构边界检查通过。原生菜单/选区回归、Host 服务/快捷键迁移/回滚与材质回归通过；完整 Swift Host 类型检查通过。
+共享 CI 配置验证目标编译与共享代码回归，不能据此宣称 Windows 窗口、系统权限、菜单、后台进程或安装包已经可用。真实平台接入仍需上方的 Host、系统后端和矩阵。
 
-新增验证包括：非 Finder 文件管理器采集、版本 1–3 转换、版本 3 意图保留、版本 4 磁盘通用编码、未知版本禁止覆写、物理键与布局字符分离、Windows Ctrl 页面命令/保留编辑键、PowerShell 复制命令、Host 返回 DLL 路径、无背景能力时不透明显示。
-
-新增 Linux/Windows CI 尚未在 GitHub 执行；没有构建或验证 Windows App。未进行新版 macOS 窗口的 GUI 验收，也未重新打包发布产物。
+当前 macOS 工程证据见 [V0.8 MVP](mvp-v0.8.md)，早期迁移检查与包记录见 [历史验收](archive/v0.6-final-acceptance.md)。本页没有新增跨平台 GUI 或系统授权验收。

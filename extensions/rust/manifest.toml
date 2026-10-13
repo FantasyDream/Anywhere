@@ -1,0 +1,5 @@
+protocol_version = 2
+id = "rust"
+name = "Rust"
+version = "0.8.0"
+capabilities = ["process.start"]

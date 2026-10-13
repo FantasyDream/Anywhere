@@ -156,6 +156,7 @@ pub struct ScanStore {
     pub query_id: u64,
     pub(super) query: NameQuery,
     options: FileSearchOptions,
+    temporary_directories: anywhere_platform::temporary_directories::TemporaryDirectories,
     direct_only: bool,
     exact_path: Option<PathBuf>,
     pub(super) progress: Mutex<Progress>,
@@ -171,6 +172,10 @@ impl ScanStore {
             directory,
             query_id: NEXT_QUERY.fetch_add(1, AtomicOrdering::Relaxed),
             query: NameQuery::new(&text, filter),
+            temporary_directories:
+                anywhere_platform::temporary_directories::TemporaryDirectories::for_search(
+                    &options.roots,
+                ),
             options,
             direct_only,
             exact_path,
@@ -183,17 +188,32 @@ impl ScanStore {
         let mut p = self.progress.lock().expect("scan progress poisoned");
         p.issues += 1;
         if p.examples.len() < 8 {
-            p.examples.push(message.into());
+            let message = message.into();
+            // Keep diagnostics bounded just like the UI examples. Record the
+            // cause, not the user's query, so an incomplete scan is diagnosable.
+            tracing::warn!(query_id = self.query_id, issue = %message, "file_search_issue");
+            p.examples.push(message);
         }
     }
     fn io_issue(&self, path: &Path, error: &std::io::Error) {
-        if error.kind() == std::io::ErrorKind::PermissionDenied {
-            self.progress
-                .lock()
-                .expect("scan progress poisoned")
-                .inaccessible += 1;
+        match error.kind() {
+            std::io::ErrorKind::PermissionDenied => {
+                self.progress
+                    .lock()
+                    .expect("scan progress poisoned")
+                    .inaccessible += 1;
+            }
+            // A mutable tree is not a filesystem snapshot. Entries removed
+            // between listing and reading have no remaining result to return.
+            std::io::ErrorKind::NotFound => {}
+            _ => self.issue(format!("{}: {error}", path.display())),
+        }
+    }
+    fn root_issue(&self, path: &Path, error: &std::io::Error) {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            self.issue(format!("{}: Search root no longer exists", path.display()));
         } else {
-            self.issue(format!("{}: {error}", path.display()));
+            self.io_issue(path, error);
         }
     }
     pub fn fail(&self, error: &anyhow::Error) {
@@ -233,6 +253,12 @@ impl ScanStore {
         for hit in hits.into_iter().take(PAGE_SIZE) {
             if cancelled() {
                 break;
+            }
+            if self
+                .temporary_directories
+                .excludes(&hit.path, hit.is_directory)
+            {
+                continue;
             }
             if !seen.insert(hit.path.clone()) {
                 continue;
@@ -307,10 +333,9 @@ impl ScanStore {
     }
     fn configured_roots(&self) -> Result<Vec<PathBuf>> {
         if self.options.roots.is_empty() {
-            Ok(vec![std::env::var_os("HOME")
-                .or_else(|| std::env::var_os("USERPROFILE"))
-                .map(PathBuf::from)
-                .context("home directory unavailable")?])
+            Ok(vec![
+                anywhere_platform::paths::home_directory().context("home directory unavailable")?
+            ])
         } else {
             Ok(self.options.roots.clone())
         }
@@ -495,7 +520,7 @@ impl ScanStore {
                     "Search root is not a directory: {}",
                     root.display()
                 )),
-                Err(error) => self.io_issue(&root, &error),
+                Err(error) => self.root_issue(&root, &error),
             }
         }
         let outer = roots.clone();
@@ -537,7 +562,11 @@ impl ScanStore {
             let entries = match std::fs::read_dir(&directory) {
                 Ok(entries) => entries,
                 Err(error) => {
-                    self.io_issue(&directory, &error);
+                    if roots.contains(&directory) {
+                        self.root_issue(&directory, &error);
+                    } else {
+                        self.io_issue(&directory, &error);
+                    }
                     continue;
                 }
             };
@@ -581,6 +610,9 @@ impl ScanStore {
                         continue;
                     }
                 };
+                if self.temporary_directories.excludes(&path, kind.is_dir()) {
+                    continue;
+                }
                 if kind.is_symlink() && !self.authorized_link_target(&path) {
                     continue;
                 }
@@ -669,16 +701,7 @@ fn prepare_query(
     mut options: FileSearchOptions,
 ) -> Result<(String, FileSearchOptions, bool, Option<PathBuf>)> {
     let raw = text.trim();
-    let path = if let Some(tail) = raw.strip_prefix("~/") {
-        PathBuf::from(
-            std::env::var_os("HOME")
-                .or_else(|| std::env::var_os("USERPROFILE"))
-                .context("home directory unavailable")?,
-        )
-        .join(tail)
-    } else {
-        PathBuf::from(raw)
-    };
+    let path = anywhere_platform::paths::expand_home(raw).context("home directory unavailable")?;
     if path.components().count() <= 1 && !path.is_absolute() {
         return Ok((raw.into(), options, false, None));
     }
@@ -689,11 +712,7 @@ fn prepare_query(
             .roots
             .first()
             .cloned()
-            .or_else(|| {
-                std::env::var_os("HOME")
-                    .or_else(|| std::env::var_os("USERPROFILE"))
-                    .map(PathBuf::from)
-            })
+            .or_else(anywhere_platform::paths::home_directory)
             .context("search directory unavailable")?;
         base.join(path)
     };
@@ -1070,6 +1089,47 @@ mod tests {
         assert_eq!(page.hits.len(), 1);
     }
 
+    #[test]
+    fn vanished_child_is_skipped_without_hiding_accessible_matches() {
+        let fixture = tempfile::tempdir().unwrap();
+        std::fs::write(fixture.path().join("report.txt"), "").unwrap();
+        let removed = fixture.path().join("updater-temporary-directory");
+        std::fs::create_dir(&removed).unwrap();
+        let store =
+            ScanStore::new("report", FileSearchFilter::All, options(fixture.path())).unwrap();
+        std::fs::remove_dir(&removed).unwrap();
+        let error = std::fs::read_dir(&removed).unwrap_err();
+        store.io_issue(&removed, &error);
+        let page = finish(&store);
+        assert!(page.progress.finished);
+        assert_eq!(page.progress.issue_count, 0);
+        assert_eq!(page.progress.inaccessible_count, 0);
+        assert!(page.progress.issue_examples.is_empty());
+        assert_eq!(page.hits.len(), 1);
+    }
+
+    #[test]
+    fn removed_root_reports_its_cause_without_hiding_accessible_matches() {
+        let fixture = tempfile::tempdir().unwrap();
+        std::fs::write(fixture.path().join("report.txt"), "").unwrap();
+        let removed = fixture.path().join("removed");
+        std::fs::create_dir(&removed).unwrap();
+        let mut policy = options(fixture.path());
+        policy.roots.push(removed.clone());
+        let store = ScanStore::new("report", FileSearchFilter::All, policy).unwrap();
+        std::fs::remove_dir(&removed).unwrap();
+        let page = finish(&store);
+        assert!(page.progress.finished);
+        assert_eq!(page.progress.issue_count, 1);
+        assert_eq!(page.progress.inaccessible_count, 0);
+        assert!(page.progress.issue_examples[0].starts_with(&removed.display().to_string()));
+        assert_eq!(page.hits.len(), 1);
+        assert_eq!(
+            page.hits[0].path,
+            fixture.path().join("report.txt").canonicalize().unwrap()
+        );
+    }
+
     #[cfg(unix)]
     #[test]
     fn unreadable_directory_is_skipped_and_other_files_remain_searchable() {
@@ -1221,6 +1281,35 @@ mod tests {
     }
 
     #[test]
+    fn home_prefixed_file_search_keeps_the_authorized_scope() {
+        let home = anywhere_platform::paths::home_directory().expect("test user's home");
+        let fixture = tempfile::tempdir_in(&home).unwrap();
+        let file = fixture.path().join("项目 file.txt");
+        std::fs::write(&file, "contents").unwrap();
+        let mut policy = options(fixture.path());
+        policy.restrict_to_roots = true;
+        for prefix in ["~", "～"] {
+            let input = format!(
+                "{prefix}/{}",
+                file.strip_prefix(&home).unwrap().to_str().unwrap()
+            );
+            let store = ScanStore::new(&input, FileSearchFilter::All, policy.clone()).unwrap();
+            let page = finish(&store);
+            assert_eq!(page.hits.len(), 1);
+            assert_eq!(page.hits[0].path, file.canonicalize().unwrap());
+            assert!(page.progress.finished && page.progress.issue_count == 0);
+            // A home alias does not authorize Home when only the fixture is allowed.
+            assert!(ScanStore::new(prefix, FileSearchFilter::All, policy.clone()).is_err());
+            assert!(ScanStore::new(
+                &format!("{prefix}/../"),
+                FileSearchFilter::All,
+                policy.clone()
+            )
+            .is_err());
+        }
+    }
+
+    #[test]
     fn explicit_paths_browse_direct_children_and_exact_files_without_sibling_leaks() {
         let fixture = tempfile::tempdir().unwrap();
         let root = fixture.path();
@@ -1244,6 +1333,72 @@ mod tests {
             assert_eq!(page.hits.len(), count);
             assert!(page.progress.finished && page.progress.issue_count == 0);
         }
+    }
+
+    #[test]
+    fn temporary_directories_are_pruned_from_traversal_and_index_hits() {
+        let fixture = tempfile::tempdir().unwrap();
+        let root = fixture.path().canonicalize().unwrap();
+        let temporary = root.join("system-temp");
+        let caches = root.join("Library/Caches");
+        let paths = [
+            root.join("report.txt"),
+            root.join("project/tmp/report.txt"),
+            root.join(".m2/report.txt"),
+            root.join(".cache/report.txt"),
+            caches.join("ordinary/report.txt"),
+            temporary.join("report.txt"),
+            caches.join("example.ShipIt/update.123/report.txt"),
+        ];
+        for path in &paths {
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, "").unwrap();
+        }
+        let mut store = ScanStore::new("report", FileSearchFilter::All, options(&root)).unwrap();
+        store.temporary_directories =
+            anywhere_platform::temporary_directories::TemporaryDirectories::with_locations(
+                std::slice::from_ref(&root),
+                vec![temporary],
+                Some(caches),
+            );
+        let hits = paths
+            .iter()
+            .cloned()
+            .map(|path| FileSearchHit {
+                path,
+                is_directory: false,
+            })
+            .collect();
+        let mut indexed: Vec<_> = store
+            .verify_index_hits(hits, &|| false)
+            .into_iter()
+            .map(|hit| hit.path)
+            .collect();
+        let page = finish(&store);
+        let mut scanned: Vec<_> = page.hits.iter().map(|hit| hit.path.clone()).collect();
+        let mut expected = paths[..5].to_vec();
+        indexed.sort();
+        scanned.sort();
+        expected.sort();
+        assert_eq!(indexed, expected);
+        assert_eq!(scanned, expected);
+        assert_eq!(page.progress.issue_count, 0);
+        let selected = root.join("system-temp");
+        let mut explicit = ScanStore::new(
+            selected.to_str().unwrap(),
+            FileSearchFilter::All,
+            options(&root),
+        )
+        .unwrap();
+        explicit.temporary_directories =
+            anywhere_platform::temporary_directories::TemporaryDirectories::with_locations(
+                &explicit.options.roots,
+                vec![selected.clone()],
+                Some(root.join("Library/Caches")),
+            );
+        let page = finish(&explicit);
+        assert_eq!(page.hits.len(), 1);
+        assert_eq!(page.hits[0].path, selected.join("report.txt"));
     }
 
     #[test]

@@ -3,6 +3,56 @@ use anywhere_core::application::SnapshotWait;
 use anywhere_platform::ContextReadError;
 use std::sync::atomic::AtomicUsize;
 
+#[tokio::test]
+async fn home_path_inputs_offer_file_and_directory_actions_for_the_expanded_target() {
+    let home = anywhere_platform::paths::home_directory().expect("test user's home");
+    let fixture = tempfile::tempdir_in(&home).unwrap();
+    let file = fixture.path().join("文件 with spaces.txt");
+    std::fs::write(&file, "contents").unwrap();
+    let platform = Arc::new(ContextPlatform::new("test.editor"));
+    let app = application(platform.clone());
+    let initial = app.activate().await.unwrap().unwrap();
+    let mut revision = 0;
+    for mode in [
+        InputMode::Content,
+        InputMode::Search,
+        InputMode::Environment,
+    ] {
+        for prefix in ["~", "～"] {
+            for (target, kind, command) in [
+                (fixture.path(), DIRECTORY, "core.directory.copy"),
+                (file.as_path(), FILE, "core.file.copy"),
+            ] {
+                revision += 1;
+                let input = format!(
+                    "{prefix}/{}",
+                    target.strip_prefix(&home).unwrap().to_str().unwrap()
+                );
+                let state = app
+                    .update_context_input(initial.session_id, input.clone(), revision, None, mode)
+                    .await
+                    .unwrap()
+                    .unwrap();
+                let state = settled(&app, state.session_id, state.revision).await;
+                assert_eq!(state.input, input, "keep the user's input spelling");
+                assert!(state
+                    .context_summary
+                    .iter()
+                    .any(|context| context.type_id == kind));
+                assert!(app
+                    .execute(state.session_id, state.revision, candidate(&state, command))
+                    .await
+                    .unwrap()
+                    .succeeded());
+                assert_eq!(
+                    platform.copies.lock().unwrap().last().unwrap(),
+                    target.canonicalize().unwrap().to_str().unwrap()
+                );
+            }
+        }
+    }
+}
+
 struct ContextPlatform {
     application: ApplicationInfo,
     finder_paths: Vec<PathBuf>,

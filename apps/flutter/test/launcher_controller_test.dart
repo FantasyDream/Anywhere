@@ -126,7 +126,7 @@ void main() {
     await controller.activate();
     await controller.dismiss();
     expect(controller.view.snapshot, isNull);
-    final clipboard = controller.contextSourceStatuses
+    final clipboard = controller.settings.contextSourceStatuses
         .firstWhere((item) => item.source == ContextSourceDto.clipboard);
     expect(clipboard.statusText, 'Permission needed');
     expect(clipboard.settingsPane, 'clipboard');
@@ -193,17 +193,17 @@ void main() {
       },
     );
 
-    expect(await controller.saveSettings(HostSettings.defaults), isTrue);
+    expect(await controller.settings.save(HostSettings.defaults), isTrue);
     expect(appliedSources, [true]);
-    expect(controller.statusMessage, warning);
+    expect(controller.settings.statusMessage, warning);
     await controller.activate();
     expect(controller.view.message, warning);
     await controller.dismiss();
 
     warning = '';
-    expect(await controller.saveSettings(HostSettings.defaults), isTrue);
+    expect(await controller.settings.save(HostSettings.defaults), isTrue);
     expect(appliedSources, [true, true]);
-    expect(controller.statusMessage, isNull);
+    expect(controller.settings.statusMessage, isNull);
     await controller.activate();
     expect(controller.view.message, isNull);
     controller.dispose();

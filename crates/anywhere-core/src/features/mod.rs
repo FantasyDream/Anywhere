@@ -10,13 +10,9 @@
 pub mod app_actions;
 pub mod applications;
 pub mod contribution;
-pub mod developer;
 pub mod filesystem;
-pub mod git;
 pub mod groups;
-pub mod json;
 pub mod text;
-pub mod url;
 
 use crate::core::context::provider::ContextProvider;
 use crate::core::context::{ContextSource, ResolvedContext};
@@ -102,9 +98,9 @@ pub fn recognized_contexts(input: &str) -> Vec<ResolvedContext> {
         contexts.push(text);
     }
     for context in [
-        url::provider::recognize(input),
+        crate::extensions::url::provider::recognize(input),
         filesystem::provider::recognize_path(input),
-        json::provider::recognize(input),
+        crate::extensions::json::provider::recognize(input),
     ]
     .into_iter()
     .flatten()

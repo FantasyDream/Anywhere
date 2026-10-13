@@ -27,42 +27,80 @@ pub(super) fn initialize(data_directory: String, plugin_directory: String) -> Re
             Box::new(anywhere_core::core::ranking::usage::MemoryUsage::default())
         }
     };
-    let mut registry = anywhere_core::application::builtin_registry();
     let user_plugins = data.join("plugins");
     std::fs::create_dir_all(&user_plugins)?;
-    let dirs = vec![PathBuf::from(&plugin_directory), user_plugins];
-    let _ = PLUGIN_DIRS.set(dirs.clone());
-    let reports = load_plugins(&mut registry, &dirs);
-    for report in &reports {
-        if !report.ok {
-            diagnostics.push(format!("Plugin {}: {}", report.id, report.detail));
-        }
-    }
-    *plugin_reports().lock().expect("plugin reports") = reports;
-    let platform = anywhere_platform::native_platform()?;
+    let app = Application::new(
+        anywhere_platform::native_platform()?,
+        anywhere_core::application::builtin_registry(),
+        history,
+        diagnostics,
+    );
+    let manager = anywhere_core::application::extension_manager::ExtensionManager::open(
+        data.join("extensions.json"),
+        vec![PathBuf::from(plugin_directory), user_plugins],
+        &app,
+    )?;
     APPLICATION
-        .set(Application::new(platform, registry, history, diagnostics))
+        .set(app)
         .map_err(|_| anyhow::anyhow!("application already initialized"))?;
+    EXTENSIONS
+        .set(Mutex::new(manager))
+        .map_err(|_| anyhow::anyhow!("extensions already initialized"))?;
     Ok(())
 }
 
-pub(super) fn plugin_status() -> Vec<PluginStatusDto> {
-    plugin_reports()
+fn extensions() -> Result<
+    std::sync::MutexGuard<'static, anywhere_core::application::extension_manager::ExtensionManager>,
+> {
+    EXTENSIONS
+        .get()
+        .context("call initialize first")?
         .lock()
-        .map(|reports| reports.clone())
+        .map_err(|_| anyhow::anyhow!("extensions unavailable"))
+}
+pub(super) fn extension_status() -> Result<Vec<ExtensionStatusDto>> {
+    Ok(extensions()?
+        .statuses()
+        .into_iter()
+        .map(Into::into)
+        .collect())
+}
+pub(super) fn change_extension(
+    change: anywhere_core::application::extension_manager::ExtensionChange,
+) -> Result<Vec<ExtensionStatusDto>> {
+    Ok(extensions()?
+        .change(application()?, change)?
+        .into_iter()
+        .map(Into::into)
+        .collect())
+}
+fn plugin_reports(
+    statuses: Vec<anywhere_core::application::extension_manager::ExtensionStatus>,
+) -> Vec<PluginStatusDto> {
+    statuses
+        .into_iter()
+        .filter(|s| !s.first_party)
+        .map(|s| PluginStatusDto {
+            id: s.id,
+            ok: s.active,
+            detail: s.detail,
+        })
+        .collect()
+}
+pub(super) fn plugin_status() -> Vec<PluginStatusDto> {
+    extensions()
+        .map(|m| plugin_reports(m.statuses()))
         .unwrap_or_default()
 }
-
+pub(super) fn reload_extensions() -> Result<Vec<ExtensionStatusDto>> {
+    Ok(extensions()?
+        .reload(application()?)?
+        .into_iter()
+        .map(Into::into)
+        .collect())
+}
 pub(super) fn reload_plugins() -> Result<Vec<PluginStatusDto>> {
-    let dirs = PLUGIN_DIRS
-        .get()
-        .cloned()
-        .context("call initialize first")?;
-    let mut registry = anywhere_core::application::builtin_registry();
-    let reports = load_plugins(&mut registry, &dirs);
-    *plugin_reports().lock().expect("plugin reports") = reports.clone();
-    application()?.replace_registry(registry);
-    Ok(reports)
+    Ok(plugin_reports(extensions()?.reload(application()?)?))
 }
 
 pub(super) fn excluded_apps() -> Result<Vec<String>> {

@@ -145,6 +145,9 @@ impl FileSearchSource {
 
 #[async_trait::async_trait]
 impl AsyncCandidateSource for FileSearchSource {
+    fn reset(&self) {
+        self.clear();
+    }
     fn accepts_mode(&self, mode: InputMode) -> bool {
         mode == InputMode::FileSearch
     }

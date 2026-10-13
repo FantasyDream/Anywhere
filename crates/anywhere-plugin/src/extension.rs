@@ -48,7 +48,7 @@ fn metadata(
         "extension version must be numeric major.minor.patch"
     );
     ensure!(
-        capabilities.len() <= 3 && !capabilities.contains(&Capability::InvokeBuiltin),
+        capabilities.len() <= 8 && !capabilities.contains(&Capability::InvokeBuiltin),
         "v2 builtin delegation is not supported"
     );
     ensure!(
@@ -71,6 +71,14 @@ pub fn validate_plugin_metadata(manifest: &PluginManifest) -> Result<()> {
             );
         }
         2 => {
+            ensure!(
+                manifest.capabilities.len() <= 3
+                    && manifest.capabilities.iter().all(|c| matches!(
+                        c,
+                        Capability::ClipboardWrite | Capability::OpenUrl | Capability::OpenFile
+                    )),
+                "capability is not available to declarative v2 plugins"
+            );
             metadata(
                 &manifest.id,
                 &manifest.name,
@@ -134,6 +142,9 @@ mod tests {
             v2().replace("capabilities = [\"url.open\"]", "capabilities = []"),
             v2().replace("[\"url.open\"]", "[\"url.open\", \"url.open\"]"),
             v2().replace("url.open", "process.spawn"),
+            v2().replace("[\"url.open\"]", "[\"url.open\", \"process.start\"]"),
+            v2().replace("[\"url.open\"]", "[\"url.open\", \"git.read\"]"),
+            v2().replace("[\"url.open\"]", "[\"url.open\", \"storage\"]"),
         ] {
             assert!(super::super::parse_manifest(&raw).is_err(), "{raw}");
         }

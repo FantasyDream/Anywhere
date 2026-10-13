@@ -5,7 +5,7 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 import 'src/rust/frb_generated.dart';
 import 'src/rust/api.dart' as bridge;
-import 'launcher_screen.dart';
+import 'launcher/launcher_screen.dart';
 import 'ui/app_style.dart';
 import 'ui/app_components.dart';
 import 'infrastructure/runtime_paths.dart';
@@ -125,8 +125,9 @@ Future<void> main() async {
                 loadedCount: count),
         fileMore: (session, revision) =>
             bridge.loadMoreFiles(sessionId: session, revision: revision),
-        fileActions: (session, revision, candidate) async => bridge.fileActions(
-            sessionId: session, revision: revision, candidateId: candidate),
+        objectActions: (session, revision, candidate) async =>
+            bridge.objectActions(
+                sessionId: session, revision: revision, candidateId: candidate),
         freezeFiles: (session, revision) =>
             bridge.freezeFileResults(sessionId: session, revision: revision),
         loadFilePreview: (session, revision, candidate) => bridge.previewFile(

@@ -13,9 +13,10 @@
 //!   platform API.
 //! - [`application`] orchestrates one launcher invocation from those concepts, one file per
 //!   use case. Product assembly lives in [`application::builtin_registry`].
-//! - [`features`] holds first-party product capabilities; each owns its contexts, its actions
-//!   and its candidate sources, and registers them through [`features::builtin_providers`],
-//!   [`features::builtin_action_bundles`] and [`features::session_seeds`].
+//! - [`features`] owns launcher, filesystem, application and text capabilities.
+//! - [`extensions`] owns domain modules, their recognizers, actions and sources;
+//!   [`features::contribution`] assembles contributions and [`features::session_seeds`]
+//!   seeds each session.
 //! - [`persistence`] stores data behind repository interfaces.
 pub mod application;
 pub mod core;

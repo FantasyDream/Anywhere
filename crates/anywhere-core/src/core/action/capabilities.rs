@@ -52,4 +52,19 @@ impl<'a> HostServices<'a> {
         self.grant.require(ExtensionCapability::OpenFile)?;
         self.platform.open_file(path)
     }
+    pub fn run_git(
+        &self,
+        path: &Path,
+        operation: anywhere_platform::GitOperation,
+    ) -> Result<anywhere_platform::GitOutput> {
+        self.grant.require(ExtensionCapability::GitRead)?;
+        self.platform.run_git(path, operation)
+    }
+    pub fn process_request(
+        &self,
+        request: anywhere_platform::process::ProcessRequest,
+    ) -> Result<anywhere_platform::process::ProcessRequest> {
+        self.grant.require(ExtensionCapability::ProcessStart)?;
+        Ok(request)
+    }
 }

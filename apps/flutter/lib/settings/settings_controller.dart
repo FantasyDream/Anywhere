@@ -1,10 +1,13 @@
+import 'dart:async';
 import '../infrastructure/runtime_policy.dart';
 import '../infrastructure/file_search_access.dart';
 import 'package:flutter/foundation.dart';
 import '../infrastructure/window_host.dart';
 import '../launcher/context_source_status.dart';
 import '../src/rust/api.dart';
+import '../src/rust/api.dart' as extensions_api;
 import 'host_settings.dart';
+import 'extension_presentation.dart';
 
 typedef ApplyExcludedApps = Future<void> Function(List<String> bundleIds);
 
@@ -19,15 +22,39 @@ class SettingsController extends ChangeNotifier {
     Future<void> Function(HostSettings)? applyFileSearch,
     Future<void> Function(HostSettings)? authorizeFileSearch,
     List<PluginStatusDto> Function()? readPlugins,
+    FutureOr<List<ExtensionStatusDto>> Function()? readExtensions,
+    Future<List<ExtensionStatusDto>> Function(String, bool)? enableExtension,
+    Future<List<ExtensionStatusDto>> Function(String, String)? grantExtension,
+    Future<List<ExtensionStatusDto>> Function(String)? removeExtensionGrant,
     Future<List<PluginStatusDto>> Function()? reload,
+    Future<List<ExtensionStatusDto>> Function()? reloadExtensions,
     Future<List<ShortcutActionDto>> Function()? readShortcutActions,
     Future<List<String>> Function(List<String>)? readSupportedShortcutActions,
     Future<List<ShortcutApplicationDto>> Function()? readShortcutApplications,
   })  : _window = window,
         _warning = startupMessage,
         _fileSearchInitializationFailed = fileSearchInitializationFailed,
-        _readPlugins = readPlugins ?? pluginStatus,
-        _reload = reload ?? reloadPlugins,
+        _readExtensions = readExtensions ??
+            (readPlugins == null
+                ? extensionStatus
+                : (() => legacyExtensionStatuses(readPlugins()))),
+        _reloadExtensions = reloadExtensions ??
+            (reload == null
+                ? extensions_api.reloadExtensions
+                : (() async {
+                    final legacy = await reload();
+                    return readExtensions == null
+                        ? legacyExtensionStatuses(legacy)
+                        : await readExtensions();
+                  })),
+        _enableExtension = enableExtension ??
+            ((key, enabled) =>
+                extensions_api.setExtensionEnabled(key: key, enabled: enabled)),
+        _grantExtension = grantExtension ??
+            ((key, token) =>
+                extensions_api.approveExtension(key: key, token: token)),
+        _removeExtensionGrant = removeExtensionGrant ??
+            ((key) => extensions_api.revokeExtension(key: key)),
         _readShortcutActions = readShortcutActions,
         _readSupportedShortcutActions = readSupportedShortcutActions,
         _readShortcutApplications = readShortcutApplications,
@@ -51,8 +78,15 @@ class SettingsController extends ChangeNotifier {
   final Future<void> Function(HostSettings) _authorizeFileSearch;
   int _searchConfiguration = 0;
   Future<void> _saveQueue = Future.value();
-  final List<PluginStatusDto> Function() _readPlugins;
-  final Future<List<PluginStatusDto>> Function() _reload;
+  final FutureOr<List<ExtensionStatusDto>> Function() _readExtensions;
+  final Future<List<ExtensionStatusDto>> Function(String, bool)
+      _enableExtension;
+  final Future<List<ExtensionStatusDto>> Function(String, String)
+      _grantExtension;
+  final Future<List<ExtensionStatusDto>> Function(String) _removeExtensionGrant;
+  List<ExtensionStatusDto> _extensions = const [];
+  List<ExtensionStatusDto> get extensions => _extensions;
+  final Future<List<ExtensionStatusDto>> Function() _reloadExtensions;
   final Future<List<ShortcutActionDto>> Function()? _readShortcutActions;
   final Future<List<String>> Function(List<String>)?
       _readSupportedShortcutActions;
@@ -60,6 +94,7 @@ class SettingsController extends ChangeNotifier {
   String? _catalogSyncError;
   int _loadEpoch = 0;
   bool _refreshingPlugins = false;
+  Future<void>? _extensionOperation;
   bool get refreshingPlugins => _refreshingPlugins;
   Set<String> _supportedShortcutActions = const {};
   bool shortcutSupported(String id) =>
@@ -86,8 +121,6 @@ class SettingsController extends ChangeNotifier {
   String? _statusMessage;
   String? _shortcutRestoreError;
   String? get statusMessage => _statusMessage;
-  List<PluginStatusDto> _plugins = const [];
-  List<PluginStatusDto> get plugins => _plugins;
   List<ContextCaptureDto> _captures = const [];
   Future<bool> Function()? beforeClose;
   Future<bool>? _closing;
@@ -117,7 +150,16 @@ class SettingsController extends ChangeNotifier {
       _statusMessage =
           'Action shortcuts were saved by a newer version. Update Anywhere before changing settings.';
     }
-    if (plugins) _plugins = _readPlugins();
+    if (plugins) {
+      try {
+        final statuses = await _readExtensions();
+        if (_disposed || epoch != _loadEpoch) return;
+        _extensions = statuses;
+      } catch (error) {
+        if (_disposed || epoch != _loadEpoch) return;
+        _statusMessage = 'Extensions could not be loaded: $error';
+      }
+    }
     if (plugins && _readShortcutActions != null) {
       final actions = await _readShortcutActions();
       if (_disposed || epoch != _loadEpoch) return;
@@ -227,8 +269,12 @@ class SettingsController extends ChangeNotifier {
   /// Native close, Done, Escape, Launcher switching and quit share one draft decision.
   Future<bool> prepareClose() =>
       _closing ??= _prepareClose().whenComplete(() => _closing = null);
-  Future<bool> _prepareClose() async =>
-      await (beforeClose?.call() ?? Future.value(true));
+  Future<bool> _prepareClose() async {
+    // Finish catalog invalidation before the host restores global action hotkeys.
+    await _extensionOperation;
+    if (_disposed) return false;
+    return await (beforeClose?.call() ?? Future.value(true));
+  }
 
   Future<bool> save(HostSettings next) {
     // Invalidate authorization/readback immediately, even while an earlier save
@@ -372,23 +418,63 @@ class SettingsController extends ChangeNotifier {
   bool _authorizingFiles = false;
   bool get authorizingFiles => _authorizingFiles;
 
-  Future<void> refreshPlugins() async {
-    if (_refreshingPlugins || _disposed) return;
+  Future<void> refreshPlugins() => _changeExtensions(_reloadExtensions);
+
+  Future<void> setExtensionEnabled(
+          ExtensionStatusDto extension, bool enabled) =>
+      _changeExtensions(() => _enableExtension(extension.key, enabled));
+
+  Future<void> approveExtension(ExtensionStatusDto extension) =>
+      _changeExtensions(
+          () => _grantExtension(extension.key, extension.approvalToken));
+
+  Future<void> revokeExtension(ExtensionStatusDto extension) =>
+      _changeExtensions(() => _removeExtensionGrant(extension.key));
+
+  Future<void> _changeExtensions(
+          Future<List<ExtensionStatusDto>> Function() change) =>
+      _runExtensionOperation(() async {
+        final statuses = await change();
+        if (!_disposed) _extensions = statuses;
+      });
+
+  Future<void> _runExtensionOperation(Future<void> Function() operation) {
+    if (_refreshingPlugins || _disposed || _closing != null) {
+      return Future.value();
+    }
+    final pending = _updateExtensions(operation);
+    _extensionOperation = pending;
+    return pending;
+  }
+
+  Future<void> _updateExtensions(Future<void> Function() operation) async {
+    ++_loadEpoch;
     _refreshingPlugins = true;
+    _statusMessage = null;
     _notify();
     try {
-      _plugins = await _reload();
+      await operation();
       if (_disposed) return;
-      try {
-        if (_readShortcutActions != null) {
-          _shortcutActions = await _readShortcutActions();
-        }
-      } finally {
-        await _syncShortcutCatalog();
-      }
+      ++_loadEpoch;
     } catch (error) {
-      _statusMessage = '$error';
+      if (!_disposed) {
+        _statusMessage = 'Extension settings could not be updated: $error';
+      }
     } finally {
+      if (!_disposed && _readShortcutActions != null) {
+        try {
+          final actions = await _readShortcutActions();
+          if (!_disposed) _shortcutActions = actions;
+        } catch (error) {
+          if (!_disposed) {
+            _shortcutActions = const [];
+            _statusMessage ??= 'Action shortcuts could not be loaded: $error';
+          }
+        }
+      }
+      // The backend can commit before its response/status read fails. Always
+      // reconcile eligibility; the sync itself unregisters uncertain chords.
+      await _syncShortcutCatalog();
       _refreshingPlugins = false;
       _notify();
     }

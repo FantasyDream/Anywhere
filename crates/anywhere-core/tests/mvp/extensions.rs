@@ -21,7 +21,11 @@ action = {type = "copy", text = "{{context.value}}"}
 async fn two_first_party_modules_keep_context_action_scope_and_execution_identity() {
     let modules = anywhere_core::extensions::builtins().unwrap();
     assert_eq!(
-        modules.iter().map(|m| m.id).collect::<Vec<_>>(),
+        modules
+            .iter()
+            .filter(|m| matches!(m.id, "url" | "json"))
+            .map(|m| m.id)
+            .collect::<Vec<_>>(),
         ["url", "json"]
     );
     let platform = Arc::new(TestPlatform::default());
@@ -113,6 +117,19 @@ fn runtime_host_services_deny_operations_before_any_side_effect() {
     let host = HostServices::new(&platform, &grant);
     assert!(host.open_url("https://example.com").is_err());
     assert!(host.open_file(Path::new("/not-opened")).is_err());
+    assert!(host
+        .run_git(Path::new("/not-read"), GitOperation::Status)
+        .is_err());
+    assert!(host
+        .process_request(anywhere_platform::process::ProcessRequest {
+            title: "Denied".into(),
+            program: "/not-run".into(),
+            arguments: vec![],
+            directory: "/not-run".into(),
+            environment: Default::default()
+        })
+        .is_err());
+    assert_eq!(platform.git_calls.load(Ordering::Relaxed), 0);
     assert!(platform.calls.lock().unwrap().is_empty());
     let context = ResolvedContext::new(
         TEXT,

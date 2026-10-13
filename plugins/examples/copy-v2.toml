@@ -1,0 +1,11 @@
+protocol_version = 2
+id = "example_copy"
+name = "Example Copy"
+version = "1.0.0"
+capabilities = ["clipboard.write"]
+
+[[commands]]
+id = "copy"
+title = "Copy with Example Extension"
+accepts = ["core.text"]
+action = { type = "copy", text = "{{context.value}}" }

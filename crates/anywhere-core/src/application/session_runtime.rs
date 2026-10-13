@@ -11,7 +11,6 @@ use crate::{
     core::context::registry::ContextProviderRegistry,
     core::context::{ExecutionContext, ResolvedContext},
     core::ranking::usage::UsageRepository,
-    core::search::candidate_source::CandidateSource,
     features::applications::index::ApplicationCatalog,
     features::filesystem::provider::DirectoryMemo,
 };
@@ -31,10 +30,8 @@ use tokio::sync::{broadcast, watch};
 pub struct Resolver {
     pub(super) registry: Arc<Mutex<Arc<ActionRegistry>>>,
     /// Stateless providers; the directory provider is added per revision.
-    pub(super) providers: ContextProviderRegistry,
-    pub(super) sources: Vec<Arc<dyn CandidateSource + Send + Sync>>,
-    pub(super) async_sources:
-        Vec<Arc<dyn crate::core::search::candidate_source::AsyncCandidateSource>>,
+    pub(super) providers: Arc<Mutex<ContextProviderRegistry>>,
+    pub(super) sources: Arc<Mutex<crate::core::search::candidate_source::SourceCatalog>>,
     pub(super) source_workers: Arc<tokio::sync::Semaphore>,
     pub(super) session: Arc<Mutex<LauncherSession>>,
     pub(super) current: Arc<AtomicU64>,
@@ -73,9 +70,8 @@ impl Resolver {
         Self {
             registry: Arc::new(Mutex::new(Arc::new(registry))),
             // Registration order does not matter: the registry sorts by priority, then id.
-            providers: super::composition::builtin_providers(),
-            sources: Vec::new(),
-            async_sources: Vec::new(),
+            providers: Arc::new(Mutex::new(super::composition::builtin_providers())),
+            sources: Arc::new(Mutex::new(Default::default())),
             source_workers: Arc::new(tokio::sync::Semaphore::new(
                 anywhere_protocol::policy::MAX_CONCURRENT_SEARCH_SOURCES as usize,
             )),
@@ -148,7 +144,10 @@ impl Resolver {
     }
 
     pub fn register_provider(&mut self, provider: Arc<dyn ContextProvider>) -> Result<()> {
-        self.providers.register(provider)
+        self.providers
+            .lock()
+            .map_err(|_| anyhow!("providers lock poisoned"))?
+            .register(provider)
     }
 
     pub fn execution(&self, session_id: SessionId, revision: Revision) -> ExecutionContext {
@@ -240,7 +239,13 @@ impl Resolver {
             .lock()
             .ok()
             .and_then(|directory| directory.clone());
-        super::composition::session_providers(self.providers.clone(), directory)
+        super::composition::session_providers(
+            self.providers
+                .lock()
+                .expect("providers lock poisoned")
+                .clone(),
+            directory,
+        )
     }
 
     pub fn build_run(
@@ -453,6 +458,11 @@ impl Resolver {
                 )
             };
             let (catalog, catalog_generation) = self.catalog_view()?;
+            let sources = self
+                .sources
+                .lock()
+                .map_err(|_| anyhow!("sources lock poisoned"))?
+                .synchronous();
             let prepared = super::snapshot::prepare(super::snapshot::SnapshotInput {
                 action_catalog_version,
                 input: &input,
@@ -466,7 +476,7 @@ impl Resolver {
                 incoming_diagnostics: &diagnostics,
                 prior_diagnostics: &prior_diagnostics,
                 catalog: &catalog,
-                sources: &self.sources,
+                sources: &sources,
                 search_candidates: &search_candidates,
                 object_actions: &object_actions,
                 now: now(),

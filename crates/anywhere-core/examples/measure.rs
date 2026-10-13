@@ -10,9 +10,9 @@
 use anywhere_core::{
     core::ranking::usage::UsageStats, core::search::candidate_source::CandidateSource,
     core::search::engine::ActionSearch, core::search::query::Query,
-    core::session::facts::SessionFacts, features::applications::index::IndexedApplication,
-    features::applications::source::ApplicationSource, features::git::provider::repository_root,
-    features::recognized_contexts,
+    core::session::facts::SessionFacts, extensions::git::provider::repository_root,
+    features::applications::index::IndexedApplication,
+    features::applications::source::ApplicationSource, features::recognized_contexts,
 };
 use std::time::Instant;
 

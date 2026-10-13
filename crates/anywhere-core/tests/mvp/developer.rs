@@ -624,7 +624,7 @@ async fn all_node_managers_execute_custom_scripts_failures_and_stoppable_service
             ("check:types", ExecutionSessionStatus::Succeeded, 0),
             ("lint", ExecutionSessionStatus::Failed, 13),
         ] {
-            let id = anywhere_core::features::developer::node::action_id(manager, script);
+            let id = anywhere_core::extensions::developer::node::action_id(manager, script);
             let result = execute_action(&app, &state, &id).await;
             assert!(result.succeeded(), "{:?}", result.error);
             let task = completed_task(&app, result.execution_session_id.as_deref().unwrap()).await;
@@ -639,7 +639,7 @@ async fn all_node_managers_execute_custom_scripts_failures_and_stoppable_service
             let result = execute_action(
                 &app,
                 &state,
-                &anywhere_core::features::developer::node::action_id(manager, script),
+                &anywhere_core::extensions::developer::node::action_id(manager, script),
             )
             .await;
             let id = result.execution_session_id.unwrap();

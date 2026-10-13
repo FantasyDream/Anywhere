@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'settings_controller.dart';
 import 'settings_components.dart';
+import 'extensions_section.dart';
 import 'action_shortcuts_section.dart';
 import 'shortcut_recorder.dart';
 import 'action_shortcut.dart';
@@ -262,7 +263,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ('shortcuts', 'Shortcuts', AppIcons.keyboard),
     ('context', 'Context', AppIcons.layers),
     ('search', 'Search', AppIcons.search),
-    ('plugins', 'Plugins', AppIcons.plugin),
+    ('plugins', 'Extensions', AppIcons.plugin),
   ];
 
   void _selectPage(String id) {
@@ -354,7 +355,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ])));
 
   List<Widget> _pageContent() {
-    final plugins = _controller.plugins;
     return switch (_page) {
       'shortcuts' => [
           _section('SHORTCUTS'),
@@ -540,57 +540,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           SizedBox(height: DesktopEnvironment.current.titleBarInset),
         ],
-      'plugins' => [
-          _section('PLUGINS'),
-          _card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (plugins.isEmpty)
-                    Row(children: [
-                      const Expanded(
-                          child: Text('No plugins loaded.',
-                              style: TextStyle(
-                                  fontSize: 12, color: AppStyle.muted))),
-                      _reloadPluginsButton(),
-                    ])
-                  else
-                    for (final plugin in plugins)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Row(
-                          children: [
-                            Icon(plugin.ok ? AppIcons.success : AppIcons.error,
-                                size: 15,
-                                color: plugin.ok
-                                    ? AppStyle.accent
-                                    : AppStyle.warning),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text('${plugin.id}  ${plugin.detail}',
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                      fontSize: 12,
-                                      color: plugin.ok
-                                          ? AppStyle.secondary
-                                          : AppStyle.warning)),
-                            ),
-                          ],
-                        ),
-                      ),
-                  if (plugins.isNotEmpty)
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: _reloadPluginsButton(),
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ],
+      'plugins' => [ExtensionsSection(controller: _controller)],
       _ => const [],
     };
   }
@@ -613,16 +563,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       });
 
   Widget _card({required Widget child}) => AppCard(child: child);
-
-  Widget _reloadPluginsButton() => OutlinedButton.icon(
-      onPressed: _controller.refreshingPlugins
-          ? null
-          : () async {
-              await _controller.refreshPlugins();
-              if (mounted) setState(() {});
-            },
-      icon: const Icon(AppIcons.refresh, size: 14),
-      label: const Text('Reload plugins'));
 
   Widget _hotkeyRow(String label, String value, String id) {
     final recording = _recording == id;

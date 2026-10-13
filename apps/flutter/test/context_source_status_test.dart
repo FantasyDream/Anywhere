@@ -9,6 +9,57 @@ ContextCaptureDto capture(
     ContextCaptureDto(source: source, status: status, capturedAtMs: 1);
 
 void main() {
+  test('ambient capture diagnostics cannot spill into global or content search',
+      () {
+    final snapshot = launcherSnapshot(
+        sessionId: 1,
+        revision: 0,
+        snapshotSeq: 1,
+        input: '',
+        contextComplete: true,
+        candidates: const [],
+        contextCaptures: [
+          capture(ContextSourceDto.finderSelection,
+              ContextCaptureStatusDto.permissionDenied)
+        ],
+        diagnostics: [
+          'platform.current_directory: captured application is no longer running'
+        ]);
+    for (final mode in [InputModeDto.search, InputModeDto.content]) {
+      final view = LauncherViewState(
+          phase: LauncherPhase.ready,
+          generation: 1,
+          inputMode: mode,
+          snapshot: snapshot);
+      expect(view.notice, isNull);
+      expect(view.noticeSettingsPane, isNull);
+      final failedExecution = LauncherViewState(
+          phase: LauncherPhase.ready,
+          generation: 1,
+          inputMode: mode,
+          snapshot: snapshot,
+          message: 'Copy failed. Try again.');
+      expect(failedExecution.notice, 'Copy failed. Try again.');
+    }
+  });
+
+  test('environment diagnostics use friendly guidance rather than provider IDs',
+      () {
+    final view = LauncherViewState(
+        phase: LauncherPhase.ready,
+        generation: 1,
+        snapshot: launcherSnapshot(
+            sessionId: 1,
+            revision: 0,
+            snapshotSeq: 1,
+            input: '',
+            contextComplete: true,
+            candidates: const [],
+            diagnostics: ['platform.current_directory: transport failed']));
+    expect(view.notice, contains('other actions are still available'));
+    expect(view.notice, isNot(contains('platform.current_directory')));
+  });
+
   test(
       'expected empty and unsupported sources stay quiet but have status details',
       () {

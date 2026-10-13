@@ -24,6 +24,19 @@ fn main() -> Result<()> {
                 instance_id: None,
             })?
         ),
+        // Diagnose the production frozen-identity path without activating Finder
+        // or printing directory contents. Supply a captured kernel instance ID.
+        "finder-bound" => {
+            let application = ApplicationInfo {
+                bundle_id: "com.apple.finder".into(),
+                name: "Finder".into(),
+                pid: value.parse()?,
+                instance_id: args.get(3).cloned(),
+            };
+            for _ in 0..5 {
+                println!("directory_found={}", platform.application_directory(&application)?.is_some());
+            }
+        }
         "url" => platform.open_url(value)?,
         "file" => platform.open_file(Path::new(value))?,
         "reveal" => platform.reveal_file(Path::new(value))?,
@@ -66,7 +79,7 @@ fn main() -> Result<()> {
                 println!("file_search_hits={}", counts[0]);
             }
         }
-        _ => bail!("capture | finder | search-files | search-files-benchmark | url | file | reveal | directory | terminal | copy [value]"),
+        _ => bail!("capture | finder | finder-bound <pid> <instance> | search-files | search-files-benchmark | url | file | reveal | directory | terminal | copy [value]"),
     }
     Ok(())
 }

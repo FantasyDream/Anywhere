@@ -1,6 +1,8 @@
 import '../src/rust/api.dart';
 import 'file_search_controller.dart';
 import 'launcher_navigation.dart';
+import 'launcher_backend.dart';
+import 'launcher_session_coordinator.dart';
 
 /// Owns tool state and asynchronous object/load requests. The Launcher controls
 /// navigation and presentation; Rust controls which objects and actions exist.
@@ -8,11 +10,33 @@ class FileWorkspaceCoordinator extends FileSearchController {
   FileWorkspaceCoordinator(super.load);
   LauncherLocation? returnLocation;
   bool moreLoading = false;
-  int _moreRequest = 0, _actionRequest = 0;
+  int _moreRequest = 0;
   void invalidateOperations() {
     ++_moreRequest;
-    ++_actionRequest;
     moreLoading = false;
+  }
+
+  Future<LauncherStateDto?> loadSnapshot(
+      int session,
+      int revision,
+      LauncherBackend backend,
+      LauncherStateDto? Function() snapshot,
+      bool Function() current) {
+    final held = snapshot();
+    final count = held?.candidates.length ?? 0;
+    final version = held?.candidateListVersion ?? 0;
+    return loadMore(session, revision, (id, rev) async {
+      if (backend.fileMoreDelta == null) return backend.fileMore!(id, rev);
+      final packet = await backend.fileMoreDelta!(id, rev, version, count);
+      final latest = snapshot();
+      if (latest?.sessionId == id &&
+          latest?.revision == rev &&
+          packet.state != null &&
+          snapshotCursor(packet.state!) <= snapshotCursor(latest!)) {
+        return latest;
+      }
+      return LauncherSessionCoordinator.materialize(latest, packet, count);
+    }, current);
   }
 
   Future<LauncherStateDto?> loadMore(
@@ -40,19 +64,6 @@ class FileWorkspaceCoordinator extends FileSearchController {
         moreLoading = false;
         notifyListeners();
       }
-    }
-  }
-
-  Future<List<CandidateDto>?> loadActions(
-      Future<List<CandidateDto>> Function() load,
-      bool Function() current) async {
-    final request = ++_actionRequest;
-    try {
-      final items = await load();
-      return request == _actionRequest && current() ? items : null;
-    } catch (_) {
-      if (request == _actionRequest && current()) rethrow;
-      return null;
     }
   }
 

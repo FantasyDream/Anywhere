@@ -95,6 +95,11 @@ impl SearchEngine<'_> {
             query,
             contexts,
             scope_id,
+            ranking: super::candidate_source::SourceRanking {
+                usage: self.usage,
+                facts: self.facts,
+                now: self.now,
+            },
         };
         let mut ranked = Vec::new();
         let mut fallback = Vec::new();

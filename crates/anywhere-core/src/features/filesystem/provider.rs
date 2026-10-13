@@ -8,7 +8,7 @@
 use crate::core::context::provider::{ContextProvider, ProviderDescriptor};
 use crate::core::context::{ContextSource, ContextValue, ExecutionContext, ResolvedContext};
 use anyhow::{bail, Context, Result};
-use anywhere_platform::{ApplicationInfo, Platform};
+use anywhere_platform::{ApplicationInfo, ContextReadError, Platform};
 use anywhere_protocol::*;
 use async_trait::async_trait;
 use std::{path::PathBuf, sync::Arc, time::Duration};
@@ -59,10 +59,14 @@ impl ContextProvider for PathProvider {
 }
 
 pub fn recognize_path(raw: &str) -> Option<ResolvedContext> {
-    let path = PathBuf::from(raw)
-        .canonicalize()
-        .or_else(|_| PathBuf::from(raw.trim()).canonicalize())
-        .ok()?;
+    // Keep the original spelling first: trailing spaces may belong to a real
+    // filename. Only retry the trimmed input if the exact path does not exist.
+    let resolve = |input: &str| {
+        anywhere_platform::paths::expand_home(input)?
+            .canonicalize()
+            .ok()
+    };
+    let path = resolve(raw).or_else(|| resolve(raw.trim()))?;
     let (type_id, value) = if path.is_dir() {
         (DIRECTORY, ContextValue::Directory(path))
     } else if path.is_file() {
@@ -132,7 +136,19 @@ impl ContextProvider for CurrentDirectoryProvider {
                 tracing::debug!(error = %error, "directory_capture_abandoned");
                 Ok(vec![])
             }
-            Err(error) => bail!("{error}"),
+            // A frozen application may exit or restart while Automation is in
+            // flight. Discard its directory, without retrying against a new app
+            // or turning normal context expiry into a persistent search error.
+            Err(error)
+                if matches!(
+                    error.downcast_ref::<ContextReadError>(),
+                    Some(ContextReadError::ApplicationChanged | ContextReadError::Unsupported)
+                ) =>
+            {
+                tracing::debug!(error = %error, "directory_capture_skipped");
+                Ok(vec![])
+            }
+            Err(error) => bail!("{error:#}"),
         }
     }
 }
@@ -140,9 +156,9 @@ impl ContextProvider for CurrentDirectoryProvider {
 /// Session-scoped, single-flight capture of one application's current directory.
 pub struct DirectoryMemo {
     bundle_id: String,
-    rx: watch::Receiver<Option<Result<Option<PathBuf>, String>>>,
+    rx: watch::Receiver<Option<Result<Option<PathBuf>, Arc<anyhow::Error>>>>,
     /// Held so the channel stays open for later revisions.
-    _tx: watch::Sender<Option<Result<Option<PathBuf>, String>>>,
+    _tx: watch::Sender<Option<Result<Option<PathBuf>, Arc<anyhow::Error>>>>,
 }
 
 impl DirectoryMemo {
@@ -153,15 +169,18 @@ impl DirectoryMemo {
         let publisher = tx.clone();
         let bundle_id = frontmost.bundle_id.clone();
         let bundle_id_for_log = bundle_id.clone();
+        let pid = frontmost.pid;
         tokio::spawn(async move {
             let started = std::time::Instant::now();
             let result =
                 tokio::task::spawn_blocking(move || platform.application_directory(&frontmost))
                     .await
                     .unwrap_or_else(|error| Err(anyhow::anyhow!("directory task failed: {error}")))
-                    .map_err(|error| format!("{error:#}"));
+                    .map_err(Arc::new);
             tracing::info!(
                 bundle_id = bundle_id_for_log,
+                pid,
+                failure_kind = ?result.as_ref().err().and_then(|error| error.downcast_ref::<ContextReadError>()),
                 duration_us = started.elapsed().as_micros() as u64,
                 found = result
                     .as_ref()
@@ -187,28 +206,31 @@ impl DirectoryMemo {
     /// The wait is abandoned as soon as this call's session or revision is superseded.
     /// Letting it run to the 30s timeout would keep a blocking worker parked on a result
     /// no revision can use any more — the caller that is still current has its own wait.
-    pub async fn directory(&self, execution: &ExecutionContext) -> Result<Option<PathBuf>, String> {
+    pub async fn directory(
+        &self,
+        execution: &ExecutionContext,
+    ) -> Result<Option<PathBuf>, Arc<anyhow::Error>> {
         let mut rx = self.rx.clone();
         if rx.borrow().is_none() {
             tokio::select! {
                 biased;
                 changed = rx.changed() => {
                     if changed.is_err() {
-                        return Err("original application directory capture ended".into());
+                        return Err(Arc::new(anyhow::anyhow!("original application directory capture ended")));
                     }
                 }
                 _ = execution.superseded() => {
-                    return Err("directory capture abandoned: revision superseded".into());
+                    return Err(Arc::new(anyhow::anyhow!("directory capture abandoned: revision superseded")));
                 }
                 _ = tokio::time::sleep(DIRECTORY_TIMEOUT) => {
-                    return Err("original application directory capture timed out".into());
+                    return Err(Arc::new(ContextReadError::TimedOut.into()));
                 }
             }
         }
         let settled = rx.borrow().clone();
         match settled {
             Some(result) => result,
-            None => Err("original application directory capture timed out".into()),
+            None => Err(Arc::new(ContextReadError::TimedOut.into())),
         }
     }
 }
@@ -245,5 +267,52 @@ mod tests {
             types(directory.path().join("missing").to_str().unwrap()),
             [TEXT]
         );
+    }
+
+    #[test]
+    fn home_paths_resolve_real_targets_and_preserve_spaces_and_tildes_in_names() {
+        let home = anywhere_platform::paths::home_directory().expect("test user's home");
+        let fixture = tempfile::tempdir_in(&home).unwrap();
+        let directory = fixture.path().join("项目 with spaces");
+        std::fs::create_dir(&directory).unwrap();
+        let file = directory.join("config~～.txt ");
+        std::fs::write(&file, "test").unwrap();
+        for prefix in ["~", "～"] {
+            let context = recognize_path(prefix).unwrap();
+            assert_eq!(context.type_id, DIRECTORY);
+            assert_eq!(context.value.path().unwrap(), home.canonicalize().unwrap());
+            for (target, kind) in [(&directory, DIRECTORY), (&file, FILE)] {
+                let input = format!(
+                    "{prefix}/{}",
+                    target.strip_prefix(&home).unwrap().to_str().unwrap()
+                );
+                let context = recognize_path(&input).unwrap();
+                assert_eq!(context.type_id, kind);
+                assert_eq!(context.source, ContextSource::UserInput);
+                assert_eq!(
+                    context.value.path().unwrap(),
+                    target.canonicalize().unwrap()
+                );
+                assert_eq!(types(&input), [TEXT, kind]);
+            }
+            let padded = format!(
+                "  {prefix}/{}  ",
+                directory.strip_prefix(&home).unwrap().to_str().unwrap()
+            );
+            assert_eq!(
+                recognize_path(&padded).unwrap().value.path().unwrap(),
+                directory.canonicalize().unwrap()
+            );
+            let missing = format!(
+                "{prefix}/{}/missing",
+                fixture
+                    .path()
+                    .strip_prefix(&home)
+                    .unwrap()
+                    .to_str()
+                    .unwrap()
+            );
+            assert_eq!(types(&missing), [TEXT]);
+        }
     }
 }

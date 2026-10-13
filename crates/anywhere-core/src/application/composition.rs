@@ -7,18 +7,40 @@ use crate::features::filesystem::provider::{CurrentDirectoryProvider, DirectoryM
 use std::sync::Arc;
 
 pub fn builtin_registry() -> ActionRegistry {
+    configured_builtins(&Default::default()).0
+}
+
+/// Actions and recognizers are assembled from the same enabled contributions.
+pub(crate) fn configured_builtins(
+    disabled: &std::collections::BTreeSet<String>,
+) -> (ActionRegistry, ContextProviderRegistry) {
     let mut registry = ActionRegistry::default();
+    let mut providers = ContextProviderRegistry::default();
     for contribution in crate::features::contribution::builtins() {
-        for bundle in contribution.bundles {
-            registry
-                .register_bundle(bundle)
-                .expect("invalid built-in action registration");
+        if disabled.contains(&format!("first-party:{}", contribution.id)) {
+            continue;
         }
-        for factory in contribution.factories {
-            registry.register_factory_ref(factory);
-        }
+        append_contribution(&mut registry, &mut providers, contribution)
+            .expect("invalid built-in contribution");
     }
-    registry
+    (registry, providers)
+}
+
+pub(crate) fn append_contribution(
+    registry: &mut ActionRegistry,
+    providers: &mut ContextProviderRegistry,
+    contribution: crate::features::contribution::FeatureContribution,
+) -> anyhow::Result<()> {
+    for provider in contribution.providers {
+        providers.register(provider)?;
+    }
+    for bundle in contribution.bundles {
+        registry.register_bundle(bundle)?;
+    }
+    for factory in contribution.factories {
+        registry.register_factory_ref(factory);
+    }
+    Ok(())
 }
 
 pub(super) fn builtin_sources(
@@ -28,24 +50,17 @@ pub(super) fn builtin_sources(
     Arc<crate::features::filesystem::search::FileSearchSource>,
     Vec<Arc<dyn crate::core::search::candidate_source::AsyncCandidateSource>>,
 ) {
-    let mut sources = Vec::new();
-    let mut files = None;
-    for feature in crate::features::contribution::builtins() {
-        if let Some(factory) = feature.source {
-            let contribution = factory(platform.clone(), registry.clone());
-            let source = contribution.source;
-            let service: Arc<dyn std::any::Any + Send + Sync> = source.clone();
-            if let Ok(file_service) =
-                service.downcast::<crate::features::filesystem::search::FileSearchSource>()
-            {
-                files = Some(file_service);
-            }
-            if contribution.available {
-                sources.push(source);
-            }
-        }
-    }
-    (files.expect("filesystem contribution missing"), sources)
+    let supported = platform.file_search_supported();
+    let files = Arc::new(crate::features::filesystem::search::FileSearchSource::new(
+        platform, registry,
+    ));
+    let sources: Vec<Arc<dyn crate::core::search::candidate_source::AsyncCandidateSource>> =
+        if supported {
+            vec![files.clone()]
+        } else {
+            vec![]
+        };
+    (files, sources)
 }
 
 pub(super) fn builtin_providers() -> ContextProviderRegistry {

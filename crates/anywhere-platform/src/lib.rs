@@ -2,7 +2,9 @@
 //!
 //! Every capability has an explicitly unsupported default so test doubles compile
 //! without implementing unused methods; macOS implements the ones the product uses.
+pub mod paths;
 pub mod search_storage;
+pub mod temporary_directories;
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -77,7 +79,7 @@ impl std::fmt::Display for ContextReadError {
         let message = match self {
             Self::Unsupported => "source is not supported by this app",
             Self::PermissionDenied => "context access permission is not granted",
-            Self::ApplicationChanged => "captured application is no longer running",
+            Self::ApplicationChanged => "captured application identity is no longer valid",
             Self::TimedOut => "context capture timed out",
             Self::TooLarge => "context content exceeds the capture limit",
             Self::TooManyItems => "selection exceeds the capture item limit",

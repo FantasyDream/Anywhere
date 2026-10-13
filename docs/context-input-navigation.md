@@ -1,5 +1,7 @@
 # Context 输入与默认唤醒
 
+当前契约：V0.8；最后核对：2026-10-13。Scope 与返回的完整规则见 [Launcher 交互](launcher-interaction.md)。
+
 ## 用户操作
 
 不增加 Scope 或并列来源入口。Scope 的分类、Current App 聚合、筛选和切换沿用原设计。
@@ -30,16 +32,13 @@ Esc 从内容页面清空并返回 Current App，重新解析当前应用环境�
 | Environment | 当前应用、Finder/浏览器环境及显式输入；排除自动文本来源 | 正常动作查询 |
 | Content | 当前 UserInput 及派生 Context | 空查询，列出内容动作 |
 | Search | 当前 UserInput 及派生 Context | 正常全局搜索 |
+| FileSearch | 独立文件工作区，不解析环境 Context | 文件查询 |
 | CapturedEnvironment | 完整激活采集，仅显式全局动作及原 API 路径使用 | 既有查询 |
 
 激活前选择 Environment，阻止首次或迟到文本采集混入 Current App。新输入、返回和模式变化产生新 Revision；Provider seeds 与提交处均按模式过滤，保留现有 Session / Revision / Catalog 执行门禁。模式切换期间隐藏旧列表；迟到采集仍可更新状态元数据。
 
-## 回归验收
+## 状态保留与验证
 
-- Core：不同 URL 来源、实际执行目标、编辑、环境恢复、空白 Search、迟到采集只发布元数据、来源单次读取、原 Scope 测试。
-- Flutter：15 秒边界、未知年龄、选中文本优先、显式 Universal、Esc 链、专用输入 UI、迟到采集与用户编辑、Settings 丢弃正文。
-- 平台：启动基线年龄未知，新 generation 计时，重复读不续期，原生剪贴板有界读取。
+有查询或工具 / 二级操作时，隐藏后 15 秒恢复原内容和 Context。空白 Global / Current App 首页按本次入口新建 Session，重新采集前台应用。菜单、Scope 与来源定义不因恢复而改写。
 
-2026-10-06：`scripts/check.sh` 完整通过，275 项 Rust 测试、107 项 Flutter 测试通过（4 项外部工具集成测试跳过），原生菜单/来源/Host、格式、Clippy、架构与前端分析通过。签名包 `0.6.0+9` 已检查新剪贴板自动填入、内容专用 UI、Esc 返回 Current App 后再进入空白 Global Search，以及旧复制内容不再次填入。自动化控制 TextEdit 的选区已建立，但系统实际前台仍为 ChatGPT/Obsidian，因此不将其计为 Selected Text 的实机捕获验收；选区优先和迟到保护由回归覆盖。
-
-开发 App：`build/Anywhere-dev-0.6.app`；ZIP：`build/Anywhere-dev-0.6-macos-arm64.zip`。固定签名与 strict 验证通过，归档内容一致，SHA-256 校验通过。
+回归覆盖来源优先级、过期 / 未知复制年龄、输入编辑、迟到结果不覆盖用户交互、Esc 链、环境恢复、来源单次读取和设置丢弃正文。历史真实采集与包验证边界见 [V0.6 记录](archive/v0.6-final-acceptance.md)，当前工程状态见 [V0.8 MVP](mvp-v0.8.md)。

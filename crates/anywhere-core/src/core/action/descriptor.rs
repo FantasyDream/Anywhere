@@ -441,7 +441,7 @@ impl ActionRegistry {
 mod tests {
     use super::*;
     use crate::core::action::group::groups;
-    use crate::features::git::actions::is_git_action;
+    use crate::extensions::git::actions::is_git_action;
     use crate::features::recognized_contexts;
 
     fn seed(input: &str) -> Vec<ResolvedContext> {

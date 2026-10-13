@@ -1,8 +1,10 @@
 # Current App 菜单动作
 
+当前契约：V0.8；最后核对：2026-10-13。历史验收见 [归档](archive/README.md)。
+
 ## 交互约定
 
-- 菜单动作直接归入现有 Current App Scope；`group_id = app`，不增加另一个应用 Scope。
+- 菜单动作直接归入现有 Current App Scope；`group_id = app.<bundle_id>`，不增加另一个应用 Scope。
 - 没有 Accessibility 权限时不提供菜单动作；Finder 目录、Git、应用搜索和其他既有动作照常工作。只要这些动作仍使 Current App Scope 非空，该 Scope 就继续存在。
 - 有意义但当前不可用的菜单保留为标准 Action，Availability 为 `Hidden`。它们不会进入候选或 Scope，不呈现灰色行。
 - 分隔符、空标题、子菜单容器、没有执行能力的状态节点直接过滤。
@@ -42,7 +44,7 @@
 
 Finder、VS Code、Chrome/Safari、TextEdit 的真实菜单、物理热键、授权交互以及首屏延迟仍需实机手工验收；自动化测试和打包通过不代表这些 GUI 项目已经验证。
 
-## 2026-10-05 安全修复（dev-0.5 / App 0.5.0+10）
+## 菜单身份安全降级
 
 - 稳定 ActionId 用于业务身份；每个发现的 MenuAction 另持有不复用的执行 token，候选 ID 包含该 token。查询、排序和迟到的 Context 不改变同一目标的 token；新的菜单 Registry 创建新的 token，旧候选不能命中新目标。
 - 阻塞执行工作开始时同时检查 Session/Revision 和当前 Registry 的 token，防止已排队请求在动作失效后触发副作用。
@@ -53,10 +55,12 @@ Finder、VS Code、Chrome/Safari、TextEdit 的真实菜单、物理热键、授
 
 回归覆盖：标识复用、唯一/重复/另一命令唯一、标识消失、路径改名、同路径替换、SQLite 重开、旧候选拒绝、当前候选执行、排队期间失效、查询后 token 保持、菜单历史不改变 Scope 顺序，以及原生 AXPress 次数。真实应用菜单执行未在本轮重新验收。
 
-## 2026-10-08 IDEA 共享标识修复（App 0.6.0+21）
+## 共享 AXIdentifier 的处理
 
 用户反馈 Browse Menus 只剩 IntelliJ IDEA 分组。当前运行日志显示 `trusted=true`，仅发现 10 个菜单叶子、9 个可用动作。直接读取 IDEA 辅助功能菜单确认：File / Edit / View 等顶层菜单及 File 下的菜单项共享 `AXIdentifier=handleAction:`。原生遍历因兄弟标识重复而跳过这些顶层菜单；Core 的降级 ID 又只编码路径中的标识，无法区分全部使用相同标识的不同路径。
 
 修复改为在每级菜单中按当前快照的标题与标识共同唯一匹配，并将降级 ID 的路径标题一起编码。标识消失不按标题回退，同一父节点内组合重复仍隐藏；执行前标题/标识/Enabled/应用实例复验、扫描 token、菜单 Usage 隔离及不支持持久绑定的安全规则保留。降级路径改名仍可能产生新 ID，未宣称消除长期身份边界。
 
 新增原生合成 AX 回归覆盖共享标识的顶层菜单与叶子、Disabled、重排后定位、旧标题/丢失标识拒绝、重复组合拒绝与目标 AXPress；Core 覆盖不同路径的 ID、插入/重排后的重扫稳定性、注册与碰撞隔离。真实 IDEA 仅展开并读取 File 菜单后收起，未执行任何菜单命令；新版实际采集与执行待安装修复包后确认。
+
+原始菜单 ActionId 稳定性与不得误关联旧记录的验收边界保留在 [V0.3.x 历史 MVP](archive/mvp-v0.3x.md)。归档不表示风险已消除；当前历史隔离、拒绝歧义执行和持久绑定限制以本文为准。

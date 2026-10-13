@@ -1,66 +1,62 @@
-# Context Model
+# Context 模型
 
-Context 是一等对象，不是 Flutter 的动态字典。
+当前实现：V0.8；最后核对：2026-10-13。Context 表示被操作的数据或环境，Scope 表示搜索范围，二者不互相替代。
 
-Core 的 `ResolvedContext` 包含 id、type_id、typed ContextValue、source、provider_id、confidence、depth、source_context_id、session_id、revision。内部 ContextValue 对文本、URL、保留 raw/parsed 的 JSON、文件、目录、仓库和应用程序提供 typed helper；Extension(String) 允许新的类型标识。
+## 数据与来源
 
-Protocol 使用字符串 type_id 和 transport value，不序列化 Core 的 ContextValue enum。新增 `git.repository` 或 `github.issue` 不必扩充长期协议枚举。应用名称等附加展示信息放在显式 properties 字段。
+Core 的 `ResolvedContext` 包含 id、type_id、typed ContextValue、source、provider_id、confidence、depth、source_context_id、capture、session_id 和 revision。
 
-| 稳定 type_id | Resolver / Provider |
+ContextValue 覆盖 Text、URL、保留 raw / parsed 的 JSON、File、FileSelection、Directory、Project、Repository、Application 与 Extension 文本。正文通过共享不可变引用传递；Project 使用明确的目录与安全属性，而非在 Flutter 中拼动态字典。
+
+传输层使用字符串类型 ID、值与 properties，不暴露内部 enum 或 AX 对象。来源保留 UserInput、ApplicationContext、FinderSelection、SelectedText、BrowserCurrentPage、Clipboard 等语义，capture 元数据标注所属应用、捕获时间等信息。
+
+| 类型 | 来源或识别 |
 |---|---|
-| core.text | 任意非空输入，保留文本；Provider 链的第一跳 |
-| core.url | 明确、合法的 HTTP(S) URL |
-| json.document | serde_json 解析成功，保留 raw 原文和 parsed 值（V0.2 规范名） |
-| core.file | 标准文件系统 API 验证真实存在的文件 |
-| core.directory | 已存在的目录，或激活时的 Finder 当前目录 |
-| core.application | 激活前的前台应用 |
-| git.repository | 从目录向上找到的最近仓库 root，只读文件系统元数据 |
+| `core.text` | 非空输入或成功采集的文本 |
+| `core.url` | 明确合法的 HTTP(S) URL |
+| `json.document` | 可解析的 JSON，保留原文；`core.json` 作为旧 matcher 兼容 |
+| `core.file` / `core.directory` | 已存在的文件 / 目录，以及应用目录或文件管理器选中项 |
+| `core.file_selection` | 多选集合；保留集合身份并有界派生子对象 |
+| `core.application` | 显示 Launcher 前冻结的应用身份 |
+| `git.repository` | 从目录有界向上检查仓库元数据 |
+| `project.rust` / `project.maven` / `project.gradle` / `project.node` | 对应项目标记与必要的轻量元数据 |
+| `java.spring_boot` | Maven / Gradle 项目声明的 Spring Boot 能力 |
 
-## V0.2 统一 Provider 链
-
-用户输入先生成 `core.text`，再由 Provider 链推导其他类型：
-
-```text
-core.text
-└─ core.input_types → core.url / json.document / core.file / core.directory
-
-core.application（激活前的前台应用，调用方在显示窗口前冻结）
-└─ platform.current_directory → core.directory（原应用目录，按 Session 单飞）
-
-core.directory
-└─ core.git_repository → git.repository
-```
-
-目录链挂在 `core.application` 而不是 `core.text` 上：它的输入是那个冻结的前台应用身份，与用户后来输入了什么无关。
-
-识别是可叠加 pipeline：URL 同时得到 Text + URL；JSON 同时得到 Text + JSON；路径同时保留 Text。没有互斥的“输入类型判断”。V0.1 的独立 Resolver 顺序已被 Provider 取代，识别规则本身不变。
-
-`git.repository` 只做有界文件系统检查：向上查找 `.git` 目录或 worktree/submodule 的 `.git` 指向文件。**发现阶段不运行任何 Git 命令**；`git status`、`git log`、`git diff` 只在用户执行对应 Action 时运行。
-
-## First Snapshot Budget
-
-Provider 不知道超时。调用方决定等待多久：
+## 种子与派生
 
 ```text
-全部 Context 提前解析完成 → 立即提交
-否则到达 first_snapshot_budget（默认 40ms）→ 用当前结果提交首屏
-剩余结果完成 → 校验 Session/Revision → 追加 Context → 重新生成候选
+冻结的应用 / 各采集来源 → 种子 Context
+
+core.text → URL / JSON / File / Directory（可叠加）
+core.application → 原应用 Directory（按 Session 单飞）
+core.directory → Git Repository / Developer Project
+Project → 对应 Action 或动态动作目标
 ```
 
-预算到期不会取消 Provider；剩余工作在一个后台任务里继续。因为图是**单个顺序解析循环**，每个版本最多有一个 Provider 调用在飞。新 Revision 取代旧 Revision 时，旧结果在纳入图和提交状态之前被丢弃。
+采集种子由 Application 的来源协调器管理；ContextProvider 从已有 Context 推导下游节点。识别阶段不运行 Git 报告或项目构建命令；执行放在 Action。
 
-若预算在某个 Provider 调用被 poll 之前到期，调用方会撤销该 `(provider, context, session, revision)` 记录，使这次调用在后续的 late pass 中重试，而不会被永久跳过。
+目录绑定原应用实例，不因输入变更重新读取前台应用。应用身份失效时丢弃目录，不猜测新应用。多选、浏览器、文本、剪贴板分别记录 Empty、Unsupported、PermissionDenied、ApplicationChanged、TimedOut 等安全状态，其他来源继续工作。
 
-激活时的原前台应用身份在宿主显示窗口之前冻结；目录捕获按 Session 单飞并记忆，输入变化不会重新读取当前前台应用，也不会重复启动 Finder Automation。
+Environment、Content、Search、FileSearch、CapturedEnvironment 的种子选择见 [输入与默认唤醒](context-input-navigation.md)。当前 Environment 不混入剪贴板 / 选中文本正文；内容自填只解析该输入。
 
-## 等价与去重
+## 文件路径简写
 
-Context Graph 的等价键是 `(type_id, canonical transport value, source)`。同一来源的同类同值只保留一个节点；显式输入与相同环境对象保留各自来源。不同版本重新分配内部节点 ID，source_context_id 指向该版本中的上游节点。
+路径识别和文件搜索共用 Rust 的 `anywhere-platform::paths`。开头的 `~`、`~/…`、`～`、`～/…` 展开到当前用户主目录，再验证真实文件 / 目录；输入文本保留原拼写，动作绑定规范化后的真实路径。先验证完整原值，再在不存在时尝试去除粘贴外围空白，避免破坏文件名尾部空格。
 
-非空输入只匹配 user_input 来源的对象动作，但 V0.2 允许查询匹配到环境 Context 的动作：粘贴 URL 时仍然只出现该 URL 的动作，输入 `git sta` 时 Git 动作来自环境仓库 Context。
+主目录未知时不把简写误当作当前工作目录；不执行 shell、变量或其他用户目录展开。路径内部的波浪号保持字面含义，重复分隔符不能让 join 替换主目录根。文件搜索仍复验实际授权范围，简写不扩大权限。
 
-Provider 运行记录由 `(provider_id, source_context_id, session_id, revision)` 唯一确定，因此一个 Provider 可以在不同节点上各执行一次。最大深度为 3，最大节点数为 128；输出类型必须在 produces 中、confidence 必须是 0..1 的有限值。Provider 失败成为 diagnostic，其他候选继续可用。
+## 图、预算与去重
 
-## 状态版本
+Provider 按注册顺序规则逐步处理；图的调用记录绑定 provider、输入节点、Session 和 Revision。单次图最多 128 节点、深度 3，输出必须符合 produces 和有限的 0..1 confidence。
 
-`LauncherState` 带 SessionId、Revision 和单调递增的 `snapshot_seq`，以及 `context_complete`。同一 Revision 的 late enrichment 会产生更高的 `snapshot_seq`，宿主据此拒绝乱序快照；跨 Session/Revision 的旧结果永不提交。候选 ID 是业务身份的稳定值（命令 + 规范化对象），不包含列表 index，因此 late rerank 不改变用户的选择；可执行性仍由 Session/Revision 校验。
+首屏默认预算 40ms，已有 pending Provider 可获得额外 grace；预算不代表能中断同步 OS 调用。后台继续解析前后复验版本；被替代的调用不能提交旧结果。未真正启动的调用不能因预算截断而永久漏掉。
+
+等价键保留类型、规范化值和来源；同来源等价节点去重，不把显式输入与环境对象抹成一个来源。候选可合并同目标的来源提示，保留真正执行对象。不可用复制动作仍按剪贴板事实隐藏。
+
+## 身份与执行
+
+内部节点身份 / 派生边只在对应解析版本内使用。业务 ActionId 用于命令历史与绑定，CandidateId 绑定具体执行对象；它们不取代 Session / Revision、动作目录版本或执行 epoch。
+
+同 Revision 的迟到结果使用更高 SnapshotSeq，Host 拒绝乱序。执行复验已提交资格及资源，不能根据展示标题或对象在列表中的 index 猜测目标。动态菜单的长期身份限制见 [菜单动作](current-app-actions.md)。
+
+详细装配和快照机制见 [架构](architecture.md)；当前工程验收与待验收矩阵见 [V0.8 MVP](mvp-v0.8.md)。

@@ -13,6 +13,11 @@ extern "C" {
         bundle_id: *const c_char,
         instance_id: *const c_char,
     ) -> i32;
+    pub fn launcher_application_identity_status(
+        pid: i32,
+        bundle_id: *const c_char,
+        instance_id: *const c_char,
+    ) -> i32;
     pub fn launcher_free_string(value: *mut c_char);
     pub fn launcher_free_bytes(value: *mut u8);
     pub fn launcher_bundle_application(path: *const c_char) -> *mut c_char;

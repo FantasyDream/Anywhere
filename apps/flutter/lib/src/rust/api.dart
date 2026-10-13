@@ -6,8 +6,8 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `application`, `load_plugins`, `plugin_reports`, `snapshot_delivery`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`
+// These functions are ignored because they are not marked as `pub`: `application`, `snapshot_delivery`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
 
@@ -89,6 +89,14 @@ Future<LauncherStateDto?> updateFileInput(
     RustLib.instance.api.crateApiUpdateFileInput(
         sessionId: sessionId, input: input, revision: revision, filter: filter);
 
+/// Resolve secondary actions for the selected object through the shared host flow.
+Future<List<CandidateDto>> objectActions(
+        {required int sessionId,
+        required int revision,
+        required String candidateId}) =>
+    RustLib.instance.api.crateApiObjectActions(
+        sessionId: sessionId, revision: revision, candidateId: candidateId);
+
 Future<List<CandidateDto>> fileActions(
         {required int sessionId,
         required int revision,
@@ -162,6 +170,25 @@ List<PluginStatusDto> pluginStatus() =>
 
 Future<List<PluginStatusDto>> reloadPlugins() =>
     RustLib.instance.api.crateApiReloadPlugins();
+
+/// Modern reload returns the same authoritative catalog as enable/grant/revoke.
+Future<List<ExtensionStatusDto>> reloadExtensions() =>
+    RustLib.instance.api.crateApiReloadExtensions();
+
+Future<List<ExtensionStatusDto>> extensionStatus() =>
+    RustLib.instance.api.crateApiExtensionStatus();
+
+Future<List<ExtensionStatusDto>> setExtensionEnabled(
+        {required String key, required bool enabled}) =>
+    RustLib.instance.api
+        .crateApiSetExtensionEnabled(key: key, enabled: enabled);
+
+Future<List<ExtensionStatusDto>> approveExtension(
+        {required String key, required String token}) =>
+    RustLib.instance.api.crateApiApproveExtension(key: key, token: token);
+
+Future<List<ExtensionStatusDto>> revokeExtension({required String key}) =>
+    RustLib.instance.api.crateApiRevokeExtension(key: key);
 
 Future<List<String>> excludedApps() =>
     RustLib.instance.api.crateApiExcludedApps();
@@ -672,6 +699,73 @@ class ExecutionSessionSummaryDto {
           outputRevision == other.outputRevision &&
           outputTruncated == other.outputTruncated &&
           error == other.error;
+}
+
+class ExtensionStatusDto {
+  final String key;
+  final String id;
+  final String name;
+  final String version;
+  final bool firstParty;
+  final bool legacy;
+  final bool enabled;
+  final bool active;
+  final bool needsApproval;
+  final bool configurable;
+  final List<String> capabilities;
+  final String approvalToken;
+  final String detail;
+
+  const ExtensionStatusDto({
+    required this.key,
+    required this.id,
+    required this.name,
+    required this.version,
+    required this.firstParty,
+    required this.legacy,
+    required this.enabled,
+    required this.active,
+    required this.needsApproval,
+    required this.configurable,
+    required this.capabilities,
+    required this.approvalToken,
+    required this.detail,
+  });
+
+  @override
+  int get hashCode =>
+      key.hashCode ^
+      id.hashCode ^
+      name.hashCode ^
+      version.hashCode ^
+      firstParty.hashCode ^
+      legacy.hashCode ^
+      enabled.hashCode ^
+      active.hashCode ^
+      needsApproval.hashCode ^
+      configurable.hashCode ^
+      capabilities.hashCode ^
+      approvalToken.hashCode ^
+      detail.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExtensionStatusDto &&
+          runtimeType == other.runtimeType &&
+          key == other.key &&
+          id == other.id &&
+          name == other.name &&
+          version == other.version &&
+          firstParty == other.firstParty &&
+          legacy == other.legacy &&
+          enabled == other.enabled &&
+          active == other.active &&
+          needsApproval == other.needsApproval &&
+          configurable == other.configurable &&
+          capabilities == other.capabilities &&
+          approvalToken == other.approvalToken &&
+          detail == other.detail;
 }
 
 enum FileObjectKindDto {

@@ -16,6 +16,93 @@ void main() {
   tearDown(() => TestDefaultBinaryMessengerBinding
       .instance.defaultBinaryMessenger
       .setMockMethodCallHandler(channel, null));
+  test(
+      'empty root wakes recapture the requested app instead of resuming Global Search',
+      () async {
+    var issued = 0, resumed = 0, discarded = 0;
+    var foreground = 'Editor';
+    final capturedApps = <int, String>{};
+    LauncherStateDto? held;
+    LauncherStateDto snapshot(
+        int session, int revision, String input, InputModeDto mode) {
+      final app = capturedApps[session]!;
+      final action = CandidateDto(
+          id: 'menu:$app',
+          kind: CandidateKindDto.action,
+          title: 'Action for $app',
+          menuPath: const [],
+          contextKeys: const [],
+          homeEligible: true,
+          primaryAction: true,
+          iconKey: 'application',
+          score: 100,
+          groupId: 'app.$app',
+          availability: AvailabilityDto.enabled);
+      return held = launcherSnapshot(
+          sessionId: session,
+          revision: revision,
+          snapshotSeq: 1,
+          input: input,
+          contextComplete: true,
+          candidates: mode == InputModeDto.environment ? [action] : [],
+          scopes: mode == InputModeDto.environment
+              ? [ScopeDto(id: 'app.$app', label: app, isCurrentApp: true)]
+              : [],
+          diagnostics: const []);
+    }
+
+    final controller = LauncherController(
+        nowMillis: () => 1000,
+        window: WindowHost(channel),
+        backend: LauncherBackend(
+            beginActivation: () => ++issued,
+            activate: (session,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async {
+              capturedApps[session] = foreground;
+              return snapshot(session, 0, '', InputModeDto.environment);
+            },
+            updateInput: (session, input, revision,
+                    {scopeId, inputMode = InputModeDto.environment}) async =>
+                snapshot(session, revision, input, inputMode),
+            execute: (_, __, ___) async => throw StateError('unused'),
+            deactivate: (_) async {
+              discarded++;
+            },
+            suspend: (_) async {},
+            resume: (_) async {
+              resumed++;
+              return held;
+            }));
+    addTearDown(controller.dispose);
+    await controller.activate();
+    expect(controller.view.scopeId, 'app.Editor');
+    for (final app in ['Finder', 'Edge', 'VSCode']) {
+      await controller.escape();
+      expect(controller.view.inputMode, InputModeDto.search);
+      await controller.dismiss(hostAlreadyHidden: true);
+      foreground = app;
+      await controller.activate(mode: WakeMode.currentApp);
+      expect(controller.view.inputMode, InputModeDto.environment);
+      expect(controller.view.scopeId, 'app.$app');
+      expect(controller.view.visibleCandidates.single.title, 'Action for $app');
+    }
+    // An untouched Current App home must also follow a newly foreground app.
+    await controller.dismiss(hostAlreadyHidden: true);
+    foreground = 'Terminal';
+    await controller.activate();
+    expect(controller.view.scopeId, 'app.Terminal');
+    expect(issued, 5);
+    expect(discarded, 4);
+    expect(resumed, 0);
+    // An explicit Global Search wake remains blank.
+    await controller.dismiss();
+    await controller.activate(mode: WakeMode.universal);
+    expect(controller.view.inputMode, InputModeDto.search);
+    expect(controller.view.scopeId, isNull);
+    expect(controller.view.input, isEmpty);
+  });
+
   testWidgets(
       'native focus loss resumes the same session and expires after 15s',
       (tester) async {

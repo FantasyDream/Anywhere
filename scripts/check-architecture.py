@@ -4,6 +4,9 @@ import json
 from pathlib import Path
 import re
 import subprocess
+from architecture_rules import check_core_imports
+
+subprocess.check_call(['python3', '-m', 'unittest', 'discover', '-s', 'scripts/tests', '-p', 'test_architecture_rules.py'])
 
 metadata = json.loads(subprocess.check_output(['cargo', 'metadata', '--locked', '--format-version=1']))
 packages = {package['id']: package for package in metadata['packages']}
@@ -26,12 +29,7 @@ print(f'Architecture OK: {len(visited)} core dependencies, no UI/Flutter bridge 
 # Production modules must not import product composition or feature implementations.
 # The existing Rust convention keeps each inline test module at the end of its file.
 for source in Path('crates/anywhere-core/src/core').rglob('*.rs'):
-    production = source.read_text().split('#[cfg(test)]', 1)[0]
-    production = re.sub(r'//[^\n]*|/\*.*?\*/', '', production, flags=re.S)
-    forbidden = r'\b(features|application|persistence)\b'
-    assert not re.search(forbidden + r'\s*::', production), source
-    for imported in re.findall(r'\buse\s+([^;]+);', production):
-        assert not re.search(forbidden, imported), source
+    check_core_imports(source.read_text(), source)
 print('Module imports OK: core has no product/feature/persistence dependency')
 
 # Shared product logic cannot select OS adapters or assume a macOS application identity.

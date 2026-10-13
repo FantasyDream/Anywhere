@@ -5,12 +5,13 @@
 //! elsewhere; this layer owns session lifecycle and snapshot publication.
 pub mod activate;
 pub mod execute;
+pub mod extension_manager;
 pub mod launcher_service;
 pub mod update_query;
 
 pub use launcher_service::{Application, LauncherApplication, SnapshotWait};
 
-mod composition;
+pub(crate) mod composition;
 mod context_capture;
 mod file_preview;
 mod search_sources;
@@ -33,3 +34,6 @@ mod file_workspace;
 mod source_runtime;
 
 pub mod context_projection;
+
+#[cfg(test)]
+mod source_catalog_tests;

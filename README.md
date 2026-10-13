@@ -1,80 +1,336 @@
-# Context-Aware Launcher
+# Anywhere
 
-Context-Aware Launcher：先理解当前对象，再推荐下一步动作。Host 是 Flutter，业务和动作执行在 Rust；SQLite 只保存命令使用次数与时间。
+**从当前操作出发的桌面 Launcher。** Anywhere 读取前台应用、选中文本、文件或网页等上下文，推荐可执行的动作；也可以搜索应用、动作、文件和收藏目录。
+
+例如：在 Finder 中打开项目目录后唤醒 Anywhere，可以打开终端、复制路径、查看 Git 状态或运行项目测试。复制一段 JSON 后唤醒，可以直接格式化并复制结果。
+
+当前处于 **V0.8 开发阶段**，主要支持 macOS。界面使用 Flutter，业务逻辑使用 Rust；Windows 尚未交付可用版本。
+
+[使用指南](#使用指南) · [架构设计](#架构设计) · [构建与开发](#构建与开发) · [文档导航](docs/README.md) · [路线图](docs/roadmap.md)
+
+## 使用指南
+
+### 1. 启动与授权
+
+打开 `Anywhere.app`。首次启动会显示 Launcher，之后通过快捷键或菜单栏打开；菜单栏还提供 Settings 和 Running Tasks。
+
+部分能力需要系统授权，可根据使用场景开启：
+
+| 权限 | 用途 | 设置入口 |
+|---|---|---|
+| 辅助功能（Accessibility） | 读取与执行应用菜单、读取选中文本、识别支持的 IDE 项目窗口 | macOS 系统设置 → 隐私与安全性 → 辅助功能 |
+| 自动化（Automation） | 读取 Finder 目录 / 选中项，以及 Safari、Chrome、Edge 的当前网页 | macOS 系统设置 → 隐私与安全性 → 自动化 |
+| 目录访问 | 搜索用户指定的目录 | Anywhere Settings → Search |
+| 完全磁盘访问（可选） | 扩大受保护目录的可访问范围 | macOS 系统设置 → 隐私与安全性 → 完全磁盘访问 |
+
+文件搜索在启动和修改搜索范围时准备目录授权，查询只使用可访问的范围。受保护或无法读取的位置会跳过；完全磁盘访问需要用户在系统设置中开启。
+
+未授权的来源不会阻止其他功能。例如，缺少辅助功能权限时隐藏应用菜单，仍可使用不依赖该权限的动作。在 Settings → Context 查看上次采集状态，并独立开关各个来源。
+
+### 2. 三种操作方式
+
+| 方式 | 如何进入 | 用途 |
+|---|---|---|
+| **Current App** | 默认按 `⌘⌥Space` | 操作当前环境，搜索应用菜单及适用的目录、Git、开发项目等动作 |
+| **Global Search** | 默认按 `⌘⌥⇧Space`，或通过搜索图标菜单切换 | 搜索应用、动作和收藏目录，查找 File Search 等工具入口 |
+| **内容输入** | Current App 唤醒时自动填入选中文本或新复制的文本 | 操作这份内容，例如复制 URL、格式化 JSON、打开路径 |
+
+Current App 聚合当前环境的所有可用动作。顶部的 **Folder、Git、Rust 等 Scope** 用于缩小动作范围；切换 Scope 保留查询。菜单保留在当前应用中，可通过 **Browse Menus…** 按层级浏览，也可直接搜索菜单名称。
+
+内容输入的优先级是：
+
+1. 当前应用的选中文本。
+2. 距今不超过 **15 秒**、且复制时间可确认的剪贴板文本。
+3. 没有可用内容时，进入 Current App。
+
+输入框会显示内容来源，只解析该内容，不混入前台应用的环境 Context。启动前已有、无法确认复制时间的剪贴板内容不会自动填入。
+
+内容输入时按 `Esc` 清空内容并返回 Current App，再按 `Esc` 进入空白 Global Search。更多规则见 [Context 输入与导航](docs/context-input-navigation.md)。
+
+### 3. 键盘操作
+
+以下为 macOS 默认键位。两个唤醒快捷键和 Action 快捷键都可以在 Settings → Shortcuts 修改。
+
+| 按键 | 操作 |
+|---|---|
+| `⌘⌥Space` | 唤醒 Current App |
+| `⌘⌥⇧Space` | 唤醒 Global Search |
+| `↑` / `↓` | 选择候选项 |
+| `Enter` | 执行动作、打开对象或进入子菜单 |
+| `⌘K` | 打开选中对象的二级 Actions；支持菜单浏览时也可进入菜单 |
+| `Ctrl+Tab` / `Ctrl+Shift+Tab` | 切换 Scope；文件搜索中切换文件类型 |
+| `→` / `←` | 输入为空时进入 / 返回菜单；有输入时保留光标移动 |
+| `Esc` | 清空查询、返回上一级或关闭窗口，具体顺序取决于当前页面 |
+| `⌘W` / `⌘M` | 关闭 / 最小化 Settings、Running Tasks 独立窗口 |
+
+Launcher 不使用单独的 `Tab` / `Shift+Tab` 遍历控件。重复当前唤醒入口可隐藏窗口，点击其他窗口也会隐藏。
+
+**隐藏后的状态恢复：**
+
+- 有查询、文件搜索页、菜单 / 二级操作、执行输出或已选的非 Current App Scope 时，保留操作状态 **15 秒**。
+- 空白 Global Search 或 Current App 首页再次唤醒，按本次入口重新采集前台应用。
+- 超过 15 秒清理 Launcher 会话。已经启动的后台任务继续运行。
+
+详见 [Launcher 交互与状态保留](docs/launcher-interaction.md)。
+
+### 4. 常用场景
+
+| 场景 | 操作示例 |
+|---|---|
+| 启动应用 | Global Search 输入应用名，例如 `chrome`，选择后按 Enter |
+| 当前应用菜单 | Current App 输入菜单名称，或进入 Browse Menus… |
+| Finder 目录 / 文件 | 唤醒后选择 Open Terminal Here、Copy Path、Open Directory 或 Open File |
+| Git 仓库 | 搜索 Git Status、Git Diff、Git Log、Git Staged Diff、Git Branches |
+| 复制 Git 信息 | Copy Branch Name、Copy Commit Hash、Copy Short Commit Hash、Copy Repository Path、Copy Remote URL |
+| 网页 / URL | 在支持的浏览器唤醒，或输入完整 HTTP(S) URL，选择打开或复制 |
+| JSON | 输入或复制 JSON，选择 Format JSON、Minify JSON、Copy Formatted JSON |
+| 收藏目录 | 目录 Context 中执行 Save Directory；Global Search 按名称、`saved` 或 `bookmark` 查找 |
+
+选中收藏目录后按 `⌘K` → **Forget Saved Directory** 可移除收藏，不删除磁盘目录。当前最多保存 100 个目录。
+
+相同目标的动作会合并来源；剪贴板已包含相同 URL 或路径时，对应复制动作隐藏。不同目标仍保留来源标注。
+
+路径需要真实存在，支持绝对路径、`~` / `~/…` 和中文全角 `～/…`，主目录简写会展开为实际路径。文件名中的空格与波浪号保留；不展开 `~其他用户`、环境变量或 shell 表达式，也不把裸域名自动推断为 URL。IDEA 项目目录识别需要窗口暴露明确路径；VS Code、Cursor / ChatGPT 对话项目目录尚未接入。
+
+### 5. 文件搜索
+
+1. 打开 Global Search，输入 `files`、`File Search` 或“文件搜索”。
+2. 选择 **File Search**，按 Enter 进入文件页面。
+3. 输入至少一个字符，搜索文件名或路径；用类型栏筛选文件、文件夹、文档、PDF、图片、音频、视频、压缩包和代码等类型。
+4. 用 `↑` / `↓` 选择。右侧固定预览跟随选择，Enter 打开，`⌘K` 查看对象操作。
+
+文件页沿用主窗口的搜索栏、候选列表和底栏。结果连续追加，已显示的行不会因后续命中反复重排，没有分页操作。`Esc` 先清空文件查询，再返回父页面；返回按钮直接返回父页面。
+
+在 Settings → Search 可以：
+
+- 开关文件搜索，设置搜索目录（每行一个绝对路径，留空使用 Home）。
+- 开关隐藏文件；新配置默认包含隐藏文件。
+- 按目录名配置排除项，例如 `node_modules`。排除会缩小搜索范围。
+- 为保存的搜索目录授权，按需要打开完全磁盘访问设置。
+
+搜索结合 **Spotlight 快速结果与完整文件名遍历**，无需安装 `rg`。遍历包含未索引文件和被 `.gitignore` 忽略的文件；隐藏文件受设置控制。符号链接本身可列出，不沿链接继续遍历目标。可搜索范围受目录设置、排除项和系统权限限制。
+
+当前预览提供元数据与有界文本读取，文本最多 64 KiB；PDF、图片、音视频等尚无完整富预览。候选图标按文件类型分类，不生成逐文件缩略图。
+
+可为 File Search 配置一个普通 Action 快捷键，并按需开启 Global，直接从其他应用进入文件页。
+
+### 6. 开发项目与后台任务
+
+目录 Context 会进一步识别项目类型，提供相应动作：
+
+| 项目 | 动作 |
+|---|---|
+| Rust / Cargo | Cargo Check、Cargo Test、按明确 package / binary 目标运行 |
+| Maven | Maven Test、Maven Package |
+| Gradle | Gradle Build、Gradle Test |
+| Node | `package.json` 声明的 scripts，按项目配置选择 npm / pnpm / yarn |
+| Spring Boot | 项目声明支持时提供 Maven / Gradle Run |
+
+Maven、Gradle 优先使用项目 wrapper。识别阶段只读取项目标记及必要元数据；真正启动命令发生在执行 Action 时。
+
+构建、测试和运行进入后台进程会话。通过菜单栏 **Running Tasks** 查看状态、stdout / stderr、退出码或停止任务。关闭 Launcher / 任务窗口不停止任务；退出 Anywhere 会停止任务。
+
+当前会话只在应用运行期间保留，尚不提供交互式 PTY 终端或应用重启后的任务恢复。
+
+### 7. 自定义快捷键与扩展
+
+**快捷键：** Settings → Shortcuts → Action shortcuts 支持固定动作绑定、Global 开关、按应用 / Context 分派的意图，以及配置导入 / 导出。触发时重新解析适用对象：一个目标直接执行，多个目标先选择，缺少 Context 时不执行。
+
+动态应用菜单的原快捷键用于显示提示，当前不支持长期自定义绑定；菜单也暂不记录使用频次，避免不稳定菜单身份关联旧记录。
+
+**扩展：** Settings → Extensions 管理第一方模块及已安装的声明式插件。
+
+- 第一方模块包括 JSON、URL、Git、Maven、Gradle、Node、Rust、Spring Boot、收藏目录。
+- 用户插件放入 `~/Library/Application Support/Anywhere/plugins/`，支持 `*.toml` 或子目录中的 `manifest.toml`；安装或修改后点击 **Reload**。
+- v2 插件先 **Review permissions → Allow & enable**。撤销权限或关闭模块后，相关候选与快捷键失效；绑定配置保留以便重新启用。
+- 当前外部 v2 插件支持声明式复制、打开 URL / 文件，不执行用户脚本，也没有插件 UI 运行时。
+
+示例：[v1 搜索插件](plugins/examples/search.toml)、[v2 复制插件](plugins/examples/copy-v2.toml)。搜索示例中的 `example.com` 是占位地址，需要自行配置；应用不自动安装 Web Search 插件。
+
+### 8. 本地数据
+
+macOS 数据目录：`~/Library/Application Support/Anywhere/`。
+
+| 文件 / 目录 | 内容 |
+|---|---|
+| `settings.json` | 唤醒键、Action 快捷键、来源开关及搜索设置 |
+| `usage.sqlite3` | 动作 ID、Context 类型、来源应用、成功执行次数与时间 |
+| `extensions.json` | 模块开关和插件能力授权 |
+| `extension-storage.sqlite3` | 按模块隔离的持久数据，例如主动收藏的目录路径 |
+| `plugins/` | 用户安装的声明式插件 |
+| `launcher.log` | 运行诊断和耗时日志，每次启动覆盖 |
+
+Usage 不保存输入正文或文件路径。Context 正文属于临时会话；文件搜索命中存入查询临时文件，切换查询或会话清理时释放，不维护长期文件索引。
+
+## 架构设计
+
+### 1. 分层与职责
+
+```mermaid
+flowchart TD
+    UI[Flutter 界面与交互] --> FRB[flutter_rust_bridge / DTO]
+    UI --> Host[原生 Host：窗口、焦点、热键、设置与授权]
+    FRB --> App[Application：会话与用例编排]
+    App --> Core[Core：Context、Action、搜索、排序与执行契约]
+    App --> Modules[Features / 第一方 Extensions]
+    Modules --> Core
+    App --> Storage[Persistence：SQLite 与配置]
+    App --> Platform[Platform：系统能力接口]
+    Modules --> Platform
+```
+
+| 层 | 负责的内容 |
+|---|---|
+| **Flutter Host** | 页面、键盘 / 鼠标交互、焦点、查询草稿、选择与返回位置、设置展示、图标缓存 |
+| **Rust Application** | 激活、Context 采集协调、查询更新、快照发布、动作执行、扩展生命周期 |
+| **Rust Core** | 平台无关的模型与算法：Context Graph、匹配、Ranking、Scope、执行资格与存储契约 |
+| **Features / Extensions** | 应用发现、文件工具，以及 JSON、Git、项目识别等具体领域能力 |
+| **Platform Adapter** | 应用 / 系统上下文读取、系统搜索、打开文件 / URL、剪贴板、进程等 OS 能力 |
+| **macOS Native Host** | Swift / AppKit 窗口、玻璃材质、系统热键、权限和生命周期适配 |
+
+Flutter 不重新识别 Context、匹配动作或计算排序。Swift Host 不解析业务输入或执行项目动作。`core/` 不依赖 Flutter，也不导入 `application/`、`features/`、`extensions/`、`persistence/`；装配集中在 Application。
+
+业务 API 通过 FRB 调用 Rust；窗口、热键和目录授权等 Host 服务通过平台无关的 `DesktopHost` / MethodChannel 接口调用。
+
+### 2. 核心概念
+
+| 概念 | 含义 |
+|---|---|
+| **Context** | 被操作的数据或环境，例如目录、URL、JSON、Git 仓库；带来源与派生关系 |
+| **ContextProvider** | 从已有 Context 轻量识别并产生新的 Context，不启动构建任务 |
+| **Action / ActionBundle** | 动作定义及其适用类型、别名、可用性、执行 Handler |
+| **Candidate** | 当前查询中可选择的一行，绑定具体执行对象；与可持久保存的业务 ActionId 分开 |
+| **CandidateSource** | 提供候选的统一接口，同步来源和异步来源共用查询与生命周期约束 |
+| **Scope** | 可见动作的搜索范围；Current App 聚合环境动作，其他 Scope 筛选领域 |
+| **Ranking** | 综合查询匹配、来源、优先级和成功执行历史排序 |
+| **ExecutionSession** | 已启动后台进程的生命周期，独立于 Launcher 的查询与显示状态 |
+
+Context 决定“对什么执行、哪些动作适用”，Scope 决定“当前搜索哪些动作”。一个目录可以派生 Git 与 Node Context，也能同时产生多个 Scope 下的动作。
+
+### 3. 从唤醒到执行
 
 ```text
-Understand → Enrich → Match → Rank → Execute
+唤醒请求
+  → 预留 Session，冻结前台应用身份
+  → 读取目录、选中项、选中文本、浏览器 URL、剪贴板等来源
+  → InputMode 决定本次使用环境 Context 还是输入 Context
+  → ContextProvider / Context Graph 轻量识别与派生
+  → Action + CandidateSource 产生候选
+  → Scope 过滤与 Ranking
+  → 提交不可变快照，Flutter 渲染
+  → 用户选择后复验资格，执行 Action
+  → 成功时记录 Usage，长任务进入 ExecutionSessionManager
 ```
 
-在 Finder 中按 **⌘⌥Space**，首页显示少量推荐动作；Current App 可以搜索当前环境全部动作，Folder / Git 等 Scope 用于缩小范围。输入 `git sta` 可执行 Git 动作，输入 URL、JSON 或路径会得到相应操作；通过 Universal 入口或清除 Scope 后，输入 `chrome` 可搜索应用。菜单层级通过 **Browse Menus…** 探索。
+原应用身份在 Launcher 显示前冻结，避免窗口抢焦点后采集到 Anywhere 自己。来源异步完成时补充快照；采集失效安全跳过，不猜测另一个应用的对象。
 
-macOS 应用可在本机编译。
+并发状态由不同版本共同约束：
 
-`dev-0.7` 的文件搜索是普通 **File Search** Action：在 Global Search 输入“文件搜索”或 `files` 查找，也可在 Settings → Shortcuts → Action shortcuts 中设置用户自定义快捷键，并按需开启 Global。空白首页不常驻工具入口；搜索图标菜单可在 Global Search / Current App 间切换。 文件页提供文档、PDF、图片、音频、视频、压缩包、代码等类型过滤（查询时按后缀分类，先过滤再加载）；类型栏与 Scope 共用标签样式，通过 Ctrl Tab / Ctrl Shift Tab 切换；裸 Tab / Shift Tab 不再遍历焦点。结果为按需追加的连续列表，没有分页按钮或页码。预览在 ⌘K / Ctrl K 的二级 Actions 中选择 Preview 打开，Esc / 返回先关闭预览并保留查询。
+- **SessionId**：区分激活会话。
+- **Revision**：区分查询输入。
+- **SnapshotSeq**：区分同一输入的后续更新。
+- **Catalog / Execution epoch**：使动作重载或隐藏前的旧执行凭据失效。
+- **Host generation**：拒绝过期的窗口显示 / 隐藏回调。
 
-文件搜索自动结合 Spotlight 快速候选与 Rust 完整文件名遍历，不需要安装 `rg` 或选择引擎。遍历同时搜索文件和文件夹，包含未索引、隐藏（按设置）和被 `.gitignore` 忽略的对象；仅用户明确的排除项缩小范围。Settings → Search 配置范围（空列表为 Home）和隐藏开关，新安装默认包含隐藏文件，保留旧配置。所有命中写入查询临时文件，隐藏超过 15 秒或换查询后清理，不维护长期文件索引。
+快照在锁内复制输入，在锁外匹配与排序，发布时复验版本。执行时只接受已提交、仍有效的候选；后台 worker 开始副作用前再次检查。隐藏撤销待执行资格，已启动进程继续由会话管理器持有。
 
-文件候选按类型使用统一透明线性图标，预览区共用；PDF、文档、表格、图片、音视频、压缩包、源码与配置等有对应形状和淡色。图标按文件名提示分类，不读取正文，也不生成逐文件缩略图。当前预览仍为文本 / 元数据，其他产品调研与后续富预览方案见 [文件预览与图标](docs/file-preview-and-icons-v0.7.md)。
+### 4. 搜索、扩展与资源管理
 
-文件页扩展主 Launcher 的搜索栏、结果行和底栏，输入一个字符即可检索，支持字面标点、Unicode 和路径导航。内部按 64 项批次追加，方向键和滚动在同一连续列表中导航；底栏显示已找到数量及搜索中/完成/部分结果。类型栏与预览仅在文件页出现。单击选择，Enter / Open 或双击打开，Actions / ⌘K 提供已有文件操作。Esc 先清空文件查询，再返回原页面；返回按钮直接回父页。普通 Launcher 查询、现有 Scope 与内容输入模式不触发文件检索。Search 设置支持开关、目录与排除项，失败可 Retry。完整规则见 [统一交互模型](docs/launcher-ui-v0.7.md)，验收边界见 [V0.7 MVP](docs/mvp-v0.7.md)。
+**搜索：** 应用、动作和收藏目录进入统一候选体系；文件搜索作为 Action 打开独立查询工作区，复用 Launcher 界面及对象操作。Spotlight 提供早期结果，完整遍历补充命中；查询临时存储保存结果，Host 按批次读取。取消、去重、类型过滤与稳定追加由 Rust 负责，Flutter 使用虚拟列表及共享数据块显示。
 
-## 构建与运行
+**扩展：** 第一方 Rust 模块通过 `FirstPartyExtension` / `FeatureContribution` 提交 Provider、ActionBundle、动态动作或 CandidateSource。Host 通过能力清单审批 `HostServices`，按模块分配 Storage；模块查询使用有界内存快照，写入采用 SQLite 事务。配置变更替换动作、Provider 和来源，撤销旧执行资格并同步快捷键。
 
-需要 macOS 12 或以上、PATH 上的 Rust stable、与 `.flutter-version` 相同的 Flutter stable，以及 Apple Command Line Tools。项目使用程序化的 Flutter macOS Host，构建脚本直接调用 Flutter assemble、swiftc 和 codesign；不依赖 CocoaPods 或 Xcode GUI 工程。生成物为本机架构的本地签名应用，不是跨架构发布包。
+第一方模块是编译进应用的受信任代码，静态 Trait 仍是内部接口；能力检查不等于进程沙箱，也不是稳定的第三方 Native ABI。外部 TOML 插件使用单独的受限声明式协议。
+
+**资源：** 慢速系统读取放在 blocking worker，旧查询取消或丢弃迟到响应；图标缓存有界。文件搜索不在内存中建立长期全盘索引；文本预览和任务输出都有读取 / 保留上限。Settings 与 Launcher 共享 Flutter engine，Running Tasks 的窗口 engine 按需创建。macOS 保留 Impeller，材质根据系统能力降级。
+
+### 5. 代码地图与扩展入口
+
+```text
+apps/flutter/
+├── lib/launcher/       UI 编排、激活、导航、状态恢复、快捷键与文件工作区
+├── lib/settings/       设置草稿、快捷键配置、扩展状态与授权界面
+├── lib/ui/             共享样式、图标和组件
+├── lib/infrastructure/ Host 接口、窗口与图标缓存等适配
+├── lib/src/rust/       FRB 生成绑定
+└── macos/Runner/       原生窗口、热键、权限、设置与菜单栏
+
+crates/
+├── anywhere-protocol/       共享模型、事件与声明式协议
+├── anywhere-core/src/
+│   ├── core/                算法与契约
+│   ├── application/         用例、会话、装配与快照发布
+│   ├── features/            基础产品能力及兼容导出
+│   ├── extensions/          第一方领域模块
+│   └── persistence/         历史、扩展配置及隔离存储
+├── anywhere-platform/       OS 接口、适配器与进程 / 文件搜索实现
+├── anywhere-plugin/         Manifest 发现、验证及模板处理
+└── anywhere-bridge-flutter/ FRB API、初始化与 DTO 转换
+
+extensions/             第一方模块 Manifest
+plugins/examples/       外部声明式插件示例
+resources/              键码、文件类型和运行策略的共享配置
+scripts/                构建、打包、生成与架构检查
+```
+
+新增能力通常从相应契约接入：
+
+- 新 Context 类型：定义模型，实现 ContextProvider，加入模块贡献。
+- 新动作：定义 ActionSpec / Handler，随 ActionBundle 注册。
+- 新搜索来源：实现 CandidateSource 或 AsyncCandidateSource。
+- 新 OS 能力：扩展 Platform 或 DesktopHost，在平台适配器实现。
+- 新 Host 工具页面：通过 HostViewNavigator 注册路由，复用共享 UI 与对象导航。
+
+业务与界面已隔离平台细节；移植 Windows 仍需补齐原生窗口、热键、权限、应用上下文、文件搜索适配与实机验收。
+
+## 构建与开发
+
+### 环境
+
+- macOS 12 或以上，以及 Apple Command Line Tools。
+- PATH 上的 Rust stable / Cargo。
+- 与 [.flutter-version](.flutter-version) 一致的 Flutter SDK。
+- Python 3，用于生成与检查脚本。
+- 可复用的代码签名身份。
+
+构建采用 Flutter assemble、swiftc 和 codesign，生成本机架构的 App，不需要 CocoaPods 或在 Xcode GUI 中打开工程。
+
+### 本机构建
+
+在仓库根目录执行：
 
 ```bash
-# 在仓库根目录；使用系统已安装的 cargo / flutter。
 source scripts/env.sh
-scripts/setup-local-signing.sh # 仅首次：在登录钥匙串创建本机签名身份
+# 首次开发时创建本机签名身份，已有身份可跳过。
+scripts/setup-local-signing.sh
 scripts/build-macos.sh
 scripts/run-macos.sh
-# 也可以在 Finder 双击 build/Anywhere.app
 ```
 
-`scripts/env.sh` 只设置本机 clang/swift 模块缓存，不再改写 `CARGO_HOME`、`PUB_CACHE` 或把项目内 `.tools` SDK 放到 PATH 前面。
+产物为 `build/Anywhere.app`。也可从 Finder 打开该 App；更新时先退出旧实例，避免同时运行多个开发包。
 
-辅助功能授权与代码签名身份关联。构建脚本现在使用登录钥匙串中长期复用的 `Anywhere Local Code Signing` 身份，不再每次用随代码变化的临时签名；从旧签名切换过来时需重新授权一次。同一台 Mac 上重建或替换应用后的授权保留情况仍待实机验收。请勿删除该钥匙串身份。已有 Apple 签名身份时可设置 `ANYWHERE_CODESIGN_IDENTITY`；发布给其他 Mac 的应用应使用 Developer ID 签名，本机自签名身份只供本机开发使用。
+构建默认复用 `Anywhere Local Code Signing` 身份，避免每次构建改变签名身份。请保留该钥匙串证书；使用其他身份可设置 `ANYWHERE_CODESIGN_IDENTITY`。本机签名供本地开发使用，对外分发的签名与公证另行处理。
 
-macOS Host 显式启用 **Impeller**。
-
-首次启动自动显示一次，之后留在菜单栏。**⌘⌥Space** 打开 Current App Launcher，有当前应用身份且存在可见动作时默认选择其 Scope；加 **Shift** 打开 Universal Search，不选择 Scope。两个入口共用窗口，切换入口保留查询；重复同一入口关闭。失去焦点隐藏，15 秒内重新唤醒恢复原页面、查询、Scope、文件类型和预览；超过 15 秒清理会话，下一次唤醒重新捕获上下文。详见 [状态保留规则](docs/launcher-retention-v0.7.md)。
-
-Current App 唤醒时，如果存在选中文本，或复制时间可确认且距今不超过 **15 秒** 的剪贴板文本，会先进入定制的 Global 内容输入页面并自动填入，只解析该输入的 Context。Esc 先返回 Current App 并恢复环境 Context，再按 Esc 返回空白 Global；不会因自填内容改变 Scope 的定义。
-
-界面由搜索框、Scope Bar 和结果列表组成。Current App Scope 聚合当前环境全部可用 Action，包括菜单、Folder、Git、剪贴板及输入识别动作；其他 Scope 按 Action Group 筛选。只显示有可见动作的入口，没有 All 或 Menu Scope。Context 决定动作是否适用，Scope 决定查询范围。当前应用菜单归 `app.<bundle_id>` 分组，顶部显示实际应用名；目录、Git 等分组可作用于多个 Context。
-
-**↑ / ↓** 选择，**Enter** 执行动作或进入子菜单；**Ctrl+Tab / Ctrl+Shift+Tab** 循环可见 Scope，None 不参与。切换 Scope 保留查询，输入不会自动退出 Scope。**Esc** 依次清查询、返回菜单、清 Scope、关闭。空输入时 **→ / ←** 可进入/返回菜单，输入非空时左右键保留光标功能。
-
-空查询只显示少量推荐动作，不显示 Applications；应用首页最多 7 个推荐动作和 **Browse Menus…**。输入后扁平搜索整个 Scope，Browse Menus 按菜单层级探索；子菜单里输入同样搜索整个应用，清空后回到原浏览位置。菜单行采用叶子标题与菜单路径副标题。无匹配时 Enter 保持 Scope；Current App 搜索全部可用 Action；Esc 清 Scope 或使用 Universal 入口后还可搜索 Applications。结果列表最多露出 7 行，更多内容可滚动，窗口高度上限 520。
-
-Current App 固定首位槽位，只有可见动作时才显示；其他分组按真正执行产生的 frecency、base_priority 和稳定 ID 排序。Session 内已有槽位冻结，迟到分组只追加。浏览与切 Scope 不增加使用次数。不可用菜单继续 Hidden，权限失败只影响依赖该权限的动作。
-
-Finder 目录捕获需要 macOS 的 Automation 授权。拒绝授权时保留输入功能并显示诊断；「最近使用」「共享」等虚拟页面没有目录上下文，不作为错误显示。目录上下文在每次唤醒时捕获一次，绑定当时的前台应用，并在该 Session 中保持不变；如果 40ms 内没读完，首屏先用已有 Context 显示，结果到达后再追加。
-
-V0.4 的 Finder 选中项、选中文本和浏览器 URL 也以唤醒时的前台应用实例为目标异步读取。应用身份在显示 Launcher 前冻结；具体值以系统读取时为准，浏览器在等待期间跳转时可能得到跳转后的 URL。
-
-Settings → Context Sources 可独立关闭四种来源，并查看上次唤醒的采集状态。无选区、不支持、超时、内容过长、选中项过多和权限拒绝分别处理；首页只提示需要处理的问题，拒绝授权时可打开系统设置，处理后重新唤醒即可重采集。隐藏后的 15 秒内保留原 Context 以恢复操作，超时后只保留状态元数据供设置页查看，不保留旧 Context 正文。
-
-剪贴板只读取一次文本快照，内容上限 16 KiB；已知系统策略拒绝时单独提示权限，无法可靠确定原因时报告不可用，不猜测权限。来源失败不阻塞其他动作。Copy URL 与 Copy Path 在剪贴板已包含相同目标时隐藏；不同 URL 的打开动作保留来源标注，相同目标合并。
-
-JSON 的 Format / Minify 在窗口中显示结果，↑ / ↓ 返回动作列表；Copy Formatted JSON 写剪贴板。文件和 URL 的打开、复制等操作全部由 Rust 调用 Platform Adapter。
-
-## 检查
+独立构建与打包：
 
 ```bash
-source scripts/env.sh
-cargo test --workspace --locked
-cargo clippy --workspace --all-targets --locked -- -D warnings
-python3 scripts/check-architecture.py
-scripts/check.sh
-cargo run --release --locked -p anywhere-core --example measure
+ANYWHERE_APP_OUTPUT="$PWD/build/Anywhere-dev.app" scripts/build-macos.sh
+scripts/package-macos.sh build/Anywhere-dev.app
 ```
 
-`cargo test -p anywhere-core` 不需要 Flutter、Dart 或可见 GUI。完整检查脚本校验共享 Flutter 版本和生成键码映射，并运行原生菜单/采集与 Host 服务回归、Rust fmt / tests / Clippy、架构检查和 Flutter analyze / tests。热键键码及显示标签只修改 `resources/hotkey-keymap.json`，随后执行 `python3 scripts/generate-keymap.py` 同步 Dart/Swift。
+打包生成 App 对应的 ZIP 和 SHA-256 文件，并检查版本与签名一致性。
 
-Rust 测试使用真实临时文件和 SQLite；Core 的 OS 动作由 TestPlatform 记录，不打开浏览器或覆盖系统剪贴板。平台 Git 回归会在临时仓库执行初始化、提交及只读查询，不修改当前项目仓库。V0.5 的进程测试会在临时目录启动受控子进程，并对无外部依赖的 Rust 项目执行 Cargo Check。基础动作由内建 ActionBundle 提供，Cargo 运行目标和 Node scripts 动作按 Context 动态生成。Maven、Gradle、Node 的真实工具验收单独运行，命令和环境要求见 [0.5 MVP](docs/mvp-v0.5.md)。
+### 检查与生成
 
-修改桥接公开 API 后重新生成：
+```bash
+# 完整工程检查：Native、Rust、架构规则、Flutter analyze / tests。
+scripts/check.sh
+
+# 仅运行 Rust 测试。
+cargo test --workspace --locked
+```
+
+修改 FRB 公开 API 后重新生成绑定：
 
 ```bash
 cargo install flutter_rust_bridge_codegen --version 2.11.1 --locked
@@ -82,77 +338,12 @@ cargo install cargo-expand --locked
 scripts/generate-bridge.sh
 ```
 
-已生成的 Dart/Rust 绑定随源码交付，普通构建无需安装生成器。
+已生成绑定随源码提交，普通构建不需要生成器。键码、文件类型、运行策略修改后使用对应的 `scripts/generate-*.py` 同步生成代码；完整检查包含漂移校验。
 
-## 基础对象动作
+## 进一步阅读
 
-| 对象 | 动作 |
-|---|---|
-| Directory | Open Terminal Here / Copy Path / Open Directory |
-| Git repository | Git Status / Git Log / Git Diff / Git Staged Diff / Git Branches；Copy Branch Name / Copy Commit Hash / Copy Short Commit Hash / Copy Repository Path / Copy Remote URL |
-| File | Open File / Reveal in File Manager / Copy Path |
-| URL | Open in Default Browser / Copy URL |
-| JSON | Format JSON / Minify JSON / Copy Formatted JSON |
-
-应用不内置 Web Search，也不自动安装搜索插件。需要时可修改 [搜索插件示例](plugins/examples/search.toml) 中的 URL 并安装到用户插件目录；示例中的 `example.com` 只是占位地址。插件命令与内建命令共用注册表和排序。
-
-只识别明确的 HTTP(S) URL，不推断裸域名。路径必须真实存在，支持绝对路径；相对路径以进程工作目录为准，不解释 shell 语法或 `~`。JSON 支持对象、数组及合法 primitive，并保留原始文本。输入最大 1 MiB。
-
-Git 动作只在执行时运行固定的只读命令；发现仓库只做文件系统检查，从不调用 Git。Git 未安装时依赖 Git 的动作显示 Disabled 并给出原因，Copy Repository Path 仍可使用。新增动作在 Git Scope 和搜索中显示，可绑定快捷键，默认首页保留原有推荐数量。分支和提交信息在执行时读取，边界与命令见 [Git 常用动作](docs/git-actions-v0.6.md)。剪贴板只在唤醒时读取一次文本快照；当它已经等于当前路径时 Copy Path / Copy Repository Path 隐藏。
-
-## 数据与插件
-
-IDEA 的项目窗口目录可通过已有 Directory Context 识别：窗口须显示明确项目路径，目录真实存在且包含 `.idea`，读取需要辅助功能权限。Git 与 Developer Actions 继续复用该目录。VS Code、Cursor Agent 和 ChatGPT 当前对话目录尚未接入；探索结论与统一 Bridge 设计见 [编辑器与 Agent Context](docs/editor-agent-context.md)。
-
-- 历史：`~/Library/Application Support/Anywhere/usage.sqlite3`。
-- 自定义插件：`~/Library/Application Support/Anywhere/plugins/*.toml`，或 `<plugin>/manifest.toml`。
-- 示例：[plugins/examples/search.toml](plugins/examples/search.toml)。修改插件后重启应用。
-- 日志：`~/Library/Application Support/Anywhere/launcher.log`，包含 Rust 和窗口耗时日志，每次启动覆盖。终端和 Finder 启动使用同一路径。
-
-历史只存 command_id、context_type、source_app、次数、时间，不存输入或路径。成功执行后更新历史，下一次排序生效。频次和最近使用加分有上限，不会压过当前输入的来源优先级。
-
-## 结构与边界
-
-[架构](docs/architecture.md) · [新版路线图](docs/roadmap.md) · [对象与动作导航设计](docs/action-navigation-design.md) · [V0.3.x MVP](docs/mvp-v0.3x.md) · [Context 模型](docs/context-model.md) · [插件协议](docs/plugin-protocol.md) · [Current App 菜单动作](docs/current-app-actions.md)
-
-`dev-0.4` 已完成工程收尾并提交；实机验收状态见 [0.4 验收记录](docs/v0.4-context-acceptance.md)。已收尾的 `dev-0.5` 版本为 `0.5.0-dev.3`（App `0.5.0+11`），已接入独立进程会话，以及 Rust、Maven、Gradle、Node 项目的常用动作。Maven/Gradle 优先使用项目 wrapper；Node 展示 package.json 明确声明的脚本，按 packageManager 或锁文件选择 npm/pnpm/yarn；Cargo Run 按 package/binary 展示明确目标，Spring Boot 提供 Maven/Gradle Run。任务输出、退出码和停止入口位于菜单栏的 Running Tasks 窗口，关闭 Launcher 或任务窗口不会停止任务；退出 Anywhere 会停止任务。设置页使用独立原生窗口，提供关闭和最小化；任务窗口还支持调整大小。⌘W 关闭当前独立窗口，⌘M 最小化；关闭设置会等待保存，并保护未应用的修改。本阶段实现、限制与后续切片见 [0.5 MVP](docs/mvp-v0.5.md)。
-
-### 0.5 开发包
-
-```bash
-# 独立生成 0.5 开发包，保留 build/Anywhere.app 的已有版本。
-ANYWHERE_APP_OUTPUT="$PWD/build/Anywhere-dev-0.5.app" scripts/build-macos.sh
-scripts/package-macos.sh build/Anywhere-dev-0.5.app
-```
-
-打包前检查 Flutter / 原生版本和固定签名；打包后核对归档中的版本、主程序和 Rust 动态库，生成 ZIP 及 SHA-256 校验文件。复制或运行 `build/Anywhere-dev-0.5.app`，ZIP 用于传输。当前工程验收状态与交付边界见 [0.5 收尾记录](docs/v0.5-closeout.md)。
-
-开发项目识别和常用构建/测试/运行已纳入 0.5；自定义 Action 快捷键已纳入 0.6，文件搜索在 0.7 开发中；插件 UI 属于后续阶段。可执行插件运行时、AI、账户与云同步尚未纳入当前版本。
-
-### 菜单身份安全降级（0.5.0+11）
-
-菜单重扫后旧候选会失效；标题或标识变化时拒绝旧目标并刷新。未验证长期身份的菜单暂不读取或记录 frecency，旧数据库数据保留，其他动作历史照常使用。原因、回归与长期快捷键限制见 [菜单身份安全说明](docs/current-app-actions.md)。
-
-## V0.6 开发中：Action Shortcuts
-
-当前分支 `dev-0.6`，Rust `0.6.0-dev.13`、App `0.6.0+13`，从已推送的 0.5 收尾基线 `d03a1f2` 开始。Settings → Action Shortcuts 可以搜索动作、录制和保存 Launcher 内快捷键。唤醒 Anywhere 后按组合键，只有一个可用对象时执行，多个对象时先选择；不需要先搜索出该动作。缺少 Context 或动作失效时拒绝执行，菜单长期绑定仍禁止。已有设置兼容读取，配置冲突明确提示。macOS 的唤醒键、固定动作与 Context 意图统一使用原生按键录制，录制取消和弹窗生命周期有保护；真实物理全局触发和不同键盘布局仍待验收。
-
-编辑时开启 Global shortcut 可从其他应用触发固定动作：重新捕获 Context，等待时 Esc 取消，超时不执行。旧配置保持仅在 Launcher 内生效。Add context shortcut 可让同一组键按源应用与 Context 类型分派不同动作：更具体的条件优先，同等匹配由用户选择，已匹配动作失效时不回退到另一命令。旧版本 1/2 配置保留原有生效范围。插件重载会暂停被撤销动作的快捷键，动作恢复后重新注册；配置保留。关闭设置时恢复失败会留在原页反馈并允许重试，冲突不阻止退出；离开项目后仍能编辑已保存脚本的键位和生效范围，动作身份保持。真实系统验收尚未完成，完整进度与契约见 [0.6 MVP](docs/mvp-v0.6.md)，功能核对见 [0.6 收尾记录](docs/v0.6-final-acceptance.md)。开发 App 为 `build/Anywhere-dev-0.6.app`；0.5 的 App 和 ZIP 单独保留。0.5 的最终功能与验收证据见 [最终核对](docs/v0.5-final-acceptance.md)。
-
-### 默认唤醒与内容输入
-
-默认唤醒优先填入选中文本，否则使用 15 秒内新复制的剪贴板文本；输入框显示来源，Global Search 只解析这份内容。按 Esc 清空内容并返回 Current App，再按 Esc 进入空白 Global Search。旧剪贴板或复制时间未知时直接进入 Current App。原有 Scope 分类与筛选保持不变，详见 [交互契约](docs/context-input-navigation.md)。
-
-### 统一视觉与页面导航
-
-所有窗口、表单和弹窗共用 UI 主题与组件。设置按 General、Shortcuts、Context、Search、Plugins 分类；输入框、主要操作、状态与选中项有明确视觉区分。设计与验收见 [UI 系统梳理](docs/ui-system-v0.6.md)。
-
-跨平台共享层与 Host 接入边界见 [platform-portability.md](docs/platform-portability.md)。当前完整系统适配器仍为 macOS；新增 Linux/Windows 共享代码 CI 不代表已交付 Windows App。
-
-### 文件搜索目录授权（V0.7 build 19）
-
-macOS 首次启动或保存新的搜索范围时，会先准备目录访问；选择所需文件夹后保存只读授权书签。只搜索有效授权范围，取消时不默认放开 Home；受保护位置会跳过并在底部注明。Settings → Search 可重新授权保存范围，或打开完全磁盘访问设置（需用户手动授予）。见 [授权流程](docs/file-search-access-v0.7.md)。
-
-当前职责边界重构及增量快照验证：[build 21 记录](docs/refactor-boundaries-build21.md)。
-
-V0.7 工程收尾已提交，当前开发分支为 dev-0.8：[第一方模块与 Extension v2 MVP](docs/mvp-v0.8.md)。
+- [架构详细说明](docs/architecture.md)：模块依赖、快照、执行与资源生命周期。
+- [Context 模型](docs/context-model.md) / [菜单动作](docs/current-app-actions.md)：对象关系与身份安全边界。
+- [统一 Launcher 交互与状态保留](docs/launcher-interaction.md)。
+- [插件协议](docs/plugin-protocol.md) / [V0.8 MVP](docs/mvp-v0.8.md)：当前扩展实现及验收范围。
+- [路线图](docs/roadmap.md)：后续 Extension API、插件 UI、Web 插件与终端方向。

@@ -1,5 +1,5 @@
 //! Finder context read through Automation. An empty selection is distinct from a failed read.
-use super::native::launcher_application_identity_matches;
+use super::native::launcher_application_identity_status;
 use crate::{ApplicationInfo, ContextReadError};
 use anyhow::{bail, Context, Result};
 use std::{
@@ -24,12 +24,12 @@ pub(super) fn application_directory(application: &ApplicationInfo) -> Result<Opt
     // Activation always supplies a captured instance, checked on both sides.
     let captured = application.pid != 0 || application.instance_id.is_some();
     if captured {
-        verify_finder_instance(application)?;
+        verify_finder_instance(application, "before_directory")?;
     }
     let script = include_str!("../../native/finder.applescript");
     let output = run_finder_script(script)?;
     if captured {
-        verify_finder_instance(application)?;
+        verify_finder_instance(application, "after_directory")?;
     }
     // osascript appends one newline; do not trim valid spaces from a filesystem name.
     let path = output.strip_suffix('\n').unwrap_or(&output);
@@ -55,13 +55,13 @@ pub(super) fn selected_paths(application: &ApplicationInfo) -> Result<Vec<PathBu
     if application.bundle_id != "com.apple.finder" {
         return Ok(Vec::new());
     }
-    verify_finder_instance(application)?;
+    verify_finder_instance(application, "before_selection")?;
     let output = run_finder_script(include_str!("../../native/finder_selection.applescript"))?;
-    verify_finder_instance(application)?;
+    verify_finder_instance(application, "after_selection")?;
     parse_selected_paths(&output)
 }
 
-fn verify_finder_instance(application: &ApplicationInfo) -> Result<()> {
+fn verify_finder_instance(application: &ApplicationInfo, stage: &'static str) -> Result<()> {
     let expected = application
         .instance_id
         .as_deref()
@@ -74,14 +74,28 @@ fn verify_finder_instance(application: &ApplicationInfo) -> Result<()> {
         .context("captured Finder bundle ID is invalid")?;
     let instance_id = CString::new(expected).context("captured Finder instance ID is invalid")?;
     // SAFETY: both C strings outlive the synchronous native identity check.
-    let matches = unsafe {
-        launcher_application_identity_matches(
+    let status = unsafe {
+        launcher_application_identity_status(
             application.pid,
             bundle_id.as_ptr(),
             instance_id.as_ptr(),
         )
     };
-    if matches != 1 {
+    if status != 1 {
+        let reason = match status {
+            0 => "invalid_identity",
+            2 => "missing_process",
+            3 => "terminated",
+            4 => "bundle_mismatch",
+            5 => "process_start_mismatch",
+            _ => "unknown",
+        };
+        tracing::info!(
+            pid = application.pid,
+            stage,
+            reason,
+            "finder_identity_rejected"
+        );
         return Err(ContextReadError::ApplicationChanged.into());
     }
     Ok(())

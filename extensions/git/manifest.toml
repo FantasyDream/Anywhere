@@ -1,0 +1,5 @@
+protocol_version = 2
+id = "git"
+name = "Git"
+version = "0.8.0"
+capabilities = ["git.read", "clipboard.write"]
