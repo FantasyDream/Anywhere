@@ -229,8 +229,8 @@ Future<FilePreviewDto> previewFile(
     RustLib.instance.api.crateApiPreviewFile(
         sessionId: sessionId, revision: revision, candidateId: candidateId);
 
-/// Pure bounded policy; safe for the Host's synchronous activation decision.
-ActivationInputDto? chooseActivationInput(
+/// Recognition runs on the bridge worker; filesystem checks never block Host UI.
+Future<ActivationInputDto?> chooseActivationInput(
         {required List<ContextCaptureDto> captures,
         required PlatformInt64 nowMs,
         required bool selectedEnabled,
@@ -327,14 +327,16 @@ enum ActionStatusDto {
 class ActivationInputDto {
   final ContextSourceDto source;
   final String text;
+  final PlatformInt64? validUntilMs;
 
   const ActivationInputDto({
     required this.source,
     required this.text,
+    this.validUntilMs,
   });
 
   @override
-  int get hashCode => source.hashCode ^ text.hashCode;
+  int get hashCode => source.hashCode ^ text.hashCode ^ validUntilMs.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -342,7 +344,8 @@ class ActivationInputDto {
       other is ActivationInputDto &&
           runtimeType == other.runtimeType &&
           source == other.source &&
-          text == other.text;
+          text == other.text &&
+          validUntilMs == other.validUntilMs;
 }
 
 enum AvailabilityDto {

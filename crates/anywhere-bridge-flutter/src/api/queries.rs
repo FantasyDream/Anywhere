@@ -164,6 +164,7 @@ pub(super) fn choose_activation_input(
     .map(|v| ActivationInputDto {
         source: context_source_dto(v.source),
         text: v.text,
+        valid_until_ms: v.valid_until_ms,
     })
 }
 

@@ -1,6 +1,6 @@
 # V0.8 MVP：第一方模块与 Extension v2
 
-状态：2026-10-14，分支 `dev-0.8`，起点 `dev-0.7@3b39763`。当前开发版本 App `0.8.0+12` / Rust `0.8.0-dev.12`。本文是当前范围与验收状态，逐构建证据见 [开发记录](archive/v0.8-development-records.md)。
+状态：2026-10-14，分支 `dev-0.8`，起点 `dev-0.7@3b39763`。当前开发版本 App `0.8.0+13` / Rust `0.8.0-dev.13`。本文是当前范围与验收状态，逐构建证据见 [开发记录](archive/v0.8-development-records.md)。
 
 ## 目标与进度
 
@@ -48,11 +48,16 @@ Directory Context 中 Save Directory 保存 canonical path；Global Search 按�
 | 新收藏目录默认动作为移除 | 二级列表固定对象默认动作在首位，其余保留公共 Ranking |
 | 批准弹窗初始焦点不明确 | 初始聚焦 Cancel，Enter 取消，右方向键后 Enter 批准 |
 | 文件异常都显示目录无法搜索 | 显示实际异常数量，悬停查看原因；最多 8 条诊断写日志；权限跳过不计错误 |
+| 未识别选区 / 剪贴板打开内容页面 | 仅具体非 Text Context 允许自动填入；后台识别失败保持 Current App，迟到结果复验交互与到期时间 |
 | 主目录简写不能产生路径 Context | `~` / `~/…` / `～/…` 共用 Rust 展开器，仍验证真实路径与文件搜索授权 |
 
 菜单永久身份仍未由 AX 元数据证明；菜单历史 / 持久绑定继续隔离，不将此风险标为已消除。详见 [菜单安全边界](current-app-actions.md)。
 
 ## 最近一次工程证据
+
+Build 13 将选区 / 剪贴板自动填入限制为真实识别器产生的具体非 Text Context；普通文本、无效 URL / JSON 和不存在的路径不打开内容页面。桥接改为 worker 调用，Host 显示 Current App 后异步决定，复验用户交互、Session / 生命周期和 Rust 提供的剪贴板到期时间；迟到的新选区会重新判定来源。
+
+Build 13 完整门禁：**403 Rust / 229 Flutter 通过，6 Rust ignored**；Native、fmt、Clippy、架构 / 生成规则、文档与 analyze 通过。记录 `build/validation/v0.8-context-prefill-check.log`。识别规则、选区无效时的剪贴板回退、真实路径 / Home 简写 / 删除路径，以及异步失败、编辑、关闭、来源变化和识别期间过期均有回归；15 秒工作区保留回归通过。没有本轮 GUI 验收。
 
 Build 12 根据 Build 11 的真实日志补齐回收站排除：OneDrive 提供商根下 `.Trash` 读取返回 `os error 60`，不应参与普通文件名搜索。主目录 / 云盘提供商回收站在进入遍历前排除，Spotlight 候选执行同一规则；普通云盘文件、项目内部同名目录与显式回收站路径保留。日志测试的共享记录清空增加互斥保护，避免并行测试相互删除证据。
 
@@ -72,14 +77,14 @@ Build 11 完整门禁：**399 Rust / 221 Flutter 通过，6 Rust ignored**；Nat
 
 本轮候选 Build 8 的真实 macOS GUI 检查已完成模块关闭、恢复开关、v2 权限内容 / 批准 / 撤销、文件工具输入、固定预览随选择切换，以及 Save → 搜索收藏 → Forget 闭环。最后发现的焦点与首项顺序修复进入 Build 9 并通过自动化；最终包界面复查因 Mac 锁屏暂未完成。具体工程记录见 [Build 9 收尾](archive/v0.8-development-records.md#build-9--工程收尾2026-10-13)。
 
-Build 12 App / arm64 ZIP 已核验：37 文件 / 8 链接逐项一致，四个主二进制为 arm64，Impeller 与 deep / strict 签名有效，designated requirement 与 Build 11 相同。包检查记录 `v0.8-recycle-package-check.json`。
+Build 13 App / arm64 ZIP 已核验：37 文件 / 8 链接逐项一致，四个主二进制为 arm64，Impeller 与 deep / strict 签名有效，designated requirement 与 Build 12 相同。包检查记录 `v0.8-context-prefill-package-check.json`。
 
 本地 GUI 测试插件已移除，原扩展偏好与收藏数据已恢复，Host 设置字节一致；成功测试动作产生正常 Usage。没有停止用户的开发任务或删除测试目录中的真实文件。
 
 ## 发布前仍需验收
 
 - 真实系统键盘、重复唤醒与失焦、选区 / 剪贴板、IDEA / Finder / 浏览器组合。
-- 最终 Build 12 的弹窗 / 对象顺序界面复查，以及其余 v2 能力、修改插件后的重新确认、异常恢复完整 GUI 矩阵。
+- 最终 Build 13 的弹窗 / 对象顺序界面复查，以及其余 v2 能力、修改插件后的重新确认、异常恢复完整 GUI 矩阵。
 - 完整系统隐私授权 / 撤销、网络 / 可移动卷、安装升级及签名 / 公证分发。
 - 整 App RSS、帧时间、长列表与实际任务输出，以及辅助功能 / 读屏。
 - Windows 完整 Host、系统适配器、安装包与实机矩阵。

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/launcher/launcher_controller.dart';
+import 'package:anywhere/launcher/activation_prefill.dart';
 import 'package:anywhere/launcher/launcher_screen.dart';
 import 'package:anywhere/launcher/launcher_view_state.dart';
 import 'package:anywhere/src/rust/api.dart';
@@ -67,19 +68,23 @@ void main() {
   LauncherController host(List<ContextCaptureDto> captures,
           {WaitForSnapshot? wait,
           List<InputModeDto>? requests,
-          bool clipboardEligible = true}) =>
+          bool clipboardEligible = true,
+          ChooseActivationInput? choose,
+          int Function()? nowMillis}) =>
       LauncherController(
           window: WindowHost(channel),
-          nowMillis: () => 1000,
+          nowMillis: nowMillis ?? () => 1000,
           backend: LauncherBackend(
-              chooseActivationInput: (captures, nowMs,
-                      {required selectedEnabled,
-                      required clipboardEnabled,
-                      required allowPendingSelection}) =>
-                  fixtureInputSuggestion(captures, nowMs,
-                      selectedEnabled: selectedEnabled,
-                      clipboardEnabled: clipboardEnabled && clipboardEligible,
-                      allowPendingSelection: allowPendingSelection),
+              chooseActivationInput: choose ??
+                  (captures, nowMs,
+                          {required selectedEnabled,
+                          required clipboardEnabled,
+                          required allowPendingSelection}) =>
+                      fixtureInputSuggestion(captures, nowMs,
+                          selectedEnabled: selectedEnabled,
+                          clipboardEnabled:
+                              clipboardEnabled && clipboardEligible,
+                          allowPendingSelection: allowPendingSelection),
               beginActivation: () => 1,
               activate: (_,
                       {promptAccessibility = false,
@@ -100,6 +105,7 @@ void main() {
     final requests = <InputModeDto>[];
     final controller = host([clipboard(), selected], requests: requests);
     await controller.activate();
+    await Future<void>.delayed(Duration.zero);
     expect(controller.view.input, selected.text);
     expect(controller.view.inputMode, InputModeDto.content);
     expect(controller.view.scopeId, isNull);
@@ -141,6 +147,140 @@ void main() {
     await controller.activate();
     expect(controller.view.contentSource, ContextSourceDto.clipboard);
     expect(controller.view.input, clipboard().text);
+    controller.dispose();
+  });
+  for (final captures in [
+    [selected],
+    [noSelection, clipboard()],
+    [selected, clipboard()]
+  ]) {
+    test('unrecognized captures keep Current App: ${captures.length} sources',
+        () async {
+      final requests = <InputModeDto>[];
+      final controller = host(captures,
+          requests: requests,
+          choose: (_, __,
+                  {required selectedEnabled,
+                  required clipboardEnabled,
+                  required allowPendingSelection}) =>
+              null);
+      await controller.activate();
+      await Future<void>.delayed(Duration.zero);
+      expect(controller.view.input, '');
+      expect(controller.view.inputMode, InputModeDto.environment);
+      expect(controller.view.contentSource, isNull);
+      expect(controller.view.scopeId, 'app.editor');
+      expect(requests, isEmpty);
+      controller.dispose();
+    });
+  }
+  test(
+      'recognition never blocks showing Current App and cannot overwrite editing',
+      () async {
+    final checked = Completer<ActivationInputDto?>();
+    final controller = host([selected],
+        choose: (_, __,
+                {required selectedEnabled,
+                required clipboardEnabled,
+                required allowPendingSelection}) =>
+            checked.future);
+    await controller.activate();
+    expect(controller.view.inputMode, InputModeDto.environment);
+    expect(controller.view.scopeId, 'app.editor');
+    await controller.update('my query');
+    checked.complete(
+        ActivationInputDto(source: selected.source, text: selected.text!));
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.view.input, 'my query');
+    expect(controller.view.inputMode, InputModeDto.environment);
+    controller.dispose();
+  });
+  test('new selection arriving during recognition supersedes a clipboard offer',
+      () async {
+    final checked = Completer<ActivationInputDto?>();
+    final arrival = Completer<SnapshotWaitDto>();
+    var choices = 0, waits = 0;
+    final controller = host([noSelection, clipboard()],
+        wait: (_, __) =>
+            waits++ == 0 ? arrival.future : Completer<SnapshotWaitDto>().future,
+        choose: (captures, now,
+                {required selectedEnabled,
+                required clipboardEnabled,
+                required allowPendingSelection}) =>
+            choices++ == 0
+                ? checked.future
+                : fixtureInputSuggestion(captures, now,
+                    selectedEnabled: selectedEnabled,
+                    clipboardEnabled: clipboardEnabled,
+                    allowPendingSelection: allowPendingSelection));
+    await controller.activate();
+    arrival.complete(SnapshotWaitDto(
+        kind: SnapshotWaitKindDto.updated,
+        state: snapshot(
+            0, '', InputModeDto.environment, [selected, clipboard()],
+            sequence: 2)));
+    await Future<void>.delayed(Duration.zero);
+    checked.complete(ActivationInputDto(
+        source: ContextSourceDto.clipboard, text: clipboard().text!));
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.view.input, selected.text);
+    expect(controller.view.contentSource, ContextSourceDto.selectedText);
+    expect(choices, 2);
+    controller.dispose();
+  });
+  test('recognition finishing after dismissal cannot open content', () async {
+    final checked = Completer<ActivationInputDto?>();
+    final controller = host([selected],
+        choose: (_, __,
+                {required selectedEnabled,
+                required clipboardEnabled,
+                required allowPendingSelection}) =>
+            checked.future);
+    await controller.activate();
+    await controller.dismiss();
+    checked.complete(
+        ActivationInputDto(source: selected.source, text: selected.text!));
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.view.phase, LauncherPhase.hidden);
+    expect(controller.view.input, '');
+    controller.dispose();
+  });
+  test('clipboard expiring during recognition keeps Current App', () async {
+    var now = 1000;
+    final checked = Completer<ActivationInputDto?>();
+    final controller = host([noSelection, clipboard()],
+        nowMillis: () => now,
+        choose: (_, __,
+                {required selectedEnabled,
+                required clipboardEnabled,
+                required allowPendingSelection}) =>
+            checked.future);
+    await controller.activate();
+    now = 16001;
+    checked.complete(ActivationInputDto(
+        source: ContextSourceDto.clipboard,
+        text: clipboard().text!,
+        validUntilMs: 16000));
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.view.inputMode, InputModeDto.environment);
+    expect(controller.view.input, '');
+    expect(controller.view.scopeId, 'app.editor');
+    controller.dispose();
+  });
+  test('recognition errors leave a usable Current App page', () async {
+    final checked = Completer<ActivationInputDto?>();
+    final controller = host([selected],
+        choose: (_, __,
+                {required selectedEnabled,
+                required clipboardEnabled,
+                required allowPendingSelection}) =>
+            checked.future);
+    await controller.activate();
+    checked.completeError(StateError('recognition failed'));
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.view.input, '');
+    expect(controller.view.inputMode, InputModeDto.environment);
+    expect(controller.view.phase, LauncherPhase.ready);
     controller.dispose();
   });
   test('explicit Universal wake stays blank despite captured content',

@@ -599,9 +599,9 @@ pub async fn preview_file(
 pub struct ActivationInputDto {
     pub source: ContextSourceDto,
     pub text: String,
+    pub valid_until_ms: Option<i64>,
 }
-/// Pure bounded policy; safe for the Host's synchronous activation decision.
-#[flutter_rust_bridge::frb(sync)]
+/// Recognition runs on the bridge worker; filesystem checks never block Host UI.
 pub fn choose_activation_input(
     captures: Vec<ContextCaptureDto>,
     now_ms: i64,

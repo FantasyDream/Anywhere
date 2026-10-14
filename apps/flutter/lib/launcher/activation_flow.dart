@@ -10,6 +10,9 @@ class ActivationFlow {
   ContextSourceDto? source;
   bool pendingAppHome = false;
   Future<void>? pendingPrefill;
+  bool reconsiderAfterCheck = false;
+  int _epoch = 0;
+  bool get prefillAllowed => _allowed;
   bool _allowed = false, _gracePassed = false;
   Timer? _grace;
 
@@ -22,6 +25,7 @@ class ActivationFlow {
     source = null;
     pendingAppHome = false;
     pendingPrefill = null;
+    reconsiderAfterCheck = false;
     _allowed = prefill;
     _gracePassed = false;
     if (prefill) {
@@ -35,18 +39,24 @@ class ActivationFlow {
     }
   }
 
-  ActivationPrefill? take(List<ContextCaptureDto> captures, int now,
+  Future<ActivationPrefill?> take(List<ContextCaptureDto> captures, int now,
       {required ChooseActivationInput? choose,
-      required bool interacted,
-      required bool visible,
+      required bool Function() interacted,
+      required bool Function() visible,
+      required int Function() nowMillis,
       required bool selectedEnabled,
-      required bool clipboardEnabled}) {
-    if (!_allowed || interacted || !visible || choose == null) return null;
-    final offer = ActivationPrefill.choose(captures, now,
+      required bool clipboardEnabled}) async {
+    if (!_allowed || interacted() || !visible() || choose == null) return null;
+    final epoch = _epoch;
+    final offer = await ActivationPrefill.choose(captures, now,
         choose: choose,
         selectedEnabled: selectedEnabled,
         clipboardEnabled: clipboardEnabled,
         allowPendingSelection: _gracePassed);
+    if (epoch != _epoch || !_allowed || interacted() || !visible()) return null;
+    if (offer?.validUntilMs != null && nowMillis() > offer!.validUntilMs!) {
+      return null;
+    }
     if (offer != null) {
       stopPrefill();
       mode = InputModeDto.content;
@@ -56,6 +66,7 @@ class ActivationFlow {
   }
 
   void stopPrefill() {
+    _epoch++;
     _allowed = false;
     _grace?.cancel();
     _grace = null;

@@ -191,15 +191,16 @@ fn wire__crate__api__begin_activation_impl(
     )
 }
 fn wire__crate__api__choose_activation_input_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
     data_len_: i32,
-) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "choose_activation_input",
-            port: None,
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
         move || {
             let message = unsafe {
@@ -217,16 +218,18 @@ fn wire__crate__api__choose_activation_input_impl(
             let api_clipboard_enabled = <bool>::sse_decode(&mut deserializer);
             let api_allow_pending_selection = <bool>::sse_decode(&mut deserializer);
             deserializer.end();
-            transform_result_sse::<_, ()>((move || {
-                let output_ok = Result::<_, ()>::Ok(crate::api::choose_activation_input(
-                    api_captures,
-                    api_now_ms,
-                    api_selected_enabled,
-                    api_clipboard_enabled,
-                    api_allow_pending_selection,
-                ))?;
-                Ok(output_ok)
-            })())
+            move |context| {
+                transform_result_sse::<_, ()>((move || {
+                    let output_ok = Result::<_, ()>::Ok(crate::api::choose_activation_input(
+                        api_captures,
+                        api_now_ms,
+                        api_selected_enabled,
+                        api_clipboard_enabled,
+                        api_allow_pending_selection,
+                    ))?;
+                    Ok(output_ok)
+                })())
+            }
         },
     )
 }
@@ -1801,9 +1804,11 @@ impl SseDecode for crate::api::ActivationInputDto {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_source = <crate::api::ContextSourceDto>::sse_decode(deserializer);
         let mut var_text = <String>::sse_decode(deserializer);
+        let mut var_validUntilMs = <Option<i64>>::sse_decode(deserializer);
         return crate::api::ActivationInputDto {
             source: var_source,
             text: var_text,
+            valid_until_ms: var_validUntilMs,
         };
     }
 }
@@ -2712,6 +2717,7 @@ fn pde_ffi_dispatcher_primary_impl(
         1 => wire__crate__api__activate_impl(port, ptr, rust_vec_len, data_len),
         2 => wire__crate__api__application_icon_impl(port, ptr, rust_vec_len, data_len),
         3 => wire__crate__api__approve_extension_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__choose_activation_input_impl(port, ptr, rust_vec_len, data_len),
         6 => wire__crate__api__deactivate_impl(port, ptr, rust_vec_len, data_len),
         7 => wire__crate__api__excluded_apps_impl(port, ptr, rust_vec_len, data_len),
         8 => wire__crate__api__execute_impl(port, ptr, rust_vec_len, data_len),
@@ -2763,7 +2769,6 @@ fn pde_ffi_dispatcher_sync_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         4 => wire__crate__api__begin_activation_impl(ptr, rust_vec_len, data_len),
-        5 => wire__crate__api__choose_activation_input_impl(ptr, rust_vec_len, data_len),
         20 => wire__crate__api__plugin_status_impl(ptr, rust_vec_len, data_len),
         22 => wire__crate__api__prompt_accessibility_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
@@ -2821,6 +2826,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::ActivationInputDto {
         [
             self.source.into_into_dart().into_dart(),
             self.text.into_into_dart().into_dart(),
+            self.valid_until_ms.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -3547,6 +3553,7 @@ impl SseEncode for crate::api::ActivationInputDto {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <crate::api::ContextSourceDto>::sse_encode(self.source, serializer);
         <String>::sse_encode(self.text, serializer);
+        <Option<i64>>::sse_encode(self.valid_until_ms, serializer);
     }
 }
 

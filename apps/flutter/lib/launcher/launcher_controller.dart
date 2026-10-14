@@ -401,9 +401,6 @@ class LauncherController extends ChangeNotifier {
         _message = 'Capturing context for ${globalBinding!.title}…';
       }
       _apply(state);
-      if (_activation.pendingPrefill != null) {
-        await _activation.pendingPrefill;
-      }
       if (!_current(generation)) return;
       if (mode == WakeMode.universal && globalBinding == null) {
         _activation.mode = InputModeDto.search;
@@ -790,22 +787,47 @@ class LauncherController extends ChangeNotifier {
   }
 
   void _maybePrefill() {
-    final offer = _activation.take(
-        _snapshot?.contextCaptures ?? const [], _nowMillis(),
-        choose: _backend.chooseActivationInput,
-        interacted: _scopeTouched ||
-            _userMoved ||
-            _input.isNotEmpty ||
-            _shortcuts.waiting,
-        visible: view.visible,
-        selectedEnabled: settings.current.captureSelectedText,
-        clipboardEnabled: settings.current.captureClipboard);
-    if (offer == null) return;
-    _wakeMode = WakeMode.universal;
-    _scopeId = null;
-    _actionPath = null;
-    _activation.pendingPrefill = update(offer.text, automatic: true);
-    unawaited(_activation.pendingPrefill);
+    if (!_activation.prefillAllowed) return;
+    if (_activation.pendingPrefill != null) {
+      _activation.reconsiderAfterCheck = true;
+      return;
+    }
+    final generation = _generation;
+    Future<void> check() async {
+      final offer = await _activation.take(
+          _snapshot?.contextCaptures ?? const [], _nowMillis(),
+          choose: _backend.chooseActivationInput,
+          interacted: () =>
+              !_current(generation) ||
+              _scopeTouched ||
+              _userMoved ||
+              _input.isNotEmpty ||
+              _shortcuts.waiting ||
+              _activation.reconsiderAfterCheck,
+          visible: () => view.visible,
+          nowMillis: _nowMillis,
+          selectedEnabled: settings.current.captureSelectedText,
+          clipboardEnabled: settings.current.captureClipboard);
+      if (offer == null) return;
+      _wakeMode = WakeMode.universal;
+      _scopeId = null;
+      _actionPath = null;
+      await update(offer.text, automatic: true);
+    }
+
+    final pending = check();
+    _activation.pendingPrefill = pending;
+    unawaited(pending.catchError((Object error) {
+      // A failed recognition is not a content page or a Launcher failure.
+      // Keep the current app available and leave diagnostics to the backend.
+    }).whenComplete(() {
+      if (!identical(_activation.pendingPrefill, pending)) return;
+      _activation.pendingPrefill = null;
+      if (_current(generation) && _activation.reconsiderAfterCheck) {
+        _activation.reconsiderAfterCheck = false;
+        _maybePrefill();
+      }
+    }));
   }
 
   Future<void> _returnToCurrentApp() async {

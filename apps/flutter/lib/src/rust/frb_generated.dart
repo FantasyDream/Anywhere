@@ -91,7 +91,7 @@ abstract class RustLibApi extends BaseApi {
 
   int crateApiBeginActivation();
 
-  ActivationInputDto? crateApiChooseActivationInput(
+  Future<ActivationInputDto?> crateApiChooseActivationInput(
       {required List<ContextCaptureDto> captures,
       required PlatformInt64 nowMs,
       required bool selectedEnabled,
@@ -348,21 +348,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  ActivationInputDto? crateApiChooseActivationInput(
+  Future<ActivationInputDto?> crateApiChooseActivationInput(
       {required List<ContextCaptureDto> captures,
       required PlatformInt64 nowMs,
       required bool selectedEnabled,
       required bool clipboardEnabled,
       required bool allowPendingSelection}) {
-    return handler.executeSync(SyncTask(
-      callFfi: () {
+    return handler.executeNormal(NormalTask(
+      callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_list_context_capture_dto(captures, serializer);
         sse_encode_i_64(nowMs, serializer);
         sse_encode_bool(selectedEnabled, serializer);
         sse_encode_bool(clipboardEnabled, serializer);
         sse_encode_bool(allowPendingSelection, serializer);
-        return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+        pdeCallFfi(generalizedFrbRustBinding, serializer,
+            funcId: 5, port: port_);
       },
       codec: SseCodec(
         decodeSuccessData: sse_decode_opt_box_autoadd_activation_input_dto,
@@ -1516,11 +1517,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ActivationInputDto dco_decode_activation_input_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return ActivationInputDto(
       source: dco_decode_context_source_dto(arr[0]),
       text: dco_decode_String(arr[1]),
+      validUntilMs: dco_decode_opt_box_autoadd_i_64(arr[2]),
     );
   }
 
@@ -2209,7 +2211,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_source = sse_decode_context_source_dto(deserializer);
     var var_text = sse_decode_String(deserializer);
-    return ActivationInputDto(source: var_source, text: var_text);
+    var var_validUntilMs = sse_decode_opt_box_autoadd_i_64(deserializer);
+    return ActivationInputDto(
+        source: var_source, text: var_text, validUntilMs: var_validUntilMs);
   }
 
   @protected
@@ -3088,6 +3092,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_context_source_dto(self.source, serializer);
     sse_encode_String(self.text, serializer);
+    sse_encode_opt_box_autoadd_i_64(self.validUntilMs, serializer);
   }
 
   @protected
