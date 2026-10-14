@@ -106,7 +106,7 @@ class ContextSourceStatus {
           _ => 0,
         };
 
-  static ContextSourceStatus? notice(List<ContextCaptureDto> captures) {
+  static ContextSourceStatus? notice(Iterable<ContextCaptureDto> captures) {
     ContextSourceStatus? selected;
     for (final source in sources) {
       for (final capture in captures.where((item) => item.source == source)) {

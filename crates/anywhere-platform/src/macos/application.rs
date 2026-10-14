@@ -265,7 +265,15 @@ fn decode_menu_discovery(value: serde_json::Value) -> Result<crate::MenuDiscover
             Ok(crate::MenuDiscovery::Ready(serde_json::from_value(items)?))
         }
         Some("untrusted") => Ok(crate::MenuDiscovery::Untrusted),
-        Some("timeout") => Ok(crate::MenuDiscovery::TimedOut),
+        Some("timeout") => {
+            tracing::warn!(
+                ax_error = ?value.get("ax_error").and_then(|v| v.as_i64()),
+                operation = ?value.get("operation").and_then(|v| v.as_str()),
+                deadline_reached = ?value.get("deadline_reached").and_then(|v| v.as_bool()),
+                "menu_discovery_incomplete"
+            );
+            Ok(crate::MenuDiscovery::TimedOut)
+        }
         Some("unavailable") => Ok(crate::MenuDiscovery::Unavailable),
         _ => anyhow::bail!("unknown menu discovery status"),
     }
@@ -314,6 +322,25 @@ mod tests {
     use super::*;
     use crate::macos::MacOsPlatform;
     use crate::Platform;
+
+    #[test]
+    fn incomplete_discovery_never_decodes_partial_items_as_ready() {
+        let partial = serde_json::json!({"status": "timeout", "ax_error": -25204,
+            "operation": "AXIdentifier", "deadline_reached": false,
+            "items": [{"title": "unsafe partial item"}]});
+        assert_eq!(
+            decode_menu_discovery(partial).unwrap(),
+            crate::MenuDiscovery::TimedOut
+        );
+        assert_eq!(
+            decode_menu_discovery(serde_json::json!({"status": "timeout"})).unwrap(),
+            crate::MenuDiscovery::TimedOut
+        );
+        assert_eq!(
+            decode_menu_discovery(serde_json::json!({"status": "ok", "items": []})).unwrap(),
+            crate::MenuDiscovery::Ready(vec![])
+        );
+    }
 
     #[test]
     fn selected_text_statuses_remain_distinct_and_bounded() {

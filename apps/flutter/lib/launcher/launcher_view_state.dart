@@ -433,7 +433,10 @@ class LauncherViewState {
       inputMode != InputModeDto.environment
           ? null
           : ContextSourceStatus.notice(
-              snapshot?.contextCaptures ?? const <ContextCaptureDto>[]);
+              (snapshot?.contextCaptures ?? const <ContextCaptureDto>[]).where(
+                  (capture) =>
+                      capture.source != ContextSourceDto.selectedText &&
+                      capture.source != ContextSourceDto.clipboard));
   String? get noticeSettingsPane =>
       message == null ? captureNotice?.settingsPane : null;
 

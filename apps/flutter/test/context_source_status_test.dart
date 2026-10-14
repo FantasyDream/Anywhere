@@ -87,8 +87,8 @@ void main() {
       () {
     final timeout = capture(
         ContextSourceDto.finderSelection, ContextCaptureStatusDto.timedOut);
-    final denied = capture(
-        ContextSourceDto.clipboard, ContextCaptureStatusDto.permissionDenied);
+    final denied = capture(ContextSourceDto.browserCurrentPage,
+        ContextCaptureStatusDto.permissionDenied);
     for (final captures in [
       [timeout, denied],
       [denied, timeout]
@@ -106,12 +106,59 @@ void main() {
               resultActions: const [],
               candidates: [],
               contextCaptures: captures,
-              diagnostics: ['clipboard: read failed']));
-      expect(view.notice, contains('Allow clipboard access'));
-      expect(view.noticeSettingsPane, 'clipboard');
+              diagnostics: [
+                'Menu discovery timed out; Current App menus were not updated.'
+              ]));
+      expect(view.notice, contains('access this browser'));
+      expect(view.noticeSettingsPane, 'automation');
     }
   });
 
+  test(
+      'unused automatic text failures stay in Settings rather than Current App',
+      () {
+    for (final source in [
+      ContextSourceDto.selectedText,
+      ContextSourceDto.clipboard
+    ]) {
+      final item = capture(source, ContextCaptureStatusDto.failed);
+      final view = LauncherViewState(
+          phase: LauncherPhase.ready,
+          generation: 1,
+          snapshot: launcherSnapshot(
+              sessionId: 1,
+              revision: 0,
+              snapshotSeq: 1,
+              input: '',
+              contextComplete: true,
+              candidates: const [],
+              contextCaptures: [item],
+              diagnostics: const []));
+      expect(view.notice, isNull);
+      expect(view.noticeSettingsPane, isNull);
+      expect(ContextSourceStatus(source, item).statusText, 'Read failed');
+    }
+  });
+  test('ignored text failures do not hide a real menu diagnostic', () {
+    final view = LauncherViewState(
+        phase: LauncherPhase.ready,
+        generation: 1,
+        snapshot: launcherSnapshot(
+            sessionId: 1,
+            revision: 0,
+            snapshotSeq: 1,
+            input: '',
+            contextComplete: true,
+            candidates: const [],
+            contextCaptures: [
+              capture(
+                  ContextSourceDto.selectedText, ContextCaptureStatusDto.failed)
+            ],
+            diagnostics: [
+              'Menu discovery timed out; Current App menus were not updated.'
+            ]));
+    expect(view.notice, contains('Some actions could not be loaded'));
+  });
   test(
       'recoverable capture errors describe the next step without pretending permission was denied',
       () {

@@ -30,7 +30,7 @@ static AXError test_timeout(AXUIElementRef element, float timeout) {
 static void test_bound(AXUIElementRef element) {
     if (!test_require_bound) return;
     assert(element == test_prepared_element);
-    assert(test_prepared_timeout > 0 && test_prepared_timeout <= 0.101);
+    assert(test_prepared_timeout > 0 && test_prepared_timeout <= (menu_request_timeout > 0 ? menu_request_timeout : 0.1) + 0.001);
     test_prepared_element = NULL; // Every read/press needs its own preparation.
 }
 static AXError test_press(AXUIElementRef element, CFStringRef action) {
@@ -201,6 +201,54 @@ int main(void) {
         assert(menu_ax_status(kAXErrorAPIDisabled, 2) == 7);
         assert(menu_ax_status(kAXErrorCannotComplete, 5) == 9);
         assert(menu_ax_status(kAXErrorActionUnsupported, 5) == 5);
+        // A transient AX failure restarts the whole discovery with fresh objects,
+        // never merges a previously collected partial list or performs an action.
+        NSDictionary *healthyBar = @{ @"AXChildren": @[leaf(@"Save As", @"", YES)] };
+        NSDictionary *healthyApp = @{ @"AXMenuBar": healthyBar };
+        NSDictionary *failedBar = @{ @"AXChildren": @[save, @{ @"TestAXError": @(kAXErrorCannotComplete) }] };
+        NSDictionary *failedApp = @{ @"AXMenuBar": failedBar };
+        __block NSUInteger attempts = 0;
+        NSUInteger pressesBeforeDiscovery = test_press_count;
+        menu_deadline = CFAbsoluteTimeGetCurrent() + 1;
+        CFAbsoluteTime originalDeadline = menu_deadline;
+        test_require_bound = YES;
+        NSDictionary *retry = menu_discovery_with_retry(^AXUIElementRef {
+            id app = attempts++ == 0 ? failedApp : healthyApp;
+            return (AXUIElementRef)CFRetain((__bridge CFTypeRef)app);
+        }, ^BOOL { return YES; });
+        assert(attempts == 2 && [retry[@"status"] isEqualToString:@"ok"]);
+        assert([retry[@"items"] count] == 1 && [retry[@"items"][0][@"title"] isEqualToString:@"Save As"]);
+        assert(menu_deadline == originalDeadline && menu_request_timeout == 0);
+        assert(test_press_count == pressesBeforeDiscovery);
+        for (NSNumber *error in @[@(kAXErrorCannotComplete), @(kAXErrorInvalidUIElement), @(kAXErrorAPIDisabled)]) {
+            attempts = 0;
+            menu_deadline = CFAbsoluteTimeGetCurrent() + 1;
+            NSDictionary *badApp = @{ @"TestAXError": error };
+            NSDictionary *failure = menu_discovery_with_retry(^AXUIElementRef {
+                attempts++;
+                return (AXUIElementRef)CFRetain((__bridge CFTypeRef)badApp);
+            }, ^BOOL { return YES; });
+            BOOL denied = error.intValue == kAXErrorAPIDisabled;
+            assert(attempts == (denied ? 1 : 2));
+            assert([failure[@"status"] isEqualToString:denied ? @"untrusted" : @"timeout"]);
+            assert(!failure[@"items"]);
+            if (!denied) assert([failure[@"ax_error"] isEqual:error] && [failure[@"operation"] isEqualToString:@"AXMenuBar"]);
+        }
+        attempts = 0;
+        menu_deadline = CFAbsoluteTimeGetCurrent() + 0.01;
+        retry = menu_discovery_with_retry(^AXUIElementRef {
+            attempts++;
+            return (AXUIElementRef)CFRetain((__bridge CFTypeRef)failedApp);
+        }, ^BOOL { return YES; });
+        assert(attempts == 1 && [retry[@"status"] isEqualToString:@"timeout"]);
+        attempts = 0;
+        menu_deadline = CFAbsoluteTimeGetCurrent() + 1;
+        retry = menu_discovery_with_retry(^AXUIElementRef {
+            attempts++;
+            return (AXUIElementRef)CFRetain((__bridge CFTypeRef)healthyApp);
+        }, ^BOOL { return attempts == 0; });
+        assert(attempts == 1 && [retry[@"status"] isEqualToString:@"unavailable"] && !retry[@"items"]);
+        test_require_bound = NO;
         menu_deadline = 0; menu_incomplete = NO; menu_ax_failure = kAXErrorSuccess;
         NSDictionary *projectWindow = @{ @"AXTitle": @"project [~/repo] – Foo.java" };
         NSDictionary *projectApp = @{ @"AXFocusedWindow": projectWindow };

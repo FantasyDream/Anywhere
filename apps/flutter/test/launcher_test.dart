@@ -493,12 +493,12 @@ void main() {
         ],
         contextCaptures: const [
           ContextCaptureDto(
-            source: ContextSourceDto.browserCurrentPage,
+            source: ContextSourceDto.selectedText,
             status: ContextCaptureStatusDto.captured,
             capturedAtMs: 1,
           ),
           ContextCaptureDto(
-            source: ContextSourceDto.selectedText,
+            source: ContextSourceDto.browserCurrentPage,
             status: ContextCaptureStatusDto.permissionDenied,
             capturedAtMs: 1,
           ),
@@ -516,14 +516,14 @@ void main() {
     ));
     await toggle(tester);
     expect(find.textContaining('Browser current page'), findsNothing);
-    expect(find.textContaining('Allow Accessibility'), findsOneWidget);
+    expect(find.textContaining('access this browser'), findsOneWidget);
     expect(find.text('Open URL'), findsOneWidget);
     expect(find.text('Open Settings'), findsOneWidget);
     await tester.tap(find.text('Open Settings'));
     await tester.pumpAndSettle();
     final request = windowMessages
         .lastWhere((call) => call.method == 'openPrivacySettings');
-    expect(request.arguments, {'pane': 'accessibility'});
+    expect(request.arguments, {'pane': 'automation'});
     expect(windowCalls.last, 'hide');
     expect(tester.takeException(), isNull);
   });

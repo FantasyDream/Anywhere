@@ -10,6 +10,8 @@ static _Thread_local CFAbsoluteTime menu_deadline;
 static _Thread_local BOOL menu_incomplete;
 static _Thread_local NSUInteger menu_visited;
 static _Thread_local AXError menu_ax_failure;
+static _Thread_local CFTimeInterval menu_request_timeout;
+static _Thread_local char menu_failure_operation[64];
 
 // Keep execution errors distinct from a missing or ambiguous menu path.
 // Status 9 covers a deadline, a traversal limit, or an AX messaging failure.
@@ -27,6 +29,12 @@ static void menu_note_ax_error(AXError error) {
         if (menu_ax_failure != kAXErrorAPIDisabled) menu_ax_failure = error;
         menu_incomplete = YES;
     }
+}
+
+static void menu_note_operation(AXError error, CFStringRef operation) {
+    if (error != kAXErrorAPIDisabled && error != kAXErrorCannotComplete &&
+        error != kAXErrorInvalidUIElement) return;
+    CFStringGetCString(operation, menu_failure_operation, sizeof(menu_failure_operation), kCFStringEncodingUTF8);
 }
 
 static int menu_interrupted_status(void) {
@@ -58,10 +66,12 @@ static BOOL ax_prepare(AXUIElementRef element) {
     if (!element || menu_expired()) return NO;
     CFTimeInterval remaining = menu_deadline > 0
         ? menu_deadline - CFAbsoluteTimeGetCurrent() : 0.1;
+    CFTimeInterval perRequest = menu_request_timeout > 0 ? menu_request_timeout : 0.1;
     if (remaining <= 0) { menu_incomplete = YES; return NO; }
-    AXError error = AXUIElementSetMessagingTimeout(element, (float)(remaining < 0.1 ? remaining : 0.1));
+    AXError error = AXUIElementSetMessagingTimeout(element, (float)(remaining < perRequest ? remaining : perRequest));
     if (error != kAXErrorSuccess) {
         menu_note_ax_error(error);
+        menu_note_operation(error, CFSTR("AXMessagingTimeout"));
         menu_incomplete = YES;
         return NO;
     }
@@ -73,6 +83,7 @@ static id ax_value(AXUIElementRef element, CFStringRef attribute) {
     CFTypeRef value = NULL;
     AXError error = AXUIElementCopyAttributeValue(element, attribute, &value);
     menu_note_ax_error(error);
+    menu_note_operation(error, attribute);
     if (error != kAXErrorSuccess || !value || menu_expired()) {
         if (value) CFRelease(value);
         return nil;
@@ -96,6 +107,7 @@ static BOOL ax_has_press(AXUIElementRef element) {
     CFArrayRef names = NULL;
     AXError error = AXUIElementCopyActionNames(element, &names);
     menu_note_ax_error(error);
+    menu_note_operation(error, CFSTR("AXActionNames"));
     if (error != kAXErrorSuccess || !names || menu_expired()) {
         if (names) CFRelease(names);
         return NO;
@@ -492,29 +504,60 @@ char *launcher_editor_project_window(const char *application_json) {
     }
 }
 
+// A failed scan never publishes partial items. Retry only transient AX failures,
+// with fresh references and the same overall deadline; execution stays separate.
+static NSDictionary *menu_discovery_attempt(AXUIElementRef app) {
+    id menuBar = ax_value(app, kAXMenuBarAttribute);
+    if (!menuBar) {
+        if (menu_ax_failure == kAXErrorAPIDisabled) return @{ @"status": @"untrusted" };
+        if (!menu_expired()) return @{ @"status": @"unavailable" };
+    } else {
+        NSMutableArray *items = [NSMutableArray array];
+        collect_items((__bridge AXUIElementRef)menuBar, @[], @[], items, YES);
+        if (menu_ax_failure == kAXErrorAPIDisabled) return @{ @"status": @"untrusted" };
+        if (!menu_expired()) return @{ @"status": @"ok", @"items": items };
+    }
+    return @{ @"status": @"timeout", @"ax_error": @(menu_ax_failure),
+              @"operation": [NSString stringWithUTF8String:menu_failure_operation],
+              @"deadline_reached": @(CFAbsoluteTimeGetCurrent() >= menu_deadline) };
+}
+
+static NSDictionary *menu_discovery_with_retry(AXUIElementRef (^create)(void), BOOL (^current)(void)) {
+    CFTimeInterval previousTimeout = menu_request_timeout;
+    NSDictionary *result = @{ @"status": @"unavailable" };
+    for (NSUInteger attempt = 0; attempt < 2; attempt++) {
+        if (!current()) { result = @{ @"status": @"unavailable" }; break; }
+        if (CFAbsoluteTimeGetCurrent() >= menu_deadline) break;
+        menu_incomplete = NO; menu_visited = 0; menu_ax_failure = kAXErrorSuccess;
+        menu_failure_operation[0] = '\0';
+        // Slow Java accessibility requests get a larger per-object allowance on
+        // the sole retry, without extending the original three-second deadline.
+        menu_request_timeout = attempt == 0 ? 0.1 : 0.25;
+        AXUIElementRef app = create();
+        if (!app) break;
+        result = menu_discovery_attempt(app);
+        CFRelease(app);
+        if (!current()) { result = @{ @"status": @"unavailable" }; break; }
+        BOOL transient = menu_ax_failure == kAXErrorCannotComplete ||
+                         menu_ax_failure == kAXErrorInvalidUIElement;
+        if (![result[@"status"] isEqualToString:@"timeout"] || !transient ||
+            CFAbsoluteTimeGetCurrent() + 0.05 >= menu_deadline || attempt == 1) break;
+        usleep(20000);
+    }
+    menu_request_timeout = previousTimeout;
+    return result;
+}
+
 char *launcher_discover_menu_actions(const char *application_json) {
     @autoreleasepool {
         if (!AXIsProcessTrusted()) return dup_status(@"untrusted", nil);
-        NSRunningApplication *running = running_app(parse_dictionary(application_json));
+        NSDictionary *identity = parse_dictionary(application_json);
+        NSRunningApplication *running = running_app(identity);
         if (!running) return dup_status(@"unavailable", nil);
         menu_deadline = CFAbsoluteTimeGetCurrent() + 3.0;
-        menu_incomplete = NO;
-        menu_visited = 0;
-        menu_ax_failure = kAXErrorSuccess;
-        AXUIElementRef app = AXUIElementCreateApplication(running.processIdentifier);
-        id menuBar = ax_value(app, kAXMenuBarAttribute);
-        CFRelease(app);
-        if (!menuBar) {
-            if (menu_ax_failure == kAXErrorAPIDisabled) return dup_status(@"untrusted", nil);
-            if (menu_expired()) return dup_status(@"timeout", nil);
-            return dup_status(@"unavailable", nil);
-        }
-        NSMutableArray *items = [NSMutableArray array];
-        collect_items((__bridge AXUIElementRef)menuBar, @[], @[], items, YES);
-        if (!running_app(parse_dictionary(application_json))) return dup_status(@"unavailable", nil);
-        if (menu_ax_failure == kAXErrorAPIDisabled) return dup_status(@"untrusted", nil);
-        if (menu_incomplete || menu_expired()) return dup_status(@"timeout", nil);
-        return dup_status(@"ok", items);
+        return dup_json(menu_discovery_with_retry(^AXUIElementRef {
+            return AXUIElementCreateApplication(running.processIdentifier);
+        }, ^BOOL { return running_app(identity) != nil; }));
     }
 }
 

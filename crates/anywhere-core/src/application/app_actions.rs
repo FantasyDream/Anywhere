@@ -231,6 +231,8 @@ impl Application {
                     menu_item_count,
                     visible_action_count,
                     cache_hit,
+                    bundle_id = %ticket.app.bundle_id,
+                    diagnostic,
                     "app_action_discovery"
                 );
                 let mut published = false;
