@@ -1,6 +1,7 @@
 //! Stable, serializable boundary types. No UI or OS dependencies.
 pub mod extension;
 pub mod policy;
+pub mod ui;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -414,10 +415,11 @@ pub enum ActionStatus {
 }
 
 /// Host-rendered destinations requested by a successfully executed Action.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HostView {
     FileSearch,
+    PluginDetail { detail: ui::DetailView },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -493,6 +495,7 @@ pub enum DeclarativeAction {
     OpenFile { path: String },
     Copy { text: String },
     ExecuteBuiltin { command_id: ActionId },
+    RenderDetail { view: ui::DetailView },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

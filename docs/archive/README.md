@@ -1,6 +1,6 @@
 # 历史验收与审查
 
-以下内容保留原日期、版本和实验边界。**不作为当前使用或实现契约**；当前状态从 [文档导航](../README.md) 和 [V0.8 MVP](../mvp-v0.8.md) 阅读。
+以下内容保留原日期、版本和实验边界。**不作为当前使用或实现契约**；当前状态从 [文档导航](../README.md) 和 [V0.9 MVP](../mvp-v0.9.md) 阅读。
 
 ## 版本记录
 
@@ -12,7 +12,8 @@
 | [V0.6 MVP](mvp-v0.6.md) / [最终核对](v0.6-final-acceptance.md) | 快捷键、迁移、UI / 平台切片和物理输入待验收 |
 | [V0.7 MVP](mvp-v0.7.md) / [收尾](v0.7-closeout.md) | 文件搜索演进，长期索引 / rg 方案被替代的过程 |
 | [V0.7 build 14](validation-v0.7-build14.md) | 对应 fixture 与可见 App 的实测边界 |
-| [V0.8 开发记录](v0.8-development-records.md) | S1–S3、build 4–11 的回归、包校验、已知实机边界 |
+| [V0.8 开发记录](v0.8-development-records.md) | S1–S3、build 4–16 的回归、包校验、已知实机边界 |
+| [V0.9 开发记录](v0.9-development-records.md) | Detail / KeyValue 的协议、执行、Host 回归与开发包 |
 
 ## Review 与重构记录
 

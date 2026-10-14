@@ -1,6 +1,6 @@
 # 文档导航
 
-当前主线：V0.8；整理日期：2026-10-13。根 [README](../README.md) 是使用与开发入口；本目录保留当前设计契约，旧构建证据和调研分别放入 archive / research。
+当前主线：V0.9；整理日期：2026-10-14。根 [README](../README.md) 是使用与开发入口；本目录保留当前设计契约，旧构建证据和调研分别放入 archive / research。
 
 ## 当前文档
 
@@ -13,11 +13,12 @@
 | [Current App 菜单](current-app-actions.md) | Hidden、定位、重扫、身份与历史安全降级 |
 | [文件搜索](file-search.md) | 查询完整性、权限、稳定连续结果、固定预览和临时存储 |
 | [开发动作](developer-actions.md) | Git、项目识别、IDEA 来源和后台进程 |
-| [扩展协议](plugin-protocol.md) | 第一方模块、v1 / v2、批准、存储与恢复 |
+| [扩展协议](plugin-protocol.md) | 第一方模块、v1 / v2 / v3、Host UI、批准、存储与恢复 |
 | [共享 UI](ui-design.md) | 组件、材质、输入与平台回退 |
 | [性能](performance.md) | 资源预算、增量更新与测量边界 |
 | [跨平台](platform-portability.md) | Host 路径 / 能力、快捷键 schema 与 Windows 接入 |
-| [V0.8 MVP](mvp-v0.8.md) | 当前范围、已完成工程切片、最新证据和待验收项 |
+| [V0.9 MVP](mvp-v0.9.md) | Host UI 切片、当前进度与待完成内容 |
+| [V0.8 收尾](mvp-v0.8.md) | 上一阶段完成范围、最终构建证据和发布边界 |
 | [路线图](roadmap.md) | 下一阶段依赖、范围取舍和 1.0 门槛 |
 
 ## 历史与研究

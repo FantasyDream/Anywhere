@@ -1492,8 +1492,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ActionResultDto dco_decode_action_result_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 9)
-      throw Exception('unexpected arr length: expect 9 but see ${arr.length}');
+    if (arr.length != 10)
+      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
     return ActionResultDto(
       sessionId: dco_decode_u_32(arr[0]),
       revision: dco_decode_u_32(arr[1]),
@@ -1502,8 +1502,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       warning: dco_decode_opt_String(arr[4]),
       outputText: dco_decode_opt_String(arr[5]),
       view: dco_decode_opt_box_autoadd_host_view_dto(arr[6]),
-      closeWindow: dco_decode_bool(arr[7]),
-      executionSessionId: dco_decode_opt_String(arr[8]),
+      pluginDetail: dco_decode_opt_box_autoadd_plugin_detail_dto(arr[7]),
+      closeWindow: dco_decode_bool(arr[8]),
+      executionSessionId: dco_decode_opt_String(arr[9]),
     );
   }
 
@@ -1599,6 +1600,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   LauncherStateDto dco_decode_box_autoadd_launcher_state_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_launcher_state_dto(raw);
+  }
+
+  @protected
+  PluginDetailDto dco_decode_box_autoadd_plugin_detail_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_plugin_detail_dto(raw);
   }
 
   @protected
@@ -1911,6 +1918,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<PluginKeyValueDto> dco_decode_list_plugin_key_value_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_plugin_key_value_dto).toList();
+  }
+
+  @protected
   List<PluginStatusDto> dco_decode_list_plugin_status_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_plugin_status_dto).toList();
@@ -2022,6 +2035,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PluginDetailDto? dco_decode_opt_box_autoadd_plugin_detail_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_plugin_detail_dto(raw);
+  }
+
+  @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_u_64(raw);
@@ -2031,6 +2050,32 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_list_prim_u_8_strict(raw);
+  }
+
+  @protected
+  PluginDetailDto dco_decode_plugin_detail_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return PluginDetailDto(
+      schemaVersion: dco_decode_u_32(arr[0]),
+      title: dco_decode_String(arr[1]),
+      body: dco_decode_opt_String(arr[2]),
+      rows: dco_decode_list_plugin_key_value_dto(arr[3]),
+    );
+  }
+
+  @protected
+  PluginKeyValueDto dco_decode_plugin_key_value_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return PluginKeyValueDto(
+      label: dco_decode_String(arr[0]),
+      value: dco_decode_String(arr[1]),
+    );
   }
 
   @protected
@@ -2184,6 +2229,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_warning = sse_decode_opt_String(deserializer);
     var var_outputText = sse_decode_opt_String(deserializer);
     var var_view = sse_decode_opt_box_autoadd_host_view_dto(deserializer);
+    var var_pluginDetail =
+        sse_decode_opt_box_autoadd_plugin_detail_dto(deserializer);
     var var_closeWindow = sse_decode_bool(deserializer);
     var var_executionSessionId = sse_decode_opt_String(deserializer);
     return ActionResultDto(
@@ -2194,6 +2241,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         warning: var_warning,
         outputText: var_outputText,
         view: var_view,
+        pluginDetail: var_pluginDetail,
         closeWindow: var_closeWindow,
         executionSessionId: var_executionSessionId);
   }
@@ -2294,6 +2342,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_launcher_state_dto(deserializer));
+  }
+
+  @protected
+  PluginDetailDto sse_decode_box_autoadd_plugin_detail_dto(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_plugin_detail_dto(deserializer));
   }
 
   @protected
@@ -2723,6 +2778,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<PluginKeyValueDto> sse_decode_list_plugin_key_value_dto(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <PluginKeyValueDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_plugin_key_value_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<PluginStatusDto> sse_decode_list_plugin_status_dto(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -2914,6 +2982,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  PluginDetailDto? sse_decode_opt_box_autoadd_plugin_detail_dto(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_plugin_detail_dto(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -2933,6 +3013,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     } else {
       return null;
     }
+  }
+
+  @protected
+  PluginDetailDto sse_decode_plugin_detail_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_schemaVersion = sse_decode_u_32(deserializer);
+    var var_title = sse_decode_String(deserializer);
+    var var_body = sse_decode_opt_String(deserializer);
+    var var_rows = sse_decode_list_plugin_key_value_dto(deserializer);
+    return PluginDetailDto(
+        schemaVersion: var_schemaVersion,
+        title: var_title,
+        body: var_body,
+        rows: var_rows);
+  }
+
+  @protected
+  PluginKeyValueDto sse_decode_plugin_key_value_dto(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_label = sse_decode_String(deserializer);
+    var var_value = sse_decode_String(deserializer);
+    return PluginKeyValueDto(label: var_label, value: var_value);
   }
 
   @protected
@@ -3075,6 +3178,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.warning, serializer);
     sse_encode_opt_String(self.outputText, serializer);
     sse_encode_opt_box_autoadd_host_view_dto(self.view, serializer);
+    sse_encode_opt_box_autoadd_plugin_detail_dto(self.pluginDetail, serializer);
     sse_encode_bool(self.closeWindow, serializer);
     sse_encode_opt_String(self.executionSessionId, serializer);
   }
@@ -3170,6 +3274,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       LauncherStateDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_launcher_state_dto(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_plugin_detail_dto(
+      PluginDetailDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_plugin_detail_dto(self, serializer);
   }
 
   @protected
@@ -3469,6 +3580,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_plugin_key_value_dto(
+      List<PluginKeyValueDto> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_plugin_key_value_dto(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_plugin_status_dto(
       List<PluginStatusDto> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -3634,6 +3755,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_plugin_detail_dto(
+      PluginDetailDto? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_plugin_detail_dto(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -3652,6 +3784,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     if (self != null) {
       sse_encode_list_prim_u_8_strict(self, serializer);
     }
+  }
+
+  @protected
+  void sse_encode_plugin_detail_dto(
+      PluginDetailDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.schemaVersion, serializer);
+    sse_encode_String(self.title, serializer);
+    sse_encode_opt_String(self.body, serializer);
+    sse_encode_list_plugin_key_value_dto(self.rows, serializer);
+  }
+
+  @protected
+  void sse_encode_plugin_key_value_dto(
+      PluginKeyValueDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.label, serializer);
+    sse_encode_String(self.value, serializer);
   }
 
   @protected

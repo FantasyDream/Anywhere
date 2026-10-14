@@ -13,6 +13,64 @@ title = "Controlled Copy"
 accepts = ["core.text"]
 action = {type = "copy", text = "{{context.value}}"}
 "#;
+
+#[tokio::test]
+async fn ui_definition_changes_require_new_approval_and_revoke_retained_views() {
+    let tmp = tempfile::tempdir().unwrap();
+    let manifest = tmp.path().join("detail.toml");
+    let raw = include_str!("../../../../plugins/examples/context-detail.toml");
+    std::fs::write(&manifest, raw).unwrap();
+    let app = app();
+    let mut manager = ExtensionManager::open(
+        tmp.path().join("extensions.json"),
+        vec![tmp.path().into()],
+        &app,
+    )
+    .unwrap();
+    let key = "plugin:example_detail";
+    let before = status(&manager, key);
+    assert!(before.needs_approval);
+    assert_eq!(before.capabilities, ["ui.render"]);
+    manager
+        .change(
+            &app,
+            ExtensionChange::Approve {
+                key: key.into(),
+                token: before.approval_token,
+            },
+        )
+        .unwrap();
+    let id = app.activate().await.unwrap().unwrap().session_id;
+    app.update_input(id, "inspected object".into(), 1)
+        .await
+        .unwrap();
+    let row = candidate(&settled(&app, id, 1).await, "example_detail.inspect");
+    assert!(matches!(
+        app.execute(id, 1, row.clone()).await.unwrap().view,
+        Some(HostView::PluginDetail { .. })
+    ));
+    app.suspend_session(id).await.unwrap();
+    std::fs::write(&manifest, raw.replace("Selected object", "Changed label")).unwrap();
+    manager.reload(&app).unwrap();
+    let changed = status(&manager, key);
+    assert!(changed.needs_approval && !changed.active);
+    assert!(app.resume_session(id).unwrap().is_none());
+    assert!(app.execute(id, 1, row).await.is_err());
+    manager
+        .change(
+            &app,
+            ExtensionChange::Approve {
+                key: key.into(),
+                token: changed.approval_token,
+            },
+        )
+        .unwrap();
+    assert!(status(&manager, key).active);
+    manager
+        .change(&app, ExtensionChange::Revoke { key: key.into() })
+        .unwrap();
+    assert!(!status(&manager, key).active);
+}
 fn status(manager: &ExtensionManager, key: &str) -> ExtensionStatus {
     manager
         .statuses()

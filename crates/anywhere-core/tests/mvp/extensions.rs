@@ -173,3 +173,88 @@ fn legacy_raw_dto_and_parser_migration_remain_registration_compatible() {
     assert_eq!(left.group_id, right.group_id);
     assert_eq!(left.accepts, right.accepts);
 }
+
+#[tokio::test]
+async fn approved_ui_returns_structured_data_and_denies_stale_execution() {
+    let manifest = anywhere_plugin::parse_manifest(include_str!(
+        "../../../../plugins/examples/context-detail.toml"
+    ))
+    .unwrap();
+    let mut denied = registry();
+    assert!(denied.register_plugin(manifest.clone()).is_err());
+    let mut granted = registry();
+    granted
+        .register_plugin_with_capabilities(manifest, &[Capability::RenderUi])
+        .unwrap();
+    let platform = Arc::new(TestPlatform::default());
+    let app = Application::new(
+        platform.clone(),
+        granted,
+        Box::<MemoryUsage>::default(),
+        vec![],
+    );
+    let id = app.activate().await.unwrap().unwrap().session_id;
+    app.update_input(id, "hello extension".into(), 1)
+        .await
+        .unwrap();
+    let state = settled(&app, id, 1).await;
+    let row = candidate(&state, "example_detail.inspect");
+    let result = app.execute(id, 1, row.clone()).await.unwrap();
+    assert_eq!(result.status, ActionStatus::Succeeded);
+    assert!(!result.close_window);
+    assert!(result.output_text.is_none());
+    let HostView::PluginDetail { detail } = result.view.unwrap() else {
+        panic!("expected detail")
+    };
+    assert_eq!(detail.rows[0].value, "hello extension");
+    assert!(platform.calls.lock().unwrap().is_empty());
+    app.update_input(id, "x".repeat(16 * 1024 + 1), 2)
+        .await
+        .unwrap();
+    let state = settled(&app, id, 2).await;
+    let oversized = app
+        .execute(id, 2, candidate(&state, "example_detail.inspect"))
+        .await
+        .unwrap();
+    assert_eq!(oversized.status, ActionStatus::Failed);
+    assert!(oversized.view.is_none());
+    assert!(!oversized.close_window);
+    assert!(app.execute(id, 1, row).await.is_err());
+    let row = candidate(&state, "example_detail.inspect");
+    app.suspend_session(id).await.unwrap();
+    app.replace_registry(registry());
+    app.resume_session(id).unwrap();
+    assert!(app.execute(id, 2, row).await.is_err());
+    assert!(platform.calls.lock().unwrap().is_empty());
+}
+
+#[test]
+fn ui_executor_checks_grants_even_for_directly_constructed_dtos() {
+    let manifest = anywhere_plugin::parse_manifest(include_str!(
+        "../../../../plugins/examples/context-detail.toml"
+    ))
+    .unwrap();
+    let context = ResolvedContext::new(
+        TEXT,
+        ContextValue::Text("hello".into()),
+        ContextSource::UserInput,
+        "test",
+    );
+    let platform = TestPlatform::default();
+    for executor in [
+        ActionExecutor::ScopedDeclarative {
+            action: manifest.commands[0].action.clone(),
+            grant: CapabilityGrant::default(),
+        },
+        ActionExecutor::Declarative(manifest.commands[0].action.clone()),
+    ] {
+        assert!(anywhere_core::core::action::execute::execute(
+            &executor,
+            &context,
+            &platform,
+            &registry()
+        )
+        .is_err());
+    }
+    assert!(platform.calls.lock().unwrap().is_empty());
+}

@@ -112,6 +112,7 @@ class LauncherViewState {
     this.selectedId,
     this.message,
     this.output,
+    this.pluginDetail,
     this.resultSource,
     this.resultStatus,
     String? universalShortcut,
@@ -151,6 +152,7 @@ class LauncherViewState {
   final List<String>? actionPath;
   final String? selectedId, message, output, resultSource;
   final ActionStatusDto? resultStatus;
+  final PluginDetailDto? pluginDetail;
   final String? _universalShortcut;
   String get universalShortcut =>
       _universalShortcut ?? HostSettings.defaults.universalLabel;
@@ -469,6 +471,7 @@ class LauncherViewState {
       ((output?.split('\n').length ?? 0).clamp(3, 14) * 20.0) + 24;
   double get height {
     if (phase == LauncherPhase.settings) return 508;
+    if (pluginDetail != null) return 480;
     if (isFileSearch) return 600;
     if (navigationOpen) return inputAreaHeight + 1 + navigationHeight;
     final body = output != null

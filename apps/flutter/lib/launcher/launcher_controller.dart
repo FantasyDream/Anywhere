@@ -58,6 +58,16 @@ class LauncherController extends ChangeNotifier {
     files = FileWorkspaceCoordinator(backend.loadFilePreview);
     files.addListener(_filePresentationChanged);
     hostViews.register(HostViewDto.fileSearch, openFileSearch);
+    hostViews.registerPayload(HostViewDto.pluginDetail, (result) async {
+      final detail = result.pluginDetail;
+      if (detail == null || detail.schemaVersion != 1) {
+        throw StateError('Unsupported or missing plugin UI');
+      }
+      _pluginDetail = detail;
+      _message = result.warning;
+      _notify();
+      await _syncWindow();
+    });
     settings.addListener(_notify);
     lifecycle = ApplicationLifecycle(
         closeSettings: closeSettings,
@@ -140,6 +150,7 @@ class LauncherController extends ChangeNotifier {
       _actionPath != null ||
       _overlay is! LauncherHome ||
       _output != null ||
+      _pluginDetail != null ||
       (_scopeId != null && view.selectedScope?.isCurrentApp == false);
 
   String? get _scopeId => _navigation.scope;
@@ -152,6 +163,7 @@ class LauncherController extends ChangeNotifier {
   bool _scopeTouched = false;
   String? _selectedId, _message, _output, _resultSource;
   ActionStatusDto? _resultStatus;
+  PluginDetailDto? _pluginDetail;
   bool _userMoved = false, _disposed = false;
   bool get _fileMoreLoading => files.moreLoading;
 
@@ -178,6 +190,7 @@ class LauncherController extends ChangeNotifier {
       _selectedId,
       _message,
       _output,
+      _pluginDetail,
       _resultSource,
       _resultStatus,
       settings.current.universalLabel,
@@ -212,6 +225,7 @@ class LauncherController extends ChangeNotifier {
       selectedId: _selectedId,
       message: _message,
       output: _output,
+      pluginDetail: _pluginDetail,
       resultSource: _resultSource,
       resultStatus: _resultStatus,
       universalShortcut: settings.current.universalLabel,
@@ -392,6 +406,7 @@ class LauncherController extends ChangeNotifier {
       _revision = _requestedRevision = state.revision;
       _message = settings.warning.isEmpty ? null : settings.warning;
       _output = null;
+      _pluginDetail = null;
       _resultSource = null;
       _resultStatus = null;
       _phase =
@@ -512,6 +527,7 @@ class LauncherController extends ChangeNotifier {
     _scopeId = null;
     _scopeTouched = false;
     _selectedId = _message = _output = _resultSource = null;
+    _pluginDetail = null;
     _resultStatus = null;
     _userMoved = false;
     icons.clear();
@@ -753,6 +769,7 @@ class LauncherController extends ChangeNotifier {
     _shortcuts.invalidate();
     _phase = LauncherPhase.resolving;
     _output = _message = null;
+    _pluginDetail = null;
     _userMoved = false;
     icons.retryFailures();
     _notify();
@@ -1045,6 +1062,7 @@ class LauncherController extends ChangeNotifier {
     final state = _snapshot;
     final entries = view.visibleEntries;
     if (_phase != LauncherPhase.ready ||
+        _pluginDetail != null ||
         state == null ||
         state.revision != _revision) {
       return;
@@ -1070,6 +1088,7 @@ class LauncherController extends ChangeNotifier {
         state == null ||
         _phase != LauncherPhase.ready ||
         _output != null ||
+        _pluginDetail != null ||
         state.revision != _requestedRevision) {
       return;
     }
@@ -1142,6 +1161,7 @@ class LauncherController extends ChangeNotifier {
   Future<void> _executeCandidate(CandidateDto candidate) async {
     final state = _snapshot;
     if (_phase != LauncherPhase.ready ||
+        _pluginDetail != null ||
         state == null ||
         state.revision != _revision) {
       return;
@@ -1154,6 +1174,7 @@ class LauncherController extends ChangeNotifier {
       return;
     }
     final generation = _generation, revision = _revision;
+    _activation.stopPrefill();
     _phase = LauncherPhase.executing;
     _notify();
     try {
@@ -1168,8 +1189,10 @@ class LauncherController extends ChangeNotifier {
       if (result.status == ActionStatusDto.succeeded &&
           hostViews.accepts(result.view)) {
         _phase = LauncherPhase.ready;
-        await hostViews.open(result.view);
-        if (result.warning != null) {
+        await hostViews.open(result.view, result: result);
+        if (result.warning != null &&
+            _current(generation) &&
+            revision == _revision) {
           _message = result.warning;
           _notify();
         }
@@ -1275,7 +1298,8 @@ class LauncherController extends ChangeNotifier {
   }
 
   void back() {
-    if (_output == null) return;
+    if (_output == null && _pluginDetail == null) return;
+    _pluginDetail = null;
     _output = null;
     _resultSource = null;
     _resultStatus = null;
@@ -1373,6 +1397,10 @@ class LauncherController extends ChangeNotifier {
   }
 
   Future<void> escape() async {
+    if (_pluginDetail != null) {
+      back();
+      return;
+    }
     if (_navigationMode != null) {
       await toggleNavigation();
       return;

@@ -4,7 +4,7 @@
 
 例如：在 Finder 中打开项目目录后唤醒 Anywhere，可以打开终端、复制路径、查看 Git 状态或运行项目测试。复制一段 JSON 后唤醒，可以直接格式化并复制结果。
 
-当前处于 **V0.8 开发阶段**，主要支持 macOS。界面使用 Flutter，业务逻辑使用 Rust；Windows 尚未交付可用版本。
+当前处于 **V0.9 开发阶段**，主要支持 macOS。界面使用 Flutter，业务逻辑使用 Rust；Windows 尚未交付可用版本。
 
 [使用指南](#使用指南) · [架构设计](#架构设计) · [构建与开发](#构建与开发) · [文档导航](docs/README.md) · [路线图](docs/roadmap.md)
 
@@ -142,10 +142,10 @@ Maven、Gradle 优先使用项目 wrapper。识别阶段只读取项目标记及
 
 - 第一方模块包括 JSON、URL、Git、Maven、Gradle、Node、Rust、Spring Boot、收藏目录。
 - 用户插件放入 `~/Library/Application Support/Anywhere/plugins/`，支持 `*.toml` 或子目录中的 `manifest.toml`；安装或修改后点击 **Reload**。
-- v2 插件先 **Review permissions → Allow & enable**。撤销权限或关闭模块后，相关候选与快捷键失效；绑定配置保留以便重新启用。
-- 当前外部 v2 插件支持声明式复制、打开 URL / 文件，不执行用户脚本，也没有插件 UI 运行时。
+- v2 / v3 插件先 **Review permissions → Allow & enable**。撤销权限或关闭模块后，相关候选与快捷键失效；绑定配置保留以便重新启用。
+- 外部 v2 插件支持声明式复制、打开 URL / 文件；v3 首先增加 Host 渲染的 Detail / KeyValue，只展示有界纯文本。插件仍不执行用户脚本。
 
-示例：[v1 搜索插件](plugins/examples/search.toml)、[v2 复制插件](plugins/examples/copy-v2.toml)。搜索示例中的 `example.com` 是占位地址，需要自行配置；应用不自动安装 Web Search 插件。
+示例：[v1 搜索插件](plugins/examples/search.toml)、[v2 复制插件](plugins/examples/copy-v2.toml)、[v3 Detail 插件](plugins/examples/context-detail.toml)。搜索示例中的 `example.com` 是占位地址，需要自行配置；应用不自动安装 Web Search 插件。
 
 ### 8. 本地数据
 
@@ -345,5 +345,5 @@ scripts/generate-bridge.sh
 - [架构详细说明](docs/architecture.md)：模块依赖、快照、执行与资源生命周期。
 - [Context 模型](docs/context-model.md) / [菜单动作](docs/current-app-actions.md)：对象关系与身份安全边界。
 - [统一 Launcher 交互与状态保留](docs/launcher-interaction.md)。
-- [插件协议](docs/plugin-protocol.md) / [V0.8 MVP](docs/mvp-v0.8.md)：当前扩展实现及验收范围。
+- [插件协议](docs/plugin-protocol.md) / [V0.9 MVP](docs/mvp-v0.9.md)：当前扩展实现及验收范围；[V0.8 收尾](docs/mvp-v0.8.md) 保留上一阶段证据。
 - [路线图](docs/roadmap.md)：后续 Extension API、插件 UI、Web 插件与终端方向。

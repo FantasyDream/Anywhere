@@ -226,6 +226,26 @@ pub(super) fn availability_dto(state: protocol::AvailabilityState) -> Availabili
 
 impl From<protocol::ActionResult> for ActionResultDto {
     fn from(result: protocol::ActionResult) -> Self {
+        let (view, plugin_detail) = match result.view {
+            Some(protocol::HostView::FileSearch) => (Some(HostViewDto::FileSearch), None),
+            Some(protocol::HostView::PluginDetail { detail }) => (
+                Some(HostViewDto::PluginDetail),
+                Some(PluginDetailDto {
+                    schema_version: detail.schema_version,
+                    title: detail.title,
+                    body: detail.body,
+                    rows: detail
+                        .rows
+                        .into_iter()
+                        .map(|r| PluginKeyValueDto {
+                            label: r.label,
+                            value: r.value,
+                        })
+                        .collect(),
+                }),
+            ),
+            None => (None, None),
+        };
         Self {
             session_id: result.session_id,
             revision: result.revision,
@@ -236,9 +256,8 @@ impl From<protocol::ActionResult> for ActionResultDto {
             error: result.error,
             warning: result.warning,
             output_text: result.output_text,
-            view: result.view.map(|v| match v {
-                protocol::HostView::FileSearch => HostViewDto::FileSearch,
-            }),
+            view,
+            plugin_detail,
             close_window: result.close_window,
             execution_session_id: result.execution_session_id,
         }

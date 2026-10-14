@@ -1,3 +1,4 @@
+import '../plugins/plugin_detail_page.dart';
 import 'activation_prefill.dart';
 import 'dart:async';
 import '../infrastructure/desktop_environment.dart';
@@ -293,7 +294,9 @@ class _LauncherScreenState extends State<LauncherScreen> {
       _objectResultsPosition = null;
     }
     _displayedObjectActions = objectActions;
-    final inputVisible = _view.visible && _view.phase != LauncherPhase.settings;
+    final inputVisible = _view.visible &&
+        _view.phase != LauncherPhase.settings &&
+        _view.pluginDetail == null;
     final searchText =
         _view.visible || _controller.hasRetainedState ? _view.searchText : '';
     if (_input.text != searchText) {
@@ -316,6 +319,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
               request == _focusRequest &&
               _view.visible &&
               _view.phase != LauncherPhase.settings &&
+              _view.pluginDetail == null &&
               _view.inputMode == mode) {
             final editor =
                 _focus.context?.findAncestorStateOfType<EditableTextState>();
@@ -414,6 +418,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
     }
     // Leave candidate selection to the input method until composition has finished.
     if (!_input.value.composing.isCollapsed) return KeyEventResult.ignored;
+    if (_view.pluginDetail != null) return KeyEventResult.ignored;
     if (_view.navigationOpen) {
       if (event.logicalKey == LogicalKeyboardKey.escape) {
         unawaited(_controller.escape());
@@ -514,6 +519,29 @@ class _LauncherScreenState extends State<LauncherScreen> {
       );
     }
     final view = _view;
+    if (view.pluginDetail != null) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: SizedBox(
+          key: const Key('launcher-panel'),
+          width: view.width,
+          height: view.height,
+          child: Material(
+            color: AppStyle.surface,
+            shape: AppStyle.panelShape,
+            clipBehavior: Clip.antiAlias,
+            child: PluginDetailPage(
+              detail: view.pluginDetail!,
+              notice: view.message,
+              onBack: () {
+                _controller.back();
+                _focus.requestFocus();
+              },
+            ),
+          ),
+        ),
+      );
+    }
     final entries = view.visibleEntries;
     final selected =
         entries.isEmpty ? null : entries[view.selectedIndex].candidate;

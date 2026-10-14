@@ -8,6 +8,7 @@ use std::collections::BTreeSet;
 pub fn required_capability(action: &DeclarativeAction) -> Capability {
     match action {
         DeclarativeAction::Copy { .. } => Capability::ClipboardWrite,
+        DeclarativeAction::RenderDetail { .. } => Capability::RenderUi,
         DeclarativeAction::OpenUrl { .. } => Capability::OpenUrl,
         DeclarativeAction::OpenFile { .. } => Capability::OpenFile,
         DeclarativeAction::ExecuteBuiltin { .. } => Capability::InvokeBuiltin,
@@ -61,6 +62,13 @@ pub fn validate_plugin_metadata(manifest: &PluginManifest) -> Result<()> {
     match manifest.protocol_version {
         1 => {
             ensure!(
+                !manifest
+                    .commands
+                    .iter()
+                    .any(|c| matches!(c.action, DeclarativeAction::RenderDetail { .. })),
+                "plugin UI requires protocol_version 3"
+            );
+            ensure!(
                 manifest.version.is_none(),
                 "v1 package version is not supported"
             );
@@ -70,14 +78,15 @@ pub fn validate_plugin_metadata(manifest: &PluginManifest) -> Result<()> {
                 "invalid legacy capability migration"
             );
         }
-        2 => {
+        2 | 3 => {
             ensure!(
-                manifest.capabilities.len() <= 3
+                manifest.capabilities.len() <= 4
                     && manifest.capabilities.iter().all(|c| matches!(
                         c,
                         Capability::ClipboardWrite | Capability::OpenUrl | Capability::OpenFile
-                    )),
-                "capability is not available to declarative v2 plugins"
+                    ) || (manifest.protocol_version == 3
+                        && *c == Capability::RenderUi)),
+                "capability is not available to this declarative protocol"
             );
             metadata(
                 &manifest.id,
@@ -85,7 +94,7 @@ pub fn validate_plugin_metadata(manifest: &PluginManifest) -> Result<()> {
                 manifest
                     .version
                     .as_deref()
-                    .context("v2 requires a package version")?,
+                    .context("versioned plugins require a package version")?,
                 &manifest.capabilities,
             )?;
             for required in required_capabilities(&manifest.commands) {
@@ -96,7 +105,7 @@ pub fn validate_plugin_metadata(manifest: &PluginManifest) -> Result<()> {
                 );
             }
         }
-        other => bail!("unsupported protocol_version {other}; expected 1 or 2"),
+        other => bail!("unsupported protocol_version {other}; expected 1, 2 or 3"),
     }
     Ok(())
 }

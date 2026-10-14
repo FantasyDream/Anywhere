@@ -1771,6 +1771,7 @@ impl SseDecode for crate::api::ActionResultDto {
         let mut var_warning = <Option<String>>::sse_decode(deserializer);
         let mut var_outputText = <Option<String>>::sse_decode(deserializer);
         let mut var_view = <Option<crate::api::HostViewDto>>::sse_decode(deserializer);
+        let mut var_pluginDetail = <Option<crate::api::PluginDetailDto>>::sse_decode(deserializer);
         let mut var_closeWindow = <bool>::sse_decode(deserializer);
         let mut var_executionSessionId = <Option<String>>::sse_decode(deserializer);
         return crate::api::ActionResultDto {
@@ -1781,6 +1782,7 @@ impl SseDecode for crate::api::ActionResultDto {
             warning: var_warning,
             output_text: var_outputText,
             view: var_view,
+            plugin_detail: var_pluginDetail,
             close_window: var_closeWindow,
             execution_session_id: var_executionSessionId,
         };
@@ -2191,6 +2193,7 @@ impl SseDecode for crate::api::HostViewDto {
         let mut inner = <i32>::sse_decode(deserializer);
         return match inner {
             0 => crate::api::HostViewDto::FileSearch,
+            1 => crate::api::HostViewDto::PluginDetail,
             _ => unreachable!("Invalid variant for HostViewDto: {}", inner),
         };
     }
@@ -2337,6 +2340,18 @@ impl SseDecode for Vec<crate::api::ExtensionStatusDto> {
         let mut ans_ = vec![];
         for idx_ in 0..len_ {
             ans_.push(<crate::api::ExtensionStatusDto>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::PluginKeyValueDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::PluginKeyValueDto>::sse_decode(deserializer));
         }
         return ans_;
     }
@@ -2531,6 +2546,17 @@ impl SseDecode for Option<crate::api::LauncherStateDto> {
     }
 }
 
+impl SseDecode for Option<crate::api::PluginDetailDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::PluginDetailDto>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<u64> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2550,6 +2576,34 @@ impl SseDecode for Option<Vec<u8>> {
         } else {
             return None;
         }
+    }
+}
+
+impl SseDecode for crate::api::PluginDetailDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_schemaVersion = <u32>::sse_decode(deserializer);
+        let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_body = <Option<String>>::sse_decode(deserializer);
+        let mut var_rows = <Vec<crate::api::PluginKeyValueDto>>::sse_decode(deserializer);
+        return crate::api::PluginDetailDto {
+            schema_version: var_schemaVersion,
+            title: var_title,
+            body: var_body,
+            rows: var_rows,
+        };
+    }
+}
+
+impl SseDecode for crate::api::PluginKeyValueDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_label = <String>::sse_decode(deserializer);
+        let mut var_value = <String>::sse_decode(deserializer);
+        return crate::api::PluginKeyValueDto {
+            label: var_label,
+            value: var_value,
+        };
     }
 }
 
@@ -2788,6 +2842,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::ActionResultDto {
             self.warning.into_into_dart().into_dart(),
             self.output_text.into_into_dart().into_dart(),
             self.view.into_into_dart().into_dart(),
+            self.plugin_detail.into_into_dart().into_dart(),
             self.close_window.into_into_dart().into_dart(),
             self.execution_session_id.into_into_dart().into_dart(),
         ]
@@ -3261,6 +3316,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::HostViewDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
             Self::FileSearch => 0.into_dart(),
+            Self::PluginDetail => 1.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -3319,6 +3375,44 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::LauncherStateDto>
     for crate::api::LauncherStateDto
 {
     fn into_into_dart(self) -> crate::api::LauncherStateDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::PluginDetailDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.schema_version.into_into_dart().into_dart(),
+            self.title.into_into_dart().into_dart(),
+            self.body.into_into_dart().into_dart(),
+            self.rows.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::PluginDetailDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::PluginDetailDto>
+    for crate::api::PluginDetailDto
+{
+    fn into_into_dart(self) -> crate::api::PluginDetailDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::PluginKeyValueDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.label.into_into_dart().into_dart(),
+            self.value.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::PluginKeyValueDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::PluginKeyValueDto>
+    for crate::api::PluginKeyValueDto
+{
+    fn into_into_dart(self) -> crate::api::PluginKeyValueDto {
         self
     }
 }
@@ -3527,6 +3621,7 @@ impl SseEncode for crate::api::ActionResultDto {
         <Option<String>>::sse_encode(self.warning, serializer);
         <Option<String>>::sse_encode(self.output_text, serializer);
         <Option<crate::api::HostViewDto>>::sse_encode(self.view, serializer);
+        <Option<crate::api::PluginDetailDto>>::sse_encode(self.plugin_detail, serializer);
         <bool>::sse_encode(self.close_window, serializer);
         <Option<String>>::sse_encode(self.execution_session_id, serializer);
     }
@@ -3864,6 +3959,7 @@ impl SseEncode for crate::api::HostViewDto {
         <i32>::sse_encode(
             match self {
                 crate::api::HostViewDto::FileSearch => 0,
+                crate::api::HostViewDto::PluginDetail => 1,
                 _ => {
                     unimplemented!("");
                 }
@@ -3984,6 +4080,16 @@ impl SseEncode for Vec<crate::api::ExtensionStatusDto> {
         <i32>::sse_encode(self.len() as _, serializer);
         for item in self {
             <crate::api::ExtensionStatusDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::PluginKeyValueDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::PluginKeyValueDto>::sse_encode(item, serializer);
         }
     }
 }
@@ -4148,6 +4254,16 @@ impl SseEncode for Option<crate::api::LauncherStateDto> {
     }
 }
 
+impl SseEncode for Option<crate::api::PluginDetailDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::PluginDetailDto>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<u64> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4165,6 +4281,24 @@ impl SseEncode for Option<Vec<u8>> {
         if let Some(value) = self {
             <Vec<u8>>::sse_encode(value, serializer);
         }
+    }
+}
+
+impl SseEncode for crate::api::PluginDetailDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <u32>::sse_encode(self.schema_version, serializer);
+        <String>::sse_encode(self.title, serializer);
+        <Option<String>>::sse_encode(self.body, serializer);
+        <Vec<crate::api::PluginKeyValueDto>>::sse_encode(self.rows, serializer);
+    }
+}
+
+impl SseEncode for crate::api::PluginKeyValueDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.label, serializer);
+        <String>::sse_encode(self.value, serializer);
     }
 }
 

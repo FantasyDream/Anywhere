@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `application`, `snapshot_delivery`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
 
@@ -275,6 +275,7 @@ class ActionResultDto {
   final String? warning;
   final String? outputText;
   final HostViewDto? view;
+  final PluginDetailDto? pluginDetail;
   final bool closeWindow;
   final String? executionSessionId;
 
@@ -286,6 +287,7 @@ class ActionResultDto {
     this.warning,
     this.outputText,
     this.view,
+    this.pluginDetail,
     required this.closeWindow,
     this.executionSessionId,
   });
@@ -299,6 +301,7 @@ class ActionResultDto {
       warning.hashCode ^
       outputText.hashCode ^
       view.hashCode ^
+      pluginDetail.hashCode ^
       closeWindow.hashCode ^
       executionSessionId.hashCode;
 
@@ -314,6 +317,7 @@ class ActionResultDto {
           warning == other.warning &&
           outputText == other.outputText &&
           view == other.view &&
+          pluginDetail == other.pluginDetail &&
           closeWindow == other.closeWindow &&
           executionSessionId == other.executionSessionId;
 }
@@ -888,6 +892,7 @@ class FileSearchProgressDto {
 
 enum HostViewDto {
   fileSearch,
+  pluginDetail,
   ;
 }
 
@@ -980,6 +985,55 @@ class LauncherStateDto {
           contextCaptures == other.contextCaptures &&
           candidates == other.candidates &&
           diagnostics == other.diagnostics;
+}
+
+class PluginDetailDto {
+  final int schemaVersion;
+  final String title;
+  final String? body;
+  final List<PluginKeyValueDto> rows;
+
+  const PluginDetailDto({
+    required this.schemaVersion,
+    required this.title,
+    this.body,
+    required this.rows,
+  });
+
+  @override
+  int get hashCode =>
+      schemaVersion.hashCode ^ title.hashCode ^ body.hashCode ^ rows.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PluginDetailDto &&
+          runtimeType == other.runtimeType &&
+          schemaVersion == other.schemaVersion &&
+          title == other.title &&
+          body == other.body &&
+          rows == other.rows;
+}
+
+class PluginKeyValueDto {
+  final String label;
+  final String value;
+
+  const PluginKeyValueDto({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  int get hashCode => label.hashCode ^ value.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PluginKeyValueDto &&
+          runtimeType == other.runtimeType &&
+          label == other.label &&
+          value == other.value;
 }
 
 class PluginStatusDto {

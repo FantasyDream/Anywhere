@@ -1,6 +1,6 @@
 # 架构
 
-当前实现：V0.8；最后核对：2026-10-13。使用入口见 [README](../README.md)，专题文档见 [文档导航](README.md)。
+当前实现：V0.9 S1；最后核对：2026-10-14。使用入口见 [README](../README.md)，专题文档见 [文档导航](README.md)。
 
 ## 分层
 
@@ -25,7 +25,7 @@ flowchart TD
 | `features` / `extensions` | 应用、文件工具和第一方领域能力 | 用 Provider / Bundle / Source 贡献，不另建 Launcher 流程 |
 | `persistence` | Usage、扩展偏好、模块存储实现 | 数据读写与锁、事务、恢复策略集中管理 |
 | `anywhere-platform` | OS-neutral Trait、上下文采集、系统搜索、资源打开、剪贴板、Git 与进程后端 | 原生调用与系统差异留在适配器 |
-| `anywhere-plugin` | TOML 发现、校验、模板处理 | 不执行任意脚本或提供插件 UI |
+| `anywhere-plugin` | TOML 发现、校验、模板与有界 UI 数据生成 | 不执行任意脚本或决定界面布局 |
 | `anywhere-bridge-flutter` | 初始化、公共 Facade、FRB DTO 转换 | 不复制识别、排序、执行规则 |
 | Flutter / Native Host | 页面、导航、输入、焦点、设置、热键、窗口与授权 | Flutter 不匹配业务动作；Swift 不解析输入或运行项目 Action |
 
@@ -44,6 +44,7 @@ crates/anywhere-core/src/
 apps/flutter/lib/
 ├── launcher/       Controller、ActivationFlow、导航、Session / FileWorkspace 协调器
 │                   ShortcutCoordinator、ObjectActionCoordinator、HostViewNavigator
+├── plugins/        Host Detail / KeyValue 渲染（纯数据）
 ├── settings/       设置草稿、保存队列、快捷键与扩展状态
 ├── ui/             AppStyle、图标与公共组件
 ├── infrastructure/ DesktopHost、窗口、生命周期、图标缓存与运行策略
@@ -104,6 +105,12 @@ Manager 只缓存有界 ExtensionState，每次重建 runtime。Reload 重开共
 
 配置损坏或 schema 未知时，扩展关闭且只读，基础 Launcher / 设置继续可用，不覆盖原文件。配置操作无论返回成功还是失败，都重新校验快捷键资格；不确定资格时注销按键。修复后 Reload 恢复。协议见 [扩展与插件](plugin-protocol.md)。
 
+## Host-rendered UI（V0.9 S1）
+
+外部 v3 Manifest 的 render_detail 使用 Protocol `ui::DetailView`；Plugin 负责 schema、模板与展开后的内容预算，Core 在普通执行 worker 内先检查 ui.render grant 后生成 `HostView::PluginDetail`。原 Session / Revision / catalog 校验与 Usage 路径不另建副本。
+
+Bridge 将内容转成 typed `PluginDetailDto`，不将 UI JSON 塞进 output_text。HostViewNavigator 接收已校验执行结果，注册视图适配器；Flutter plugins 模块只渲染字段和纯文本，不匹配 Context 或重做插值。Launcher 保留底层查询 / Scope / 选中项，返回仅关闭视图；隐藏仍使用统一 15 秒生命周期。未知版本 / 超限在进入 UI 前失败。能力批准绑定完整定义，变更 / 撤销沿 ExtensionManager 失效旧会话。
+
 ## 扩展入口与验证
 
 - 新 Context：定义类型和值，实现 ContextProvider 并贡献注册。
@@ -112,4 +119,4 @@ Manager 只缓存有界 ExtensionState，每次重建 runtime。Reload 重开共
 - 新工具页面：HostViewNavigator 注册路由，复用导航、共享 UI 和对象 Actions。
 - 新系统能力：扩展 Platform / DesktopHost，实现各平台适配器。
 
-`scripts/check-architecture.py` 检查 Cargo 依赖及 core 模块反向导入；行为由公开 Facade、平台和 Widget 回归覆盖。完整门禁是 `scripts/check.sh`。自动化通过不代替真实键盘、权限、窗口、升级及 Windows 验收；当前记录见 [V0.8 MVP](mvp-v0.8.md)。
+`scripts/check-architecture.py` 检查 Cargo 依赖及 core 模块反向导入；行为由公开 Facade、平台和 Widget 回归覆盖。完整门禁是 `scripts/check.sh`。自动化通过不代替真实键盘、权限、窗口、升级及 Windows 验收；当前记录见 [V0.9 MVP](mvp-v0.9.md)。

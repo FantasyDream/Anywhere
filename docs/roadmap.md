@@ -1,6 +1,6 @@
 # Anywhere 产品路线图
 
-最后更新：2026-10-14。当前主线为 `dev-0.8`；版本号表示依赖顺序，不代表发布日期。实现进度以 [当前 MVP](mvp-v0.8.md) 为准，历史构建与验收在 [归档](archive/README.md)。
+最后更新：2026-10-14。当前主线为 `dev-0.9`；版本号表示依赖顺序，不代表发布日期。实现进度以 [当前 MVP](mvp-v0.9.md) 为准，历史构建与验收在 [归档](archive/README.md)。
 
 ## 产品目标
 
@@ -17,8 +17,8 @@
 | V0.5 Developer / Process Sessions | Git / Rust / Maven / Gradle / Node / Spring Boot，后台任务 | 功能与工程收尾，已有真实工具验收记录 |
 | V0.6 Action Shortcuts | 本地 / 全局固定动作、应用 / Context 意图、导入导出 | 工程收尾；真实键盘与完整系统矩阵仍需记录 |
 | V0.7 File Search | 普通 Action 入口、系统索引 + 遍历、稳定连续列表、固定预览 | 工程收尾；完整权限 / 卷 / 物理输入矩阵保留 |
-| **V0.8 First-party / Extension v2** | 模块贡献、明确能力批准、生命周期、真实 Source / Storage | S1–S3 工程收尾，macOS 关键闭环已实机检查；正式发布矩阵保留 |
-| V0.9 Host-rendered Plugin UI | List、Detail、Form、KeyValue、Markdown 的受限描述与宿主渲染 | 先以一个真实插件完成输入、校验、执行、错误与返回，不注入任意 Widget |
+| V0.8 First-party / Extension v2 | 模块贡献、明确能力批准、生命周期、真实 Source / Storage | S1–S3 工程收尾，macOS 关键闭环已实机检查；正式发布矩阵保留 |
+| **V0.9 Host-rendered Plugin UI** | List、Detail、Form、KeyValue、Markdown 的受限描述与宿主渲染 | S1 Detail / KeyValue 已接入；下一步 Form 的输入、校验、提交，再扩展 List / Markdown，不注入任意 Widget |
 | V0.10 PTY / Terminal | 进程会话上增加 PTY、输入、尺寸变化与终端视图 | 验证流控、高输出、返回 / 停止 / 退出生命周期 |
 | V1.0 | Context-aware Launcher、搜索、多来源 Context、开发动作、扩展协议和可返回会话 | 满足下方发布条件 |
 

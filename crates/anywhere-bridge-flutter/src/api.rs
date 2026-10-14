@@ -530,6 +530,7 @@ pub struct ActionResultDto {
     pub warning: Option<String>,
     pub output_text: Option<String>,
     pub view: Option<HostViewDto>,
+    pub plugin_detail: Option<PluginDetailDto>,
     pub close_window: bool,
     pub execution_session_id: Option<String>,
 }
@@ -575,6 +576,21 @@ pub struct PluginStatusDto {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HostViewDto {
     FileSearch,
+    PluginDetail,
+}
+
+#[derive(Clone, Debug)]
+pub struct PluginDetailDto {
+    pub schema_version: u32,
+    pub title: String,
+    pub body: Option<String>,
+    pub rows: Vec<PluginKeyValueDto>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PluginKeyValueDto {
+    pub label: String,
+    pub value: String,
 }
 
 #[derive(Clone, Debug)]

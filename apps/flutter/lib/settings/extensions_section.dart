@@ -163,6 +163,7 @@ class ExtensionsSection extends StatelessWidget {
 }
 
 String _capabilityLabel(String capability) => switch (capability) {
+      'ui.render' => 'Show a plugin view in Anywhere',
       'clipboard.write' => 'Write to the clipboard',
       'url.open' => 'Open web addresses',
       'file.open' => 'Open files',

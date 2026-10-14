@@ -1,7 +1,8 @@
-//! Declarative manifests; no executable runtime or UI.
+//! Declarative manifests and bounded UI descriptions; no executable runtime.
 use anyhow::{bail, Context, Result};
 use anywhere_protocol::{DeclarativeAction, PluginManifest};
 pub mod extension;
+pub mod ui;
 use std::{collections::HashSet, path::Path};
 
 pub const EXAMPLE_PLUGIN: &str = include_str!("../../../plugins/examples/search.toml");
@@ -48,6 +49,7 @@ pub fn validate_manifest(manifest: &PluginManifest) -> Result<()> {
             bail!("base_priority must be in -50..50");
         }
         match &command.action {
+            DeclarativeAction::RenderDetail { view } => ui::validate_detail(view)?,
             DeclarativeAction::OpenUrl { url } => {
                 validate_template(url)?;
                 let sample = if url == VARIABLE {
@@ -115,8 +117,17 @@ pub fn validate_template(template: &str) -> Result<()> {
 
 /// URL substitutions are data: percent-encode query/path values, never shell-escape.
 pub fn interpolate(template: &str, value: &str, for_url: bool) -> Result<String> {
+    interpolate_bounded(template, value, for_url, 4 * 1024 * 1024)
+}
+
+pub(crate) fn interpolate_bounded(
+    template: &str,
+    value: &str,
+    for_url: bool,
+    max_bytes: usize,
+) -> Result<String> {
     validate_template(template)?;
-    let replacement = if for_url && template != VARIABLE {
+    let replacement: std::borrow::Cow<'_, str> = if for_url && template != VARIABLE {
         value
             .bytes()
             .map(|byte| {
@@ -127,16 +138,17 @@ pub fn interpolate(template: &str, value: &str, for_url: bool) -> Result<String>
                 }
             })
             .collect::<String>()
+            .into()
     } else {
-        value.to_owned()
+        std::borrow::Cow::Borrowed(value)
     };
     let occurrences = template.matches(VARIABLE).count();
     let rendered_size = replacement
         .len()
         .checked_mul(occurrences)
         .and_then(|size| size.checked_add(template.len() - occurrences * VARIABLE.len()));
-    if rendered_size.is_none_or(|size| size > 4 * 1024 * 1024) {
-        bail!("expanded action exceeds 4 MiB");
+    if rendered_size.is_none_or(|size| size > max_bytes) {
+        bail!("expanded value exceeds {max_bytes} bytes");
     }
     let rendered = template.replace(VARIABLE, &replacement);
     if for_url {

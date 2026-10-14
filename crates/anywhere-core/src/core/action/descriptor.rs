@@ -322,14 +322,14 @@ impl ActionRegistry {
     }
 
     /// The caller supplies grants independently of the manifest. Default loading
-    /// grants nothing to v2; v1 retains its existing explicit-install behavior.
+    /// grants nothing to versioned plugins; v1 retains its existing explicit-install behavior.
     pub fn register_plugin_with_capabilities(
         &mut self,
         plugin: PluginManifest,
         allowed: &[extension::ExtensionCapability],
     ) -> Result<()> {
         anywhere_plugin::validate_manifest(&plugin)?;
-        let grant = if plugin.protocol_version == 2 {
+        let grant = if plugin.protocol_version >= 2 {
             Some(super::capabilities::CapabilityGrant::approve(
                 &plugin.capabilities,
                 allowed,
@@ -381,6 +381,7 @@ impl ActionRegistry {
                 }
             }
             let icon = match command.action {
+                DeclarativeAction::RenderDetail { .. } => "file",
                 DeclarativeAction::OpenUrl { .. } => "globe",
                 DeclarativeAction::OpenFile { .. } => "file",
                 DeclarativeAction::Copy { .. } => "copy",

@@ -4,6 +4,8 @@ use serde::{Deserialize, Serialize};
 pub enum ExtensionCapability {
     #[serde(rename = "clipboard.write")]
     ClipboardWrite,
+    #[serde(rename = "ui.render")]
+    RenderUi,
     #[serde(rename = "url.open")]
     OpenUrl,
     #[serde(rename = "file.open")]
@@ -22,6 +24,7 @@ impl ExtensionCapability {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::ClipboardWrite => "clipboard.write",
+            Self::RenderUi => "ui.render",
             Self::OpenUrl => "url.open",
             Self::OpenFile => "file.open",
             Self::GitRead => "git.read",

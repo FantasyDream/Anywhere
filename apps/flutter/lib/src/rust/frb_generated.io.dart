@@ -69,6 +69,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LauncherStateDto dco_decode_box_autoadd_launcher_state_dto(dynamic raw);
 
   @protected
+  PluginDetailDto dco_decode_box_autoadd_plugin_detail_dto(dynamic raw);
+
+  @protected
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
@@ -157,6 +160,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ExtensionStatusDto> dco_decode_list_extension_status_dto(dynamic raw);
 
   @protected
+  List<PluginKeyValueDto> dco_decode_list_plugin_key_value_dto(dynamic raw);
+
+  @protected
   List<PluginStatusDto> dco_decode_list_plugin_status_dto(dynamic raw);
 
   @protected
@@ -210,10 +216,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LauncherStateDto? dco_decode_opt_box_autoadd_launcher_state_dto(dynamic raw);
 
   @protected
+  PluginDetailDto? dco_decode_opt_box_autoadd_plugin_detail_dto(dynamic raw);
+
+  @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
 
   @protected
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  PluginDetailDto dco_decode_plugin_detail_dto(dynamic raw);
+
+  @protected
+  PluginKeyValueDto dco_decode_plugin_key_value_dto(dynamic raw);
 
   @protected
   PluginStatusDto dco_decode_plugin_status_dto(dynamic raw);
@@ -308,6 +323,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LauncherStateDto sse_decode_box_autoadd_launcher_state_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  PluginDetailDto sse_decode_box_autoadd_plugin_detail_dto(
       SseDeserializer deserializer);
 
   @protected
@@ -410,6 +429,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<PluginKeyValueDto> sse_decode_list_plugin_key_value_dto(
+      SseDeserializer deserializer);
+
+  @protected
   List<PluginStatusDto> sse_decode_list_plugin_status_dto(
       SseDeserializer deserializer);
 
@@ -470,10 +493,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  PluginDetailDto? sse_decode_opt_box_autoadd_plugin_detail_dto(
+      SseDeserializer deserializer);
+
+  @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  PluginDetailDto sse_decode_plugin_detail_dto(SseDeserializer deserializer);
+
+  @protected
+  PluginKeyValueDto sse_decode_plugin_key_value_dto(
+      SseDeserializer deserializer);
 
   @protected
   PluginStatusDto sse_decode_plugin_status_dto(SseDeserializer deserializer);
@@ -580,6 +614,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       LauncherStateDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_plugin_detail_dto(
+      PluginDetailDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
@@ -683,6 +721,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<ExtensionStatusDto> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_plugin_key_value_dto(
+      List<PluginKeyValueDto> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_plugin_status_dto(
       List<PluginStatusDto> self, SseSerializer serializer);
 
@@ -744,11 +786,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       LauncherStateDto? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_plugin_detail_dto(
+      PluginDetailDto? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_list_prim_u_8_strict(
       Uint8List? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_plugin_detail_dto(
+      PluginDetailDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_plugin_key_value_dto(
+      PluginKeyValueDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_plugin_status_dto(

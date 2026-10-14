@@ -17,6 +17,14 @@ pub fn execute(
             let host = super::capabilities::HostServices::new(platform, grant);
             let value = context.value.text();
             match action {
+                RenderDetail { view } => {
+                    grant.require(anywhere_protocol::extension::ExtensionCapability::RenderUi)?;
+                    return Ok(ExecutionOutput::view(
+                        anywhere_protocol::HostView::PluginDetail {
+                            detail: anywhere_plugin::ui::render_detail(view, &value)?,
+                        },
+                    ));
+                }
                 Copy { text } => {
                     host.copy_text(&anywhere_plugin::interpolate(text, &value, false)?)?
                 }
@@ -45,6 +53,7 @@ fn execute_declarative(
     use anywhere_protocol::DeclarativeAction::*;
     let value = context.value.text();
     match action {
+        RenderDetail { .. } => bail!("plugin UI requires a scoped capability grant"),
         OpenUrl { url } => platform.open_url(&anywhere_plugin::interpolate(url, &value, true)?)?,
         OpenFile { path } => platform.open_file(std::path::Path::new(
             &anywhere_plugin::interpolate(path, &value, false)?,
