@@ -218,7 +218,7 @@ impl Application {
                 let actions = match convert::registry(
                     &base,
                     &ticket.app,
-                    items.clone().unwrap_or_default(),
+                    items.as_deref().unwrap_or_default(),
                 ) {
                     Ok(actions) => actions,
                     Err(error) => {

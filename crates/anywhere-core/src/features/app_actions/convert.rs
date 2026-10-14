@@ -13,7 +13,7 @@ use std::collections::HashMap;
 pub fn registry(
     base: &ActionRegistry,
     app: &ApplicationInfo,
-    items: Vec<DiscoveredMenuItem>,
+    items: impl AsRef<[DiscoveredMenuItem]>,
 ) -> anyhow::Result<ActionRegistry> {
     let mut registry = base.clone();
     for action in descriptors(app, items) {
@@ -22,15 +22,19 @@ pub fn registry(
     Ok(registry)
 }
 
-pub fn descriptors(app: &ApplicationInfo, items: Vec<DiscoveredMenuItem>) -> Vec<ActionDefinition> {
+pub fn descriptors(
+    app: &ApplicationInfo,
+    items: impl AsRef<[DiscoveredMenuItem]>,
+) -> Vec<ActionDefinition> {
+    let items = items.as_ref();
     let mut counts = HashMap::new();
-    for item in &items {
+    for item in items {
         if let Some(Some(id)) = item.identifiers.last() {
             *counts.entry(id.clone()).or_insert(0usize) += 1;
         }
     }
     let actions: Vec<ActionDefinition> = items
-        .into_iter()
+        .iter()
         .map(|item| {
             // A unique AX identifier survives localization and path movement. Otherwise use
             // the full semantic path, pairing available IDs with titles. Repeated
@@ -75,7 +79,7 @@ pub fn descriptors(app: &ApplicationInfo, items: Vec<DiscoveredMenuItem>) -> Vec
                 id,
                 title: leaf.clone(),
                 subtitle: None,
-                shortcut: item.shortcut,
+                shortcut: item.shortcut.clone(),
                 accepts: vec![ContextMatcher {
                     type_id: APPLICATION.into(),
                 }],
@@ -83,8 +87,8 @@ pub fn descriptors(app: &ApplicationInfo, items: Vec<DiscoveredMenuItem>) -> Vec
                     app.clone(),
                     MenuLocator {
                         bundle_id: app.bundle_id.clone(),
-                        titles: item.menu_path,
-                        identifiers: item.identifiers,
+                        titles: item.menu_path.clone(),
+                        identifiers: item.identifiers.clone(),
                     },
                 ))),
                 availability: if item.enabled {

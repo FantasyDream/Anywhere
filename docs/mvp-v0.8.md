@@ -1,6 +1,8 @@
 # V0.8 MVP：第一方模块与 Extension v2
 
-状态：2026-10-14，分支 `dev-0.8`，起点 `dev-0.7@3b39763`。当前开发版本 App `0.8.0+15` / Rust `0.8.0-dev.15`。本文是当前范围与验收状态，逐构建证据见 [开发记录](archive/v0.8-development-records.md)。
+状态：2026-10-14，分支 `dev-0.8`，起点 `dev-0.7@3b39763`。最终开发版本 App `0.8.0+16` / Rust `0.8.0-dev.16`。本文是当前范围与验收状态，逐构建证据见 [开发记录](archive/v0.8-development-records.md)。
+
+**工程收尾完成，可进入 V0.9 开发。** 正式发行与 Windows 验收边界保留在文末，不将工程通过当作全平台正式发布。
 
 ## 目标与进度
 
@@ -57,6 +59,8 @@ Directory Context 中 Save Directory 保存 canonical path；Global Search 按�
 
 ## 最近一次工程证据
 
+Build 16 完成菜单缓存收尾：共享不可变 metadata，最多 8 个应用 / 4 MiB 估算 payload，generation 记录最多 32 个；大菜单超过缓存预算仍正常发布。完整门禁 **406 Rust / 231 Flutter 通过，6 Rust ignored**，Native、fmt、Clippy、架构 / 生成规则、文档与 analyze 通过。日志 `build/validation/v0.8-handoff-check.log`。App / arm64 ZIP 全部 37 文件 / 8 链接一致，四个主二进制 arm64，Impeller、deep / strict 签名和与 Build 15 相同的长期签名身份已核验。本轮没有 Build 16 GUI 或整 App RSS 测量，既有实机证据仍只对应 Build 15。
+
 Build 15 增加原预算内的菜单完整重读、具体 AX 失败诊断，并将不被 Current App 消费的选区 / 剪贴板错误留在 Settings。最终完整门禁 **404 Rust / 231 Flutter 通过，6 Rust ignored**；Native、fmt、Clippy、架构 / 生成规则、文档与 analyze 通过。日志 `build/validation/v0.8-menu-final-check-pass.log`。
 
 实机仅运行 Build 15：IDEA / Git / Folder / Maven 正常，页面无警告，Browse Menus 13 个分组，File 页面 18 个候选。只浏览，没有执行菜单或项目任务；日志有多次成功 IDEA 采集。旧 Build 13 的日志未提供具体 AX 错误码，不据此认定某一属性为原始根因，也不把这些成功样本当成全部应用或后续持续成功的证明。
@@ -90,7 +94,7 @@ Build 15 App / arm64 ZIP 已核验：37 文件 / 8 链接逐项一致，四个�
 ## 发布前仍需验收
 
 - 真实系统键盘、重复唤醒与失焦、选区 / 剪贴板、IDEA / Finder / 浏览器组合。
-- 最终 Build 15 的弹窗 / 对象顺序界面复查，以及其余 v2 能力、修改插件后的重新确认、异常恢复完整 GUI 矩阵。
+- 最终 Build 16 的弹窗 / 对象顺序界面复查，以及其余 v2 能力、修改插件后的重新确认、异常恢复完整 GUI 矩阵。
 - 完整系统隐私授权 / 撤销、网络 / 可移动卷、安装升级及签名 / 公证分发。
 - 整 App RSS、帧时间、长列表与实际任务输出，以及辅助功能 / 读屏。
 - Windows 完整 Host、系统适配器、安装包与实机矩阵。
