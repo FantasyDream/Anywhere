@@ -156,7 +156,7 @@ pub struct ScanStore {
     pub query_id: u64,
     pub(super) query: NameQuery,
     options: FileSearchOptions,
-    temporary_directories: anywhere_platform::temporary_directories::TemporaryDirectories,
+    system_exclusions: anywhere_platform::search_exclusions::SearchExclusions,
     direct_only: bool,
     exact_path: Option<PathBuf>,
     pub(super) progress: Mutex<Progress>,
@@ -172,10 +172,9 @@ impl ScanStore {
             directory,
             query_id: NEXT_QUERY.fetch_add(1, AtomicOrdering::Relaxed),
             query: NameQuery::new(&text, filter),
-            temporary_directories:
-                anywhere_platform::temporary_directories::TemporaryDirectories::for_search(
-                    &options.roots,
-                ),
+            system_exclusions: anywhere_platform::search_exclusions::SearchExclusions::for_search(
+                &options.roots,
+            ),
             options,
             direct_only,
             exact_path,
@@ -254,10 +253,7 @@ impl ScanStore {
             if cancelled() {
                 break;
             }
-            if self
-                .temporary_directories
-                .excludes(&hit.path, hit.is_directory)
-            {
+            if self.system_exclusions.excludes(&hit.path, hit.is_directory) {
                 continue;
             }
             if !seen.insert(hit.path.clone()) {
@@ -610,7 +606,7 @@ impl ScanStore {
                         continue;
                     }
                 };
-                if self.temporary_directories.excludes(&path, kind.is_dir()) {
+                if self.system_exclusions.excludes(&path, kind.is_dir()) {
                     continue;
                 }
                 if kind.is_symlink() && !self.authorized_link_target(&path) {
@@ -1090,6 +1086,26 @@ mod tests {
     }
 
     #[test]
+    fn ordinary_cloud_directory_timeout_still_reports_partial_results() {
+        let fixture = tempfile::tempdir().unwrap();
+        std::fs::write(fixture.path().join("report.txt"), "").unwrap();
+        let store =
+            ScanStore::new("report", FileSearchFilter::All, options(fixture.path())).unwrap();
+        store.io_issue(
+            &fixture
+                .path()
+                .join("Library/CloudStorage/OneDrive/Documents"),
+            &std::io::Error::from(std::io::ErrorKind::TimedOut),
+        );
+        let page = finish(&store);
+        assert!(page.progress.finished);
+        assert_eq!(page.progress.issue_count, 1);
+        assert_eq!(page.progress.inaccessible_count, 0);
+        assert!(page.progress.issue_examples[0].contains("OneDrive/Documents"));
+        assert_eq!(page.hits.len(), 1);
+    }
+
+    #[test]
     fn vanished_child_is_skipped_without_hiding_accessible_matches() {
         let fixture = tempfile::tempdir().unwrap();
         std::fs::write(fixture.path().join("report.txt"), "").unwrap();
@@ -1336,7 +1352,7 @@ mod tests {
     }
 
     #[test]
-    fn temporary_directories_are_pruned_from_traversal_and_index_hits() {
+    fn system_exclusions_are_pruned_from_traversal_and_index_hits() {
         let fixture = tempfile::tempdir().unwrap();
         let root = fixture.path().canonicalize().unwrap();
         let temporary = root.join("system-temp");
@@ -1347,6 +1363,11 @@ mod tests {
             root.join(".m2/report.txt"),
             root.join(".cache/report.txt"),
             caches.join("ordinary/report.txt"),
+            root.join("Library/CloudStorage/OneDrive-个人/Documents/report.txt"),
+            root.join("Library/CloudStorage/OneDrive-个人/project/.Trash/report.txt"),
+            root.join("project/.Trash/report.txt"),
+            root.join(".Trash/report.txt"),
+            root.join("Library/CloudStorage/OneDrive-个人/.Trash/report.txt"),
             temporary.join("report.txt"),
             caches.join("example.ShipIt/update.123/report.txt"),
         ];
@@ -1355,11 +1376,11 @@ mod tests {
             std::fs::write(path, "").unwrap();
         }
         let mut store = ScanStore::new("report", FileSearchFilter::All, options(&root)).unwrap();
-        store.temporary_directories =
-            anywhere_platform::temporary_directories::TemporaryDirectories::with_locations(
+        store.system_exclusions =
+            anywhere_platform::search_exclusions::SearchExclusions::with_locations(
                 std::slice::from_ref(&root),
                 vec![temporary],
-                Some(caches),
+                Some(root.clone()),
             );
         let hits = paths
             .iter()
@@ -1376,29 +1397,35 @@ mod tests {
             .collect();
         let page = finish(&store);
         let mut scanned: Vec<_> = page.hits.iter().map(|hit| hit.path.clone()).collect();
-        let mut expected = paths[..5].to_vec();
+        let mut expected = paths[..8].to_vec();
         indexed.sort();
         scanned.sort();
         expected.sort();
         assert_eq!(indexed, expected);
         assert_eq!(scanned, expected);
         assert_eq!(page.progress.issue_count, 0);
-        let selected = root.join("system-temp");
-        let mut explicit = ScanStore::new(
-            selected.to_str().unwrap(),
-            FileSearchFilter::All,
-            options(&root),
-        )
-        .unwrap();
-        explicit.temporary_directories =
-            anywhere_platform::temporary_directories::TemporaryDirectories::with_locations(
-                &explicit.options.roots,
-                vec![selected.clone()],
-                Some(root.join("Library/Caches")),
-            );
-        let page = finish(&explicit);
-        assert_eq!(page.hits.len(), 1);
-        assert_eq!(page.hits[0].path, selected.join("report.txt"));
+        for selected in [
+            root.join("system-temp"),
+            root.join(".Trash"),
+            root.join("Library/CloudStorage/OneDrive-个人/.Trash"),
+        ] {
+            let mut explicit = ScanStore::new(
+                selected.to_str().unwrap(),
+                FileSearchFilter::All,
+                options(&root),
+            )
+            .unwrap();
+            explicit.system_exclusions =
+                anywhere_platform::search_exclusions::SearchExclusions::with_locations(
+                    &explicit.options.roots,
+                    vec![root.join("system-temp")],
+                    Some(root.clone()),
+                );
+            let page = finish(&explicit);
+            assert_eq!(page.hits.len(), 1);
+            assert_eq!(page.hits[0].path, selected.join("report.txt"));
+            assert_eq!(page.progress.issue_count, 0);
+        }
     }
 
     #[test]

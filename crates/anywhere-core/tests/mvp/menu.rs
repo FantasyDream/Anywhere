@@ -466,6 +466,7 @@ async fn a_menu_action_disabled_after_discovery_fails_without_crashing() {
 
 #[tokio::test]
 async fn menu_discovery_and_execute_emit_tracing_fields() {
+    let _recording = RECORDING_TEST.lock().await;
     let fields = recorded_fields();
     fields.lock().unwrap().clear();
     let platform = Arc::new(TestPlatform::new(

@@ -514,6 +514,9 @@ pub(crate) async fn settled(
     panic!("revision {revision} never completed");
 }
 
+/// Serializes tests that clear and inspect the shared process-wide recorder.
+pub(crate) static RECORDING_TEST: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
 /// Records every tracing field name and log-message value the core emits.
 pub(crate) fn recorded_fields() -> &'static Arc<Mutex<Vec<String>>> {
     static FIELDS: OnceLock<Arc<Mutex<Vec<String>>>> = OnceLock::new();

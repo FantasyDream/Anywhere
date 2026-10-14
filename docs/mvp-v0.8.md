@@ -1,6 +1,6 @@
 # V0.8 MVP：第一方模块与 Extension v2
 
-状态：2026-10-14，分支 `dev-0.8`，起点 `dev-0.7@3b39763`。当前开发版本 App `0.8.0+11` / Rust `0.8.0-dev.11`。本文是当前范围与验收状态，逐构建证据见 [开发记录](archive/v0.8-development-records.md)。
+状态：2026-10-14，分支 `dev-0.8`，起点 `dev-0.7@3b39763`。当前开发版本 App `0.8.0+12` / Rust `0.8.0-dev.12`。本文是当前范围与验收状态，逐构建证据见 [开发记录](archive/v0.8-development-records.md)。
 
 ## 目标与进度
 
@@ -43,6 +43,7 @@ Directory Context 中 Save Directory 保存 canonical path；Global Search 按�
 | 目录应用身份失效显示内部警告 | 安全跳过目录，不把后台采集提示挂到 Global / Content |
 | 空白 Global 恢复阻止 Current App | 空白首页新采集；查询、文件 / 二级页面仍保留 15 秒 |
 | 普通搜索进入临时目录 | 平台识别系统临时路径 / macOS 更新缓存；遍历与 Spotlight 一致排除，显式指定路径可覆盖 |
+| OneDrive 回收站超时产生搜索警告 | 普通搜索排除主目录 / 云盘提供商回收站，保留正常云盘文件与项目同名目录；显式路径可覆盖 |
 | 遍历中临时子目录消失导致黄色警告 | 消失的子项安静跳过；搜索根消失与真实读写失败仍报告部分结果 |
 | 新收藏目录默认动作为移除 | 二级列表固定对象默认动作在首位，其余保留公共 Ranking |
 | 批准弹窗初始焦点不明确 | 初始聚焦 Cancel，Enter 取消，右方向键后 Enter 批准 |
@@ -53,9 +54,13 @@ Directory Context 中 Save Directory 保存 canonical path；Global Search 按�
 
 ## 最近一次工程证据
 
+Build 12 根据 Build 11 的真实日志补齐回收站排除：OneDrive 提供商根下 `.Trash` 读取返回 `os error 60`，不应参与普通文件名搜索。主目录 / 云盘提供商回收站在进入遍历前排除，Spotlight 候选执行同一规则；普通云盘文件、项目内部同名目录与显式回收站路径保留。日志测试的共享记录清空增加互斥保护，避免并行测试相互删除证据。
+
+Build 12 最终完整门禁：**401 Rust / 221 Flutter 通过，6 Rust ignored**；Native、fmt、Clippy、架构 / 生成规则、文档与 analyze 通过。记录 `build/validation/v0.8-recycle-check-final.log`。本轮没有重跑真实 OneDrive 扫描或 GUI，不能把模拟文件树回归当作实机验收。
+
 Build 11 完成代码与文档清理：移除四个旧领域转发入口、旧 Flutter 导出入口、未使用设置下拉组件、Launcher 设置转发方法及重复 getter；使用实际模块与 SettingsController 入口。旧配置迁移 / v1 插件支持保留。文档门禁验证 37 篇 Markdown、199 个本地链接，禁止引用忽略的构建产物。
 
-Build 10 增加临时目录策略，测试验证遍历 / 索引过滤一致、正常缓存与项目目录保留，以及显式路径继续可搜索。完整规则见 [文件搜索](file-search.md#临时目录过滤)。
+Build 10 增加临时目录策略，测试验证遍历 / 索引过滤一致、正常缓存与项目目录保留，以及显式路径继续可搜索。完整规则见 [文件搜索](file-search.md#临时目录与回收站过滤)。
 
 Build 11 完整门禁：**399 Rust / 221 Flutter 通过，6 Rust ignored**；Native、fmt、Clippy、架构 / 生成规则及 analyze 通过。记录 `build/validation/v0.8-final-check.log`。实际 Carbon 注册测试还验证了冲突回滚、撤销、暂停、关闭与跨进程冲突，记录 `v0.8-closeout-hotkeys-live.log`；它不证明实体键盘的按键送达。
 
@@ -67,14 +72,14 @@ Build 11 完整门禁：**399 Rust / 221 Flutter 通过，6 Rust ignored**；Nat
 
 本轮候选 Build 8 的真实 macOS GUI 检查已完成模块关闭、恢复开关、v2 权限内容 / 批准 / 撤销、文件工具输入、固定预览随选择切换，以及 Save → 搜索收藏 → Forget 闭环。最后发现的焦点与首项顺序修复进入 Build 9 并通过自动化；最终包界面复查因 Mac 锁屏暂未完成。具体工程记录见 [Build 9 收尾](archive/v0.8-development-records.md#build-9--工程收尾2026-10-13)。
 
-Build 11 App / arm64 ZIP 已核验：37 文件 / 8 链接逐项一致，四个主二进制为 arm64，Impeller 与 deep / strict 签名有效，designated requirement 与 Build 10 相同。包检查记录 `v0.8-final-package-check.json`。
+Build 12 App / arm64 ZIP 已核验：37 文件 / 8 链接逐项一致，四个主二进制为 arm64，Impeller 与 deep / strict 签名有效，designated requirement 与 Build 11 相同。包检查记录 `v0.8-recycle-package-check.json`。
 
 本地 GUI 测试插件已移除，原扩展偏好与收藏数据已恢复，Host 设置字节一致；成功测试动作产生正常 Usage。没有停止用户的开发任务或删除测试目录中的真实文件。
 
 ## 发布前仍需验收
 
 - 真实系统键盘、重复唤醒与失焦、选区 / 剪贴板、IDEA / Finder / 浏览器组合。
-- 最终 Build 11 的弹窗 / 对象顺序界面复查，以及其余 v2 能力、修改插件后的重新确认、异常恢复完整 GUI 矩阵。
+- 最终 Build 12 的弹窗 / 对象顺序界面复查，以及其余 v2 能力、修改插件后的重新确认、异常恢复完整 GUI 矩阵。
 - 完整系统隐私授权 / 撤销、网络 / 可移动卷、安装升级及签名 / 公证分发。
 - 整 App RSS、帧时间、长列表与实际任务输出，以及辅助功能 / 读屏。
 - Windows 完整 Host、系统适配器、安装包与实机矩阵。

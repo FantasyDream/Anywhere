@@ -1183,6 +1183,7 @@ async fn first_snapshot_waits_for_the_step_after_the_directory() {
 /// first snapshot, and the late pass still fills the actions in.
 #[tokio::test]
 async fn first_snapshot_grace_is_bounded_and_late_pass_still_completes() {
+    let _recording = RECORDING_TEST.lock().await;
     let fields = recorded_fields();
     fields.lock().unwrap().clear();
     let dir = tempfile::tempdir().unwrap();
@@ -1288,6 +1289,7 @@ async fn snapshot_sequence_increases_for_late_enrichment() {
 #[tokio::test]
 async fn every_named_performance_metric_is_emitted_for_one_activation() {
     use metrics;
+    let _recording = RECORDING_TEST.lock().await;
     let fields = recorded_fields();
     fields.lock().unwrap().clear();
     let dir = tempfile::tempdir().unwrap();

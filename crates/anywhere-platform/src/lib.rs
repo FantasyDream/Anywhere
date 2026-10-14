@@ -3,8 +3,8 @@
 //! Every capability has an explicitly unsupported default so test doubles compile
 //! without implementing unused methods; macOS implements the ones the product uses.
 pub mod paths;
+pub mod search_exclusions;
 pub mod search_storage;
-pub mod temporary_directories;
 use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
