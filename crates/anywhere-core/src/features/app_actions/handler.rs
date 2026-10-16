@@ -21,9 +21,25 @@ impl MenuAction {
         Self {
             app,
             locator,
-            execution_token: NEXT_EXECUTION_TOKEN
-                .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
-                .expect("menu execution token space exhausted"),
+            execution_token: next_execution_token(),
+        }
+    }
+}
+
+fn next_execution_token() -> u64 {
+    let mut current = NEXT_EXECUTION_TOKEN.load(Ordering::Relaxed);
+    loop {
+        let next = current
+            .checked_add(1)
+            .expect("menu execution token space exhausted");
+        match NEXT_EXECUTION_TOKEN.compare_exchange_weak(
+            current,
+            next,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => return current,
+            Err(observed) => current = observed,
         }
     }
 }
