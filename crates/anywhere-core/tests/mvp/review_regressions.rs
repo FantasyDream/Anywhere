@@ -1,7 +1,7 @@
 use crate::support::*;
 use anywhere_core::{
-    application::extension_manager::ExtensionManager,
-    extensions::saved_directories::{FORGET, OPEN, SAVE},
+    application::settings_service::SettingsService,
+    features::saved_directories::{FORGET, OPEN, SAVE},
     persistence::module_storage::ModuleStorageHost,
 };
 fn review_app() -> Application {
@@ -38,13 +38,13 @@ async fn two_independent_instances_merge_saved_data() {
     std::fs::create_dir(&alpha).unwrap();
     std::fs::create_dir(&beta).unwrap();
     let a = review_app();
-    let _a = ExtensionManager::open(policy.clone(), vec![], &a).unwrap();
+    let _a = SettingsService::open(policy.clone(), vec![], &a).unwrap();
     let b = review_app();
-    let _b = ExtensionManager::open(policy.clone(), vec![], &b).unwrap();
+    let _b = SettingsService::open(policy.clone(), vec![], &b).unwrap();
     save(&a, &alpha).await;
     save(&b, &beta).await;
     let reopened = review_app();
-    let _c = ExtensionManager::open(policy, vec![], &reopened).unwrap();
+    let _c = SettingsService::open(policy, vec![], &reopened).unwrap();
     assert!(search(&reopened, "alpha")
         .await
         .candidates
@@ -60,7 +60,7 @@ async fn two_independent_instances_merge_saved_data() {
 async fn reserved_prefixes_are_normal_names_and_forget_is_a_secondary_action() {
     let tmp = tempfile::tempdir().unwrap();
     let app = review_app();
-    let _m = ExtensionManager::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+    let _m = SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
     for name in ["remove draft", "forget archive", "Unpin notes"] {
         let folder = tmp.path().join(name);
         std::fs::create_dir(&folder).unwrap();
@@ -112,7 +112,7 @@ async fn saved_directory_usage_participates_in_shared_ranking() {
         Box::new(SqliteUsageRepository::open(&history_path).unwrap()),
         vec![],
     );
-    let _m = ExtensionManager::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+    let _m = SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
     save(&app, &path).await;
     let before = search(&app, "project").await;
     let score = before
@@ -156,7 +156,7 @@ fn replacing_failed_database_recovers_on_reload() {
         .put("directories", b"broken json")
         .unwrap();
     let app = review_app();
-    let mut m = ExtensionManager::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+    let mut m = SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
     assert!(
         !m.statuses()
             .iter()
@@ -166,7 +166,7 @@ fn replacing_failed_database_recovers_on_reload() {
     );
     std::fs::rename(&db, tmp.path().join("broken.backup")).unwrap();
     let _fresh = ModuleStorageHost::open(&db).unwrap();
-    m.reload(&app).unwrap();
+    m.refresh(&app).unwrap();
     assert!(
         m.statuses()
             .iter()
@@ -176,7 +176,7 @@ fn replacing_failed_database_recovers_on_reload() {
     );
     let fresh_app = review_app();
     let fresh_manager =
-        ExtensionManager::open(tmp.path().join("extensions.json"), vec![], &fresh_app).unwrap();
+        SettingsService::open(tmp.path().join("extensions.json"), vec![], &fresh_app).unwrap();
     assert!(
         fresh_manager
             .statuses()
@@ -196,9 +196,9 @@ async fn external_forget_revokes_a_stale_open_offer_and_preserves_other_saved_pa
     std::fs::create_dir(&alpha).unwrap();
     std::fs::create_dir(&beta).unwrap();
     let a = review_app();
-    let _a = ExtensionManager::open(policy.clone(), vec![], &a).unwrap();
+    let _a = SettingsService::open(policy.clone(), vec![], &a).unwrap();
     let b = review_app();
-    let _b = ExtensionManager::open(policy, vec![], &b).unwrap();
+    let _b = SettingsService::open(policy, vec![], &b).unwrap();
     save(&a, &alpha).await;
     save(&b, &beta).await;
     let old = search(&a, "alpha").await;
@@ -237,7 +237,7 @@ async fn replacement_refreshes_already_loaded_state_and_keeps_writing_to_the_new
     let db = tmp.path().join("extension-storage.sqlite3");
     let app = review_app();
     let mut manager =
-        ExtensionManager::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+        SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
     let alpha = tmp.path().join("alpha");
     let beta = tmp.path().join("beta");
     std::fs::create_dir(&alpha).unwrap();
@@ -245,7 +245,7 @@ async fn replacement_refreshes_already_loaded_state_and_keeps_writing_to_the_new
     save(&app, &alpha).await;
     std::fs::rename(&db, tmp.path().join("old.sqlite3")).unwrap();
     let fresh = ModuleStorageHost::open(&db).unwrap();
-    manager.reload(&app).unwrap();
+    manager.refresh(&app).unwrap();
     assert!(!search(&app, "alpha")
         .await
         .candidates

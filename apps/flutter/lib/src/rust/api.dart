@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `application`, `snapshot_delivery`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
 
@@ -168,12 +168,12 @@ bool promptAccessibility() =>
 List<PluginStatusDto> pluginStatus() =>
     RustLib.instance.api.crateApiPluginStatus();
 
-Future<List<PluginStatusDto>> reloadPlugins() =>
-    RustLib.instance.api.crateApiReloadPlugins();
+Future<List<PluginStatusDto>> refreshPlugins() =>
+    RustLib.instance.api.crateApiRefreshPlugins();
 
-/// Modern reload returns the same authoritative catalog as enable/grant/revoke.
-Future<List<ExtensionStatusDto>> reloadExtensions() =>
-    RustLib.instance.api.crateApiReloadExtensions();
+/// Refresh preferences and feature data; no module or plugin code is loaded.
+Future<List<ExtensionStatusDto>> refreshFeatures() =>
+    RustLib.instance.api.crateApiRefreshFeatures();
 
 Future<List<ExtensionStatusDto>> extensionStatus() =>
     RustLib.instance.api.crateApiExtensionStatus();
@@ -276,6 +276,7 @@ class ActionResultDto {
   final String? outputText;
   final HostViewDto? view;
   final PluginDetailDto? pluginDetail;
+  final NativeToolDto? nativeTool;
   final bool closeWindow;
   final String? executionSessionId;
 
@@ -288,6 +289,7 @@ class ActionResultDto {
     this.outputText,
     this.view,
     this.pluginDetail,
+    this.nativeTool,
     required this.closeWindow,
     this.executionSessionId,
   });
@@ -302,6 +304,7 @@ class ActionResultDto {
       outputText.hashCode ^
       view.hashCode ^
       pluginDetail.hashCode ^
+      nativeTool.hashCode ^
       closeWindow.hashCode ^
       executionSessionId.hashCode;
 
@@ -318,6 +321,7 @@ class ActionResultDto {
           outputText == other.outputText &&
           view == other.view &&
           pluginDetail == other.pluginDetail &&
+          nativeTool == other.nativeTool &&
           closeWindow == other.closeWindow &&
           executionSessionId == other.executionSessionId;
 }
@@ -892,6 +896,7 @@ class FileSearchProgressDto {
 
 enum HostViewDto {
   fileSearch,
+  nativeTool,
   pluginDetail,
   ;
 }
@@ -985,6 +990,27 @@ class LauncherStateDto {
           contextCaptures == other.contextCaptures &&
           candidates == other.candidates &&
           diagnostics == other.diagnostics;
+}
+
+class NativeToolDto {
+  final String id;
+  final String input;
+
+  const NativeToolDto({
+    required this.id,
+    required this.input,
+  });
+
+  @override
+  int get hashCode => id.hashCode ^ input.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NativeToolDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          input == other.input;
 }
 
 class PluginDetailDto {

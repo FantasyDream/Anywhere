@@ -69,6 +69,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   LauncherStateDto dco_decode_box_autoadd_launcher_state_dto(dynamic raw);
 
   @protected
+  NativeToolDto dco_decode_box_autoadd_native_tool_dto(dynamic raw);
+
+  @protected
   PluginDetailDto dco_decode_box_autoadd_plugin_detail_dto(dynamic raw);
 
   @protected
@@ -185,6 +188,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ShortcutRouteDto> dco_decode_list_shortcut_route_dto(dynamic raw);
 
   @protected
+  NativeToolDto dco_decode_native_tool_dto(dynamic raw);
+
+  @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
@@ -214,6 +220,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LauncherStateDto? dco_decode_opt_box_autoadd_launcher_state_dto(dynamic raw);
+
+  @protected
+  NativeToolDto? dco_decode_opt_box_autoadd_native_tool_dto(dynamic raw);
 
   @protected
   PluginDetailDto? dco_decode_opt_box_autoadd_plugin_detail_dto(dynamic raw);
@@ -323,6 +332,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LauncherStateDto sse_decode_box_autoadd_launcher_state_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  NativeToolDto sse_decode_box_autoadd_native_tool_dto(
       SseDeserializer deserializer);
 
   @protected
@@ -459,6 +472,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  NativeToolDto sse_decode_native_tool_dto(SseDeserializer deserializer);
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
 
   @protected
@@ -490,6 +506,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   LauncherStateDto? sse_decode_opt_box_autoadd_launcher_state_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  NativeToolDto? sse_decode_opt_box_autoadd_native_tool_dto(
       SseDeserializer deserializer);
 
   @protected
@@ -612,6 +632,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_launcher_state_dto(
       LauncherStateDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_native_tool_dto(
+      NativeToolDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_plugin_detail_dto(
@@ -752,6 +776,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<ShortcutRouteDto> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_native_tool_dto(NativeToolDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
 
   @protected
@@ -784,6 +811,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_launcher_state_dto(
       LauncherStateDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_native_tool_dto(
+      NativeToolDto? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_plugin_detail_dto(

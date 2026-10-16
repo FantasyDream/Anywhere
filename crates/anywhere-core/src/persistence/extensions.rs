@@ -1,16 +1,17 @@
-//! Durable extension preferences. Failed writes leave the previous policy intact.
+//! External plugin approvals. Legacy native disable keys are inert migration backups.
+use super::config_file;
 use anyhow::{ensure, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    io::{Read, Write},
     path::Path,
 };
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct ExtensionPreferences {
+pub struct PluginPreferences {
     pub schema_version: u32,
+    /// Plugin keys plus retained legacy first-party keys, which are never used as native policy.
     pub disabled: BTreeSet<String>,
     /// Exact canonical manifest plus installation origin; no grant by plugin id alone.
     pub approvals: BTreeMap<String, String>,
@@ -18,7 +19,7 @@ pub struct ExtensionPreferences {
     pub recovery: bool,
 }
 
-impl Default for ExtensionPreferences {
+impl Default for PluginPreferences {
     fn default() -> Self {
         Self {
             schema_version: 1,
@@ -28,17 +29,10 @@ impl Default for ExtensionPreferences {
         }
     }
 }
-impl ExtensionPreferences {
+impl PluginPreferences {
     pub fn load(path: &Path) -> Result<Self> {
-        let mut raw = Vec::new();
-        match std::fs::File::open(path) {
-            Ok(file) => {
-                file.take(4 * 1024 * 1024 + 1).read_to_end(&mut raw)?;
-            }
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                return Ok(Self::default())
-            }
-            Err(error) => return Err(error).context("extension preferences unavailable"),
+        let Some(raw) = config_file::read_bounded(path, 4 * 1024 * 1024)? else {
+            return Ok(Self::default());
         };
         ensure!(
             raw.len() <= 4 * 1024 * 1024,
@@ -54,22 +48,22 @@ impl ExtensionPreferences {
     pub fn save(&self, path: &Path) -> Result<()> {
         ensure!(
             !self.recovery,
-            "repair extension preferences and reload before changing settings"
+            "repair extension preferences and refresh before changing settings"
         );
-        let raw = serde_json::to_vec_pretty(self)?;
         ensure!(
-            raw.len() <= 4 * 1024 * 1024,
-            "extension preferences exceed 4 MiB"
+            self.schema_version == 1,
+            "unsupported extension preference version"
         );
-        let parent = path
-            .parent()
-            .context("extension preferences need a directory")?;
-        let mut file = tempfile::NamedTempFile::new_in(parent)?;
-        file.write_all(&raw)?;
-        file.as_file().sync_all()?;
-        file.persist(path)
-            .context("could not save extension preferences")?;
-        Ok(())
+        config_file::write_json(path, self, 4 * 1024 * 1024)
+    }
+
+    pub fn save_checked(&self, path: &Path, expected: &Self) -> Result<()> {
+        let current = Self::load(path)?;
+        ensure!(
+            current == *expected,
+            "plugin preferences changed; refresh before changing settings"
+        );
+        self.save(path)
     }
 }
 
@@ -82,7 +76,7 @@ mod tests {
         let path = tmp.path().join("extensions.json");
         let file = std::fs::File::create(&path).unwrap();
         file.set_len(64 * 1024 * 1024).unwrap();
-        assert!(ExtensionPreferences::load(&path)
+        assert!(PluginPreferences::load(&path)
             .unwrap_err()
             .to_string()
             .contains("4 MiB"));

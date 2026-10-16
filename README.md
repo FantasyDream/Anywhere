@@ -2,9 +2,9 @@
 
 **从当前操作出发的桌面 Launcher。** Anywhere 读取前台应用、选中文本、文件或网页等上下文，推荐可执行的动作；也可以搜索应用、动作、文件和收藏目录。
 
-例如：在 Finder 中打开项目目录后唤醒 Anywhere，可以打开终端、复制路径、查看 Git 状态或运行项目测试。复制一段 JSON 后唤醒，可以直接格式化并复制结果。
+例如：在 Finder 中打开项目目录后唤醒 Anywhere，可以打开终端、复制路径、查看 Git 状态或运行项目测试。复制一个网页 URL 后唤醒，可以打开或复制该地址。
 
-当前处于 **V0.9 开发阶段**，主要支持 macOS。界面使用 Flutter，业务逻辑使用 Rust；Windows 尚未交付可用版本。
+当前 **V0.9 内置功能模块已完成工程收尾**，主要支持 macOS。界面使用 Flutter，业务逻辑使用 Rust；Windows 尚未交付可用版本。
 
 [使用指南](#使用指南) · [架构设计](#架构设计) · [构建与开发](#构建与开发) · [文档导航](docs/README.md) · [路线图](docs/roadmap.md)
 
@@ -33,19 +33,23 @@
 |---|---|---|
 | **Current App** | 默认按 `⌘⌥Space` | 操作当前环境，搜索应用菜单及适用的目录、Git、开发项目等动作 |
 | **Global Search** | 默认按 `⌘⌥⇧Space`，或通过搜索图标菜单切换 | 搜索应用、动作和收藏目录，查找 File Search 等工具入口 |
-| **内容输入** | Current App 唤醒时自动填入可识别的选中文本或新复制内容 | 操作这份内容，例如复制 URL、格式化 JSON、打开路径 |
+| **内容输入** | Current App 唤醒时自动填入可识别的选中文本或新复制内容 | 操作这份内容，例如复制 URL、打开路径 |
 
 Current App 聚合当前环境的所有可用动作。顶部的 **Folder、Git、Rust 等 Scope** 用于缩小动作范围；切换 Scope 保留查询。菜单保留在当前应用中，可通过 **Browse Menus…** 按层级浏览，也可直接搜索菜单名称。
 
 内容输入的优先级是：
 
-1. 当前应用中能解析为 URL、JSON、真实文件 / 目录等具体 Context 的选中文本。
+1. 当前应用中能解析为 URL、真实文件 / 目录等具体 Context 的选中文本。
 2. 距今不超过 **15 秒**、复制时间可确认，且能解析为具体 Context 的剪贴板内容。
 3. 普通文本、无效对象或没有可用内容时，进入 Current App。
 
 输入框会显示内容来源，只解析该内容，不混入前台应用的环境 Context。启动前已有、无法确认复制时间的剪贴板内容不会自动填入。
 
 内容输入时按 `Esc` 清空内容并返回 Current App，再按 `Esc` 进入空白 Global Search。更多规则见 [Context 输入与导航](docs/context-input-navigation.md)。
+
+### JSON 工具计划
+
+JSON 功能已延期：待 WebView 插件机制完成后，以 WebView 插件实现。V0.9 已移除原生工作区、内置 JSON 动作与自动识别入口；原功能身份和历史数据保留兼容依据。收尾状态见 [V0.9 MVP](docs/mvp-v0.9.md)。
 
 ### 3. 键盘操作
 
@@ -83,7 +87,6 @@ Launcher 不使用单独的 `Tab` / `Shift+Tab` 遍历控件。重复当前唤�
 | Git 仓库 | 搜索 Git Status、Git Diff、Git Log、Git Staged Diff、Git Branches |
 | 复制 Git 信息 | Copy Branch Name、Copy Commit Hash、Copy Short Commit Hash、Copy Repository Path、Copy Remote URL |
 | 网页 / URL | 在支持的浏览器唤醒，或输入完整 HTTP(S) URL，选择打开或复制 |
-| JSON | 输入或复制 JSON，选择 Format JSON、Minify JSON、Copy Formatted JSON |
 | 收藏目录 | 目录 Context 中执行 Save Directory；Global Search 按名称、`saved` 或 `bookmark` 查找 |
 
 选中收藏目录后按 `⌘K` → **Forget Saved Directory** 可移除收藏，不删除磁盘目录。当前最多保存 100 个目录。
@@ -138,12 +141,12 @@ Maven、Gradle 优先使用项目 wrapper。识别阶段只读取项目标记及
 
 动态应用菜单的原快捷键用于显示提示，当前不支持长期自定义绑定；菜单也暂不记录使用频次，避免不稳定菜单身份关联旧记录。
 
-**扩展：** Settings → Extensions 管理第一方模块及已安装的声明式插件。
+**扩展：** Settings → Features 管理第一方模块及已安装的声明式插件。
 
-- 第一方模块包括 JSON、URL、Git、Maven、Gradle、Node、Rust、Spring Boot、收藏目录。
-- 用户插件放入 `~/Library/Application Support/Anywhere/plugins/`，支持 `*.toml` 或子目录中的 `manifest.toml`；安装或修改后点击 **Reload**。
+- 第一方模块包括 URL、Git、Maven、Gradle、Node、Rust、Spring Boot、收藏目录。
+- 用户插件放入 `~/Library/Application Support/Anywhere/plugins/`，支持 `*.toml` 或子目录中的 `manifest.toml`；安装或修改后重启；新批准下次启动生效，撤销立即失效。**Refresh** 只刷新设置和业务数据。
 - v2 / v3 插件先 **Review permissions → Allow & enable**。撤销权限或关闭模块后，相关候选与快捷键失效；绑定配置保留以便重新启用。
-- 外部 v2 插件支持声明式复制、打开 URL / 文件；v3 首先增加 Host 渲染的 Detail / KeyValue，只展示有界纯文本。插件仍不执行用户脚本。
+- 现有外部 v2 支持声明式复制、打开 URL / 文件，v3 有 Detail / KeyValue 开发切片；这条 DSL 路线停止扩展。当前优先迁移内置功能模块和原生工具页，第三方 WebView 与热加载放到最后。
 
 示例：[v1 搜索插件](plugins/examples/search.toml)、[v2 复制插件](plugins/examples/copy-v2.toml)、[v3 Detail 插件](plugins/examples/context-detail.toml)。搜索示例中的 `example.com` 是占位地址，需要自行配置；应用不自动安装 Web Search 插件。
 
@@ -155,7 +158,8 @@ macOS 数据目录：`~/Library/Application Support/Anywhere/`。
 |---|---|
 | `settings.json` | 唤醒键、Action 快捷键、来源开关及搜索设置 |
 | `usage.sqlite3` | 动作 ID、Context 类型、来源应用、成功执行次数与时间 |
-| `extensions.json` | 模块开关和插件能力授权 |
+| `features.json` | 内置功能开关，启动时从旧配置迁移 |
+| `extensions.json` | 外部插件开关和能力授权；旧第一方键保留为迁移备份 |
 | `extension-storage.sqlite3` | 按模块隔离的持久数据，例如主动收藏的目录路径 |
 | `plugins/` | 用户安装的声明式插件 |
 | `launcher.log` | 运行诊断和耗时日志，每次启动覆盖 |
@@ -172,7 +176,7 @@ flowchart TD
     UI --> Host[原生 Host：窗口、焦点、热键、设置与授权]
     FRB --> App[Application：会话与用例编排]
     App --> Core[Core：Context、Action、搜索、排序与执行契约]
-    App --> Modules[Features / 第一方 Extensions]
+    App --> Modules[内置 Feature 模块]
     Modules --> Core
     App --> Storage[Persistence：SQLite 与配置]
     App --> Platform[Platform：系统能力接口]
@@ -182,13 +186,13 @@ flowchart TD
 | 层 | 负责的内容 |
 |---|---|
 | **Flutter Host** | 页面、键盘 / 鼠标交互、焦点、查询草稿、选择与返回位置、设置展示、图标缓存 |
-| **Rust Application** | 激活、Context 采集协调、查询更新、快照发布、动作执行、扩展生命周期 |
+| **Rust Application** | 激活、Context 采集协调、查询更新、快照发布、动作执行、功能策略 |
 | **Rust Core** | 平台无关的模型与算法：Context Graph、匹配、Ranking、Scope、执行资格与存储契约 |
-| **Features / Extensions** | 应用发现、文件工具，以及 JSON、Git、项目识别等具体领域能力 |
+| **Feature 模块** | 应用发现、文件工具，以及 URL、Git、项目识别等具体领域能力 |
 | **Platform Adapter** | 应用 / 系统上下文读取、系统搜索、打开文件 / URL、剪贴板、进程等 OS 能力 |
 | **macOS Native Host** | Swift / AppKit 窗口、玻璃材质、系统热键、权限和生命周期适配 |
 
-Flutter 不重新识别 Context、匹配动作或计算排序。Swift Host 不解析业务输入或执行项目动作。`core/` 不依赖 Flutter，也不导入 `application/`、`features/`、`extensions/`、`persistence/`；装配集中在 Application。
+Flutter 不重新识别 Context、匹配动作或计算排序。Swift Host 不解析业务输入或执行项目动作。`core/` 不依赖 Flutter，也不导入 `application/`、`features/`、`persistence/`；装配集中在 Application。
 
 业务 API 通过 FRB 调用 Rust；窗口、热键和目录授权等 Host 服务通过平台无关的 `DesktopHost` / MethodChannel 接口调用。
 
@@ -196,7 +200,7 @@ Flutter 不重新识别 Context、匹配动作或计算排序。Swift Host 不�
 
 | 概念 | 含义 |
 |---|---|
-| **Context** | 被操作的数据或环境，例如目录、URL、JSON、Git 仓库；带来源与派生关系 |
+| **Context** | 被操作的数据或环境，例如目录、URL、Git 仓库；带来源与派生关系 |
 | **ContextProvider** | 从已有 Context 轻量识别并产生新的 Context，不启动构建任务 |
 | **Action / ActionBundle** | 动作定义及其适用类型、别名、可用性、执行 Handler |
 | **Candidate** | 当前查询中可选择的一行，绑定具体执行对象；与可持久保存的业务 ActionId 分开 |
@@ -238,7 +242,7 @@ Context 决定“对什么执行、哪些动作适用”，Scope 决定“当前
 
 **搜索：** 应用、动作和收藏目录进入统一候选体系；文件搜索作为 Action 打开独立查询工作区，复用 Launcher 界面及对象操作。Spotlight 提供早期结果，完整遍历补充命中；查询临时存储保存结果，Host 按批次读取。取消、去重、类型过滤与稳定追加由 Rust 负责，Flutter 使用虚拟列表及共享数据块显示。
 
-**扩展：** 第一方 Rust 模块通过 `FirstPartyExtension` / `FeatureContribution` 提交 Provider、ActionBundle、动态动作或 CandidateSource。Host 通过能力清单审批 `HostServices`，按模块分配 Storage；模块查询使用有界内存快照，写入采用 SQLite 事务。配置变更替换动作、Provider 和来源，撤销旧执行资格并同步快捷键。
+**内置功能：** Rust 模块通过静态注册、`FeatureDescriptor` / `FeatureContribution` 提交 Provider、ActionBundle、动态动作或 CandidateSource。Host 检查系统操作并按稳定 ID 绑定存储；收藏目录分离 repository / service，查询读取有界缓存，写入采用 SQLite 事务，不使用 Any 状态恢复。第一方贡献只在启动装配；设置变更筛选已注册的贡献，撤销旧执行资格并同步快捷键。Refresh 读取配置与业务数据，不加载代码；完整迁移见 [阶段路线图](docs/feature-module-roadmap.md)。
 
 第一方模块是编译进应用的受信任代码，静态 Trait 仍是内部接口；能力检查不等于进程沙箱，也不是稳定的第三方 Native ABI。外部 TOML 插件使用单独的受限声明式协议。
 
@@ -260,14 +264,12 @@ crates/
 ├── anywhere-core/src/
 │   ├── core/                算法与契约
 │   ├── application/         用例、会话、装配与快照发布
-│   ├── features/            基础产品能力及兼容导出
-│   ├── extensions/          第一方领域模块
+│   ├── features/            基础能力、内置领域模块、静态注册与类型化服务
 │   └── persistence/         历史、扩展配置及隔离存储
 ├── anywhere-platform/       OS 接口、适配器与进程 / 文件搜索实现
 ├── anywhere-plugin/         Manifest 发现、验证及模板处理
 └── anywhere-bridge-flutter/ FRB API、初始化与 DTO 转换
 
-extensions/             第一方模块 Manifest
 plugins/examples/       外部声明式插件示例
 resources/              键码、文件类型和运行策略的共享配置
 scripts/                构建、打包、生成与架构检查
@@ -279,7 +281,7 @@ scripts/                构建、打包、生成与架构检查
 - 新动作：定义 ActionSpec / Handler，随 ActionBundle 注册。
 - 新搜索来源：实现 CandidateSource 或 AsyncCandidateSource。
 - 新 OS 能力：扩展 Platform 或 DesktopHost，在平台适配器实现。
-- 新 Host 工具页面：通过 HostViewNavigator 注册路由，复用共享 UI 与对象导航。
+- 新原生工具页：提供 ToolPageSession 和 ToolPageRegistration，加入静态目录，复用 ToolPageShell；无需新增 Launcher 领域分支。
 
 业务与界面已隔离平台细节；移植 Windows 仍需补齐原生窗口、热键、权限、应用上下文、文件搜索适配与实机验收。
 
@@ -345,5 +347,5 @@ scripts/generate-bridge.sh
 - [架构详细说明](docs/architecture.md)：模块依赖、快照、执行与资源生命周期。
 - [Context 模型](docs/context-model.md) / [菜单动作](docs/current-app-actions.md)：对象关系与身份安全边界。
 - [统一 Launcher 交互与状态保留](docs/launcher-interaction.md)。
-- [插件协议](docs/plugin-protocol.md) / [V0.9 MVP](docs/mvp-v0.9.md)：当前扩展实现及验收范围；[V0.8 收尾](docs/mvp-v0.8.md) 保留上一阶段证据。
-- [路线图](docs/roadmap.md)：后续 Extension API、插件 UI、Web 插件与终端方向。
+- [模块迁移路线图](docs/feature-module-roadmap.md) / [V0.9 MVP](docs/mvp-v0.9.md)：当前内置功能迁移阶段与验收范围；[V0.8 收尾](docs/mvp-v0.8.md) 保留上一阶段证据。
+- [路线图](docs/roadmap.md)：后续剪贴板历史 / 搜索、Terminal、核心收尾、WebView 插件与 JSON 工具方向。

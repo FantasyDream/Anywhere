@@ -45,6 +45,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var tasksChannel: FlutterMethodChannel? { taskWindows.tasksChannel }
     var tasksReady: Bool { taskWindows.tasksReady }
     var localKeyMonitor: Any?
+    private var editingController: FlutterViewController? {
+        guard NSApp.isActive, let key = NSApp.keyWindow else { return nil }
+        if key === tasksWindow { return taskWindows.tasksController }
+        return key === window || key === settingsWindow ? controller : nil
+    }
+    lazy var editMenu = NativeEditMenu(available: { [weak self] in self?.editingController != nil },
+        send: { [weak self] command in
+            guard let destination = self?.editingController else { return }
+            FlutterMethodChannel(name: "anywhere/editing", binaryMessenger: destination.engine.binaryMessenger)
+                .invokeMethod("perform", arguments: command)
+        })
     let shortcutRecorder = ShortcutRecorder()
     var shortcutRecordingChannel: FlutterMethodChannel!
     var terminationPending = false
@@ -546,17 +557,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         menu.addItem(quit)
         statusItem.menu = menu
 
-        // Flutter text fields need the native Edit menu for standard ⌘V / ⌘C shortcuts.
+        // Native menu commands are applied to Flutter's focused editing model.
         let main = NSMenu()
         let appItem = NSMenuItem()
         main.addItem(appItem)
         appItem.submenu = menu.copy() as? NSMenu
         let editItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
-        let edit = NSMenu(title: "Edit")
-        for (title, action, key) in [("Undo", "undo:", "z"), ("Cut", "cut:", "x"), ("Copy", "copy:", "c"), ("Paste", "paste:", "v"), ("Select All", "selectAll:", "a")] {
-            edit.addItem(NSMenuItem(title: title, action: Selector(action), keyEquivalent: key))
-        }
-        editItem.submenu = edit
+        editItem.submenu = editMenu.makeMenu()
         main.addItem(editItem)
         // Expose task commands through macOS menus. The local monitor reserves ⌘.;
         // Flutter owns Escape's clear-filter / hide logic.

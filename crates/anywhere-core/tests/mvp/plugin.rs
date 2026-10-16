@@ -81,7 +81,7 @@ async fn wrapping_copy_path_is_hidden_when_the_clipboard_already_holds_it() {
 }
 
 #[tokio::test]
-async fn wrapping_json_keeps_plugin_identity_and_records_usage() {
+async fn wrapping_url_keeps_plugin_identity_and_records_usage() {
     let history = Arc::new(Mutex::new(MemoryUsage::default()));
     let app = Application::new(
         Arc::new(TestPlatform::default()),
@@ -90,23 +90,23 @@ async fn wrapping_json_keeps_plugin_identity_and_records_usage() {
         vec![],
     );
     let session = app.activate().await.unwrap().unwrap().session_id;
-    let json = app
-        .update_input(session, r#"{"a":1}"#.into(), 1)
+    let url = app
+        .update_input(session, "https://example.org/wrapped".into(), 1)
         .await
         .unwrap()
         .unwrap();
-    let pretty = json
+    let pretty = url
         .candidates
         .iter()
-        .find(|candidate| candidate.command_id.as_deref() == Some("wrap.pretty"))
-        .expect("wrapped json action");
-    assert_eq!(pretty.title, "Pretty JSON");
+        .find(|candidate| candidate.command_id.as_deref() == Some("wrap.url"))
+        .expect("wrapped URL action");
+    assert_eq!(pretty.title, "Copy URL");
     assert!(pretty
         .subtitle
         .as_deref()
         .is_some_and(|subtitle| subtitle.contains("Wrap")));
     assert!(app
-        .execute(session, json.revision, pretty.id.clone())
+        .execute(session, url.revision, pretty.id.clone())
         .await
         .unwrap()
         .succeeded());
@@ -120,7 +120,7 @@ async fn wrapping_json_keeps_plugin_identity_and_records_usage() {
     assert!(
         recorded
             .iter()
-            .any(|(action, kind, _)| { action == "wrap.pretty" && kind == JSON_DOCUMENT }),
+            .any(|(action, kind, _)| { action == "wrap.url" && kind == URL }),
         "{recorded:?}"
     );
 }

@@ -419,6 +419,7 @@ pub enum ActionStatus {
 #[serde(rename_all = "snake_case")]
 pub enum HostView {
     FileSearch,
+    NativeTool { id: String, input: String },
     PluginDetail { detail: ui::DetailView },
 }
 

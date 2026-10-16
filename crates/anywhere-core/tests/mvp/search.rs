@@ -376,10 +376,10 @@ accepts = ["core.directory"]
 action = { type = "execute_builtin", command_id = "core.directory.copy" }
 
 [[commands]]
-id = "pretty"
-title = "Pretty JSON"
-accepts = ["core.json"]
-action = { type = "execute_builtin", command_id = "core.json.format" }
+id = "url"
+title = "Copy URL"
+accepts = ["core.url"]
+action = { type = "execute_builtin", command_id = "core.url.copy" }
 "#;
 
 #[tokio::test]

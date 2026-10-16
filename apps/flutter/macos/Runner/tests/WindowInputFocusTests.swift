@@ -39,6 +39,15 @@ struct WindowInputFocusTests {
             assert(launcher.firstResponder === editor)
         }
 
+        // Switching pages removes the old text input view while Flutter's new
+        // client is attached. AppKit falls back to the window; restore routing.
+        editor.removeFromSuperview()
+        assert(launcher.firstResponder === launcher)
+        WindowInputFocus.restore(in: launcher, content: wrapper)
+        assert(launcher.firstResponder === surface)
+        wrapper.addSubview(editor)
+        assert(launcher.makeFirstResponder(editor))
+
         // A shared-engine move chooses a receiver belonging to the new window.
         launcher.contentView = nil
         settings.contentView = wrapper
@@ -56,6 +65,6 @@ struct WindowInputFocusTests {
         let before = settings.firstResponder
         WindowInputFocus.restore(in: settings, content: empty)
         assert(settings.firstResponder === before)
-        print("Window input focus: wrapper regression, active editor, repeated wake and window move passed")
+        print("Window input focus: wrapper regression, editor removal, active editor, repeated wake and window move passed")
     }
 }

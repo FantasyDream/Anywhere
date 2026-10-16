@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:anywhere/infrastructure/window_host.dart';
-import 'package:anywhere/settings/extensions_section.dart';
+import 'package:anywhere/settings/features_section.dart';
 import 'package:anywhere/settings/settings_screen.dart';
 import 'package:anywhere/settings/settings_controller.dart';
 import 'package:anywhere/settings/host_settings.dart';
@@ -14,9 +14,9 @@ import 'package:flutter_test/flutter_test.dart';
 ExtensionStatusDto extension(
         {bool active = false, bool firstParty = false, bool enabled = true}) =>
     ExtensionStatusDto(
-        key: firstParty ? 'first-party:json' : 'plugin:test',
-        id: firstParty ? 'json' : 'test',
-        name: firstParty ? 'JSON' : 'Test Copy',
+        key: firstParty ? 'first-party:git' : 'plugin:test',
+        id: firstParty ? 'git' : 'test',
+        name: firstParty ? 'Git' : 'Test Copy',
         version: '1.0.0',
         firstParty: firstParty,
         legacy: false,
@@ -63,7 +63,7 @@ void main() {
     final c = SettingsController(
         window: WindowHost(channel),
         readExtensions: () => [extension(active: true)],
-        reloadExtensions: () async {
+        refreshFeatures: () async {
           supported = [];
           if (failed) throw StateError('response failed after commit');
           return [extension()];
@@ -72,12 +72,12 @@ void main() {
     addTearDown(c.dispose);
     await c.load(plugins: true);
     expect(c.shortcutSupported('test.copy'), isTrue);
-    await c.refreshPlugins();
+    await c.refreshFeatureData();
     expect(c.shortcutSupported('test.copy'), isFalse);
     expect(syncs.last['supportedActionIds'], isEmpty);
     expect(c.statusMessage, contains('response failed'));
     failed = false;
-    await c.refreshPlugins();
+    await c.refreshFeatureData();
     expect(c.extensions.single.active, isFalse);
     expect(c.statusMessage, isNull);
   });
@@ -92,7 +92,7 @@ void main() {
           if (failed) throw StateError('status read failed');
           return [extension(active: true)];
         },
-        reload: () async {
+        refreshPluginReports: () async {
           failed = true;
           available = false;
           return [];
@@ -100,7 +100,7 @@ void main() {
         readSupportedShortcutActions: (ids) async => available ? ids : []);
     addTearDown(c.dispose);
     await c.load(plugins: true);
-    await c.refreshPlugins();
+    await c.refreshFeatureData();
     expect(c.shortcutSupported('test.copy'), isFalse);
     expect(syncs.last['supportedActionIds'], isEmpty);
     expect(c.statusMessage, contains('status read failed'));
@@ -261,7 +261,7 @@ void main() {
         builder: AppStyle.windowBuilder,
         home: Scaffold(
             body: SingleChildScrollView(
-                child: ExtensionsSection(controller: c)))));
+                child: FeaturesSection(controller: c)))));
     await tester.tap(find.text('Review permissions…'));
     await tester.pumpAndSettle();
     expect(find.text('Allow Test Copy?'), findsOneWidget);
@@ -289,7 +289,7 @@ void main() {
     final modules = [
       'Git',
       'URL',
-      'JSON',
+      'Git',
       'Rust',
       'Maven',
       'Gradle',

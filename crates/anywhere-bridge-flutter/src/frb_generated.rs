@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -853569811;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 704349308;
 
 // Section: executor
 
@@ -852,7 +852,7 @@ fn wire__crate__api__prompt_accessibility_impl(
         },
     )
 }
-fn wire__crate__api__reload_extensions_impl(
+fn wire__crate__api__refresh_features_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -860,7 +860,7 @@ fn wire__crate__api__reload_extensions_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "reload_extensions",
+            debug_name: "refresh_features",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -878,7 +878,7 @@ fn wire__crate__api__reload_extensions_impl(
             move |context| {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || {
-                        let output_ok = crate::api::reload_extensions()?;
+                        let output_ok = crate::api::refresh_features()?;
                         Ok(output_ok)
                     })(),
                 )
@@ -886,7 +886,7 @@ fn wire__crate__api__reload_extensions_impl(
         },
     )
 }
-fn wire__crate__api__reload_plugins_impl(
+fn wire__crate__api__refresh_plugins_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
     rust_vec_len_: i32,
@@ -894,7 +894,7 @@ fn wire__crate__api__reload_plugins_impl(
 ) {
     FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "reload_plugins",
+            debug_name: "refresh_plugins",
             port: Some(port_),
             mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
         },
@@ -912,7 +912,7 @@ fn wire__crate__api__reload_plugins_impl(
             move |context| {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || {
-                        let output_ok = crate::api::reload_plugins()?;
+                        let output_ok = crate::api::refresh_plugins()?;
                         Ok(output_ok)
                     })(),
                 )
@@ -1772,6 +1772,7 @@ impl SseDecode for crate::api::ActionResultDto {
         let mut var_outputText = <Option<String>>::sse_decode(deserializer);
         let mut var_view = <Option<crate::api::HostViewDto>>::sse_decode(deserializer);
         let mut var_pluginDetail = <Option<crate::api::PluginDetailDto>>::sse_decode(deserializer);
+        let mut var_nativeTool = <Option<crate::api::NativeToolDto>>::sse_decode(deserializer);
         let mut var_closeWindow = <bool>::sse_decode(deserializer);
         let mut var_executionSessionId = <Option<String>>::sse_decode(deserializer);
         return crate::api::ActionResultDto {
@@ -1783,6 +1784,7 @@ impl SseDecode for crate::api::ActionResultDto {
             output_text: var_outputText,
             view: var_view,
             plugin_detail: var_pluginDetail,
+            native_tool: var_nativeTool,
             close_window: var_closeWindow,
             execution_session_id: var_executionSessionId,
         };
@@ -2193,7 +2195,8 @@ impl SseDecode for crate::api::HostViewDto {
         let mut inner = <i32>::sse_decode(deserializer);
         return match inner {
             0 => crate::api::HostViewDto::FileSearch,
-            1 => crate::api::HostViewDto::PluginDetail,
+            1 => crate::api::HostViewDto::NativeTool,
+            2 => crate::api::HostViewDto::PluginDetail,
             _ => unreachable!("Invalid variant for HostViewDto: {}", inner),
         };
     }
@@ -2443,6 +2446,18 @@ impl SseDecode for Vec<crate::api::ShortcutRouteDto> {
     }
 }
 
+impl SseDecode for crate::api::NativeToolDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <String>::sse_decode(deserializer);
+        let mut var_input = <String>::sse_decode(deserializer);
+        return crate::api::NativeToolDto {
+            id: var_id,
+            input: var_input,
+        };
+    }
+}
+
 impl SseDecode for Option<String> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2540,6 +2555,17 @@ impl SseDecode for Option<crate::api::LauncherStateDto> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::api::LauncherStateDto>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::NativeToolDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::NativeToolDto>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -2787,8 +2813,8 @@ fn pde_ffi_dispatcher_primary_impl(
         18 => wire__crate__api__object_actions_impl(port, ptr, rust_vec_len, data_len),
         19 => wire__crate__api__ping_impl(port, ptr, rust_vec_len, data_len),
         21 => wire__crate__api__preview_file_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__reload_extensions_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__reload_plugins_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__refresh_features_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__refresh_plugins_impl(port, ptr, rust_vec_len, data_len),
         25 => wire__crate__api__remove_execution_session_impl(port, ptr, rust_vec_len, data_len),
         26 => wire__crate__api__resolve_action_binding_impl(port, ptr, rust_vec_len, data_len),
         27 => wire__crate__api__resolve_shortcut_intent_impl(port, ptr, rust_vec_len, data_len),
@@ -2843,6 +2869,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::ActionResultDto {
             self.output_text.into_into_dart().into_dart(),
             self.view.into_into_dart().into_dart(),
             self.plugin_detail.into_into_dart().into_dart(),
+            self.native_tool.into_into_dart().into_dart(),
             self.close_window.into_into_dart().into_dart(),
             self.execution_session_id.into_into_dart().into_dart(),
         ]
@@ -3316,7 +3343,8 @@ impl flutter_rust_bridge::IntoDart for crate::api::HostViewDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
             Self::FileSearch => 0.into_dart(),
-            Self::PluginDetail => 1.into_dart(),
+            Self::NativeTool => 1.into_dart(),
+            Self::PluginDetail => 2.into_dart(),
             _ => unreachable!(),
         }
     }
@@ -3375,6 +3403,22 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::LauncherStateDto>
     for crate::api::LauncherStateDto
 {
     fn into_into_dart(self) -> crate::api::LauncherStateDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::NativeToolDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.id.into_into_dart().into_dart(),
+            self.input.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::NativeToolDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::NativeToolDto> for crate::api::NativeToolDto {
+    fn into_into_dart(self) -> crate::api::NativeToolDto {
         self
     }
 }
@@ -3622,6 +3666,7 @@ impl SseEncode for crate::api::ActionResultDto {
         <Option<String>>::sse_encode(self.output_text, serializer);
         <Option<crate::api::HostViewDto>>::sse_encode(self.view, serializer);
         <Option<crate::api::PluginDetailDto>>::sse_encode(self.plugin_detail, serializer);
+        <Option<crate::api::NativeToolDto>>::sse_encode(self.native_tool, serializer);
         <bool>::sse_encode(self.close_window, serializer);
         <Option<String>>::sse_encode(self.execution_session_id, serializer);
     }
@@ -3959,7 +4004,8 @@ impl SseEncode for crate::api::HostViewDto {
         <i32>::sse_encode(
             match self {
                 crate::api::HostViewDto::FileSearch => 0,
-                crate::api::HostViewDto::PluginDetail => 1,
+                crate::api::HostViewDto::NativeTool => 1,
+                crate::api::HostViewDto::PluginDetail => 2,
                 _ => {
                     unimplemented!("");
                 }
@@ -4164,6 +4210,14 @@ impl SseEncode for Vec<crate::api::ShortcutRouteDto> {
     }
 }
 
+impl SseEncode for crate::api::NativeToolDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.input, serializer);
+    }
+}
+
 impl SseEncode for Option<String> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -4250,6 +4304,16 @@ impl SseEncode for Option<crate::api::LauncherStateDto> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::LauncherStateDto>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::NativeToolDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::NativeToolDto>::sse_encode(value, serializer);
         }
     }
 }

@@ -30,6 +30,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+      - name: Verify builtin feature catalogue
+        run: cargo run -p anywhere-core --example generate_feature_catalog --locked -- --check
       - name: Compile shared workspace and test targets
         run: cargo check --workspace --all-targets --locked
       - name: Run shared Rust regressions on Linux

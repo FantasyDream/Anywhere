@@ -31,3 +31,8 @@ xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   apps/flutter/macos/Runner/tests/WindowInputFocusTests.swift \
   -o "$host_test_directory/input-focus-test"
 "$host_test_directory/input-focus-test"
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  apps/flutter/macos/Runner/NativeEditMenu.swift \
+  apps/flutter/macos/Runner/tests/NativeEditMenuTests.swift \
+  -o "$host_test_directory/edit-menu-test"
+"$host_test_directory/edit-menu-test"

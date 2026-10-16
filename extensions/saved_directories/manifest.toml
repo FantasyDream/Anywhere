@@ -1,5 +1,0 @@
-protocol_version = 2
-id = "saved_directories"
-name = "Saved Directories"
-version = "0.8.0"
-capabilities = ["storage", "file.open"]

@@ -1,0 +1,11 @@
+samples: 100 warmup + 1000 measured, 1000 synthetic applications
+"https://github.com": input_recognition p50=0.038ms p95=0.054ms; matcher p50=0.002ms p95=0.003ms; applications p50=0.123ms p95=0.162ms; ranking p50=0.000ms p95=0.000ms
+"{\"name\":\"foo\",\"age\":18}": input_recognition p50=0.035ms p95=0.043ms; matcher p50=0.000ms p95=0.000ms; applications p50=0.112ms p95=0.119ms; ranking p50=0.000ms p95=0.000ms
+"Cargo.toml": input_recognition p50=0.024ms p95=0.028ms; matcher p50=0.003ms p95=0.004ms; applications p50=0.129ms p95=0.134ms; ranking p50=0.000ms p95=0.000ms
+".": input_recognition p50=0.023ms p95=0.031ms; matcher p50=0.004ms p95=0.005ms; applications p50=0.130ms p95=0.144ms; ranking p50=0.000ms p95=0.000ms
+"hello world": input_recognition p50=0.033ms p95=0.041ms; matcher p50=0.000ms p95=0.000ms; applications p50=0.121ms p95=0.133ms; ranking p50=0.000ms p95=0.000ms
+"git sta": input_recognition p50=0.034ms p95=0.042ms; matcher p50=0.000ms p95=0.000ms; applications p50=0.132ms p95=0.141ms; ranking p50=0.000ms p95=0.000ms
+"chrome": input_recognition p50=0.034ms p95=0.041ms; matcher p50=0.000ms p95=0.000ms; applications p50=0.122ms p95=0.130ms; ranking p50=0.000ms p95=0.000ms
+1048576 chars of text: input_recognition p50=0.288ms p95=0.347ms; matcher p50=0.000ms p95=0.000ms; applications p50=0.000ms p95=0.000ms; ranking p50=0.033ms p95=0.060ms
+repository_root("/Users/luckincoffee/Documents/Github/Anywhere") = Some("/Users/luckincoffee/Documents/Github/Anywhere")
+text provider contexts for "hello world": 1

@@ -35,7 +35,7 @@ impl ModuleStorageHost {
         connection.execute_batch("PRAGMA cache_size=-256; CREATE TABLE IF NOT EXISTS extension_values (namespace TEXT NOT NULL, key TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY(namespace,key)); PRAGMA user_version=1;")?;
         Ok(())
     }
-    /// Explicit reload also follows a repaired/replaced database file. Bound handles
+    /// Explicit data refresh also follows a repaired/replaced database file. Bound handles
     /// share the slot, so no old action can keep writing through a detached connection.
     pub fn reopen(&self) -> Result<()> {
         if let Some(path) = &self.path {

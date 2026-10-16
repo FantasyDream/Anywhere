@@ -76,11 +76,15 @@ final class LauncherWindowCoordinator {
             let screen = panel.screen ?? NSScreen.main!
             let height = min(max(requestedHeight, 300), screen.visibleFrame.height)
             panel.setContentSize(NSSize(width: 648, height: height))
+            WindowInputFocus.restore(in: panel, content: controller.view)
             return
         }
         let screen = window.screen ?? NSScreen.main!
         let height = min(max(requestedHeight, 64), min(600, screen.visibleFrame.height))
         let width = min(max(requestedWidth, 400), screen.visibleFrame.width)
+        // Navigation can remove the old editor even without a frame change.
+        // Preserve any surviving editor; otherwise restore a keyboard receiver.
+        defer { WindowInputFocus.restore(in: window, content: controller.view) }
         guard window.frame.size != NSSize(width: width, height: height) else { return }
         var frame = window.frame
         frame.origin.y = max(screen.visibleFrame.minY, frame.maxY - height)

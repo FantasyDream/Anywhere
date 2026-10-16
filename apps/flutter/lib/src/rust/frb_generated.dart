@@ -68,7 +68,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.11.1';
 
   @override
-  int get rustContentHash => -853569811;
+  int get rustContentHash => 704349308;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -152,9 +152,9 @@ abstract class RustLibApi extends BaseApi {
 
   bool crateApiPromptAccessibility();
 
-  Future<List<ExtensionStatusDto>> crateApiReloadExtensions();
+  Future<List<ExtensionStatusDto>> crateApiRefreshFeatures();
 
-  Future<List<PluginStatusDto>> crateApiReloadPlugins();
+  Future<List<PluginStatusDto>> crateApiRefreshPlugins();
 
   Future<void> crateApiRemoveExecutionSession({required String id});
 
@@ -835,7 +835,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<List<ExtensionStatusDto>> crateApiReloadExtensions() {
+  Future<List<ExtensionStatusDto>> crateApiRefreshFeatures() {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -846,19 +846,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_list_extension_status_dto,
         decodeErrorData: sse_decode_AnyhowException,
       ),
-      constMeta: kCrateApiReloadExtensionsConstMeta,
+      constMeta: kCrateApiRefreshFeaturesConstMeta,
       argValues: [],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiReloadExtensionsConstMeta => const TaskConstMeta(
-        debugName: "reload_extensions",
+  TaskConstMeta get kCrateApiRefreshFeaturesConstMeta => const TaskConstMeta(
+        debugName: "refresh_features",
         argNames: [],
       );
 
   @override
-  Future<List<PluginStatusDto>> crateApiReloadPlugins() {
+  Future<List<PluginStatusDto>> crateApiRefreshPlugins() {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
@@ -869,14 +869,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeSuccessData: sse_decode_list_plugin_status_dto,
         decodeErrorData: sse_decode_AnyhowException,
       ),
-      constMeta: kCrateApiReloadPluginsConstMeta,
+      constMeta: kCrateApiRefreshPluginsConstMeta,
       argValues: [],
       apiImpl: this,
     ));
   }
 
-  TaskConstMeta get kCrateApiReloadPluginsConstMeta => const TaskConstMeta(
-        debugName: "reload_plugins",
+  TaskConstMeta get kCrateApiRefreshPluginsConstMeta => const TaskConstMeta(
+        debugName: "refresh_plugins",
         argNames: [],
       );
 
@@ -1492,8 +1492,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ActionResultDto dco_decode_action_result_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 10)
-      throw Exception('unexpected arr length: expect 10 but see ${arr.length}');
+    if (arr.length != 11)
+      throw Exception('unexpected arr length: expect 11 but see ${arr.length}');
     return ActionResultDto(
       sessionId: dco_decode_u_32(arr[0]),
       revision: dco_decode_u_32(arr[1]),
@@ -1503,8 +1503,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       outputText: dco_decode_opt_String(arr[5]),
       view: dco_decode_opt_box_autoadd_host_view_dto(arr[6]),
       pluginDetail: dco_decode_opt_box_autoadd_plugin_detail_dto(arr[7]),
-      closeWindow: dco_decode_bool(arr[8]),
-      executionSessionId: dco_decode_opt_String(arr[9]),
+      nativeTool: dco_decode_opt_box_autoadd_native_tool_dto(arr[8]),
+      closeWindow: dco_decode_bool(arr[9]),
+      executionSessionId: dco_decode_opt_String(arr[10]),
     );
   }
 
@@ -1600,6 +1601,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   LauncherStateDto dco_decode_box_autoadd_launcher_state_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_launcher_state_dto(raw);
+  }
+
+  @protected
+  NativeToolDto dco_decode_box_autoadd_native_tool_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_native_tool_dto(raw);
   }
 
   @protected
@@ -1969,6 +1976,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  NativeToolDto dco_decode_native_tool_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return NativeToolDto(
+      id: dco_decode_String(arr[0]),
+      input: dco_decode_String(arr[1]),
+    );
+  }
+
+  @protected
   String? dco_decode_opt_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_String(raw);
@@ -2032,6 +2051,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   LauncherStateDto? dco_decode_opt_box_autoadd_launcher_state_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_launcher_state_dto(raw);
+  }
+
+  @protected
+  NativeToolDto? dco_decode_opt_box_autoadd_native_tool_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_native_tool_dto(raw);
   }
 
   @protected
@@ -2231,6 +2256,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_view = sse_decode_opt_box_autoadd_host_view_dto(deserializer);
     var var_pluginDetail =
         sse_decode_opt_box_autoadd_plugin_detail_dto(deserializer);
+    var var_nativeTool =
+        sse_decode_opt_box_autoadd_native_tool_dto(deserializer);
     var var_closeWindow = sse_decode_bool(deserializer);
     var var_executionSessionId = sse_decode_opt_String(deserializer);
     return ActionResultDto(
@@ -2242,6 +2269,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         outputText: var_outputText,
         view: var_view,
         pluginDetail: var_pluginDetail,
+        nativeTool: var_nativeTool,
         closeWindow: var_closeWindow,
         executionSessionId: var_executionSessionId);
   }
@@ -2342,6 +2370,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_launcher_state_dto(deserializer));
+  }
+
+  @protected
+  NativeToolDto sse_decode_box_autoadd_native_tool_dto(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_native_tool_dto(deserializer));
   }
 
   @protected
@@ -2875,6 +2910,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  NativeToolDto sse_decode_native_tool_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_String(deserializer);
+    var var_input = sse_decode_String(deserializer);
+    return NativeToolDto(id: var_id, input: var_input);
+  }
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -2976,6 +3019,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_launcher_state_dto(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  NativeToolDto? sse_decode_opt_box_autoadd_native_tool_dto(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_native_tool_dto(deserializer));
     } else {
       return null;
     }
@@ -3179,6 +3234,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_opt_String(self.outputText, serializer);
     sse_encode_opt_box_autoadd_host_view_dto(self.view, serializer);
     sse_encode_opt_box_autoadd_plugin_detail_dto(self.pluginDetail, serializer);
+    sse_encode_opt_box_autoadd_native_tool_dto(self.nativeTool, serializer);
     sse_encode_bool(self.closeWindow, serializer);
     sse_encode_opt_String(self.executionSessionId, serializer);
   }
@@ -3274,6 +3330,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       LauncherStateDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_launcher_state_dto(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_native_tool_dto(
+      NativeToolDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_native_tool_dto(self, serializer);
   }
 
   @protected
@@ -3658,6 +3721,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_native_tool_dto(
+      NativeToolDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.id, serializer);
+    sse_encode_String(self.input, serializer);
+  }
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -3751,6 +3822,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_launcher_state_dto(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_native_tool_dto(
+      NativeToolDto? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_native_tool_dto(self, serializer);
     }
   }
 

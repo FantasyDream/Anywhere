@@ -110,6 +110,10 @@ class LauncherSearchArea extends StatelessWidget {
                           controller: input,
                           focusNode: focus,
                           autofocus: true,
+                          // Launcher commands own Return. A native editing
+                          // completion must not close a newer page's input client.
+                          textInputAction: TextInputAction.none,
+                          onEditingComplete: () {},
                           maxLines: state.isContent ? 2 : 1,
                           style: TextStyle(
                               fontSize: state.isContent ? 17 : 21,

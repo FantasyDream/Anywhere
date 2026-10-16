@@ -226,8 +226,13 @@ pub(super) fn availability_dto(state: protocol::AvailabilityState) -> Availabili
 
 impl From<protocol::ActionResult> for ActionResultDto {
     fn from(result: protocol::ActionResult) -> Self {
-        let (view, plugin_detail) = match result.view {
-            Some(protocol::HostView::FileSearch) => (Some(HostViewDto::FileSearch), None),
+        let (view, plugin_detail, native_tool) = match result.view {
+            Some(protocol::HostView::FileSearch) => (Some(HostViewDto::FileSearch), None, None),
+            Some(protocol::HostView::NativeTool { id, input }) => (
+                Some(HostViewDto::NativeTool),
+                None,
+                Some(NativeToolDto { id, input }),
+            ),
             Some(protocol::HostView::PluginDetail { detail }) => (
                 Some(HostViewDto::PluginDetail),
                 Some(PluginDetailDto {
@@ -243,8 +248,9 @@ impl From<protocol::ActionResult> for ActionResultDto {
                         })
                         .collect(),
                 }),
+                None,
             ),
-            None => (None, None),
+            None => (None, None, None),
         };
         Self {
             session_id: result.session_id,
@@ -258,6 +264,7 @@ impl From<protocol::ActionResult> for ActionResultDto {
             output_text: result.output_text,
             view,
             plugin_detail,
+            native_tool,
             close_window: result.close_window,
             execution_session_id: result.execution_session_id,
         }

@@ -10,10 +10,20 @@ use std::sync::Arc;
 #[derive(Default, Clone)]
 pub struct ContextProviderRegistry {
     providers: Vec<Arc<dyn ContextProvider>>,
+    contributors: std::collections::BTreeMap<String, Arc<str>>,
+    input_recognizers: Vec<(super::input_recognizer::InputRecognizer, Option<Arc<str>>)>,
 }
 
 impl ContextProviderRegistry {
     pub fn register(&mut self, provider: Arc<dyn ContextProvider>) -> Result<()> {
+        self.register_owned(provider, None)
+    }
+
+    pub fn register_owned(
+        &mut self,
+        provider: Arc<dyn ContextProvider>,
+        contributor: Option<&str>,
+    ) -> Result<()> {
         let descriptor = provider.descriptor();
         if self
             .providers
@@ -21,6 +31,10 @@ impl ContextProviderRegistry {
             .any(|existing| existing.descriptor().id == descriptor.id)
         {
             bail!("duplicate provider id: {}", descriptor.id);
+        }
+        if let Some(contributor) = contributor {
+            self.contributors
+                .insert(descriptor.id.clone(), contributor.into());
         }
         self.providers.push(provider);
         self.providers.sort_by(|a, b| {
@@ -30,6 +44,43 @@ impl ContextProviderRegistry {
                 .then_with(|| a.descriptor().id.cmp(&b.descriptor().id))
         });
         Ok(())
+    }
+
+    pub fn register_input_recognizer(
+        &mut self,
+        recognizer: super::input_recognizer::InputRecognizer,
+        contributor: Option<&str>,
+    ) -> Result<()> {
+        if recognizer.id.is_empty()
+            || self
+                .input_recognizers
+                .iter()
+                .any(|(existing, _)| existing.id == recognizer.id)
+        {
+            bail!("duplicate or empty input recognizer id: {}", recognizer.id);
+        }
+        self.input_recognizers
+            .push((recognizer, contributor.map(Into::into)));
+        self.input_recognizers
+            .sort_by(|(a, _), (b, _)| b.priority.cmp(&a.priority).then_with(|| a.id.cmp(b.id)));
+        Ok(())
+    }
+    pub fn input_recognizers(&self) -> Vec<super::input_recognizer::InputRecognizer> {
+        self.input_recognizers
+            .iter()
+            .map(|(rule, _)| *rule)
+            .collect()
+    }
+
+    pub fn retain_contributors(&mut self, enabled: impl Fn(&str) -> bool) {
+        self.providers.retain(|provider| {
+            self.contributors
+                .get(&provider.descriptor().id)
+                .is_none_or(|id| enabled(id))
+        });
+        self.contributors.retain(|_, id| enabled(id));
+        self.input_recognizers
+            .retain(|(_, owner)| owner.as_deref().is_none_or(&enabled));
     }
 
     pub fn providers(&self) -> &[Arc<dyn ContextProvider>] {
@@ -101,5 +152,44 @@ mod tests {
                 },
             }))
             .is_err());
+    }
+    #[test]
+    fn input_recognizer_identity_is_unique_and_owner_filter_preserves_foundations() {
+        use super::super::input_recognizer::InputRecognizer;
+        let rule = |id, priority| InputRecognizer {
+            id,
+            priority,
+            recognize: |_| None,
+        };
+        let mut registry = ContextProviderRegistry::default();
+        registry
+            .register_input_recognizer(rule("core.path", 1), None)
+            .unwrap();
+        registry
+            .register_input_recognizer(rule("core.json", 2), Some("json"))
+            .unwrap();
+        assert!(registry
+            .register_input_recognizer(rule("core.json", 3), None)
+            .is_err());
+        assert!(registry
+            .register_input_recognizer(rule("", 3), None)
+            .is_err());
+        assert_eq!(
+            registry
+                .input_recognizers()
+                .iter()
+                .map(|r| r.id)
+                .collect::<Vec<_>>(),
+            ["core.json", "core.path"]
+        );
+        registry.retain_contributors(|_| false);
+        assert_eq!(
+            registry
+                .input_recognizers()
+                .iter()
+                .map(|r| r.id)
+                .collect::<Vec<_>>(),
+            ["core.path"]
+        );
     }
 }

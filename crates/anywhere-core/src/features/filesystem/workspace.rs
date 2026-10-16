@@ -6,17 +6,11 @@ use crate::core::{
         group::ActionGroup,
         handler::{ActionHandler, ExecutionOutput},
     },
-    context::{ContextValue, ResolvedContext},
-    search::{
-        candidate::Candidate,
-        candidate_source::{CandidateSource, SearchContext},
-        engine::ActionSearch,
-        query::Query,
-    },
+    context::ResolvedContext,
 };
 use anywhere_protocol::*;
 
-pub const ENTRY_CONTEXT: &str = "core.launcher";
+use crate::features::tools::ENTRY_CONTEXT;
 pub const ACTION_ID: &str = "core.files.search";
 struct OpenSearch;
 impl ActionHandler for OpenSearch {
@@ -48,42 +42,5 @@ pub fn bundle() -> ActionBundle {
             home_eligible: false,
             primary_action: false,
         }],
-    }
-}
-
-/// The Launcher capability is an execution target, not an ambient Context or Scope.
-pub struct EntrySource<'a, 'b> {
-    pub search: &'a ActionSearch<'b>,
-}
-impl EntrySource<'_, '_> {
-    /// Shortcut execution must remain available independently of visible search.
-    pub fn binding_offers(&self) -> Vec<Candidate> {
-        self.offers(&Query::parse(""))
-    }
-
-    fn offers(&self, query: &Query) -> Vec<Candidate> {
-        let context = ResolvedContext::new(
-            ENTRY_CONTEXT,
-            ContextValue::Text("".into()),
-            ContextSource::ForegroundApplication,
-            "core.launcher",
-        );
-        self.search
-            .search(query, &[context], &[])
-            .candidates
-            .into_iter()
-            .filter(|c| c.presentation.command_id.as_deref() == Some(ACTION_ID))
-            .collect()
-    }
-}
-impl CandidateSource for EntrySource<'_, '_> {
-    fn id(&self) -> &'static str {
-        "workspace-actions"
-    }
-    fn candidates(&self, request: &SearchContext<'_>) -> Vec<Candidate> {
-        if request.scope_id.is_some() || request.query.is_empty() {
-            return Vec::new();
-        }
-        self.offers(request.query)
     }
 }

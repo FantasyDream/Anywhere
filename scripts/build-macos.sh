@@ -7,6 +7,7 @@ python3 scripts/check-flutter.py
 python3 scripts/generate-keymap.py --check
 python3 scripts/generate-file-types.py --check
 python3 scripts/generate-runtime-policies.py --check
+cargo run -p anywhere-core --example generate_feature_catalog --locked -- --check
 if [[ "$(uname -s)" != Darwin ]]; then
   echo 'This MVP builds on macOS only.' >&2
   exit 1

@@ -18,15 +18,15 @@ action = {type = "copy", text = "{{context.value}}"}
 "#;
 
 #[tokio::test]
-async fn two_first_party_modules_keep_context_action_scope_and_execution_identity() {
-    let modules = anywhere_core::extensions::builtins().unwrap();
+async fn delivered_modules_keep_catalog_and_url_execution_identity() {
+    let modules = anywhere_core::features::builtin_contributions().unwrap();
     assert_eq!(
         modules
             .iter()
-            .filter(|m| matches!(m.id, "url" | "json"))
+            .filter(|m| matches!(m.id, "git" | "url"))
             .map(|m| m.id)
             .collect::<Vec<_>>(),
-        ["url", "json"]
+        ["git", "url"]
     );
     let platform = Arc::new(TestPlatform::default());
     let app = Application::new(
@@ -36,23 +36,6 @@ async fn two_first_party_modules_keep_context_action_scope_and_execution_identit
         vec![],
     );
     let id = app.activate().await.unwrap().unwrap().session_id;
-    app.update_input(id, r#"{"value":1}"#.into(), 1)
-        .await
-        .unwrap();
-    let state = settled(&app, id, 1).await;
-    assert!(state
-        .context_summary
-        .iter()
-        .any(|c| c.type_id == JSON_DOCUMENT));
-    let formatted = app
-        .execute(id, 1, candidate(&state, "core.json.format"))
-        .await
-        .unwrap();
-    assert_eq!(formatted.status, ActionStatus::Succeeded);
-    assert!(formatted.output_text.as_deref().unwrap().contains("\n"));
-    app.execute(id, 1, candidate(&state, "core.json.copy"))
-        .await
-        .unwrap();
     app.update_input(id, "https://example.com/project".into(), 2)
         .await
         .unwrap();
@@ -62,10 +45,9 @@ async fn two_first_party_modules_keep_context_action_scope_and_execution_identit
         .await
         .unwrap();
     let calls = platform.calls.lock().unwrap();
-    assert_eq!(calls.len(), 2);
-    assert_eq!(calls[0].0, "copy");
+    assert_eq!(calls.len(), 1);
     assert_eq!(
-        calls[1],
+        calls[0],
         ("url".into(), "https://example.com/project".into())
     );
 }

@@ -12,9 +12,9 @@
 | 没有可识别选中文本，剪贴板复制年龄不超过 15 秒且能解析为具体 Context | Global Search：自动填入剪贴板，专用内容输入 UI |
 | 只有普通文本、对象解析失败、剪贴板过期或年龄未知 | Current App：空输入，当前应用环境动作 |
 
-自动填入必须由实际识别器产生 URL、JSON、真实文件 / 目录等非 Text Context。普通 Text 只是图的输入种子，不满足自动跳转条件；无效 URL、损坏 JSON、不存在的路径不会打开内容页。识别失败的选区允许继续尝试有效剪贴板。手动输入和进入内容页面后的编辑仍沿用原图规则。
+自动填入必须由实际识别器产生 URL、真实文件 / 目录等非 Text Context。普通 Text 只是图的输入种子，不满足自动跳转条件；无效 URL、JSON 文本、不存在的路径不会打开内容页。识别失败的选区允许继续尝试有效剪贴板。手动输入和进入内容页面后的编辑仍沿用原图规则。
 
-内容 UI 标明 Selected text 或 Recent clipboard，并提示 Esc 返回 Current App。正文可以编辑；它是待处理对象，不作为动作标题查询。URL、JSON、路径等仍走同一 Context Graph、Registry 和 Ranking；只处理当前输入及派生 Context，不混入当前应用、网页、Finder 选择或其他捕获文本。
+内容 UI 标明 Selected text 或 Recent clipboard，并提示 Esc 返回 Current App。正文可以编辑；它是待处理对象，不作为动作标题查询。URL、路径等仍走同一 Context Graph、Registry 和 Ranking；只处理当前输入及派生 Context，不混入当前应用、网页、Finder 选择或其他捕获文本。
 
 Esc 从内容页面清空并返回 Current App，重新解析当前应用环境；再次 Esc 进入完全空白 Global Search；再按 Esc 关闭窗口。菜单浏览、结果页及已有查询的返回逻辑仍保留。显式 Universal 唤醒直接进入空白搜索，绕过自动填入；显式全局动作快捷键独立使用完整采集图。
 
@@ -46,3 +46,5 @@ Esc 从内容页面清空并返回 Current App，重新解析当前应用环境�
 有查询或工具 / 二级操作时，隐藏后 15 秒恢复原内容和 Context。空白 Global / Current App 首页按本次入口新建 Session，重新采集前台应用。菜单、Scope 与来源定义不因恢复而改写。
 
 回归覆盖来源优先级、过期 / 未知复制年龄、输入编辑、迟到结果不覆盖用户交互、Esc 链、环境恢复、来源单次读取和设置丢弃正文。历史真实采集与包验证边界见 [V0.6 记录](archive/v0.6-final-acceptance.md)，当前工程状态见 [V0.8 MVP](mvp-v0.8.md)。
+
+JSON 工具已延期到 WebView 插件阶段，当前 JSON 文本仅为普通 Text，不会单独触发自动内容页。

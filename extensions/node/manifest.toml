@@ -1,5 +1,0 @@
-protocol_version = 2
-id = "node"
-name = "Node"
-version = "0.8.0"
-capabilities = ["process.start"]

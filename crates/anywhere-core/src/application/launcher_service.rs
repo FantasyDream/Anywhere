@@ -55,6 +55,7 @@ pub trait LauncherApplication: Send + Sync {
 }
 
 pub struct Application {
+    pub(super) feature_catalog_installed: std::sync::atomic::AtomicBool,
     pub(super) executions: Arc<crate::core::execution::ExecutionSessionManager>,
     pub(super) platform: Arc<dyn Platform>,
     /// The engine, shared with the background tasks that publish late results.
@@ -109,6 +110,7 @@ impl Application {
             .asynchronous
             .extend(sources);
         Self {
+            feature_catalog_installed: Default::default(),
             executions: Arc::new(Default::default()),
             platform,
             resolver,
@@ -259,11 +261,32 @@ impl Application {
 
     /// Commit policy persistence before atomically publishing the new catalog.
     /// Provider runs, retained contexts and execution offers belong to the old configuration.
-    pub(crate) fn replace_extension_runtime(
+    #[cfg(test)]
+    pub(crate) fn publish_feature_catalog(
         &self,
         registry: ActionRegistry,
         providers: crate::core::context::registry::ContextProviderRegistry,
         sources: crate::core::search::candidate_source::SourceSet,
+        policy: Arc<crate::features::policy::FeaturePolicySnapshot>,
+        persist: impl FnOnce() -> Result<()>,
+    ) -> Result<()> {
+        self.publish_selected_catalog(
+            registry,
+            providers,
+            sources,
+            policy,
+            BTreeSet::new(),
+            persist,
+        )
+    }
+
+    pub(crate) fn publish_selected_catalog(
+        &self,
+        mut registry: ActionRegistry,
+        mut providers: crate::core::context::registry::ContextProviderRegistry,
+        mut sources: crate::core::search::candidate_source::SourceSet,
+        policy: Arc<crate::features::policy::FeaturePolicySnapshot>,
+        excluded: BTreeSet<String>,
         persist: impl FnOnce() -> Result<()>,
     ) -> Result<()> {
         let mut session = self.session()?;
@@ -289,7 +312,25 @@ impl Application {
                 "duplicate or empty source id: {id}"
             );
         }
+        let mut policy_slot = self
+            .resolver
+            .feature_policy
+            .current
+            .write()
+            .map_err(|_| anyhow::anyhow!("feature policy lock poisoned"))?;
+        let mut excluded_slot = self
+            .resolver
+            .feature_policy
+            .excluded
+            .write()
+            .map_err(|_| anyhow::anyhow!("contribution policy lock poisoned"))?;
+        let enabled = |id: &str| policy.allows_contributor(id) && !excluded.contains(id);
+        registry.retain_contributors(enabled);
+        providers.retain_contributors(enabled);
+        sources.retain_contributors(enabled);
         persist()?;
+        *policy_slot = policy;
+        *excluded_slot = excluded;
         let retired = std::mem::replace(&mut source_slot.extensions, sources);
         *provider_slot = providers;
         *registry_slot = Arc::new(registry);
@@ -302,6 +343,8 @@ impl Application {
         session.actions = registry_slot.clone();
         session.invalidate_execution();
         self.resolver.abandon_session();
+        drop(excluded_slot);
+        drop(policy_slot);
         drop(source_slot);
         drop(registry_slot);
         drop(provider_slot);

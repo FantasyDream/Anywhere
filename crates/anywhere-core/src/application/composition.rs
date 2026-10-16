@@ -17,7 +17,9 @@ pub(crate) fn configured_builtins(
     let mut registry = ActionRegistry::default();
     let mut providers = ContextProviderRegistry::default();
     for contribution in crate::features::contribution::builtins() {
-        if disabled.contains(&format!("first-party:{}", contribution.id)) {
+        if contribution.configurable
+            && disabled.contains(&format!("first-party:{}", contribution.id))
+        {
             continue;
         }
         append_contribution(&mut registry, &mut providers, contribution)
@@ -31,14 +33,18 @@ pub(crate) fn append_contribution(
     providers: &mut ContextProviderRegistry,
     contribution: crate::features::contribution::FeatureContribution,
 ) -> anyhow::Result<()> {
+    let owner = contribution.configurable.then_some(contribution.id);
+    for rule in contribution.input_recognizers {
+        providers.register_input_recognizer(rule, owner)?;
+    }
     for provider in contribution.providers {
-        providers.register(provider)?;
+        providers.register_owned(provider, owner)?;
     }
     for bundle in contribution.bundles {
-        registry.register_bundle(bundle)?;
+        registry.register_owned_bundle(bundle, owner)?;
     }
     for factory in contribution.factories {
-        registry.register_factory_ref(factory);
+        registry.register_owned_factory(factory, owner);
     }
     Ok(())
 }
@@ -64,13 +70,7 @@ pub(super) fn builtin_sources(
 }
 
 pub(super) fn builtin_providers() -> ContextProviderRegistry {
-    let mut registry = ContextProviderRegistry::default();
-    for provider in crate::features::builtin_providers() {
-        registry
-            .register(provider)
-            .expect("invalid built-in provider registration");
-    }
-    registry
+    configured_builtins(&Default::default()).1
 }
 
 pub(super) fn session_providers(

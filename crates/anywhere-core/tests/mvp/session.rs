@@ -343,40 +343,6 @@ async fn scenarios_a_to_f_use_the_same_facade_and_executor() {
         .await
         .is_err());
 
-    let json = app
-        .update_input(session, r#"{"name":"foo","age":18}"#.into(), 2)
-        .await
-        .unwrap()
-        .unwrap();
-    assert_eq!(
-        json.candidates[0].command_id.as_deref(),
-        Some("core.json.format")
-    );
-    for command in ["core.json.format", "core.json.minify", "core.json.copy"] {
-        assert!(app
-            .execute(session, json.revision, candidate(&json, command))
-            .await
-            .unwrap()
-            .succeeded());
-    }
-    let formatted = app
-        .execute(session, json.revision, candidate(&json, "core.json.format"))
-        .await
-        .unwrap();
-    assert!(!formatted.close_window);
-    assert!(formatted.output_text.unwrap().contains('\n'));
-    let minified = app
-        .execute(session, json.revision, candidate(&json, "core.json.minify"))
-        .await
-        .unwrap()
-        .output_text
-        .unwrap();
-    assert!(!minified.contains('\n'));
-    assert_eq!(
-        serde_json::from_str::<serde_json::Value>(&minified).unwrap()["name"],
-        "foo"
-    );
-
     let path = dir.path().join("existing file.txt");
     std::fs::write(&path, "hello").unwrap();
     let file = app

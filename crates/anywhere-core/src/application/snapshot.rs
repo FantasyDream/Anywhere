@@ -95,7 +95,7 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
     validate_ready_candidates(&mut ready_candidates, actions, facts);
     let ready_source = crate::core::search::candidate_source::ReadySource(&ready_candidates);
     extra.push(&ready_source);
-    let workspace = crate::features::filesystem::workspace::EntrySource { search: &search };
+    let workspace = crate::features::tools::EntrySource { search: &search };
     if input_mode != InputMode::Content {
         extra.push(&workspace);
     }
@@ -136,9 +136,9 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
             .iter()
             .filter(|candidate| {
                 candidate.presentation.kind == CandidateKind::Action
-                    && candidate.context().is_some_and(|c| {
-                        c.type_id != crate::features::filesystem::workspace::ENTRY_CONTEXT
-                    })
+                    && candidate
+                        .context()
+                        .is_some_and(|c| c.type_id != crate::features::tools::ENTRY_CONTEXT)
             })
             .cloned()
             .collect()

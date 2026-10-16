@@ -31,6 +31,7 @@ pub struct Resolver {
     pub(super) registry: Arc<Mutex<Arc<ActionRegistry>>>,
     /// Stateless providers; the directory provider is added per revision.
     pub(super) providers: Arc<Mutex<ContextProviderRegistry>>,
+    pub(super) feature_policy: Arc<crate::features::policy::FeaturePolicy>,
     pub(super) sources: Arc<Mutex<crate::core::search::candidate_source::SourceCatalog>>,
     pub(super) source_workers: Arc<tokio::sync::Semaphore>,
     pub(super) session: Arc<Mutex<LauncherSession>>,
@@ -71,6 +72,7 @@ impl Resolver {
             registry: Arc::new(Mutex::new(Arc::new(registry))),
             // Registration order does not matter: the registry sorts by priority, then id.
             providers: Arc::new(Mutex::new(super::composition::builtin_providers())),
+            feature_policy: Arc::new(Default::default()),
             sources: Arc::new(Mutex::new(Default::default())),
             source_workers: Arc::new(tokio::sync::Semaphore::new(
                 anywhere_protocol::policy::MAX_CONCURRENT_SEARCH_SOURCES as usize,
@@ -101,7 +103,8 @@ impl Resolver {
             .unwrap_or_else(|poisoned| poisoned.into_inner().clone())
     }
 
-    pub fn replace_base_registry(&self, registry: ActionRegistry) {
+    pub fn replace_base_registry(&self, mut registry: ActionRegistry) {
+        registry.retain_contributors(|id| self.feature_policy.allows(id));
         if let Ok(mut slot) = self.registry.lock() {
             *slot = Arc::new(registry);
         }
@@ -156,6 +159,7 @@ impl Resolver {
             revision,
             current: self.current.clone(),
             events: self.events.clone(),
+            guard: Some(self.feature_policy.request_guard()),
         }
     }
 
@@ -412,6 +416,7 @@ impl Resolver {
                 action_catalog_version,
                 search_candidates,
                 object_actions,
+                feature_policy,
             ) = {
                 let session = self
                     .session
@@ -455,6 +460,7 @@ impl Resolver {
                     self.action_catalog_version.load(Ordering::Acquire),
                     session.resolution.search_candidates.clone(),
                     session.resolution.object_actions.clone(),
+                    self.feature_policy.snapshot(),
                 )
             };
             let (catalog, catalog_generation) = self.catalog_view()?;
@@ -489,6 +495,7 @@ impl Resolver {
             if session.state.session_id != session_id
                 || session.state.revision != revision
                 || !self.is_current(session_id, revision)
+                || !self.feature_policy.is_current(&feature_policy)
             {
                 return Ok(None);
             }

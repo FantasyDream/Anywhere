@@ -1,8 +1,7 @@
 //! Manifest negotiation and metadata validation; never grants requested access.
 use anyhow::{bail, ensure, Context, Result};
 use anywhere_protocol::{
-    extension::{ExtensionCapability as Capability, FirstPartyManifest},
-    DeclarativeAction, PluginCommand, PluginManifest,
+    extension::ExtensionCapability as Capability, DeclarativeAction, PluginCommand, PluginManifest,
 };
 use std::collections::BTreeSet;
 pub fn required_capability(action: &DeclarativeAction) -> Capability {
@@ -109,20 +108,6 @@ pub fn validate_plugin_metadata(manifest: &PluginManifest) -> Result<()> {
     }
     Ok(())
 }
-pub fn parse_first_party_manifest(raw: &str) -> Result<FirstPartyManifest> {
-    ensure!(
-        raw.len() <= 16 * 1024,
-        "first-party metadata exceeds 16 KiB"
-    );
-    let m: FirstPartyManifest = toml::from_str(raw).context("invalid first-party manifest")?;
-    ensure!(
-        m.protocol_version == 2,
-        "first-party manifests require protocol_version 2"
-    );
-    metadata(&m.id, &m.name, &m.version, &m.capabilities)?;
-    Ok(m)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,22 +157,5 @@ accepts = ["core.text"]
 action = {type = "execute_builtin", command_id = "core.json.copy"}
 "#;
         assert!(super::super::parse_manifest(raw).is_err());
-    }
-    #[test]
-    fn first_party_metadata_uses_the_same_version_and_capability_contract() {
-        let json = include_str!("../../../extensions/json/manifest.toml");
-        assert_eq!(
-            parse_first_party_manifest(json).unwrap().capabilities,
-            [Capability::ClipboardWrite]
-        );
-        assert!(parse_first_party_manifest(
-            &json.replace("protocol_version = 2", "protocol_version = 1")
-        )
-        .is_err());
-        assert!(
-            parse_first_party_manifest(&json.replace("clipboard.write", "unknown.operation"))
-                .is_err()
-        );
-        assert!(parse_first_party_manifest(&(json.to_owned() + "runtime = \"shell\"\n")).is_err());
     }
 }

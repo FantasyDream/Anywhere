@@ -1,4 +1,3 @@
-import '../plugins/plugin_detail_page.dart';
 import 'activation_prefill.dart';
 import 'dart:async';
 import '../infrastructure/desktop_environment.dart';
@@ -177,6 +176,8 @@ class _LauncherScreenState extends State<LauncherScreen> {
   final _focus = FocusNode();
   final _scroll = ScrollController();
   double? _hiddenScrollOffset;
+  Object? _displayedTool;
+  (Object, double)? _toolReturnScroll;
   LauncherController get _controller => widget.controller;
   LauncherViewState get _view => _controller.view;
   bool _wasVisible = false;
@@ -213,7 +214,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
 
   void _reportIconViewport() {
     final count = _view.visibleEntries.length;
-    if (count == 0 || _view.output != null) return;
+    if (count == 0 || _view.toolPage != null || _view.output != null) return;
     var first = 0;
     var last = LauncherViewState.maxRows;
     if (_scroll.hasClients) {
@@ -264,6 +265,35 @@ class _LauncherScreenState extends State<LauncherScreen> {
         }
       });
     }
+    final queryKey = (
+      _view.snapshot?.sessionId,
+      _view.snapshot?.revision,
+      _view.input,
+      _view.scopeId,
+      _view.actionPath
+    );
+    if (_view.toolPage != null &&
+        _displayedTool == null &&
+        _scroll.hasClients) {
+      _toolReturnScroll = (queryKey, _scroll.offset);
+    }
+    final toolPosition = _toolReturnScroll;
+    final restoreToolScroll = _view.toolPage == null &&
+        _displayedTool != null &&
+        toolPosition?.$1 == queryKey;
+    _displayedTool = _view.toolPage;
+    if (restoreToolScroll) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted &&
+            _view.visible &&
+            _view.toolPage == null &&
+            _scroll.hasClients) {
+          _scroll.jumpTo(
+              toolPosition!.$2.clamp(0, _scroll.position.maxScrollExtent));
+        }
+      });
+    }
+    if (_toolReturnScroll?.$1 != queryKey) _toolReturnScroll = null;
     final objectActions = _view.objectActionTitle != null;
     if (objectActions && !_displayedObjectActions && _scroll.hasClients) {
       // Actions temporarily replace the list with a much shorter one. Save its
@@ -296,7 +326,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
     _displayedObjectActions = objectActions;
     final inputVisible = _view.visible &&
         _view.phase != LauncherPhase.settings &&
-        _view.pluginDetail == null;
+        _view.toolPage == null;
     final searchText =
         _view.visible || _controller.hasRetainedState ? _view.searchText : '';
     if (_input.text != searchText) {
@@ -319,7 +349,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
               request == _focusRequest &&
               _view.visible &&
               _view.phase != LauncherPhase.settings &&
-              _view.pluginDetail == null &&
+              _view.toolPage == null &&
               _view.inputMode == mode) {
             final editor =
                 _focus.context?.findAncestorStateOfType<EditableTextState>();
@@ -343,7 +373,8 @@ class _LauncherScreenState extends State<LauncherScreen> {
       final selection =
           entries.isEmpty ? null : entries[_view.selectedIndex].key;
       // Progress-only batches must not scroll a mouse user back to the selected row.
-      if (!restoreFilePosition &&
+      if (!restoreToolScroll &&
+          !restoreFilePosition &&
           !_pointerSelection &&
           (!_view.isFileSearch ||
               selection != _displayedFileSelection ||
@@ -399,12 +430,16 @@ class _LauncherScreenState extends State<LauncherScreen> {
 
   Future<void> _openEntry(int index) async {
     await _controller.selectEntry(index);
-    if (mounted && _view.visible) _focus.requestFocus();
+    if (mounted && _view.visible && _view.toolPage == null) {
+      _focus.requestFocus();
+    }
   }
 
   Future<void> _runAndFocus(Future<void> Function() action) async {
     await action();
-    if (mounted && _view.visible) _focus.requestFocus();
+    if (mounted && _view.visible && _view.toolPage == null) {
+      _focus.requestFocus();
+    }
   }
 
   void _backMenu() {
@@ -418,7 +453,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
     }
     // Leave candidate selection to the input method until composition has finished.
     if (!_input.value.composing.isCollapsed) return KeyEventResult.ignored;
-    if (_view.pluginDetail != null) return KeyEventResult.ignored;
+    if (_view.toolPage != null) return KeyEventResult.ignored;
     if (_view.navigationOpen) {
       if (event.logicalKey == LogicalKeyboardKey.escape) {
         unawaited(_controller.escape());
@@ -519,7 +554,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
       );
     }
     final view = _view;
-    if (view.pluginDetail != null) {
+    if (view.toolPage != null) {
       return Align(
         alignment: Alignment.topCenter,
         child: SizedBox(
@@ -530,14 +565,20 @@ class _LauncherScreenState extends State<LauncherScreen> {
             color: AppStyle.surface,
             shape: AppStyle.panelShape,
             clipBehavior: Clip.antiAlias,
-            child: PluginDetailPage(
-              detail: view.pluginDetail!,
-              notice: view.message,
-              onBack: () {
-                _controller.back();
-                _focus.requestFocus();
-              },
-            ),
+            child: KeyedSubtree(
+                key: ObjectKey(view.toolPage),
+                child: ListenableBuilder(
+                    listenable: view.toolPage!,
+                    builder: (context, _) => view.toolPage!.build(context,
+                            presentation: _controller.windowPresentation,
+                            visible: view.visible,
+                            notice: view.message,
+                            onCopy: view.output == null
+                                ? null
+                                : _controller.copyResult, onBack: () {
+                          _controller.back();
+                          _focus.requestFocus();
+                        }))),
           ),
         ),
       );
@@ -605,8 +646,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
                           files: _controller.files,
                           enabled: !view.resolving &&
                               !view.executing &&
-                              view.objectActionTitle == null &&
-                              view.output == null,
+                              view.objectActionTitle == null,
                           onSelect: _focus.requestFocus),
                     if (!view.navigationOpen && view.notice != null)
                       _notice(view),
@@ -614,11 +654,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
                       if (view.hasResultHeading)
                         LauncherResultHeading(
                             title: view.resultHeading,
-                            detail: view.output != null
-                                ? view.resultSource
-                                : view.isContent
-                                    ? 'Global Search'
-                                    : null),
+                            detail: view.isContent ? 'Global Search' : null),
                       Expanded(
                           child: LayoutBuilder(
                               builder: (context, constraints) => Row(
@@ -642,7 +678,6 @@ class _LauncherScreenState extends State<LauncherScreen> {
                                       !_fileSearchNeedsAuthorization &&
                                       !view.executing &&
                                       !view.resolving &&
-                                      view.output == null &&
                                       view.objectActionTitle == null
                                   ? () => _runAndFocus(_controller.retrySearch)
                                   : null,
@@ -650,16 +685,12 @@ class _LauncherScreenState extends State<LauncherScreen> {
                               ? () =>
                                   _runAndFocus(_controller.showObjectActions)
                               : null,
-                          label: view.output == null
-                              ? (view.hasFileControls && _controller.fileMoreLoading
-                                      ? 'Loading more files…'
-                                      : view.searchStatus) ??
-                                  (entries.length == 1
-                                      ? '1 result'
-                                      : '${entries.length} results')
-                              : view.resultStatus == ActionStatusDto.failed
-                                  ? 'Failed'
-                                  : 'Succeeded',
+                          label: (view.hasFileControls && _controller.fileMoreLoading
+                                  ? 'Loading more files…'
+                                  : view.searchStatus) ??
+                              (entries.length == 1
+                                  ? '1 result'
+                                  : '${entries.length} results'),
                           primaryLabel: view.objectActionTitle == null &&
                                   entries.isNotEmpty &&
                                   (entries[view.selectedIndex].navigationPath !=
@@ -678,37 +709,17 @@ class _LauncherScreenState extends State<LauncherScreen> {
                                   view.resolving
                               ? null
                               : () => _runAndFocus(_controller.executeSelected),
-                          result: view.output != null,
-                          onCopy: view.output == null
-                              ? null
-                              : _controller.copyResult,
-                          onBack: view.output != null
-                              ? () {
-                                  _controller.back();
-                                  _focus.requestFocus();
-                                }
-                              : view.objectActionTitle != null
-                                  ? _backFiles
-                                  : view.browsing
-                                      ? _backMenu
-                                      : null),
+                          onBack: view.objectActionTitle != null
+                              ? _backFiles
+                              : view.browsing
+                                  ? _backMenu
+                                  : null),
                     ],
                   ]))),
         ));
   }
 
   Widget _resultsBody(LauncherViewState view) {
-    if (view.output != null) {
-      return SingleChildScrollView(
-          key: const Key('result-preview'),
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
-          child: SelectableText(view.output!,
-              style: const TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 12,
-                  height: 1.65,
-                  color: AppStyle.primary)));
-    }
     final entries = view.visibleEntries;
     if (entries.isEmpty) {
       if (view.isFileSearch) {

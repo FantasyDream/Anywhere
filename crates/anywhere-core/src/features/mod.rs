@@ -1,18 +1,29 @@
-//! First-party product features.
+//! Built-in product features and their registration contracts.
 //!
-//! Adding a capability is a registration, not a branch in core:
-//! - an [`ActionBundle`](crate::core::action::bundle::ActionBundle) in [`builtin_action_bundles`]
-//! - a [`ContextProvider`] in [`builtin_providers`]
-//! - a seed in [`session_seeds`] if it starts the context graph
-//! - a [`CandidateSource`](crate::core::search::candidate_source::CandidateSource) passed into search
-//!
-//! Hide rules name a fact key; capture writes the fact, not a new struct field.
+//! Domain modules implement [`BuiltinFeature`] and declare module-owned
+//! `registration.rs` entries. Cargo generates the catalogue; Application binds
+//! services once at startup and preferences select the captured contributions.
+//! Providers, Actions and Sources use shared Core contracts. The collection
+//! helpers below support isolated consumers; they do not reload the live app.
 pub mod app_actions;
 pub mod applications;
+pub mod catalog;
 pub mod contribution;
+pub mod descriptor;
 pub mod filesystem;
 pub mod groups;
+pub mod policy;
+pub mod services;
 pub mod text;
+pub mod tools;
+
+pub mod developer;
+pub mod git;
+pub(crate) mod host_services;
+pub mod module;
+pub mod saved_directories;
+pub mod url;
+pub use module::{builtin_contributions, BuiltinFeature, FeatureBindings};
 
 use crate::core::context::provider::ContextProvider;
 use crate::core::context::{ContextSource, ResolvedContext};
@@ -86,26 +97,35 @@ pub fn remember_environment(cache: &mut Vec<ResolvedContext>, contexts: &[Resolv
     }
 }
 
+/// Static lightweight recognition catalogue, also useful for tools and tests.
+pub fn input_recognizers() -> Vec<crate::core::context::input_recognizer::InputRecognizer> {
+    let mut registry = crate::core::context::registry::ContextProviderRegistry::default();
+    for contribution in contribution::builtins() {
+        for rule in contribution.input_recognizers {
+            registry
+                .register_input_recognizer(rule, None)
+                .expect("invalid input recognizer registration");
+        }
+    }
+    registry.input_recognizers()
+}
+
 /// Every context the built-in recognizers derive from one input.
 ///
 /// The providers are thin adapters over these same functions, so tests and the
 /// micro-benchmark exercise the real recognition rules rather than a copy of them. Order is
-/// the documented recognition order: the raw text, then a URL, a path, and a JSON document;
+/// the documented recognition order: the raw text, then a URL and a path;
 /// recognition is additive, never exclusive.
 pub fn recognized_contexts(input: &str) -> Vec<ResolvedContext> {
     let mut contexts = Vec::new();
     if let Some(text) = text::provider::text_context(input) {
         contexts.push(text);
     }
-    for context in [
-        crate::extensions::url::provider::recognize(input),
-        filesystem::provider::recognize_path(input),
-        crate::extensions::json::provider::recognize(input),
-    ]
-    .into_iter()
-    .flatten()
-    {
-        contexts.push(context);
+    let rules = input_recognizers();
+    for rule in rules {
+        if let Some(context) = (rule.recognize)(input) {
+            contexts.push(context);
+        }
     }
     contexts
 }
@@ -124,12 +144,12 @@ mod tests {
     }
 
     #[test]
-    fn recognition_is_additive_and_keeps_json_primitives() {
+    fn recognition_is_additive_without_deferred_tool_contexts() {
         assert_eq!(types("https://github.com"), [TEXT, URL]);
         assert_eq!(types("HTTPS://github.com"), [TEXT, URL]);
-        assert_eq!(types(r#"{"a":1}"#), [TEXT, JSON_DOCUMENT]);
+        assert_eq!(types(r#"{"a":1}"#), [TEXT]);
         for input in ["true", "null", "123", "[]", "\"hello\""] {
-            assert_eq!(types(input), [TEXT, JSON_DOCUMENT]);
+            assert_eq!(types(input), [TEXT]);
         }
         assert_eq!(types("random sentence"), [TEXT]);
         for input in [
@@ -146,7 +166,7 @@ mod tests {
     }
 
     /// The recognizers run in the order the pre-provider pipeline used: a string that is
-    /// both a URL and a path stays a URL, and one that is both a path and JSON stays a path.
+    /// both a URL and a path stays a URL.
     #[test]
     fn recognizers_run_in_the_documented_order() {
         use crate::core::context::registry::ContextProviderRegistry;
@@ -159,7 +179,7 @@ mod tests {
             .into_iter()
             .filter(|id| id.starts_with("core.") && *id != "core.text_provider")
             .collect::<Vec<_>>();
-        let expected = ["core.url", "core.path", "core.json", "core.git_repository"];
+        let expected = ["core.url", "core.path", "core.git_repository"];
         for id in &expected {
             assert!(
                 recognizers.contains(id),
@@ -168,16 +188,5 @@ mod tests {
         }
         let position = |id: &str| recognizers.iter().position(|entry| *entry == id).unwrap();
         assert!(position("core.url") < position("core.path"));
-        assert!(position("core.path") < position("core.json"));
-    }
-
-    #[test]
-    fn json_type_is_the_v0_2_canonical_identifier() {
-        let json = recognized_contexts("{}")
-            .into_iter()
-            .find(|context| context.type_id == JSON_DOCUMENT)
-            .expect("a JSON document context");
-        assert_ne!(json.type_id, JSON_LEGACY);
-        assert_eq!(json.value.text(), "{}", "the raw JSON text is preserved");
     }
 }

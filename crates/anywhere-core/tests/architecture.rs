@@ -300,14 +300,15 @@ fn feature_contributions_have_unique_ownership_and_share_registration_contract()
     let node = contributions.iter().find(|c| c.id == "node").unwrap();
     assert!(!git.providers.is_empty() && !git.bundles.is_empty());
     assert!(!node.providers.is_empty() && !node.bundles.is_empty() && !node.factories.is_empty());
-    use anywhere_core::extensions::FirstPartyExtension;
-    let runtime = anywhere_core::extensions::saved_directories::Extension
-        .runtime(Some(
-            anywhere_core::persistence::module_storage::ModuleStorageHost::memory()
-                .unwrap()
-                .bind("saved_directories")
-                .unwrap(),
-        ))
+    use anywhere_core::features::BuiltinFeature;
+    let mut services = features::services::FeatureServices::new(Ok(
+        anywhere_core::persistence::module_storage::ModuleStorageHost::memory()
+            .unwrap()
+            .bind("saved_directories")
+            .unwrap(),
+    ));
+    let runtime = anywhere_core::features::saved_directories::Feature
+        .bind_services(&mut services)
         .unwrap();
     assert_eq!(
         runtime.sources.ids().collect::<Vec<_>>(),

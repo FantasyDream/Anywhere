@@ -49,9 +49,32 @@ pub type CandidateSourceRef = std::sync::Arc<dyn CandidateSource + Send + Sync>;
 #[derive(Default, Clone)]
 pub struct SourceSet {
     pub synchronous: Vec<CandidateSourceRef>,
+    /// Explicit registration owners; base platform services have no optional owner.
+    pub contributors: std::collections::BTreeMap<&'static str, std::sync::Arc<str>>,
     pub asynchronous: Vec<std::sync::Arc<dyn AsyncCandidateSource>>,
 }
 impl SourceSet {
+    pub fn assign_contributor(&mut self, id: &str) {
+        self.contributors = self.ids().map(|source| (source, id.into())).collect();
+    }
+    pub fn extend(&mut self, other: Self) {
+        self.synchronous.extend(other.synchronous);
+        self.asynchronous.extend(other.asynchronous);
+        self.contributors.extend(other.contributors);
+    }
+    pub fn retain_contributors(&mut self, enabled: impl Fn(&str) -> bool) {
+        self.synchronous.retain(|source| {
+            self.contributors
+                .get(source.id())
+                .is_none_or(|id| enabled(id))
+        });
+        self.asynchronous.retain(|source| {
+            self.contributors
+                .get(source.id())
+                .is_none_or(|id| enabled(id))
+        });
+        self.contributors.retain(|_, id| enabled(id));
+    }
     pub fn ids(&self) -> impl Iterator<Item = &'static str> + '_ {
         self.synchronous
             .iter()

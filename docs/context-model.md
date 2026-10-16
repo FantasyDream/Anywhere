@@ -14,7 +14,7 @@ ContextValue 覆盖 Text、URL、保留 raw / parsed 的 JSON、File、FileSelec
 |---|---|
 | `core.text` | 非空输入或成功采集的文本 |
 | `core.url` | 明确合法的 HTTP(S) URL |
-| `json.document` | 可解析的 JSON，保留原文；`core.json` 作为旧 matcher 兼容 |
+| `json.document` | 保留数据 / matcher 兼容；当前无内置识别器或动作，JSON 工具延期到 WebView 阶段 |
 | `core.file` / `core.directory` | 已存在的文件 / 目录，以及应用目录或文件管理器选中项 |
 | `core.file_selection` | 多选集合；保留集合身份并有界派生子对象 |
 | `core.application` | 显示 Launcher 前冻结的应用身份 |
@@ -27,7 +27,7 @@ ContextValue 覆盖 Text、URL、保留 raw / parsed 的 JSON、File、FileSelec
 ```text
 冻结的应用 / 各采集来源 → 种子 Context
 
-core.text → URL / JSON / File / Directory（可叠加）
+core.text → URL / File / Directory（可叠加）
 core.application → 原应用 Directory（按 Session 单飞）
 core.directory → Git Repository / Developer Project
 Project → 对应 Action 或动态动作目标

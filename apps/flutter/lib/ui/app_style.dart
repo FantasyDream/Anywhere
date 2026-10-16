@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import '../infrastructure/desktop_environment.dart';
+import '../infrastructure/desktop_edit_menu.dart';
 
 /// One palette and control vocabulary for every window and sheet.
 /// Native AppKit supplies the blur; content surfaces stabilize text contrast.
@@ -62,18 +63,20 @@ abstract final class AppStyle {
 
   /// Native glass remains fully visible. Only unsupported hosts and reduced
   /// transparency use the original opaque fallback.
-  static Widget windowBuilder(BuildContext context, Widget? child) => Shortcuts(
-          shortcuts: const {
+  static Widget windowBuilder(BuildContext context, Widget? child) =>
+      DesktopEditMenu(
+          child: Shortcuts(
+              shortcuts: const {
             SingleActivator(LogicalKeyboardKey.tab):
                 DoNothingAndStopPropagationIntent(),
             SingleActivator(LogicalKeyboardKey.tab, shift: true):
                 DoNothingAndStopPropagationIntent(),
           },
-          child: ColoredBox(
-              color: DesktopEnvironment.current.hasBackdrop
-                  ? Colors.transparent
-                  : const Color(0xff24262b),
-              child: child ?? const SizedBox.shrink()));
+              child: ColoredBox(
+                  color: DesktopEnvironment.current.hasBackdrop
+                      ? Colors.transparent
+                      : const Color(0xff24262b),
+                  child: child ?? const SizedBox.shrink())));
 
   static ThemeData get theme {
     final shape = RoundedRectangleBorder(

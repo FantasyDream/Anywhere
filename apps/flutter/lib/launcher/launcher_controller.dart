@@ -1,3 +1,5 @@
+import '../tools/tool_page.dart';
+import '../tools/builtin_tool_pages.dart';
 import 'launcher_session_coordinator.dart';
 import 'launcher_backend.dart';
 export 'launcher_backend.dart';
@@ -39,8 +41,10 @@ class LauncherController extends ChangeNotifier {
     List<PluginStatusDto> Function()? readPlugins,
     Future<void> Function()? shutdownTasks,
     int Function()? nowMillis,
+    ToolPageRegistry? toolPages,
   })  : _backend = backend,
         _window = window,
+        _toolPages = toolPages ?? builtinToolPages(),
         _nowMillis = nowMillis ?? (() => DateTime.now().millisecondsSinceEpoch),
         settings = SettingsController(
             window: window,
@@ -58,16 +62,21 @@ class LauncherController extends ChangeNotifier {
     files = FileWorkspaceCoordinator(backend.loadFilePreview);
     files.addListener(_filePresentationChanged);
     hostViews.register(HostViewDto.fileSearch, openFileSearch);
-    hostViews.registerPayload(HostViewDto.pluginDetail, (result) async {
-      final detail = result.pluginDetail;
-      if (detail == null || detail.schemaVersion != 1) {
-        throw StateError('Unsupported or missing plugin UI');
-      }
-      _pluginDetail = detail;
-      _message = result.warning;
-      _notify();
-      await _syncWindow();
-    });
+    for (final view in _toolPages.hostViews) {
+      hostViews.registerPayload(view, (result) async {
+        final page = _toolPages.open(result);
+        _toolPage = page;
+        _message = result.warning;
+        _notify();
+        await _syncWindow();
+        // Native resize may complete after the new editor acquired logical focus.
+        // Reconnect its keyboard only after the Host finished changing the frame.
+        if (identical(_toolPage, page) && this.view.visible) {
+          ++_windowPresentation;
+          _notify();
+        }
+      });
+    }
     settings.addListener(_notify);
     lifecycle = ApplicationLifecycle(
         closeSettings: closeSettings,
@@ -150,7 +159,7 @@ class LauncherController extends ChangeNotifier {
       _actionPath != null ||
       _overlay is! LauncherHome ||
       _output != null ||
-      _pluginDetail != null ||
+      _toolPage != null ||
       (_scopeId != null && view.selectedScope?.isCurrentApp == false);
 
   String? get _scopeId => _navigation.scope;
@@ -161,9 +170,24 @@ class LauncherController extends ChangeNotifier {
   WakeMode get _wakeMode => _navigation.wakeMode;
   set _wakeMode(WakeMode value) => _navigation.wakeMode = value;
   bool _scopeTouched = false;
-  String? _selectedId, _message, _output, _resultSource;
+  String? _selectedId, _message, _output;
   ActionStatusDto? _resultStatus;
-  PluginDetailDto? _pluginDetail;
+  final ToolPageRegistry _toolPages;
+  ToolPageSession? _page;
+  ToolPageSession? get _toolPage => _page;
+  set _toolPage(ToolPageSession? value) {
+    if (identical(_page, value)) return;
+    _page?.dispose();
+    _page = value;
+    final session = _session, revision = _revision;
+    value?.bindInteraction(() =>
+        !_disposed &&
+        identical(_page, value) &&
+        _phase == LauncherPhase.ready &&
+        _session == session &&
+        _revision == revision);
+  }
+
   bool _userMoved = false, _disposed = false;
   bool get _fileMoreLoading => files.moreLoading;
 
@@ -190,8 +214,7 @@ class LauncherController extends ChangeNotifier {
       _selectedId,
       _message,
       _output,
-      _pluginDetail,
-      _resultSource,
+      _toolPage,
       _resultStatus,
       settings.current.universalLabel,
       _overlay,
@@ -225,8 +248,7 @@ class LauncherController extends ChangeNotifier {
       selectedId: _selectedId,
       message: _message,
       output: _output,
-      pluginDetail: _pluginDetail,
-      resultSource: _resultSource,
+      toolPage: _toolPage,
       resultStatus: _resultStatus,
       universalShortcut: settings.current.universalLabel,
       bindingChoices: _bindingChoices,
@@ -406,8 +428,7 @@ class LauncherController extends ChangeNotifier {
       _revision = _requestedRevision = state.revision;
       _message = settings.warning.isEmpty ? null : settings.warning;
       _output = null;
-      _pluginDetail = null;
-      _resultSource = null;
+      _toolPage = null;
       _resultStatus = null;
       _phase =
           globalBinding == null ? LauncherPhase.ready : LauncherPhase.resolving;
@@ -481,6 +502,9 @@ class LauncherController extends ChangeNotifier {
       bool retain = true,
       bool preserveSettings = false}) async {
     if (_disposed) return;
+    // Native focus loss and an explicit hide can arrive for the same window.
+    // A repeated hide must not turn retained work into a destructive dismissal.
+    if (retain && _phase == LauncherPhase.hidden) return;
     if (retain &&
         _phase != LauncherPhase.hidden &&
         _phase != LauncherPhase.settings &&
@@ -496,13 +520,16 @@ class LauncherController extends ChangeNotifier {
       _activation.stopPrefill();
       files.invalidateOperations();
       _objectActions.invalidate();
-      _notify();
-      _sessionFlow.retain(_capturePolicy, _backend.suspend!(session),
+      final suspension = _backend.suspend!(session);
+      _sessionFlow.retain(_capturePolicy, suspension,
           () => unawaited(_discardRetained()));
+      // Listeners save scroll / editor state when the window becomes hidden.
+      // Publish the retention lifetime before notifying them.
+      _notify();
       try {
         if (!hostAlreadyHidden) await _window.hide(generation);
       } finally {
-        await _sessionFlow.suspension;
+        await suspension;
       }
       return;
     }
@@ -526,8 +553,8 @@ class LauncherController extends ChangeNotifier {
     _actionPath = null;
     _scopeId = null;
     _scopeTouched = false;
-    _selectedId = _message = _output = _resultSource = null;
-    _pluginDetail = null;
+    _selectedId = _message = _output = null;
+    _toolPage = null;
     _resultStatus = null;
     _userMoved = false;
     icons.clear();
@@ -542,15 +569,18 @@ class LauncherController extends ChangeNotifier {
     }
   }
 
-  Future<void> _discardRetained() =>
-      _sessionFlow.discardOnce(_discardHiddenState);
+  Future<void> _discardRetained() => _discardHiddenState();
   Future<void> _discardHiddenState() async {
     if (_hiddenAt == null) return;
+    final generation = _generation, session = _session;
     _retainedPhase = null;
     final pending = _sessionFlow.clearRetention();
     try {
       await pending;
     } catch (_) {}
+    if (!_current(generation) || _session != session || _hiddenAt != null) {
+      return;
+    }
     // Hidden cleanup must never clear a newer settings window or activation.
     if (_phase == LauncherPhase.hidden || _phase == LauncherPhase.settings) {
       await dismiss(
@@ -574,9 +604,14 @@ class LauncherController extends ChangeNotifier {
     final generation = ++_generation;
     try {
       await _sessionFlow.suspension;
-      if (!_current(generation) || _phase != LauncherPhase.hidden) return false;
+      if (!_current(generation) ||
+          _phase != LauncherPhase.hidden ||
+          !_sessionFlow.canResume(_capturePolicy)) {
+        return false;
+      }
       final state = await resume(session);
       if (!_current(generation) ||
+          !_sessionFlow.canResume(_capturePolicy) ||
           state == null ||
           state.sessionId != session) {
         return false;
@@ -769,7 +804,7 @@ class LauncherController extends ChangeNotifier {
     _shortcuts.invalidate();
     _phase = LauncherPhase.resolving;
     _output = _message = null;
-    _pluginDetail = null;
+    _toolPage = null;
     _userMoved = false;
     icons.retryFailures();
     _notify();
@@ -1062,7 +1097,7 @@ class LauncherController extends ChangeNotifier {
     final state = _snapshot;
     final entries = view.visibleEntries;
     if (_phase != LauncherPhase.ready ||
-        _pluginDetail != null ||
+        _toolPage != null ||
         state == null ||
         state.revision != _revision) {
       return;
@@ -1088,7 +1123,7 @@ class LauncherController extends ChangeNotifier {
         state == null ||
         _phase != LauncherPhase.ready ||
         _output != null ||
-        _pluginDetail != null ||
+        _toolPage != null ||
         state.revision != _requestedRevision) {
       return;
     }
@@ -1161,7 +1196,7 @@ class LauncherController extends ChangeNotifier {
   Future<void> _executeCandidate(CandidateDto candidate) async {
     final state = _snapshot;
     if (_phase != LauncherPhase.ready ||
-        _pluginDetail != null ||
+        _toolPage != null ||
         state == null ||
         state.revision != _revision) {
       return;
@@ -1222,7 +1257,7 @@ class LauncherController extends ChangeNotifier {
             : result.warning ?? result.error;
         _output = result.outputText;
         _resultStatus = result.status;
-        _resultSource = _sourceFor(candidate);
+        if (_output != null) _toolPage = _toolPages.openResult(result);
         _notify();
         await _syncWindow();
       }
@@ -1256,7 +1291,6 @@ class LauncherController extends ChangeNotifier {
     freezeFileResults();
     _output = null;
     _activation.stopPrefill();
-    _resultSource = null;
     _resultStatus = null;
     _notify();
     unawaited(_syncWindow());
@@ -1280,7 +1314,6 @@ class LauncherController extends ChangeNotifier {
 
   void _refreshPresentation({bool preserveSelection = false}) {
     _output = null;
-    _resultSource = null;
     _resultStatus = null;
     _userMoved = preserveSelection;
     icons.retryFailures();
@@ -1298,19 +1331,12 @@ class LauncherController extends ChangeNotifier {
   }
 
   void back() {
-    if (_output == null && _pluginDetail == null) return;
-    _pluginDetail = null;
+    if (_output == null && _toolPage == null) return;
+    _toolPage = null;
     _output = null;
-    _resultSource = null;
     _resultStatus = null;
     _notify();
     unawaited(_syncWindow());
-  }
-
-  String _sourceFor(CandidateDto candidate) {
-    final subtitle = candidate.subtitle;
-    if (subtitle != null && subtitle.isNotEmpty) return subtitle;
-    return candidate.title;
   }
 
   Future<void> copyResult() async {
@@ -1397,7 +1423,7 @@ class LauncherController extends ChangeNotifier {
   }
 
   Future<void> escape() async {
-    if (_pluginDetail != null) {
+    if (_toolPage != null) {
       back();
       return;
     }
@@ -1586,6 +1612,7 @@ class LauncherController extends ChangeNotifier {
   void dispose() {
     _activation.dispose();
     _sessionFlow.dispose();
+    _toolPage = null;
     _disposed = true;
     _cachedView = null;
     _viewKey = null;

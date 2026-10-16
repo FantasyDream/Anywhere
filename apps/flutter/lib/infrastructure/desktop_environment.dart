@@ -69,5 +69,7 @@ class DesktopEnvironment {
   SingleActivator command(LogicalKeyboardKey key, {bool alt = false}) =>
       SingleActivator(key,
           meta: usesMetaCommand, control: !usesMetaCommand, alt: alt);
+  String commandShiftLabel(String key) =>
+      commandLabel('${modifierLabels[shortcutShiftKey]}$key');
   String commandLabel(String key) => '${usesMetaCommand ? '⌘' : 'Ctrl+'}$key';
 }

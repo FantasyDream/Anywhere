@@ -22,7 +22,14 @@ impl Application {
             .read()
             .map_err(|_| anyhow::anyhow!("search settings unavailable"))?
             .generation;
-        let (candidate, source_app, menu_generation, source_bundle, catalog_version) = {
+        let (
+            candidate,
+            source_app,
+            menu_generation,
+            source_bundle,
+            catalog_version,
+            feature_policy,
+        ) = {
             let session = self.session()?;
             if session.suspended
                 || session.state.session_id != session_id
@@ -55,6 +62,17 @@ impl Application {
                 .get(candidate_id.as_str())
                 .cloned()
                 .context("action expired; choose a current action")?;
+            let feature_policy = self.resolver.feature_policy.snapshot();
+            if let crate::core::search::candidate::CandidateTarget::Action { action, .. } =
+                &candidate.target
+            {
+                if action
+                    .contributor()
+                    .is_some_and(|id| !self.resolver.feature_policy.allows(id))
+                {
+                    bail!("feature is disabled; choose a current action");
+                }
+            }
             if !candidate.presentation.availability.is_executable() {
                 bail!(
                     "{}",
@@ -76,6 +94,7 @@ impl Application {
                     .as_ref()
                     .map(|app| app.bundle_id.clone()),
                 catalog_version,
+                feature_policy,
             )
         };
         let platform = self.platform.clone();
@@ -84,6 +103,7 @@ impl Application {
         let executions = self.executions.clone();
         let session_for_execution = self.resolver.session.clone();
         let current_catalog_version = self.resolver.action_catalog_version.clone();
+        let current_feature_policy = self.resolver.feature_policy.clone();
         let guarded_target = candidate.target.execution_token();
         let records_usage = candidate.target.records_usage();
         // Handed to the worker so it can re-check currency when it actually starts running,
@@ -120,6 +140,7 @@ impl Application {
             // can dismiss the launcher in that gap — acting then would open a window, or
             // overwrite the clipboard, for a session that no longer exists.
             if !execution_ticket.is_current()
+                || !current_feature_policy.is_current(&feature_policy)
                 || epoch.load(std::sync::atomic::Ordering::Acquire) != execution_epoch
                 || current_catalog_version.load(std::sync::atomic::Ordering::Acquire)
                     != catalog_version

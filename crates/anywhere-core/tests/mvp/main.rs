@@ -16,3 +16,5 @@ mod support;
 mod usage_independence;
 
 mod review_regressions;
+
+mod release_surfaces;

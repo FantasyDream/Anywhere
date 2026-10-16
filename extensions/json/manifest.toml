@@ -1,5 +1,0 @@
-protocol_version = 2
-id = "json"
-name = "JSON"
-version = "0.8.0"
-capabilities = ["clipboard.write"]

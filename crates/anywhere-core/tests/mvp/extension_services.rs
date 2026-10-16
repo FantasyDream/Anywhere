@@ -1,7 +1,7 @@
 use crate::support::*;
 use anywhere_core::{
-    application::extension_manager::{ExtensionChange, ExtensionManager},
-    extensions::saved_directories::{FORGET, OPEN, SAVE},
+    application::settings_service::{SettingsChange, SettingsService},
+    features::saved_directories::{FORGET, OPEN, SAVE},
     persistence::module_storage::ModuleStorageHost,
 };
 
@@ -31,7 +31,7 @@ async fn saved_directory_source_roundtrip_ranking_open_forget_and_restart() {
     let platform = Arc::new(TestPlatform::default());
     let app = application(platform.clone());
     let policy = tmp.path().join("extensions.json");
-    let mut manager = ExtensionManager::open(policy.clone(), vec![], &app).unwrap();
+    let mut manager = SettingsService::open(policy.clone(), vec![], &app).unwrap();
     save(&app, &project).await;
     let state = search(&app, "unique_saved_project").await;
     let row = state
@@ -67,10 +67,10 @@ async fn saved_directory_source_roundtrip_ranking_open_forget_and_restart() {
         .candidates
         .iter()
         .any(|c| c.command_id.as_deref() == Some(OPEN)));
-    // Rebuilding configuration shares the bounded cache, including subsequent saves/removals.
-    manager.reload(&app).unwrap();
+    // Data refresh keeps the startup source and its bounded service cache.
+    manager.refresh(&app).unwrap();
     let restarted = application(Arc::new(TestPlatform::default()));
-    let _loaded = ExtensionManager::open(policy, vec![], &restarted).unwrap();
+    let _loaded = SettingsService::open(policy, vec![], &restarted).unwrap();
     assert!(search(&restarted, "unique_saved_project")
         .await
         .candidates
@@ -95,7 +95,7 @@ async fn saved_directory_source_roundtrip_ranking_open_forget_and_restart() {
         .candidates
         .iter()
         .any(|c| c.command_id.as_deref() == Some(OPEN)));
-    manager.reload(&app).unwrap();
+    manager.refresh(&app).unwrap();
     assert!(!search(&app, "unique_saved_project")
         .await
         .candidates
@@ -111,14 +111,14 @@ async fn source_disable_reenable_and_missing_directory_reject_stale_execution() 
     let platform = Arc::new(TestPlatform::default());
     let app = application(platform.clone());
     let mut manager =
-        ExtensionManager::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+        SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
     save(&app, &project).await;
     let old = search(&app, "saved_lifecycle").await;
     let old_row = candidate(&old, OPEN);
     manager
         .change(
             &app,
-            ExtensionChange::Enable {
+            SettingsChange::Enable {
                 key: "first-party:saved_directories".into(),
                 enabled: false,
             },
@@ -140,7 +140,7 @@ async fn source_disable_reenable_and_missing_directory_reject_stale_execution() 
     manager
         .change(
             &app,
-            ExtensionChange::Enable {
+            SettingsChange::Enable {
                 key: "first-party:saved_directories".into(),
                 enabled: true,
             },
@@ -176,7 +176,7 @@ async fn source_disable_reenable_and_missing_directory_reject_stale_execution() 
 }
 
 #[tokio::test]
-async fn corrupt_module_data_is_isolated_and_reload_can_recover_without_affecting_json() {
+async fn corrupt_module_data_is_isolated_and_refresh_can_recover_without_affecting_json() {
     let tmp = tempfile::tempdir().unwrap();
     let path = tmp.path().join("extension-storage.sqlite3");
     let host = ModuleStorageHost::open(&path).unwrap();
@@ -184,7 +184,7 @@ async fn corrupt_module_data_is_isolated_and_reload_can_recover_without_affectin
     store.put("directories", b"not valid JSON").unwrap();
     let app = application(Arc::new(TestPlatform::default()));
     let mut manager =
-        ExtensionManager::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+        SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
     assert!(
         !manager
             .statuses()
@@ -197,7 +197,7 @@ async fn corrupt_module_data_is_isolated_and_reload_can_recover_without_affectin
         manager
             .statuses()
             .iter()
-            .find(|s| s.id == "json")
+            .find(|s| s.id == "url")
             .unwrap()
             .active
     );
@@ -205,13 +205,10 @@ async fn corrupt_module_data_is_isolated_and_reload_can_recover_without_affectin
         .supported_shortcut_actions(&[SAVE.into()])
         .unwrap()
         .is_empty());
-    let json = search(&app, "{\"key\":1}").await;
-    assert!(json
-        .context_summary
-        .iter()
-        .any(|c| c.type_id == JSON_DOCUMENT));
+    let url = search(&app, "https://example.org").await;
+    assert!(url.context_summary.iter().any(|c| c.type_id == URL));
     store.remove("directories").unwrap();
-    manager.reload(&app).unwrap();
+    manager.refresh(&app).unwrap();
     assert!(
         manager
             .statuses()
@@ -227,6 +224,136 @@ async fn corrupt_module_data_is_isolated_and_reload_can_recover_without_affectin
 }
 
 #[tokio::test]
+async fn another_instance_forget_blocks_a_cached_open_without_side_effects() {
+    let temporary = tempfile::tempdir().unwrap();
+    let directory = temporary.path().join("shared_saved_project");
+    std::fs::create_dir(&directory).unwrap();
+    let policy = temporary.path().join("extensions.json");
+    let platform = Arc::new(TestPlatform::default());
+    let first = application(platform.clone());
+    let _first_manager = SettingsService::open(policy.clone(), vec![], &first).unwrap();
+    save(&first, &directory).await;
+    let cached = search(&first, "shared_saved_project").await;
+    let row = candidate(&cached, OPEN);
+    let second = application(Arc::new(TestPlatform::default()));
+    let _second_manager = SettingsService::open(policy, vec![], &second).unwrap();
+    let object = search(&second, "shared_saved_project").await;
+    let actions = second
+        .file_actions(object.session_id, object.revision, candidate(&object, OPEN))
+        .unwrap();
+    let forget = actions
+        .iter()
+        .find(|action| action.command_id.as_deref() == Some(FORGET))
+        .unwrap();
+    assert_eq!(
+        second
+            .execute(object.session_id, object.revision, forget.id.clone())
+            .await
+            .unwrap()
+            .status,
+        ActionStatus::Succeeded
+    );
+    assert_eq!(
+        first
+            .execute(cached.session_id, cached.revision, row)
+            .await
+            .unwrap()
+            .status,
+        ActionStatus::Failed
+    );
+    assert!(platform.calls.lock().unwrap().is_empty());
+    assert!(!search(&first, "shared_saved_project")
+        .await
+        .candidates
+        .iter()
+        .any(|candidate| candidate.command_id.as_deref() == Some(OPEN)));
+}
+
+#[tokio::test]
+async fn replaced_broken_database_rebinds_typed_service_and_revokes_old_rows() {
+    let temporary = tempfile::tempdir().unwrap();
+    let original = temporary.path().join("original_saved_project");
+    let replacement = temporary.path().join("replacement_saved_project");
+    let added = temporary.path().join("added_saved_project");
+    for path in [&original, &replacement, &added] {
+        std::fs::create_dir(path).unwrap();
+    }
+    let database = temporary.path().join("extension-storage.sqlite3");
+    let platform = Arc::new(TestPlatform::default());
+    let app = application(platform.clone());
+    let mut manager =
+        SettingsService::open(temporary.path().join("extensions.json"), vec![], &app).unwrap();
+    save(&app, &original).await;
+    let cached = search(&app, "original_saved_project").await;
+    let row = candidate(&cached, OPEN);
+    std::fs::rename(&database, temporary.path().join("detached.sqlite3")).unwrap();
+    std::fs::write(&database, b"broken database").unwrap();
+    manager.refresh(&app).unwrap();
+    assert!(
+        !manager
+            .statuses()
+            .iter()
+            .find(|status| status.id == "saved_directories")
+            .unwrap()
+            .active
+    );
+    assert!(
+        manager
+            .statuses()
+            .iter()
+            .find(|status| status.id == "url")
+            .unwrap()
+            .active
+    );
+    assert!(app
+        .execute(cached.session_id, cached.revision, row)
+        .await
+        .is_err());
+    assert_eq!(std::fs::read(&database).unwrap(), b"broken database");
+    assert!(platform.calls.lock().unwrap().is_empty());
+    std::fs::remove_file(&database).unwrap();
+    let host = ModuleStorageHost::open(&database).unwrap();
+    let storage = host.bind("saved_directories").unwrap();
+    storage
+        .put(
+            "directories",
+            &serde_json::to_vec(&serde_json::json!({
+                "version": 1, "paths": [replacement.canonicalize().unwrap()]
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+    manager.refresh(&app).unwrap();
+    assert!(
+        manager
+            .statuses()
+            .iter()
+            .find(|status| status.id == "saved_directories")
+            .unwrap()
+            .active
+    );
+    assert!(!search(&app, "original_saved_project")
+        .await
+        .candidates
+        .iter()
+        .any(|candidate| candidate.command_id.as_deref() == Some(OPEN)));
+    assert!(search(&app, "replacement_saved_project")
+        .await
+        .candidates
+        .iter()
+        .any(|candidate| candidate.command_id.as_deref() == Some(OPEN)));
+    save(&app, &added).await;
+    let persisted: serde_json::Value =
+        serde_json::from_slice(&storage.get("directories").unwrap().unwrap()).unwrap();
+    let paths: Vec<std::path::PathBuf> =
+        serde_json::from_value(persisted["paths"].clone()).unwrap();
+    assert_eq!(paths.len(), 2);
+    assert!(paths.contains(&replacement.canonicalize().unwrap()));
+    assert!(paths.contains(&added.canonicalize().unwrap()));
+    assert!(!paths.contains(&original.canonicalize().unwrap()));
+}
+
+#[tokio::test]
 async fn git_and_developer_switches_preserve_existing_ids_and_disable_only_their_contribution() {
     let tmp = tempfile::tempdir().unwrap();
     let project = tmp.path().join("project");
@@ -239,7 +366,7 @@ async fn git_and_developer_switches_preserve_existing_ids_and_disable_only_their
     .unwrap();
     let app = application(Arc::new(TestPlatform::default()));
     let mut manager =
-        ExtensionManager::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+        SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
     let state = search(&app, project.to_str().unwrap()).await;
     assert!(state
         .context_summary
@@ -256,7 +383,7 @@ async fn git_and_developer_switches_preserve_existing_ids_and_disable_only_their
     manager
         .change(
             &app,
-            ExtensionChange::Enable {
+            SettingsChange::Enable {
                 key: "first-party:git".into(),
                 enabled: false,
             },
@@ -278,7 +405,7 @@ async fn git_and_developer_switches_preserve_existing_ids_and_disable_only_their
     manager
         .change(
             &app,
-            ExtensionChange::Enable {
+            SettingsChange::Enable {
                 key: "first-party:node".into(),
                 enabled: false,
             },
@@ -313,7 +440,7 @@ action={type="copy",text="wrong"}
     .unwrap();
     let platform = Arc::new(TestPlatform::default());
     let app = application(platform.clone());
-    let manager = ExtensionManager::open(
+    let manager = SettingsService::open(
         tmp.path().join("extensions.json"),
         vec![tmp.path().into()],
         &app,

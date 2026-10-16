@@ -1,6 +1,13 @@
 import '../src/rust/api.dart';
 
-enum ExtensionPhase { enabled, disabled, needsPermission, failed, unavailable }
+enum ExtensionPhase {
+  enabled,
+  disabled,
+  needsPermission,
+  failed,
+  unavailable,
+  restartRequired
+}
 
 extension ExtensionPresentation on ExtensionStatusDto {
   ExtensionPhase get phase {
@@ -8,6 +15,9 @@ extension ExtensionPresentation on ExtensionStatusDto {
     if (!configurable) return ExtensionPhase.unavailable;
     if (!enabled) return ExtensionPhase.disabled;
     if (needsApproval) return ExtensionPhase.needsPermission;
+    if (!firstParty && detail.startsWith('Restart Anywhere')) {
+      return ExtensionPhase.restartRequired;
+    }
     return ExtensionPhase.failed;
   }
 
@@ -17,6 +27,7 @@ extension ExtensionPresentation on ExtensionStatusDto {
         ExtensionPhase.needsPermission => 'Awaiting permission',
         ExtensionPhase.failed => 'Could not start',
         ExtensionPhase.unavailable => 'Unavailable',
+        ExtensionPhase.restartRequired => 'Restart required',
       };
   bool get needsAttention =>
       phase == ExtensionPhase.failed || phase == ExtensionPhase.unavailable;

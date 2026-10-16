@@ -405,14 +405,7 @@ async fn copied_finder_selection_hides_redundant_collection_copy() {
         FILE_SELECTION,
     )
     .await;
-    capture_state(
-        &app,
-        initial.session_id,
-        0,
-        ContextSource::Clipboard,
-        JSON_DOCUMENT,
-    )
-    .await;
+    capture_state(&app, initial.session_id, 0, ContextSource::Clipboard, TEXT).await;
     let state = app
         .update_input(initial.session_id, "copy".into(), 1)
         .await
@@ -810,7 +803,7 @@ async fn supported_browser_urls_and_clipboard_have_distinct_sources_across_revis
     ] {
         let mut fake = ContextPlatform::new(browser);
         fake.browser_url = Some("https://example.org/page".into());
-        fake.clipboard = Some(r#"{"item":42}"#.into());
+        fake.clipboard = Some("https://example.org/copied".into());
         let fake = Arc::new(fake);
         let app = application(fake.clone());
         let initial = app.activate().await.unwrap().unwrap();
@@ -822,14 +815,7 @@ async fn supported_browser_urls_and_clipboard_have_distinct_sources_across_revis
             URL,
         )
         .await;
-        let _ = capture_state(
-            &app,
-            initial.session_id,
-            0,
-            ContextSource::Clipboard,
-            JSON_DOCUMENT,
-        )
-        .await;
+        let _ = capture_state(&app, initial.session_id, 0, ContextSource::Clipboard, URL).await;
         let revised = app
             .update_input(initial.session_id, "json".into(), 1)
             .await
@@ -843,8 +829,7 @@ async fn supported_browser_urls_and_clipboard_have_distinct_sources_across_revis
         assert!(revised
             .context_summary
             .iter()
-            .any(|context| context.type_id == JSON_DOCUMENT
-                && context.source == ContextSource::Clipboard));
+            .any(|context| context.type_id == URL && context.source == ContextSource::Clipboard));
         assert_eq!(fake.browser_reads.load(Ordering::SeqCst), 1, "{browser}");
         assert_eq!(fake.clipboard_reads.load(Ordering::SeqCst), 1, "{browser}");
     }

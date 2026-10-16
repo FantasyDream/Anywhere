@@ -1,6 +1,8 @@
 # 架构
 
-当前实现：V0.9 S1；最后核对：2026-10-14。使用入口见 [README](../README.md)，专题文档见 [文档导航](README.md)。
+当前实现：V0.9 内置功能模块；最后核对：2026-10-14。使用入口见 [README](../README.md)，专题文档见 [文档导航](README.md)。
+
+已确认转向内置功能模块，按 [迁移路线图](feature-module-roadmap.md) 分阶段实施。P01 集中构造与身份检查；P02 由模块自己的 registration.rs 声明功能，Cargo 编译时自动发现并生成 features/catalog 使用的目录，迁移阶段保留既有功能身份与顺序；JSON 延期后当前交付 8 个可配置内置功能。P03 将内置描述改为 Rust FeatureDescriptor，移除内置 TOML 和协议解析，状态显示统一使用 Cargo workspace 构建版本。P04 将收藏目录拆为 repository / service，FeatureServices 持有具体 service，移除 ExtensionState / Any 状态恢复。没有运行期扫描或加载。P05c 已删除旧 FirstPartyExtension / ExtensionRuntime / ExtensionManager / Reload；Native 只在启动绑定贡献，设置与业务数据刷新单独管理。
 
 ## 分层
 
@@ -10,7 +12,7 @@ flowchart TD
     UI --> Host[DesktopHost / 原生 Host]
     Bridge --> App[Application：装配与用例]
     App --> Core[core：模型、算法与契约]
-    App --> Modules[features / extensions]
+    App --> Modules[内置 Feature 模块]
     Modules --> Core
     App --> Persistence[持久化适配]
     App --> Platform[Platform 系统能力]
@@ -20,9 +22,9 @@ flowchart TD
 | 层 | 职责 | 约束 |
 |---|---|---|
 | `anywhere-protocol` | Context 类型、展示状态、事件、声明式 Manifest | 共享传输模型，不保存 OS 对象 |
-| `anywhere-core/core` | Context Graph、Action、候选、Ranking、SessionFacts、ExecutionSession、Storage 契约 | 不导入 application / features / extensions / persistence，不依赖 Flutter |
-| `anywhere-core/application` | 激活、输入、采集协调、快照、执行、扩展生命周期与装配 | 协调用例，不决定像素或原生窗口外观 |
-| `features` / `extensions` | 应用、文件工具和第一方领域能力 | 用 Provider / Bundle / Source 贡献，不另建 Launcher 流程 |
+| `anywhere-core/core` | Context Graph、Action、候选、Ranking、SessionFacts、ExecutionSession、Storage 契约 | 不导入 application / 内置 Feature 模块 / persistence，不依赖 Flutter |
+| `anywhere-core/application` | 激活、输入、采集协调、快照、执行、功能策略与装配 | 协调用例，不决定像素或原生窗口外观 |
+| `features` | 应用、文件工具和第一方领域能力 | 用 Provider / Bundle / Source 贡献，不另建 Launcher 流程 |
 | `persistence` | Usage、扩展偏好、模块存储实现 | 数据读写与锁、事务、恢复策略集中管理 |
 | `anywhere-platform` | OS-neutral Trait、上下文采集、系统搜索、资源打开、剪贴板、Git 与进程后端 | 原生调用与系统差异留在适配器 |
 | `anywhere-plugin` | TOML 发现、校验、模板与有界 UI 数据生成 | 不执行任意脚本或决定界面布局 |
@@ -37,21 +39,21 @@ flowchart TD
 crates/anywhere-core/src/
 ├── core/           模型与算法；context / action / search / ranking / session / execution
 ├── application/    activate、update_query、execute、session_runtime、source_runtime
-├── features/       applications、filesystem、text、装配贡献
-├── extensions/     json、url、git、developer、saved_directories
+├── features/       applications、filesystem、text、url、git、developer、saved_directories
+│                   编译期 catalog、FeatureDescriptor、服务绑定与策略
 └── persistence/    usage、extensions、module_storage
 
 apps/flutter/lib/
 ├── launcher/       Controller、ActivationFlow、导航、Session / FileWorkspace 协调器
 │                   ShortcutCoordinator、ObjectActionCoordinator、HostViewNavigator
-├── plugins/        Host Detail / KeyValue 渲染（纯数据）
+├── tools/          静态 ToolPageRegistry、ToolPageSession、共享 ToolPageShell
+├── plugins/        Legacy Detail / KeyValue 兼容 Body（纯数据）
 ├── settings/       设置草稿、保存队列、快捷键与扩展状态
 ├── ui/             AppStyle、图标与公共组件
 ├── infrastructure/ DesktopHost、窗口、生命周期、图标缓存与运行策略
 └── src/rust/       已生成的绑定
 
 apps/flutter/macos/Runner/  原生窗口、设置存储、热键、授权、材质与任务窗口
-extensions/                编译时嵌入的第一方 Manifest
 plugins/examples/          外部声明式插件示例
 resources/                 键码、文件类型与运行策略的公共配置
 ```
@@ -63,6 +65,7 @@ resources/                 键码、文件类型与运行策略的公共配置
 3. Rust 冻结前台应用身份，启动独立的上下文采集、应用目录加载与历史读取。慢速系统调用放在 blocking worker。
 4. InputMode 决定种子：Environment 使用应用环境；Content / Search 只解析显式输入；FileSearch 使用文件工作区；全局动作绑定使用 CapturedEnvironment。
 5. Provider 顺序派生 Context，预算截断后后台继续；来源结果按会话资格补充。
+   自动填入从同一 ProviderRegistry 的轻量规则目录读取当前启用识别器，发布锁外识别，返回前复验策略 / catalog，避免过期开关与迟到建议。
 6. 提交首份快照后显示窗口，后续通过 snapshot wait / delta 发布更新。
 
 目录采集按 Session 单飞，不能因用户输入改变而再次读取“现在的前台应用”。失效应用身份安全跳过目录；不重试到已经取得焦点的 Launcher 或另一应用。详见 [Context 模型](context-model.md) 和 [默认输入策略](context-input-navigation.md)。
@@ -77,11 +80,15 @@ resources/                 键码、文件类型与运行策略的公共配置
 | BusinessActionId | 使用记录与可持久配置中的动作 |
 | ExecutionCandidateId | 已提交候选及其具体对象 |
 | Catalog version / Execution epoch | 动作定义变更、隐藏与恢复后的执行资格 |
+| Feature policy snapshot | 内置功能开关 / 恢复资格，请求持有同一 Arc 身份 |
 | Host generation | 原生显示、隐藏与迟到回调 |
 
 发布采用“锁内复制不可变输入和版本 → 锁外匹配 / 排序 → 锁内复验并发布”。索引、历史和 Registry 共享不可变快照；并发提交改变输入时重新计算，旧 Session / Revision 的结果直接丢弃。
 
 执行仅接受当前已提交凭据，排队 worker 开始副作用前再次验证；进程计划生成后、spawn 前也检查版本。副作用成功后仍记 Usage，即使窗口已隐藏。菜单另有 discovery token，不能把可重扫的菜单 ActionId 当作永久身份；见 [菜单安全契约](current-app-actions.md)。
+
+隐藏工作区的 15 秒生命周期由 LauncherSessionCoordinator 管理。Controller 在通知界面隐藏前建立保留信息；重复隐藏保持幂等，异步恢复在挂起 / 恢复等待后重查期限与策略。到期清理先取走该次保留记录，等待后核对 generation / SessionId，避免清理新会话；每次隐藏持有自己的挂起 Future，新旧到期任务各自结束。空根页唤醒仍重新采集当前应用。
+
 
 隐藏撤销待执行资格。已有操作保留 15 秒，恢复使用新 epoch；空白首页按本次入口新建 Session。已启动进程由 ExecutionSessionManager 持有，不随查询或窗口隐藏终止；应用退出会结束任务。交互详见 [Launcher 契约](launcher-interaction.md)。
 
@@ -97,19 +104,31 @@ Flutter 的 `StableList` 共享 256 条不可变块，索引按块复用，仅�
 
 ## 第一方模块与持久化
 
-`FirstPartyExtension` 通过 `FeatureContribution` 提交 Provider、ActionBundle 和动态动作；runtime 可贡献 Sources 与有界 ExtensionState。内部静态 Trait 不承诺第三方 Native ABI，也不代表进程隔离。
+`BuiltinFeature` 通过 FeatureContribution 提交 Provider / Bundle / Factory，启动时通过 FeatureBindings 接入已绑定的类型化服务动作与来源。BuiltinCatalog 保存编译内目录，不保留重建模块的工厂 / 生命周期；编译期目录构造器只用于启动与测试。第二次装配同一 Application 被拒绝。内部 Trait 不是第三方 Native ABI 或进程沙箱。
 
-能力请求由 Host 审批，执行通过 `HostServices` 检查；Storage 的 namespace、字节 / 键额度由 Host 分配。持久化写入成功后发布配置，替换动作、Provider 与模块来源，推进版本并取消旧任务；释放发布锁后 reset 旧异步来源。基础来源保留，已启动 ExecutionSession 不因重载结束。
+SettingsService 协调独立 FeatureSettings 与 LegacyPluginSettings，持久化成功后发布贡献选择，推进执行资格并取消旧会话；源码与 Handler / Source 不重新绑定。FeatureServices 持有具体 SavedDirectoriesService；数据 Refresh 更新其 repository / cache，坏 DB 替换后使用同一 service 接入新绑定，不让旧 action 通过脱离当前数据的句柄写入。SQLite IMMEDIATE 事务继续合并最新已提交数据；失败不覆盖坏数据，查询不持有磁盘事务锁。
 
-Manager 只缓存有界 ExtensionState，每次重建 runtime。Reload 重开共享存储连接并刷新状态。`ExtensionStorage.update` 在 SQLite IMMEDIATE 事务中读改写，失败不改数据库或内存快照。查询使用内存状态，必要的执行校验可以读取数据库。
+旧声明式插件仅启动发现 / 注册。新批准或未在启动可读的批准修复需要重启激活，开关和撤销即时过滤已装载定义。Refresh 复验已有定义，不发现新增插件；变更 / 移动后停止旧动作，重启后重新审查。外部来源有明确 plugin:<id> 贡献归属与独立选择，Native 恢复模式不会误关闭其他批准。对应 DTO 暂保留兼容名称，界面使用 Features / Refresh。
 
-配置损坏或 schema 未知时，扩展关闭且只读，基础 Launcher / 设置继续可用，不覆盖原文件。配置操作无论返回成功还是失败，都重新校验快捷键资格；不确定资格时注销按键。修复后 Reload 恢复。协议见 [扩展与插件](plugin-protocol.md)。
+P05a 将设置分为 `FeaturePreferences` / `features.json` 与 `PluginPreferences` / `extensions.json`。首次启动从旧 `first-party:<id>` 禁用键生成新文件，旧键和批准仍保留在旧文件；有效的新文件是原生开关的唯一依据。创建迁移文件禁止覆盖已有目标，多实例启动遇到已创建文件会读取现有内容。有效未知功能 ID 保留，模块重新引入时继续应用其开关。
 
-## Host-rendered UI（V0.9 S1）
+FeaturePolicySnapshot 是不可变 Arc，只有内置配置或恢复资格改变时推进 generation；外部批准 / 普通 Refresh 不推进该 generation。P05b 在注册时显式记录贡献归属，基础文件 / 文本贡献不属于可关闭模块；动态动作继承 Factory 归属，快捷键读取同一有效注册表，配置边界过滤 Provider / Actions / Sources。恢复旧注册表也须经过当前策略过滤。
+
+Application 在会话发布边界安装与 SettingsService 相同的策略 Arc，保存失败保留旧快照 / 候选 / 会话。请求捕获策略身份，Core 的通用 ExecutionGuard 不导入产品策略；快照提交和执行也复验，避免不同 SettingsService 的相同 generation 误当作同一配置。变化取消旧策略下整个会话的异步等待，Graph 不折叠迟到结果、隐藏恢复不继承旧候选。排队的 Git / Developer blocking worker 开始前检查资格；已经开始的 OS I/O 不强制中断，工作者继续负责自己的资源 / admission 清理。已启动执行任务独立运行。P06 已将自动填入接到同目录的轻量 InputRecognizer；P05c 已退役目录重建框架。
+
+两类设置分别进入只读恢复，不覆盖损坏或未知 schema 文件；有效内置配置不因外部配置损坏而关闭，外部配置也可在内置配置损坏时单独修改。若新文件尚不存在且旧配置不可读，无法可靠迁移旧开关，内置功能同样只读关闭。基础 Launcher / 设置继续可用。写入前复验对应文件，已损坏、移除或与所读配置不同则拒绝该修改并要求 Refresh；每次操作只写其中一个文件，失败不发布新目录 / 策略。该复验不构成对任意外部编辑器的文件事务锁。
+
+配置操作无论成功还是失败，都重新校验快捷键资格；不确定资格时注销按键。修复后 Refresh 恢复设置 / 数据；未启动装载的外部定义需重启激活。协议见 [扩展与插件](plugin-protocol.md)。
+
+## 原生工具页与旧 UI 协议兼容
 
 外部 v3 Manifest 的 render_detail 使用 Protocol `ui::DetailView`；Plugin 负责 schema、模板与展开后的内容预算，Core 在普通执行 worker 内先检查 ui.render grant 后生成 `HostView::PluginDetail`。原 Session / Revision / catalog 校验与 Usage 路径不另建副本。
 
-Bridge 将内容转成 typed `PluginDetailDto`，不将 UI JSON 塞进 output_text。HostViewNavigator 接收已校验执行结果，注册视图适配器；Flutter plugins 模块只渲染字段和纯文本，不匹配 Context 或重做插值。Launcher 保留底层查询 / Scope / 选中项，返回仅关闭视图；隐藏仍使用统一 15 秒生命周期。未知版本 / 超限在进入 UI 前失败。能力批准绑定完整定义，变更 / 撤销沿 ExtensionManager 失效旧会话。
+Bridge 将内容转成 typed `PluginDetailDto`，不将 UI JSON 塞进 output_text。HostViewNavigator 接收已校验执行结果；P07 的静态 ToolPageRegistry 选择具体会话与原生 Body，ToolPageShell 管理共享布局 / 返回 / 焦点。Flutter Legacy Body 只渲染字段和纯文本，不匹配 Context 或重做插值。Launcher 保留底层查询 / Scope / 选中项，返回仅关闭视图；隐藏仍使用统一 15 秒生命周期。未知版本 / 超限在进入 UI 前失败。能力批准绑定完整定义，变更 / 撤销沿设置策略发布失效旧会话。
+
+## Native Tools 与操作
+
+ToolPageRegistry 选择编译内 Flutter 会话，ToolPageShell 统一布局、返回、焦点和 IME。当前实际页面为内部文本结果与旧 Detail 兼容视图，Launcher 不包含领域页面分支。NativeTool 保留普通页面 ID / 输入的类型化路由契约，未知或歧义路由拒绝打开；它不是第三方 UI DSL。`features/tools.rs` 的工具 EntrySource 复用普通 Action 搜索，不依赖文件领域。
 
 ## 扩展入口与验证
 
@@ -120,3 +139,14 @@ Bridge 将内容转成 typed `PluginDetailDto`，不将 UI JSON 塞进 output_te
 - 新系统能力：扩展 Platform / DesktopHost，实现各平台适配器。
 
 `scripts/check-architecture.py` 检查 Cargo 依赖及 core 模块反向导入；行为由公开 Facade、平台和 Widget 回归覆盖。完整门禁是 `scripts/check.sh`。自动化通过不代替真实键盘、权限、窗口、升级及 Windows 验收；当前记录见 [V0.9 MVP](mvp-v0.9.md)。
+
+
+### 延期的 JSON 工具
+
+JSON 改在未来 WebView 插件机制完成后实现。当前已移除原生工作区、内置 Provider / Actions / 注册入口、Flutter 页面和专用桥接操作；仅供该工具使用的 FeatureOperation / worker 框架同时移除，避免零业务消费者的执行体系常驻 Core。通用页面注册 / Shell、结果导航、会话 / 策略 / 执行 epoch 与既有 worker admission 继续服务现有业务。
+
+`json.document` / `core.json` 的 matcher 归一、ContextValue 数据类型与旧 Usage 迁移保留兼容；旧 `core.json.*` 动作 ID 不分配给其他动作。现有禁用键、快捷键配置和历史不主动删除，但无法找到当前目标的快捷键不会注册 / 执行，旧插件不能委托已退役动作。新的 Web 插件阶段再决定业务处理与 Host 的接口。
+
+### 系统编辑菜单与输入模型
+
+原生 Edit 菜单通过 NativeEditMenu 向当前 key window 对应的 Flutter engine 发送 anywhere/editing 编辑指令；Launcher / Settings 共用 engine，Running Tasks 使用自己的 engine。每个 engine 的 DesktopEditMenu 根据当前 Focus 调用 Flutter Actions，统一处理 Undo / Redo / Cut / Copy / Paste / Select All，文本、选区和撤销历史保存在 Flutter 编辑模型中。没有活动 Flutter 窗口时原生菜单不转发，无焦点 / 未知指令不会修改输入。业务处理继续由 Rust 执行。

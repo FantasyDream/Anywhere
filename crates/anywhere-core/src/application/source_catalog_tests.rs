@@ -16,7 +16,7 @@ use std::{
     time::Duration,
 };
 
-struct QuietPlatform;
+pub(super) struct QuietPlatform;
 impl Platform for QuietPlatform {
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
         Ok(None)
@@ -94,13 +94,15 @@ async fn synchronous_and_async_sources_share_atomic_install_and_cancel_on_remova
         ticket: Default::default(),
         resets: AtomicUsize::new(0),
     });
-    app.replace_extension_runtime(
+    app.publish_feature_catalog(
         ActionRegistry::default(),
         ContextProviderRegistry::default(),
         SourceSet {
             synchronous: vec![Arc::new(EmptySource("addon.sync"))],
             asynchronous: vec![slow.clone()],
+            ..Default::default()
         },
+        app.resolver.feature_policy.snapshot(),
         || Ok(()),
     )
     .unwrap();
@@ -120,19 +122,21 @@ async fn synchronous_and_async_sources_share_atomic_install_and_cancel_on_remova
     assert!(slow.ticket.lock().unwrap().as_ref().unwrap().is_current());
     // Failed publication preserves both source kinds and does not cancel the old catalog.
     assert!(app
-        .replace_extension_runtime(
+        .publish_feature_catalog(
             ActionRegistry::default(),
             ContextProviderRegistry::default(),
             SourceSet::default(),
+            app.resolver.feature_policy.snapshot(),
             || anyhow::bail!("disk full")
         )
         .is_err());
     assert!(slow.ticket.lock().unwrap().as_ref().unwrap().is_current());
     assert_eq!(slow.resets.load(Ordering::SeqCst), 0);
-    app.replace_extension_runtime(
+    app.publish_feature_catalog(
         ActionRegistry::default(),
         ContextProviderRegistry::default(),
         SourceSet::default(),
+        app.resolver.feature_policy.snapshot(),
         || Ok(()),
     )
     .unwrap();

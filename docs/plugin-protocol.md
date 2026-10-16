@@ -1,18 +1,20 @@
 # 扩展与声明式插件
 
-当前实现：V0.9 S1；最后核对：2026-10-14。本页区分第一方 Rust 模块和外部 TOML 插件。两者都复用正常 Context、Action、Candidate、Ranking 和执行链路。
+当前实现：V0.9 内置功能模块（外部 UI 协议保留 S1）；最后核对：2026-10-14。本页区分内置 Rust 功能模块和外部 TOML 插件。两者都复用正常 Context、Action、Candidate、Ranking 和执行链路。
+
+方向已调整：第一方改为内置功能模块，按 [P01–P09](feature-module-roadmap.md) 迁移；第三方 WebView 放到最后。本页保留旧 v1 / v2 / v3 已实现协议与兼容行为，停止扩展 UI DSL。内置 Manifest 已在 P03 移除，旧 Reload / runtime 已在 P05c 退役。
 
 ## 第一方模块
 
-JSON、URL、Git、Maven、Gradle、Node、Rust、Spring Boot、收藏目录的 Manifest 位于 `extensions/`，实现位于 `crates/anywhere-core/src/extensions/`。metadata 在编译时嵌入，不从用户目录加载任意 Rust 动态库。
+URL、Git、Maven、Gradle、Node、Rust、Spring Boot、收藏目录实现位于 `crates/anywhere-core/src/features/`。各模块使用静态 FeatureDescriptor 声明 ID、名称和系统操作，registration.rs 编译期注册；内置描述不经过 TOML、外部协议版本或包版本校验，不从用户目录加载任意 Rust 动态库。设置状态使用 App 的 Cargo workspace 版本，内置模块没有独立版本。
 
-`FirstPartyExtension` / `FeatureContribution` 贡献 Provider、ActionBundle、动态动作及 runtime Sources。Host 审批能力并提供 HostServices / 隔离 Storage；有界 ExtensionState 可在 runtime 重建间共享。内部 Trait 不是稳定外部 ABI，也不构成进程沙箱。
+`BuiltinFeature` / `FeatureContribution` 贡献 Provider、ActionBundle、动态动作及 启动绑定 Sources。FeatureDescriptor 的操作声明仍需通过 Host 允许列表，每次 HostServices 调用仍检查授权；Storage 的 namespace 仍由 Host 按稳定功能 ID 绑定。P04 起使用 FeatureServices 的具体业务 service，ExtensionState / Any 状态恢复已移除；收藏目录仅 repository 接触绑定存储，动作 / 来源只持有 SavedDirectoriesService。内部 Trait 不是稳定外部 ABI，也不构成进程沙箱。
 
-模块开关同时撤销识别器、动作与来源。重载推进目录 / 执行版本、失效保留会话并重新校验快捷键；已启动任务继续独立运行。架构详见 [装配与生命周期](architecture.md)。
+模块开关同时撤销识别器、动作与来源。策略发布推进目录 / 执行版本、失效保留会话并重新校验快捷键；已启动任务继续独立运行。架构详见 [装配与生命周期](architecture.md)。
 
 ## 外部插件安装
 
-支持 `~/Library/Application Support/Anywhere/plugins/*.toml` 和 `<plugin>/manifest.toml`。安装或修改后在 Settings → Extensions 点击 Reload。
+支持 `~/Library/Application Support/Anywhere/plugins/*.toml` 和 `<plugin>/manifest.toml`。安装或修改后重启 Anywhere，在 Settings → Features 查看启动时检查的定义。Refresh 只刷新设置与数据、复验已有定义，不扫描新插件。
 
 插件只描述匹配与受限操作，不提供 Flutter Widget，也不运行 Shell、Node、Python、WASM 或任意进程。没有 Marketplace 或任意代码 UI runtime；v3 的受限数据视图由 Flutter Host 渲染。
 
@@ -42,23 +44,23 @@ action = { type = "copy", text = "{{context.value}}" }
 
 v2 不支持 `execute_builtin`，也不向外部声明式插件开放第一方的 `git.read`、`process.start`、`storage`。
 
-Settings → Extensions 的 Review permissions → Allow & enable 批准后才注册。审查弹窗初始聚焦 Cancel；Enter 取消，右方向键转到 Allow & enable 后 Enter 批准。批准绑定内容、版本与安装路径，插件变化需要重新批准；Revoke permissions / Disable 撤销对应候选和快捷键，保留用户绑定配置。
+Settings → Features 的 Review permissions → Allow for next launch 批准写入后需重启才注册并激活。审查弹窗初始聚焦 Cancel；Enter 取消，右方向键转到 Allow for next launch 后 Enter 批准。批准绑定内容、版本与安装路径，插件变化需要重新批准；Revoke permissions / Disable 撤销对应候选和快捷键，保留用户绑定配置。
 
 执行持有不可变批准，HostServices 每次调用检查；产品能力令牌不代替 macOS 权限、授权目录、Session / Revision 或资源复验。
 
 ## v3：Host Detail / KeyValue（S1）
 
-v1 / v2 的语义保持不变。UI 插件使用 `protocol_version = 3`、数值包版本及 `ui.render` 能力，仍通过 Settings → Extensions 审查、批准和启用。v3 也支持 v2 三种操作及其对应批准，不开放脚本、进程、Storage 或 `execute_builtin`。
+v1 / v2 的语义保持不变。UI 插件使用 `protocol_version = 3`、数值包版本及 `ui.render` 能力，仍通过 Settings → Features 审查、批准和启用。v3 也支持 v2 三种操作及其对应批准，不开放脚本、进程、Storage 或 `execute_builtin`。
 
 新增 `action.type = "render_detail"`，`view.schema_version = 1`，描述 `title`、可选 `body` 与 `rows = [{label, value}, ...]`。标题和标签为字面文本，body / value 只支持 `{{context.value}}`。用户内容中的花括号、HTML 等作为普通文字，不重复插值、不执行或主动导航。
 
 - 最多 32 行；标题 / 标签 1..200 bytes；body 64 KiB、单行 value 16 KiB、总文本 128 KiB（模板与展开后分别检查）。超限在进入 Host 前返回正常动作错误；仍保留查询供用户修改。
 - 未知 UI 版本、字段 / 类型、变量和未声明能力拒绝整个插件；即使直接构造 DTO，注册 / 执行也校验与检查能力。
-- 复用现有 Session、Revision、Candidate、能力批准、Usage 与快捷键；批准绑定 UI 定义，修改视图也需要重新批准。撤销 / Reload 使旧候选、待执行结果与保留会话失效。
+- 复用现有 Session、Revision、Candidate、能力批准、Usage 与快捷键；批准绑定 UI 定义，修改视图也需要重新批准。撤销 / 设置变更使旧候选、待执行结果与保留会话失效。
 - 纯 Flutter 视图沿用 AppStyle 和 Launcher 材质。`↑↓` / `PageUp` / `PageDown` 滚动，`Esc` / Back 返回原查询和候选选择；不引入裸 Tab 操作。隐藏后按既有 15 秒规则保留。
 - Detail 当前只读，文本可选择复制（Host 的普通文本操作）；不提供插件回调、表单提交、Markdown 链接或任意 Widget。
 
-完整示例：[Context Detail](../plugins/examples/context-detail.toml)。它不会自动安装。将文件放到插件目录、Reload 并批准 `ui.render` 后，输入可识别内容或在当前 Context 的插件 Scope 中运行 Inspect Context。
+完整示例：[Context Detail](../plugins/examples/context-detail.toml)。它不会自动安装。将文件放到插件目录、重启并批准 `ui.render`，再重启激活后，输入可识别内容或在当前 Context 的插件 Scope 中运行 Inspect Context。
 
 ## v1：兼容协议
 
@@ -80,7 +82,7 @@ action = { type = "open_url", url = "https://example.com/search?q={{context.valu
 
 ## 共用匹配与模板
 
-命令注册身份为 `<plugin.id>.<command.id>`。标识使用合法的小写片段，`core` 命名空间保留；matcher 使用命名空间类型，如 `core.text`、`git.repository`。`core.json` matcher 归一到 `json.document`，业务动作 `core.json.*` 保持兼容。
+命令注册身份为 `<plugin.id>.<command.id>`。标识使用合法的小写片段，`core` 命名空间保留；matcher 使用命名空间类型，如 `core.text`、`git.repository`。`core.json` matcher 归一到 `json.document`，旧业务动作 `core.json.*` 已延期并从内置目录移除，委托该目标将失败；旧 matcher / Usage 迁移与动作 ID 仍保留兼容依据。
 
 可选 `group_id` 决定领域 Scope，默认 `plugin.<plugin_id>`；`aliases` / `keywords` 参与确定性查询匹配。插件不能通过 Group 改写 Context 来源或执行对象。
 
@@ -90,9 +92,13 @@ action = { type = "open_url", url = "https://example.com/search?q={{context.valu
 
 ## 持久化与恢复
 
-`extensions.json` 保存模块状态和 v2 / v3 批准，模块数据通过 `extension-storage.sqlite3` 按 namespace 与额度隔离。Storage 的事务更新防止多个连接覆盖已提交收藏。
+`features.json`（schema 1）保存内置功能禁用 ID，不保存批准或独立版本；读取上限 128 KiB / 1024 个合法 ID。首次启动按旧 `extensions.json` 的 `first-party:<id>` 禁用键迁移，新文件存在后不再重新导入旧值。迁移禁止覆盖另一实例已创建的新文件，旧文件中的键作为备份保留。
 
-配置损坏 / 未知 schema 不覆盖原文件，模块关闭且只读，基础 Launcher 和设置仍可用。修复配置或存储后 Reload 重开连接、刷新状态。任何配置操作返回失败时也同步实际快捷键目录，不确定资格不继续注册旧按键。
+`extensions.json` 保留外部插件开关和 v2 / v3 的精确内容 / 安装位置批准，读取上限仍为 4 MiB；旧第一方禁用键不再决定已迁移的内置开关。模块数据继续使用 `extension-storage.sqlite3` 的原 namespace 与额度。Storage 事务更新防止多个连接覆盖已提交收藏。
+
+两份配置分别只读恢复：内置配置损坏时其他外部插件仍可使用 / 设置；新内置配置有效时外部配置损坏也不会关闭内置功能。新文件不存在且旧配置不可读时，无法迁移旧开关，内置功能先只读关闭。未知 schema、非法内容、超限不覆盖；写入前发现对应文件被修改 / 损坏也拒绝旧设置操作。每次只原子替换对应的一个文件，失败保持旧策略 / 目录 / 会话。
+
+修复配置或存储后 Refresh 重开数据连接、刷新状态。任何配置操作返回失败时也同步实际快捷键目录，不确定资格不继续注册旧按键。FeaturePolicySnapshot 的 generation 只随内置策略与恢复资格变化发布；统一资格筛选已接入识别、候选、Sources 和快捷键，旧 Reload 已退役。
 
 收藏目录最多 100 项 / 64 KiB，普通查询始终找目录；对象 Actions 的首项保持默认打开操作，移除通过明确选择 Forget Saved Directory；`forget` / `remove` / `unpin` 不被解析为隐式删除指令。
 

@@ -6,6 +6,7 @@ python3 scripts/check-flutter.py
 python3 scripts/generate-keymap.py --check
 python3 scripts/generate-file-types.py --check
 python3 scripts/generate-runtime-policies.py --check
+cargo run -p anywhere-core --example generate_feature_catalog --locked -- --check
 python3 scripts/check-docs.py
 scripts/check-macos-menu.sh
 scripts/check-macos-host.sh

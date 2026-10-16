@@ -51,7 +51,7 @@ void main() {
 
   SettingsController controller(
           {required Future<List<String>> Function(List<String>) supported,
-          Future<List<PluginStatusDto>> Function()? reload,
+          Future<List<PluginStatusDto>> Function()? refreshPluginReports,
           Future<List<ShortcutActionDto>> Function()? actions}) =>
       SettingsController(
           window: WindowHost(channel),
@@ -59,7 +59,7 @@ void main() {
           applyFileSearch: (_) async {},
           applyContextSources: (_) async {},
           readPlugins: () => [],
-          reload: reload ?? () async => [],
+          refreshPluginReports: refreshPluginReports ?? () async => [],
           readSupportedShortcutActions: supported,
           readShortcutActions: actions);
 
@@ -111,13 +111,13 @@ void main() {
     expect(requests.single.toSet(), {'plugin.copy', 'core.directory.terminal'});
     expect(syncs.last['supportedActionIds'], available);
     available = ['core.directory.terminal'];
-    await c.refreshPlugins();
+    await c.refreshFeatureData();
     expect(c.shortcutSupported('plugin.copy'), isFalse);
     expect(c.shortcutActions.map((a) => a.actionId), available);
     expect(c.current.actionShortcuts.length, 2);
     expect(syncs.last['supportedActionIds'], available);
     available = ['plugin.copy', 'core.directory.terminal'];
-    await c.refreshPlugins();
+    await c.refreshFeatureData();
     expect(c.shortcutSupported('plugin.copy'), isTrue);
     expect(syncs.length, 3);
     expect(
@@ -139,7 +139,7 @@ void main() {
     expect(c.statusMessage, contains('catalog unavailable'));
     expect(c.current.actionShortcuts.length, 2);
     fail = false;
-    await c.refreshPlugins();
+    await c.refreshFeatureData();
     expect(c.statusMessage, isNull);
     expect(syncs.last['supportedActionIds'], isNotEmpty);
   });
@@ -178,16 +178,16 @@ void main() {
     var reloads = 0;
     final c = controller(
         supported: (ids) async => ids,
-        reload: () {
+        refreshPluginReports: () {
           reloads++;
           return gate.future;
         },
         actions: () async => throw StateError('picker unavailable'));
     addTearDown(c.dispose);
     await c.load();
-    final refreshing = c.refreshPlugins();
+    final refreshing = c.refreshFeatureData();
     expect(c.refreshingPlugins, isTrue);
-    await c.refreshPlugins();
+    await c.refreshFeatureData();
     expect(reloads, 1);
     gate.complete([]);
     await refreshing;

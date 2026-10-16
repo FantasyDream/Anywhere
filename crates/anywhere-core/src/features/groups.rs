@@ -33,14 +33,6 @@ pub fn web() -> ActionGroup {
     }
 }
 
-pub fn json() -> ActionGroup {
-    ActionGroup {
-        id: JSON.into(),
-        title: "JSON".into(),
-        icon: Some("code".into()),
-    }
-}
-
 pub fn app() -> ActionGroup {
     ActionGroup {
         id: APP.into(),
@@ -64,7 +56,6 @@ pub fn builtin() -> Vec<ActionGroup> {
         folder(),
         file(),
         web(),
-        json(),
         rust(),
         maven(),
         gradle(),

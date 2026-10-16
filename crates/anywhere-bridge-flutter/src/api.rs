@@ -14,9 +14,8 @@ use std::{
 };
 
 static APPLICATION: OnceLock<Application> = OnceLock::new();
-static EXTENSIONS: OnceLock<
-    Mutex<anywhere_core::application::extension_manager::ExtensionManager>,
-> = OnceLock::new();
+static EXTENSIONS: OnceLock<Mutex<anywhere_core::application::settings_service::SettingsService>> =
+    OnceLock::new();
 
 pub fn ping() -> String {
     queries::ping()
@@ -225,13 +224,13 @@ pub fn plugin_status() -> Vec<PluginStatusDto> {
     settings::plugin_status()
 }
 
-pub fn reload_plugins() -> Result<Vec<PluginStatusDto>> {
-    settings::reload_plugins()
+pub fn refresh_plugins() -> Result<Vec<PluginStatusDto>> {
+    settings::refresh_plugins()
 }
 
-/// Modern reload returns the same authoritative catalog as enable/grant/revoke.
-pub fn reload_extensions() -> Result<Vec<ExtensionStatusDto>> {
-    settings::reload_extensions()
+/// Refresh preferences and feature data; no module or plugin code is loaded.
+pub fn refresh_features() -> Result<Vec<ExtensionStatusDto>> {
+    settings::refresh_features()
 }
 
 pub fn extension_status() -> Result<Vec<ExtensionStatusDto>> {
@@ -239,17 +238,17 @@ pub fn extension_status() -> Result<Vec<ExtensionStatusDto>> {
 }
 pub fn set_extension_enabled(key: String, enabled: bool) -> Result<Vec<ExtensionStatusDto>> {
     settings::change_extension(
-        anywhere_core::application::extension_manager::ExtensionChange::Enable { key, enabled },
+        anywhere_core::application::settings_service::SettingsChange::Enable { key, enabled },
     )
 }
 pub fn approve_extension(key: String, token: String) -> Result<Vec<ExtensionStatusDto>> {
     settings::change_extension(
-        anywhere_core::application::extension_manager::ExtensionChange::Approve { key, token },
+        anywhere_core::application::settings_service::SettingsChange::Approve { key, token },
     )
 }
 pub fn revoke_extension(key: String) -> Result<Vec<ExtensionStatusDto>> {
     settings::change_extension(
-        anywhere_core::application::extension_manager::ExtensionChange::Revoke { key },
+        anywhere_core::application::settings_service::SettingsChange::Revoke { key },
     )
 }
 
@@ -269,8 +268,8 @@ pub struct ExtensionStatusDto {
     pub approval_token: String,
     pub detail: String,
 }
-impl From<anywhere_core::application::extension_manager::ExtensionStatus> for ExtensionStatusDto {
-    fn from(s: anywhere_core::application::extension_manager::ExtensionStatus) -> Self {
+impl From<anywhere_core::application::settings_service::ModuleStatus> for ExtensionStatusDto {
+    fn from(s: anywhere_core::application::settings_service::ModuleStatus) -> Self {
         Self {
             key: s.key,
             id: s.id,
@@ -531,6 +530,7 @@ pub struct ActionResultDto {
     pub output_text: Option<String>,
     pub view: Option<HostViewDto>,
     pub plugin_detail: Option<PluginDetailDto>,
+    pub native_tool: Option<NativeToolDto>,
     pub close_window: bool,
     pub execution_session_id: Option<String>,
 }
@@ -576,6 +576,7 @@ pub struct PluginStatusDto {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HostViewDto {
     FileSearch,
+    NativeTool,
     PluginDetail,
 }
 
@@ -748,4 +749,10 @@ mod delivery_tests {
             }
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct NativeToolDto {
+    pub id: String,
+    pub input: String,
 }

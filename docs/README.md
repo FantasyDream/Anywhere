@@ -1,6 +1,6 @@
 # 文档导航
 
-当前主线：V0.9；整理日期：2026-10-14。根 [README](../README.md) 是使用与开发入口；本目录保留当前设计契约，旧构建证据和调研分别放入 archive / research。
+当前主线：V0.9；整理日期：2026-10-16。根 [README](../README.md) 是使用与开发入口；本目录保留当前设计契约，旧构建证据和调研分别放入 archive / research。
 
 ## 当前文档
 
@@ -17,7 +17,8 @@
 | [共享 UI](ui-design.md) | 组件、材质、输入与平台回退 |
 | [性能](performance.md) | 资源预算、增量更新与测量边界 |
 | [跨平台](platform-portability.md) | Host 路径 / 能力、快捷键 schema 与 Windows 接入 |
-| [V0.9 MVP](mvp-v0.9.md) | Host UI 切片、当前进度与待完成内容 |
+| [V0.9 MVP](mvp-v0.9.md) | 内置功能模块、Build 6 收尾结果与发行验收边界 |
+| [模块迁移路线图](feature-module-roadmap.md) | 小阶段范围、验收、回滚与续接规则 |
 | [V0.8 收尾](mvp-v0.8.md) | 上一阶段完成范围、最终构建证据和发布边界 |
 | [路线图](roadmap.md) | 下一阶段依赖、范围取舍和 1.0 门槛 |
 

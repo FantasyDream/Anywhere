@@ -8,6 +8,16 @@ use std::{collections::HashSet, path::Path};
 pub const EXAMPLE_PLUGIN: &str = include_str!("../../../plugins/examples/search.toml");
 const VARIABLE: &str = "{{context.value}}";
 
+/// Bounded file access shared by startup discovery and approval identity checks.
+pub fn read_manifest(path: &Path) -> Result<PluginManifest> {
+    use std::io::Read;
+    let mut raw = String::new();
+    std::fs::File::open(path)?
+        .take(256 * 1024 + 1)
+        .read_to_string(&mut raw)?;
+    parse_manifest(&raw)
+}
+
 pub fn parse_manifest(raw: &str) -> Result<PluginManifest> {
     if raw.len() > 256 * 1024 {
         bail!("manifest exceeds 256 KiB");
@@ -230,7 +240,7 @@ pub fn discover_with_paths(directory: &Path) -> LocatedDiscovery {
             if std::fs::metadata(&path)?.len() > 256 * 1024 {
                 bail!("manifest exceeds 256 KiB");
             }
-            parse_manifest(&std::fs::read_to_string(&path)?)
+            read_manifest(&path)
         })();
         match load {
             Ok(manifest) => result.manifests.push((path, manifest)),

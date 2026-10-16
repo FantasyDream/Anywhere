@@ -88,6 +88,7 @@ pub struct ActionDescriptor {
     pub home_eligible: bool,
     pub primary_action: bool,
     search: SearchFields,
+    contributor: Option<std::sync::Arc<str>>,
 }
 
 impl ActionDescriptor {
@@ -115,7 +116,13 @@ impl ActionDescriptor {
             home_eligible: definition.home_eligible,
             primary_action: definition.primary_action,
             search,
+            contributor: None,
         }
+    }
+
+    /// Registration ownership, independent of display groups and business action ids.
+    pub fn contributor(&self) -> Option<&str> {
+        self.contributor.as_deref()
     }
 
     pub fn search(&self) -> &SearchFields {
@@ -144,7 +151,13 @@ pub struct ActionRegistry {
     actions: BTreeMap<ActionId, std::sync::Arc<ActionDescriptor>>,
     groups: BTreeMap<GroupId, RegisteredGroup>,
     next_rank: u16,
-    factories: Vec<std::sync::Arc<dyn super::bundle::ContextActionFactory>>,
+    factories: Vec<RegisteredFactory>,
+}
+
+#[derive(Clone)]
+struct RegisteredFactory {
+    factory: std::sync::Arc<dyn super::bundle::ContextActionFactory>,
+    contributor: Option<std::sync::Arc<str>>,
 }
 
 impl GroupMeta for ActionRegistry {
@@ -205,7 +218,7 @@ impl ActionRegistry {
         }
         self.factories
             .iter()
-            .any(|factory| factory.supports_persistent_binding(id))
+            .any(|factory| factory.factory.supports_persistent_binding(id))
     }
     pub fn register_factory(
         &mut self,
@@ -218,7 +231,42 @@ impl ActionRegistry {
         &mut self,
         factory: std::sync::Arc<dyn super::bundle::ContextActionFactory>,
     ) {
-        self.factories.push(factory);
+        self.register_owned_factory(factory, None);
+    }
+
+    pub fn register_owned_factory(
+        &mut self,
+        factory: std::sync::Arc<dyn super::bundle::ContextActionFactory>,
+        contributor: Option<&str>,
+    ) {
+        self.factories.push(RegisteredFactory {
+            factory,
+            contributor: contributor.map(Into::into),
+        });
+    }
+
+    /// Filter once at a configuration boundary, including not-yet-expanded factories.
+    pub fn retain_contributors(&mut self, enabled: impl Fn(&str) -> bool) {
+        self.actions
+            .retain(|_, action| action.contributor().is_none_or(&enabled));
+        self.factories
+            .retain(|factory| factory.contributor.as_deref().is_none_or(&enabled));
+        // Delegating commands must disappear with their target, even if the delegate
+        // has a different contribution owner. Execution and binding also revalidate.
+        let missing: BTreeSet<_> = self
+            .actions
+            .values()
+            .filter_map(|action| {
+                let target = match &action.executor {
+                    ActionExecutor::Declarative(DeclarativeAction::ExecuteBuiltin {
+                        command_id,
+                    }) => command_id,
+                    _ => return None,
+                };
+                (!self.actions.contains_key(target)).then(|| action.id.clone())
+            })
+            .collect();
+        self.actions.retain(|id, _| !missing.contains(id));
     }
 
     /// Build an immutable snapshot registry. Generated handlers travel with candidates.
@@ -226,7 +274,8 @@ impl ActionRegistry {
         let mut registry = self.clone();
         registry.factories.clear();
         let mut diagnostics = Vec::new();
-        for factory in &self.factories {
+        for registered in &self.factories {
+            let factory = &registered.factory;
             let expansion = factory.actions(contexts);
             diagnostics.extend(
                 expansion
@@ -235,7 +284,9 @@ impl ActionRegistry {
                     .map(|message| format!("context actions [{}]: {message}", factory.id())),
             );
             for action in expansion.actions {
-                if let Err(error) = registry.register(action) {
+                if let Err(error) =
+                    registry.register_owned(action, registered.contributor.as_deref())
+                {
                     diagnostics.push(format!("context actions [{}]: {error}", factory.id()));
                 }
             }
@@ -243,7 +294,11 @@ impl ActionRegistry {
         (registry, diagnostics)
     }
     /// Check every action, then insert. A failure leaves the registry unchanged.
-    fn commit_batch(&mut self, actions: Vec<ActionDefinition>) -> Result<()> {
+    fn commit_batch(
+        &mut self,
+        actions: Vec<ActionDefinition>,
+        contributor: Option<&str>,
+    ) -> Result<()> {
         let mut seen = BTreeSet::new();
         for action in &actions {
             if !seen.insert(action.id.clone()) || self.actions.contains_key(&action.id) {
@@ -255,7 +310,8 @@ impl ActionRegistry {
             action.availability.validate()?;
         }
         for action in actions {
-            let action = ActionDescriptor::from_definition(action);
+            let mut action = ActionDescriptor::from_definition(action);
+            action.contributor = contributor.map(Into::into);
             self.actions
                 .insert(action.id.clone(), std::sync::Arc::new(action));
         }
@@ -263,13 +319,29 @@ impl ActionRegistry {
     }
 
     pub fn register(&mut self, action: ActionDefinition) -> Result<()> {
-        self.commit_batch(vec![action])
+        self.register_owned(action, None)
+    }
+
+    pub fn register_owned(
+        &mut self,
+        action: ActionDefinition,
+        contributor: Option<&str>,
+    ) -> Result<()> {
+        self.commit_batch(vec![action], contributor)
     }
 
     /// Actions and the group's display title, or neither.
     pub fn register_bundle(&mut self, bundle: ActionBundle) -> Result<()> {
+        self.register_owned_bundle(bundle, None)
+    }
+
+    pub fn register_owned_bundle(
+        &mut self,
+        bundle: ActionBundle,
+        contributor: Option<&str>,
+    ) -> Result<()> {
         let group = bundle.group.clone();
-        self.commit_batch(bundle.descriptors())?;
+        self.commit_batch(bundle.descriptors(), contributor)?;
         self.remember_group(group, true);
         Ok(())
     }
@@ -327,6 +399,15 @@ impl ActionRegistry {
         &mut self,
         plugin: PluginManifest,
         allowed: &[extension::ExtensionCapability],
+    ) -> Result<()> {
+        self.register_owned_plugin(plugin, allowed, None)
+    }
+
+    pub fn register_owned_plugin(
+        &mut self,
+        plugin: PluginManifest,
+        allowed: &[extension::ExtensionCapability],
+        contributor: Option<&str>,
     ) -> Result<()> {
         anywhere_plugin::validate_manifest(&plugin)?;
         let grant = if plugin.protocol_version >= 2 {
@@ -423,7 +504,7 @@ impl ActionRegistry {
             .iter()
             .map(|command| command.group_id.clone())
             .collect::<Vec<_>>();
-        self.commit_batch(commands)?;
+        self.commit_batch(commands, contributor)?;
         for id in group_ids {
             self.remember_group(
                 ActionGroup {
@@ -442,7 +523,7 @@ impl ActionRegistry {
 mod tests {
     use super::*;
     use crate::core::action::group::groups;
-    use crate::extensions::git::actions::is_git_action;
+    use crate::features::git::actions::is_git_action;
     use crate::features::recognized_contexts;
 
     fn seed(input: &str) -> Vec<ResolvedContext> {
@@ -450,16 +531,18 @@ mod tests {
     }
 
     fn json_context() -> ResolvedContext {
-        seed("{}")
-            .into_iter()
-            .find(|c| c.type_id == JSON_DOCUMENT)
-            .unwrap()
+        ResolvedContext::new(
+            JSON_DOCUMENT,
+            crate::core::context::ContextValue::Text("{}".into()),
+            ContextSource::UserInput,
+            "legacy-fixture",
+        )
     }
 
     #[test]
     fn exact_type_match_and_builtin_command_count() {
         let registry = crate::application::builtin_registry();
-        assert_eq!(registry.commands().count(), 31);
+        assert_eq!(registry.commands().count(), 28);
         let url = seed("https://github.com")
             .into_iter()
             .find(|c| c.type_id == URL)
@@ -468,7 +551,7 @@ mod tests {
         assert!(registry.get("core.url.open").unwrap().matches(&url));
         assert!(!registry.get("core.url.open").unwrap().matches(&json));
         assert_eq!(registry.matching(&url).count(), 2);
-        assert_eq!(registry.matching(&json).count(), 3);
+        assert_eq!(registry.matching(&json).count(), 0);
         let directory = ResolvedContext::new(
             DIRECTORY,
             crate::core::context::ContextValue::Directory("/tmp".into()),
@@ -533,7 +616,7 @@ mod tests {
     }
 
     #[test]
-    fn v0_1_json_plugin_is_normalized_and_keeps_working() {
+    fn legacy_matcher_normalization_remains_without_retired_builtin_targets() {
         let mut registry = crate::application::builtin_registry();
         let raw = r#"
 protocol_version = 1
@@ -544,7 +627,7 @@ name = "Legacy"
 id = "pretty"
 title = "Pretty JSON"
 accepts = ["core.json"]
-action = { type = "execute_builtin", command_id = "core.json.format" }
+action = { type = "copy", text = "{{context.value}}" }
 "#;
         let manifest = anywhere_plugin::parse_manifest(raw).unwrap();
         registry.register_plugin(manifest.clone()).unwrap();

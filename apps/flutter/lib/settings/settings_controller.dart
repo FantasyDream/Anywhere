@@ -26,8 +26,8 @@ class SettingsController extends ChangeNotifier {
     Future<List<ExtensionStatusDto>> Function(String, bool)? enableExtension,
     Future<List<ExtensionStatusDto>> Function(String, String)? grantExtension,
     Future<List<ExtensionStatusDto>> Function(String)? removeExtensionGrant,
-    Future<List<PluginStatusDto>> Function()? reload,
-    Future<List<ExtensionStatusDto>> Function()? reloadExtensions,
+    Future<List<PluginStatusDto>> Function()? refreshPluginReports,
+    Future<List<ExtensionStatusDto>> Function()? refreshFeatures,
     Future<List<ShortcutActionDto>> Function()? readShortcutActions,
     Future<List<String>> Function(List<String>)? readSupportedShortcutActions,
     Future<List<ShortcutApplicationDto>> Function()? readShortcutApplications,
@@ -38,11 +38,11 @@ class SettingsController extends ChangeNotifier {
             (readPlugins == null
                 ? extensionStatus
                 : (() => legacyExtensionStatuses(readPlugins()))),
-        _reloadExtensions = reloadExtensions ??
-            (reload == null
-                ? extensions_api.reloadExtensions
+        _refreshFeatures = refreshFeatures ??
+            (refreshPluginReports == null
+                ? extensions_api.refreshFeatures
                 : (() async {
-                    final legacy = await reload();
+                    final legacy = await refreshPluginReports();
                     return readExtensions == null
                         ? legacyExtensionStatuses(legacy)
                         : await readExtensions();
@@ -86,7 +86,7 @@ class SettingsController extends ChangeNotifier {
   final Future<List<ExtensionStatusDto>> Function(String) _removeExtensionGrant;
   List<ExtensionStatusDto> _extensions = const [];
   List<ExtensionStatusDto> get extensions => _extensions;
-  final Future<List<ExtensionStatusDto>> Function() _reloadExtensions;
+  final Future<List<ExtensionStatusDto>> Function() _refreshFeatures;
   final Future<List<ShortcutActionDto>> Function()? _readShortcutActions;
   final Future<List<String>> Function(List<String>)?
       _readSupportedShortcutActions;
@@ -418,7 +418,7 @@ class SettingsController extends ChangeNotifier {
   bool _authorizingFiles = false;
   bool get authorizingFiles => _authorizingFiles;
 
-  Future<void> refreshPlugins() => _changeExtensions(_reloadExtensions);
+  Future<void> refreshFeatureData() => _changeExtensions(_refreshFeatures);
 
   Future<void> setExtensionEnabled(
           ExtensionStatusDto extension, bool enabled) =>

@@ -5,8 +5,10 @@
 //! elsewhere; this layer owns session lifecycle and snapshot publication.
 pub mod activate;
 pub mod execute;
-pub mod extension_manager;
 pub mod launcher_service;
+mod legacy_plugins;
+mod native_features;
+pub mod settings_service;
 pub mod update_query;
 
 pub use launcher_service::{Application, LauncherApplication, SnapshotWait};
@@ -37,3 +39,6 @@ pub mod context_projection;
 
 #[cfg(test)]
 mod source_catalog_tests;
+
+#[cfg(test)]
+mod feature_policy_tests;

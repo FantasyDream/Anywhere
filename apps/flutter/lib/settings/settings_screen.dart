@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'settings_controller.dart';
 import 'settings_components.dart';
-import 'extensions_section.dart';
+import 'features_section.dart';
 import 'action_shortcuts_section.dart';
 import 'shortcut_recorder.dart';
 import 'action_shortcut.dart';
@@ -263,7 +263,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ('shortcuts', 'Shortcuts', AppIcons.keyboard),
     ('context', 'Context', AppIcons.layers),
     ('search', 'Search', AppIcons.search),
-    ('plugins', 'Extensions', AppIcons.plugin),
+    ('plugins', 'Features', AppIcons.layers),
   ];
 
   void _selectPage(String id) {
@@ -540,7 +540,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           SizedBox(height: DesktopEnvironment.current.titleBarInset),
         ],
-      'plugins' => [ExtensionsSection(controller: _controller)],
+      'plugins' => [FeaturesSection(controller: _controller)],
       _ => const [],
     };
   }
@@ -551,7 +551,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'GENERAL' => 'Startup',
         'CONTEXT SOURCES' => 'Context sources',
         'SEARCH' => 'Search results',
-        'PLUGINS' => 'Extensions',
+        'PLUGINS' => 'Features',
         _ => title,
       },
       icon: switch (title) {

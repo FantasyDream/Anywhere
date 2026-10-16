@@ -14,7 +14,6 @@ class LauncherSessionCoordinator {
   Object? capturePolicy;
   Future<void>? suspension;
   Timer? _deadline;
-  Future<void>? _discarding;
   Future<bool>? _restoring;
   static const retention =
       Duration(milliseconds: RuntimePolicy.launcherRetentionMs);
@@ -46,8 +45,6 @@ class LauncherSessionCoordinator {
     return pending;
   }
 
-  Future<void> discardOnce(Future<void> Function() run) =>
-      _discarding ??= run().whenComplete(() => _discarding = null);
   Future<bool> restoreOnce(Future<bool> Function() run) =>
       _restoring ??= run().whenComplete(() => _restoring = null);
   void dispose() {

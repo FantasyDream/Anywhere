@@ -1,4 +1,4 @@
-//! Versioned metadata and explicit host operations, independent of Rust Traits.
+//! Explicit host operations shared by built-in features and versioned plugins.
 use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum ExtensionCapability {
@@ -33,13 +33,4 @@ impl ExtensionCapability {
             Self::InvokeBuiltin => "builtin.invoke",
         }
     }
-}
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct FirstPartyManifest {
-    pub protocol_version: u32,
-    pub id: String,
-    pub name: String,
-    pub version: String,
-    pub capabilities: Vec<ExtensionCapability>,
 }

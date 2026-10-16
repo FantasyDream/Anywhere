@@ -154,18 +154,20 @@ pub(super) fn choose_activation_input(
             }
         })
         .collect();
-    anywhere_core::application::input_policy::choose_activation_input(
-        &captures,
-        now_ms,
-        selected_enabled,
-        clipboard_enabled,
-        allow_pending_selection,
-    )
-    .map(|v| ActivationInputDto {
-        source: context_source_dto(v.source),
-        text: v.text,
-        valid_until_ms: v.valid_until_ms,
-    })
+    application()
+        .ok()?
+        .choose_activation_input(
+            &captures,
+            now_ms,
+            selected_enabled,
+            clipboard_enabled,
+            allow_pending_selection,
+        )
+        .map(|v| ActivationInputDto {
+            source: context_source_dto(v.source),
+            text: v.text,
+            valid_until_ms: v.valid_until_ms,
+        })
 }
 
 pub(super) async fn wait_for_snapshot_delta(

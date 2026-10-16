@@ -1,3 +1,4 @@
+import '../tools/tool_page.dart';
 import '../settings/host_settings.dart';
 import 'file_search_controller.dart';
 import 'dart:convert';
@@ -112,8 +113,7 @@ class LauncherViewState {
     this.selectedId,
     this.message,
     this.output,
-    this.pluginDetail,
-    this.resultSource,
+    this.toolPage,
     this.resultStatus,
     String? universalShortcut,
     this.bindingChoices,
@@ -136,7 +136,8 @@ class LauncherViewState {
   static const navigationHeight = 108.0;
   bool get hasFilePreview => isFileSearch;
   double get width =>
-      phase == LauncherPhase.settings || !isFileSearch ? 648 : 920;
+      toolPage?.width ??
+      (phase == LauncherPhase.settings || !isFileSearch ? 648 : 920);
   bool get hasFileControls =>
       isFileSearch && bindingChoices == null && output == null;
   bool get hasControls => hasScopeBar || hasFileControls;
@@ -150,9 +151,10 @@ class LauncherViewState {
 
   /// null = scope home, [] = menu root, [View, Appearance] = submenu.
   final List<String>? actionPath;
-  final String? selectedId, message, output, resultSource;
+  final String? selectedId, message, output;
   final ActionStatusDto? resultStatus;
-  final PluginDetailDto? pluginDetail;
+  final ToolPageSession? toolPage;
+  PluginDetailDto? get pluginDetail => toolPage?.legacyDetail;
   final String? _universalShortcut;
   String get universalShortcut =>
       _universalShortcut ?? HostSettings.defaults.universalLabel;
@@ -471,7 +473,7 @@ class LauncherViewState {
       ((output?.split('\n').length ?? 0).clamp(3, 14) * 20.0) + 24;
   double get height {
     if (phase == LauncherPhase.settings) return 508;
-    if (pluginDetail != null) return 480;
+    if (toolPage != null) return toolPage!.height;
     if (isFileSearch) return 600;
     if (navigationOpen) return inputAreaHeight + 1 + navigationHeight;
     final body = output != null

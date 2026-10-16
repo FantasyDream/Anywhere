@@ -35,7 +35,7 @@ pub(super) fn initialize(data_directory: String, plugin_directory: String) -> Re
         history,
         diagnostics,
     );
-    let manager = anywhere_core::application::extension_manager::ExtensionManager::open(
+    let manager = anywhere_core::application::settings_service::SettingsService::open(
         data.join("extensions.json"),
         vec![PathBuf::from(plugin_directory), user_plugins],
         &app,
@@ -50,7 +50,7 @@ pub(super) fn initialize(data_directory: String, plugin_directory: String) -> Re
 }
 
 fn extensions() -> Result<
-    std::sync::MutexGuard<'static, anywhere_core::application::extension_manager::ExtensionManager>,
+    std::sync::MutexGuard<'static, anywhere_core::application::settings_service::SettingsService>,
 > {
     EXTENSIONS
         .get()
@@ -66,7 +66,7 @@ pub(super) fn extension_status() -> Result<Vec<ExtensionStatusDto>> {
         .collect())
 }
 pub(super) fn change_extension(
-    change: anywhere_core::application::extension_manager::ExtensionChange,
+    change: anywhere_core::application::settings_service::SettingsChange,
 ) -> Result<Vec<ExtensionStatusDto>> {
     Ok(extensions()?
         .change(application()?, change)?
@@ -75,7 +75,7 @@ pub(super) fn change_extension(
         .collect())
 }
 fn plugin_reports(
-    statuses: Vec<anywhere_core::application::extension_manager::ExtensionStatus>,
+    statuses: Vec<anywhere_core::application::settings_service::ModuleStatus>,
 ) -> Vec<PluginStatusDto> {
     statuses
         .into_iter()
@@ -92,15 +92,15 @@ pub(super) fn plugin_status() -> Vec<PluginStatusDto> {
         .map(|m| plugin_reports(m.statuses()))
         .unwrap_or_default()
 }
-pub(super) fn reload_extensions() -> Result<Vec<ExtensionStatusDto>> {
+pub(super) fn refresh_features() -> Result<Vec<ExtensionStatusDto>> {
     Ok(extensions()?
-        .reload(application()?)?
+        .refresh(application()?)?
         .into_iter()
         .map(Into::into)
         .collect())
 }
-pub(super) fn reload_plugins() -> Result<Vec<PluginStatusDto>> {
-    Ok(plugin_reports(extensions()?.reload(application()?)?))
+pub(super) fn refresh_plugins() -> Result<Vec<PluginStatusDto>> {
+    Ok(plugin_reports(extensions()?.refresh(application()?)?))
 }
 
 pub(super) fn excluded_apps() -> Result<Vec<String>> {

@@ -5,6 +5,7 @@
 //! into `core.url`, a directory into a `git.repository`. The engine walks that graph
 //! sequentially, and the registry holds the providers available to a session.
 pub mod engine;
+pub mod input_recognizer;
 pub mod navigation;
 pub mod provider;
 pub mod registry;
