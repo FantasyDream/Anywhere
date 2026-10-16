@@ -79,6 +79,19 @@ fn check_refuses_missing_or_stale_snapshot_without_modifying_it() {
 }
 
 #[test]
+fn check_accepts_windows_line_endings_but_rejects_stale_content_without_writing() {
+    let temporary = tempfile::tempdir().unwrap();
+    let snapshot = temporary.path().join("catalog.rs");
+    let expected = "first\nsecond\n";
+    let checkout = "first\r\nsecond\r\n";
+    fs::write(&snapshot, checkout).unwrap();
+    feature_catalog::write_or_check(&snapshot, expected, true).unwrap();
+    assert_eq!(fs::read_to_string(&snapshot).unwrap(), checkout);
+    assert!(feature_catalog::write_or_check(&snapshot, "first\nchanged\n", true).is_err());
+    assert_eq!(fs::read_to_string(&snapshot).unwrap(), checkout);
+}
+
+#[test]
 fn discovery_rejects_missing_empty_and_malformed_registrations() {
     let temporary = tempfile::tempdir().unwrap();
     let root = temporary.path();

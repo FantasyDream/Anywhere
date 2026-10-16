@@ -13,6 +13,11 @@ xcrun clang -fobjc-arc -Wall -Wextra -Werror -Wno-deprecated-declarations \
   -framework AppKit -o "$MENU_TEST_DIR/clipboard-test"
 "$MENU_TEST_DIR/clipboard-test"
 xcrun clang -fobjc-arc -Wall -Wextra -Werror -Wno-deprecated-declarations \
+  -DANYWHERE_TEST_LEGACY_SDK \
+  crates/anywhere-platform/native/tests/macos_clipboard_test.m \
+  -framework AppKit -o "$MENU_TEST_DIR/clipboard-legacy-test"
+"$MENU_TEST_DIR/clipboard-legacy-test"
+xcrun clang -fobjc-arc -Wall -Wextra -Werror -Wno-deprecated-declarations \
   crates/anywhere-platform/native/tests/macos_identity_test.m \
   -framework AppKit -o "$MENU_TEST_DIR/identity-test"
 "$MENU_TEST_DIR/identity-test"

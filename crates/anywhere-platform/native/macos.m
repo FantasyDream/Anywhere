@@ -285,14 +285,18 @@ int launcher_clipboard_text(char *output, unsigned int capacity, unsigned int *o
     @autoreleasepool {
         if (out_length) *out_length = 0;
         NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
+#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 150400
         if (@available(macOS 15.4, *)) {
             if (pasteboard.accessBehavior == NSPasteboardAccessBehaviorAlwaysDeny) return 4;
         }
+#endif
         NSString *text = [pasteboard stringForType:NSPasteboardTypeString];
         // A permission prompt can change the policy during this read.
+#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 150400
         if (@available(macOS 15.4, *)) {
             if (pasteboard.accessBehavior == NSPasteboardAccessBehaviorAlwaysDeny) return 4;
         }
+#endif
         if (!text && [pasteboard.types containsObject:NSPasteboardTypeString]) return 0;
         if (text.length == 0) return 2;
         NSData *data = [text dataUsingEncoding:NSUTF8StringEncoding];

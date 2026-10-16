@@ -77,7 +77,12 @@ pub fn write_or_check(path: &Path, content: &str, check: bool) -> io::Result<()>
         Err(error) if error.kind() == io::ErrorKind::NotFound => None,
         Err(error) => return Err(error),
     };
-    if current.as_deref() == Some(content) {
+    // Git can check text files out as CRLF on Windows. Checking a generated
+    // snapshot must ignore that representation without rewriting the checkout.
+    if current
+        .as_deref()
+        .is_some_and(|current| current.replace("\r\n", "\n") == content)
+    {
         return Ok(());
     }
     if check {

@@ -1,6 +1,12 @@
 // Exercise the production reader without accessing or changing the user's clipboard.
 #import <AppKit/AppKit.h>
 #include <assert.h>
+#ifdef ANYWHERE_TEST_LEGACY_SDK
+// Exercise the older SDK branch even on a machine with the latest SDK.
+#undef __MAC_OS_X_VERSION_MAX_ALLOWED
+#define __MAC_OS_X_VERSION_MAX_ALLOWED 140000
+#define NSPasteboardAccessBehaviorAlwaysDeny unavailable_in_legacy_sdk
+#endif
 @interface TestPasteboard : NSObject
 @property(nonatomic, copy) NSString *text;
 @property(nonatomic, copy) NSArray *types;
@@ -44,6 +50,7 @@ int main(void) {
         assert(launcher_clipboard_text(output, sizeof(output), &length) == 0);
         board.types = @[];
         assert(launcher_clipboard_text(output, sizeof(output), &length) == 2);
+#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 150400
         if (@available(macOS 15.4, *)) {
             board.text = @"private";
             board.types = @[NSPasteboardTypeString];
@@ -56,6 +63,7 @@ int main(void) {
             assert(launcher_clipboard_text(output, sizeof(output), &length) == 4);
             assert(length == 0);
         }
+#endif
     }
     return 0;
 }
