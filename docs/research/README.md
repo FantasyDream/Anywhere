@@ -5,6 +5,7 @@
 | 文档 | 内容 |
 |---|---|
 | [全功能开源库复用清单](open-source-reuse-audit.md) | 2026-10-17 重新核验；当前功能、可替换边界、接入成本与优先级 |
+| [R2 SQLite 临时排序对照](result-store-r2.md) | 2026-10-18 同机原型、顺序 / 取消 / 失败回归及资源测量；保留现有生产后端 |
 | [FSearch 评估](fsearch-evaluation.md) | 同名项目、macOS fork / Rust 实现、集成成本与索引取舍 |
 | [搜索库补充](file-search-libraries.md) | zlob、ignore / walkdir / jwalk、fff-search 等候选与验证建议 |
 | [文件预览](file-preview.md) | Raycast / Alfred / Spotlight 行为和公开 Quick Look 能力 |

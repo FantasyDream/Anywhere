@@ -7,7 +7,7 @@
 适合复用的是文件枚举、文字匹配、格式解码、热键、系统 API 绑定等基础部件。Context 来源、Scope、执行资格、稳定列表、15 秒保留等产品规则继续由 Anywhere 持有。没有证据支持用一个现成库无适配替换整个 Launcher 或文件搜索链路。
 
 - **可局部引入：** `encoding_rs` / `chardetng`、`which`；分别补文本编码处理和简化可执行文件查找。
-- **值得做原型：** `nucleo-matcher`、`ignore` / `walkdir`、复用现有 SQLite 做查询临时记录、`global-hotkey`。先验证行为等价与资源收益，再决定替换。
+- **值得做原型：** `nucleo-matcher`、`ignore` / `walkdir`、`global-hotkey`。先验证行为等价与资源收益，再决定替换。SQLite 查询临时排序已于 2026-10-18 完成 [R2 对照](result-store-r2.md)，本轮保留现有后端。
 - **保留现有选型：** `clipboard-rs`、`rusqlite`、`image`、`flutter_rust_bridge`、Serde / URL / TOML / XML / Unicode 等库。
 - **下一阶段直接使用：** PTY 优先评估 `portable-pty`，Terminal 渲染优先评估 `xterm.js`；它们补下一阶段能力，不算当前已接入。
 
@@ -21,7 +21,7 @@
 | 同上，优先简单串行实现 | [walkdir](https://docs.rs/walkdir/latest/walkdir/struct.WalkDir.html) | 标准递归迭代器，减少路径遍历样板 | **中，基线候选。** `max_open` 限制句柄数量，达到限制会把目录条目读入内存，不是硬内存额度；不保证优于当前磁盘队列 |
 | 并行枚举备选 | [zlob](https://github.com/dmtrKovalenko/zlob) | 回调式遍历 / glob | **高，暂不优先。** 引入 Zig / FFI 构建及错误 / 队列适配；现有约束下收益需测量；既有调研见 [搜索库补充](file-search-libraries.md) |
 | 并行枚举备选 | [jwalk](https://github.com/Byron/jwalk) | Rayon 并行遍历 | **不作为新接入首选。** 官方仓库显示 2026-08-05 已归档；旧调研中的候选建议应结合此状态重新判断 |
-| 查询临时记录与外部排序 | [SQLite 临时文件与排序机制](https://www.sqlite.org/tempfiles.html)，复用现有 `rusqlite` | 可能替换 `result_store.rs` 的分块排序 / 多路归并和部分自定义记录格式；按查询创建并销毁 DB | **中，值得单独原型。** 不增加数据库依赖，不建立长期索引；仍需保留已展示前缀冻结、原始路径身份、取消与流式提交。缓存 / temp_store 不是整个进程的硬内存上限 |
+| 查询临时记录与外部排序 | [SQLite 临时文件与排序机制](https://www.sqlite.org/tempfiles.html)，复用现有 `rusqlite` | 曾建议替换 `result_store.rs` 的分块排序 / 多路归并和部分自定义记录格式；按查询创建并销毁 DB | **R2 已对照，当前不替换。** [本机原型](result-store-r2.md)通过正确性验证，但速度、RSS 与临时磁盘均未获益；不推广为所有 SQLite 设计的结论。缓存 / temp_store 不是整个进程的硬内存上限 |
 | 应用 / Action 查询：分词、Exact / Prefix / WordPrefix / Substring | [nucleo-matcher](https://github.com/helix-editor/nucleo) | 可选模糊评分、匹配位置与 Unicode 字素处理 | **中，体验原型优先。** 只接低层 matcher，不引入整个 picker；保留精确 / 前缀层级、标识符限制、各词命中与 frecency。文件搜索是否允许非连续模糊匹配需另定产品规则 |
 | 已安装应用发现 | `walkdir` / [notify](https://github.com/notify-rs/notify) | 前者可简化有界目录扫描，后者可触发目录缓存失效 | **低至中，按需。** `catalog.rs` 已限制深度和数量；识别 `.app`、读取名称 / Bundle ID、重复安装优先级仍是应用发现逻辑。notify 是增量刷新能力，不是完整应用目录 SDK |
 | 元数据 / 有界文本预览，当前只接受 UTF-8 文本 | [encoding_rs](https://github.com/hsivonen/encoding_rs) + [chardetng](https://github.com/hsivonen/chardetng) | 在现有 64 KiB 读取边界内支持 BOM / UTF-16、GBK 等编码解码与推测 | **低至中，建议优先补。** BOM 和有效 UTF-8 优先；chardetng 不负责识别 UTF-16，应由 BOM 层处理；检测可能误判，二进制不能仅凭“能解码”就显示为文本 |

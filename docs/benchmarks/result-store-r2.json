@@ -1,0 +1,513 @@
+{
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "probe": "query-local unread result storage",
+  "cache": "warm OS caches, synthetic raw records; no cache clearing",
+  "excluded": [
+    "directory traversal",
+    "Spotlight",
+    "Flutter",
+    "Bridge",
+    "GUI"
+  ],
+  "notes": [
+    "both use actual production raw codec and ranking",
+    "first batch includes SQLite open/schema, excludes fixture writes",
+    "temporary disk sampled between batches; not a true peak",
+    "RSS includes the common test harness and displayed path set",
+    "Unix path ordering only; no Windows validation"
+  ],
+  "baseline": {
+    "backend": "baseline",
+    "max_rss_bytes": 9650176
+  },
+  "cases": [
+    {
+      "rows": 100,
+      "waves": 1,
+      "samples": {
+        "external": [
+          {
+            "all_batches_ms": 1.360915,
+            "backend": "external",
+            "batches": 3,
+            "displayed_order_sha256": "1cc812358911106d1de0e30a1c71fc756927d7b37cf049a2e174f31e02f92a30",
+            "first_batch_ms": 1.319458,
+            "returned": 100,
+            "rows": 100,
+            "slowest_batch_ms": 1.319458,
+            "temporary_bytes_sampled": 11560,
+            "waves": 1,
+            "max_rss_bytes": 10731520
+          },
+          {
+            "all_batches_ms": 0.350374,
+            "backend": "external",
+            "batches": 3,
+            "displayed_order_sha256": "1cc812358911106d1de0e30a1c71fc756927d7b37cf049a2e174f31e02f92a30",
+            "first_batch_ms": 0.295375,
+            "returned": 100,
+            "rows": 100,
+            "slowest_batch_ms": 0.295375,
+            "temporary_bytes_sampled": 11560,
+            "waves": 1,
+            "max_rss_bytes": 10715136
+          },
+          {
+            "all_batches_ms": 0.39845800000000003,
+            "backend": "external",
+            "batches": 3,
+            "displayed_order_sha256": "1cc812358911106d1de0e30a1c71fc756927d7b37cf049a2e174f31e02f92a30",
+            "first_batch_ms": 0.341625,
+            "returned": 100,
+            "rows": 100,
+            "slowest_batch_ms": 0.341625,
+            "temporary_bytes_sampled": 11560,
+            "waves": 1,
+            "max_rss_bytes": 10747904
+          }
+        ],
+        "sqlite": [
+          {
+            "all_batches_ms": 5.595001,
+            "backend": "sqlite",
+            "batches": 3,
+            "displayed_order_sha256": "1cc812358911106d1de0e30a1c71fc756927d7b37cf049a2e174f31e02f92a30",
+            "first_batch_ms": 5.288334,
+            "returned": 100,
+            "rows": 100,
+            "slowest_batch_ms": 5.288334,
+            "temporary_bytes_sampled": 67220,
+            "waves": 1,
+            "max_rss_bytes": 12140544
+          },
+          {
+            "all_batches_ms": 1.8848340000000001,
+            "backend": "sqlite",
+            "batches": 3,
+            "displayed_order_sha256": "1cc812358911106d1de0e30a1c71fc756927d7b37cf049a2e174f31e02f92a30",
+            "first_batch_ms": 1.551125,
+            "returned": 100,
+            "rows": 100,
+            "slowest_batch_ms": 1.551125,
+            "temporary_bytes_sampled": 67220,
+            "waves": 1,
+            "max_rss_bytes": 12156928
+          },
+          {
+            "all_batches_ms": 2.131709,
+            "backend": "sqlite",
+            "batches": 3,
+            "displayed_order_sha256": "1cc812358911106d1de0e30a1c71fc756927d7b37cf049a2e174f31e02f92a30",
+            "first_batch_ms": 1.763875,
+            "returned": 100,
+            "rows": 100,
+            "slowest_batch_ms": 1.763875,
+            "temporary_bytes_sampled": 67220,
+            "waves": 1,
+            "max_rss_bytes": 12173312
+          }
+        ]
+      }
+    },
+    {
+      "rows": 10000,
+      "waves": 1,
+      "samples": {
+        "external": [
+          {
+            "all_batches_ms": 27.102291000000005,
+            "backend": "external",
+            "batches": 158,
+            "displayed_order_sha256": "81fa29cf3095157c603963dd2b820be3946606023dd07db9d2e1a969adc307b7",
+            "first_batch_ms": 19.902834000000002,
+            "returned": 10000,
+            "rows": 10000,
+            "slowest_batch_ms": 19.902834000000002,
+            "temporary_bytes_sampled": 1157460,
+            "waves": 1,
+            "max_rss_bytes": 12763136
+          },
+          {
+            "all_batches_ms": 26.039786000000014,
+            "backend": "external",
+            "batches": 158,
+            "displayed_order_sha256": "81fa29cf3095157c603963dd2b820be3946606023dd07db9d2e1a969adc307b7",
+            "first_batch_ms": 18.809,
+            "returned": 10000,
+            "rows": 10000,
+            "slowest_batch_ms": 18.809,
+            "temporary_bytes_sampled": 1157460,
+            "waves": 1,
+            "max_rss_bytes": 12763136
+          },
+          {
+            "all_batches_ms": 27.336791000000023,
+            "backend": "external",
+            "batches": 158,
+            "displayed_order_sha256": "81fa29cf3095157c603963dd2b820be3946606023dd07db9d2e1a969adc307b7",
+            "first_batch_ms": 20.16375,
+            "returned": 10000,
+            "rows": 10000,
+            "slowest_batch_ms": 20.16375,
+            "temporary_bytes_sampled": 1157460,
+            "waves": 1,
+            "max_rss_bytes": 12713984
+          }
+        ],
+        "sqlite": [
+          {
+            "all_batches_ms": 250.09258000000017,
+            "backend": "sqlite",
+            "batches": 158,
+            "displayed_order_sha256": "81fa29cf3095157c603963dd2b820be3946606023dd07db9d2e1a969adc307b7",
+            "first_batch_ms": 59.824667,
+            "returned": 10000,
+            "rows": 10000,
+            "slowest_batch_ms": 59.824667,
+            "temporary_bytes_sampled": 6255786,
+            "waves": 1,
+            "max_rss_bytes": 14434304
+          },
+          {
+            "all_batches_ms": 258.938324,
+            "backend": "sqlite",
+            "batches": 158,
+            "displayed_order_sha256": "81fa29cf3095157c603963dd2b820be3946606023dd07db9d2e1a969adc307b7",
+            "first_batch_ms": 64.283958,
+            "returned": 10000,
+            "rows": 10000,
+            "slowest_batch_ms": 64.283958,
+            "temporary_bytes_sampled": 6255786,
+            "waves": 1,
+            "max_rss_bytes": 14385152
+          },
+          {
+            "all_batches_ms": 239.976708,
+            "backend": "sqlite",
+            "batches": 158,
+            "displayed_order_sha256": "81fa29cf3095157c603963dd2b820be3946606023dd07db9d2e1a969adc307b7",
+            "first_batch_ms": 57.689167,
+            "returned": 10000,
+            "rows": 10000,
+            "slowest_batch_ms": 57.689167,
+            "temporary_bytes_sampled": 6255786,
+            "waves": 1,
+            "max_rss_bytes": 14401536
+          }
+        ]
+      }
+    },
+    {
+      "rows": 100000,
+      "waves": 1,
+      "samples": {
+        "external": [
+          {
+            "all_batches_ms": 268.4312409999998,
+            "backend": "external",
+            "batches": 1564,
+            "displayed_order_sha256": "d4d7c1f50114ff79ed08044d1f27b03482c1688d1cfaab12f1ca93a387dbbd15",
+            "first_batch_ms": 195.96562500000002,
+            "returned": 100000,
+            "rows": 100000,
+            "slowest_batch_ms": 195.96562500000002,
+            "temporary_bytes_sampled": 11574680,
+            "waves": 1,
+            "max_rss_bytes": 24395776
+          },
+          {
+            "all_batches_ms": 294.5525310000005,
+            "backend": "external",
+            "batches": 1564,
+            "displayed_order_sha256": "d4d7c1f50114ff79ed08044d1f27b03482c1688d1cfaab12f1ca93a387dbbd15",
+            "first_batch_ms": 216.55433299999999,
+            "returned": 100000,
+            "rows": 100000,
+            "slowest_batch_ms": 216.55433299999999,
+            "temporary_bytes_sampled": 11574680,
+            "waves": 1,
+            "max_rss_bytes": 24412160
+          },
+          {
+            "all_batches_ms": 284.1646559999997,
+            "backend": "external",
+            "batches": 1564,
+            "displayed_order_sha256": "d4d7c1f50114ff79ed08044d1f27b03482c1688d1cfaab12f1ca93a387dbbd15",
+            "first_batch_ms": 207.50095900000002,
+            "returned": 100000,
+            "rows": 100000,
+            "slowest_batch_ms": 207.50095900000002,
+            "temporary_bytes_sampled": 11574680,
+            "waves": 1,
+            "max_rss_bytes": 24428544
+          }
+        ],
+        "sqlite": [
+          {
+            "all_batches_ms": 3589.720957000001,
+            "backend": "sqlite",
+            "batches": 1564,
+            "displayed_order_sha256": "d4d7c1f50114ff79ed08044d1f27b03482c1688d1cfaab12f1ca93a387dbbd15",
+            "first_batch_ms": 1384.601959,
+            "returned": 100000,
+            "rows": 100000,
+            "slowest_batch_ms": 1384.601959,
+            "temporary_bytes_sampled": 67174092,
+            "waves": 1,
+            "max_rss_bytes": 26066944
+          },
+          {
+            "all_batches_ms": 3670.090660000006,
+            "backend": "sqlite",
+            "batches": 1564,
+            "displayed_order_sha256": "d4d7c1f50114ff79ed08044d1f27b03482c1688d1cfaab12f1ca93a387dbbd15",
+            "first_batch_ms": 1357.34475,
+            "returned": 100000,
+            "rows": 100000,
+            "slowest_batch_ms": 1357.34475,
+            "temporary_bytes_sampled": 67174092,
+            "waves": 1,
+            "max_rss_bytes": 26034176
+          },
+          {
+            "all_batches_ms": 3671.2466090000007,
+            "backend": "sqlite",
+            "batches": 1564,
+            "displayed_order_sha256": "d4d7c1f50114ff79ed08044d1f27b03482c1688d1cfaab12f1ca93a387dbbd15",
+            "first_batch_ms": 1399.929708,
+            "returned": 100000,
+            "rows": 100000,
+            "slowest_batch_ms": 1399.929708,
+            "temporary_bytes_sampled": 67174092,
+            "waves": 1,
+            "max_rss_bytes": 26050560
+          }
+        ]
+      }
+    },
+    {
+      "rows": 10000,
+      "waves": 16,
+      "samples": {
+        "external": [
+          {
+            "all_batches_ms": 68.12336000000009,
+            "backend": "external",
+            "batches": 158,
+            "displayed_order_sha256": "81fa29cf3095157c603963dd2b820be3946606023dd07db9d2e1a969adc307b7",
+            "first_batch_ms": 1.211667,
+            "returned": 10000,
+            "rows": 10000,
+            "slowest_batch_ms": 6.094375,
+            "temporary_bytes_sampled": 1101504,
+            "waves": 16,
+            "max_rss_bytes": 12664832
+          },
+          {
+            "all_batches_ms": 71.04596000000004,
+            "backend": "external",
+            "batches": 158,
+            "displayed_order_sha256": "81fa29cf3095157c603963dd2b820be3946606023dd07db9d2e1a969adc307b7",
+            "first_batch_ms": 1.262125,
+            "returned": 10000,
+            "rows": 10000,
+            "slowest_batch_ms": 6.291291,
+            "temporary_bytes_sampled": 1101504,
+            "waves": 16,
+            "max_rss_bytes": 12697600
+          },
+          {
+            "all_batches_ms": 70.25586399999996,
+            "backend": "external",
+            "batches": 158,
+            "displayed_order_sha256": "81fa29cf3095157c603963dd2b820be3946606023dd07db9d2e1a969adc307b7",
+            "first_batch_ms": 1.211458,
+            "returned": 10000,
+            "rows": 10000,
+            "slowest_batch_ms": 6.8035,
+            "temporary_bytes_sampled": 1101504,
+            "waves": 16,
+            "max_rss_bytes": 12664832
+          }
+        ],
+        "sqlite": [
+          {
+            "all_batches_ms": 242.98545699999994,
+            "backend": "sqlite",
+            "batches": 158,
+            "displayed_order_sha256": "81fa29cf3095157c603963dd2b820be3946606023dd07db9d2e1a969adc307b7",
+            "first_batch_ms": 3.1665,
+            "returned": 10000,
+            "rows": 10000,
+            "slowest_batch_ms": 7.465249999999999,
+            "temporary_bytes_sampled": 5526698,
+            "waves": 16,
+            "max_rss_bytes": 14385152
+          },
+          {
+            "all_batches_ms": 246.76195899999996,
+            "backend": "sqlite",
+            "batches": 158,
+            "displayed_order_sha256": "81fa29cf3095157c603963dd2b820be3946606023dd07db9d2e1a969adc307b7",
+            "first_batch_ms": 3.198917,
+            "returned": 10000,
+            "rows": 10000,
+            "slowest_batch_ms": 8.634541,
+            "temporary_bytes_sampled": 5526698,
+            "waves": 16,
+            "max_rss_bytes": 14417920
+          },
+          {
+            "all_batches_ms": 257.61183399999993,
+            "backend": "sqlite",
+            "batches": 158,
+            "displayed_order_sha256": "81fa29cf3095157c603963dd2b820be3946606023dd07db9d2e1a969adc307b7",
+            "first_batch_ms": 3.108375,
+            "returned": 10000,
+            "rows": 10000,
+            "slowest_batch_ms": 7.492291,
+            "temporary_bytes_sampled": 5526698,
+            "waves": 16,
+            "max_rss_bytes": 14352384
+          }
+        ]
+      }
+    },
+    {
+      "rows": 100000,
+      "waves": 16,
+      "samples": {
+        "external": [
+          {
+            "all_batches_ms": 683.6500320000007,
+            "backend": "external",
+            "batches": 1564,
+            "displayed_order_sha256": "d4d7c1f50114ff79ed08044d1f27b03482c1688d1cfaab12f1ca93a387dbbd15",
+            "first_batch_ms": 9.163584,
+            "returned": 100000,
+            "rows": 100000,
+            "slowest_batch_ms": 63.244416,
+            "temporary_bytes_sampled": 11518724,
+            "waves": 16,
+            "max_rss_bytes": 24444928
+          },
+          {
+            "all_batches_ms": 681.421947000001,
+            "backend": "external",
+            "batches": 1564,
+            "displayed_order_sha256": "d4d7c1f50114ff79ed08044d1f27b03482c1688d1cfaab12f1ca93a387dbbd15",
+            "first_batch_ms": 9.286542,
+            "returned": 100000,
+            "rows": 100000,
+            "slowest_batch_ms": 63.628083000000004,
+            "temporary_bytes_sampled": 11518724,
+            "waves": 16,
+            "max_rss_bytes": 24477696
+          },
+          {
+            "all_batches_ms": 671.3498810000002,
+            "backend": "external",
+            "batches": 1564,
+            "displayed_order_sha256": "d4d7c1f50114ff79ed08044d1f27b03482c1688d1cfaab12f1ca93a387dbbd15",
+            "first_batch_ms": 9.315458,
+            "returned": 100000,
+            "rows": 100000,
+            "slowest_batch_ms": 62.292125,
+            "temporary_bytes_sampled": 11518724,
+            "waves": 16,
+            "max_rss_bytes": 24494080
+          }
+        ],
+        "sqlite": [
+          {
+            "all_batches_ms": 3312.456525000002,
+            "backend": "sqlite",
+            "batches": 1564,
+            "displayed_order_sha256": "d4d7c1f50114ff79ed08044d1f27b03482c1688d1cfaab12f1ca93a387dbbd15",
+            "first_batch_ms": 28.563458,
+            "returned": 100000,
+            "rows": 100000,
+            "slowest_batch_ms": 93.940459,
+            "temporary_bytes_sampled": 62197452,
+            "waves": 16,
+            "max_rss_bytes": 26066944
+          },
+          {
+            "all_batches_ms": 3215.620952000003,
+            "backend": "sqlite",
+            "batches": 1564,
+            "displayed_order_sha256": "d4d7c1f50114ff79ed08044d1f27b03482c1688d1cfaab12f1ca93a387dbbd15",
+            "first_batch_ms": 28.561125,
+            "returned": 100000,
+            "rows": 100000,
+            "slowest_batch_ms": 94.809833,
+            "temporary_bytes_sampled": 62197452,
+            "waves": 16,
+            "max_rss_bytes": 26050560
+          },
+          {
+            "all_batches_ms": 3283.0640109999945,
+            "backend": "sqlite",
+            "batches": 1564,
+            "displayed_order_sha256": "d4d7c1f50114ff79ed08044d1f27b03482c1688d1cfaab12f1ca93a387dbbd15",
+            "first_batch_ms": 28.993042,
+            "returned": 100000,
+            "rows": 100000,
+            "slowest_batch_ms": 80.72708300000001,
+            "temporary_bytes_sampled": 62197452,
+            "waves": 16,
+            "max_rss_bytes": 26083328
+          }
+        ]
+      }
+    }
+  ],
+  "cooperative_cancellation": {
+    "external": [
+      {
+        "backend": "external",
+        "cancel_return_ms": 0.791417,
+        "cancelled": true,
+        "rows": 100000,
+        "max_rss_bytes": 10682368
+      },
+      {
+        "backend": "external",
+        "cancel_return_ms": 0.010041,
+        "cancelled": true,
+        "rows": 100000,
+        "max_rss_bytes": 10731520
+      },
+      {
+        "backend": "external",
+        "cancel_return_ms": 0.009792,
+        "cancelled": true,
+        "rows": 100000,
+        "max_rss_bytes": 10698752
+      }
+    ],
+    "sqlite": [
+      {
+        "backend": "sqlite",
+        "cancel_return_ms": 0.110166,
+        "cancelled": true,
+        "rows": 100000,
+        "max_rss_bytes": 12304384
+      },
+      {
+        "backend": "sqlite",
+        "cancel_return_ms": 0.109375,
+        "cancelled": true,
+        "rows": 100000,
+        "max_rss_bytes": 12369920
+      },
+      {
+        "backend": "sqlite",
+        "cancel_return_ms": 0.11204099999999999,
+        "cancelled": true,
+        "rows": 100000,
+        "max_rss_bytes": 12320768
+      }
+    ]
+  }
+}

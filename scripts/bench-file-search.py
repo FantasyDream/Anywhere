@@ -32,7 +32,7 @@ def main():
     if platform.system() != 'Darwin':
         parser.error('this RSS sampler uses macOS /usr/bin/time -l')
     binary = options.binary.resolve()
-    result = {'platform': platform.platform(), 'probe': 'release Rust walker + pagination',
+    result = {'platform': platform.platform(), 'probe': 'release Rust walker + continuous results',
               'cache': 'OS caches left untouched; fixtures just created',
               'excludes': ['Spotlight subprocess', 'Flutter', 'real GUI'],
               'baseline': measure(binary, ['--baseline']), 'cases': []}

@@ -1,9 +1,9 @@
-//! Read-only traversal/page probe. No Spotlight, Flutter, GUI or file content reads.
+//! Read-only traversal/continuous-result probe. No Spotlight, Flutter, GUI or content reads.
 //! Run a release binary under an external RSS sampler; `--baseline` loads no query.
 use anywhere_core::features::filesystem::scan::ScanStore;
 use anywhere_platform::FileSearchOptions;
 use anywhere_protocol::FileSearchFilter;
-use std::{path::PathBuf, time::Instant};
+use std::{collections::HashSet, path::PathBuf, time::Instant};
 
 fn main() -> anyhow::Result<()> {
     let mut args = std::env::args().skip(1);
@@ -35,37 +35,41 @@ fn main() -> anyhow::Result<()> {
         Ok(())
     })?;
     let complete_ms = started.elapsed().as_secs_f64() * 1000.0;
+    let mut displayed = HashSet::new();
+    let mut batch_count = 0;
+    let mut reading_ms = 0.0;
+    let mut slowest_batch_ms: f64 = 0.0;
+    loop {
+        let started = Instant::now();
+        let batch = store.more(&displayed, &|| false)?;
+        let elapsed = started.elapsed().as_secs_f64() * 1000.0;
+        reading_ms += elapsed;
+        slowest_batch_ms = slowest_batch_ms.max(elapsed);
+        if batch.hits.is_empty() {
+            break;
+        }
+        batch_count += 1;
+        for hit in batch.hits {
+            anyhow::ensure!(displayed.insert(hit.path), "duplicate continuous result");
+        }
+    }
     let disk_bytes: u64 = std::fs::read_dir(store.workspace())?
         .map(|entry| entry?.metadata().map(|m| m.len()))
         .collect::<std::io::Result<Vec<_>>>()?
         .into_iter()
         .sum();
-    let mut page = store.page(None, &|| false)?;
-    let mut returned = page.hits.len();
-    let mut page_count = 1;
-    let mut paging_ms = 0.0;
-    let mut slowest_page_ms: f64 = 0.0;
-    while let Some(cursor) = page.progress.next_cursor {
-        let started = Instant::now();
-        page = store.page(Some(&cursor), &|| false)?;
-        let elapsed = started.elapsed().as_secs_f64() * 1000.0;
-        paging_ms += elapsed;
-        slowest_page_ms = slowest_page_ms.max(elapsed);
-        returned += page.hits.len();
-        page_count += 1;
-    }
     let progress = store.progress();
     anyhow::ensure!(
-        returned as u64 == progress.confirmed_matches,
-        "pagination omitted matches"
+        displayed.len() as u64 == progress.confirmed_matches,
+        "continuous reading omitted matches"
     );
     println!(
         "{}",
         serde_json::json!({
             "first_batch_ms":first_ms, "complete_ms":complete_ms,
             "scanned_entries":progress.scanned_entries,"matches":progress.confirmed_matches,
-            "issues":progress.issue_count,"pages":page_count,"returned":returned,
-            "all_pages_ms":paging_ms,"slowest_next_page_ms":slowest_page_ms,"temporary_bytes":disk_bytes
+            "issues":progress.issue_count,"batches":batch_count,"returned":displayed.len(),
+            "all_batches_ms":reading_ms,"slowest_batch_ms":slowest_batch_ms,"temporary_bytes":disk_bytes
         })
     );
     Ok(())
