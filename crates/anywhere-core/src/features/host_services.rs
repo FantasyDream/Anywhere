@@ -12,6 +12,11 @@ fn approved(id: &str) -> &'static [Capability] {
         "git" => &[Capability::GitRead, Capability::ClipboardWrite],
         "rust" | "maven" | "gradle" | "node" | "spring_boot" => &[Capability::ProcessStart],
         "saved_directories" => &[Capability::Storage, Capability::OpenFile],
+        "clipboard" => &[
+            Capability::Storage,
+            Capability::ClipboardWrite,
+            Capability::RenderUi,
+        ],
         "url" => &[Capability::OpenUrl, Capability::ClipboardWrite],
         _ => &[],
     }

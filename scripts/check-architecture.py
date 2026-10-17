@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
-from architecture_rules import check_core_imports
+from architecture_rules import check_core_imports, check_feature_imports
 
 subprocess.check_call(['python3', '-m', 'unittest', 'discover', '-s', 'scripts/tests', '-p', 'test_architecture_rules.py'])
 
@@ -31,6 +31,13 @@ print(f'Architecture OK: {len(visited)} core dependencies, no UI/Flutter bridge 
 for source in Path('crates/anywhere-core/src/core').rglob('*.rs'):
     check_core_imports(source.read_text(), source)
 print('Module imports OK: core has no product/feature/persistence dependency')
+
+# Feature services depend on repository contracts, never concrete app/storage wiring.
+for source in Path('crates/anywhere-core/src/features').rglob('*.rs'):
+    if source.name.endswith('_tests.rs'):
+        continue  # These files are included only by cfg(test) modules.
+    check_feature_imports(source.read_text(), source)
+print('Feature imports OK: no application or concrete persistence dependency')
 
 # Shared product logic cannot select OS adapters or assume a macOS application identity.
 for source in Path('crates/anywhere-core/src').rglob('*.rs'):

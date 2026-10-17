@@ -1,3 +1,4 @@
+mod clipboard;
 mod conversions;
 use conversions::*;
 mod executions;
@@ -19,6 +20,53 @@ static EXTENSIONS: OnceLock<Mutex<anywhere_core::application::settings_service::
 
 pub fn ping() -> String {
     queries::ping()
+}
+
+pub struct ClipboardItemDto {
+    pub id: String,
+    pub summary: String,
+    pub kind: String,
+    pub copied_at_ms: i64,
+    pub byte_count: u32,
+}
+pub struct ClipboardDetailDto {
+    pub item: ClipboardItemDto,
+    pub text: String,
+    pub image_png: Vec<u8>,
+    pub files: Vec<String>,
+    pub formats: Vec<String>,
+}
+pub struct ClipboardHistoryDto {
+    pub recording: bool,
+    pub available: bool,
+    pub notice: Option<String>,
+    pub items: Vec<ClipboardItemDto>,
+}
+pub struct ClipboardHistoryStatusDto {
+    pub recording: bool,
+    pub available: bool,
+    pub notice: Option<String>,
+}
+pub fn clipboard_history_status() -> Result<ClipboardHistoryStatusDto> {
+    clipboard::status()
+}
+pub fn clipboard_history(query: String) -> Result<ClipboardHistoryDto> {
+    clipboard::search(query)
+}
+pub fn clipboard_history_detail(id: String) -> Result<Option<ClipboardDetailDto>> {
+    clipboard::detail(id)
+}
+pub fn set_clipboard_recording(enabled: bool) -> Result<()> {
+    clipboard::set_recording(enabled)
+}
+pub fn copy_clipboard_entry(id: String) -> Result<()> {
+    clipboard::copy(id)
+}
+pub fn delete_clipboard_entry(id: String) -> Result<()> {
+    clipboard::delete(id)
+}
+pub fn clear_clipboard_history() -> Result<()> {
+    clipboard::clear()
 }
 
 pub struct ShortcutActionDto {

@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'clipboard_settings_controller.dart';
+import '../infrastructure/clipboard_preferences_backend.dart';
 import '../infrastructure/runtime_policy.dart';
 import '../infrastructure/file_search_access.dart';
 import 'package:flutter/foundation.dart';
@@ -15,6 +17,7 @@ typedef ApplyExcludedApps = Future<void> Function(List<String> bundleIds);
 class SettingsController extends ChangeNotifier {
   SettingsController({
     required DesktopHost window,
+    ClipboardPreferencesBackend? clipboardBackend,
     String startupMessage = '',
     bool fileSearchInitializationFailed = false,
     ApplyExcludedApps? applyExcludedApps,
@@ -31,7 +34,9 @@ class SettingsController extends ChangeNotifier {
     Future<List<ShortcutActionDto>> Function()? readShortcutActions,
     Future<List<String>> Function(List<String>)? readSupportedShortcutActions,
     Future<List<ShortcutApplicationDto>> Function()? readShortcutApplications,
-  })  : _window = window,
+  })  : clipboard = ClipboardSettingsController(
+            clipboardBackend ?? RustClipboardPreferencesBackend()),
+        _window = window,
         _warning = startupMessage,
         _fileSearchInitializationFailed = fileSearchInitializationFailed,
         _readExtensions = readExtensions ??
@@ -69,8 +74,11 @@ class SettingsController extends ChangeNotifier {
                 finderSelection: s.captureFinderSelection,
                 selectedText: s.captureSelectedText,
                 browserCurrentPage: s.captureBrowserCurrentPage,
-                clipboard: s.captureClipboard));
+                clipboard: s.captureClipboard)) {
+    clipboard.addListener(_notify);
+  }
 
+  final ClipboardSettingsController clipboard;
   final DesktopHost _window;
   final ApplyExcludedApps _applyExcludedApps;
   final Future<void> Function(HostSettings) _applyContextSources;
@@ -272,6 +280,11 @@ class SettingsController extends ChangeNotifier {
   Future<bool> _prepareClose() async {
     // Finish catalog invalidation before the host restores global action hotkeys.
     await _extensionOperation;
+    if (!await clipboard.waitForPending()) {
+      reportError(clipboard.notice ??
+          'Clipboard settings could not be updated. Try again.');
+      return false;
+    }
     if (_disposed) return false;
     return await (beforeClose?.call() ?? Future.value(true));
   }
@@ -494,6 +507,8 @@ class SettingsController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    clipboard.removeListener(_notify);
+    clipboard.dispose();
     super.dispose();
   }
 }

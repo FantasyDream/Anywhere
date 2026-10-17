@@ -48,3 +48,5 @@ Esc 从内容页面清空并返回 Current App，重新解析当前应用环境�
 回归覆盖来源优先级、过期 / 未知复制年龄、输入编辑、迟到结果不覆盖用户交互、Esc 链、环境恢复、来源单次读取和设置丢弃正文。历史真实采集与包验证边界见 [V0.6 记录](archive/v0.6-final-acceptance.md)，当前工程状态见 [V0.8 MVP](mvp-v0.8.md)。
 
 JSON 工具已延期到 WebView 插件阶段，当前 JSON 文本仅为普通 Text，不会单独触发自动内容页。
+
+剪贴板自动填入开关及上次采集状态位于 Settings → Clipboard，与历史采集开关分别控制；Finder、选中文本和浏览器来源仍位于 Settings → Context。

@@ -8,6 +8,7 @@
 pub mod app_actions;
 pub mod applications;
 pub mod catalog;
+pub mod clipboard;
 pub mod contribution;
 pub mod descriptor;
 pub mod filesystem;

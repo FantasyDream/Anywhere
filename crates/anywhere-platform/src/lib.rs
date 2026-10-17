@@ -2,7 +2,9 @@
 //!
 //! Every capability has an explicitly unsupported default so test doubles compile
 //! without implementing unused methods; macOS implements the ones the product uses.
+pub mod clipboard;
 pub mod paths;
+pub mod private_storage;
 pub mod search_exclusions;
 pub mod search_storage;
 use anyhow::{bail, Result};
@@ -332,6 +334,40 @@ pub trait Platform: Send + Sync {
 
     /// Observe generation changes only, without reading or retaining clipboard text.
     fn start_clipboard_tracking(&self) {}
+
+    /// History polling reads only this generation until it changes.
+    fn clipboard_generation(&self) -> Result<i64> {
+        Err(ContextReadError::Unsupported.into())
+    }
+
+    /// Explicit user request only. May show the OS permission prompt; never records text.
+    fn request_clipboard_history_access(&self) -> Result<()> {
+        Err(ContextReadError::Unsupported.into())
+    }
+
+    /// Read all persistent representations of one generation; never prompt.
+    fn clipboard_history_payload(
+        &self,
+        _generation: i64,
+    ) -> Result<Option<clipboard::ClipboardPayload>> {
+        Err(ContextReadError::Unsupported.into())
+    }
+
+    fn write_clipboard(&self, payload: &clipboard::ClipboardPayload) -> Result<()> {
+        if payload.formats.len() == 1 {
+            if let Some(text) = payload.plain_text() {
+                return self.copy_text(text);
+            }
+        }
+        Err(ContextReadError::Unsupported.into())
+    }
+
+    fn watch_clipboard(
+        &self,
+        _changed: Box<dyn Fn() + Send>,
+    ) -> Result<Box<dyn clipboard::ClipboardWatch>> {
+        Err(ContextReadError::Unsupported.into())
+    }
 
     fn clipboard_snapshot(&self) -> Result<ClipboardSnapshot> {
         Ok(ClipboardSnapshot {

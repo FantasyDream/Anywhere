@@ -7,6 +7,7 @@ use std::sync::Arc;
 
 pub struct FeatureServices {
     saved_directories: Arc<SavedDirectoriesService>,
+    clipboard: Arc<crate::features::clipboard::service::HistoryService>,
 }
 
 impl FeatureServices {
@@ -14,7 +15,19 @@ impl FeatureServices {
     pub fn new(storage: Result<Arc<dyn ExtensionStorage>, String>) -> Self {
         Self {
             saved_directories: Arc::new(SavedDirectoriesService::pending(storage)),
+            clipboard: Arc::new(crate::features::clipboard::service::HistoryService::new(
+                Err("not bound".into()),
+            )),
         }
+    }
+    pub(crate) fn bind_clipboard(
+        &mut self,
+        service: Arc<crate::features::clipboard::service::HistoryService>,
+    ) {
+        self.clipboard = service;
+    }
+    pub fn clipboard(&self) -> Arc<crate::features::clipboard::service::HistoryService> {
+        self.clipboard.clone()
     }
     pub(crate) fn saved_directories(&self) -> Arc<SavedDirectoriesService> {
         self.saved_directories.clone()

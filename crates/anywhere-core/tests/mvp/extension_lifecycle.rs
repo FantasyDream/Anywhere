@@ -88,6 +88,43 @@ fn enable(key: &str, enabled: bool) -> SettingsChange {
         enabled,
     }
 }
+
+#[tokio::test]
+async fn clipboard_uses_regular_action_navigation_and_disable_revokes_history_access() {
+    let temporary = tempfile::tempdir().unwrap();
+    let app = app();
+    let mut manager =
+        SettingsService::open(temporary.path().join("extensions.json"), vec![], &app).unwrap();
+    let id = app.activate().await.unwrap().unwrap().session_id;
+    app.update_input(id, "clipboard".into(), 1).await.unwrap();
+    let state = settled(&app, id, 1).await;
+    let shelf = candidate(&state, "core.clipboard.shelf");
+    assert!(matches!(app.execute(id, 1, shelf).await.unwrap().view,
+        Some(HostView::NativeTool { id, .. }) if id == "clipboard.shelf"));
+    assert!(!manager.clipboard().status().unwrap().recording);
+    let row = candidate(&state, "core.clipboard.history");
+    assert!(matches!(app.execute(id, 1, row).await.unwrap().view,
+        Some(HostView::NativeTool { id, .. }) if id == "clipboard.history"));
+    let history = manager.clipboard();
+    history.set_recording(true).unwrap();
+    manager
+        .change(&app, enable("first-party:clipboard", false))
+        .unwrap();
+    assert!(!history.status().unwrap().available);
+    assert!(history.search("").is_err());
+    assert!(history.set_recording(true).is_err());
+    assert!(app.shortcut_actions().unwrap().iter().all(|a| ![
+        "core.clipboard.history",
+        "core.clipboard.shelf"
+    ]
+    .contains(&a.action_id.as_str())));
+    manager
+        .change(&app, enable("first-party:clipboard", true))
+        .unwrap();
+    assert!(history.status().unwrap().available);
+    assert!(history.status().unwrap().recording);
+    assert!(history.search("").unwrap().is_empty());
+}
 fn approve(manager: &SettingsService) -> SettingsChange {
     let s = status(manager, "plugin:controlled");
     SettingsChange::Approve {
@@ -118,7 +155,7 @@ async fn native_status_uses_app_version_and_preserves_metadata_through_disable_a
         .into_iter()
         .filter(|s| s.first_party)
         .collect();
-    let expected: [(&str, &str, &[&str]); 8] = [
+    let expected: [(&str, &str, &[&str]); 9] = [
         ("git", "Git", &["git.read", "clipboard.write"]),
         ("url", "URL", &["url.open", "clipboard.write"]),
         ("rust", "Rust", &["process.start"]),
@@ -130,6 +167,11 @@ async fn native_status_uses_app_version_and_preserves_metadata_through_disable_a
             "saved_directories",
             "Saved Directories",
             &["storage", "file.open"],
+        ),
+        (
+            "clipboard",
+            "Clipboard History",
+            &["storage", "clipboard.write", "ui.render"],
         ),
     ];
     assert_eq!(native.len(), expected.len());
@@ -383,7 +425,7 @@ async fn failed_save_rolls_back_catalog_preferences_and_live_session() {
     assert!(status(&manager, "first-party:url").active);
     assert!(Arc::ptr_eq(&policy, &manager.feature_policy()));
     assert!(app.execute(id, 1, row).await.is_ok());
-    assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 2); // Temp file cleaned up.
+    assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 3); // Includes the private clipboard database; no temp file.
 }
 
 #[tokio::test]
@@ -707,7 +749,7 @@ async fn failed_external_save_preserves_native_policy_and_live_plugin_execution(
         app.execute(id, 1, row).await.unwrap().status,
         ActionStatus::Succeeded
     );
-    assert_eq!(std::fs::read_dir(temporary.path()).unwrap().count(), 4); // Temporary writes cleaned up.
+    assert_eq!(std::fs::read_dir(temporary.path()).unwrap().count(), 5); // Includes the private clipboard database; no temp file.
 }
 
 #[test]

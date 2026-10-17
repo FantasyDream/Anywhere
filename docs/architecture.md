@@ -1,8 +1,8 @@
 # 架构
 
-当前实现：V0.9 内置功能模块；最后核对：2026-10-14。使用入口见 [README](../README.md)，专题文档见 [文档导航](README.md)。
+当前实现：V0.10 剪贴板历史开发中，基于 V0.9 内置功能模块；最后核对：2026-10-17。使用入口见 [README](../README.md)，专题文档见 [文档导航](README.md)。
 
-已确认转向内置功能模块，按 [迁移路线图](feature-module-roadmap.md) 分阶段实施。P01 集中构造与身份检查；P02 由模块自己的 registration.rs 声明功能，Cargo 编译时自动发现并生成 features/catalog 使用的目录，迁移阶段保留既有功能身份与顺序；JSON 延期后当前交付 8 个可配置内置功能。P03 将内置描述改为 Rust FeatureDescriptor，移除内置 TOML 和协议解析，状态显示统一使用 Cargo workspace 构建版本。P04 将收藏目录拆为 repository / service，FeatureServices 持有具体 service，移除 ExtensionState / Any 状态恢复。没有运行期扫描或加载。P05c 已删除旧 FirstPartyExtension / ExtensionRuntime / ExtensionManager / Reload；Native 只在启动绑定贡献，设置与业务数据刷新单独管理。
+已确认转向内置功能模块，按 [迁移路线图](feature-module-roadmap.md) 分阶段实施。P01 集中构造与身份检查；P02 由模块自己的 registration.rs 声明功能，Cargo 编译时自动发现并生成 features/catalog 使用的目录，迁移阶段保留既有功能身份与顺序；JSON 延期后 V0.9 交付 8 个可配置内置功能，V0.10 增加 clipboard 模块。P03 将内置描述改为 Rust FeatureDescriptor，移除内置 TOML 和协议解析，状态显示统一使用 Cargo workspace 构建版本。P04 将收藏目录拆为 repository / service，FeatureServices 持有具体 service，移除 ExtensionState / Any 状态恢复。没有运行期扫描或加载。P05c 已删除旧 FirstPartyExtension / ExtensionRuntime / ExtensionManager / Reload；Native 只在启动绑定贡献，设置与业务数据刷新单独管理。
 
 ## 分层
 
@@ -39,14 +39,15 @@ flowchart TD
 crates/anywhere-core/src/
 ├── core/           模型与算法；context / action / search / ranking / session / execution
 ├── application/    activate、update_query、execute、session_runtime、source_runtime
-├── features/       applications、filesystem、text、url、git、developer、saved_directories
+├── features/       applications、filesystem、text、url、git、developer、saved_directories、clipboard
 │                   编译期 catalog、FeatureDescriptor、服务绑定与策略
-└── persistence/    usage、extensions、module_storage
+└── persistence/    usage、extensions、module_storage、clipboard
 
 apps/flutter/lib/
 ├── launcher/       Controller、ActivationFlow、导航、Session / FileWorkspace 协调器
 │                   ShortcutCoordinator、ObjectActionCoordinator、HostViewNavigator
 ├── tools/          静态 ToolPageRegistry、ToolPageSession、共享 ToolPageShell
+├── features/       功能自己的页面、展示会话与静态注册（当前 clipboard）
 ├── plugins/        Legacy Detail / KeyValue 兼容 Body（纯数据）
 ├── settings/       设置草稿、保存队列、快捷键与扩展状态
 ├── ui/             AppStyle、图标与公共组件
@@ -101,6 +102,26 @@ resources/                 键码、文件类型与运行策略的公共配置
 Spotlight 返回早期候选，Rust 完整遍历允许范围；查询临时存储保存命中并外部排序，已显示前缀保持稳定。对象二级动作按选中目标延迟生成，复验原执行对象。Host 接收 replacement、append 或 metadata delta，不重新匹配文件。
 
 Flutter 的 `StableList` 共享 256 条不可变块，索引按块复用，仅为访问到的候选包装行；Revision 或 list version 改变时拒绝无效尾部。完整契约见 [文件搜索](file-search.md)。
+
+## 剪贴板功能模块
+
+| 位置 | 职责 |
+|---|---|
+| `features/clipboard/{history,service,content}.rs` | 存储契约、采集与执行资格、元数据及有界预览 |
+| `persistence/clipboard.rs` | SQLite 事务、迁移、配额、去重和摘要 / 原始数据读取；不生成预览 |
+| `anywhere-platform/clipboard` | clipboard-rs 格式读写和监听；macOS 薄适配提供权限、代数与大小检查 |
+| Flutter `features/clipboard/` | 两个界面的静态注册、查询 / 选择 / 焦点、共享列表与预览 |
+| Flutter `infrastructure/clipboard_*_backend.dart` | 类型化 Bridge 适配；使用和配置接口分离 |
+| Flutter `settings/clipboard_*` | 采集、清空、自动填入配置及异步保存协调 |
+| Native `ToolWindowController` | 悬浮窗置顶、生命周期和返回目标应用焦点 |
+
+剪贴板历史作为编译内 `clipboard` 模块贡献普通 Action，通过 `NativeTool` 路由到统一 `ToolPageRegistry`。`HistoryRepository` 声明存储契约，独立 SQLite 实现负责有界落盘与摘要查询；`HistoryService` 控制开关、采集代数、去重写入和清理期间的 epoch。系统读取在业务锁外完成，写入前复验 epoch。Platform 使用 clipboard-rs 统一格式读写与变化监听；macOS 薄适配仅提供代数、权限和大小检查。一次复制的多种表示以 SQLite BLOB 保存，指纹去重并复验实际内容；旧纯文本 schema 事务迁移且保留 ID。缩略图解码在 Rust 生成并限制尺寸和分配，Flutter 只接收单条有界预览。正文不进入通用 Context / Usage，Host 不持有全部历史正文。Flutter 仅管理查询、选择与单条预览，并拒绝过期响应。独立悬浮窗由另一个普通 Action 路由到 `ToolWindowRegistration`，原生 `ToolWindowController` 只负责置顶、生命周期和返回目标应用焦点。窗口按需创建独立 Flutter engine，调用共享 Rust Application 的同一 HistoryService，不重新初始化存储或开启采集；界面复用 ClipboardHistorySession / Page / Preview。窗口关闭销毁其 engine，最小化暂停摘要刷新；Launcher 的 15 秒保留规则不会关闭该窗口。采集开关、清空和唤醒自动填入统一位于 Settings → Clipboard，使用页后端仅暴露查询、详情、复制和单条删除；独立设置后端通过轻量状态 DTO 读取状态，不查询历史列表。设置关闭等待变更和读回完成。完整范围见 [V0.10 MVP](mvp-v0.10.md)。
+
+剪贴板界面通过功能目录内的 `registration.dart` 贡献页面 / 窗口工厂，`builtin_tool_pages.dart` 仅负责组合；Launcher 不判断剪贴板业务 ID。测试夹具位于 `test/support`，测试入口不互相导入。
+
+每个展示会话只允许一个详情请求，快速选择合并为最新目标；Rust 服务在读取正文之前串行准入，防止多个窗口并发解码。解码不持有存储 / 策略锁，完成后复验 epoch 与条目是否仍存在。文本在复制到临时预览之前截断，避免对整个大正文再分配一份内存。
+
+后台刷新在提交结果时保留最新选中 ID，增加其他条目不重新解码当前正文。临时查询失败保留已有结果，后续成功自动清除提示；查询变化、禁用、删除后返回的旧预览不会覆盖当前选择。整理结论与测试证据见 [V0.10 MVP](mvp-v0.10.md)。
 
 ## 第一方模块与持久化
 

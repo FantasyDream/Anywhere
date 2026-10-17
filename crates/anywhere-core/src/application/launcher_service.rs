@@ -74,6 +74,10 @@ pub struct Application {
 }
 
 impl Application {
+    /// Typed system port for app-owned services; shared UI never selects an OS adapter.
+    pub fn platform(&self) -> &dyn Platform {
+        self.platform.as_ref()
+    }
     pub fn new(
         platform: Arc<dyn Platform>,
         registry: ActionRegistry,

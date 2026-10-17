@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../src/rust/api.dart';
 
-/// A native presentation session, owned by Launcher retention, not by a plugin loader.
+/// A native presentation session owned by its Launcher page or independent window.
 abstract class ToolPageSession extends ChangeNotifier {
   String get id;
   String get title;
@@ -40,9 +40,17 @@ class ToolPageRegistration {
   final ToolPageSession Function(ActionResultDto) open;
 }
 
+/// Detached windows use the same typed Host result, without a Launcher session.
+class ToolWindowRegistration {
+  const ToolWindowRegistration({required this.id, required this.show});
+  final String id;
+  final Future<void> Function() show;
+}
+
 /// Immutable UI catalogue. A new page contributes a native factory; Core supplies data.
 class ToolPageRegistry {
-  ToolPageRegistry(Iterable<ToolPageRegistration> pages) {
+  ToolPageRegistry(Iterable<ToolPageRegistration> pages,
+      {Iterable<ToolWindowRegistration> windows = const []}) {
     for (final page in pages) {
       if (page.id.length > 100 ||
           !RegExp(r'^[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*)+$')
@@ -52,10 +60,27 @@ class ToolPageRegistry {
       }
       _pages[page.id] = page;
     }
+    for (final window in windows) {
+      if (!RegExp(r'^[a-z][a-z0-9_-]*(\.[a-z][a-z0-9_-]*)+$')
+              .hasMatch(window.id) ||
+          window.id.length > 100 ||
+          _pages.containsKey(window.id) ||
+          _windows.containsKey(window.id)) {
+        throw ArgumentError('Invalid or duplicate tool window: ${window.id}');
+      }
+      _windows[window.id] = window;
+    }
   }
+  final Map<String, ToolWindowRegistration> _windows = {};
+  Future<void> Function()? windowFor(ActionResultDto result) =>
+      result.view == HostViewDto.nativeTool
+          ? _windows[result.nativeTool?.id]?.show
+          : null;
   final Map<String, ToolPageRegistration> _pages = {};
-  Set<HostViewDto> get hostViews =>
-      _pages.values.map((p) => p.view).whereType<HostViewDto>().toSet();
+  Set<HostViewDto> get hostViews => {
+        ..._pages.values.map((p) => p.view).whereType<HostViewDto>(),
+        if (_windows.isNotEmpty) HostViewDto.nativeTool
+      };
   ToolPageSession open(ActionResultDto result) {
     final matches = _pages.values
         .where(

@@ -46,6 +46,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ActivationInputDto dco_decode_box_autoadd_activation_input_dto(dynamic raw);
 
   @protected
+  ClipboardDetailDto dco_decode_box_autoadd_clipboard_detail_dto(dynamic raw);
+
+  @protected
   ExecutionSessionDetailDto dco_decode_box_autoadd_execution_session_detail_dto(
       dynamic raw);
 
@@ -85,6 +88,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CandidateUpdateDto dco_decode_candidate_update_dto(dynamic raw);
+
+  @protected
+  ClipboardDetailDto dco_decode_clipboard_detail_dto(dynamic raw);
+
+  @protected
+  ClipboardHistoryDto dco_decode_clipboard_history_dto(dynamic raw);
+
+  @protected
+  ClipboardHistoryStatusDto dco_decode_clipboard_history_status_dto(
+      dynamic raw);
+
+  @protected
+  ClipboardItemDto dco_decode_clipboard_item_dto(dynamic raw);
 
   @protected
   ContextCaptureDto dco_decode_context_capture_dto(dynamic raw);
@@ -150,6 +166,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<CandidateDto> dco_decode_list_candidate_dto(dynamic raw);
 
   @protected
+  List<ClipboardItemDto> dco_decode_list_clipboard_item_dto(dynamic raw);
+
+  @protected
   List<ContextCaptureDto> dco_decode_list_context_capture_dto(dynamic raw);
 
   @protected
@@ -195,6 +214,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ActivationInputDto? dco_decode_opt_box_autoadd_activation_input_dto(
+      dynamic raw);
+
+  @protected
+  ClipboardDetailDto? dco_decode_opt_box_autoadd_clipboard_detail_dto(
       dynamic raw);
 
   @protected
@@ -309,6 +332,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  ClipboardDetailDto sse_decode_box_autoadd_clipboard_detail_dto(
+      SseDeserializer deserializer);
+
+  @protected
   ExecutionSessionDetailDto sse_decode_box_autoadd_execution_session_detail_dto(
       SseDeserializer deserializer);
 
@@ -354,6 +381,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   CandidateUpdateDto sse_decode_candidate_update_dto(
       SseDeserializer deserializer);
+
+  @protected
+  ClipboardDetailDto sse_decode_clipboard_detail_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ClipboardHistoryDto sse_decode_clipboard_history_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ClipboardHistoryStatusDto sse_decode_clipboard_history_status_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ClipboardItemDto sse_decode_clipboard_item_dto(SseDeserializer deserializer);
 
   @protected
   ContextCaptureDto sse_decode_context_capture_dto(
@@ -426,6 +468,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<ClipboardItemDto> sse_decode_list_clipboard_item_dto(
+      SseDeserializer deserializer);
+
+  @protected
   List<ContextCaptureDto> sse_decode_list_context_capture_dto(
       SseDeserializer deserializer);
 
@@ -479,6 +525,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ActivationInputDto? sse_decode_opt_box_autoadd_activation_input_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ClipboardDetailDto? sse_decode_opt_box_autoadd_clipboard_detail_dto(
       SseDeserializer deserializer);
 
   @protected
@@ -607,6 +657,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       ActivationInputDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_clipboard_detail_dto(
+      ClipboardDetailDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_execution_session_detail_dto(
       ExecutionSessionDetailDto self, SseSerializer serializer);
 
@@ -654,6 +708,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_candidate_update_dto(
       CandidateUpdateDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_clipboard_detail_dto(
+      ClipboardDetailDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_clipboard_history_dto(
+      ClipboardHistoryDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_clipboard_history_status_dto(
+      ClipboardHistoryStatusDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_clipboard_item_dto(
+      ClipboardItemDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_context_capture_dto(
@@ -729,6 +799,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<CandidateDto> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_clipboard_item_dto(
+      List<ClipboardItemDto> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_context_capture_dto(
       List<ContextCaptureDto> self, SseSerializer serializer);
 
@@ -784,6 +858,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_activation_input_dto(
       ActivationInputDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_clipboard_detail_dto(
+      ClipboardDetailDto? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_execution_session_detail_dto(

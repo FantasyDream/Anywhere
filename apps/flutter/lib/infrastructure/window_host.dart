@@ -23,6 +23,7 @@ abstract interface class DesktopHost {
   Future<void> resumeActionShortcuts();
   Future<void> openPrivacySettings(String pane);
   Future<void> showExecutionSessions(String id);
+  Future<void> showToolWindow(String id);
   Future<HostSettings> readSettings();
   Future<String> readSettingsStatus();
   Future<void> syncActionShortcutCatalog(
@@ -109,6 +110,10 @@ class WindowHost implements DesktopHost {
   @override
   Future<void> showExecutionSessions(String id) =>
       _channel.invokeMethod<void>('showExecutionSessions', {'id': id});
+
+  @override
+  Future<void> showToolWindow(String id) =>
+      _channel.invokeMethod<void>('showToolWindow', {'id': id});
 
   @override
   Future<HostSettings> readSettings() async {

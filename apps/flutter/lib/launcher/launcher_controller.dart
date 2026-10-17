@@ -44,7 +44,8 @@ class LauncherController extends ChangeNotifier {
     ToolPageRegistry? toolPages,
   })  : _backend = backend,
         _window = window,
-        _toolPages = toolPages ?? builtinToolPages(),
+        _toolPages =
+            toolPages ?? builtinToolPages(showWindow: window.showToolWindow),
         _nowMillis = nowMillis ?? (() => DateTime.now().millisecondsSinceEpoch),
         settings = SettingsController(
             window: window,
@@ -64,6 +65,13 @@ class LauncherController extends ChangeNotifier {
     hostViews.register(HostViewDto.fileSearch, openFileSearch);
     for (final view in _toolPages.hostViews) {
       hostViews.registerPayload(view, (result) async {
+        final showWindow = _toolPages.windowFor(result);
+        if (showWindow != null) {
+          final generation = _generation;
+          await showWindow();
+          if (_current(generation)) await dismiss();
+          return;
+        }
         final page = _toolPages.open(result);
         _toolPage = page;
         _message = result.warning;
@@ -521,8 +529,8 @@ class LauncherController extends ChangeNotifier {
       files.invalidateOperations();
       _objectActions.invalidate();
       final suspension = _backend.suspend!(session);
-      _sessionFlow.retain(_capturePolicy, suspension,
-          () => unawaited(_discardRetained()));
+      _sessionFlow.retain(
+          _capturePolicy, suspension, () => unawaited(_discardRetained()));
       // Listeners save scroll / editor state when the window becomes hidden.
       // Publish the retention lifetime before notifying them.
       _notify();

@@ -12,21 +12,25 @@ class ToolPageShell extends StatefulWidget {
       required this.onBack,
       this.subtitle = 'Tool',
       this.notice,
+      this.header,
       this.footer,
       this.scrollController,
       this.editorFocus,
       this.presentation = 0,
       this.visible = true,
-      this.onKeyEvent});
+      this.onKeyEvent,
+      this.detached = false});
   final String title, subtitle;
   final String? notice;
   final Widget child;
+  final Widget? header;
   final Widget? footer;
   final VoidCallback onBack;
   final ScrollController? scrollController;
   final FocusNode? editorFocus;
   final int presentation;
   final bool visible;
+  final bool detached;
   final KeyEventResult Function(KeyEvent)? onKeyEvent;
   @override
   State<ToolPageShell> createState() => _ToolPageShellState();
@@ -153,21 +157,27 @@ class _ToolPageShellState extends State<ToolPageShell> {
               padding: const EdgeInsets.fromLTRB(16, 14, 24, 14),
               child: Row(children: [
                 IconButton(
-                    tooltip: 'Back · Esc',
+                    tooltip: widget.detached ? 'Close · Esc' : 'Back · Esc',
                     onPressed: widget.visible ? widget.onBack : null,
-                    icon: const Icon(Icons.chevron_left_rounded, size: 26)),
+                    icon: Icon(
+                        widget.detached
+                            ? Icons.close_rounded
+                            : Icons.chevron_left_rounded,
+                        size: widget.detached ? 20 : 26)),
                 const SizedBox(width: 8),
                 Expanded(
-                    child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                      Text(widget.subtitle, style: AppStyle.caption),
-                      const SizedBox(height: 4),
-                      Text(widget.title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppStyle.heading.copyWith(fontSize: 22)),
-                    ])),
+                    child: widget.header ??
+                        Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(widget.subtitle, style: AppStyle.caption),
+                              const SizedBox(height: 4),
+                              Text(widget.title,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style:
+                                      AppStyle.heading.copyWith(fontSize: 22)),
+                            ])),
               ])),
           const Divider(height: 1, indent: 20, endIndent: 20),
           if (widget.notice != null)
@@ -184,7 +194,7 @@ class _ToolPageShellState extends State<ToolPageShell> {
                         const Text('↑↓ Scroll', style: AppStyle.caption)),
                 TextButton(
                     onPressed: widget.visible ? widget.onBack : null,
-                    child: const Text('Back')),
+                    child: Text(widget.detached ? 'Close' : 'Back')),
                 const SizedBox(width: 8),
                 const Text('esc', style: AppStyle.caption),
               ])),

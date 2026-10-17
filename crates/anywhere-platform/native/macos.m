@@ -278,32 +278,45 @@ long long launcher_clipboard_change_count(void) {
     @autoreleasepool { return (long long)NSPasteboard.generalPasteboard.changeCount; }
 }
 
-// Clipboard text snapshot. Returns 1 and fills the output buffer on success,
-// 2 when the clipboard holds no plain text, 3 when the value exceeds capacity,
-// 4 when access is explicitly denied, 0 when reading failed.
-int launcher_clipboard_text(char *output, unsigned int capacity, unsigned int *out_length) {
+// Public policy API is queried dynamically to support old SDKs on new systems.
+static NSInteger clipboard_access_behavior(NSPasteboard *pasteboard) {
+    if (@available(macOS 15.4, *)) {
+        SEL selector = NSSelectorFromString(@"accessBehavior");
+        if (![pasteboard respondsToSelector:selector]) return 0;
+        NSInteger (*getBehavior)(id, SEL) = (NSInteger (*)(id, SEL))[pasteboard methodForSelector:selector];
+        return getBehavior(pasteboard, selector);
+    }
+    return 2;
+}
+int launcher_clipboard_history_access_allowed(void) {
+    @autoreleasepool { return clipboard_access_behavior(NSPasteboard.generalPasteboard) == 2 ? 1 : 0; }
+}
+// Foreground preflight may prompt. Actual clipboard format reads use clipboard-rs.
+int launcher_clipboard_text_guard(unsigned long long capacity) {
     @autoreleasepool {
-        if (out_length) *out_length = 0;
         NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
-#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 150400
-        if (@available(macOS 15.4, *)) {
-            if (pasteboard.accessBehavior == NSPasteboardAccessBehaviorAlwaysDeny) return 4;
-        }
-#endif
+        if (clipboard_access_behavior(pasteboard) == 3) return 4;
         NSString *text = [pasteboard stringForType:NSPasteboardTypeString];
-        // A permission prompt can change the policy during this read.
-#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 150400
-        if (@available(macOS 15.4, *)) {
-            if (pasteboard.accessBehavior == NSPasteboardAccessBehaviorAlwaysDeny) return 4;
-        }
-#endif
+        if (clipboard_access_behavior(pasteboard) == 3) return 4;
         if (!text && [pasteboard.types containsObject:NSPasteboardTypeString]) return 0;
-        if (text.length == 0) return 2;
-        NSData *data = [text dataUsingEncoding:NSUTF8StringEncoding];
-        if (!data) return 2;
-        if (out_length) *out_length = (unsigned int)data.length;
-        if (data.length > capacity || !output) return 3;
-        memcpy(output, data.bytes, data.length);
-        return 1;
+        if (!text.length) return 2;
+        return [text lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > capacity ? 3 : 1;
+    }
+}
+unsigned long long launcher_clipboard_item_count(void) {
+    @autoreleasepool { return (unsigned long long)NSPasteboard.generalPasteboard.pasteboardItems.count; }
+}
+// Avoid copying an oversized representation into Rust. Reading NSData can still
+// materialize lazy data in the source app; the OS API cannot preflight that cost.
+int launcher_clipboard_format_guard(const char *format, unsigned long long capacity) {
+    @autoreleasepool {
+        NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
+        if (clipboard_access_behavior(pasteboard) != 2) return 4;
+        NSString *type = format ? [NSString stringWithUTF8String:format] : nil;
+        if (!type) return 0;
+        NSData *data = [pasteboard dataForType:type];
+        if (clipboard_access_behavior(pasteboard) != 2) return 4;
+        if (!data) return 0;
+        return data.length > capacity ? 3 : 1;
     }
 }

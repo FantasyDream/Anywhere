@@ -1,0 +1,59 @@
+{
+  "database_bytes": 16531456,
+  "detail_mean_us": 14,
+  "fixture": "1000 synthetic plain-text entries, approximately 8 KiB each",
+  "insert_ms": 1136,
+  "queries": [
+    {
+      "matches": 1000,
+      "max_us": 1258,
+      "p50_us": 1075,
+      "p95_us": 1130,
+      "query": "",
+      "samples": 50
+    },
+    {
+      "matches": 1000,
+      "max_us": 1543,
+      "p50_us": 1481,
+      "p95_us": 1524,
+      "query": "entry",
+      "samples": 50
+    },
+    {
+      "matches": 1000,
+      "max_us": 1598,
+      "p50_us": 1525,
+      "p95_us": 1567,
+      "query": "中文 rust",
+      "samples": 50
+    },
+    {
+      "matches": 1,
+      "max_us": 7200,
+      "p50_us": 6109,
+      "p95_us": 6705,
+      "query": "entry-0999",
+      "samples": 50
+    },
+    {
+      "matches": 0,
+      "max_us": 6162,
+      "p50_us": 6099,
+      "p95_us": 6136,
+      "query": "no-such-entry",
+      "samples": 50
+    }
+  ],
+  "rows": 1000,
+  "scope": "Rust repository only; excludes Flutter, bridge and OS clipboard",
+  "summary_utf8_bytes": 124000,
+  "peak_rss_bytes": 12156928,
+  "build": "0.10.0+5 / clipboard-rs 0.3.5 / schema 2",
+  "environment": {
+    "system": "Darwin",
+    "machine": "arm64",
+    "profile": "release",
+    "timestamp": "2026-10-16T21:17:06.156851+08:00"
+  }
+}

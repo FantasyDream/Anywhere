@@ -44,6 +44,13 @@ impl<'a> HostServices<'a> {
         self.grant.require(ExtensionCapability::ClipboardWrite)?;
         self.platform.copy_text(value)
     }
+    pub fn write_clipboard(
+        &self,
+        value: &anywhere_platform::clipboard::ClipboardPayload,
+    ) -> Result<()> {
+        self.grant.require(ExtensionCapability::ClipboardWrite)?;
+        self.platform.write_clipboard(value)
+    }
     pub fn open_url(&self, value: &str) -> Result<()> {
         self.grant.require(ExtensionCapability::OpenUrl)?;
         self.platform.open_url(value)

@@ -21,6 +21,8 @@ tracing.workspace = true
 url.workspace = true
 unicode-normalization = "0.1"
 unicode-casefold = "0.2"
+sha2 = "0.10"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "tiff", "gif", "webp", "bmp"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 
 [dev-dependencies]

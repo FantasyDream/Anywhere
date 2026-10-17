@@ -14,6 +14,7 @@ import '../ui/app_style.dart';
 import '../ui/app_components.dart';
 import 'host_settings.dart';
 import 'file_search_settings.dart';
+import 'clipboard_settings_section.dart';
 import '../src/rust/api.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -263,11 +264,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ('shortcuts', 'Shortcuts', AppIcons.keyboard),
     ('context', 'Context', AppIcons.layers),
     ('search', 'Search', AppIcons.search),
+    ('clipboard', 'Clipboard', AppIcons.clipboard),
     ('plugins', 'Features', AppIcons.layers),
   ];
 
   void _selectPage(String id) {
     if (_page == id) return;
+    if (id == 'clipboard') unawaited(_controller.clipboard.load());
     _recorder.cancel();
     setState(() {
       _page = id;
@@ -434,15 +437,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 status: _sourceStatus(ContextSourceDto.browserCurrentPage),
                 onChanged: (value) => _save((current) =>
                     current.copyWith(captureBrowserCurrentPage: value))),
-            const Divider(),
-            SettingsToggleRow(
-                title: 'Clipboard text',
-                description: 'Auto-fill new copies for 15 seconds',
-                icon: AppIcons.clipboard,
-                value: _settings.captureClipboard,
-                status: _sourceStatus(ContextSourceDto.clipboard),
-                onChanged: (value) => _save(
-                    (current) => current.copyWith(captureClipboard: value))),
           ])),
           const SizedBox(height: 8),
           const Text(
@@ -539,6 +533,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           ),
           SizedBox(height: DesktopEnvironment.current.titleBarInset),
+        ],
+      'clipboard' => [
+          ClipboardSettingsSection(
+              controller: _controller.clipboard,
+              autoFill: _settings.captureClipboard,
+              autoFillStatus: _sourceStatus(ContextSourceDto.clipboard),
+              onAutoFill: _saving || _controller.clipboard.busy
+                  ? null
+                  : (value) => _save(
+                      (current) => current.copyWith(captureClipboard: value)))
         ],
       'plugins' => [FeaturesSection(controller: _controller)],
       _ => const [],

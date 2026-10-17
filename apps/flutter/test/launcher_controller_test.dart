@@ -458,6 +458,49 @@ void main() {
 
   for (final failToOpen in [false, true]) {
     test(
+        'detached tool ${failToOpen ? 'failure keeps Launcher usable' : 'opens independently of Launcher retention'}',
+        () async {
+      final messages = <String>[];
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        messages.add(call.method);
+        if (call.method == 'showToolWindow') {
+          expect((call.arguments as Map)['id'], 'clipboard.shelf');
+          if (failToOpen) throw PlatformException(code: 'tool');
+        }
+        return null;
+      });
+      final candidate =
+          action('core.clipboard.shelf', 'Clipboard Shelf', 'tools');
+      final controller = open(
+        beginActivation: () => 1,
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
+            captured(offers: [candidate]),
+        updateInput: (_, __, ___,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
+            null,
+        execute: (session, revision, _) async => ActionResultDto(
+            sessionId: session,
+            revision: revision,
+            status: ActionStatusDto.succeeded,
+            closeWindow: false,
+            view: HostViewDto.nativeTool,
+            nativeTool: const NativeToolDto(id: 'clipboard.shelf', input: '')),
+        deactivate: (_) async {},
+      );
+      await controller.activate();
+      await controller.executeSelected();
+      expect(messages, contains('showToolWindow'));
+      expect(controller.view.toolPage, isNull);
+      expect(controller.view.visible, failToOpen);
+      if (!failToOpen) expect(controller.hasRetainedState, isFalse);
+      controller.dispose();
+    });
+  }
+
+  for (final failToOpen in [false, true]) {
+    test(
         'started task ${failToOpen ? 'survives a window failure' : 'opens before Launcher dismissal'}',
         () async {
       final messages = <String>[];

@@ -33,7 +33,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var latestGeneration = 0
     lazy var launcherWindows = LauncherWindowCoordinator(window: window, controller: controller,
         host: materialController, glass: glass, mask: launcherGlassMask, delegate: self,
-        tasksVisible: { [weak self] in self?.tasksWindow?.isVisible == true })
+        tasksVisible: { [weak self] in
+            self?.tasksWindow?.isVisible == true || self?.clipboardWindow.window?.isVisible == true
+        })
     var settingsOpen: Bool {
         get { launcherWindows.settingsOpen }
         set { launcherWindows.settingsOpen = newValue }
@@ -41,6 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var settingsWindow: NSWindow? { launcherWindows.settingsWindow }
     var launcherGlassMask: NSImage?
     lazy var taskWindows = TasksWindowController(onLauncher: { [weak self] in self?.activate(mode: "universal") })
+    lazy var clipboardWindow = ToolWindowController(entrypoint: "clipboardShelfMain",
+        channelName: "anywhere/clipboard-shelf", title: "Anywhere · Clipboard Shelf")
     var tasksWindow: NSWindow? { taskWindows.tasksWindow }
     var tasksChannel: FlutterMethodChannel? { taskWindows.tasksChannel }
     var tasksReady: Bool { taskWindows.tasksReady }
@@ -48,6 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     private var editingController: FlutterViewController? {
         guard NSApp.isActive, let key = NSApp.keyWindow else { return nil }
         if key === tasksWindow { return taskWindows.tasksController }
+        if key === clipboardWindow.window { return clipboardWindow.controller }
         return key === window || key === settingsWindow ? controller : nil
     }
     lazy var editMenu = NativeEditMenu(available: { [weak self] in self?.editingController != nil },
@@ -75,6 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let logs = Self.supportDirectory()
         freopen(logs.appendingPathComponent("launcher.log").path, "w", stderr)
         NSApp.setActivationPolicy(.accessory)
+        _ = clipboardWindow // Observe paste destinations before Launcher takes focus; no engine yet.
         controller = FlutterViewController(project: FlutterDartProject())
         controller.backgroundColor = .clear
         window = LauncherWindow(contentRect: NSRect(x: 0, y: 0, width: 648, height: 64),
@@ -202,6 +208,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 } else {
                     reply(FlutterError(code: "privacy", message: "System Settings could not be opened.", details: nil))
                 }
+            case "showToolWindow":
+                let args = call.arguments as? [String: Any]
+                guard args?["id"] as? String == "clipboard.shelf" else {
+                    reply(FlutterError(code: "tool", message: "Unknown tool window.", details: nil)); return
+                }
+                if self.clipboardWindow.show() { reply(nil) }
+                else { reply(FlutterError(code: "tool", message: "Clipboard Shelf could not start.", details: nil)) }
             case "showExecutionSessions":
                 let args = call.arguments as? [String: Any]
                 if self.showTasks(id: args?["id"] as? String) {
@@ -387,11 +400,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func validateMenuItem(_ item: NSMenuItem) -> Bool {
         if item.action == #selector(closeActiveWindow) || item.action == #selector(minimizeActiveWindow) {
             guard let key = NSApp.keyWindow else { return false }
-            return key === settingsWindow || key === tasksWindow
+            return key === settingsWindow || key === tasksWindow || key === clipboardWindow.window
         }
         if item.action == #selector(zoomActiveWindow) {
             guard let key = NSApp.keyWindow else { return false }
-            return key === tasksWindow
+            return key === tasksWindow || key === clipboardWindow.window
         }
         let taskActions: [Selector] = [#selector(findTask), #selector(stopTask),
                                       #selector(refreshTasks), #selector(taskLauncher), #selector(hideTasks)]
@@ -403,8 +416,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
     /// Lazy second Flutter engine: releasing its window never destroys Rust process sessions.
     func showTasks(id: String?) -> Bool { taskWindows.showTasks(id: id) }
-    func applicationDidHide(_ notification: Notification) { taskWindows.applicationDidHide(notification) }
-    func applicationDidUnhide(_ notification: Notification) { taskWindows.applicationDidUnhide(notification) }
+    func applicationDidHide(_ notification: Notification) {
+        taskWindows.applicationDidHide(notification)
+        clipboardWindow.applicationVisibilityChanged()
+    }
+    func applicationDidUnhide(_ notification: Notification) {
+        taskWindows.applicationDidUnhide(notification)
+        clipboardWindow.applicationVisibilityChanged()
+    }
 
     func activate(mode: String) {
         guard !terminationPending else { return }

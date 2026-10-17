@@ -79,6 +79,16 @@ impl SettingsService {
         let storage_path = path.with_file_name("extension-storage.sqlite3");
         let storage = ModuleStorageHost::open(&storage_path).map_err(|e| format!("{e:#}"));
         let mut services = FeatureServices::new(binding(&storage));
+        let clipboard = Arc::new(crate::features::clipboard::service::HistoryService::new(
+            crate::persistence::clipboard::SqliteHistoryRepository::open(
+                &path.with_file_name("clipboard-history.sqlite3"),
+            )
+            .map(|repo| {
+                Box::new(repo) as Box<dyn crate::features::clipboard::history::HistoryRepository>
+            })
+            .map_err(|_| "clipboard history storage unavailable".into()),
+        ));
+        services.bind_clipboard(clipboard.clone());
         let mut catalog = BuiltinCatalog::assemble(&mut services)?;
         let legacy = LegacyPluginSettings::open(path, directories, &mut catalog.registry)?;
         let native = FeatureSettings::open(
@@ -105,6 +115,7 @@ impl SettingsService {
             &settings.legacy.preferences,
             || Ok(()),
         )?;
+        clipboard.start(app.platform.clone())?;
         Ok(settings)
     }
     pub fn statuses(&self) -> Vec<ModuleStatus> {
@@ -119,6 +130,9 @@ impl SettingsService {
     }
     pub fn feature_policy(&self) -> Arc<FeaturePolicySnapshot> {
         self.native.policy.clone()
+    }
+    pub fn clipboard(&self) -> Arc<crate::features::clipboard::service::HistoryService> {
+        self.services.clipboard()
     }
     fn refresh_business_data(&mut self) {
         if self.native.policy.is_enabled("saved_directories") {
@@ -231,6 +245,7 @@ impl SettingsService {
                 excluded.insert(status.key);
             }
         }
+        let clipboard_enabled = policy.is_enabled("clipboard");
         app.publish_selected_catalog(
             self.catalog.registry.clone(),
             self.catalog.providers.clone(),
@@ -238,7 +253,10 @@ impl SettingsService {
             policy,
             excluded,
             persist,
-        )
+        )?;
+        self.services
+            .clipboard()
+            .set_feature_enabled(clipboard_enabled, app.platform.as_ref())
     }
 }
 fn binding(

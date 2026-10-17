@@ -1,9 +1,10 @@
 # 调研资料
 
-这里保存日期明确的来源检查与后续方案，**未在文档整理时重新联网核验**。资料不证明对应库已经使用，也不把作者性能数字或推断当作 Anywhere 同机测量。
+这里保存日期明确的来源检查与后续方案，以各文档自己的核验日期为准。资料不证明对应库已经使用，也不把作者性能数字或推断当作 Anywhere 同机测量。
 
 | 文档 | 内容 |
 |---|---|
+| [全功能开源库复用清单](open-source-reuse-audit.md) | 2026-10-17 重新核验；当前功能、可替换边界、接入成本与优先级 |
 | [FSearch 评估](fsearch-evaluation.md) | 同名项目、macOS fork / Rust 实现、集成成本与索引取舍 |
 | [搜索库补充](file-search-libraries.md) | zlob、ignore / walkdir / jwalk、fff-search 等候选与验证建议 |
 | [文件预览](file-preview.md) | Raycast / Alfred / Spotlight 行为和公开 Quick Look 能力 |

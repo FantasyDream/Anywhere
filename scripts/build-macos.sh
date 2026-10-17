@@ -51,6 +51,7 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Frameworks" "$APP/Contents/Resourc
 # No bundled plugins: the app must not install a web search the user did not ask for.
 cp apps/flutter/macos/Runner/Info.plist "$APP/Contents/Info.plist"
 cp apps/flutter/macos/Runner/Assets/Anywhere.icns "$APP/Contents/Resources/Anywhere.icns"
+ditto resources/licenses "$APP/Contents/Resources/Licenses"
 # ditto preserves framework symlinks required by dyld and code signing.
 ditto build/flutter/FlutterMacOS.framework "$APP/Contents/Frameworks/FlutterMacOS.framework"
 ditto build/flutter/App.framework "$APP/Contents/Frameworks/App.framework"

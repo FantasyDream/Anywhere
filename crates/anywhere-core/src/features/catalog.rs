@@ -184,7 +184,8 @@ mod tests {
                 "gradle",
                 "node",
                 "spring_boot",
-                "saved_directories"
+                "saved_directories",
+                "clipboard"
             ]
         );
         for (entry, module) in BUILTIN_FEATURES.iter().zip(modules) {

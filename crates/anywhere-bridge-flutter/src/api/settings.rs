@@ -49,7 +49,7 @@ pub(super) fn initialize(data_directory: String, plugin_directory: String) -> Re
     Ok(())
 }
 
-fn extensions() -> Result<
+pub(super) fn extensions() -> Result<
     std::sync::MutexGuard<'static, anywhere_core::application::settings_service::SettingsService>,
 > {
     EXTENSIONS

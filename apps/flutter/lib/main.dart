@@ -13,6 +13,7 @@ import 'infrastructure/window_host.dart';
 import 'infrastructure/desktop_image_cache.dart';
 import 'infrastructure/desktop_environment.dart';
 import 'execution/execution_sessions_screen.dart';
+import 'features/clipboard/clipboard_shelf_app.dart';
 
 const windowChannel = MethodChannel('anywhere/window');
 
@@ -38,6 +39,27 @@ Future<void> executionSessionsMain() async {
         builder: AppStyle.windowBuilder,
         home: AppFailureView(
             title: 'Running Tasks could not open', detail: '$error')));
+  }
+}
+
+/// Loaded lazily by the floating host; shares the app-lifetime Rust library.
+@pragma('vm:entry-point')
+Future<void> clipboardShelfMain() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  configureDesktopImageCache();
+  try {
+    const channel = MethodChannel('anywhere/clipboard-shelf');
+    final paths = await RuntimePaths.read(channel);
+    DesktopEnvironment.configure(await DesktopEnvironment.read(channel));
+    await initializeRustLibrary(paths);
+    runApp(const ClipboardShelfApp());
+  } catch (error) {
+    runApp(MaterialApp(
+        debugShowCheckedModeBanner: false,
+        theme: AppStyle.theme,
+        builder: AppStyle.windowBuilder,
+        home: AppFailureView(
+            title: 'Clipboard Shelf could not open', detail: '$error')));
   }
 }
 

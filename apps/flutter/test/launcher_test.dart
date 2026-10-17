@@ -578,9 +578,11 @@ void main() {
                         onClose: controller.closeSettings))))));
     await tester.tap(find.byKey(const ValueKey('settings-context')));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Permission needed'), 160);
-    await tester.pumpAndSettle();
     expect(find.text('Not supported by this app'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('settings-clipboard')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Permission needed'));
+    await tester.pumpAndSettle();
     expect(find.text('Permission needed'), findsOneWidget);
     await tester.tap(find.text('Open Settings'));
     await tester.pumpAndSettle();

@@ -1,0 +1,60 @@
+{
+  "database_bytes": 25206784,
+  "detail_mean_us": 6,
+  "fixture": "1000 synthetic plain-text entries, approximately 8 KiB each",
+  "insert_ms": 1767,
+  "queries": [
+    {
+      "matches": 1000,
+      "max_us": 2871,
+      "p50_us": 2225,
+      "p95_us": 2655,
+      "query": "",
+      "samples": 50
+    },
+    {
+      "matches": 1000,
+      "max_us": 3642,
+      "p50_us": 2803,
+      "p95_us": 3098,
+      "query": "entry",
+      "samples": 50
+    },
+    {
+      "matches": 1000,
+      "max_us": 5263,
+      "p50_us": 3157,
+      "p95_us": 4984,
+      "query": "中文 rust",
+      "samples": 50
+    },
+    {
+      "matches": 1,
+      "max_us": 7306,
+      "p50_us": 6219,
+      "p95_us": 7016,
+      "query": "entry-0999",
+      "samples": 50
+    },
+    {
+      "matches": 0,
+      "max_us": 7348,
+      "p50_us": 6217,
+      "p95_us": 7091,
+      "query": "no-such-entry",
+      "samples": 50
+    }
+  ],
+  "rows": 1000,
+  "scope": "Rust repository only; excludes Flutter, bridge and OS clipboard",
+  "summary_utf8_bytes": 124000,
+  "peak_rss_bytes": 10190848,
+  "measured_at_utc": "2026-10-16T08:25:41.808091+00:00",
+  "environment": {
+    "system": "Darwin",
+    "release": "27.0.0",
+    "architecture": "arm64",
+    "profile": "release",
+    "core_version": "0.10.0-dev.1"
+  }
+}

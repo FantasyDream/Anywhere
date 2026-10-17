@@ -3,7 +3,7 @@ from pathlib import Path
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from architecture_rules import check_core_imports
+from architecture_rules import check_core_imports, check_feature_imports
 
 
 class CoreBoundaries(unittest.TestCase):
@@ -20,6 +20,14 @@ class CoreBoundaries(unittest.TestCase):
 // use crate::extensions::git;
 #[cfg(test)] mod tests { use crate::extensions::git; }
 ''', 'core/fixture.rs')
+
+    def test_feature_services_reject_concrete_composition_and_storage(self):
+        for source in ['use crate::persistence::clipboard::SqliteHistoryRepository;',
+                       'use crate::{core::storage::StorageHost, application as app};',
+                       'fn f() { crate::application::activate(); }']:
+            with self.subTest(source=source), self.assertRaises(AssertionError):
+                check_feature_imports(source, 'features/fixture.rs')
+        check_feature_imports('use crate::{core::storage::StorageHost, features::clipboard::history::HistoryRepository};', 'features/fixture.rs')
 
 
 if __name__ == '__main__':

@@ -9,7 +9,7 @@ mod browser;
 mod clipboard;
 mod editor;
 mod finder;
-mod native;
+pub(crate) mod native;
 mod shell;
 
 use crate::{
@@ -96,6 +96,27 @@ impl Platform for MacOsPlatform {
     }
     fn clipboard_snapshot(&self) -> Result<crate::ClipboardSnapshot> {
         clipboard::snapshot()
+    }
+    fn clipboard_generation(&self) -> Result<i64> {
+        Ok(clipboard::change_count())
+    }
+    fn request_clipboard_history_access(&self) -> Result<()> {
+        crate::clipboard::request_access()
+    }
+    fn clipboard_history_payload(
+        &self,
+        generation: i64,
+    ) -> Result<Option<crate::clipboard::ClipboardPayload>> {
+        crate::clipboard::read(generation)
+    }
+    fn write_clipboard(&self, payload: &crate::clipboard::ClipboardPayload) -> Result<()> {
+        crate::clipboard::write(payload)
+    }
+    fn watch_clipboard(
+        &self,
+        changed: Box<dyn Fn() + Send>,
+    ) -> Result<Box<dyn crate::clipboard::ClipboardWatch>> {
+        crate::clipboard::watch(changed)
     }
     fn clipboard_text(&self) -> Result<Option<String>> {
         clipboard::clipboard_text()

@@ -11,6 +11,27 @@ import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
 
+Future<ClipboardHistoryStatusDto> clipboardHistoryStatus() =>
+    RustLib.instance.api.crateApiClipboardHistoryStatus();
+
+Future<ClipboardHistoryDto> clipboardHistory({required String query}) =>
+    RustLib.instance.api.crateApiClipboardHistory(query: query);
+
+Future<ClipboardDetailDto?> clipboardHistoryDetail({required String id}) =>
+    RustLib.instance.api.crateApiClipboardHistoryDetail(id: id);
+
+Future<void> setClipboardRecording({required bool enabled}) =>
+    RustLib.instance.api.crateApiSetClipboardRecording(enabled: enabled);
+
+Future<void> copyClipboardEntry({required String id}) =>
+    RustLib.instance.api.crateApiCopyClipboardEntry(id: id);
+
+Future<void> deleteClipboardEntry({required String id}) =>
+    RustLib.instance.api.crateApiDeleteClipboardEntry(id: id);
+
+Future<void> clearClipboardHistory() =>
+    RustLib.instance.api.crateApiClearClipboardHistory();
+
 Future<List<String>> supportedShortcutActions(
         {required List<String> actionIds}) =>
     RustLib.instance.api.crateApiSupportedShortcutActions(actionIds: actionIds);
@@ -499,6 +520,131 @@ enum CandidateUpdateDto {
   retain,
   append,
   ;
+}
+
+class ClipboardDetailDto {
+  final ClipboardItemDto item;
+  final String text;
+  final Uint8List imagePng;
+  final List<String> files;
+  final List<String> formats;
+
+  const ClipboardDetailDto({
+    required this.item,
+    required this.text,
+    required this.imagePng,
+    required this.files,
+    required this.formats,
+  });
+
+  @override
+  int get hashCode =>
+      item.hashCode ^
+      text.hashCode ^
+      imagePng.hashCode ^
+      files.hashCode ^
+      formats.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ClipboardDetailDto &&
+          runtimeType == other.runtimeType &&
+          item == other.item &&
+          text == other.text &&
+          imagePng == other.imagePng &&
+          files == other.files &&
+          formats == other.formats;
+}
+
+class ClipboardHistoryDto {
+  final bool recording;
+  final bool available;
+  final String? notice;
+  final List<ClipboardItemDto> items;
+
+  const ClipboardHistoryDto({
+    required this.recording,
+    required this.available,
+    this.notice,
+    required this.items,
+  });
+
+  @override
+  int get hashCode =>
+      recording.hashCode ^
+      available.hashCode ^
+      notice.hashCode ^
+      items.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ClipboardHistoryDto &&
+          runtimeType == other.runtimeType &&
+          recording == other.recording &&
+          available == other.available &&
+          notice == other.notice &&
+          items == other.items;
+}
+
+class ClipboardHistoryStatusDto {
+  final bool recording;
+  final bool available;
+  final String? notice;
+
+  const ClipboardHistoryStatusDto({
+    required this.recording,
+    required this.available,
+    this.notice,
+  });
+
+  @override
+  int get hashCode => recording.hashCode ^ available.hashCode ^ notice.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ClipboardHistoryStatusDto &&
+          runtimeType == other.runtimeType &&
+          recording == other.recording &&
+          available == other.available &&
+          notice == other.notice;
+}
+
+class ClipboardItemDto {
+  final String id;
+  final String summary;
+  final String kind;
+  final PlatformInt64 copiedAtMs;
+  final int byteCount;
+
+  const ClipboardItemDto({
+    required this.id,
+    required this.summary,
+    required this.kind,
+    required this.copiedAtMs,
+    required this.byteCount,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      summary.hashCode ^
+      kind.hashCode ^
+      copiedAtMs.hashCode ^
+      byteCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ClipboardItemDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          summary == other.summary &&
+          kind == other.kind &&
+          copiedAtMs == other.copiedAtMs &&
+          byteCount == other.byteCount;
 }
 
 class ContextCaptureDto {
