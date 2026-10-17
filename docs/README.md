@@ -1,6 +1,6 @@
 # 文档导航
 
-当前主线：V0.10；整理日期：2026-10-17。根 [README](../README.md) 是使用与开发入口；本目录保留当前设计契约，旧构建证据和调研分别放入 archive / research。
+当前主线：V0.10；整理日期：2026-10-18。根 [README](../README.md) 是使用与开发入口；本目录保留当前设计契约，旧构建证据和调研分别放入 archive / research。
 
 ## 当前文档
 
@@ -15,6 +15,7 @@
 | [开发动作](developer-actions.md) | Git、项目识别、IDEA 来源和后台进程 |
 | [扩展协议](plugin-protocol.md) | 第一方模块、v1 / v2 / v3、Host UI、批准、存储与恢复 |
 | [共享 UI](ui-design.md) | 组件、材质、输入与平台回退 |
+| [开源复用重构](open-source-refactor-plan.md) | R1 编码 / 工具查找，R2 SQLite、R3 匹配原型及验收 |
 | [性能](performance.md) | 资源预算、增量更新与测量边界 |
 | [跨平台](platform-portability.md) | Host 路径 / 能力、快捷键 schema 与 Windows 接入 |
 | [V0.9 MVP](mvp-v0.9.md) | 内置功能模块、Build 6 收尾结果与发行验收边界 |

@@ -6,17 +6,31 @@ use std::path::{Path, PathBuf};
 
 /// Resolve a tool without invoking a shell or sourcing login scripts.
 pub fn find_executable(name: &str) -> Option<PathBuf> {
-    if name.contains(['/', '\\']) {
+    find_executable_in(name, tool_directories())
+}
+
+fn find_executable_in(name: &str, directories: Vec<PathBuf>) -> Option<PathBuf> {
+    if name.is_empty()
+        || name.contains(['/', '\\'])
+        || (cfg!(windows)
+            && Path::new(name).extension().is_some_and(|ext| {
+                !ext.eq_ignore_ascii_case("exe") && !ext.eq_ignore_ascii_case("com")
+            }))
+    {
         return None;
     }
-    tool_directories()
+    directories
         .into_iter()
+        .filter(|path| path.is_absolute())
         .flat_map(|path| {
             executable_names(name)
                 .into_iter()
                 .map(move |name| path.join(name))
         })
-        .find(|path| is_executable(path))
+        // Check absolute candidates through the library without joining PATH:
+        // SDK directories containing PATH separators remain valid. Never let
+        // PATHEXT add a batch script or a working-directory fallback.
+        .find(|path| which::which_global(path).is_ok_and(|found| found == *path) && path.is_file())
 }
 
 fn executable_names(name: &str) -> Vec<String> {
@@ -119,18 +133,6 @@ fn installed_node_directory(root: &std::path::Path, prefix: &[u32]) -> Option<Pa
         .map(|(_, path)| path)
 }
 
-fn is_executable(path: &std::path::Path) -> bool {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        path.metadata()
-            .map(|metadata| metadata.is_file() && metadata.permissions().mode() & 0o111 != 0)
-            .unwrap_or(false)
-    }
-    #[cfg(not(unix))]
-    path.is_file()
-}
-
 /// Optional GUI launch environment; existing user configuration always wins.
 pub fn java_environment() -> std::collections::BTreeMap<String, String> {
     #[cfg(unix)]
@@ -187,6 +189,63 @@ mod tests {
     use super::*;
 
     #[test]
+    fn executable_lookup_preserves_directory_order_permissions_and_literal_paths() {
+        use std::os::unix::fs::PermissionsExt;
+        let root = tempfile::tempdir().unwrap();
+        let first = root.path().join("first bin");
+        let second = root.path().join("SDK:中文 bin");
+        std::fs::create_dir_all(&first).unwrap();
+        std::fs::create_dir_all(&second).unwrap();
+        for (directory, mode) in [(&first, 0o644), (&second, 0o755)] {
+            let path = directory.join("java");
+            std::fs::write(&path, "#!/bin/sh\nexit 0\n").unwrap();
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode)).unwrap();
+        }
+        let paths = vec![first.clone(), second.clone()];
+        assert_eq!(
+            find_executable_in("java", paths.clone()),
+            Some(second.join("java"))
+        );
+        std::fs::set_permissions(first.join("java"), std::fs::Permissions::from_mode(0o755))
+            .unwrap();
+        assert_eq!(
+            find_executable_in("java", paths.clone()),
+            Some(first.join("java"))
+        );
+        for name in ["", "./java", "../java", "dir/java", "dir\\java"] {
+            assert!(find_executable_in(name, paths.clone()).is_none());
+        }
+        assert!(find_executable_in("java", vec![PathBuf::from("relative")]).is_none());
+        std::fs::create_dir_all(first.join("node")).unwrap();
+        assert!(find_executable_in("node", paths.clone()).is_none());
+        std::os::unix::fs::symlink(second.join("java"), first.join("linked")).unwrap();
+        assert_eq!(
+            find_executable_in("linked", paths.clone()),
+            Some(first.join("linked"))
+        );
+        std::os::unix::fs::symlink(second.join("missing"), first.join("broken")).unwrap();
+        assert!(find_executable_in("broken", paths).is_none());
+    }
+
+    #[test]
+    fn ancestor_wrapper_selection_keeps_existing_non_executable_wrapper() {
+        let root = tempfile::tempdir().unwrap();
+        let module = root.path().join("module");
+        std::fs::create_dir_all(&module).unwrap();
+        let wrapper = root.path().join("mvnw");
+        std::fs::write(&wrapper, "#!/bin/sh\nexit 0\n").unwrap();
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o644)).unwrap();
+        assert_eq!(
+            wrapped_tool(&module, "mvnw", "missing-tool").unwrap(),
+            (
+                PathBuf::from("/bin/sh"),
+                vec![wrapper.to_string_lossy().into_owned()]
+            )
+        );
+    }
+
+    #[test]
     fn nvm_default_selection_is_bounded_and_respects_aliases_and_major_versions() {
         let dir = tempfile::tempdir().unwrap();
         let root = dir.path();
@@ -211,5 +270,19 @@ mod tests {
         assert_eq!(nvm_default_directory(root), None);
         std::fs::write(root.join("alias/default"), "a".repeat(257)).unwrap();
         assert_eq!(nvm_default_directory(root), None);
+    }
+}
+
+#[cfg(all(test, windows))]
+mod windows_tests {
+    use super::*;
+    #[test]
+    fn lookup_does_not_select_batch_files_or_add_pathext_to_an_explicit_name() {
+        let root = tempfile::tempdir().unwrap();
+        for name in ["tool.cmd", "tool.bat"] {
+            std::fs::write(root.path().join(name), "echo test").unwrap();
+            assert!(find_executable_in(name, vec![root.path().into()]).is_none());
+        }
+        assert!(find_executable_in("tool", vec![root.path().into()]).is_none());
     }
 }

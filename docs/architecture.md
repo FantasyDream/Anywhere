@@ -1,6 +1,6 @@
 # 架构
 
-当前实现：V0.10 剪贴板历史开发中，基于 V0.9 内置功能模块；最后核对：2026-10-17。使用入口见 [README](../README.md)，专题文档见 [文档导航](README.md)。
+当前实现：V0.10 剪贴板历史开发中，基于 V0.9 内置功能模块；最后核对：2026-10-18。使用入口见 [README](../README.md)，专题文档见 [文档导航](README.md)。
 
 已确认转向内置功能模块，按 [迁移路线图](feature-module-roadmap.md) 分阶段实施。P01 集中构造与身份检查；P02 由模块自己的 registration.rs 声明功能，Cargo 编译时自动发现并生成 features/catalog 使用的目录，迁移阶段保留既有功能身份与顺序；JSON 延期后 V0.9 交付 8 个可配置内置功能，V0.10 增加 clipboard 模块。P03 将内置描述改为 Rust FeatureDescriptor，移除内置 TOML 和协议解析，状态显示统一使用 Cargo workspace 构建版本。P04 将收藏目录拆为 repository / service，FeatureServices 持有具体 service，移除 ExtensionState / Any 状态恢复。没有运行期扫描或加载。P05c 已删除旧 FirstPartyExtension / ExtensionRuntime / ExtensionManager / Reload；Native 只在启动绑定贡献，设置与业务数据刷新单独管理。
 
@@ -101,7 +101,7 @@ resources/                 键码、文件类型与运行策略的公共配置
 
 Spotlight 返回早期候选，Rust 完整遍历允许范围；查询临时存储保存命中并外部排序，已显示前缀保持稳定。对象二级动作按选中目标延迟生成，复验原执行对象。Host 接收 replacement、append 或 metadata delta，不重新匹配文件。
 
-Flutter 的 `StableList` 共享 256 条不可变块，索引按块复用，仅为访问到的候选包装行；Revision 或 list version 改变时拒绝无效尾部。完整契约见 [文件搜索](file-search.md)。
+Flutter 的 `StableList` 共享 256 条不可变块，索引按块复用，仅为访问到的候选包装行；Revision 或 list version 改变时拒绝无效尾部。完整契约见 [文件搜索](file-search.md)。R1 的编码检测 / 有界解码位于 `features/filesystem/preview/text.rs`，只在 Rust 预览边界执行；Platform 的工具查找使用 which 检查绝对候选，仍保留 GUI 工具目录和 wrapper 策略。阶段计划见 [开源复用重构](open-source-refactor-plan.md)。
 
 ## 剪贴板功能模块
 
