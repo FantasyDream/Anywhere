@@ -1,0 +1,4795 @@
+{
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "probe": "field-level app/action matching",
+  "library": "nucleo-matcher 0.3.1, dev-only, ASCII substring + native Unicode fallback",
+  "samples_per_query": 200,
+  "warmup_per_query": 30,
+  "excluded": [
+    "Context resolution",
+    "availability",
+    "candidate construction",
+    "ranking sort",
+    "Bridge",
+    "Flutter",
+    "GUI"
+  ],
+  "baseline": {
+    "backend": "baseline",
+    "max_rss_bytes": 9699328
+  },
+  "cases": [
+    {
+      "corpus": "apps",
+      "rows": 1000,
+      "samples": {
+        "legacy": [
+          {
+            "backend": "legacy",
+            "corpus": "apps",
+            "prepare_ms": 8.4e-05,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "6ffa2fe4d5ec3f9cee4f8a416cb4713cf1ea5e709a3483f73788ac29ab3897d5",
+                "level_checksum": 167664000,
+                "matches": 84,
+                "p50_us": 146.292,
+                "p95_us": 201.833,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3d8184519ebaacb6ab5db1ced1587c22d5a60dec8665951abe8b29930b6fa34",
+                "level_checksum": 83832000,
+                "matches": 84,
+                "p50_us": 130.458,
+                "p95_us": 138.208,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "c4d98581a3feb065940e16750a33ec89006285315fff022e9ba3caf79d544c86",
+                "level_checksum": 41916000,
+                "matches": 84,
+                "p50_us": 112.541,
+                "p95_us": 113.834,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 121.5,
+                "p95_us": 124.333,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 111.25,
+                "p95_us": 118.959,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 127.917,
+                "p95_us": 134.958,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 121.291,
+                "p95_us": 126.625,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 109.792,
+                "p95_us": 115.916,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 107.959,
+                "p95_us": 113.708,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 106.5,
+                "p95_us": 110.709,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 104.417,
+                "p95_us": 107.959,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 119.584,
+                "p95_us": 127.125,
+                "query": "app missing"
+              }
+            ],
+            "rows": 1000,
+            "max_rss_bytes": 10797056
+          },
+          {
+            "backend": "legacy",
+            "corpus": "apps",
+            "prepare_ms": 0.0,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "6ffa2fe4d5ec3f9cee4f8a416cb4713cf1ea5e709a3483f73788ac29ab3897d5",
+                "level_checksum": 167664000,
+                "matches": 84,
+                "p50_us": 97.125,
+                "p95_us": 99.625,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3d8184519ebaacb6ab5db1ced1587c22d5a60dec8665951abe8b29930b6fa34",
+                "level_checksum": 83832000,
+                "matches": 84,
+                "p50_us": 115.75,
+                "p95_us": 119.125,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "c4d98581a3feb065940e16750a33ec89006285315fff022e9ba3caf79d544c86",
+                "level_checksum": 41916000,
+                "matches": 84,
+                "p50_us": 104.708,
+                "p95_us": 110.084,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 113.208,
+                "p95_us": 120.583,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 112.417,
+                "p95_us": 115.458,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 119.833,
+                "p95_us": 128.375,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 116.584,
+                "p95_us": 125.584,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 111.541,
+                "p95_us": 115.291,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 106.209,
+                "p95_us": 114.875,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 104.375,
+                "p95_us": 114.709,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 106.75,
+                "p95_us": 110.125,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 117.917,
+                "p95_us": 125.833,
+                "query": "app missing"
+              }
+            ],
+            "rows": 1000,
+            "max_rss_bytes": 10797056
+          },
+          {
+            "backend": "legacy",
+            "corpus": "apps",
+            "prepare_ms": 0.0,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "6ffa2fe4d5ec3f9cee4f8a416cb4713cf1ea5e709a3483f73788ac29ab3897d5",
+                "level_checksum": 167664000,
+                "matches": 84,
+                "p50_us": 97.959,
+                "p95_us": 101.792,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3d8184519ebaacb6ab5db1ced1587c22d5a60dec8665951abe8b29930b6fa34",
+                "level_checksum": 83832000,
+                "matches": 84,
+                "p50_us": 114.208,
+                "p95_us": 120.125,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "c4d98581a3feb065940e16750a33ec89006285315fff022e9ba3caf79d544c86",
+                "level_checksum": 41916000,
+                "matches": 84,
+                "p50_us": 104.958,
+                "p95_us": 111.125,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 113.584,
+                "p95_us": 116.709,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 109.75,
+                "p95_us": 116.958,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 119.834,
+                "p95_us": 127.416,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 119.833,
+                "p95_us": 124.709,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 106.875,
+                "p95_us": 109.334,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 104.375,
+                "p95_us": 110.709,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 102.958,
+                "p95_us": 105.125,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 100.917,
+                "p95_us": 106.542,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 117.291,
+                "p95_us": 123.875,
+                "query": "app missing"
+              }
+            ],
+            "rows": 1000,
+            "max_rss_bytes": 10780672
+          }
+        ],
+        "existing": [
+          {
+            "backend": "existing",
+            "corpus": "apps",
+            "prepare_ms": 4.2e-05,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "6ffa2fe4d5ec3f9cee4f8a416cb4713cf1ea5e709a3483f73788ac29ab3897d5",
+                "level_checksum": 167664000,
+                "matches": 84,
+                "p50_us": 46.625,
+                "p95_us": 49.5,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3d8184519ebaacb6ab5db1ced1587c22d5a60dec8665951abe8b29930b6fa34",
+                "level_checksum": 83832000,
+                "matches": 84,
+                "p50_us": 58.042,
+                "p95_us": 63.208,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "c4d98581a3feb065940e16750a33ec89006285315fff022e9ba3caf79d544c86",
+                "level_checksum": 41916000,
+                "matches": 84,
+                "p50_us": 49.25,
+                "p95_us": 52.167,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 60.542,
+                "p95_us": 64.334,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 52.625,
+                "p95_us": 56.084,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 61.333,
+                "p95_us": 67.292,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 62.208,
+                "p95_us": 65.416,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 51.208,
+                "p95_us": 56.916,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 49.375,
+                "p95_us": 52.625,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 44.584,
+                "p95_us": 48.625,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 46.75,
+                "p95_us": 50.625,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 60.25,
+                "p95_us": 66.209,
+                "query": "app missing"
+              }
+            ],
+            "rows": 1000,
+            "max_rss_bytes": 10764288
+          },
+          {
+            "backend": "existing",
+            "corpus": "apps",
+            "prepare_ms": 0.0,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "6ffa2fe4d5ec3f9cee4f8a416cb4713cf1ea5e709a3483f73788ac29ab3897d5",
+                "level_checksum": 167664000,
+                "matches": 84,
+                "p50_us": 46.042,
+                "p95_us": 48.834,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3d8184519ebaacb6ab5db1ced1587c22d5a60dec8665951abe8b29930b6fa34",
+                "level_checksum": 83832000,
+                "matches": 84,
+                "p50_us": 58.584,
+                "p95_us": 63.166,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "c4d98581a3feb065940e16750a33ec89006285315fff022e9ba3caf79d544c86",
+                "level_checksum": 41916000,
+                "matches": 84,
+                "p50_us": 49.667,
+                "p95_us": 52.416,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 58.459,
+                "p95_us": 63.0,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 56.75,
+                "p95_us": 60.375,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 61.209,
+                "p95_us": 65.5,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 60.541,
+                "p95_us": 64.125,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 51.75,
+                "p95_us": 55.125,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 50.0,
+                "p95_us": 52.708,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 46.958,
+                "p95_us": 48.958,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 45.917,
+                "p95_us": 49.291,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 62.125,
+                "p95_us": 66.291,
+                "query": "app missing"
+              }
+            ],
+            "rows": 1000,
+            "max_rss_bytes": 10747904
+          },
+          {
+            "backend": "existing",
+            "corpus": "apps",
+            "prepare_ms": 4.2e-05,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "6ffa2fe4d5ec3f9cee4f8a416cb4713cf1ea5e709a3483f73788ac29ab3897d5",
+                "level_checksum": 167664000,
+                "matches": 84,
+                "p50_us": 43.375,
+                "p95_us": 46.167,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3d8184519ebaacb6ab5db1ced1587c22d5a60dec8665951abe8b29930b6fa34",
+                "level_checksum": 83832000,
+                "matches": 84,
+                "p50_us": 57.041,
+                "p95_us": 60.625,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "c4d98581a3feb065940e16750a33ec89006285315fff022e9ba3caf79d544c86",
+                "level_checksum": 41916000,
+                "matches": 84,
+                "p50_us": 49.416,
+                "p95_us": 53.041,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 57.584,
+                "p95_us": 64.417,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 54.167,
+                "p95_us": 57.25,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 63.5,
+                "p95_us": 67.541,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 58.625,
+                "p95_us": 66.084,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 49.208,
+                "p95_us": 52.25,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 49.917,
+                "p95_us": 52.625,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 46.417,
+                "p95_us": 47.125,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 46.625,
+                "p95_us": 48.291,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 61.083,
+                "p95_us": 65.083,
+                "query": "app missing"
+              }
+            ],
+            "rows": 1000,
+            "max_rss_bytes": 10797056
+          }
+        ],
+        "prepared": [
+          {
+            "backend": "prepared",
+            "corpus": "apps",
+            "prepare_ms": 0.06870799999999999,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "6ffa2fe4d5ec3f9cee4f8a416cb4713cf1ea5e709a3483f73788ac29ab3897d5",
+                "level_checksum": 167664000,
+                "matches": 84,
+                "p50_us": 43.958,
+                "p95_us": 44.334,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3d8184519ebaacb6ab5db1ced1587c22d5a60dec8665951abe8b29930b6fa34",
+                "level_checksum": 83832000,
+                "matches": 84,
+                "p50_us": 57.666,
+                "p95_us": 63.625,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "c4d98581a3feb065940e16750a33ec89006285315fff022e9ba3caf79d544c86",
+                "level_checksum": 41916000,
+                "matches": 84,
+                "p50_us": 47.625,
+                "p95_us": 50.5,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 61.0,
+                "p95_us": 66.666,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 54.708,
+                "p95_us": 56.791,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 64.375,
+                "p95_us": 67.792,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 60.834,
+                "p95_us": 64.541,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 52.5,
+                "p95_us": 54.292,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 50.25,
+                "p95_us": 55.708,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 43.875,
+                "p95_us": 45.667,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 46.959,
+                "p95_us": 47.542,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 59.334,
+                "p95_us": 64.291,
+                "query": "app missing"
+              }
+            ],
+            "rows": 1000,
+            "max_rss_bytes": 11010048
+          },
+          {
+            "backend": "prepared",
+            "corpus": "apps",
+            "prepare_ms": 0.070666,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "6ffa2fe4d5ec3f9cee4f8a416cb4713cf1ea5e709a3483f73788ac29ab3897d5",
+                "level_checksum": 167664000,
+                "matches": 84,
+                "p50_us": 43.292,
+                "p95_us": 46.0,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3d8184519ebaacb6ab5db1ced1587c22d5a60dec8665951abe8b29930b6fa34",
+                "level_checksum": 83832000,
+                "matches": 84,
+                "p50_us": 63.667,
+                "p95_us": 66.958,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "c4d98581a3feb065940e16750a33ec89006285315fff022e9ba3caf79d544c86",
+                "level_checksum": 41916000,
+                "matches": 84,
+                "p50_us": 53.833,
+                "p95_us": 54.708,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 61.0,
+                "p95_us": 67.917,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 54.375,
+                "p95_us": 55.292,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 63.958,
+                "p95_us": 66.709,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 61.042,
+                "p95_us": 64.875,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 51.375,
+                "p95_us": 55.0,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 47.416,
+                "p95_us": 52.125,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 42.5,
+                "p95_us": 46.416,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 44.167,
+                "p95_us": 47.541,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 60.459,
+                "p95_us": 64.375,
+                "query": "app missing"
+              }
+            ],
+            "rows": 1000,
+            "max_rss_bytes": 11042816
+          },
+          {
+            "backend": "prepared",
+            "corpus": "apps",
+            "prepare_ms": 0.077209,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "6ffa2fe4d5ec3f9cee4f8a416cb4713cf1ea5e709a3483f73788ac29ab3897d5",
+                "level_checksum": 167664000,
+                "matches": 84,
+                "p50_us": 45.792,
+                "p95_us": 48.333,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3d8184519ebaacb6ab5db1ced1587c22d5a60dec8665951abe8b29930b6fa34",
+                "level_checksum": 83832000,
+                "matches": 84,
+                "p50_us": 58.042,
+                "p95_us": 63.917,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "c4d98581a3feb065940e16750a33ec89006285315fff022e9ba3caf79d544c86",
+                "level_checksum": 41916000,
+                "matches": 84,
+                "p50_us": 49.959,
+                "p95_us": 51.583,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 60.458,
+                "p95_us": 66.291,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 53.209,
+                "p95_us": 56.667,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 62.5,
+                "p95_us": 67.833,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 63.75,
+                "p95_us": 66.5,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 50.709,
+                "p95_us": 53.875,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 48.75,
+                "p95_us": 52.583,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 43.542,
+                "p95_us": 45.917,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 45.958,
+                "p95_us": 48.833,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 59.084,
+                "p95_us": 63.459,
+                "query": "app missing"
+              }
+            ],
+            "rows": 1000,
+            "max_rss_bytes": 11026432
+          }
+        ],
+        "nucleo": [
+          {
+            "backend": "nucleo",
+            "corpus": "apps",
+            "prepare_ms": 0.11158399999999999,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "6ffa2fe4d5ec3f9cee4f8a416cb4713cf1ea5e709a3483f73788ac29ab3897d5",
+                "level_checksum": 167664000,
+                "matches": 84,
+                "p50_us": 53.375,
+                "p95_us": 56.875,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3d8184519ebaacb6ab5db1ced1587c22d5a60dec8665951abe8b29930b6fa34",
+                "level_checksum": 83832000,
+                "matches": 84,
+                "p50_us": 65.875,
+                "p95_us": 68.708,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "c4d98581a3feb065940e16750a33ec89006285315fff022e9ba3caf79d544c86",
+                "level_checksum": 41916000,
+                "matches": 84,
+                "p50_us": 64.875,
+                "p95_us": 67.584,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 68.458,
+                "p95_us": 71.416,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 62.416,
+                "p95_us": 63.208,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 68.625,
+                "p95_us": 72.75,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 67.291,
+                "p95_us": 69.833,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 59.166,
+                "p95_us": 62.167,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 61.333,
+                "p95_us": 63.084,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 48.083,
+                "p95_us": 50.917,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 57.333,
+                "p95_us": 60.375,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 67.541,
+                "p95_us": 68.0,
+                "query": "app missing"
+              }
+            ],
+            "rows": 1000,
+            "max_rss_bytes": 11190272
+          },
+          {
+            "backend": "nucleo",
+            "corpus": "apps",
+            "prepare_ms": 0.100625,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "6ffa2fe4d5ec3f9cee4f8a416cb4713cf1ea5e709a3483f73788ac29ab3897d5",
+                "level_checksum": 167664000,
+                "matches": 84,
+                "p50_us": 53.916,
+                "p95_us": 55.458,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3d8184519ebaacb6ab5db1ced1587c22d5a60dec8665951abe8b29930b6fa34",
+                "level_checksum": 83832000,
+                "matches": 84,
+                "p50_us": 67.292,
+                "p95_us": 71.334,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "c4d98581a3feb065940e16750a33ec89006285315fff022e9ba3caf79d544c86",
+                "level_checksum": 41916000,
+                "matches": 84,
+                "p50_us": 64.5,
+                "p95_us": 67.292,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 67.542,
+                "p95_us": 72.25,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 61.041,
+                "p95_us": 62.459,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 68.5,
+                "p95_us": 71.708,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 65.708,
+                "p95_us": 71.167,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 62.958,
+                "p95_us": 64.459,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 59.542,
+                "p95_us": 65.0,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 48.209,
+                "p95_us": 51.083,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 56.75,
+                "p95_us": 60.917,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 64.916,
+                "p95_us": 67.875,
+                "query": "app missing"
+              }
+            ],
+            "rows": 1000,
+            "max_rss_bytes": 11190272
+          },
+          {
+            "backend": "nucleo",
+            "corpus": "apps",
+            "prepare_ms": 0.108542,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "6ffa2fe4d5ec3f9cee4f8a416cb4713cf1ea5e709a3483f73788ac29ab3897d5",
+                "level_checksum": 167664000,
+                "matches": 84,
+                "p50_us": 54.875,
+                "p95_us": 57.75,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3d8184519ebaacb6ab5db1ced1587c22d5a60dec8665951abe8b29930b6fa34",
+                "level_checksum": 83832000,
+                "matches": 84,
+                "p50_us": 65.75,
+                "p95_us": 70.917,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "c4d98581a3feb065940e16750a33ec89006285315fff022e9ba3caf79d544c86",
+                "level_checksum": 41916000,
+                "matches": 84,
+                "p50_us": 61.791,
+                "p95_us": 65.208,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 69.75,
+                "p95_us": 72.625,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 62.625,
+                "p95_us": 65.708,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 70.959,
+                "p95_us": 73.834,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 67.459,
+                "p95_us": 70.541,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 59.833,
+                "p95_us": 62.75,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 60.917,
+                "p95_us": 62.5,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 46.167,
+                "p95_us": 48.125,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 57.833,
+                "p95_us": 59.666,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 66.333,
+                "p95_us": 69.25,
+                "query": "app missing"
+              }
+            ],
+            "rows": 1000,
+            "max_rss_bytes": 11190272
+          }
+        ],
+        "fuzzy": [
+          {
+            "backend": "fuzzy",
+            "corpus": "apps",
+            "prepare_ms": 0.12275,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "6ffa2fe4d5ec3f9cee4f8a416cb4713cf1ea5e709a3483f73788ac29ab3897d5",
+                "level_checksum": 167664000,
+                "matches": 84,
+                "p50_us": 62.083,
+                "p95_us": 65.708,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3d8184519ebaacb6ab5db1ced1587c22d5a60dec8665951abe8b29930b6fa34",
+                "level_checksum": 83832000,
+                "matches": 84,
+                "p50_us": 79.834,
+                "p95_us": 83.042,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "c4d98581a3feb065940e16750a33ec89006285315fff022e9ba3caf79d544c86",
+                "level_checksum": 41916000,
+                "matches": 84,
+                "p50_us": 70.667,
+                "p95_us": 74.583,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "39cbed9081865ecb31173a5f4edcd1641109509d46c643aae28f79f7b372e590",
+                "level_checksum": 209750000,
+                "matches": 335,
+                "p50_us": 84.709,
+                "p95_us": 89.333,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "c4d98581a3feb065940e16750a33ec89006285315fff022e9ba3caf79d544c86",
+                "level_checksum": 41916000,
+                "matches": 84,
+                "p50_us": 71.708,
+                "p95_us": 76.792,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 79.291,
+                "p95_us": 82.791,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 76.083,
+                "p95_us": 78.792,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 71.959,
+                "p95_us": 74.875,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 67.666,
+                "p95_us": 70.708,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 51.875,
+                "p95_us": 54.875,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 75.5,
+                "p95_us": 77.5,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 75.25,
+                "p95_us": 77.917,
+                "query": "app missing"
+              }
+            ],
+            "rows": 1000,
+            "max_rss_bytes": 11288576
+          },
+          {
+            "backend": "fuzzy",
+            "corpus": "apps",
+            "prepare_ms": 0.12575,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "6ffa2fe4d5ec3f9cee4f8a416cb4713cf1ea5e709a3483f73788ac29ab3897d5",
+                "level_checksum": 167664000,
+                "matches": 84,
+                "p50_us": 61.625,
+                "p95_us": 64.416,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3d8184519ebaacb6ab5db1ced1587c22d5a60dec8665951abe8b29930b6fa34",
+                "level_checksum": 83832000,
+                "matches": 84,
+                "p50_us": 79.792,
+                "p95_us": 85.833,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "c4d98581a3feb065940e16750a33ec89006285315fff022e9ba3caf79d544c86",
+                "level_checksum": 41916000,
+                "matches": 84,
+                "p50_us": 70.583,
+                "p95_us": 74.042,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "39cbed9081865ecb31173a5f4edcd1641109509d46c643aae28f79f7b372e590",
+                "level_checksum": 209750000,
+                "matches": 335,
+                "p50_us": 85.208,
+                "p95_us": 88.0,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "c4d98581a3feb065940e16750a33ec89006285315fff022e9ba3caf79d544c86",
+                "level_checksum": 41916000,
+                "matches": 84,
+                "p50_us": 74.875,
+                "p95_us": 77.917,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 79.125,
+                "p95_us": 82.666,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 78.166,
+                "p95_us": 79.917,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 71.417,
+                "p95_us": 74.041,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 70.75,
+                "p95_us": 71.584,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 53.583,
+                "p95_us": 56.292,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 73.625,
+                "p95_us": 75.584,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 75.167,
+                "p95_us": 78.167,
+                "query": "app missing"
+              }
+            ],
+            "rows": 1000,
+            "max_rss_bytes": 11272192
+          },
+          {
+            "backend": "fuzzy",
+            "corpus": "apps",
+            "prepare_ms": 0.12774999999999997,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "6ffa2fe4d5ec3f9cee4f8a416cb4713cf1ea5e709a3483f73788ac29ab3897d5",
+                "level_checksum": 167664000,
+                "matches": 84,
+                "p50_us": 61.917,
+                "p95_us": 65.709,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3d8184519ebaacb6ab5db1ced1587c22d5a60dec8665951abe8b29930b6fa34",
+                "level_checksum": 83832000,
+                "matches": 84,
+                "p50_us": 78.708,
+                "p95_us": 82.5,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "c4d98581a3feb065940e16750a33ec89006285315fff022e9ba3caf79d544c86",
+                "level_checksum": 41916000,
+                "matches": 84,
+                "p50_us": 70.375,
+                "p95_us": 74.417,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "39cbed9081865ecb31173a5f4edcd1641109509d46c643aae28f79f7b372e590",
+                "level_checksum": 209750000,
+                "matches": 335,
+                "p50_us": 86.958,
+                "p95_us": 91.583,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "c4d98581a3feb065940e16750a33ec89006285315fff022e9ba3caf79d544c86",
+                "level_checksum": 41916000,
+                "matches": 84,
+                "p50_us": 73.209,
+                "p95_us": 76.042,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "b2aafdda8298c29049bee09947580e5b788e8ddc8b1303ec9a23cb68e02d84f7",
+                "level_checksum": 84000000,
+                "matches": 84,
+                "p50_us": 78.167,
+                "p95_us": 83.084,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 76.375,
+                "p95_us": 78.708,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 70.917,
+                "p95_us": 73.584,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 72.792,
+                "p95_us": 74.333,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 55.084,
+                "p95_us": 58.0,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 74.791,
+                "p95_us": 77.208,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 79.792,
+                "p95_us": 84.834,
+                "query": "app missing"
+              }
+            ],
+            "rows": 1000,
+            "max_rss_bytes": 11272192
+          }
+        ]
+      }
+    },
+    {
+      "corpus": "apps",
+      "rows": 10000,
+      "samples": {
+        "legacy": [
+          {
+            "backend": "legacy",
+            "corpus": "apps",
+            "prepare_ms": 0.0,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "0ee53c6a5131f2066644ccd1f662053f77c53a44b9cc3d177fbf900082748917",
+                "level_checksum": 16676664000,
+                "matches": 834,
+                "p50_us": 1012.875,
+                "p95_us": 1070.208,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "cb5098f4f19546c586e9874549b9c5f0343f9f51bc2f68e9847fe27c3474a838",
+                "level_checksum": 8338332000,
+                "matches": 834,
+                "p50_us": 1165.167,
+                "p95_us": 1196.709,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e05d715b0a86881157ca07f09b7733f2fb673d97d04582051a52c72a8d6a6b8d",
+                "level_checksum": 4169166000,
+                "matches": 834,
+                "p50_us": 1100.041,
+                "p95_us": 1150.375,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 1164.625,
+                "p95_us": 1205.291,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1144.5,
+                "p95_us": 1192.709,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 1190.917,
+                "p95_us": 1258.0,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1192.542,
+                "p95_us": 1246.083,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1117.5,
+                "p95_us": 1175.5,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1110.333,
+                "p95_us": 1170.291,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1061.167,
+                "p95_us": 1131.375,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1068.958,
+                "p95_us": 1116.959,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1189.0,
+                "p95_us": 1239.625,
+                "query": "app missing"
+              }
+            ],
+            "rows": 10000,
+            "max_rss_bytes": 13205504
+          },
+          {
+            "backend": "legacy",
+            "corpus": "apps",
+            "prepare_ms": 4.1e-05,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "0ee53c6a5131f2066644ccd1f662053f77c53a44b9cc3d177fbf900082748917",
+                "level_checksum": 16676664000,
+                "matches": 834,
+                "p50_us": 1028.625,
+                "p95_us": 1068.125,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "cb5098f4f19546c586e9874549b9c5f0343f9f51bc2f68e9847fe27c3474a838",
+                "level_checksum": 8338332000,
+                "matches": 834,
+                "p50_us": 1173.583,
+                "p95_us": 1216.042,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e05d715b0a86881157ca07f09b7733f2fb673d97d04582051a52c72a8d6a6b8d",
+                "level_checksum": 4169166000,
+                "matches": 834,
+                "p50_us": 1104.083,
+                "p95_us": 1151.458,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 1165.958,
+                "p95_us": 1215.667,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1137.5,
+                "p95_us": 1209.458,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 1202.459,
+                "p95_us": 1233.667,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1195.209,
+                "p95_us": 1225.333,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1154.208,
+                "p95_us": 1205.625,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1105.417,
+                "p95_us": 1153.833,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1062.875,
+                "p95_us": 1101.5,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1059.333,
+                "p95_us": 1093.375,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1173.417,
+                "p95_us": 1230.333,
+                "query": "app missing"
+              }
+            ],
+            "rows": 10000,
+            "max_rss_bytes": 13205504
+          },
+          {
+            "backend": "legacy",
+            "corpus": "apps",
+            "prepare_ms": 4.2e-05,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "0ee53c6a5131f2066644ccd1f662053f77c53a44b9cc3d177fbf900082748917",
+                "level_checksum": 16676664000,
+                "matches": 834,
+                "p50_us": 989.875,
+                "p95_us": 1024.917,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "cb5098f4f19546c586e9874549b9c5f0343f9f51bc2f68e9847fe27c3474a838",
+                "level_checksum": 8338332000,
+                "matches": 834,
+                "p50_us": 1136.875,
+                "p95_us": 1194.625,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e05d715b0a86881157ca07f09b7733f2fb673d97d04582051a52c72a8d6a6b8d",
+                "level_checksum": 4169166000,
+                "matches": 834,
+                "p50_us": 1094.375,
+                "p95_us": 1128.333,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 1136.875,
+                "p95_us": 1167.125,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1129.125,
+                "p95_us": 1184.916,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 1193.333,
+                "p95_us": 1232.792,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1183.917,
+                "p95_us": 1224.625,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1100.625,
+                "p95_us": 1170.417,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1086.792,
+                "p95_us": 1133.542,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1053.583,
+                "p95_us": 1094.417,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1048.792,
+                "p95_us": 1095.209,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 1153.125,
+                "p95_us": 1205.416,
+                "query": "app missing"
+              }
+            ],
+            "rows": 10000,
+            "max_rss_bytes": 13205504
+          }
+        ],
+        "existing": [
+          {
+            "backend": "existing",
+            "corpus": "apps",
+            "prepare_ms": 4.1e-05,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "0ee53c6a5131f2066644ccd1f662053f77c53a44b9cc3d177fbf900082748917",
+                "level_checksum": 16676664000,
+                "matches": 834,
+                "p50_us": 463.291,
+                "p95_us": 494.959,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "cb5098f4f19546c586e9874549b9c5f0343f9f51bc2f68e9847fe27c3474a838",
+                "level_checksum": 8338332000,
+                "matches": 834,
+                "p50_us": 612.791,
+                "p95_us": 674.959,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e05d715b0a86881157ca07f09b7733f2fb673d97d04582051a52c72a8d6a6b8d",
+                "level_checksum": 4169166000,
+                "matches": 834,
+                "p50_us": 535.75,
+                "p95_us": 558.583,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 621.834,
+                "p95_us": 645.417,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 571.916,
+                "p95_us": 605.416,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 605.208,
+                "p95_us": 639.75,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 604.375,
+                "p95_us": 639.875,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 535.792,
+                "p95_us": 564.833,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 514.917,
+                "p95_us": 537.75,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 468.417,
+                "p95_us": 495.667,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 477.542,
+                "p95_us": 508.375,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 587.833,
+                "p95_us": 611.333,
+                "query": "app missing"
+              }
+            ],
+            "rows": 10000,
+            "max_rss_bytes": 13205504
+          },
+          {
+            "backend": "existing",
+            "corpus": "apps",
+            "prepare_ms": 4.2e-05,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "0ee53c6a5131f2066644ccd1f662053f77c53a44b9cc3d177fbf900082748917",
+                "level_checksum": 16676664000,
+                "matches": 834,
+                "p50_us": 474.541,
+                "p95_us": 502.417,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "cb5098f4f19546c586e9874549b9c5f0343f9f51bc2f68e9847fe27c3474a838",
+                "level_checksum": 8338332000,
+                "matches": 834,
+                "p50_us": 594.166,
+                "p95_us": 626.0,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e05d715b0a86881157ca07f09b7733f2fb673d97d04582051a52c72a8d6a6b8d",
+                "level_checksum": 4169166000,
+                "matches": 834,
+                "p50_us": 527.084,
+                "p95_us": 557.417,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 626.0,
+                "p95_us": 653.917,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 566.959,
+                "p95_us": 593.416,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 635.042,
+                "p95_us": 658.417,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 612.833,
+                "p95_us": 635.333,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 550.292,
+                "p95_us": 600.333,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 528.5,
+                "p95_us": 553.25,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 483.333,
+                "p95_us": 511.333,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 505.041,
+                "p95_us": 529.667,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 617.5,
+                "p95_us": 636.542,
+                "query": "app missing"
+              }
+            ],
+            "rows": 10000,
+            "max_rss_bytes": 13172736
+          },
+          {
+            "backend": "existing",
+            "corpus": "apps",
+            "prepare_ms": 4.1e-05,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "0ee53c6a5131f2066644ccd1f662053f77c53a44b9cc3d177fbf900082748917",
+                "level_checksum": 16676664000,
+                "matches": 834,
+                "p50_us": 485.583,
+                "p95_us": 507.541,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "cb5098f4f19546c586e9874549b9c5f0343f9f51bc2f68e9847fe27c3474a838",
+                "level_checksum": 8338332000,
+                "matches": 834,
+                "p50_us": 612.333,
+                "p95_us": 641.292,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e05d715b0a86881157ca07f09b7733f2fb673d97d04582051a52c72a8d6a6b8d",
+                "level_checksum": 4169166000,
+                "matches": 834,
+                "p50_us": 543.791,
+                "p95_us": 565.167,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 635.042,
+                "p95_us": 662.417,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 558.584,
+                "p95_us": 743.916,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 668.5,
+                "p95_us": 712.0,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 614.417,
+                "p95_us": 646.375,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 546.958,
+                "p95_us": 598.625,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 543.417,
+                "p95_us": 567.875,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 487.291,
+                "p95_us": 518.208,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 484.5,
+                "p95_us": 522.042,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 590.625,
+                "p95_us": 619.5,
+                "query": "app missing"
+              }
+            ],
+            "rows": 10000,
+            "max_rss_bytes": 13139968
+          }
+        ],
+        "prepared": [
+          {
+            "backend": "prepared",
+            "corpus": "apps",
+            "prepare_ms": 0.772458,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "0ee53c6a5131f2066644ccd1f662053f77c53a44b9cc3d177fbf900082748917",
+                "level_checksum": 16676664000,
+                "matches": 834,
+                "p50_us": 471.708,
+                "p95_us": 491.125,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "cb5098f4f19546c586e9874549b9c5f0343f9f51bc2f68e9847fe27c3474a838",
+                "level_checksum": 8338332000,
+                "matches": 834,
+                "p50_us": 594.041,
+                "p95_us": 636.208,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e05d715b0a86881157ca07f09b7733f2fb673d97d04582051a52c72a8d6a6b8d",
+                "level_checksum": 4169166000,
+                "matches": 834,
+                "p50_us": 502.167,
+                "p95_us": 541.334,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 597.334,
+                "p95_us": 646.458,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 547.291,
+                "p95_us": 570.792,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 602.833,
+                "p95_us": 623.0,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 574.208,
+                "p95_us": 599.208,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 527.125,
+                "p95_us": 569.583,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 514.209,
+                "p95_us": 537.166,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 462.708,
+                "p95_us": 483.167,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 461.042,
+                "p95_us": 491.834,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 572.917,
+                "p95_us": 607.083,
+                "query": "app missing"
+              }
+            ],
+            "rows": 10000,
+            "max_rss_bytes": 15532032
+          },
+          {
+            "backend": "prepared",
+            "corpus": "apps",
+            "prepare_ms": 0.74,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "0ee53c6a5131f2066644ccd1f662053f77c53a44b9cc3d177fbf900082748917",
+                "level_checksum": 16676664000,
+                "matches": 834,
+                "p50_us": 452.75,
+                "p95_us": 483.958,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "cb5098f4f19546c586e9874549b9c5f0343f9f51bc2f68e9847fe27c3474a838",
+                "level_checksum": 8338332000,
+                "matches": 834,
+                "p50_us": 598.416,
+                "p95_us": 637.541,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e05d715b0a86881157ca07f09b7733f2fb673d97d04582051a52c72a8d6a6b8d",
+                "level_checksum": 4169166000,
+                "matches": 834,
+                "p50_us": 525.625,
+                "p95_us": 555.417,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 615.958,
+                "p95_us": 652.042,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 582.875,
+                "p95_us": 610.708,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 619.875,
+                "p95_us": 670.208,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 590.916,
+                "p95_us": 625.25,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 540.667,
+                "p95_us": 572.25,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 527.375,
+                "p95_us": 566.041,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 467.416,
+                "p95_us": 512.25,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 467.084,
+                "p95_us": 483.625,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 568.416,
+                "p95_us": 590.917,
+                "query": "app missing"
+              }
+            ],
+            "rows": 10000,
+            "max_rss_bytes": 15532032
+          },
+          {
+            "backend": "prepared",
+            "corpus": "apps",
+            "prepare_ms": 0.7487499999999999,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "0ee53c6a5131f2066644ccd1f662053f77c53a44b9cc3d177fbf900082748917",
+                "level_checksum": 16676664000,
+                "matches": 834,
+                "p50_us": 467.125,
+                "p95_us": 491.083,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "cb5098f4f19546c586e9874549b9c5f0343f9f51bc2f68e9847fe27c3474a838",
+                "level_checksum": 8338332000,
+                "matches": 834,
+                "p50_us": 596.583,
+                "p95_us": 635.417,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e05d715b0a86881157ca07f09b7733f2fb673d97d04582051a52c72a8d6a6b8d",
+                "level_checksum": 4169166000,
+                "matches": 834,
+                "p50_us": 510.792,
+                "p95_us": 550.417,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 643.0,
+                "p95_us": 666.583,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 581.583,
+                "p95_us": 609.625,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 638.75,
+                "p95_us": 666.75,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 585.084,
+                "p95_us": 615.25,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 539.959,
+                "p95_us": 579.417,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 547.125,
+                "p95_us": 572.0,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 478.084,
+                "p95_us": 500.958,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 480.833,
+                "p95_us": 505.167,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 594.916,
+                "p95_us": 625.125,
+                "query": "app missing"
+              }
+            ],
+            "rows": 10000,
+            "max_rss_bytes": 15532032
+          }
+        ],
+        "nucleo": [
+          {
+            "backend": "nucleo",
+            "corpus": "apps",
+            "prepare_ms": 0.975792,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "0ee53c6a5131f2066644ccd1f662053f77c53a44b9cc3d177fbf900082748917",
+                "level_checksum": 16676664000,
+                "matches": 834,
+                "p50_us": 534.25,
+                "p95_us": 565.625,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "cb5098f4f19546c586e9874549b9c5f0343f9f51bc2f68e9847fe27c3474a838",
+                "level_checksum": 8338332000,
+                "matches": 834,
+                "p50_us": 684.833,
+                "p95_us": 723.25,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e05d715b0a86881157ca07f09b7733f2fb673d97d04582051a52c72a8d6a6b8d",
+                "level_checksum": 4169166000,
+                "matches": 834,
+                "p50_us": 651.917,
+                "p95_us": 670.625,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 680.959,
+                "p95_us": 725.666,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 650.959,
+                "p95_us": 691.875,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 729.583,
+                "p95_us": 760.791,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 686.667,
+                "p95_us": 713.792,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 620.708,
+                "p95_us": 650.167,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 640.375,
+                "p95_us": 655.25,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 510.209,
+                "p95_us": 533.709,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 593.167,
+                "p95_us": 613.25,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 675.25,
+                "p95_us": 703.375,
+                "query": "app missing"
+              }
+            ],
+            "rows": 10000,
+            "max_rss_bytes": 16007168
+          },
+          {
+            "backend": "nucleo",
+            "corpus": "apps",
+            "prepare_ms": 0.939709,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "0ee53c6a5131f2066644ccd1f662053f77c53a44b9cc3d177fbf900082748917",
+                "level_checksum": 16676664000,
+                "matches": 834,
+                "p50_us": 546.625,
+                "p95_us": 569.875,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "cb5098f4f19546c586e9874549b9c5f0343f9f51bc2f68e9847fe27c3474a838",
+                "level_checksum": 8338332000,
+                "matches": 834,
+                "p50_us": 698.417,
+                "p95_us": 732.875,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e05d715b0a86881157ca07f09b7733f2fb673d97d04582051a52c72a8d6a6b8d",
+                "level_checksum": 4169166000,
+                "matches": 834,
+                "p50_us": 648.209,
+                "p95_us": 664.625,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 701.833,
+                "p95_us": 731.291,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 659.542,
+                "p95_us": 696.75,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 742.959,
+                "p95_us": 766.75,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 714.0,
+                "p95_us": 744.875,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 642.5,
+                "p95_us": 663.834,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 649.708,
+                "p95_us": 668.541,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 511.625,
+                "p95_us": 535.0,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 597.167,
+                "p95_us": 616.25,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 688.792,
+                "p95_us": 716.792,
+                "query": "app missing"
+              }
+            ],
+            "rows": 10000,
+            "max_rss_bytes": 15990784
+          },
+          {
+            "backend": "nucleo",
+            "corpus": "apps",
+            "prepare_ms": 0.9416249999999999,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "0ee53c6a5131f2066644ccd1f662053f77c53a44b9cc3d177fbf900082748917",
+                "level_checksum": 16676664000,
+                "matches": 834,
+                "p50_us": 553.542,
+                "p95_us": 567.875,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "cb5098f4f19546c586e9874549b9c5f0343f9f51bc2f68e9847fe27c3474a838",
+                "level_checksum": 8338332000,
+                "matches": 834,
+                "p50_us": 705.916,
+                "p95_us": 726.75,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e05d715b0a86881157ca07f09b7733f2fb673d97d04582051a52c72a8d6a6b8d",
+                "level_checksum": 4169166000,
+                "matches": 834,
+                "p50_us": 646.625,
+                "p95_us": 677.792,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 690.875,
+                "p95_us": 727.458,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 650.584,
+                "p95_us": 695.708,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 717.708,
+                "p95_us": 769.041,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 720.084,
+                "p95_us": 734.541,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 637.584,
+                "p95_us": 655.292,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 643.792,
+                "p95_us": 665.792,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 525.834,
+                "p95_us": 544.792,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 599.375,
+                "p95_us": 614.625,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 689.125,
+                "p95_us": 721.667,
+                "query": "app missing"
+              }
+            ],
+            "rows": 10000,
+            "max_rss_bytes": 16023552
+          }
+        ],
+        "fuzzy": [
+          {
+            "backend": "fuzzy",
+            "corpus": "apps",
+            "prepare_ms": 1.228458,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "0ee53c6a5131f2066644ccd1f662053f77c53a44b9cc3d177fbf900082748917",
+                "level_checksum": 16676664000,
+                "matches": 834,
+                "p50_us": 635.75,
+                "p95_us": 670.875,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "cb5098f4f19546c586e9874549b9c5f0343f9f51bc2f68e9847fe27c3474a838",
+                "level_checksum": 8338332000,
+                "matches": 834,
+                "p50_us": 811.667,
+                "p95_us": 845.583,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e05d715b0a86881157ca07f09b7733f2fb673d97d04582051a52c72a8d6a6b8d",
+                "level_checksum": 4169166000,
+                "matches": 834,
+                "p50_us": 725.666,
+                "p95_us": 746.083,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "6481c5fb61040fdbf64bf80dd80fe13b0b3059936c5d49e2eb8a3f8e1e96177a",
+                "level_checksum": 20847500000,
+                "matches": 3335,
+                "p50_us": 853.5,
+                "p95_us": 877.291,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e05d715b0a86881157ca07f09b7733f2fb673d97d04582051a52c72a8d6a6b8d",
+                "level_checksum": 4169166000,
+                "matches": 834,
+                "p50_us": 795.167,
+                "p95_us": 847.792,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 809.083,
+                "p95_us": 844.333,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 793.416,
+                "p95_us": 829.375,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 742.458,
+                "p95_us": 769.375,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 725.167,
+                "p95_us": 746.791,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 547.625,
+                "p95_us": 564.625,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 750.333,
+                "p95_us": 774.5,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 786.917,
+                "p95_us": 823.416,
+                "query": "app missing"
+              }
+            ],
+            "rows": 10000,
+            "max_rss_bytes": 16252928
+          },
+          {
+            "backend": "fuzzy",
+            "corpus": "apps",
+            "prepare_ms": 1.145,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "0ee53c6a5131f2066644ccd1f662053f77c53a44b9cc3d177fbf900082748917",
+                "level_checksum": 16676664000,
+                "matches": 834,
+                "p50_us": 637.625,
+                "p95_us": 658.708,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "cb5098f4f19546c586e9874549b9c5f0343f9f51bc2f68e9847fe27c3474a838",
+                "level_checksum": 8338332000,
+                "matches": 834,
+                "p50_us": 802.583,
+                "p95_us": 841.375,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e05d715b0a86881157ca07f09b7733f2fb673d97d04582051a52c72a8d6a6b8d",
+                "level_checksum": 4169166000,
+                "matches": 834,
+                "p50_us": 720.541,
+                "p95_us": 745.083,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "6481c5fb61040fdbf64bf80dd80fe13b0b3059936c5d49e2eb8a3f8e1e96177a",
+                "level_checksum": 20847500000,
+                "matches": 3335,
+                "p50_us": 853.833,
+                "p95_us": 898.542,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e05d715b0a86881157ca07f09b7733f2fb673d97d04582051a52c72a8d6a6b8d",
+                "level_checksum": 4169166000,
+                "matches": 834,
+                "p50_us": 788.834,
+                "p95_us": 819.042,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 810.042,
+                "p95_us": 839.875,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 788.459,
+                "p95_us": 809.167,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 740.416,
+                "p95_us": 763.125,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 720.667,
+                "p95_us": 746.792,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 552.375,
+                "p95_us": 570.458,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 754.709,
+                "p95_us": 781.334,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 779.417,
+                "p95_us": 808.875,
+                "query": "app missing"
+              }
+            ],
+            "rows": 10000,
+            "max_rss_bytes": 16220160
+          },
+          {
+            "backend": "fuzzy",
+            "corpus": "apps",
+            "prepare_ms": 1.2064160000000002,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "0ee53c6a5131f2066644ccd1f662053f77c53a44b9cc3d177fbf900082748917",
+                "level_checksum": 16676664000,
+                "matches": 834,
+                "p50_us": 621.792,
+                "p95_us": 656.666,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "cb5098f4f19546c586e9874549b9c5f0343f9f51bc2f68e9847fe27c3474a838",
+                "level_checksum": 8338332000,
+                "matches": 834,
+                "p50_us": 831.625,
+                "p95_us": 859.917,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e05d715b0a86881157ca07f09b7733f2fb673d97d04582051a52c72a8d6a6b8d",
+                "level_checksum": 4169166000,
+                "matches": 834,
+                "p50_us": 721.583,
+                "p95_us": 746.125,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "6481c5fb61040fdbf64bf80dd80fe13b0b3059936c5d49e2eb8a3f8e1e96177a",
+                "level_checksum": 20847500000,
+                "matches": 3335,
+                "p50_us": 852.5,
+                "p95_us": 876.25,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e05d715b0a86881157ca07f09b7733f2fb673d97d04582051a52c72a8d6a6b8d",
+                "level_checksum": 4169166000,
+                "matches": 834,
+                "p50_us": 789.833,
+                "p95_us": 825.292,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "52a57e8d68802e0f85145d21b4363ef3abdd0fafae8e72b46cecb3fa9176cd3e",
+                "level_checksum": 8340000000,
+                "matches": 834,
+                "p50_us": 803.833,
+                "p95_us": 824.958,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 808.292,
+                "p95_us": 823.916,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 750.0,
+                "p95_us": 776.167,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 721.625,
+                "p95_us": 752.167,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 559.667,
+                "p95_us": 575.083,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 753.334,
+                "p95_us": 775.083,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 790.584,
+                "p95_us": 812.0,
+                "query": "app missing"
+              }
+            ],
+            "rows": 10000,
+            "max_rss_bytes": 16220160
+          }
+        ]
+      }
+    },
+    {
+      "corpus": "actions",
+      "rows": 2000,
+      "samples": {
+        "legacy": [
+          {
+            "backend": "legacy",
+            "corpus": "actions",
+            "prepare_ms": 0.0,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 357.0,
+                "p95_us": 374.291,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 421.583,
+                "p95_us": 439.041,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 360.666,
+                "p95_us": 371.834,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "75a86a8bb87fc11ed0fc44246f0c044cd97eb83b1ac46ee63097b40fe6f7c77c",
+                "level_checksum": 1604682000,
+                "matches": 802,
+                "p50_us": 362.041,
+                "p95_us": 382.292,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 392.667,
+                "p95_us": 405.167,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 419.333,
+                "p95_us": 446.833,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "ac8c1644b4b7c7cbd35f67a70e5d5ba049735dad9fda5b0282a2cf9f4ed56f10",
+                "level_checksum": 270546000,
+                "matches": 134,
+                "p50_us": 416.166,
+                "p95_us": 433.791,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "b0e67f3db7fb5355c1c38d4ee6951ee3f19030102312ef80d45440579a876314",
+                "level_checksum": 134268000,
+                "matches": 67,
+                "p50_us": 371.125,
+                "p95_us": 392.958,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 367.459,
+                "p95_us": 382.792,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 357.166,
+                "p95_us": 371.875,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 341.084,
+                "p95_us": 352.042,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 397.583,
+                "p95_us": 411.417,
+                "query": "app missing"
+              }
+            ],
+            "rows": 2000,
+            "max_rss_bytes": 11878400
+          },
+          {
+            "backend": "legacy",
+            "corpus": "actions",
+            "prepare_ms": 0.0,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 357.166,
+                "p95_us": 369.708,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 423.834,
+                "p95_us": 434.5,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 369.584,
+                "p95_us": 379.542,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "75a86a8bb87fc11ed0fc44246f0c044cd97eb83b1ac46ee63097b40fe6f7c77c",
+                "level_checksum": 1604682000,
+                "matches": 802,
+                "p50_us": 360.083,
+                "p95_us": 378.792,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 390.375,
+                "p95_us": 408.833,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 422.375,
+                "p95_us": 443.166,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "ac8c1644b4b7c7cbd35f67a70e5d5ba049735dad9fda5b0282a2cf9f4ed56f10",
+                "level_checksum": 270546000,
+                "matches": 134,
+                "p50_us": 405.292,
+                "p95_us": 425.834,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "b0e67f3db7fb5355c1c38d4ee6951ee3f19030102312ef80d45440579a876314",
+                "level_checksum": 134268000,
+                "matches": 67,
+                "p50_us": 382.125,
+                "p95_us": 411.417,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 371.75,
+                "p95_us": 380.959,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 362.417,
+                "p95_us": 376.833,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 351.042,
+                "p95_us": 365.083,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 392.458,
+                "p95_us": 421.167,
+                "query": "app missing"
+              }
+            ],
+            "rows": 2000,
+            "max_rss_bytes": 11862016
+          },
+          {
+            "backend": "legacy",
+            "corpus": "actions",
+            "prepare_ms": 4.2e-05,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 359.292,
+                "p95_us": 374.667,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 419.625,
+                "p95_us": 438.958,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 369.458,
+                "p95_us": 390.042,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "75a86a8bb87fc11ed0fc44246f0c044cd97eb83b1ac46ee63097b40fe6f7c77c",
+                "level_checksum": 1604682000,
+                "matches": 802,
+                "p50_us": 354.666,
+                "p95_us": 374.958,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 378.875,
+                "p95_us": 395.459,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 413.5,
+                "p95_us": 444.75,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "ac8c1644b4b7c7cbd35f67a70e5d5ba049735dad9fda5b0282a2cf9f4ed56f10",
+                "level_checksum": 270546000,
+                "matches": 134,
+                "p50_us": 401.375,
+                "p95_us": 419.792,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "b0e67f3db7fb5355c1c38d4ee6951ee3f19030102312ef80d45440579a876314",
+                "level_checksum": 134268000,
+                "matches": 67,
+                "p50_us": 369.625,
+                "p95_us": 378.917,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 371.417,
+                "p95_us": 383.0,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 357.542,
+                "p95_us": 369.541,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 347.416,
+                "p95_us": 356.458,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 396.083,
+                "p95_us": 409.5,
+                "query": "app missing"
+              }
+            ],
+            "rows": 2000,
+            "max_rss_bytes": 11878400
+          }
+        ],
+        "existing": [
+          {
+            "backend": "existing",
+            "corpus": "actions",
+            "prepare_ms": 4.2e-05,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 169.0,
+                "p95_us": 185.667,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 248.542,
+                "p95_us": 258.25,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 190.25,
+                "p95_us": 195.792,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "75a86a8bb87fc11ed0fc44246f0c044cd97eb83b1ac46ee63097b40fe6f7c77c",
+                "level_checksum": 1604682000,
+                "matches": 802,
+                "p50_us": 215.917,
+                "p95_us": 228.834,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 198.208,
+                "p95_us": 209.25,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 233.709,
+                "p95_us": 251.834,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "ac8c1644b4b7c7cbd35f67a70e5d5ba049735dad9fda5b0282a2cf9f4ed56f10",
+                "level_checksum": 270546000,
+                "matches": 134,
+                "p50_us": 222.667,
+                "p95_us": 233.0,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "b0e67f3db7fb5355c1c38d4ee6951ee3f19030102312ef80d45440579a876314",
+                "level_checksum": 134268000,
+                "matches": 67,
+                "p50_us": 194.458,
+                "p95_us": 210.041,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 182.208,
+                "p95_us": 200.125,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 181.209,
+                "p95_us": 193.625,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 169.792,
+                "p95_us": 181.625,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 226.709,
+                "p95_us": 241.167,
+                "query": "app missing"
+              }
+            ],
+            "rows": 2000,
+            "max_rss_bytes": 11780096
+          },
+          {
+            "backend": "existing",
+            "corpus": "actions",
+            "prepare_ms": 4.1e-05,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 168.292,
+                "p95_us": 184.167,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 232.708,
+                "p95_us": 244.167,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 180.375,
+                "p95_us": 186.416,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "75a86a8bb87fc11ed0fc44246f0c044cd97eb83b1ac46ee63097b40fe6f7c77c",
+                "level_checksum": 1604682000,
+                "matches": 802,
+                "p50_us": 211.458,
+                "p95_us": 224.917,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 193.708,
+                "p95_us": 204.916,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 239.667,
+                "p95_us": 256.208,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "ac8c1644b4b7c7cbd35f67a70e5d5ba049735dad9fda5b0282a2cf9f4ed56f10",
+                "level_checksum": 270546000,
+                "matches": 134,
+                "p50_us": 224.583,
+                "p95_us": 235.292,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "b0e67f3db7fb5355c1c38d4ee6951ee3f19030102312ef80d45440579a876314",
+                "level_checksum": 134268000,
+                "matches": 67,
+                "p50_us": 194.167,
+                "p95_us": 219.708,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 186.75,
+                "p95_us": 198.625,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 172.667,
+                "p95_us": 179.208,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 172.917,
+                "p95_us": 180.042,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 216.167,
+                "p95_us": 237.333,
+                "query": "app missing"
+              }
+            ],
+            "rows": 2000,
+            "max_rss_bytes": 11763712
+          },
+          {
+            "backend": "existing",
+            "corpus": "actions",
+            "prepare_ms": 4.1e-05,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 176.208,
+                "p95_us": 187.084,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 232.959,
+                "p95_us": 248.333,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 182.542,
+                "p95_us": 193.75,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "75a86a8bb87fc11ed0fc44246f0c044cd97eb83b1ac46ee63097b40fe6f7c77c",
+                "level_checksum": 1604682000,
+                "matches": 802,
+                "p50_us": 217.583,
+                "p95_us": 227.917,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 200.875,
+                "p95_us": 212.0,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 232.625,
+                "p95_us": 246.542,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "ac8c1644b4b7c7cbd35f67a70e5d5ba049735dad9fda5b0282a2cf9f4ed56f10",
+                "level_checksum": 270546000,
+                "matches": 134,
+                "p50_us": 233.292,
+                "p95_us": 246.875,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "b0e67f3db7fb5355c1c38d4ee6951ee3f19030102312ef80d45440579a876314",
+                "level_checksum": 134268000,
+                "matches": 67,
+                "p50_us": 211.75,
+                "p95_us": 269.625,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 183.5,
+                "p95_us": 192.084,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 191.0,
+                "p95_us": 194.75,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 174.375,
+                "p95_us": 218.75,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 267.75,
+                "p95_us": 279.708,
+                "query": "app missing"
+              }
+            ],
+            "rows": 2000,
+            "max_rss_bytes": 11730944
+          }
+        ],
+        "prepared": [
+          {
+            "backend": "prepared",
+            "corpus": "actions",
+            "prepare_ms": 0.22945800000000002,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 175.041,
+                "p95_us": 188.417,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 249.0,
+                "p95_us": 261.666,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 188.5,
+                "p95_us": 197.125,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "75a86a8bb87fc11ed0fc44246f0c044cd97eb83b1ac46ee63097b40fe6f7c77c",
+                "level_checksum": 1604682000,
+                "matches": 802,
+                "p50_us": 218.5,
+                "p95_us": 235.458,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 201.166,
+                "p95_us": 217.084,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 236.125,
+                "p95_us": 266.792,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "ac8c1644b4b7c7cbd35f67a70e5d5ba049735dad9fda5b0282a2cf9f4ed56f10",
+                "level_checksum": 270546000,
+                "matches": 134,
+                "p50_us": 231.167,
+                "p95_us": 244.25,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "b0e67f3db7fb5355c1c38d4ee6951ee3f19030102312ef80d45440579a876314",
+                "level_checksum": 134268000,
+                "matches": 67,
+                "p50_us": 192.375,
+                "p95_us": 206.291,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 183.042,
+                "p95_us": 197.625,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 171.708,
+                "p95_us": 183.959,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 157.041,
+                "p95_us": 172.708,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 236.042,
+                "p95_us": 240.209,
+                "query": "app missing"
+              }
+            ],
+            "rows": 2000,
+            "max_rss_bytes": 12582912
+          },
+          {
+            "backend": "prepared",
+            "corpus": "actions",
+            "prepare_ms": 0.2215,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 165.75,
+                "p95_us": 183.0,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 245.875,
+                "p95_us": 260.584,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 174.083,
+                "p95_us": 196.834,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "75a86a8bb87fc11ed0fc44246f0c044cd97eb83b1ac46ee63097b40fe6f7c77c",
+                "level_checksum": 1604682000,
+                "matches": 802,
+                "p50_us": 212.0,
+                "p95_us": 223.375,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 206.959,
+                "p95_us": 217.5,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 247.542,
+                "p95_us": 260.958,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "ac8c1644b4b7c7cbd35f67a70e5d5ba049735dad9fda5b0282a2cf9f4ed56f10",
+                "level_checksum": 270546000,
+                "matches": 134,
+                "p50_us": 224.75,
+                "p95_us": 234.458,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "b0e67f3db7fb5355c1c38d4ee6951ee3f19030102312ef80d45440579a876314",
+                "level_checksum": 134268000,
+                "matches": 67,
+                "p50_us": 190.416,
+                "p95_us": 205.0,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 181.042,
+                "p95_us": 187.708,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 164.792,
+                "p95_us": 177.833,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 156.25,
+                "p95_us": 164.5,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 208.542,
+                "p95_us": 223.125,
+                "query": "app missing"
+              }
+            ],
+            "rows": 2000,
+            "max_rss_bytes": 12615680
+          },
+          {
+            "backend": "prepared",
+            "corpus": "actions",
+            "prepare_ms": 0.225,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 170.541,
+                "p95_us": 178.292,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 234.0,
+                "p95_us": 249.958,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 175.042,
+                "p95_us": 184.583,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "75a86a8bb87fc11ed0fc44246f0c044cd97eb83b1ac46ee63097b40fe6f7c77c",
+                "level_checksum": 1604682000,
+                "matches": 802,
+                "p50_us": 212.583,
+                "p95_us": 225.583,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 190.834,
+                "p95_us": 197.667,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 235.625,
+                "p95_us": 247.542,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "ac8c1644b4b7c7cbd35f67a70e5d5ba049735dad9fda5b0282a2cf9f4ed56f10",
+                "level_checksum": 270546000,
+                "matches": 134,
+                "p50_us": 220.416,
+                "p95_us": 238.083,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "b0e67f3db7fb5355c1c38d4ee6951ee3f19030102312ef80d45440579a876314",
+                "level_checksum": 134268000,
+                "matches": 67,
+                "p50_us": 184.666,
+                "p95_us": 194.584,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 174.958,
+                "p95_us": 183.084,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 164.334,
+                "p95_us": 171.25,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 160.083,
+                "p95_us": 170.916,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 206.833,
+                "p95_us": 219.416,
+                "query": "app missing"
+              }
+            ],
+            "rows": 2000,
+            "max_rss_bytes": 12632064
+          }
+        ],
+        "nucleo": [
+          {
+            "backend": "nucleo",
+            "corpus": "actions",
+            "prepare_ms": 0.330042,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 211.125,
+                "p95_us": 218.167,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 242.917,
+                "p95_us": 252.375,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 214.875,
+                "p95_us": 226.709,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "75a86a8bb87fc11ed0fc44246f0c044cd97eb83b1ac46ee63097b40fe6f7c77c",
+                "level_checksum": 1604682000,
+                "matches": 802,
+                "p50_us": 210.209,
+                "p95_us": 221.75,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 224.333,
+                "p95_us": 231.625,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 245.333,
+                "p95_us": 254.208,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "ac8c1644b4b7c7cbd35f67a70e5d5ba049735dad9fda5b0282a2cf9f4ed56f10",
+                "level_checksum": 270546000,
+                "matches": 134,
+                "p50_us": 230.416,
+                "p95_us": 240.084,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "b0e67f3db7fb5355c1c38d4ee6951ee3f19030102312ef80d45440579a876314",
+                "level_checksum": 134268000,
+                "matches": 67,
+                "p50_us": 234.708,
+                "p95_us": 243.666,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 219.0,
+                "p95_us": 230.375,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 185.875,
+                "p95_us": 197.0,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 203.25,
+                "p95_us": 209.208,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 222.792,
+                "p95_us": 229.458,
+                "query": "app missing"
+              }
+            ],
+            "rows": 2000,
+            "max_rss_bytes": 12779520
+          },
+          {
+            "backend": "nucleo",
+            "corpus": "actions",
+            "prepare_ms": 0.322917,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 210.458,
+                "p95_us": 220.75,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 256.125,
+                "p95_us": 285.75,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 244.208,
+                "p95_us": 260.208,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "75a86a8bb87fc11ed0fc44246f0c044cd97eb83b1ac46ee63097b40fe6f7c77c",
+                "level_checksum": 1604682000,
+                "matches": 802,
+                "p50_us": 223.292,
+                "p95_us": 250.5,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 267.5,
+                "p95_us": 287.583,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 276.5,
+                "p95_us": 290.667,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "ac8c1644b4b7c7cbd35f67a70e5d5ba049735dad9fda5b0282a2cf9f4ed56f10",
+                "level_checksum": 270546000,
+                "matches": 134,
+                "p50_us": 261.5,
+                "p95_us": 268.5,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "b0e67f3db7fb5355c1c38d4ee6951ee3f19030102312ef80d45440579a876314",
+                "level_checksum": 134268000,
+                "matches": 67,
+                "p50_us": 265.125,
+                "p95_us": 274.833,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 231.583,
+                "p95_us": 269.542,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 220.625,
+                "p95_us": 234.791,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 215.792,
+                "p95_us": 235.958,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 245.125,
+                "p95_us": 267.416,
+                "query": "app missing"
+              }
+            ],
+            "rows": 2000,
+            "max_rss_bytes": 12763136
+          },
+          {
+            "backend": "nucleo",
+            "corpus": "actions",
+            "prepare_ms": 0.303709,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 211.209,
+                "p95_us": 221.25,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 243.125,
+                "p95_us": 250.083,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 214.125,
+                "p95_us": 225.75,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "75a86a8bb87fc11ed0fc44246f0c044cd97eb83b1ac46ee63097b40fe6f7c77c",
+                "level_checksum": 1604682000,
+                "matches": 802,
+                "p50_us": 210.459,
+                "p95_us": 222.291,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 226.0,
+                "p95_us": 237.709,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 245.0,
+                "p95_us": 253.083,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "ac8c1644b4b7c7cbd35f67a70e5d5ba049735dad9fda5b0282a2cf9f4ed56f10",
+                "level_checksum": 270546000,
+                "matches": 134,
+                "p50_us": 232.625,
+                "p95_us": 238.625,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "b0e67f3db7fb5355c1c38d4ee6951ee3f19030102312ef80d45440579a876314",
+                "level_checksum": 134268000,
+                "matches": 67,
+                "p50_us": 234.0,
+                "p95_us": 244.042,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 219.375,
+                "p95_us": 227.334,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 175.167,
+                "p95_us": 190.75,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 201.667,
+                "p95_us": 207.708,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 222.333,
+                "p95_us": 230.25,
+                "query": "app missing"
+              }
+            ],
+            "rows": 2000,
+            "max_rss_bytes": 12828672
+          }
+        ],
+        "fuzzy": [
+          {
+            "backend": "fuzzy",
+            "corpus": "actions",
+            "prepare_ms": 0.36691700000000005,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 246.875,
+                "p95_us": 262.041,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "40c1887c4be579c34509a70d02acff54633c225a6d2cbf7b0f8f4094dfdbe1c8",
+                "level_checksum": 133799000,
+                "matches": 134,
+                "p50_us": 292.167,
+                "p95_us": 308.209,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 249.625,
+                "p95_us": 260.0,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "74709d7d2885ce787b32359b1538623bce0c4e74b34b8af114fba46e89d1ea58",
+                "level_checksum": 1870075000,
+                "matches": 1069,
+                "p50_us": 235.25,
+                "p95_us": 239.917,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 264.75,
+                "p95_us": 273.084,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 283.167,
+                "p95_us": 288.0,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "ac8c1644b4b7c7cbd35f67a70e5d5ba049735dad9fda5b0282a2cf9f4ed56f10",
+                "level_checksum": 270546000,
+                "matches": 134,
+                "p50_us": 274.625,
+                "p95_us": 284.917,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "b0e67f3db7fb5355c1c38d4ee6951ee3f19030102312ef80d45440579a876314",
+                "level_checksum": 134268000,
+                "matches": 67,
+                "p50_us": 292.042,
+                "p95_us": 300.25,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "8d3af232bc327539b9d28a10cb14dc5a6d0a0f03a066eb2ef3804d9ee9039f00",
+                "level_checksum": 134201000,
+                "matches": 134,
+                "p50_us": 252.0,
+                "p95_us": 264.417,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 224.875,
+                "p95_us": 230.25,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 238.458,
+                "p95_us": 246.791,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 264.917,
+                "p95_us": 272.25,
+                "query": "app missing"
+              }
+            ],
+            "rows": 2000,
+            "max_rss_bytes": 12845056
+          },
+          {
+            "backend": "fuzzy",
+            "corpus": "actions",
+            "prepare_ms": 0.359958,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 247.75,
+                "p95_us": 261.25,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "40c1887c4be579c34509a70d02acff54633c225a6d2cbf7b0f8f4094dfdbe1c8",
+                "level_checksum": 133799000,
+                "matches": 134,
+                "p50_us": 291.792,
+                "p95_us": 308.25,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 254.958,
+                "p95_us": 263.584,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "74709d7d2885ce787b32359b1538623bce0c4e74b34b8af114fba46e89d1ea58",
+                "level_checksum": 1870075000,
+                "matches": 1069,
+                "p50_us": 237.916,
+                "p95_us": 243.958,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 269.125,
+                "p95_us": 275.084,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 285.791,
+                "p95_us": 290.916,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "ac8c1644b4b7c7cbd35f67a70e5d5ba049735dad9fda5b0282a2cf9f4ed56f10",
+                "level_checksum": 270546000,
+                "matches": 134,
+                "p50_us": 269.958,
+                "p95_us": 274.667,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "b0e67f3db7fb5355c1c38d4ee6951ee3f19030102312ef80d45440579a876314",
+                "level_checksum": 134268000,
+                "matches": 67,
+                "p50_us": 292.209,
+                "p95_us": 302.375,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "8d3af232bc327539b9d28a10cb14dc5a6d0a0f03a066eb2ef3804d9ee9039f00",
+                "level_checksum": 134201000,
+                "matches": 134,
+                "p50_us": 254.709,
+                "p95_us": 262.833,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 212.042,
+                "p95_us": 227.042,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 239.583,
+                "p95_us": 248.208,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 267.75,
+                "p95_us": 273.708,
+                "query": "app missing"
+              }
+            ],
+            "rows": 2000,
+            "max_rss_bytes": 12894208
+          },
+          {
+            "backend": "fuzzy",
+            "corpus": "actions",
+            "prepare_ms": 0.349416,
+            "queries": [
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 251.042,
+                "p95_us": 262.5,
+                "query": "chrome"
+              },
+              {
+                "candidate_tiers_sha256": "40c1887c4be579c34509a70d02acff54633c225a6d2cbf7b0f8f4094dfdbe1c8",
+                "level_checksum": 133799000,
+                "matches": 134,
+                "p50_us": 294.583,
+                "p95_us": 326.333,
+                "query": "chr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 253.5,
+                "p95_us": 259.208,
+                "query": "hrome"
+              },
+              {
+                "candidate_tiers_sha256": "74709d7d2885ce787b32359b1538623bce0c4e74b34b8af114fba46e89d1ea58",
+                "level_checksum": 1870075000,
+                "matches": 1069,
+                "p50_us": 235.166,
+                "p95_us": 244.042,
+                "query": "co"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 275.625,
+                "p95_us": 282.958,
+                "query": "gchr"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 289.333,
+                "p95_us": 296.5,
+                "query": "vsc"
+              },
+              {
+                "candidate_tiers_sha256": "ac8c1644b4b7c7cbd35f67a70e5d5ba049735dad9fda5b0282a2cf9f4ed56f10",
+                "level_checksum": 270546000,
+                "matches": 134,
+                "p50_us": 279.375,
+                "p95_us": 286.125,
+                "query": "git sta"
+              },
+              {
+                "candidate_tiers_sha256": "b0e67f3db7fb5355c1c38d4ee6951ee3f19030102312ef80d45440579a876314",
+                "level_checksum": 134268000,
+                "matches": 67,
+                "p50_us": 288.958,
+                "p95_us": 299.334,
+                "query": "copy branch"
+              },
+              {
+                "candidate_tiers_sha256": "8d3af232bc327539b9d28a10cb14dc5a6d0a0f03a066eb2ef3804d9ee9039f00",
+                "level_checksum": 134201000,
+                "matches": 134,
+                "p50_us": 253.792,
+                "p95_us": 260.625,
+                "query": "brnch"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 211.042,
+                "p95_us": 218.416,
+                "query": "\u590d\u5236 \u540d\u79f0"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 242.375,
+                "p95_us": 250.042,
+                "query": "google \u4e0d\u5b58\u5728"
+              },
+              {
+                "candidate_tiers_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+                "level_checksum": 0,
+                "matches": 0,
+                "p50_us": 265.5,
+                "p95_us": 275.292,
+                "query": "app missing"
+              }
+            ],
+            "rows": 2000,
+            "max_rss_bytes": 12828672
+          }
+        ]
+      }
+    }
+  ]
+}

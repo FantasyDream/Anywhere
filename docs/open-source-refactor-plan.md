@@ -6,10 +6,10 @@
 
 | 阶段 | 范围 | 验收与后续入口 |
 |---|---|---|
-| R1 | encoding_rs / chardetng 文本预览；which 工具查找 | 本阶段实现。BOM、UTF-16、常见文本 / 源码的传统编码推测；输入和输出各限 64 KiB；未知二进制不猜编码。工具目录优先级、可执行权限、NVM / SDKMAN 与 wrapper 保持，Windows 不引入 PATHEXT 批处理回退 |
+| R1 | encoding_rs / chardetng 文本预览；which 工具查找 | **已完成**，见下方 R1 验收。编码预览与工具查找已接入生产 |
 | R2 | SQLite 查询临时记录 / 外部排序原型 | **对照已完成，保留现有生产排序器。** 原型通过正确性验证，但本机速度、RSS 和临时磁盘均无收益，见 [R2 记录](research/result-store-r2.md)。原型仅在 Unix 测试构建启用，不进入 App |
-| R3 | nucleo-matcher 匹配原型 | 先比较应用和 Action，不改文件搜索语义。保留 Exact / Prefix / WordPrefix 优先级、各词约束、标识符限制和 frecency，比较中英文与缩写的候选集合 / 排序。无确定收益则保留现有实现 |
-| R4 | 根据原型结果收敛 | 只接入通过验收的后端，移除不再使用的旧代码 / 依赖；全量门禁、打包与界面回归后提交 |
+| R3 | nucleo-matcher 匹配原型 | **对照已完成**，见 [R3 记录](research/matcher-r3.md)。采用无缓存的原生流式比较，移除热路径临时字符串分配；不接入 nucleo 或非连续模糊搜索，生产匹配集合与等级保持 |
+| R4 | 根据原型结果收敛 | **已完成本轮收敛**：R1 库进入生产，R2 保留原排序器，R3 采用无缓存原生优化；旧匹配参考与未采用原型仅留测试。完整门禁、Build 11 打包及下方界面回归通过 |
 
 ## R1 行为
 
@@ -40,3 +40,20 @@ R1 不包含 SQLite / nucleo 的生产替换，不能据此声明文件搜索更
 - 修正旧文件基准：从旧 `ScanStore.page` 游标接口改为真实连续读取的 `ScanStore.more`。此前旧接口的 786–798 ms 不能代表当前连续读取路径，也不能把新测量解释为本轮生产提速。
 - 完整 `scripts/check.sh`：490 Rust / 273 Flutter 通过，7 项 ignored（6 项既有，新增 1 项资源基准已单独显式运行）；原生、fmt、Clippy、架构、文档与 analyze 均通过。本机日志：`build/validation/open-source-r2-check.log`。
 - 本轮不修改生产搜索或 UI，不另打包或打开真实用户文件；R1 Build 10 仍是当前应用包。后续入口为 R3 应用 / Action 匹配原型，继续采用有收益才接入的规则。
+
+## R3 验收记录（2026-10-18）
+
+- 对照冻结旧算法、生产流式比较、名称预处理控制组、nucleo 兼容组及 fuzzy 扩展组；1,000 / 10,000 个合成应用和 2,000 个注册 Action 字段，各三次进程采样。
+- 兼容组完整候选集合 / 匹配等级摘要一致；Unicode 子串回退、短词噪声、各词 / 字段边界、frecency、长输入与流式前缀新增 8 项回归。
+- 生产仅去除 compact 临时字符串分配，不增加名称缓存或匹配后端设置。nucleo 固定版本仅供测试使用，生产正常依赖图不含它，也不引入完整 picker。
+- R2 / R3 共用构建及资源测量 runner，已回归 R2 两个后端的完整顺序。资源基准在全量门禁之外单独显式运行，计时不与编译 / 全量测试重叠。
+- 完整 `scripts/check.sh`：498 Rust / 273 Flutter 通过，8 项 ignored（6 项既有，2 项资源基准已分别显式运行）；原生、fmt、Clippy、架构、文档与 analyze 均通过。本机日志：`build/validation/open-source-final-check.log`。
+
+## R4 收敛与 Build 11（2026-10-18）
+
+- 生产保留 encoding_rs / chardetng / which；不增加生产 SQLite 搜索后端、nucleo、完整 picker、名称常驻缓存或搜索模式设置。原生匹配旧分配代码仅作为 `cfg(test)` 下的差异基线保留；原型无运行时入口，生产正常依赖图确认没有 nucleo。
+- 无公共 Bridge / 插件协议变更，无额外 feature flag 或热加载机制。Rust 继续负责匹配，Flutter / Host 负责现有展示与平台边界。
+- 版本 `0.10.0+11`；包为 `build/Anywhere-open-source-final-build11.app`、对应 `-macos-arm64.zip` 和 `.sha256`。构建采用原有持久签名；deep / strict、资源与 ZIP 内关键文件一致性均通过。旧 Build 10 已退出，验证进程为 Build 11，最终只保留它运行。
+- 完成全部代码与单元门禁后，通过真实 Build 11 UI 验证：`co` 未误命中 Chrome、`visualstudioc` 命中 Visual Studio Code、粘贴 `visualstudiocode 不存在` 无应用候选、`file se` 命中 File Search 并能打开 / 输入、UTF-16 合成文件固定预览显示中文 / emoji 与明确编码提示、返回主页面保留原查询。
+- 测试输入已清空；剪贴板历史采集保持关闭，未调整用户设置。Unicode 多词采用粘贴提交（工具会恢复原剪贴板）；不把自动化工具的 Unicode typeText / AX setter 当作真实 IME 验收。没有补做 Windows、首次权限、辅助 engine VoiceOver 或长期内存验收。
+- 本机证据：`build/validation/open-source-final-build.log`、`open-source-final-package.log`、`open-source-final-live.json`、`open-source-production-dependencies.txt`。同机 CPU / RSS 原始记录随文档保存；不把字段基准解释为整 App 性能承诺。

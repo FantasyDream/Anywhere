@@ -6,45 +6,19 @@ macOS RSS uses /usr/bin/time -l. Each sample gets a separate process/workspace.
 """
 import argparse
 import json
-import os
 import platform
-import re
 import statistics
-import subprocess
 from pathlib import Path
+from bench_probe import build_core_probe, measure_probe
 
 TEST = 'features::filesystem::result_store_probe::benchmark::compare'
 
 
-def build():
-    process = subprocess.run(
-        ['cargo', 'test', '-p', 'anywhere-core', '--release', '--locked',
-         '--lib', '--no-run', '--message-format=json'],
-        check=True, text=True, stdout=subprocess.PIPE)
-    for line in process.stdout.splitlines():
-        message = json.loads(line)
-        if (message.get('reason') == 'compiler-artifact'
-                and message['target']['name'] == 'anywhere_core'
-                and message.get('executable')):
-            return message['executable']
-    raise RuntimeError('release test executable missing')
-
-
 def measure(binary, backend, count=0, waves=1, cancel=False):
-    environment = dict(os.environ, ANYWHERE_PROBE_BACKEND=backend,
+    environment = dict(ANYWHERE_PROBE_BACKEND=backend,
                        ANYWHERE_PROBE_ROWS=str(count), ANYWHERE_PROBE_WAVES=str(waves),
                        ANYWHERE_PROBE_CANCEL='1' if cancel else '0')
-    process = subprocess.run(
-        ['/usr/bin/time', '-l', binary, '--exact', TEST, '--ignored',
-         '--nocapture', '--test-threads=1'], env=environment,
-        check=True, text=True, capture_output=True)
-    metrics = next(line.partition('RESULT_STORE_METRICS ')[2]
-                   for line in process.stdout.splitlines() if 'RESULT_STORE_METRICS ' in line)
-    result = json.loads(metrics)
-    rss = re.search(r'(\d+)\s+maximum resident set size', process.stderr)
-    assert rss, process.stderr
-    result['max_rss_bytes'] = int(rss[1])
-    return result
+    return measure_probe(binary, TEST, environment, 'RESULT_STORE_METRICS ')
 
 
 def main():
@@ -54,7 +28,7 @@ def main():
     options = parser.parse_args()
     if platform.system() != 'Darwin' or options.samples < 1:
         parser.error('requires macOS and at least one sample')
-    binary = build()
+    binary = build_core_probe()
     result = {
         'platform': platform.platform(), 'probe': 'query-local unread result storage',
         'cache': 'warm OS caches, synthetic raw records; no cache clearing',

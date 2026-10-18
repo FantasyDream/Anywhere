@@ -170,12 +170,7 @@ fn field_match(field: &str, query: &Query, identifier_only: bool) -> Option<Matc
         return Some(MatchLevel::Prefix);
     }
     // Separator-insensitive prefix of a visible name: `abdown` → ABDownloadManager.
-    let compact = field
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric())
-        .collect::<String>();
-    let wanted = query.compact();
-    if !wanted.is_empty() && compact.starts_with(wanted) {
+    if compact_prefix(field, query.compact()) {
         return Some(MatchLevel::Substring);
     }
     if query
@@ -188,6 +183,14 @@ fn field_match(field: &str, query: &Query, identifier_only: bool) -> Option<Matc
     None
 }
 
+/// Compare only as far as the query needs, without allocating a compact copy of
+/// every candidate on every keystroke. Non-ASCII UTF-8 bytes cannot pass the ASCII
+/// filter, exactly like the previous char-based materialization.
+fn compact_prefix(field: &str, wanted: &str) -> bool {
+    let mut compact = field.bytes().filter(u8::is_ascii_alphanumeric);
+    !wanted.is_empty() && wanted.bytes().all(|byte| compact.next() == Some(byte))
+}
+
 /// Guards against pathological manifests without allocating per lookup.
 pub fn valid_search_field(value: &str) -> bool {
     value.len() <= 200
@@ -196,6 +199,35 @@ pub fn valid_search_field(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn streaming_compact_prefix_preserves_materialized_unicode_and_separator_behavior() {
+        for field in [
+            "",
+            "google chrome",
+            "ab-download_manager",
+            "café",
+            "工具abc",
+            "İstanbul",
+            "😀x",
+            "^a!b$1",
+        ] {
+            let compact: String = field
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .collect();
+            for wanted in [
+                "", "g", "googlec", "abdown", "ab1", "caf", "café", "工具", "abc", "istan", "x",
+                "a", "z",
+            ] {
+                assert_eq!(
+                    compact_prefix(field, wanted),
+                    !wanted.is_empty() && compact.starts_with(wanted),
+                    "{field:?}, {wanted:?}"
+                );
+            }
+        }
+    }
 
     fn fields(title: &str, aliases: &[&str], keywords: &[&str]) -> SearchFields {
         let aliases = aliases.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();

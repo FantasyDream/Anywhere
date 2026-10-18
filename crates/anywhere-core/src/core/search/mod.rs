@@ -6,3 +6,6 @@ pub mod fallback;
 pub mod query;
 
 pub mod scope;
+
+#[cfg(test)]
+mod matcher_probe;
