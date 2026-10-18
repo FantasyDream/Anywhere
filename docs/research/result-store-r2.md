@@ -2,7 +2,11 @@
 
 日期：2026-10-18。分支：`codex/refactor-open-source`，生产基线 `cc6e228`。结论：**保留现有磁盘归并排序器，不把本轮 SQLite 原型接入生产。**
 
-## 范围与实现
+## 历史记录状态
+
+本报告记录清理前的实验及原始数据。最终收尾已移除未采用的原型、专用脚本和测试入口；需要重放时使用独立 checkout 的 `9d14251` 提交，不在当前工作树执行下方旧命令。现有生产归并排序及其连续读取 / 失败恢复测试继续保留。
+
+## 当时的实现
 
 生产路径仍为 `filesystem/result_store.rs`。对照代码位于 `filesystem/result_store_probe/`，仅通过 `cfg(all(test, unix))` 编译；不增加运行时配置、公开 API 或 Cargo 依赖，不改变授权、遍历、匹配、Context、Scope、UI 或 15 秒恢复规则。
 
@@ -35,7 +39,7 @@ cargo build --release -p anywhere-core --example file_search_measure --locked
 python3 scripts/bench-file-search.py --output docs/benchmarks/file-search-continuous-r2.json
 ```
 
-macOS 27.0.1 / arm64，Release；每组各采样 3 次、两后端交替顺序、独立进程和 workspace；OS cache 不清。最终测量与编译 / 全量测试顺序执行。完整数据见 [排序对照](../benchmarks/result-store-r2.json) 和 [实际遍历 / 连续读取](../benchmarks/file-search-continuous-r2.json)。
+macOS 27.0.1 / arm64，Release；每组各采样 3 次、两后端交替顺序、独立进程和 workspace；OS cache 不清。最终测量与编译 / 全量测试顺序执行。完整数据见 [排序对照](../archive/benchmarks/open-source-result-store-r2-2026-10-18.json) 和 [实际遍历 / 连续读取](../benchmarks/file-search-continuous-r2.json)。
 
 排序对照不遍历真实目录，不包含 Spotlight、Flutter、Bridge 或 GUI；输入为相同合成原始路径。已有 7 条显示前缀，16 次提交场景在每次提交后读取一批，最后读完余下结果。所有样本的返回数量及完整显示顺序 SHA-256 均一致。
 
@@ -57,7 +61,7 @@ macOS 27.0.1 / arm64，Release；每组各采样 3 次、两后端交替顺序�
 
 ## 选型结论与边界
 
-当前原型没有满足速度、低内存或临时磁盘收益门槛，不迁移生产。实验代码保留在测试模块中用于重现；没有加入一套可切换的生产引擎或维护长期数据库的配置。
+当前原型没有满足速度、低内存或临时磁盘收益门槛，不迁移生产。实验代码已在最终清理时移除，可从 `9d14251` 重现；没有加入一套可切换的生产引擎或维护长期数据库的配置。
 
 SQLite 原型保留共同的原始输入文件，另存索引、规范化名称和路径 key；若将来尝试直接写入 SQLite、压缩 schema 或不同 journal 策略，需要重新测量并验证回滚。本轮结论只针对本实现和这些负载，不推导为 SQLite 不能实现快速搜索。
 

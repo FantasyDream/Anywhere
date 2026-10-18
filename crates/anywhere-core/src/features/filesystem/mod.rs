@@ -9,8 +9,4 @@ pub mod workspace;
 
 mod result_store;
 
-// An isolated comparison, never compiled into the application or its public API.
-#[cfg(all(test, unix))]
-mod result_store_probe;
-
 mod file_types;

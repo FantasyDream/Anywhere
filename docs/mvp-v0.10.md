@@ -1,6 +1,6 @@
 # V0.10 MVP：剪贴板历史与搜索
 
-当前分支：`codex/dev-0.10`。开始日期：2026-10-16。延续 [路线图](roadmap.md)，先补齐内置搜索，再开发 Terminal。
+剪贴板功能基线分支：`codex/dev-0.10`；最新收尾分支：`codex/refactor-open-source`，验收包 Build 11。开始日期：2026-10-16。延续 [路线图](roadmap.md)，先补齐内置搜索，再开发 Terminal。
 
 ## 分步实施
 
@@ -119,3 +119,11 @@ Build 8 实机验证 Settings → Clipboard 显示采集开关、自动填入及
 提交前重新执行 `scripts/check.sh`：476 Rust / 273 Flutter 通过，6 项既有 Rust ignored；原生、格式、Clippy、架构、文档和 Flutter analyze 均通过。新日志为本机 `build/validation/v0.10-closeout-2026-10-18.log`。沿用上节 Build 9 的签名包与真实界面验收，本日未重新运行权限 / 长时间内存 / VoiceOver 矩阵。
 
 本次先提交当前版本，再从该提交创建独立的开源复用重构分支；编码预览、工具查找以及后续 SQLite / matcher 原型按 [开源库清单](research/open-source-reuse-audit.md) 分阶段实施。
+
+### Build 11 与最终清理（2026-10-18）
+
+剪贴板工程收尾之后，开源复用 R1–R4 已完成：编码预览 / 工具查找进入生产，文件排序维持现有实现，应用 / Action 匹配移除 compact 临时字符串分配。Build 11 的签名包、完整门禁、实机查询与预览验收见 [收尾记录](open-source-refactor-plan.md)。
+
+最后清理已结束的 SQLite / nucleo / 长期索引原型、专用脚本和 nucleo 测试依赖；保留生产规则回归，归档原始测量。README 与路线图已同步为收尾状态。本机旧安装包已清理，当前 Build 11、对应 ZIP、验证夹具及用户历史均保留。本次仅清理测试 / 文档 / 历史产物，不重新定义剪贴板范围或宣称补齐既有平台 / 权限 / VoiceOver 验收边界。
+
+最终完整门禁 **487 Rust / 273 Flutter** 通过，6 项既有 Rust ignored；原生、fmt、Clippy、架构、文档与 analyze 均通过。测试计数变化来自实验专属测试清理与独立产品回归迁移，具体说明见 [最终清理记录](open-source-refactor-plan.md#最终源码与文件清理2026-10-18)。日志：`build/validation/v0.10-final-cleanup-check.log`。本次不修改生产逻辑，沿用 Build 11 的实机验收与安装包，没有重复开启剪贴板采集或调整设置。

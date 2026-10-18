@@ -4,11 +4,15 @@
 
 结论：**保留原生匹配规则，移除每次候选比较中的临时 compact 字符串分配；不将 nucleo 或额外名称缓存接入生产，不增加模糊搜索模式。**
 
+## 历史记录状态
+
+本报告记录清理前的实验及原始数据。最终收尾已移除 nucleo dev-dependency、原型、冻结旧算法和专用 runner；需要重放时使用独立 checkout 的 `9d14251` 提交，不在当前工作树执行下方旧命令。生产流式比较、helper 回归与 `tests/search_fields.rs` 的产品规则回归继续保留。
+
 ## 实现与对照范围
 
 生产改动仅在 `core/search/query.rs`：原先收集 ASCII 字母 / 数字到 String 再 `starts_with`，现在通过字节迭代器过滤并按查询需要比较，首次不同即返回。不增加常驻字段缓存，不改变 Query / SearchFields API、Context、Scope、候选身份、frecency、文件搜索或 15 秒恢复规则。
 
-实验位于 `core/search/matcher_probe/`，由 `cfg(test)` 隔离；`nucleo-matcher = 0.3.1` 仅为 dev-dependency。`cargo tree --locked -p anywhere-bridge-flutter --edges normal` 验证生产依赖图没有 nucleo。原型中冻结一份旧字段算法用于差异测试，生产只有一个匹配器，无后端设置或重复运行路径。
+当时实验位于 `core/search/matcher_probe/`，由 `cfg(test)` 隔离；`nucleo-matcher = 0.3.1` 仅为 dev-dependency。`cargo tree --locked -p anywhere-bridge-flutter --edges normal` 验证生产依赖图没有 nucleo。原型中冻结一份旧字段算法用于差异测试，生产只有一个匹配器，无后端设置或重复运行路径。
 
 | 对照项 | 内容 |
 |---|---|
@@ -56,12 +60,12 @@ macOS 27.0.1 / arm64、Release；每个后端每组独立运行 3 个进程，�
 
 1,000 个应用的独立进程峰值 RSS 中位数：旧算法 10.30 MiB，当前 10.27 MiB，名称缓存 10.52 MiB，nucleo 兼容 10.67 MiB。RSS 是测试进程指标，几十 KiB 的差异不作为整体内存下降结论；采用流式方案的内存依据是没有新增常驻缓存，代码路径也不再分配 compact String。
 
-完整环境、准备耗时、每个查询的 p50 / p95、候选数、匹配等级摘要及进程峰值 RSS 见 [原始记录](../benchmarks/matcher-r3.json)。表格的“各查询 p95 均值”不是整个 Launcher 的 p95，也不表示整 App 提速相同比例。
+完整环境、准备耗时、每个查询的 p50 / p95、候选数、匹配等级摘要及进程峰值 RSS 见 [原始记录](../archive/benchmarks/open-source-matcher-r3-2026-10-18.json)。表格的“各查询 p95 均值”不是整个 Launcher 的 p95，也不表示整 App 提速相同比例。
 
 ## 收敛决定
 
 - 采用流式 compact 前缀比较，避免热路径分配与全字段拷贝；不采用额外常驻缓存。
 - nucleo 兼容组需要 Unicode 回退，当前又未优于无缓存的原生实现，因此不增加生产适配层。
-- fuzzy 的短查询噪声没有完成产品规则设计，保留为测试证据。
-- R2 / R3 共享 `scripts/bench_probe.py` 的构建、隔离进程和 RSS 采样工具；R2 两个后端已用 100 条记录验证共享 runner 的返回顺序一致。
-- 保留测试原型、冻结旧算法与原始数据用于复现；旧分配算法只存在于测试，不进入 App。未接入的原型不带生产配置、线程、缓存或加载器。
+- fuzzy 的短查询噪声没有完成产品规则设计，因此未接入；原始样本保留，当前短词边界由产品回归保障。
+- 当时 R2 / R3 共用 `scripts/bench_probe.py` 的构建、隔离进程和 RSS 采样工具；R2 两个后端曾用 100 条记录验证共享 runner 的返回顺序一致。
+- 最终清理移除测试原型、冻结旧算法和专用脚本，保留原始数据及不依赖原型的产品回归；历史代码从 `9d14251` 获取。生产不维护备用匹配后端。

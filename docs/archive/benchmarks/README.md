@@ -4,6 +4,8 @@
 
 | 样本 | 边界 |
 |---|---|
+| [R2 SQLite 排序对照，2026-10-18](open-source-result-store-r2-2026-10-18.json) | 旧原型位于提交 `9d14251`；当前已移除，保留原始顺序 / 耗时 / RSS / 磁盘对照 |
+| [R3 匹配对照，2026-10-18](open-source-matcher-r3-2026-10-18.json) | 旧原型位于提交 `9d14251`；采用原生流式比较，nucleo 未接入生产且依赖已清理 |
 | [长期索引原型，2026-10-10](file-search-index-prototype-2026-10-10.json) | 已被取代的实验，不代表生产路径；status 与 hardware 保留在原始 JSON |
 | [V0.9 整 App，2026-10-16](v0.9-app-2026-10-16.json) | Build 6 主进程 RSS 快照、可见 / 隐藏 vmmap 与原生可见事件，非长期或端到端帧耗时保证 |
 | [V0.9 遍历器，2026-10-16](v0.9-file-search-2026-10-16.json) | 0.9 收尾源码，10k / 40k 刚创建文件，3 次采样；独立 Rust release 进程，不含 Spotlight / Flutter |

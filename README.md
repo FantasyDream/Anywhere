@@ -4,7 +4,7 @@
 
 例如：在 Finder 中打开项目目录后唤醒 Anywhere，可以打开终端、复制路径、查看 Git 状态或运行项目测试。复制一个网页 URL 后唤醒，可以打开或复制该地址。
 
-当前开发 **V0.10 剪贴板历史与搜索**，V0.9 内置功能模块已完成工程收尾。主要支持 macOS，界面使用 Flutter，业务逻辑使用 Rust；Windows 尚未交付可用版本。
+当前版本 **V0.10 剪贴板历史与搜索（Build 11）**，剪贴板功能与开源复用重构已完成工程收尾。主要支持 macOS，界面使用 Flutter，业务逻辑使用 Rust；Windows 尚未交付可用版本。
 
 [使用指南](#使用指南) · [架构设计](#架构设计) · [构建与开发](#构建与开发) · [文档导航](docs/README.md) · [路线图](docs/roadmap.md)
 
@@ -47,7 +47,7 @@ Current App 聚合当前环境的所有可用动作。顶部的 **Folder、Git�
 
 内容输入时按 `Esc` 清空内容并返回 Current App，再按 `Esc` 进入空白 Global Search。更多规则见 [Context 输入与导航](docs/context-input-navigation.md)。
 
-### 剪贴板历史（V0.10 开发中）
+### 剪贴板历史（V0.10）
 
 剪贴板有两个独立 Action，都可在 Settings → Shortcuts 配置快捷键：
 
@@ -361,4 +361,4 @@ scripts/generate-bridge.sh
 - [Context 模型](docs/context-model.md) / [菜单动作](docs/current-app-actions.md)：对象关系与身份安全边界。
 - [统一 Launcher 交互与状态保留](docs/launcher-interaction.md)。
 - [模块迁移路线图](docs/feature-module-roadmap.md) / [V0.9 MVP](docs/mvp-v0.9.md)：当前内置功能迁移阶段与验收范围；[V0.8 收尾](docs/mvp-v0.8.md) 保留上一阶段证据。
-- [路线图](docs/roadmap.md)：后续剪贴板历史 / 搜索、Terminal、核心收尾、WebView 插件与 JSON 工具方向。
+- [路线图](docs/roadmap.md)：后续 Terminal、核心收尾、WebView 插件与 JSON 工具方向。
