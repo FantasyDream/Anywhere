@@ -3,63 +3,77 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import '../infrastructure/desktop_environment.dart';
 import '../infrastructure/desktop_edit_menu.dart';
+import 'design_tokens.g.dart';
+export 'design_tokens.g.dart';
 
 /// One palette and control vocabulary for every window and sheet.
 /// Native AppKit supplies the blur; content surfaces stabilize text contrast.
 abstract final class AppStyle {
   // A neutral veil over the native blur softens bright backgrounds without
   // adding a second blur layer or replacing glass with a flat opaque panel.
-  static const surface = Color(0xa0303438);
-  static const overlay = Color(0xf22b2e35);
-  static const menuSurface = Color(0xff2b2e35);
-  static const actionSurface = Color(0x0cffffff);
-  static const primaryButtonSurface = Color(0x242869bf);
-  static const buttonSelection = Color(0x10ffffff);
-  static const keycapSurface = Color(0x06ffffff);
-  static const keycapBorder = Color(0x1affffff);
-  static const card = Color(0x782a2e36);
-  static const field = Color(0x8020232a);
-  static const elevated = Color(0x584b505a);
-  static const sidebar = Color(0x10101218);
-  static const window = Color(0x1a12161e);
-  static const sidebarSelection = Color(0x24ffffff);
-  static const hover = Color(0x0cffffff);
-  static const border = Color(0x38ffffff);
-  static const divider = Color(0x1fffffff);
+  static const surface = DesignTokens.surface;
+  static const overlay = DesignTokens.overlay;
+  static const menuSurface = DesignTokens.menuSurface;
+  static const actionSurface = DesignTokens.actionSurface;
+  static const primaryButtonSurface = DesignTokens.primaryButtonSurface;
+  static const buttonSelection = DesignTokens.buttonSelection;
+  static const keycapSurface = DesignTokens.keycapSurface;
+  static const keycapBorder = DesignTokens.keycapBorder;
+  static const card = DesignTokens.card;
+  static const field = DesignTokens.field;
+  static const elevated = DesignTokens.elevated;
+  static const sidebar = DesignTokens.sidebar;
+  static const window = DesignTokens.window;
+  static const sidebarSelection = DesignTokens.sidebarSelection;
+  static const hover = DesignTokens.hover;
+  static const border = DesignTokens.border;
+  static const divider = DesignTokens.divider;
   // Local controls carry their own contrast; the window glass stays untouched.
-  static const controlSurface = Color(0xff3d4046);
-  static const controlSelection = Color(0xff56595f);
-  static const controlBorder = Color(0x30ffffff);
+  static const controlSurface = DesignTokens.controlSurface;
+  static const controlSelection = DesignTokens.controlSelection;
+  static const controlBorder = DesignTokens.controlBorder;
   static const List<Shadow> textShadows = [];
-  static const primary = Color(0xfff7f8fa);
-  static const secondary = Color(0xffe0e3e9);
-  static const muted = Color(0xffd6dbe2);
-  static const accent = Color(0xffa7caff);
-  static const accentFill = Color(0xff2869bf);
-  static const warning = Color(0xffffc66d);
-  static const danger = Color(0xffff8078);
-  static const selectedSurface = Color(0x0cffffff);
-  static const selectionOutline = Color(0x18ffffff);
-  static const selectedBorder = Color(0xffb6c2d7);
-  static const success = Color(0xff73cc91);
-  static const radius = 18.0;
-  static const resultRadius = 10.0;
-  static const controlRadius = 8.0;
-  static const cardRadius = 12.0;
+  static const primary = DesignTokens.primary;
+  static const secondary = DesignTokens.secondary;
+  static const muted = DesignTokens.muted;
+  static const accent = DesignTokens.accent;
+  static const accentFill = DesignTokens.accentFill;
+  static const warning = DesignTokens.warning;
+  static const danger = DesignTokens.danger;
+  static const selectedSurface = DesignTokens.selectedSurface;
+  static const selectionOutline = DesignTokens.selectionOutline;
+  static const selectedBorder = DesignTokens.selectedBorder;
+  static const success = DesignTokens.success;
+  static const radius = DesignTokens.radius;
+  static const resultRadius = DesignTokens.resultRadius;
+  static const controlRadius = DesignTokens.controlRadius;
+  static const cardRadius = DesignTokens.cardRadius;
   static const body = TextStyle(
-      fontSize: 13, height: 1.25, color: primary, shadows: textShadows);
-  static const caption =
-      TextStyle(fontSize: 11, height: 1.3, color: muted, shadows: textShadows);
+      fontSize: DesignTokens.bodySize,
+      height: DesignTokens.bodyLineHeight,
+      fontWeight: DesignTokens.bodyWeight,
+      color: primary,
+      shadows: textShadows);
+  static const caption = TextStyle(
+      fontSize: DesignTokens.captionSize,
+      height: DesignTokens.captionLineHeight,
+      color: muted,
+      shadows: textShadows);
   static const heading = TextStyle(
-      fontSize: 15,
-      fontWeight: FontWeight.w600,
+      fontSize: DesignTokens.headingSize,
+      fontWeight: DesignTokens.headingWeight,
       color: primary,
       letterSpacing: 0,
       shadows: textShadows);
+  static const paneTitle = TextStyle(
+      fontSize: DesignTokens.labelSize,
+      height: DesignTokens.bodyLineHeight,
+      fontWeight: DesignTokens.primaryControlWeight,
+      color: primary);
 
   static ShapeBorder get panelShape => RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(radius),
-      side: const BorderSide(color: divider, width: .5));
+      side: const BorderSide(color: divider, width: DesignTokens.dividerWidth));
 
   /// Native glass remains fully visible. Only unsupported hosts and reduced
   /// transparency use the original opaque fallback.
@@ -75,7 +89,7 @@ abstract final class AppStyle {
               child: ColoredBox(
                   color: DesktopEnvironment.current.hasBackdrop
                       ? Colors.transparent
-                      : const Color(0xff24262b),
+                      : DesignTokens.fallbackSurface,
                   child: child ?? const SizedBox.shrink())));
 
   static ThemeData get theme {
@@ -90,12 +104,13 @@ abstract final class AppStyle {
     });
     final buttonSide = WidgetStateProperty.resolveWith<BorderSide>((states) {
       if (states.contains(WidgetState.focused)) {
-        return const BorderSide(color: selectedBorder, width: 1.2);
+        return const BorderSide(
+            color: selectedBorder, width: DesignTokens.focusBorderWidth);
       }
       return BorderSide(
           color:
               states.contains(WidgetState.disabled) ? divider : controlBorder,
-          width: .6);
+          width: DesignTokens.controlBorderWidth);
     });
     final base = ThemeData(
       fontFamily: DesktopEnvironment.current.fontFamily,
@@ -129,17 +144,18 @@ abstract final class AppStyle {
               bodyMedium: body,
               bodySmall: caption,
               titleLarge: heading,
-              titleMedium: body.copyWith(fontWeight: FontWeight.w600),
-              titleSmall:
-                  caption.copyWith(fontWeight: FontWeight.w600, color: primary),
-              labelLarge: body.copyWith(fontSize: 12),
+              titleMedium:
+                  body.copyWith(fontWeight: DesignTokens.headingWeight),
+              titleSmall: caption.copyWith(
+                  fontWeight: DesignTokens.headingWeight, color: primary),
+              labelLarge: body.copyWith(fontSize: DesignTokens.labelSize),
               labelMedium: caption.copyWith(color: secondary),
               labelSmall: caption.copyWith(fontSize: 10))
           .apply(fontFamily: DesktopEnvironment.current.fontFamily),
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.standard,
-      dividerTheme:
-          const DividerThemeData(color: divider, thickness: .5, space: 1),
+      dividerTheme: const DividerThemeData(
+          color: divider, thickness: DesignTokens.dividerWidth, space: 1),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: field,
@@ -149,47 +165,67 @@ abstract final class AppStyle {
         prefixIconColor: secondary,
         prefixIconConstraints:
             const BoxConstraints(minWidth: 28, minHeight: 28),
-        hintStyle: caption.copyWith(fontSize: 12),
-        labelStyle: const TextStyle(fontSize: 12, color: secondary),
-        floatingLabelStyle: const TextStyle(fontSize: 12, color: accent),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
+        hintStyle: caption.copyWith(fontSize: DesignTokens.labelSize),
+        labelStyle:
+            const TextStyle(fontSize: DesignTokens.labelSize, color: secondary),
+        floatingLabelStyle:
+            const TextStyle(fontSize: DesignTokens.labelSize, color: accent),
+        contentPadding: const EdgeInsets.symmetric(
+            horizontal: DesignTokens.fieldPaddingX,
+            vertical: DesignTokens.fieldPaddingY),
         border: OutlineInputBorder(
             borderRadius: BorderRadius.circular(controlRadius)),
         enabledBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(controlRadius),
-            borderSide: const BorderSide(color: border, width: .8)),
+            borderSide: const BorderSide(
+                color: border, width: DesignTokens.fieldBorderWidth)),
         focusedBorder: OutlineInputBorder(
             borderRadius: BorderRadius.circular(controlRadius),
-            borderSide: const BorderSide(color: selectedBorder, width: 1.5)),
+            borderSide: const BorderSide(
+                color: selectedBorder,
+                width: DesignTokens.fieldFocusBorderWidth)),
       ),
+      textSelectionTheme: const TextSelectionThemeData(
+          cursorColor: accent,
+          selectionColor: DesignTokens.textSelection,
+          selectionHandleColor: accent),
       textButtonTheme: TextButtonThemeData(
           style: TextButton.styleFrom(
                   foregroundColor: primary,
-                  minimumSize: const Size(0, 24),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  disabledForegroundColor:
+                      primary.withValues(alpha: DesignTokens.disabledOpacity),
+                  minimumSize: const Size(0, DesignTokens.controlHeight),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: DesignTokens.controlPaddingX,
+                      vertical: DesignTokens.controlPaddingY),
                   textStyle: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w400,
+                      fontSize: DesignTokens.controlFontSize,
+                      fontWeight: DesignTokens.controlWeight,
                       fontFamily: DesktopEnvironment.current.fontFamily),
                   shape: shape)
               .copyWith(
                   overlayColor: buttonOverlay,
                   side: WidgetStateProperty.resolveWith((states) =>
                       states.contains(WidgetState.focused)
-                          ? const BorderSide(color: selectedBorder, width: 1.2)
+                          ? const BorderSide(
+                              color: selectedBorder,
+                              width: DesignTokens.focusBorderWidth)
                           : BorderSide.none))),
       outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
                   foregroundColor: primary,
+                  disabledForegroundColor:
+                      primary.withValues(alpha: DesignTokens.disabledOpacity),
                   backgroundColor: Colors.transparent,
-                  minimumSize: const Size(0, 24),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                  side: const BorderSide(color: border, width: .8),
+                  minimumSize: const Size(0, DesignTokens.controlHeight),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: DesignTokens.controlPaddingX,
+                      vertical: DesignTokens.controlPaddingY),
+                  side: const BorderSide(
+                      color: border, width: DesignTokens.fieldBorderWidth),
                   textStyle: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w400,
+                      fontSize: DesignTokens.controlFontSize,
+                      fontWeight: DesignTokens.controlWeight,
                       fontFamily: DesktopEnvironment.current.fontFamily),
                   shape: shape)
               .copyWith(overlayColor: buttonOverlay, side: buttonSide)),
@@ -198,42 +234,55 @@ abstract final class AppStyle {
                   backgroundColor: primaryButtonSurface,
                   disabledBackgroundColor: Colors.transparent,
                   foregroundColor: Colors.white,
-                  minimumSize: const Size(0, 24),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  disabledForegroundColor:
+                      primary.withValues(alpha: DesignTokens.disabledOpacity),
+                  minimumSize: const Size(0, DesignTokens.controlHeight),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: DesignTokens.controlPaddingX,
+                      vertical: DesignTokens.controlPaddingY),
                   textStyle: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
+                      fontSize: DesignTokens.controlFontSize,
+                      fontWeight: DesignTokens.primaryControlWeight,
                       fontFamily: DesktopEnvironment.current.fontFamily),
                   shape: shape)
               .copyWith(overlayColor: buttonOverlay, side: buttonSide)),
       iconButtonTheme: IconButtonThemeData(
           style: IconButton.styleFrom(
                   foregroundColor: secondary,
-                  iconSize: 16,
-                  minimumSize: const Size(26, 26),
+                  disabledForegroundColor:
+                      secondary.withValues(alpha: DesignTokens.disabledOpacity),
+                  iconSize: DesignTokens.iconSize,
+                  padding: const EdgeInsets.all(5),
+                  minimumSize: const Size(
+                      DesignTokens.iconButtonSize, DesignTokens.iconButtonSize),
                   shape: shape)
               .copyWith(
                   overlayColor: buttonOverlay,
                   side: WidgetStateProperty.resolveWith((states) =>
                       states.contains(WidgetState.focused)
-                          ? const BorderSide(color: selectedBorder, width: 1.2)
+                          ? const BorderSide(
+                              color: selectedBorder,
+                              width: DesignTokens.focusBorderWidth)
                           : BorderSide.none))),
       dialogTheme: DialogThemeData(
           backgroundColor: overlay,
           surfaceTintColor: Colors.transparent,
           barrierColor: const Color(0x66000000),
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-              side: const BorderSide(color: divider, width: .5)),
+              borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
+              side: const BorderSide(
+                  color: divider, width: DesignTokens.dividerWidth)),
           titleTextStyle: heading,
-          contentTextStyle: body.copyWith(fontSize: 12, color: secondary)),
+          contentTextStyle: body.copyWith(
+              fontSize: DesignTokens.labelSize, color: secondary)),
       listTileTheme: const ListTileThemeData(
           textColor: primary,
           iconColor: secondary,
           selectedColor: primary,
           selectedTileColor: selectedSurface,
-          titleTextStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
+          titleTextStyle: TextStyle(
+              fontSize: DesignTokens.bodySize,
+              fontWeight: DesignTokens.controlWeight),
           subtitleTextStyle: caption),
       switchTheme: SwitchThemeData(
           thumbColor: WidgetStateProperty.resolveWith((states) =>
@@ -246,29 +295,31 @@ abstract final class AppStyle {
           shadowColor: const Color(0x40000000),
           surfaceTintColor: Colors.transparent,
           textStyle: body.copyWith(
-              fontSize: 12, fontFamily: DesktopEnvironment.current.fontFamily),
+              fontSize: DesignTokens.labelSize,
+              fontFamily: DesktopEnvironment.current.fontFamily),
           labelTextStyle: WidgetStatePropertyAll(body.copyWith(
-              fontSize: 12,
+              fontSize: DesignTokens.labelSize,
               color: primary,
               fontFamily: DesktopEnvironment.current.fontFamily)),
           shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(controlRadius),
-              side: const BorderSide(color: controlBorder, width: .5))),
+              side: const BorderSide(
+                  color: controlBorder, width: DesignTokens.dividerWidth))),
       tooltipTheme: TooltipThemeData(
           decoration: BoxDecoration(
               color: overlay,
-              borderRadius: BorderRadius.circular(6),
+              borderRadius: BorderRadius.circular(DesignTokens.tooltipRadius),
               border: Border.all(color: border)),
           textStyle: caption.copyWith(color: primary),
           waitDuration: const Duration(milliseconds: 450)),
       snackBarTheme: SnackBarThemeData(
           backgroundColor: overlay,
-          contentTextStyle: body.copyWith(fontSize: 12),
+          contentTextStyle: body.copyWith(fontSize: DesignTokens.labelSize),
           behavior: SnackBarBehavior.floating,
           shape: shape),
       scrollbarTheme: ScrollbarThemeData(
-          thickness: WidgetStateProperty.all(5),
-          radius: const Radius.circular(5)),
+          thickness: WidgetStateProperty.all(DesignTokens.scrollbarSize),
+          radius: const Radius.circular(DesignTokens.scrollbarSize)),
       expansionTileTheme: const ExpansionTileThemeData(
           iconColor: secondary,
           collapsedIconColor: muted,

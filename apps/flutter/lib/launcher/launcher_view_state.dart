@@ -1,4 +1,5 @@
 import '../tools/tool_page.dart';
+import '../ui/design_tokens.g.dart';
 import '../settings/host_settings.dart';
 import 'file_search_controller.dart';
 import 'dart:convert';
@@ -168,10 +169,10 @@ class LauncherViewState {
   bool get resolving => phase == LauncherPhase.resolving;
   bool get executing => phase == LauncherPhase.executing;
   static const rowHeight = 56.0,
-      inputHeight = 72.0,
-      scopeHeight = 36.0,
+      inputHeight = DesignTokens.pageHeaderHeight,
+      scopeHeight = DesignTokens.pageToolbarHeight,
       headerHeight = 24.0,
-      footerHeight = 44.0;
+      footerHeight = DesignTokens.pageFooterHeight;
   static const maxRows = 7;
   List<ScopeDto> get scopes => snapshot?.scopes ?? const [];
   late final ScopeDto? selectedScope = _findSelectedScope();

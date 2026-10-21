@@ -1,7 +1,7 @@
 //! Pure derivation of search metadata and bounded, non-executing previews.
 use super::history::*;
 use anywhere_platform::clipboard::{ClipboardPayload, FILES};
-use std::io::Cursor;
+use std::{borrow::Cow, io::Cursor};
 
 pub fn image_format(name: &str) -> bool {
     matches!(
@@ -40,17 +40,21 @@ pub fn metadata(payload: &ClipboardPayload) -> (String, String, String) {
     } else {
         "binary"
     };
+    // Plain text is already UTF-8 inside the payload. Borrow it while deriving
+    // metadata instead of retaining another full body beside the search buffer.
     let searchable = if !files.is_empty() {
-        files.join("\n")
+        Cow::Owned(files.join("\n"))
     } else {
-        payload.plain_text().map(str::to_owned).unwrap_or_else(|| {
-            payload
-                .formats
-                .iter()
-                .filter(|f| rich_format(&f.name))
-                .filter_map(|f| std::str::from_utf8(&f.data).ok())
-                .collect::<Vec<_>>()
-                .join("\n")
+        payload.plain_text().map(Cow::Borrowed).unwrap_or_else(|| {
+            Cow::Owned(
+                payload
+                    .formats
+                    .iter()
+                    .filter(|f| rich_format(&f.name))
+                    .filter_map(|f| std::str::from_utf8(&f.data).ok())
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            )
         })
     };
     let title = if !files.is_empty() {
@@ -75,7 +79,7 @@ pub fn metadata(payload: &ClipboardPayload) -> (String, String, String) {
         .take(SUMMARY_CHARACTERS)
         .map(|c| if c.is_control() { ' ' } else { c })
         .collect();
-    let search = format!(
+    let mut search = format!(
         "{searchable}\n{}\n{kind}",
         payload
             .formats
@@ -83,8 +87,14 @@ pub fn metadata(payload: &ClipboardPayload) -> (String, String, String) {
             .map(|f| f.name.as_str())
             .collect::<Vec<_>>()
             .join(" ")
-    )
-    .to_lowercase();
+    );
+    // Most paths / JSON / source text are ASCII. Normalize the owned index in
+    // place; Unicode keeps str's context-sensitive rules (for example final Σ).
+    if search.is_ascii() {
+        search.make_ascii_lowercase();
+    } else {
+        search = search.to_lowercase();
+    }
     (kind.into(), summary, search)
 }
 pub fn preview(item: HistoryItem, payload: ClipboardPayload) -> HistoryDetail {
@@ -161,6 +171,22 @@ mod tests {
             copied_at_ms: 0,
             byte_count: 0,
         }
+    }
+    #[test]
+    fn borrowed_plain_text_preserves_unicode_search_and_content_past_summary() {
+        let mut payload = ClipboardPayload::text("ΟΣ İHELLO\n中文 TailNeedle");
+        payload.formats.push(ClipboardFormat {
+            name: "Application/X-Example".into(),
+            data: vec![],
+        });
+        let (kind, summary, search) = metadata(&payload);
+        assert_eq!(kind, "text");
+        assert_eq!(summary, "ΟΣ İHELLO 中文 TailNeedle");
+        assert_eq!(search, "ος i\u{307}hello\n中文 tailneedle\ntext/plain;charset=utf-8 application/x-example\ntext");
+        let payload = ClipboardPayload::text(&format!("{}TailNeedle", "A".repeat(8192)));
+        let (_, summary, search) = metadata(&payload);
+        assert_eq!(summary.chars().count(), SUMMARY_CHARACTERS);
+        assert!(search.contains("tailneedle\ntext/plain;charset=utf-8\ntext"));
     }
     #[test]
     fn previews_bound_unicode_text_lossy_rich_text_images_and_file_references() {

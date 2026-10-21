@@ -4,6 +4,7 @@ import '../../ui/file_type_appearance.dart';
 import '../file_search_controller.dart';
 import '../launcher_view_state.dart';
 import 'launcher_components.dart';
+import '../../infrastructure/desktop_environment.dart';
 
 /// The file page uses the same filter chips and cycle keys as Scope.
 class FileSearchControls extends StatelessWidget {
@@ -64,7 +65,7 @@ class FileSearchPreview extends StatelessWidget {
         children: [
           const Padding(
               padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Text('Preview', style: AppStyle.caption)),
+              child: Text('Preview', style: AppStyle.paneTitle)),
           Expanded(
               child: files.loading
                   ? const Center(
@@ -125,12 +126,16 @@ class FileSearchPreview extends StatelessWidget {
                                           decoration: BoxDecoration(
                                               color: AppStyle.actionSurface,
                                               borderRadius:
-                                                  BorderRadius.circular(8)),
+                                                  BorderRadius.circular(
+                                                      AppStyle.controlRadius)),
                                           child: SelectableText(preview.text!,
-                                              style: const TextStyle(
-                                                  fontFamily: 'monospace',
-                                                  fontSize: 11,
-                                                  height: 1.55,
+                                              style: TextStyle(
+                                                  fontFamily: DesktopEnvironment
+                                                      .current.monoFontFamily,
+                                                  fontSize: DesignTokens
+                                                      .previewCodeSize,
+                                                  height: DesignTokens
+                                                      .previewCodeLineHeight,
                                                   color: AppStyle.primary))),
                                     ],
                                   ])))),

@@ -42,6 +42,11 @@ class DesktopEnvironment {
         TargetPlatform.windows => 'Segoe UI',
         _ => null,
       };
+  String get monoFontFamily => switch (platform) {
+        TargetPlatform.macOS => 'Menlo',
+        TargetPlatform.windows => 'Consolas',
+        _ => 'monospace',
+      };
   String get fileSelectionLabel =>
       usesMetaCommand ? 'Finder selection' : 'File selection';
   String get applicationIdHint =>

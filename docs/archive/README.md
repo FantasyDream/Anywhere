@@ -1,6 +1,6 @@
 # 历史验收与审查
 
-以下内容保留原日期、版本和实验边界。**不作为当前使用或实现契约**；当前状态从 [文档导航](../README.md) 和 [V0.9 MVP](../mvp-v0.9.md) 阅读。
+以下内容保留原日期、版本和实验边界。**不作为当前使用或实现契约**；当前状态从 [文档导航](../README.md) 和 [V0.11 MVP](../mvp-v0.11.md) 阅读。
 
 ## 版本记录
 
@@ -17,11 +17,17 @@
 
 ## Review 与重构记录
 
+- [V0.11 Build 51 性能与交互收尾](reviews/closeout-v0.11-build51.md)：组词查询、预览复用、复制延迟、设置提示与 JSON 文本复用。
+
+- [V0.11 Build 47 运行时验收](reviews/verification-v0.11-build47.md)：剪贴板异常边界、空设置窗口释放、移除 Web 首帧截图路径。
+- [V0.11 Build 36 过期界面资源释放](reviews/memory-v0.11-build36.md)：闲置解码缓存、撤销历史与隐藏帧边界。
+- [V0.11 Build 35 内存优化](reviews/memory-v0.11-build35.md)：大文本派生峰值、HTML 字节副本及测量范围。
 - [V0.5 可维护性](reviews/review-maintainability-v0.5.md)。
 - [V0.7 架构](reviews/review-v0.7-architecture-2026-10-12.md)。
 - [Flutter / Rust 边界](reviews/review-flutter-rust-boundaries-2026-10-12.md)。
 - [build 21 边界收尾](reviews/refactor-boundaries-build21.md)。
 - [V0.8 综合 Review](reviews/review-v0.8-2026-10-13.md)。
+- [V0.11 最终边界与分层 Review](reviews/review-v0.11-final-2026-10-20.md)：Build 31，包管理幂等性、损坏资源复用、WebView 超时与识别归属。
 
 Review 的问题列表描述审查基线，修复记录描述其后变更；不能从旧“仍有问题”段落直接推断当前代码仍有该缺陷。菜单永久语义身份仍未验证的限制继续属于 [当前契约](../current-app-actions.md)，没有因归档而取消。
 
@@ -30,3 +36,5 @@ Review 的问题列表描述审查基线，修复记录描述其后变更；不�
 ## 历史基准数据
 
 [基准说明](benchmarks/README.md) 保留长期索引原型与 V2 遍历器的两个 JSON 样本。原型未进入生产，遍历器采样也不包含 Flutter / Spotlight / 原生窗口，不能作为当前整 App RSS。
+
+- [V0.11 架构与收尾 Review（2026-10-20）](reviews/review-v0.11-2026-10-20.md)

@@ -35,6 +35,18 @@ impl ModuleStorageHost {
         connection.execute_batch("PRAGMA cache_size=-256; CREATE TABLE IF NOT EXISTS extension_values (namespace TEXT NOT NULL, key TEXT NOT NULL, value BLOB NOT NULL, PRIMARY KEY(namespace,key)); PRAGMA user_version=1;")?;
         Ok(())
     }
+    /// Trusted Host cleanup only, never exported to a module or browser.
+    pub fn clear_namespace(&self, namespace: &str) -> Result<()> {
+        validate(namespace)?;
+        self.connection
+            .lock()
+            .map_err(|_| anyhow::anyhow!("module storage unavailable"))?
+            .execute(
+                "DELETE FROM extension_values WHERE namespace=?1",
+                params![namespace],
+            )?;
+        Ok(())
+    }
     /// Explicit data refresh also follows a repaired/replaced database file. Bound handles
     /// share the slot, so no old action can keep writing through a detached connection.
     pub fn reopen(&self) -> Result<()> {
@@ -51,16 +63,33 @@ impl ModuleStorageHost {
     }
     /// Only the host holds this factory. Modules receive the resulting bound handle.
     pub fn bind(&self, namespace: &str) -> Result<Arc<dyn ExtensionStorage>> {
+        self.bind_with_quota(namespace, MAX_NAMESPACE_BYTES, MAX_NAMESPACE_KEYS)
+    }
+    /// Trusted Host chooses the quota. Neither modules nor Web messages receive this factory.
+    pub fn bind_with_quota(
+        &self,
+        namespace: &str,
+        max_bytes: usize,
+        max_keys: usize,
+    ) -> Result<Arc<dyn ExtensionStorage>> {
         validate(namespace)?;
+        ensure!(
+            max_bytes > 0 && max_bytes <= 1024 * 1024 && max_keys > 0 && max_keys <= 256,
+            "invalid storage quota"
+        );
         Ok(Arc::new(ScopedStorage {
             host: self.clone(),
             namespace: namespace.into(),
+            max_bytes,
+            max_keys,
         }))
     }
 }
 struct ScopedStorage {
     host: ModuleStorageHost,
     namespace: String,
+    max_bytes: usize,
+    max_keys: usize,
 }
 fn validate(key: &str) -> Result<()> {
     ensure!(
@@ -84,10 +113,7 @@ impl ExtensionStorage for ScopedStorage {
         read_value(&connection, &self.namespace, key)
     }
     fn put(&self, key: &str, value: &[u8]) -> Result<()> {
-        ensure!(
-            value.len() <= MAX_VALUE_BYTES,
-            "module storage value exceeds limit"
-        );
+        ensure!(value.len() <= MAX_VALUE_BYTES, StorageQuotaExceeded);
         self.update(key, &mut |_| Ok(Some(value.to_vec())))?;
         Ok(())
     }
@@ -115,14 +141,11 @@ impl ExtensionStorage for ScopedStorage {
         let previous = read_value(&transaction, &self.namespace, key)?;
         let value = change(previous.as_deref())?;
         if let Some(value) = &value {
-            ensure!(
-                value.len() <= MAX_VALUE_BYTES,
-                "module storage value exceeds limit"
-            );
+            ensure!(value.len() <= MAX_VALUE_BYTES, StorageQuotaExceeded);
             let (bytes, keys): (usize, usize) = transaction.query_row("SELECT COALESCE(SUM(length(value)),0),count(*) FROM extension_values WHERE namespace=?1 AND key!=?2", params![self.namespace,key], |r| Ok((r.get(0)?,r.get(1)?)))?;
             ensure!(
-                bytes + value.len() <= MAX_NAMESPACE_BYTES && keys < MAX_NAMESPACE_KEYS,
-                "module storage quota exceeded"
+                bytes + value.len() <= self.max_bytes && keys < self.max_keys,
+                StorageQuotaExceeded
             );
             transaction.execute("INSERT INTO extension_values(namespace,key,value) VALUES(?1,?2,?3) ON CONFLICT(namespace,key) DO UPDATE SET value=excluded.value", params![self.namespace,key,value])?;
         } else {

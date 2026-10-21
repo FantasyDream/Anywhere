@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import '../web_plugins/web_packages_section.dart';
 import '../src/rust/api.dart';
 import '../ui/app_components.dart';
 import '../ui/app_icons.dart';
 import '../ui/app_style.dart';
-import 'settings_components.dart';
 import 'settings_controller.dart';
 import 'extension_presentation.dart';
 
@@ -46,6 +46,7 @@ class FeaturesSection extends StatelessWidget {
                   padding: EdgeInsets.all(12),
                   child: Text('No external extensions installed.',
                       style: AppStyle.caption))),
+        const WebPackagesSection(),
       ]);
 
   Widget _group(BuildContext context, List<ExtensionStatusDto> extensions) =>
@@ -115,7 +116,7 @@ class FeaturesSection extends StatelessWidget {
               ])),
           if (e.configurable) ...[
             const SizedBox(width: 10),
-            SettingsToggle(
+            AppToggle(
                 key: ValueKey('${e.key}-toggle'),
                 label: 'Enable ${e.name}',
                 value: e.enabled,

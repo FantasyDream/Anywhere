@@ -1,8 +1,8 @@
 # 扩展与声明式插件
 
-当前实现：V0.9 内置功能模块（外部 UI 协议保留 S1）；最后核对：2026-10-14。本页区分内置 Rust 功能模块和外部 TOML 插件。两者都复用正常 Context、Action、Candidate、Ranking 和执行链路。
+当前实现：V0.10 内置功能模块（外部 UI 协议保留 S1）；最后核对：2026-10-18。本页区分内置 Rust 功能模块和外部 TOML 插件。两者都复用正常 Context、Action、Candidate、Ranking 和执行链路。
 
-方向已调整：第一方改为内置功能模块，按 [P01–P09](feature-module-roadmap.md) 迁移；第三方 WebView 放到最后。本页保留旧 v1 / v2 / v3 已实现协议与兼容行为，停止扩展 UI DSL。内置 Manifest 已在 P03 移除，旧 Reload / runtime 已在 P05c 退役。
+第一方已改为内置功能模块，按 [P01–P09](feature-module-roadmap.md) 完成迁移。2026-10-18 调整后，Terminal 延后，下一阶段优先第三方 Web 插件，详见 [Web 平台设计与进度](web-plugin-design.md)。新的本地 Web 包、SDK 与预览安装入口由上述独立契约管理；本页只记录 v1 / v2 / v3 已实现协议与兼容行为，停止扩展 UI DSL。内置 Manifest 已在 P03 移除，旧 Reload / runtime 已在 P05c 退役；新的 Web 动态装载不会恢复第一方热加载。
 
 ## 第一方模块
 

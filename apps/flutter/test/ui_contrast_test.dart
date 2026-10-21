@@ -16,15 +16,17 @@ void main() {
     // Representative native glass colors, not a claim that Flutter can sample
     // the desktop underneath an AppKit surface. Native appearance is checked live.
     for (final material in [const Color(0xff808080), const Color(0xff969696)]) {
-      final glass = Color.alphaBlend(AppStyle.surface, material);
-      final selected = Color.alphaBlend(AppStyle.selectedSurface, glass);
-      for (final ink in [
-        AppStyle.primary,
-        AppStyle.secondary,
-        AppStyle.muted
-      ]) {
-        expect(contrast(ink, glass), greaterThanOrEqualTo(4.5));
-        expect(contrast(ink, selected), greaterThanOrEqualTo(4.5));
+      for (final veil in [AppStyle.surface, AppStyle.window]) {
+        final glass = Color.alphaBlend(veil, material);
+        final selected = Color.alphaBlend(AppStyle.selectedSurface, glass);
+        for (final ink in [
+          AppStyle.primary,
+          AppStyle.secondary,
+          AppStyle.muted
+        ]) {
+          expect(contrast(ink, glass), greaterThanOrEqualTo(4.5));
+          expect(contrast(ink, selected), greaterThanOrEqualTo(4.5));
+        }
       }
     }
   });

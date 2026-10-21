@@ -55,11 +55,11 @@ void main() {
           theme: SettingsStyle.theme(AppStyle.theme),
           home: Scaffold(
               body: StatefulBuilder(
-                  builder: (context, setState) => SettingsToggle(
+                  builder: (context, setState) => AppToggle(
                       label: 'Capture source',
                       value: value,
                       onChanged: (v) => setState(() => value = v))))));
-      final toggle = find.byType(SettingsToggle);
+      final toggle = find.byType(AppToggle);
       expect(tester.getSize(toggle).width, lessThanOrEqualTo(40));
       expect(tester.getSize(toggle).height, lessThanOrEqualTo(30));
       expect(tester.getSemantics(toggle).flagsCollection.isToggled,
@@ -84,12 +84,11 @@ void main() {
     await tester.pumpWidget(MaterialApp(
         theme: SettingsStyle.theme(AppStyle.theme),
         home: const Scaffold(
-            body: SettingsToggle(
-                label: 'Recording', value: true, onChanged: null))));
-    await tester.tap(find.byType(SettingsToggle));
+            body:
+                AppToggle(label: 'Recording', value: true, onChanged: null))));
+    await tester.tap(find.byType(AppToggle));
     await tester.pump();
-    expect(tester.widget<SettingsToggle>(find.byType(SettingsToggle)).value,
-        isTrue);
+    expect(tester.widget<AppToggle>(find.byType(AppToggle)).value, isTrue);
     expect(
         tester.widget<TextButton>(find.byType(TextButton)).onPressed, isNull);
   });

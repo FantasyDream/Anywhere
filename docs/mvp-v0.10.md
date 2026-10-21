@@ -44,7 +44,7 @@ flowchart LR
 
 旧纯文本 schema v1 升级为 v2，事务中保留历史 ID、顺序与采集偏好。复制从数据库按 ID 重新读取原始表示，并复验功能资格。正文不进入日志、Context、Usage 或通用插件存储。数据库本地明文，macOS 0600，SQLite DELETE journal / secure_delete / 512 KiB 页缓存；不宣称加密或安全擦除系统备份。
 
-clipboard-rs 0.3.5 固定版本，macOS 监听仍使用 changeCount 轮询，不承诺捕捉间隔内每次复制。原生仅保留权限、代数和分配前大小检查；NSPasteboard 读取延迟数据本身仍可能触发源应用分配，大小检查不能预知这一系统开销。
+clipboard-rs 0.3.5 固定版本，macOS 监听仍使用 changeCount 轮询，不承诺捕捉间隔内每次复制。V0.11 Build 39 后，macOS 代数轮询通过受保护原生查询，格式读写继续使用 clipboard-rs 并拦截 Cocoa 异常；原生还提供权限和分配前大小检查；NSPasteboard 读取延迟数据本身仍可能触发源应用分配，大小检查不能预知这一系统开销。
 
 “所有格式”以可序列化剪贴板数据为边界：文件承诺、应用内部指针、源应用退出后无法兑现的延迟对象，以及同一种格式在多个 pasteboard item 的任意组合，不能通用持久恢复；不会把这些情况描述为完整保真。Windows App 尚未交付，本轮跨平台库接入不等于完成 Windows 实机支持。
 

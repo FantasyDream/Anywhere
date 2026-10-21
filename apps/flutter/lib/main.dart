@@ -1,4 +1,5 @@
 import 'infrastructure/file_search_access.dart';
+import 'infrastructure/web_platform.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
@@ -65,6 +66,7 @@ Future<void> clipboardShelfMain() async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  registerWebPlatform();
   configureDesktopImageCache();
   try {
     final runtime = await RuntimePaths.read(windowChannel);

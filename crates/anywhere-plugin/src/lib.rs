@@ -1,8 +1,9 @@
-//! Declarative manifests and bounded UI descriptions; no executable runtime.
+//! Declarative definitions and verified Web packages; no executable runtime.
 use anyhow::{bail, Context, Result};
 use anywhere_protocol::{DeclarativeAction, PluginManifest};
 pub mod extension;
 pub mod ui;
+pub mod web;
 use std::{collections::HashSet, path::Path};
 
 pub const EXAMPLE_PLUGIN: &str = include_str!("../../../plugins/examples/search.toml");

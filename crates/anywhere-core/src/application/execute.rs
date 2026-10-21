@@ -25,6 +25,7 @@ impl Application {
         let (
             candidate,
             source_app,
+            captured_app,
             menu_generation,
             source_bundle,
             catalog_version,
@@ -87,6 +88,7 @@ impl Application {
             (
                 candidate,
                 session.identity.source_app.clone(),
+                session.identity.frontmost.clone(),
                 session.menu.generation,
                 session
                     .identity
@@ -106,6 +108,7 @@ impl Application {
         let current_feature_policy = self.resolver.feature_policy.clone();
         let guarded_target = candidate.target.execution_token();
         let records_usage = candidate.target.records_usage();
+        let web_plugins = self.web_plugins.clone();
         // Handed to the worker so it can re-check currency when it actually starts running,
         // rather than trusting a check made while the request was still being queued.
         let execution_ticket = self.resolver.execution(session_id, revision);
@@ -186,6 +189,31 @@ impl Application {
                     path, ..
                 } => crate::features::applications::launch::execute(path, platform.as_ref())?,
             };
+            if let Some(command) = output.web_command.take() {
+                // Mint the invocation under the same lock used by hide/activation/catalog
+                // publication. A queued worker cannot recreate a ticket after revocation.
+                let session = session_for_execution
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("session unavailable"))?;
+                if session.suspended
+                    || !execution_ticket.is_current()
+                    || !current_feature_policy.is_current(&feature_policy)
+                    || epoch.load(std::sync::atomic::Ordering::Acquire) != execution_epoch
+                    || current_catalog_version.load(std::sync::atomic::Ordering::Acquire)
+                        != catalog_version
+                {
+                    bail!("Web action expired before opening");
+                }
+                let context = candidate
+                    .context()
+                    .context("Web action has no invocation input")?;
+                output.view = Some(
+                    web_plugins
+                        .lock()
+                        .map_err(|_| anyhow::anyhow!("Web service unavailable"))?
+                        .start(&command, context, captured_app.as_ref(), &source_app)?,
+                );
+            }
             // Planning a process is still side-effect free. Revalidate just before spawn;
             // the newly started process then has its own lifetime and identity.
             let execution_session_id = if let Some(request) = output.process.take() {

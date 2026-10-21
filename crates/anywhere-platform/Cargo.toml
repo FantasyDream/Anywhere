@@ -18,7 +18,7 @@ which = "8.0.6"
 libc = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2 = "0.6"
+objc2 = { version = "0.6", features = ["exception"] }
 
 [build-dependencies]
 cc = "1"

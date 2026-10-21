@@ -202,6 +202,10 @@ mod tests {
             "other temporary directories must survive"
         );
 
+        // Parallel process tests may briefly inherit this descriptor during fork.
+        // Release the fixture's lock explicitly rather than waiting for every
+        // inherited descriptor to close at exec.
+        active_lease.unlock().unwrap();
         drop(active_lease);
         clean_stale_workspaces_in(root.path());
         assert!(!active.exists(), "released lease can be reclaimed");

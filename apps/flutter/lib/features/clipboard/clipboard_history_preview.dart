@@ -1,24 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../infrastructure/desktop_environment.dart';
 import '../../src/rust/api.dart';
-import '../../ui/app_icons.dart';
 import '../../ui/app_style.dart';
+import '../../ui/file_type_appearance.dart';
+import 'clipboard_history_presentation.dart';
 
-IconData clipboardKindIcon(String kind) => switch (kind) {
-      'image' => AppIcons.image,
-      'files' => AppIcons.folder,
-      'rich_text' => AppIcons.document,
-      'binary' => AppIcons.file,
-      _ => AppIcons.clipboard,
-    };
-String clipboardKindLabel(String kind) => switch (kind) {
-      'image' => 'Image',
-      'files' => 'Files',
-      'rich_text' => 'Rich text',
-      'binary' => 'Data',
-      _ => 'Text',
-    };
-
-/// Displays only a bounded Rust-generated preview, never executes HTML or opens files.
+/// Displays only the bounded Rust preview; never reads files or executes HTML.
 class ClipboardHistoryPreview extends StatefulWidget {
   const ClipboardHistoryPreview({super.key, required this.detail});
   final ClipboardDetailDto detail;
@@ -59,64 +46,126 @@ class _ClipboardHistoryPreviewState extends State<ClipboardHistoryPreview> {
   @override
   Widget build(BuildContext context) {
     final detail = widget.detail;
-    final formats = Text(detail.formats.join(' · '), style: AppStyle.caption);
+    return Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+        child:
+            Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Row(children: [
+            Icon(clipboardKindIcon(detail.item.kind),
+                size: 16, color: AppStyle.secondary),
+            const SizedBox(width: 7),
+            Expanded(
+                child: Text('${clipboardKindLabel(detail.item.kind)} preview',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppStyle.paneTitle)),
+          ]),
+          const SizedBox(height: 6),
+          Text(clipboardCopyDate(context, detail.item.copiedAtMs.toInt()),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppStyle.caption),
+          const SizedBox(height: 12),
+          Flexible(
+              fit: FlexFit.loose,
+              child: Container(
+                  key: const Key('clipboard-preview-surface'),
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                      color: AppStyle.actionSurface,
+                      borderRadius:
+                          BorderRadius.circular(AppStyle.controlRadius)),
+                  child: _content())),
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(
+                child: Tooltip(
+                    message: 'Size of the saved clipboard data',
+                    child: Text(
+                        '${clipboardDataSize(detail.item.byteCount)} saved',
+                        style: AppStyle.caption))),
+            if (detail.formats.isNotEmpty)
+              Tooltip(
+                  message: detail.formats.join('\n'),
+                  child: Text(
+                      '${detail.formats.length} ${detail.formats.length == 1 ? 'format' : 'formats'}',
+                      style: AppStyle.caption)),
+          ]),
+        ]));
+  }
+
+  Widget _content() {
+    final detail = widget.detail;
     if (detail.files.isNotEmpty) {
-      return ListView.builder(
+      return ListView.separated(
           key: const Key('clipboard-file-preview'),
-          itemCount: detail.files.length + 1,
-          itemBuilder: (context, index) => index == detail.files.length
-              ? Padding(padding: const EdgeInsets.only(top: 16), child: formats)
-              : Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: Row(
+          // Short selections fit their content; large ones keep a lazy viewport.
+          shrinkWrap: detail.files.length <= 3,
+          padding: const EdgeInsets.all(12),
+          itemCount: detail.files.length,
+          separatorBuilder: (_, __) => const Divider(height: 20),
+          itemBuilder: (context, index) {
+            final path = detail.files[index];
+            final name = clipboardFileName(path);
+            return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              FileTypeIcon(
+                  appearance: FileTypeAppearance.forName(name), size: 24),
+              const SizedBox(width: 8),
+              Expanded(
+                  child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(AppIcons.file,
-                            size: 18, color: AppStyle.secondary),
-                        const SizedBox(width: 8),
-                        Expanded(
-                            child: SelectableText(detail.files[index],
-                                style: AppStyle.body.copyWith(fontSize: 12))),
-                      ])));
+                    Text(name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppStyle.body.copyWith(fontSize: 12)),
+                    const SizedBox(height: 4),
+                    SelectableText(path, style: AppStyle.caption),
+                  ])),
+            ]);
+          });
     }
-    return SingleChildScrollView(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      if (_image != null) ...[
-        Image(
-            image: _image!,
-            key: const Key('clipboard-image-preview'),
-            fit: BoxFit.contain,
-            errorBuilder: (_, error, stack) => const Text(
-                'Image preview unavailable',
-                style: AppStyle.caption)),
-        const SizedBox(height: 16),
-      ] else if (detail.item.kind == 'image') ...[
-        const Icon(AppIcons.image, size: 48, color: AppStyle.secondary),
-        const SizedBox(height: 12),
-        const Text(
-            'Preview unavailable. The original image can still be copied.',
-            style: AppStyle.caption),
-        const SizedBox(height: 16),
-      ],
-      if (detail.text.isNotEmpty) ...[
-        SelectableText(detail.text,
-            key: const Key('clipboard-preview'),
-            style: AppStyle.body
-                .copyWith(fontFamily: 'monospace', fontSize: 12, height: 1.5)),
-        const SizedBox(height: 16),
-      ],
-      if (detail.text.isEmpty &&
-          _image == null &&
-          detail.item.kind != 'image') ...[
-        Icon(clipboardKindIcon(detail.item.kind),
-            size: 40, color: AppStyle.secondary),
-        const SizedBox(height: 12),
-        const Text(
-            'Preview is not available for this format. Copy restores its saved data.',
-            style: AppStyle.caption),
-        const SizedBox(height: 16),
-      ],
-      formats,
-    ]));
+    if (_image != null) {
+      return Column(children: [
+        Expanded(
+            flex: 2,
+            child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Image(
+                    image: _image!,
+                    key: const Key('clipboard-image-preview'),
+                    fit: BoxFit.contain,
+                    width: double.infinity,
+                    height: double.infinity,
+                    errorBuilder: (_, error, stack) =>
+                        _unavailable('Image preview unavailable')))),
+        if (detail.text.isNotEmpty) Expanded(child: _text(detail.text)),
+      ]);
+    }
+    if (detail.text.isNotEmpty) return _text(detail.text);
+    return _unavailable(detail.item.kind == 'image'
+        ? 'Preview unavailable. The original image can still be copied.'
+        : 'Preview is not available for this format. Copy restores its saved data.');
   }
+
+  Widget _text(String text) => SingleChildScrollView(
+      padding: const EdgeInsets.all(12),
+      child: SizedBox(
+          width: double.infinity,
+          child: SelectableText(text,
+              key: const Key('clipboard-preview'),
+              style: AppStyle.body.copyWith(
+                  fontFamily: DesktopEnvironment.current.monoFontFamily,
+                  fontSize: DesignTokens.previewCodeSize,
+                  height: DesignTokens.previewCodeLineHeight))));
+
+  Widget _unavailable(String message) => Center(
+      child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(clipboardKindIcon(widget.detail.item.kind),
+                size: 28, color: AppStyle.secondary),
+            const SizedBox(height: 10),
+            Text(message, style: AppStyle.caption, textAlign: TextAlign.center),
+          ])));
 }

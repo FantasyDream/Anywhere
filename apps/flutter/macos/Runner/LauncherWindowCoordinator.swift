@@ -1,18 +1,18 @@
 import AppKit
-import FlutterMacOS
 
 /// Reparents the same view between transient Launcher and persistent Settings.
 final class LauncherWindowCoordinator {
     let window: NSWindow
-    let controller: FlutterViewController
+    let controller: NSViewController
     let host: WindowMaterialController
     let glass: WindowMaterial
     let launcherGlassMask: NSImage?
     weak var delegate: NSWindowDelegate?
     let tasksVisible: () -> Bool
     var settingsOpen = false
-    var settingsWindow: NSWindow?
-    init(window: NSWindow, controller: FlutterViewController, host: WindowMaterialController, glass: WindowMaterial,
+    private(set) var settingsWindow: NSWindow?
+    private var settingsOrigin: NSPoint?
+    init(window: NSWindow, controller: NSViewController, host: WindowMaterialController, glass: WindowMaterial,
          mask: NSImage?, delegate: NSWindowDelegate, tasksVisible: @escaping () -> Bool) {
         self.window = window; self.controller = controller; self.host = host; self.glass = glass
         launcherGlassMask = mask; self.delegate = delegate; self.tasksVisible = tasksVisible
@@ -42,7 +42,8 @@ final class LauncherWindowCoordinator {
             panel.isReleasedWhenClosed = false
             panel.delegate = delegate
             panel.standardWindowButton(.zoomButton)?.isEnabled = false
-            panel.center()
+            if let origin = settingsOrigin { panel.setFrameOrigin(origin) }
+            else { panel.center() }
             settingsWindow = panel
         }
         if settingsWindow?.contentViewController !== host {
@@ -60,14 +61,20 @@ final class LauncherWindowCoordinator {
     }
 
     func restoreLauncherView() {
-        guard settingsWindow?.contentViewController === host else { return }
-        settingsWindow?.orderOut(nil)
-        settingsWindow?.contentViewController = nil
+        guard let panel = settingsWindow, panel.contentViewController === host else { return }
+        settingsOrigin = panel.frame.origin
+        panel.orderOut(nil)
+        panel.contentViewController = nil
         let frame = window.frame
         window.contentViewController = host
         window.setFrame(frame, display: false)
         glass.maskImage = launcherGlassMask
         glass.cornerRadius = 18
+        // Only the shared content needs to survive. Keeping an empty Settings
+        // window retains its backing store and lets window restoration raise a
+        // blank native window independently of the Launcher presentation.
+        panel.close()
+        settingsWindow = nil
     }
 
     func resizeWindow(_ requestedHeight: Double, width requestedWidth: Double = 648) {

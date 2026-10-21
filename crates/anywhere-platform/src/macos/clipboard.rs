@@ -13,7 +13,12 @@ struct Observation {
 }
 impl Observation {
     fn observe(&mut self, count: i64, now: Instant) {
-        if self.count != count {
+        if count < 0 || self.count < 0 {
+            // A service outage is not a copy. Recovered contents have unknown
+            // age and must not be automatically offered as a recent clipboard.
+            self.copied = None;
+            self.count = count;
+        } else if self.count != count {
             // Use the beginning of the observation interval. This expires up to
             // 500ms early instead of presenting content copied more than 15s ago.
             self.copied = Some(self.checked);
@@ -25,7 +30,18 @@ impl Observation {
 static OBSERVATION: OnceLock<Mutex<Observation>> = OnceLock::new();
 pub(super) fn change_count() -> i64 {
     // SAFETY: the function returns a pasteboard generation and touches no buffers.
-    unsafe { launcher_clipboard_change_count() }
+    let count = unsafe { launcher_clipboard_change_count() };
+    if count < 0 {
+        // Both the foreground snapshot and background watcher use this query.
+        // Forget recency across an outage rather than dating recovered content
+        // from the time of the next successful foreground read.
+        if let Some(observation) = OBSERVATION.get() {
+            if let Ok(mut held) = observation.lock() {
+                held.observe(count, Instant::now());
+            }
+        }
+    }
+    count
 }
 
 static TRACKER: OnceLock<Mutex<Option<Box<dyn crate::clipboard::ClipboardWatch>>>> =
@@ -40,11 +56,12 @@ pub(super) fn start_tracking() {
     });
     TRACKER.get_or_init(|| {
         let watch = crate::clipboard::watch(Box::new(|| {
+            let count = change_count();
             if let Some(observation) = OBSERVATION.get() {
                 if let Ok(mut held) = observation.lock() {
                     let now = Instant::now();
                     held.checked = now - Duration::from_millis(500);
-                    held.observe(change_count(), now);
+                    held.observe(count, now);
                 }
             }
         }))
@@ -55,8 +72,10 @@ pub(super) fn start_tracking() {
 pub(super) fn snapshot() -> Result<crate::ClipboardSnapshot> {
     start_tracking();
     let count = change_count();
+    anyhow::ensure!(count >= 0, crate::ContextReadError::Unavailable);
     let text = clipboard_text()?;
     let after = change_count();
+    anyhow::ensure!(after >= 0, crate::ContextReadError::Unavailable);
     let age_ms = OBSERVATION.get().and_then(|observation| {
         let mut held = observation.lock().ok()?;
         let now = Instant::now();
@@ -85,6 +104,22 @@ pub(super) fn copy_text(text: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pasteboard_outage_does_not_make_recovered_content_recent() {
+        let now = Instant::now();
+        let mut held = Observation {
+            count: 2,
+            checked: now,
+            copied: Some(now),
+        };
+        held.observe(-1, now);
+        assert!(held.copied.is_none());
+        held.observe(8, now + Duration::from_secs(1));
+        assert!(held.copied.is_none());
+        held.observe(9, now + Duration::from_secs(2));
+        assert_eq!(held.copied, Some(now + Duration::from_secs(1)));
+    }
 
     #[test]
     fn initial_clipboard_has_unknown_age_and_new_generations_do_not_refresh_on_read() {

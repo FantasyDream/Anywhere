@@ -76,6 +76,12 @@ impl ActionMatcher<'_> {
         });
         let mut candidates = Vec::new();
         for context in contexts {
+            let text = match &context.value {
+                ContextValue::Text(text) => text.as_ref(),
+                _ => "",
+            };
+            let mut input_matches =
+                crate::core::context::input_patterns::InputPatternMatches::new(text);
             // The collection is the user's object. Expanding selected children for
             // providers must not create an Open/Reveal row for every selected file.
             if grouped_finder_selection
@@ -104,6 +110,24 @@ impl ActionMatcher<'_> {
                 if group_filter.is_some_and(|scope| scope != group_id) {
                     continue;
                 }
+                // Query text becomes a Web input only through an explicit bounded
+                // matcher. Generic text consumers must not receive search keywords.
+                let content_match = context.type_id == TEXT
+                    && match &action.executor {
+                        super::descriptor::ActionExecutor::WebCommand(command) => {
+                            command.matches_input(&mut input_matches)
+                        }
+                        _ => false,
+                    };
+                if matches!(
+                    action.executor,
+                    super::descriptor::ActionExecutor::WebCommand(_)
+                ) && context.source == ContextSource::UserInput
+                    && context.type_id == TEXT
+                    && !content_match
+                {
+                    continue;
+                }
                 let action_query = if searching && scope_id.is_none() && action.owning_app.is_some()
                 {
                     // A command such as Finder's "Find" must keep its direct title match
@@ -123,15 +147,30 @@ impl ActionMatcher<'_> {
                     query.clone()
                 };
                 let match_level = action.search().matched(&action_query);
-                if searching && match_level.is_none() && !availability::is_user_object(context) {
+                if searching
+                    && match_level.is_none()
+                    && !availability::is_user_object(context)
+                    && !(content_match && context.source == ContextSource::UserInput)
+                {
                     continue;
+                }
+                // Declared content matchers narrow automatic suggestions. An explicit
+                // keyword still opens the tool for editing invalid/incomplete input.
+                if let super::descriptor::ActionExecutor::WebCommand(command) = &action.executor {
+                    if context.type_id == TEXT
+                        && !command.input_matchers.is_empty()
+                        && !content_match
+                        && match_level.is_none()
+                    {
+                        continue;
+                    }
                 }
                 let availability =
                     availability::evaluate(&action.availability, context, self.facts);
                 if !availability.is_visible() {
                     continue;
                 }
-                let stats = if action.executor.records_usage() {
+                let stats = if action.executor.uses_usage() {
                     (self.usage)(&action.id, &context.type_id)
                 } else {
                     Default::default()

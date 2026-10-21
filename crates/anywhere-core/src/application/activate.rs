@@ -28,6 +28,10 @@ impl Application {
             .checked_add(1)
             .context("session id exhausted; restart launcher")?;
         self.file_search_source.clear();
+        self.web_plugins
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Web service unavailable"))?
+            .invalidate();
         *session = crate::application::session_model::LauncherSession::reserved(
             session_id,
             self.resolver.base_registry(),

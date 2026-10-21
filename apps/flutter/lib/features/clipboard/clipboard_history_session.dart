@@ -3,15 +3,21 @@ import 'package:flutter/material.dart';
 import '../../src/rust/api.dart' as api;
 import '../../infrastructure/clipboard_history_backend.dart';
 import 'clipboard_history_page.dart';
+import 'clipboard_history_presentation.dart';
 import '../../tools/tool_page.dart';
 
 /// Presentation state only. Persistence, matching, quotas and capture live in Rust.
 class ClipboardHistorySession extends ToolPageSession {
-  ClipboardHistorySession(this.backend) {
+  ClipboardHistorySession(this.backend,
+      {this.rowExtent = clipboardHistoryRowHeight, bool previewEnabled = true})
+      : _previewEnabled = previewEnabled {
     query.addListener(_queryChanged);
     unawaited(refresh());
   }
   final ClipboardHistoryBackend backend;
+  final double rowExtent;
+  bool _previewEnabled;
+  bool get previewEnabled => _previewEnabled;
   final query = TextEditingController();
   final focus = FocusNode(debugLabel: 'clipboard-history-search');
   final scroll = ScrollController();
@@ -24,6 +30,7 @@ class ClipboardHistorySession extends ToolPageSession {
   Timer? _debounce;
   Future<void>? _previewTask;
   String _lastQuery = '';
+  bool _composing = false;
   api.ClipboardItemDto? get selected =>
       items.isEmpty ? null : items[selectedIndex];
   @override
@@ -31,15 +38,32 @@ class ClipboardHistorySession extends ToolPageSession {
   @override
   String get title => 'Clipboard History';
   @override
-  double get width => 880;
+  double get width => 960;
   @override
-  double get height => 560;
+  double get height => 600;
 
   void _queryChanged() {
     // Focus and caret changes also notify TextEditingController. Only actual
     // query edits may clear results or invalidate the current selection.
-    if (disposed || query.text == _lastQuery) return;
+    if (disposed) return;
+    if (!query.value.composing.isCollapsed) {
+      if (!_composing) {
+        _composing = true;
+        _debounce?.cancel();
+        ++_searchEpoch;
+        ++_detailEpoch;
+        loading = false;
+        notifyListeners();
+      }
+      return;
+    }
+    final committed = _composing;
+    _composing = false;
+    // Composition may have cancelled the debounce for this same text. Resume
+    // it on commit even when the final characters did not change.
+    if (!committed && query.text == _lastQuery) return;
     _lastQuery = query.text;
+    status = null;
     _debounce?.cancel();
     // Invalidate both response paths immediately, before the debounce fires.
     ++_searchEpoch;
@@ -54,6 +78,7 @@ class ClipboardHistorySession extends ToolPageSession {
 
   Future<void> refresh({bool background = false}) async {
     if (!canInteract ||
+        !query.value.composing.isCollapsed ||
         (background && (loading || mutating || _debounce?.isActive == true))) {
       return;
     }
@@ -84,7 +109,20 @@ class ClipboardHistorySession extends ToolPageSession {
       items = List.unmodifiable(result.items);
       final previous = items.indexWhere((item) => item.id == selectedId);
       selectedIndex = previous < 0 ? 0 : previous;
-      if (preview == null || preview!.item.id != selected?.id) {
+      // Row metadata is ready independently of image decoding. Keep both the
+      // loading indicator and copy feedback independent of preview latency.
+      loading = false;
+      if (!unchanged && preview != null && preview!.item.id == selected?.id) {
+        final cached = preview!;
+        preview = api.ClipboardDetailDto(
+            item: selected!,
+            text: cached.text,
+            imagePng: cached.imagePng,
+            files: cached.files,
+            formats: cached.formats);
+      }
+      if (_previewEnabled &&
+          (preview == null || preview!.item.id != selected?.id)) {
         await select(selectedIndex);
       }
     } catch (_) {
@@ -121,8 +159,26 @@ class ClipboardHistorySession extends ToolPageSession {
     notifyListeners();
   }
 
+  void setPreviewEnabled(bool enabled) {
+    if (disposed || _previewEnabled == enabled) return;
+    _previewEnabled = enabled;
+    ++_detailEpoch;
+    preview = null;
+    notifyListeners();
+    if (enabled) unawaited(select(selectedIndex));
+  }
+
   Future<void> select(int index) async {
     if (!canInteract) return;
+    if (items.isNotEmpty) {
+      final next = index.clamp(0, items.length - 1);
+      if (next == selectedIndex &&
+          (preview?.item.id == items[next].id || _previewTask != null)) {
+        _scrollSelection();
+        return _previewTask;
+      }
+      if (next != selectedIndex) status = null;
+    }
     ++_detailEpoch;
     preview = null;
     if (items.isEmpty) {
@@ -131,9 +187,16 @@ class ClipboardHistorySession extends ToolPageSession {
     }
     selectedIndex = index.clamp(0, items.length - 1);
     notifyListeners();
+    _scrollSelection();
+    // Only one detail request per presentation. Arrow repeats replace the
+    // desired selection instead of queueing every intermediate image decode.
+    if (_previewEnabled) return _previewTask ??= _drainPreviews();
+  }
+
+  void _scrollSelection() {
     if (scroll.hasClients) {
-      final top = selectedIndex * 64.0;
-      final bottom = top + 64;
+      final top = selectedIndex * rowExtent;
+      final bottom = top + rowExtent;
       final offset = scroll.offset;
       if (top < offset || bottom > offset + scroll.position.viewportDimension) {
         scroll.jumpTo(
@@ -141,26 +204,24 @@ class ClipboardHistorySession extends ToolPageSession {
                 .clamp(0, scroll.position.maxScrollExtent));
       }
     }
-    // Only one detail request per presentation. Arrow repeats replace the
-    // desired selection instead of queueing every intermediate image decode.
-    return _previewTask ??= _drainPreviews();
   }
 
   Future<void> _drainPreviews() async {
     try {
-      while (canInteract && items.isNotEmpty) {
+      while (
+          canInteract && !_composing && _previewEnabled && items.isNotEmpty) {
         final epoch = _detailEpoch;
         final id = selected!.id;
         try {
           final detail = await backend.detail(id);
-          if (!canInteract) return;
+          if (!canInteract || _composing || !_previewEnabled) return;
           if (epoch != _detailEpoch || selected?.id != id) continue;
           preview = detail;
           if (detail == null) {
             notice = 'This entry is no longer available. Refresh history.';
           }
         } catch (_) {
-          if (!canInteract) return;
+          if (!canInteract || _composing || !_previewEnabled) return;
           if (epoch != _detailEpoch || selected?.id != id) continue;
           notice = 'This entry could not be previewed.';
         }
@@ -173,7 +234,7 @@ class ClipboardHistorySession extends ToolPageSession {
   }
 
   Future<bool> _change(Future<void> Function() operation,
-      {String? success, String? failure}) async {
+      {String? success, String? failure, bool refreshAfter = true}) async {
     if (!canInteract || mutating) return false;
     mutating = true;
     status = null;
@@ -181,7 +242,7 @@ class ClipboardHistorySession extends ToolPageSession {
     try {
       await operation();
       if (!canInteract) return false;
-      await refresh();
+      if (refreshAfter) await refresh();
       if (!canInteract) return false;
       if (success != null) {
         status = success;
@@ -206,11 +267,24 @@ class ClipboardHistorySession extends ToolPageSession {
     final id = selected?.id;
     if (id != null) {
       return _change(() => backend.copy(id),
+          // Restoring a payload does not mutate history. Background collection
+          // can update row metadata later without delaying the successful copy.
+          refreshAfter: false,
           success: 'Copied. Paste in the destination app.',
           failure:
               'This entry could not be copied. For files, check that the originals still exist and are accessible.');
     }
     return false;
+  }
+
+  /// A compact shelf click copies by identity. Do not wait for image preview I/O
+  /// before restoring the payload; select updates the target synchronously.
+  Future<bool> copyItem(String id) async {
+    if (!canInteract || mutating) return false;
+    final index = items.indexWhere((item) => item.id == id);
+    if (index < 0) return false;
+    unawaited(select(index));
+    return copy();
   }
 
   Future<void> delete() async {

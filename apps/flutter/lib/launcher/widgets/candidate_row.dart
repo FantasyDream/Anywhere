@@ -34,43 +34,32 @@ class CandidateRow extends StatelessWidget {
       enabled: !disabled,
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Material(
-          color: selected ? AppStyle.selectedSurface : Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppStyle.resultRadius),
-            side: BorderSide(
-                color:
-                    selected ? AppStyle.selectionOutline : Colors.transparent,
-                width: .5),
-          ),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(AppStyle.resultRadius),
-            onTap: disabled ? null : onTap,
-            child: SizedBox(
-              height: LauncherViewState.rowHeight - 4,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Row(
-                  children: [
-                    CandidateIcon(
-                        candidate: candidate,
-                        bytes: iconBytes,
-                        size: 32,
-                        fileObject: fileObject),
-                    const SizedBox(width: 12),
-                    Expanded(child: _labels(disabled)),
-                    if (actionShortcut != null ||
-                        candidate.shortcut != null) ...[
-                      const SizedBox(width: 8),
-                      Tooltip(
-                          message: actionShortcut != null
-                              ? 'Anywhere action shortcut'
-                              : 'Shortcut in the current app',
-                          child:
-                              _shortcut(actionShortcut ?? candidate.shortcut!)),
-                    ],
+        child: AppSelectionSurface(
+          selected: selected,
+          onTap: disabled ? null : onTap,
+          child: SizedBox(
+            height: LauncherViewState.rowHeight - 4,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Row(
+                children: [
+                  CandidateIcon(
+                      candidate: candidate,
+                      bytes: iconBytes,
+                      size: 32,
+                      fileObject: fileObject),
+                  const SizedBox(width: 12),
+                  Expanded(child: _labels(disabled)),
+                  if (actionShortcut != null || candidate.shortcut != null) ...[
+                    const SizedBox(width: 8),
+                    Tooltip(
+                        message: actionShortcut != null
+                            ? 'Anywhere action shortcut'
+                            : 'Shortcut in the current app',
+                        child:
+                            _shortcut(actionShortcut ?? candidate.shortcut!)),
                   ],
-                ),
+                ],
               ),
             ),
           ),

@@ -38,6 +38,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   SettingsController get _controller => widget.controller;
   HostSettings get _settings => _controller.current;
+  String? get _notice =>
+      _controller.statusMessage ??
+      (_page == 'shortcuts' ? _controller.shortcutCatalogMessage : null);
 
   @override
   void initState() {
@@ -348,8 +351,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               padding:
                                   const EdgeInsets.fromLTRB(20, 18, 20, 20),
                               children: [
-                        if (_controller.statusMessage != null) ...[
-                          AppNotice(_controller.statusMessage!),
+                        if (_notice case final message?) ...[
+                          AppNotice(message),
                           const SizedBox(height: 12),
                         ],
                         ..._pageContent(),

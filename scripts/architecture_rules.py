@@ -16,3 +16,7 @@ def check_core_imports(source, name):
 
 def check_feature_imports(source, name):
     _check_imports(source, name, r'\b(application|persistence)\b')
+
+
+def check_persistence_imports(source, name):
+    _check_imports(source, name, r'\b(application|Application)\b')

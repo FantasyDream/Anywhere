@@ -1,8 +1,12 @@
 import AppKit
+import flutter_inappwebview_macos
 import ApplicationServices
 import Carbon
 import FlutterMacOS
 import ServiceManagement
+
+@_silgen_name("anywhere_install_flutter_surface_guard")
+private func installFlutterSurfaceGuard() -> Int32
 
 // macOS window lifecycle only. Context capture and every action stay in Rust.
 final class LauncherWindow: NSWindow {
@@ -13,6 +17,9 @@ final class LauncherWindow: NSWindow {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation {
     var window: LauncherWindow!
     var controller: FlutterViewController!
+    private var webToolsChannel: FlutterMethodChannel?
+    private var webToolsActive = false
+    private let webPackagePicker = WebPackagePicker()
     var glass: WindowMaterial!
     var materialController: WindowMaterialController!
     var channel: FlutterMethodChannel!
@@ -55,9 +62,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         if key === clipboardWindow.window { return clipboardWindow.controller }
         return key === window || key === settingsWindow ? controller : nil
     }
-    lazy var editMenu = NativeEditMenu(available: { [weak self] in self?.editingController != nil },
+    private var nativePanelEditing: Bool { NSApp.isActive && NSApp.keyWindow is NSPanel }
+    lazy var editMenu = NativeEditMenu(available: { [weak self] in
+        self?.editingController != nil || self?.nativePanelEditing == true
+    },
         send: { [weak self] command in
-            guard let destination = self?.editingController else { return }
+            guard let self else { return }
+            if self.nativePanelEditing {
+                _ = NSApp.sendAction(NSSelectorFromString(command + ":"), to: nil, from: nil)
+                return
+            }
+            guard let destination = self.editingController else { return }
+            if self.webToolsActive, NSApp.keyWindow === self.window,
+               NativeWebEditing.perform(command, in: self.window) { return }
             FlutterMethodChannel(name: "anywhere/editing", binaryMessenger: destination.engine.binaryMessenger)
                 .invokeMethod("perform", arguments: command)
         })
@@ -79,9 +96,35 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func applicationDidFinishLaunching(_ notification: Notification) {
         let logs = Self.supportDirectory()
         freopen(logs.appendingPathComponent("launcher.log").path, "w", stderr)
+        log(["event": "flutter_surface_guard", "installed": installFlutterSurfaceGuard() == 1])
         NSApp.setActivationPolicy(.accessory)
         _ = clipboardWindow // Observe paste destinations before Launcher takes focus; no engine yet.
         controller = FlutterViewController(project: FlutterDartProject())
+        InAppWebViewFlutterPlugin.register(with: controller.registrar(forPlugin: "InAppWebViewFlutterPlugin"))
+        webToolsChannel = FlutterMethodChannel(name: "anywhere/web-tools", binaryMessenger: controller.engine.binaryMessenger)
+        webToolsChannel?.setMethodCallHandler { [weak self] call, reply in
+            if call.method == "focusHost", let self, self.webToolsActive,
+               NSApp.keyWindow === self.window {
+                self.window.makeFirstResponder(nil)
+                WindowInputFocus.restore(in: self.window, content: self.controller.view)
+                reply(nil)
+            } else if call.method == "focusWeb", let self, self.webToolsActive,
+                      NSApp.keyWindow === self.window {
+                NativeWebEditing.focus(in: self.window,
+                    content: self.window.contentView ?? self.controller.view)
+                reply(nil)
+            } else if call.method == "configureWebAppearance", let self, self.webToolsActive {
+                let transparent = NativeWebAppearance.configure(in: self.window.contentView ?? self.controller.view)
+                self.log(["event": "web_canvas_configured", "web_view_found": transparent != nil,
+                          "transparent": transparent ?? false])
+                reply(transparent)
+            } else if call.method == "active", let active = call.arguments as? Bool {
+                self?.webToolsActive = active
+                // Background dragging otherwise steals WebKit mouse-up/click events.
+                self?.window.isMovableByWindowBackground = !active
+                reply(nil)
+            } else { reply(FlutterMethodNotImplemented) }
+        }
         controller.backgroundColor = .clear
         window = LauncherWindow(contentRect: NSRect(x: 0, y: 0, width: 648, height: 64),
                                 styleMask: [.borderless], backing: .buffered, defer: false)
@@ -136,6 +179,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         channel.setMethodCallHandler { [weak self] call, reply in
             guard let self else { return }
             switch call.method {
+            case "chooseWebPackage":
+                guard self.settingsOpen, let settings = self.settingsWindow,
+                      NSApp.keyWindow === settings else { reply(nil); return }
+                self.webPackagePicker.choose(in: settings) { reply($0) }
             case "capabilities":
                 reply(HostRuntime.capabilities)
             case "paths":
@@ -328,6 +375,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                event.window === settings, NSApp.keyWindow === settings,
                self.shortcutRecorder.handle(code: event.keyCode, flags: event.modifierFlags, repeatKey: event.isARepeat) {
                 return nil
+            }
+            if let self, self.webToolsActive, NSApp.isActive,
+               NSApp.keyWindow === self.window, event.window === self.window {
+                let flags = event.modifierFlags.intersection([.command, .option, .control, .shift])
+                let composing = (self.window.firstResponder as? NSTextInputClient)?.hasMarkedText() ?? false
+                if !composing, event.keyCode == 53 {
+                    self.webToolsChannel?.invokeMethod("back", arguments: nil)
+                    return nil
+                }
+                if !composing, flags == .command, event.keyCode == UInt16(kVK_ANSI_K) {
+                    self.webToolsChannel?.invokeMethod("actions", arguments: nil)
+                    return nil
+                }
             }
             guard let self, self.tasksReady,
                   let tasks = self.tasksWindow, NSApp.keyWindow === tasks,

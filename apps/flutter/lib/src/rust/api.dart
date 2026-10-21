@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `application`, `snapshot_delivery`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
 
@@ -288,6 +288,49 @@ Future<SnapshotWaitDto> loadMoreFilesDelta(
         candidateListVersion: candidateListVersion,
         loadedCount: loadedCount);
 
+Future<List<WebPackageDto>> webPackages() =>
+    RustLib.instance.api.crateApiWebPackages();
+
+Future<WebReviewDto> inspectWebPackage({required String path}) =>
+    RustLib.instance.api.crateApiInspectWebPackage(path: path);
+
+Future<void> cancelWebReview() =>
+    RustLib.instance.api.crateApiCancelWebReview();
+
+Future<List<WebPackageDto>> approveWebPackage({required String token}) =>
+    RustLib.instance.api.crateApiApproveWebPackage(token: token);
+
+Future<List<WebPackageDto>> changeWebPackage(
+        {required String id, required String operation}) =>
+    RustLib.instance.api.crateApiChangeWebPackage(id: id, operation: operation);
+
+Future<WebDocumentDto> openWebDocument(
+        {required String invocationId, String? resumeHandle}) =>
+    RustLib.instance.api.crateApiOpenWebDocument(
+        invocationId: invocationId, resumeHandle: resumeHandle);
+
+Future<void> closeWebDocument({required String handle}) =>
+    RustLib.instance.api.crateApiCloseWebDocument(handle: handle);
+
+Future<WebReplyDto> dispatchWebFrame(
+        {required String handle,
+        required String origin,
+        required bool mainFrame,
+        required String frame}) =>
+    RustLib.instance.api.crateApiDispatchWebFrame(
+        handle: handle, origin: origin, mainFrame: mainFrame, frame: frame);
+
+Future<WebReplyDto> confirmWebOperation(
+        {required String handle,
+        required String origin,
+        required String ticket,
+        required bool approved}) =>
+    RustLib.instance.api.crateApiConfirmWebOperation(
+        handle: handle, origin: origin, ticket: ticket, approved: approved);
+
+Future<Uint8List> webResource({required String handle, required String path}) =>
+    RustLib.instance.api.crateApiWebResource(handle: handle, path: path);
+
 class ActionResultDto {
   final int sessionId;
   final int revision;
@@ -298,6 +341,7 @@ class ActionResultDto {
   final HostViewDto? view;
   final PluginDetailDto? pluginDetail;
   final NativeToolDto? nativeTool;
+  final WebPluginLaunchDto? webPlugin;
   final bool closeWindow;
   final String? executionSessionId;
 
@@ -311,6 +355,7 @@ class ActionResultDto {
     this.view,
     this.pluginDetail,
     this.nativeTool,
+    this.webPlugin,
     required this.closeWindow,
     this.executionSessionId,
   });
@@ -326,6 +371,7 @@ class ActionResultDto {
       view.hashCode ^
       pluginDetail.hashCode ^
       nativeTool.hashCode ^
+      webPlugin.hashCode ^
       closeWindow.hashCode ^
       executionSessionId.hashCode;
 
@@ -343,6 +389,7 @@ class ActionResultDto {
           view == other.view &&
           pluginDetail == other.pluginDetail &&
           nativeTool == other.nativeTool &&
+          webPlugin == other.webPlugin &&
           closeWindow == other.closeWindow &&
           executionSessionId == other.executionSessionId;
 }
@@ -1044,6 +1091,7 @@ enum HostViewDto {
   fileSearch,
   nativeTool,
   pluginDetail,
+  webPlugin,
   ;
 }
 
@@ -1397,4 +1445,165 @@ enum SnapshotWaitKindDto {
   closed,
   superseded,
   ;
+}
+
+class WebDocumentDto {
+  final String handle;
+  final String origin;
+  final String entry;
+  final String title;
+
+  const WebDocumentDto({
+    required this.handle,
+    required this.origin,
+    required this.entry,
+    required this.title,
+  });
+
+  @override
+  int get hashCode =>
+      handle.hashCode ^ origin.hashCode ^ entry.hashCode ^ title.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WebDocumentDto &&
+          runtimeType == other.runtimeType &&
+          handle == other.handle &&
+          origin == other.origin &&
+          entry == other.entry &&
+          title == other.title;
+}
+
+/// Host-only package management; never dispatched through the Web SDK.
+class WebPackageDto {
+  final String id;
+  final String name;
+  final String version;
+  final String digest;
+  final List<String> permissions;
+  final bool enabled;
+  final bool rollback;
+
+  const WebPackageDto({
+    required this.id,
+    required this.name,
+    required this.version,
+    required this.digest,
+    required this.permissions,
+    required this.enabled,
+    required this.rollback,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      version.hashCode ^
+      digest.hashCode ^
+      permissions.hashCode ^
+      enabled.hashCode ^
+      rollback.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WebPackageDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          version == other.version &&
+          digest == other.digest &&
+          permissions == other.permissions &&
+          enabled == other.enabled &&
+          rollback == other.rollback;
+}
+
+class WebPluginLaunchDto {
+  final String invocationId;
+
+  const WebPluginLaunchDto({
+    required this.invocationId,
+  });
+
+  @override
+  int get hashCode => invocationId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WebPluginLaunchDto &&
+          runtimeType == other.runtimeType &&
+          invocationId == other.invocationId;
+}
+
+class WebReplyDto {
+  final String? frame;
+  final String? ticket;
+  final String? title;
+  final String? preview;
+
+  const WebReplyDto({
+    this.frame,
+    this.ticket,
+    this.title,
+    this.preview,
+  });
+
+  @override
+  int get hashCode =>
+      frame.hashCode ^ ticket.hashCode ^ title.hashCode ^ preview.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WebReplyDto &&
+          runtimeType == other.runtimeType &&
+          frame == other.frame &&
+          ticket == other.ticket &&
+          title == other.title &&
+          preview == other.preview;
+}
+
+class WebReviewDto {
+  final String token;
+  final String id;
+  final String name;
+  final String version;
+  final String digest;
+  final List<String> permissions;
+  final bool updating;
+
+  const WebReviewDto({
+    required this.token,
+    required this.id,
+    required this.name,
+    required this.version,
+    required this.digest,
+    required this.permissions,
+    required this.updating,
+  });
+
+  @override
+  int get hashCode =>
+      token.hashCode ^
+      id.hashCode ^
+      name.hashCode ^
+      version.hashCode ^
+      digest.hashCode ^
+      permissions.hashCode ^
+      updating.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WebReviewDto &&
+          runtimeType == other.runtimeType &&
+          token == other.token &&
+          id == other.id &&
+          name == other.name &&
+          version == other.version &&
+          digest == other.digest &&
+          permissions == other.permissions &&
+          updating == other.updating;
 }

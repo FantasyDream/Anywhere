@@ -1,11 +1,14 @@
 import 'dart:async';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/settings/action_shortcut.dart';
 import 'package:anywhere/settings/host_settings.dart';
 import 'package:anywhere/settings/settings_controller.dart';
+import 'package:anywhere/settings/settings_screen.dart';
 import 'package:anywhere/src/rust/api.dart';
+import 'package:anywhere/ui/app_style.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -136,12 +139,56 @@ void main() {
     fail = true;
     expect(await c.save(c.current), isFalse);
     expect(syncs.last['supportedActionIds'], isEmpty);
-    expect(c.statusMessage, contains('catalog unavailable'));
+    expect(c.statusMessage, contains('Reopen Settings'));
     expect(c.current.actionShortcuts.length, 2);
     fail = false;
     await c.refreshFeatureData();
     expect(c.statusMessage, isNull);
     expect(syncs.last['supportedActionIds'], isNotEmpty);
+  });
+
+  testWidgets(
+      'registration failures stay in Shortcuts and offer readable recovery',
+      (tester) async {
+    var fail = true;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'settings') return stored.toMap();
+      if (call.method == 'settingsStatus') return {};
+      if (call.method == 'syncActionShortcutCatalog') {
+        syncs.add(call.arguments as Map);
+        if (fail) {
+          throw PlatformException(
+              code: 'shortcuts',
+              message: 'Copy shortcut is unavailable (-9878)');
+        }
+      }
+      return null;
+    });
+    final c = controller(supported: (ids) async => ids);
+    await c.load();
+    await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme,
+        home: SettingsScreen(controller: c, onClose: () async => true)));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('PlatformException'), findsNothing);
+    expect(find.textContaining('different key combination'), findsOneWidget);
+    expect(c.shortcutSupported('plugin.copy'), isFalse);
+    expect(syncs.last['supportedActionIds'], isEmpty);
+    await tester.tap(find.text('General'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('different key combination'), findsNothing);
+    await tester.tap(find.text('Shortcuts'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('different key combination'), findsOneWidget);
+    fail = false;
+    await c.load();
+    await tester.pumpAndSettle();
+    expect(find.textContaining('different key combination'), findsNothing);
+    expect(c.shortcutSupported('plugin.copy'), isTrue);
+    expect(c.current.actionShortcuts.length, 2);
+    await tester.pumpWidget(const SizedBox());
+    c.dispose();
   });
 
   test('pending old configuration cannot sync after a concurrent save',

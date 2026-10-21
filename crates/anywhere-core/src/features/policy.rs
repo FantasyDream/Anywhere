@@ -25,7 +25,7 @@ impl FeaturePolicySnapshot {
     }
     /// External compatibility contributions have an independent startup grant policy.
     pub(crate) fn allows_contributor(&self, id: &str) -> bool {
-        id.starts_with("plugin:") || self.is_enabled(id)
+        id.starts_with("plugin:") || id.starts_with("web:") || self.is_enabled(id)
     }
     pub fn is_configurable(&self) -> bool {
         !self.recovery

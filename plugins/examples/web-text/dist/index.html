@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Text Pad</title>
+    <link rel="stylesheet" href="sdk/styles/controls.css">
+    <link rel="stylesheet" href="style.css">
+    <script type="module" src="main.js"></script>
+  </head>
+  <body>
+    <main class="aw-ui">
+      <label for="text">Text Pad</label>
+      <p class="aw-muted">Local text only. This example requests no host capabilities.</p>
+      <textarea id="text" placeholder="Write something…" spellcheck="false"></textarea>
+      <output class="aw-muted" id="count" for="text" aria-live="polite">0 characters</output>
+    </main>
+  </body>
+</html>

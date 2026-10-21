@@ -8,10 +8,12 @@ import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart' show kPrimaryMouseButton;
 import '../src/rust/api.dart';
 import '../infrastructure/window_host.dart';
+import '../infrastructure/desktop_image_cache.dart';
 import 'launcher_controller.dart';
 import 'widgets/file_search_components.dart';
 import 'file_search_controller.dart' show FileFilter, LoadFilePreview;
 import '../ui/app_style.dart';
+import '../ui/app_components.dart';
 import 'launcher_view_state.dart';
 import 'widgets/candidate_row.dart';
 import 'widgets/candidate_icon.dart';
@@ -181,10 +183,13 @@ class _LauncherScreenState extends State<LauncherScreen> {
   LauncherController get _controller => widget.controller;
   LauncherViewState get _view => _controller.view;
   bool _wasVisible = false;
+  bool _hadVisiblePresentation = false;
+  int _searchEditorEpoch = 0;
   int? _displayedRevision;
   String? _displayedScope;
   String? _displayedPath;
-  String? _submitted;
+  // A first focus notification is not an edit of the initial empty controller.
+  String _submitted = '';
   InputModeDto? _displayedMode;
   int? _displayedPresentation;
   int _focusRequest = 0;
@@ -230,6 +235,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
   @override
   void initState() {
     super.initState();
+    _hadVisiblePresentation = _view.visible;
     _controller.addListener(_refresh);
     _input.addListener(_onInput);
     _scroll.addListener(_reportIconViewport);
@@ -241,11 +247,41 @@ class _LauncherScreenState extends State<LauncherScreen> {
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller.removeListener(_refresh);
       widget.controller.addListener(_refresh);
+      _hadVisiblePresentation = _view.visible;
     }
+  }
+
+  bool _releaseExpiredPresentation() {
+    if (_view.visible) {
+      _hadVisiblePresentation = true;
+      return false;
+    }
+    if (!_hadVisiblePresentation ||
+        _view.phase != LauncherPhase.hidden ||
+        _controller.hasRetainedState) {
+      return false;
+    }
+    _hadVisiblePresentation = false;
+    // Clearing TextEditingController.text alone leaves EditableText's undo stack
+    // alive. Recreate only the expired editor, after its 15-second workspace ends.
+    ++_searchEditorEpoch;
+    final owner = _controller;
+    // Let Image widgets release their live listeners before clearing keep-alive
+    // entries. A wake or controller replacement before this frame cancels cleanup.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted &&
+          identical(_controller, owner) &&
+          _view.phase == LauncherPhase.hidden &&
+          !_controller.hasRetainedState) {
+        releaseIdleDesktopImages();
+      }
+    });
+    return true;
   }
 
   void _refresh() {
     if (!mounted) return;
+    final releaseIdleResources = _releaseExpiredPresentation();
     if (!_view.visible &&
         _wasVisible &&
         _controller.hasRetainedState &&
@@ -398,6 +434,11 @@ class _LauncherScreenState extends State<LauncherScreen> {
     _displayedPath = _view.actionPath?.join(' / ');
     _reportIconViewport();
     setState(() {});
+    if (releaseIdleResources && !WidgetsBinding.instance.framesEnabled) {
+      // Hidden desktop engines can stop vsync. Flush this one expired subtree
+      // without waiting for the next wake; do not restart a repeating frame loop.
+      WidgetsBinding.instance.scheduleWarmUpFrame();
+    }
   }
 
   @override
@@ -533,6 +574,60 @@ class _LauncherScreenState extends State<LauncherScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final platformPage = _view.toolPage?.embedsPlatformView == true;
+    final settings = _view.phase == LauncherPhase.settings;
+    // Settings reuses this engine. Keep the retained native page mounted but
+    // offstage, so navigating to Settings does not destroy its 15-second state.
+    // Stable sibling slots also keep the Settings draft mounted when retention expires.
+    return Stack(fit: StackFit.expand, children: [
+      Offstage(
+          offstage: !platformPage || settings,
+          child:
+              platformPage ? _buildToolPanel(_view) : const SizedBox.shrink()),
+      Offstage(
+          offstage: platformPage && !settings,
+          child: platformPage && !settings
+              ? const SizedBox.shrink()
+              : _buildContent(context)),
+    ]);
+  }
+
+  Widget _buildToolPanel(LauncherViewState view) {
+    return Align(
+      alignment: Alignment.topCenter,
+      child: SizedBox(
+        key: const Key('launcher-panel'),
+        width: view.width,
+        height: view.height,
+        child: Material(
+          color: AppStyle.surface,
+          shape: AppStyle.panelShape,
+          // Foreground border paint becomes a full-size native hit-test overlay
+          // on macOS, even where the stroke is transparent. Paint it behind WebKit.
+          borderOnForeground: !view.toolPage!.embedsPlatformView,
+          clipBehavior:
+              view.toolPage!.embedsPlatformView ? Clip.none : Clip.antiAlias,
+          child: KeyedSubtree(
+              key: ObjectKey(view.toolPage),
+              child: ListenableBuilder(
+                  listenable: view.toolPage!,
+                  builder: (context, _) => view.toolPage!.build(context,
+                          presentation: _controller.windowPresentation,
+                          visible: view.visible &&
+                              view.phase != LauncherPhase.settings,
+                          notice: view.message,
+                          onCopy: view.output == null
+                              ? null
+                              : _controller.copyResult, onBack: () {
+                        _controller.back();
+                        _focus.requestFocus();
+                      }))),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildContent(BuildContext context) {
     if (_view.phase == LauncherPhase.settings) {
       return Align(
         alignment: Alignment.topCenter,
@@ -554,35 +649,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
       );
     }
     final view = _view;
-    if (view.toolPage != null) {
-      return Align(
-        alignment: Alignment.topCenter,
-        child: SizedBox(
-          key: const Key('launcher-panel'),
-          width: view.width,
-          height: view.height,
-          child: Material(
-            color: AppStyle.surface,
-            shape: AppStyle.panelShape,
-            clipBehavior: Clip.antiAlias,
-            child: KeyedSubtree(
-                key: ObjectKey(view.toolPage),
-                child: ListenableBuilder(
-                    listenable: view.toolPage!,
-                    builder: (context, _) => view.toolPage!.build(context,
-                            presentation: _controller.windowPresentation,
-                            visible: view.visible,
-                            notice: view.message,
-                            onCopy: view.output == null
-                                ? null
-                                : _controller.copyResult, onBack: () {
-                          _controller.back();
-                          _focus.requestFocus();
-                        }))),
-          ),
-        ),
-      );
-    }
+    if (view.toolPage != null) return _buildToolPanel(view);
     final entries = view.visibleEntries;
     final selected =
         entries.isEmpty ? null : entries[view.selectedIndex].candidate;
@@ -609,6 +676,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
                   onKeyEvent: _onKey,
                   child: Column(children: [
                     LauncherSearchArea(
+                        key: ValueKey((_controller, _searchEditorEpoch)),
                         state: view,
                         input: _input,
                         focus: _focus,
@@ -665,9 +733,10 @@ class _LauncherScreenState extends State<LauncherScreen> {
                                         if (view.hasFilePreview) ...[
                                           const VerticalDivider(width: 1),
                                           SizedBox(
-                                              width:
-                                                  (constraints.maxWidth * .38)
-                                                      .clamp(220.0, 360.0),
+                                              width: (constraints.maxWidth *
+                                                      DesignTokens
+                                                          .previewFraction)
+                                                  .clamp(220.0, 360.0),
                                               child: FileSearchPreview(
                                                   files: _controller.files)),
                                         ],
@@ -855,28 +924,15 @@ class _LauncherScreenState extends State<LauncherScreen> {
                           false)
                   ? view.snapshot!.fileSearch!.issueExamples.join('\n')
                   : view.notice!,
-              child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  decoration: BoxDecoration(
-                      color: AppStyle.warning.withValues(alpha: .09),
-                      borderRadius: BorderRadius.circular(10)),
-                  child: Row(children: [
-                    const Icon(AppIcons.info,
-                        size: 15, color: AppStyle.warning),
-                    const SizedBox(width: 8),
-                    Expanded(
-                        child: Text(view.notice!,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                                fontSize: 11, color: AppStyle.warning))),
-                    if (view.noticeSettingsPane != null)
-                      TextButton(
+              child: AppNotice(view.notice!,
+                  compact: true,
+                  trailing: view.noticeSettingsPane == null
+                      ? null
+                      : TextButton(
                           onPressed: () => _controller
                               .openPrivacySettings(view.noticeSettingsPane!),
                           child: const Text('Open Settings',
-                              style: TextStyle(fontSize: 11))),
-                  ])))));
+                              style: TextStyle(fontSize: 11)))))));
 
   void _selectPointerResult(int index) {
     // Pointer-down selects before double-click recognition, but must not queue

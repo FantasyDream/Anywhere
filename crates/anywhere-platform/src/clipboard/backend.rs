@@ -1,9 +1,16 @@
-//! clipboard-rs owns format IO and notifications. Native code only guards access/size.
+//! clipboard-rs owns format IO. macOS guards Cocoa failures at the platform boundary.
 use super::*;
-use clipboard_rs::{
-    Clipboard, ClipboardContent, ClipboardContext, ClipboardHandler, ClipboardWatcher,
-    ClipboardWatcherContext, WatcherShutdown,
-};
+use clipboard_rs::{Clipboard, ClipboardContent, ClipboardContext};
+#[cfg(not(target_os = "macos"))]
+use clipboard_rs::{ClipboardHandler, ClipboardWatcher, ClipboardWatcherContext, WatcherShutdown};
+
+#[cfg(target_os = "macos")]
+fn native_operation<T>(operation: impl FnOnce() -> Result<T>) -> Result<T> {
+    // Cocoa can throw when the pasteboard owner changes during a read. Rust's
+    // catch_unwind cannot catch foreign exceptions and aborts the whole process.
+    objc2::exception::catch(std::panic::AssertUnwindSafe(operation))
+        .map_err(|_| ContextReadError::Unavailable)?
+}
 
 fn context<T>(operation: impl FnOnce(&ClipboardContext) -> Result<T>) -> Result<T> {
     let run = || {
@@ -12,7 +19,7 @@ fn context<T>(operation: impl FnOnce(&ClipboardContext) -> Result<T>) -> Result<
     };
     #[cfg(target_os = "macos")]
     {
-        objc2::rc::autoreleasepool(|_| run())
+        native_operation(|| objc2::rc::autoreleasepool(|_| run()))
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -68,6 +75,8 @@ fn persistent_format(name: &str) -> bool {
 }
 
 pub fn read(generation: i64) -> Result<Option<ClipboardPayload>> {
+    #[cfg(target_os = "macos")]
+    ensure!(generation >= 0, ContextReadError::Unavailable);
     if !same_generation(generation) {
         return Ok(None);
     }
@@ -244,14 +253,19 @@ pub fn read_text(capacity: usize) -> Result<Option<String>> {
         Ok((!text.is_empty()).then_some(text))
     })
 }
+#[cfg(not(target_os = "macos"))]
 struct Handler(Box<dyn Fn() + Send>);
+#[cfg(not(target_os = "macos"))]
 impl ClipboardHandler for Handler {
     fn on_clipboard_change(&mut self) {
         (self.0)();
     }
 }
+#[cfg(not(target_os = "macos"))]
 struct Watch(Option<WatcherShutdown>);
+#[cfg(not(target_os = "macos"))]
 impl ClipboardWatch for Watch {}
+#[cfg(not(target_os = "macos"))]
 impl Drop for Watch {
     fn drop(&mut self) {
         if let Some(shutdown) = self.0.take() {
@@ -259,6 +273,7 @@ impl Drop for Watch {
         }
     }
 }
+#[cfg(not(target_os = "macos"))]
 pub fn watch(changed: Box<dyn Fn() + Send>) -> Result<Box<dyn ClipboardWatch>> {
     let mut watcher = ClipboardWatcherContext::new().map_err(|_| ContextReadError::Unavailable)?;
     watcher.add_handler(Handler(changed));
@@ -267,6 +282,14 @@ pub fn watch(changed: Box<dyn Fn() + Send>) -> Result<Box<dyn ClipboardWatch>> {
         .name("clipboard-rs-watch".into())
         .spawn(move || watcher.start_watch())?;
     Ok(Box::new(Watch(Some(shutdown))))
+}
+
+#[cfg(target_os = "macos")]
+pub fn watch(changed: Box<dyn Fn() + Send>) -> Result<Box<dyn ClipboardWatch>> {
+    // clipboard-rs uses the same 500 ms changeCount polling on macOS, but its
+    // watcher calls Cocoa outside an exception boundary. Keep format IO in the
+    // library and use the guarded metadata-only native query for notifications.
+    super::macos_watch::watch(changed)
 }
 
 #[cfg(test)]

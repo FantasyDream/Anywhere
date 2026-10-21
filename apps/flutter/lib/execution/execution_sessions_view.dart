@@ -12,12 +12,12 @@ import 'execution_sessions_controller.dart';
 
 const _label = TextStyle(fontSize: 11, color: AppStyle.muted);
 const _body = TextStyle(fontSize: 12, color: AppStyle.secondary);
-const _mono = TextStyle(
-    fontFamily: 'Menlo',
+TextStyle get _mono => TextStyle(
+    fontFamily: DesktopEnvironment.current.monoFontFamily,
     fontFamilyFallback: ['monospace'],
-    fontSize: 11.5,
-    height: 1.65,
-    color: AppStyle.secondary);
+    fontSize: DesignTokens.previewCodeSize,
+    height: DesignTokens.previewCodeLineHeight,
+    color: AppStyle.primary);
 
 String taskStatus(ExecutionSessionStatusDto status) => switch (status) {
       ExecutionSessionStatusDto.running => 'Running',
@@ -358,59 +358,48 @@ class _TaskRow extends StatelessWidget {
       selected: selected,
       child: Padding(
         padding: const EdgeInsets.only(bottom: 4),
-        child: Material(
-          color: selected ? AppStyle.selectedSurface : Colors.transparent,
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(6),
-              side: BorderSide(
-                  color:
-                      selected ? AppStyle.selectionOutline : Colors.transparent,
-                  width: .5)),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(6),
-            onTap: onTap,
-            child: Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                child: Row(children: [
-                  Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+        child: AppSelectionSurface(
+          selected: selected,
+          onTap: onTap,
+          child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(children: [
+                Expanded(
+                    child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                      Tooltip(
+                          message: session.title,
+                          child: Text(session.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                  color: AppStyle.primary))),
+                      const SizedBox(height: 4),
+                      Tooltip(
+                          message: session.directory,
+                          child: Text(project,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: selected
+                                  ? _body.copyWith(color: AppStyle.primary)
+                                  : _body)),
+                      const SizedBox(height: 4),
+                      Wrap(
+                          spacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
-                        Tooltip(
-                            message: session.title,
-                            child: Text(session.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppStyle.primary))),
-                        const SizedBox(height: 4),
-                        Tooltip(
-                            message: session.directory,
-                            child: Text(project,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: selected
-                                    ? _body.copyWith(color: AppStyle.primary)
-                                    : _body)),
-                        const SizedBox(height: 4),
-                        Wrap(
-                            spacing: 8,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: [
-                              _TaskStatus(session.status, selected: selected),
-                              if (session.exitCode != null)
-                                Text('Exit ${session.exitCode}',
-                                    style: selected
-                                        ? _label.copyWith(
-                                            color: AppStyle.primary)
-                                        : _label),
-                            ]),
-                      ])),
-                ])),
-          ),
+                            _TaskStatus(session.status, selected: selected),
+                            if (session.exitCode != null)
+                              Text('Exit ${session.exitCode}',
+                                  style: selected
+                                      ? _label.copyWith(color: AppStyle.primary)
+                                      : _label),
+                          ]),
+                    ])),
+              ])),
         ),
       ),
     );

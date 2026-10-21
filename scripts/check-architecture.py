@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
-from architecture_rules import check_core_imports, check_feature_imports
+from architecture_rules import check_core_imports, check_feature_imports, check_persistence_imports
 
 subprocess.check_call(['python3', '-m', 'unittest', 'discover', '-s', 'scripts/tests', '-p', 'test_architecture_rules.py'])
 
@@ -38,6 +38,10 @@ for source in Path('crates/anywhere-core/src/features').rglob('*.rs'):
         continue  # These files are included only by cfg(test) modules.
     check_feature_imports(source.read_text(), source)
 print('Feature imports OK: no application or concrete persistence dependency')
+
+for source in Path('crates/anywhere-core/src/persistence').rglob('*.rs'):
+    check_persistence_imports(source.read_text(), source)
+print('Persistence imports OK: adapters do not call Application')
 
 # Shared product logic cannot select OS adapters or assume a macOS application identity.
 for source in Path('crates/anywhere-core/src').rglob('*.rs'):

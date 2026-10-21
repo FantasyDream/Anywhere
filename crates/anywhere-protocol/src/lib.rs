@@ -2,6 +2,10 @@
 pub mod extension;
 pub mod policy;
 pub mod ui;
+pub mod web_bridge;
+pub mod web_plugin;
+/// Host tool execution target; never a captured user object or a UI Scope.
+pub const LAUNCHER_ENTRY_CONTEXT: &str = "core.launcher";
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -419,8 +423,17 @@ pub enum ActionStatus {
 #[serde(rename_all = "snake_case")]
 pub enum HostView {
     FileSearch,
-    NativeTool { id: String, input: String },
-    PluginDetail { detail: ui::DetailView },
+    NativeTool {
+        id: String,
+        input: String,
+    },
+    PluginDetail {
+        detail: ui::DetailView,
+    },
+    /// Opaque Host-issued ticket. Not a resource URL or a page-supplied plugin identity.
+    WebPlugin {
+        invocation_id: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

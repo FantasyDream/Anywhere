@@ -11,6 +11,7 @@ pub fn execute(
     registry: &ActionRegistry,
 ) -> Result<ExecutionOutput> {
     match executor {
+        ActionExecutor::WebCommand(command) => Ok(ExecutionOutput::web(command.clone())),
         ActionExecutor::Native(handler) => handler.execute(context, platform),
         ActionExecutor::ScopedDeclarative { action, grant } => {
             use anywhere_protocol::DeclarativeAction::*;

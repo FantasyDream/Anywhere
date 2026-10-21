@@ -4,9 +4,21 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 
+[features]
+web-schema = ["dep:schemars"]
+
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+schemars = { version = "1", optional = true }
+
+[[example]]
+name = "generate_web_plugin_schema"
+required-features = ["web-schema"]
+
+[[example]]
+name = "generate_web_sdk_contract"
+required-features = ["web-schema"]
 
 [dev-dependencies]
 toml = "0.8"

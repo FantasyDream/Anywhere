@@ -40,7 +40,7 @@ pub fn build(
         });
         if let (Some(command), Some(context)) = (candidate.command_id.as_ref(), offer.context()) {
             let key = (command.clone(), context.type_id.clone());
-            if offer.target.records_usage() && counted.insert(key.clone()) {
+            if offer.target.uses_usage() && counted.insert(key.clone()) {
                 let stats = usage.get(&key).copied().unwrap_or_default();
                 let (frequency, recency) =
                     usage_terms(stats.execute_count, stats.last_executed_at, now);

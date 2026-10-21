@@ -1,0 +1,121 @@
+/* Shared Host defaults. Low specificity lets tools customize local components. */
+:where(*, *::before, *::after) { box-sizing: border-box; }
+:where(body, .aw-ui) {
+  color: var(--aw-text);
+  font: var(--aw-body-weight) var(--aw-body-size)/var(--aw-body-line-height) var(--aw-font-ui);
+  letter-spacing: 0;
+  /* Use system smoothing; avoid forcing thin grayscale glyphs on glass. */
+  -webkit-font-smoothing: auto;
+}
+:where(button, select, input, textarea) {
+  margin: 0; font-family: var(--aw-font-ui); color-scheme: dark;
+  letter-spacing: 0; text-transform: none;
+  -webkit-appearance: none; appearance: none;
+}
+:where(button, select) {
+  min-width: 0; min-height: var(--aw-control-height);
+  padding: var(--aw-control-padding-y) var(--aw-control-padding-x);
+  color: var(--aw-text);
+  font-size: var(--aw-control-font-size); font-weight: var(--aw-control-weight);
+  line-height: var(--aw-body-line-height);
+  background: transparent;
+  border: var(--aw-control-border-width) solid var(--aw-control-border);
+  border-radius: var(--aw-control-radius);
+  vertical-align: middle; box-shadow: none;
+}
+:where(button) { display: inline-flex; align-items: center; justify-content: center; gap: var(--aw-space-xs); cursor: pointer; }
+:where(button:hover:not(:disabled), select:hover:not(:disabled)) { background-color: var(--aw-hover); }
+:where(button:active:not(:disabled), button:focus-visible) { background-color: var(--aw-button-selection); }
+:where(.aw-button--primary) { background: var(--aw-primary-button-surface); font-weight: var(--aw-primary-control-weight); }
+:where(.aw-button--primary:hover:not(:disabled)) { background: var(--aw-primary-button-surface); box-shadow: inset 0 0 0 999px var(--aw-hover); }
+:where(button:focus-visible, select:focus-visible) {
+  outline: none; border-color: var(--aw-selected-border);
+  box-shadow: inset 0 0 0 calc(var(--aw-focus-border-width) - var(--aw-control-border-width)) var(--aw-selected-border);
+}
+:where(button:disabled, select:disabled, input:disabled, textarea:disabled) { opacity: var(--aw-disabled-opacity); cursor: default; }
+:where(select) {
+  padding-right: calc(var(--aw-control-padding-x) + var(--aw-icon-size));
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m5 6.5 3 3 3-3' fill='none' stroke='%23e0e3e9' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right var(--aw-space-xs) center; background-size: var(--aw-icon-size);
+}
+:where(select option) { background: var(--aw-menu-surface); color: var(--aw-text); }
+:where(input, textarea) {
+  min-width: 0; padding: var(--aw-field-padding-y) var(--aw-field-padding-x);
+  color: var(--aw-text); background: var(--aw-field);
+  font-size: var(--aw-field-font-size); font-weight: var(--aw-body-weight); line-height: var(--aw-body-line-height);
+  border: var(--aw-field-border-width) solid var(--aw-border); border-radius: var(--aw-control-radius);
+  caret-color: var(--aw-accent);
+}
+:where(input:focus-visible, textarea:focus-visible) {
+  outline: none; border-color: var(--aw-selected-border);
+  box-shadow: inset 0 0 0 calc(var(--aw-field-focus-border-width) - var(--aw-field-border-width)) var(--aw-selected-border);
+}
+:where(input::placeholder, textarea::placeholder) { color: var(--aw-muted); opacity: 1; }
+:where(input[type="search"])::-webkit-search-cancel-button { -webkit-appearance: none; }
+:where(input[type="checkbox"], input[type="radio"]) {
+  width: var(--aw-icon-size); height: var(--aw-icon-size); padding: 0; vertical-align: middle;
+  border-radius: var(--aw-space-xs); cursor: pointer;
+}
+:where(input[type="radio"]) { border-radius: 50%; }
+:where(input[type="checkbox"]:checked, input[type="radio"]:checked) { background-color: var(--aw-accent-fill); border-color: var(--aw-accent-fill); }
+:where(input[type="checkbox"]:checked) {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 8 2.5 2.5L12 5' fill='none' stroke='white' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+:where(input[type="radio"]:checked)::after { content: ''; display: block; width: 6px; height: 6px; margin: 4px; border-radius: 50%; background: var(--aw-primary); }
+:where(label) { font-size: var(--aw-label-size); font-weight: var(--aw-body-weight); }
+:where(h1, h2, h3) { font-size: var(--aw-heading-size); line-height: var(--aw-body-line-height); font-weight: var(--aw-heading-weight); }
+:where(kbd) {
+  display: inline-flex; align-items: center; justify-content: center; min-width: var(--aw-keycap-min-width);
+  font: var(--aw-keycap-weight) var(--aw-keycap-font-size)/var(--aw-keycap-line-height) var(--aw-font-ui);
+  color: var(--aw-secondary); border: var(--aw-divider-width) solid var(--aw-keycap-border);
+  border-radius: var(--aw-keycap-radius); background: var(--aw-keycap-surface);
+  padding: var(--aw-keycap-padding-y) var(--aw-keycap-padding-x);
+}
+:where(button kbd) { min-width: 0; padding: 0; border: 0; background: transparent; }
+::selection { background: var(--aw-text-selection); }
+:where(.aw-icon-button) { width: var(--aw-icon-button-size); height: var(--aw-icon-button-size); padding: 0; }
+:where(.aw-toolbar, .aw-actions) { display: flex; flex-wrap: wrap; align-items: center; gap: var(--aw-space-sm); }
+:where(.aw-toolbar) { justify-content: space-between; }
+:where(.aw-card) { border: var(--aw-divider-width) solid var(--aw-divider); border-radius: var(--aw-card-radius); background: var(--aw-card); }
+:where(.aw-card textarea) { background: transparent; }
+:where(.aw-muted) { color: var(--aw-secondary); font-size: var(--aw-caption-size); line-height: var(--aw-caption-line-height); }
+:where(.aw-error) { color: var(--aw-danger); }
+:where(.aw-tool) { height: 100%; min-height: 0; display: flex; flex-direction: column; gap: var(--aw-space-md); padding: var(--aw-space-lg); }
+:where(.aw-tool > textarea) { flex: 1; min-height: 80px; resize: none; }
+:where(.aw-tool > p) { margin: 0; }
+:where(.sr-only) { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+::-webkit-scrollbar { width: var(--aw-scrollbar-size); height: var(--aw-scrollbar-size); }
+::-webkit-scrollbar-thumb { background: var(--aw-border); border-radius: var(--aw-scrollbar-size); }
+
+/* Launcher-style workspaces: toolbar, unframed panes, quiet code surfaces. */
+:where(.aw-workspace) { height: 100%; min-height: 0; display: flex; flex-direction: column; }
+:where(.aw-workspace-toolbar) { min-height: var(--aw-page-toolbar-height); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--aw-space-sm); padding: var(--aw-space-xs) var(--aw-space-lg); }
+:where(.aw-tabs) { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+:where(.aw-tab) { height: var(--aw-filter-height); min-height: var(--aw-filter-height); border-color: transparent; border-radius: var(--aw-filter-radius); padding: 0 var(--aw-space-md); font-size: var(--aw-filter-size); color: var(--aw-secondary); }
+:where(.aw-tab[aria-pressed="true"]) { color: var(--aw-primary); background: var(--aw-selected-surface); border-color: var(--aw-selection-outline); font-weight: var(--aw-heading-weight); }
+:where(.aw-workspace-panes) { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) clamp(220px, calc(100% * var(--aw-preview-fraction)), 360px); }
+:where(.aw-pane) { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+:where(.aw-pane + .aw-pane) { border-left: var(--aw-divider-width) solid var(--aw-divider); }
+:where(.aw-pane-header) { flex-wrap: wrap; overflow-wrap: anywhere; min-height: var(--aw-page-toolbar-height); display: flex; align-items: center; justify-content: space-between; gap: var(--aw-space-sm); padding: var(--aw-space-md) var(--aw-space-lg) var(--aw-space-sm); color: var(--aw-secondary); }
+:where(.aw-pane-header label, .aw-pane-header span) { font-size: var(--aw-caption-size); line-height: var(--aw-caption-line-height); font-weight: var(--aw-body-weight); }
+:where(.aw-pane-header label) { color: var(--aw-primary); font-size: var(--aw-label-size); font-weight: var(--aw-primary-control-weight); line-height: var(--aw-body-line-height); }
+:where(.aw-pane-header span) { font-variant-numeric: tabular-nums; }
+:where(.aw-pane-body) { flex: 1; min-height: 0; display: flex; margin: 0 var(--aw-space-lg); }
+:where(.aw-editor) { flex: 1; min-height: 0; width: 100%; resize: none; padding: var(--aw-control-padding-x); border: var(--aw-divider-width) solid transparent; border-radius: var(--aw-control-radius); background: var(--aw-action-surface); font: var(--aw-body-weight) var(--aw-preview-code-size)/var(--aw-preview-code-line-height) var(--aw-font-mono); white-space: pre; tab-size: 2; }
+:where(.aw-editor:focus-visible) { outline: none; border-color: var(--aw-selected-border); box-shadow: inset 0 0 0 calc(var(--aw-field-focus-border-width) - var(--aw-divider-width)) var(--aw-selected-border); }
+:where(.aw-pane-footer) { flex-wrap: wrap; overflow-wrap: anywhere; min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: var(--aw-space-sm); padding: var(--aw-space-sm) var(--aw-space-lg); color: var(--aw-secondary); font-size: var(--aw-caption-size); }
+:where(.aw-button--action) { font-weight: var(--aw-primary-control-weight); }
+:where(.aw-workspace-notice) { margin: var(--aw-space-sm) var(--aw-space-lg); padding: var(--aw-space-sm) var(--aw-space-md); border-radius: var(--aw-result-radius); background: var(--aw-card); color: var(--aw-primary); font-size: var(--aw-caption-size); border: var(--aw-control-border-width) solid var(--aw-warning); overflow-wrap: anywhere; max-height: 100px; flex-shrink: 0; overflow: auto; }
+
+:where(.aw-workspace-notice[data-kind="error"]) { border-color: var(--aw-danger); }
+:where(input[aria-invalid="true"], textarea[aria-invalid="true"]) { border-color: var(--aw-danger); }
+/* Keep every action reachable when the host is small or text is enlarged. */
+@media (max-width: 560px), (max-height: 360px) {
+  :where(.aw-workspace) { overflow: auto; }
+  :where(.aw-workspace-panes) { flex: none; min-height: 340px; }
+}
+@media (max-width: 560px) {
+  :where(.aw-workspace-panes) { grid-template-columns: minmax(0, 1fr); }
+  :where(.aw-pane) { min-height: 260px; }
+  :where(.aw-pane + .aw-pane) { border-left: 0; border-top: var(--aw-divider-width) solid var(--aw-divider); }
+}

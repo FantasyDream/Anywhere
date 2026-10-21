@@ -98,7 +98,9 @@ impl Platform for MacOsPlatform {
         clipboard::snapshot()
     }
     fn clipboard_generation(&self) -> Result<i64> {
-        Ok(clipboard::change_count())
+        let count = clipboard::change_count();
+        anyhow::ensure!(count >= 0, crate::ContextReadError::Unavailable);
+        Ok(count)
     }
     fn request_clipboard_history_access(&self) -> Result<()> {
         crate::clipboard::request_access()

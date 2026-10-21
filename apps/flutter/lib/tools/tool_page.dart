@@ -8,6 +8,10 @@ abstract class ToolPageSession extends ChangeNotifier {
   String get subtitle => 'Tool';
   double get width => 648;
   double get height => 480;
+
+  /// macOS platform views must be clipped by the native window, not a Flutter
+  /// physical-shape layer, which can hide their content under Impeller.
+  bool get embedsPlatformView => false;
   bool get disposed => _disposed;
   bool _disposed = false;
   bool Function()? _interaction;

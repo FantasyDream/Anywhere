@@ -366,7 +366,10 @@ mod tests {
 
     #[test]
     fn scan_is_cancelled_and_reaped_and_timeout_does_not_block() {
-        let (dir, program) = fixture("printf '%s' \"$$\" > pid; exec /bin/sleep 5");
+        // Publish readiness atomically: cancellation must not kill the fixture
+        // between creating an empty pid file and writing its process identity.
+        let (dir, program) =
+            fixture("printf '%s' \"$$\" > pid.pending; mv pid.pending pid; exec /bin/sleep 5");
         let options = FileSearchOptions {
             roots: vec![dir.path().to_path_buf()],
             ..Default::default()

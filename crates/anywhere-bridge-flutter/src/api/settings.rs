@@ -40,6 +40,11 @@ pub(super) fn initialize(data_directory: String, plugin_directory: String) -> Re
         vec![PathBuf::from(plugin_directory), user_plugins],
         &app,
     )?;
+    if let Err(error) = web::initialize(&app, data) {
+        tracing::warn!(error = %error, "web_packages_unavailable");
+        // A corrupt optional package must not prevent the native Launcher from starting.
+        app.publish_web_catalog(Default::default())?;
+    }
     APPLICATION
         .set(app)
         .map_err(|_| anyhow::anyhow!("application already initialized"))?;

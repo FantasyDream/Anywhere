@@ -60,6 +60,14 @@ impl TextFallbackSource<'_> {
         let mut fallbacks = self
             .registry
             .matching(&context)
+            // Web input matchers run in the ranked ActionMatcher. Never send arbitrary
+            // unmatched query text to a Web workspace through the fallback path.
+            .filter(|action| {
+                !matches!(
+                    action.executor,
+                    crate::core::action::descriptor::ActionExecutor::WebCommand(_)
+                )
+            })
             .filter(|action| group_filter.is_none_or(|group| group == action.group_id))
             .filter_map(|action| {
                 let availability =

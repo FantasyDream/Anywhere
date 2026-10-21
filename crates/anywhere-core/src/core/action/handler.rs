@@ -12,6 +12,7 @@ pub struct ExecutionOutput {
     pub view: Option<anywhere_protocol::HostView>,
     pub close_window: bool,
     pub process: Option<anywhere_platform::process::ProcessRequest>,
+    pub web_command: Option<super::web_command::WebCommandRef>,
 }
 
 impl ExecutionOutput {
@@ -21,6 +22,7 @@ impl ExecutionOutput {
             view: None,
             close_window: true,
             process: None,
+            web_command: None,
         }
     }
 
@@ -30,6 +32,7 @@ impl ExecutionOutput {
             view: None,
             close_window: false,
             process: None,
+            web_command: None,
         }
     }
 
@@ -39,6 +42,7 @@ impl ExecutionOutput {
             view: Some(view),
             close_window: false,
             process: None,
+            web_command: None,
         }
     }
 
@@ -48,6 +52,17 @@ impl ExecutionOutput {
             view: None,
             close_window: true,
             process: Some(request),
+            web_command: None,
+        }
+    }
+
+    pub fn web(command: super::web_command::WebCommandRef) -> Self {
+        Self {
+            text: None,
+            view: None,
+            close_window: false,
+            process: None,
+            web_command: Some(command),
         }
     }
 }

@@ -1,0 +1,205 @@
+{
+  "$defs": {
+    "WebCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "accepts": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "entrypoint": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "inputMatchers": {
+          "description": "Host-owned content recognition. No plugin code runs during search or capture.",
+          "items": {
+            "$ref": "#/$defs/WebInputMatcher"
+          },
+          "type": "array"
+        },
+        "keywords": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "entrypoint"
+      ],
+      "type": "object"
+    },
+    "WebInputMatcher": {
+      "oneOf": [
+        {
+          "const": "json",
+          "description": "Strict JSON objects and arrays; scalars are ordinary search terms.",
+          "type": "string"
+        },
+        {
+          "const": "json_escaped",
+          "description": "JSON containers encoded as a JSON string (optionally without outer quotes).",
+          "type": "string"
+        }
+      ]
+    },
+    "WebPermission": {
+      "oneOf": [
+        {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "const": "context.read",
+              "type": "string"
+            },
+            "types": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            }
+          },
+          "required": [
+            "name",
+            "types"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "const": "context.currentApp",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "const": "clipboard.readText",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "const": "clipboard.writeText",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "const": "storage.local",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        }
+      ]
+    },
+    "WebPlatform": {
+      "enum": [
+        "macos",
+        "windows"
+      ],
+      "type": "string"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "apiVersion": {
+      "const": "1",
+      "type": "string"
+    },
+    "commands": {
+      "items": {
+        "$ref": "#/$defs/WebCommand"
+      },
+      "type": "array"
+    },
+    "entry": {
+      "type": "string"
+    },
+    "icon": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "permissions": {
+      "items": {
+        "$ref": "#/$defs/WebPermission"
+      },
+      "type": "array"
+    },
+    "platforms": {
+      "items": {
+        "$ref": "#/$defs/WebPlatform"
+      },
+      "type": "array"
+    },
+    "schemaVersion": {
+      "const": 1,
+      "format": "uint32",
+      "minimum": 0,
+      "type": "integer"
+    },
+    "version": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "name",
+    "version",
+    "apiVersion",
+    "platforms",
+    "entry",
+    "permissions",
+    "commands"
+  ],
+  "title": "WebPluginManifest",
+  "type": "object"
+}

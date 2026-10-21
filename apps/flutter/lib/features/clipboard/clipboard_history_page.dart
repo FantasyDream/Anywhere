@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../infrastructure/desktop_environment.dart';
 import '../../ui/app_style.dart';
+import '../../ui/app_icons.dart';
+import 'clipboard_history_list.dart';
 import 'clipboard_history_session.dart';
 import 'clipboard_history_preview.dart';
 import '../../tools/tool_page_shell.dart';
@@ -15,15 +17,11 @@ class ClipboardHistoryPage extends StatefulWidget {
       required this.session,
       required this.onBack,
       required this.presentation,
-      required this.visible,
-      this.floating = false,
-      this.onCopied});
+      required this.visible});
   final ClipboardHistorySession session;
   final VoidCallback onBack;
   final int presentation;
   final bool visible;
-  final bool floating;
-  final Future<void> Function()? onCopied;
   @override
   State<ClipboardHistoryPage> createState() => _ClipboardHistoryPageState();
 }
@@ -31,7 +29,11 @@ class ClipboardHistoryPage extends StatefulWidget {
 class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
   final _menu = GlobalKey<PopupMenuButtonState<_HistoryAction>>();
   ClipboardHistorySession get session => widget.session;
-  bool get active => widget.visible && session.canInteract && !session.mutating;
+  bool get active =>
+      widget.visible &&
+      session.canInteract &&
+      !session.mutating &&
+      session.query.value.composing.isCollapsed;
   @override
   void didUpdateWidget(ClipboardHistoryPage old) {
     super.didUpdateWidget(old);
@@ -50,9 +52,7 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
     if (!active) return;
     switch (action) {
       case _HistoryAction.copy:
-        if (await session.copy() && mounted && widget.visible) {
-          await widget.onCopied?.call();
-        }
+        await session.copy();
       case _HistoryAction.delete:
         await session.delete();
       case _HistoryAction.refresh:
@@ -66,6 +66,8 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
     final key = event.logicalKey;
     final keyboard = HardwareKeyboard.instance;
     if (DesktopEnvironment.current.commandPressed &&
+        !keyboard.isAltPressed &&
+        !keyboard.isShiftPressed &&
         key == LogicalKeyboardKey.keyK) {
       _menu.currentState?.showButtonMenu();
       return KeyEventResult.handled;
@@ -93,46 +95,76 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
   @override
   Widget build(BuildContext context) => ToolPageShell(
         title: session.title,
-        detached: widget.floating,
         subtitle: 'Clipboard',
         onBack: widget.onBack,
         editorFocus: session.focus,
         presentation: widget.presentation,
         visible: widget.visible,
         onKeyEvent: _key,
-        notice: session.notice ?? (widget.floating ? null : session.status),
-        header: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(
-              widget.floating
-                  ? 'Clipboard Shelf · Always on top'
-                  : 'Clipboard History',
-              style: AppStyle.caption),
-          const SizedBox(height: 4),
-          TextField(
-              key: const Key('clipboard-search'),
-              controller: session.query,
-              focusNode: session.focus,
-              autofocus: true,
-              // Returning from Actions restores the caret, not a select-all.
-              selectAllOnFocus: false,
-              textInputAction: TextInputAction.none,
-              onEditingComplete: () {},
-              style: AppStyle.body.copyWith(fontSize: 21),
-              decoration: const InputDecoration(
-                  hintText: 'Search clipboard history…',
-                  filled: false,
-                  border: InputBorder.none,
-                  enabledBorder: InputBorder.none,
-                  focusedBorder: InputBorder.none,
-                  contentPadding: EdgeInsets.zero))
-        ]),
+        notice: session.notice,
+        showFooterBack: false,
+        header: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Clipboard History',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppStyle.caption.copyWith(
+                      fontSize: DesignTokens.pageModeSize,
+                      fontWeight: DesignTokens.pageModeWeight)),
+              const SizedBox(height: 3),
+              TextField(
+                  key: const Key('clipboard-search'),
+                  controller: session.query,
+                  focusNode: session.focus,
+                  autofocus: widget.visible,
+                  selectAllOnFocus: false,
+                  textInputAction: TextInputAction.none,
+                  onEditingComplete: () {},
+                  style: AppStyle.body
+                      .copyWith(fontSize: DesignTokens.pageHeadingSize),
+                  cursorColor: AppStyle.primary,
+                  cursorWidth: 1.4,
+                  decoration: InputDecoration(
+                      hintText: 'Search clipboard history…',
+                      hintStyle: AppStyle.body.copyWith(
+                          fontSize: DesignTokens.pageHeadingSize,
+                          color: AppStyle.muted),
+                      isCollapsed: true,
+                      isDense: true,
+                      filled: false,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding: EdgeInsets.zero)),
+            ]),
         footer: Row(children: [
           Expanded(
-              child: Text(
-                  '${session.items.length} ${session.items.length == 1 ? 'entry' : 'entries'}${!session.recording ? ' · Paused' : ''}${session.loading ? ' · Searching…' : widget.floating && session.status != null ? ' · Copied' : ''}',
-                  style: AppStyle.caption)),
+              child: Row(children: [
+            Flexible(
+                child: Text(
+                    '${session.items.length} ${session.items.length == 1 ? 'entry' : 'entries'}${!session.recording ? ' · Paused' : ''}${session.loading ? ' · Searching…' : ''}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppStyle.caption)),
+            if (session.status != null) ...[
+              const SizedBox(width: 12),
+              Tooltip(
+                  message: session.status!,
+                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(AppIcons.check, size: 12, color: AppStyle.success),
+                    SizedBox(width: 4),
+                    Text('Copied',
+                        style:
+                            TextStyle(fontSize: 11, color: AppStyle.success)),
+                  ])),
+            ]
+          ])),
           PopupMenuButton<_HistoryAction>(
               key: _menu,
+              enabled: active,
               onCanceled: () {
                 if (widget.visible && session.canInteract) {
                   session.focus.requestFocus();
@@ -158,12 +190,14 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
                         enabled: active,
                         child: const Text('Refresh')),
                   ],
-              child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  child: Text(
-                      'Actions · ${DesktopEnvironment.current.commandLabel('K')}',
-                      style: AppStyle.caption))),
+              child: Semantics(
+                  button: true,
+                  child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      child: Text(
+                          'Actions · ${DesktopEnvironment.current.commandLabel('K')}',
+                          style: AppStyle.caption)))),
           const SizedBox(width: 8),
           OutlinedButton(
               onPressed: active && session.selected != null
@@ -171,145 +205,70 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
                   : null,
               child: const Text('Copy ↵')),
         ]),
-        child: Column(children: [
-          Expanded(
-              child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                Expanded(
-                    flex: 5,
-                    child: session.items.isEmpty
-                        ? Center(
-                            child: Padding(
-                                padding: const EdgeInsets.all(24),
-                                child: Text(
-                                    session.loading
-                                        ? 'Loading…'
-                                        : session.query.text.isNotEmpty
-                                            ? 'No matching entries'
-                                            : session.recording
-                                                ? widget.floating
-                                                    ? 'Newly copied items will appear here automatically.'
-                                                    : 'Newly copied items will appear here.\nRefresh to see new copies.'
-                                                : 'No saved entries.\nManage recording in Settings → Clipboard.',
-                                    style: AppStyle.body,
-                                    textAlign: TextAlign.center)))
-                        : ListView.builder(
-                            controller: session.scroll,
-                            itemExtent: 64,
-                            padding: EdgeInsets.zero,
-                            itemCount: session.items.length,
-                            itemBuilder: (context, index) {
-                              final item = session.items[index];
-                              return Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 10, vertical: 3),
-                                  child: Material(
-                                      color: index == session.selectedIndex
-                                          ? AppStyle.selectedSurface
-                                          : Colors.transparent,
-                                      shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(
-                                              AppStyle.resultRadius),
-                                          side: BorderSide(
-                                              color: index ==
-                                                      session.selectedIndex
-                                                  ? AppStyle.selectionOutline
-                                                  : Colors.transparent)),
-                                      child: InkWell(
-                                          onDoubleTap: widget.floating && active
-                                              ? () async {
-                                                  await session.select(index);
-                                                  if (mounted &&
-                                                      active &&
-                                                      session.selected?.id ==
-                                                          item.id) {
-                                                    await _action(
-                                                        _HistoryAction.copy);
-                                                  }
-                                                }
-                                              : null,
-                                          onTap: active
-                                              ? () {
-                                                  unawaited(
-                                                      session.select(index));
-                                                  session.focus.requestFocus();
-                                                }
-                                              : null,
-                                          borderRadius: BorderRadius.circular(
-                                              AppStyle.resultRadius),
-                                          child: Semantics(
-                                              selected: index ==
-                                                  session.selectedIndex,
-                                              child: Padding(
-                                                  padding: const EdgeInsets
-                                                      .symmetric(
-                                                      horizontal: 14,
-                                                      vertical: 8),
-                                                  child: Row(children: [
-                                                    Icon(
-                                                        clipboardKindIcon(
-                                                            item.kind),
-                                                        size: 22,
-                                                        color:
-                                                            AppStyle.secondary),
-                                                    const SizedBox(width: 12),
-                                                    Expanded(
-                                                        child: Column(
-                                                            crossAxisAlignment:
-                                                                CrossAxisAlignment
-                                                                    .start,
-                                                            mainAxisAlignment:
-                                                                MainAxisAlignment
-                                                                    .center,
-                                                            children: [
-                                                          Text(item.summary,
-                                                              maxLines: 1,
-                                                              overflow:
-                                                                  TextOverflow
-                                                                      .ellipsis,
-                                                              style: AppStyle
-                                                                  .body),
-                                                          const SizedBox(
-                                                              height: 3),
-                                                          Text(
-                                                              '${clipboardKindLabel(item.kind)} · ${_size(item.byteCount)} · ${_date(context, item.copiedAtMs.toInt())}',
-                                                              style: AppStyle
-                                                                  .caption),
-                                                        ]))
-                                                  ]))))));
-                            })),
-                const VerticalDivider(width: 1),
-                Expanded(
-                    flex: 4,
-                    child: Padding(
-                        padding: const EdgeInsets.all(20),
-                        child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text('Preview', style: AppStyle.caption),
-                              const SizedBox(height: 16),
-                              Expanded(
-                                  child: session.preview == null
-                                      ? const Center(
-                                          child: Text('Select an entry',
-                                              style: AppStyle.caption))
-                                      : ClipboardHistoryPreview(
-                                          key: ValueKey(
-                                              session.preview!.item.id),
-                                          detail: session.preview!)),
-                            ]))),
-              ])),
-        ]),
+        child: LayoutBuilder(builder: (context, constraints) {
+          // Give browsing most of the window; short snippets should not reserve
+          // half the page. Keep a readable preview in narrower history windows.
+          final previewWidth = (constraints.maxWidth * .32).clamp(220.0, 340.0);
+          return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Expanded(
+                key: const Key('clipboard-list-pane'),
+                child: session.items.isEmpty
+                    ? _empty()
+                    : ClipboardHistoryList(
+                        items: session.items,
+                        selectedIndex: session.selectedIndex,
+                        scroll: session.scroll,
+                        onSelect: !active
+                            ? null
+                            : (item) {
+                                final index = session.items
+                                    .indexWhere((row) => row.id == item.id);
+                                if (index < 0) return;
+                                unawaited(session.select(index));
+                                session.focus.requestFocus();
+                              },
+                      )),
+            const VerticalDivider(width: 1),
+            SizedBox(
+                key: const Key('clipboard-preview-pane'),
+                width: previewWidth,
+                child: session.preview == null
+                    ? Center(
+                        child: Text(
+                            session.items.isEmpty
+                                ? 'Preview'
+                                : session.notice != null
+                                    ? 'Preview unavailable'
+                                    : 'Loading preview…',
+                            style: AppStyle.caption))
+                    : ClipboardHistoryPreview(
+                        key: ValueKey(session.preview!.item.id),
+                        detail: session.preview!)),
+          ]);
+        }),
       );
-  String _size(int bytes) => bytes >= 1024 * 1024
-      ? '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB'
-      : bytes >= 1024
-          ? '${(bytes / 1024).toStringAsFixed(1)} KB'
-          : '$bytes B';
-  String _date(BuildContext context, int milliseconds) {
-    final date = DateTime.fromMillisecondsSinceEpoch(milliseconds);
-    final localizations = MaterialLocalizations.of(context);
-    return '${localizations.formatShortDate(date)} ${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(date))}';
-  }
+
+  Widget _empty() => Center(
+      child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(AppIcons.clipboard, size: 28, color: AppStyle.secondary),
+            const SizedBox(height: 12),
+            Text(
+                session.loading
+                    ? 'Loading…'
+                    : session.query.text.isNotEmpty
+                        ? 'No matching entries'
+                        : 'No saved entries',
+                style: AppStyle.body),
+            if (!session.loading && session.query.text.isEmpty) ...[
+              const SizedBox(height: 6),
+              Text(
+                  session.recording
+                      ? 'Newly copied items will appear here.\nRefresh to see new copies.'
+                      : 'Manage recording in Settings → Clipboard.',
+                  style: AppStyle.caption,
+                  textAlign: TextAlign.center),
+            ],
+          ])));
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../ui/app_components.dart';
 import '../ui/app_style.dart';
+import '../ui/app_icons.dart';
 
 /// Shared frame and keyboard / focus rules. Bodies remain ordinary Flutter widgets.
 class ToolPageShell extends StatefulWidget {
@@ -13,7 +14,10 @@ class ToolPageShell extends StatefulWidget {
       this.subtitle = 'Tool',
       this.notice,
       this.header,
+      this.leading,
+      this.headerHeight = DesignTokens.pageHeaderHeight,
       this.footer,
+      this.showFooterBack = true,
       this.scrollController,
       this.editorFocus,
       this.presentation = 0,
@@ -24,7 +28,10 @@ class ToolPageShell extends StatefulWidget {
   final String? notice;
   final Widget child;
   final Widget? header;
+  final Widget? leading;
+  final double headerHeight;
   final Widget? footer;
+  final bool showFooterBack;
   final VoidCallback onBack;
   final ScrollController? scrollController;
   final FocusNode? editorFocus;
@@ -153,31 +160,44 @@ class _ToolPageShellState extends State<ToolPageShell> {
         onKeyEvent: _key,
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Padding(
-              padding: const EdgeInsets.fromLTRB(16, 14, 24, 14),
+          AppPageHeader(
+              height: widget.headerHeight,
               child: Row(children: [
-                IconButton(
-                    tooltip: widget.detached ? 'Close · Esc' : 'Back · Esc',
-                    onPressed: widget.visible ? widget.onBack : null,
-                    icon: Icon(
-                        widget.detached
-                            ? Icons.close_rounded
-                            : Icons.chevron_left_rounded,
-                        size: widget.detached ? 20 : 26)),
-                const SizedBox(width: 8),
+                widget.leading ??
+                    IconButton(
+                        tooltip: widget.detached ? 'Close · Esc' : 'Back · Esc',
+                        onPressed: widget.visible ? widget.onBack : null,
+                        icon: Icon(
+                            widget.detached
+                                ? AppIcons.close
+                                : AppIcons.back,
+                            size: 20)),
+                const SizedBox(width: 12),
                 Expanded(
                     child: widget.header ??
                         Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(widget.subtitle, style: AppStyle.caption),
-                              const SizedBox(height: 4),
+                              Text(widget.subtitle,
+                                  style: AppStyle.caption.copyWith(
+                                      fontSize: DesignTokens.pageModeSize,
+                                      fontWeight: DesignTokens.pageModeWeight)),
+                              const SizedBox(height: 3),
                               Text(widget.title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style:
-                                      AppStyle.heading.copyWith(fontSize: 22)),
+                                  style: AppStyle.body.copyWith(
+                                      fontSize: DesignTokens.pageHeadingSize)),
                             ])),
+                const SizedBox(width: 14),
+                Tooltip(
+                    message: widget.detached ? 'Close · Esc' : 'Back · Esc',
+                    child: InkWell(
+                        onTap: widget.visible ? widget.onBack : null,
+                        borderRadius:
+                            BorderRadius.circular(DesignTokens.keycapRadius),
+                        child: const AppKeycap('esc'))),
               ])),
           const Divider(height: 1, indent: 20, endIndent: 20),
           if (widget.notice != null)
@@ -185,19 +205,19 @@ class _ToolPageShellState extends State<ToolPageShell> {
                 padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
                 child: AppNotice(widget.notice!)),
           Expanded(child: widget.child),
-          const Divider(height: 1),
-          Padding(
-              padding: const EdgeInsets.fromLTRB(24, 10, 24, 14),
+          AppPageFooter(
               child: Row(children: [
-                Expanded(
-                    child: widget.footer ??
-                        const Text('↑↓ Scroll', style: AppStyle.caption)),
-                TextButton(
-                    onPressed: widget.visible ? widget.onBack : null,
-                    child: Text(widget.detached ? 'Close' : 'Back')),
-                const SizedBox(width: 8),
-                const Text('esc', style: AppStyle.caption),
-              ])),
+            Expanded(
+                child: widget.footer ??
+                    const Text('↑↓ Scroll', style: AppStyle.caption)),
+            if (widget.showFooterBack) ...[
+              TextButton(
+                  onPressed: widget.visible ? widget.onBack : null,
+                  child: Text(widget.detached ? 'Close' : 'Back')),
+              const SizedBox(width: 8),
+              const Text('esc', style: AppStyle.caption),
+            ],
+          ])),
         ]),
       );
 }

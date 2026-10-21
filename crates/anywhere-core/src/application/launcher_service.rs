@@ -55,6 +55,8 @@ pub trait LauncherApplication: Send + Sync {
 }
 
 pub struct Application {
+    pub(super) web_rpc_workers: Arc<tokio::sync::Semaphore>,
+    pub(super) web_plugins: Arc<Mutex<super::web_plugins::WebPluginService>>,
     pub(super) feature_catalog_installed: std::sync::atomic::AtomicBool,
     pub(super) executions: Arc<crate::core::execution::ExecutionSessionManager>,
     pub(super) platform: Arc<dyn Platform>,
@@ -114,6 +116,10 @@ impl Application {
             .asynchronous
             .extend(sources);
         Self {
+            web_rpc_workers: Arc::new(tokio::sync::Semaphore::new(
+                anywhere_protocol::web_bridge::MAX_RUNNING,
+            )),
+            web_plugins: Default::default(),
             feature_catalog_installed: Default::default(),
             executions: Arc::new(Default::default()),
             platform,
@@ -170,6 +176,10 @@ impl Application {
                 return Ok(());
             }
             session.suspended = true;
+            self.web_plugins
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Web service unavailable"))?
+                .suspend();
             self.resolver
                 .execution_epoch
                 .fetch_add(1, std::sync::atomic::Ordering::AcqRel)
@@ -177,6 +187,7 @@ impl Application {
         };
         let resolver = self.resolver.clone();
         let files = self.file_search_source.clone();
+        let web_plugins = self.web_plugins.clone();
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(
                 anywhere_protocol::policy::LAUNCHER_RETENTION_MS,
@@ -193,6 +204,9 @@ impl Application {
                     == epoch
             {
                 session.invalidate_execution();
+                if let Ok(mut web) = web_plugins.lock() {
+                    web.invalidate();
+                }
                 resolver.abandon_session();
                 files.clear();
             }
@@ -249,6 +263,13 @@ impl Application {
             let Ok(mut session) = self.session() else {
                 return;
             };
+            let Ok(mut web) = self.web_plugins.lock() else {
+                return;
+            };
+            let Ok(registry) = web.restore_actions(&registry) else {
+                return;
+            };
+            web.invalidate();
             // Catalog invalidation and session replacement are one publication boundary.
             self.resolver.replace_base_registry(registry);
             self.resolver
@@ -294,6 +315,11 @@ impl Application {
         persist: impl FnOnce() -> Result<()>,
     ) -> Result<()> {
         let mut session = self.session()?;
+        let mut web = self
+            .web_plugins
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Web service unavailable"))?;
+        registry = web.restore_actions(&registry)?;
         let mut provider_slot = self
             .resolver
             .providers
@@ -333,6 +359,7 @@ impl Application {
         providers.retain_contributors(enabled);
         sources.retain_contributors(enabled);
         persist()?;
+        web.invalidate();
         *policy_slot = policy;
         *excluded_slot = excluded;
         let retired = std::mem::replace(&mut source_slot.extensions, sources);
@@ -747,6 +774,10 @@ impl LauncherApplication for Application {
     fn deactivate(&self, session_id: SessionId) -> Result<()> {
         let mut session = self.session()?;
         if session.state.session_id == session_id {
+            self.web_plugins
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Web service unavailable"))?
+                .invalidate();
             self.resolver
                 .execution_epoch
                 .fetch_add(1, std::sync::atomic::Ordering::AcqRel);

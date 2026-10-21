@@ -259,8 +259,8 @@ void main() {
     h.failSave = true;
     await tester.tap(find.byKey(const ValueKey('settings-general')));
     await tester.pumpAndSettle();
-    final loginSwitch = find.byWidgetPredicate(
-        (w) => w is SettingsToggle && w.label == 'Open at login');
+    final loginSwitch = find
+        .byWidgetPredicate((w) => w is AppToggle && w.label == 'Open at login');
     await tester.scrollUntilVisible(loginSwitch, 160);
     await tester.tap(loginSwitch);
     await tester.pump();

@@ -4,7 +4,7 @@
 
 例如：在 Finder 中打开项目目录后唤醒 Anywhere，可以打开终端、复制路径、查看 Git 状态或运行项目测试。复制一个网页 URL 后唤醒，可以打开或复制该地址。
 
-当前版本 **V0.10 剪贴板历史与搜索（Build 11）**，剪贴板功能与开源复用重构已完成工程收尾。主要支持 macOS，界面使用 Flutter，业务逻辑使用 Rust；Windows 尚未交付可用版本。
+当前开发版本 **V0.11 Web 工具预览（Build 36）**；V0.10 剪贴板与开源复用重构作为既有基线。主要支持 macOS，界面使用 Flutter，业务逻辑使用 Rust；Windows 尚未交付可用版本。
 
 [使用指南](#使用指南) · [架构设计](#架构设计) · [构建与开发](#构建与开发) · [文档导航](docs/README.md) · [路线图](docs/roadmap.md)
 
@@ -52,16 +52,22 @@ Current App 聚合当前环境的所有可用动作。顶部的 **Folder、Git�
 剪贴板有两个独立 Action，都可在 Settings → Shortcuts 配置快捷键：
 
 - **Clipboard History / 剪贴板**：在 Launcher 搜索框下打开历史页，适合查找后复制。
-- **Clipboard Shelf / 剪贴板悬浮窗**：打开独立置顶窗口，适合多次复制粘贴。切换应用、点击桌面或复制后不自动消失；重复触发会唤回同一个窗口，关闭按钮 / Esc 关闭。保留相同搜索与预览，↑↓ 选择、Enter 或双击复制，复制成功后返回上一个应用以便按 ⌘V；不会自动粘贴。可见时自动更新记录，查询和选择按身份保留，最小化时停止刷新。打开任一页面都不会自动开启采集。
+- **Clipboard Shelf / 剪贴板悬浮窗**：在鼠标所在屏幕的可用区域右下角打开约 400×520 的紧凑置顶列表，避开 Dock。输入搜索，↑↓ 选择，Enter / 单击复制，⌘1–9 快选当前结果的前九项。复制后返回上一个应用以便按 ⌘V，窗口保持显示。⌘K → Preview 查看详情，Esc 返回列表并保留查询、选择和滚动位置，再按 Esc 关闭。可见时自动更新记录，最小化时停止刷新，重复触发唤回同一窗口并重新定位右下角。可拖动、调整尺寸；打开任一页面都不会自动开启采集。
 
 - 默认不采集，在 **Settings → Clipboard → Record clipboard history** 开启后保存未来复制的文本、图片、文件列表、HTML / RTF 及可读取的自定义格式，关闭开关暂停。旧剪贴板不补录；macOS 需要允许剪贴板读取，后台不会反复弹权限申请。
 - 输入检索内容，`↑↓` 选择，右侧始终预览，`Enter` 复制；`⌘K` 可复制、单条删除或刷新；采集开关、清空历史和 15 秒自动填入设置统一位于 **Settings → Clipboard**。`Esc` 关闭 Actions，再按 `Esc` 返回原搜索。
 - 最多保存 1,000 条、128 MiB 数据，每条最多 16 MiB / 64 个格式；重复内容合并。历史期限与唤醒时的 **15 秒自动填入** 无关。
 - 本地明文存储，只记录应用运行期间观察到的复制。文件列表仅保存原路径，恢复时原文件必须仍然存在；HTML 不执行脚本，图片只生成有界缩略图。文件承诺、延迟对象及任意多 item 私有格式不能保证完整恢复。开发及验收状态见 [V0.10 MVP](docs/mvp-v0.10.md)。
 
-### JSON 工具计划
+### Web 工具与 JSON Workspace（预览）
 
-JSON 功能已延期：待 WebView 插件机制完成后，以 WebView 插件实现。V0.9 已移除原生工作区、内置 JSON 动作与自动识别入口；原功能身份和历史数据保留兼容依据。收尾状态见 [V0.9 MVP](docs/mvp-v0.9.md)。
+开发第三方插件请先看 [开发指南](docs/plugin-development.md)：SDK 导出包内含独立模板和打包工具，不需要修改主程序或安装 Rust / Flutter。
+
+在 Settings → Features → Web tools → Import 选择可信的本地 `.awplugin` 包，核对版本、内容摘要和权限后批准；随即可以搜索工具名称，无须重启。该区域还支持禁用 / 撤销、卸载、更新和恢复上一批准版本。当前仅供 macOS 本地开发验收，不开放插件市场或自动更新。
+
+运行 `python3 scripts/build-web-examples.py` 构建 [JSON Workspace](plugins/examples/json-workspace/README.md) 与 [Text Pad](plugins/examples/web-text/README.md)。导入 JSON 包后搜索 `JSON Workspace`：左侧输入停顿后自动格式化，上方选择 JSONPath / JavaScript 并输入公式，`$` / `this` 自动补入，右侧展示和复制结果；`⌘↵` 立即查询，`⌘⇧C` 复制当前结果。输入 / 输出各最多 1 MiB，不保存正文，只保存缩进偏好。声明宿主 `inputMatchers` 的新版 JSON 包还支持自动识别对象 / 数组：直接输入 JSON 可匹配 Action，选择后带入原文；选中文本和 15 秒内新复制内容沿用自动填入规则。自动识别最多 16 KiB / 128 层，不将普通标量误当成 JSON。
+
+Web 工具复用 Launcher 页框，`⌘K` 打开宿主操作，Esc 返回搜索，隐藏后的输入仍保留 15 秒。剪贴板操作经宿主单次确认。资源来自已批准包，网络、frame、弹窗和导航均受限制；这些策略不等于操作系统进程沙箱。原生 IME / 安全 / Windows 验收边界见 [V0.11 MVP](docs/mvp-v0.11.md) 与 [实施记录](docs/web-plugin-design.md)。旧原生 JSON 工作区继续退役，新工具使用独立的 Web Action ID。
 
 ### 3. 键盘操作
 
@@ -158,7 +164,7 @@ Maven、Gradle 优先使用项目 wrapper。识别阶段只读取项目标记及
 - 第一方模块包括 URL、Git、Maven、Gradle、Node、Rust、Spring Boot、收藏目录。
 - 用户插件放入 `~/Library/Application Support/Anywhere/plugins/`，支持 `*.toml` 或子目录中的 `manifest.toml`；安装或修改后重启；新批准下次启动生效，撤销立即失效。**Refresh** 只刷新设置和业务数据。
 - v2 / v3 插件先 **Review permissions → Allow & enable**。撤销权限或关闭模块后，相关候选与快捷键失效；绑定配置保留以便重新启用。
-- 现有外部 v2 支持声明式复制、打开 URL / 文件，v3 有 Detail / KeyValue 开发切片；这条 DSL 路线停止扩展。当前优先迁移内置功能模块和原生工具页，第三方 WebView 与热加载放到最后。
+- 现有外部 v2 支持声明式复制、打开 URL / 文件，v3 有 Detail / KeyValue 开发切片；这条 DSL 路线停止扩展。新插件使用 WebView，本地页面、安装入口和 [SDK](packages/plugin-sdk/README.md) 已进入 macOS 开发预览；按 [开发指南](docs/plugin-development.md) 开始。平台与发行边界见 [方案与进度](docs/web-plugin-design.md)，Terminal 延后。
 
 示例：[v1 搜索插件](plugins/examples/search.toml)、[v2 复制插件](plugins/examples/copy-v2.toml)、[v3 Detail 插件](plugins/examples/context-detail.toml)。搜索示例中的 `example.com` 是占位地址，需要自行配置；应用不自动安装 Web Search 插件。
 
@@ -306,6 +312,7 @@ scripts/                构建、打包、生成与架构检查
 - PATH 上的 Rust stable / Cargo。
 - 与 [.flutter-version](.flutter-version) 一致的 Flutter SDK。
 - Python 3，用于生成与检查脚本。
+- Node.js 22+ / npm，用于 SDK 类型检查与 Rust 互通测试；App 和插件运行时不需要 Node。
 - 可复用的代码签名身份。
 
 构建采用 Flutter assemble、swiftc 和 codesign，生成本机架构的 App，不需要 CocoaPods 或在 Xcode GUI 中打开工程。
@@ -361,4 +368,4 @@ scripts/generate-bridge.sh
 - [Context 模型](docs/context-model.md) / [菜单动作](docs/current-app-actions.md)：对象关系与身份安全边界。
 - [统一 Launcher 交互与状态保留](docs/launcher-interaction.md)。
 - [模块迁移路线图](docs/feature-module-roadmap.md) / [V0.9 MVP](docs/mvp-v0.9.md)：当前内置功能迁移阶段与验收范围；[V0.8 收尾](docs/mvp-v0.8.md) 保留上一阶段证据。
-- [路线图](docs/roadmap.md)：后续 Terminal、核心收尾、WebView 插件与 JSON 工具方向。
+- [路线图](docs/roadmap.md) / [Web 插件设计](docs/web-plugin-design.md)：下一阶段 Web 插件、JSON 验证、核心收尾，以及延期的 Terminal。

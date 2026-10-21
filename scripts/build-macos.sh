@@ -4,6 +4,7 @@ cd "$(dirname "$0")/.."
 ROOT="$PWD"
 source scripts/env.sh
 python3 scripts/check-flutter.py
+python3 scripts/generate-design-tokens.py --check
 python3 scripts/generate-keymap.py --check
 python3 scripts/generate-file-types.py --check
 python3 scripts/generate-runtime-policies.py --check
@@ -55,18 +56,23 @@ ditto resources/licenses "$APP/Contents/Resources/Licenses"
 # ditto preserves framework symlinks required by dyld and code signing.
 ditto build/flutter/FlutterMacOS.framework "$APP/Contents/Frameworks/FlutterMacOS.framework"
 ditto build/flutter/App.framework "$APP/Contents/Frameworks/App.framework"
+python3 scripts/build-webview-framework.py "$APP"
 cp target/release/libanywhere_bridge_flutter.dylib "$APP/Contents/Frameworks/"
 xcrun clang -c -fobjc-arc -O2 -mmacosx-version-min=12.0 \
   -o "$ROOT/build/macos_menu.o" \
   "$ROOT/crates/anywhere-platform/native/macos_menu.m"
+xcrun clang -c -fobjc-arc -O2 -mmacosx-version-min=12.0 \
+  -o "$ROOT/build/flutter_surface_guard.o" \
+  "$ROOT/apps/flutter/macos/Runner/NativeFlutterSurfaceGuard.m"
 xcrun swiftc -O -target "$ARCH-apple-macos12.0" \
   -module-cache-path "$SWIFT_MODULE_CACHE" \
-  -F "$APP/Contents/Frameworks" -framework FlutterMacOS -framework App -framework AppKit -framework Carbon -framework ApplicationServices \
+  -I "$ROOT/build/webview-native/native" -F "$APP/Contents/Frameworks" -framework FlutterMacOS -framework flutter_inappwebview_macos -framework App -framework AppKit -framework Carbon -framework ApplicationServices \
   -Xlinker -rpath -Xlinker @executable_path/../Frameworks \
   -Xlinker -export_dynamic \
   -Xlinker -ld_classic \
-  apps/flutter/macos/Runner/*.swift "$ROOT/build/macos_menu.o" -o "$APP/Contents/MacOS/Anywhere"
-for framework in FlutterMacOS App; do
+  apps/flutter/macos/Runner/*.swift "$ROOT/build/macos_menu.o" \
+  "$ROOT/build/flutter_surface_guard.o" -o "$APP/Contents/MacOS/Anywhere"
+for framework in FlutterMacOS App flutter_inappwebview_macos; do
   codesign --force --sign "$SIGN_IDENTITY" "$APP/Contents/Frameworks/$framework.framework"
 done
 # The cargo-built dylib records its build path as its install name, which would make

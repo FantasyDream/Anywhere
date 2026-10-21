@@ -1,6 +1,24 @@
 use super::*;
 use clipboard_rs::{common::RustImageData, ContentFormat};
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+#[cfg(target_os = "macos")]
+#[test]
+fn cocoa_exception_is_an_error_and_does_not_abort_the_process() {
+    use objc2::{msg_send, rc::Retained, runtime::NSObject};
+    let result = native_operation(|| {
+        let object = NSObject::new();
+        // SAFETY: deliberately send an unsupported NSObject selector to raise
+        // a real Objective-C exception inside the production catch boundary.
+        let _: Retained<NSObject> = unsafe { msg_send![&*object, copy] };
+        Ok(())
+    });
+    assert!(result
+        .unwrap_err()
+        .downcast_ref::<ContextReadError>()
+        .is_some());
+    assert_eq!(native_operation(|| Ok(42)).unwrap(), 42);
+}
 #[derive(Default)]
 struct Board {
     formats: Vec<(String, Vec<u8>)>,

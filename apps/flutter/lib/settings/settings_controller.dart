@@ -4,6 +4,7 @@ import '../infrastructure/clipboard_preferences_backend.dart';
 import '../infrastructure/runtime_policy.dart';
 import '../infrastructure/file_search_access.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import '../infrastructure/window_host.dart';
 import '../launcher/context_source_status.dart';
 import '../src/rust/api.dart';
@@ -100,6 +101,12 @@ class SettingsController extends ChangeNotifier {
       _readSupportedShortcutActions;
   Future<void> _catalogQueue = Future.value();
   String? _catalogSyncError;
+  String? get shortcutCatalogMessage => _catalogSyncError;
+
+  String _shortcutCatalogFailure(Object error) => error is PlatformException &&
+          error.code == 'shortcuts'
+      ? 'Some action shortcuts are paused. Reopen Settings to try again, or choose a different key combination.'
+      : 'Action shortcuts could not be refreshed. Reopen Settings to try again.';
   int _loadEpoch = 0;
   bool _refreshingPlugins = false;
   Future<void>? _extensionOperation;
@@ -198,6 +205,7 @@ class SettingsController extends ChangeNotifier {
     if (reader == null || _disposed) return Future.value();
     final next = _catalogQueue.then((_) async {
       if (_disposed || current.actionShortcutVersion != 4) return;
+      final previousError = _catalogSyncError;
       _catalogSyncError = null;
       final snapshot = current;
       final ids = _bindingActionIds(snapshot);
@@ -212,20 +220,17 @@ class SettingsController extends ChangeNotifier {
         _warning = await _window.readSettingsStatus();
         if (warning.isNotEmpty ||
             _statusMessage == previousWarning ||
-            _statusMessage
-                    ?.startsWith('Action shortcuts could not be refreshed:') ==
-                true) {
+            (previousError != null && _statusMessage == previousError)) {
           _statusMessage = warning.isEmpty ? null : warning;
         }
       } catch (error) {
         if (_disposed || !identical(snapshot, current)) return;
-        _catalogSyncError = 'Action shortcuts could not be refreshed: $error';
+        _catalogSyncError = _shortcutCatalogFailure(error);
         _supportedShortcutActions = const {};
         // An uncertain catalog must not keep a revoked action's system chord alive.
         try {
           await _window.syncActionShortcutCatalog(snapshot, const []);
         } catch (_) {}
-        _statusMessage = _catalogSyncError;
         _notify();
       }
     });
@@ -330,7 +335,7 @@ class SettingsController extends ChangeNotifier {
       if (_disposed) return false;
       await _syncShortcutCatalog();
       if (_disposed) return false;
-      reportError('Action shortcuts could not be refreshed: $error');
+      reportError(_shortcutCatalogFailure(error));
       return false;
     }
     if (_disposed) return false;

@@ -71,11 +71,12 @@ impl super::Application {
         clipboard_enabled: bool,
         allow_pending_selection: bool,
     ) -> Option<ActivationInput> {
-        let (rules, policy, version) = {
+        let (rules, actions, policy, version) = {
             let _session = self.session().ok()?;
             let providers = self.resolver.providers.lock().ok()?;
             (
                 providers.input_recognizers(),
+                self.resolver.base_registry(),
                 self.resolver.feature_policy.snapshot(),
                 self.resolver
                     .action_catalog_version
@@ -97,11 +98,12 @@ impl super::Application {
             clipboard_enabled,
             allow_pending_selection,
             |text| {
-                rules.iter().any(|rule| {
+                let recognized = rules.iter().any(|rule| {
                     current()
                         && (rule.recognize)(text)
                             .is_some_and(|context| context.type_id != anywhere_protocol::TEXT)
-                })
+                });
+                recognized || (current() && actions.recognizes_web_input(text))
             },
         );
         current().then_some(result).flatten()

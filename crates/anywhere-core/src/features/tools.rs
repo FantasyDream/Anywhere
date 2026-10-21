@@ -10,7 +10,7 @@ use crate::core::{
 };
 use anywhere_protocol::ContextSource;
 
-pub const ENTRY_CONTEXT: &str = "core.launcher";
+pub use anywhere_protocol::LAUNCHER_ENTRY_CONTEXT as ENTRY_CONTEXT;
 
 /// The Launcher capability is an execution target, not an ambient Context or Scope.
 pub struct EntrySource<'a, 'b> {

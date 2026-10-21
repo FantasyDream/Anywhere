@@ -81,6 +81,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
+  WebPluginLaunchDto dco_decode_box_autoadd_web_plugin_launch_dto(dynamic raw);
+
+  @protected
   CandidateDto dco_decode_candidate_dto(dynamic raw);
 
   @protected
@@ -207,6 +210,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<ShortcutRouteDto> dco_decode_list_shortcut_route_dto(dynamic raw);
 
   @protected
+  List<WebPackageDto> dco_decode_list_web_package_dto(dynamic raw);
+
+  @protected
   NativeToolDto dco_decode_native_tool_dto(dynamic raw);
 
   @protected
@@ -252,6 +258,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  WebPluginLaunchDto? dco_decode_opt_box_autoadd_web_plugin_launch_dto(
+      dynamic raw);
 
   @protected
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
@@ -300,6 +310,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void dco_decode_unit(dynamic raw);
+
+  @protected
+  WebDocumentDto dco_decode_web_document_dto(dynamic raw);
+
+  @protected
+  WebPackageDto dco_decode_web_package_dto(dynamic raw);
+
+  @protected
+  WebPluginLaunchDto dco_decode_web_plugin_launch_dto(dynamic raw);
+
+  @protected
+  WebReplyDto dco_decode_web_reply_dto(dynamic raw);
+
+  @protected
+  WebReviewDto dco_decode_web_review_dto(dynamic raw);
 
   @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
@@ -371,6 +396,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  WebPluginLaunchDto sse_decode_box_autoadd_web_plugin_launch_dto(
+      SseDeserializer deserializer);
 
   @protected
   CandidateDto sse_decode_candidate_dto(SseDeserializer deserializer);
@@ -518,6 +547,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<WebPackageDto> sse_decode_list_web_package_dto(
+      SseDeserializer deserializer);
+
+  @protected
   NativeToolDto sse_decode_native_tool_dto(SseDeserializer deserializer);
 
   @protected
@@ -568,6 +601,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  WebPluginLaunchDto? sse_decode_opt_box_autoadd_web_plugin_launch_dto(
+      SseDeserializer deserializer);
 
   @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
@@ -621,6 +658,22 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_decode_unit(SseDeserializer deserializer);
+
+  @protected
+  WebDocumentDto sse_decode_web_document_dto(SseDeserializer deserializer);
+
+  @protected
+  WebPackageDto sse_decode_web_package_dto(SseDeserializer deserializer);
+
+  @protected
+  WebPluginLaunchDto sse_decode_web_plugin_launch_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  WebReplyDto sse_decode_web_reply_dto(SseDeserializer deserializer);
+
+  @protected
+  WebReviewDto sse_decode_web_review_dto(SseDeserializer deserializer);
 
   @protected
   void sse_encode_AnyhowException(
@@ -697,6 +750,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_web_plugin_launch_dto(
+      WebPluginLaunchDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_candidate_dto(CandidateDto self, SseSerializer serializer);
@@ -850,6 +907,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<ShortcutRouteDto> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_web_package_dto(
+      List<WebPackageDto> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_native_tool_dto(NativeToolDto self, SseSerializer serializer);
 
   @protected
@@ -900,6 +961,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_web_plugin_launch_dto(
+      WebPluginLaunchDto? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_list_prim_u_8_strict(
@@ -959,6 +1024,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   void sse_encode_unit(void self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_web_document_dto(
+      WebDocumentDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_web_package_dto(WebPackageDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_web_plugin_launch_dto(
+      WebPluginLaunchDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_web_reply_dto(WebReplyDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_web_review_dto(WebReviewDto self, SseSerializer serializer);
 }
 
 // Section: wire_class

@@ -4,6 +4,14 @@ pub const MAX_KEY_BYTES: usize = 128;
 pub const MAX_VALUE_BYTES: usize = 64 * 1024;
 pub const MAX_NAMESPACE_BYTES: usize = 256 * 1024;
 pub const MAX_NAMESPACE_KEYS: usize = 128;
+#[derive(Debug)]
+pub struct StorageQuotaExceeded;
+impl std::fmt::Display for StorageQuotaExceeded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("module storage quota exceeded")
+    }
+}
+impl std::error::Error for StorageQuotaExceeded {}
 /// Called once under the storage transaction. Must not perform I/O or re-enter storage.
 pub type StorageUpdate<'a> = dyn FnMut(Option<&[u8]>) -> Result<Option<Vec<u8>>> + 'a;
 pub trait ExtensionStorage: Send + Sync {

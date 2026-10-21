@@ -40,6 +40,9 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
 
     func show() -> Bool {
         rememberDestination(NSWorkspace.shared.frontmostApplication)
+        let pointer = NSEvent.mouseLocation
+        let screen = NSScreen.screens.first { NSMouseInRect(pointer, $0.frame, false) }
+            ?? window?.screen ?? NSScreen.main ?? NSScreen.screens.first
         if window == nil {
             let view = FlutterViewController(project: FlutterDartProject())
             let transport = FlutterMethodChannel(name: channelName, binaryMessenger: view.engine.binaryMessenger)
@@ -67,7 +70,7 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
                 transport.setMethodCallHandler(nil)
                 return false
             }
-            let size = NSSize(width: 820, height: 540)
+            let size = ToolWindowPlacement.preferredSize
             let panel = NSWindow(contentRect: NSRect(origin: .zero, size: size),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                 backing: .buffered, defer: false)
@@ -79,14 +82,13 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.backgroundColor = .clear
             panel.isOpaque = false
-            panel.minSize = NSSize(width: 720, height: 420)
+            panel.minSize = NSSize(width: 320, height: 300)
             panel.isReleasedWhenClosed = false
             panel.delegate = self
             view.backgroundColor = .clear
             panel.contentViewController = WindowMaterialController(contentController: view,
                 frame: NSRect(origin: .zero, size: size), cornerRadius: 0)
             panel.setContentSize(size)
-            panel.center()
             window = panel
             controller = view
             channel = transport
@@ -94,6 +96,10 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
         NSApp.unhide(nil)
         NSApp.activate(ignoringOtherApps: true)
         if window?.isMiniaturized == true { window?.deminiaturize(nil) }
+        if let window, let screen {
+            window.setFrame(ToolWindowPlacement.bottomTrailing(size: window.frame.size,
+                            in: screen.visibleFrame), display: false)
+        }
         window?.makeKeyAndOrderFront(nil)
         if let window, let content = controller?.view {
             WindowInputFocus.restore(in: window, content: content)

@@ -2,7 +2,7 @@
 
 核对日期：2026-10-14。代码基线 `dev-0.9@e4dbedc`。本文记录用户提出的新方向及改造建议，**不是已实现功能或实机验收**；本轮只梳理代码和官方接口资料，不修改运行代码。原 V0.9 Form / List / Markdown DSL 切片应暂停，待按本方案调整开发范围。
 
-后续方向已调整：第一方彻底取消热加载 / 通用 runtime 模型，改为 [内置功能模块](builtin-feature-modules.md)；第三方 WebView 放到最后阶段。本页的第一方 Runtime / NativeProcessRuntime 和 V0.9 Web 实施顺序已被新方案替代，保留为调研过程。
+后续方向已调整：第一方彻底取消热加载 / 通用 runtime 模型，改为 [内置功能模块](builtin-feature-modules.md)。2026-10-18 用户将 Terminal 延后，第三方 Web 插件提前，当前提案见 [Web 插件设计](../web-plugin-design.md)。本页的第一方 Runtime / NativeProcessRuntime、历史代码清单和 V0.9 Web 实施顺序均不能作为当前架构依据，保留为调研过程。
 
 ## 1. 建议采用的边界
 

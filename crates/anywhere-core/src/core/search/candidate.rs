@@ -30,6 +30,12 @@ pub enum CandidateTarget {
 }
 
 impl CandidateTarget {
+    pub fn uses_usage(&self) -> bool {
+        match self {
+            Self::Action { action, .. } => action.executor.uses_usage(),
+            Self::LaunchApplication { .. } => true,
+        }
+    }
     pub fn records_usage(&self) -> bool {
         match self {
             Self::Action { action, .. } => action.executor.records_usage(),
@@ -127,6 +133,27 @@ pub fn compare_candidates(a: &Candidate, b: &Candidate) -> std::cmp::Ordering {
 /// Keep one row per action and canonical object, preferring the highest-ranked occurrence.
 /// Context root membership is unioned so ownership survives deduplication.
 pub fn deduplicate_actions(candidates: &mut Vec<Candidate>) {
+    // A tool's object offer is more specific than opening its empty workspace.
+    let with_objects: std::collections::BTreeSet<_> = candidates
+        .iter()
+        .filter_map(|candidate| {
+            (candidate
+                .context()
+                .is_some_and(|c| c.type_id != LAUNCHER_ENTRY_CONTEXT))
+            .then(|| candidate.presentation.command_id.clone())
+            .flatten()
+        })
+        .collect();
+    candidates.retain(|candidate| {
+        !(candidate
+            .context()
+            .is_some_and(|c| c.type_id == LAUNCHER_ENTRY_CONTEXT)
+            && candidate
+                .presentation
+                .command_id
+                .as_ref()
+                .is_some_and(|id| with_objects.contains(id)))
+    });
     let mut merged: Vec<Candidate> = Vec::with_capacity(candidates.len());
     let mut index: BTreeMap<(ActionId, ContextTypeId, Arc<str>), usize> = BTreeMap::new();
     for candidate in candidates.drain(..) {

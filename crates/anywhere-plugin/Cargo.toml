@@ -11,4 +11,13 @@ serde.workspace = true
 toml = "0.8"
 url.workspace = true
 tracing.workspace = true
+serde_json = { workspace = true, features = ["raw_value"] }
+semver = "1"
+sha2 = "0.10"
+unicode-normalization = "0.1"
+unicode-casefold = "0.2"
+zip = { version = "9.0.5", default-features = false, features = ["deflate-flate2"] }
+# Explicit pure-Rust inflate backend; no encryption, native codecs or zopfli.
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+png = "0.18"
 

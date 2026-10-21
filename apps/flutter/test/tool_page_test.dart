@@ -5,7 +5,10 @@ import 'package:anywhere/tools/tool_page.dart';
 import 'package:anywhere/tools/tool_page_shell.dart';
 import 'package:anywhere/launcher/launcher_controller.dart';
 import 'package:anywhere/launcher/launcher_screen.dart';
+import 'package:anywhere/launcher/launcher_view_state.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
+import 'package:anywhere/ui/app_components.dart';
+import 'package:anywhere/ui/app_style.dart';
 import 'package:anywhere/src/rust/api.dart';
 import 'launcher_fixtures.dart';
 
@@ -238,5 +241,46 @@ void main() {
     await host.activate();
     expect(page.disposed, isTrue);
     expect(host.view.toolPage, isNull);
+  });
+  testWidgets('workspace frame has one Escape target and keeps content usable',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(920, 600));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    var back = 0;
+    Widget page(bool visible) => MaterialApp(
+        theme: AppStyle.theme,
+        home: Material(
+            child: ToolPageShell(
+          title: 'Workspace with a very long title that must stay on one line',
+          subtitle: 'Workspace',
+          visible: visible,
+          onBack: () => back++,
+          showFooterBack: false,
+          footer: const Row(children: [
+            Expanded(child: Text('Local processing')),
+            Text('Actions · ⌘K')
+          ]),
+          child: const ColoredBox(
+              key: Key('workspace-body'), color: Colors.transparent),
+        )));
+    await tester.pumpWidget(page(true));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(find.byType(AppPageHeader)).height,
+        LauncherViewState.inputHeight);
+    expect(tester.getSize(find.byType(AppPageFooter)).height,
+        LauncherViewState.footerHeight);
+    expect(tester.getSize(find.byKey(const Key('workspace-body'))).height,
+        greaterThan(450));
+    expect(find.text('Back'), findsNothing);
+    expect(find.text('esc'), findsOneWidget);
+    await tester.tap(find.text('esc'));
+    expect(back, 1);
+    await tester.binding.setSurfaceSize(const Size(648, 480));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(page(false));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('esc'));
+    expect(back, 1);
   });
 }

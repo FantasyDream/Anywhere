@@ -36,6 +36,7 @@ mod file_workspace;
 mod source_runtime;
 
 pub mod context_projection;
+pub mod web_plugins;
 
 #[cfg(test)]
 mod source_catalog_tests;

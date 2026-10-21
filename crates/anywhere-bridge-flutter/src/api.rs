@@ -1,5 +1,6 @@
 mod clipboard;
 mod conversions;
+mod web;
 use conversions::*;
 mod executions;
 mod files;
@@ -579,6 +580,7 @@ pub struct ActionResultDto {
     pub view: Option<HostViewDto>,
     pub plugin_detail: Option<PluginDetailDto>,
     pub native_tool: Option<NativeToolDto>,
+    pub web_plugin: Option<WebPluginLaunchDto>,
     pub close_window: bool,
     pub execution_session_id: Option<String>,
 }
@@ -626,6 +628,12 @@ pub enum HostViewDto {
     FileSearch,
     NativeTool,
     PluginDetail,
+    WebPlugin,
+}
+
+#[derive(Clone, Debug)]
+pub struct WebPluginLaunchDto {
+    pub invocation_id: String,
 }
 
 #[derive(Clone, Debug)]
@@ -803,4 +811,83 @@ mod delivery_tests {
 pub struct NativeToolDto {
     pub id: String,
     pub input: String,
+}
+
+/// Host-only package management; never dispatched through the Web SDK.
+#[derive(Clone, Debug)]
+pub struct WebPackageDto {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub digest: String,
+    pub permissions: Vec<String>,
+    pub enabled: bool,
+    pub rollback: bool,
+}
+#[derive(Clone, Debug)]
+pub struct WebReviewDto {
+    pub token: String,
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub digest: String,
+    pub permissions: Vec<String>,
+    pub updating: bool,
+}
+#[derive(Clone, Debug)]
+pub struct WebDocumentDto {
+    pub handle: String,
+    pub origin: String,
+    pub entry: String,
+    pub title: String,
+}
+#[derive(Clone, Debug)]
+pub struct WebReplyDto {
+    pub frame: Option<String>,
+    pub ticket: Option<String>,
+    pub title: Option<String>,
+    pub preview: Option<String>,
+}
+pub fn web_packages() -> Result<Vec<WebPackageDto>> {
+    web::statuses()
+}
+pub fn inspect_web_package(path: String) -> Result<WebReviewDto> {
+    web::inspect(path)
+}
+pub fn cancel_web_review() -> Result<()> {
+    web::cancel_review()
+}
+pub fn approve_web_package(token: String) -> Result<Vec<WebPackageDto>> {
+    web::approve(token)
+}
+pub fn change_web_package(id: String, operation: String) -> Result<Vec<WebPackageDto>> {
+    web::change(id, operation)
+}
+pub async fn open_web_document(
+    invocation_id: String,
+    resume_handle: Option<String>,
+) -> Result<WebDocumentDto> {
+    web::open(invocation_id, resume_handle).await
+}
+pub fn close_web_document(handle: String) -> Result<()> {
+    web::close(handle)
+}
+pub async fn dispatch_web_frame(
+    handle: String,
+    origin: String,
+    main_frame: bool,
+    frame: String,
+) -> Result<WebReplyDto> {
+    web::dispatch(handle, origin, main_frame, frame).await
+}
+pub async fn confirm_web_operation(
+    handle: String,
+    origin: String,
+    ticket: String,
+    approved: bool,
+) -> Result<WebReplyDto> {
+    web::confirm(handle, origin, ticket, approved).await
+}
+pub fn web_resource(handle: String, path: String) -> Result<Vec<u8>> {
+    web::resource(handle, path)
 }

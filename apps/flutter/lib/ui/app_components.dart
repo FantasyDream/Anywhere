@@ -2,6 +2,59 @@ import 'app_icons.dart';
 import 'package:flutter/material.dart';
 import 'app_style.dart';
 
+/// One transparent selection treatment for search, menus, history and tasks.
+/// Hover never adds a second wash over the keyboard-selected row.
+class AppSelectionSurface extends StatelessWidget {
+  const AppSelectionSurface(
+      {super.key, required this.selected, required this.child, this.onTap});
+  final bool selected;
+  final Widget child;
+  final VoidCallback? onTap;
+  @override
+  Widget build(BuildContext context) => Material(
+      color: selected ? AppStyle.selectedSurface : Colors.transparent,
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppStyle.resultRadius),
+          side: BorderSide(
+              color: selected ? AppStyle.selectionOutline : Colors.transparent,
+              width: DesignTokens.dividerWidth)),
+      child: InkWell(
+          borderRadius: BorderRadius.circular(AppStyle.resultRadius),
+          hoverColor: selected ? Colors.transparent : AppStyle.hover,
+          onTap: onTap,
+          child: child));
+}
+
+/// Shared Launcher and tool-page geometry; individual pages supply the content.
+class AppPageHeader extends StatelessWidget {
+  const AppPageHeader(
+      {super.key,
+      required this.child,
+      this.height = DesignTokens.pageHeaderHeight});
+  final Widget child;
+  final double height;
+  @override
+  Widget build(BuildContext context) => SizedBox(
+      height: height,
+      child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20), child: child));
+}
+
+class AppPageFooter extends StatelessWidget {
+  const AppPageFooter({super.key, required this.child});
+  final Widget child;
+  @override
+  Widget build(BuildContext context) => SizedBox(
+      height: DesignTokens.pageFooterHeight,
+      child: Column(children: [
+        const Divider(height: 1),
+        Expanded(
+            child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 3, 24, 10),
+                child: child)),
+      ]));
+}
+
 /// A quiet macOS-style toolbar: title on the leading side, commands trailing.
 /// Native windows reserve their own traffic-light inset above this component.
 class AppToolbar extends StatelessWidget {
@@ -57,7 +110,7 @@ class AppSidebarItem extends StatelessWidget {
               alignment: Alignment.centerLeft,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(AppStyle.controlRadius),
                   side: BorderSide(
                       color: selected
                           ? AppStyle.selectionOutline
@@ -66,8 +119,9 @@ class AppSidebarItem extends StatelessWidget {
               backgroundColor:
                   selected ? AppStyle.selectedSurface : Colors.transparent,
               foregroundColor: AppStyle.primary,
-              textStyle:
-                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w400)),
+              textStyle: TextStyle(
+                  fontSize: DesignTokens.bodySize,
+                  fontWeight: selected ? FontWeight.w500 : FontWeight.w400)),
           child: Row(children: [
             SizedBox(
                 width: 20,
@@ -135,9 +189,15 @@ enum NoticeKind { info, warning, error, success }
 
 class AppNotice extends StatelessWidget {
   const AppNotice(this.message,
-      {super.key, this.kind = NoticeKind.warning, this.onDismiss});
+      {super.key,
+      this.kind = NoticeKind.warning,
+      this.onDismiss,
+      this.compact = false,
+      this.trailing});
   final String message;
   final NoticeKind kind;
+  final bool compact;
+  final Widget? trailing;
   final VoidCallback? onDismiss;
   @override
   Widget build(BuildContext context) {
@@ -147,26 +207,46 @@ class AppNotice extends StatelessWidget {
       NoticeKind.error => AppStyle.danger,
       NoticeKind.success => AppStyle.success,
     };
-    return Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        decoration: BoxDecoration(
-            color: AppStyle.card,
-            borderRadius: BorderRadius.circular(AppStyle.controlRadius),
-            border: Border.all(color: AppStyle.divider, width: .8)),
-        child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Icon(kind == NoticeKind.success ? AppIcons.success : AppIcons.info,
-              size: 16, color: color),
-          const SizedBox(width: 9),
-          Expanded(
-              child: Text(message,
-                  style: TextStyle(
-                      fontSize: 12, height: 1.3, color: AppStyle.secondary))),
-          if (onDismiss != null)
-            IconButton(
-                tooltip: 'Dismiss message',
-                onPressed: onDismiss,
-                icon: Icon(AppIcons.close, size: 16, color: color)),
-        ]));
+    return Semantics(
+        liveRegion: true,
+        child: Container(
+            padding:
+                EdgeInsets.symmetric(horizontal: 10, vertical: compact ? 3 : 8),
+            decoration: BoxDecoration(
+                color: AppStyle.card,
+                borderRadius: BorderRadius.circular(AppStyle.controlRadius),
+                border: Border.all(
+                    color: color.withValues(alpha: .24),
+                    width: DesignTokens.controlBorderWidth)),
+            child: Row(
+                crossAxisAlignment: compact
+                    ? CrossAxisAlignment.center
+                    : CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                      switch (kind) {
+                        NoticeKind.success => AppIcons.success,
+                        NoticeKind.error => AppIcons.error,
+                        _ => AppIcons.info,
+                      },
+                      size: 16,
+                      color: color),
+                  const SizedBox(width: 9),
+                  Expanded(
+                      child: Text(message,
+                          maxLines: compact ? 2 : null,
+                          overflow: compact ? TextOverflow.ellipsis : null,
+                          style: TextStyle(
+                              fontSize: compact ? 11 : 12,
+                              height: 1.2,
+                              color: AppStyle.primary))),
+                  if (trailing != null) trailing!,
+                  if (onDismiss != null)
+                    IconButton(
+                        tooltip: 'Dismiss message',
+                        onPressed: onDismiss,
+                        icon: Icon(AppIcons.close, size: 16, color: color)),
+                ])));
   }
 }
 
@@ -203,12 +283,15 @@ class AppKeycap extends StatelessWidget {
   final String label;
   @override
   Widget build(BuildContext context) => Container(
-      constraints: const BoxConstraints(minWidth: 20),
-      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 3),
+      constraints: const BoxConstraints(minWidth: DesignTokens.keycapMinWidth),
+      padding: const EdgeInsets.symmetric(
+          horizontal: DesignTokens.keycapPaddingX,
+          vertical: DesignTokens.keycapPaddingY),
       decoration: BoxDecoration(
           color: AppStyle.keycapSurface,
-          borderRadius: BorderRadius.circular(5),
-          border: Border.all(color: AppStyle.keycapBorder, width: .5)),
+          borderRadius: BorderRadius.circular(DesignTokens.keycapRadius),
+          border: Border.all(
+              color: AppStyle.keycapBorder, width: DesignTokens.dividerWidth)),
       child: label == '↵'
           ? Semantics(
               label: 'Return',
@@ -217,9 +300,9 @@ class AppKeycap extends StatelessWidget {
           : Text(label,
               textAlign: TextAlign.center,
               style: const TextStyle(
-                  fontSize: 10.5,
-                  height: 1.1,
-                  fontWeight: FontWeight.w500,
+                  fontSize: DesignTokens.keycapFontSize,
+                  height: DesignTokens.keycapLineHeight,
+                  fontWeight: DesignTokens.keycapWeight,
                   color: AppStyle.secondary)));
 }
 
@@ -269,4 +352,51 @@ class AppStatusBadge extends StatelessWidget {
         const SizedBox(width: 5),
         Text(label, style: TextStyle(fontSize: 11, height: 1.2, color: color)),
       ]));
+}
+
+/// A compact switch with a larger hit area, semantics and button keyboard
+/// activation. Its geometry stays stable at different text sizes.
+class AppToggle extends StatelessWidget {
+  const AppToggle(
+      {super.key,
+      required this.label,
+      required this.value,
+      required this.onChanged});
+  final String label;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+      container: true,
+      label: label,
+      toggled: value,
+      enabled: onChanged != null,
+      child: TextButton(
+          onPressed: onChanged == null ? null : () => onChanged!(!value),
+          style: TextButton.styleFrom(
+              minimumSize: const Size(40, 30),
+              padding: const EdgeInsets.all(5),
+              backgroundColor: Colors.transparent),
+          child: Opacity(
+              opacity: onChanged == null ? .45 : 1,
+              child: Container(
+                  width: 30,
+                  height: 18,
+                  padding: const EdgeInsets.all(2),
+                  decoration: BoxDecoration(
+                      color: value ? AppStyle.accentFill : AppStyle.elevated,
+                      borderRadius: BorderRadius.circular(9),
+                      border: Border.all(
+                          color: value ? AppStyle.accentFill : AppStyle.border,
+                          width: .6)),
+                  child: Align(
+                      alignment:
+                          value ? Alignment.centerRight : Alignment.centerLeft,
+                      child: Container(
+                          width: 14,
+                          height: 14,
+                          decoration: const BoxDecoration(
+                              color: Colors.white,
+                              shape: BoxShape.circle)))))));
 }

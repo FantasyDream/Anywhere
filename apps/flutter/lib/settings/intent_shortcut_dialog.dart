@@ -9,7 +9,6 @@ import 'action_shortcut.dart';
 import 'host_settings.dart';
 import 'shortcut_recorder.dart';
 import 'shortcut_app_picker.dart';
-import 'settings_components.dart';
 
 /// An intent has one chord and explicit rules. Rule order has no meaning.
 class IntentShortcutDialog extends StatefulWidget {
@@ -204,7 +203,7 @@ class _IntentShortcutDialogState extends State<IntentShortcutDialog> {
                                       : _draft().label))),
                           const Spacer(),
                           const Text('Global', style: TextStyle(fontSize: 12)),
-                          SettingsToggle(
+                          AppToggle(
                               label: 'Global shortcut',
                               value: _global,
                               onChanged: _recording

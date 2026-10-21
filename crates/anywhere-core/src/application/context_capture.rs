@@ -88,6 +88,17 @@ impl Application {
     ) {
         if let Ok(mut policy) = self.capture_policy.lock() {
             policy.set(finder, selected_text, browser_page, clipboard);
+            // Keep the existing capture -> session lock order. A previously issued
+            // Web input/document cannot outlive a source policy change.
+            if let Ok(mut session) = self.session() {
+                self.resolver
+                    .execution_epoch
+                    .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                session.execution = Default::default();
+                if let Ok(mut web) = self.web_plugins.lock() {
+                    web.invalidate();
+                }
+            }
         }
     }
 

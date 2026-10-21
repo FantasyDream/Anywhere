@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone)]
 pub enum ActionExecutor {
+    WebCommand(super::web_command::WebCommandRef),
     Native(ActionHandlerRef),
     Declarative(DeclarativeAction),
     ScopedDeclarative {
@@ -22,20 +23,26 @@ impl ActionExecutor {
     pub fn is_menu(&self) -> bool {
         match self {
             Self::Native(handler) => handler.is_menu(),
-            Self::Declarative(_) | Self::ScopedDeclarative { .. } => false,
+            Self::WebCommand(_) | Self::Declarative(_) | Self::ScopedDeclarative { .. } => false,
         }
     }
     pub fn records_usage(&self) -> bool {
         match self {
             Self::Native(handler) => handler.records_usage(),
+            Self::WebCommand(_) => false, // Recorded once after the qualified document is ready.
             Self::Declarative(_) | Self::ScopedDeclarative { .. } => true,
         }
+    }
+
+    /// Web navigation records later at ready, but still consumes its existing frecency.
+    pub fn uses_usage(&self) -> bool {
+        matches!(self, Self::WebCommand(_)) || self.records_usage()
     }
 
     pub fn execution_token(&self) -> Option<u64> {
         match self {
             Self::Native(handler) => handler.execution_token(),
-            Self::Declarative(_) | Self::ScopedDeclarative { .. } => None,
+            Self::WebCommand(_) | Self::Declarative(_) | Self::ScopedDeclarative { .. } => None,
         }
     }
 }
@@ -194,9 +201,9 @@ impl ActionRegistry {
                     _ => bail!("execute_builtin target is not built-in"),
                 }
             }
-            ActionExecutor::Declarative(_) | ActionExecutor::ScopedDeclarative { .. } => {
-                BindingPolicy::Persistent
-            }
+            ActionExecutor::WebCommand(_)
+            | ActionExecutor::Declarative(_)
+            | ActionExecutor::ScopedDeclarative { .. } => BindingPolicy::Persistent,
         };
         if let BindingPolicy::Unavailable { reason } = policy {
             bail!("{reason}");

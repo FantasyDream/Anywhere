@@ -2,6 +2,7 @@
 #import "macos_process.h"
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 // Only OS context capture. All window/UI code lives in the Flutter host.
 char *launcher_frontmost_application(void) {
@@ -275,7 +276,9 @@ unsigned char *launcher_application_icon(const char *utf8_path, unsigned int siz
 
 // Reading the generation does not read clipboard contents or prompt for access.
 long long launcher_clipboard_change_count(void) {
-    @autoreleasepool { return (long long)NSPasteboard.generalPasteboard.changeCount; }
+    @try {
+        @autoreleasepool { return (long long)NSPasteboard.generalPasteboard.changeCount; }
+    } @catch (NSException *exception) { return -1; }
 }
 
 // Public policy API is queried dynamically to support old SDKs on new systems.
@@ -289,34 +292,42 @@ static NSInteger clipboard_access_behavior(NSPasteboard *pasteboard) {
     return 2;
 }
 int launcher_clipboard_history_access_allowed(void) {
-    @autoreleasepool { return clipboard_access_behavior(NSPasteboard.generalPasteboard) == 2 ? 1 : 0; }
+    @try {
+        @autoreleasepool { return clipboard_access_behavior(NSPasteboard.generalPasteboard) == 2 ? 1 : 0; }
+    } @catch (NSException *exception) { return 0; }
 }
 // Foreground preflight may prompt. Actual clipboard format reads use clipboard-rs.
 int launcher_clipboard_text_guard(unsigned long long capacity) {
-    @autoreleasepool {
-        NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
-        if (clipboard_access_behavior(pasteboard) == 3) return 4;
-        NSString *text = [pasteboard stringForType:NSPasteboardTypeString];
-        if (clipboard_access_behavior(pasteboard) == 3) return 4;
-        if (!text && [pasteboard.types containsObject:NSPasteboardTypeString]) return 0;
-        if (!text.length) return 2;
-        return [text lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > capacity ? 3 : 1;
-    }
+    @try {
+        @autoreleasepool {
+            NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
+            if (clipboard_access_behavior(pasteboard) == 3) return 4;
+            NSString *text = [pasteboard stringForType:NSPasteboardTypeString];
+            if (clipboard_access_behavior(pasteboard) == 3) return 4;
+            if (!text && [pasteboard.types containsObject:NSPasteboardTypeString]) return 0;
+            if (!text.length) return 2;
+            return [text lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > capacity ? 3 : 1;
+        }
+    } @catch (NSException *exception) { return 0; }
 }
 unsigned long long launcher_clipboard_item_count(void) {
-    @autoreleasepool { return (unsigned long long)NSPasteboard.generalPasteboard.pasteboardItems.count; }
+    @try {
+        @autoreleasepool { return (unsigned long long)NSPasteboard.generalPasteboard.pasteboardItems.count; }
+    } @catch (NSException *exception) { return ULLONG_MAX; }
 }
 // Avoid copying an oversized representation into Rust. Reading NSData can still
 // materialize lazy data in the source app; the OS API cannot preflight that cost.
 int launcher_clipboard_format_guard(const char *format, unsigned long long capacity) {
-    @autoreleasepool {
-        NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
-        if (clipboard_access_behavior(pasteboard) != 2) return 4;
-        NSString *type = format ? [NSString stringWithUTF8String:format] : nil;
-        if (!type) return 0;
-        NSData *data = [pasteboard dataForType:type];
-        if (clipboard_access_behavior(pasteboard) != 2) return 4;
-        if (!data) return 0;
-        return data.length > capacity ? 3 : 1;
-    }
+    @try {
+        @autoreleasepool {
+            NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
+            if (clipboard_access_behavior(pasteboard) != 2) return 4;
+            NSString *type = format ? [NSString stringWithUTF8String:format] : nil;
+            if (!type) return 0;
+            NSData *data = [pasteboard dataForType:type];
+            if (clipboard_access_behavior(pasteboard) != 2) return 4;
+            if (!data) return 0;
+            return data.length > capacity ? 3 : 1;
+        }
+    } @catch (NSException *exception) { return 0; }
 }

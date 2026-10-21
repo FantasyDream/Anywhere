@@ -3,7 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../ui/app_style.dart';
 import '../../infrastructure/clipboard_history_backend.dart';
-import 'clipboard_history_page.dart';
+import 'clipboard_shelf_page.dart';
+import 'clipboard_history_presentation.dart';
 import 'clipboard_history_session.dart';
 
 /// An independent presentation of the same Rust history, with its own query and
@@ -22,8 +23,10 @@ class ClipboardShelfApp extends StatefulWidget {
 }
 
 class _ClipboardShelfAppState extends State<ClipboardShelfApp> {
-  late final session =
-      ClipboardHistorySession(widget.backend ?? RustClipboardHistoryBackend());
+  late final session = ClipboardHistorySession(
+      widget.backend ?? RustClipboardHistoryBackend(),
+      rowExtent: clipboardShelfRowHeight,
+      previewEnabled: false);
   Timer? _timer;
   bool _visible = true, _polling = false;
   int _presentation = 0, _visibilityEpoch = 0;
@@ -117,11 +120,10 @@ class _ClipboardShelfAppState extends State<ClipboardShelfApp> {
               padding: const EdgeInsets.only(top: 24),
               child: ListenableBuilder(
                   listenable: session,
-                  builder: (context, _) => ClipboardHistoryPage(
+                  builder: (context, _) => ClipboardShelfPage(
                       session: session,
-                      floating: true,
                       onCopied: _copied,
-                      onBack: () => unawaited(_close()),
+                      onClose: () => unawaited(_close()),
                       presentation: _presentation,
                       visible: _visible)),
             ))),

@@ -3,10 +3,16 @@ from pathlib import Path
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from architecture_rules import check_core_imports, check_feature_imports
+from architecture_rules import check_core_imports, check_feature_imports, check_persistence_imports
 
 
 class CoreBoundaries(unittest.TestCase):
+    def test_persistence_cannot_publish_application_state(self):
+        for source in ['use crate::Application;', 'use crate::application::web_plugins::WebPluginCatalog;',
+                       'fn publish() { crate::Application::new(); }']:
+            with self.subTest(source=source), self.assertRaises(AssertionError):
+                check_persistence_imports(source, 'persistence/fixture.rs')
+        check_persistence_imports('use anywhere_plugin::web::VerifiedWebPackage;', 'persistence/fixture.rs')
     def test_extension_dependency_is_rejected_in_imports_and_qualified_calls(self):
         for source in ['use crate::extensions::git;',
                        'use crate::{core::storage::ExtensionStorage, extensions as modules};',

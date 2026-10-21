@@ -1,9 +1,9 @@
 # Anywhere 产品路线图
 
-最后更新：2026-10-18。当前验收版本为 V0.10 / Build 11（`codex/refactor-open-source`，剪贴板基线在 `codex/dev-0.10`）；版本号表示依赖顺序，不代表发布日期。实现进度以 [当前 MVP](mvp-v0.10.md) 为准，历史构建与验收在 [归档](archive/README.md)。
+最后更新：2026-10-21。既有验收版本为 V0.10 / Build 11，当前开发预览为 V0.11 / Build 51（`codex/refactor-open-source`，剪贴板基线在 `codex/dev-0.10`）；版本号表示依赖顺序，不代表发布日期。Web 实现进度以 [V0.11 MVP](mvp-v0.11.md) 为准，剪贴板基线见 [V0.10 MVP](mvp-v0.10.md)，历史构建与验收在 [归档](archive/README.md)。
 
 
-2026-10-18：V0.10 及 [开源复用重构 R1–R4](open-source-refactor-plan.md)已完成工程收尾。编码预览与工具查找已接入；SQLite / nucleo 经对照后未采用，实验代码及专用依赖已清理，保留原始测量和必要回归。下一阶段为 V0.11 PTY / Terminal，原有产品依赖顺序保持。
+2026-10-18：V0.10 及 [开源复用重构 R1–R4](open-source-refactor-plan.md)已完成工程收尾。编码预览与工具查找已接入；SQLite / nucleo 经对照后未采用，实验代码及专用依赖已清理，保留原始测量和必要回归。用户最新确认：**Terminal 延后，第三方统一采用 WebView，优先复用 flutter_inappwebview**；详见 [Web 插件设计](web-plugin-design.md)。P0 探针验证中，P1 包协议 / 校验与 P2 Rust 注册 / 调用主链路、HostView 协议已实现；P3 SDK / Rust 能力代理已实现；P4–P6 已接入生产代码的 macOS 本地开发预览：统一页框、宿主确认、安装更新 / 回滚、JSON / Text Pad；原生界面与安全矩阵验收继续，Windows 与公开分发未开放。
 
 ## 产品目标
 
@@ -23,27 +23,28 @@
 | V0.8 First-party / Extension v2 | 模块贡献、明确能力批准、生命周期、真实 Source / Storage | S1–S3 工程收尾，macOS 关键闭环已实机检查；正式发布矩阵保留 |
 | **V0.9 内置功能模块 / 原生工具页** | 静态装配、自动注册、功能策略、类型化服务与统一页面；JSON 延期 | 工程收尾、完整门禁与 Build 6 关键闭环验收完成；JSON 原生入口已清理，原 UI DSL 停止扩展 |
 | **V0.10 剪贴板历史与搜索** | 历史采集、持久保存、搜索、预览与恢复使用；补齐当前规划的内置搜索能力 | 工程收尾，Build 11 完成开源复用、性能对照、全量门禁与关键界面验收；首次权限 / VoiceOver / 长时间内存矩阵保留 |
-| V0.11 PTY / Terminal | 进程会话上增加 PTY、输入、尺寸变化与终端视图 | 剪贴板搜索完成后推进，验证流控、高输出、返回 / 停止 / 退出生命周期 |
+| **V0.11 第三方 Web 插件基础** | 本地包、flutter_inappwebview、Context 输入、SDK、能力代理、安装批准 / 更新 / 重载 | 用户已确认统一 WebView 路线；P0–P6 已接入本地预览，继续核对原生键盘、安全矩阵与发行边界 |
+| Web 平台验证：JSON 工具 | JSON 编辑、格式化、压缩、校验、错误定位与复制 | P6 已实现 JSONPath / JavaScript 与复制动作；普通 Web 包，随 V0.11 验证，不恢复 Flutter 原生 JSON 工作区 |
 | 后续第一方能力与核心收尾 | 项目工具、Recent Projects、性能、可用性与平台适配 | 按真实功能验证内置模块与原生页面接口 |
-| V1.0 | Context-aware Launcher、搜索、多来源 Context、开发动作、内置工具体系和可返回会话 | 满足下方发布条件 |
-| 1.0 后：WebView 插件机制 | WebView、JS SDK、能力接口、安装更新与热加载 | 完成核心体验后单独实现；第一方不预留原生二进制热加载 |
-| WebView 机制完成后：JSON 插件 | JSON 编辑、格式化、压缩、校验、错误定位与复制 | 使用 WebView 插件交付，作为机制的首个实际工具；不恢复 Flutter 原生 JSON 工作区 |
+| V1.0 | Context-aware Launcher、搜索、多来源 Context、开发动作、内置工具、可返回进程会话与最小 Web 插件闭环 | 满足下方发布条件；不要求 PTY 或 Marketplace |
+| **延期：PTY / Terminal** | 进程会话上增加 PTY、输入、尺寸变化与终端视图 | Web 插件实际工具验证后再排期，不作为 Web SDK 的前置；流控与高输出单独设计验收 |
 
 ## 后续执行顺序
 
 ```text
 0.9 内置模块架构收尾与现有功能验收
  → 0.10 剪贴板历史与搜索
- → 0.11 PTY / Terminal
+ → 0.11 第三方 Web 插件基础（P0–P5）
+ → JSON Web 工具验证（P6）
  → 内置能力补齐与核心体验收尾
  → 1.0 核心闭环
- → WebView 插件机制
- → JSON WebView 插件
+
+延期队列：PTY / Terminal → Code Agents / ACP（重新排期）
 ```
 
-0.11 之后的小版本号尚未锁定，按上述依赖排期。Code Agents / ACP、OCR / Translate、Marketplace 等继续作为独立候选，另定优先级；不为凑版本同时扩张范围。
+0.11 之后的小版本号尚未锁定，按上述依赖排期。Terminal 不硬性锁在 1.0 之后，其恢复开发时间另定；当前先做 Web 机制和真实工具。Host HTTP / 文件访问 / Secrets 按真实插件需求逐项补齐；OCR / Translate、Marketplace 等继续作为独立候选，不同时扩张范围。
 
-## 当前版本：V0.10 剪贴板历史与搜索
+## 已完成基础：V0.10 剪贴板历史与搜索
 
 2026-10-16 用户确认：0.9 之后先做剪贴板，这是当前规划中最后一项缺失的内置搜索能力，完成后再开发其他功能。
 
@@ -52,20 +53,20 @@
 - Rust 管理历史、检索、去重和存储；Flutter 管理列表、预览、选择与交互；Platform 负责系统剪贴板读写与变更检测。
 - 历史保留数量 / 容量与内存缓存有界，查询从持久存储读取，避免将全部历史常驻内存；具体格式支持与额度在开发前的 MVP 中确定。
 - **现有 15 秒规则只约束本次唤醒是否自动填入内容**，不作为历史条目的保存或可搜索期限；历史搜索是用户主动进入的操作，不向普通主列表持续铺满剪贴板内容。
-- 剪贴板历史 / 搜索加入 1.0 核心闭环；Terminal、Recent Projects 以及其他能力排在它之后。WebView 与 JSON 的先后关系保持。
+- 剪贴板历史 / 搜索加入 1.0 核心闭环。该阶段已完成；2026-10-18 的后续优先级调整为 Web 插件 → JSON 验证，Terminal 延后。
 
 ## 范围取舍
 
 - 现有文件搜索复用 Spotlight 快速路径，加完整遍历，不维护长期文件索引；Clipboard History 已完成 V0.10 工程收尾，具体范围及验收边界见当前 MVP；Browser History 不纳入这轮核心搜索补齐范围。
-- 第一方正式称为内置功能模块，随 App 编译与发布，取消加载 / 重载 / 卸载模型。旧 TOML 外部功能已有实现，迁移期间独立兼容；第三方 WebView 放到最后。
+- 第一方正式称为内置功能模块，随 App 编译与发布，取消加载 / 重载 / 卸载模型。旧 TOML 外部功能已有实现，迁移期间独立兼容；下一阶段新增第三方 Web 包，不将内置模块改回插件运行时。
 - 文件预览先保持元数据 / 有界文本。图片、PDF、系统 Quick Look 等逐项验证，不把图标分类当作富预览。
-- 通用 Web 插件、JSON 工具、Code Agent 管理、ACP、Screenshot / OCR / Translate、Marketplace 不列入 1.0 门槛。
+- 最小 Web 插件闭环提前：本地安装 / 批准、统一 Action、受限 SDK、更新撤销与真实工具验证。后台插件、任意进程、第三方搜索源、Code Agent 管理、ACP、Screenshot / OCR / Translate、Marketplace 不列入 1.0 门槛。
 - 2026-10-16 用户确认 JSON 整体延期，待 WebView 插件机制完成后实现。V0.9 已撤下原生 JSON 实现、入口与专用页面；旧身份与数据保留迁移依据，避免以后复用给其他动作。
-- Terminal 可使用专用 WebView / xterm.js 桥接，通用 React / Vue / Svelte 插件不是前置条件。输入、生命周期与吞吐需要独立验收。
+- Terminal 将来可复用 WebView / 主题 / 键盘基础，通过独立 PTY 通道接 xterm.js；不提前实现终端专用流框架。现有 Process Sessions 保持使用，输入、生命周期与吞吐另行验收。
 
 ## 架构演进
 
-V0.8 的贡献接口、Storage 和执行资格继续复用。V0.9 整理为静态内置功能目录、功能策略和类型化服务，原生页面通过统一容器接入；详情见 [模块迁移路线图](feature-module-roadmap.md)。V0.10 先补齐剪贴板历史与搜索，复用现有来源 / 动作与页面接口；V0.11 再扩展 ExecutionSession。第三方 WebView 与热加载在 1.0 后单独实现，JSON 工具在该机制完成后作为 Web 插件开发。
+V0.8 的贡献接口、Storage 和执行资格继续复用。V0.9 整理为静态内置功能目录、功能策略和类型化服务，原生页面通过统一容器接入；详情见 [模块迁移路线图](feature-module-roadmap.md)。V0.10 已补齐剪贴板历史与搜索。V0.11 新增独立 Web 包目录、Invocation / 能力代理和 WebPluginSurface，复用 Action / Ranking / ToolPageShell；第一方架构不重做。JSON 随后作为普通 Web 工具验证，Terminal 再排期。
 
 必须守住的契约：
 
@@ -85,6 +86,11 @@ V0.8 的贡献接口、Storage 和执行资格继续复用。V0.9 整理为静�
 - 剪贴板历史能跨应用重启搜索与恢复使用，保存 / 查询 / 缓存有界，采集设置与管理操作生效，且与自动填入的 15 秒规则分离。
 - Git 和各 Developer 类型有实际项目验收，长任务可返回、查看结果和停止，输出有界。
 - 至少两个内置模块使用同一贡献与装配接口，原生工具有完整输入 / 错误 / 返回流程；第一方无热加载框架，设置即时生效并保持执行资格检查。
+- Web 插件的本地安装、Context 投影、受控调用、撤销 / 更新、15 秒隐藏恢复经真实工具验证；JS 资源变化需重新批准，旧实例无法继续使用权限。JSON 按普通 Web 包验证，不引入领域专用 Host 后门。
 - 自动化、签名 / 公证、安装升级、权限降级、性能基线与手工交互矩阵均有记录。
 
 工程检查和开发包完成不能替代发布矩阵。当前进度与证据见 [V0.10 MVP](mvp-v0.10.md)和[开源复用收尾](open-source-refactor-plan.md)，V0.8 证据仍保留在 [上一阶段收尾](mvp-v0.8.md)。
+
+## 第三方 Context：研究排期
+
+现有 Web UI 基础继续使用；自动派生 Context 是另一种受限贡献，先做类型所有权 / grant / 输出校验，再验证独立 QuickJS worker，最后决定公开 SDK。统一使用现有 Graph / Action / Scope / Ranking，不为第三方复制主流程；详细比较、风险和验收门槛见 [调研](research/third-party-context-providers.md)。当前未实现，不将 worker 或任意 Context 注册列为本版已完成能力。

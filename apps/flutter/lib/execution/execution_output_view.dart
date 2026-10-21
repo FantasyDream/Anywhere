@@ -1,3 +1,4 @@
+import '../infrastructure/desktop_environment.dart';
 import '../ui/app_icons.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -123,7 +124,7 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
                                 size: 15,
                                 color: _copied
                                     ? AppStyle.success
-                                    : AppStyle.secondary)),
+                                    : AppStyle.primary)),
                       ]))),
           const Divider(height: 1, color: AppStyle.divider),
           Expanded(
@@ -144,13 +145,14 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
                             : _text,
                         key: const Key('task-output-text'),
                         style: TextStyle(
-                            fontFamily: 'Menlo',
+                            fontFamily:
+                                DesktopEnvironment.current.monoFontFamily,
                             fontFamilyFallback: const ['monospace'],
-                            fontSize: 12,
-                            height: 1.65,
+                            fontSize: DesignTokens.previewCodeSize,
+                            height: DesignTokens.previewCodeLineHeight,
                             color: _diagnostics
                                 ? AppStyle.warning
-                                : AppStyle.secondary)),
+                                : AppStyle.primary)),
                   ))),
         ]),
       );

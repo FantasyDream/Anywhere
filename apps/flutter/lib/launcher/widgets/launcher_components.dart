@@ -24,125 +24,120 @@ class LauncherSearchArea extends StatelessWidget {
   final Widget? trailing;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
+  Widget build(BuildContext context) => AppPageHeader(
       height: state.inputAreaHeight,
-      child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Row(children: [
-            if (onBack != null)
-              IconButton(
-                  tooltip: 'Back to results',
-                  onPressed: onBack,
-                  icon: const Icon(AppIcons.back, size: 20))
-            else if (!state.isContent && onToggleNavigation != null)
-              Semantics(
-                  button: true,
-                  expanded: state.navigationOpen,
-                  label: 'Global Search / Current App',
-                  child: Tooltip(
-                      message: 'Global Search / Current App',
-                      child: InkWell(
-                          key: const Key('launcher-navigation'),
-                          borderRadius:
-                              BorderRadius.circular(AppStyle.controlRadius),
-                          onTap: state.resolving || state.executing
-                              ? null
-                              : onToggleNavigation,
-                          child: SizedBox.square(
-                              dimension: 36,
-                              child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(AppIcons.search,
-                                        size: 24, color: AppStyle.primary),
-                                    const SizedBox(width: 3),
-                                    RotatedBox(
-                                        quarterTurns:
-                                            state.navigationOpen ? 2 : 0,
-                                        child: const Icon(AppIcons.chevronDown,
-                                            size: 9,
-                                            color: AppStyle.secondary)),
-                                  ])))))
-            else
-              AppIconPlate(
-                  state.isContent
-                      ? (state.contentSource == ContextSourceDto.selectedText
-                          ? AppIcons.quote
-                          : AppIcons.clipboard)
-                      : AppIcons.search,
-                  size: 36),
-            const SizedBox(width: 12),
-            Expanded(
-                // Both neighboring controls change during an asynchronous Host
-                // transition. The parent slot must survive, not just TextField.
-                key: const Key('launcher-input-slot'),
-                child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (state.isFileSearch)
-                        Padding(
-                            padding: const EdgeInsets.only(bottom: 3),
-                            child: Tooltip(
-                                message: state.fileRangeDetail,
-                                child: Text(state.fileRangeLabel,
-                                    key: const Key('launcher-mode-label'),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: AppStyle.caption.copyWith(
-                                        fontSize: 10,
-                                        fontWeight: FontWeight.w500)))),
-                      if (state.isContent)
-                        Padding(
-                            padding: const EdgeInsets.only(bottom: 6),
-                            child: Text(
-                                '${state.contentLabel} · Esc → Current App',
-                                key: const Key('captured-content-label'),
+      child: Row(children: [
+        if (onBack != null)
+          IconButton(
+              tooltip: 'Back to results',
+              onPressed: onBack,
+              icon: const Icon(AppIcons.back, size: 20))
+        else if (!state.isContent && onToggleNavigation != null)
+          Semantics(
+              button: true,
+              expanded: state.navigationOpen,
+              label: 'Global Search / Current App',
+              child: Tooltip(
+                  message: 'Global Search / Current App',
+                  child: InkWell(
+                      key: const Key('launcher-navigation'),
+                      borderRadius:
+                          BorderRadius.circular(AppStyle.controlRadius),
+                      onTap: state.resolving || state.executing
+                          ? null
+                          : onToggleNavigation,
+                      child: SizedBox.square(
+                          dimension: 36,
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            const Icon(AppIcons.search,
+                                size: 24, color: AppStyle.primary),
+                            const SizedBox(width: 3),
+                            RotatedBox(
+                                quarterTurns: state.navigationOpen ? 2 : 0,
+                                child: const Icon(AppIcons.chevronDown,
+                                    size: 9, color: AppStyle.secondary)),
+                          ])))))
+        else
+          AppIconPlate(
+              state.isContent
+                  ? (state.contentSource == ContextSourceDto.selectedText
+                      ? AppIcons.quote
+                      : AppIcons.clipboard)
+                  : AppIcons.search,
+              size: 36),
+        const SizedBox(width: 12),
+        Expanded(
+            // Both neighboring controls change during an asynchronous Host
+            // transition. The parent slot must survive, not just TextField.
+            key: const Key('launcher-input-slot'),
+            child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (state.isFileSearch)
+                    Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: Tooltip(
+                            message: state.fileRangeDetail,
+                            child: Text(state.fileRangeLabel,
+                                key: const Key('launcher-mode-label'),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500,
-                                    color: AppStyle.secondary))),
-                      TextField(
-                          // Keep the editing connection alive across host view changes.
-                          key: const Key('launcher-search-input'),
-                          controller: input,
-                          focusNode: focus,
-                          autofocus: true,
-                          // Launcher commands own Return. A native editing
-                          // completion must not close a newer page's input client.
-                          textInputAction: TextInputAction.none,
-                          onEditingComplete: () {},
-                          maxLines: state.isContent ? 2 : 1,
-                          style: TextStyle(
-                              fontSize: state.isContent ? 17 : 21,
-                              height: 1.25,
-                              fontWeight: FontWeight.w400,
-                              color: AppStyle.primary),
-                          cursorColor: AppStyle.primary,
-                          cursorWidth: 1.4,
-                          decoration: InputDecoration(
-                              hintText: state.searchHint,
-                              hintStyle: const TextStyle(
-                                  color: AppStyle.muted,
-                                  fontWeight: FontWeight.w400),
-                              filled: false,
-                              contentPadding: EdgeInsets.zero,
-                              enabledBorder: InputBorder.none,
-                              focusedBorder: InputBorder.none,
-                              border: InputBorder.none,
-                              isDense: true)),
-                    ])),
-            const SizedBox(width: 14),
-            if (state.resolving || state.executing)
-              const SizedBox.square(
-                  dimension: 16,
-                  child: CircularProgressIndicator(
-                      strokeWidth: 1.5, color: AppStyle.secondary))
-            else
-              trailing ?? const AppKeycap('esc'),
-          ])));
+                                style: AppStyle.caption.copyWith(
+                                    fontSize: DesignTokens.pageModeSize,
+                                    fontWeight: DesignTokens.pageModeWeight)))),
+                  if (state.isContent)
+                    Padding(
+                        padding: const EdgeInsets.only(bottom: 6),
+                        child: Text('${state.contentLabel} · Esc → Current App',
+                            key: const Key('captured-content-label'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: AppStyle.secondary))),
+                  TextField(
+                      // Keep the editing connection alive across host view changes.
+                      key: const Key('launcher-search-input'),
+                      controller: input,
+                      focusNode: focus,
+                      autofocus: state.visible,
+                      // Launcher commands own Return. A native editing
+                      // completion must not close a newer page's input client.
+                      textInputAction: TextInputAction.none,
+                      onEditingComplete: () {},
+                      maxLines: state.isContent ? 2 : 1,
+                      style: TextStyle(
+                          fontSize: state.isContent
+                              ? 17
+                              : DesignTokens.pageHeadingSize,
+                          height: 1.25,
+                          fontWeight: FontWeight.w400,
+                          color: AppStyle.primary),
+                      cursorColor: AppStyle.primary,
+                      cursorWidth: 1.4,
+                      decoration: InputDecoration(
+                          hintText: state.searchHint,
+                          hintStyle: const TextStyle(
+                              color: AppStyle.muted,
+                              fontWeight: FontWeight.w400),
+                          filled: false,
+                          contentPadding: EdgeInsets.zero,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          border: InputBorder.none,
+                          isDense: true)),
+                ])),
+        const SizedBox(width: 14),
+        if (state.resolving || state.executing)
+          const SizedBox.square(
+              dimension: 16,
+              child: CircularProgressIndicator(
+                  strokeWidth: 1.5, color: AppStyle.secondary))
+        else
+          trailing ?? const AppKeycap('esc'),
+      ]));
 }
 
 /// Search mode choices live inside the resized glass window, never in an
@@ -168,53 +163,46 @@ class LauncherRootNavigation extends StatelessWidget {
               Semantics(
                   button: true,
                   selected: state.navigationMode == mode,
-                  child: Material(
-                      color: state.navigationMode == mode
-                          ? AppStyle.selectedSurface
-                          : Colors.transparent,
-                      borderRadius:
-                          BorderRadius.circular(AppStyle.resultRadius),
-                      child: InkWell(
-                          key: Key('launcher-navigation-${mode.name}'),
-                          borderRadius:
-                              BorderRadius.circular(AppStyle.resultRadius),
-                          onTap: () => onSelect(mode),
-                          child: SizedBox(
-                              height: 44,
-                              child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 12),
-                                  child: Row(children: [
-                                    Icon(
-                                        mode == InputModeDto.search
-                                            ? AppIcons.search
-                                            : AppIcons.apps,
-                                        size: 20,
-                                        color: AppStyle.secondary),
-                                    const SizedBox(width: 14),
-                                    Expanded(
-                                        child: Column(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.center,
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.start,
-                                            children: [
-                                          Text(
-                                              mode == InputModeDto.search
-                                                  ? 'Global Search'
-                                                  : 'Current App',
-                                              style: AppStyle.body.copyWith(
-                                                  fontWeight: FontWeight.w500)),
-                                          Text(
-                                              mode == InputModeDto.search
-                                                  ? 'Find apps and actions'
-                                                  : 'Actions for your current environment',
-                                              style: AppStyle.caption),
-                                        ])),
-                                    if (state.inputMode == mode)
-                                      const Icon(AppIcons.check,
-                                          size: 15, color: AppStyle.secondary),
-                                  ])))))),
+                  child: AppSelectionSurface(
+                      key: Key('launcher-navigation-${mode.name}'),
+                      selected: state.navigationMode == mode,
+                      onTap: () => onSelect(mode),
+                      child: SizedBox(
+                          height: 44,
+                          child: Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 12),
+                              child: Row(children: [
+                                Icon(
+                                    mode == InputModeDto.search
+                                        ? AppIcons.search
+                                        : AppIcons.apps,
+                                    size: 20,
+                                    color: AppStyle.secondary),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                    child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                      Text(
+                                          mode == InputModeDto.search
+                                              ? 'Global Search'
+                                              : 'Current App',
+                                          style: AppStyle.body.copyWith(
+                                              fontWeight: FontWeight.w500)),
+                                      Text(
+                                          mode == InputModeDto.search
+                                              ? 'Find apps and actions'
+                                              : 'Actions for your current environment',
+                                          style: AppStyle.caption),
+                                    ])),
+                                if (state.inputMode == mode)
+                                  const Icon(AppIcons.check,
+                                      size: 15, color: AppStyle.secondary),
+                              ]))))),
             ]
           ])));
 }
@@ -351,16 +339,18 @@ class LauncherFilterButton extends StatelessWidget {
         selected: selected,
         button: true,
         child: Material(
-            color: selected ? AppStyle.buttonSelection : Colors.transparent,
+            color: selected ? AppStyle.selectedSurface : Colors.transparent,
             shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(DesignTokens.filterRadius),
                 side: BorderSide(
-                    color:
-                        selected ? AppStyle.controlBorder : Colors.transparent,
-                    width: .6)),
+                    color: selected
+                        ? AppStyle.selectionOutline
+                        : Colors.transparent,
+                    width: DesignTokens.dividerWidth)),
             clipBehavior: Clip.antiAlias,
             child: InkWell(
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(DesignTokens.filterRadius),
+                hoverColor: selected ? Colors.transparent : AppStyle.hover,
                 onTap: onSelect,
                 child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -376,7 +366,7 @@ class LauncherFilterButton extends StatelessWidget {
                       ],
                       Text(label,
                           style: TextStyle(
-                              fontSize: 12,
+                              fontSize: DesignTokens.filterSize,
                               fontWeight:
                                   selected ? FontWeight.w600 : FontWeight.w400,
                               color: selected
@@ -434,56 +424,46 @@ class LauncherFooter extends StatelessWidget {
   final VoidCallback? onPrimary, onCopy, onBack, onActions, onRetry;
   final bool result;
   @override
-  Widget build(BuildContext context) => SizedBox(
+  Widget build(BuildContext context) => AppPageFooter(
       key: const Key('launcher-footer'),
-      height: LauncherViewState.footerHeight,
-      child: Column(children: [
-        const Divider(height: 1),
+      child: Row(children: [
         Expanded(
-            child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 3, 24, 10),
-                child: Row(children: [
-                  Expanded(
-                      child: Text(label,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: AppStyle.caption.copyWith(fontSize: 10.5))),
-                  if (onRetry != null)
-                    TextButton(onPressed: onRetry, child: const Text('Retry')),
-                  if (onActions != null)
-                    Tooltip(
-                        message: 'More actions for the selected item',
-                        child: TextButton(
-                            key: const Key('launcher-actions'),
-                            onPressed: onActions,
-                            child: Text(
-                                'Actions · ${DesktopEnvironment.current.usesMetaCommand ? '⌘' : 'Ctrl'}K'))),
-                  if (onCopy != null)
-                    TextButton(onPressed: onCopy, child: const Text('Copy')),
-                  if (onBack != null)
-                    TextButton(onPressed: onBack, child: const Text('Back')),
-                  if (!result && onPrimary != null) ...[
-                    const SizedBox(width: 6),
-                    Tooltip(
-                        message:
-                            '↑ / ↓ to select · Return or double-click to activate',
-                        child: OutlinedButton(
-                            onPressed: onPrimary,
-                            style: OutlinedButton.styleFrom(
-                                backgroundColor: AppStyle.actionSurface,
-                                foregroundColor: AppStyle.primary,
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 10),
-                                minimumSize: const Size(0, 24)),
-                            child: Text(primaryLabel,
-                                style: const TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w500)))),
-                    const SizedBox(width: 6),
-                    const AppKeycap('↵'),
-                  ],
-                  if (result) const AppKeycap('esc'),
-                ]))),
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppStyle.caption.copyWith(fontSize: 10.5))),
+        if (onRetry != null)
+          TextButton(onPressed: onRetry, child: const Text('Retry')),
+        if (onActions != null)
+          Tooltip(
+              message: 'More actions for the selected item',
+              child: TextButton(
+                  key: const Key('launcher-actions'),
+                  onPressed: onActions,
+                  child: Text(
+                      'Actions · ${DesktopEnvironment.current.usesMetaCommand ? '⌘' : 'Ctrl'}K'))),
+        if (onCopy != null)
+          TextButton(onPressed: onCopy, child: const Text('Copy')),
+        if (onBack != null)
+          TextButton(onPressed: onBack, child: const Text('Back')),
+        if (!result && onPrimary != null) ...[
+          const SizedBox(width: 6),
+          Tooltip(
+              message: '↑ / ↓ to select · Return or double-click to activate',
+              child: OutlinedButton(
+                  onPressed: onPrimary,
+                  style: OutlinedButton.styleFrom(
+                      backgroundColor: AppStyle.actionSurface,
+                      foregroundColor: AppStyle.primary,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      minimumSize: const Size(0, 24)),
+                  child: Text(primaryLabel,
+                      style: const TextStyle(
+                          fontSize: 11, fontWeight: FontWeight.w500)))),
+          const SizedBox(width: 6),
+          const AppKeycap('↵'),
+        ],
+        if (result) const AppKeycap('esc'),
       ]));
 }
 
@@ -539,43 +519,34 @@ class MenuNavigationRow extends StatelessWidget {
       selected: selected,
       child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 2),
-          child: Material(
-              color: selected ? AppStyle.selectedSurface : Colors.transparent,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(AppStyle.resultRadius),
-                  side: BorderSide(
-                      color: selected
-                          ? AppStyle.selectionOutline
-                          : Colors.transparent,
-                      width: .5)),
-              child: InkWell(
-                  borderRadius: BorderRadius.circular(AppStyle.resultRadius),
-                  onTap: onTap,
-                  child: SizedBox(
-                      height: LauncherViewState.rowHeight - 4,
-                      child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                          child: Row(children: [
-                            SizedBox(
-                                width: 36,
-                                height: 36,
-                                child: Icon(icon,
-                                    size: 22,
-                                    color: icon == AppIcons.folder
-                                        ? const Color(0xff92c9f6)
-                                        : AppStyle.secondary)),
-                            const SizedBox(width: 14),
-                            Expanded(
-                                child: Text(title,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                        fontSize: 15,
-                                        fontWeight: selected
-                                            ? FontWeight.w600
-                                            : FontWeight.w500,
-                                        color: AppStyle.primary))),
-                            const Icon(AppIcons.chevron,
-                                size: 14, color: AppStyle.secondary),
-                          ])))))));
+          child: AppSelectionSurface(
+              selected: selected,
+              onTap: onTap,
+              child: SizedBox(
+                  height: LauncherViewState.rowHeight - 4,
+                  child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Row(children: [
+                        SizedBox(
+                            width: 36,
+                            height: 36,
+                            child: Icon(icon,
+                                size: 22,
+                                color: icon == AppIcons.folder
+                                    ? const Color(0xff92c9f6)
+                                    : AppStyle.secondary)),
+                        const SizedBox(width: 14),
+                        Expanded(
+                            child: Text(title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 15,
+                                    fontWeight: selected
+                                        ? FontWeight.w600
+                                        : FontWeight.w500,
+                                    color: AppStyle.primary))),
+                        const Icon(AppIcons.chevron,
+                            size: 14, color: AppStyle.secondary),
+                      ]))))));
 }

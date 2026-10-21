@@ -1,12 +1,13 @@
 # 文档导航
 
-当前验收版本：V0.10 / Build 11；整理日期：2026-10-18。根 [README](../README.md) 是使用与开发入口；本目录保留当前设计契约，旧构建证据和调研分别放入 archive / research。
+既有验收版本：V0.10 / Build 11；当前开发预览：V0.11 / Build 36；整理日期：2026-10-21。根 [README](../README.md) 是使用与开发入口；本目录保留当前设计契约，旧构建证据和调研分别放入 archive / research。
 
 ## 当前文档
 
 | 文档 | 阅读用途 |
 |---|---|
 | [架构](architecture.md) | Rust / Flutter / Host 分工、模块装配、快照、取消和执行 |
+| [第三方 Context 调研](research/third-party-context-providers.md) | 注册与派生边界、类型 / 权限隔离、QuickJS worker 与 Wasm 的取舍；尚未接入 |
 | [Context 模型](context-model.md) | 类型、来源、Provider 图、等价与身份 |
 | [默认输入](context-input-navigation.md) | 选中文本、15 秒剪贴板、InputMode 和 Esc |
 | [Launcher 交互](launcher-interaction.md) | Scope、菜单、二级操作、快捷键和状态恢复 |
@@ -14,6 +15,9 @@
 | [文件搜索](file-search.md) | 查询完整性、权限、稳定连续结果、固定预览和临时存储 |
 | [开发动作](developer-actions.md) | Git、项目识别、IDEA 来源和后台进程 |
 | [扩展协议](plugin-protocol.md) | 第一方模块、v1 / v2 / v3、Host UI、批准、存储与恢复 |
+| [V0.11 MVP](mvp-v0.11.md) | 本地 Web 包 / Host / SDK / 新 JSON 工具的实现、验收与发行边界 |
+| [第三方插件开发指南](plugin-development.md) | 从独立模板开始：安装 SDK、调用能力、统一样式、打包、更新与排错 |
+| [第三方 Web 插件设计](web-plugin-design.md) | P0 验证中，P1 包校验、P2 Rust 注册 / 调用与 HostView 协议已实现；P3 SDK / Rust 能力代理已实现，P4–P6 已实现 macOS 本地开发预览，正在进行原生验收，Windows / 公开分发未开放；Terminal 延后 |
 | [共享 UI](ui-design.md) | 组件、材质、输入与平台回退 |
 | [开源复用重构](open-source-refactor-plan.md) | R1 编码 / 工具查找，R2 SQLite、R3 匹配原型及验收 |
 | [性能](performance.md) | 资源预算、增量更新与测量边界 |

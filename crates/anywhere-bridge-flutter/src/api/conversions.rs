@@ -226,12 +226,15 @@ pub(super) fn availability_dto(state: protocol::AvailabilityState) -> Availabili
 
 impl From<protocol::ActionResult> for ActionResultDto {
     fn from(result: protocol::ActionResult) -> Self {
-        let (view, plugin_detail, native_tool) = match result.view {
-            Some(protocol::HostView::FileSearch) => (Some(HostViewDto::FileSearch), None, None),
+        let (view, plugin_detail, native_tool, web_plugin) = match result.view {
+            Some(protocol::HostView::FileSearch) => {
+                (Some(HostViewDto::FileSearch), None, None, None)
+            }
             Some(protocol::HostView::NativeTool { id, input }) => (
                 Some(HostViewDto::NativeTool),
                 None,
                 Some(NativeToolDto { id, input }),
+                None,
             ),
             Some(protocol::HostView::PluginDetail { detail }) => (
                 Some(HostViewDto::PluginDetail),
@@ -249,8 +252,15 @@ impl From<protocol::ActionResult> for ActionResultDto {
                         .collect(),
                 }),
                 None,
+                None,
             ),
-            None => (None, None, None),
+            Some(protocol::HostView::WebPlugin { invocation_id }) => (
+                Some(HostViewDto::WebPlugin),
+                None,
+                None,
+                Some(WebPluginLaunchDto { invocation_id }),
+            ),
+            None => (None, None, None, None),
         };
         Self {
             session_id: result.session_id,
@@ -265,8 +275,40 @@ impl From<protocol::ActionResult> for ActionResultDto {
             view,
             plugin_detail,
             native_tool,
+            web_plugin,
             close_window: result.close_window,
             execution_session_id: result.execution_session_id,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn web_view_conversion_transports_only_the_opaque_host_ticket() {
+        let result = protocol::ActionResult {
+            session_id: 4,
+            revision: 2,
+            status: protocol::ActionStatus::Succeeded,
+            error: None,
+            warning: None,
+            output_text: None,
+            view: Some(protocol::HostView::WebPlugin {
+                invocation_id: "opaque-host-ticket".into(),
+            }),
+            close_window: false,
+            execution_session_id: None,
+        };
+        let value: ActionResultDto = result.into();
+        assert_eq!(value.view, Some(HostViewDto::WebPlugin));
+        assert_eq!(
+            value.web_plugin.unwrap().invocation_id,
+            "opaque-host-ticket"
+        );
+        assert!(value.native_tool.is_none());
+        assert!(value.plugin_detail.is_none());
+        assert!(value.output_text.is_none());
+        assert!(!value.close_window);
     }
 }

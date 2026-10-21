@@ -104,6 +104,8 @@ pub trait ClipboardWatch: Send {}
 
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 mod backend;
+#[cfg(target_os = "macos")]
+mod macos_watch;
 #[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 pub use backend::{copy_text, read, read_text, request_access, watch, write};
 

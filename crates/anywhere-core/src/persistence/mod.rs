@@ -5,3 +5,5 @@ pub mod extensions;
 pub mod features;
 pub mod module_storage;
 pub mod usage;
+
+pub mod web_packages;
