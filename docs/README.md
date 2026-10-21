@@ -1,11 +1,12 @@
 # 文档导航
 
-既有验收版本：V0.10 / Build 11；当前开发预览：V0.11 / Build 36；整理日期：2026-10-21。根 [README](../README.md) 是使用与开发入口；本目录保留当前设计契约，旧构建证据和调研分别放入 archive / research。
+既有验收版本：V0.10 / Build 11；已收尾预览：V0.11 / Build 51；当前开发：V0.12 中英国际化与拼音检索；整理日期：2026-10-21。根 [README](../README.md) 是使用与开发入口；本目录保留当前设计契约，旧构建证据和调研分别放入 archive / research。
 
 ## 当前文档
 
 | 文档 | 阅读用途 |
 |---|---|
+| [V0.12 MVP](mvp-v0.12.md) | 中英语言、开源选型、拼音搜索与分步迁移验收 |
 | [架构](architecture.md) | Rust / Flutter / Host 分工、模块装配、快照、取消和执行 |
 | [第三方 Context 调研](research/third-party-context-providers.md) | 注册与派生边界、类型 / 权限隔离、QuickJS worker 与 Wasm 的取舍；尚未接入 |
 | [Context 模型](context-model.md) | 类型、来源、Provider 图、等价与身份 |

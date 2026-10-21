@@ -1,6 +1,6 @@
 //! Minimal deterministic query parsing and field matching.
 //!
-//! Deliberately excludes NLP, CJK word segmentation and pinyin conversion.
+//! Literal names and metadata retain their tiers; pinyin is a lower-ranked fallback.
 
 /// Trim, lowercase and split on ASCII whitespace into non-empty tokens.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -56,6 +56,8 @@ impl Query {
 /// usage history, so the query tier dominates every other ranking term.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MatchLevel {
+    /// Chinese full pinyin or initials; literal matches always rank higher.
+    Transliteration,
     /// Every token matched inside some field.
     Substring,
     /// Every token matched the start of a word in some field.
@@ -73,10 +75,11 @@ impl MatchLevel {
             return 0;
         }
         match self {
-            Self::Exact => 4000,
-            Self::Prefix => 3000,
-            Self::WordPrefix => 2000,
-            Self::Substring => 1000,
+            Self::Transliteration => 1000,
+            Self::Exact => 5000,
+            Self::Prefix => 4000,
+            Self::WordPrefix => 3000,
+            Self::Substring => 2000,
         }
     }
 }
@@ -141,7 +144,12 @@ impl SearchFields {
             .metadata
             .iter()
             .map(|field| field_match(field, query, true));
-        names.chain(metadata).flatten().max()
+        names.chain(metadata).flatten().max().or_else(|| {
+            self.name
+                .iter()
+                .any(|field| super::pinyin::matches(field, &query.tokens))
+                .then_some(MatchLevel::Transliteration)
+        })
     }
 }
 
@@ -199,6 +207,35 @@ pub fn valid_search_field(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pinyin_names_match_but_identifiers_stay_literal_and_bounded() {
+        let name = fields("微信开发工具", &[], &["com.开发工具"]);
+        assert_eq!(
+            name.matched(&Query::parse("WEIXIN")),
+            Some(MatchLevel::Transliteration)
+        );
+        assert_eq!(
+            name.matched(&Query::parse("wxkfgj")),
+            Some(MatchLevel::Transliteration)
+        );
+        assert!(name.matched(&Query::parse("weixin missing")).is_none());
+        assert!(fields("Other", &[], &["微信"])
+            .matched(&Query::parse("wx"))
+            .is_none());
+        assert!(
+            fields("weixin", &[], &[]).matched(&Query::parse("weixin"))
+                > name.matched(&Query::parse("weixin"))
+        );
+        assert!(
+            MatchLevel::Transliteration.score(true)
+                > crate::core::ranking::score::NON_QUERY_TERM_CEILING
+        );
+        assert!(
+            MatchLevel::Substring.score(true) - MatchLevel::Transliteration.score(true)
+                > crate::core::ranking::score::NON_QUERY_TERM_CEILING
+        );
+    }
 
     #[test]
     fn streaming_compact_prefix_preserves_materialized_unicode_and_separator_behavior() {
@@ -372,8 +409,8 @@ mod tests {
 
     #[test]
     fn query_match_score_tiers_exceed_every_other_ranking_term() {
-        assert_eq!(MatchLevel::Exact.score(true), 4000);
-        assert_eq!(MatchLevel::Substring.score(true), 1000);
+        assert_eq!(MatchLevel::Exact.score(true), 5000);
+        assert_eq!(MatchLevel::Substring.score(true), 2000);
         assert_eq!(MatchLevel::Exact.score(false), 0);
         assert!(
             MatchLevel::Substring.score(true) > crate::core::ranking::score::NON_QUERY_TERM_CEILING

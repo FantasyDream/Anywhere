@@ -171,3 +171,10 @@ SDK 包含编译后的接口、类型、公共 CSS、模板和打包器。更多
 ## 7. 进阶用法
 
 保留原始 `host` / `createHost` / `lifecycle` API，供已有集成或需要自主管理生命周期的框架使用；普通插件优先用 `definePlugin`，不要混用两套连接。完整 API 与共享布局类见 [SDK 说明](../packages/plugin-sdk/README.md)。这些是普通 Web API 与 CSS 工具类，不是插件 UI DSL。
+
+
+## 跟随宿主语言
+
+宿主设置支持跟随系统 / 简体中文 / English。SDK 的 `environment.language` 提供解析后的 `en` / `zh`，`environment.onLanguageChange` 订阅变化并返回取消函数；组件销毁时取消订阅。无需增加权限或调用 Rust，语言只属于呈现信息，不能用来验证调用者身份。资源随包发布，不增加联网加载器。
+
+JSON 示例使用 i18next，语言切换只重绘文案，保留输入、公式和输出。插件可自行选择常规 Web 国际化库；旧插件不接入仍可运行。宿主不翻译用户正文、公式、命令输出或第三方包未提供的文案。

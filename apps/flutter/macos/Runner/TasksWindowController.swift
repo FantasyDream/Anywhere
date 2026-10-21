@@ -7,6 +7,7 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
     var tasksController: FlutterViewController?
     var tasksChannel: FlutterMethodChannel?
     var tasksReady = false
+    private var localeHost: LocaleHost?
     var pendingTaskId: String?
     let onLauncher: () -> Void
     init(onLauncher: @escaping () -> Void) { self.onLauncher = onLauncher }
@@ -15,6 +16,7 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
         let created = tasksWindow == nil
         if created {
             let view = FlutterViewController(project: FlutterDartProject())
+            localeHost = LocaleHost(messenger: view.engine.binaryMessenger)
             let channel = FlutterMethodChannel(name: "anywhere/executions", binaryMessenger: view.engine.binaryMessenger)
             channel.setMethodCallHandler { [weak self] call, reply in
                 guard let self else { reply(nil); return }
@@ -37,6 +39,7 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
             }
             guard view.engine.run(withEntrypoint: "executionSessionsMain") else {
                 channel.setMethodCallHandler(nil)
+                localeHost = nil
                 return false
             }
             let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 600),
@@ -81,6 +84,7 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
         tasksChannel?.setMethodCallHandler(nil)
         tasksWindow?.contentViewController = nil
         tasksWindow = nil
+        localeHost = nil
         tasksController = nil
         tasksChannel = nil
         tasksReady = false

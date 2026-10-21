@@ -17,6 +17,7 @@ final class LauncherWindow: NSWindow {
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation {
     var window: LauncherWindow!
     var controller: FlutterViewController!
+    private var localeHost: LocaleHost?
     private var webToolsChannel: FlutterMethodChannel?
     private var webToolsActive = false
     private let webPackagePicker = WebPackagePicker()
@@ -99,7 +100,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         log(["event": "flutter_surface_guard", "installed": installFlutterSurfaceGuard() == 1])
         NSApp.setActivationPolicy(.accessory)
         _ = clipboardWindow // Observe paste destinations before Launcher takes focus; no engine yet.
+        LocaleHost.update(stored.uiLanguage)
         controller = FlutterViewController(project: FlutterDartProject())
+        localeHost = LocaleHost(messenger: controller.engine.binaryMessenger)
         InAppWebViewFlutterPlugin.register(with: controller.registrar(forPlugin: "InAppWebViewFlutterPlugin"))
         webToolsChannel = FlutterMethodChannel(name: "anywhere/web-tools", binaryMessenger: controller.engine.binaryMessenger)
         webToolsChannel?.setMethodCallHandler { [weak self] call, reply in
@@ -300,7 +303,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
                 }
                 self.stored = next
                 if let error = self.settingsStore.save() {
+                    self.stored.uiLanguage = previous.uiLanguage
                     errors.append(error)
+                } else {
+                    LocaleHost.update(next.uiLanguage)
                 }
                 if errors.isEmpty {
                     reply(nil)

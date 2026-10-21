@@ -1,3 +1,4 @@
+import '../../l10n/app_language.dart';
 import '../../infrastructure/desktop_environment.dart';
 import 'package:flutter/material.dart';
 import '../../src/rust/api.dart';
@@ -23,22 +24,34 @@ class LauncherSearchArea extends StatelessWidget {
   final VoidCallback? onBack;
   final Widget? trailing;
 
+  String _fileRangeLabel(BuildContext context) {
+    final roots = state.snapshot?.fileSearch?.roots ?? const <String>[];
+    if (roots.isEmpty) return context.l10n.fileSearch;
+    if (roots.length > 1) return context.l10n.fileLocations(roots.length);
+    final name = roots.single
+            .split(RegExp(r'[/\\]'))
+            .where((part) => part.isNotEmpty)
+            .lastOrNull ??
+        roots.single;
+    return context.l10n.fileRange(name);
+  }
+
   @override
   Widget build(BuildContext context) => AppPageHeader(
       height: state.inputAreaHeight,
       child: Row(children: [
         if (onBack != null)
           IconButton(
-              tooltip: 'Back to results',
+              tooltip: context.l10n.backToResults,
               onPressed: onBack,
               icon: const Icon(AppIcons.back, size: 20))
         else if (!state.isContent && onToggleNavigation != null)
           Semantics(
               button: true,
               expanded: state.navigationOpen,
-              label: 'Global Search / Current App',
+              label: context.l10n.navigationModes,
               child: Tooltip(
-                  message: 'Global Search / Current App',
+                  message: context.l10n.navigationModes,
                   child: InkWell(
                       key: const Key('launcher-navigation'),
                       borderRadius:
@@ -79,7 +92,7 @@ class LauncherSearchArea extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: 3),
                         child: Tooltip(
                             message: state.fileRangeDetail,
-                            child: Text(state.fileRangeLabel,
+                            child: Text(_fileRangeLabel(context),
                                 key: const Key('launcher-mode-label'),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -89,7 +102,12 @@ class LauncherSearchArea extends StatelessWidget {
                   if (state.isContent)
                     Padding(
                         padding: const EdgeInsets.only(bottom: 6),
-                        child: Text('${state.contentLabel} · Esc → Current App',
+                        child: Text(
+                            context.l10n.contentEscapeHint(
+                                state.contentSource ==
+                                        ContextSourceDto.selectedText
+                                    ? context.l10n.selectedText
+                                    : context.l10n.clipboardText),
                             key: const Key('captured-content-label'),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
@@ -118,7 +136,14 @@ class LauncherSearchArea extends StatelessWidget {
                       cursorColor: AppStyle.primary,
                       cursorWidth: 1.4,
                       decoration: InputDecoration(
-                          hintText: state.searchHint,
+                          hintText: state.isFileSearch
+                              ? context.l10n.searchFilesFolders
+                              : state.isContent
+                                  ? context.l10n.editCapturedContent
+                                  : state.selectedScope == null
+                                      ? context.l10n.searchAppsActions
+                                      : context.l10n.searchAppActions(
+                                          state.selectedScope!.label),
                           hintStyle: const TextStyle(
                               color: AppStyle.muted,
                               fontWeight: FontWeight.w400),
@@ -189,8 +214,8 @@ class LauncherRootNavigation extends StatelessWidget {
                                         children: [
                                       Text(
                                           mode == InputModeDto.search
-                                              ? 'Global Search'
-                                              : 'Current App',
+                                              ? context.l10n.globalSearch
+                                              : context.l10n.currentApp,
                                           style: AppStyle.body.copyWith(
                                               fontWeight: FontWeight.w500)),
                                       Text(
@@ -433,7 +458,7 @@ class LauncherFooter extends StatelessWidget {
                 overflow: TextOverflow.ellipsis,
                 style: AppStyle.caption.copyWith(fontSize: 10.5))),
         if (onRetry != null)
-          TextButton(onPressed: onRetry, child: const Text('Retry')),
+          TextButton(onPressed: onRetry, child: Text(context.l10n.retry)),
         if (onActions != null)
           Tooltip(
               message: 'More actions for the selected item',
@@ -443,9 +468,9 @@ class LauncherFooter extends StatelessWidget {
                   child: Text(
                       'Actions · ${DesktopEnvironment.current.usesMetaCommand ? '⌘' : 'Ctrl'}K'))),
         if (onCopy != null)
-          TextButton(onPressed: onCopy, child: const Text('Copy')),
+          TextButton(onPressed: onCopy, child: Text(context.l10n.copy)),
         if (onBack != null)
-          TextButton(onPressed: onBack, child: const Text('Back')),
+          TextButton(onPressed: onBack, child: Text(context.l10n.back)),
         if (!result && onPrimary != null) ...[
           const SizedBox(width: 6),
           Tooltip(

@@ -45,12 +45,16 @@ impl NameQuery {
     pub fn rank(&self, path: &Path, is_directory: bool) -> Option<RankedHit> {
         let name = path.file_name()?.to_str()?;
         let normalized = normalize(name);
-        if !self.words.iter().all(|w| normalized.contains(w))
-            || !self.filter.accepts(name, is_directory)
-        {
+        if !self.filter.accepts(name, is_directory) {
             return None;
         }
-        let score = if normalized == self.joined {
+        let literal = self.words.iter().all(|w| normalized.contains(w));
+        if !literal && !crate::core::search::pinyin::matches(&normalized, &self.words) {
+            return None;
+        }
+        let score = if !literal {
+            500
+        } else if normalized == self.joined {
             1000
         } else if normalized.starts_with(&self.joined) {
             900
@@ -789,6 +793,26 @@ pub(super) fn read_record(reader: &mut impl Read) -> Result<Option<(PathBuf, boo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pinyin_finds_unindexed_hidden_names_without_widening_the_type_filter() {
+        let fixture = tempfile::tempdir().unwrap();
+        let hidden = fixture.path().join(".隐藏目录");
+        std::fs::create_dir(&hidden).unwrap();
+        let file = hidden.join("开发文档.md");
+        std::fs::write(&file, "example").unwrap();
+        std::fs::create_dir(hidden.join("开发文档")).unwrap();
+        for input in ["kaifawendang", "kfwd", "kai 文档"] {
+            let store =
+                ScanStore::new(input, FileSearchFilter::Files, options(fixture.path())).unwrap();
+            let page = finish(&store);
+            assert_eq!(page.hits.len(), 1, "{input}");
+            assert_eq!(page.hits[0].path, file.canonicalize().unwrap());
+        }
+        let query = NameQuery::new("kfwd", FileSearchFilter::Pdf);
+        assert!(query.rank(&file, false).is_none());
+    }
+
     use std::collections::BTreeSet;
 
     fn options(root: &Path) -> FileSearchOptions {

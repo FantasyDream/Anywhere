@@ -1,3 +1,5 @@
+import '../l10n/app_language.dart';
+import 'web_locale.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -44,6 +46,16 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
   InAppWebViewController? _web;
   String? _error;
   int _viewKey = 0;
+  String _language = 'en';
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final language = Localizations.localeOf(context).languageCode;
+    if (_language == language) return;
+    _language = language;
+    unawaited(notifyWebLanguage(_web, _language));
+  }
+
   bool _actions = false, _navigated = false;
   bool _loading = true;
   bool _preparingDisplay = false;
@@ -89,8 +101,9 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
     }
   }
 
-  Future<void> _applyWebAppearance(InAppWebViewController controller) {
+  Future<void> _applyWebAppearance(InAppWebViewController controller) async {
     final document = _document;
+    await notifyWebLanguage(controller, _language);
     return _appearance.apply(controller,
         isCurrent: () =>
             mounted &&
@@ -300,7 +313,8 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
       }
       if (_current(document) && response.frame != null) {
         await reply.postMessage(webReplyMessage(response.frame!));
-        if (_current(document) && webReadyAcknowledged(frame, response.frame!)) {
+        if (_current(document) &&
+            webReadyAcknowledged(frame, response.frame!)) {
           _readyTimer?.cancel();
           if (_loading && !_preparingDisplay) {
             _preparingDisplay = true;
@@ -331,7 +345,7 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
       // Listener bootstrap must precede the transport at document start.
       await controller.addUserScript(
           userScript: UserScript(
-              source: webBootstrap,
+              source: webLocaleScript(_language) + webBootstrap,
               injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
               forMainFrameOnly: true));
       if (_current(document) && sharesWebView(_web, controller)) {
@@ -407,7 +421,7 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
     final viewKey = _viewKey;
     return ToolPageShell(
         title: document?.title ?? 'Opening tool…',
-        subtitle: 'Workspace',
+        subtitle: context.l10n.workspace,
         onBack: _back,
         onKeyEvent: _key,
         visible: widget.visible,
@@ -420,11 +434,11 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
               child: Text(
                   _loading && _error == null
                       ? 'Loading tool…'
-                      : 'Local processing',
+                      : context.l10n.localProcessing,
                   style: AppStyle.caption)),
           TextButton(
               onPressed: widget.visible ? _toggleActions : null,
-              child: const Text('Actions · ⌘K')),
+              child: Text('${context.l10n.actions} · ⌘K')),
         ]),
         child: Stack(fit: StackFit.expand, children: [
           if (_error != null)

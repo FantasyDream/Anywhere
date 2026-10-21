@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:anywhere/web_plugins/web_document_theme.dart';
+import 'package:anywhere/web_plugins/web_locale.dart';
 import 'package:anywhere/web_plugins/web_view_appearance.dart';
 import 'package:anywhere/web_plugins/web_view_events.dart';
 
@@ -75,6 +76,31 @@ void main() {
       pending.complete();
       await request;
     }
+  });
+
+  testWidgets('language notification cannot hold initial display',
+      (tester) async {
+    final pending = platform.evaluation = Completer<void>();
+    var completed = false;
+    final sent = notifyWebLanguage(web, 'zh').then((_) => completed = true);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(completed, isTrue);
+    pending.complete();
+    await sent;
+  });
+
+  test('locale notification is bounded public metadata and tolerates teardown',
+      () async {
+    await notifyWebLanguage(web, 'zh');
+    expect(platform.scripts.single, contains("__anywhereLanguage = 'zh'"));
+    expect(platform.scripts.single,
+        contains("document.documentElement.lang = 'zh'"));
+    expect(
+        webLocaleScript("'</script>"), contains("__anywhereLanguage = 'en'"));
+    expect(webLocaleScript("'</script>"), isNot(contains('</script>')));
+    platform.disposed = true;
+    await notifyWebLanguage(web, 'en');
   });
 
   test('presentation events tolerate teardown and carry no plugin capability',

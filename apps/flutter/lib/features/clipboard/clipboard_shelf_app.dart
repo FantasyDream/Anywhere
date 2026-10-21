@@ -1,3 +1,4 @@
+import '../../l10n/app_language.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -109,7 +110,7 @@ class _ClipboardShelfAppState extends State<ClipboardShelfApp> {
   }
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
+  Widget build(BuildContext context) => LocalizedApp(
         debugShowCheckedModeBanner: false,
         theme: AppStyle.theme,
         builder: AppStyle.windowBuilder,

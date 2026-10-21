@@ -55,6 +55,16 @@ struct HostServicesTests {
         defer { try? FileManager.default.removeItem(at: temp) }
         let store = SettingsStore(fileURL: temp.appendingPathComponent("settings.json"))
         let previous = store.current
+        assert(previous.asMap()["uiLanguage"] as? String == "system")
+        var localized = previous
+        assert(localized.apply(["uiLanguage": "zh"]) == nil)
+        let languageFile = temp.appendingPathComponent("language.json")
+        assert(localized.save(to: languageFile) == nil)
+        let restoredLanguage = StoredSettings.load(from: languageFile)
+        assert(restoredLanguage.uiLanguage == "zh")
+        assert(restoredLanguage.sameHotKeys(as: previous))
+        assert(localized.apply(["uiLanguage": "unsupported"]) != nil)
+        assert(localized.uiLanguage == "zh")
         assert(previous.asMap()["fileSearchEngine"] as? String == "systemIndex")
         assert(previous.asMap()["fileSearchIncludeHidden"] as? Bool == true)
         var searchSettings = previous

@@ -47,15 +47,15 @@ export function prepareJsonAction(text, id, spaces = 2) {
     const document = decodeDocumentOrNull(text);
     const decoded = document?.escaped ? document.text : decodeLayer(bounded(text));
     validate(decoded);
-    return {text: decoded, copy: false, message: 'Removed JSON escaping'};
+    return {text: decoded, copy: false, message: 'unescaped'};
   }
   const source = decodeDocument(text).text;
   let result = transform(source, id === 'copy-format' ? 'format' : 'minify', spaces);
   if (id === 'copy-escaped') result = bounded(JSON.stringify(result));
   return {text: result, copy: true, message: {
-    'copy-format': 'Copied formatted JSON',
-    'copy-minify': 'Copied minified JSON',
-    'copy-escaped': 'Copied escaped JSON',
+    'copy-format': 'copiedFormat',
+    'copy-minify': 'copiedMinify',
+    'copy-escaped': 'copiedEscaped',
   }[id]};
 }
 function decodeDocumentOrNull(text) {
@@ -71,7 +71,7 @@ export function prepareJsonLaunch(invocation, spaces = 2) {
   if (invocation.entrypoint === 'workspace') {
     const document = decodeDocument(source);
     return {input: document.text, clipboard: null,
-      message: document.escaped ? 'Decoded escaped JSON' : null};
+      message: document.escaped ? 'decoded' : null};
   }
   const result = prepareJsonAction(source, invocation.entrypoint, spaces);
   return {input: result.copy ? decodeDocument(source).text : result.text,

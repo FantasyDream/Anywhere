@@ -21,3 +21,5 @@
 2026-10-18 的 [第三方 Web 插件设计](../web-plugin-design.md)是当前待实施提案：Terminal 延后；本地 Web 包、系统 WebView、SDK、Context / 能力隔离与安装更新按 P0–P6 推进。旧研究的历史代码说明不能当作现状。
 
 - [第三方 Context 注册与运行方案](third-party-context-providers.md)：2026-10-20，类型与权限隔离、统一 Graph、QuickJS / Wasm 比较及分步验证；尚未接入。
+
+- [中英国际化与拼音开源选型](i18n-pinyin.md)：Flutter 官方方案、Rust pinyin 与 Web 资源边界。

@@ -4,7 +4,7 @@ use crate::core::search::query::MatchLevel;
 use anywhere_protocol::*;
 
 /// Every term other than `query_match` must stay below the lowest query tier
-/// (`Substring` = 1000), so usage history can never outrank a real query match.
+/// (`Transliteration` = 1000), so usage history can never outrank a real query match.
 pub const NON_QUERY_TERM_CEILING: i32 = 950;
 
 /// Frequency weight per execution, capped at [`FREQUENCY_CAP`] executions.
@@ -33,7 +33,7 @@ pub const FALLBACK_CEILING: f32 = 600.0;
 /// within the band, and `base_priority` decides between otherwise equal fallbacks.
 pub fn fallback_score(match_level: Option<MatchLevel>, base_priority: i32) -> f32 {
     let matched = match_level
-        .map(|level| level.score(true) as f32 / 4000.0)
+        .map(|level| level.score(true) as f32 / 5000.0)
         .unwrap_or(0.0);
     let base = (FALLBACK_CEILING - FALLBACK_FLOOR) * matched;
     (FALLBACK_FLOOR + base + base_priority.clamp(-50, 50) as f32).clamp(0.0, FALLBACK_CEILING)

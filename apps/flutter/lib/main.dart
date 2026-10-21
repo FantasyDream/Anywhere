@@ -1,3 +1,4 @@
+import 'l10n/app_language.dart';
 import 'infrastructure/file_search_access.dart';
 import 'infrastructure/web_platform.dart';
 import 'package:flutter/material.dart';
@@ -27,6 +28,7 @@ Future<void> initializeRustLibrary(RuntimePaths paths) async {
 Future<void> executionSessionsMain() async {
   WidgetsFlutterBinding.ensureInitialized();
   configureDesktopImageCache();
+  await AppLanguage.current.attach();
   try {
     const channel = MethodChannel('anywhere/executions');
     final paths = await RuntimePaths.read(channel);
@@ -34,7 +36,7 @@ Future<void> executionSessionsMain() async {
     await initializeRustLibrary(paths);
     runApp(const ExecutionSessionsApp());
   } catch (error) {
-    runApp(MaterialApp(
+    runApp(LocalizedApp(
         debugShowCheckedModeBanner: false,
         theme: AppStyle.theme,
         builder: AppStyle.windowBuilder,
@@ -48,6 +50,7 @@ Future<void> executionSessionsMain() async {
 Future<void> clipboardShelfMain() async {
   WidgetsFlutterBinding.ensureInitialized();
   configureDesktopImageCache();
+  await AppLanguage.current.attach();
   try {
     const channel = MethodChannel('anywhere/clipboard-shelf');
     final paths = await RuntimePaths.read(channel);
@@ -55,7 +58,7 @@ Future<void> clipboardShelfMain() async {
     await initializeRustLibrary(paths);
     runApp(const ClipboardShelfApp());
   } catch (error) {
-    runApp(MaterialApp(
+    runApp(LocalizedApp(
         debugShowCheckedModeBanner: false,
         theme: AppStyle.theme,
         builder: AppStyle.windowBuilder,
@@ -68,6 +71,7 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   registerWebPlatform();
   configureDesktopImageCache();
+  await AppLanguage.current.attach();
   try {
     final runtime = await RuntimePaths.read(windowChannel);
     DesktopEnvironment.configure(await DesktopEnvironment.read(windowChannel));
@@ -200,7 +204,7 @@ Future<void> main() async {
       ),
     );
   } catch (error) {
-    runApp(MaterialApp(
+    runApp(LocalizedApp(
         debugShowCheckedModeBanner: false,
         theme: AppStyle.theme,
         builder: AppStyle.windowBuilder,

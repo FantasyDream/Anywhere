@@ -50,7 +50,7 @@ test('invalid input, inner JSON, action names and oversized output fail without 
 
 test('launcher routes reuse the same actions, preserve input and never read clipboard implicitly', () => {
   const invocation = {input:{kind:'text', text:JSON.stringify(source)}, entrypoint:'workspace'};
-  assert.deepEqual(prepareJsonLaunch(invocation), {input:source, clipboard:null, message:'Decoded escaped JSON'});
+  assert.deepEqual(prepareJsonLaunch(invocation), {input:source, clipboard:null, message:'decoded'});
   for (const action of JSON_ACTIONS) {
     const result = prepareJsonLaunch({...invocation, entrypoint:action.id});
     assert.equal(result.input, source);

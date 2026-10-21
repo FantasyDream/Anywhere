@@ -167,3 +167,14 @@ python3 scripts/generate-design-tokens.py --check
 宿主 macOS 回复使用受限 UTF-8 `ArrayBuffer`，在文档传输层还原成 SDK 字符串帧，避免原生字符串插值损坏 JSON 转义。插件的 API 与输入处理代码不变；单帧仍为 64 KiB，非法 UTF-8 / 超限帧不交付。该适配不开放通用二进制或流接口。
 
 SDK 实现分为 `client.ts`（具体能力、队列与分块）、`lifecycle.ts`（展示事件）、`plugin.ts`（默认连接寿命），公开入口仅重导出；业务插件不需要依赖这些内部路径。
+
+
+## UI language
+
+`environment.language` returns the Host's resolved `en` or `zh` language. Use
+`environment.onLanguageChange(listener)` for live changes and call its returned
+unsubscribe function when the page is disposed. Keep translated resources inside
+the package; any normal Web translation library can be used. The JSON example
+uses i18next. This metadata needs no permission, conveys no native identity, and
+does not change Invocation input, grants, command IDs or stored data. Old hosts
+without the metadata default to English; old plugins keep their existing UI.

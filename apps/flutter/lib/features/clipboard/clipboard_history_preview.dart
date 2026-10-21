@@ -1,3 +1,4 @@
+import '../../l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import '../../infrastructure/desktop_environment.dart';
 import '../../src/rust/api.dart';
@@ -55,7 +56,8 @@ class _ClipboardHistoryPreviewState extends State<ClipboardHistoryPreview> {
                 size: 16, color: AppStyle.secondary),
             const SizedBox(width: 7),
             Expanded(
-                child: Text('${clipboardKindLabel(detail.item.kind)} preview',
+                child: Text(
+                    '${clipboardKindLabel(detail.item.kind, context.l10n)} preview',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppStyle.paneTitle)),

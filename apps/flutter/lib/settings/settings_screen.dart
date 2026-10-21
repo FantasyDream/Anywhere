@@ -1,3 +1,4 @@
+import '../l10n/app_language.dart';
 import '../infrastructure/desktop_environment.dart';
 import '../ui/app_icons.dart';
 import 'dart:async';
@@ -152,23 +153,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
         barrierDismissible: false,
         builder: (context) => AlertDialog(
           title: Text(dirty
-              ? 'Save changes before closing?'
-              : 'Some changes were not saved'),
+              ? context.l10n.saveBeforeClose
+              : context.l10n.changesNotSaved),
           content: Text(dirty
-              ? 'Search settings have unapplied changes.'
+              ? context.l10n.searchDrafts
               : (_controller.statusMessage ??
                   'Settings could not be saved. You can keep editing or close without saving.')),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(context, 'cancel'),
-                child: const Text('Keep editing')),
+                child: Text(context.l10n.keepEditing)),
             TextButton(
                 onPressed: () => Navigator.pop(context, 'discard'),
-                child: const Text('Close without saving')),
+                child: Text(context.l10n.closeWithoutSaving)),
             if (dirty)
               FilledButton(
                   onPressed: () => Navigator.pop(context, 'save'),
-                  child: const Text('Save changes')),
+                  child: Text(context.l10n.saveChanges)),
           ],
         ),
       );
@@ -256,20 +257,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
           TextButton(
             onPressed: () =>
                 _controller.openPrivacySettings(status.settingsPane!),
-            child: const Text('Open Settings', style: TextStyle(fontSize: 11)),
+            child:
+                Text(context.l10n.openSettings, style: TextStyle(fontSize: 11)),
           ),
       ]),
     );
   }
 
-  static const _pages = <(String, String, IconData)>[
-    ('general', 'General', AppIcons.settings),
-    ('shortcuts', 'Shortcuts', AppIcons.keyboard),
-    ('context', 'Context', AppIcons.layers),
-    ('search', 'Search', AppIcons.search),
-    ('clipboard', 'Clipboard', AppIcons.clipboard),
-    ('plugins', 'Features', AppIcons.layers),
+  static const _pages = <(String, IconData)>[
+    ('general', AppIcons.settings),
+    ('shortcuts', AppIcons.keyboard),
+    ('context', AppIcons.layers),
+    ('search', AppIcons.search),
+    ('clipboard', AppIcons.clipboard),
+    ('plugins', AppIcons.layers),
   ];
+
+  String _pageTitle(String id) => switch (id) {
+        'general' => context.l10n.general,
+        'shortcuts' => context.l10n.shortcuts,
+        'context' => context.l10n.context,
+        'search' => context.l10n.search,
+        'clipboard' => context.l10n.clipboard,
+        _ => context.l10n.features,
+      };
 
   void _selectPage(String id) {
     if (_page == id) return;
@@ -298,17 +309,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             key: const Key('settings-navigation'),
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
-                              const Padding(
-                                  padding: EdgeInsets.fromLTRB(8, 0, 0, 10),
-                                  child: Text('Settings',
+                              Padding(
+                                  padding:
+                                      const EdgeInsets.fromLTRB(8, 0, 0, 10),
+                                  child: Text(context.l10n.settings,
                                       style: AppStyle.caption)),
                               for (final page in _pages)
                                 Padding(
                                     padding: const EdgeInsets.only(bottom: 3),
                                     child: AppSidebarItem(
                                         key: ValueKey('settings-${page.$1}'),
-                                        label: page.$2,
-                                        icon: page.$3,
+                                        label: _pageTitle(page.$1),
+                                        icon: page.$2,
                                         iconColor: switch (page.$1) {
                                           'general' => const Color(0xff707070),
                                           'shortcuts' =>
@@ -326,22 +338,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                   const SizedBox(height: 28),
-                  AppToolbar(
-                      title: _pages.firstWhere((p) => p.$1 == _page).$2,
-                      actions: [
-                        if (_saving) ...[
-                          const SizedBox.square(
-                              dimension: 12,
-                              child:
-                                  CircularProgressIndicator(strokeWidth: 1.5)),
-                          const SizedBox(width: 6),
-                          const Text('Saving…', style: AppStyle.caption),
-                          const SizedBox(width: 8),
-                        ],
-                        OutlinedButton(
-                            onPressed: widget.onClose,
-                            child: const Text('Done')),
-                      ]),
+                  AppToolbar(title: _pageTitle(_page), actions: [
+                    if (_saving) ...[
+                      const SizedBox.square(
+                          dimension: 12,
+                          child: CircularProgressIndicator(strokeWidth: 1.5)),
+                      const SizedBox(width: 6),
+                      Text(context.l10n.saving, style: AppStyle.caption),
+                      const SizedBox(width: 8),
+                    ],
+                    OutlinedButton(
+                        onPressed: widget.onClose,
+                        child: Text(context.l10n.done)),
+                  ]),
                   const Divider(),
                   Expanded(
                       child: Scrollbar(
@@ -363,20 +372,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<Widget> _pageContent() {
     return switch (_page) {
       'shortcuts' => [
-          _section('SHORTCUTS'),
+          _section(context.l10n.shortcuts),
           _card(
             child: Column(
               children: [
-                _hotkeyRow('Current App', _settings.currentAppLabel, 'current'),
+                _hotkeyRow(context.l10n.currentApp, _settings.currentAppLabel,
+                    'current'),
                 const Divider(height: 1, color: AppStyle.divider),
-                _hotkeyRow(
-                    'Universal Search', _settings.universalLabel, 'universal'),
+                _hotkeyRow(context.l10n.universalSearch,
+                    _settings.universalLabel, 'universal'),
               ],
             ),
           ),
           const SizedBox(height: 6),
-          const Text(
-            'Choose a shortcut, then press the new key combination. Esc cancels.',
+          Text(
+            context.l10n.shortcutHelp,
             style: TextStyle(fontSize: 11, color: AppStyle.muted),
           ),
           SizedBox(height: DesktopEnvironment.current.titleBarInset),
@@ -397,26 +407,66 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SizedBox(height: DesktopEnvironment.current.titleBarInset),
         ],
       'general' => [
-          _section('GENERAL'),
+          _section(context.l10n.general),
+          _card(
+              child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Row(children: [
+                    Expanded(
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                          Text(context.l10n.language, style: AppStyle.body),
+                          const SizedBox(height: 3),
+                          Text(context.l10n.languageDescription,
+                              style: AppStyle.caption),
+                        ])),
+                    const SizedBox(width: 12),
+                    DropdownButton<String>(
+                      key: const Key('settings-language'),
+                      value: _settings.uiLanguage,
+                      items: [
+                        DropdownMenuItem(
+                            value: 'system',
+                            child: Text(context.l10n.languageSystem)),
+                        DropdownMenuItem(
+                            value: 'zh',
+                            child: Text(context.l10n.languageChinese)),
+                        DropdownMenuItem(
+                            value: 'en',
+                            child: Text(context.l10n.languageEnglish)),
+                      ],
+                      onChanged: _saving
+                          ? null
+                          : (language) {
+                              if (language != null) {
+                                _save((current) =>
+                                    current.copyWith(uiLanguage: language));
+                              }
+                            },
+                    ),
+                  ]))),
+          const SizedBox(height: 12),
           _card(
               child: SettingsToggleRow(
-                  title: 'Open at login',
-                  description: 'Start quietly when you sign in',
+                  title: context.l10n.openAtLogin,
+                  description: context.l10n.openAtLoginDescription,
                   icon: AppIcons.power,
                   value: _settings.launchAtLogin,
                   onChanged: (value) => _save(
                       (current) => current.copyWith(launchAtLogin: value)))),
         ],
       'context' => [
-          _section('CONTEXT SOURCES'),
-          const Text('Choose what Anywhere can use when you open it.',
-              style: AppStyle.caption),
+          _section(context.l10n.contextSources),
+          Text(context.l10n.contextDescription, style: AppStyle.caption),
           const SizedBox(height: 10),
           _card(
               child: Column(children: [
             SettingsToggleRow(
-                title: DesktopEnvironment.current.fileSelectionLabel,
-                description: 'Selected files and folders',
+                title: DesktopEnvironment.current.usesMetaCommand
+                    ? context.l10n.finderSelection
+                    : context.l10n.fileSelection,
+                description: context.l10n.selectedFilesDescription,
                 icon: AppIcons.folder,
                 value: _settings.captureFinderSelection,
                 status: _sourceStatus(ContextSourceDto.finderSelection),
@@ -424,8 +474,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     current.copyWith(captureFinderSelection: value))),
             const Divider(),
             SettingsToggleRow(
-                title: 'Selected text',
-                description: 'Text selected in the current app',
+                title: context.l10n.selectedText,
+                description: context.l10n.selectedTextDescription,
                 icon: AppIcons.quote,
                 value: _settings.captureSelectedText,
                 status: _sourceStatus(ContextSourceDto.selectedText),
@@ -433,7 +483,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     (current) => current.copyWith(captureSelectedText: value))),
             const Divider(),
             SettingsToggleRow(
-                title: 'Browser current page',
+                title: context.l10n.browserCurrentPage,
                 description: DesktopEnvironment.current.browserDescription,
                 icon: AppIcons.globe,
                 value: _settings.captureBrowserCurrentPage,
@@ -447,7 +497,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               style: AppStyle.caption),
         ],
       'search' => [
-          _section('SEARCH'),
+          _section(context.l10n.search),
           _card(
               child: FileSearchSettings(
                   enabled: _settings.fileSearchEnabled,

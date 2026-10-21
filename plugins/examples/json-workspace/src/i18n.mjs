@@ -1,0 +1,41 @@
+import i18next from 'i18next';
+import {environment} from '@anywhere/plugin-sdk';
+
+export const resources = {
+  en: {translation:{
+    tools:'JSON tools', mode:'Formula mode', switchMode:'Switch mode · Ctrl+Tab / Ctrl+Shift+Tab',
+    indent:'Indent', spaces:'{{count}} spaces', paste:'Paste…', rootHint:'Automatically included in the formula',
+    jsFormula:'JavaScript formula after this', pathFormula:'JSONPath after $', calculate:'Calculate', query:'Query',
+    calculateHint:'Calculate result · ⌘↵', input:'JSON input', bytes:'{{count, number}} bytes',
+    pasteHint:'Paste JSON here', actions:'JSON actions', autoFormat:'Auto-format on', clear:'Clear', result:'Result',
+    resultCount_one:'{{count}} result', resultCount_other:'{{count}} results', match_one:'{{count}} match', match_other:'{{count}} matches',
+    outputHint:'Results appear here', copyHint:'Copy result · ⌘⇧C', copyResult:'Copy result…', copied:'Copied',
+    waiting:'Waiting for Host…', cancelled:'Operation cancelled', copiedResult:'Copied query result',
+    decoded:'Decoded escaped JSON', unescaped:'Removed JSON escaping', copiedFormat:'Copied formatted JSON',
+    copiedMinify:'Copied minified JSON', copiedEscaped:'Copied escaped JSON',
+    begin:'Enter JSON to begin · processing stays on this device', editing:'Editing…', updating:'Updating…',
+    noMatches:'No matches · try a different path', jsSummary:'JavaScript calculation · only JSON data is available',
+    pathSummary:'{{count}} matches · single values are shown directly; multiple values as an array',
+    'copy-format':'Copy formatted', 'copy-minify':'Copy minified', 'copy-escaped':'Copy escaped', unescape:'Unescape',
+  }},
+  zh: {translation:{
+    tools:'JSON 工具', mode:'公式模式', switchMode:'切换模式 · Ctrl+Tab / Ctrl+Shift+Tab',
+    indent:'缩进', spaces:'{{count}} 个空格', paste:'粘贴…', rootHint:'公式会自动包含此前缀',
+    jsFormula:'this 后的 JavaScript 公式', pathFormula:'$ 后的 JSONPath', calculate:'计算', query:'查询',
+    calculateHint:'计算结果 · ⌘↵', input:'JSON 输入', bytes:'{{count, number}} 字节',
+    pasteHint:'在此粘贴 JSON', actions:'JSON 操作', autoFormat:'自动格式化已开启', clear:'清空', result:'结果',
+    resultCount_one:'{{count}} 个结果', resultCount_other:'{{count}} 个结果', match_one:'{{count}} 项匹配', match_other:'{{count}} 项匹配',
+    outputHint:'结果将显示在此处', copyHint:'复制结果 · ⌘⇧C', copyResult:'复制结果…', copied:'已复制',
+    waiting:'等待宿主确认…', cancelled:'操作已取消', copiedResult:'已复制查询结果',
+    decoded:'已解码转义 JSON', unescaped:'已去除 JSON 转义', copiedFormat:'已复制格式化 JSON',
+    copiedMinify:'已复制压缩 JSON', copiedEscaped:'已复制转义 JSON',
+    begin:'输入 JSON 开始使用 · 内容仅在本机处理', editing:'正在编辑…', updating:'正在更新…',
+    noMatches:'没有匹配项，请尝试其他路径', jsSummary:'JavaScript 计算 · 仅可访问 JSON 数据',
+    pathSummary:'{{count}} 项匹配 · 单个值直接显示，多个值以数组显示',
+    'copy-format':'复制格式化', 'copy-minify':'复制压缩', 'copy-escaped':'复制转义', unescape:'去除转义',
+  }},
+};
+export const i18n = i18next.createInstance();
+i18n.init({lng:environment.language, fallbackLng:'en', supportedLngs:['en','zh'],
+  initAsync:false, resources, interpolation:{escapeValue:false}});
+export const t = (key, options) => i18n.t(key, options);

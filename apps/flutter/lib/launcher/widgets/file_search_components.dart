@@ -1,3 +1,4 @@
+import '../../l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import '../../ui/app_style.dart';
 import '../../ui/file_type_appearance.dart';
@@ -17,6 +18,19 @@ class FileSearchControls extends StatelessWidget {
   final VoidCallback onSelect;
   final bool enabled;
 
+  String _typeLabel(BuildContext context, FileFilter type) => switch (type) {
+        FileFilter.all => context.l10n.allTypes,
+        FileFilter.files => context.l10n.files,
+        FileFilter.folders => context.l10n.folders,
+        FileFilter.documents => context.l10n.documents,
+        FileFilter.pdf => context.l10n.pdf,
+        FileFilter.images => context.l10n.images,
+        FileFilter.audio => context.l10n.audio,
+        FileFilter.video => context.l10n.video,
+        FileFilter.archives => context.l10n.archives,
+        FileFilter.code => context.l10n.code,
+      };
+
   @override
   Widget build(BuildContext context) => SizedBox(
       key: const Key('file-search-controls'),
@@ -28,7 +42,7 @@ class FileSearchControls extends StatelessWidget {
           enabled: enabled,
           options: [
             for (final type in FileFilter.values)
-              LauncherFilterOption(type.name, type.label,
+              LauncherFilterOption(type.name, _typeLabel(context, type),
                   'Search this file type · Ctrl+Tab / Ctrl+Shift+Tab'),
           ],
           onSelect: (id) {
@@ -63,9 +77,9 @@ class FileSearchPreview extends StatelessWidget {
         key: const Key('file-preview-pane'),
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Padding(
-              padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-              child: Text('Preview', style: AppStyle.paneTitle)),
+          Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: Text(context.l10n.preview, style: AppStyle.paneTitle)),
           Expanded(
               child: files.loading
                   ? const Center(
@@ -99,15 +113,16 @@ class FileSearchPreview extends StatelessWidget {
                                         style: AppStyle.body.copyWith(
                                             fontWeight: FontWeight.w600)),
                                     const SizedBox(height: 14),
-                                    _property('Kind', appearance.label),
+                                    _property(
+                                        context.l10n.kind, appearance.label),
                                     if (!preview.isDirectory)
-                                      _property(
-                                          'Size', _size(preview.sizeBytes)),
+                                      _property(context.l10n.size,
+                                          _size(preview.sizeBytes)),
                                     if (modified != null)
-                                      _property('Modified',
+                                      _property(context.l10n.modified,
                                           '${localizations.formatMediumDate(modified)} · ${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(modified))}'),
                                     const SizedBox(height: 12),
-                                    const Text('Location',
+                                    Text(context.l10n.location,
                                         style: AppStyle.caption),
                                     const SizedBox(height: 4),
                                     SelectableText(path!,

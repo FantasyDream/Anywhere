@@ -1,3 +1,4 @@
+import '../../l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import '../../ui/app_icons.dart';
 
@@ -12,12 +13,13 @@ IconData clipboardKindIcon(String kind) => switch (kind) {
       'binary' => AppIcons.file,
       _ => AppIcons.clipboard,
     };
-String clipboardKindLabel(String kind) => switch (kind) {
-      'image' => 'Image',
-      'files' => 'Files',
-      'rich_text' => 'Rich text',
-      'binary' => 'Data',
-      _ => 'Text',
+String clipboardKindLabel(String kind, [AppLocalizations? l10n]) =>
+    switch (kind) {
+      'image' => l10n?.image ?? 'Image',
+      'files' => l10n?.files ?? 'Files',
+      'rich_text' => l10n?.richText ?? 'Rich text',
+      'binary' => l10n?.data ?? 'Data',
+      _ => l10n?.text ?? 'Text',
     };
 String clipboardDataSize(int bytes) => bytes >= 1024 * 1024
     ? '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB'

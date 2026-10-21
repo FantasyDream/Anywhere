@@ -1,3 +1,4 @@
+import '../l10n/language_preference.dart';
 import '../infrastructure/runtime_policy.dart';
 import '../src/rust/api.dart' show FileSearchEngineDto;
 import 'dart:convert';
@@ -19,6 +20,7 @@ class HostSettings {
     required this.captureSelectedText,
     required this.captureBrowserCurrentPage,
     required this.captureClipboard,
+    this.uiLanguage = 'system',
     this.fileSearchEnabled = true,
     this.fileSearchAccessReady,
     this.fileSearchEngine = FileSearchEngineDto.systemIndex,
@@ -53,6 +55,7 @@ class HostSettings {
   final int universalKeyCode;
   final int universalModifiers;
   final bool launchAtLogin;
+  final String uiLanguage;
   final List<String> excludedApps;
   final bool captureFinderSelection;
   final bool captureSelectedText;
@@ -103,6 +106,7 @@ class HostSettings {
     int? universalKeyCode,
     int? universalModifiers,
     bool? launchAtLogin,
+    String? uiLanguage,
     List<String>? excludedApps,
     bool? captureFinderSelection,
     bool? captureSelectedText,
@@ -121,6 +125,7 @@ class HostSettings {
         universalKeyCode: universalKeyCode ?? this.universalKeyCode,
         universalModifiers: universalModifiers ?? this.universalModifiers,
         launchAtLogin: launchAtLogin ?? this.launchAtLogin,
+        uiLanguage: LanguagePreference.normalize(uiLanguage ?? this.uiLanguage),
         excludedApps: excludedApps ?? this.excludedApps,
         captureFinderSelection:
             captureFinderSelection ?? this.captureFinderSelection,
@@ -146,6 +151,7 @@ class HostSettings {
         'universalKeyCode': universalKeyCode,
         'universalModifiers': universalModifiers,
         'launchAtLogin': launchAtLogin,
+        'uiLanguage': uiLanguage,
         'excludedApps': excludedApps,
         'captureFinderSelection': captureFinderSelection,
         'captureSelectedText': captureSelectedText,
@@ -193,6 +199,7 @@ class HostSettings {
       universalModifiers:
           number('universalModifiers', defaults.universalModifiers),
       launchAtLogin: map['launchAtLogin'] == true,
+      uiLanguage: LanguagePreference.normalize(map['uiLanguage']),
       excludedApps: excluded is List
           ? [
               for (final item in excluded)

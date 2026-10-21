@@ -369,3 +369,10 @@ scripts/generate-bridge.sh
 - [统一 Launcher 交互与状态保留](docs/launcher-interaction.md)。
 - [模块迁移路线图](docs/feature-module-roadmap.md) / [V0.9 MVP](docs/mvp-v0.9.md)：当前内置功能迁移阶段与验收范围；[V0.8 收尾](docs/mvp-v0.8.md) 保留上一阶段证据。
 - [路线图](docs/roadmap.md) / [Web 插件设计](docs/web-plugin-design.md)：下一阶段 Web 插件、JSON 验证、核心收尾，以及延期的 Terminal。
+
+
+### V0.12 开发中：语言与拼音
+
+分支 `codex/dev-0.12-i18n` 已接入官方 Flutter 中英国际化框架；设置 → General / 通用 → Language / 语言可选择跟随系统、简体中文或 English。文案正分批迁移，当前仍有英文界面；现状与剩余范围见 [V0.12 计划](docs/mvp-v0.12.md)。
+
+应用和动作的中文显示名称 / 既有别名、文件名称支持全拼与首字母匹配，例如 `weixin` / `wx`、`kaifawendang` / `kfwd`。文件搜索继续完整遍历授权目录；拼音不扩大权限、排除项或类型范围。切换语言不改变查询、ActionId 和快捷键；不转换文件名 / 路径、外部应用菜单或全部剪贴板正文。

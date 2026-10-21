@@ -1,0 +1,150 @@
+{
+  "@@locale": "en",
+  "settings": "Settings",
+  "general": "General",
+  "shortcuts": "Shortcuts",
+  "context": "Context",
+  "search": "Search",
+  "clipboard": "Clipboard",
+  "features": "Features",
+  "language": "Language",
+  "languageDescription": "Choose the language used throughout Anywhere",
+  "languageSystem": "System default",
+  "languageEnglish": "English",
+  "languageChinese": "简体中文",
+  "done": "Done",
+  "saving": "Saving…",
+  "openAtLogin": "Open at login",
+  "openAtLoginDescription": "Start quietly when you sign in",
+  "currentApp": "Current App",
+  "globalSearch": "Global Search",
+  "universalSearch": "Universal Search",
+  "navigationModes": "Global Search / Current App",
+  "backToResults": "Back to results",
+  "back": "Back",
+  "run": "Run",
+  "open": "Open",
+  "copy": "Copy",
+  "actions": "Actions",
+  "navigate": "Navigate",
+  "retry": "Retry",
+  "cancel": "Cancel",
+  "close": "Close",
+  "clear": "Clear",
+  "remove": "Remove",
+  "delete": "Delete",
+  "preview": "Preview",
+  "kind": "Kind",
+  "size": "Size",
+  "modified": "Modified",
+  "location": "Location",
+  "allTypes": "All types",
+  "files": "Files",
+  "folders": "Folders",
+  "documents": "Documents",
+  "pdf": "PDF",
+  "images": "Images",
+  "audio": "Audio",
+  "video": "Video",
+  "archives": "Archives",
+  "code": "Code",
+  "fileSearch": "File Search",
+  "clipboardHistory": "Clipboard History",
+  "clipboardShelf": "Clipboard Shelf",
+  "runningTasks": "Running Tasks",
+  "searchAppsActions": "Search apps and actions…",
+  "searchFilesFolders": "Search files and folders…",
+  "searchHistory": "Search clipboard history…",
+  "findFilesFolders": "Find files and folders",
+  "noResults": "No results",
+  "noMatches": "No matches",
+  "noHistory": "No clipboard history",
+  "copied": "Copied",
+  "copiedPaste": "Copied. Paste in the destination app.",
+  "copyFailed": "Could not copy. Try again.",
+  "loading": "Loading…",
+  "searching": "Searching…",
+  "suggested": "Suggested",
+  "menus": "Menus",
+  "browseMenus": "Browse Menus…",
+  "contextSources": "CONTEXT SOURCES",
+  "contextDescription": "Choose what Anywhere can use when you open it.",
+  "finderSelection": "Finder selection",
+  "fileSelection": "File selection",
+  "selectedFilesDescription": "Selected files and folders",
+  "selectedText": "Selected text",
+  "selectedTextDescription": "Text selected in the current app",
+  "browserCurrentPage": "Browser current page",
+  "clipboardText": "Clipboard text",
+  "clipboardAgeDescription": "Auto-fill new copies for 15 seconds",
+  "openSettings": "Open Settings",
+  "keepEditing": "Keep editing",
+  "closeWithoutSaving": "Close without saving",
+  "saveChanges": "Save changes",
+  "saveBeforeClose": "Save changes before closing?",
+  "changesNotSaved": "Some changes were not saved",
+  "searchDrafts": "Search settings have unapplied changes.",
+  "settingsSaveFailed": "Settings could not be saved. Try again.",
+  "shortcutHelp": "Choose a shortcut, then press the new key combination. Esc cancels.",
+  "pressShortcut": "Press shortcut…",
+  "workspace": "Workspace",
+  "localProcessing": "Local processing",
+  "webTool": "Web tool",
+  "reload": "Reload",
+  "image": "Image",
+  "richText": "Rich text",
+  "data": "Data",
+  "text": "Text",
+  "pin": "Pin",
+  "unpin": "Unpin",
+  "copiedContent": "Copied content",
+  "resultsCount": "{count, plural, =0{0 results} =1{1 result} other{{count} results}}",
+  "@resultsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "entriesCount": "{count, plural, =0{0 entries} =1{1 entry} other{{count} entries}}",
+  "@entriesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchAppActions": "Search {app} actions…",
+  "@searchAppActions": {
+    "placeholders": {
+      "app": {
+        "type": "String"
+      }
+    }
+  },
+  "contentEscapeHint": "{source} · Esc → Current App",
+  "@contentEscapeHint": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "fileRange": "File Search · {range}",
+  "@fileRange": {
+    "placeholders": {
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "editCapturedContent": "Edit captured content…",
+  "fileLocations": "File Search · {count} locations",
+  "@fileLocations": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  }
+}

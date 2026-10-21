@@ -1,6 +1,6 @@
 # JSON Workspace
 
-普通第三方 Web 包示例：Preact 页面、jsonc-parser 格式化、jsonpath-js 查询、SandboxJS 计算、Anywhere 浏览器 SDK；无 JSON 专用 Rust API，无 Node 运行时。当前包版本为 0.4.3；配合 V0.11 的共享工作区样式使用。
+普通第三方 Web 包示例：Preact 页面、jsonc-parser 格式化、jsonpath-js 查询、SandboxJS 计算、Anywhere 浏览器 SDK；无 JSON 专用 Rust API，无 Node 运行时。当前包版本为 0.5.0；配合 V0.11 的共享工作区样式使用。
 
 源码使用 `@anywhere/plugin-sdk` 标准包导入；本仓库开发时用 npm `file:` 依赖连接 SDK，独立工程可改为 SDK `.tgz`。通用打包器与新项目模板见 [第三方插件开发指南](../../../docs/plugin-development.md)。
 
@@ -74,3 +74,5 @@ Launcher 可搜索以下命令；当输入对应内容时也会自动匹配。�
 支持 `"{\"a\":1}"` 和 `{\"a\":1}` 等转义形式；自动匹配仍只接受对象 / 数组，原始编码文本最多 16 KiB、解码后嵌套最多 128 层、最多解开 4 层。普通 JSON 内字符串的合法转义不被替换。宿主只识别格式并原样传入，实际解码在插件内执行；工作区打开和 Paste 按钮会自动解码这些对象 / 数组。显式 Unescape 也可去除包裹 JSON 标量的一层编码，但普通搜索中的标量不会自动触发。
 
 复制输出超过 1 MiB 时拒绝操作，不截断或写入部分结果。编码 / 解码只处理文本，不将文档转换成 JS 数值，因此格式化 / 压缩 / 转义复制保留大整数、指数和重复键。
+
+UI 使用内嵌 i18next 中英资源，并通过 SDK 跟随宿主语言；切换文案不重建编辑器或重新计算正文。技术解析错误仍保留库提供的诊断。

@@ -3,6 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/env.sh
 python3 scripts/check-flutter.py
+python3 scripts/check-localizations.py
 python3 scripts/generate-design-tokens.py --check
 python3 -m unittest discover -s scripts/tests -p test_design_tokens.py
 python3 scripts/generate-keymap.py --check

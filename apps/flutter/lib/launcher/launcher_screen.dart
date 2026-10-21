@@ -1,3 +1,4 @@
+import '../l10n/app_language.dart';
 import 'activation_prefill.dart';
 import 'dart:async';
 import '../infrastructure/desktop_environment.dart';
@@ -157,7 +158,7 @@ class _LauncherAppState extends State<LauncherApp> {
   }
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
+  Widget build(BuildContext context) => LocalizedApp(
         debugShowCheckedModeBanner: false,
         title: 'Anywhere',
         theme: AppStyle.theme,

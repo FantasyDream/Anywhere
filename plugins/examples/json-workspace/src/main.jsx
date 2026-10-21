@@ -1,6 +1,7 @@
 import {h, render} from 'preact';
 import {useEffect, useLayoutEffect, useMemo, useRef, useState} from 'preact/hooks';
-import {definePlugin} from '@anywhere/plugin-sdk';
+import {definePlugin, environment} from '@anywhere/plugin-sdk';
+import {i18n, t} from './i18n.mjs';
 import {MAX_BYTES} from './json.mjs';
 import {JSON_ACTIONS, decodeDocument, prepareJsonAction, prepareJsonLaunch} from './actions.mjs';
 import {QueryEngine, QueryError, MAX_QUERY_LENGTH} from './query.mjs';
@@ -11,6 +12,8 @@ const encoder = new TextEncoder();
 const stamp = (input, path, spaces, mode) => ({input, path: path.trim(), spaces, mode});
 const matches = (result, input, path, spaces, mode) => result?.input === input && result.path === path.trim() && result.spaces === spaces && result.mode === mode;
 function App() {
+  const [language, setLanguage] = useState(environment.language);
+  useEffect(() => environment.onLanguageChange(value => { i18n.changeLanguage(value); setLanguage(value); }), []);
   const [input, setInput] = useState('');
   const [mode, setMode] = useState('javascript');
   const [paths, setPaths] = useState({jsonpath:'', javascript:''});
@@ -33,7 +36,7 @@ function App() {
 
   function report(error) {
     if (['USER_CANCELLED', 'CANCELLED', 'INACTIVE'].includes(error.code)) {
-      setNotice({text: 'Operation cancelled', failed: false});
+      setNotice({key: 'cancelled', failed: false});
       return;
     }
     setNotice({text: error.code ? `Host request: ${error.code}` : error.message, failed: true});
@@ -84,7 +87,7 @@ function App() {
     const text = state.processed.output;
     void operation(async () => {
       await plugin.current.host.clipboard.writeText(text);
-      setNotice({text: 'Copied query result', failed: false});
+      setNotice({key: 'copiedResult', failed: false});
     });
   }
   function jsonAction(id) {
@@ -94,7 +97,7 @@ function App() {
       const result = prepareJsonAction(state.input, id, state.spaces);
       if (result.copy) await plugin.current.host.clipboard.writeText(result.text);
       else { edited.current = true; load(result.text); }
-      setNotice({text: result.message, failed: false});
+      setNotice({key: result.message, failed: false});
     });
   }
   function load(text) {
@@ -147,9 +150,9 @@ function App() {
           if (launch.clipboard !== null) {
             await operation(async () => {
               await instance.host.clipboard.writeText(launch.clipboard);
-              setNotice({text: launch.message, failed: false});
+              setNotice({key: launch.message, failed: false});
             });
-          } else if (launch.message) setNotice({text: launch.message, failed: false});
+          } else if (launch.message) setNotice({key: launch.message, failed: false});
         } catch (error) { report(error); }
       },
     });
@@ -171,29 +174,29 @@ function App() {
 
   const error = fresh ? processed.error : null;
   const isJavaScript = mode === 'javascript';
-  const summary = error || (!input.trim() ? 'Enter JSON to begin · processing stays on this device'
-    : !fresh ? (composing ? 'Editing…' : 'Updating…')
-    : count === 0 ? 'No matches · try a different path'
-    : isJavaScript ? 'JavaScript calculation · only JSON data is available'
-    : `${count} ${count === 1 ? 'match' : 'matches'} · single values are shown directly; multiple values as an array`);
-  return <main class="aw-ui aw-workspace">
-    <nav class="aw-workspace-toolbar" aria-label="JSON tools">
-      <div class="aw-tabs" role="group" aria-label="Formula mode">
+  const summary = error || (!input.trim() ? t('begin')
+    : !fresh ? (composing ? t('editing') : t('updating'))
+    : count === 0 ? t('noMatches')
+    : isJavaScript ? t('jsSummary')
+    : t('pathSummary', {count}));
+  return <main class="aw-ui aw-workspace" lang={language}>
+    <nav class="aw-workspace-toolbar" aria-label={t('tools')}>
+      <div class="aw-tabs" role="group" aria-label={t('mode')}>
         {[['javascript','JavaScript'],['jsonpath','JSONPath']].map(([value,label]) =>
-          <button class="aw-tab" aria-pressed={mode === value} title="Switch mode · Ctrl+Tab / Ctrl+Shift+Tab" onClick={() => {
+          <button class="aw-tab" aria-pressed={mode === value} title={t('switchMode')} onClick={() => {
             setMode(value); setNotice(null); document.getElementById('json-path')?.focus();
           }}>{label}</button>)}
       </div>
-      <div class="aw-actions"><label class="indent">Indent <select value={spaces} onChange={event => {
+      <div class="aw-actions"><label class="indent">{t('indent')} <select value={spaces} onChange={event => {
         const value = Number(event.currentTarget.value); indentEdited.current = true; setNotice(null); setSpaces(value);
         void operation(() => plugin.current.host.storage.set('indent', value));
-      }}><option value={2}>2 spaces</option><option value={4}>4 spaces</option></select></label>
-      <button disabled={busy} onClick={() => operation(async () => {const text = await plugin.current.host.clipboard.readText(); if (text != null) {edited.current = true; const document = decodeDocument(text); load(document.text); if (document.escaped) setNotice({text: 'Decoded escaped JSON', failed: false});}})}>Paste…</button></div>
+      }}><option value={2}>{t('spaces', {count:2})}</option><option value={4}>{t('spaces', {count:4})}</option></select></label>
+      <button disabled={busy} onClick={() => operation(async () => {const text = await plugin.current.host.clipboard.readText(); if (text != null) {edited.current = true; const document = decodeDocument(text); load(document.text); if (document.escaped) setNotice({key: 'decoded', failed: false});}})}>{t('paste')}</button></div>
     </nav>
     <div class="query-bar">
       <div class="formula-field" data-invalid={fresh && processed.queryError ? 'true' : 'false'}>
-      <label for="json-path" class="formula-root" title="Automatically included in the formula">{isJavaScript ? 'this' : '$'}</label>
-      <input id="json-path" aria-label={isJavaScript ? 'JavaScript formula after this' : 'JSONPath after $'} type="text" value={path} maxLength={MAX_QUERY_LENGTH} spellcheck={false} autocomplete="off" autocapitalize="off"
+      <label for="json-path" class="formula-root" title={t('rootHint')}>{isJavaScript ? 'this' : '$'}</label>
+      <input id="json-path" aria-label={isJavaScript ? t('jsFormula') : t('pathFormula')} type="text" value={path} maxLength={MAX_QUERY_LENGTH} spellcheck={false} autocomplete="off" autocapitalize="off"
         aria-describedby={fresh && processed.queryError ? "json-error" : undefined}
         placeholder={isJavaScript ? ".users.map(x => x.name)" : ".users[*].name"} aria-invalid={fresh && processed.queryError ? 'true' : 'false'}
         onInput={event => {setNotice(null); setPath(event.currentTarget.value);}}
@@ -207,27 +210,27 @@ function App() {
         onCompositionStart={() => setComposing(true)} onCompositionEnd={() => setComposing(false)}
         onKeyDown={event => {if (event.key === 'Enter' && !event.isComposing && !event.metaKey && !event.ctrlKey) {event.preventDefault(); current.current.run();}}}/>
       </div>
-      <button class="aw-button--action" disabled={busy || composing || !input.trim()} onClick={run} title="Calculate result · ⌘↵">{isJavaScript ? 'Calculate' : 'Query'} <kbd>⌘↵</kbd></button>
+      <button class="aw-button--action" disabled={busy || composing || !input.trim()} onClick={run} title={t('calculateHint')}>{isJavaScript ? t('calculate') : t('query')} <kbd>⌘↵</kbd></button>
     </div>
     {(error || notice?.failed) && <aside id="json-error" role="alert" class="aw-workspace-notice" data-kind="error">{notice?.failed ? notice.text : error}</aside>}
     <section class="aw-workspace-panes">
-      <article class="aw-pane"><header class="aw-pane-header"><label for="json-input">JSON input</label><span>{inputBytes.toLocaleString()} bytes</span></header>
+      <article class="aw-pane"><header class="aw-pane-header"><label for="json-input">{t('input')}</label><span>{t('bytes', {count:inputBytes})}</span></header>
         <div class="aw-pane-body"><textarea id="json-input" class="aw-editor" ref={inputRef} spellcheck={false} autocomplete="off" autocapitalize="off"
-          placeholder="Paste JSON here" value={input} onInput={edit}
+          placeholder={t('pasteHint')} value={input} onInput={edit}
           onCompositionStart={() => setComposing(true)} onCompositionEnd={() => setComposing(false)}/></div>
         <footer class="aw-pane-footer json-input-actions">
-          <div class="aw-actions" aria-label="JSON actions">{JSON_ACTIONS.map(action =>
-            <button disabled={!input.trim() || busy || composing} onClick={() => jsonAction(action.id)}>{action.label}</button>)}</div>
-          <div class="input-status"><span>{notice && !notice.failed ? notice.text : 'Auto-format on'}</span>
+          <div class="aw-actions" aria-label={t('actions')}>{JSON_ACTIONS.map(action =>
+            <button disabled={!input.trim() || busy || composing} onClick={() => jsonAction(action.id)}>{t(action.id)}</button>)}</div>
+          <div class="input-status"><span>{notice && !notice.failed ? t(notice.key) : t('autoFormat')}</span>
           <button disabled={!input || busy} onClick={() => {
             edited.current = true; engine.current.clear(); setInput(''); setNotice(null); inputRef.current?.focus();
-          }}>Clear</button></div></footer></article>
-      <article class="aw-pane"><header class="aw-pane-header"><label for="json-output">Result</label><span>{count == null ? '—' : isJavaScript ? '1 result' : `${count} ${count === 1 ? 'match' : 'matches'}`} · {outputBytes.toLocaleString()} bytes</span></header>
-        <div class="aw-pane-body"><textarea id="json-output" class="aw-editor" readonly spellcheck={false} placeholder="Results appear here" value={output}/></div>
+          }}>{t('clear')}</button></div></footer></article>
+      <article class="aw-pane"><header class="aw-pane-header"><label for="json-output">{t('result')}</label><span>{count == null ? '—' : isJavaScript ? t('resultCount', {count:1}) : t('match', {count})} · {t('bytes', {count:outputBytes})}</span></header>
+        <div class="aw-pane-body"><textarea id="json-output" class="aw-editor" readonly spellcheck={false} placeholder={t('outputHint')} value={output}/></div>
         <footer class="aw-pane-footer"><span/>
-          <button class="aw-button--action" disabled={!output || busy} onClick={copyResult} title="Copy result · ⌘⇧C">{notice?.text === 'Copied query result' ? 'Copied' : 'Copy result…'} <kbd>⌘⇧C</kbd></button></footer></article>
+          <button class="aw-button--action" disabled={!output || busy} onClick={copyResult} title={t('copyHint')}>{notice?.key === 'copiedResult' ? t('copied') : t('copyResult')} <kbd>⌘⇧C</kbd></button></footer></article>
     </section>
-    <output role="status" aria-live="polite" class="sr-only">{busy ? 'Waiting for Host…' : notice?.text ?? summary}</output>
+    <output role="status" aria-live="polite" class="sr-only">{busy ? t('waiting') : (notice?.key ? t(notice.key) : notice?.text) ?? summary}</output>
   </main>;
 }
 render(<App/>, document.getElementById('app'));

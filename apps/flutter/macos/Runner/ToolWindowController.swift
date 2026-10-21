@@ -8,6 +8,7 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
     private(set) var controller: FlutterViewController?
     private var channel: FlutterMethodChannel?
     private var ready = false
+    private var localeHost: LocaleHost?
     private let entrypoint: String
     private let channelName: String
     private let title: String
@@ -45,6 +46,7 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
             ?? window?.screen ?? NSScreen.main ?? NSScreen.screens.first
         if window == nil {
             let view = FlutterViewController(project: FlutterDartProject())
+            localeHost = LocaleHost(messenger: view.engine.binaryMessenger)
             let transport = FlutterMethodChannel(name: channelName, binaryMessenger: view.engine.binaryMessenger)
             transport.setMethodCallHandler { [weak self] call, reply in
                 guard let self else { reply(nil); return }
@@ -68,6 +70,7 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
             }
             guard view.engine.run(withEntrypoint: entrypoint) else {
                 transport.setMethodCallHandler(nil)
+                localeHost = nil
                 return false
             }
             let size = ToolWindowPlacement.preferredSize
@@ -124,6 +127,7 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
         channel?.setMethodCallHandler(nil)
         window?.contentViewController = nil
         window = nil
+        localeHost = nil
         controller = nil
         channel = nil
         ready = false

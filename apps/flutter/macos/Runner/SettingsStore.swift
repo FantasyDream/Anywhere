@@ -31,6 +31,7 @@ struct StoredSettings: Codable {
     var universalKeyCode: UInt32
     var universalModifiers: UInt32
     var launchAtLogin: Bool
+    var uiLanguage: String? = nil
     var excludedApps: [String]
     // Optional for compatibility with settings.json written before V0.4.
     var captureFinderSelection: Bool?
@@ -127,6 +128,7 @@ struct StoredSettings: Codable {
             "universalKeyCode": Int(NativeHotKeyMap.portableKeys[universalKeyCode] ?? UInt32.max),
             "universalModifiers": Int(NativeHotKeyMap.portableMask(universalModifiers)),
             "launchAtLogin": launchAtLogin,
+            "uiLanguage": ["system", "zh", "en"].contains(uiLanguage ?? "") ? uiLanguage! : "system",
             "excludedApps": excludedApps,
             "captureFinderSelection": captureFinderSelection ?? true,
             "captureSelectedText": captureSelectedText ?? true,
@@ -197,6 +199,12 @@ struct StoredSettings: Codable {
         for key in ["currentAppModifiers", "universalModifiers"] where args[key] != nil {
             guard let value = Self.uint32(args[key]), let mask = NativeHotKeyMap.nativeMask(value) else { return "Invalid portable shortcut modifiers." }
             if key == "currentAppModifiers" { currentAppModifiers = mask } else { universalModifiers = mask }
+        }
+        if let value = args["uiLanguage"] {
+            guard let language = value as? String, ["system", "zh", "en"].contains(language) else {
+                return "Unsupported interface language."
+            }
+            uiLanguage = language
         }
         if let value = args["launchAtLogin"] as? Bool { launchAtLogin = value }
         if let value = args["excludedApps"] as? [String] {

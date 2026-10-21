@@ -1,3 +1,4 @@
+import '../l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../ui/app_style.dart';
@@ -69,7 +70,7 @@ class _ExecutionSessionsAppState extends State<ExecutionSessionsApp> {
   }
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
+  Widget build(BuildContext context) => LocalizedApp(
         debugShowCheckedModeBanner: false,
         theme: AppStyle.theme,
         builder: AppStyle.windowBuilder,

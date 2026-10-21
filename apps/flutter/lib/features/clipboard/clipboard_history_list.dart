@@ -1,3 +1,4 @@
+import '../../l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import '../../infrastructure/desktop_environment.dart';
 import '../../src/rust/api.dart';
@@ -62,7 +63,7 @@ class ClipboardHistoryList extends StatelessWidget {
                                             : AppStyle.body),
                                     SizedBox(height: compact ? 2 : 4),
                                     Text(
-                                        '${clipboardKindLabel(item.kind)} · ${clipboardCopyDate(context, item.copiedAtMs.toInt(), compact: true)}',
+                                        '${clipboardKindLabel(item.kind, context.l10n)} · ${clipboardCopyDate(context, item.copiedAtMs.toInt(), compact: true)}',
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
                                         style: compact

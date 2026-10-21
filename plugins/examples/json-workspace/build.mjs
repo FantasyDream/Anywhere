@@ -10,3 +10,5 @@ await copyFile('node_modules/jsonpath-js/LICENSE','dist/jsonpath-js-LICENSE.txt'
 
 await copyFile('node_modules/@nyariv/sandboxjs/LICENSE','dist/sandboxjs-LICENSE.txt');
 await copyFile('node_modules/acorn/LICENSE','dist/acorn-LICENSE.txt');
+
+await copyFile('node_modules/i18next/LICENSE','dist/i18next-LICENSE.txt');

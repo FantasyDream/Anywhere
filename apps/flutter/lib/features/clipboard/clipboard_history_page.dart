@@ -1,3 +1,4 @@
+import '../../l10n/app_language.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -95,7 +96,7 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
   @override
   Widget build(BuildContext context) => ToolPageShell(
         title: session.title,
-        subtitle: 'Clipboard',
+        subtitle: context.l10n.clipboard,
         onBack: widget.onBack,
         editorFocus: session.focus,
         presentation: widget.presentation,
@@ -108,7 +109,7 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Clipboard History',
+              Text(context.l10n.clipboardHistory,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: AppStyle.caption.copyWith(
@@ -128,7 +129,7 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
                   cursorColor: AppStyle.primary,
                   cursorWidth: 1.4,
                   decoration: InputDecoration(
-                      hintText: 'Search clipboard history…',
+                      hintText: context.l10n.searchHistory,
                       hintStyle: AppStyle.body.copyWith(
                           fontSize: DesignTokens.pageHeadingSize,
                           color: AppStyle.muted),
@@ -153,10 +154,11 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
               const SizedBox(width: 12),
               Tooltip(
                   message: session.status!,
-                  child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                    Icon(AppIcons.check, size: 12, color: AppStyle.success),
-                    SizedBox(width: 4),
-                    Text('Copied',
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(AppIcons.check,
+                        size: 12, color: AppStyle.success),
+                    const SizedBox(width: 4),
+                    Text(context.l10n.copied,
                         style:
                             TextStyle(fontSize: 11, color: AppStyle.success)),
                   ])),

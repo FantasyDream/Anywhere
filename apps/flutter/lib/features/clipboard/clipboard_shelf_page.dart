@@ -1,3 +1,4 @@
+import '../../l10n/app_language.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -141,7 +142,7 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
 
   @override
   Widget build(BuildContext context) => ToolPageShell(
-      title: 'Clipboard Shelf',
+      title: context.l10n.clipboardShelf,
       detached: !session.previewEnabled,
       headerHeight: 60,
       leading: session.previewEnabled
@@ -232,7 +233,7 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
                       height: 32,
                       enabled:
                           session.selected != null && !session.previewEnabled,
-                      child: const Text('Preview')),
+                      child: Text(context.l10n.preview)),
                   PopupMenuItem(
                       value: _ShelfAction.delete,
                       height: 32,

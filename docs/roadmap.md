@@ -1,6 +1,6 @@
 # Anywhere 产品路线图
 
-最后更新：2026-10-21。既有验收版本为 V0.10 / Build 11，当前开发预览为 V0.11 / Build 51（`codex/refactor-open-source`，剪贴板基线在 `codex/dev-0.10`）；版本号表示依赖顺序，不代表发布日期。Web 实现进度以 [V0.11 MVP](mvp-v0.11.md) 为准，剪贴板基线见 [V0.10 MVP](mvp-v0.10.md)，历史构建与验收在 [归档](archive/README.md)。
+最后更新：2026-10-21。既有验收版本为 V0.10 / Build 11，已收尾预览为 V0.11 / Build 51（`codex/refactor-open-source`），当前开发为 V0.12 中英国际化与拼音检索（`codex/dev-0.12-i18n`，剪贴板基线在 `codex/dev-0.10`）；版本号表示依赖顺序，不代表发布日期。Web 实现进度以 [V0.11 MVP](mvp-v0.11.md) 为准，剪贴板基线见 [V0.10 MVP](mvp-v0.10.md)，历史构建与验收在 [归档](archive/README.md)。
 
 
 2026-10-18：V0.10 及 [开源复用重构 R1–R4](open-source-refactor-plan.md)已完成工程收尾。编码预览与工具查找已接入；SQLite / nucleo 经对照后未采用，实验代码及专用依赖已清理，保留原始测量和必要回归。用户最新确认：**Terminal 延后，第三方统一采用 WebView，优先复用 flutter_inappwebview**；详见 [Web 插件设计](web-plugin-design.md)。P0 探针验证中，P1 包协议 / 校验与 P2 Rust 注册 / 调用主链路、HostView 协议已实现；P3 SDK / Rust 能力代理已实现；P4–P6 已接入生产代码的 macOS 本地开发预览：统一页框、宿主确认、安装更新 / 回滚、JSON / Text Pad；原生界面与安全矩阵验收继续，Windows 与公开分发未开放。
@@ -24,6 +24,7 @@
 | **V0.9 内置功能模块 / 原生工具页** | 静态装配、自动注册、功能策略、类型化服务与统一页面；JSON 延期 | 工程收尾、完整门禁与 Build 6 关键闭环验收完成；JSON 原生入口已清理，原 UI DSL 停止扩展 |
 | **V0.10 剪贴板历史与搜索** | 历史采集、持久保存、搜索、预览与恢复使用；补齐当前规划的内置搜索能力 | 工程收尾，Build 11 完成开源复用、性能对照、全量门禁与关键界面验收；首次权限 / VoiceOver / 长时间内存矩阵保留 |
 | **V0.11 第三方 Web 插件基础** | 本地包、flutter_inappwebview、Context 输入、SDK、能力代理、安装批准 / 更新 / 重载 | 用户已确认统一 WebView 路线；P0–P6 已接入本地预览，继续核对原生键盘、安全矩阵与发行边界 |
+| **V0.12 国际化 / 拼音** | 跟随系统 / 中英切换、跨窗口语言通知、Web 资源、全拼 / 首字母名称匹配 | I1 / I2 / I4 首批工程实现，I3 文案继续迁移；尚未完整 GUI 验收 |
 | Web 平台验证：JSON 工具 | JSON 编辑、格式化、压缩、校验、错误定位与复制 | P6 已实现 JSONPath / JavaScript 与复制动作；普通 Web 包，随 V0.11 验证，不恢复 Flutter 原生 JSON 工作区 |
 | 后续第一方能力与核心收尾 | 项目工具、Recent Projects、性能、可用性与平台适配 | 按真实功能验证内置模块与原生页面接口 |
 | V1.0 | Context-aware Launcher、搜索、多来源 Context、开发动作、内置工具、可返回进程会话与最小 Web 插件闭环 | 满足下方发布条件；不要求 PTY 或 Marketplace |
@@ -36,13 +37,14 @@
  → 0.10 剪贴板历史与搜索
  → 0.11 第三方 Web 插件基础（P0–P5）
  → JSON Web 工具验证（P6）
+ → 0.12 中英国际化与拼音检索
  → 内置能力补齐与核心体验收尾
  → 1.0 核心闭环
 
 延期队列：PTY / Terminal → Code Agents / ACP（重新排期）
 ```
 
-0.11 之后的小版本号尚未锁定，按上述依赖排期。Terminal 不硬性锁在 1.0 之后，其恢复开发时间另定；当前先做 Web 机制和真实工具。Host HTTP / 文件访问 / Secrets 按真实插件需求逐项补齐；OCR / Translate、Marketplace 等继续作为独立候选，不同时扩张范围。
+2026-10-21 用户确认下一阶段为 **V0.12 中英国际化与拼音检索**，优先复用开源库，分步计划见 [V0.12 MVP](mvp-v0.12.md)。V0.11 本地预览工程收尾已提交，发行门槛仍保留。Terminal 不硬性锁在 1.0 之后，其恢复开发时间另定；当前先做 Web 机制和真实工具。Host HTTP / 文件访问 / Secrets 按真实插件需求逐项补齐；OCR / Translate、Marketplace 等继续作为独立候选，不同时扩张范围。
 
 ## 已完成基础：V0.10 剪贴板历史与搜索
 
