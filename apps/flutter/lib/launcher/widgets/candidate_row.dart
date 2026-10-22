@@ -1,8 +1,14 @@
+import '../../l10n/app_language.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
+import '../../ui/app_components.dart';
 import 'package:flutter/foundation.dart';
 import '../../src/rust/api.dart';
+import '../../l10n/localized_label.dart';
+import '../../ui/app_style.dart';
+import '../launcher_view_state.dart';
+import 'candidate_icon.dart';
 
-/// A result row: presentation only, with selection and icon data supplied by its parent.
 class CandidateRow extends StatelessWidget {
   const CandidateRow({
     super.key,
@@ -10,136 +16,152 @@ class CandidateRow extends StatelessWidget {
     required this.selected,
     required this.onTap,
     this.iconBytes,
+    this.sourceLabel,
+    this.actionShortcut,
+    this.primaryLabel,
+    this.onPrimary,
+    this.onActions,
+    this.onDoubleTap,
+    this.fileObject = true,
   });
   final CandidateDto candidate;
   final bool selected;
   final VoidCallback onTap;
   final Uint8List? iconBytes;
+  final String? sourceLabel;
+  final String? actionShortcut;
+  final String? primaryLabel;
+  final VoidCallback? onPrimary, onActions, onDoubleTap;
+  final bool fileObject;
 
   @override
   Widget build(BuildContext context) {
-    final disabled = candidate.availability != 'enabled';
-    return Semantics(
-      selected: selected,
-      button: true,
-      child: Material(
-        color: selected ? const Color(0x665c6070) : Colors.transparent,
-        borderRadius: BorderRadius.circular(7),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(7),
-          onTap: onTap,
+    final disabled = candidate.availability != AvailabilityDto.enabled;
+    final title =
+        context.localizedLabel(candidate.title, candidate.localizedTitles);
+    return Listener(
+        // Select immediately, independently of the double-click recognizer. This
+        // also lets row commands execute without waiting for a double-click timeout.
+        onPointerDown: disabled
+            ? null
+            : (event) {
+                if (event.buttons == kPrimaryMouseButton) onTap();
+              },
+        child: Semantics(
+          selected: selected,
+          button: true,
+          enabled: !disabled,
+          onTap: disabled ? null : onTap,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Row(
-              children: [
-                Container(
-                  width: 30,
-                  height: 30,
-                  decoration: BoxDecoration(
-                    // Only the fallback glyph needs a plate: a real icon is opaque.
-                    color: iconBytes != null
-                        ? Colors.transparent
-                        : const Color(0x4d454955),
-                    borderRadius: BorderRadius.circular(7),
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child: _iconFor(candidate, disabled),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: AppSelectionSurface(
+              selected: selected,
+              child: SizedBox(
+                height: LauncherViewState.rowHeight - 4,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Row(
                     children: [
-                      Text(
-                        candidate.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: disabled
-                              ? const Color(0xff9aa0ad)
-                              : const Color(0xffebebef),
-                        ),
-                      ),
-                      if (candidate.subtitle != null || disabled)
-                        Text(
-                          disabled
-                              ? (candidate.availabilityReason ??
-                                  'Not available right now')
-                              : candidate.subtitle!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(
-                            fontSize: 11,
-                            height: 1.5,
-                            color: disabled
-                                ? const Color(0xffc9a26b)
-                                : const Color(0xffd0d6e1),
-                          ),
-                        ),
+                      Expanded(
+                          // Only the object region recognizes double-clicks. A
+                          // parent double-tap recognizer would delay command taps.
+                          child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onDoubleTap: disabled ? null : onDoubleTap,
+                              child: Row(children: [
+                                CandidateIcon(
+                                    candidate: candidate,
+                                    bytes: iconBytes,
+                                    size: 32,
+                                    fileObject: fileObject),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                    child: _labels(context, disabled, title)),
+                              ]))),
+                      if (actionShortcut != null) ...[
+                        const SizedBox(width: 8),
+                        Tooltip(
+                            message: context.l10n.anywhereActionShortcut,
+                            child: _shortcut(actionShortcut!)),
+                      ],
+                      if (selected && !disabled && primaryLabel != null) ...[
+                        const SizedBox(width: 6),
+                        AppRowActions(
+                            primaryLabel: primaryLabel!,
+                            onPrimary: onPrimary,
+                            onActions: onActions),
+                      ],
                     ],
                   ),
                 ),
-                if (candidate.shortcut != null) ...[
-                  const SizedBox(width: 12),
-                  Text(candidate.shortcut!,
-                      style: const TextStyle(
-                          fontSize: 12, color: Color(0xffa8abb7))),
-                ],
-                if (selected && !disabled) ...[
-                  const SizedBox(width: 12),
-                  const Icon(
-                    Icons.keyboard_return_rounded,
-                    size: 16,
-                    color: Color(0xffa8abb7),
-                  ),
-                ],
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        ));
+  }
+
+  Widget _labels(BuildContext context, bool disabled, String title) {
+    final subtitle = _visibleSubtitle(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        _title(disabled, title),
+        if (subtitle != null) ...[
+          const SizedBox(height: 2),
+          Tooltip(
+              message: subtitle,
+              child: Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w400,
+                  shadows: AppStyle.textShadows,
+                  height: 1.35,
+                  color: disabled ? AppStyle.warning : AppStyle.secondary,
+                ),
+              )),
+        ],
+      ],
     );
   }
 
-  /// Real application icon when available, semantic glyph otherwise.
-  Widget _iconFor(CandidateDto candidate, bool disabled) {
-    final bytes = iconBytes;
-    if (bytes != null) {
-      // `cover` fills the slot the way the system's own icon renderer does. `contain`
-      // letterboxes, which showed up as a transparent frame around the artwork.
-      return Image.memory(
-        bytes,
-        width: 30,
-        height: 30,
-        fit: BoxFit.cover,
-        gaplessPlayback: true,
-        errorBuilder: (_, __, ___) => _glyph(candidate, disabled),
+  Widget _title(bool disabled, String title) => Text(
+        title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+            fontSize: 15,
+            height: 1.2,
+            fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+            shadows: AppStyle.textShadows,
+            letterSpacing: 0,
+            color: disabled ? AppStyle.muted : AppStyle.primary),
       );
+
+  String? _visibleSubtitle(BuildContext context) {
+    final disabled = candidate.availability != AvailabilityDto.enabled;
+    if (disabled) {
+      return candidate.availabilityReason ?? context.l10n.notAvailableRightNow;
     }
-    return _glyph(candidate, disabled);
+    final menu = candidate.menuPath.join(' › ');
+    if (menu.isNotEmpty) {
+      return sourceLabel == null ? menu : '$sourceLabel · $menu';
+    }
+    final subtitle = candidate.subtitle?.trim();
+    if (subtitle == null ||
+        subtitle.isEmpty ||
+        _isBundleId(subtitle) ||
+        candidate.title == subtitle) {
+      return sourceLabel;
+    }
+    return sourceLabel == null ? subtitle : '$sourceLabel · $subtitle';
   }
 
-  Widget _glyph(CandidateDto candidate, bool disabled) => Icon(
-        _icon(candidate),
-        size: 17,
-        color: disabled ? const Color(0xff8a8f9c) : const Color(0xffcad0de),
-      );
+  bool _isBundleId(String value) =>
+      RegExp(r'^[A-Za-z][A-Za-z0-9-]*(\.[A-Za-z0-9-]+){2,}$').hasMatch(value);
 
-  IconData _icon(CandidateDto candidate) {
-    if (candidate.kind == 'application') return Icons.apps_rounded;
-    return switch (candidate.iconKey) {
-      'terminal' => Icons.terminal_rounded,
-      'folder' => Icons.folder_open_rounded,
-      'file' => Icons.insert_drive_file_outlined,
-      'copy' => Icons.content_copy_rounded,
-      'globe' => Icons.language_rounded,
-      'code' => Icons.data_object_rounded,
-      'search' => Icons.search_rounded,
-      'git' => Icons.account_tree_outlined,
-      _ => Icons.bolt_rounded,
-    };
-  }
+  Widget _shortcut(String shortcut) => AppKeycap(shortcut);
 }

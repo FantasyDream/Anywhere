@@ -1,7 +1,6 @@
 //! Directory actions.
 use crate::core::action::availability::AvailabilityRule;
 use crate::core::action::bundle::{ActionBundle, ActionSpec};
-use crate::core::action::group::groups;
 use crate::core::action::handler::{ActionHandler, ExecutionOutput};
 use crate::core::context::ResolvedContext;
 use anyhow::{Context, Result};
@@ -48,9 +47,10 @@ impl ActionHandler for OpenDirectory {
 
 pub fn bundle() -> ActionBundle {
     ActionBundle {
-        group: groups::folder(),
+        group: crate::features::groups::folder(),
         actions: vec![
             ActionSpec {
+                localized_titles: &[("zh", "在此打开终端")],
                 id: "core.directory.terminal",
                 title: "Open Terminal Here",
                 accepts: DIRECTORY,
@@ -60,39 +60,50 @@ pub fn bundle() -> ActionBundle {
                 icon: "terminal",
                 aliases: &["terminal", "shell", "console"],
                 keywords: &["folder"],
+                home_eligible: true,
+                primary_action: false,
             },
             ActionSpec {
+                localized_titles: &[("zh", "复制路径")],
                 id: "core.directory.copy",
                 title: "Copy Path",
                 accepts: DIRECTORY,
                 handler: &CopyPath,
                 availability: AvailabilityRule::hide_if(crate::core::session::facts::CLIPBOARD),
                 base_priority: 20,
-                icon: "copy",
+                icon: "copy-path",
                 aliases: &["copy", "path", "clipboard"],
                 keywords: &["folder"],
+                home_eligible: true,
+                primary_action: false,
             },
             ActionSpec {
+                localized_titles: &[("zh", "打开文件夹")],
                 id: "core.directory.open",
                 title: "Open Directory",
                 accepts: DIRECTORY,
                 handler: &OpenDirectory,
                 availability: AvailabilityRule::Enabled,
                 base_priority: 10,
-                icon: "folder",
+                icon: "folder-open",
                 aliases: &["open", "reveal", "finder"],
                 keywords: &["folder"],
+                home_eligible: true,
+                primary_action: true,
             },
             ActionSpec {
+                localized_titles: &[("zh", "复制路径")],
                 id: "core.file.copy",
                 title: "Copy Path",
                 accepts: FILE,
                 handler: &CopyPath,
                 availability: AvailabilityRule::hide_if(crate::core::session::facts::CLIPBOARD),
                 base_priority: 10,
-                icon: "copy",
+                icon: "copy-path",
                 aliases: &["copy", "path", "clipboard"],
                 keywords: &["document"],
+                home_eligible: true,
+                primary_action: false,
             },
         ],
     }

@@ -15,71 +15,32 @@ pub struct ActionGroup {
 
 /// Group ids of the built-in actions.
 ///
-/// Grouping is a presentation concern, so every literal lives here: scope labels, scope
-/// ordering and group membership all refer to these.
+/// Shared group identities. Product labels and declarations live in features/groups.rs.
 pub mod groups {
-    use super::ActionGroup;
 
     pub const GIT: &str = "git";
     pub const FOLDER: &str = "folder";
     pub const FILE: &str = "file";
     pub const WEB: &str = "web";
     pub const JSON: &str = "json";
+    pub const RUST: &str = "rust";
+    pub const MAVEN: &str = "maven";
+    pub const GRADLE: &str = "gradle";
+    pub const SPRING_BOOT: &str = "spring_boot";
+    pub const NODE: &str = "node";
+    pub const TOOLS: &str = "tools";
     /// Launch candidates; never a scope of their own.
     pub const APP: &str = "app";
 
-    pub fn git() -> ActionGroup {
-        ActionGroup {
-            id: GIT.into(),
-            title: "Git".into(),
-            icon: Some("git".into()),
-        }
+    pub fn for_app(bundle_id: &str) -> String {
+        format!("app.{bundle_id}")
     }
+}
 
-    pub fn folder() -> ActionGroup {
-        ActionGroup {
-            id: FOLDER.into(),
-            title: "Folder".into(),
-            icon: Some("folder".into()),
-        }
-    }
-
-    pub fn file() -> ActionGroup {
-        ActionGroup {
-            id: FILE.into(),
-            title: "File".into(),
-            icon: Some("file".into()),
-        }
-    }
-
-    pub fn web() -> ActionGroup {
-        ActionGroup {
-            id: WEB.into(),
-            title: "Web".into(),
-            icon: Some("globe".into()),
-        }
-    }
-
-    pub fn json() -> ActionGroup {
-        ActionGroup {
-            id: JSON.into(),
-            title: "JSON".into(),
-            icon: Some("code".into()),
-        }
-    }
-
-    pub fn app() -> ActionGroup {
-        ActionGroup {
-            id: APP.into(),
-            title: "Current App".into(),
-            icon: None,
-        }
-    }
-
-    /// The built-in catalogue, in the order the scope bar falls back to.
-    pub fn builtin() -> Vec<ActionGroup> {
-        vec![git(), folder(), file(), web(), json(), app()]
-    }
+/// Title and tie-break rank recorded with a group.
+pub trait GroupMeta {
+    fn label(&self, group_id: &str) -> String;
+    fn rank(&self, group_id: &str) -> u16;
 }
 
 /// Display label for a group id, falling back to a label derived from the id.
@@ -87,12 +48,6 @@ pub mod groups {
 /// Plugin groups are not in the catalogue, so they are titled from their id rather than
 /// showing a raw `plugin.foo_bar`.
 pub fn label_for(group_id: &str) -> String {
-    if let Some(group) = groups::builtin()
-        .into_iter()
-        .find(|group| group.id == group_id)
-    {
-        return group.title;
-    }
     match group_id.strip_prefix("plugin.") {
         Some(plugin) => plugin
             .split(['.', '_', '-'])
@@ -118,7 +73,7 @@ mod tests {
     #[test]
     fn labels_come_from_the_catalogue_and_plugin_ids_are_titled() {
         assert_eq!(label_for(groups::GIT), "Git");
-        assert_eq!(label_for(groups::JSON), "JSON");
+        assert_eq!(label_for(groups::JSON), "Json");
         assert_eq!(label_for("plugin.my_tool"), "My Tool");
         assert_eq!(label_for("custom"), "Custom");
     }
@@ -126,7 +81,7 @@ mod tests {
     /// A group carries no context type: applicability belongs to the action.
     #[test]
     fn a_group_is_presentation_only() {
-        for group in groups::builtin() {
+        for group in crate::features::groups::builtin() {
             assert!(!group.id.is_empty());
             assert!(!group.title.is_empty());
         }

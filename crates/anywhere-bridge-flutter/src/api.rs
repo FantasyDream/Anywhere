@@ -1,98 +1,223 @@
+mod clipboard;
+mod conversions;
+mod web;
+use conversions::*;
+mod executions;
+mod files;
+mod queries;
+mod settings;
+mod shortcuts;
 use anyhow::{Context, Result};
 use anywhere_core::{persistence::usage::SqliteUsageRepository, Application, LauncherApplication};
 use anywhere_protocol as protocol;
 use std::{
-    path::Path,
-    sync::{Arc, OnceLock},
-    time::Duration,
+    path::{Path, PathBuf},
+    sync::{Mutex, OnceLock},
 };
 
 static APPLICATION: OnceLock<Application> = OnceLock::new();
-
-/// Longest a single `wait_for_snapshot` call may block before Dart polls again.
-const SNAPSHOT_WAIT: Duration = Duration::from_secs(30);
+static EXTENSIONS: OnceLock<Mutex<anywhere_core::application::settings_service::SettingsService>> =
+    OnceLock::new();
 
 pub fn ping() -> String {
-    anywhere_core::ping().to_owned()
+    queries::ping()
+}
+
+pub struct ClipboardItemDto {
+    pub id: String,
+    pub summary: String,
+    pub kind: String,
+    pub copied_at_ms: i64,
+    pub byte_count: u32,
+}
+pub struct ClipboardDetailDto {
+    pub item: ClipboardItemDto,
+    pub text: String,
+    pub image_png: Vec<u8>,
+    pub files: Vec<String>,
+    pub formats: Vec<String>,
+}
+pub enum ClipboardNoticeDto {
+    FeatureDisabled,
+    StorageUnavailable,
+    AccessRequired,
+    ItemTooLarge,
+    ReadFailed,
+    CaptureUnavailable,
+    MonitoringUnavailable,
+}
+pub struct ClipboardHistoryDto {
+    pub recording: bool,
+    pub available: bool,
+    pub notice: Option<ClipboardNoticeDto>,
+    pub items: Vec<ClipboardItemDto>,
+}
+pub struct ClipboardHistoryStatusDto {
+    pub recording: bool,
+    pub available: bool,
+    pub notice: Option<ClipboardNoticeDto>,
+}
+pub fn clipboard_history_status() -> Result<ClipboardHistoryStatusDto> {
+    clipboard::status()
+}
+pub fn clipboard_history(query: String) -> Result<ClipboardHistoryDto> {
+    clipboard::search(query)
+}
+pub fn clipboard_history_detail(id: String) -> Result<Option<ClipboardDetailDto>> {
+    clipboard::detail(id)
+}
+pub fn set_clipboard_recording(enabled: bool) -> Result<()> {
+    clipboard::set_recording(enabled)
+}
+pub fn copy_clipboard_entry(id: String) -> Result<()> {
+    clipboard::copy(id)
+}
+pub fn delete_clipboard_entry(id: String) -> Result<()> {
+    clipboard::delete(id)
+}
+pub fn clear_clipboard_history() -> Result<()> {
+    clipboard::clear()
+}
+
+#[flutter_rust_bridge::frb]
+pub struct ShortcutActionDto {
+    pub action_id: String,
+    pub title: String,
+    #[frb(default = "const {}")]
+    pub localized_titles: std::collections::HashMap<String, String>,
+    pub context_types: Vec<String>,
+}
+
+pub async fn supported_shortcut_actions(action_ids: Vec<String>) -> Result<Vec<String>> {
+    shortcuts::supported_shortcut_actions(action_ids).await
+}
+
+pub async fn shortcut_actions() -> Result<Vec<ShortcutActionDto>> {
+    shortcuts::shortcut_actions().await
+}
+
+pub async fn resolve_action_binding(
+    session_id: u32,
+    revision: u32,
+    action_id: String,
+) -> Result<Vec<CandidateDto>> {
+    shortcuts::resolve_action_binding(session_id, revision, action_id).await
+}
+
+#[derive(Clone, Debug)]
+pub struct BindingResolutionDto {
+    pub state: LauncherStateDto,
+    pub candidates: Vec<CandidateDto>,
+    pub requires_choice: bool,
+}
+
+/// Fresh global activation only: wait for capture and retain exact execution targets.
+pub async fn wait_action_binding(
+    session_id: u32,
+    revision: u32,
+    action_id: String,
+) -> Result<BindingResolutionDto> {
+    shortcuts::wait_action_binding(session_id, revision, action_id).await
 }
 
 pub fn initialize(data_directory: String, plugin_directory: String) -> Result<()> {
-    if APPLICATION.get().is_some() {
-        return Ok(());
-    }
-    let _ = tracing_subscriber::fmt()
-        .json()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| "info".into()),
-        )
-        .with_writer(std::io::stderr)
-        .try_init();
-    let data = Path::new(&data_directory);
-    std::fs::create_dir_all(data)?;
-    let history =
-        SqliteUsageRepository::open(&data.join("usage.sqlite3")).context("open usage history")?;
-    let mut registry = anywhere_core::application::composition::builtin_registry();
-    let mut diagnostics = Vec::new();
-    let user_plugins = data.join("plugins");
-    std::fs::create_dir_all(&user_plugins)?;
-    for directory in [Path::new(&plugin_directory), user_plugins.as_path()] {
-        let discovery = anywhere_plugin::discover(directory);
-        diagnostics.extend(discovery.diagnostics);
-        for manifest in discovery.manifests {
-            let id = manifest.id.clone();
-            if let Err(error) = registry.register_plugin(manifest) {
-                tracing::error!(plugin_id = id, error = %error, "plugin_load_failure");
-                diagnostics.push(format!("Plugin {id}: {error:#}"));
-            }
-        }
-    }
-    #[cfg(target_os = "macos")]
-    let platform = Arc::new(anywhere_platform::MacOsPlatform);
-    #[cfg(target_os = "windows")]
-    let platform = Arc::new(anywhere_platform::WindowsPlatform::default());
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    anyhow::bail!("The host supports macOS and Windows only");
-    #[cfg(any(target_os = "macos", target_os = "windows"))]
-    APPLICATION
-        .set(Application::new(
-            platform,
-            registry,
-            Box::new(history),
-            diagnostics,
-        ))
-        .map_err(|_| anyhow::anyhow!("application already initialized"))?;
-    Ok(())
+    settings::initialize(data_directory, plugin_directory)
 }
 
 fn application() -> Result<&'static Application> {
     APPLICATION.get().context("call initialize first")
 }
 
+#[derive(Clone, Debug)]
+#[flutter_rust_bridge::frb]
+pub struct ShortcutApplicationDto {
+    pub bundle_id: String,
+    pub title: String,
+    #[frb(default = "const {}")]
+    pub localized_titles: std::collections::HashMap<String, String>,
+}
+pub fn shortcut_applications() -> Result<Vec<ShortcutApplicationDto>> {
+    shortcuts::shortcut_applications()
+}
+#[derive(Clone, Debug)]
+pub struct ShortcutRouteDto {
+    pub action_id: String,
+    pub app_bundle_id: Option<String>,
+    pub context_type: Option<String>,
+}
+
+pub fn resolve_shortcut_intent(
+    session_id: u32,
+    revision: u32,
+    routes: Vec<ShortcutRouteDto>,
+) -> Result<BindingResolutionDto> {
+    shortcuts::resolve_shortcut_intent(session_id, revision, routes)
+}
+pub async fn wait_shortcut_intent(
+    session_id: u32,
+    revision: u32,
+    routes: Vec<ShortcutRouteDto>,
+) -> Result<BindingResolutionDto> {
+    shortcuts::wait_shortcut_intent(session_id, revision, routes).await
+}
+
 /// Reserve synchronously so Dart can cancel even before foreground capture finishes.
 #[flutter_rust_bridge::frb(sync)]
 pub fn begin_activation() -> Result<u32> {
-    application()?.begin_activation()
+    queries::begin_activation()
 }
 
 pub async fn activate(
     session_id: u32,
     prompt_accessibility: bool,
+    captured_environment: bool,
 ) -> Result<Option<LauncherStateDto>> {
-    Ok(application()?
-        .activate_session_with(session_id, prompt_accessibility)
-        .await?
-        .map(Into::into))
+    queries::activate(session_id, prompt_accessibility, captured_environment).await
 }
 
 pub async fn update_input(
     session_id: u32,
     input: String,
     revision: u32,
+    scope_id: Option<String>,
+    input_mode: InputModeDto,
 ) -> Result<Option<LauncherStateDto>> {
-    Ok(application()?
-        .update_input(session_id, input, revision)
-        .await?
-        .map(Into::into))
+    queries::update_input(session_id, input, revision, scope_id, input_mode).await
+}
+
+/// File filters are part of the initiating query, before enumeration/page limits.
+pub async fn update_file_input(
+    session_id: u32,
+    input: String,
+    revision: u32,
+    filter: String,
+) -> Result<Option<LauncherStateDto>> {
+    files::update_file_input(session_id, input, revision, filter).await
+}
+
+/// Resolve secondary actions for the selected object through the shared host flow.
+pub fn object_actions(
+    session_id: u32,
+    revision: u32,
+    candidate_id: String,
+) -> Result<Vec<CandidateDto>> {
+    files::file_actions(session_id, revision, candidate_id)
+}
+
+pub fn file_actions(
+    session_id: u32,
+    revision: u32,
+    candidate_id: String,
+) -> Result<Vec<CandidateDto>> {
+    files::file_actions(session_id, revision, candidate_id)
+}
+
+pub async fn load_more_files(session_id: u32, revision: u32) -> Result<Option<LauncherStateDto>> {
+    files::load_more_files(session_id, revision).await
+}
+
+pub fn freeze_file_results(session_id: u32, revision: u32) -> Result<()> {
+    files::freeze_file_results(session_id, revision)
 }
 
 /// Latest committed snapshot for a session, read straight from the core.
@@ -100,60 +225,12 @@ pub async fn update_input(
 /// The core is the only source of truth: a late pass publishes there, and nothing
 /// here has to be kept in step with it.
 pub fn latest_state(session_id: u32) -> Option<LauncherStateDto> {
-    application().ok()?.latest_state(session_id).map(Into::into)
-}
-
-/// A snapshot position that is monotonic for the whole session.
-///
-/// `snapshot_seq` alone is not monotonic: the core restarts it at 1 for every revision, so
-/// a late snapshot of an older revision can carry a higher sequence than the newest
-/// revision's first snapshot. Pairing the two makes the order unambiguous, which is what
-/// this wait needs. The Dart loop builds the same value from the fields it already has
-/// (`revision` and `snapshotSeq`), which is why it stays private to this module.
-fn cursor(state: &protocol::LauncherState) -> u64 {
-    ((state.revision as u64) << 32) | state.snapshot_seq as u64
+    queries::latest_state(session_id)
 }
 
 /// Block until the core publishes a snapshot beyond `after` for this session.
-///
-/// Late context is committed by a background task, so the core's own update channel is the
-/// only place a caller can observe it. Returns the newest snapshot when one arrives, or
-/// `None` on timeout, so the caller can wait again from the same cursor — a wait that ends
-/// because nothing happened must not be mistaken for the session being finished.
-pub async fn wait_for_snapshot(session_id: u32, after: u64) -> Result<Option<LauncherStateDto>> {
-    let app = application()?;
-    if let Some(state) = beyond(app, session_id, after) {
-        return Ok(Some(state.into()));
-    }
-    let mut updates = app.state_updates();
-    let deadline = tokio::time::Instant::now() + SNAPSHOT_WAIT;
-    loop {
-        if !app.is_session_active(session_id) {
-            return Ok(None);
-        }
-        if let Some(state) = beyond(app, session_id, after) {
-            return Ok(Some(state.into()));
-        }
-        let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
-        if remaining.is_zero() {
-            break;
-        }
-        match tokio::time::timeout(remaining, updates.changed()).await {
-            // A newer snapshot for another session is fine: the loop re-checks ours.
-            Ok(Ok(())) => continue,
-            // Sender gone: the core is shutting down, so report nothing.
-            Ok(Err(_)) => return Ok(None),
-            // The wait elapsed. Nothing newer exists; the caller waits again.
-            Err(_) => break,
-        }
-    }
-    Ok(None)
-}
-
-/// The committed snapshot for a session, when it is beyond `after`.
-fn beyond(app: &Application, session_id: u32, after: u64) -> Option<protocol::LauncherState> {
-    app.latest_state(session_id)
-        .filter(|state| cursor(state) > after)
+pub async fn wait_for_snapshot(session_id: u32, after: u64) -> Result<SnapshotWaitDto> {
+    queries::wait_for_snapshot(session_id, after).await
 }
 
 pub async fn execute(
@@ -161,169 +238,721 @@ pub async fn execute(
     revision: u32,
     candidate_id: String,
 ) -> Result<ActionResultDto> {
-    Ok(application()?
-        .execute(session_id, revision, candidate_id)
-        .await?
-        .into())
+    queries::execute(session_id, revision, candidate_id).await
 }
 
 /// Small PNG for an application candidate, or `None` when there is no icon.
 pub fn application_icon(candidate_id: String) -> Result<Option<Vec<u8>>> {
-    let result = application()?.application_icon(&candidate_id);
-    match &result {
-        Ok(Some(bytes)) => tracing::debug!(candidate_id, bytes = bytes.len(), "app_icon_served"),
-        Ok(None) => tracing::info!(candidate_id, "app_icon_absent"),
-        Err(error) => tracing::error!(candidate_id, error = %error, "app_icon_failed"),
-    }
-    result
+    queries::application_icon(candidate_id)
+}
+
+pub async fn suspend_launcher(session_id: u32) -> Result<()> {
+    queries::suspend_launcher(session_id).await
+}
+
+pub fn resume_launcher(session_id: u32) -> Result<Option<LauncherStateDto>> {
+    queries::resume_launcher(session_id)
 }
 
 pub fn deactivate(session_id: u32) -> Result<()> {
-    application()?.deactivate(session_id)
+    queries::deactivate(session_id)
+}
+
+pub fn execution_sessions() -> Result<Vec<ExecutionSessionSummaryDto>> {
+    executions::execution_sessions()
+}
+
+pub fn execution_session(id: String) -> Result<Option<ExecutionSessionDetailDto>> {
+    executions::execution_session(id)
+}
+
+pub fn stop_execution_session(id: String) -> Result<()> {
+    executions::stop_execution_session(id)
+}
+
+pub fn remove_execution_session(id: String) -> Result<()> {
+    executions::remove_execution_session(id)
+}
+
+pub fn shutdown_execution_sessions() -> Result<()> {
+    executions::shutdown_execution_sessions()
 }
 
 #[flutter_rust_bridge::frb(sync)]
 pub fn prompt_accessibility() -> Result<bool> {
-    application()?.prompt_accessibility()
+    queries::prompt_accessibility()
+}
+
+#[flutter_rust_bridge::frb(sync)]
+pub fn plugin_status() -> Vec<PluginStatusDto> {
+    settings::plugin_status()
+}
+
+pub fn refresh_plugins() -> Result<Vec<PluginStatusDto>> {
+    settings::refresh_plugins()
+}
+
+/// Refresh preferences and feature data; no module or plugin code is loaded.
+pub fn refresh_features() -> Result<Vec<ExtensionStatusDto>> {
+    settings::refresh_features()
+}
+
+pub fn extension_status() -> Result<Vec<ExtensionStatusDto>> {
+    settings::extension_status()
+}
+pub fn set_extension_enabled(key: String, enabled: bool) -> Result<Vec<ExtensionStatusDto>> {
+    settings::change_extension(
+        anywhere_core::application::settings_service::SettingsChange::Enable { key, enabled },
+    )
+}
+pub fn approve_extension(key: String, token: String) -> Result<Vec<ExtensionStatusDto>> {
+    settings::change_extension(
+        anywhere_core::application::settings_service::SettingsChange::Approve { key, token },
+    )
+}
+pub fn revoke_extension(key: String) -> Result<Vec<ExtensionStatusDto>> {
+    settings::change_extension(
+        anywhere_core::application::settings_service::SettingsChange::Revoke { key },
+    )
+}
+
+#[derive(Clone, Debug)]
+#[flutter_rust_bridge::frb]
+pub struct ExtensionStatusDto {
+    pub key: String,
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub first_party: bool,
+    pub legacy: bool,
+    pub enabled: bool,
+    pub active: bool,
+    pub needs_approval: bool,
+    pub configurable: bool,
+    #[frb(default = "false")]
+    pub restart_required: bool,
+    pub capabilities: Vec<String>,
+    pub approval_token: String,
+    pub detail: String,
+}
+impl From<anywhere_core::application::settings_service::ModuleStatus> for ExtensionStatusDto {
+    fn from(s: anywhere_core::application::settings_service::ModuleStatus) -> Self {
+        Self {
+            key: s.key,
+            id: s.id,
+            name: s.name,
+            version: s.version,
+            first_party: s.first_party,
+            legacy: s.legacy,
+            enabled: s.enabled,
+            active: s.active,
+            needs_approval: s.needs_approval,
+            configurable: s.configurable,
+            restart_required: s.restart_required,
+            capabilities: s.capabilities,
+            approval_token: s.approval_token,
+            detail: s.detail,
+        }
+    }
+}
+
+pub fn excluded_apps() -> Result<Vec<String>> {
+    settings::excluded_apps()
+}
+
+pub fn set_excluded_apps(bundle_ids: Vec<String>) -> Result<()> {
+    settings::set_excluded_apps(bundle_ids)
+}
+
+pub fn set_file_search(
+    enabled: bool,
+    roots: Vec<String>,
+    excluded_directory_names: Vec<String>,
+    engine: FileSearchEngineDto,
+    include_hidden: bool,
+    restrict_to_roots: bool,
+) -> Result<()> {
+    settings::set_file_search(
+        enabled,
+        roots,
+        excluded_directory_names,
+        engine,
+        include_hidden,
+        restrict_to_roots,
+    )
+}
+
+#[derive(Clone, Copy)]
+pub enum FileSearchEngineDto {
+    SystemIndex,
+    Ripgrep,
+    Combined,
+}
+
+pub fn set_context_sources(
+    finder_selection: bool,
+    selected_text: bool,
+    browser_current_page: bool,
+    clipboard: bool,
+) -> Result<()> {
+    settings::set_context_sources(
+        finder_selection,
+        selected_text,
+        browser_current_page,
+        clipboard,
+    )
 }
 
 // Explicit conversion keeps generated/Flutter types out of the protocol and core.
 #[derive(Clone, Debug)]
+#[flutter_rust_bridge::frb]
 pub struct LauncherStateDto {
     pub session_id: u32,
     pub revision: u32,
     pub snapshot_seq: u32,
+    #[frb(default = "0")]
+    pub candidate_list_version: u32,
     pub input: String,
     pub context_complete: bool,
+    pub search_sources: Vec<SearchSourceDto>,
+    pub file_search: Option<FileSearchProgressDto>,
+    pub result_actions: Vec<CandidateDto>,
     pub contexts: Vec<ContextDto>,
-    pub candidates: Vec<CandidateDto>,
+    pub context_candidates: Vec<CandidateDto>,
+    pub preferred_context_key: Option<String>,
     pub scopes: Vec<ScopeDto>,
+    pub selected_scope: Option<String>,
+    pub context_captures: Vec<ContextCaptureDto>,
+    pub candidates: Vec<CandidateDto>,
     pub diagnostics: Vec<String>,
 }
+#[derive(Clone, Debug)]
+pub struct FileSearchProgressDto {
+    pub query_id: u64,
+    pub roots: Vec<String>,
+    pub scanned_entries: u64,
+    pub confirmed_matches: u64,
+    pub finished: bool,
+    pub issue_count: u64,
+    pub inaccessible_count: u64,
+    pub issue_examples: Vec<String>,
+    pub next_cursor: Option<String>,
+    pub previous_cursor: Option<String>,
+    pub page: u32,
+    pub needs_refresh: bool,
+}
+
+#[derive(Clone, Debug)]
+pub struct SearchSourceDto {
+    pub id: String,
+    pub state: SearchSourceStateDto,
+}
+#[derive(Clone, Copy, Debug)]
+pub enum SearchSourceStateDto {
+    Loading,
+    Ready,
+    Unavailable,
+    Partial,
+}
+
 #[derive(Clone, Debug)]
 pub struct ContextDto {
     pub id: String,
     pub type_id: String,
     pub label: String,
     pub detail: String,
+    pub source: ContextSourceDto,
+    pub key: String,
+    pub root_key: String,
+    pub icon_key: String,
+    pub capabilities: Vec<String>,
+    pub candidate_ids: Vec<String>,
+    pub primary_candidate_id: Option<String>,
 }
 #[derive(Clone, Debug)]
+pub struct ContextCaptureDto {
+    pub text: Option<String>,
+    pub clipboard_age_ms: Option<u64>,
+    pub source: ContextSourceDto,
+    pub status: ContextCaptureStatusDto,
+    pub captured_at_ms: i64,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InputModeDto {
+    Environment,
+    Content,
+    Search,
+    FileSearch,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ContextCaptureStatusDto {
+    Captured,
+    Empty,
+    PermissionDenied,
+    Unsupported,
+    ApplicationChanged,
+    TimedOut,
+    TooLarge,
+    TooManyItems,
+    Unavailable,
+    Failed,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ContextSourceDto {
+    UserInput,
+    ForegroundApplication,
+    ApplicationContext,
+    FinderSelection,
+    SelectedText,
+    BrowserCurrentPage,
+    Clipboard,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CandidateKindDto {
+    Application,
+    Action,
+    File,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AvailabilityDto {
+    Enabled,
+    Disabled,
+    Hidden,
+}
+
+#[derive(Clone, Debug)]
+#[flutter_rust_bridge::frb]
+pub struct ScopeDto {
+    pub id: String,
+    pub label: String,
+    pub is_current_app: bool,
+    #[frb(default = "const []")]
+    pub action_ids: Vec<String>,
+    #[frb(default = "const []")]
+    pub menu_ids: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum FileObjectKindDto {
+    File,
+    Directory,
+}
+
+#[derive(Clone, Debug)]
+#[flutter_rust_bridge::frb]
 pub struct CandidateDto {
     pub id: String,
-    /// `application` or `action`, mirroring `CandidateKind`.
-    pub kind: String,
+    pub kind: CandidateKindDto,
+    #[frb(default = "false")]
+    pub is_menu: bool,
+    pub file_kind: Option<FileObjectKindDto>,
     pub title: String,
+    #[frb(default = "const {}")]
+    pub localized_titles: std::collections::HashMap<String, String>,
+    pub menu_path: Vec<String>,
+    pub context_keys: Vec<String>,
+    pub execution_context_id: Option<String>,
+    pub execution_target_label: Option<String>,
+    pub home_eligible: bool,
+    pub primary_action: bool,
+    pub section_label: Option<String>,
     pub subtitle: Option<String>,
     pub shortcut: Option<String>,
     pub icon_key: String,
     pub score: f32,
     pub group_id: String,
-    /// `enabled`, `disabled` or `hidden`.
-    pub availability: String,
+    pub availability: AvailabilityDto,
     pub availability_reason: Option<String>,
     pub command_id: Option<String>,
     pub bundle_id: Option<String>,
 }
-#[derive(Clone, Debug)]
-pub struct ScopeDto {
-    pub id: String,
-    /// `all`, `app` or `group`.
-    pub kind: String,
-    pub label: String,
-    pub candidate_ids: Vec<String>,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SnapshotWaitKindDto {
+    Updated,
+    TimedOut,
+    Closed,
+    Superseded,
 }
+
+#[derive(Clone, Debug)]
+#[flutter_rust_bridge::frb]
+pub struct SnapshotWaitDto {
+    pub kind: SnapshotWaitKindDto,
+    #[frb(default = "CandidateUpdateDto.replace")]
+    pub candidate_update: CandidateUpdateDto,
+    pub state: Option<LauncherStateDto>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ActionStatusDto {
+    Succeeded,
+    Failed,
+}
+
 #[derive(Clone, Debug)]
 pub struct ActionResultDto {
     pub session_id: u32,
     pub revision: u32,
-    pub success: bool,
-    pub message: String,
+    pub status: ActionStatusDto,
+    pub error: Option<String>,
+    pub warning: Option<String>,
     pub output_text: Option<String>,
+    pub view: Option<HostViewDto>,
+    pub plugin_detail: Option<PluginDetailDto>,
+    pub native_tool: Option<NativeToolDto>,
+    pub web_plugin: Option<WebPluginLaunchDto>,
     pub close_window: bool,
+    pub execution_session_id: Option<String>,
 }
 
-impl From<protocol::LauncherState> for LauncherStateDto {
-    fn from(state: protocol::LauncherState) -> Self {
-        Self {
-            session_id: state.session_id,
-            revision: state.revision,
-            snapshot_seq: state.snapshot_seq,
-            input: state.input,
-            context_complete: state.context_complete,
-            contexts: state
-                .context_summary
-                .into_iter()
-                .map(|context| ContextDto {
-                    id: context.id,
-                    type_id: context.type_id,
-                    label: context.label,
-                    detail: context.detail,
-                })
-                .collect(),
-            candidates: state
-                .candidates
-                .into_iter()
-                .map(|candidate| CandidateDto {
-                    id: candidate.id,
-                    kind: kind_name(candidate.kind).into(),
-                    title: candidate.title,
-                    subtitle: candidate.subtitle,
-                    shortcut: candidate.shortcut,
-                    icon_key: candidate.icon.key,
-                    score: candidate.score,
-                    group_id: candidate.group_id,
-                    availability: availability_state(candidate.availability.state).into(),
-                    availability_reason: candidate.availability.reason,
-                    command_id: candidate.command_id,
-                    bundle_id: candidate.bundle_id,
-                })
-                .collect(),
-            scopes: state
-                .scopes
-                .into_iter()
-                .map(|scope| ScopeDto {
-                    id: scope.id,
-                    kind: scope_kind_name(scope.kind).into(),
-                    label: scope.label,
-                    candidate_ids: scope.candidate_ids,
-                })
-                .collect(),
-            diagnostics: state.diagnostics,
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExecutionSessionStatusDto {
+    Running,
+    Stopping,
+    Succeeded,
+    Failed,
+    Stopped,
+}
+
+#[derive(Clone, Debug)]
+pub struct ExecutionSessionSummaryDto {
+    pub id: String,
+    pub title: String,
+    pub directory: String,
+    pub command: Vec<String>,
+    pub status: ExecutionSessionStatusDto,
+    pub exit_code: Option<i32>,
+    pub started_at_ms: i64,
+    pub finished_at_ms: Option<i64>,
+    pub output_revision: i64,
+    pub output_truncated: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ExecutionSessionDetailDto {
+    pub summary: ExecutionSessionSummaryDto,
+    pub stdout: String,
+    pub stderr: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct PluginStatusDto {
+    pub id: String,
+    pub ok: bool,
+    pub detail: String,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HostViewDto {
+    FileSearch,
+    NativeTool,
+    PluginDetail,
+    WebPlugin,
+}
+
+#[derive(Clone, Debug)]
+pub struct WebPluginLaunchDto {
+    pub invocation_id: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct PluginDetailDto {
+    pub schema_version: u32,
+    pub title: String,
+    pub body: Option<String>,
+    pub rows: Vec<PluginKeyValueDto>,
+}
+
+#[derive(Clone, Debug)]
+pub struct PluginKeyValueDto {
+    pub label: String,
+    pub value: String,
+}
+
+#[derive(Clone, Debug)]
+#[flutter_rust_bridge::frb]
+pub struct FilePreviewDto {
+    pub path: String,
+    pub is_directory: bool,
+    pub size_bytes: u64,
+    pub modified_ms: Option<i64>,
+    pub text: Option<String>,
+    pub truncated_at_bytes: Option<u32>,
+    pub encoding: Option<String>,
+    #[frb(default = "false")]
+    pub encoding_guessed: bool,
+}
+
+pub async fn preview_file(
+    session_id: u32,
+    revision: u32,
+    candidate_id: String,
+) -> Result<FilePreviewDto> {
+    files::preview_file(session_id, revision, candidate_id).await
+}
+
+#[derive(Clone, Debug)]
+pub struct ActivationInputDto {
+    pub source: ContextSourceDto,
+    pub text: String,
+    pub valid_until_ms: Option<i64>,
+}
+/// Recognition runs on the bridge worker; filesystem checks never block Host UI.
+pub fn choose_activation_input(
+    captures: Vec<ContextCaptureDto>,
+    now_ms: i64,
+    selected_enabled: bool,
+    clipboard_enabled: bool,
+    allow_pending_selection: bool,
+) -> Option<ActivationInputDto> {
+    queries::choose_activation_input(
+        captures,
+        now_ms,
+        selected_enabled,
+        clipboard_enabled,
+        allow_pending_selection,
+    )
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CandidateUpdateDto {
+    Replace,
+    Retain,
+    Append,
+}
+/// A client missing a list replacement receives a full snapshot. Stable list
+/// generations permit a bounded tail transfer; progress-only updates send no rows.
+pub async fn wait_for_snapshot_delta(
+    session_id: u32,
+    after: u64,
+    candidate_list_version: u32,
+    loaded_count: u32,
+) -> Result<SnapshotWaitDto> {
+    queries::wait_for_snapshot_delta(session_id, after, candidate_list_version, loaded_count).await
+}
+fn snapshot_delivery(
+    mut state: protocol::LauncherState,
+    version: u32,
+    count: u32,
+) -> SnapshotWaitDto {
+    let update = if state.file_search.is_some()
+        && version != 0
+        && version == state.candidate_list_version
+        && count as usize <= state.candidates.len()
+    {
+        let tail = state.candidates[count as usize..].to_vec();
+        let kind = if tail.is_empty() {
+            CandidateUpdateDto::Retain
+        } else {
+            CandidateUpdateDto::Append
+        };
+        state.candidates = std::sync::Arc::new(tail);
+        kind
+    } else {
+        CandidateUpdateDto::Replace
+    };
+    SnapshotWaitDto {
+        kind: SnapshotWaitKindDto::Updated,
+        state: Some(state.into()),
+        candidate_update: update,
+    }
+}
+
+pub async fn load_more_files_delta(
+    session_id: u32,
+    revision: u32,
+    candidate_list_version: u32,
+    loaded_count: u32,
+) -> Result<SnapshotWaitDto> {
+    files::load_more_files_delta(session_id, revision, candidate_list_version, loaded_count).await
+}
+
+#[cfg(test)]
+mod delivery_tests {
+    use super::*;
+    fn row(i: usize) -> protocol::CandidatePresentation {
+        protocol::CandidatePresentation {
+            localized_titles: Default::default(),
+            id: format!("row-{i}"),
+            kind: protocol::CandidateKind::File,
+            is_menu: false,
+            file_kind: Some(protocol::FileObjectKind::File),
+            title: format!("report-{i}.txt"),
+            subtitle: Some(format!("/fixture/{}", "directory/".repeat(24))),
+            shortcut: None,
+            icon: protocol::IconDescriptor { key: "file".into() },
+            score: 0.0,
+            group_id: "files".into(),
+            availability: protocol::Availability::enabled(),
+            command_id: Some("core.file.open".into()),
+            bundle_id: None,
+            owning_app: None,
+            menu_path: vec![],
+            context_keys: vec![],
+            execution_context_id: None,
+            execution_target_label: None,
+            home_eligible: false,
+            primary_action: true,
+            section_label: None,
+        }
+    }
+    #[test]
+    fn localized_labels_cross_the_bridge_without_replacing_identity_or_paths() {
+        let mut application = row(0);
+        application.kind = protocol::CandidateKind::Application;
+        application.title = "Reminders".into();
+        application.localized_titles = [
+            ("zh".into(), "提醒事项".into()),
+            ("en".into(), "Reminders".into()),
+        ]
+        .into();
+        application.bundle_id = Some("com.apple.reminders".into());
+        let id = application.id.clone();
+        let path = application.subtitle.clone();
+        let dto = conversions::candidate_dto(application);
+        assert_eq!(dto.localized_titles["zh"], "提醒事项");
+        assert_eq!(dto.localized_titles["en"], "Reminders");
+        assert_eq!(dto.id, id);
+        assert_eq!(dto.subtitle, path);
+        assert_eq!(dto.bundle_id.as_deref(), Some("com.apple.reminders"));
+    }
+
+    #[test]
+    fn large_snapshots_deliver_only_progress_or_new_rows_and_resync_missed_replacements() {
+        for count in [1000, 10000] {
+            let state = protocol::LauncherState {
+                candidate_list_version: 3,
+                candidates: (0..count).map(row).collect::<Vec<_>>().into(),
+                file_search: Some(Box::default()),
+                ..Default::default()
+            };
+            let start = std::time::Instant::now();
+            for _ in 0..100 {
+                let packet = snapshot_delivery(state.clone(), 3, count as u32);
+                assert_eq!(packet.candidate_update, CandidateUpdateDto::Retain);
+                assert!(packet.state.unwrap().candidates.is_empty());
+            }
+            let delta_us = start.elapsed().as_micros();
+            let start = std::time::Instant::now();
+            for _ in 0..100 {
+                let full: LauncherStateDto = state.clone().into();
+                assert_eq!(full.candidates.len(), count);
+            }
+            let full_us = start.elapsed().as_micros();
+            println!("{count} rows / 100 DTO updates: full={full_us}us, metadata={delta_us}us; metadata transfers 0 rows");
+            let tail = snapshot_delivery(state.clone(), 3, (count - 64) as u32);
+            assert_eq!(tail.candidate_update, CandidateUpdateDto::Append);
+            assert_eq!(tail.state.unwrap().candidates.len(), 64);
+            for (version, length) in [(2, count as u32), (3, count as u32 + 1)] {
+                let replacement = snapshot_delivery(state.clone(), version, length);
+                assert_eq!(replacement.candidate_update, CandidateUpdateDto::Replace);
+                assert_eq!(replacement.state.unwrap().candidates.len(), count);
+            }
         }
     }
 }
 
-fn kind_name(kind: protocol::CandidateKind) -> &'static str {
-    match kind {
-        protocol::CandidateKind::Application => "application",
-        protocol::CandidateKind::Action => "action",
-    }
+#[derive(Clone, Debug)]
+pub struct NativeToolDto {
+    pub id: String,
+    pub input: String,
 }
 
-fn availability_state(state: protocol::AvailabilityState) -> &'static str {
-    match state {
-        protocol::AvailabilityState::Enabled => "enabled",
-        protocol::AvailabilityState::Disabled => "disabled",
-        protocol::AvailabilityState::Hidden => "hidden",
-    }
+/// Host-only package management; never dispatched through the Web SDK.
+#[derive(Clone, Debug)]
+pub struct WebPackageDto {
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub digest: String,
+    pub permissions: Vec<WebPermissionDto>,
+    pub enabled: bool,
+    pub rollback: bool,
 }
-
-fn scope_kind_name(kind: protocol::ScopeKind) -> &'static str {
-    match kind {
-        protocol::ScopeKind::App => "app",
-        protocol::ScopeKind::Group => "group",
-    }
+#[derive(Clone, Debug)]
+pub struct WebReviewDto {
+    pub token: String,
+    pub id: String,
+    pub name: String,
+    pub version: String,
+    pub digest: String,
+    pub permissions: Vec<WebPermissionDto>,
+    pub updating: bool,
 }
-
-impl From<protocol::ActionResult> for ActionResultDto {
-    fn from(result: protocol::ActionResult) -> Self {
-        Self {
-            session_id: result.session_id,
-            revision: result.revision,
-            success: result.success,
-            message: result.message,
-            output_text: result.output_text,
-            close_window: result.close_window,
-        }
-    }
+#[derive(Clone, Debug)]
+pub struct WebDocumentDto {
+    pub handle: String,
+    pub origin: String,
+    pub entry: String,
+    pub title: String,
+}
+#[derive(Clone, Debug)]
+pub struct WebPermissionDto {
+    pub kind: WebPermissionKindDto,
+    pub context_types: Vec<String>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WebPermissionKindDto {
+    ContextRead,
+    CurrentApp,
+    ClipboardReadText,
+    ClipboardWriteText,
+    LocalStorage,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WebConsentKindDto {
+    ReadClipboard,
+    WriteClipboard,
+}
+#[derive(Clone, Debug)]
+pub struct WebReplyDto {
+    pub frame: Option<String>,
+    pub ticket: Option<String>,
+    pub consent: Option<WebConsentKindDto>,
+    pub preview: Option<String>,
+}
+pub fn web_packages() -> Result<Vec<WebPackageDto>> {
+    web::statuses()
+}
+pub fn inspect_web_package(path: String) -> Result<WebReviewDto> {
+    web::inspect(path)
+}
+pub fn cancel_web_review() -> Result<()> {
+    web::cancel_review()
+}
+pub fn approve_web_package(token: String) -> Result<Vec<WebPackageDto>> {
+    web::approve(token)
+}
+pub fn change_web_package(id: String, operation: String) -> Result<Vec<WebPackageDto>> {
+    web::change(id, operation)
+}
+pub async fn open_web_document(
+    invocation_id: String,
+    resume_handle: Option<String>,
+) -> Result<WebDocumentDto> {
+    web::open(invocation_id, resume_handle).await
+}
+pub fn close_web_document(handle: String) -> Result<()> {
+    web::close(handle)
+}
+pub async fn dispatch_web_frame(
+    handle: String,
+    origin: String,
+    main_frame: bool,
+    frame: String,
+) -> Result<WebReplyDto> {
+    web::dispatch(handle, origin, main_frame, frame).await
+}
+pub async fn confirm_web_operation(
+    handle: String,
+    origin: String,
+    ticket: String,
+    approved: bool,
+) -> Result<WebReplyDto> {
+    web::confirm(handle, origin, ticket, approved).await
+}
+pub fn web_resource(handle: String, path: String) -> Result<Vec<u8>> {
+    web::resource(handle, path)
 }

@@ -37,16 +37,26 @@ impl Application {
             .then(|| self.app_actions.get(&app, version.as_deref()))
             .flatten();
         let cache_hit = cached.is_some();
-        let actions =
-            cached.and_then(|items| convert::registry(&self.resolver.registry, &app, items).ok());
+        let catalog_version = self
+            .resolver
+            .action_catalog_version
+            .load(std::sync::atomic::Ordering::Acquire);
+        let base = self.resolver.base_registry();
+        let actions = cached.and_then(|items| convert::registry(&base, &app, items).ok());
         {
             let Ok(mut session) = self.session() else {
                 return;
             };
-            if session.state.session_id != session_id {
+            if session.state.session_id != session_id
+                || self
+                    .resolver
+                    .action_catalog_version
+                    .load(std::sync::atomic::Ordering::Acquire)
+                    != catalog_version
+            {
                 return;
             }
-            session.menu_trusted = trusted;
+            session.menu.trusted = trusted;
             if let Some(actions) = actions {
                 session.actions = Arc::new(actions);
             }
@@ -62,16 +72,56 @@ impl Application {
         tracing::info!(trusted, prompt = true, "accessibility_prompt");
         let (session_id, changed) = {
             let mut session = self.session()?;
-            let changed = session.menu_trusted != trusted;
-            session.menu_trusted = trusted;
+            let changed = session.menu.trusted != trusted;
+            session.menu.trusted = trusted;
             (session.state.session_id, changed)
         };
         // Showing the window calls this too. An already granted permission must not
         // start a second scan, race the first scan, or block the Flutter UI on version IO.
         if changed {
-            self.refresh_app_actions(session_id, None);
+            if trusted {
+                self.refresh_app_actions(session_id, None);
+            } else {
+                self.clear_untrusted_menus(session_id);
+            }
+        } else if !trusted {
+            self.note_menu_diagnostic(
+                session_id,
+                "Accessibility is not granted; Current App menus are hidden.",
+            );
         }
         Ok(trusted)
+    }
+
+    fn clear_untrusted_menus(&self, session_id: SessionId) {
+        // Advance the session generation while holding its lock. An older discovery may
+        // already be waiting in catalog.finish() for this lock; it must not republish
+        // menus after permission has been revoked.
+        let ticket = {
+            let Ok(mut session) = self.session() else {
+                return;
+            };
+            if session.state.session_id != session_id {
+                return;
+            }
+            let ticket = session
+                .identity
+                .frontmost
+                .clone()
+                .map(|app| self.app_actions.ticket(app));
+            if let Some(ticket) = &ticket {
+                session.menu.generation = ticket.generation;
+            }
+            session.actions = self.resolver.base_registry();
+            ticket
+        };
+        if let Some(ticket) = ticket {
+            self.app_actions.begin(&ticket, true);
+        }
+        self.note_menu_diagnostic(
+            session_id,
+            "Accessibility is not granted; Current App menus are hidden.",
+        );
     }
 
     pub(super) fn refresh_app_actions(
@@ -99,19 +149,18 @@ impl Application {
             {
                 return;
             }
-            if expected_generation.is_some_and(|expected| expected != session.menu_generation) {
+            if expected_generation.is_some_and(|expected| expected != session.menu.generation) {
                 return;
             }
-            let Some(app) = session.frontmost.clone() else {
+            let Some(app) = session.identity.frontmost.clone() else {
                 return;
             };
-            // Issued under the session lock, without taking the catalog lock.
             let ticket = self.app_actions.ticket(app);
-            session.menu_generation = ticket.generation;
+            session.menu.generation = ticket.generation;
             if invalidate {
-                session.actions = self.resolver.registry.clone();
+                session.actions = self.resolver.base_registry();
             }
-            (ticket, session.menu_trusted)
+            (ticket, session.menu.trusted)
         };
         if !self.app_actions.begin(&ticket, invalidate) {
             return;
@@ -136,23 +185,40 @@ impl Application {
                 let result = if trusted {
                     platform.discover_menu_actions(&ticket.app)
                 } else {
-                    Ok(Vec::new())
+                    Ok(anywhere_platform::MenuDiscovery::Untrusted)
                 };
-                let items = match result {
-                    Ok(items) => Some(items),
+                let (items, diagnostic) = match result {
+                    // An empty menu is an expected context state, not a warning.
+                    // Empty menus contribute no actions; other context sources remain usable.
+                    Ok(anywhere_platform::MenuDiscovery::Ready(items)) => (Some(items), None),
+                    Ok(anywhere_platform::MenuDiscovery::Untrusted) => (
+                        None,
+                        Some("Accessibility is not granted; Current App menus are hidden."),
+                    ),
+                    Ok(anywhere_platform::MenuDiscovery::TimedOut) => (
+                        None,
+                        Some("Menu discovery timed out; Current App menus were not updated."),
+                    ),
+                    Ok(anywhere_platform::MenuDiscovery::Unavailable) => {
+                        (None, Some("This app's menu bar could not be read."))
+                    }
                     Err(error) => {
                         tracing::warn!(error = %error, "app_action_discovery_failed");
-                        None
+                        (None, Some("This app's menu bar could not be read."))
                     }
                 };
                 let menu_item_count = items.as_ref().map_or(0, Vec::len);
                 let visible_action_count = items
                     .as_ref()
                     .map_or(0, |items| items.iter().filter(|item| item.enabled).count());
+                let catalog_version = resolver
+                    .action_catalog_version
+                    .load(std::sync::atomic::Ordering::Acquire);
+                let base = resolver.base_registry();
                 let actions = match convert::registry(
-                    &resolver.registry,
+                    &base,
                     &ticket.app,
-                    items.clone().unwrap_or_default(),
+                    items.as_deref().unwrap_or_default(),
                 ) {
                     Ok(actions) => actions,
                     Err(error) => {
@@ -165,6 +231,8 @@ impl Application {
                     menu_item_count,
                     visible_action_count,
                     cache_hit,
+                    bundle_id = %ticket.app.bundle_id,
+                    diagnostic,
                     "app_action_discovery"
                 );
                 let mut published = false;
@@ -173,12 +241,22 @@ impl Application {
                         return;
                     };
                     if session.state.session_id != session_id
-                        || session.menu_generation != ticket.generation
+                        || resolver
+                            .action_catalog_version
+                            .load(std::sync::atomic::Ordering::Acquire)
+                            != catalog_version
+                        || session.menu.generation != ticket.generation
+                        || !session.menu.trusted
                         || !resolver.is_session_active(session_id)
                     {
                         return;
                     }
                     session.actions = Arc::new(actions);
+                    if let Some(message) = diagnostic {
+                        if !session.state.diagnostics.iter().any(|item| item == message) {
+                            session.state.diagnostics.push(message.to_owned());
+                        }
+                    }
                     published = true;
                 });
                 if published {
@@ -188,5 +266,20 @@ impl Application {
         if let Err(error) = result {
             tracing::warn!(error = %error, "app_action_discovery_spawn_failed");
         }
+    }
+
+    fn note_menu_diagnostic(&self, session_id: SessionId, message: &str) {
+        {
+            let Ok(mut session) = self.session() else {
+                return;
+            };
+            if session.state.session_id != session_id {
+                return;
+            }
+            if !session.state.diagnostics.iter().any(|item| item == message) {
+                session.state.diagnostics.push(message.to_owned());
+            }
+        }
+        let _ = self.resolver.recompute_current(session_id);
     }
 }

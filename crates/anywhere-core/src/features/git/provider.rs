@@ -37,9 +37,15 @@ impl ContextProvider for GitRepositoryProvider {
         };
         // The repository walk stats every ancestor, so it belongs on a blocking boundary
         // for the same reason input recognition does.
-        let root = tokio::task::spawn_blocking(move || repository_root(&path))
-            .await
-            .context("repository detection task failed")?;
+        let ticket = execution.clone();
+        let root = tokio::task::spawn_blocking(move || {
+            ticket
+                .is_current()
+                .then(|| repository_root(&path))
+                .flatten()
+        })
+        .await
+        .context("repository detection task failed")?;
         // The walk may have outlived the revision that asked for it.
         if !execution.is_current() {
             return Ok(vec![]);

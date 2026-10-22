@@ -1,0 +1,559 @@
+{
+  "calls": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "oneOf": [
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "invocation.get",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "lifecycle.ready",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "context.getCurrentApp",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "clipboard.readText",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "clipboard.writeText",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "storage.get",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "storage.set",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              },
+              "value": true
+            },
+            "required": [
+              "key",
+              "value"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "storage.remove",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "key"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "text.begin",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "bytes": {
+                "format": "uint",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "bytes"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "text.chunk",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "sequence": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "text": {
+                "type": "string"
+              },
+              "ticket": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ticket",
+              "sequence",
+              "text"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "text.commit",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "ticket": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ticket"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "text.read",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "sequence": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "ticket": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ticket",
+              "sequence"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "text.cancel",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "ticket": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "ticket"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      },
+      {
+        "additionalProperties": false,
+        "properties": {
+          "method": {
+            "const": "request.cancel",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": false,
+            "properties": {
+              "request_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "request_id"
+            ],
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "params"
+        ],
+        "type": "object"
+      }
+    ],
+    "title": "WebCall"
+  },
+  "currentApp": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Frozen before activation; process ids, window titles and AX data are excluded.",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "name"
+    ],
+    "title": "WebCurrentApp",
+    "type": "object"
+  },
+  "errors": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "enum": [
+      "INVALID_REQUEST",
+      "UNSUPPORTED_METHOD",
+      "INCOMPATIBLE_PROTOCOL",
+      "UNTRUSTED_DOCUMENT",
+      "INACTIVE",
+      "PERMISSION_DENIED",
+      "DUPLICATE_REQUEST",
+      "QUOTA_EXCEEDED",
+      "BUSY",
+      "TOO_LARGE",
+      "EXPIRED",
+      "CANCELLED",
+      "USER_CANCELLED",
+      "TIMEOUT",
+      "STORAGE_UNAVAILABLE",
+      "HOST_FAILURE"
+    ],
+    "title": "WebErrorCode",
+    "type": "string"
+  },
+  "invocation": {
+    "$defs": {
+      "WebInput": {
+        "description": "Minimal input for one explicit invocation; no graph, filesystem paths or AX data.",
+        "oneOf": [
+          {
+            "properties": {
+              "kind": {
+                "const": "empty",
+                "type": "string"
+              },
+              "reason": {
+                "$ref": "#/$defs/WebInputReason"
+              }
+            },
+            "required": [
+              "kind",
+              "reason"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "text",
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "source",
+              "text"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "kind": {
+                "const": "url",
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              },
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "source",
+              "url"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "items": {
+                "items": {
+                  "$ref": "#/$defs/WebResource"
+                },
+                "type": "array"
+              },
+              "kind": {
+                "const": "resources",
+                "type": "string"
+              },
+              "source": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "source",
+              "items"
+            ],
+            "type": "object"
+          }
+        ]
+      },
+      "WebInputReason": {
+        "enum": [
+          "no_object",
+          "permission_denied",
+          "unsupported_type",
+          "too_large"
+        ],
+        "type": "string"
+      },
+      "WebResource": {
+        "properties": {
+          "handle": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/$defs/WebResourceKind"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "handle",
+          "name",
+          "kind"
+        ],
+        "type": "object"
+      },
+      "WebResourceKind": {
+        "enum": [
+          "file",
+          "directory",
+          "unknown"
+        ],
+        "type": "string"
+      }
+    },
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "properties": {
+      "command_id": {
+        "type": "string"
+      },
+      "entrypoint": {
+        "type": "string"
+      },
+      "input": {
+        "$ref": "#/$defs/WebInput"
+      },
+      "plugin_id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "plugin_id",
+      "command_id",
+      "entrypoint",
+      "input"
+    ],
+    "title": "WebInvocation",
+    "type": "object"
+  },
+  "limits": {
+    "chunkBytes": 4096,
+    "confirmTimeoutMs": 30000,
+    "frameBytes": 65536,
+    "queue": 16,
+    "running": 8,
+    "textBytes": 1048576,
+    "timeoutMs": 5000,
+    "transferBytes": 2097152
+  },
+  "protocol": 1
+}

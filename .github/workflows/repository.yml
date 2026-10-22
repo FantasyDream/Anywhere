@@ -1,0 +1,38 @@
+name: Repository checks
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+    paths:
+      - '**/*.md'
+      - 'LICENSE'
+      - 'packages/plugin-sdk/LICENSE'
+      - 'scripts/check-docs.py'
+      - 'scripts/tests/test_docs.py'
+      - '**/package-lock.json'
+      - 'scripts/check-npm-sources.py'
+      - 'scripts/tests/test_npm_sources.py'
+      - '.github/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  documentation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate documentation and repository files
+        run: |
+          python3 -m unittest discover -s scripts/tests -p test_npm_sources.py
+          python3 scripts/check-npm-sources.py
+          python3 -m unittest discover -s scripts/tests -p test_docs.py
+          python3 scripts/check-docs.py
+          git diff --check

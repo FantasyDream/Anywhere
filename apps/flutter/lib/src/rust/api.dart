@@ -6,30 +6,134 @@
 import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `application`, `availability_state`, `beyond`, `cursor`, `kind_name`, `scope_kind_name`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`
+// These functions are ignored because they are not marked as `pub`: `application`, `snapshot_delivery`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
+
+Future<ClipboardHistoryStatusDto> clipboardHistoryStatus() =>
+    RustLib.instance.api.crateApiClipboardHistoryStatus();
+
+Future<ClipboardHistoryDto> clipboardHistory({required String query}) =>
+    RustLib.instance.api.crateApiClipboardHistory(query: query);
+
+Future<ClipboardDetailDto?> clipboardHistoryDetail({required String id}) =>
+    RustLib.instance.api.crateApiClipboardHistoryDetail(id: id);
+
+Future<void> setClipboardRecording({required bool enabled}) =>
+    RustLib.instance.api.crateApiSetClipboardRecording(enabled: enabled);
+
+Future<void> copyClipboardEntry({required String id}) =>
+    RustLib.instance.api.crateApiCopyClipboardEntry(id: id);
+
+Future<void> deleteClipboardEntry({required String id}) =>
+    RustLib.instance.api.crateApiDeleteClipboardEntry(id: id);
+
+Future<void> clearClipboardHistory() =>
+    RustLib.instance.api.crateApiClearClipboardHistory();
+
+Future<List<String>> supportedShortcutActions(
+        {required List<String> actionIds}) =>
+    RustLib.instance.api.crateApiSupportedShortcutActions(actionIds: actionIds);
+
+Future<List<ShortcutActionDto>> shortcutActions() =>
+    RustLib.instance.api.crateApiShortcutActions();
+
+Future<List<CandidateDto>> resolveActionBinding(
+        {required int sessionId,
+        required int revision,
+        required String actionId}) =>
+    RustLib.instance.api.crateApiResolveActionBinding(
+        sessionId: sessionId, revision: revision, actionId: actionId);
+
+/// Fresh global activation only: wait for capture and retain exact execution targets.
+Future<BindingResolutionDto> waitActionBinding(
+        {required int sessionId,
+        required int revision,
+        required String actionId}) =>
+    RustLib.instance.api.crateApiWaitActionBinding(
+        sessionId: sessionId, revision: revision, actionId: actionId);
 
 Future<void> initialize(
         {required String dataDirectory, required String pluginDirectory}) =>
     RustLib.instance.api.crateApiInitialize(
         dataDirectory: dataDirectory, pluginDirectory: pluginDirectory);
 
+Future<List<ShortcutApplicationDto>> shortcutApplications() =>
+    RustLib.instance.api.crateApiShortcutApplications();
+
+Future<BindingResolutionDto> resolveShortcutIntent(
+        {required int sessionId,
+        required int revision,
+        required List<ShortcutRouteDto> routes}) =>
+    RustLib.instance.api.crateApiResolveShortcutIntent(
+        sessionId: sessionId, revision: revision, routes: routes);
+
+Future<BindingResolutionDto> waitShortcutIntent(
+        {required int sessionId,
+        required int revision,
+        required List<ShortcutRouteDto> routes}) =>
+    RustLib.instance.api.crateApiWaitShortcutIntent(
+        sessionId: sessionId, revision: revision, routes: routes);
+
 /// Reserve synchronously so Dart can cancel even before foreground capture finishes.
 int beginActivation() => RustLib.instance.api.crateApiBeginActivation();
 
 Future<LauncherStateDto?> activate(
-        {required int sessionId, required bool promptAccessibility}) =>
+        {required int sessionId,
+        required bool promptAccessibility,
+        required bool capturedEnvironment}) =>
     RustLib.instance.api.crateApiActivate(
-        sessionId: sessionId, promptAccessibility: promptAccessibility);
+        sessionId: sessionId,
+        promptAccessibility: promptAccessibility,
+        capturedEnvironment: capturedEnvironment);
 
 Future<LauncherStateDto?> updateInput(
         {required int sessionId,
         required String input,
-        required int revision}) =>
+        required int revision,
+        String? scopeId,
+        required InputModeDto inputMode}) =>
     RustLib.instance.api.crateApiUpdateInput(
-        sessionId: sessionId, input: input, revision: revision);
+        sessionId: sessionId,
+        input: input,
+        revision: revision,
+        scopeId: scopeId,
+        inputMode: inputMode);
+
+/// File filters are part of the initiating query, before enumeration/page limits.
+Future<LauncherStateDto?> updateFileInput(
+        {required int sessionId,
+        required String input,
+        required int revision,
+        required String filter}) =>
+    RustLib.instance.api.crateApiUpdateFileInput(
+        sessionId: sessionId, input: input, revision: revision, filter: filter);
+
+/// Resolve secondary actions for the selected object through the shared host flow.
+Future<List<CandidateDto>> objectActions(
+        {required int sessionId,
+        required int revision,
+        required String candidateId}) =>
+    RustLib.instance.api.crateApiObjectActions(
+        sessionId: sessionId, revision: revision, candidateId: candidateId);
+
+Future<List<CandidateDto>> fileActions(
+        {required int sessionId,
+        required int revision,
+        required String candidateId}) =>
+    RustLib.instance.api.crateApiFileActions(
+        sessionId: sessionId, revision: revision, candidateId: candidateId);
+
+Future<LauncherStateDto?> loadMoreFiles(
+        {required int sessionId, required int revision}) =>
+    RustLib.instance.api
+        .crateApiLoadMoreFiles(sessionId: sessionId, revision: revision);
+
+Future<void> freezeFileResults(
+        {required int sessionId, required int revision}) =>
+    RustLib.instance.api
+        .crateApiFreezeFileResults(sessionId: sessionId, revision: revision);
 
 /// Latest committed snapshot for a session, read straight from the core.
 ///
@@ -39,12 +143,7 @@ Future<LauncherStateDto?> latestState({required int sessionId}) =>
     RustLib.instance.api.crateApiLatestState(sessionId: sessionId);
 
 /// Block until the core publishes a snapshot beyond `after` for this session.
-///
-/// Late context is committed by a background task, so the core's own update channel is the
-/// only place a caller can observe it. Returns the newest snapshot when one arrives, or
-/// `None` on timeout, so the caller can wait again from the same cursor — a wait that ends
-/// because nothing happened must not be mistaken for the session being finished.
-Future<LauncherStateDto?> waitForSnapshot(
+Future<SnapshotWaitDto> waitForSnapshot(
         {required int sessionId, required BigInt after}) =>
     RustLib.instance.api
         .crateApiWaitForSnapshot(sessionId: sessionId, after: after);
@@ -60,37 +159,221 @@ Future<ActionResultDto> execute(
 Future<Uint8List?> applicationIcon({required String candidateId}) =>
     RustLib.instance.api.crateApiApplicationIcon(candidateId: candidateId);
 
+Future<void> suspendLauncher({required int sessionId}) =>
+    RustLib.instance.api.crateApiSuspendLauncher(sessionId: sessionId);
+
+Future<LauncherStateDto?> resumeLauncher({required int sessionId}) =>
+    RustLib.instance.api.crateApiResumeLauncher(sessionId: sessionId);
+
 Future<void> deactivate({required int sessionId}) =>
     RustLib.instance.api.crateApiDeactivate(sessionId: sessionId);
+
+Future<List<ExecutionSessionSummaryDto>> executionSessions() =>
+    RustLib.instance.api.crateApiExecutionSessions();
+
+Future<ExecutionSessionDetailDto?> executionSession({required String id}) =>
+    RustLib.instance.api.crateApiExecutionSession(id: id);
+
+Future<void> stopExecutionSession({required String id}) =>
+    RustLib.instance.api.crateApiStopExecutionSession(id: id);
+
+Future<void> removeExecutionSession({required String id}) =>
+    RustLib.instance.api.crateApiRemoveExecutionSession(id: id);
+
+Future<void> shutdownExecutionSessions() =>
+    RustLib.instance.api.crateApiShutdownExecutionSessions();
 
 bool promptAccessibility() =>
     RustLib.instance.api.crateApiPromptAccessibility();
 
+List<PluginStatusDto> pluginStatus() =>
+    RustLib.instance.api.crateApiPluginStatus();
+
+Future<List<PluginStatusDto>> refreshPlugins() =>
+    RustLib.instance.api.crateApiRefreshPlugins();
+
+/// Refresh preferences and feature data; no module or plugin code is loaded.
+Future<List<ExtensionStatusDto>> refreshFeatures() =>
+    RustLib.instance.api.crateApiRefreshFeatures();
+
+Future<List<ExtensionStatusDto>> extensionStatus() =>
+    RustLib.instance.api.crateApiExtensionStatus();
+
+Future<List<ExtensionStatusDto>> setExtensionEnabled(
+        {required String key, required bool enabled}) =>
+    RustLib.instance.api
+        .crateApiSetExtensionEnabled(key: key, enabled: enabled);
+
+Future<List<ExtensionStatusDto>> approveExtension(
+        {required String key, required String token}) =>
+    RustLib.instance.api.crateApiApproveExtension(key: key, token: token);
+
+Future<List<ExtensionStatusDto>> revokeExtension({required String key}) =>
+    RustLib.instance.api.crateApiRevokeExtension(key: key);
+
+Future<List<String>> excludedApps() =>
+    RustLib.instance.api.crateApiExcludedApps();
+
+Future<void> setExcludedApps({required List<String> bundleIds}) =>
+    RustLib.instance.api.crateApiSetExcludedApps(bundleIds: bundleIds);
+
+Future<void> setFileSearch(
+        {required bool enabled,
+        required List<String> roots,
+        required List<String> excludedDirectoryNames,
+        required FileSearchEngineDto engine,
+        required bool includeHidden,
+        required bool restrictToRoots}) =>
+    RustLib.instance.api.crateApiSetFileSearch(
+        enabled: enabled,
+        roots: roots,
+        excludedDirectoryNames: excludedDirectoryNames,
+        engine: engine,
+        includeHidden: includeHidden,
+        restrictToRoots: restrictToRoots);
+
+Future<void> setContextSources(
+        {required bool finderSelection,
+        required bool selectedText,
+        required bool browserCurrentPage,
+        required bool clipboard}) =>
+    RustLib.instance.api.crateApiSetContextSources(
+        finderSelection: finderSelection,
+        selectedText: selectedText,
+        browserCurrentPage: browserCurrentPage,
+        clipboard: clipboard);
+
+Future<FilePreviewDto> previewFile(
+        {required int sessionId,
+        required int revision,
+        required String candidateId}) =>
+    RustLib.instance.api.crateApiPreviewFile(
+        sessionId: sessionId, revision: revision, candidateId: candidateId);
+
+/// Recognition runs on the bridge worker; filesystem checks never block Host UI.
+Future<ActivationInputDto?> chooseActivationInput(
+        {required List<ContextCaptureDto> captures,
+        required PlatformInt64 nowMs,
+        required bool selectedEnabled,
+        required bool clipboardEnabled,
+        required bool allowPendingSelection}) =>
+    RustLib.instance.api.crateApiChooseActivationInput(
+        captures: captures,
+        nowMs: nowMs,
+        selectedEnabled: selectedEnabled,
+        clipboardEnabled: clipboardEnabled,
+        allowPendingSelection: allowPendingSelection);
+
+/// A client missing a list replacement receives a full snapshot. Stable list
+/// generations permit a bounded tail transfer; progress-only updates send no rows.
+Future<SnapshotWaitDto> waitForSnapshotDelta(
+        {required int sessionId,
+        required BigInt after,
+        required int candidateListVersion,
+        required int loadedCount}) =>
+    RustLib.instance.api.crateApiWaitForSnapshotDelta(
+        sessionId: sessionId,
+        after: after,
+        candidateListVersion: candidateListVersion,
+        loadedCount: loadedCount);
+
+Future<SnapshotWaitDto> loadMoreFilesDelta(
+        {required int sessionId,
+        required int revision,
+        required int candidateListVersion,
+        required int loadedCount}) =>
+    RustLib.instance.api.crateApiLoadMoreFilesDelta(
+        sessionId: sessionId,
+        revision: revision,
+        candidateListVersion: candidateListVersion,
+        loadedCount: loadedCount);
+
+Future<List<WebPackageDto>> webPackages() =>
+    RustLib.instance.api.crateApiWebPackages();
+
+Future<WebReviewDto> inspectWebPackage({required String path}) =>
+    RustLib.instance.api.crateApiInspectWebPackage(path: path);
+
+Future<void> cancelWebReview() =>
+    RustLib.instance.api.crateApiCancelWebReview();
+
+Future<List<WebPackageDto>> approveWebPackage({required String token}) =>
+    RustLib.instance.api.crateApiApproveWebPackage(token: token);
+
+Future<List<WebPackageDto>> changeWebPackage(
+        {required String id, required String operation}) =>
+    RustLib.instance.api.crateApiChangeWebPackage(id: id, operation: operation);
+
+Future<WebDocumentDto> openWebDocument(
+        {required String invocationId, String? resumeHandle}) =>
+    RustLib.instance.api.crateApiOpenWebDocument(
+        invocationId: invocationId, resumeHandle: resumeHandle);
+
+Future<void> closeWebDocument({required String handle}) =>
+    RustLib.instance.api.crateApiCloseWebDocument(handle: handle);
+
+Future<WebReplyDto> dispatchWebFrame(
+        {required String handle,
+        required String origin,
+        required bool mainFrame,
+        required String frame}) =>
+    RustLib.instance.api.crateApiDispatchWebFrame(
+        handle: handle, origin: origin, mainFrame: mainFrame, frame: frame);
+
+Future<WebReplyDto> confirmWebOperation(
+        {required String handle,
+        required String origin,
+        required String ticket,
+        required bool approved}) =>
+    RustLib.instance.api.crateApiConfirmWebOperation(
+        handle: handle, origin: origin, ticket: ticket, approved: approved);
+
+Future<Uint8List> webResource({required String handle, required String path}) =>
+    RustLib.instance.api.crateApiWebResource(handle: handle, path: path);
+
 class ActionResultDto {
   final int sessionId;
   final int revision;
-  final bool success;
-  final String message;
+  final ActionStatusDto status;
+  final String? error;
+  final String? warning;
   final String? outputText;
+  final HostViewDto? view;
+  final PluginDetailDto? pluginDetail;
+  final NativeToolDto? nativeTool;
+  final WebPluginLaunchDto? webPlugin;
   final bool closeWindow;
+  final String? executionSessionId;
 
   const ActionResultDto({
     required this.sessionId,
     required this.revision,
-    required this.success,
-    required this.message,
+    required this.status,
+    this.error,
+    this.warning,
     this.outputText,
+    this.view,
+    this.pluginDetail,
+    this.nativeTool,
+    this.webPlugin,
     required this.closeWindow,
+    this.executionSessionId,
   });
 
   @override
   int get hashCode =>
       sessionId.hashCode ^
       revision.hashCode ^
-      success.hashCode ^
-      message.hashCode ^
+      status.hashCode ^
+      error.hashCode ^
+      warning.hashCode ^
       outputText.hashCode ^
-      closeWindow.hashCode;
+      view.hashCode ^
+      pluginDetail.hashCode ^
+      nativeTool.hashCode ^
+      webPlugin.hashCode ^
+      closeWindow.hashCode ^
+      executionSessionId.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -99,26 +382,100 @@ class ActionResultDto {
           runtimeType == other.runtimeType &&
           sessionId == other.sessionId &&
           revision == other.revision &&
-          success == other.success &&
-          message == other.message &&
+          status == other.status &&
+          error == other.error &&
+          warning == other.warning &&
           outputText == other.outputText &&
-          closeWindow == other.closeWindow;
+          view == other.view &&
+          pluginDetail == other.pluginDetail &&
+          nativeTool == other.nativeTool &&
+          webPlugin == other.webPlugin &&
+          closeWindow == other.closeWindow &&
+          executionSessionId == other.executionSessionId;
+}
+
+enum ActionStatusDto {
+  succeeded,
+  failed,
+  ;
+}
+
+class ActivationInputDto {
+  final ContextSourceDto source;
+  final String text;
+  final PlatformInt64? validUntilMs;
+
+  const ActivationInputDto({
+    required this.source,
+    required this.text,
+    this.validUntilMs,
+  });
+
+  @override
+  int get hashCode => source.hashCode ^ text.hashCode ^ validUntilMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ActivationInputDto &&
+          runtimeType == other.runtimeType &&
+          source == other.source &&
+          text == other.text &&
+          validUntilMs == other.validUntilMs;
+}
+
+enum AvailabilityDto {
+  enabled,
+  disabled,
+  hidden,
+  ;
+}
+
+class BindingResolutionDto {
+  final LauncherStateDto state;
+  final List<CandidateDto> candidates;
+  final bool requiresChoice;
+
+  const BindingResolutionDto({
+    required this.state,
+    required this.candidates,
+    required this.requiresChoice,
+  });
+
+  @override
+  int get hashCode =>
+      state.hashCode ^ candidates.hashCode ^ requiresChoice.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is BindingResolutionDto &&
+          runtimeType == other.runtimeType &&
+          state == other.state &&
+          candidates == other.candidates &&
+          requiresChoice == other.requiresChoice;
 }
 
 class CandidateDto {
   final String id;
-
-  /// `application` or `action`, mirroring `CandidateKind`.
-  final String kind;
+  final CandidateKindDto kind;
+  final bool isMenu;
+  final FileObjectKindDto? fileKind;
   final String title;
+  final Map<String, String> localizedTitles;
+  final List<String> menuPath;
+  final List<String> contextKeys;
+  final String? executionContextId;
+  final String? executionTargetLabel;
+  final bool homeEligible;
+  final bool primaryAction;
+  final String? sectionLabel;
   final String? subtitle;
   final String? shortcut;
   final String iconKey;
   final double score;
   final String groupId;
-
-  /// `enabled`, `disabled` or `hidden`.
-  final String availability;
+  final AvailabilityDto availability;
   final String? availabilityReason;
   final String? commandId;
   final String? bundleId;
@@ -126,7 +483,17 @@ class CandidateDto {
   const CandidateDto({
     required this.id,
     required this.kind,
+    this.isMenu = false,
+    this.fileKind,
     required this.title,
+    this.localizedTitles = const {},
+    required this.menuPath,
+    required this.contextKeys,
+    this.executionContextId,
+    this.executionTargetLabel,
+    required this.homeEligible,
+    required this.primaryAction,
+    this.sectionLabel,
     this.subtitle,
     this.shortcut,
     required this.iconKey,
@@ -142,7 +509,17 @@ class CandidateDto {
   int get hashCode =>
       id.hashCode ^
       kind.hashCode ^
+      isMenu.hashCode ^
+      fileKind.hashCode ^
       title.hashCode ^
+      localizedTitles.hashCode ^
+      menuPath.hashCode ^
+      contextKeys.hashCode ^
+      executionContextId.hashCode ^
+      executionTargetLabel.hashCode ^
+      homeEligible.hashCode ^
+      primaryAction.hashCode ^
+      sectionLabel.hashCode ^
       subtitle.hashCode ^
       shortcut.hashCode ^
       iconKey.hashCode ^
@@ -160,7 +537,17 @@ class CandidateDto {
           runtimeType == other.runtimeType &&
           id == other.id &&
           kind == other.kind &&
+          isMenu == other.isMenu &&
+          fileKind == other.fileKind &&
           title == other.title &&
+          localizedTitles == other.localizedTitles &&
+          menuPath == other.menuPath &&
+          contextKeys == other.contextKeys &&
+          executionContextId == other.executionContextId &&
+          executionTargetLabel == other.executionTargetLabel &&
+          homeEligible == other.homeEligible &&
+          primaryAction == other.primaryAction &&
+          sectionLabel == other.sectionLabel &&
           subtitle == other.subtitle &&
           shortcut == other.shortcut &&
           iconKey == other.iconKey &&
@@ -172,22 +559,245 @@ class CandidateDto {
           bundleId == other.bundleId;
 }
 
+enum CandidateKindDto {
+  application,
+  action,
+  file,
+  ;
+}
+
+enum CandidateUpdateDto {
+  replace,
+  retain,
+  append,
+  ;
+}
+
+class ClipboardDetailDto {
+  final ClipboardItemDto item;
+  final String text;
+  final Uint8List imagePng;
+  final List<String> files;
+  final List<String> formats;
+
+  const ClipboardDetailDto({
+    required this.item,
+    required this.text,
+    required this.imagePng,
+    required this.files,
+    required this.formats,
+  });
+
+  @override
+  int get hashCode =>
+      item.hashCode ^
+      text.hashCode ^
+      imagePng.hashCode ^
+      files.hashCode ^
+      formats.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ClipboardDetailDto &&
+          runtimeType == other.runtimeType &&
+          item == other.item &&
+          text == other.text &&
+          imagePng == other.imagePng &&
+          files == other.files &&
+          formats == other.formats;
+}
+
+class ClipboardHistoryDto {
+  final bool recording;
+  final bool available;
+  final ClipboardNoticeDto? notice;
+  final List<ClipboardItemDto> items;
+
+  const ClipboardHistoryDto({
+    required this.recording,
+    required this.available,
+    this.notice,
+    required this.items,
+  });
+
+  @override
+  int get hashCode =>
+      recording.hashCode ^
+      available.hashCode ^
+      notice.hashCode ^
+      items.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ClipboardHistoryDto &&
+          runtimeType == other.runtimeType &&
+          recording == other.recording &&
+          available == other.available &&
+          notice == other.notice &&
+          items == other.items;
+}
+
+class ClipboardHistoryStatusDto {
+  final bool recording;
+  final bool available;
+  final ClipboardNoticeDto? notice;
+
+  const ClipboardHistoryStatusDto({
+    required this.recording,
+    required this.available,
+    this.notice,
+  });
+
+  @override
+  int get hashCode => recording.hashCode ^ available.hashCode ^ notice.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ClipboardHistoryStatusDto &&
+          runtimeType == other.runtimeType &&
+          recording == other.recording &&
+          available == other.available &&
+          notice == other.notice;
+}
+
+class ClipboardItemDto {
+  final String id;
+  final String summary;
+  final String kind;
+  final PlatformInt64 copiedAtMs;
+  final int byteCount;
+
+  const ClipboardItemDto({
+    required this.id,
+    required this.summary,
+    required this.kind,
+    required this.copiedAtMs,
+    required this.byteCount,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      summary.hashCode ^
+      kind.hashCode ^
+      copiedAtMs.hashCode ^
+      byteCount.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ClipboardItemDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          summary == other.summary &&
+          kind == other.kind &&
+          copiedAtMs == other.copiedAtMs &&
+          byteCount == other.byteCount;
+}
+
+enum ClipboardNoticeDto {
+  featureDisabled,
+  storageUnavailable,
+  accessRequired,
+  itemTooLarge,
+  readFailed,
+  captureUnavailable,
+  monitoringUnavailable,
+  ;
+}
+
+class ContextCaptureDto {
+  final String? text;
+  final BigInt? clipboardAgeMs;
+  final ContextSourceDto source;
+  final ContextCaptureStatusDto status;
+  final PlatformInt64 capturedAtMs;
+
+  const ContextCaptureDto({
+    this.text,
+    this.clipboardAgeMs,
+    required this.source,
+    required this.status,
+    required this.capturedAtMs,
+  });
+
+  @override
+  int get hashCode =>
+      text.hashCode ^
+      clipboardAgeMs.hashCode ^
+      source.hashCode ^
+      status.hashCode ^
+      capturedAtMs.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ContextCaptureDto &&
+          runtimeType == other.runtimeType &&
+          text == other.text &&
+          clipboardAgeMs == other.clipboardAgeMs &&
+          source == other.source &&
+          status == other.status &&
+          capturedAtMs == other.capturedAtMs;
+}
+
+enum ContextCaptureStatusDto {
+  captured,
+  empty,
+  permissionDenied,
+  unsupported,
+  applicationChanged,
+  timedOut,
+  tooLarge,
+  tooManyItems,
+  unavailable,
+  failed,
+  ;
+}
+
 class ContextDto {
   final String id;
   final String typeId;
   final String label;
   final String detail;
+  final ContextSourceDto source;
+  final String key;
+  final String rootKey;
+  final String iconKey;
+  final List<String> capabilities;
+  final List<String> candidateIds;
+  final String? primaryCandidateId;
 
   const ContextDto({
     required this.id,
     required this.typeId,
     required this.label,
     required this.detail,
+    required this.source,
+    required this.key,
+    required this.rootKey,
+    required this.iconKey,
+    required this.capabilities,
+    required this.candidateIds,
+    this.primaryCandidateId,
   });
 
   @override
   int get hashCode =>
-      id.hashCode ^ typeId.hashCode ^ label.hashCode ^ detail.hashCode;
+      id.hashCode ^
+      typeId.hashCode ^
+      label.hashCode ^
+      detail.hashCode ^
+      source.hashCode ^
+      key.hashCode ^
+      rootKey.hashCode ^
+      iconKey.hashCode ^
+      capabilities.hashCode ^
+      candidateIds.hashCode ^
+      primaryCandidateId.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -197,29 +807,365 @@ class ContextDto {
           id == other.id &&
           typeId == other.typeId &&
           label == other.label &&
+          detail == other.detail &&
+          source == other.source &&
+          key == other.key &&
+          rootKey == other.rootKey &&
+          iconKey == other.iconKey &&
+          capabilities == other.capabilities &&
+          candidateIds == other.candidateIds &&
+          primaryCandidateId == other.primaryCandidateId;
+}
+
+enum ContextSourceDto {
+  userInput,
+  foregroundApplication,
+  applicationContext,
+  finderSelection,
+  selectedText,
+  browserCurrentPage,
+  clipboard,
+  ;
+}
+
+class ExecutionSessionDetailDto {
+  final ExecutionSessionSummaryDto summary;
+  final String stdout;
+  final String stderr;
+
+  const ExecutionSessionDetailDto({
+    required this.summary,
+    required this.stdout,
+    required this.stderr,
+  });
+
+  @override
+  int get hashCode => summary.hashCode ^ stdout.hashCode ^ stderr.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExecutionSessionDetailDto &&
+          runtimeType == other.runtimeType &&
+          summary == other.summary &&
+          stdout == other.stdout &&
+          stderr == other.stderr;
+}
+
+enum ExecutionSessionStatusDto {
+  running,
+  stopping,
+  succeeded,
+  failed,
+  stopped,
+  ;
+}
+
+class ExecutionSessionSummaryDto {
+  final String id;
+  final String title;
+  final String directory;
+  final List<String> command;
+  final ExecutionSessionStatusDto status;
+  final int? exitCode;
+  final PlatformInt64 startedAtMs;
+  final PlatformInt64? finishedAtMs;
+  final PlatformInt64 outputRevision;
+  final bool outputTruncated;
+  final String? error;
+
+  const ExecutionSessionSummaryDto({
+    required this.id,
+    required this.title,
+    required this.directory,
+    required this.command,
+    required this.status,
+    this.exitCode,
+    required this.startedAtMs,
+    this.finishedAtMs,
+    required this.outputRevision,
+    required this.outputTruncated,
+    this.error,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      title.hashCode ^
+      directory.hashCode ^
+      command.hashCode ^
+      status.hashCode ^
+      exitCode.hashCode ^
+      startedAtMs.hashCode ^
+      finishedAtMs.hashCode ^
+      outputRevision.hashCode ^
+      outputTruncated.hashCode ^
+      error.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExecutionSessionSummaryDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          title == other.title &&
+          directory == other.directory &&
+          command == other.command &&
+          status == other.status &&
+          exitCode == other.exitCode &&
+          startedAtMs == other.startedAtMs &&
+          finishedAtMs == other.finishedAtMs &&
+          outputRevision == other.outputRevision &&
+          outputTruncated == other.outputTruncated &&
+          error == other.error;
+}
+
+class ExtensionStatusDto {
+  final String key;
+  final String id;
+  final String name;
+  final String version;
+  final bool firstParty;
+  final bool legacy;
+  final bool enabled;
+  final bool active;
+  final bool needsApproval;
+  final bool configurable;
+  final bool restartRequired;
+  final List<String> capabilities;
+  final String approvalToken;
+  final String detail;
+
+  const ExtensionStatusDto({
+    required this.key,
+    required this.id,
+    required this.name,
+    required this.version,
+    required this.firstParty,
+    required this.legacy,
+    required this.enabled,
+    required this.active,
+    required this.needsApproval,
+    required this.configurable,
+    this.restartRequired = false,
+    required this.capabilities,
+    required this.approvalToken,
+    required this.detail,
+  });
+
+  @override
+  int get hashCode =>
+      key.hashCode ^
+      id.hashCode ^
+      name.hashCode ^
+      version.hashCode ^
+      firstParty.hashCode ^
+      legacy.hashCode ^
+      enabled.hashCode ^
+      active.hashCode ^
+      needsApproval.hashCode ^
+      configurable.hashCode ^
+      restartRequired.hashCode ^
+      capabilities.hashCode ^
+      approvalToken.hashCode ^
+      detail.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ExtensionStatusDto &&
+          runtimeType == other.runtimeType &&
+          key == other.key &&
+          id == other.id &&
+          name == other.name &&
+          version == other.version &&
+          firstParty == other.firstParty &&
+          legacy == other.legacy &&
+          enabled == other.enabled &&
+          active == other.active &&
+          needsApproval == other.needsApproval &&
+          configurable == other.configurable &&
+          restartRequired == other.restartRequired &&
+          capabilities == other.capabilities &&
+          approvalToken == other.approvalToken &&
           detail == other.detail;
+}
+
+enum FileObjectKindDto {
+  file,
+  directory,
+  ;
+}
+
+class FilePreviewDto {
+  final String path;
+  final bool isDirectory;
+  final BigInt sizeBytes;
+  final PlatformInt64? modifiedMs;
+  final String? text;
+  final int? truncatedAtBytes;
+  final String? encoding;
+  final bool encodingGuessed;
+
+  const FilePreviewDto({
+    required this.path,
+    required this.isDirectory,
+    required this.sizeBytes,
+    this.modifiedMs,
+    this.text,
+    this.truncatedAtBytes,
+    this.encoding,
+    this.encodingGuessed = false,
+  });
+
+  @override
+  int get hashCode =>
+      path.hashCode ^
+      isDirectory.hashCode ^
+      sizeBytes.hashCode ^
+      modifiedMs.hashCode ^
+      text.hashCode ^
+      truncatedAtBytes.hashCode ^
+      encoding.hashCode ^
+      encodingGuessed.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FilePreviewDto &&
+          runtimeType == other.runtimeType &&
+          path == other.path &&
+          isDirectory == other.isDirectory &&
+          sizeBytes == other.sizeBytes &&
+          modifiedMs == other.modifiedMs &&
+          text == other.text &&
+          truncatedAtBytes == other.truncatedAtBytes &&
+          encoding == other.encoding &&
+          encodingGuessed == other.encodingGuessed;
+}
+
+enum FileSearchEngineDto {
+  systemIndex,
+  ripgrep,
+  combined,
+  ;
+}
+
+class FileSearchProgressDto {
+  final BigInt queryId;
+  final List<String> roots;
+  final BigInt scannedEntries;
+  final BigInt confirmedMatches;
+  final bool finished;
+  final BigInt issueCount;
+  final BigInt inaccessibleCount;
+  final List<String> issueExamples;
+  final String? nextCursor;
+  final String? previousCursor;
+  final int page;
+  final bool needsRefresh;
+
+  const FileSearchProgressDto({
+    required this.queryId,
+    required this.roots,
+    required this.scannedEntries,
+    required this.confirmedMatches,
+    required this.finished,
+    required this.issueCount,
+    required this.inaccessibleCount,
+    required this.issueExamples,
+    this.nextCursor,
+    this.previousCursor,
+    required this.page,
+    required this.needsRefresh,
+  });
+
+  @override
+  int get hashCode =>
+      queryId.hashCode ^
+      roots.hashCode ^
+      scannedEntries.hashCode ^
+      confirmedMatches.hashCode ^
+      finished.hashCode ^
+      issueCount.hashCode ^
+      inaccessibleCount.hashCode ^
+      issueExamples.hashCode ^
+      nextCursor.hashCode ^
+      previousCursor.hashCode ^
+      page.hashCode ^
+      needsRefresh.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is FileSearchProgressDto &&
+          runtimeType == other.runtimeType &&
+          queryId == other.queryId &&
+          roots == other.roots &&
+          scannedEntries == other.scannedEntries &&
+          confirmedMatches == other.confirmedMatches &&
+          finished == other.finished &&
+          issueCount == other.issueCount &&
+          inaccessibleCount == other.inaccessibleCount &&
+          issueExamples == other.issueExamples &&
+          nextCursor == other.nextCursor &&
+          previousCursor == other.previousCursor &&
+          page == other.page &&
+          needsRefresh == other.needsRefresh;
+}
+
+enum HostViewDto {
+  fileSearch,
+  nativeTool,
+  pluginDetail,
+  webPlugin,
+  ;
+}
+
+enum InputModeDto {
+  environment,
+  content,
+  search,
+  fileSearch,
+  ;
 }
 
 class LauncherStateDto {
   final int sessionId;
   final int revision;
   final int snapshotSeq;
+  final int candidateListVersion;
   final String input;
   final bool contextComplete;
+  final List<SearchSourceDto> searchSources;
+  final FileSearchProgressDto? fileSearch;
+  final List<CandidateDto> resultActions;
   final List<ContextDto> contexts;
-  final List<CandidateDto> candidates;
+  final List<CandidateDto> contextCandidates;
+  final String? preferredContextKey;
   final List<ScopeDto> scopes;
+  final String? selectedScope;
+  final List<ContextCaptureDto> contextCaptures;
+  final List<CandidateDto> candidates;
   final List<String> diagnostics;
 
   const LauncherStateDto({
     required this.sessionId,
     required this.revision,
     required this.snapshotSeq,
+    this.candidateListVersion = 0,
     required this.input,
     required this.contextComplete,
+    required this.searchSources,
+    this.fileSearch,
+    required this.resultActions,
     required this.contexts,
-    required this.candidates,
+    required this.contextCandidates,
+    this.preferredContextKey,
     required this.scopes,
+    this.selectedScope,
+    required this.contextCaptures,
+    required this.candidates,
     required this.diagnostics,
   });
 
@@ -228,11 +1174,19 @@ class LauncherStateDto {
       sessionId.hashCode ^
       revision.hashCode ^
       snapshotSeq.hashCode ^
+      candidateListVersion.hashCode ^
       input.hashCode ^
       contextComplete.hashCode ^
+      searchSources.hashCode ^
+      fileSearch.hashCode ^
+      resultActions.hashCode ^
       contexts.hashCode ^
-      candidates.hashCode ^
+      contextCandidates.hashCode ^
+      preferredContextKey.hashCode ^
       scopes.hashCode ^
+      selectedScope.hashCode ^
+      contextCaptures.hashCode ^
+      candidates.hashCode ^
       diagnostics.hashCode;
 
   @override
@@ -243,32 +1197,138 @@ class LauncherStateDto {
           sessionId == other.sessionId &&
           revision == other.revision &&
           snapshotSeq == other.snapshotSeq &&
+          candidateListVersion == other.candidateListVersion &&
           input == other.input &&
           contextComplete == other.contextComplete &&
+          searchSources == other.searchSources &&
+          fileSearch == other.fileSearch &&
+          resultActions == other.resultActions &&
           contexts == other.contexts &&
-          candidates == other.candidates &&
+          contextCandidates == other.contextCandidates &&
+          preferredContextKey == other.preferredContextKey &&
           scopes == other.scopes &&
+          selectedScope == other.selectedScope &&
+          contextCaptures == other.contextCaptures &&
+          candidates == other.candidates &&
           diagnostics == other.diagnostics;
 }
 
-class ScopeDto {
+class NativeToolDto {
   final String id;
+  final String input;
 
-  /// `all`, `app` or `group`.
-  final String kind;
-  final String label;
-  final List<String> candidateIds;
-
-  const ScopeDto({
+  const NativeToolDto({
     required this.id,
-    required this.kind,
-    required this.label,
-    required this.candidateIds,
+    required this.input,
+  });
+
+  @override
+  int get hashCode => id.hashCode ^ input.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NativeToolDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          input == other.input;
+}
+
+class PluginDetailDto {
+  final int schemaVersion;
+  final String title;
+  final String? body;
+  final List<PluginKeyValueDto> rows;
+
+  const PluginDetailDto({
+    required this.schemaVersion,
+    required this.title,
+    this.body,
+    required this.rows,
   });
 
   @override
   int get hashCode =>
-      id.hashCode ^ kind.hashCode ^ label.hashCode ^ candidateIds.hashCode;
+      schemaVersion.hashCode ^ title.hashCode ^ body.hashCode ^ rows.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PluginDetailDto &&
+          runtimeType == other.runtimeType &&
+          schemaVersion == other.schemaVersion &&
+          title == other.title &&
+          body == other.body &&
+          rows == other.rows;
+}
+
+class PluginKeyValueDto {
+  final String label;
+  final String value;
+
+  const PluginKeyValueDto({
+    required this.label,
+    required this.value,
+  });
+
+  @override
+  int get hashCode => label.hashCode ^ value.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PluginKeyValueDto &&
+          runtimeType == other.runtimeType &&
+          label == other.label &&
+          value == other.value;
+}
+
+class PluginStatusDto {
+  final String id;
+  final bool ok;
+  final String detail;
+
+  const PluginStatusDto({
+    required this.id,
+    required this.ok,
+    required this.detail,
+  });
+
+  @override
+  int get hashCode => id.hashCode ^ ok.hashCode ^ detail.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is PluginStatusDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          ok == other.ok &&
+          detail == other.detail;
+}
+
+class ScopeDto {
+  final String id;
+  final String label;
+  final bool isCurrentApp;
+  final List<String> actionIds;
+  final List<String> menuIds;
+
+  const ScopeDto({
+    required this.id,
+    required this.label,
+    required this.isCurrentApp,
+    this.actionIds = const [],
+    this.menuIds = const [],
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      label.hashCode ^
+      isCurrentApp.hashCode ^
+      actionIds.hashCode ^
+      menuIds.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -276,7 +1336,347 @@ class ScopeDto {
       other is ScopeDto &&
           runtimeType == other.runtimeType &&
           id == other.id &&
-          kind == other.kind &&
           label == other.label &&
-          candidateIds == other.candidateIds;
+          isCurrentApp == other.isCurrentApp &&
+          actionIds == other.actionIds &&
+          menuIds == other.menuIds;
+}
+
+class SearchSourceDto {
+  final String id;
+  final SearchSourceStateDto state;
+
+  const SearchSourceDto({
+    required this.id,
+    required this.state,
+  });
+
+  @override
+  int get hashCode => id.hashCode ^ state.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SearchSourceDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          state == other.state;
+}
+
+enum SearchSourceStateDto {
+  loading,
+  ready,
+  unavailable,
+  partial,
+  ;
+}
+
+class ShortcutActionDto {
+  final String actionId;
+  final String title;
+  final Map<String, String> localizedTitles;
+  final List<String> contextTypes;
+
+  const ShortcutActionDto({
+    required this.actionId,
+    required this.title,
+    this.localizedTitles = const {},
+    required this.contextTypes,
+  });
+
+  @override
+  int get hashCode =>
+      actionId.hashCode ^
+      title.hashCode ^
+      localizedTitles.hashCode ^
+      contextTypes.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ShortcutActionDto &&
+          runtimeType == other.runtimeType &&
+          actionId == other.actionId &&
+          title == other.title &&
+          localizedTitles == other.localizedTitles &&
+          contextTypes == other.contextTypes;
+}
+
+class ShortcutApplicationDto {
+  final String bundleId;
+  final String title;
+  final Map<String, String> localizedTitles;
+
+  const ShortcutApplicationDto({
+    required this.bundleId,
+    required this.title,
+    this.localizedTitles = const {},
+  });
+
+  @override
+  int get hashCode =>
+      bundleId.hashCode ^ title.hashCode ^ localizedTitles.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ShortcutApplicationDto &&
+          runtimeType == other.runtimeType &&
+          bundleId == other.bundleId &&
+          title == other.title &&
+          localizedTitles == other.localizedTitles;
+}
+
+class ShortcutRouteDto {
+  final String actionId;
+  final String? appBundleId;
+  final String? contextType;
+
+  const ShortcutRouteDto({
+    required this.actionId,
+    this.appBundleId,
+    this.contextType,
+  });
+
+  @override
+  int get hashCode =>
+      actionId.hashCode ^ appBundleId.hashCode ^ contextType.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is ShortcutRouteDto &&
+          runtimeType == other.runtimeType &&
+          actionId == other.actionId &&
+          appBundleId == other.appBundleId &&
+          contextType == other.contextType;
+}
+
+class SnapshotWaitDto {
+  final SnapshotWaitKindDto kind;
+  final CandidateUpdateDto candidateUpdate;
+  final LauncherStateDto? state;
+
+  const SnapshotWaitDto({
+    required this.kind,
+    this.candidateUpdate = CandidateUpdateDto.replace,
+    this.state,
+  });
+
+  @override
+  int get hashCode => kind.hashCode ^ candidateUpdate.hashCode ^ state.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SnapshotWaitDto &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          candidateUpdate == other.candidateUpdate &&
+          state == other.state;
+}
+
+enum SnapshotWaitKindDto {
+  updated,
+  timedOut,
+  closed,
+  superseded,
+  ;
+}
+
+enum WebConsentKindDto {
+  readClipboard,
+  writeClipboard,
+  ;
+}
+
+class WebDocumentDto {
+  final String handle;
+  final String origin;
+  final String entry;
+  final String title;
+
+  const WebDocumentDto({
+    required this.handle,
+    required this.origin,
+    required this.entry,
+    required this.title,
+  });
+
+  @override
+  int get hashCode =>
+      handle.hashCode ^ origin.hashCode ^ entry.hashCode ^ title.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WebDocumentDto &&
+          runtimeType == other.runtimeType &&
+          handle == other.handle &&
+          origin == other.origin &&
+          entry == other.entry &&
+          title == other.title;
+}
+
+/// Host-only package management; never dispatched through the Web SDK.
+class WebPackageDto {
+  final String id;
+  final String name;
+  final String version;
+  final String digest;
+  final List<WebPermissionDto> permissions;
+  final bool enabled;
+  final bool rollback;
+
+  const WebPackageDto({
+    required this.id,
+    required this.name,
+    required this.version,
+    required this.digest,
+    required this.permissions,
+    required this.enabled,
+    required this.rollback,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      name.hashCode ^
+      version.hashCode ^
+      digest.hashCode ^
+      permissions.hashCode ^
+      enabled.hashCode ^
+      rollback.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WebPackageDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          name == other.name &&
+          version == other.version &&
+          digest == other.digest &&
+          permissions == other.permissions &&
+          enabled == other.enabled &&
+          rollback == other.rollback;
+}
+
+class WebPermissionDto {
+  final WebPermissionKindDto kind;
+  final List<String> contextTypes;
+
+  const WebPermissionDto({
+    required this.kind,
+    required this.contextTypes,
+  });
+
+  @override
+  int get hashCode => kind.hashCode ^ contextTypes.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WebPermissionDto &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          contextTypes == other.contextTypes;
+}
+
+enum WebPermissionKindDto {
+  contextRead,
+  currentApp,
+  clipboardReadText,
+  clipboardWriteText,
+  localStorage,
+  ;
+}
+
+class WebPluginLaunchDto {
+  final String invocationId;
+
+  const WebPluginLaunchDto({
+    required this.invocationId,
+  });
+
+  @override
+  int get hashCode => invocationId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WebPluginLaunchDto &&
+          runtimeType == other.runtimeType &&
+          invocationId == other.invocationId;
+}
+
+class WebReplyDto {
+  final String? frame;
+  final String? ticket;
+  final WebConsentKindDto? consent;
+  final String? preview;
+
+  const WebReplyDto({
+    this.frame,
+    this.ticket,
+    this.consent,
+    this.preview,
+  });
+
+  @override
+  int get hashCode =>
+      frame.hashCode ^ ticket.hashCode ^ consent.hashCode ^ preview.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WebReplyDto &&
+          runtimeType == other.runtimeType &&
+          frame == other.frame &&
+          ticket == other.ticket &&
+          consent == other.consent &&
+          preview == other.preview;
+}
+
+class WebReviewDto {
+  final String token;
+  final String id;
+  final String name;
+  final String version;
+  final String digest;
+  final List<WebPermissionDto> permissions;
+  final bool updating;
+
+  const WebReviewDto({
+    required this.token,
+    required this.id,
+    required this.name,
+    required this.version,
+    required this.digest,
+    required this.permissions,
+    required this.updating,
+  });
+
+  @override
+  int get hashCode =>
+      token.hashCode ^
+      id.hashCode ^
+      name.hashCode ^
+      version.hashCode ^
+      digest.hashCode ^
+      permissions.hashCode ^
+      updating.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WebReviewDto &&
+          runtimeType == other.runtimeType &&
+          token == other.token &&
+          id == other.id &&
+          name == other.name &&
+          version == other.version &&
+          digest == other.digest &&
+          permissions == other.permissions &&
+          updating == other.updating;
 }

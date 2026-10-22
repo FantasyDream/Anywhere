@@ -11,7 +11,34 @@ pub fn execute(
     registry: &ActionRegistry,
 ) -> Result<ExecutionOutput> {
     match executor {
+        ActionExecutor::WebCommand(command) => Ok(ExecutionOutput::web(command.clone())),
         ActionExecutor::Native(handler) => handler.execute(context, platform),
+        ActionExecutor::ScopedDeclarative { action, grant } => {
+            use anywhere_protocol::DeclarativeAction::*;
+            let host = super::capabilities::HostServices::new(platform, grant);
+            let value = context.value.text();
+            match action {
+                RenderDetail { view } => {
+                    grant.require(anywhere_protocol::extension::ExtensionCapability::RenderUi)?;
+                    return Ok(ExecutionOutput::view(
+                        anywhere_protocol::HostView::PluginDetail {
+                            detail: anywhere_plugin::ui::render_detail(view, &value)?,
+                        },
+                    ));
+                }
+                Copy { text } => {
+                    host.copy_text(&anywhere_plugin::interpolate(text, &value, false)?)?
+                }
+                OpenUrl { url } => {
+                    host.open_url(&anywhere_plugin::interpolate(url, &value, true)?)?
+                }
+                OpenFile { path } => host.open_file(std::path::Path::new(
+                    &anywhere_plugin::interpolate(path, &value, false)?,
+                ))?,
+                ExecuteBuiltin { .. } => bail!("v2 builtin delegation is not supported"),
+            }
+            Ok(ExecutionOutput::dismiss())
+        }
         ActionExecutor::Declarative(action) => {
             execute_declarative(action, context, platform, registry)
         }
@@ -27,6 +54,7 @@ fn execute_declarative(
     use anywhere_protocol::DeclarativeAction::*;
     let value = context.value.text();
     match action {
+        RenderDetail { .. } => bail!("plugin UI requires a scoped capability grant"),
         OpenUrl { url } => platform.open_url(&anywhere_plugin::interpolate(url, &value, true)?)?,
         OpenFile { path } => platform.open_file(std::path::Path::new(
             &anywhere_plugin::interpolate(path, &value, false)?,

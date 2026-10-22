@@ -1,0 +1,24 @@
+protocol_version = 3
+id = "example_detail"
+name = "Context Detail"
+version = "1.0.0"
+capabilities = ["ui.render"]
+
+[[commands]]
+id = "inspect"
+title = "Inspect Context"
+subtitle = "View the current object without opening another app"
+accepts = ["core.text", "core.url", "core.directory", "core.file", "json.document"]
+keywords = ["detail", "inspect", "context"]
+
+[commands.action]
+type = "render_detail"
+
+[commands.action.view]
+schema_version = 1
+title = "Context Detail"
+body = "This view is rendered by Anywhere. Esc returns to your original query."
+
+[[commands.action.view.rows]]
+label = "Selected object"
+value = "{{context.value}}"

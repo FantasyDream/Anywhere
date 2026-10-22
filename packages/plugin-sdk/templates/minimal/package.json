@@ -1,0 +1,11 @@
+{
+  "name": "anywhere-text-transform",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "pack": "python3 node_modules/@anywhere/plugin-sdk/tools/package.py . --output output/text-transform.awplugin"
+  },
+  "devDependencies": {"esbuild": "0.28.2"}
+}

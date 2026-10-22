@@ -1,0 +1,281 @@
+{
+  "schemaVersion": 1,
+  "appearance": "dark",
+  "colorFormat": "ARGB",
+  "colors": {
+    "surface": "#a0303438",
+    "overlay": "#f22b2e35",
+    "menuSurface": "#ff2b2e35",
+    "actionSurface": "#0cffffff",
+    "primaryButtonSurface": "#242869bf",
+    "buttonSelection": "#10ffffff",
+    "keycapSurface": "#06ffffff",
+    "keycapBorder": "#1affffff",
+    "card": "#782a2e36",
+    "field": "#8020232a",
+    "elevated": "#584b505a",
+    "sidebar": "#10101218",
+    "window": "#a0303438",
+    "sidebarSelection": "#24ffffff",
+    "hover": "#08ffffff",
+    "border": "#38ffffff",
+    "divider": "#1fffffff",
+    "controlSurface": "#ff3d4046",
+    "controlSelection": "#ff56595f",
+    "controlBorder": "#30ffffff",
+    "primary": "#fff7f8fa",
+    "secondary": "#ffe0e3e9",
+    "muted": "#ffd6dbe2",
+    "accent": "#ffa7caff",
+    "accentFill": "#ff2869bf",
+    "warning": "#ffffc66d",
+    "danger": "#ffff8078",
+    "selectedSurface": "#0cffffff",
+    "selectionOutline": "#30ffffff",
+    "selectedBorder": "#ffb6c2d7",
+    "success": "#ff73cc91",
+    "fallbackSurface": "#ff24262b",
+    "textSelection": "#4da7caff",
+    "iconBlue": "#ff9dcbff",
+    "iconGreen": "#ff9de0bc",
+    "iconCoral": "#ffffb3a8",
+    "iconPurple": "#ffcebaff",
+    "iconAmber": "#ffffd28d",
+    "iconPink": "#fff5bad9",
+    "iconNeutral": "#ffe6ebf2",
+    "iconBadgeInk": "#ff202832"
+  },
+  "metrics": {
+    "radius": {
+      "value": 18,
+      "unit": "px"
+    },
+    "resultRadius": {
+      "value": 10,
+      "unit": "px"
+    },
+    "controlRadius": {
+      "value": 8,
+      "unit": "px"
+    },
+    "cardRadius": {
+      "value": 12,
+      "unit": "px"
+    },
+    "tooltipRadius": {
+      "value": 6,
+      "unit": "px"
+    },
+    "bodySize": {
+      "value": 13,
+      "unit": "px"
+    },
+    "bodyLineHeight": {
+      "value": 1.25,
+      "unit": "number"
+    },
+    "captionSize": {
+      "value": 11,
+      "unit": "px"
+    },
+    "captionLineHeight": {
+      "value": 1.3,
+      "unit": "number"
+    },
+    "headingSize": {
+      "value": 15,
+      "unit": "px"
+    },
+    "headingWeight": {
+      "value": 600,
+      "unit": "fontWeight"
+    },
+    "controlFontSize": {
+      "value": 11,
+      "unit": "px"
+    },
+    "controlHeight": {
+      "value": 24,
+      "unit": "px"
+    },
+    "controlPaddingX": {
+      "value": 10,
+      "unit": "px"
+    },
+    "controlPaddingY": {
+      "value": 3,
+      "unit": "px"
+    },
+    "controlBorderWidth": {
+      "value": 0.6,
+      "unit": "px"
+    },
+    "focusBorderWidth": {
+      "value": 1.2,
+      "unit": "px"
+    },
+    "fieldPaddingX": {
+      "value": 9,
+      "unit": "px"
+    },
+    "fieldPaddingY": {
+      "value": 7,
+      "unit": "px"
+    },
+    "fieldBorderWidth": {
+      "value": 0.8,
+      "unit": "px"
+    },
+    "fieldFocusBorderWidth": {
+      "value": 1.5,
+      "unit": "px"
+    },
+    "dividerWidth": {
+      "value": 0.5,
+      "unit": "px"
+    },
+    "iconSize": {
+      "value": 16,
+      "unit": "px"
+    },
+    "iconButtonSize": {
+      "value": 26,
+      "unit": "px"
+    },
+    "disabledOpacity": {
+      "value": 0.4,
+      "unit": "number"
+    },
+    "spaceXs": {
+      "value": 4,
+      "unit": "px"
+    },
+    "spaceSm": {
+      "value": 8,
+      "unit": "px"
+    },
+    "spaceMd": {
+      "value": 12,
+      "unit": "px"
+    },
+    "spaceLg": {
+      "value": 16,
+      "unit": "px"
+    },
+    "spaceXl": {
+      "value": 20,
+      "unit": "px"
+    },
+    "spaceXxl": {
+      "value": 24,
+      "unit": "px"
+    },
+    "scrollbarSize": {
+      "value": 5,
+      "unit": "px"
+    },
+    "controlWeight": {
+      "value": 400,
+      "unit": "fontWeight"
+    },
+    "primaryControlWeight": {
+      "value": 500,
+      "unit": "fontWeight"
+    },
+    "labelSize": {
+      "value": 12,
+      "unit": "px"
+    },
+    "bodyWeight": {
+      "value": 400,
+      "unit": "fontWeight"
+    },
+    "fieldFontSize": {
+      "value": 13,
+      "unit": "px"
+    },
+    "keycapFontSize": {
+      "value": 10.5,
+      "unit": "px"
+    },
+    "keycapLineHeight": {
+      "value": 1.1,
+      "unit": "number"
+    },
+    "keycapWeight": {
+      "value": 500,
+      "unit": "fontWeight"
+    },
+    "keycapRadius": {
+      "value": 5,
+      "unit": "px"
+    },
+    "keycapMinWidth": {
+      "value": 20,
+      "unit": "px"
+    },
+    "keycapPaddingX": {
+      "value": 5,
+      "unit": "px"
+    },
+    "keycapPaddingY": {
+      "value": 3,
+      "unit": "px"
+    },
+    "pageHeaderHeight": {
+      "value": 72,
+      "unit": "px"
+    },
+    "pageFooterHeight": {
+      "value": 44,
+      "unit": "px"
+    },
+    "pageToolbarHeight": {
+      "value": 36,
+      "unit": "px"
+    },
+    "pageHeadingSize": {
+      "value": 21,
+      "unit": "px"
+    },
+    "pageModeSize": {
+      "value": 10,
+      "unit": "px"
+    },
+    "pageModeWeight": {
+      "value": 500,
+      "unit": "fontWeight"
+    },
+    "previewCodeSize": {
+      "value": 11,
+      "unit": "px"
+    },
+    "previewCodeLineHeight": {
+      "value": 1.55,
+      "unit": "number"
+    },
+    "filterSize": {
+      "value": 12,
+      "unit": "px"
+    },
+    "filterRadius": {
+      "value": 10,
+      "unit": "px"
+    },
+    "filterHeight": {
+      "value": 26,
+      "unit": "px"
+    },
+    "previewFraction": {
+      "value": 0.38,
+      "unit": "number"
+    }
+  },
+  "fonts": {
+    "fontUi": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
+    "fontMono": "Menlo, Consolas, monospace"
+  },
+  "aliases": {
+    "text": "primary"
+  }
+}

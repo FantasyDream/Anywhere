@@ -1,0 +1,40 @@
+name: Bug report / 缺陷报告
+description: 报告可以复现的问题；漏洞请遵循 SECURITY.md。
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先搜索已有 Issue，并使用最小脱敏样例。不要提交完整剪贴板、用户目录、凭据或安全漏洞细节。
+        Please use a minimal, sanitized example. Report vulnerabilities privately as described in SECURITY.md.
+  - type: input
+    id: version
+    attributes:
+      label: App 版本 / 构建号或 commit
+      placeholder: 例如 0.12.0+13 / commit SHA
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 系统、架构与输入法 / OS, architecture and input method
+      placeholder: macOS 版本；Apple Silicon / Intel；输入问题请写输入法
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 / Steps to reproduce
+      description: 写明从哪个入口唤醒、所在页面及具体按键 / 点击。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期与实际结果 / Expected and actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 截图、最小样例或脱敏日志 / Evidence
+      description: 仅提供相关片段；同时说明是否每次出现、能否在最新开发包复现。

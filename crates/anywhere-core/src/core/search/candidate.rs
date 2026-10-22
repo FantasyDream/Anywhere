@@ -6,6 +6,7 @@ use crate::core::action::descriptor::ActionDescriptor;
 use crate::core::context::ResolvedContext;
 use anywhere_protocol::*;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 /// A candidate and everything needed to present or execute it.
 #[derive(Debug, Clone)]
@@ -19,8 +20,8 @@ pub struct Candidate {
 #[derive(Debug, Clone)]
 pub enum CandidateTarget {
     Action {
-        action: Box<ActionDescriptor>,
-        context: Box<ResolvedContext>,
+        action: Arc<ActionDescriptor>,
+        context: Arc<ResolvedContext>,
     },
     LaunchApplication {
         path: String,
@@ -29,10 +30,37 @@ pub enum CandidateTarget {
 }
 
 impl CandidateTarget {
+    pub fn uses_usage(&self) -> bool {
+        match self {
+            Self::Action { action, .. } => action.executor.uses_usage(),
+            Self::LaunchApplication { .. } => true,
+        }
+    }
+    pub fn records_usage(&self) -> bool {
+        match self {
+            Self::Action { action, .. } => action.executor.records_usage(),
+            Self::LaunchApplication { .. } => true,
+        }
+    }
+
+    pub fn execution_token(&self) -> Option<u64> {
+        match self {
+            Self::Action { action, .. } => action.executor.execution_token(),
+            Self::LaunchApplication { .. } => None,
+        }
+    }
+
+    pub fn from_shared_action(action: Arc<ActionDescriptor>, context: ResolvedContext) -> Self {
+        Self::Action {
+            action,
+            context: Arc::new(context),
+        }
+    }
+
     pub fn from_action(action: ActionDescriptor, context: ResolvedContext) -> Self {
         Self::Action {
-            action: Box::new(action),
-            context: Box::new(context),
+            action: Arc::new(action),
+            context: Arc::new(context),
         }
     }
 }
@@ -49,9 +77,6 @@ impl Candidate {
 /// Everything the search produced for this revision.
 pub struct CandidateSet {
     pub candidates: Vec<Candidate>,
-    pub scopes: Vec<ScopeEntry>,
-    /// Usage total per dynamic scope, used to order the scope bar.
-    pub scope_use: BTreeMap<GroupId, u32>,
     /// Action matching: applicability, availability and query match per context.
     pub matcher_us: u64,
     /// Every ranked source after the first (application index today, files later).
@@ -63,10 +88,22 @@ pub struct CandidateSet {
 /// Stable business identity: survives re-ranking, renumbering and late enrichment.
 pub fn action_candidate_id(command: &str, context: &ResolvedContext) -> String {
     format!(
-        "action:{command}:{}:{}",
+        "action:{command}:{}:{:016x}",
         context.type_id,
-        context.value.text()
+        context.value.identity_fingerprint()
     )
+}
+
+/// Stable for re-ranking this target; a new discovery cannot reuse an old capability.
+pub fn action_execution_candidate_id(
+    action: &ActionDescriptor,
+    context: &ResolvedContext,
+) -> String {
+    let id = action_candidate_id(&action.id, context);
+    match action.executor.execution_token() {
+        Some(token) => format!("{id}:discovery:{token}"),
+        None => id,
+    }
 }
 
 fn candidate_sort_key(candidate: &Candidate) -> (&str, &str) {
@@ -94,10 +131,31 @@ pub fn compare_candidates(a: &Candidate, b: &Candidate) -> std::cmp::Ordering {
 }
 
 /// Keep one row per action and canonical object, preferring the highest-ranked occurrence.
-/// Scope membership is unioned so ownership survives deduplication.
+/// Context root membership is unioned so ownership survives deduplication.
 pub fn deduplicate_actions(candidates: &mut Vec<Candidate>) {
+    // A tool's object offer is more specific than opening its empty workspace.
+    let with_objects: std::collections::BTreeSet<_> = candidates
+        .iter()
+        .filter_map(|candidate| {
+            (candidate
+                .context()
+                .is_some_and(|c| c.type_id != LAUNCHER_ENTRY_CONTEXT))
+            .then(|| candidate.presentation.command_id.clone())
+            .flatten()
+        })
+        .collect();
+    candidates.retain(|candidate| {
+        !(candidate
+            .context()
+            .is_some_and(|c| c.type_id == LAUNCHER_ENTRY_CONTEXT)
+            && candidate
+                .presentation
+                .command_id
+                .as_ref()
+                .is_some_and(|id| with_objects.contains(id)))
+    });
     let mut merged: Vec<Candidate> = Vec::with_capacity(candidates.len());
-    let mut index: BTreeMap<(ActionId, ContextTypeId, String), usize> = BTreeMap::new();
+    let mut index: BTreeMap<(ActionId, ContextTypeId, Arc<str>), usize> = BTreeMap::new();
     for candidate in candidates.drain(..) {
         let Some(command) = candidate.presentation.command_id.clone() else {
             merged.push(candidate);
@@ -105,12 +163,17 @@ pub fn deduplicate_actions(candidates: &mut Vec<Candidate>) {
         };
         let context = candidate
             .context()
-            .map(|context| (context.type_id.clone(), context.value.text()))
-            .unwrap_or_default();
+            .map(|context| (context.type_id.clone(), context.value.shared_text()))
+            .unwrap_or_else(|| (String::new(), Arc::<str>::from("")));
         let key = (command, context.0, context.1);
         match index.get(&key) {
             Some(position) => {
                 let existing = &mut merged[*position];
+                for key in &candidate.presentation.context_keys {
+                    if !existing.presentation.context_keys.contains(key) {
+                        existing.presentation.context_keys.push(key.clone());
+                    }
+                }
                 if existing.presentation.owning_app.is_none() {
                     existing.presentation.owning_app = candidate.presentation.owning_app;
                 }

@@ -1,243 +1,288 @@
-//! Scope bar construction and ordering.
-//!
-//! A scope is a hard filter over matched candidates: the current application's actions
-//! and one entry per action group. Global search is `scope = None` on the host, not a
-//! synthetic All row. The core builds membership; the session freezes presentation order.
-use crate::core::action::group::groups;
-use crate::core::search::candidate::Candidate;
+//! Available UX domains, derived only from visible action offers.
+use super::candidate::Candidate;
+use crate::core::action::descriptor::ActionRegistry;
+use crate::core::action::group::{groups, GroupMeta};
+use crate::core::ranking::score::{usage_terms, UsageStats};
+use anywhere_platform::ApplicationInfo;
 use anywhere_protocol::*;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
-/// Rows the host shows for an empty query.
-///
-/// A *view* limit, deliberately not applied here: truncating the candidate set left each
-/// scope's id list pointing at entries that no longer existed, so a group could look
-/// populated and then render empty, and a row pushed past the limit lost the identity the
-/// selection was holding on to. The core returns every visible candidate and the host
-/// decides how many rows fit.
-pub const HOME_LIMIT: usize = 7;
-
-/// Reserved id for the current application's visible actions.
-pub const SCOPE_APP: &str = "app";
-
-/// Bounded frequency plus recency per distinct action, used to order scopes.
-pub type ScopeUse = BTreeMap<GroupId, u32>;
-
-/// Build the scope bar from every visible candidate, before any view limit.
 pub fn build(
-    candidates: &[Candidate],
-    current_app: &Option<String>,
-    app_label: &str,
-    scope_use: &ScopeUse,
+    offers: &[Candidate],
+    registry: &ActionRegistry,
+    usage: &HashMap<(String, String), UsageStats>,
+    current_app: Option<&ApplicationInfo>,
+    now: i64,
 ) -> Vec<ScopeEntry> {
-    let mut app_ids = Vec::new();
-    let mut groups: BTreeMap<GroupId, Vec<ActionId>> = BTreeMap::new();
-    for candidate in candidates {
-        if candidate.presentation.kind != CandidateKind::Action {
+    let current_group = current_app.map(|app| groups::for_app(&app.bundle_id));
+    let mut groups: BTreeMap<String, (ScopeEntry, i32, i32)> = BTreeMap::new();
+    let mut counted = HashSet::new();
+    for offer in offers {
+        let candidate = &offer.presentation;
+        if candidate.kind != CandidateKind::Action || !candidate.availability.is_visible() {
             continue;
         }
-        let owns_current_app = match (&candidate.presentation.owning_app, current_app.as_deref()) {
-            (Some(owning), Some(current)) => owning == current,
-            _ => false,
-        };
-        if owns_current_app {
-            app_ids.push(candidate.presentation.id.clone());
-        }
-        groups
-            .entry(candidate.presentation.group_id.clone())
-            .or_default()
-            .push(candidate.presentation.id.clone());
-    }
-    let mut scopes = Vec::new();
-    if !app_ids.is_empty() {
-        scopes.push(ScopeEntry {
-            id: SCOPE_APP.into(),
-            kind: ScopeKind::App,
-            label: app_label.to_owned(),
-            candidate_ids: app_ids,
+        let entry = groups.entry(candidate.group_id.clone()).or_insert_with(|| {
+            (
+                ScopeEntry {
+                    id: candidate.group_id.clone(),
+                    label: candidate
+                        .section_label
+                        .clone()
+                        .unwrap_or_else(|| registry.label(&candidate.group_id)),
+                    is_current_app: current_group.as_ref() == Some(&candidate.group_id),
+                    action_ids: Vec::new(),
+                    menu_ids: Vec::new(),
+                },
+                0,
+                i32::MIN,
+            )
         });
+        if let (Some(command), Some(context)) = (candidate.command_id.as_ref(), offer.context()) {
+            let key = (command.clone(), context.type_id.clone());
+            if offer.target.uses_usage() && counted.insert(key.clone()) {
+                let stats = usage.get(&key).copied().unwrap_or_default();
+                let (frequency, recency) =
+                    usage_terms(stats.execute_count, stats.last_executed_at, now);
+                entry.1 = entry.1.saturating_add(frequency + recency);
+            }
+            if let Some(action) = registry.get(command) {
+                entry.2 = entry.2.max(action.base_priority);
+            }
+        }
     }
-    let mut ordered = groups.into_iter().collect::<Vec<_>>();
-    let use_of = |group: &str| scope_use.get(group).copied().unwrap_or_default();
-    ordered.sort_by(|(a, _), (b, _)| {
-        use_of(b)
-            .cmp(&use_of(a))
-            .then_with(|| group_rank(a).cmp(&group_rank(b)))
-            .then_with(|| a.cmp(b))
+    // Current App is the action home for this captured environment. Its children
+    // keep their original domain groups; menus are only one of its action sources.
+    if !groups.is_empty() {
+        if let Some(app) = current_app {
+            let entry = groups
+                .entry(groups::for_app(&app.bundle_id))
+                .or_insert_with(|| {
+                    (
+                        ScopeEntry {
+                            id: groups::for_app(&app.bundle_id),
+                            label: app.name.clone(),
+                            is_current_app: true,
+                            action_ids: Vec::new(),
+                            menu_ids: Vec::new(),
+                        },
+                        0,
+                        i32::MIN,
+                    )
+                });
+            entry.0.label.clone_from(&app.name);
+            entry.0.is_current_app = true;
+        }
+    }
+    let mut entries: Vec<_> = groups.into_values().collect();
+    entries.sort_by(|a, b| {
+        b.0.is_current_app
+            .cmp(&a.0.is_current_app)
+            .then_with(|| b.1.cmp(&a.1))
+            .then_with(|| b.2.cmp(&a.2))
+            .then_with(|| a.0.id.cmp(&b.0.id))
     });
-    for (group, ids) in ordered {
-        if group == groups::APP || ids.is_empty() {
-            continue;
-        }
-        scopes.push(ScopeEntry {
-            id: group.clone(),
-            kind: ScopeKind::Group,
-            label: group_label(&group),
-            candidate_ids: ids,
-        });
-    }
-    scopes
-}
-
-/// Keep session order: Current App first, already-seen groups in place, newcomers append.
-pub fn apply_session_order(
-    built: Vec<ScopeEntry>,
-    frozen_ids: &mut Vec<ScopeId>,
-) -> Vec<ScopeEntry> {
-    let mut by_id = HashMap::with_capacity(built.len());
-    let mut built_ids = Vec::with_capacity(built.len());
-    for scope in built {
-        built_ids.push(scope.id.clone());
-        by_id.insert(scope.id.clone(), scope);
-    }
-    if by_id.contains_key(SCOPE_APP) && frozen_ids.first().map(String::as_str) != Some(SCOPE_APP) {
-        frozen_ids.retain(|id| id != SCOPE_APP);
-        frozen_ids.insert(0, SCOPE_APP.into());
-    }
-    for id in &built_ids {
-        if id == SCOPE_APP {
-            continue;
-        }
-        if !frozen_ids.iter().any(|frozen| frozen == id) {
-            frozen_ids.push(id.clone());
-        }
-    }
-    frozen_ids
-        .iter()
-        .filter_map(|id| by_id.remove(id))
+    entries
+        .into_iter()
+        .map(|entry| {
+            let mut scope = entry.0;
+            for offer in offers {
+                let c = &offer.presentation;
+                if scope.contains(c) {
+                    scope.action_ids.push(c.id.clone());
+                }
+                if c.is_menu && c.availability.is_visible() && c.group_id == scope.id {
+                    scope.menu_ids.push(c.id.clone());
+                }
+            }
+            scope
+        })
         .collect()
 }
 
-/// Frecency per group across distinct visible actions.
-pub fn usage_by_group(
-    candidates: &[Candidate],
-    usage: &dyn Fn(&str, &str) -> crate::core::ranking::score::UsageStats,
-    now: i64,
-) -> ScopeUse {
-    let mut scope_use = ScopeUse::new();
-    let mut seen = std::collections::HashSet::new();
-    for candidate in candidates {
-        let (Some(action), Some(context)) = (
-            candidate.presentation.command_id.as_ref(),
-            candidate.context(),
-        ) else {
-            continue;
-        };
-        if !seen.insert((action, &context.type_id)) {
-            continue;
+/// Current App includes every applicable action. Other scopes filter one domain.
+/// The caller must still enforce Action kind for any selected scope, so this
+/// never admits application launch candidates into Current App.
+pub fn group_filter<'a>(
+    scope_id: Option<&'a str>,
+    current_app: Option<&ApplicationInfo>,
+) -> Option<&'a str> {
+    scope_id.filter(|scope| current_app.is_none_or(|app| *scope != groups::for_app(&app.bundle_id)))
+}
+
+/// Remember slots for the entire session. Hidden/removed groups vacate their slot;
+/// query changes cannot reorder it, and a returning group keeps the same position.
+pub fn freeze(scopes: &mut [ScopeEntry], order: &mut Vec<GroupId>) {
+    for scope in scopes.iter() {
+        if !order.contains(&scope.id) {
+            order.push(scope.id.clone());
         }
-        let stats = usage(action, &context.type_id);
-        let (frequency, recency) = crate::core::ranking::score::usage_terms(
-            stats.execute_count,
-            stats.last_executed_at,
-            now,
-        );
-        let score = scope_use
-            .entry(candidate.presentation.group_id.clone())
-            .or_default();
-        *score = score.saturating_add((frequency + recency) as u32);
     }
-    scope_use
-}
-
-fn group_rank(group: &str) -> u8 {
-    match group {
-        groups::GIT => 0,
-        groups::FOLDER => 1,
-        groups::FILE => 2,
-        groups::WEB => 3,
-        groups::JSON => 4,
-        _ => 5,
-    }
-}
-
-fn group_label(group: &str) -> String {
-    match group {
-        groups::GIT => "Git".into(),
-        groups::FOLDER => "Folder".into(),
-        groups::FILE => "File".into(),
-        groups::WEB => "Web".into(),
-        groups::JSON => "JSON".into(),
-        groups::APP => "Current App".into(),
-        other => match other.strip_prefix("plugin.") {
-            Some(plugin) => plugin
-                .split(['.', '_', '-'])
-                .map(capitalize)
-                .collect::<Vec<_>>()
-                .join(" "),
-            None => capitalize(other),
-        },
-    }
-}
-
-fn capitalize(value: &str) -> String {
-    let mut chars = value.chars();
-    match chars.next() {
-        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
-        None => String::new(),
-    }
+    scopes.sort_by_key(|scope| order.iter().position(|id| id == &scope.id).unwrap());
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn entry(id: &str, kind: ScopeKind) -> ScopeEntry {
+    fn scope(id: &str) -> ScopeEntry {
         ScopeEntry {
             id: id.into(),
-            kind,
             label: id.into(),
-            candidate_ids: vec!["x".into()],
+            is_current_app: false,
+            action_ids: Vec::new(),
+            menu_ids: Vec::new(),
         }
     }
-
-    fn ids(scopes: &[ScopeEntry]) -> Vec<&str> {
-        scopes.iter().map(|scope| scope.id.as_str()).collect()
-    }
-
     #[test]
-    fn late_groups_append_and_current_app_inserts_first() {
-        let mut frozen = Vec::new();
-        let first = apply_session_order(vec![entry("folder", ScopeKind::Group)], &mut frozen);
-        assert_eq!(ids(&first), ["folder"]);
-        let late = apply_session_order(
-            vec![
-                entry("app", ScopeKind::App),
-                entry("git", ScopeKind::Group),
-                entry("folder", ScopeKind::Group),
-            ],
-            &mut frozen,
+    fn late_groups_append_and_hidden_groups_keep_their_slot() {
+        let mut order = vec!["app.editor".into()];
+        let mut initial = vec![scope("folder"), scope("web")];
+        freeze(&mut initial, &mut order);
+        let mut later = vec![
+            scope("git"),
+            scope("folder"),
+            scope("web"),
+            scope("app.editor"),
+        ];
+        freeze(&mut later, &mut order);
+        assert_eq!(
+            later
+                .iter()
+                .map(|scope| scope.id.as_str())
+                .collect::<Vec<_>>(),
+            ["app.editor", "folder", "web", "git"]
         );
-        assert_eq!(ids(&late), ["app", "folder", "git"]);
+        let mut hidden = vec![scope("git"), scope("folder")];
+        freeze(&mut hidden, &mut order);
+        assert_eq!(hidden[0].id, "folder");
+        let mut restored = vec![scope("git"), scope("web"), scope("folder")];
+        freeze(&mut restored, &mut order);
+        assert_eq!(
+            restored
+                .iter()
+                .map(|scope| scope.id.as_str())
+                .collect::<Vec<_>>(),
+            ["folder", "web", "git"]
+        );
     }
-
     #[test]
-    fn hidden_groups_keep_their_frozen_slot() {
-        let mut frozen = Vec::new();
-        apply_session_order(
-            vec![
-                entry("app", ScopeKind::App),
-                entry("git", ScopeKind::Group),
-                entry("folder", ScopeKind::Group),
-            ],
-            &mut frozen,
+    fn group_order_uses_execution_history_instead_of_candidate_rank() {
+        use crate::core::context::{ContextValue, ResolvedContext};
+        use crate::core::search::{engine::ActionSearch, query::Query};
+        use crate::core::session::facts::{FactValue, SessionFacts, GIT};
+        let registry = crate::application::builtin_registry();
+        let directory = tempfile::tempdir().unwrap();
+        let contexts = vec![
+            ResolvedContext::new(
+                DIRECTORY,
+                ContextValue::Directory(directory.path().into()),
+                ContextSource::ApplicationContext,
+                "test",
+            ),
+            ResolvedContext::new(
+                GIT_REPOSITORY,
+                ContextValue::Repository(directory.path().into()),
+                ContextSource::ApplicationContext,
+                "test",
+            ),
+        ];
+        let facts = SessionFacts::default().with(GIT, FactValue::Flag(true));
+        let no_usage = |_: &str, _: &str| UsageStats::default();
+        let search = ActionSearch::new(
+            &registry,
+            &no_usage,
+            &facts,
+            1000,
+            crate::features::context_semantic,
         );
-        let hidden = apply_session_order(
-            vec![
-                entry("app", ScopeKind::App),
-                entry("folder", ScopeKind::Group),
-            ],
-            &mut frozen,
+        let offers = search.search(&Query::parse(""), &contexts, &[]).candidates;
+        assert_eq!(offers[0].presentation.group_id, "git");
+        let mut history = HashMap::new();
+        history.insert(
+            ("core.directory.copy".into(), DIRECTORY.into()),
+            UsageStats {
+                execute_count: 10,
+                last_executed_at: 1000,
+            },
         );
-        assert_eq!(ids(&hidden), ["app", "folder"]);
-        let restored = apply_session_order(
-            vec![
-                entry("app", ScopeKind::App),
-                entry("folder", ScopeKind::Group),
-                entry("git", ScopeKind::Group),
-            ],
-            &mut frozen,
+        let scopes = build(&offers, &registry, &history, None, 1000);
+        assert_eq!(
+            scopes[0].id, "folder",
+            "Group frecency comes from executions, not the leading candidate's context/rank"
         );
-        assert_eq!(ids(&restored), ["app", "git", "folder"]);
+    }
+    #[test]
+    fn unverified_menu_history_cannot_change_scope_order() {
+        use crate::core::context::{ContextValue, ResolvedContext};
+        use crate::core::search::{engine::ActionSearch, query::Query};
+        use crate::core::session::facts::SessionFacts;
+        use anywhere_platform::{ApplicationInfo, DiscoveredMenuItem};
+        use anywhere_protocol::APPLICATION;
+        let app = ApplicationInfo {
+            bundle_id: "test.editor".into(),
+            name: "Editor".into(),
+            pid: 42,
+            instance_id: Some("one".into()),
+        };
+        let registry = crate::features::app_actions::convert::registry(
+            &crate::application::builtin_registry(),
+            &app,
+            vec![DiscoveredMenuItem {
+                title: "Uncommon".into(),
+                menu_path: vec!["Tools".into(), "Uncommon".into()],
+                identifiers: vec![None, Some("reused".into())],
+                shortcut: None,
+                enabled: true,
+            }],
+        )
+        .unwrap();
+        let directory = tempfile::tempdir().unwrap();
+        let contexts = vec![
+            ResolvedContext::new(
+                DIRECTORY,
+                ContextValue::Directory(directory.path().into()),
+                ContextSource::ApplicationContext,
+                "test",
+            ),
+            ResolvedContext::new(
+                APPLICATION,
+                ContextValue::Application {
+                    bundle_id: app.bundle_id.clone(),
+                    name: app.name.clone(),
+                },
+                ContextSource::ApplicationContext,
+                "test",
+            ),
+        ];
+        let facts = SessionFacts::default();
+        let no_usage = |_: &str, _: &str| UsageStats::default();
+        let search = ActionSearch::new(
+            &registry,
+            &no_usage,
+            &facts,
+            1000,
+            crate::features::context_semantic,
+        );
+        let offers = search.search(&Query::parse(""), &contexts, &[]).candidates;
+        let menu = offers
+            .iter()
+            .find(|offer| offer.presentation.title == "Uncommon")
+            .unwrap();
+        let baseline = build(&offers, &registry, &HashMap::new(), None, 1000);
+        let history = HashMap::from([(
+            (
+                menu.presentation.command_id.clone().unwrap(),
+                APPLICATION.into(),
+            ),
+            UsageStats {
+                execute_count: u32::MAX,
+                last_executed_at: 1000,
+            },
+        )]);
+        let actual = build(&offers, &registry, &history, None, 1000);
+        assert_eq!(
+            actual.iter().map(|scope| &scope.id).collect::<Vec<_>>(),
+            baseline.iter().map(|scope| &scope.id).collect::<Vec<_>>()
+        );
     }
 }

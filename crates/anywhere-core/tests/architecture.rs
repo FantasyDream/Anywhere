@@ -27,13 +27,16 @@ fn sources_of(contexts: &[ResolvedContext], registry: &ActionRegistry) -> Vec<Ca
     use anywhere_core::core::search::candidate_source::{CandidateSource, SearchContext};
     let usage = |_: &str, _: &str| anywhere_core::core::ranking::usage::UsageStats::default();
     let facts = anywhere_core::core::session::facts::SessionFacts::default();
-    let matcher = ActionMatcher {
+    let matcher = ActionMatcher::new(
         registry,
-        usage: &usage,
-        facts: &facts,
-        now: 1000,
-    };
+        &usage,
+        &facts,
+        1000,
+        anywhere_core::features::context_semantic,
+    );
     matcher.candidates(&SearchContext {
+        scope_id: None,
+        ranking: Default::default(),
         query: &anywhere_core::core::search::query::Query::parse("copy"),
         contexts,
     })
@@ -104,7 +107,7 @@ async fn the_provider_chain_is_recursive_and_deduplicates() {
 /// separately from applicability.
 #[test]
 fn matching_and_availability_are_separate_steps() {
-    let registry = anywhere_core::application::composition::builtin_registry();
+    let registry = anywhere_core::application::builtin_registry();
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path().canonicalize().unwrap();
     let contexts = features::recognized_contexts(root.to_str().unwrap());
@@ -114,12 +117,13 @@ fn matching_and_availability_are_separate_steps() {
         anywhere_core::core::session::facts::FactValue::Flag(true),
     );
     let usage = |_: &str, _: &str| anywhere_core::core::ranking::usage::UsageStats::default();
-    let matcher = matcher::ActionMatcher {
-        registry: &registry,
-        usage: &usage,
-        facts: &facts,
-        now: 1000,
-    };
+    let matcher = matcher::ActionMatcher::new(
+        &registry,
+        &usage,
+        &facts,
+        1000,
+        anywhere_core::features::context_semantic,
+    );
     let query = anywhere_core::core::search::query::Query::parse("");
     let matched = matcher.match_actions(&query, &contexts);
     assert!(
@@ -142,12 +146,13 @@ fn matching_and_availability_are_separate_steps() {
             anywhere_core::core::session::facts::GIT,
             anywhere_core::core::session::facts::FactValue::Flag(true),
         );
-    let matcher = matcher::ActionMatcher {
-        registry: &registry,
-        usage: &usage,
-        facts: &facts,
-        now: 1000,
-    };
+    let matcher = matcher::ActionMatcher::new(
+        &registry,
+        &usage,
+        &facts,
+        1000,
+        anywhere_core::features::context_semantic,
+    );
     assert!(
         !matcher
             .match_actions(&query, &contexts)
@@ -161,11 +166,16 @@ fn matching_and_availability_are_separate_steps() {
 /// Applications and actions reach the list through the same contract.
 #[test]
 fn every_candidate_kind_has_a_source_behind_it() {
-    let registry = anywhere_core::application::composition::builtin_registry();
+    let registry = anywhere_core::application::builtin_registry();
     let usage = |_: &str, _: &str| anywhere_core::core::ranking::usage::UsageStats::default();
     let facts = anywhere_core::core::session::facts::SessionFacts::default();
-    let search =
-        anywhere_core::core::search::engine::ActionSearch::new(&registry, &usage, &facts, 1000);
+    let search = anywhere_core::core::search::engine::ActionSearch::new(
+        &registry,
+        &usage,
+        &facts,
+        1000,
+        anywhere_core::features::context_semantic,
+    );
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path().canonicalize().unwrap();
     let contexts = features::recognized_contexts(root.to_str().unwrap());
@@ -197,9 +207,12 @@ fn every_candidate_kind_has_a_source_behind_it() {
         fn candidates(&self, _: &SearchContext<'_>) -> Vec<Candidate> {
             vec![Candidate {
                 presentation: CandidatePresentation {
+                    localized_titles: Default::default(),
                     shortcut: None,
                     id: "marker:test".into(),
                     kind: CandidateKind::Application,
+                    is_menu: false,
+                    file_kind: None,
                     title: "Marker".into(),
                     subtitle: None,
                     icon: IconDescriptor {
@@ -211,6 +224,13 @@ fn every_candidate_kind_has_a_source_behind_it() {
                     command_id: None,
                     bundle_id: Some("marker".into()),
                     owning_app: None,
+                    menu_path: Vec::new(),
+                    context_keys: Vec::new(),
+                    execution_context_id: None,
+                    execution_target_label: None,
+                    home_eligible: true,
+                    primary_action: false,
+                    section_label: None,
                 },
                 target:
                     anywhere_core::core::search::candidate::CandidateTarget::LaunchApplication {
@@ -242,7 +262,7 @@ fn features_register_through_bundles() {
         bundles.len() >= 4,
         "each feature contributes its own bundle"
     );
-    let registry = anywhere_core::application::composition::builtin_registry();
+    let registry = anywhere_core::application::builtin_registry();
     for bundle in &bundles {
         assert!(
             bundle.actions.iter().all(|action| !action.id.is_empty()),
@@ -268,4 +288,60 @@ fn features_register_through_bundles() {
     // Availability is reachable without going through matching or execution.
     let _ = availability::is_user_object;
     let _ = Arc::new(());
+}
+
+#[test]
+fn feature_contributions_have_unique_ownership_and_share_registration_contract() {
+    let contributions = features::contribution::builtins();
+    let mut ids = std::collections::HashSet::new();
+    for feature in &contributions {
+        assert!(ids.insert(feature.id));
+    }
+    let git = contributions.iter().find(|c| c.id == "git").unwrap();
+    let node = contributions.iter().find(|c| c.id == "node").unwrap();
+    assert!(!git.providers.is_empty() && !git.bundles.is_empty());
+    assert!(!node.providers.is_empty() && !node.bundles.is_empty() && !node.factories.is_empty());
+    use anywhere_core::features::BuiltinFeature;
+    let mut services = features::services::FeatureServices::new(Ok(
+        anywhere_core::persistence::module_storage::ModuleStorageHost::memory()
+            .unwrap()
+            .bind("saved_directories")
+            .unwrap(),
+    ));
+    let runtime = anywhere_core::features::saved_directories::Feature
+        .bind_services(&mut services)
+        .unwrap();
+    assert_eq!(
+        runtime.sources.ids().collect::<Vec<_>>(),
+        ["saved_directories"]
+    );
+}
+
+#[test]
+fn menu_semantics_are_explicit_and_plugin_ids_are_opaque() {
+    let raw = anywhere_plugin::EXAMPLE_PLUGIN.replace("id = \"example\"", "id = \"app\"");
+    let mut registry = anywhere_core::application::builtin_registry();
+    registry
+        .register_plugin(anywhere_plugin::parse_manifest(&raw).unwrap())
+        .unwrap();
+    assert!(!registry.get("app.search").unwrap().executor.is_menu());
+    let app = anywhere_platform::ApplicationInfo {
+        bundle_id: "test.editor".into(),
+        name: "Editor".into(),
+        pid: 1,
+        instance_id: Some("one".into()),
+    };
+    let mut menus = anywhere_core::features::app_actions::convert::descriptors(
+        &app,
+        vec![anywhere_platform::DiscoveredMenuItem {
+            title: "Root Leaf".into(),
+            menu_path: vec!["Root Leaf".into()],
+            identifiers: vec![None],
+            shortcut: None,
+            enabled: true,
+        }],
+    );
+    let leaf = menus.pop().unwrap();
+    assert!(leaf.menu_path.is_empty());
+    assert!(leaf.executor.is_menu());
 }

@@ -22,25 +22,157 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException dco_decode_AnyhowException(dynamic raw);
 
   @protected
+  Map<String, String> dco_decode_Map_String_String_None(dynamic raw);
+
+  @protected
   String dco_decode_String(dynamic raw);
 
   @protected
   ActionResultDto dco_decode_action_result_dto(dynamic raw);
 
   @protected
+  ActionStatusDto dco_decode_action_status_dto(dynamic raw);
+
+  @protected
+  ActivationInputDto dco_decode_activation_input_dto(dynamic raw);
+
+  @protected
+  AvailabilityDto dco_decode_availability_dto(dynamic raw);
+
+  @protected
+  BindingResolutionDto dco_decode_binding_resolution_dto(dynamic raw);
+
+  @protected
   bool dco_decode_bool(dynamic raw);
+
+  @protected
+  ActivationInputDto dco_decode_box_autoadd_activation_input_dto(dynamic raw);
+
+  @protected
+  ClipboardDetailDto dco_decode_box_autoadd_clipboard_detail_dto(dynamic raw);
+
+  @protected
+  ClipboardNoticeDto dco_decode_box_autoadd_clipboard_notice_dto(dynamic raw);
+
+  @protected
+  ExecutionSessionDetailDto dco_decode_box_autoadd_execution_session_detail_dto(
+      dynamic raw);
+
+  @protected
+  FileObjectKindDto dco_decode_box_autoadd_file_object_kind_dto(dynamic raw);
+
+  @protected
+  FileSearchProgressDto dco_decode_box_autoadd_file_search_progress_dto(
+      dynamic raw);
+
+  @protected
+  HostViewDto dco_decode_box_autoadd_host_view_dto(dynamic raw);
+
+  @protected
+  int dco_decode_box_autoadd_i_32(dynamic raw);
+
+  @protected
+  PlatformInt64 dco_decode_box_autoadd_i_64(dynamic raw);
 
   @protected
   LauncherStateDto dco_decode_box_autoadd_launcher_state_dto(dynamic raw);
 
   @protected
+  NativeToolDto dco_decode_box_autoadd_native_tool_dto(dynamic raw);
+
+  @protected
+  PluginDetailDto dco_decode_box_autoadd_plugin_detail_dto(dynamic raw);
+
+  @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw);
+
+  @protected
+  BigInt dco_decode_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  WebConsentKindDto dco_decode_box_autoadd_web_consent_kind_dto(dynamic raw);
+
+  @protected
+  WebPluginLaunchDto dco_decode_box_autoadd_web_plugin_launch_dto(dynamic raw);
+
+  @protected
   CandidateDto dco_decode_candidate_dto(dynamic raw);
+
+  @protected
+  CandidateKindDto dco_decode_candidate_kind_dto(dynamic raw);
+
+  @protected
+  CandidateUpdateDto dco_decode_candidate_update_dto(dynamic raw);
+
+  @protected
+  ClipboardDetailDto dco_decode_clipboard_detail_dto(dynamic raw);
+
+  @protected
+  ClipboardHistoryDto dco_decode_clipboard_history_dto(dynamic raw);
+
+  @protected
+  ClipboardHistoryStatusDto dco_decode_clipboard_history_status_dto(
+      dynamic raw);
+
+  @protected
+  ClipboardItemDto dco_decode_clipboard_item_dto(dynamic raw);
+
+  @protected
+  ClipboardNoticeDto dco_decode_clipboard_notice_dto(dynamic raw);
+
+  @protected
+  ContextCaptureDto dco_decode_context_capture_dto(dynamic raw);
+
+  @protected
+  ContextCaptureStatusDto dco_decode_context_capture_status_dto(dynamic raw);
 
   @protected
   ContextDto dco_decode_context_dto(dynamic raw);
 
   @protected
+  ContextSourceDto dco_decode_context_source_dto(dynamic raw);
+
+  @protected
+  ExecutionSessionDetailDto dco_decode_execution_session_detail_dto(
+      dynamic raw);
+
+  @protected
+  ExecutionSessionStatusDto dco_decode_execution_session_status_dto(
+      dynamic raw);
+
+  @protected
+  ExecutionSessionSummaryDto dco_decode_execution_session_summary_dto(
+      dynamic raw);
+
+  @protected
+  ExtensionStatusDto dco_decode_extension_status_dto(dynamic raw);
+
+  @protected
   double dco_decode_f_32(dynamic raw);
+
+  @protected
+  FileObjectKindDto dco_decode_file_object_kind_dto(dynamic raw);
+
+  @protected
+  FilePreviewDto dco_decode_file_preview_dto(dynamic raw);
+
+  @protected
+  FileSearchEngineDto dco_decode_file_search_engine_dto(dynamic raw);
+
+  @protected
+  FileSearchProgressDto dco_decode_file_search_progress_dto(dynamic raw);
+
+  @protected
+  HostViewDto dco_decode_host_view_dto(dynamic raw);
+
+  @protected
+  int dco_decode_i_32(dynamic raw);
+
+  @protected
+  PlatformInt64 dco_decode_i_64(dynamic raw);
+
+  @protected
+  InputModeDto dco_decode_input_mode_dto(dynamic raw);
 
   @protected
   LauncherStateDto dco_decode_launcher_state_dto(dynamic raw);
@@ -52,25 +184,155 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<CandidateDto> dco_decode_list_candidate_dto(dynamic raw);
 
   @protected
+  List<ClipboardItemDto> dco_decode_list_clipboard_item_dto(dynamic raw);
+
+  @protected
+  List<ContextCaptureDto> dco_decode_list_context_capture_dto(dynamic raw);
+
+  @protected
   List<ContextDto> dco_decode_list_context_dto(dynamic raw);
+
+  @protected
+  List<ExecutionSessionSummaryDto>
+      dco_decode_list_execution_session_summary_dto(dynamic raw);
+
+  @protected
+  List<ExtensionStatusDto> dco_decode_list_extension_status_dto(dynamic raw);
+
+  @protected
+  List<PluginKeyValueDto> dco_decode_list_plugin_key_value_dto(dynamic raw);
+
+  @protected
+  List<PluginStatusDto> dco_decode_list_plugin_status_dto(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<(String, String)> dco_decode_list_record_string_string(dynamic raw);
+
+  @protected
   List<ScopeDto> dco_decode_list_scope_dto(dynamic raw);
+
+  @protected
+  List<SearchSourceDto> dco_decode_list_search_source_dto(dynamic raw);
+
+  @protected
+  List<ShortcutActionDto> dco_decode_list_shortcut_action_dto(dynamic raw);
+
+  @protected
+  List<ShortcutApplicationDto> dco_decode_list_shortcut_application_dto(
+      dynamic raw);
+
+  @protected
+  List<ShortcutRouteDto> dco_decode_list_shortcut_route_dto(dynamic raw);
+
+  @protected
+  List<WebPackageDto> dco_decode_list_web_package_dto(dynamic raw);
+
+  @protected
+  List<WebPermissionDto> dco_decode_list_web_permission_dto(dynamic raw);
+
+  @protected
+  NativeToolDto dco_decode_native_tool_dto(dynamic raw);
 
   @protected
   String? dco_decode_opt_String(dynamic raw);
 
   @protected
+  ActivationInputDto? dco_decode_opt_box_autoadd_activation_input_dto(
+      dynamic raw);
+
+  @protected
+  ClipboardDetailDto? dco_decode_opt_box_autoadd_clipboard_detail_dto(
+      dynamic raw);
+
+  @protected
+  ClipboardNoticeDto? dco_decode_opt_box_autoadd_clipboard_notice_dto(
+      dynamic raw);
+
+  @protected
+  ExecutionSessionDetailDto?
+      dco_decode_opt_box_autoadd_execution_session_detail_dto(dynamic raw);
+
+  @protected
+  FileObjectKindDto? dco_decode_opt_box_autoadd_file_object_kind_dto(
+      dynamic raw);
+
+  @protected
+  FileSearchProgressDto? dco_decode_opt_box_autoadd_file_search_progress_dto(
+      dynamic raw);
+
+  @protected
+  HostViewDto? dco_decode_opt_box_autoadd_host_view_dto(dynamic raw);
+
+  @protected
+  int? dco_decode_opt_box_autoadd_i_32(dynamic raw);
+
+  @protected
+  PlatformInt64? dco_decode_opt_box_autoadd_i_64(dynamic raw);
+
+  @protected
   LauncherStateDto? dco_decode_opt_box_autoadd_launcher_state_dto(dynamic raw);
+
+  @protected
+  NativeToolDto? dco_decode_opt_box_autoadd_native_tool_dto(dynamic raw);
+
+  @protected
+  PluginDetailDto? dco_decode_opt_box_autoadd_plugin_detail_dto(dynamic raw);
+
+  @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
+
+  @protected
+  BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  WebConsentKindDto? dco_decode_opt_box_autoadd_web_consent_kind_dto(
+      dynamic raw);
+
+  @protected
+  WebPluginLaunchDto? dco_decode_opt_box_autoadd_web_plugin_launch_dto(
+      dynamic raw);
 
   @protected
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  PluginDetailDto dco_decode_plugin_detail_dto(dynamic raw);
+
+  @protected
+  PluginKeyValueDto dco_decode_plugin_key_value_dto(dynamic raw);
+
+  @protected
+  PluginStatusDto dco_decode_plugin_status_dto(dynamic raw);
+
+  @protected
+  (String, String) dco_decode_record_string_string(dynamic raw);
+
+  @protected
   ScopeDto dco_decode_scope_dto(dynamic raw);
+
+  @protected
+  SearchSourceDto dco_decode_search_source_dto(dynamic raw);
+
+  @protected
+  SearchSourceStateDto dco_decode_search_source_state_dto(dynamic raw);
+
+  @protected
+  ShortcutActionDto dco_decode_shortcut_action_dto(dynamic raw);
+
+  @protected
+  ShortcutApplicationDto dco_decode_shortcut_application_dto(dynamic raw);
+
+  @protected
+  ShortcutRouteDto dco_decode_shortcut_route_dto(dynamic raw);
+
+  @protected
+  SnapshotWaitDto dco_decode_snapshot_wait_dto(dynamic raw);
+
+  @protected
+  SnapshotWaitKindDto dco_decode_snapshot_wait_kind_dto(dynamic raw);
 
   @protected
   int dco_decode_u_32(dynamic raw);
@@ -85,7 +347,35 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void dco_decode_unit(dynamic raw);
 
   @protected
+  WebConsentKindDto dco_decode_web_consent_kind_dto(dynamic raw);
+
+  @protected
+  WebDocumentDto dco_decode_web_document_dto(dynamic raw);
+
+  @protected
+  WebPackageDto dco_decode_web_package_dto(dynamic raw);
+
+  @protected
+  WebPermissionDto dco_decode_web_permission_dto(dynamic raw);
+
+  @protected
+  WebPermissionKindDto dco_decode_web_permission_kind_dto(dynamic raw);
+
+  @protected
+  WebPluginLaunchDto dco_decode_web_plugin_launch_dto(dynamic raw);
+
+  @protected
+  WebReplyDto dco_decode_web_reply_dto(dynamic raw);
+
+  @protected
+  WebReviewDto dco_decode_web_review_dto(dynamic raw);
+
+  @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
+
+  @protected
+  Map<String, String> sse_decode_Map_String_String_None(
+      SseDeserializer deserializer);
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
@@ -94,20 +384,170 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ActionResultDto sse_decode_action_result_dto(SseDeserializer deserializer);
 
   @protected
+  ActionStatusDto sse_decode_action_status_dto(SseDeserializer deserializer);
+
+  @protected
+  ActivationInputDto sse_decode_activation_input_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  AvailabilityDto sse_decode_availability_dto(SseDeserializer deserializer);
+
+  @protected
+  BindingResolutionDto sse_decode_binding_resolution_dto(
+      SseDeserializer deserializer);
+
+  @protected
   bool sse_decode_bool(SseDeserializer deserializer);
+
+  @protected
+  ActivationInputDto sse_decode_box_autoadd_activation_input_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ClipboardDetailDto sse_decode_box_autoadd_clipboard_detail_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ClipboardNoticeDto sse_decode_box_autoadd_clipboard_notice_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ExecutionSessionDetailDto sse_decode_box_autoadd_execution_session_detail_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  FileObjectKindDto sse_decode_box_autoadd_file_object_kind_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  FileSearchProgressDto sse_decode_box_autoadd_file_search_progress_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  HostViewDto sse_decode_box_autoadd_host_view_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_box_autoadd_i_32(SseDeserializer deserializer);
+
+  @protected
+  PlatformInt64 sse_decode_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
   LauncherStateDto sse_decode_box_autoadd_launcher_state_dto(
       SseDeserializer deserializer);
 
   @protected
+  NativeToolDto sse_decode_box_autoadd_native_tool_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  PluginDetailDto sse_decode_box_autoadd_plugin_detail_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
+  BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  WebConsentKindDto sse_decode_box_autoadd_web_consent_kind_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  WebPluginLaunchDto sse_decode_box_autoadd_web_plugin_launch_dto(
+      SseDeserializer deserializer);
+
+  @protected
   CandidateDto sse_decode_candidate_dto(SseDeserializer deserializer);
+
+  @protected
+  CandidateKindDto sse_decode_candidate_kind_dto(SseDeserializer deserializer);
+
+  @protected
+  CandidateUpdateDto sse_decode_candidate_update_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ClipboardDetailDto sse_decode_clipboard_detail_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ClipboardHistoryDto sse_decode_clipboard_history_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ClipboardHistoryStatusDto sse_decode_clipboard_history_status_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ClipboardItemDto sse_decode_clipboard_item_dto(SseDeserializer deserializer);
+
+  @protected
+  ClipboardNoticeDto sse_decode_clipboard_notice_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ContextCaptureDto sse_decode_context_capture_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ContextCaptureStatusDto sse_decode_context_capture_status_dto(
+      SseDeserializer deserializer);
 
   @protected
   ContextDto sse_decode_context_dto(SseDeserializer deserializer);
 
   @protected
+  ContextSourceDto sse_decode_context_source_dto(SseDeserializer deserializer);
+
+  @protected
+  ExecutionSessionDetailDto sse_decode_execution_session_detail_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ExecutionSessionStatusDto sse_decode_execution_session_status_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ExecutionSessionSummaryDto sse_decode_execution_session_summary_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ExtensionStatusDto sse_decode_extension_status_dto(
+      SseDeserializer deserializer);
+
+  @protected
   double sse_decode_f_32(SseDeserializer deserializer);
+
+  @protected
+  FileObjectKindDto sse_decode_file_object_kind_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  FilePreviewDto sse_decode_file_preview_dto(SseDeserializer deserializer);
+
+  @protected
+  FileSearchEngineDto sse_decode_file_search_engine_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  FileSearchProgressDto sse_decode_file_search_progress_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  HostViewDto sse_decode_host_view_dto(SseDeserializer deserializer);
+
+  @protected
+  int sse_decode_i_32(SseDeserializer deserializer);
+
+  @protected
+  PlatformInt64 sse_decode_i_64(SseDeserializer deserializer);
+
+  @protected
+  InputModeDto sse_decode_input_mode_dto(SseDeserializer deserializer);
 
   @protected
   LauncherStateDto sse_decode_launcher_state_dto(SseDeserializer deserializer);
@@ -120,26 +560,178 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<ClipboardItemDto> sse_decode_list_clipboard_item_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  List<ContextCaptureDto> sse_decode_list_context_capture_dto(
+      SseDeserializer deserializer);
+
+  @protected
   List<ContextDto> sse_decode_list_context_dto(SseDeserializer deserializer);
+
+  @protected
+  List<ExecutionSessionSummaryDto>
+      sse_decode_list_execution_session_summary_dto(
+          SseDeserializer deserializer);
+
+  @protected
+  List<ExtensionStatusDto> sse_decode_list_extension_status_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  List<PluginKeyValueDto> sse_decode_list_plugin_key_value_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  List<PluginStatusDto> sse_decode_list_plugin_status_dto(
+      SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<(String, String)> sse_decode_list_record_string_string(
+      SseDeserializer deserializer);
+
+  @protected
   List<ScopeDto> sse_decode_list_scope_dto(SseDeserializer deserializer);
 
   @protected
+  List<SearchSourceDto> sse_decode_list_search_source_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  List<ShortcutActionDto> sse_decode_list_shortcut_action_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  List<ShortcutApplicationDto> sse_decode_list_shortcut_application_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  List<ShortcutRouteDto> sse_decode_list_shortcut_route_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  List<WebPackageDto> sse_decode_list_web_package_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  List<WebPermissionDto> sse_decode_list_web_permission_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  NativeToolDto sse_decode_native_tool_dto(SseDeserializer deserializer);
+
+  @protected
   String? sse_decode_opt_String(SseDeserializer deserializer);
+
+  @protected
+  ActivationInputDto? sse_decode_opt_box_autoadd_activation_input_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ClipboardDetailDto? sse_decode_opt_box_autoadd_clipboard_detail_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ClipboardNoticeDto? sse_decode_opt_box_autoadd_clipboard_notice_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ExecutionSessionDetailDto?
+      sse_decode_opt_box_autoadd_execution_session_detail_dto(
+          SseDeserializer deserializer);
+
+  @protected
+  FileObjectKindDto? sse_decode_opt_box_autoadd_file_object_kind_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  FileSearchProgressDto? sse_decode_opt_box_autoadd_file_search_progress_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  HostViewDto? sse_decode_opt_box_autoadd_host_view_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  int? sse_decode_opt_box_autoadd_i_32(SseDeserializer deserializer);
+
+  @protected
+  PlatformInt64? sse_decode_opt_box_autoadd_i_64(SseDeserializer deserializer);
 
   @protected
   LauncherStateDto? sse_decode_opt_box_autoadd_launcher_state_dto(
       SseDeserializer deserializer);
 
   @protected
+  NativeToolDto? sse_decode_opt_box_autoadd_native_tool_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  PluginDetailDto? sse_decode_opt_box_autoadd_plugin_detail_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
+  BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  WebConsentKindDto? sse_decode_opt_box_autoadd_web_consent_kind_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  WebPluginLaunchDto? sse_decode_opt_box_autoadd_web_plugin_launch_dto(
+      SseDeserializer deserializer);
+
+  @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  PluginDetailDto sse_decode_plugin_detail_dto(SseDeserializer deserializer);
+
+  @protected
+  PluginKeyValueDto sse_decode_plugin_key_value_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  PluginStatusDto sse_decode_plugin_status_dto(SseDeserializer deserializer);
+
+  @protected
+  (String, String) sse_decode_record_string_string(
+      SseDeserializer deserializer);
+
+  @protected
   ScopeDto sse_decode_scope_dto(SseDeserializer deserializer);
+
+  @protected
+  SearchSourceDto sse_decode_search_source_dto(SseDeserializer deserializer);
+
+  @protected
+  SearchSourceStateDto sse_decode_search_source_state_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ShortcutActionDto sse_decode_shortcut_action_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ShortcutApplicationDto sse_decode_shortcut_application_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ShortcutRouteDto sse_decode_shortcut_route_dto(SseDeserializer deserializer);
+
+  @protected
+  SnapshotWaitDto sse_decode_snapshot_wait_dto(SseDeserializer deserializer);
+
+  @protected
+  SnapshotWaitKindDto sse_decode_snapshot_wait_kind_dto(
+      SseDeserializer deserializer);
 
   @protected
   int sse_decode_u_32(SseDeserializer deserializer);
@@ -154,11 +746,39 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
-  int sse_decode_i_32(SseDeserializer deserializer);
+  WebConsentKindDto sse_decode_web_consent_kind_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  WebDocumentDto sse_decode_web_document_dto(SseDeserializer deserializer);
+
+  @protected
+  WebPackageDto sse_decode_web_package_dto(SseDeserializer deserializer);
+
+  @protected
+  WebPermissionDto sse_decode_web_permission_dto(SseDeserializer deserializer);
+
+  @protected
+  WebPermissionKindDto sse_decode_web_permission_kind_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  WebPluginLaunchDto sse_decode_web_plugin_launch_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  WebReplyDto sse_decode_web_reply_dto(SseDeserializer deserializer);
+
+  @protected
+  WebReviewDto sse_decode_web_review_dto(SseDeserializer deserializer);
 
   @protected
   void sse_encode_AnyhowException(
       AnyhowException self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_Map_String_String_None(
+      Map<String, String> self, SseSerializer serializer);
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
@@ -168,20 +788,177 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       ActionResultDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_action_status_dto(
+      ActionStatusDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_activation_input_dto(
+      ActivationInputDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_availability_dto(
+      AvailabilityDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_binding_resolution_dto(
+      BindingResolutionDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_bool(bool self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_activation_input_dto(
+      ActivationInputDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_clipboard_detail_dto(
+      ClipboardDetailDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_clipboard_notice_dto(
+      ClipboardNoticeDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_execution_session_detail_dto(
+      ExecutionSessionDetailDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_file_object_kind_dto(
+      FileObjectKindDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_file_search_progress_dto(
+      FileSearchProgressDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_host_view_dto(
+      HostViewDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_i_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_i_64(
+      PlatformInt64 self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_launcher_state_dto(
       LauncherStateDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_native_tool_dto(
+      NativeToolDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_plugin_detail_dto(
+      PluginDetailDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_web_consent_kind_dto(
+      WebConsentKindDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_web_plugin_launch_dto(
+      WebPluginLaunchDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_candidate_dto(CandidateDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_candidate_kind_dto(
+      CandidateKindDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_candidate_update_dto(
+      CandidateUpdateDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_clipboard_detail_dto(
+      ClipboardDetailDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_clipboard_history_dto(
+      ClipboardHistoryDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_clipboard_history_status_dto(
+      ClipboardHistoryStatusDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_clipboard_item_dto(
+      ClipboardItemDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_clipboard_notice_dto(
+      ClipboardNoticeDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_context_capture_dto(
+      ContextCaptureDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_context_capture_status_dto(
+      ContextCaptureStatusDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_context_dto(ContextDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_context_source_dto(
+      ContextSourceDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_execution_session_detail_dto(
+      ExecutionSessionDetailDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_execution_session_status_dto(
+      ExecutionSessionStatusDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_execution_session_summary_dto(
+      ExecutionSessionSummaryDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_extension_status_dto(
+      ExtensionStatusDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_f_32(double self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_file_object_kind_dto(
+      FileObjectKindDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_file_preview_dto(
+      FilePreviewDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_file_search_engine_dto(
+      FileSearchEngineDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_file_search_progress_dto(
+      FileSearchProgressDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_host_view_dto(HostViewDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_i_32(int self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_i_64(PlatformInt64 self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_input_mode_dto(InputModeDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_launcher_state_dto(
@@ -195,29 +972,185 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<CandidateDto> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_clipboard_item_dto(
+      List<ClipboardItemDto> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_context_capture_dto(
+      List<ContextCaptureDto> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_context_dto(
       List<ContextDto> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_execution_session_summary_dto(
+      List<ExecutionSessionSummaryDto> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_extension_status_dto(
+      List<ExtensionStatusDto> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_plugin_key_value_dto(
+      List<PluginKeyValueDto> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_plugin_status_dto(
+      List<PluginStatusDto> self, SseSerializer serializer);
 
   @protected
   void sse_encode_list_prim_u_8_strict(
       Uint8List self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_record_string_string(
+      List<(String, String)> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_scope_dto(List<ScopeDto> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_search_source_dto(
+      List<SearchSourceDto> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_shortcut_action_dto(
+      List<ShortcutActionDto> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_shortcut_application_dto(
+      List<ShortcutApplicationDto> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_shortcut_route_dto(
+      List<ShortcutRouteDto> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_web_package_dto(
+      List<WebPackageDto> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_web_permission_dto(
+      List<WebPermissionDto> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_native_tool_dto(NativeToolDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_String(String? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_activation_input_dto(
+      ActivationInputDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_clipboard_detail_dto(
+      ClipboardDetailDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_clipboard_notice_dto(
+      ClipboardNoticeDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_execution_session_detail_dto(
+      ExecutionSessionDetailDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_file_object_kind_dto(
+      FileObjectKindDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_file_search_progress_dto(
+      FileSearchProgressDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_host_view_dto(
+      HostViewDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_i_32(int? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_i_64(
+      PlatformInt64? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_launcher_state_dto(
       LauncherStateDto? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_native_tool_dto(
+      NativeToolDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_plugin_detail_dto(
+      PluginDetailDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_web_consent_kind_dto(
+      WebConsentKindDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_web_plugin_launch_dto(
+      WebPluginLaunchDto? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_list_prim_u_8_strict(
       Uint8List? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_plugin_detail_dto(
+      PluginDetailDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_plugin_key_value_dto(
+      PluginKeyValueDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_plugin_status_dto(
+      PluginStatusDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_record_string_string(
+      (String, String) self, SseSerializer serializer);
+
+  @protected
   void sse_encode_scope_dto(ScopeDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_search_source_dto(
+      SearchSourceDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_search_source_state_dto(
+      SearchSourceStateDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_shortcut_action_dto(
+      ShortcutActionDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_shortcut_application_dto(
+      ShortcutApplicationDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_shortcut_route_dto(
+      ShortcutRouteDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_snapshot_wait_dto(
+      SnapshotWaitDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_snapshot_wait_kind_dto(
+      SnapshotWaitKindDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_u_32(int self, SseSerializer serializer);
@@ -232,7 +1165,33 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_unit(void self, SseSerializer serializer);
 
   @protected
-  void sse_encode_i_32(int self, SseSerializer serializer);
+  void sse_encode_web_consent_kind_dto(
+      WebConsentKindDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_web_document_dto(
+      WebDocumentDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_web_package_dto(WebPackageDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_web_permission_dto(
+      WebPermissionDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_web_permission_kind_dto(
+      WebPermissionKindDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_web_plugin_launch_dto(
+      WebPluginLaunchDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_web_reply_dto(WebReplyDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_web_review_dto(WebReviewDto self, SseSerializer serializer);
 }
 
 // Section: wire_class

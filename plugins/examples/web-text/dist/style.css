@@ -1,0 +1,5 @@
+main { display: grid; gap: var(--aw-space-md); padding: var(--aw-space-xxl); }
+label { font-size: var(--aw-heading-size); font-weight: var(--aw-heading-weight); }
+p { margin: 0; }
+textarea { min-height: 240px; resize: vertical; font-size: var(--aw-body-size); line-height: var(--aw-body-line-height); }
+output { font-variant-numeric: tabular-nums; }

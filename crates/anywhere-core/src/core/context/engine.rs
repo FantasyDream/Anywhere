@@ -29,12 +29,16 @@ pub const MAX_DEPTH: u8 = 3;
 /// Upper bound on contexts in one run, so a pathological chain cannot grow without limit.
 pub const MAX_CONTEXTS: usize = 128;
 
+/// Caller-supplied, memory-only currency guard. The engine knows no product policy.
+pub type ExecutionGuard = Arc<dyn Fn() -> bool + Send + Sync>;
+
 #[derive(Clone)]
 pub struct ExecutionContext {
     pub session_id: SessionId,
     pub revision: Revision,
     pub(crate) current: Arc<AtomicU64>,
     pub(crate) events: broadcast::Sender<LauncherEvent>,
+    pub(crate) guard: Option<ExecutionGuard>,
 }
 
 pub(crate) fn stamp(session: SessionId, revision: Revision) -> u64 {
@@ -54,11 +58,13 @@ impl ExecutionContext {
             revision,
             current: Arc::new(AtomicU64::new(stamp(session_id, revision))),
             events,
+            guard: None,
         }
     }
 
     pub fn is_current(&self) -> bool {
         self.current.load(Ordering::Acquire) == stamp(self.session_id, self.revision)
+            && self.guard.as_ref().is_none_or(|guard| guard())
     }
 
     /// Resolves once this session or revision is superseded.
@@ -103,8 +109,26 @@ impl ContextGraph {
             cursor: 0,
             pending: None,
         };
-        for seed in seeds {
+        // Captures/cache use local ids. Rebase parent links when row ids are reassigned,
+        // including seeds deduplicated against an earlier value from the same source.
+        let mut seed_ids = std::collections::HashMap::new();
+        for mut seed in seeds {
+            let old_id = seed.id.clone();
+            seed.source_context_id = seed
+                .source_context_id
+                .as_ref()
+                .and_then(|parent| seed_ids.get(parent).cloned());
+            let identity = (seed.type_id.clone(), seed.value.shared_text(), seed.source);
             run.insert(seed);
+            if !old_id.is_empty() {
+                if let Some(held) = run.contexts().iter().find(|held| {
+                    held.type_id == identity.0
+                        && held.value.shared_text() == identity.1
+                        && held.source == identity.2
+                }) {
+                    seed_ids.insert(old_id, held.id.clone());
+                }
+            }
         }
         run
     }
@@ -112,8 +136,8 @@ impl ContextGraph {
 
 /// Run one provider call to completion, detached from whoever is waiting for it.
 ///
-/// The result is sent whether or not anyone is still waiting, so the work is never lost and
-/// never repeated.
+/// A budget cut does not interrupt the call. Supersession stops the async wait and sends
+/// Abandoned; any blocking worker already started must retain its own resource lifetime.
 async fn run_provider(
     provider: Arc<dyn ContextProvider>,
     input: ResolvedContext,
@@ -131,9 +155,13 @@ async fn run_provider(
             "provider_started"
         );
         let started = std::time::Instant::now();
-        StepOutcome::Completed {
-            result: provider.resolve(&input, &execution).await,
-            duration_us: started.elapsed().as_micros() as u64,
+        tokio::select! {
+            biased;
+            _ = execution.superseded() => StepOutcome::Abandoned,
+            result = provider.resolve(&input, &execution) => StepOutcome::Completed {
+                result,
+                duration_us: started.elapsed().as_micros() as u64,
+            },
         }
     };
     // A closed receiver only means nobody is waiting any more.
@@ -208,10 +236,10 @@ pub struct PendingStep {
     pub produces: Vec<ContextTypeId>,
     /// The started call, detached into its own task.
     ///
-    /// Detaching is the point: a budget cut stops *waiting*, and dropping a future that is
-    /// awaiting a `spawn_blocking` handle would cancel the awaited task and lose the work the
-    /// provider had already begun. A detached task keeps running to completion whatever the
-    /// caller does, and the receiver is how the late pass collects the same result.
+    /// A first-snapshot budget cut stops waiting here without dropping the provider future.
+    /// A late pass collects the same call. Session or policy supersession instead cancels
+    /// that async wait; dropping a spawn_blocking handle does not stop an OS operation
+    /// already running, and its result cannot enter the superseded graph.
     outcome: oneshot::Receiver<StepOutcome>,
 }
 
@@ -359,6 +387,9 @@ impl ContextGraphRun {
         else {
             return;
         };
+        if !self.execution.is_current() {
+            return;
+        }
         let StepOutcome::Completed {
             result,
             duration_us,
@@ -395,8 +426,14 @@ impl ContextGraphRun {
                     output.provider_id = provider_id.clone();
                     output.depth = input.depth + 1;
                     output.source_context_id = Some(input.id.clone());
-                    if input.source == ContextSource::UserInput {
-                        output.source = ContextSource::UserInput;
+                    // Recognition providers use UserInput as their default. A URL or
+                    // JSON value recognized from a captured source keeps that source;
+                    // providers which explicitly own a different source keep theirs.
+                    if output.source == ContextSource::UserInput {
+                        output.source = input.source;
+                    }
+                    if output.capture.is_none() {
+                        output.capture = input.capture.clone();
                     }
                     self.insert(output);
                 }
@@ -472,7 +509,7 @@ mod tests {
             };
             Ok(vec![ResolvedContext::new(
                 TEXT,
-                ContextValue::Text(value),
+                ContextValue::Text(value.into()),
                 input.source,
                 "chain",
             )])
@@ -485,6 +522,7 @@ mod tests {
             revision: 0,
             current: Arc::new(AtomicU64::new(stamp(1, 0))),
             events: broadcast::channel(32).0,
+            guard: None,
         }
     }
 

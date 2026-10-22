@@ -1,6 +1,6 @@
 //! Minimal deterministic query parsing and field matching.
 //!
-//! Deliberately excludes NLP, CJK word segmentation and pinyin conversion.
+//! Literal names and metadata retain their tiers; pinyin is a lower-ranked fallback.
 
 /// Trim, lowercase and split on ASCII whitespace into non-empty tokens.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -8,6 +8,7 @@ pub struct Query {
     pub raw_input: String,
     pub normalized_query: String,
     pub tokens: Vec<String>,
+    compact: String,
 }
 
 impl Query {
@@ -18,10 +19,15 @@ impl Query {
             .filter(|token| !token.is_empty())
             .map(str::to_owned)
             .collect();
+        let compact = normalized_query
+            .chars()
+            .filter(|c| c.is_alphanumeric())
+            .collect();
         Self {
             raw_input: raw_input.to_owned(),
             normalized_query,
             tokens,
+            compact,
         }
     }
 
@@ -34,11 +40,8 @@ impl Query {
     /// `google 不存在` compacted to `google` and matched Google Chrome even though the
     /// second token matched nothing. That is discarding query information, which is
     /// not the same as "no Chinese segmentation".
-    pub fn compact(&self) -> String {
-        self.normalized_query
-            .chars()
-            .filter(|c| c.is_alphanumeric())
-            .collect()
+    pub fn compact(&self) -> &str {
+        &self.compact
     }
 
     /// A query with no tokens is Context Home, not a search.
@@ -53,6 +56,8 @@ impl Query {
 /// usage history, so the query tier dominates every other ranking term.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MatchLevel {
+    /// Chinese full pinyin or initials; literal matches always rank higher.
+    Transliteration,
     /// Every token matched inside some field.
     Substring,
     /// Every token matched the start of a word in some field.
@@ -70,10 +75,11 @@ impl MatchLevel {
             return 0;
         }
         match self {
-            Self::Exact => 4000,
-            Self::Prefix => 3000,
-            Self::WordPrefix => 2000,
-            Self::Substring => 1000,
+            Self::Transliteration => 1000,
+            Self::Exact => 5000,
+            Self::Prefix => 4000,
+            Self::WordPrefix => 3000,
+            Self::Substring => 2000,
         }
     }
 }
@@ -85,7 +91,7 @@ impl MatchLevel {
 /// or a file stem, which the user never sees — only matches exactly or at a word
 /// start; otherwise `co` would surface every app whose bundle id contains those
 /// letters, which is exactly what was reported.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SearchFields {
     name: Vec<String>,
     metadata: Vec<String>,
@@ -138,7 +144,12 @@ impl SearchFields {
             .metadata
             .iter()
             .map(|field| field_match(field, query, true));
-        names.chain(metadata).flatten().max()
+        names.chain(metadata).flatten().max().or_else(|| {
+            self.name
+                .iter()
+                .any(|field| super::pinyin::matches(field, &query.tokens))
+                .then_some(MatchLevel::Transliteration)
+        })
     }
 }
 
@@ -167,12 +178,7 @@ fn field_match(field: &str, query: &Query, identifier_only: bool) -> Option<Matc
         return Some(MatchLevel::Prefix);
     }
     // Separator-insensitive prefix of a visible name: `abdown` → ABDownloadManager.
-    let compact = field
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric())
-        .collect::<String>();
-    let wanted = query.compact();
-    if !wanted.is_empty() && compact.starts_with(&wanted) {
+    if compact_prefix(field, query.compact()) {
         return Some(MatchLevel::Substring);
     }
     if query
@@ -185,6 +191,14 @@ fn field_match(field: &str, query: &Query, identifier_only: bool) -> Option<Matc
     None
 }
 
+/// Compare only as far as the query needs, without allocating a compact copy of
+/// every candidate on every keystroke. Non-ASCII UTF-8 bytes cannot pass the ASCII
+/// filter, exactly like the previous char-based materialization.
+fn compact_prefix(field: &str, wanted: &str) -> bool {
+    let mut compact = field.bytes().filter(u8::is_ascii_alphanumeric);
+    !wanted.is_empty() && wanted.bytes().all(|byte| compact.next() == Some(byte))
+}
+
 /// Guards against pathological manifests without allocating per lookup.
 pub fn valid_search_field(value: &str) -> bool {
     value.len() <= 200
@@ -193,6 +207,64 @@ pub fn valid_search_field(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn pinyin_names_match_but_identifiers_stay_literal_and_bounded() {
+        let name = fields("微信开发工具", &[], &["com.开发工具"]);
+        assert_eq!(
+            name.matched(&Query::parse("WEIXIN")),
+            Some(MatchLevel::Transliteration)
+        );
+        assert_eq!(
+            name.matched(&Query::parse("wxkfgj")),
+            Some(MatchLevel::Transliteration)
+        );
+        assert!(name.matched(&Query::parse("weixin missing")).is_none());
+        assert!(fields("Other", &[], &["微信"])
+            .matched(&Query::parse("wx"))
+            .is_none());
+        assert!(
+            fields("weixin", &[], &[]).matched(&Query::parse("weixin"))
+                > name.matched(&Query::parse("weixin"))
+        );
+        assert!(
+            MatchLevel::Transliteration.score(true)
+                > crate::core::ranking::score::NON_QUERY_TERM_CEILING
+        );
+        assert!(
+            MatchLevel::Substring.score(true) - MatchLevel::Transliteration.score(true)
+                > crate::core::ranking::score::NON_QUERY_TERM_CEILING
+        );
+    }
+
+    #[test]
+    fn streaming_compact_prefix_preserves_materialized_unicode_and_separator_behavior() {
+        for field in [
+            "",
+            "google chrome",
+            "ab-download_manager",
+            "café",
+            "工具abc",
+            "İstanbul",
+            "😀x",
+            "^a!b$1",
+        ] {
+            let compact: String = field
+                .chars()
+                .filter(|c| c.is_ascii_alphanumeric())
+                .collect();
+            for wanted in [
+                "", "g", "googlec", "abdown", "ab1", "caf", "café", "工具", "abc", "istan", "x",
+                "a", "z",
+            ] {
+                assert_eq!(
+                    compact_prefix(field, wanted),
+                    !wanted.is_empty() && compact.starts_with(wanted),
+                    "{field:?}, {wanted:?}"
+                );
+            }
+        }
+    }
 
     fn fields(title: &str, aliases: &[&str], keywords: &[&str]) -> SearchFields {
         let aliases = aliases.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
@@ -337,8 +409,8 @@ mod tests {
 
     #[test]
     fn query_match_score_tiers_exceed_every_other_ranking_term() {
-        assert_eq!(MatchLevel::Exact.score(true), 4000);
-        assert_eq!(MatchLevel::Substring.score(true), 1000);
+        assert_eq!(MatchLevel::Exact.score(true), 5000);
+        assert_eq!(MatchLevel::Substring.score(true), 2000);
         assert_eq!(MatchLevel::Exact.score(false), 0);
         assert!(
             MatchLevel::Substring.score(true) > crate::core::ranking::score::NON_QUERY_TERM_CEILING

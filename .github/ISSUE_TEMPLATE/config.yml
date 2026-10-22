@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 使用帮助 / Usage and troubleshooting
+    url: https://github.com/FantasyDream/Anywhere/blob/HEAD/SUPPORT.md
+    about: 操作、权限、构建和问题报告入口。
+  - name: 安全报告 / Security policy
+    url: https://github.com/FantasyDream/Anywhere/blob/HEAD/SECURITY.md
+    about: 请先阅读私密报告流程，不公开提交漏洞或敏感信息。

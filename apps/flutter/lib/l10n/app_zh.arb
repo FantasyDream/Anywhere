@@ -1,0 +1,780 @@
+{
+  "@@locale": "zh",
+  "settings": "设置",
+  "general": "通用",
+  "shortcuts": "快捷键",
+  "context": "上下文",
+  "search": "搜索",
+  "clipboard": "剪贴板",
+  "features": "功能",
+  "language": "语言",
+  "languageDescription": "选择 Anywhere 使用的语言",
+  "languageSystem": "跟随系统",
+  "languageEnglish": "English",
+  "languageChinese": "简体中文",
+  "done": "完成",
+  "saving": "正在保存…",
+  "openAtLogin": "登录时启动",
+  "openAtLoginDescription": "登录后在后台启动",
+  "currentApp": "当前应用",
+  "globalSearch": "全局搜索",
+  "universalSearch": "全局搜索",
+  "navigationModes": "全局搜索 / 当前应用",
+  "backToResults": "返回结果",
+  "back": "返回",
+  "run": "运行",
+  "open": "打开",
+  "copy": "复制",
+  "actions": "操作",
+  "retry": "重试",
+  "cancel": "取消",
+  "close": "关闭",
+  "clear": "清空",
+  "remove": "移除",
+  "delete": "删除",
+  "preview": "预览",
+  "kind": "类型",
+  "size": "大小",
+  "modified": "修改时间",
+  "location": "位置",
+  "allTypes": "所有类型",
+  "files": "文件",
+  "folders": "文件夹",
+  "documents": "文档",
+  "pdf": "PDF",
+  "images": "图片",
+  "audio": "音频",
+  "video": "视频",
+  "archives": "压缩文件",
+  "code": "代码",
+  "fileSearch": "文件搜索",
+  "clipboardHistory": "剪贴板历史",
+  "clipboardShelf": "悬浮剪贴板",
+  "runningTasks": "运行中的任务",
+  "searchAppsActions": "搜索应用和操作…",
+  "searchFilesFolders": "搜索文件和文件夹…",
+  "searchHistory": "搜索剪贴板历史…",
+  "findFilesFolders": "查找文件和文件夹",
+  "noResults": "无结果",
+  "copied": "已复制",
+  "copiedPaste": "已复制，可在目标应用中粘贴。",
+  "copyFailed": "复制失败，请重试。",
+  "loading": "正在加载…",
+  "searching": "正在搜索…",
+  "suggested": "建议",
+  "menus": "菜单",
+  "browseMenus": "浏览菜单…",
+  "contextSources": "上下文来源",
+  "contextDescription": "选择唤醒 Anywhere 时可以使用的内容。",
+  "finderSelection": "访达选中项",
+  "fileSelection": "选中文件",
+  "selectedFilesDescription": "选中的文件和文件夹",
+  "selectedText": "选中文本",
+  "selectedTextDescription": "当前应用中选中的文本",
+  "browserCurrentPage": "浏览器当前页面",
+  "clipboardText": "剪贴板文本",
+  "openSettings": "打开设置",
+  "keepEditing": "继续编辑",
+  "closeWithoutSaving": "放弃修改并关闭",
+  "saveChanges": "保存修改",
+  "saveBeforeClose": "关闭前保存修改？",
+  "changesNotSaved": "部分修改尚未保存",
+  "searchDrafts": "搜索设置存在尚未应用的修改。",
+  "settingsSaveFailed": "设置保存失败，请重试。",
+  "shortcutHelp": "选择快捷键，再按下新的按键组合。按 Esc 取消。",
+  "workspace": "工作区",
+  "image": "图片",
+  "richText": "富文本",
+  "data": "数据",
+  "text": "文本",
+  "searchAppActions": "搜索 {app} 的操作…",
+  "@searchAppActions": {
+    "placeholders": {
+      "app": {
+        "type": "String"
+      }
+    }
+  },
+  "contentEscapeHint": "{source} · Esc → 当前应用",
+  "@contentEscapeHint": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "fileRange": "文件搜索 · {range}",
+  "@fileRange": {
+    "placeholders": {
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "editCapturedContent": "编辑捕获的内容…",
+  "fileLocations": "文件搜索 · {count} 个位置",
+  "@fileLocations": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "actionShortcuts": "动作快捷键",
+  "bindAKeyToAnActionOr": "为动作绑定按键，或根据上下文选择要执行的动作。",
+  "globalWorksFromOtherApps": "全局 · 在其他应用中也可使用",
+  "whileAnywhereIsOpen": "仅在 Anywhere 打开时可用",
+  "actionUnavailableShortcutPaused": "动作不可用 · 快捷键已暂停",
+  "actionsUnavailableShortcutPaused": "动作不可用 · 快捷键已暂停",
+  "someRulesAreUnavailable": "部分规则不可用",
+  "notDetectedInTheLastContext": "上次未检测到对应上下文",
+  "addActionShortcut": "添加动作快捷键",
+  "addContextShortcut": "添加上下文快捷键",
+  "toolsSuchAsFileSearchAreAlways": "文件搜索等工具始终可绑定。项目动作会在对应项目处于当前上下文时显示。",
+  "actionShortcut": "动作快捷键",
+  "findAnAction": "查找动作…",
+  "notDetectedInTheLastContextThe": "上次未检测到对应上下文，已保留保存的动作。",
+  "shortcutRecordingFailedTryAgain": "快捷键录制失败，请重试。",
+  "pressAShortcut": "请按下快捷键…",
+  "recordShortcut": "录制快捷键",
+  "useCommandOptionOrControlWithA": "请使用 Command、Option 或 Control 加字母。按 Esc 取消录制。",
+  "globalShortcut": "全局快捷键",
+  "worksFromOtherAppsUsesFreshContext": "在其他应用中也可使用，需要时会重新采集上下文。",
+  "chooseAnotherAction": "选择其他动作",
+  "saveShortcut": "保存快捷键",
+  "clearClipboardHistory": "清空剪贴板历史？",
+  "allSavedEntriesWillBePermanentlyRemoved": "所有历史记录将永久删除，系统剪贴板的当前内容不变。",
+  "clearHistory": "清空历史",
+  "clipboardHistorySetting": "剪贴板历史",
+  "recordClipboardHistory": "记录剪贴板历史",
+  "saveFutureCopiesWhileAnywhereIsRunning": "保存 Anywhere 运行期间新复制的内容，不导入启动前已有的内容。",
+  "textImagesRichTextAndFileReferences": "文本、图片、富文本和文件引用均保存在本机。暂停记录会保留已有历史。",
+  "tryAgain": "重试",
+  "whenOpeningLauncher": "唤醒启动器时",
+  "autoFillSupportedContentCopiedWithinThe": "自动填入最近 15 秒内复制且可识别的内容，与历史记录开关相互独立。",
+  "historyStorage": "历史记录存储",
+  "removeAllSavedEntriesThisDoesNot": "删除所有已保存的记录，不改变采集开关或当前系统剪贴板。",
+  "clearHistoryAction": "清空历史…",
+  "enabled": "已启用",
+  "disabled": "已停用",
+  "awaitingPermission": "等待授权",
+  "couldNotStart": "无法启动",
+  "unavailable": "不可用",
+  "restartRequired": "需要重新启动",
+  "updating": "正在更新…",
+  "refresh": "刷新",
+  "chooseTheToolsAvailableInAnywhere": "选择在 Anywhere 中可用的工具。",
+  "builtIn": "内置功能",
+  "installedPlugins": "已安装的插件",
+  "legacyV1PermissionsCannotBeRevokedIndividually": "旧版 v1 权限无法逐项撤销，停用扩展后可停止其动作。",
+  "reviewPermissions": "查看权限…",
+  "revokePermissions": "撤销权限",
+  "thisExtensionRequestsPermissionTo": "此扩展请求以下权限：",
+  "noHostPermissionsRequested": "未请求宿主权限。",
+  "approvalAppliesToThisInspectedDefinitionRestart": "授权仅适用于当前检查的定义。新授权的插件将在重启 Anywhere 后生效；撤销权限会立即生效。",
+  "allowForNextLaunch": "允许下次启动时使用",
+  "showAPluginViewInAnywhere": "在 Anywhere 中显示插件页面",
+  "writeToTheClipboard": "写入剪贴板",
+  "openWebAddresses": "打开网页地址",
+  "openFiles": "打开文件",
+  "readRepositoryInformation": "读取仓库信息",
+  "runProjectTasks": "运行项目任务",
+  "saveExtensionData": "保存扩展数据",
+  "fileSearchSetting": "文件搜索",
+  "searchFileNamesInTheFileSearch": "通过文件搜索动作按名称查找文件",
+  "systemSearchShowsEarlyResultsFilenameScanning": "系统搜索先显示结果，文件名扫描仅在可访问且已授权的目录中进行。",
+  "includeHiddenFiles": "包含隐藏文件",
+  "includeDotfilesAndFilesInHiddenDirectories": "包含以点开头的文件和隐藏目录中的文件",
+  "searchDirectories": "搜索目录",
+  "excludedDirectoryNames": "排除项必须是目录名，每行一个。",
+  "oneDirectoryNamePerLine": "每行一个目录名",
+  "filesAndFoldersAreScannedIncludingGitignored": "扫描文件和文件夹，包括被 Git 忽略的文件。排除项会缩小搜索范围。符号链接只列出链接本身，不扫描目标。",
+  "directoryAccessIsPreparedAtStartupAnd": "启动和变更搜索范围时预先检查目录权限，跳过受保护的位置。完全磁盘访问权限为可选项，需在系统设置中启用。",
+  "authorizeSavedDirectories": "授权已保存的目录",
+  "fullDiskAccess": "完全磁盘访问权限…",
+  "saveFileSearch": "保存文件搜索设置",
+  "addAtLeastOneRule": "请至少添加一条规则。",
+  "contextShortcut": "上下文快捷键",
+  "shortcutName": "快捷键名称",
+  "eGOpenTerminal": "例如：打开终端",
+  "global": "全局",
+  "moreSpecificConditionsTakePriorityEqualMatches": "优先匹配更具体的条件。多条规则同等匹配时由你选择；已匹配的动作不可用时，不会执行其他动作。",
+  "noRulesYetAddAnActionAnd": "还没有规则。添加动作，并选择在哪个应用或上下文中执行。",
+  "addRule": "添加规则",
+  "saveContextShortcut": "保存上下文快捷键",
+  "savedApp": "已保存的应用",
+  "shortcutRule": "快捷键规则",
+  "inApp": "应用",
+  "anyApp": "任意应用",
+  "withContext": "上下文",
+  "anyCompatibleContext": "任意兼容的上下文",
+  "aRuleAlreadyUsesTheseConditions": "已有规则使用了相同条件。",
+  "saveRule": "保存规则",
+  "finishOrCancelEditingTheActionShortcut": "请先完成或取消动作快捷键编辑，再关闭窗口。",
+  "settingsCouldNotBeSavedYouCan": "设置保存失败。你可以继续编辑，或不保存直接关闭。",
+  "newEditsWereMadeWhileSavingSave": "保存期间有新的修改，请先保存再关闭。",
+  "changesApplyOnTheNextWakeStatus": "更改将在下次唤醒时生效，状态显示上一次采集的结果。",
+  "hiddenApps": "隐藏的应用",
+  "enterOneApplicationIDPerLineTo": "每行输入一个应用 ID，使其不出现在搜索结果中。",
+  "saveApps": "保存应用设置",
+  "pressShortcutKey": "请按下快捷键",
+  "chooseApp": "选择应用",
+  "findAnApp": "查找应用…",
+  "noMatchingApps": "没有匹配的应用",
+  "outputCouldNotBeCopiedTryAgain": "无法复制输出，请重试。",
+  "output": "输出",
+  "diagnostics": "诊断",
+  "copyOutput": "复制输出",
+  "noDiagnosticOutput": "没有诊断输出。",
+  "waitingForOutput": "正在等待输出…",
+  "noStandardOutput": "没有标准输出。",
+  "followNewOutput": "跟随新输出",
+  "jumpToLatestOutput": "跳到最新输出",
+  "following": "跟随中",
+  "latest": "最新",
+  "theWindowCouldNotBeChangedTry": "无法调整窗口，请重试。",
+  "running": "运行中",
+  "stopping": "正在停止",
+  "completed": "已完成",
+  "failed": "失败",
+  "stopped": "已停止",
+  "noMatchingTasks": "没有匹配的任务",
+  "tasksKeepRunningWhenHidden": "隐藏窗口后任务继续运行",
+  "noRunningTasks": "没有正在运行的任务",
+  "allTasksFinished": "所有任务均已结束",
+  "launcher": "启动器",
+  "findATask": "查找任务…",
+  "clearSearch": "清空搜索",
+  "tasks": "任务",
+  "stoppingProgress": "正在停止…",
+  "stop": "停止",
+  "moreActions": "更多操作",
+  "commandCopied": "已复制命令",
+  "commandCouldNotBeCopiedTryAgain": "无法复制命令，请重试。",
+  "copyCommand": "复制命令",
+  "removeResult": "移除结果",
+  "commandDetails": "命令详情",
+  "showingTheLatestOutput128KiBPer": "显示最新输出，每个输出流最多保留 128 KiB。",
+  "noTasksYet": "还没有任务。",
+  "chooseAProjectBuildTestOrRun": "在启动器中选择项目的构建、测试或运行动作。",
+  "anywhereActionShortcut": "Anywhere 动作快捷键",
+  "notAvailableRightNow": "暂时不可用",
+  "searchThisFileType": "搜索此文件类型 · Tab / Shift+Tab",
+  "selectAFileToPreview": "选择文件以预览",
+  "findAppsAndActions": "查找应用和动作",
+  "actionsForYourCurrentEnvironment": "当前环境的动作",
+  "allActionsAvailableInTheCurrentApp": "当前应用环境中的所有可用动作",
+  "copyWithReturnHint": "复制 · ↵",
+  "deleteEntry": "删除此记录",
+  "previewUnavailable": "无法预览",
+  "loadingPreview": "正在加载预览…",
+  "selectEntryToPreview": "选择一条记录以查看预览",
+  "noMatchingEntries": "没有匹配的记录",
+  "noSavedEntries": "没有历史记录",
+  "newlyCopiedItemsWillAppearHereRefresh": "新复制的内容会出现在这里。\n刷新以查看新记录。",
+  "manageRecordingInSettingsClipboard": "在“设置 → 剪贴板”中管理记录。",
+  "imagePreviewUnavailable": "无法预览图片",
+  "previewUnavailableTheOriginalImageCanStill": "无法预览，仍可复制原始图片。",
+  "previewIsNotAvailableForThisFormat": "此格式暂不支持预览。复制时会恢复已保存的数据。",
+  "theWindowCouldNotBeClosedUse": "无法关闭窗口，请使用窗口关闭按钮。",
+  "backToListEsc": "返回列表 · Esc",
+  "clipboardAlwaysOnTop": "剪贴板 · 置顶",
+  "searchClipboard": "搜索剪贴板…",
+  "noSavedEntriesManageRecordingInSettings": "没有历史记录。\n请在“设置 → 剪贴板”中管理记录。",
+  "actionFailed": "动作失败",
+  "actionResult": "动作结果",
+  "result": "结果",
+  "scroll": "↑↓ 滚动",
+  "tool": "工具",
+  "closeEsc": "关闭 · Esc",
+  "backEsc": "返回 · Esc",
+  "reloadTool": "重新加载工具",
+  "backToSearchEsc": "返回搜索 · Esc",
+  "cancelEsc": "取消 · Esc",
+  "cancelEscapeSelected": "✓ 取消 · Esc",
+  "allowOnce": "✓ 允许一次",
+  "allowOnceAction": "允许一次",
+  "webToolsAreUnavailableOnThisPlatform": "此平台暂不支持 Web 工具。",
+  "requestedAccess": "请求的权限",
+  "noHostPermissions": "未请求宿主权限。",
+  "codeRunsInALocalWebViewNetwork": "代码在本地 WebView 中运行，禁止联网和页面跳转。此限制不等同于操作系统级进程沙箱。",
+  "thisReplacesTheInstalledCodeClosesIts": "这将替换已安装的代码并关闭其当前页面，保留本地设置。之后可恢复到曾经批准的版本。",
+  "approveAndInstall": "批准并安装",
+  "installedSearchForTheToolByName": "安装完成，搜索工具名称即可打开。",
+  "thePackageCouldNotBeInstalledThe": "安装失败，现有版本未改变。",
+  "theOperationCouldNotFinishCheckThe": "操作未完成，请检查工具状态后重试。",
+  "webTools": "Web 工具",
+  "import": "导入…",
+  "noWebToolsInstalled": "尚未安装 Web 工具。",
+  "restoreApprovedVersion": "恢复已批准的版本",
+  "uninstall": "卸载",
+  "theToolDidNotBecomeReadyGo": "工具未就绪，请返回后重新打开。",
+  "thisToolIsNoLongerAvailableReturn": "此工具已不可用，请返回搜索后重新打开。",
+  "theToolCouldNotLoadReloadIt": "工具加载失败，请重新加载或返回搜索。",
+  "openingTool": "正在打开工具…",
+  "loadingTool": "正在加载工具…",
+  "theToolStoppedReloadItOrReturn": "工具已停止，请重新加载或返回搜索。",
+  "allowThisOperation": "允许此操作？",
+  "thisTool": "此工具",
+  "dismissMessage": "关闭提示",
+  "returnKey": "回车",
+  "folder": "文件夹",
+  "file": "文件",
+  "selectedFiles": "所选文件",
+  "webLink": "网页链接",
+  "gitRepository": "Git 仓库",
+  "nodeProject": "Node 项目",
+  "mavenProject": "Maven 项目",
+  "gradleProject": "Gradle 项目",
+  "rustProject": "Rust 项目",
+  "springProject": "Spring Boot 项目",
+  "anywhereTool": "Anywhere 工具",
+  "pdfDocument": "PDF 文档",
+  "document": "文档",
+  "textFile": "文本文件",
+  "spreadsheet": "电子表格",
+  "presentation": "演示文稿",
+  "archive": "压缩包",
+  "sourceCode": "源代码",
+  "configurationFile": "配置文件",
+  "ebook": "电子书",
+  "font": "字体",
+  "packageOrBinary": "软件包或二进制文件",
+  "captureOff": "已关闭 · 下次唤醒时生效",
+  "captureNotRead": "上次唤醒时未采集",
+  "captureReady": "已就绪 · 上次唤醒",
+  "noItemsSelected": "未选择项目",
+  "noTextSelected": "未选择文本",
+  "noPageAvailable": "没有可用的网页",
+  "noTextCopied": "没有复制的文本",
+  "permissionNeeded": "需要授权",
+  "sourceUnsupported": "此应用不支持",
+  "captureAppChanged": "采集期间应用发生变化",
+  "timedOut": "超时",
+  "contentTooLong": "内容过长",
+  "tooManyItems": "所选项目过多",
+  "sourceUnavailable": "无法读取此来源",
+  "readFailed": "读取失败",
+  "finderPermissionHelp": "请在系统设置中允许控制访达，然后重新唤醒 Anywhere。",
+  "selectedTextPermissionHelp": "请在系统设置中允许辅助功能访问，然后重新唤醒 Anywhere。",
+  "browserPermissionHelp": "请在“系统设置 → 隐私与安全性 → 自动化”中允许 Anywhere 访问此浏览器，然后重新唤醒。",
+  "clipboardPermissionHelp": "请在系统设置中允许访问剪贴板，然后重新唤醒 Anywhere。",
+  "appChangedHelp": "原应用已退出或重启，请重新唤醒 Anywhere 以再次采集。",
+  "tooManyItemsHelp": "请在访达中选择不超过 32 个项目，然后重新唤醒 Anywhere。",
+  "loadingMoreFiles": "正在加载更多文件…",
+  "authorizeSearchDirectories": "授权搜索目录",
+  "authorizeSearchHelp": "请在“设置 → 搜索”中授权已保存的目录。权限准备完成后才会开始搜索。",
+  "fileSearchOff": "文件搜索已关闭",
+  "searchUnavailable": "搜索不可用",
+  "partialResults": "部分结果",
+  "noMatchingFiles": "没有匹配的文件",
+  "noContentActions": "此内容没有可用动作",
+  "searchingFiles": "正在搜索文件…",
+  "fileSearchUnavailable": "文件搜索不可用",
+  "fileSearchDisabledHelp": "文件搜索已关闭，可在“设置 → 搜索”中启用。",
+  "typeFileName": "输入文件或文件夹名称开始搜索",
+  "fileSearchIncompleteHelp": "文件搜索未完成，请查看问题详情后重试。",
+  "noMatchingActions": "没有匹配的动作",
+  "noActionsAvailable": "没有可用动作",
+  "fileSearchIncomplete": "文件搜索未完成，已找到的结果仍然可用。",
+  "actionsLoadIncomplete": "部分动作未能加载，请重新唤醒 Anywhere 后重试；其他动作仍可使用。",
+  "fileSearchOtherResults": "文件搜索不可用 · 其他结果仍可使用",
+  "currentPage": "当前网页",
+  "chooseTarget": "选择目标",
+  "contentActions": "此内容的动作",
+  "searchComplete": "搜索完成",
+  "clipboardSettingsFailed": "无法读取或更新剪贴板设置，请重试。",
+  "historyLoadFailed": "无法加载剪贴板历史，请刷新重试。",
+  "historyEntryMissing": "此记录已不可用，请刷新历史。",
+  "historyPreviewFailed": "无法预览此记录。",
+  "historyOperationFailed": "操作未完成，请刷新后重试。",
+  "historyCopyFailed": "无法复制此记录。如为文件，请确认原文件仍然存在且可访问。",
+  "sourceUnsupportedHelp": "此应用未提供{source}，其他来源仍可使用。",
+  "@sourceUnsupportedHelp": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "sourceTimeoutHelp": "{source}响应超时，请重新唤醒 Anywhere 后重试。",
+  "@sourceTimeoutHelp": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "sourceTooLongHelp": "{source}内容过长，请减少内容后重新唤醒 Anywhere。",
+  "@sourceTooLongHelp": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "sourceFailedHelp": "无法读取{source}，请重新唤醒 Anywhere 后重试；其他来源仍可使用。",
+  "@sourceFailedHelp": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "fileFoundCount": "找到 {count} 项",
+  "@fileFoundCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchIssues": "{count} 个问题",
+  "@searchIssues": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fileSearchIssueNotice": "文件搜索遇到 {count} 个问题，已找到的结果仍然可用。",
+  "@fileSearchIssueNotice": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filterActions": "筛选{scope}动作",
+  "@filterActions": {
+    "placeholders": {
+      "scope": {
+        "type": "String"
+      }
+    }
+  },
+  "emptyFileType": "结果中没有{type}，请尝试“所有类型”或其他关键词。",
+  "@emptyFileType": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "fileRootsHint": "{example}\n留空则搜索个人主目录",
+  "@fileRootsHint": {
+    "placeholders": {
+      "example": {
+        "type": "String"
+      }
+    }
+  },
+  "runningCount": "{count} 项运行中",
+  "@runningCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "exitCode": "退出码 {code}",
+  "@exitCode": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "taskKeyboardHelp": "↑↓ 选择任务   {find} 查找   {stop} 停止   Esc 隐藏",
+  "@taskKeyboardHelp": {
+    "placeholders": {
+      "find": {
+        "type": "String"
+      },
+      "stop": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutHint": "{label} · {shortcut}",
+  "@shortcutHint": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "shortcut": {
+        "type": "String"
+      }
+    }
+  },
+  "enableFeature": "启用{name}",
+  "@enableFeature": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "allowFeature": "允许{name}？",
+  "@allowFeature": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "removeRule": "移除第 {number} 条规则",
+  "@removeRule": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "contextRulesCount": "{count} 条上下文规则",
+  "@contextRulesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "editActionShortcut": "编辑“{title}”的快捷键",
+  "@editActionShortcut": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "removeActionShortcut": "移除“{title}”的快捷键",
+  "@removeActionShortcut": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "results": "结果",
+  "succeeded": "成功",
+  "input": "输入",
+  "web": "网页",
+  "tools": "工具",
+  "restrictedLocationsSkipped": "已跳过 {count} 个受限位置",
+  "@restrictedLocationsSkipped": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "clipboardConsent": "{tool}请求执行剪贴板操作。授权仅对本次操作有效。",
+  "@clipboardConsent": {
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "quitAnywhere": "退出 Anywhere",
+  "edit": "编辑",
+  "undo": "撤销",
+  "redo": "重做",
+  "cut": "剪切",
+  "paste": "粘贴",
+  "selectAll": "全选",
+  "window": "窗口",
+  "minimize": "最小化",
+  "zoom": "缩放",
+  "closeWindow": "关闭窗口",
+  "findTaskMenu": "查找任务…",
+  "stopSelectedTask": "停止所选任务",
+  "refreshTasks": "刷新任务",
+  "openLauncher": "打开启动器",
+  "closeTaskWindow": "关闭任务窗口",
+  "runningTasksMenu": "运行中的任务…",
+  "settingsMenu": "设置…",
+  "authorizeFileSearch": "授权文件搜索",
+  "authorize": "授权",
+  "importLocalWebTool": "导入本地 Web 工具",
+  "importPackage": "导入",
+  "fileSearchAccessMessage": "请选择允许 Anywhere 搜索的文件夹，授权会保存供以后启动时使用。受保护的系统或应用数据可能仍需在系统设置中启用完全磁盘访问权限。",
+  "inspectTrustedPackage": "请选择可信的 .awplugin 包，在安装前检查其内容。",
+  "readClipboardText": "读取剪贴板文本",
+  "copyTextToClipboard": "将文本复制到剪贴板",
+  "permissionCurrentApp": "当前应用名称",
+  "permissionReadClipboard": "读取剪贴板文本（每次操作均需确认）",
+  "permissionWriteClipboard": "复制文本（每次操作均需确认）",
+  "permissionLocalStorage": "独立本地设置（1 MiB）",
+  "launcherStartupFailed": "启动器无法启动",
+  "tasksStartupFailed": "无法打开运行中的任务",
+  "shelfStartupFailed": "无法打开剪贴板悬浮窗",
+  "savedDirectories": "收藏的文件夹",
+  "browserPageDescription": "使用 Safari、Chrome 或 Edge 当前标签页的网页地址",
+  "permissionContextRead": "选中的上下文：{types}",
+  "@permissionContextRead": {
+    "placeholders": {
+      "types": {
+        "type": "String"
+      }
+    }
+  },
+  "supportedBrowserDescription": "支持的浏览器当前页面的网址",
+  "installToolReview": "安装{name}？",
+  "@installToolReview": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "updateToolReview": "更新{name}？",
+  "@updateToolReview": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "paused": "已暂停",
+  "detail": "详情",
+  "formatsCount": "{count} 种格式",
+  "@formatsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "automationUsage": "在唤醒 Anywhere 时读取访达当前位置和所选项目，以及 Safari、Chrome 或 Edge 当前标签页的网址，以推荐相关动作。",
+  "contentPreview": "{kind}预览",
+  "@contentPreview": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "savedSize": "已保存 {size}",
+  "@savedSize": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "invalidActionIdentity": "动作标识无效。",
+  "letterWithModifier": "请使用修饰键加字母键。",
+  "modifierWithLetter": "请为字母键添加修饰键。",
+  "reservedEditingShortcut": "此快捷键用于编辑或窗口操作，无法重新绑定。",
+  "invalidShortcutIntent": "上下文快捷键标识无效。",
+  "shortcutRuleLimit": "请填写快捷键名称，且最多设置 16 条规则。",
+  "differentShortcutConditions": "每条规则的应用和上下文条件必须不同。",
+  "shortcutAlreadyOpens": "此快捷键已用于唤醒 Anywhere。",
+  "invalidShortcutRule": "快捷键规则无效。",
+  "searchDirectoryLimits": "最多使用 8 个目录和 32 个排除项。",
+  "absoluteSearchDirectories": "搜索目录必须使用绝对路径，每行一个。",
+  "unsupportedShortcutSettings": "不支持此版本的动作快捷键设置，请先更新 Anywhere。",
+  "oneShortcutPerAction": "每个动作只能绑定一个快捷键。",
+  "shortcutsRefreshFailed": "无法刷新动作快捷键，请重新打开设置后重试。",
+  "shortcutAssignedTo": "此快捷键已绑定到“{title}”。",
+  "@shortcutAssignedTo": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "maxActionShortcuts": "最多支持 {count} 个动作快捷键。",
+  "@maxActionShortcuts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shortcutsSavedByNewerVersion": "动作快捷键由更新版本保存，请先更新 Anywhere 再修改设置。",
+  "directoryAccessFailed": "无法准备目录访问权限，请在搜索设置中重试。",
+  "openSystemSettingsFailed": "无法打开系统设置，请手动打开。",
+  "shortcutsRestoreFailed": "无法恢复动作快捷键，请修改冲突的快捷键或尝试再次关闭。",
+  "extensionsLoadFailed": "无法加载扩展：{detail}",
+  "@extensionsLoadFailed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "extensionsUpdateFailed": "无法更新扩展设置：{detail}",
+  "@extensionsUpdateFailed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutLoadFailed": "无法加载动作快捷键：{detail}",
+  "@shortcutLoadFailed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutsPausedHelp": "部分动作快捷键已暂停，请重新打开设置重试，或改用其他按键组合。",
+  "shelfSelectHint": "单击选择 · 双击复制",
+  "shelfCopyAndReturn": "复制并返回原应用",
+  "shelfDeleteTitle": "删除这条历史记录？",
+  "shelfDeleteDescription": "仅删除这条已保存的历史记录。",
+  "hidePreview": "收起预览",
+  "shelfPreviewScrollHint": "{shortcut} 滚动预览",
+  "@shelfPreviewScrollHint": {
+    "placeholders": {
+      "shortcut": {
+        "type": "String"
+      }
+    }
+  },
+  "details": "详细信息",
+  "sourceStatus": "来源状态",
+  "searchRules": "搜索规则",
+  "searchHelp": "搜索说明",
+  "toolOptions": "工具选项",
+  "keyboardHelp": "键盘操作",
+  "fileInformation": "文件信息",
+  "historyFeatureDisabled": "剪贴板历史已在内置功能中禁用。",
+  "historyStorageUnavailable": "剪贴板历史存储不可用。请修复数据文件后重启。",
+  "historyAccessRequired": "请在系统设置中允许访问剪贴板，以记录新复制的内容。后台采集不会弹出权限申请。",
+  "historyItemTooLarge": "复制的内容超过 16 MiB 历史记录上限，未保存。",
+  "historyReadFailed": "无法读取一条剪贴板内容，已有历史仍可使用。",
+  "historyCaptureUnavailable": "剪贴板历史采集不可用，已有历史仍可使用。",
+  "historyMonitoringUnavailable": "当前平台不支持剪贴板监控。",
+  "filePreviewChanged": "无法预览。如果文件已发生变化，请重新搜索。",
+  "filePreviewUnsupported": "此文件类型不支持文本预览",
+  "filePreviewTruncated": "仅显示前 {size}",
+  "@filePreviewTruncated": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "filePreviewEncodingGuessed": "推测编码为 {encoding}",
+  "@filePreviewEncodingGuessed": {
+    "placeholders": {
+      "encoding": {
+        "type": "String"
+      }
+    }
+  },
+  "filePreviewDecoded": "以 {encoding} 解码",
+  "@filePreviewDecoded": {
+    "placeholders": {
+      "encoding": {
+        "type": "String"
+      }
+    }
+  },
+  "shelfReturnFailed": "已复制，但未能返回目标应用。请切换到该应用后粘贴。",
+  "shelfReturnUnavailable": "已复制，原目标应用已不可用。请切换到需要的应用后粘贴。"
+}

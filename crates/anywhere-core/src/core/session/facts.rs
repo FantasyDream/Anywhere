@@ -8,7 +8,7 @@
 //! Known keys and value kinds are a host-internal contract. Unknown names and kind
 //! mismatches are rejected at write and at rule registration, not swallowed as runtime
 //! misses. Nothing here does IO: values were snapshotted before the host took focus.
-use crate::core::context::{ContextSource, ResolvedContext};
+use crate::core::context::{ContextSource, ContextValue, ResolvedContext};
 use anyhow::{bail, Result};
 use anywhere_platform::ApplicationInfo;
 use std::collections::BTreeMap;
@@ -50,7 +50,30 @@ pub enum FactValue {
 impl FactValue {
     fn matches_context(&self, context: &ResolvedContext) -> bool {
         match self {
-            Self::Text(text) => text == &context.value.text(),
+            Self::Text(text) => match &context.value {
+                // Providers parse URL contexts too: compare the same canonical value,
+                // while retaining path, query and fragment differences.
+                ContextValue::Url(url) => {
+                    let text = text.trim();
+                    if text == url.as_str() {
+                        return true;
+                    }
+                    let Some((_, authority)) = text.split_once("://") else {
+                        return false;
+                    };
+                    // URL parsing can repair malformed input. Such clipboard text
+                    // must not hide a valid context's copy action.
+                    if authority.is_empty()
+                        || authority.starts_with('/')
+                        || text.contains('\\')
+                        || text.chars().any(char::is_whitespace)
+                    {
+                        return false;
+                    }
+                    url::Url::parse(text).is_ok_and(|parsed| parsed == *url)
+                }
+                _ => text == &context.value.text(),
+            },
             Self::Flag(_) => false,
         }
     }
@@ -123,21 +146,75 @@ pub enum Ownership {
 /// the ambient application just because an ambient context was visited earlier.
 pub fn context_ownership(context: &ResolvedContext, facts: &SessionFacts) -> Ownership {
     match context.source {
-        ContextSource::ForegroundApplication | ContextSource::ApplicationContext => match facts
-            .frontmost
+        ContextSource::ForegroundApplication
+        | ContextSource::ApplicationContext
+        | ContextSource::FinderSelection
+        | ContextSource::SelectedText
+        | ContextSource::BrowserCurrentPage => context
+            .capture
             .as_ref()
-            .filter(|app| !app.bundle_id.is_empty())
-        {
-            Some(application) => Ownership::App(application.bundle_id.clone()),
-            None => Ownership::Ambient,
-        },
-        ContextSource::UserInput => Ownership::Ambient,
+            .and_then(|capture| capture.owning_app.as_ref())
+            .filter(|app| !app.is_empty())
+            .cloned()
+            .or_else(|| facts.frontmost.as_ref().map(|app| app.bundle_id.clone()))
+            .filter(|app| !app.is_empty())
+            .map_or(Ownership::Ambient, Ownership::App),
+        ContextSource::UserInput | ContextSource::Clipboard => Ownership::Ambient,
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn url_facts_match_canonical_addresses_without_merging_different_targets() {
+        let context = ResolvedContext::new(
+            anywhere_protocol::URL,
+            ContextValue::Url(url::Url::parse("https://example.org/").unwrap()),
+            ContextSource::BrowserCurrentPage,
+            "test",
+        );
+        for text in ["https://example.org/", "  https://EXAMPLE.org:443\n"] {
+            let facts = SessionFacts::default().with(CLIPBOARD, FactValue::Text(text.into()));
+            assert!(facts.matches_context(CLIPBOARD, &context), "{text:?}");
+        }
+        for text in [
+            "http://example.org/",
+            "https://other.example.org/",
+            "https://example.org:444/",
+            "https://example.org/page",
+            "https://example.org/?q=1",
+            "https://example.org/#section",
+            "https:example.org",
+            "https:///example.org",
+            "https://example.org\\",
+            "https://exa\nmple.org/",
+            "not a URL",
+            "",
+        ] {
+            let facts = SessionFacts::default().with(CLIPBOARD, FactValue::Text(text.into()));
+            assert!(!facts.matches_context(CLIPBOARD, &context), "{text:?}");
+        }
+        assert!(!SessionFacts::default().matches_context(CLIPBOARD, &context));
+    }
+
+    #[test]
+    fn text_and_path_facts_keep_exact_matching() {
+        for (type_id, value) in [
+            (anywhere_protocol::TEXT, ContextValue::Text("/tmp".into())),
+            (
+                anywhere_protocol::DIRECTORY,
+                ContextValue::Directory("/tmp".into()),
+            ),
+        ] {
+            let context = ResolvedContext::new(type_id, value, ContextSource::UserInput, "test");
+            let same = SessionFacts::default().with(CLIPBOARD, FactValue::Text("/tmp".into()));
+            assert!(same.matches_context(CLIPBOARD, &context));
+            let padded = SessionFacts::default().with(CLIPBOARD, FactValue::Text(" /tmp\n".into()));
+            assert!(!padded.matches_context(CLIPBOARD, &context));
+        }
+    }
 
     #[test]
     fn from_map_rejects_unknown_and_mistyped_values() {

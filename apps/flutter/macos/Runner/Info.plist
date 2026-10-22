@@ -7,12 +7,12 @@
   <key>CFBundleName</key><string>Anywhere</string>
   <key>CFBundleDisplayName</key><string>Anywhere</string>
   <key>CFBundlePackageType</key><string>APPL</string>
-  <key>CFBundleShortVersionString</key><string>0.2.0</string>
-  <key>CFBundleVersion</key><string>1</string>
+  <key>CFBundleShortVersionString</key><string>0.12.0</string>
+  <key>CFBundleVersion</key><string>15</string>
   <key>LSMinimumSystemVersion</key><string>12.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
   <!-- Keep the renderer explicit for the custom host and packaged app. -->
   <key>FLTEnableImpeller</key><true/>
-  <key>NSAppleEventsUsageDescription</key><string>Read the front Finder window directory to suggest actions when you open the launcher.</string>
+  <key>NSAppleEventsUsageDescription</key><string>Read the current Finder location and selection, and the active Safari, Chrome, or Edge tab URL to suggest actions when you open Anywhere.</string>
 </dict></plist>

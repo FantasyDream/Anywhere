@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "id": "dev.anywhere.json-workspace",
+  "name": "JSON Workspace",
+  "version": "0.5.2",
+  "apiVersion": "1",
+  "platforms": [
+    "macos"
+  ],
+  "entry": "dist/index.html",
+  "permissions": [
+    {
+      "name": "context.read",
+      "types": [
+        "core.text"
+      ]
+    },
+    {
+      "name": "clipboard.readText"
+    },
+    {
+      "name": "clipboard.writeText"
+    },
+    {
+      "name": "storage.local"
+    }
+  ],
+  "commands": [
+    {
+      "id": "open",
+      "title": "JSON Workspace",
+      "keywords": [
+        "json",
+        "jsonpath",
+        "javascript",
+        "query",
+        "format",
+        "格式化",
+        "查询"
+      ],
+      "accepts": [
+        "core.text"
+      ],
+      "inputMatchers": [
+        "json",
+        "json_escaped"
+      ],
+      "entrypoint": "workspace"
+    },
+    {
+      "id": "copy-format",
+      "title": "Copy Formatted JSON",
+      "keywords": [
+        "json",
+        "copy",
+        "format",
+        "复制格式化JSON"
+      ],
+      "accepts": [
+        "core.text"
+      ],
+      "inputMatchers": [
+        "json",
+        "json_escaped"
+      ],
+      "entrypoint": "copy-format"
+    },
+    {
+      "id": "copy-minify",
+      "title": "Copy Minified JSON",
+      "keywords": [
+        "json",
+        "copy",
+        "minify",
+        "compact",
+        "复制压缩JSON"
+      ],
+      "accepts": [
+        "core.text"
+      ],
+      "inputMatchers": [
+        "json",
+        "json_escaped"
+      ],
+      "entrypoint": "copy-minify"
+    },
+    {
+      "id": "copy-escaped",
+      "title": "Copy Escaped JSON",
+      "keywords": [
+        "json",
+        "copy",
+        "escape",
+        "复制转义JSON"
+      ],
+      "accepts": [
+        "core.text"
+      ],
+      "inputMatchers": [
+        "json",
+        "json_escaped"
+      ],
+      "entrypoint": "copy-escaped"
+    },
+    {
+      "id": "unescape",
+      "title": "Unescape JSON",
+      "keywords": [
+        "json",
+        "unescape",
+        "decode",
+        "去除转义",
+        "去转义"
+      ],
+      "accepts": [
+        "core.text"
+      ],
+      "inputMatchers": [
+        "json_escaped"
+      ],
+      "entrypoint": "unescape"
+    }
+  ]
+}

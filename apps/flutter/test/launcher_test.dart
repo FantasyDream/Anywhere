@@ -1,34 +1,62 @@
+import 'package:anywhere/infrastructure/desktop_environment.dart';
+import 'package:anywhere/ui/app_icons.dart';
+import 'package:anywhere/ui/app_components.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:anywhere/launcher_screen.dart';
+import 'package:anywhere/launcher/launcher_screen.dart';
+import 'package:anywhere/launcher/launcher_controller.dart';
+import 'package:anywhere/launcher/launcher_view_state.dart';
+import 'package:anywhere/infrastructure/window_host.dart';
+import 'package:anywhere/settings/settings_screen.dart';
 import 'package:anywhere/src/rust/api.dart';
+import 'launcher_fixtures.dart';
 
 /// Two action candidates with the documented stable ids.
 CandidateDto candidate(
   String id,
   String title, {
-  String kind = 'action',
-  String availability = 'enabled',
+  CandidateKindDto kind = CandidateKindDto.action,
+  AvailabilityDto availability = AvailabilityDto.enabled,
   String? reason,
   String iconKey = 'file',
   String groupId = 'folder',
   double score = 100,
+  bool homeEligible = true,
+  String? sectionLabel,
+  String? executionContextId,
+  String? executionTargetLabel,
+  String? subtitle = 'from Rust',
+  List<String> menuPath = const [],
+  bool? isMenu,
+  FileObjectKindDto? fileKind,
 }) =>
     CandidateDto(
+      contextKeys: const [],
+      homeEligible: homeEligible,
+      primaryAction: false,
       id: id,
       kind: kind,
+      isMenu: isMenu ?? menuPath.isNotEmpty,
+      fileKind: fileKind,
       title: title,
-      subtitle: 'from Rust',
+      menuPath: menuPath,
+      sectionLabel: sectionLabel,
+      executionContextId: executionContextId,
+      executionTargetLabel: executionTargetLabel,
+      subtitle: subtitle,
       iconKey: iconKey,
       score: score,
       groupId: groupId,
       availability: availability,
       availabilityReason: reason,
-      commandId: kind == 'action' ? id.split(':')[1] : null,
-      bundleId:
-          kind == 'application' ? 'com.example.${id.split(':')[1]}' : null,
+      commandId: kind == CandidateKindDto.action
+          ? (id.contains(':') ? id.split(':')[1] : id)
+          : null,
+      bundleId: kind == CandidateKindDto.application
+          ? 'com.example.${id.split(':')[1]}'
+          : null,
     );
 
 LauncherStateDto state(
@@ -41,15 +69,18 @@ LauncherStateDto state(
   final first = candidate('action:first:c1', title);
   final second =
       candidate('action:second:c1', 'Second action', iconKey: 'copy');
-  return LauncherStateDto(
+  return launcherSnapshot(
     sessionId: 1,
     revision: revision,
     snapshotSeq: snapshotSeq,
     input: input,
     contextComplete: contextComplete,
+    searchSources: const [],
+    resultActions: const [],
     contexts: [],
+    contextCaptures: const [],
     candidates: [first, second],
-    scopes: const [],
+    roots: const [],
     diagnostics: [],
   );
 }
@@ -68,6 +99,9 @@ const _onePixelPng = <int>[
 ];
 
 void main() {
+  setUp(() => DesktopEnvironment.configure(
+      const DesktopEnvironment(platform: TargetPlatform.macOS)));
+  tearDown(DesktopEnvironment.reset);
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('test/launcher-window');
   const codec = StandardMethodCodec();
@@ -85,6 +119,61 @@ void main() {
     });
   });
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
+
+  test(
+      'explicit feature scopes expose run targets and custom scripts without flooding home',
+      () {
+    final actions = [
+      candidate('action:custom:c1', 'pnpm Run · check:types',
+          groupId: 'node', homeEligible: false),
+      candidate('action:run:c2', 'Cargo Run · server / main',
+          groupId: 'rust', homeEligible: false),
+      candidate('action:copy:c3', 'Copy Path'),
+    ];
+    final snapshot = launcherSnapshot(
+        sessionId: 1,
+        revision: 0,
+        snapshotSeq: 1,
+        contextComplete: true,
+        searchSources: const [],
+        resultActions: const [],
+        input: '',
+        contexts: [],
+        diagnostics: [],
+        candidates: actions,
+        contextCandidates: actions,
+        scopes: const [
+          ScopeDto(id: 'node', label: 'Node', isCurrentApp: false),
+          ScopeDto(id: 'rust', label: 'Rust', isCurrentApp: false)
+        ]);
+    final home = LauncherViewState(
+        phase: LauncherPhase.ready, generation: 1, snapshot: snapshot);
+    expect(home.visibleCandidates.map((c) => c.title), ['Copy Path']);
+    final node = LauncherViewState(
+        phase: LauncherPhase.ready,
+        generation: 1,
+        snapshot: snapshot,
+        scopeId: 'node');
+    expect(
+        node.visibleCandidates.map((c) => c.title), ['pnpm Run · check:types']);
+    expect(node.resultHeading, 'Actions');
+    final scopedSearch = LauncherViewState(
+        phase: LauncherPhase.ready,
+        generation: 1,
+        snapshot: snapshot,
+        inputMode: InputModeDto.search,
+        scopeId: 'node');
+    expect(scopedSearch.hasScopeBar, isTrue);
+    expect(scopedSearch.visibleCandidates.map((c) => c.title),
+        ['pnpm Run · check:types']);
+    final rust = LauncherViewState(
+        phase: LauncherPhase.ready,
+        generation: 1,
+        snapshot: snapshot,
+        scopeId: 'rust');
+    expect(rust.visibleCandidates.map((c) => c.title),
+        ['Cargo Run · server / main']);
+  });
 
   Future<void> toggle(WidgetTester tester, {String mode = 'currentApp'}) async {
     final done = Completer<void>();
@@ -118,15 +207,18 @@ void main() {
         (i) => candidate('action:command.$i:$scopeFilter',
             scopeFilter.isEmpty ? 'Action $i' : '$scopeFilter $i',
             score: 100.0 - i));
-    return LauncherStateDto(
+    return launcherSnapshot(
       sessionId: 1,
       revision: revision,
       snapshotSeq: 1,
       input: input,
       contextComplete: true,
+      searchSources: const [],
+      resultActions: const [],
       contexts: [],
+      contextCaptures: const [],
       candidates: candidates,
-      scopes: const [],
+      roots: const [],
       diagnostics: [],
     );
   }
@@ -137,8 +229,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
         window: channel,
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async => sizedState(0, 0),
-        updateInput: (_, input, revision) async =>
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
+            sizedState(0, 0),
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
             sizedState(revision, int.parse(input), input: input),
         execute: (_, revision, candidate) async =>
             throw StateError('not invoked'),
@@ -148,7 +244,7 @@ void main() {
     expect(find.byKey(const Key('empty-state')), findsNothing);
     final emptyHeight =
         tester.getSize(find.byKey(const Key('launcher-panel'))).height;
-    expect(emptyHeight, 64);
+    expect(emptyHeight, LauncherViewState.inputHeight);
     await tester.enterText(find.byType(TextField), '2');
     await tester.pumpAndSettle();
     final twoRows =
@@ -176,44 +272,346 @@ void main() {
     await tester.pumpWidget(LauncherApp(
         window: channel,
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async => sizedState(0, 0),
-        updateInput: (_, input, revision) async => sizedState(revision, 0),
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
+            sizedState(0, 0),
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
+            sizedState(revision, 0),
         execute: (_, revision, candidate) async =>
             throw StateError('not invoked'),
         deactivate: (_) async {}));
     await toggle(tester);
     expect(find.text('No actions for this context'), findsNothing);
     expect(find.byKey(const Key('empty-state')), findsNothing);
-    expect(tester.getSize(find.byKey(const Key('launcher-panel'))).height, 64);
+    expect(tester.getSize(find.byKey(const Key('launcher-panel'))).height,
+        LauncherViewState.inputHeight);
     await tester.enterText(find.byType(TextField), 'zzz');
     await tester.pumpAndSettle();
     expect(find.textContaining('zzz'), findsWidgets);
     expect(find.textContaining('match'), findsNothing);
-    expect(tester.getSize(find.byKey(const Key('launcher-panel'))).height, 64);
+    expect(tester.getSize(find.byKey(const Key('launcher-panel'))).height,
+        LauncherViewState.inputHeight);
+  });
+
+  testWidgets('scope homes stay short and menu queries flatten the entire app',
+      (tester) async {
+    final sidebar = candidate('app.sidebar', 'Toggle Sidebar',
+        groupId: 'app.editor', menuPath: ['View', 'Appearance']);
+    final terminal = candidate('app.terminal', 'Toggle Terminal',
+        groupId: 'app.editor', menuPath: ['View']);
+    final menus = [
+      for (var i = 0; i < 60; i++)
+        candidate('app.export.$i', 'Export $i',
+            groupId: 'app.editor', menuPath: ['File'], homeEligible: false)
+    ];
+    final git = candidate('git.status', 'Git Status', groupId: 'git');
+    final copy = candidate('copy.path', 'Copy Path');
+    final offers = [
+      sidebar,
+      terminal,
+      ...menus,
+      git,
+      copy,
+      for (var i = 0; i < 3; i++)
+        candidate('context.extra.$i', 'Context Extra $i')
+    ];
+    final boundaries = <String?>[];
+    var captures = 0;
+    final executions = <String>[];
+    LauncherStateDto result(int revision, String input, String? scope) =>
+        launcherSnapshot(
+            sessionId: 1,
+            revision: revision,
+            snapshotSeq: 1,
+            input: input,
+            contextComplete: true,
+            searchSources: const [],
+            resultActions: const [],
+            contextCandidates: offers,
+            selectedScope: scope,
+            candidates: offers
+                .where((item) =>
+                    (scope == null ||
+                        scope == 'app.editor' ||
+                        item.groupId == scope) &&
+                    input.toLowerCase().split(' ').every((word) =>
+                        '${item.title} ${item.menuPath.join(' ')}'
+                            .toLowerCase()
+                            .contains(word)))
+                .toList(),
+            diagnostics: []);
+    await tester.pumpWidget(LauncherApp(
+        window: channel,
+        beginActivation: () => 1,
+        activate: (_,
+            {promptAccessibility = false, capturedEnvironment = false}) async {
+          captures++;
+          return result(0, '', null);
+        },
+        updateInput: (_, input, revision,
+            {scopeId, inputMode = InputModeDto.environment}) async {
+          boundaries.add(scopeId);
+          return result(revision, input, scopeId);
+        },
+        execute: (session, revision, id) async {
+          executions.add(id);
+          return ActionResultDto(
+              sessionId: session,
+              revision: revision,
+              status: ActionStatusDto.succeeded,
+              closeWindow: false);
+        },
+        deactivate: (_) async {}));
+    await toggle(tester);
+    expect(find.byKey(const Key('scope-bar')), findsOneWidget);
+    expect(find.byKey(const Key('active-context')), findsNothing);
+    expect(find.text('All'), findsNothing);
+    expect(find.text('6 results'), findsNothing);
+    expect(find.byKey(const Key('launcher-footer')), findsNothing);
+    expect(find.text('Browse Menus…').hitTestable(), findsOneWidget);
+    expect(find.text('Context Extra 2'), findsNothing);
+    expect(find.text('Git Status'), findsOneWidget);
+    expect(find.text('Copy Path'), findsOneWidget);
+    expect(find.text('Export 0'), findsNothing);
+    await tester.tap(find.text('Browse Menus…'));
+    await tester.pumpAndSettle();
+    expect(find.text('File'), findsOneWidget);
+    expect(find.text('View'), findsOneWidget);
+    await tester.tap(find.text('View'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Appearance'));
+    await tester.pumpAndSettle();
+    expect(find.text('View › Appearance'), findsOneWidget);
+    expect(executions, isEmpty);
+    expect(boundaries, isEmpty);
+    await tester.enterText(find.byType(TextField), 'File Export 59');
+    await tester.pumpAndSettle();
+    expect(find.text('Export 59'), findsOneWidget);
+    expect(boundaries.last, 'app.editor');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text('Toggle Sidebar'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(executions, ['app.sidebar']);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape); // View
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape); // App Home
+    await tester.pumpAndSettle();
+    expect(find.text('Browse Menus…'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'git status');
+    await tester.pumpAndSettle();
+    expect(boundaries.last, 'app.editor');
+    expect(find.text('Git Status'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(executions, ['app.sidebar', 'git.status']);
+    await tester.enterText(find.byType(TextField), 'copy path');
+    await tester.pumpAndSettle();
+    expect(find.text('Copy Path'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(executions, ['app.sidebar', 'git.status', 'copy.path']);
+    await tester.enterText(find.byType(TextField), 'Context Extra 2');
+    await tester.pumpAndSettle();
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('action-list')),
+            matching: find.text('Context Extra 2')),
+        findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'absent');
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(boundaries.last,
+        'app.editor'); // Enter cannot silently leave the scope.
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(boundaries.last, 'git');
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'absent');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape); // Query
+    await tester.pumpAndSettle();
+    expect(find.text('Git Status'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape); // Scope
+    await tester.pumpAndSettle();
+    expect(boundaries.last, isNull);
+    expect(find.text('Copy Path'), findsNothing);
+    expect(captures, 1);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('an unresolved context stays on the search bar', (tester) async {
     await tester.pumpWidget(LauncherApp(
         window: channel,
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async => LauncherStateDto(
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
+            launcherSnapshot(
               sessionId: 1,
               revision: 0,
               snapshotSeq: 1,
               input: '',
               contextComplete: false,
+              searchSources: const [],
+              resultActions: const [],
               contexts: [],
+              contextCaptures: const [],
               candidates: [],
-              scopes: const [],
+              roots: const [],
               diagnostics: [],
             ),
-        updateInput: (_, input, revision) async => sizedState(revision, 0),
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
+            sizedState(revision, 0),
         execute: (_, revision, candidate) async =>
             throw StateError('not invoked'),
         deactivate: (_) async {}));
     await toggle(tester);
     expect(find.textContaining('Looking for actions'), findsNothing);
     expect(find.byKey(const Key('empty-state')), findsNothing);
+  });
+
+  testWidgets(
+      'captured source and permission guidance appear without hiding actions',
+      (tester) async {
+    await tester.pumpWidget(LauncherApp(
+      window: channel,
+      beginActivation: () => 1,
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          launcherSnapshot(
+        sessionId: 1,
+        revision: 0,
+        snapshotSeq: 1,
+        input: '',
+        contextComplete: true,
+        searchSources: const [],
+        resultActions: const [],
+        contexts: const [
+          ContextDto(
+            id: 'c1',
+            key: 'c1',
+            rootKey: 'c1',
+            iconKey: 'folder',
+            capabilities: [],
+            candidateIds: ['action:first:c1'],
+            typeId: 'core.url',
+            label: 'URL',
+            detail: 'https://example.org',
+            source: ContextSourceDto.browserCurrentPage,
+          ),
+        ],
+        contextCaptures: const [
+          ContextCaptureDto(
+            source: ContextSourceDto.selectedText,
+            status: ContextCaptureStatusDto.captured,
+            capturedAtMs: 1,
+          ),
+          ContextCaptureDto(
+            source: ContextSourceDto.browserCurrentPage,
+            status: ContextCaptureStatusDto.permissionDenied,
+            capturedAtMs: 1,
+          ),
+        ],
+        candidates: [candidate('action:first:c1', 'Open URL')],
+        roots: const [],
+        diagnostics: const [],
+      ),
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          state(revision, 'Open URL'),
+      execute: (_, revision, candidate) async =>
+          throw StateError('not invoked'),
+      deactivate: (_) async {},
+    ));
+    await toggle(tester);
+    expect(find.textContaining('Browser current page'), findsNothing);
+    expect(find.textContaining('access this browser'), findsOneWidget);
+    expect(find.text('Open URL'), findsOneWidget);
+    expect(find.text('Open Settings'), findsOneWidget);
+    await tester.tap(find.text('Open Settings'));
+    await tester.pumpAndSettle();
+    final request = windowMessages
+        .lastWhere((call) => call.method == 'openPrivacySettings');
+    expect(request.arguments, {'pane': 'automation'});
+    expect(windowCalls.last, 'hide');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'Settings shows last capture status and opens clipboard privacy settings',
+      (tester) async {
+    final controller = LauncherController(
+      window: WindowHost(channel),
+      backend: LauncherBackend(
+        beginActivation: () => 1,
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
+            launcherSnapshot(
+                sessionId: 1,
+                revision: 0,
+                snapshotSeq: 1,
+                input: '',
+                contextComplete: true,
+                searchSources: const [],
+                resultActions: const [],
+                contextCaptures: const [
+              ContextCaptureDto(
+                  source: ContextSourceDto.selectedText,
+                  status: ContextCaptureStatusDto.unsupported,
+                  capturedAtMs: 1),
+              ContextCaptureDto(
+                  source: ContextSourceDto.clipboard,
+                  status: ContextCaptureStatusDto.permissionDenied,
+                  capturedAtMs: 1),
+            ],
+                candidates: [],
+                diagnostics: []),
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
+            null,
+        execute: (_, revision, id) async => throw StateError('not invoked'),
+        deactivate: (_) async {},
+      ),
+    );
+    await controller.activate();
+    await controller.dismiss();
+    await tester.pumpWidget(MaterialApp(
+        home: Center(
+            child: SizedBox(
+                width: 648,
+                height: 480,
+                child: Material(
+                    child: SettingsScreen(
+                        controller: controller.settings,
+                        onClose: controller.closeSettings))))));
+    await tester.tap(find.byKey(const ValueKey('settings-context')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Source status'));
+    await tester.tap(find.text('Source status'));
+    await tester.pumpAndSettle();
+    expect(find.text('Not supported by this app'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('settings-clipboard')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Permission needed'));
+    await tester.pumpAndSettle();
+    expect(find.text('Permission needed'), findsOneWidget);
+    await tester.tap(find.text('Open Settings'));
+    await tester.pumpAndSettle();
+    expect(
+        windowMessages
+            .lastWhere((call) => call.method == 'openPrivacySettings')
+            .arguments,
+        {'pane': 'clipboard'});
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox.shrink());
+    controller.dispose();
   });
 
   testWidgets(
@@ -225,9 +623,13 @@ void main() {
     await tester.pumpWidget(LauncherApp(
         window: channel,
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async =>
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
             state(0, 'Capture ${++captures}'),
-        updateInput: (_, input, revision) => delayed.future,
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) =>
+            delayed.future,
         execute: (_, revision, candidate) async =>
             throw StateError('not invoked'),
         deactivate: (_) async {
@@ -261,9 +663,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
         window: channel,
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async =>
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
             state(0, 'Capture ${++captures}'),
-        updateInput: (_, input, revision) async =>
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
             state(revision, input, input: input),
         execute: (_, revision, candidate) => pending.future,
         deactivate: (_) async {}));
@@ -274,8 +679,7 @@ void main() {
     pending.complete(ActionResultDto(
         sessionId: 1,
         revision: 0,
-        success: true,
-        message: 'Done',
+        status: ActionStatusDto.succeeded,
         outputText: null,
         closeWindow: true));
     await tester.pumpAndSettle();
@@ -289,8 +693,11 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) => captured.future,
-      updateInput: (_, input, revision) async =>
+      activate: (_,
+              {promptAccessibility = false, capturedEnvironment = false}) =>
+          captured.future,
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           state(revision, input, input: input),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
@@ -318,17 +725,19 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async =>
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
           state(0, 'Open Terminal Here'),
-      updateInput: (_, input, revision) async =>
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           state(revision, input, input: input),
       execute: (session, revision, candidate) async {
         executed.add(candidate);
         return ActionResultDto(
             sessionId: session,
             revision: revision,
-            success: true,
-            message: 'Done',
+            status: ActionStatusDto.succeeded,
             outputText: null,
             closeWindow: false);
       },
@@ -346,6 +755,10 @@ void main() {
     expect(executed, ['action:second:c1']);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
+    expect(deactivated, 0);
+    expect(find.byKey(const Key('action-list')), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
     expect(deactivated, 1);
     expect(windowCalls.last, 'hide');
   });
@@ -357,9 +770,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async =>
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
           state(0, 'Initial action'),
-      updateInput: (_, input, revision) =>
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) =>
           revision == 1 ? old.future : fresh.future,
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
@@ -368,9 +784,9 @@ void main() {
     await toggle(tester);
     await tester.enterText(find.byType(TextField), 'old');
     await tester.enterText(find.byType(TextField), 'fresh');
-    fresh.complete(state(2, 'Fresh action'));
+    fresh.complete(state(2, 'Fresh action', input: 'fresh'));
     await tester.pumpAndSettle();
-    old.complete(state(1, 'Old action'));
+    old.complete(state(1, 'Old action', input: 'old'));
     await tester.pumpAndSettle();
     expect(find.text('Fresh action'), findsOneWidget);
     expect(find.text('Old action'), findsNothing);
@@ -382,9 +798,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async =>
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
           state(0, 'Initial action'),
-      updateInput: (_, input, revision) async =>
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           state(revision, input, input: input),
       execute: (_, revision, candidate) => result.future,
       deactivate: (_) async {},
@@ -395,8 +814,7 @@ void main() {
     result.complete(ActionResultDto(
         sessionId: 1,
         revision: 0,
-        success: true,
-        message: 'Done',
+        status: ActionStatusDto.succeeded,
         outputText: null,
         closeWindow: true));
     await tester.pumpAndSettle();
@@ -404,40 +822,42 @@ void main() {
     expect(windowCalls, isNot(contains('hide')));
   });
 
-  testWidgets('scope bar switches scopes and stays presentation-only',
+  testWidgets('Tab cycles scopes in both directions without losing input focus',
       (tester) async {
     final all =
         candidate('action:core.git.status:c1', 'Git Status', groupId: 'git');
     final folder =
         candidate('action:core.git.log:c1', 'Git Log', groupId: 'git');
     final appRow = candidate('action:core.directory.copy:c1', 'Copy Path');
-    LauncherStateDto scoped(int revision) => LauncherStateDto(
+    LauncherStateDto scoped(int revision) => launcherSnapshot(
           sessionId: 1,
           revision: revision,
           snapshotSeq: 1,
           input: '',
           contextComplete: true,
+          searchSources: const [],
+          resultActions: const [],
           contexts: [],
+          contextCaptures: const [],
           candidates: [appRow, all, folder],
-          scopes: [
-            ScopeDto(
-                id: 'app',
-                kind: 'app',
-                label: 'Finder',
-                candidateIds: [appRow.id]),
-            ScopeDto(
-                id: 'git',
-                kind: 'group',
-                label: 'Git',
-                candidateIds: [all.id, folder.id]),
+          roots: [
+            contextFixture(
+                id: 'app', label: 'Finder', candidateIds: [appRow.id]),
+            contextFixture(
+                id: 'git', label: 'Git', candidateIds: [all.id, folder.id]),
           ],
           diagnostics: [],
         );
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => scoped(0),
-      updateInput: (_, input, revision) async => scoped(revision),
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          scoped(0),
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          scoped(revision),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
       deactivate: (_) async {},
@@ -445,20 +865,38 @@ void main() {
     await toggle(tester);
     expect(find.byKey(const Key('scope-bar')), findsOneWidget);
     expect(find.text('All'), findsNothing);
-    expect(find.text('Finder'), findsOneWidget);
+    expect(find.text('Folder'), findsOneWidget);
     expect(find.text('Git'), findsOneWidget);
     expect(find.text('Copy Path'), findsOneWidget);
-    expect(find.text('Git Status'), findsNothing);
-    await tester.tap(find.text('Git'));
+    expect(find.text('Git Status'), findsOneWidget);
+    await tester.tap(find.text('Git').first);
     await tester.pumpAndSettle();
     expect(find.text('Copy Path'), findsNothing);
     expect(find.text('Git Status'), findsOneWidget);
     expect(find.text('Git Log'), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField)).focusNode!.hasFocus,
+        isTrue);
+    // Plain Tab wraps from Git to Folder, without traversing toolbar controls.
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(find.text('Copy Path'), findsOneWidget);
+    expect(find.text('Git Status'), findsNothing);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pumpAndSettle();
+    expect(find.text('Copy Path'), findsNothing);
+    expect(find.text('Git Status'), findsOneWidget);
+    // The existing Control chord remains an alias.
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
     expect(find.text('Copy Path'), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField)).focusNode!.hasFocus,
+        isTrue);
+    expect(tester.testTextInput.hasAnyClients, isTrue);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -467,26 +905,32 @@ void main() {
     final first = candidate('action:first:c1', 'First row');
     final second = candidate('action:second:c1', 'Second row');
     final third = candidate('action:third:c1', 'Third row');
-    LauncherStateDto lateState({required bool keepSecond}) => LauncherStateDto(
+    LauncherStateDto lateState({required bool keepSecond}) => launcherSnapshot(
           sessionId: 1,
           revision: 0,
           snapshotSeq: 2,
           input: '',
           contextComplete: true,
+          searchSources: const [],
+          resultActions: const [],
           contexts: [],
+          contextCaptures: const [],
           candidates: [third, first, if (keepSecond) second],
-          scopes: const [],
+          roots: const [],
           diagnostics: [],
         );
-    final firstSnapshot = LauncherStateDto(
+    final firstSnapshot = launcherSnapshot(
       sessionId: 1,
       revision: 0,
       snapshotSeq: 1,
       input: '',
       contextComplete: false,
+      searchSources: const [],
+      resultActions: const [],
       contexts: [],
+      contextCaptures: const [],
       candidates: [first, second],
-      scopes: const [],
+      roots: const [],
       diagnostics: [],
     );
     // Each wait gets its own completer: the listener re-arms after every wait, so handing
@@ -495,8 +939,12 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => firstSnapshot,
-      updateInput: (_, input, revision) async =>
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          firstSnapshot,
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           state(revision, input, input: input),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
@@ -504,7 +952,12 @@ void main() {
       waitForSnapshot: (_, after) {
         final completer = Completer<LauncherStateDto?>();
         pending.add(completer);
-        return completer.future;
+        return completer.future.then((state) => SnapshotWaitDto(
+              kind: state == null
+                  ? SnapshotWaitKindDto.timedOut
+                  : SnapshotWaitKindDto.updated,
+              state: state,
+            ));
       },
     ));
     await toggle(tester);
@@ -531,15 +984,19 @@ void main() {
       // second listener being started.
       LauncherStateDto snapshot(int seq, String title,
               {required bool complete}) =>
-          LauncherStateDto(
+          launcherSnapshot(
             sessionId: 1,
             revision: 0,
             snapshotSeq: seq,
-            input: 'chrome',
+            // Activation and index republishes share the empty environment query.
+            input: '',
             contextComplete: complete,
+            searchSources: const [],
+            resultActions: const [],
             contexts: [],
+            contextCaptures: const [],
             candidates: [candidate('action:first:c1', title)],
-            scopes: const [],
+            roots: const [],
             diagnostics: [],
           );
 
@@ -547,9 +1004,12 @@ void main() {
       await tester.pumpWidget(LauncherApp(
         window: channel,
         beginActivation: () => 1,
-        activate: (_, {promptAccessibility = false}) async =>
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
             snapshot(1, 'Search the Web', complete: settledAtStart),
-        updateInput: (_, input, revision) async =>
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
             state(revision, 'Search the Web', input: input),
         execute: (_, revision, candidate) async =>
             throw StateError('not invoked'),
@@ -557,7 +1017,12 @@ void main() {
         waitForSnapshot: (_, after) {
           final completer = Completer<LauncherStateDto?>();
           pending.add(completer);
-          return completer.future;
+          return completer.future.then((state) => SnapshotWaitDto(
+                kind: state == null
+                    ? SnapshotWaitKindDto.timedOut
+                    : SnapshotWaitKindDto.updated,
+                state: state,
+              ));
         },
       ));
       await toggle(tester);
@@ -585,24 +1050,27 @@ void main() {
     });
   }
 
-  testWidgets(
-      'a selected row stays selectable when late rows push it down',
+  testWidgets('a selected row stays selectable when late rows push it down',
       (tester) async {
     // A later update can rank other rows above the user's selection. The window
     // must keep that candidate selected, and Enter must still run *that* row.
     CandidateDto row(int index, {double score = 100}) =>
         candidate('action:command.$index:c1', 'Row $index', score: score);
 
-    LauncherStateDto withRows(int snapshotSeq, List<CandidateDto> rows) =>
-        LauncherStateDto(
+    LauncherStateDto withRows(int snapshotSeq, List<CandidateDto> rows,
+            {int revision = 1, String input = 'row'}) =>
+        launcherSnapshot(
           sessionId: 1,
-          revision: 0,
+          revision: revision,
           snapshotSeq: snapshotSeq,
-          input: '',
+          input: input,
           contextComplete: true,
+          searchSources: const [],
+          resultActions: const [],
           contexts: [],
+          contextCaptures: const [],
           candidates: rows,
-          scopes: const [],
+          roots: const [],
           diagnostics: [],
         );
 
@@ -619,26 +1087,32 @@ void main() {
       window: channel,
       // Still being enriched, so the window subscribes to later snapshots.
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => LauncherStateDto(
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          launcherSnapshot(
         sessionId: 1,
         revision: 0,
         snapshotSeq: 1,
         input: '',
         contextComplete: false,
+        searchSources: const [],
+        resultActions: const [],
         contexts: [],
+        contextCaptures: const [],
         candidates: initial,
-        scopes: const [],
+        roots: const [],
         diagnostics: [],
       ),
-      updateInput: (_, input, revision) async =>
-          state(revision, input, input: input),
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          withRows(1, initial, revision: revision, input: input),
       execute: (_, revision, candidate) async {
         executed = candidate;
         return ActionResultDto(
           sessionId: 1,
           revision: revision,
-          success: true,
-          message: 'Done',
+          status: ActionStatusDto.succeeded,
           closeWindow: false,
         );
       },
@@ -646,11 +1120,18 @@ void main() {
       waitForSnapshot: (_, after) {
         final completer = Completer<LauncherStateDto?>();
         pending.add(completer);
-        return completer.future;
+        return completer.future.then((state) => SnapshotWaitDto(
+              kind: state == null
+                  ? SnapshotWaitKindDto.timedOut
+                  : SnapshotWaitKindDto.updated,
+              state: state,
+            ));
       },
     ));
     await toggle(tester);
     expect(pending, hasLength(1), reason: 'one listener per visible session');
+    await tester.enterText(find.byType(TextField), 'row');
+    await tester.pumpAndSettle();
 
     pending[0].complete(withRows(2, initial));
     await tester.pumpAndSettle();
@@ -682,18 +1163,25 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => LauncherStateDto(
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          launcherSnapshot(
         sessionId: 1,
         revision: 0,
         snapshotSeq: 1,
         input: '',
         contextComplete: false,
+        searchSources: const [],
+        resultActions: const [],
         contexts: [],
+        contextCaptures: const [],
         candidates: [first, second],
-        scopes: const [],
+        roots: const [],
         diagnostics: [],
       ),
-      updateInput: (_, input, revision) async =>
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           state(revision, input, input: input),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
@@ -701,21 +1189,29 @@ void main() {
       waitForSnapshot: (_, after) {
         final completer = Completer<LauncherStateDto?>();
         pending.add(completer);
-        return completer.future;
+        return completer.future.then((state) => SnapshotWaitDto(
+              kind: state == null
+                  ? SnapshotWaitKindDto.timedOut
+                  : SnapshotWaitKindDto.updated,
+              state: state,
+            ));
       },
     ));
     await toggle(tester);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
-    pending[0].complete(LauncherStateDto(
+    pending[0].complete(launcherSnapshot(
       sessionId: 1,
       revision: 0,
       snapshotSeq: 2,
       input: '',
       contextComplete: true,
+      searchSources: const [],
+      resultActions: const [],
       contexts: [],
+      contextCaptures: const [],
       candidates: [third],
-      scopes: const [],
+      roots: const [],
       diagnostics: [],
     ));
     await tester.pumpAndSettle();
@@ -723,51 +1219,118 @@ void main() {
     expect(find.text('Second row'), findsNothing);
   });
 
+  testWidgets('keyboard selection keeps its operation inside the last row',
+      (tester) async {
+    tester.view.physicalSize = const Size(648, 520);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final actions = List.generate(
+        15, (index) => candidate('action:$index', 'Action $index'));
+    LauncherStateDto state(int revision, String input) => launcherSnapshot(
+        sessionId: 1,
+        revision: revision,
+        snapshotSeq: revision + 1,
+        input: input,
+        contextComplete: true,
+        searchSources: const [],
+        resultActions: const [],
+        candidates: actions,
+        diagnostics: []);
+    await tester.pumpWidget(LauncherApp(
+        window: channel,
+        beginActivation: () => 1,
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
+            state(0, ''),
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
+            state(revision, input),
+        execute: (_, __, ___) async => throw StateError('not invoked'),
+        deactivate: (_) async {}));
+    await toggle(tester);
+    await tester.enterText(find.byType(TextField), 'action');
+    await tester.pumpAndSettle();
+    for (var index = 0; index < 14; index++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
+    }
+    final last = find.text('Action 14');
+    expect(last.hitTestable(), findsOneWidget);
+    expect(find.text('15 results'), findsNothing);
+    expect(find.byKey(const Key('launcher-footer')), findsNothing);
+    final panel = tester.getRect(find.byKey(const Key('launcher-panel')));
+    final action =
+        tester.getRect(find.byKey(const Key('selected-row-primary')));
+    expect(action.center.dy, closeTo(tester.getRect(last).center.dy, 10));
+    expect(action.bottom, lessThanOrEqualTo(panel.bottom - 8));
+    expect(action.right, lessThanOrEqualTo(panel.right - 20));
+    expect(find.byType(AppRowActions), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('application icons render when loaded and fall back when absent',
       (tester) async {
     final chrome = CandidateDto(
+      contextKeys: const [],
+      homeEligible: true,
+      primaryAction: false,
       id: 'app:com.google.Chrome:/Applications/Google Chrome.app',
-      kind: 'application',
+      kind: CandidateKindDto.application,
       title: 'Google Chrome',
+      menuPath: const [],
       subtitle: '/Applications/Google Chrome.app',
       iconKey: 'application',
       score: 5000,
       groupId: 'app',
-      availability: 'enabled',
+      availability: AvailabilityDto.enabled,
       availabilityReason: null,
       commandId: null,
       bundleId: 'com.google.Chrome',
     );
     final notes = CandidateDto(
+      contextKeys: const [],
+      homeEligible: true,
+      primaryAction: false,
       id: 'app:com.apple.Notes:/System/Applications/Notes.app',
-      kind: 'application',
+      kind: CandidateKindDto.application,
       title: 'Notes',
+      menuPath: const [],
       subtitle: '/System/Applications/Notes.app',
       iconKey: 'application',
       score: 4000,
       groupId: 'app',
-      availability: 'enabled',
+      availability: AvailabilityDto.enabled,
       availabilityReason: null,
       commandId: null,
       bundleId: 'com.apple.Notes',
     );
-    final state = LauncherStateDto(
-      sessionId: 1,
-      revision: 0,
-      snapshotSeq: 1,
-      input: 'app',
-      contextComplete: true,
-      contexts: [],
-      candidates: [chrome, notes],
-      scopes: const [],
-      diagnostics: [],
-    );
+    LauncherStateDto state(int revision, String input) => launcherSnapshot(
+          sessionId: 1,
+          revision: revision,
+          snapshotSeq: 1,
+          input: input,
+          contextComplete: true,
+          searchSources: const [],
+          resultActions: const [],
+          contexts: [],
+          contextCaptures: const [],
+          candidates: [chrome, notes],
+          roots: const [],
+          diagnostics: [],
+        );
     final requested = <String>[];
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => state,
-      updateInput: (_, input, revision) async => state,
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          state(0, ''),
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          state(revision, input),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
       deactivate: (_) async {},
@@ -781,26 +1344,36 @@ void main() {
       },
     ));
     await toggle(tester);
+    expect(requested, isEmpty, reason: 'Apps are not on empty-query Home');
+    await tester.enterText(find.byType(TextField), 'app');
     await tester.pumpAndSettle();
     expect(requested, contains(chrome.id));
     expect(requested, contains(notes.id));
-    expect(find.byType(Image), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('action-list')),
+            matching: find.byType(Image)),
+        findsOneWidget);
     // The failing icon falls back to a glyph instead of breaking the row.
-    expect(find.byIcon(Icons.apps_rounded), findsOneWidget);
+    expect(find.byIcon(AppIcons.apps), findsOneWidget);
     expect(find.text('Notes'), findsOneWidget);
   });
 
   testWidgets('an icon that fails once is retried on the next snapshot',
       (tester) async {
     CandidateDto app(String id, String title) => CandidateDto(
+          contextKeys: const [],
+          homeEligible: true,
+          primaryAction: false,
           id: id,
-          kind: 'application',
+          kind: CandidateKindDto.application,
           title: title,
+          menuPath: const [],
           subtitle: '/Applications/$title.app',
           iconKey: 'application',
           score: 5000,
           groupId: 'app',
-          availability: 'enabled',
+          availability: AvailabilityDto.enabled,
           availabilityReason: null,
           commandId: null,
           bundleId: id,
@@ -808,23 +1381,32 @@ void main() {
     final edge = app('app:com.microsoft.edgemac', 'Microsoft Edge');
     // Sequence must advance, or the ordering guard correctly ignores the second
     // snapshot and this test would not exercise a retry at all.
-    LauncherStateDto withEdge(int revision) => LauncherStateDto(
+    LauncherStateDto withEdge(int revision, {String input = ''}) =>
+        launcherSnapshot(
           sessionId: 1,
           revision: revision,
           snapshotSeq: revision + 1,
-          input: 'edge',
+          input: input,
           contextComplete: true,
+          searchSources: const [],
+          resultActions: const [],
           contexts: [],
+          contextCaptures: const [],
           candidates: [edge],
-          scopes: const [],
+          roots: const [],
           diagnostics: [],
         );
     var attempts = 0;
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => withEdge(0),
-      updateInput: (_, input, revision) async => withEdge(revision),
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          withEdge(0),
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          withEdge(revision, input: input),
       execute: (_, revision, candidate) async =>
           throw StateError('not invoked'),
       deactivate: (_) async {},
@@ -836,15 +1418,24 @@ void main() {
       },
     ));
     await toggle(tester);
+    await tester.enterText(find.byType(TextField), 'edge');
     await tester.pumpAndSettle();
     expect(attempts, 1);
-    expect(find.byType(Image), findsNothing,
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('action-list')),
+            matching: find.byType(Image)),
+        findsNothing,
         reason: 'the first attempt failed');
     // A later snapshot must try again rather than cache the absence forever.
     await tester.enterText(find.byType(TextField), 'edge again');
     await tester.pumpAndSettle();
     expect(attempts, greaterThan(1));
-    expect(find.byType(Image), findsOneWidget);
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('action-list')),
+            matching: find.byType(Image)),
+        findsOneWidget);
   });
 
   testWidgets('disabled candidates show their reason and cannot execute',
@@ -853,23 +1444,30 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => LauncherStateDto(
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          launcherSnapshot(
         sessionId: 1,
         revision: 0,
         snapshotSeq: 1,
         input: '',
         contextComplete: true,
+        searchSources: const [],
+        resultActions: const [],
         contexts: [],
+        contextCaptures: const [],
         candidates: [
           candidate('action:core.git.status:c1', 'Git Status',
-              availability: 'disabled',
+              availability: AvailabilityDto.disabled,
               reason: 'git is not installed',
               iconKey: 'git'),
         ],
-        scopes: const [],
+        roots: const [],
         diagnostics: [],
       ),
-      updateInput: (_, input, revision) async =>
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           state(revision, input, input: input),
       execute: (_, revision, candidate) async {
         executed++;
@@ -884,66 +1482,79 @@ void main() {
     expect(executed, 0);
   });
 
-  testWidgets('typing keeps the active scope', (tester) async {
-    final copy = candidate('action:core.directory.copy:c1', 'Copy Path');
+  testWidgets('typing keeps the active Scope', (tester) async {
+    final copy = candidate('action:core.directory.copy:c1', 'Copy Path',
+        groupId: 'app.editor');
     final git =
         candidate('action:core.git.status:c1', 'Git Status', groupId: 'git');
-    LauncherStateDto scoped(int revision, String input) => LauncherStateDto(
+    LauncherStateDto scoped(int revision, String input) => launcherSnapshot(
           sessionId: 1,
           revision: revision,
           snapshotSeq: 1,
           input: input,
           contextComplete: true,
+          searchSources: const [],
+          resultActions: const [],
           contexts: [],
-          candidates: [copy, git],
-          scopes: [
-            ScopeDto(
-                id: 'app',
-                kind: 'app',
-                label: 'Finder',
-                candidateIds: [copy.id]),
-            ScopeDto(
-                id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
+          contextCaptures: const [],
+          contextCandidates: [copy, git],
+          candidates: [copy, git]
+              .where((action) =>
+                  action.title.toLowerCase().contains(input.toLowerCase()))
+              .toList(),
+          roots: [
+            contextFixture(id: 'app', label: 'Finder', candidateIds: [copy.id]),
+            contextFixture(id: 'git', label: 'Git', candidateIds: [git.id]),
           ],
           diagnostics: [],
         );
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => scoped(0, ''),
-      updateInput: (_, input, revision) async => scoped(revision, input),
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          scoped(0, ''),
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          scoped(revision, input),
       execute: (_, __, ___) async => throw StateError('not invoked'),
       deactivate: (_) async {},
     ));
     await toggle(tester);
     expect(find.text('Copy Path'), findsOneWidget);
-    expect(find.text('Git Status'), findsNothing);
+    expect(find.text('Git Status'), findsOneWidget);
+    expect(find.text('Search Editor actions…'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'copy');
     await tester.pumpAndSettle();
     expect(find.text('Copy Path'), findsOneWidget);
     expect(find.text('Git Status'), findsNothing);
   });
 
-  testWidgets('Esc clears query then scope then the window', (tester) async {
-    final copy = candidate('action:core.directory.copy:c1', 'Copy Path');
+  testWidgets('Esc clears query then Scope then closes the window',
+      (tester) async {
+    final copy = candidate('action:core.directory.copy:c1', 'Copy Path',
+        groupId: 'app.editor');
     final git =
         candidate('action:core.git.status:c1', 'Git Status', groupId: 'git');
-    LauncherStateDto scoped(int revision, String input) => LauncherStateDto(
+    LauncherStateDto scoped(int revision, String input) => launcherSnapshot(
           sessionId: 1,
           revision: revision,
           snapshotSeq: 1,
           input: input,
           contextComplete: true,
+          searchSources: const [],
+          resultActions: const [],
           contexts: [],
-          candidates: [copy, git],
-          scopes: [
-            ScopeDto(
-                id: 'app',
-                kind: 'app',
-                label: 'Finder',
-                candidateIds: [copy.id]),
-            ScopeDto(
-                id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
+          contextCaptures: const [],
+          contextCandidates: [copy, git],
+          candidates: [copy, git]
+              .where((action) =>
+                  action.title.toLowerCase().contains(input.toLowerCase()))
+              .toList(),
+          roots: [
+            contextFixture(id: 'app', label: 'Finder', candidateIds: [copy.id]),
+            contextFixture(id: 'git', label: 'Git', candidateIds: [git.id]),
           ],
           diagnostics: [],
         );
@@ -951,8 +1562,13 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => scoped(0, ''),
-      updateInput: (_, input, revision) async => scoped(revision, input),
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          scoped(0, ''),
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          scoped(revision, input),
       execute: (_, __, ___) async => throw StateError('not invoked'),
       deactivate: (_) async {
         deactivated++;
@@ -966,12 +1582,13 @@ void main() {
     expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
         isEmpty);
     expect(find.text('Copy Path'), findsOneWidget);
-    expect(find.text('Git Status'), findsNothing);
+    expect(find.text('Git Status'), findsOneWidget);
+    expect(find.text('Search Editor actions…'), findsOneWidget);
     expect(deactivated, 0);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(find.text('Copy Path'), findsOneWidget);
-    expect(find.text('Git Status'), findsOneWidget);
+    expect(find.text('Git Status'), findsNothing);
+    expect(find.text('Search apps and actions…'), findsOneWidget);
     expect(deactivated, 0);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
@@ -981,33 +1598,41 @@ void main() {
 
   testWidgets('another wake entry switches mode in place and keeps the query',
       (tester) async {
-    final copy = candidate('action:core.directory.copy:c1', 'Copy Path');
+    final copy = candidate('action:core.directory.copy:c1', 'Copy Path',
+        groupId: 'app.editor');
     final git =
         candidate('action:core.git.status:c1', 'Git Status', groupId: 'git');
-    LauncherStateDto scoped(int revision, String input) => LauncherStateDto(
+    LauncherStateDto scoped(int revision, String input) => launcherSnapshot(
           sessionId: 1,
           revision: revision,
           snapshotSeq: 1,
           input: input,
           contextComplete: true,
+          searchSources: const [],
+          resultActions: const [],
           contexts: [],
-          candidates: [copy, git],
-          scopes: [
-            ScopeDto(
-                id: 'app',
-                kind: 'app',
-                label: 'Finder',
-                candidateIds: [copy.id]),
-            ScopeDto(
-                id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
+          contextCaptures: const [],
+          contextCandidates: [copy, git],
+          candidates: [copy, git]
+              .where((action) =>
+                  action.title.toLowerCase().contains(input.toLowerCase()))
+              .toList(),
+          roots: [
+            contextFixture(id: 'app', label: 'Finder', candidateIds: [copy.id]),
+            contextFixture(id: 'git', label: 'Git', candidateIds: [git.id]),
           ],
           diagnostics: [],
         );
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => scoped(0, ''),
-      updateInput: (_, input, revision) async => scoped(revision, input),
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          scoped(0, ''),
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          scoped(revision, input),
       execute: (_, __, ___) async => throw StateError('not invoked'),
       deactivate: (_) async {},
     ));
@@ -1018,45 +1643,221 @@ void main() {
     expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
         'copy');
     expect(find.text('Copy Path'), findsOneWidget);
-    expect(find.text('Git Status'), findsOneWidget);
+    expect(find.text('Git Status'), findsNothing);
+    expect(find.text('Search apps and actions…'), findsOneWidget);
     expect(windowCalls, isNot(contains('hide')));
     await toggle(tester, mode: 'universal');
     await tester.pumpAndSettle();
     expect(windowCalls.last, 'hide');
   });
 
-  testWidgets('Current App late snapshot is selected while idle',
+  testWidgets(
+      'URL actions show page or clipboard source and execute the selected target',
       (tester) async {
+    const pageUrl = 'https://example.org/current';
+    final pageCopy = candidate('action:core.url.copy:page', 'Copy URL',
+        groupId: 'web', executionContextId: 'page', subtitle: pageUrl);
+    final pageOpen = candidate(
+        'action:core.url.open:page', 'Open in Default Browser',
+        groupId: 'web', executionContextId: 'page', subtitle: pageUrl);
+    final clipboardOpen = candidate(
+        'action:core.url.open:clipboard', 'Open in Default Browser',
+        groupId: 'web',
+        executionContextId: 'clipboard',
+        subtitle: 'Copied URL');
+    // Rust omits redundant Copy URL for the clipboard's own value.
+    final offers = [pageCopy, pageOpen, clipboardOpen];
+    final contexts = [
+      contextFixture(
+          id: 'clipboard',
+          label: 'Clipboard',
+          typeId: 'core.url',
+          source: ContextSourceDto.clipboard,
+          detail: 'Copied URL',
+          candidateIds: [clipboardOpen.id]),
+      contextFixture(
+          id: 'page',
+          label: 'Current page',
+          typeId: 'core.url',
+          source: ContextSourceDto.browserCurrentPage,
+          detail: pageUrl,
+          candidateIds: [pageCopy.id, pageOpen.id]),
+    ];
+    final executed = <String>[];
+    LauncherStateDto snapshot(int revision, String input) => launcherSnapshot(
+        sessionId: 1,
+        revision: revision,
+        snapshotSeq: 1,
+        input: input,
+        contextComplete: true,
+        searchSources: const [],
+        resultActions: const [],
+        contexts: contexts,
+        contextCandidates: offers,
+        candidates: offers
+            .where((action) =>
+                action.title.toLowerCase().contains(input.toLowerCase()))
+            .toList(),
+        scopes: const [
+          ScopeDto(id: 'app.edge', label: 'Microsoft Edge', isCurrentApp: true),
+          ScopeDto(id: 'web', label: 'Web', isCurrentApp: false),
+        ],
+        diagnostics: []);
+    await tester.pumpWidget(LauncherApp(
+        window: channel,
+        beginActivation: () => 1,
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
+            snapshot(0, ''),
+        updateInput: (_, input, revision,
+                {scopeId, inputMode = InputModeDto.environment}) async =>
+            snapshot(revision, input),
+        execute: (session, revision, id) async {
+          executed.add(id);
+          return ActionResultDto(
+              sessionId: session,
+              revision: revision,
+              status: ActionStatusDto.succeeded,
+              closeWindow: false);
+        },
+        deactivate: (_) async {}));
+    await toggle(tester);
+    expect(find.text('Copy URL'), findsOneWidget);
+    expect(find.text('Open in Default Browser'), findsNWidgets(2));
+    expect(find.text('Current page · $pageUrl'), findsNWidgets(2));
+    expect(find.text('Clipboard · Copied URL'), findsOneWidget);
+    await tester.tap(find.text('Clipboard · Copied URL'));
+    await tester.pumpAndSettle();
+    expect(executed, isEmpty);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(executed, [clipboardOpen.id]);
+    await tester.enterText(find.byType(TextField), 'copy');
+    await tester.pumpAndSettle();
+    expect(find.text('Current page · $pageUrl'), findsOneWidget);
+    expect(find.text('Clipboard · Copied URL'), findsNothing);
+    await tester.tap(find.text('Current page · $pageUrl'));
+    await tester.pumpAndSettle();
+    expect(executed, [clipboardOpen.id]);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(executed, [clipboardOpen.id, pageCopy.id]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Current App with no menus shows and searches context actions',
+      (tester) async {
+    final copy = candidate('action:core.directory.copy:c1', 'Copy Path');
     final git =
         candidate('action:core.git.status:c1', 'Git Status', groupId: 'git');
-    final copy = candidate('action:core.directory.copy:c1', 'Copy Path');
-    final first = LauncherStateDto(
+    final hidden = candidate('action:hidden:c1', 'Git Hidden',
+        groupId: 'git', availability: AvailabilityDto.hidden);
+    final application = candidate('app:gittools', 'Git Tools',
+        kind: CandidateKindDto.application, groupId: 'app');
+    final offers = [copy, git, hidden, application];
+    final requests = <String?>[];
+    final executed = <String>[];
+    LauncherStateDto snapshot(int revision, String input,
+            {String? selectedScope}) =>
+        launcherSnapshot(
+            sessionId: 1,
+            revision: revision,
+            snapshotSeq: 1,
+            input: input,
+            contextComplete: true,
+            searchSources: const [],
+            resultActions: const [],
+            contextCandidates: offers,
+            selectedScope: selectedScope,
+            candidates: offers
+                .where((action) =>
+                    action.title.toLowerCase().contains(input.toLowerCase()) &&
+                    (selectedScope == null ||
+                        action.kind == CandidateKindDto.action))
+                .toList(),
+            scopes: const [
+              ScopeDto(id: 'app.finder', label: 'Finder', isCurrentApp: true),
+              ScopeDto(id: 'folder', label: 'Folder', isCurrentApp: false),
+              ScopeDto(id: 'git', label: 'Git', isCurrentApp: false),
+            ],
+            diagnostics: []);
+    await tester.pumpWidget(LauncherApp(
+        window: channel,
+        beginActivation: () => 1,
+        activate: (_,
+                {promptAccessibility = false,
+                capturedEnvironment = false}) async =>
+            snapshot(0, ''),
+        updateInput: (_, input, revision,
+            {scopeId, inputMode = InputModeDto.environment}) async {
+          requests.add(scopeId);
+          return snapshot(revision, input, selectedScope: scopeId);
+        },
+        execute: (session, revision, id) async {
+          executed.add(id);
+          return ActionResultDto(
+              sessionId: session,
+              revision: revision,
+              status: ActionStatusDto.succeeded,
+              closeWindow: false);
+        },
+        deactivate: (_) async {}));
+    await toggle(tester);
+    expect(find.text('Search Finder actions…'), findsOneWidget);
+    expect(find.text('Copy Path'), findsOneWidget);
+    expect(find.text('Git Status'), findsOneWidget);
+    expect(find.text('Browse Menus…'), findsNothing);
+    expect(find.text('Git Hidden'), findsNothing);
+    expect(find.text('Git Tools'), findsNothing);
+    await tester.enterText(find.byType(TextField), 'git');
+    await tester.pumpAndSettle();
+    expect(requests.last, 'app.finder');
+    expect(find.text('Git Status'), findsOneWidget);
+    expect(find.text('Copy Path'), findsNothing);
+    expect(find.text('Git Hidden'), findsNothing);
+    expect(find.text('Git Tools'), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(executed, [git.id]);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('late Current App Scope is selected while idle', (tester) async {
+    final git =
+        candidate('action:core.git.status:c1', 'Git Status', groupId: 'git');
+    final copy = candidate('action:core.directory.copy:c1', 'Copy Path',
+        groupId: 'app.editor');
+    final first = launcherSnapshot(
       sessionId: 1,
       revision: 0,
       snapshotSeq: 1,
       input: '',
       contextComplete: false,
+      searchSources: const [],
+      resultActions: const [],
       contexts: [],
+      contextCaptures: const [],
       candidates: [git],
-      scopes: [
-        ScopeDto(
-            id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
+      roots: [
+        contextFixture(id: 'git', label: 'Git', candidateIds: [git.id]),
       ],
       diagnostics: [],
     );
-    final late = LauncherStateDto(
+    final late = launcherSnapshot(
       sessionId: 1,
       revision: 0,
       snapshotSeq: 2,
       input: '',
       contextComplete: true,
+      searchSources: const [],
+      resultActions: const [],
       contexts: [],
+      contextCaptures: const [],
       candidates: [copy, git],
-      scopes: [
-        ScopeDto(
-            id: 'app', kind: 'app', label: 'Finder', candidateIds: [copy.id]),
-        ScopeDto(
-            id: 'git', kind: 'group', label: 'Git', candidateIds: [git.id]),
+      roots: [
+        contextFixture(id: 'app', label: 'Finder', candidateIds: [copy.id]),
+        contextFixture(id: 'git', label: 'Git', candidateIds: [git.id]),
       ],
       diagnostics: [],
     );
@@ -1064,15 +1865,24 @@ void main() {
     await tester.pumpWidget(LauncherApp(
       window: channel,
       beginActivation: () => 1,
-      activate: (_, {promptAccessibility = false}) async => first,
-      updateInput: (_, input, revision) async =>
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          first,
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
           state(revision, input, input: input),
       execute: (_, __, ___) async => throw StateError('not invoked'),
       deactivate: (_) async {},
       waitForSnapshot: (_, __) {
         final completer = Completer<LauncherStateDto?>();
         pending.add(completer);
-        return completer.future;
+        return completer.future.then((state) => SnapshotWaitDto(
+              kind: state == null
+                  ? SnapshotWaitKindDto.timedOut
+                  : SnapshotWaitKindDto.updated,
+              state: state,
+            ));
       },
     ));
     await toggle(tester);
@@ -1081,6 +1891,7 @@ void main() {
     pending[0].complete(late);
     await tester.pumpAndSettle();
     expect(find.text('Copy Path'), findsOneWidget);
-    expect(find.text('Git Status'), findsNothing);
+    expect(find.text('Git Status'), findsOneWidget);
+    expect(find.text('Search Editor actions…'), findsOneWidget);
   });
 }

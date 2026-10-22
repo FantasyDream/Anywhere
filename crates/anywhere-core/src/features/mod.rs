@@ -1,68 +1,132 @@
-//! First-party product features.
+//! Built-in product features and their registration contracts.
 //!
-//! Each owns the contexts it recognizes and the actions it offers. Adding an action is a
-//! handler, an AvailabilityRule on the spec, and a registration. Custom hide rules name a
-//! fact key and an operation; a new snapshot is inserted into SessionFacts at capture, not
-//! a new struct field. A new kind of list row registers a CandidateSource and an Invocation.
+//! Domain modules implement [`BuiltinFeature`] and declare module-owned
+//! `registration.rs` entries. Cargo generates the catalogue; Application binds
+//! services once at startup and preferences select the captured contributions.
+//! Providers, Actions and Sources use shared Core contracts. The collection
+//! helpers below support isolated consumers; they do not reload the live app.
 pub mod app_actions;
 pub mod applications;
+pub mod catalog;
+pub mod clipboard;
+pub mod contribution;
+pub mod descriptor;
 pub mod filesystem;
-pub mod git;
-pub mod json;
+pub mod groups;
+pub mod policy;
+pub mod services;
 pub mod text;
+pub mod tools;
+
+pub mod developer;
+pub mod git;
+pub(crate) mod host_services;
+pub mod module;
+pub mod saved_directories;
 pub mod url;
+pub use module::{builtin_contributions, BuiltinFeature, FeatureBindings};
 
 use crate::core::context::provider::ContextProvider;
-use crate::core::context::ResolvedContext;
+use crate::core::context::{ContextSource, ResolvedContext};
+use anywhere_platform::ApplicationInfo;
 use std::sync::Arc;
 
 /// Every action the first-party features contribute, as bundles.
-///
-/// This is the whole registration surface: adding a feature means adding its bundle here.
 pub fn builtin_action_bundles() -> Vec<crate::core::action::bundle::ActionBundle> {
-    vec![
-        git::actions::bundle(),
-        filesystem::actions_folder::bundle(),
-        filesystem::actions_file::bundle(),
-        url::actions::bundle(),
-        json::actions::bundle(),
-    ]
+    contribution::builtins()
+        .into_iter()
+        .flat_map(|c| c.bundles)
+        .collect()
 }
 
-/// Every provider a session gets from the first-party features.
-///
-/// The registry decides the order (priority, then id); this only says what exists. A new
-/// feature adds its provider here and nothing else has to change.
 pub fn builtin_providers() -> Vec<Arc<dyn ContextProvider>> {
-    vec![
-        Arc::new(url::provider::UrlProvider::new()),
-        Arc::new(filesystem::provider::PathProvider::default()),
-        Arc::new(json::provider::JsonProvider::new()),
-        Arc::new(text::provider::TextProvider::default()),
-        Arc::new(git::provider::GitRepositoryProvider::default()),
-    ]
+    contribution::builtins()
+        .into_iter()
+        .flat_map(|c| c.providers)
+        .collect()
+}
+
+/// Contexts that start a revision: memoized environment, frozen frontmost app, typed text.
+pub fn session_seeds(
+    frontmost: Option<&ApplicationInfo>,
+    cache: impl IntoIterator<Item = ResolvedContext>,
+    input: &str,
+) -> Vec<ResolvedContext> {
+    let mut seeds: Vec<_> = cache.into_iter().collect();
+    if let Some(app) = frontmost {
+        seeds.push(applications::context::frontmost_context(app));
+    }
+    if let Some(text) = text::provider::text_context(input) {
+        seeds.push(text);
+    }
+    seeds
+}
+
+/// Ranking bias for a context type. Typed text is weaker than a recognized object.
+pub fn context_semantic(type_id: &str) -> i32 {
+    if type_id == anywhere_protocol::TEXT {
+        40
+    } else {
+        90
+    }
+}
+
+/// Environment context reused by later revisions of the same session.
+///
+/// User-typed objects stay out: caching them made the next query inherit the previous path.
+pub fn reusable_environment(context: &ResolvedContext) -> bool {
+    context.source == ContextSource::ApplicationContext
+        && matches!(
+            context.type_id.as_str(),
+            anywhere_protocol::DIRECTORY | anywhere_protocol::GIT_REPOSITORY
+        )
+}
+
+pub fn remember_environment(cache: &mut Vec<ResolvedContext>, contexts: &[ResolvedContext]) {
+    for context in contexts {
+        if !reusable_environment(context) {
+            continue;
+        }
+        let seen = cache.iter().any(|cached| {
+            cached.type_id == context.type_id
+                && cached.value.shared_text() == context.value.shared_text()
+                && cached.source == context.source
+        });
+        if !seen {
+            cache.push(context.clone());
+        }
+    }
+}
+
+/// Static lightweight recognition catalogue, also useful for tools and tests.
+pub fn input_recognizers() -> Vec<crate::core::context::input_recognizer::InputRecognizer> {
+    let mut registry = crate::core::context::registry::ContextProviderRegistry::default();
+    for contribution in contribution::builtins() {
+        for rule in contribution.input_recognizers {
+            registry
+                .register_input_recognizer(rule, None)
+                .expect("invalid input recognizer registration");
+        }
+    }
+    registry.input_recognizers()
 }
 
 /// Every context the built-in recognizers derive from one input.
 ///
 /// The providers are thin adapters over these same functions, so tests and the
 /// micro-benchmark exercise the real recognition rules rather than a copy of them. Order is
-/// the documented recognition order: the raw text, then a URL, a path, and a JSON document;
+/// the documented recognition order: the raw text, then a URL and a path;
 /// recognition is additive, never exclusive.
 pub fn recognized_contexts(input: &str) -> Vec<ResolvedContext> {
     let mut contexts = Vec::new();
     if let Some(text) = text::provider::text_context(input) {
         contexts.push(text);
     }
-    for context in [
-        url::provider::recognize(input),
-        filesystem::provider::recognize_path(input),
-        json::provider::recognize(input),
-    ]
-    .into_iter()
-    .flatten()
-    {
-        contexts.push(context);
+    let rules = input_recognizers();
+    for rule in rules {
+        if let Some(context) = (rule.recognize)(input) {
+            contexts.push(context);
+        }
     }
     contexts
 }
@@ -81,12 +145,12 @@ mod tests {
     }
 
     #[test]
-    fn recognition_is_additive_and_keeps_json_primitives() {
+    fn recognition_is_additive_without_deferred_tool_contexts() {
         assert_eq!(types("https://github.com"), [TEXT, URL]);
         assert_eq!(types("HTTPS://github.com"), [TEXT, URL]);
-        assert_eq!(types(r#"{"a":1}"#), [TEXT, JSON_DOCUMENT]);
+        assert_eq!(types(r#"{"a":1}"#), [TEXT]);
         for input in ["true", "null", "123", "[]", "\"hello\""] {
-            assert_eq!(types(input), [TEXT, JSON_DOCUMENT]);
+            assert_eq!(types(input), [TEXT]);
         }
         assert_eq!(types("random sentence"), [TEXT]);
         for input in [
@@ -103,7 +167,7 @@ mod tests {
     }
 
     /// The recognizers run in the order the pre-provider pipeline used: a string that is
-    /// both a URL and a path stays a URL, and one that is both a path and JSON stays a path.
+    /// both a URL and a path stays a URL.
     #[test]
     fn recognizers_run_in_the_documented_order() {
         use crate::core::context::registry::ContextProviderRegistry;
@@ -116,7 +180,7 @@ mod tests {
             .into_iter()
             .filter(|id| id.starts_with("core.") && *id != "core.text_provider")
             .collect::<Vec<_>>();
-        let expected = ["core.url", "core.path", "core.json", "core.git_repository"];
+        let expected = ["core.url", "core.path", "core.git_repository"];
         for id in &expected {
             assert!(
                 recognizers.contains(id),
@@ -125,16 +189,5 @@ mod tests {
         }
         let position = |id: &str| recognizers.iter().position(|entry| *entry == id).unwrap();
         assert!(position("core.url") < position("core.path"));
-        assert!(position("core.path") < position("core.json"));
-    }
-
-    #[test]
-    fn json_type_is_the_v0_2_canonical_identifier() {
-        let json = recognized_contexts("{}")
-            .into_iter()
-            .find(|context| context.type_id == JSON_DOCUMENT)
-            .expect("a JSON document context");
-        assert_ne!(json.type_id, JSON_LEGACY);
-        assert_eq!(json.value.text(), "{}", "the raw JSON text is preserved");
     }
 }

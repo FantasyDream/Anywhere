@@ -1,0 +1,151 @@
+{
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "probe": "release Rust walker + pagination",
+  "cache": "OS caches left untouched; fixtures just created",
+  "excludes": [
+    "Spotlight subprocess",
+    "Flutter",
+    "real GUI"
+  ],
+  "baseline": {
+    "baseline": true,
+    "max_rss_bytes": 7241728
+  },
+  "cases": [
+    {
+      "files": 10000,
+      "expected_matches": 100,
+      "samples": [
+        {
+          "all_pages_ms": 0.07050000000000001,
+          "complete_ms": 13.714625,
+          "first_batch_ms": 13.632458999999999,
+          "issues": 0,
+          "matches": 100,
+          "pages": 2,
+          "returned": 100,
+          "scanned_entries": 10100,
+          "slowest_next_page_ms": 0.07050000000000001,
+          "temporary_bytes": 23896,
+          "max_rss_bytes": 7749632
+        },
+        {
+          "all_pages_ms": 0.089917,
+          "complete_ms": 11.809375000000001,
+          "first_batch_ms": 11.738166,
+          "issues": 0,
+          "matches": 100,
+          "pages": 2,
+          "returned": 100,
+          "scanned_entries": 10100,
+          "slowest_next_page_ms": 0.089917,
+          "temporary_bytes": 23896,
+          "max_rss_bytes": 7733248
+        },
+        {
+          "all_pages_ms": 0.076666,
+          "complete_ms": 11.551874999999999,
+          "first_batch_ms": 11.485917,
+          "issues": 0,
+          "matches": 100,
+          "pages": 2,
+          "returned": 100,
+          "scanned_entries": 10100,
+          "slowest_next_page_ms": 0.076666,
+          "temporary_bytes": 23896,
+          "max_rss_bytes": 7749632
+        }
+      ]
+    },
+    {
+      "files": 40000,
+      "expected_matches": 100,
+      "samples": [
+        {
+          "all_pages_ms": 0.063666,
+          "complete_ms": 34.771125,
+          "first_batch_ms": 34.682207999999996,
+          "issues": 0,
+          "matches": 100,
+          "pages": 2,
+          "returned": 100,
+          "scanned_entries": 40100,
+          "slowest_next_page_ms": 0.063666,
+          "temporary_bytes": 23896,
+          "max_rss_bytes": 7749632
+        },
+        {
+          "all_pages_ms": 0.073792,
+          "complete_ms": 34.107541999999995,
+          "first_batch_ms": 34.028375,
+          "issues": 0,
+          "matches": 100,
+          "pages": 2,
+          "returned": 100,
+          "scanned_entries": 40100,
+          "slowest_next_page_ms": 0.073792,
+          "temporary_bytes": 23896,
+          "max_rss_bytes": 7782400
+        },
+        {
+          "all_pages_ms": 0.064208,
+          "complete_ms": 33.830416,
+          "first_batch_ms": 33.7465,
+          "issues": 0,
+          "matches": 100,
+          "pages": 2,
+          "returned": 100,
+          "scanned_entries": 40100,
+          "slowest_next_page_ms": 0.064208,
+          "temporary_bytes": 23896,
+          "max_rss_bytes": 7749632
+        }
+      ]
+    },
+    {
+      "files": 10000,
+      "expected_matches": 10000,
+      "samples": [
+        {
+          "all_pages_ms": 720.7136270000002,
+          "complete_ms": 14.071167,
+          "first_batch_ms": 13.966542,
+          "issues": 0,
+          "matches": 10000,
+          "pages": 157,
+          "returned": 10000,
+          "scanned_entries": 10100,
+          "slowest_next_page_ms": 5.155375,
+          "temporary_bytes": 1291096,
+          "max_rss_bytes": 8011776
+        },
+        {
+          "all_pages_ms": 710.3277919999999,
+          "complete_ms": 12.876208,
+          "first_batch_ms": 12.759542,
+          "issues": 0,
+          "matches": 10000,
+          "pages": 157,
+          "returned": 10000,
+          "scanned_entries": 10100,
+          "slowest_next_page_ms": 5.104958,
+          "temporary_bytes": 1291096,
+          "max_rss_bytes": 7979008
+        },
+        {
+          "all_pages_ms": 720.7624180000003,
+          "complete_ms": 13.113125,
+          "first_batch_ms": 12.98625,
+          "issues": 0,
+          "matches": 10000,
+          "pages": 157,
+          "returned": 10000,
+          "scanned_entries": 10100,
+          "slowest_next_page_ms": 5.040667,
+          "temporary_bytes": 1291096,
+          "max_rss_bytes": 8060928
+        }
+      ]
+    }
+  ]
+}

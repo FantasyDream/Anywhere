@@ -1,9 +1,9 @@
 //! URL actions.
 use crate::core::action::availability::AvailabilityRule;
 use crate::core::action::bundle::{ActionBundle, ActionSpec};
-use crate::core::action::group::groups;
 use crate::core::action::handler::{ActionHandler, ExecutionOutput};
 use crate::core::context::{ContextValue, ResolvedContext};
+use crate::core::session::facts::CLIPBOARD;
 use anyhow::{bail, Result};
 use anywhere_platform::Platform;
 use anywhere_protocol::*;
@@ -20,7 +20,8 @@ impl ActionHandler for OpenBrowser {
         let ContextValue::Url(url) = &context.value else {
             bail!("URL context required");
         };
-        platform.open_url(url.as_str())?;
+        crate::features::host_services::for_feature(super::descriptor(), platform)?
+            .open_url(url.as_str())?;
         Ok(ExecutionOutput::dismiss())
     }
 }
@@ -34,16 +35,18 @@ impl ActionHandler for CopyUrl {
         let ContextValue::Url(url) = &context.value else {
             bail!("URL context required");
         };
-        platform.copy_text(url.as_str())?;
+        crate::features::host_services::for_feature(super::descriptor(), platform)?
+            .copy_text(url.as_str())?;
         Ok(ExecutionOutput::dismiss())
     }
 }
 
 pub fn bundle() -> ActionBundle {
     ActionBundle {
-        group: groups::web(),
+        group: crate::features::groups::web(),
         actions: vec![
             ActionSpec {
+                localized_titles: &[("zh", "在默认浏览器中打开")],
                 id: "core.url.open",
                 title: "Open in Default Browser",
                 accepts: URL,
@@ -53,17 +56,22 @@ pub fn bundle() -> ActionBundle {
                 icon: "globe",
                 aliases: &["browser", "open"],
                 keywords: &["link"],
+                home_eligible: true,
+                primary_action: true,
             },
             ActionSpec {
+                localized_titles: &[("zh", "复制网址")],
                 id: "core.url.copy",
                 title: "Copy URL",
                 accepts: URL,
                 handler: &CopyUrl,
-                availability: AvailabilityRule::Enabled,
+                availability: AvailabilityRule::hide_if(CLIPBOARD),
                 base_priority: 20,
-                icon: "copy",
+                icon: "copy-url",
                 aliases: &["copy", "link", "clipboard"],
                 keywords: &["url"],
+                home_eligible: true,
+                primary_action: false,
             },
         ],
     }

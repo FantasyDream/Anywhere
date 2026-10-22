@@ -70,6 +70,6 @@ pub enum StepOutcome {
         result: Result<Vec<ResolvedContext>>,
         duration_us: u64,
     },
-    /// The caller abandoned this run before the provider was polled.
+    /// The caller superseded this run before polling or while waiting for the provider.
     Abandoned,
 }

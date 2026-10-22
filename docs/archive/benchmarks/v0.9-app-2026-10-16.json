@@ -1,0 +1,157 @@
+{
+  "build": "0.9.0+6",
+  "renderer": "Impeller",
+  "rss_samples": [
+    {
+      "time": "2026-10-16T03:34:14.735267+00:00",
+      "state": "settings-visible-after-git-result-and-repeated-navigation",
+      "processes": [
+        {
+          "pid": 68410,
+          "rss_kib": 85072,
+          "cpu_percent": 0.1
+        }
+      ]
+    },
+    {
+      "time": "2026-10-16T03:44:47.946316+00:00",
+      "state": "file-search-visible-complete-1592-results-with-text-preview",
+      "processes": [
+        {
+          "pid": 68410,
+          "rss_kib": 49808,
+          "cpu_percent": 0.2
+        }
+      ]
+    },
+    {
+      "time": "2026-10-16T03:47:11.480004+00:00",
+      "state": "after-menu-hide-and-16-second-expiry-no-AX-refresh",
+      "processes": [
+        {
+          "pid": 68410,
+          "rss_kib": 48992,
+          "cpu_percent": 0.0
+        }
+      ]
+    }
+  ],
+  "vmmap_visible_M": {
+    "Physical footprint": 150.9,
+    "Physical footprint (peak)": 214.3
+  },
+  "vmmap_hidden_after_expiry_M": {
+    "Physical footprint": 93.5,
+    "Physical footprint (peak)": 214.3
+  },
+  "native_visibility_events": [
+    {
+      "ax_trusted": true,
+      "event": "launcher_visible",
+      "hotkey_to_visible_ms": 12.609083321876824,
+      "timestamp": "2026-10-16T03:29:06.839Z",
+      "window_height": 72,
+      "window_width": 648
+    },
+    {
+      "ax_trusted": true,
+      "event": "settings_visible",
+      "timestamp": "2026-10-16T03:31:53.171Z",
+      "window_height": 508,
+      "window_width": 648
+    },
+    {
+      "ax_trusted": true,
+      "event": "launcher_visible",
+      "hotkey_to_visible_ms": 40.432416717521846,
+      "timestamp": "2026-10-16T03:32:24.501Z",
+      "window_height": 520,
+      "window_width": 648
+    },
+    {
+      "ax_trusted": true,
+      "event": "settings_visible",
+      "timestamp": "2026-10-16T03:33:09.612Z",
+      "window_height": 508,
+      "window_width": 648
+    },
+    {
+      "ax_trusted": true,
+      "event": "launcher_visible",
+      "hotkey_to_visible_ms": 21.176583308260888,
+      "timestamp": "2026-10-16T03:33:10.334Z",
+      "window_height": 520,
+      "window_width": 648
+    },
+    {
+      "ax_trusted": true,
+      "event": "settings_visible",
+      "timestamp": "2026-10-16T03:33:58.271Z",
+      "window_height": 508,
+      "window_width": 648
+    },
+    {
+      "ax_trusted": true,
+      "event": "launcher_visible",
+      "hotkey_to_visible_ms": 21.975249983370304,
+      "timestamp": "2026-10-16T03:35:00.461Z",
+      "window_height": 520,
+      "window_width": 648
+    },
+    {
+      "event": "launcher_dismissed",
+      "generation": 15,
+      "reason": "focus_lost",
+      "timestamp": "2026-10-16T03:37:15.940Z"
+    },
+    {
+      "ax_trusted": true,
+      "event": "launcher_visible",
+      "hotkey_to_visible_ms": 392.2746250173077,
+      "timestamp": "2026-10-16T03:37:37.139Z",
+      "window_height": 520,
+      "window_width": 648
+    },
+    {
+      "event": "launcher_dismissed",
+      "generation": 18,
+      "reason": "focus_lost",
+      "timestamp": "2026-10-16T03:40:43.322Z"
+    },
+    {
+      "ax_trusted": true,
+      "event": "launcher_visible",
+      "hotkey_to_visible_ms": 38.97758334642276,
+      "timestamp": "2026-10-16T03:40:48.383Z",
+      "window_height": 520,
+      "window_width": 648
+    },
+    {
+      "event": "launcher_dismissed",
+      "generation": 20,
+      "reason": "focus_lost",
+      "timestamp": "2026-10-16T03:42:02.592Z"
+    },
+    {
+      "ax_trusted": true,
+      "event": "launcher_visible",
+      "hotkey_to_visible_ms": 40.010333352256566,
+      "timestamp": "2026-10-16T03:42:07.779Z",
+      "window_height": 520,
+      "window_width": 648
+    },
+    {
+      "ax_trusted": true,
+      "event": "launcher_visible",
+      "hotkey_to_visible_ms": 29.00829166173935,
+      "timestamp": "2026-10-16T03:45:49.538Z",
+      "window_height": 600,
+      "window_width": 920
+    }
+  ],
+  "boundaries": [
+    "RSS snapshots are not total graphics or physical footprint",
+    "Native hotkey_to_visible_ms measures native ordering, not input-to-photon or Flutter frame time",
+    "Single macOS arm64 machine; no Windows or long-duration soak result"
+  ]
+}

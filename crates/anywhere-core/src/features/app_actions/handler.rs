@@ -5,11 +5,43 @@ use crate::core::{
 };
 use anyhow::Result;
 use anywhere_platform::{ApplicationInfo, MenuLocator, Platform};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
+
+static NEXT_EXECUTION_TOKEN: AtomicU64 = AtomicU64::new(1);
 
 pub struct MenuAction {
     pub app: ApplicationInfo,
     pub locator: MenuLocator,
+    execution_token: u64,
+}
+
+impl MenuAction {
+    pub fn new(app: ApplicationInfo, locator: MenuLocator) -> Self {
+        Self {
+            app,
+            locator,
+            execution_token: next_execution_token(),
+        }
+    }
+}
+
+fn next_execution_token() -> u64 {
+    let mut current = NEXT_EXECUTION_TOKEN.load(Ordering::Relaxed);
+    loop {
+        let next = current
+            .checked_add(1)
+            .expect("menu execution token space exhausted");
+        match NEXT_EXECUTION_TOKEN.compare_exchange_weak(
+            current,
+            next,
+            Ordering::Relaxed,
+            Ordering::Relaxed,
+        ) {
+            Ok(_) => return current,
+            Err(observed) => current = observed,
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -22,6 +54,24 @@ impl std::fmt::Display for MenuExecutionFailure {
 impl std::error::Error for MenuExecutionFailure {}
 
 impl ActionHandler for MenuAction {
+    fn is_menu(&self) -> bool {
+        true
+    }
+    fn binding_policy(&self) -> crate::core::action::identity::BindingPolicy {
+        crate::core::action::identity::BindingPolicy::Unavailable {
+            reason: "Menu identity is not verified for persistent shortcuts",
+        }
+    }
+    fn records_usage(&self) -> bool {
+        // AXIdentifier and semantic paths can be reused by a different command.
+        // Retain existing rows, but quarantine them until a durable identity exists.
+        false
+    }
+
+    fn execution_token(&self) -> Option<u64> {
+        Some(self.execution_token)
+    }
+
     fn execute(&self, _: &ResolvedContext, platform: &dyn Platform) -> Result<ExecutionOutput> {
         let started = Instant::now();
         let result = platform.perform_menu_action(&self.app, &self.locator);

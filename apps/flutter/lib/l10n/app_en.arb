@@ -1,0 +1,780 @@
+{
+  "@@locale": "en",
+  "settings": "Settings",
+  "general": "General",
+  "shortcuts": "Shortcuts",
+  "context": "Context",
+  "search": "Search",
+  "clipboard": "Clipboard",
+  "features": "Features",
+  "language": "Language",
+  "languageDescription": "Choose the language used throughout Anywhere",
+  "languageSystem": "System default",
+  "languageEnglish": "English",
+  "languageChinese": "简体中文",
+  "done": "Done",
+  "saving": "Saving…",
+  "openAtLogin": "Open at login",
+  "openAtLoginDescription": "Start quietly when you sign in",
+  "currentApp": "Current App",
+  "globalSearch": "Global Search",
+  "universalSearch": "Universal Search",
+  "navigationModes": "Global Search / Current App",
+  "backToResults": "Back to results",
+  "back": "Back",
+  "run": "Run",
+  "open": "Open",
+  "copy": "Copy",
+  "actions": "Actions",
+  "retry": "Retry",
+  "cancel": "Cancel",
+  "close": "Close",
+  "clear": "Clear",
+  "remove": "Remove",
+  "delete": "Delete",
+  "preview": "Preview",
+  "kind": "Kind",
+  "size": "Size",
+  "modified": "Modified",
+  "location": "Location",
+  "allTypes": "All types",
+  "files": "Files",
+  "folders": "Folders",
+  "documents": "Documents",
+  "pdf": "PDF",
+  "images": "Images",
+  "audio": "Audio",
+  "video": "Video",
+  "archives": "Archives",
+  "code": "Code",
+  "fileSearch": "File Search",
+  "clipboardHistory": "Clipboard History",
+  "clipboardShelf": "Clipboard Shelf",
+  "runningTasks": "Running Tasks",
+  "searchAppsActions": "Search apps and actions…",
+  "searchFilesFolders": "Search files and folders…",
+  "searchHistory": "Search clipboard history…",
+  "findFilesFolders": "Find files and folders",
+  "noResults": "No results",
+  "copied": "Copied",
+  "copiedPaste": "Copied. Paste in the destination app.",
+  "copyFailed": "Could not copy. Try again.",
+  "loading": "Loading…",
+  "searching": "Searching…",
+  "suggested": "Suggested",
+  "menus": "Menus",
+  "browseMenus": "Browse Menus…",
+  "contextSources": "CONTEXT SOURCES",
+  "contextDescription": "Choose what Anywhere can use when you open it.",
+  "finderSelection": "Finder selection",
+  "fileSelection": "File selection",
+  "selectedFilesDescription": "Selected files and folders",
+  "selectedText": "Selected text",
+  "selectedTextDescription": "Text selected in the current app",
+  "browserCurrentPage": "Browser current page",
+  "clipboardText": "Clipboard text",
+  "openSettings": "Open Settings",
+  "keepEditing": "Keep editing",
+  "closeWithoutSaving": "Close without saving",
+  "saveChanges": "Save changes",
+  "saveBeforeClose": "Save changes before closing?",
+  "changesNotSaved": "Some changes were not saved",
+  "searchDrafts": "Search settings have unapplied changes.",
+  "settingsSaveFailed": "Settings could not be saved. Try again.",
+  "shortcutHelp": "Choose a shortcut, then press the new key combination. Esc cancels.",
+  "workspace": "Workspace",
+  "image": "Image",
+  "richText": "Rich text",
+  "data": "Data",
+  "text": "Text",
+  "searchAppActions": "Search {app} actions…",
+  "@searchAppActions": {
+    "placeholders": {
+      "app": {
+        "type": "String"
+      }
+    }
+  },
+  "contentEscapeHint": "{source} · Esc → Current App",
+  "@contentEscapeHint": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "fileRange": "File Search · {range}",
+  "@fileRange": {
+    "placeholders": {
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "editCapturedContent": "Edit captured content…",
+  "fileLocations": "File Search · {count} locations",
+  "@fileLocations": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "actionShortcuts": "Action shortcuts",
+  "bindAKeyToAnActionOr": "Bind a key to an action, or choose actions by context.",
+  "globalWorksFromOtherApps": "Global · works from other apps",
+  "whileAnywhereIsOpen": "While Anywhere is open",
+  "actionUnavailableShortcutPaused": "Action unavailable · shortcut paused",
+  "actionsUnavailableShortcutPaused": "Actions unavailable · shortcut paused",
+  "someRulesAreUnavailable": "Some rules are unavailable",
+  "notDetectedInTheLastContext": "Not detected in the last context",
+  "addActionShortcut": "Add action shortcut",
+  "addContextShortcut": "Add context shortcut",
+  "toolsSuchAsFileSearchAreAlways": "Tools such as File Search are always available to bind. Project actions appear when their project is active.",
+  "actionShortcut": "Action shortcut",
+  "findAnAction": "Find an action…",
+  "notDetectedInTheLastContextThe": "Not detected in the last context. The saved action is retained.",
+  "shortcutRecordingFailedTryAgain": "Shortcut recording failed. Try again.",
+  "pressAShortcut": "Press a shortcut…",
+  "recordShortcut": "Record shortcut",
+  "useCommandOptionOrControlWithA": "Use Command, Option or Control with a letter. Esc cancels recording.",
+  "globalShortcut": "Global shortcut",
+  "worksFromOtherAppsUsesFreshContext": "Works from other apps. Uses fresh context when needed.",
+  "chooseAnotherAction": "Choose another action",
+  "saveShortcut": "Save shortcut",
+  "clearClipboardHistory": "Clear clipboard history?",
+  "allSavedEntriesWillBePermanentlyRemoved": "All saved entries will be permanently removed. The current system clipboard is unchanged.",
+  "clearHistory": "Clear History",
+  "clipboardHistorySetting": "Clipboard history",
+  "recordClipboardHistory": "Record clipboard history",
+  "saveFutureCopiesWhileAnywhereIsRunning": "Save future copies while Anywhere is running. Existing clipboard contents are not imported.",
+  "textImagesRichTextAndFileReferences": "Text, images, rich text and file references are saved locally. Pausing keeps existing history.",
+  "tryAgain": "Try Again",
+  "whenOpeningLauncher": "When opening Launcher",
+  "autoFillSupportedContentCopiedWithinThe": "Auto-fill supported content copied within the last 15 seconds. Independent of history recording.",
+  "historyStorage": "History storage",
+  "removeAllSavedEntriesThisDoesNot": "Remove all saved entries. This does not change recording or the current system clipboard.",
+  "clearHistoryAction": "Clear History…",
+  "enabled": "Enabled",
+  "disabled": "Disabled",
+  "awaitingPermission": "Awaiting permission",
+  "couldNotStart": "Could not start",
+  "unavailable": "Unavailable",
+  "restartRequired": "Restart required",
+  "updating": "Updating…",
+  "refresh": "Refresh",
+  "chooseTheToolsAvailableInAnywhere": "Choose the tools available in Anywhere.",
+  "builtIn": "Built in",
+  "installedPlugins": "Installed plugins",
+  "legacyV1PermissionsCannotBeRevokedIndividually": "Legacy v1 permissions cannot be revoked individually. Disable to stop its actions.",
+  "reviewPermissions": "Review permissions…",
+  "revokePermissions": "Revoke permissions",
+  "thisExtensionRequestsPermissionTo": "This extension requests permission to:",
+  "noHostPermissionsRequested": "No host permissions requested.",
+  "approvalAppliesToThisInspectedDefinitionRestart": "Approval applies to this inspected definition. Restart Anywhere to activate a newly approved plugin. Revoking permission takes effect immediately.",
+  "allowForNextLaunch": "Allow for next launch",
+  "showAPluginViewInAnywhere": "Show a plugin view in Anywhere",
+  "writeToTheClipboard": "Write to the clipboard",
+  "openWebAddresses": "Open web addresses",
+  "openFiles": "Open files",
+  "readRepositoryInformation": "Read repository information",
+  "runProjectTasks": "Run project tasks",
+  "saveExtensionData": "Save extension data",
+  "fileSearchSetting": "File search",
+  "searchFileNamesInTheFileSearch": "Search file names in the File Search action",
+  "systemSearchShowsEarlyResultsFilenameScanning": "System search shows early results. Filename scanning uses accessible, authorized directories.",
+  "includeHiddenFiles": "Include hidden files",
+  "includeDotfilesAndFilesInHiddenDirectories": "Include dotfiles and files in hidden directories",
+  "searchDirectories": "Search directories",
+  "excludedDirectoryNames": "Exclusions must be directory names, one per line.",
+  "oneDirectoryNamePerLine": "One directory name per line",
+  "filesAndFoldersAreScannedIncludingGitignored": "Files and folders are scanned, including gitignored files. Exclusions narrow the search range. Symbolic links are listed without scanning their targets.",
+  "directoryAccessIsPreparedAtStartupAnd": "Directory access is prepared at startup and when the search range changes. Protected locations are skipped. Full Disk Access is optional and must be enabled in System Settings.",
+  "authorizeSavedDirectories": "Authorize saved directories",
+  "fullDiskAccess": "Full Disk Access…",
+  "saveFileSearch": "Save file search",
+  "addAtLeastOneRule": "Add at least one rule.",
+  "contextShortcut": "Context shortcut",
+  "shortcutName": "Shortcut name",
+  "eGOpenTerminal": "e.g. Open terminal",
+  "global": "Global",
+  "moreSpecificConditionsTakePriorityEqualMatches": "More specific conditions take priority. Equal matches let you choose. An unavailable matching action will not fall back.",
+  "noRulesYetAddAnActionAnd": "No rules yet. Add an action and choose the app or context where it should run.",
+  "addRule": "Add rule",
+  "saveContextShortcut": "Save context shortcut",
+  "savedApp": "Saved app",
+  "shortcutRule": "Shortcut rule",
+  "inApp": "In app",
+  "anyApp": "Any app",
+  "withContext": "With context",
+  "anyCompatibleContext": "Any compatible context",
+  "aRuleAlreadyUsesTheseConditions": "A rule already uses these conditions.",
+  "saveRule": "Save rule",
+  "finishOrCancelEditingTheActionShortcut": "Finish or cancel editing the action shortcut before closing.",
+  "settingsCouldNotBeSavedYouCan": "Settings could not be saved. You can keep editing or close without saving.",
+  "newEditsWereMadeWhileSavingSave": "New edits were made while saving. Save them before closing.",
+  "changesApplyOnTheNextWakeStatus": "Changes apply on the next wake. Status refers to the last capture.",
+  "hiddenApps": "Hidden apps",
+  "enterOneApplicationIDPerLineTo": "Enter one application ID per line to keep it out of search.",
+  "saveApps": "Save apps",
+  "pressShortcutKey": "Press a shortcut",
+  "chooseApp": "Choose app",
+  "findAnApp": "Find an app…",
+  "noMatchingApps": "No matching apps",
+  "outputCouldNotBeCopiedTryAgain": "Output could not be copied. Try again.",
+  "output": "Output",
+  "diagnostics": "Diagnostics",
+  "copyOutput": "Copy output",
+  "noDiagnosticOutput": "No diagnostic output.",
+  "waitingForOutput": "Waiting for output…",
+  "noStandardOutput": "No standard output.",
+  "followNewOutput": "Follow new output",
+  "jumpToLatestOutput": "Jump to latest output",
+  "following": "Following",
+  "latest": "Latest",
+  "theWindowCouldNotBeChangedTry": "The window could not be changed. Try again.",
+  "running": "Running",
+  "stopping": "Stopping",
+  "completed": "Completed",
+  "failed": "Failed",
+  "stopped": "Stopped",
+  "noMatchingTasks": "No matching tasks",
+  "tasksKeepRunningWhenHidden": "Tasks keep running when hidden",
+  "noRunningTasks": "No running tasks",
+  "allTasksFinished": "All tasks finished",
+  "launcher": "Launcher",
+  "findATask": "Find a task…",
+  "clearSearch": "Clear search",
+  "tasks": "Tasks",
+  "stoppingProgress": "Stopping…",
+  "stop": "Stop",
+  "moreActions": "More actions",
+  "commandCopied": "Command copied",
+  "commandCouldNotBeCopiedTryAgain": "Command could not be copied. Try again.",
+  "copyCommand": "Copy command",
+  "removeResult": "Remove result",
+  "commandDetails": "Command details",
+  "showingTheLatestOutput128KiBPer": "Showing the latest output (128 KiB per stream).",
+  "noTasksYet": "No tasks yet.",
+  "chooseAProjectBuildTestOrRun": "Choose a project Build, Test or Run action in the Launcher.",
+  "anywhereActionShortcut": "Anywhere action shortcut",
+  "notAvailableRightNow": "Not available right now",
+  "searchThisFileType": "Search this file type · Tab / Shift+Tab",
+  "selectAFileToPreview": "Select a file to preview",
+  "findAppsAndActions": "Find apps and actions",
+  "actionsForYourCurrentEnvironment": "Actions for your current environment",
+  "allActionsAvailableInTheCurrentApp": "All actions available in the current app",
+  "copyWithReturnHint": "Copy · ↵",
+  "deleteEntry": "Delete Entry",
+  "previewUnavailable": "Preview unavailable",
+  "loadingPreview": "Loading preview…",
+  "selectEntryToPreview": "Select an entry to preview",
+  "noMatchingEntries": "No matching entries",
+  "noSavedEntries": "No saved entries",
+  "newlyCopiedItemsWillAppearHereRefresh": "Newly copied items will appear here.\nRefresh to see new copies.",
+  "manageRecordingInSettingsClipboard": "Manage recording in Settings → Clipboard.",
+  "imagePreviewUnavailable": "Image preview unavailable",
+  "previewUnavailableTheOriginalImageCanStill": "Preview unavailable. The original image can still be copied.",
+  "previewIsNotAvailableForThisFormat": "Preview is not available for this format. Copy restores its saved data.",
+  "theWindowCouldNotBeClosedUse": "The window could not be closed. Use the window close button.",
+  "backToListEsc": "Back to list · Esc",
+  "clipboardAlwaysOnTop": "Clipboard · Always on top",
+  "searchClipboard": "Search clipboard…",
+  "noSavedEntriesManageRecordingInSettings": "No saved entries.\nManage recording in Settings → Clipboard.",
+  "actionFailed": "Action failed",
+  "actionResult": "Action result",
+  "result": "Result",
+  "scroll": "↑↓ Scroll",
+  "tool": "Tool",
+  "closeEsc": "Close · Esc",
+  "backEsc": "Back · Esc",
+  "reloadTool": "Reload tool",
+  "backToSearchEsc": "Back to search · Esc",
+  "cancelEsc": "Cancel · Esc",
+  "cancelEscapeSelected": "✓ Cancel · Esc",
+  "allowOnce": "✓ Allow once",
+  "allowOnceAction": "Allow once",
+  "webToolsAreUnavailableOnThisPlatform": "Web tools are unavailable on this platform.",
+  "requestedAccess": "Requested access",
+  "noHostPermissions": "No Host permissions.",
+  "codeRunsInALocalWebViewNetwork": "Code runs in a local WebView. Network access and navigation are blocked. This is not an OS process sandbox.",
+  "thisReplacesTheInstalledCodeClosesIts": "This replaces the installed code, closes its active page, and keeps its local settings. A previously approved version can be restored.",
+  "approveAndInstall": "Approve and install",
+  "installedSearchForTheToolByName": "Installed. Search for the tool by name to open it.",
+  "thePackageCouldNotBeInstalledThe": "The package could not be installed. The existing version is unchanged.",
+  "theOperationCouldNotFinishCheckThe": "The operation could not finish. Check the current tool status and try again.",
+  "webTools": "Web tools",
+  "import": "Import…",
+  "noWebToolsInstalled": "No Web tools installed.",
+  "restoreApprovedVersion": "Restore approved version",
+  "uninstall": "Uninstall",
+  "theToolDidNotBecomeReadyGo": "The tool did not become ready. Go back and reopen it.",
+  "thisToolIsNoLongerAvailableReturn": "This tool is no longer available. Return to search and reopen it.",
+  "theToolCouldNotLoadReloadIt": "The tool could not load. Reload it or return to search.",
+  "openingTool": "Opening tool…",
+  "loadingTool": "Loading tool…",
+  "theToolStoppedReloadItOrReturn": "The tool stopped. Reload it or return to search.",
+  "allowThisOperation": "Allow this operation?",
+  "thisTool": "This tool",
+  "dismissMessage": "Dismiss message",
+  "returnKey": "Return",
+  "folder": "Folder",
+  "file": "File",
+  "selectedFiles": "Selected files",
+  "webLink": "Web link",
+  "gitRepository": "Git repository",
+  "nodeProject": "Node project",
+  "mavenProject": "Maven project",
+  "gradleProject": "Gradle project",
+  "rustProject": "Rust project",
+  "springProject": "Spring Boot project",
+  "anywhereTool": "Anywhere tool",
+  "pdfDocument": "PDF document",
+  "document": "Document",
+  "textFile": "Text file",
+  "spreadsheet": "Spreadsheet",
+  "presentation": "Presentation",
+  "archive": "Archive",
+  "sourceCode": "Source code",
+  "configurationFile": "Configuration file",
+  "ebook": "E-book",
+  "font": "Font",
+  "packageOrBinary": "Package or binary",
+  "captureOff": "Off · applies on the next wake",
+  "captureNotRead": "Not captured in the last wake",
+  "captureReady": "Ready · last wake",
+  "noItemsSelected": "No items selected",
+  "noTextSelected": "No text selected",
+  "noPageAvailable": "No web page available",
+  "noTextCopied": "No text copied",
+  "permissionNeeded": "Permission needed",
+  "sourceUnsupported": "Not supported by this app",
+  "captureAppChanged": "App changed during capture",
+  "timedOut": "Timed out",
+  "contentTooLong": "Content too long",
+  "tooManyItems": "Too many selected items",
+  "sourceUnavailable": "Could not read this source",
+  "readFailed": "Read failed",
+  "finderPermissionHelp": "Allow Finder Automation in System Settings, then reopen Anywhere.",
+  "selectedTextPermissionHelp": "Allow Accessibility in System Settings, then reopen Anywhere.",
+  "browserPermissionHelp": "Allow Anywhere to access this browser in System Settings → Privacy & Security → Automation, then reopen Anywhere.",
+  "clipboardPermissionHelp": "Allow clipboard access in System Settings, then reopen Anywhere.",
+  "appChangedHelp": "The original app exited or restarted. Reopen Anywhere to capture it again.",
+  "tooManyItemsHelp": "Select up to 32 items in Finder, then reopen Anywhere.",
+  "loadingMoreFiles": "Loading more files…",
+  "authorizeSearchDirectories": "Authorize search directories",
+  "authorizeSearchHelp": "Open Settings → Search and authorize saved directories. No file search runs before access is prepared.",
+  "fileSearchOff": "File search is turned off",
+  "searchUnavailable": "Search is unavailable",
+  "partialResults": "Partial results",
+  "noMatchingFiles": "No matching files",
+  "noContentActions": "No actions for this content",
+  "searchingFiles": "Searching files…",
+  "fileSearchUnavailable": "File search unavailable",
+  "fileSearchDisabledHelp": "File search is disabled. Enable it in Settings → Search.",
+  "typeFileName": "Type a file or folder name to search",
+  "fileSearchIncompleteHelp": "File search is incomplete. Check the issue details and retry.",
+  "noMatchingActions": "No matching actions",
+  "noActionsAvailable": "No actions available",
+  "fileSearchIncomplete": "File search is incomplete. Available results are still usable.",
+  "actionsLoadIncomplete": "Some actions could not be loaded. Reopen Anywhere to try again; other actions are still available.",
+  "fileSearchOtherResults": "File search unavailable · Other results are still usable",
+  "currentPage": "Current page",
+  "chooseTarget": "Choose a target",
+  "contentActions": "Actions for this content",
+  "searchComplete": "Search complete",
+  "clipboardSettingsFailed": "Clipboard settings could not be loaded or updated. Try again.",
+  "historyLoadFailed": "Clipboard history could not be loaded. Try Refresh.",
+  "historyEntryMissing": "This entry is no longer available. Refresh history.",
+  "historyPreviewFailed": "This entry could not be previewed.",
+  "historyOperationFailed": "The operation could not be completed. Refresh and try again.",
+  "historyCopyFailed": "This entry could not be copied. For files, check that the originals still exist and are accessible.",
+  "sourceUnsupportedHelp": "{source} is not exposed by this app. Other sources still work.",
+  "@sourceUnsupportedHelp": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "sourceTimeoutHelp": "{source} took too long to respond. Reopen Anywhere to try again.",
+  "@sourceTimeoutHelp": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "sourceTooLongHelp": "{source} is too long to use. Use less content and reopen Anywhere.",
+  "@sourceTooLongHelp": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "sourceFailedHelp": "{source} could not be read. Reopen Anywhere to try again; other sources still work.",
+  "@sourceFailedHelp": {
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "fileFoundCount": "{count} found",
+  "@fileFoundCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "searchIssues": "{count, plural, =1{1 issue} other{{count} issues}}",
+  "@searchIssues": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "fileSearchIssueNotice": "{count, plural, =1{File search encountered 1 issue. Available results are still usable.} other{File search encountered {count} issues. Available results are still usable.}}",
+  "@fileSearchIssueNotice": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "filterActions": "Filter {scope} actions",
+  "@filterActions": {
+    "placeholders": {
+      "scope": {
+        "type": "String"
+      }
+    }
+  },
+  "emptyFileType": "No {type} in these results. Try All types or another search.",
+  "@emptyFileType": {
+    "placeholders": {
+      "type": {
+        "type": "String"
+      }
+    }
+  },
+  "fileRootsHint": "{example}\nLeave empty to search your home directory",
+  "@fileRootsHint": {
+    "placeholders": {
+      "example": {
+        "type": "String"
+      }
+    }
+  },
+  "runningCount": "{count} running",
+  "@runningCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "exitCode": "Exit {code}",
+  "@exitCode": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "taskKeyboardHelp": "↑↓ Tasks   {find} Find   {stop} Stop   Esc Hide",
+  "@taskKeyboardHelp": {
+    "placeholders": {
+      "find": {
+        "type": "String"
+      },
+      "stop": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutHint": "{label} · {shortcut}",
+  "@shortcutHint": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "shortcut": {
+        "type": "String"
+      }
+    }
+  },
+  "enableFeature": "Enable {name}",
+  "@enableFeature": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "allowFeature": "Allow {name}?",
+  "@allowFeature": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "removeRule": "Remove rule {number}",
+  "@removeRule": {
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "contextRulesCount": "{count, plural, =1{1 context rule} other{{count} context rules}}",
+  "@contextRulesCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "editActionShortcut": "Edit shortcut for {title}",
+  "@editActionShortcut": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "removeActionShortcut": "Remove shortcut for {title}",
+  "@removeActionShortcut": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "results": "Results",
+  "succeeded": "Succeeded",
+  "input": "Input",
+  "web": "Web",
+  "tools": "Tools",
+  "restrictedLocationsSkipped": "{count} restricted locations skipped",
+  "@restrictedLocationsSkipped": {
+    "placeholders": {
+      "count": {
+        "type": "String"
+      }
+    }
+  },
+  "clipboardConsent": "{tool} is requesting a clipboard operation. Approval applies once.",
+  "@clipboardConsent": {
+    "placeholders": {
+      "tool": {
+        "type": "String"
+      }
+    }
+  },
+  "quitAnywhere": "Quit Anywhere",
+  "edit": "Edit",
+  "undo": "Undo",
+  "redo": "Redo",
+  "cut": "Cut",
+  "paste": "Paste",
+  "selectAll": "Select All",
+  "window": "Window",
+  "minimize": "Minimize",
+  "zoom": "Zoom",
+  "closeWindow": "Close Window",
+  "findTaskMenu": "Find Task…",
+  "stopSelectedTask": "Stop Selected Task",
+  "refreshTasks": "Refresh Tasks",
+  "openLauncher": "Open Launcher",
+  "closeTaskWindow": "Close Task Window",
+  "runningTasksMenu": "Running Tasks…",
+  "settingsMenu": "Settings…",
+  "authorizeFileSearch": "Authorize File Search",
+  "authorize": "Authorize",
+  "importLocalWebTool": "Import a local Web tool",
+  "importPackage": "Import",
+  "fileSearchAccessMessage": "Choose folders Anywhere may search. Access is saved for future launches. Protected system or app data may still require Full Disk Access in System Settings.",
+  "inspectTrustedPackage": "Choose a trusted .awplugin package to inspect before installing.",
+  "readClipboardText": "Read clipboard text",
+  "copyTextToClipboard": "Copy text to clipboard",
+  "permissionCurrentApp": "Current application name",
+  "permissionReadClipboard": "Read clipboard text (confirmed per operation)",
+  "permissionWriteClipboard": "Copy text (confirmed per operation)",
+  "permissionLocalStorage": "Private local settings (1 MiB)",
+  "launcherStartupFailed": "Launcher could not start",
+  "tasksStartupFailed": "Running Tasks could not open",
+  "shelfStartupFailed": "Clipboard Shelf could not open",
+  "savedDirectories": "Saved Directories",
+  "browserPageDescription": "Use the active Safari, Chrome, or Edge tab’s web address",
+  "permissionContextRead": "Selected context: {types}",
+  "@permissionContextRead": {
+    "placeholders": {
+      "types": {
+        "type": "String"
+      }
+    }
+  },
+  "supportedBrowserDescription": "Active URL in a supported browser",
+  "installToolReview": "Install {name}?",
+  "@installToolReview": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "updateToolReview": "Update {name}?",
+  "@updateToolReview": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "paused": "Paused",
+  "detail": "Detail",
+  "formatsCount": "{count, plural, =1{1 format} other{{count} formats}}",
+  "@formatsCount": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "automationUsage": "Read the current Finder location and selection, and the active Safari, Chrome, or Edge tab URL to suggest actions when you open Anywhere.",
+  "contentPreview": "{kind} preview",
+  "@contentPreview": {
+    "placeholders": {
+      "kind": {
+        "type": "String"
+      }
+    }
+  },
+  "savedSize": "{size} saved",
+  "@savedSize": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "invalidActionIdentity": "Invalid action identity.",
+  "letterWithModifier": "Use a letter key with a modifier.",
+  "modifierWithLetter": "Use a modifier with the letter key.",
+  "reservedEditingShortcut": "This shortcut is reserved for editing or window commands.",
+  "invalidShortcutIntent": "Invalid shortcut intent identity.",
+  "shortcutRuleLimit": "Name the shortcut and use at most 16 rules.",
+  "differentShortcutConditions": "Rules must use different app and context conditions.",
+  "shortcutAlreadyOpens": "This shortcut already opens Anywhere.",
+  "invalidShortcutRule": "Invalid shortcut rule.",
+  "searchDirectoryLimits": "Use at most 8 directories and 32 exclusions.",
+  "absoluteSearchDirectories": "Search directories must be absolute paths, one per line.",
+  "unsupportedShortcutSettings": "Unsupported action shortcut settings version. Update Anywhere before changing settings.",
+  "oneShortcutPerAction": "An action can only have one shortcut.",
+  "shortcutsRefreshFailed": "Action shortcuts could not be refreshed. Reopen Settings to try again.",
+  "shortcutAssignedTo": "This shortcut is assigned to {title}.",
+  "@shortcutAssignedTo": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "maxActionShortcuts": "At most {count} action shortcuts are supported.",
+  "@maxActionShortcuts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "shortcutsSavedByNewerVersion": "Action shortcuts were saved by a newer version. Update Anywhere before changing settings.",
+  "directoryAccessFailed": "Directory access could not be prepared. Try again in Search settings.",
+  "openSystemSettingsFailed": "System Settings could not be opened. Open the system settings manually.",
+  "shortcutsRestoreFailed": "Action shortcuts could not be restored. Change the conflicting shortcut or try closing again.",
+  "extensionsLoadFailed": "Extensions could not be loaded: {detail}",
+  "@extensionsLoadFailed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "extensionsUpdateFailed": "Extension settings could not be updated: {detail}",
+  "@extensionsUpdateFailed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutLoadFailed": "Action shortcuts could not be loaded: {detail}",
+  "@shortcutLoadFailed": {
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "shortcutsPausedHelp": "Some action shortcuts are paused. Reopen Settings to try again, or choose a different key combination.",
+  "shelfSelectHint": "Single-click selects · Double-click copies",
+  "shelfCopyAndReturn": "Copy and return to app",
+  "shelfDeleteTitle": "Remove this entry?",
+  "shelfDeleteDescription": "Only this saved history entry will be removed.",
+  "hidePreview": "Hide preview",
+  "shelfPreviewScrollHint": "{shortcut} Scroll preview",
+  "@shelfPreviewScrollHint": {
+    "placeholders": {
+      "shortcut": {
+        "type": "String"
+      }
+    }
+  },
+  "details": "Details",
+  "sourceStatus": "Source status",
+  "searchRules": "Search rules",
+  "searchHelp": "How search works",
+  "toolOptions": "Tool options",
+  "keyboardHelp": "Keyboard shortcuts",
+  "fileInformation": "File information",
+  "historyFeatureDisabled": "Clipboard History is disabled in Features.",
+  "historyStorageUnavailable": "Clipboard history storage is unavailable. Restart after repairing the data file.",
+  "historyAccessRequired": "Allow clipboard access in system settings to record new copies. Background capture will not prompt.",
+  "historyItemTooLarge": "The copied item exceeds the 16 MiB history limit and was not saved.",
+  "historyReadFailed": "A clipboard item could not be read. Existing history is still available.",
+  "historyCaptureUnavailable": "Clipboard history capture is unavailable. Existing history is still available.",
+  "historyMonitoringUnavailable": "Clipboard monitoring is unavailable on this platform.",
+  "filePreviewChanged": "Preview unavailable. Search again if the file has changed.",
+  "filePreviewUnsupported": "Text preview is unavailable for this file type",
+  "filePreviewTruncated": "Showing the first {size}",
+  "@filePreviewTruncated": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "filePreviewEncodingGuessed": "Encoding guessed as {encoding}",
+  "@filePreviewEncodingGuessed": {
+    "placeholders": {
+      "encoding": {
+        "type": "String"
+      }
+    }
+  },
+  "filePreviewDecoded": "Decoded as {encoding}",
+  "@filePreviewDecoded": {
+    "placeholders": {
+      "encoding": {
+        "type": "String"
+      }
+    }
+  },
+  "shelfReturnFailed": "Copied. Could not return to the app. Switch to it to paste.",
+  "shelfReturnUnavailable": "Copied. The destination app is no longer available. Switch to an app to paste."
+}

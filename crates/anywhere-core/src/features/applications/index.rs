@@ -12,10 +12,12 @@ use std::sync::Arc;
 pub struct IndexedApplication {
     pub bundle_id: String,
     pub name: String,
+    pub localized_names: BTreeMap<String, String>,
     /// Canonical bundle path: both the launch target and the icon source.
     pub path: String,
     pub aliases: Vec<String>,
     pub keywords: Vec<String>,
+    pub search: crate::core::search::query::SearchFields,
 }
 
 impl IndexedApplication {
@@ -32,6 +34,21 @@ impl IndexedApplication {
     /// Derived from `bundle_id` so recording and ranking can never drift apart.
     pub fn usage_id(&self) -> String {
         crate::core::ranking::usage::application_usage_id(&self.bundle_id)
+    }
+
+    pub fn prepared(mut self) -> Self {
+        for name in self.localized_names.values() {
+            push_unique(&mut self.aliases, name.clone(), &self.name);
+        }
+        let identifier =
+            crate::features::applications::source::searchable_bundle_id(&self.bundle_id);
+        self.search = crate::core::search::query::SearchFields::new(
+            &self.name,
+            &self.aliases,
+            &self.keywords,
+        )
+        .with_metadata(&[identifier.as_str()]);
+        self
     }
 }
 
@@ -91,22 +108,67 @@ pub fn index_from(entries: Vec<BundleApplication>) -> Vec<IndexedApplication> {
         for alias in entry.aliases {
             push_unique(&mut aliases, alias, &name);
         }
-        applications.push(IndexedApplication {
-            bundle_id: entry.bundle_id,
-            name,
-            path,
-            aliases,
-            keywords: Vec::new(),
-        });
+        applications.push(
+            IndexedApplication {
+                bundle_id: entry.bundle_id,
+                name,
+                localized_names: entry.localized_names,
+                path,
+                aliases,
+                keywords: Vec::new(),
+                search: crate::core::search::query::SearchFields::default(),
+            }
+            .prepared(),
+        );
     }
     deduplicate(applications)
 }
 
-pub fn scan(platform: &dyn Platform) -> Vec<IndexedApplication> {
-    index_from(platform.installed_applications())
+/// A finished catalog walk. `skipped == 0` and an empty list is an empty machine.
+/// `skipped > 0` is a partial index: the applications that could be read are still usable.
+pub struct ScanReport {
+    pub applications: Vec<IndexedApplication>,
+    pub skipped: usize,
+}
+
+pub fn scan(platform: &dyn Platform) -> ScanReport {
+    let found = platform.installed_applications();
+    let input = found.applications.len();
+    let applications = index_from(found.applications);
+    ScanReport {
+        skipped: found.skipped + input.saturating_sub(applications.len()),
+        applications,
+    }
+}
+
+/// The scan task finished, or it failed and the previous index must stay.
+pub enum ScanStatus {
+    Complete(ScanReport),
+    Failed,
+}
+
+/// Background scan. A failed task is not an empty catalog.
+pub async fn scan_async(platform: Arc<dyn Platform>) -> ScanStatus {
+    let started = std::time::Instant::now();
+    match tokio::task::spawn_blocking(move || scan(platform.as_ref())).await {
+        Ok(report) => {
+            tracing::info!(
+                duration_us = started.elapsed().as_micros() as u64,
+                count = report.applications.len(),
+                skipped = report.skipped,
+                "app_index_ready"
+            );
+            ScanStatus::Complete(report)
+        }
+        Err(error) => {
+            tracing::error!(error = %error, "app_index_failed");
+            ScanStatus::Failed
+        }
+    }
 }
 
 /// Background index handle shared with the application state.
+#[derive(Clone)]
 pub struct ApplicationCatalog {
     applications: Vec<IndexedApplication>,
 }
@@ -126,20 +188,20 @@ impl ApplicationCatalog {
     pub fn is_empty(&self) -> bool {
         self.applications.is_empty()
     }
-}
 
-/// Background scan. The caller stores the catalog when this resolves.
-pub async fn scan_async(platform: Arc<dyn Platform>) -> ApplicationCatalog {
-    let started = std::time::Instant::now();
-    let applications = tokio::task::spawn_blocking(move || scan(platform.as_ref()))
-        .await
-        .unwrap_or_default();
-    tracing::info!(
-        duration_us = started.elapsed().as_micros() as u64,
-        count = applications.len(),
-        "app_index_ready"
-    );
-    ApplicationCatalog::new(applications)
+    pub fn excluding(&self, excluded: &std::collections::BTreeSet<String>) -> Self {
+        if excluded.is_empty() {
+            return self.clone();
+        }
+        Self {
+            applications: self
+                .applications
+                .iter()
+                .filter(|application| !excluded.contains(&application.bundle_id))
+                .cloned()
+                .collect(),
+        }
+    }
 }
 
 #[cfg(test)]
@@ -160,6 +222,9 @@ mod tests {
         roots: Vec<PathBuf>,
     }
     impl Platform for FakePlatform {
+        fn is_application_entry(&self, path: &Path) -> bool {
+            path.extension().is_some_and(|extension| extension == "app")
+        }
         fn application_roots(&self) -> Vec<PathBuf> {
             self.roots.clone()
         }
@@ -182,6 +247,7 @@ mod tests {
                 .unwrap_or_default();
             let bundle_id = format!("app.{}.com", stem.replace(' ', "").to_lowercase());
             Ok(Some(anywhere_platform::BundleApplication {
+                localized_names: Default::default(),
                 bundle_id,
                 name: self.display.clone().unwrap_or(stem),
                 aliases: self.aliases.clone(),
@@ -273,7 +339,7 @@ mod tests {
             roots: vec![root.path().to_path_buf()],
             ..FakePlatform::default()
         };
-        let applications = scan(&platform);
+        let applications = scan(&platform).applications;
         assert_eq!(applications.len(), 1);
         assert_eq!(applications[0].name, "Alpha");
         assert!(
@@ -287,12 +353,15 @@ mod tests {
             roots: vec![root.path().to_path_buf()],
             ..FakePlatform::default()
         };
-        assert!(scan(&platform).is_empty());
+        let missing = scan(&platform);
+        assert!(missing.applications.is_empty());
+        assert!(missing.skipped > 0, "unreadable bundles are a partial scan");
     }
 
     #[test]
     fn display_name_is_kept_and_platform_aliases_remain_searchable() {
         let applications = index_from(vec![BundleApplication {
+            localized_names: Default::default(),
             bundle_id: "com.lark.suite".into(),
             name: "飞书".into(),
             aliases: vec!["Lark".into()],
@@ -328,19 +397,109 @@ mod tests {
     }
 
     #[test]
+    fn localized_application_names_match_chinese_english_and_pinyin_without_changing_identity() {
+        use crate::core::search::{
+            candidate::CandidateTarget,
+            candidate_source::{CandidateSource, SearchContext},
+            query::Query,
+        };
+        use crate::features::applications::source::ApplicationSource;
+
+        for (english, chinese, full, initials) in [
+            ("Reminders", "提醒事项", "tixingshixiang", "txsx"),
+            (
+                "Activity Monitor",
+                "活动监视器",
+                "huodongjianshiqi",
+                "hdjsq",
+            ),
+        ] {
+            let make = |name: &str| {
+                index_from(vec![BundleApplication {
+                    bundle_id: format!("test.{full}"),
+                    name: name.into(),
+                    localized_names: BTreeMap::from([
+                        ("en".into(), english.into()),
+                        ("zh".into(), chinese.into()),
+                    ]),
+                    aliases: Vec::new(),
+                    path: Some(format!("/System/Applications/{english}.app")),
+                    icon: None,
+                }])
+            };
+            let english_catalog = make(english);
+            let chinese_catalog = make(chinese);
+            assert_eq!(english_catalog[0].usage_id(), chinese_catalog[0].usage_id());
+            let usage = |_: &str, _: &str| Default::default();
+            for input in [english, chinese, full, initials] {
+                let query = Query::parse(input);
+                let search = SearchContext {
+                    query: &query,
+                    contexts: &[],
+                    scope_id: None,
+                    ranking: Default::default(),
+                };
+                let rows = |applications: &[IndexedApplication]| {
+                    ApplicationSource {
+                        applications,
+                        app_usage: &usage,
+                        now: 0,
+                    }
+                    .candidates(&search)
+                };
+                let en = rows(&english_catalog);
+                let zh = rows(&chinese_catalog);
+                assert_eq!(en.len(), 1, "{input}");
+                assert_eq!(zh.len(), 1, "{input}");
+                assert_eq!(en[0].presentation.id, zh[0].presentation.id);
+                assert_eq!(en[0].presentation.bundle_id, zh[0].presentation.bundle_id);
+                assert_eq!(en[0].presentation.localized_titles["zh"], chinese);
+                assert_eq!(en[0].presentation.localized_titles["en"], english);
+                for row in [en, zh] {
+                    let CandidateTarget::LaunchApplication { path, icon_source } = &row[0].target
+                    else {
+                        panic!("application candidate must retain its launch target");
+                    };
+                    assert_eq!(path, &english_catalog[0].path);
+                    assert_eq!(icon_source, path);
+                }
+            }
+            for input in ["邮件", "nomatch"] {
+                assert!(english_catalog[0]
+                    .search
+                    .matched(&Query::parse(input))
+                    .is_none());
+            }
+        }
+    }
+
+    #[test]
     fn platform_aliases_are_searchable_and_never_replace_the_title() {
         let applications = index_from(vec![BundleApplication {
+            localized_names: Default::default(),
             bundle_id: "com.google.Chrome".into(),
             name: "Google Chrome".into(),
-            aliases: vec!["Access the Internet".into()],
+            aliases: vec!["Access the Internet".into(), "谷歌浏览器".into()],
             path: Some("/Applications/Google Chrome.app".into()),
             icon: None,
         }]);
         assert_eq!(applications.len(), 1);
         assert_eq!(applications[0].name, "Google Chrome");
-        assert_eq!(
-            applications[0].aliases,
-            vec!["Access the Internet".to_owned()]
+        assert!(
+            applications[0]
+                .aliases
+                .iter()
+                .any(|alias| alias == "Access the Internet"),
+            "{:?}",
+            applications[0].aliases
+        );
+        assert!(
+            applications[0]
+                .aliases
+                .iter()
+                .any(|alias| alias == "谷歌浏览器"),
+            "{:?}",
+            applications[0].aliases
         );
 
         let fields = crate::core::search::query::SearchFields::new(
@@ -366,7 +525,7 @@ mod tests {
             roots: vec![root.path().to_path_buf()],
             ..FakePlatform::default()
         };
-        let applications = scan(&platform);
+        let applications = scan(&platform).applications;
         assert_eq!(applications.len(), 1);
         let application = &applications[0];
         assert!(
@@ -403,6 +562,7 @@ mod tests {
     #[test]
     fn indexed_application_exposes_the_spec_fields() {
         let applications = index_from(vec![BundleApplication {
+            localized_names: Default::default(),
             bundle_id: "app.alpha.com".into(),
             name: "Alpha".into(),
             aliases: Vec::new(),

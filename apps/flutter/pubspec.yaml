@@ -1,16 +1,23 @@
 name: anywhere
-description: Anywhere — context-aware macOS and Windows launcher. Presentation only.
+description: Anywhere — context-aware macOS launcher. Presentation only.
 publish_to: none
-version: 0.2.0+1
+version: 0.12.0+15
 environment:
   sdk: '>=3.6.0 <4.0.0'
 dependencies:
+  cupertino_icons: 1.0.8
   flutter:
     sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: any
   flutter_rust_bridge: 2.11.1
+  flutter_inappwebview: 6.1.5
+  flutter_inappwebview_macos: 1.1.2
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
 flutter:
+  generate: true
   uses-material-design: true

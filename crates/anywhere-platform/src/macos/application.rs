@@ -1,7 +1,7 @@
 //! Applications: identity, localized names, launch and icon.
 use super::c_path;
 use super::native::*;
-use crate::{ApplicationInfo, BundleApplication};
+use crate::{ApplicationInfo, BundleApplication, SelectedTextError};
 use anyhow::{bail, Context, Result};
 use std::{
     ffi::CStr,
@@ -22,31 +22,35 @@ pub(super) fn frontmost_application() -> Result<Option<ApplicationInfo>> {
     result.map(Some).context("decode frontmost application")
 }
 
-pub(super) fn installed_applications(roots: &[PathBuf]) -> Vec<BundleApplication> {
-    let languages = preferred_languages();
+pub(super) fn installed_applications(roots: &[PathBuf]) -> crate::InstalledApplications {
     let mut applications = Vec::new();
-    let mut unreadable = 0usize;
-    for path in crate::catalog::discover(roots) {
-        match read_bundle(&path, &languages) {
+    let mut skipped = 0usize;
+    for path in crate::catalog::discover(roots, &|path| {
+        crate::Platform::is_application_entry(&super::MacOsPlatform, path)
+    }) {
+        match read_bundle(&path) {
             Ok(Some(application)) => applications.push(application),
-            Ok(None) => unreadable += 1,
+            Ok(None) => skipped += 1,
             Err(error) => {
-                unreadable += 1;
+                skipped += 1;
                 tracing::debug!(bundle = %path.display(), error = %error, "app_index_skip");
             }
         }
     }
-    if unreadable > 0 {
-        tracing::info!(unreadable, "app_index_incomplete");
+    if skipped > 0 {
+        tracing::info!(skipped, "app_index_incomplete");
     }
-    applications
+    crate::InstalledApplications {
+        applications,
+        skipped,
+    }
 }
 
 pub(super) fn bundle_application(bundle: &Path) -> Result<Option<BundleApplication>> {
-    read_bundle(bundle, &preferred_languages())
+    read_bundle(bundle)
 }
 
-fn read_bundle(bundle: &Path, languages: &[String]) -> Result<Option<BundleApplication>> {
+fn read_bundle(bundle: &Path) -> Result<Option<BundleApplication>> {
     let path = c_path(&bundle.to_string_lossy())?;
     // SAFETY: path outlives the call; the native side returns a malloc-owned JSON string.
     let decoded = unsafe {
@@ -67,7 +71,7 @@ fn read_bundle(bundle: &Path, languages: &[String]) -> Result<Option<BundleAppli
             .filter(|value| !value.is_empty())
             .map(str::to_owned)
     };
-    let (Some(bundle_id), Some(mut name)) = (string("bundle_id"), string("name")) else {
+    let (Some(bundle_id), Some(name)) = (string("bundle_id"), string("name")) else {
         return Ok(None);
     };
     let mut aliases = value
@@ -82,68 +86,27 @@ fn read_bundle(bundle: &Path, languages: &[String]) -> Result<Option<BundleAppli
                 .collect::<Vec<_>>()
         })
         .unwrap_or_default();
-    if !languages.is_empty() {
-        if let Ok(names) = bundle_localized_names(bundle, languages) {
-            if let Some(preferred) = names
-                .first()
-                .map(String::as_str)
-                .filter(|entry| !entry.is_empty())
-            {
-                if !preferred.eq_ignore_ascii_case(&name) {
-                    aliases.insert(0, name);
-                    name = preferred.to_owned();
-                }
-            }
-            for localized in names {
-                if localized != name && !aliases.iter().any(|alias| alias == &localized) {
-                    aliases.push(localized);
-                }
-            }
-        }
-    }
+    aliases.extend(
+        super::aliases::well_known_aliases(&bundle_id)
+            .iter()
+            .map(|alias| (*alias).to_owned()),
+    );
+    let localized_names = value
+        .get("localized_names")
+        .cloned()
+        .map(serde_json::from_value)
+        .transpose()
+        .context("decode localized application names")?
+        .unwrap_or_default();
     aliases.retain(|alias| !alias.eq_ignore_ascii_case(&name));
     Ok(Some(BundleApplication {
         aliases,
+        localized_names,
         bundle_id,
         name,
         path: string("path"),
         icon: None,
     }))
-}
-
-pub(super) fn preferred_languages() -> Vec<String> {
-    // SAFETY: returns a malloc-owned JSON string, freed exactly once here.
-    unsafe {
-        let raw = launcher_preferred_languages();
-        if raw.is_null() {
-            return Vec::new();
-        }
-        let decoded: std::result::Result<Vec<String>, _> =
-            serde_json::from_slice(CStr::from_ptr(raw).to_bytes());
-        launcher_free_string(raw);
-        decoded.unwrap_or_default()
-    }
-}
-
-pub(super) fn bundle_localized_names(bundle: &Path, languages: &[String]) -> Result<Vec<String>> {
-    if languages.is_empty() {
-        return Ok(Vec::new());
-    }
-    let path = c_path(&bundle.to_string_lossy())?;
-    let languages = c_path(&languages.join(","))?;
-    // SAFETY: both inputs are NUL-terminated and outlive the call; the returned
-    // string is malloc-owned and freed exactly once.
-    let decoded = unsafe {
-        let raw = launcher_bundle_localized_names(path.as_ptr(), languages.as_ptr());
-        if raw.is_null() {
-            return Ok(Vec::new());
-        }
-        let decoded: std::result::Result<Vec<String>, _> =
-            serde_json::from_slice(CStr::from_ptr(raw).to_bytes());
-        launcher_free_string(raw);
-        decoded
-    };
-    Ok(decoded.unwrap_or_default())
 }
 
 pub(super) fn launch_application(path: &str) -> Result<bool> {
@@ -159,6 +122,53 @@ pub(super) fn launch_application(path: &str) -> Result<bool> {
 pub(super) fn accessibility_trusted(prompt: bool) -> bool {
     // SAFETY: no pointers; the native side only reads a flag.
     unsafe { launcher_accessibility_trusted(if prompt { 1 } else { 0 }) == 1 }
+}
+
+pub(super) fn selected_text(application: &ApplicationInfo) -> Result<Option<String>> {
+    if application.pid <= 0 || application.instance_id.is_none() {
+        return Err(SelectedTextError::ApplicationChanged.into());
+    }
+    let identity = c_path(&serde_json::to_string(application)?)?;
+    // SAFETY: the NUL-terminated identity outlives the call; native returns an
+    // owned JSON string and the matching free runs exactly once.
+    let decoded = unsafe {
+        let raw = launcher_selected_text(identity.as_ptr());
+        if raw.is_null() {
+            bail!("selected text inspection returned no status");
+        }
+        let decoded = serde_json::from_slice(CStr::from_ptr(raw).to_bytes());
+        launcher_free_string(raw);
+        decoded
+    };
+    decode_selected_text(decoded.context("decode selected text status")?)
+}
+
+fn decode_selected_text(value: serde_json::Value) -> Result<Option<String>> {
+    match value.get("status").and_then(|status| status.as_str()) {
+        Some("ok") => {
+            if value.get("truncated").and_then(|flag| flag.as_bool()) == Some(true) {
+                return Err(SelectedTextError::TooLarge.into());
+            }
+            let text = value
+                .get("text")
+                .and_then(|text| text.as_str())
+                .context("selected text status has no text")?;
+            // The native shim already caps the string. Guard the Rust boundary too
+            // in case a future native implementation forgets that contract.
+            if text.len() > 16 * 1024 {
+                return Err(SelectedTextError::TooLarge.into());
+            }
+            Ok((!text.is_empty()).then(|| text.to_owned()))
+        }
+        Some("no_selection") => Ok(None),
+        Some("unsupported") => Err(SelectedTextError::Unsupported.into()),
+        Some("untrusted") => Err(SelectedTextError::PermissionDenied.into()),
+        Some("application_changed") => Err(SelectedTextError::ApplicationChanged.into()),
+        Some("timeout") => Err(SelectedTextError::TimedOut.into()),
+        Some("too_large") => Err(SelectedTextError::TooLarge.into()),
+        Some("unavailable") => Err(SelectedTextError::Unavailable.into()),
+        _ => bail!("unknown selected text status"),
+    }
 }
 
 pub(super) fn application_version(bundle_id: &str) -> Option<String> {
@@ -177,24 +187,49 @@ pub(super) fn application_version(bundle_id: &str) -> Option<String> {
     }
 }
 
-pub(super) fn discover_menu_actions(
-    application: &ApplicationInfo,
-) -> Result<Vec<crate::DiscoveredMenuItem>> {
+pub(super) fn discover_menu_actions(application: &ApplicationInfo) -> Result<crate::MenuDiscovery> {
     if application.pid <= 0 {
-        return Ok(Vec::new());
+        return Ok(crate::MenuDiscovery::Unavailable);
     }
     let identity = c_path(&serde_json::to_string(application)?)?;
-    // SAFETY: native returns a malloc-owned JSON array, freed once.
+    // SAFETY: native returns a malloc-owned JSON object, freed once.
     let decoded = unsafe {
         let raw = launcher_discover_menu_actions(identity.as_ptr());
         if raw.is_null() {
-            bail!("menu discovery failed, timed out, or application identity changed");
+            return Ok(crate::MenuDiscovery::Unavailable);
         }
         let decoded = serde_json::from_slice(CStr::from_ptr(raw).to_bytes());
         launcher_free_string(raw);
         decoded
     };
-    decoded.context("decode menu actions")
+    decode_menu_discovery(decoded.context("decode menu actions")?)
+}
+
+fn decode_menu_discovery(value: serde_json::Value) -> Result<crate::MenuDiscovery> {
+    if value.is_array() {
+        return Ok(crate::MenuDiscovery::Ready(serde_json::from_value(value)?));
+    }
+    match value.get("status").and_then(|status| status.as_str()) {
+        Some("ok") => {
+            let items = value
+                .get("items")
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!([]));
+            Ok(crate::MenuDiscovery::Ready(serde_json::from_value(items)?))
+        }
+        Some("untrusted") => Ok(crate::MenuDiscovery::Untrusted),
+        Some("timeout") => {
+            tracing::warn!(
+                ax_error = ?value.get("ax_error").and_then(|v| v.as_i64()),
+                operation = ?value.get("operation").and_then(|v| v.as_str()),
+                deadline_reached = ?value.get("deadline_reached").and_then(|v| v.as_bool()),
+                "menu_discovery_incomplete"
+            );
+            Ok(crate::MenuDiscovery::TimedOut)
+        }
+        Some("unavailable") => Ok(crate::MenuDiscovery::Unavailable),
+        _ => anyhow::bail!("unknown menu discovery status"),
+    }
 }
 
 pub(super) fn perform_menu_action(
@@ -216,6 +251,7 @@ pub(super) fn perform_menu_action(
         6 => bail!("menu locator is invalid"),
         7 => bail!("accessibility permission is not granted"),
         8 => bail!("could not activate the captured application"),
+        9 => bail!("menu inspection could not finish; try again"),
         other => bail!("menu action failed ({other})"),
     }
 }
@@ -241,6 +277,74 @@ mod tests {
     use crate::Platform;
 
     #[test]
+    fn incomplete_discovery_never_decodes_partial_items_as_ready() {
+        let partial = serde_json::json!({"status": "timeout", "ax_error": -25204,
+            "operation": "AXIdentifier", "deadline_reached": false,
+            "items": [{"title": "unsafe partial item"}]});
+        assert_eq!(
+            decode_menu_discovery(partial).unwrap(),
+            crate::MenuDiscovery::TimedOut
+        );
+        assert_eq!(
+            decode_menu_discovery(serde_json::json!({"status": "timeout"})).unwrap(),
+            crate::MenuDiscovery::TimedOut
+        );
+        assert_eq!(
+            decode_menu_discovery(serde_json::json!({"status": "ok", "items": []})).unwrap(),
+            crate::MenuDiscovery::Ready(vec![])
+        );
+    }
+
+    #[test]
+    fn selected_text_statuses_remain_distinct_and_bounded() {
+        use serde_json::json;
+
+        assert_eq!(
+            decode_selected_text(json!({"status":"no_selection"})).unwrap(),
+            None
+        );
+        assert_eq!(
+            decode_selected_text(json!({"status":"ok", "text":"hello"})).unwrap(),
+            Some("hello".into())
+        );
+        for (status, expected) in [
+            ("unsupported", SelectedTextError::Unsupported),
+            ("untrusted", SelectedTextError::PermissionDenied),
+            ("application_changed", SelectedTextError::ApplicationChanged),
+            ("timeout", SelectedTextError::TimedOut),
+            ("too_large", SelectedTextError::TooLarge),
+            ("unavailable", SelectedTextError::Unavailable),
+        ] {
+            let error = decode_selected_text(json!({"status":status})).unwrap_err();
+            assert_eq!(error.downcast_ref::<SelectedTextError>(), Some(&expected));
+        }
+        assert!(
+            decode_selected_text(json!({"status":"ok", "text":"x".repeat(16 * 1024 + 1)})).is_err()
+        );
+        assert_eq!(
+            decode_selected_text(json!({"status":"ok", "text":"truncated", "truncated":true}))
+                .unwrap_err()
+                .downcast_ref::<SelectedTextError>(),
+            Some(&SelectedTextError::TooLarge)
+        );
+    }
+
+    #[test]
+    fn selected_text_requires_a_frozen_process_identity() {
+        let application = ApplicationInfo {
+            bundle_id: "test.editor".into(),
+            name: "Editor".into(),
+            pid: 0,
+            instance_id: None,
+        };
+        let error = selected_text(&application).unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<SelectedTextError>(),
+            Some(&SelectedTextError::ApplicationChanged)
+        );
+    }
+
+    #[test]
     fn bundle_metadata_is_reported_for_a_real_system_application() {
         let platform = MacOsPlatform;
         let finder = Path::new("/System/Library/CoreServices/Finder.app");
@@ -255,16 +359,12 @@ mod tests {
             );
         }
         let lark = Path::new("/Applications/Lark.app");
-        if lark.exists()
-            && preferred_languages()
-                .iter()
-                .any(|language| language.to_ascii_lowercase().starts_with("zh"))
-        {
+        if lark.exists() {
             let bundle = platform.bundle_application(lark).unwrap().unwrap();
             assert_eq!(
-                bundle.name, "飞书",
-                "preferred-language title, not the English file name; aliases={:?}",
-                bundle.aliases
+                bundle.localized_names.get("zh").map(String::as_str),
+                Some("飞书"),
+                "Chinese search/presentation metadata must be independent of the system language"
             );
         }
         // A plain directory is not an application.
@@ -288,7 +388,10 @@ mod tests {
             let mut rejected = app.clone();
             rejected.instance_id = None;
             assert!(
-                platform.discover_menu_actions(&rejected).is_err(),
+                matches!(
+                    platform.discover_menu_actions(&rejected).unwrap(),
+                    crate::MenuDiscovery::Unavailable | crate::MenuDiscovery::TimedOut
+                ),
                 "a missing instance_id must not discover menus"
             );
         }
@@ -302,17 +405,18 @@ mod tests {
             return;
         };
         assert!(app.pid > 0);
-        let items = platform.discover_menu_actions(&app).unwrap();
+        let discovery = platform.discover_menu_actions(&app).unwrap();
         if trusted {
             assert!(
-                items
+                discovery
+                    .items()
                     .iter()
                     .all(|item| !item.title.is_empty() && !item.menu_path.is_empty()),
                 "menu leaves must have titles"
             );
         } else {
             assert!(
-                items.is_empty(),
+                matches!(discovery, crate::MenuDiscovery::Untrusted) || discovery.is_empty(),
                 "untrusted accessibility must not yield menu actions"
             );
         }

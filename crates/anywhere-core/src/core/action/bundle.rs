@@ -4,11 +4,26 @@
 //! themselves. Registration is the only wiring — the engine, the search pipeline and the
 //! launcher service never learn the feature's name.
 use super::availability::AvailabilityRule;
-use super::descriptor::{ActionDescriptor, ActionExecutor};
+use super::descriptor::{ActionDefinition, ActionExecutor};
 use super::group::ActionGroup;
 use super::handler::{ActionHandler, ActionHandlerRef};
-use crate::core::search::query::SearchFields;
 use anywhere_protocol::ContextMatcher;
+
+/// Pure expansion of captured capabilities into actions. No filesystem or tool execution.
+pub trait ContextActionFactory: Send + Sync {
+    /// Registration eligibility only. Invocation still requires a fresh expanded action.
+    fn supports_persistent_binding(&self, _id: &str) -> bool {
+        false
+    }
+    fn id(&self) -> &'static str;
+    fn actions(&self, contexts: &[crate::core::context::ResolvedContext]) -> ActionExpansion;
+}
+
+#[derive(Default)]
+pub struct ActionExpansion {
+    pub actions: Vec<ActionDefinition>,
+    pub diagnostics: Vec<String>,
+}
 
 /// One action declaration inside a bundle.
 ///
@@ -18,6 +33,8 @@ use anywhere_protocol::ContextMatcher;
 pub struct ActionSpec {
     pub id: &'static str,
     pub title: &'static str,
+    /// Labels belong to the action's author; locale selection belongs to the host.
+    pub localized_titles: &'static [(&'static str, &'static str)],
     /// Legacy V0.1 type ids are normalized at registration time.
     pub accepts: &'static str,
     pub handler: &'static dyn ActionHandler,
@@ -26,11 +43,13 @@ pub struct ActionSpec {
     pub icon: &'static str,
     pub aliases: &'static [&'static str],
     pub keywords: &'static [&'static str],
+    pub home_eligible: bool,
+    pub primary_action: bool,
 }
 
 impl ActionSpec {
-    /// The descriptor this row stands for, in the bundle's group.
-    pub fn descriptor(&self, group_id: &str) -> ActionDescriptor {
+    /// The definition this row stands for, in the bundle's group.
+    pub fn descriptor(&self, group_id: &str) -> ActionDefinition {
         let aliases = self
             .aliases
             .iter()
@@ -41,7 +60,12 @@ impl ActionSpec {
             .iter()
             .map(|keyword| (*keyword).to_owned())
             .collect::<Vec<_>>();
-        ActionDescriptor {
+        ActionDefinition {
+            localized_titles: self
+                .localized_titles
+                .iter()
+                .map(|(language, title)| ((*language).into(), (*title).into()))
+                .collect(),
             id: self.id.into(),
             title: self.title.into(),
             subtitle: None,
@@ -54,10 +78,13 @@ impl ActionSpec {
             base_priority: self.base_priority,
             icon: self.icon.into(),
             group_id: group_id.into(),
-            aliases: aliases.clone(),
-            keywords: keywords.clone(),
+            aliases,
+            keywords,
             owning_app: None,
-            search: SearchFields::new(self.title, &aliases, &keywords),
+            menu_path: Vec::new(),
+            home_eligible: self.home_eligible,
+            primary_action: self.primary_action,
+            search_title: None,
         }
     }
 }
@@ -69,7 +96,7 @@ pub struct ActionBundle {
 }
 
 impl ActionBundle {
-    pub fn descriptors(&self) -> Vec<ActionDescriptor> {
+    pub fn descriptors(&self) -> Vec<ActionDefinition> {
         self.actions
             .iter()
             .map(|spec| spec.descriptor(&self.group.id))

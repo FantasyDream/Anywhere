@@ -1,6 +1,6 @@
 //! Bounded, deadline-aware draining of a child process's pipes.
 //!
-//! Shared by the macOS and Windows Git runners: both need to keep reading so the child
+//! Shared by the macOS Git runner: keep reading so the child
 //! never blocks on a full pipe, cap what they keep, and stop waiting after a timeout even
 //! if a grandchild still holds the pipe open.
 

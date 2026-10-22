@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "id": "dev.example.text-transform",
+  "name": "Text Transform",
+  "version": "0.1.0",
+  "apiVersion": "1",
+  "platforms": ["macos"],
+  "entry": "dist/index.html",
+  "permissions": [
+    {"name": "context.read", "types": ["core.text"]},
+    {"name": "clipboard.writeText"}
+  ],
+  "commands": [{
+    "id": "open",
+    "title": "Text Transform",
+    "keywords": ["uppercase", "text", "大写"],
+    "accepts": ["core.text"],
+    "entrypoint": "workspace"
+  }]
+}

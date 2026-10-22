@@ -6,9 +6,12 @@
 //! action.
 use crate::core::action::availability;
 use crate::core::action::descriptor::ActionRegistry;
+use crate::core::action::group::GroupMeta;
 use crate::core::context::{ContextSource, ContextValue, ResolvedContext};
 use crate::core::ranking::score;
-use crate::core::search::candidate::{action_candidate_id, compare_candidates, Candidate};
+use crate::core::search::candidate::{
+    action_execution_candidate_id, compare_candidates, Candidate,
+};
 use crate::core::search::candidate_source::{CandidateSource, SearchContext, SourceStage};
 use crate::core::search::query::Query;
 use crate::core::session::facts::SessionFacts;
@@ -20,47 +23,69 @@ pub struct TextFallbackSource<'a> {
 }
 
 impl CandidateSource for TextFallbackSource<'_> {
+    fn id(&self) -> &'static str {
+        "fallback"
+    }
+
     fn stage(&self) -> SourceStage {
         SourceStage::Fallback
     }
 
     fn candidates(&self, search: &SearchContext<'_>) -> Vec<Candidate> {
-        self.build(search.query, &[])
+        self.build(search.query, &[], search.scope_id)
     }
 
     fn contribute(&self, search: &SearchContext<'_>, existing: &[Candidate]) -> Vec<Candidate> {
         if search.query.is_empty() {
             return Vec::new();
         }
-        self.build(search.query, existing)
+        self.build(search.query, existing, search.scope_id)
     }
 }
 
 impl TextFallbackSource<'_> {
-    fn build(&self, query: &Query, existing: &[Candidate]) -> Vec<Candidate> {
+    fn build(
+        &self,
+        query: &Query,
+        existing: &[Candidate],
+        scope_id: Option<&str>,
+    ) -> Vec<Candidate> {
+        let group_filter = super::scope::group_filter(scope_id, self.facts.frontmost.as_ref());
         let context = ResolvedContext::new(
             TEXT,
-            ContextValue::Text(query.raw_input.clone()),
+            ContextValue::Text(query.raw_input.clone().into()),
             ContextSource::UserInput,
             "core.text_fallback",
         );
         let mut fallbacks = self
             .registry
             .matching(&context)
+            // Web input matchers run in the ranked ActionMatcher. Never send arbitrary
+            // unmatched query text to a Web workspace through the fallback path.
+            .filter(|action| {
+                !matches!(
+                    action.executor,
+                    crate::core::action::descriptor::ActionExecutor::WebCommand(_)
+                )
+            })
+            .filter(|action| group_filter.is_none_or(|group| group == action.group_id))
             .filter_map(|action| {
                 let availability =
                     availability::evaluate(&action.availability, &context, self.facts);
                 if !availability.is_visible() {
                     return None;
                 }
-                let level = action.search.matched(query);
+                let level = action.search().matched(query);
                 Some(Candidate {
                     presentation: CandidatePresentation {
+                        localized_titles: action.localized_titles.clone(),
                         shortcut: None,
-                        id: action_candidate_id(&action.id, &context),
+                        id: action_execution_candidate_id(action, &context),
                         kind: CandidateKind::Action,
+                        is_menu: false,
+                        file_kind: None,
                         title: action.title.clone(),
-                        subtitle: Some(display_detail(&context)),
+                        subtitle: Some(context.display_detail()),
                         icon: IconDescriptor {
                             key: action.icon.clone(),
                         },
@@ -70,6 +95,13 @@ impl TextFallbackSource<'_> {
                         command_id: Some(action.id.clone()),
                         bundle_id: None,
                         owning_app: None,
+                        menu_path: action.menu_path.clone(),
+                        context_keys: Vec::new(),
+                        execution_context_id: None,
+                        execution_target_label: None,
+                        home_eligible: action.home_eligible,
+                        primary_action: action.primary_action,
+                        section_label: Some(self.registry.label(&action.group_id)),
                     },
                     target: crate::core::search::candidate::CandidateTarget::from_action(
                         action.clone(),
@@ -86,16 +118,4 @@ impl TextFallbackSource<'_> {
         fallbacks.sort_by(compare_candidates);
         fallbacks
     }
-}
-
-/// Short subtitle text; execution still uses the full transport value.
-fn display_detail(context: &ResolvedContext) -> String {
-    const MAX: usize = 120;
-    let text = context.value.text();
-    if text.chars().count() <= MAX {
-        return text;
-    }
-    let mut shortened = text.chars().take(MAX).collect::<String>();
-    shortened.push('…');
-    shortened
 }

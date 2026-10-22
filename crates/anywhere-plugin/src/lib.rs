@@ -1,22 +1,41 @@
-//! Declarative manifests; no executable runtime or UI.
+//! Declarative definitions and verified Web packages; no executable runtime.
 use anyhow::{bail, Context, Result};
 use anywhere_protocol::{DeclarativeAction, PluginManifest};
+pub mod extension;
+pub mod ui;
+pub mod web;
 use std::{collections::HashSet, path::Path};
 
 pub const EXAMPLE_PLUGIN: &str = include_str!("../../../plugins/examples/search.toml");
 const VARIABLE: &str = "{{context.value}}";
+
+/// Bounded file access shared by startup discovery and approval identity checks.
+pub fn read_manifest(path: &Path) -> Result<PluginManifest> {
+    use std::io::Read;
+    let mut raw = String::new();
+    std::fs::File::open(path)?
+        .take(256 * 1024 + 1)
+        .read_to_string(&mut raw)?;
+    parse_manifest(&raw)
+}
 
 pub fn parse_manifest(raw: &str) -> Result<PluginManifest> {
     if raw.len() > 256 * 1024 {
         bail!("manifest exceeds 256 KiB");
     }
     let manifest: PluginManifest = toml::from_str(raw).context("invalid plugin TOML")?;
-    if manifest.protocol_version != 1 {
-        bail!(
-            "unsupported protocol_version {}; expected 1",
-            manifest.protocol_version
-        );
+    if manifest.protocol_version == 1
+        && (manifest.version.is_some() || !manifest.capabilities.is_empty())
+    {
+        bail!("v1 manifests cannot declare v2 metadata");
     }
+    validate_manifest(&manifest)?;
+    Ok(manifest)
+}
+
+/// Revalidate at registration too; callers may construct protocol DTOs directly.
+pub fn validate_manifest(manifest: &PluginManifest) -> Result<()> {
+    extension::validate_plugin_metadata(manifest)?;
     if !identifier(&manifest.id) || manifest.id == "core" || manifest.id.starts_with("core.") {
         bail!("invalid or reserved plugin id");
     }
@@ -41,6 +60,7 @@ pub fn parse_manifest(raw: &str) -> Result<PluginManifest> {
             bail!("base_priority must be in -50..50");
         }
         match &command.action {
+            DeclarativeAction::RenderDetail { view } => ui::validate_detail(view)?,
             DeclarativeAction::OpenUrl { url } => {
                 validate_template(url)?;
                 let sample = if url == VARIABLE {
@@ -64,7 +84,7 @@ pub fn parse_manifest(raw: &str) -> Result<PluginManifest> {
             }
         }
     }
-    Ok(manifest)
+    Ok(())
 }
 
 fn identifier(value: &str) -> bool {
@@ -108,8 +128,17 @@ pub fn validate_template(template: &str) -> Result<()> {
 
 /// URL substitutions are data: percent-encode query/path values, never shell-escape.
 pub fn interpolate(template: &str, value: &str, for_url: bool) -> Result<String> {
+    interpolate_bounded(template, value, for_url, 4 * 1024 * 1024)
+}
+
+pub(crate) fn interpolate_bounded(
+    template: &str,
+    value: &str,
+    for_url: bool,
+    max_bytes: usize,
+) -> Result<String> {
     validate_template(template)?;
-    let replacement = if for_url && template != VARIABLE {
+    let replacement: std::borrow::Cow<'_, str> = if for_url && template != VARIABLE {
         value
             .bytes()
             .map(|byte| {
@@ -120,16 +149,17 @@ pub fn interpolate(template: &str, value: &str, for_url: bool) -> Result<String>
                 }
             })
             .collect::<String>()
+            .into()
     } else {
-        value.to_owned()
+        std::borrow::Cow::Borrowed(value)
     };
     let occurrences = template.matches(VARIABLE).count();
     let rendered_size = replacement
         .len()
         .checked_mul(occurrences)
         .and_then(|size| size.checked_add(template.len() - occurrences * VARIABLE.len()));
-    if rendered_size.is_none_or(|size| size > 4 * 1024 * 1024) {
-        bail!("expanded action exceeds 4 MiB");
+    if rendered_size.is_none_or(|size| size > max_bytes) {
+        bail!("expanded value exceeds {max_bytes} bytes");
     }
     let rendered = template.replace(VARIABLE, &replacement);
     if for_url {
@@ -154,7 +184,26 @@ pub struct Discovery {
 
 /// Discover flat *.toml manifests and <plugin>/manifest.toml; deterministic path order.
 pub fn discover(directory: &Path) -> Discovery {
-    let mut result = Discovery::default();
+    let located = discover_with_paths(directory);
+    Discovery {
+        manifests: located
+            .manifests
+            .into_iter()
+            .map(|(_, manifest)| manifest)
+            .collect(),
+        diagnostics: located.diagnostics,
+    }
+}
+
+#[derive(Default)]
+pub struct LocatedDiscovery {
+    pub manifests: Vec<(std::path::PathBuf, PluginManifest)>,
+    pub diagnostics: Vec<String>,
+}
+
+/// Preserve the inspected origin so approval cannot migrate to a different installation.
+pub fn discover_with_paths(directory: &Path) -> LocatedDiscovery {
+    let mut result = LocatedDiscovery::default();
     if !directory.exists() {
         return result;
     }
@@ -192,10 +241,10 @@ pub fn discover(directory: &Path) -> Discovery {
             if std::fs::metadata(&path)?.len() > 256 * 1024 {
                 bail!("manifest exceeds 256 KiB");
             }
-            parse_manifest(&std::fs::read_to_string(&path)?)
+            read_manifest(&path)
         })();
         match load {
-            Ok(manifest) => result.manifests.push(manifest),
+            Ok(manifest) => result.manifests.push((path, manifest)),
             Err(error) => {
                 let diagnostic = format!("{}: {error:#}", path.display());
                 tracing::error!(path = %path.display(), error = %error, "plugin_load_failure");
@@ -213,7 +262,7 @@ mod tests {
     fn valid_manifest_and_all_validation_failures() {
         assert_eq!(parse_manifest(EXAMPLE_PLUGIN).unwrap().commands.len(), 1);
         for raw in [
-            EXAMPLE_PLUGIN.replace("protocol_version = 1", "protocol_version = 2"),
+            EXAMPLE_PLUGIN.replace("protocol_version = 1", "protocol_version = 3"),
             EXAMPLE_PLUGIN.replace("open_url", "run_shell"),
             EXAMPLE_PLUGIN.replace("context.value", "context.secret"),
             EXAMPLE_PLUGIN.replace("core.text", "bad matcher"),

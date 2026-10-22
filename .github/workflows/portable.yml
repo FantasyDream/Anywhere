@@ -1,0 +1,59 @@
+name: Shared platform checks
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'crates/**'
+      - 'apps/flutter/lib/**'
+      - 'apps/flutter/test/**'
+      - 'apps/flutter/pubspec*'
+      - 'resources/**'
+      - 'scripts/**'
+      - '.flutter-version'
+      - '.github/workflows/portable.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portable-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  shared:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Verify builtin feature catalogue
+        run: cargo run -p anywhere-core --example generate_feature_catalog --locked -- --check
+      - name: Compile shared workspace and test targets
+        run: cargo check --workspace --all-targets --locked
+      - name: Run shared Rust regressions on Linux
+        if: runner.os == 'Linux'
+        run: cargo test --workspace --locked
+      - name: Read Flutter version
+        id: flutter-version
+        shell: bash
+        run: echo "version=$(cat .flutter-version)" >> "$GITHUB_OUTPUT"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ steps.flutter-version.outputs.version }}
+          channel: stable
+          cache: true
+      - name: Verify shared UI and host protocol
+        working-directory: apps/flutter
+        run: |
+          flutter pub get
+          flutter analyze
+          flutter test

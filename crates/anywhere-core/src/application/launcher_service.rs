@@ -8,7 +8,8 @@ use anyhow::Result;
 use anywhere_platform::{ApplicationInfo, Platform};
 use anywhere_protocol::*;
 use std::{
-    sync::Arc,
+    collections::BTreeSet,
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 use tokio::sync::watch;
@@ -42,7 +43,7 @@ pub trait LauncherApplication: Send + Sync {
         &self,
         session_id: SessionId,
         revision: Revision,
-        candidate_id: ActionId,
+        candidate_id: CandidateId,
     ) -> Result<ActionResult>;
     /// Small PNG for an application candidate, or `None` when there is no icon.
     ///
@@ -54,19 +55,31 @@ pub trait LauncherApplication: Send + Sync {
 }
 
 pub struct Application {
+    pub(super) web_rpc_workers: Arc<tokio::sync::Semaphore>,
+    pub(super) web_plugins: Arc<Mutex<super::web_plugins::WebPluginService>>,
+    pub(super) feature_catalog_installed: std::sync::atomic::AtomicBool,
+    pub(super) executions: Arc<crate::core::execution::ExecutionSessionManager>,
     pub(super) platform: Arc<dyn Platform>,
     /// The engine, shared with the background tasks that publish late results.
     pub(super) resolver: Resolver,
     pub(super) startup_diagnostics: Vec<String>,
     pub(super) budget: Duration,
     pub(super) content_grace: Duration,
-    pub(super) catalog_tx: watch::Sender<bool>,
-    /// One catalog scan per process; later sessions reuse the immutable snapshot.
-    pub(super) catalog_started: Arc<std::sync::atomic::AtomicBool>,
+    pub(super) catalog_tx: watch::Sender<u64>,
     pub(super) app_actions: crate::features::app_actions::AppActionCatalog,
+    pub(super) excluded_apps: Arc<Mutex<BTreeSet<String>>>,
+    pub(super) file_search_policy:
+        Arc<std::sync::RwLock<crate::features::filesystem::search::FileSearchPolicy>>,
+    pub(super) file_search_source: Arc<crate::features::filesystem::search::FileSearchSource>,
+    pub(super) preview_worker: Arc<tokio::sync::Semaphore>,
+    pub(super) capture_policy: Arc<Mutex<super::context_capture::CapturePolicy>>,
 }
 
 impl Application {
+    /// Typed system port for app-owned services; shared UI never selects an OS adapter.
+    pub fn platform(&self) -> &dyn Platform {
+        self.platform.as_ref()
+    }
     pub fn new(
         platform: Arc<dyn Platform>,
         registry: ActionRegistry,
@@ -89,19 +102,59 @@ impl Application {
         startup_diagnostics: Vec<String>,
         budget: Duration,
     ) -> Self {
-        let mut resolver = Resolver::new(registry, history);
-        let (catalog_tx, catalog_rx) = watch::channel(false);
-        resolver.catalog_rx = catalog_rx;
+        platform.start_clipboard_tracking();
+        let (catalog_tx, catalog_rx) = watch::channel(0);
+        let resolver = Resolver::new(registry, history).with_catalog_rx(catalog_rx);
+        let (source, sources) =
+            super::composition::builtin_sources(platform.clone(), resolver.base_registry());
+        let file_search_policy = source.policy.clone();
+        resolver
+            .sources
+            .lock()
+            .expect("sources lock poisoned")
+            .base
+            .asynchronous
+            .extend(sources);
         Self {
+            web_rpc_workers: Arc::new(tokio::sync::Semaphore::new(
+                anywhere_protocol::web_bridge::MAX_RUNNING,
+            )),
+            web_plugins: Default::default(),
+            feature_catalog_installed: Default::default(),
+            executions: Arc::new(Default::default()),
             platform,
             resolver,
+            file_search_policy,
+            file_search_source: source,
+            preview_worker: Arc::new(tokio::sync::Semaphore::new(1)),
             startup_diagnostics,
             budget,
             content_grace: DEFAULT_FIRST_CONTENT_GRACE,
             catalog_tx,
-            catalog_started: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             app_actions: crate::features::app_actions::AppActionCatalog::default(),
+            excluded_apps: Arc::new(Mutex::new(BTreeSet::new())),
+            capture_policy: Arc::new(Mutex::new(Default::default())),
         }
+    }
+
+    pub fn execution_sessions(&self) -> Vec<ExecutionSessionSummary> {
+        self.executions.list()
+    }
+
+    pub fn execution_session(&self, id: &str) -> Option<ExecutionSessionDetail> {
+        self.executions.detail(id)
+    }
+
+    pub fn stop_execution_session(&self, id: &str) -> Result<()> {
+        self.executions.stop(id)
+    }
+
+    pub fn remove_execution_session(&self, id: &str) -> Result<()> {
+        self.executions.remove(id)
+    }
+
+    pub fn shutdown_execution_sessions(&self) {
+        self.executions.shutdown();
     }
 
     /// Override the first-content grace.
@@ -115,6 +168,86 @@ impl Application {
         self
     }
 
+    /// Presentation may resume for 15 seconds; side effects are revoked immediately.
+    pub async fn suspend_session(&self, session_id: SessionId) -> Result<()> {
+        let epoch = {
+            let mut session = self.session()?;
+            if session.state.session_id != session_id || self.resolver.is_abandoned() {
+                return Ok(());
+            }
+            session.suspended = true;
+            self.web_plugins
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Web service unavailable"))?
+                .suspend();
+            self.resolver
+                .execution_epoch
+                .fetch_add(1, std::sync::atomic::Ordering::AcqRel)
+                + 1
+        };
+        let resolver = self.resolver.clone();
+        let files = self.file_search_source.clone();
+        let web_plugins = self.web_plugins.clone();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(
+                anywhere_protocol::policy::LAUNCHER_RETENTION_MS,
+            ))
+            .await;
+            let Ok(mut session) = resolver.session.lock() else {
+                return;
+            };
+            if session.state.session_id == session_id
+                && session.suspended
+                && resolver
+                    .execution_epoch
+                    .load(std::sync::atomic::Ordering::Acquire)
+                    == epoch
+            {
+                session.invalidate_execution();
+                if let Ok(mut web) = web_plugins.lock() {
+                    web.invalidate();
+                }
+                resolver.abandon_session();
+                files.clear();
+            }
+        });
+        Ok(())
+    }
+
+    pub fn resume_session(&self, session_id: SessionId) -> Result<Option<LauncherState>> {
+        {
+            let mut session = self.session()?;
+            if session.state.session_id != session_id
+                || !session.suspended
+                || self.resolver.is_abandoned()
+            {
+                return Ok(None);
+            }
+            session.suspended = false;
+            self.resolver
+                .execution_epoch
+                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        }
+        self.resolver.recompute_current(session_id);
+        if let Some(state) = self.latest_state(session_id) {
+            return Ok(Some(state));
+        }
+        // A pending query has no committed execution offers yet. Preserve its
+        // input so the Host can resume/reissue it without displaying stale rows.
+        let session = self.session()?;
+        if session.state.session_id != session_id
+            || session.suspended
+            || self.resolver.is_abandoned()
+        {
+            return Ok(None);
+        }
+        let mut state = session.state.clone();
+        state.candidates = Arc::new(Vec::new());
+        state.result_actions.clear();
+        state.context_candidates.clear();
+        Ok(Some(state))
+    }
+
     /// Latest committed snapshot for a session, whatever task published it.
     ///
     /// Late context is published by a background task, so this is the only way a
@@ -123,6 +256,200 @@ impl Application {
         let state = self.resolver.latest_tx.borrow().clone()?;
         (state.session_id == session_id && self.resolver.is_current(session_id, state.revision))
             .then(|| (*state).clone())
+    }
+
+    pub fn replace_registry(&self, registry: crate::core::action::descriptor::ActionRegistry) {
+        let session_id = {
+            let Ok(mut session) = self.session() else {
+                return;
+            };
+            let Ok(mut web) = self.web_plugins.lock() else {
+                return;
+            };
+            let Ok(registry) = web.restore_actions(&registry) else {
+                return;
+            };
+            web.invalidate();
+            // Catalog invalidation and session replacement are one publication boundary.
+            self.resolver.replace_base_registry(registry);
+            self.resolver
+                .action_catalog_version
+                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            session.actions = self.resolver.base_registry();
+            session.execution = Default::default();
+            session.state.session_id
+        };
+        // Also rebuild when foreground capture failed and there is no menu discovery.
+        self.resolver.recompute_current(session_id);
+        self.refresh_app_actions(session_id, None);
+    }
+
+    /// Commit policy persistence before atomically publishing the new catalog.
+    /// Provider runs, retained contexts and execution offers belong to the old configuration.
+    #[cfg(test)]
+    pub(crate) fn publish_feature_catalog(
+        &self,
+        registry: ActionRegistry,
+        providers: crate::core::context::registry::ContextProviderRegistry,
+        sources: crate::core::search::candidate_source::SourceSet,
+        policy: Arc<crate::features::policy::FeaturePolicySnapshot>,
+        persist: impl FnOnce() -> Result<()>,
+    ) -> Result<()> {
+        self.publish_selected_catalog(
+            registry,
+            providers,
+            sources,
+            policy,
+            BTreeSet::new(),
+            persist,
+        )
+    }
+
+    pub(crate) fn publish_selected_catalog(
+        &self,
+        mut registry: ActionRegistry,
+        mut providers: crate::core::context::registry::ContextProviderRegistry,
+        mut sources: crate::core::search::candidate_source::SourceSet,
+        policy: Arc<crate::features::policy::FeaturePolicySnapshot>,
+        excluded: BTreeSet<String>,
+        persist: impl FnOnce() -> Result<()>,
+    ) -> Result<()> {
+        let mut session = self.session()?;
+        let mut web = self
+            .web_plugins
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Web service unavailable"))?;
+        registry = web.restore_actions(&registry)?;
+        let mut provider_slot = self
+            .resolver
+            .providers
+            .lock()
+            .map_err(|_| anyhow::anyhow!("providers lock poisoned"))?;
+        let mut registry_slot = self
+            .resolver
+            .registry
+            .lock()
+            .map_err(|_| anyhow::anyhow!("registry lock poisoned"))?;
+        let mut source_slot = self
+            .resolver
+            .sources
+            .lock()
+            .map_err(|_| anyhow::anyhow!("sources lock poisoned"))?;
+        let mut source_ids: BTreeSet<_> = source_slot.base.ids().collect();
+        for id in sources.ids() {
+            anyhow::ensure!(
+                !id.is_empty() && source_ids.insert(id),
+                "duplicate or empty source id: {id}"
+            );
+        }
+        let mut policy_slot = self
+            .resolver
+            .feature_policy
+            .current
+            .write()
+            .map_err(|_| anyhow::anyhow!("feature policy lock poisoned"))?;
+        let mut excluded_slot = self
+            .resolver
+            .feature_policy
+            .excluded
+            .write()
+            .map_err(|_| anyhow::anyhow!("contribution policy lock poisoned"))?;
+        let enabled = |id: &str| policy.allows_contributor(id) && !excluded.contains(id);
+        registry.retain_contributors(enabled);
+        providers.retain_contributors(enabled);
+        sources.retain_contributors(enabled);
+        persist()?;
+        web.invalidate();
+        *policy_slot = policy;
+        *excluded_slot = excluded;
+        let retired = std::mem::replace(&mut source_slot.extensions, sources);
+        *provider_slot = providers;
+        *registry_slot = Arc::new(registry);
+        self.resolver
+            .action_catalog_version
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        self.resolver
+            .execution_epoch
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+        session.actions = registry_slot.clone();
+        session.invalidate_execution();
+        self.resolver.abandon_session();
+        drop(excluded_slot);
+        drop(policy_slot);
+        drop(source_slot);
+        drop(registry_slot);
+        drop(provider_slot);
+        drop(session);
+        retired.reset();
+        self.file_search_source.clear();
+        Ok(())
+    }
+
+    pub fn excluded_apps(&self) -> Vec<String> {
+        self.excluded_apps
+            .lock()
+            .map(|ids| ids.iter().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    pub fn set_excluded_apps(&self, ids: Vec<String>) {
+        let set: BTreeSet<String> = ids.into_iter().filter(|id| !id.trim().is_empty()).collect();
+        if let Ok(mut excluded) = self.excluded_apps.lock() {
+            *excluded = set.clone();
+        }
+        if let Ok(mut slot) = self.resolver.catalog.lock() {
+            slot.catalog = if set.is_empty() {
+                slot.full.clone()
+            } else {
+                Arc::new(slot.full.excluding(&set))
+            };
+        }
+        if let Ok(session) = self.session() {
+            let session_id = session.state.session_id;
+            drop(session);
+            let _ = self.resolver.recompute_current(session_id);
+        }
+    }
+
+    /// True once clipboard, git availability and history have been applied or abandoned.
+    pub fn supplemental_ready(&self, session_id: SessionId) -> bool {
+        self.session()
+            .map(|session| session.state.session_id == session_id && !session.supplemental_pending)
+            .unwrap_or(false)
+    }
+
+    /// Block until a newer snapshot for `session_id` is committed.
+    pub async fn wait_for_snapshot(&self, session_id: SessionId, after: u64) -> SnapshotWait {
+        if !self.resolver.is_session_active(session_id) {
+            return SnapshotWait::Superseded;
+        }
+        if let Some(state) = self.beyond(session_id, after) {
+            return SnapshotWait::Updated(Box::new(state));
+        }
+        let mut updates = self.state_updates();
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+        loop {
+            if !self.resolver.is_session_active(session_id) {
+                return SnapshotWait::Superseded;
+            }
+            if let Some(state) = self.beyond(session_id, after) {
+                return SnapshotWait::Updated(Box::new(state));
+            }
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if remaining.is_zero() {
+                return SnapshotWait::TimedOut;
+            }
+            match tokio::time::timeout(remaining, updates.changed()).await {
+                Ok(Ok(())) => continue,
+                Ok(Err(_)) => return SnapshotWait::Closed,
+                Err(_) => return SnapshotWait::TimedOut,
+            }
+        }
+    }
+
+    fn beyond(&self, session_id: SessionId, after: u64) -> Option<LauncherState> {
+        self.latest_state(session_id)
+            .filter(|state| snapshot_cursor(state) > after)
     }
 
     pub fn is_session_active(&self, session_id: SessionId) -> bool {
@@ -147,16 +474,41 @@ impl Application {
     /// The scan starts at activation, so an app search typed within the first ~60ms would
     /// otherwise match an empty index and no later input would revisit it. The bridge
     /// re-commits the current snapshot when this fires.
-    pub fn index_updates(&self) -> watch::Receiver<bool> {
+    pub fn index_updates(&self) -> watch::Receiver<u64> {
         self.catalog_tx.subscribe()
     }
 
     /// Additional product sources use the same matching, sorting and publication path.
     pub fn register_candidate_source(
         &mut self,
-        source: Arc<dyn crate::core::search::candidate_source::CandidateSource + Send + Sync>,
+        source: crate::core::search::candidate_source::CandidateSourceRef,
     ) {
-        self.resolver.sources.push(source);
+        self.resolver
+            .sources
+            .lock()
+            .expect("sources lock poisoned")
+            .base
+            .synchronous
+            .push(source);
+    }
+
+    pub fn register_async_candidate_source(
+        &mut self,
+        source: Arc<dyn crate::core::search::candidate_source::AsyncCandidateSource>,
+    ) -> Result<()> {
+        let mut catalog = self
+            .resolver
+            .sources
+            .lock()
+            .map_err(|_| anyhow::anyhow!("sources lock poisoned"))?;
+        if source.id().is_empty()
+            || catalog.asynchronous().iter().any(|s| s.id() == source.id())
+            || catalog.synchronous().iter().any(|s| s.id() == source.id())
+        {
+            anyhow::bail!("duplicate or empty search source id: {}", source.id());
+        }
+        catalog.base.asynchronous.push(source);
+        Ok(())
     }
 
     /// Extra providers are stacked on the built-ins by priority then id.
@@ -178,29 +530,52 @@ impl Application {
 
     /// Background application scan; never blocks the first snapshot.
     ///
-    /// Concurrent activations share the first scan; refresh is outside this MVP.
-    pub(super) fn spawn_catalog_scan(&self) {
-        if self
-            .catalog_started
-            .swap(true, std::sync::atomic::Ordering::AcqRel)
-        {
-            return;
-        }
+    /// Each activation issues a new scan so an app installed after launch is visible
+    /// the next time the launcher opens. A newer scan discards an older one that
+    /// finishes late.
+    pub(super) fn spawn_catalog_scan(&self) -> u64 {
+        let generation = self
+            .resolver
+            .catalog_issued
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel)
+            + 1;
         let platform = self.platform.clone();
         let catalog = self.resolver.catalog.clone();
+        let excluded = self.excluded_apps.clone();
         let tx = self.catalog_tx.clone();
         tokio::spawn(async move {
             let scanned = applications::scan_async(platform).await;
-            let count = scanned.applications().len();
-            if let Ok(mut handle) = catalog.lock() {
-                *handle = Arc::new(scanned);
+            let Ok(mut slot) = catalog.lock() else {
+                return;
+            };
+            if generation < slot.generation {
+                return;
             }
-            tx.send_replace(true);
-            tracing::info!(count, "app_index_published");
+            slot.generation = generation;
+            match scanned {
+                applications::ScanStatus::Complete(report) => {
+                    let skipped = report.skipped;
+                    let full = Arc::new(applications::ApplicationCatalog::new(report.applications));
+                    let catalog = match excluded.lock() {
+                        Ok(excluded) if !excluded.is_empty() => Arc::new(full.excluding(&excluded)),
+                        _ => full.clone(),
+                    };
+                    let count = catalog.applications().len();
+                    slot.full = full;
+                    slot.catalog = catalog;
+                    tx.send_replace(generation);
+                    tracing::info!(count, skipped, generation, "app_index_published");
+                }
+                applications::ScanStatus::Failed => {
+                    tx.send_replace(generation);
+                    tracing::error!(generation, "app_index_kept");
+                }
+            }
         });
+        generation
     }
 
-    /// Re-publish the current snapshot once the initial application scan finishes.
+    /// Re-publish the current snapshot once the activation's application scan finishes.
     ///
     /// The scan starts at activation and takes ~60ms on a real machine, so a search typed
     /// immediately after opening would match an empty index: the first snapshot never
@@ -209,12 +584,12 @@ impl Application {
     /// The rebuild happens after the revision settles. Publishing it earlier would emit a
     /// snapshot that is not final with no late context behind it, and hosts treat a new
     /// `snapshot_seq` as "there is more to show now".
-    pub(super) fn spawn_index_recompute(&self, session_id: SessionId) {
+    pub(super) fn spawn_index_recompute(&self, session_id: SessionId, generation: u64) {
         let resolver = self.resolver.clone();
         let mut index = self.catalog_tx.subscribe();
         let mut states = self.state_updates();
         tokio::spawn(async move {
-            while !*index.borrow_and_update() {
+            while *index.borrow_and_update() < generation {
                 if !resolver.is_session_active(session_id) {
                     return;
                 }
@@ -300,41 +675,38 @@ impl Application {
             .unwrap_or_default()
     }
 
-    pub(super) async fn load_usage(&self, source_app: String) -> (UsageMap, UsageMap, Vec<String>) {
-        let history = self.resolver.history.clone();
-        let loaded = tokio::task::spawn_blocking(move || {
-            let history = history
-                .lock()
-                .map_err(|_| anyhow::anyhow!("history lock poisoned"))?;
-            Ok::<_, anyhow::Error>((history.load(&source_app), history.load_global()))
-        })
-        .await;
-        let mut diagnostics = Vec::new();
-        let (scoped, global) = match loaded {
-            Ok(Ok((scoped, global))) => {
-                let mut recover = |result: anyhow::Result<UsageMap>| match result {
-                    Ok(value) => value,
-                    Err(error) => {
-                        tracing::warn!(error = %error, "usage_load_failed");
-                        diagnostics.push(format!("Usage history could not be loaded: {error:#}"));
-                        UsageMap::default()
-                    }
-                };
-                (recover(scoped), recover(global))
-            }
-            failure => {
-                let message = format!("Usage history task failed: {failure:?}");
-                tracing::warn!(%message, "usage_load_failed");
-                diagnostics.push(message);
-                (UsageMap::default(), UsageMap::default())
-            }
+    pub(super) async fn publish_resolution(
+        &self,
+        session_id: SessionId,
+        revision: Revision,
+        run: crate::core::context::engine::ContextGraphRun,
+        start: Instant,
+        mut diagnostics: Vec<String>,
+    ) -> Result<Option<LauncherState>> {
+        let Some(resolution) = self
+            .resolver
+            .resolve_until_with_grace(session_id, run, self.budget, self.content_grace, start)
+            .await
+        else {
+            return Ok(None);
         };
-        (scoped, global, diagnostics)
+        let complete_by_budget = resolution.complete;
+        let late_run = resolution.run;
+        diagnostics.extend(resolution.diagnostics);
+        let committed = self.resolver.commit(
+            session_id,
+            revision,
+            resolution.contexts,
+            diagnostics.clone(),
+            complete_by_budget,
+            start,
+        )?;
+        if !complete_by_budget {
+            self.spawn_completion(session_id, revision, late_run, start, diagnostics);
+        }
+        Ok(committed)
     }
 }
-
-type UsageMap =
-    std::collections::HashMap<(String, String), crate::core::ranking::score::UsageStats>;
 
 #[async_trait::async_trait]
 impl LauncherApplication for Application {
@@ -351,7 +723,7 @@ impl LauncherApplication for Application {
         input: String,
         revision: Revision,
     ) -> Result<Option<LauncherState>> {
-        self.update_query_use_case(session_id, input, revision)
+        self.update_query_use_case(session_id, input, revision, None)
             .await
     }
 
@@ -360,7 +732,7 @@ impl LauncherApplication for Application {
         &self,
         session_id: SessionId,
         revision: Revision,
-        candidate_id: ActionId,
+        candidate_id: CandidateId,
     ) -> Result<ActionResult> {
         self.execute_use_case(session_id, revision, candidate_id)
             .await
@@ -371,19 +743,19 @@ impl LauncherApplication for Application {
     /// Never called while building a snapshot: the icon is presentation only and must
     /// not affect ranking, ordering or the time to first snapshot.
     fn application_icon(&self, candidate_id: &str) -> Result<Option<Vec<u8>>> {
-        let path = {
-            let session = self.session()?;
-            session
-                .state_candidates
-                .get(candidate_id)
-                .and_then(|candidate| match &candidate.target {
-                    crate::core::search::candidate::CandidateTarget::LaunchApplication {
-                        icon_source,
-                        ..
-                    } => Some(icon_source.clone()),
-                    _ => None,
-                })
-        };
+        let path =
+            {
+                let session = self.session()?;
+                session.execution.candidates.get(candidate_id).and_then(
+                    |candidate| match &candidate.target {
+                        crate::core::search::candidate::CandidateTarget::LaunchApplication {
+                            icon_source,
+                            ..
+                        } => Some(icon_source.clone()),
+                        _ => None,
+                    },
+                )
+            };
         let Some(path) = path else {
             return Ok(None);
         };
@@ -402,16 +774,31 @@ impl LauncherApplication for Application {
     fn deactivate(&self, session_id: SessionId) -> Result<()> {
         let mut session = self.session()?;
         if session.state.session_id == session_id {
+            self.web_plugins
+                .lock()
+                .map_err(|_| anyhow::anyhow!("Web service unavailable"))?
+                .invalidate();
             self.resolver
-                .current
-                .store(0, std::sync::atomic::Ordering::Release);
-            session.directory = None;
-            session.state_candidates.clear();
-            session.context_cache.clear();
-            self.resolver.latest_tx.send_replace(None);
+                .execution_epoch
+                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            session.invalidate_execution();
+            self.resolver.abandon_session();
+            self.file_search_source.clear();
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum SnapshotWait {
+    Updated(Box<LauncherState>),
+    TimedOut,
+    Closed,
+    Superseded,
+}
+
+fn snapshot_cursor(state: &LauncherState) -> u64 {
+    (u64::from(state.revision) << 32) | u64::from(state.snapshot_seq)
 }
 
 pub struct SessionSubscription {
@@ -422,33 +809,56 @@ pub struct SessionSubscription {
 }
 
 impl SessionSubscription {
-    /// Latest committed state, replayed even if it was published before subscribing.
+    /// Latest committed state for this subscription's session.
     pub fn latest_state(&self) -> Option<LauncherState> {
-        self.latest.borrow().as_ref().map(|state| (**state).clone())
+        let latest = self.latest.borrow();
+        let state = latest.as_ref()?;
+        (state.session_id == self.session_id).then(|| (**state).clone())
+    }
+
+    fn superseded(&self) -> bool {
+        let current = self.current.load(std::sync::atomic::Ordering::Acquire);
+        current == 0 || (current >> 32) != u64::from(self.session_id)
     }
 
     pub async fn recv(&mut self) -> Result<LauncherEvent> {
         loop {
-            let event = self.receiver.recv().await?;
-            let (session_id, revision) = match &event {
-                LauncherEvent::ContextAdded { context } => (context.session_id, context.revision),
-                LauncherEvent::ActionsUpdated { state } => (state.session_id, state.revision),
-                LauncherEvent::ProviderCompleted {
-                    session_id,
-                    revision,
-                    ..
+            if self.superseded() {
+                anyhow::bail!("subscription superseded");
+            }
+            tokio::select! {
+                event = self.receiver.recv() => {
+                    let event = event?;
+                    let (session_id, revision) = match &event {
+                        LauncherEvent::ContextAdded { context } => {
+                            (context.session_id, context.revision)
+                        }
+                        LauncherEvent::ActionsUpdated { state } => {
+                            (state.session_id, state.revision)
+                        }
+                        LauncherEvent::ProviderCompleted {
+                            session_id,
+                            revision,
+                            ..
+                        }
+                        | LauncherEvent::ProviderFailed {
+                            session_id,
+                            revision,
+                            ..
+                        } => (*session_id, *revision),
+                    };
+                    if session_id == self.session_id
+                        && self.current.load(std::sync::atomic::Ordering::Acquire)
+                            == crate::core::context::engine::stamp(session_id, revision)
+                    {
+                        return Ok(event);
+                    }
                 }
-                | LauncherEvent::ProviderFailed {
-                    session_id,
-                    revision,
-                    ..
-                } => (*session_id, *revision),
-            };
-            if session_id == self.session_id
-                && self.current.load(std::sync::atomic::Ordering::Acquire)
-                    == crate::core::context::engine::stamp(session_id, revision)
-            {
-                return Ok(event);
+                changed = self.latest.changed() => {
+                    if changed.is_err() {
+                        anyhow::bail!("subscription closed");
+                    }
+                }
             }
         }
     }

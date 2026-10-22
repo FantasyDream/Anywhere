@@ -1,21 +1,82 @@
 use super::availability::AvailabilityRule;
+use super::bundle::ActionBundle;
+use super::group::{label_for, ActionGroup, GroupMeta};
 use super::handler::ActionHandlerRef;
 use crate::core::context::ResolvedContext;
 use crate::core::search::query::SearchFields;
 use anyhow::{bail, Result};
 use anywhere_protocol::*;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone)]
 pub enum ActionExecutor {
+    WebCommand(super::web_command::WebCommandRef),
     Native(ActionHandlerRef),
     Declarative(DeclarativeAction),
+    ScopedDeclarative {
+        action: DeclarativeAction,
+        grant: super::capabilities::CapabilityGrant,
+    },
 }
 
+impl ActionExecutor {
+    pub fn is_menu(&self) -> bool {
+        match self {
+            Self::Native(handler) => handler.is_menu(),
+            Self::WebCommand(_) | Self::Declarative(_) | Self::ScopedDeclarative { .. } => false,
+        }
+    }
+    pub fn records_usage(&self) -> bool {
+        match self {
+            Self::Native(handler) => handler.records_usage(),
+            Self::WebCommand(_) => false, // Recorded once after the qualified document is ready.
+            Self::Declarative(_) | Self::ScopedDeclarative { .. } => true,
+        }
+    }
+
+    /// Web navigation records later at ready, but still consumes its existing frecency.
+    pub fn uses_usage(&self) -> bool {
+        matches!(self, Self::WebCommand(_)) || self.records_usage()
+    }
+
+    pub fn execution_token(&self) -> Option<u64> {
+        match self {
+            Self::Native(handler) => handler.execution_token(),
+            Self::WebCommand(_) | Self::Declarative(_) | Self::ScopedDeclarative { .. } => None,
+        }
+    }
+}
+
+/// Author-supplied action. Search text is derived when this is registered.
+#[derive(Debug, Clone)]
+pub struct ActionDefinition {
+    pub id: ActionId,
+    pub title: String,
+    pub localized_titles: BTreeMap<String, String>,
+    pub subtitle: Option<String>,
+    pub shortcut: Option<String>,
+    pub accepts: Vec<ContextMatcher>,
+    pub executor: ActionExecutor,
+    pub availability: AvailabilityRule,
+    pub base_priority: i32,
+    pub icon: String,
+    pub group_id: GroupId,
+    pub aliases: Vec<String>,
+    pub keywords: Vec<String>,
+    pub owning_app: Option<String>,
+    pub menu_path: Vec<String>,
+    pub home_eligible: bool,
+    pub primary_action: bool,
+    /// Visible title used for search when it differs from the row title.
+    pub search_title: Option<String>,
+}
+
+/// An action after registration. `search` is computed from the definition and cannot be set.
 #[derive(Debug, Clone)]
 pub struct ActionDescriptor {
     pub id: ActionId,
     pub title: String,
+    pub localized_titles: BTreeMap<String, String>,
     pub subtitle: Option<String>,
     pub shortcut: Option<String>,
     pub accepts: Vec<ContextMatcher>,
@@ -28,15 +89,61 @@ pub struct ActionDescriptor {
     pub keywords: Vec<String>,
     /// App that owns this action exclusively, beyond ambient provenance.
     ///
-    /// No built-in or v1 plugin sets this yet: the Current App scope is currently
-    /// driven by which context an action accepts. It stays so an app-specific action
-    /// can declare itself without a protocol change.
+    /// Menu discoveries set this to their captured application. Other actions use
+    /// ambient context provenance. Scope membership is always determined by group_id.
     pub owning_app: Option<String>,
-    /// Precomputed lowercase search fields.
-    pub search: SearchFields,
+    /// Ancestor menu titles. The row title is the leaf; display joins the two.
+    pub menu_path: Vec<String>,
+    pub home_eligible: bool,
+    pub primary_action: bool,
+    search: SearchFields,
+    contributor: Option<std::sync::Arc<str>>,
 }
 
 impl ActionDescriptor {
+    fn from_definition(mut definition: ActionDefinition) -> Self {
+        for title in definition.localized_titles.values() {
+            if title != &definition.title && !definition.aliases.contains(title) {
+                definition.aliases.push(title.clone());
+            }
+        }
+        let primary = definition
+            .search_title
+            .as_deref()
+            .unwrap_or(definition.title.as_str());
+        let search = SearchFields::new(primary, &definition.aliases, &definition.keywords);
+        Self {
+            id: definition.id,
+            title: definition.title,
+            localized_titles: definition.localized_titles,
+            subtitle: definition.subtitle,
+            shortcut: definition.shortcut,
+            accepts: definition.accepts,
+            executor: definition.executor,
+            availability: definition.availability,
+            base_priority: definition.base_priority,
+            icon: definition.icon,
+            group_id: definition.group_id,
+            aliases: definition.aliases,
+            keywords: definition.keywords,
+            owning_app: definition.owning_app,
+            menu_path: definition.menu_path,
+            home_eligible: definition.home_eligible,
+            primary_action: definition.primary_action,
+            search,
+            contributor: None,
+        }
+    }
+
+    /// Registration ownership, independent of display groups and business action ids.
+    pub fn contributor(&self) -> Option<&str> {
+        self.contributor.as_deref()
+    }
+
+    pub fn search(&self) -> &SearchFields {
+        &self.search
+    }
+
     pub fn matches(&self, context: &ResolvedContext) -> bool {
         self.accepts
             .iter()
@@ -48,26 +155,238 @@ impl ActionDescriptor {
 ///
 /// Registration and lookup only. Matching lives in `ActionMatcher`, availability in
 /// `availability`, execution in `execute` and registered feature handlers.
+#[derive(Clone, Debug)]
+struct RegisteredGroup {
+    title: String,
+    rank: u16,
+}
+
 #[derive(Clone, Default)]
 pub struct ActionRegistry {
-    actions: BTreeMap<ActionId, ActionDescriptor>,
+    actions: BTreeMap<ActionId, std::sync::Arc<ActionDescriptor>>,
+    groups: BTreeMap<GroupId, RegisteredGroup>,
+    next_rank: u16,
+    factories: Vec<RegisteredFactory>,
+}
+
+#[derive(Clone)]
+struct RegisteredFactory {
+    factory: std::sync::Arc<dyn super::bundle::ContextActionFactory>,
+    contributor: Option<std::sync::Arc<str>>,
+}
+
+impl GroupMeta for ActionRegistry {
+    fn label(&self, group_id: &str) -> String {
+        self.groups
+            .get(group_id)
+            .map(|group| group.title.clone())
+            .unwrap_or_else(|| label_for(group_id))
+    }
+
+    fn rank(&self, group_id: &str) -> u16 {
+        self.groups
+            .get(group_id)
+            .map(|group| group.rank)
+            .unwrap_or(u16::MAX)
+    }
 }
 
 impl ActionRegistry {
-    pub fn register(&mut self, action: ActionDescriptor) -> Result<()> {
-        if self.actions.contains_key(&action.id) {
-            bail!("duplicate action id: {}", action.id);
+    /// Return only a stable business identity, never a scan token or candidate row ID.
+    pub fn persistent_binding(&self, id: &str) -> Result<super::identity::PersistentActionBinding> {
+        use super::identity::{BindingPolicy, BusinessActionId, PersistentActionBinding};
+        let action = self
+            .get(id)
+            .ok_or_else(|| anyhow::anyhow!("action no longer exists"))?;
+        let policy = match &action.executor {
+            ActionExecutor::Native(handler) => handler.binding_policy(),
+            ActionExecutor::Declarative(DeclarativeAction::ExecuteBuiltin { command_id }) => {
+                let target = self
+                    .get(command_id)
+                    .ok_or_else(|| anyhow::anyhow!("built-in action no longer exists"))?;
+                match &target.executor {
+                    ActionExecutor::Native(handler) => handler.binding_policy(),
+                    _ => bail!("execute_builtin target is not built-in"),
+                }
+            }
+            ActionExecutor::WebCommand(_)
+            | ActionExecutor::Declarative(_)
+            | ActionExecutor::ScopedDeclarative { .. } => BindingPolicy::Persistent,
+        };
+        if let BindingPolicy::Unavailable { reason } = policy {
+            bail!("{reason}");
         }
-        if action.group_id.trim().is_empty() {
-            bail!("action {} requires a group id", action.id);
+        Ok(PersistentActionBinding {
+            action_id: BusinessActionId::new(action.id.clone()),
+            context_types: action
+                .accepts
+                .iter()
+                .map(|matcher| matcher.type_id.clone())
+                .collect(),
+        })
+    }
+    /// An absent generated action can still belong to an installed factory. This
+    /// does not grant an execution offer or bypass the handler's binding policy.
+    pub fn supports_persistent_binding(&self, id: &str) -> bool {
+        if self.get(id).is_some() {
+            return self.persistent_binding(id).is_ok();
         }
-        action.availability.validate()?;
-        self.actions.insert(action.id.clone(), action);
+        self.factories
+            .iter()
+            .any(|factory| factory.factory.supports_persistent_binding(id))
+    }
+    pub fn register_factory(
+        &mut self,
+        factory: impl super::bundle::ContextActionFactory + 'static,
+    ) {
+        self.register_factory_ref(std::sync::Arc::new(factory));
+    }
+
+    pub fn register_factory_ref(
+        &mut self,
+        factory: std::sync::Arc<dyn super::bundle::ContextActionFactory>,
+    ) {
+        self.register_owned_factory(factory, None);
+    }
+
+    pub fn register_owned_factory(
+        &mut self,
+        factory: std::sync::Arc<dyn super::bundle::ContextActionFactory>,
+        contributor: Option<&str>,
+    ) {
+        self.factories.push(RegisteredFactory {
+            factory,
+            contributor: contributor.map(Into::into),
+        });
+    }
+
+    /// Filter once at a configuration boundary, including not-yet-expanded factories.
+    pub fn retain_contributors(&mut self, enabled: impl Fn(&str) -> bool) {
+        self.actions
+            .retain(|_, action| action.contributor().is_none_or(&enabled));
+        self.factories
+            .retain(|factory| factory.contributor.as_deref().is_none_or(&enabled));
+        // Delegating commands must disappear with their target, even if the delegate
+        // has a different contribution owner. Execution and binding also revalidate.
+        let missing: BTreeSet<_> = self
+            .actions
+            .values()
+            .filter_map(|action| {
+                let target = match &action.executor {
+                    ActionExecutor::Declarative(DeclarativeAction::ExecuteBuiltin {
+                        command_id,
+                    }) => command_id,
+                    _ => return None,
+                };
+                (!self.actions.contains_key(target)).then(|| action.id.clone())
+            })
+            .collect();
+        self.actions.retain(|id, _| !missing.contains(id));
+    }
+
+    /// Build an immutable snapshot registry. Generated handlers travel with candidates.
+    pub fn for_contexts(&self, contexts: &[ResolvedContext]) -> (Self, Vec<String>) {
+        let mut registry = self.clone();
+        registry.factories.clear();
+        let mut diagnostics = Vec::new();
+        for registered in &self.factories {
+            let factory = &registered.factory;
+            let expansion = factory.actions(contexts);
+            diagnostics.extend(
+                expansion
+                    .diagnostics
+                    .into_iter()
+                    .map(|message| format!("context actions [{}]: {message}", factory.id())),
+            );
+            for action in expansion.actions {
+                if let Err(error) =
+                    registry.register_owned(action, registered.contributor.as_deref())
+                {
+                    diagnostics.push(format!("context actions [{}]: {error}", factory.id()));
+                }
+            }
+        }
+        (registry, diagnostics)
+    }
+    /// Check every action, then insert. A failure leaves the registry unchanged.
+    fn commit_batch(
+        &mut self,
+        actions: Vec<ActionDefinition>,
+        contributor: Option<&str>,
+    ) -> Result<()> {
+        let mut seen = BTreeSet::new();
+        for action in &actions {
+            if !seen.insert(action.id.clone()) || self.actions.contains_key(&action.id) {
+                bail!("duplicate action id: {}", action.id);
+            }
+            if action.group_id.trim().is_empty() {
+                bail!("action {} requires a group id", action.id);
+            }
+            action.availability.validate()?;
+        }
+        for action in actions {
+            let mut action = ActionDescriptor::from_definition(action);
+            action.contributor = contributor.map(Into::into);
+            self.actions
+                .insert(action.id.clone(), std::sync::Arc::new(action));
+        }
         Ok(())
     }
 
+    pub fn register(&mut self, action: ActionDefinition) -> Result<()> {
+        self.register_owned(action, None)
+    }
+
+    pub fn register_owned(
+        &mut self,
+        action: ActionDefinition,
+        contributor: Option<&str>,
+    ) -> Result<()> {
+        self.commit_batch(vec![action], contributor)
+    }
+
+    /// Actions and the group's display title, or neither.
+    pub fn register_bundle(&mut self, bundle: ActionBundle) -> Result<()> {
+        self.register_owned_bundle(bundle, None)
+    }
+
+    pub fn register_owned_bundle(
+        &mut self,
+        bundle: ActionBundle,
+        contributor: Option<&str>,
+    ) -> Result<()> {
+        let group = bundle.group.clone();
+        self.commit_batch(bundle.descriptors(), contributor)?;
+        self.remember_group(group, true);
+        Ok(())
+    }
+
+    fn remember_group(&mut self, group: ActionGroup, ranked: bool) {
+        if group.id.trim().is_empty() || self.groups.contains_key(&group.id) {
+            return;
+        }
+        let rank = if ranked {
+            let rank = self.next_rank;
+            self.next_rank = self.next_rank.saturating_add(1);
+            rank
+        } else {
+            u16::MAX
+        };
+        let title = if group.title.trim().is_empty() {
+            label_for(&group.id)
+        } else {
+            group.title
+        };
+        self.groups
+            .insert(group.id, RegisteredGroup { title, rank });
+    }
+
     pub fn get(&self, id: &str) -> Option<&ActionDescriptor> {
-        self.actions.get(id)
+        self.actions.get(id).map(std::sync::Arc::as_ref)
+    }
+
+    pub fn get_shared(&self, id: &str) -> Option<std::sync::Arc<ActionDescriptor>> {
+        self.actions.get(id).cloned()
     }
 
     pub fn matching<'a>(
@@ -76,22 +395,51 @@ impl ActionRegistry {
     ) -> impl Iterator<Item = &'a ActionDescriptor> {
         self.actions
             .values()
+            .map(std::sync::Arc::as_ref)
             .filter(|command| command.matches(context))
     }
 
     pub fn commands(&self) -> impl Iterator<Item = &ActionDescriptor> {
-        self.actions.values()
+        self.actions.values().map(std::sync::Arc::as_ref)
     }
 
     /// Validate all commands first; a bad plugin never leaves half a registration.
     pub fn register_plugin(&mut self, plugin: PluginManifest) -> Result<()> {
+        self.register_plugin_with_capabilities(plugin, &[])
+    }
+
+    /// The caller supplies grants independently of the manifest. Default loading
+    /// grants nothing to versioned plugins; v1 retains its existing explicit-install behavior.
+    pub fn register_plugin_with_capabilities(
+        &mut self,
+        plugin: PluginManifest,
+        allowed: &[extension::ExtensionCapability],
+    ) -> Result<()> {
+        self.register_owned_plugin(plugin, allowed, None)
+    }
+
+    pub fn register_owned_plugin(
+        &mut self,
+        plugin: PluginManifest,
+        allowed: &[extension::ExtensionCapability],
+        contributor: Option<&str>,
+    ) -> Result<()> {
+        anywhere_plugin::validate_manifest(&plugin)?;
+        let grant = if plugin.protocol_version >= 2 {
+            Some(super::capabilities::CapabilityGrant::approve(
+                &plugin.capabilities,
+                allowed,
+            )?)
+        } else {
+            None
+        };
         let default_group = format!("plugin.{}", plugin.id);
         let plugin_name = plugin.name.clone();
         let mut commands = Vec::new();
         for command in plugin.commands {
             let id = format!("{}.{}", plugin.id, command.id);
             if self.actions.contains_key(&id)
-                || commands.iter().any(|c: &ActionDescriptor| c.id == id)
+                || commands.iter().any(|c: &ActionDefinition| c.id == id)
             {
                 bail!("duplicate command id: {id}");
             }
@@ -129,6 +477,7 @@ impl ActionRegistry {
                 }
             }
             let icon = match command.action {
+                DeclarativeAction::RenderDetail { .. } => "file",
                 DeclarativeAction::OpenUrl { .. } => "globe",
                 DeclarativeAction::OpenFile { .. } => "file",
                 DeclarativeAction::Copy { .. } => "copy",
@@ -136,28 +485,51 @@ impl ActionRegistry {
             };
             let aliases = command.aliases.clone();
             let keywords = command.keywords.clone();
-            commands.push(ActionDescriptor {
+            commands.push(ActionDefinition {
+                localized_titles: Default::default(),
                 shortcut: None,
                 id,
-                search: SearchFields::new(&command.title, &aliases, &keywords),
-                title: command.title,
+                title: command.title.clone(),
                 subtitle: Some(command.subtitle.unwrap_or_else(|| plugin_name.clone())),
                 accepts: accepts
                     .into_iter()
                     .map(|type_id| ContextMatcher { type_id })
                     .collect(),
-                executor: ActionExecutor::Declarative(command.action),
+                executor: if let Some(grant) = &grant {
+                    ActionExecutor::ScopedDeclarative {
+                        action: command.action,
+                        grant: grant.clone(),
+                    }
+                } else {
+                    ActionExecutor::Declarative(command.action)
+                },
                 availability,
                 base_priority: command.base_priority,
                 icon: icon.into(),
                 group_id: command.group_id.unwrap_or_else(|| default_group.clone()),
                 owning_app: None,
+                menu_path: Vec::new(),
+                home_eligible: true,
+                primary_action: false,
                 aliases,
                 keywords,
+                search_title: None,
             });
         }
-        for command in commands {
-            self.register(command)?;
+        let group_ids = commands
+            .iter()
+            .map(|command| command.group_id.clone())
+            .collect::<Vec<_>>();
+        self.commit_batch(commands, contributor)?;
+        for id in group_ids {
+            self.remember_group(
+                ActionGroup {
+                    id: id.clone(),
+                    title: label_for(&id),
+                    icon: None,
+                },
+                false,
+            );
         }
         Ok(())
     }
@@ -175,16 +547,56 @@ mod tests {
     }
 
     fn json_context() -> ResolvedContext {
-        seed("{}")
-            .into_iter()
-            .find(|c| c.type_id == JSON_DOCUMENT)
-            .unwrap()
+        ResolvedContext::new(
+            JSON_DOCUMENT,
+            crate::core::context::ContextValue::Text("{}".into()),
+            ContextSource::UserInput,
+            "legacy-fixture",
+        )
+    }
+
+    #[test]
+    fn bundled_actions_supply_chinese_names_and_share_literal_and_pinyin_search() {
+        use crate::core::search::query::Query;
+        let registry = crate::application::builtin_registry();
+        for action in registry.commands() {
+            let chinese = action
+                .localized_titles
+                .get("zh")
+                .unwrap_or_else(|| panic!("missing Chinese action label: {}", action.id));
+            assert!(
+                action.search().matched(&Query::parse(chinese)).is_some(),
+                "{}",
+                action.id
+            );
+            assert!(
+                action
+                    .search()
+                    .matched(&Query::parse(&action.title))
+                    .is_some(),
+                "{}",
+                action.id
+            );
+        }
+        let action = registry.get("core.git.copy_branch_name").unwrap();
+        for query in ["复制分支名", "fuzhifenzhiming", "fzfzm", "Copy Branch Name"] {
+            assert!(
+                action.search().matched(&Query::parse(query)).is_some(),
+                "{query}"
+            );
+        }
+        assert_eq!(action.id, "core.git.copy_branch_name");
+        assert_eq!(action.localized_titles["zh"], "复制分支名");
+        assert!(action
+            .search()
+            .matched(&Query::parse("not-a-branch-action"))
+            .is_none());
     }
 
     #[test]
     fn exact_type_match_and_builtin_command_count() {
-        let registry = crate::application::composition::builtin_registry();
-        assert_eq!(registry.commands().count(), 14);
+        let registry = crate::application::builtin_registry();
+        assert_eq!(registry.commands().count(), 30);
         let url = seed("https://github.com")
             .into_iter()
             .find(|c| c.type_id == URL)
@@ -193,7 +605,7 @@ mod tests {
         assert!(registry.get("core.url.open").unwrap().matches(&url));
         assert!(!registry.get("core.url.open").unwrap().matches(&json));
         assert_eq!(registry.matching(&url).count(), 2);
-        assert_eq!(registry.matching(&json).count(), 3);
+        assert_eq!(registry.matching(&json).count(), 0);
         let directory = ResolvedContext::new(
             DIRECTORY,
             crate::core::context::ContextValue::Directory("/tmp".into()),
@@ -205,11 +617,11 @@ mod tests {
 
     #[test]
     fn every_builtin_has_a_group_and_search_fields() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         for command in registry.commands() {
             assert!(!command.group_id.is_empty(), "{}", command.id);
             assert!(
-                !command.search.names().is_empty(),
+                !command.search().names().is_empty(),
                 "{} needs searchable fields",
                 command.id
             );
@@ -218,7 +630,7 @@ mod tests {
 
     #[test]
     fn git_actions_only_accept_repository_context() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         let directory = ResolvedContext::new(
             DIRECTORY,
             crate::core::context::ContextValue::Directory("/tmp".into()),
@@ -240,12 +652,26 @@ mod tests {
             .map(|command| command.id.as_str())
             .collect::<Vec<_>>();
         ids.sort_unstable();
-        assert_eq!(ids, ["core.git.diff", "core.git.log", "core.git.status"]);
+        assert_eq!(
+            ids,
+            [
+                "core.git.branches",
+                "core.git.copy_branch_name",
+                "core.git.copy_commit_hash",
+                "core.git.copy_remote_url",
+                "core.git.copy_repository_path",
+                "core.git.copy_short_commit_hash",
+                "core.git.diff",
+                "core.git.log",
+                "core.git.staged_diff",
+                "core.git.status"
+            ]
+        );
     }
 
     #[test]
-    fn v0_1_json_plugin_is_normalized_and_keeps_working() {
-        let mut registry = crate::application::composition::builtin_registry();
+    fn legacy_matcher_normalization_remains_without_retired_builtin_targets() {
+        let mut registry = crate::application::builtin_registry();
         let raw = r#"
 protocol_version = 1
 id = "legacy"
@@ -255,7 +681,7 @@ name = "Legacy"
 id = "pretty"
 title = "Pretty JSON"
 accepts = ["core.json"]
-action = { type = "execute_builtin", command_id = "core.json.format" }
+action = { type = "copy", text = "{{context.value}}" }
 "#;
         let manifest = anywhere_plugin::parse_manifest(raw).unwrap();
         registry.register_plugin(manifest.clone()).unwrap();
@@ -270,13 +696,13 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
         bad.commands[0].action = DeclarativeAction::ExecuteBuiltin {
             command_id: "core.url.open".into(),
         };
-        let mut fresh = crate::application::composition::builtin_registry();
+        let mut fresh = crate::application::builtin_registry();
         assert!(fresh.register_plugin(bad).is_err());
     }
 
     #[test]
     fn git_actions_and_dispatch_agree_on_the_same_set() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         for command in registry.commands() {
             assert_eq!(
                 is_git_action(&command.id),
@@ -289,7 +715,7 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
 
     #[test]
     fn copy_path_actions_share_one_group_across_object_types() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         for id in ["core.directory.copy", "core.file.copy"] {
             assert_eq!(
                 registry.get(id).unwrap().group_id,
@@ -301,7 +727,7 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
 
     #[test]
     fn known_groups_are_the_only_group_ids_in_the_builtin_registry() {
-        let registry = crate::application::composition::builtin_registry();
+        let registry = crate::application::builtin_registry();
         for command in registry.commands() {
             assert!(
                 [
@@ -310,6 +736,12 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
                     groups::FILE,
                     groups::WEB,
                     groups::JSON,
+                    groups::RUST,
+                    groups::MAVEN,
+                    groups::GRADLE,
+                    groups::NODE,
+                    groups::SPRING_BOOT,
+                    groups::TOOLS,
                 ]
                 .contains(&command.group_id.as_str()),
                 "{} uses an unknown group {}",
@@ -321,7 +753,7 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
 
     #[test]
     fn plugins_without_group_metadata_get_an_explicit_default() {
-        let mut registry = crate::application::composition::builtin_registry();
+        let mut registry = crate::application::builtin_registry();
         registry
             .register_plugin(
                 anywhere_plugin::parse_manifest(anywhere_plugin::EXAMPLE_PLUGIN).unwrap(),
@@ -349,6 +781,7 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
 
         let spec = |id: &'static str, availability: AvailabilityRule| {
             ActionSpec {
+                localized_titles: &[],
                 id,
                 title: "Bad",
                 accepts: TEXT,
@@ -358,6 +791,8 @@ action = { type = "execute_builtin", command_id = "core.json.format" }
                 icon: "copy",
                 aliases: &[],
                 keywords: &[],
+                home_eligible: true,
+                primary_action: false,
             }
             .descriptor("test")
         };
@@ -405,7 +840,7 @@ action = { type = "execute_builtin", command_id = "core.directory.copy" }
 
     #[test]
     fn execute_builtin_inherits_the_target_availability_rule() {
-        let mut registry = crate::application::composition::builtin_registry();
+        let mut registry = crate::application::builtin_registry();
         registry
             .register_plugin(anywhere_plugin::parse_manifest(WRAP_PLUGIN).unwrap())
             .unwrap();
@@ -430,7 +865,7 @@ action = { type = "execute_builtin", command_id = "core.directory.copy" }
 
     #[test]
     fn a_bad_wrapping_plugin_does_not_leave_a_partial_registration() {
-        let mut registry = crate::application::composition::builtin_registry();
+        let mut registry = crate::application::builtin_registry();
         let raw = format!(
             "{WRAP_PLUGIN}
 
@@ -448,5 +883,52 @@ action = {{ type = \"execute_builtin\", command_id = \"core.missing.action\" }}
         assert!(registry.get("wrap.copy").is_none());
         assert!(registry.get("wrap.missing").is_none());
         assert!(registry.get("core.git.status").is_some());
+    }
+
+    #[test]
+    fn a_later_invalid_command_does_not_keep_the_earlier_one() {
+        let mut registry = ActionRegistry::default();
+        let raw = r#"
+protocol_version = 1
+id = "partial"
+name = "Partial"
+
+[[commands]]
+id = "ok"
+title = "Ok"
+accepts = ["core.text"]
+group_id = "tools"
+action = { type = "copy", text = "x" }
+
+[[commands]]
+id = "bad"
+title = "Bad"
+accepts = ["core.text"]
+group_id = ""
+action = { type = "copy", text = "y" }
+"#;
+        assert!(anywhere_plugin::parse_manifest(raw)
+            .and_then(|manifest| registry.register_plugin(manifest))
+            .is_err());
+        assert!(registry.get("partial.ok").is_none());
+        assert!(registry.get("partial.bad").is_none());
+    }
+
+    #[test]
+    fn a_bundle_title_is_the_action_section_label() {
+        use crate::core::action::bundle::ActionBundle;
+        use crate::core::action::group::ActionGroup;
+        let mut registry = ActionRegistry::default();
+        registry
+            .register_bundle(ActionBundle {
+                group: ActionGroup {
+                    id: "custom_tools".into(),
+                    title: "Custom tools display title".into(),
+                    icon: None,
+                },
+                actions: Vec::new(),
+            })
+            .unwrap();
+        assert_eq!(registry.label("custom_tools"), "Custom tools display title");
     }
 }

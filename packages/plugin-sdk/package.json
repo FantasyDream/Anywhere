@@ -1,0 +1,27 @@
+{
+  "name": "@anywhere/plugin-sdk",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "bin": {"anywhere-plugin": "tools/create.mjs"},
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./styles/controls.css": "./styles/controls.css",
+    "./styles/tokens.css": "./styles/tokens.css"
+  },
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "styles", "tools/package.py", "tools/create.mjs", "templates", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "check": "tsc --noEmit",
+    "test": "node --test test/*.test.mjs",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  }
+}

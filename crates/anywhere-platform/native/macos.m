@@ -1,7 +1,9 @@
 #import <AppKit/AppKit.h>
 #import "macos_process.h"
+#import "macos_application_names.h"
 #include <stdlib.h>
 #include <string.h>
+#include <limits.h>
 
 // Only OS context capture. All window/UI code lives in the Flutter host.
 char *launcher_frontmost_application(void) {
@@ -23,6 +25,33 @@ char *launcher_frontmost_application(void) {
 
 void launcher_free_string(char *value) { free(value); }
 void launcher_free_bytes(unsigned char *value) { free(value); }
+
+// Recheck the frozen app identity around slower Automation calls. Bundle ID
+// alone cannot detect a restart, and PID alone can be reused by the kernel.
+// 1 = match, 0 = invalid arguments, 2 = missing process, 3 = terminated,
+// 4 = bundle mismatch, 5 = process-start mismatch. No app content is returned.
+int launcher_application_identity_status(int pid, const char *bundle_id,
+                                         const char *instance_id) {
+    @autoreleasepool {
+        if (pid <= 0 || !bundle_id || !instance_id) return 0;
+        NSString *expectedBundle = [NSString stringWithUTF8String:bundle_id];
+        NSString *expectedInstance = [NSString stringWithUTF8String:instance_id];
+        if (expectedBundle.length == 0 || expectedInstance.length == 0) return 0;
+        NSRunningApplication *running =
+            [NSRunningApplication runningApplicationWithProcessIdentifier:(pid_t)pid];
+        NSString *actualInstance = launcher_process_instance((pid_t)pid);
+        if (!running || actualInstance.length == 0) return 2;
+        if (running.terminated) return 3;
+        if (![running.bundleIdentifier isEqualToString:expectedBundle]) return 4;
+        if (![actualInstance isEqualToString:expectedInstance]) return 5;
+        return 1;
+    }
+}
+
+int launcher_application_identity_matches(int pid, const char *bundle_id,
+                                          const char *instance_id) {
+    return launcher_application_identity_status(pid, bundle_id, instance_id) == 1;
+}
 
 // One installed application bundle. Metadata only: no icon is extracted here.
 char *launcher_bundle_application(const char *utf8_path) {
@@ -48,6 +77,25 @@ char *launcher_bundle_application(const char *utf8_path) {
         if (![name isKindOfClass:NSString.class] || name.length == 0) {
             name = path.lastPathComponent.stringByDeletingPathExtension;
         }
+        NSArray<NSString *> *preferredNames = launcher_names_for_languages(bundle, NSLocale.preferredLanguages);
+        if (preferredNames.count > 0) name = preferredNames.firstObject;
+        NSMutableDictionary<NSString *, NSString *> *localizedNames = [NSMutableDictionary dictionary];
+        for (NSString *language in @[ @"en", @"zh" ]) {
+            NSArray<NSString *> *translated = launcher_names_for_languages(
+                bundle, @[ [language isEqualToString:@"zh"] ? @"zh-Hans" : language ]);
+            if (translated.count > 0) localizedNames[language] = translated.firstObject;
+        }
+        // Some system apps (e.g. Calculator) keep English only in their base Info.plist.
+        if (!localizedNames[@"en"]) {
+            for (id candidate in @[ bundle.infoDictionary[@"CFBundleDisplayName"] ?: NSNull.null,
+                                     bundle.infoDictionary[@"CFBundleName"] ?: NSNull.null,
+                                     path.lastPathComponent.stringByDeletingPathExtension ]) {
+                if ([candidate isKindOfClass:NSString.class] && [candidate length] > 0) {
+                    localizedNames[@"en"] = candidate;
+                    break;
+                }
+            }
+        }
         NSMutableArray<NSString *> *aliases = [NSMutableArray array];
         NSMutableSet<NSString *> *seen = [NSMutableSet setWithObject:name];
         for (id candidate in @[
@@ -61,11 +109,18 @@ char *launcher_bundle_application(const char *utf8_path) {
             [seen addObject:alias];
             [aliases addObject:alias];
         }
+        for (NSString *alias in preferredNames) {
+            if (![seen containsObject:alias]) {
+                [seen addObject:alias];
+                [aliases addObject:alias];
+            }
+        }
         NSDictionary *value = @{
             @"bundle_id": identifier,
             @"name": name,
             @"path": bundle.bundlePath ?: path,
             @"aliases": aliases,
+            @"localized_names": localizedNames,
         };
         NSData *data = [NSJSONSerialization dataWithJSONObject:value options:0 error:NULL];
         if (!data) return NULL;
@@ -74,83 +129,9 @@ char *launcher_bundle_application(const char *utf8_path) {
     }
 }
 
-// The user's preferred languages, most preferred first, as a JSON array.
-//
-// Read from the system rather than from an environment variable: a Finder-launched
-// app has no AppleLanguages in its environment.
-char *launcher_preferred_languages(void) {
-    @autoreleasepool {
-        NSArray<NSString *> *languages = NSLocale.preferredLanguages;
-        NSData *data = [NSJSONSerialization dataWithJSONObject:languages options:0 error:NULL];
-        if (!data) return NULL;
-        NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-        return json ? strdup(json.UTF8String) : NULL;
-    }
-}
-
-// Names for one bundle in the given preference languages, as a JSON array.
-//
-// macOS keeps localized app names in <lang>.lproj/InfoPlist.strings, which
-// `bundleWithPath` does not surface for a bundle outside the running app. Without
-// this, searching for "Safari浏览器" found nothing: the index only ever held the
-// canonical English name.
-char *launcher_bundle_localized_names(const char *utf8_path, const char *utf8_languages) {
-    @autoreleasepool {
-        if (!utf8_path || !utf8_languages) return NULL;
-        NSString *path = [NSString stringWithUTF8String:utf8_path];
-        NSArray<NSString *> *languages =
-            [[NSString stringWithUTF8String:utf8_languages] componentsSeparatedByString:@","];
-        if (path.length == 0 || languages.count == 0) return NULL;
-        NSString *resources = [path stringByAppendingPathComponent:@"Contents/Resources"];
-        NSFileManager *files = NSFileManager.defaultManager;
-        NSMutableArray<NSString *> *names = [NSMutableArray array];
-        NSMutableSet<NSString *> *seen = [NSMutableSet set];
-        for (NSString *language in languages) {
-            NSString *trimmed = [language
-                stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-            if (trimmed.length == 0) continue;
-            // "zh-Hans-CN" also has to match "zh-Hans", "zh_CN" and "zh-Hans-CN".
-            NSMutableArray<NSString *> *candidates = [NSMutableArray arrayWithObject:trimmed];
-            NSArray<NSString *> *parts = [trimmed componentsSeparatedByString:@"-"];
-            if (parts.count >= 2) {
-                NSString *script = parts[1];
-                if ([script isEqualToString:@"Hans"]) {
-                    [candidates addObject:@"zh_CN"];
-                    [candidates addObject:@"zh-Hans"];
-                } else if ([script isEqualToString:@"Hant"]) {
-                    [candidates addObject:@"zh_TW"];
-                    [candidates addObject:@"zh_HK"];
-                    [candidates addObject:@"zh-Hant"];
-                }
-                [candidates addObject:[NSString stringWithFormat:@"%@_%@", parts[0], parts[1]]];
-            }
-            for (NSString *candidate in candidates) {
-                NSString *strings = [[resources
-                    stringByAppendingPathComponent:[candidate stringByAppendingPathExtension:@"lproj"]]
-                    stringByAppendingPathComponent:@"InfoPlist.strings"];
-                if (![files fileExistsAtPath:strings]) continue;
-                NSDictionary *entries = [NSDictionary dictionaryWithContentsOfFile:strings];
-                if (![entries isKindOfClass:NSDictionary.class]) continue;
-                for (NSString *key in @[ @"CFBundleDisplayName", @"CFBundleName" ]) {
-                    NSString *value = entries[key];
-                    if (![value isKindOfClass:NSString.class] || value.length == 0) continue;
-                    if (![seen containsObject:value]) {
-                        [seen addObject:value];
-                        [names addObject:value];
-                    }
-                }
-                if (names.count > 0) break;
-            }
-        }
-        if (names.count == 0) return NULL;
-        NSData *data = [NSJSONSerialization dataWithJSONObject:names options:0 error:NULL];
-        if (!data) return NULL;
-        NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-        return json ? strdup(json.UTF8String) : NULL;
-    }
-}
-
-// Activate a running instance, otherwise launch the canonical bundle path.
+// Open the selected install through LaunchServices, reusing a running instance.
+// NSWorkspace performs the cooperative activation handoff on macOS 14+; a bare
+// NSRunningApplication activation request can succeed without taking foreground.
 // Returns 1 when an application was activated or launched, 0 when nothing happened.
 int launcher_launch_application(const char *utf8_path) {
     @autoreleasepool {
@@ -158,18 +139,9 @@ int launcher_launch_application(const char *utf8_path) {
         NSString *path = [NSString stringWithUTF8String:utf8_path];
         if (path.length == 0) return 0;
         NSURL *url = [NSURL fileURLWithPath:path];
-        NSString *target = [[NSBundle bundleWithURL:url] bundleIdentifier];
-        if (target.length > 0) {
-            for (NSRunningApplication *running in NSWorkspace.sharedWorkspace.runningApplications) {
-                // Match the chosen install so a duplicate installation is not activated.
-                if ([running.bundleIdentifier isEqualToString:target] &&
-                    [running.bundleURL.path isEqualToString:path]) {
-                    return [running activateWithOptions:NSApplicationActivateAllWindows] ? 1 : 0;
-                }
-            }
-        }
         NSWorkspaceOpenConfiguration *configuration = [NSWorkspaceOpenConfiguration configuration];
         configuration.activates = YES;
+        configuration.createsNewApplicationInstance = NO;
         __block int launched = 0;
         dispatch_semaphore_t done = dispatch_semaphore_create(0);
         [NSWorkspace.sharedWorkspace openApplicationAtURL:url
@@ -181,8 +153,12 @@ int launcher_launch_application(const char *utf8_path) {
         }];
         // The completion handler runs off the main thread; a bounded wait keeps this
         // call synchronous without blocking the launcher for long.
-        dispatch_semaphore_wait(done,
-                                dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)));
+        if (dispatch_semaphore_wait(done,
+                dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC))) != 0) {
+            // A late callback owns its captured result. Do not read that result
+            // concurrently after timing out, or report a pending open as success.
+            return 0;
+        }
         return launched;
     }
 }
@@ -246,20 +222,60 @@ unsigned char *launcher_application_icon(const char *utf8_path, unsigned int siz
     }
 }
 
-// Clipboard text snapshot. Returns 1 and fills the output buffer on success,
-// 2 when the clipboard holds no plain text, 3 when the value exceeds capacity,
-// 0 when reading failed.
-int launcher_clipboard_text(char *output, unsigned int capacity, unsigned int *out_length) {
-    @autoreleasepool {
-        if (out_length) *out_length = 0;
-        NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
-        NSString *text = [pasteboard stringForType:NSPasteboardTypeString];
-        if (text.length == 0) return 2;
-        NSData *data = [text dataUsingEncoding:NSUTF8StringEncoding];
-        if (!data) return 2;
-        if (out_length) *out_length = (unsigned int)data.length;
-        if (data.length > capacity || !output) return 3;
-        memcpy(output, data.bytes, data.length);
-        return 1;
+// Reading the generation does not read clipboard contents or prompt for access.
+long long launcher_clipboard_change_count(void) {
+    @try {
+        @autoreleasepool { return (long long)NSPasteboard.generalPasteboard.changeCount; }
+    } @catch (NSException *exception) { return -1; }
+}
+
+// Public policy API is queried dynamically to support old SDKs on new systems.
+static NSInteger clipboard_access_behavior(NSPasteboard *pasteboard) {
+    if (@available(macOS 15.4, *)) {
+        SEL selector = NSSelectorFromString(@"accessBehavior");
+        if (![pasteboard respondsToSelector:selector]) return 0;
+        NSInteger (*getBehavior)(id, SEL) = (NSInteger (*)(id, SEL))[pasteboard methodForSelector:selector];
+        return getBehavior(pasteboard, selector);
     }
+    return 2;
+}
+int launcher_clipboard_history_access_allowed(void) {
+    @try {
+        @autoreleasepool { return clipboard_access_behavior(NSPasteboard.generalPasteboard) == 2 ? 1 : 0; }
+    } @catch (NSException *exception) { return 0; }
+}
+// Foreground preflight may prompt. Actual clipboard format reads use clipboard-rs.
+int launcher_clipboard_text_guard(unsigned long long capacity) {
+    @try {
+        @autoreleasepool {
+            NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
+            if (clipboard_access_behavior(pasteboard) == 3) return 4;
+            NSString *text = [pasteboard stringForType:NSPasteboardTypeString];
+            if (clipboard_access_behavior(pasteboard) == 3) return 4;
+            if (!text && [pasteboard.types containsObject:NSPasteboardTypeString]) return 0;
+            if (!text.length) return 2;
+            return [text lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > capacity ? 3 : 1;
+        }
+    } @catch (NSException *exception) { return 0; }
+}
+unsigned long long launcher_clipboard_item_count(void) {
+    @try {
+        @autoreleasepool { return (unsigned long long)NSPasteboard.generalPasteboard.pasteboardItems.count; }
+    } @catch (NSException *exception) { return ULLONG_MAX; }
+}
+// Avoid copying an oversized representation into Rust. Reading NSData can still
+// materialize lazy data in the source app; the OS API cannot preflight that cost.
+int launcher_clipboard_format_guard(const char *format, unsigned long long capacity) {
+    @try {
+        @autoreleasepool {
+            NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
+            if (clipboard_access_behavior(pasteboard) != 2) return 4;
+            NSString *type = format ? [NSString stringWithUTF8String:format] : nil;
+            if (!type) return 0;
+            NSData *data = [pasteboard dataForType:type];
+            if (clipboard_access_behavior(pasteboard) != 2) return 4;
+            if (!data) return 0;
+            return data.length > capacity ? 3 : 1;
+        }
+    } @catch (NSException *exception) { return 0; }
 }

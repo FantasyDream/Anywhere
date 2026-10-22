@@ -10,8 +10,11 @@
 //! [`ActionBundle`]: bundle::ActionBundle
 pub mod availability;
 pub mod bundle;
+pub mod capabilities;
 pub mod descriptor;
 pub mod execute;
 pub mod group;
 pub mod handler;
+pub mod identity;
 pub mod matcher;
+pub mod web_command;

@@ -8,3 +8,28 @@ xcrun clang -fobjc-arc -Wall -Wextra -Werror \
   crates/anywhere-platform/native/tests/macos_menu_test.m \
   -framework AppKit -framework ApplicationServices -o "$MENU_TEST_DIR/menu-test"
 "$MENU_TEST_DIR/menu-test"
+xcrun clang -fobjc-arc -Wall -Wextra -Werror -Wno-deprecated-declarations \
+  crates/anywhere-platform/native/tests/macos_clipboard_test.m \
+  -framework AppKit -o "$MENU_TEST_DIR/clipboard-test"
+"$MENU_TEST_DIR/clipboard-test"
+xcrun clang -fobjc-arc -Wall -Wextra -Werror -Wno-deprecated-declarations \
+  -DANYWHERE_TEST_LEGACY_SDK \
+  crates/anywhere-platform/native/tests/macos_clipboard_test.m \
+  -framework AppKit -o "$MENU_TEST_DIR/clipboard-legacy-test"
+"$MENU_TEST_DIR/clipboard-legacy-test"
+xcrun clang -fobjc-arc -Wall -Wextra -Werror -Wno-deprecated-declarations \
+  crates/anywhere-platform/native/tests/macos_identity_test.m \
+  -framework AppKit -o "$MENU_TEST_DIR/identity-test"
+"$MENU_TEST_DIR/identity-test"
+xcrun clang -fobjc-arc -Wall -Wextra -Werror -Wno-deprecated-declarations \
+  crates/anywhere-platform/native/tests/macos_application_launch_test.m \
+  -framework AppKit -o "$MENU_TEST_DIR/application-launch-test"
+"$MENU_TEST_DIR/application-launch-test"
+for variant in modern legacy; do
+  APPLICATION_NAME_FLAGS=(-fobjc-arc -Wall -Wextra -Werror -Wno-deprecated-declarations)
+  if [[ "$variant" == legacy ]]; then APPLICATION_NAME_FLAGS+=(-DANYWHERE_TEST_LEGACY_SDK); fi
+  xcrun clang "${APPLICATION_NAME_FLAGS[@]}" \
+    crates/anywhere-platform/native/tests/macos_application_names_test.m \
+    -framework AppKit -o "$MENU_TEST_DIR/application-names-$variant-test"
+  "$MENU_TEST_DIR/application-names-$variant-test"
+done

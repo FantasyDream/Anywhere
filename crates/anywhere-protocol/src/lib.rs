@@ -1,4 +1,11 @@
 //! Stable, serializable boundary types. No UI or OS dependencies.
+pub mod extension;
+pub mod policy;
+pub mod ui;
+pub mod web_bridge;
+pub mod web_plugin;
+/// Host tool execution target; never a captured user object or a UI Scope.
+pub const LAUNCHER_ENTRY_CONTEXT: &str = "core.launcher";
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -12,7 +19,56 @@ pub type ActionId = String;
 /// Identity of one row in the list: an action *or* an application, with its object.
 pub type CandidateId = String;
 pub type GroupId = String;
-pub type ScopeId = String;
+/// Stable semantic identity of a context, independent of snapshot row numbering.
+pub type ContextKey = String;
+/// A process lifetime, independent of Launcher SessionId and query Revision.
+pub type ExecutionSessionId = String;
+pub const PROJECT_RUST: &str = "project.rust";
+pub const PROJECT_MAVEN: &str = "project.maven";
+pub const PROJECT_GRADLE: &str = "project.gradle";
+pub const JAVA_SPRING_BOOT: &str = "java.spring_boot";
+pub const PROJECT_NODE: &str = "project.node";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ExecutionSessionStatus {
+    Running,
+    Stopping,
+    Succeeded,
+    Failed,
+    Stopped,
+}
+
+impl ExecutionSessionStatus {
+    pub fn is_active(self) -> bool {
+        matches!(self, Self::Running | Self::Stopping)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExecutionSessionSummary {
+    pub id: ExecutionSessionId,
+    pub title: String,
+    pub directory: String,
+    pub command: Vec<String>,
+    pub status: ExecutionSessionStatus,
+    pub exit_code: Option<i32>,
+    pub started_at_ms: i64,
+    pub finished_at_ms: Option<i64>,
+    /// Advances when either output stream changes, including a full rolling tail.
+    #[serde(default)]
+    pub output_revision: i64,
+    pub output_truncated: bool,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ExecutionSessionDetail {
+    pub summary: ExecutionSessionSummary,
+    /// Each stream is independently bounded. Cross-stream ordering is not promised.
+    pub stdout: String,
+    pub stderr: String,
+}
 
 pub const TEXT: &str = "core.text";
 pub const URL: &str = "core.url";
@@ -21,6 +77,7 @@ pub const JSON_DOCUMENT: &str = "json.document";
 /// Legacy V0.1 JSON context type. Normalized to `json.document` at the registry boundary.
 pub const JSON_LEGACY: &str = "core.json";
 pub const FILE: &str = "core.file";
+pub const FILE_SELECTION: &str = "core.file_selection";
 pub const DIRECTORY: &str = "core.directory";
 pub const APPLICATION: &str = "core.application";
 pub const GIT_REPOSITORY: &str = "git.repository";
@@ -44,6 +101,10 @@ pub enum ContextSource {
     UserInput,
     ForegroundApplication,
     ApplicationContext,
+    FinderSelection,
+    SelectedText,
+    BrowserCurrentPage,
+    Clipboard,
 }
 
 /// Open type identifier + transport value. New types don't change this protocol.
@@ -70,6 +131,52 @@ pub struct ContextPresentation {
     pub label: String,
     pub detail: String,
     pub source: ContextSource,
+    pub key: ContextKey,
+    pub root_key: ContextKey,
+    pub icon_key: String,
+    pub capabilities: Vec<String>,
+    pub candidate_ids: Vec<CandidateId>,
+    pub primary_candidate_id: Option<CandidateId>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ContextCaptureStatus {
+    Captured,
+    Empty,
+    PermissionDenied,
+    Unsupported,
+    ApplicationChanged,
+    TimedOut,
+    TooLarge,
+    TooManyItems,
+    Unavailable,
+    Failed,
+}
+
+/// How a revision obtains Context, independently of Scope filtering.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum InputMode {
+    /// Full activation graph for explicit global action resolution.
+    #[default]
+    CapturedEnvironment,
+    Environment,
+    Content,
+    Search,
+    /// Dedicated file workspace; no captured Context or application candidates.
+    FileSearch,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContextCapturePresentation {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    /// Age of this exact clipboard snapshot at capture, not time of reading it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub clipboard_age_ms: Option<u64>,
+    pub source: ContextSource,
+    pub status: ContextCaptureStatus,
+    pub captured_at_ms: i64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -78,13 +185,27 @@ pub struct IconDescriptor {
     pub key: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FileObjectKind {
+    File,
+    Directory,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CandidatePresentation {
     pub id: CandidateId,
     pub kind: CandidateKind,
+    #[serde(default)]
+    pub is_menu: bool,
+    #[serde(default)]
+    pub file_kind: Option<FileObjectKind>,
     pub title: String,
+    /// Optional source-supplied labels. The host chooses a language for display only.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub localized_titles: BTreeMap<String, String>,
     pub subtitle: Option<String>,
     #[serde(default)]
+    /// Display-only shortcut reported by the source application; never a user binding.
     pub shortcut: Option<String>,
     pub icon: IconDescriptor,
     pub score: f32,
@@ -94,8 +215,30 @@ pub struct CandidatePresentation {
     pub command_id: Option<ActionId>,
     /// Bundle identity of an application launch candidate.
     pub bundle_id: Option<String>,
-    /// App that owns an action exclusively (Current App scope); `None` for generic actions.
+    /// App provenance for an action; generic actions can also appear in Current App.
     pub owning_app: Option<String>,
+    /// Menu ancestors. Empty when the title is the whole label.
+    #[serde(default)]
+    pub menu_path: Vec<String>,
+    /// Context roots that expose this offer. Canonical duplicate targets union membership.
+    #[serde(default)]
+    pub context_keys: Vec<ContextKey>,
+    /// Actual graph node used for execution; may be a capability derived from the root.
+    pub execution_context_id: Option<ContextId>,
+    pub execution_target_label: Option<String>,
+    /// Whether this candidate may be recommended directly on an empty-query home.
+    #[serde(default = "default_true")]
+    pub home_eligible: bool,
+    /// The default operation when Enter is pressed on its context.
+    #[serde(default)]
+    pub primary_action: bool,
+    /// Core-provided visual section within the context action panel.
+    #[serde(default)]
+    pub section_label: Option<String>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -103,6 +246,7 @@ pub struct CandidatePresentation {
 pub enum CandidateKind {
     Application,
     Action,
+    File,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -146,21 +290,68 @@ impl Availability {
     }
 }
 
-/// Scope bar entry. Current App is first when it has visible actions; there is no All row.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ScopeEntry {
-    pub id: ScopeId,
-    pub kind: ScopeKind,
-    pub label: String,
-    /// Candidates of this scope in ranked order, after availability and filtering.
-    pub candidate_ids: Vec<CandidateId>,
+/// Query boundary. The current application's entry includes all actions;
+/// other entries filter a domain group independently of Context types.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum Scope {
+    #[default]
+    Universal,
+    Group(GroupId),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ScopeKind {
-    App,
-    Group,
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ScopeEntry {
+    pub id: GroupId,
+    pub label: String,
+    pub is_current_app: bool,
+    #[serde(default)]
+    pub action_ids: Vec<CandidateId>,
+    #[serde(default)]
+    pub menu_ids: Vec<CandidateId>,
+}
+
+impl ScopeEntry {
+    pub fn contains(&self, candidate: &CandidatePresentation) -> bool {
+        candidate.kind == CandidateKind::Action
+            && candidate.availability.is_visible()
+            && (self.is_current_app || candidate.group_id == self.id)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SearchSourceState {
+    Loading,
+    Ready,
+    Unavailable,
+    Partial,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchSourcePresentation {
+    pub id: String,
+    pub state: SearchSourceState,
+}
+
+mod file_filter;
+pub use file_filter::FileSearchFilter;
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileSearchProgress {
+    pub query_id: u64,
+    #[serde(default)]
+    pub roots: Vec<String>,
+    pub scanned_entries: u64,
+    pub confirmed_matches: u64,
+    pub finished: bool,
+    pub issue_count: u64,
+    #[serde(default)]
+    pub inaccessible_count: u64,
+    pub issue_examples: Vec<String>,
+    pub next_cursor: Option<String>,
+    pub previous_cursor: Option<String>,
+    pub page: u32,
+    pub needs_refresh: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -174,46 +365,108 @@ pub struct LauncherState {
     /// True once the context graph for this revision has no pending work.
     #[serde(default)]
     pub context_complete: bool,
+    #[serde(default)]
+    pub search_sources: Vec<SearchSourcePresentation>,
+    #[serde(default)]
+    pub file_search: Option<Box<FileSearchProgress>>,
+    #[serde(default)]
+    pub result_actions: Vec<CandidatePresentation>,
     pub context_summary: Vec<ContextPresentation>,
-    pub candidates: Vec<CandidatePresentation>,
+    #[serde(default)]
+    pub context_candidates: Vec<CandidatePresentation>,
+    pub preferred_context_key: Option<ContextKey>,
+    #[serde(default)]
     pub scopes: Vec<ScopeEntry>,
+    pub selected_scope: Option<GroupId>,
+    #[serde(default)]
+    pub context_captures: Vec<ContextCapturePresentation>,
+    pub candidates: std::sync::Arc<Vec<CandidatePresentation>>,
+    /// Stable across append/progress; changes when the object list is replaced.
+    #[serde(default)]
+    pub candidate_list_version: u32,
     pub diagnostics: Vec<String>,
 }
 
 impl LauncherState {
     pub fn candidate(&self, id: &str) -> Option<&CandidatePresentation> {
-        self.candidates.iter().find(|candidate| candidate.id == id)
-    }
-    /// Candidate ids of a scope, or every visible candidate when the scope is unknown.
-    pub fn scope_candidate_ids(&self, scope_id: &str) -> Vec<&CandidatePresentation> {
-        let ids = self
-            .scopes
+        self.candidates
             .iter()
-            .find(|scope| scope.id == scope_id)
-            .map(|scope| scope.candidate_ids.as_slice());
-        match ids {
-            Some(ids) => ids
-                .iter()
-                .filter_map(|id| self.candidate(id))
-                .filter(|candidate| candidate.availability.is_visible())
-                .collect(),
-            None => self
+            .chain(&self.context_candidates)
+            .find(|candidate| candidate.id == id)
+    }
+    /// Missing groups remain empty; they never widen to Universal.
+    pub fn scoped_candidates(&self, scope: &Scope) -> Vec<&CandidatePresentation> {
+        match scope {
+            Scope::Universal => self
                 .candidates
                 .iter()
                 .filter(|candidate| candidate.availability.is_visible())
                 .collect(),
+            Scope::Group(key) => match self.scopes.iter().find(|entry| entry.id == *key) {
+                Some(entry) => self
+                    .context_candidates
+                    .iter()
+                    .filter(|candidate| entry.contains(candidate))
+                    .collect(),
+                None => Vec::new(),
+            },
         }
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ActionStatus {
+    Succeeded,
+    Failed,
+}
+
+/// Host-rendered destinations requested by a successfully executed Action.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum HostView {
+    FileSearch,
+    NativeTool {
+        id: String,
+        input: String,
+    },
+    PluginDetail {
+        detail: ui::DetailView,
+    },
+    /// Opaque Host-issued ticket. Not a resource URL or a page-supplied plugin identity.
+    WebPlugin {
+        invocation_id: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ActionResult {
     pub session_id: SessionId,
     pub revision: Revision,
-    pub success: bool,
-    pub message: String,
+    pub status: ActionStatus,
+    /// Present when the action itself failed.
+    pub error: Option<String>,
+    /// Present when the action succeeded but a follow-up step did not.
+    pub warning: Option<String>,
     pub output_text: Option<String>,
+    #[serde(default)]
+    pub view: Option<HostView>,
     pub close_window: bool,
+    #[serde(default)]
+    pub execution_session_id: Option<ExecutionSessionId>,
+}
+
+impl ActionResult {
+    pub fn succeeded(&self) -> bool {
+        self.status == ActionStatus::Succeeded
+    }
+
+    pub fn notice(&self) -> &str {
+        self.error
+            .as_deref()
+            .or(self.warning.as_deref())
+            .unwrap_or("")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -227,6 +480,10 @@ pub struct PluginManifest {
     pub protocol_version: u32,
     pub id: String,
     pub name: String,
+    #[serde(default)]
+    pub version: Option<String>,
+    #[serde(default)]
+    pub capabilities: Vec<extension::ExtensionCapability>,
     pub commands: Vec<PluginCommand>,
 }
 
@@ -255,6 +512,7 @@ pub enum DeclarativeAction {
     OpenFile { path: String },
     Copy { text: String },
     ExecuteBuiltin { command_id: ActionId },
+    RenderDetail { view: ui::DetailView },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -327,6 +585,48 @@ mod tests {
     }
 
     #[test]
+    fn capture_status_round_trips_and_old_states_default_to_empty() {
+        for status in [
+            ContextCaptureStatus::Unsupported,
+            ContextCaptureStatus::ApplicationChanged,
+            ContextCaptureStatus::TimedOut,
+            ContextCaptureStatus::TooLarge,
+            ContextCaptureStatus::TooManyItems,
+        ] {
+            let encoded = serde_json::to_value(status).unwrap();
+            assert_eq!(
+                serde_json::from_value::<ContextCaptureStatus>(encoded).unwrap(),
+                status
+            );
+        }
+        let state = LauncherState {
+            context_captures: vec![ContextCapturePresentation {
+                source: ContextSource::SelectedText,
+                status: ContextCaptureStatus::PermissionDenied,
+                captured_at_ms: 42,
+                text: None,
+                clipboard_age_ms: None,
+            }],
+            ..Default::default()
+        };
+        let encoded = serde_json::to_value(&state).unwrap();
+        assert_eq!(
+            encoded["context_captures"][0]["status"],
+            "permission_denied"
+        );
+        assert_eq!(
+            serde_json::from_value::<LauncherState>(encoded.clone()).unwrap(),
+            state
+        );
+        let mut previous = encoded;
+        previous.as_object_mut().unwrap().remove("context_captures");
+        assert!(serde_json::from_value::<LauncherState>(previous)
+            .unwrap()
+            .context_captures
+            .is_empty());
+    }
+
+    #[test]
     fn v0_1_plugin_manifest_still_parses_without_v0_2_metadata() {
         // Mirrors plugins/examples/google.toml: no group_id, aliases or keywords.
         let v0_1 = r#"
@@ -348,13 +648,16 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
     }
 
     #[test]
-    fn scope_lookup_falls_back_to_every_visible_candidate() {
+    fn scope_lookup_hides_unavailable_and_missing_context_does_not_widen() {
         let state = LauncherState {
             session_id: 1,
             candidates: vec![
                 CandidatePresentation {
+                    localized_titles: Default::default(),
                     id: "action:core.directory.copy:c1".into(),
                     kind: CandidateKind::Action,
+                    is_menu: false,
+                    file_kind: None,
                     title: "Copy Path".into(),
                     subtitle: None,
                     shortcut: None,
@@ -365,10 +668,20 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
                     command_id: Some("core.directory.copy".into()),
                     bundle_id: None,
                     owning_app: None,
+                    menu_path: Vec::new(),
+                    context_keys: Vec::new(),
+                    execution_context_id: None,
+                    execution_target_label: None,
+                    home_eligible: true,
+                    primary_action: false,
+                    section_label: None,
                 },
                 CandidatePresentation {
+                    localized_titles: Default::default(),
                     id: "app:com.google.Chrome".into(),
                     kind: CandidateKind::Application,
+                    is_menu: false,
+                    file_kind: None,
                     title: "Google Chrome".into(),
                     subtitle: None,
                     shortcut: None,
@@ -381,14 +694,93 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
                     command_id: None,
                     bundle_id: Some("com.google.Chrome".into()),
                     owning_app: None,
+                    menu_path: Vec::new(),
+                    context_keys: Vec::new(),
+                    execution_context_id: None,
+                    execution_target_label: None,
+                    home_eligible: true,
+                    primary_action: true,
+                    section_label: None,
+                },
+            ]
+            .into(),
+            ..Default::default()
+        };
+        let visible = state.scoped_candidates(&Scope::Universal);
+        assert_eq!(visible.len(), 1);
+        assert!(state
+            .scoped_candidates(&Scope::Group("missing".into()))
+            .is_empty());
+        assert_eq!(visible[0].id, "app:com.google.Chrome");
+        assert!(state.candidate("app:com.google.Chrome").is_some());
+        assert!(state.candidate("missing").is_none());
+    }
+
+    #[test]
+    fn current_app_membership_includes_domains_and_disabled_actions_only() {
+        let hidden = CandidatePresentation {
+            localized_titles: Default::default(),
+            id: "hidden".into(),
+            kind: CandidateKind::Action,
+            is_menu: false,
+            file_kind: None,
+            title: "Copy Path".into(),
+            subtitle: None,
+            shortcut: None,
+            icon: IconDescriptor { key: "copy".into() },
+            score: 1.0,
+            group_id: "folder".into(),
+            availability: Availability::hidden(),
+            command_id: Some("core.directory.copy".into()),
+            bundle_id: None,
+            owning_app: None,
+            menu_path: Vec::new(),
+            context_keys: Vec::new(),
+            execution_context_id: None,
+            execution_target_label: None,
+            home_eligible: true,
+            primary_action: false,
+            section_label: None,
+        };
+        let mut folder = hidden.clone();
+        folder.id = "folder-action".into();
+        folder.availability = Availability::enabled();
+        let mut git = folder.clone();
+        git.id = "git-action".into();
+        git.group_id = "git".into();
+        git.availability = Availability::disabled("Git unavailable");
+        let mut application = folder.clone();
+        application.id = "application".into();
+        application.kind = CandidateKind::Application;
+        let state = LauncherState {
+            context_candidates: vec![hidden, folder, git, application],
+            scopes: vec![
+                ScopeEntry {
+                    id: "app.finder".into(),
+                    label: "Finder".into(),
+                    is_current_app: true,
+                    action_ids: Vec::new(),
+                    menu_ids: Vec::new(),
+                },
+                ScopeEntry {
+                    id: "folder".into(),
+                    label: "Folder".into(),
+                    is_current_app: false,
+                    action_ids: Vec::new(),
+                    menu_ids: Vec::new(),
                 },
             ],
             ..Default::default()
         };
-        let visible = state.scope_candidate_ids("unknown");
-        assert_eq!(visible.len(), 1);
-        assert_eq!(visible[0].id, "app:com.google.Chrome");
-        assert!(state.candidate("app:com.google.Chrome").is_some());
-        assert!(state.candidate("missing").is_none());
+        let ids = |scope: &str| {
+            state
+                .scoped_candidates(&Scope::Group(scope.into()))
+                .iter()
+                .map(|action| action.id.as_str())
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(ids("app.finder"), ["folder-action", "git-action"]);
+        assert_eq!(ids("folder"), ["folder-action"]);
+        assert!(ids("app.other").is_empty());
     }
 }

@@ -1,4 +1,4 @@
-//! Repeatable local CPU timings for the V0.2 hot path.
+//! Repeatable local CPU timings for input recognition, matching and ranking.
 //!
 //! Reports the three phases of a candidate build separately — action matching, application
 //! matching and ranking — because the first two are matching work and only the third is
@@ -8,10 +8,14 @@
 //! Finder Automation, FFI, window rendering and RSS are not measurable here; use
 //! `launcher.log` and the manual validation checklist for those.
 use anywhere_core::{
-    core::ranking::usage::UsageStats, core::search::candidate_source::CandidateSource,
-    core::search::engine::ActionSearch, core::search::query::Query,
-    core::session::facts::SessionFacts, features::applications::index::IndexedApplication,
-    features::applications::source::ApplicationSource, features::git::provider::repository_root,
+    core::ranking::usage::UsageStats,
+    core::search::candidate_source::CandidateSource,
+    core::search::engine::ActionSearch,
+    core::search::query::{Query, SearchFields},
+    core::session::facts::SessionFacts,
+    features::applications::index::IndexedApplication,
+    features::applications::source::ApplicationSource,
+    features::git::provider::repository_root,
     features::recognized_contexts,
 };
 use std::time::Instant;
@@ -28,25 +32,35 @@ fn percentiles(mut samples: Vec<u128>) -> (f64, f64) {
 
 fn synthetic_catalog(count: usize) -> Vec<IndexedApplication> {
     (0..count)
-        .map(|index| IndexedApplication {
-            bundle_id: format!("com.example.application{index}"),
-            name: format!("Example Application {index}"),
-            path: format!("/Applications/Example Application {index}.app"),
-            aliases: vec![format!("app{index}")],
-            keywords: vec!["example".into()],
+        .map(|index| {
+            IndexedApplication {
+                bundle_id: format!("com.example.application{index}"),
+                name: format!("Example Application {index}"),
+                path: format!("/Applications/Example Application {index}.app"),
+                aliases: vec![format!("app{index}")],
+                keywords: vec!["example".into()],
+                ..Default::default()
+            }
+            .prepared()
         })
         .collect()
 }
 
 fn main() {
-    let registry = anywhere_core::application::composition::builtin_registry();
+    let registry = anywhere_core::application::builtin_registry();
     let catalog = synthetic_catalog(1000);
     let empty_usage = |_: &str, _: &str| UsageStats::default();
     let facts = SessionFacts::default().with(
         anywhere_core::core::session::facts::GIT,
         anywhere_core::core::session::facts::FactValue::Flag(true),
     );
-    let search = ActionSearch::new(&registry, &empty_usage, &facts, 1000);
+    let search = ActionSearch::new(
+        &registry,
+        &empty_usage,
+        &facts,
+        1000,
+        anywhere_core::features::context_semantic,
+    );
     // The application index is a candidate source, exactly as it is in the launcher.
     let application_source = ApplicationSource {
         applications: &catalog,
@@ -102,6 +116,29 @@ fn main() {
              applications p50={apps_p50:.3}ms p95={apps_p95:.3}ms; \
              ranking p50={ranking_p50:.3}ms p95={ranking_p95:.3}ms"
         );
+    }
+
+    // Isolate the additional Chinese-name fallback; the ASCII catalog above
+    // keeps the comparable pre-existing measurement unchanged.
+    let names: Vec<_> = (0..1000)
+        .map(|i| SearchFields::new(&format!("重庆开发工具 {i}"), &[], &[]))
+        .collect();
+    for input in ["chongqingkaifa", "cqkfgj", "not-present"] {
+        let query = Query::parse(input);
+        let mut samples = Vec::new();
+        for index in 0..220 {
+            let started = Instant::now();
+            let count = names
+                .iter()
+                .filter(|name| name.matched(std::hint::black_box(&query)).is_some())
+                .count();
+            std::hint::black_box(count);
+            if index >= 20 {
+                samples.push(started.elapsed().as_nanos());
+            }
+        }
+        let (p50, p95) = percentiles(samples);
+        println!("pinyin {input:?}: 1000 Chinese names p50={p50:.3}ms p95={p95:.3}ms");
     }
 
     // Repository detection is metadata-only and must stay off the Git hot path.

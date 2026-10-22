@@ -9,11 +9,68 @@ use std::time::Instant;
 use tracing::Instrument;
 
 impl Application {
-    pub(super) async fn update_query_use_case(
+    pub async fn update_scoped_input(
         &self,
         session_id: SessionId,
         input: String,
         revision: Revision,
+        selected_scope: Option<GroupId>,
+    ) -> Result<Option<LauncherState>> {
+        self.update_context_input(
+            session_id,
+            input,
+            revision,
+            selected_scope,
+            InputMode::CapturedEnvironment,
+        )
+        .await
+    }
+
+    pub async fn update_context_input(
+        &self,
+        session_id: SessionId,
+        input: String,
+        revision: Revision,
+        selected_scope: Option<GroupId>,
+        input_mode: InputMode,
+    ) -> Result<Option<LauncherState>> {
+        self.update_input_request(
+            session_id,
+            input,
+            revision,
+            selected_scope,
+            input_mode,
+            FileSearchFilter::All,
+        )
+        .await
+    }
+
+    pub async fn update_file_search_input(
+        &self,
+        session_id: SessionId,
+        input: String,
+        revision: Revision,
+        filter: FileSearchFilter,
+    ) -> Result<Option<LauncherState>> {
+        self.update_input_request(
+            session_id,
+            input,
+            revision,
+            None,
+            InputMode::FileSearch,
+            filter,
+        )
+        .await
+    }
+
+    async fn update_input_request(
+        &self,
+        session_id: SessionId,
+        input: String,
+        revision: Revision,
+        selected_scope: Option<GroupId>,
+        input_mode: InputMode,
+        filter: FileSearchFilter,
     ) -> Result<Option<LauncherState>> {
         if input.len() > MAX_INPUT_BYTES {
             bail!("input exceeds 1 MiB");
@@ -23,29 +80,26 @@ impl Application {
             let mut session = self.session()?;
             if session.state.session_id != session_id
                 || revision <= session.state.revision
-                || self
-                    .resolver
-                    .current
-                    .load(std::sync::atomic::Ordering::Acquire)
-                    == 0
+                || self.resolver.is_abandoned()
             {
                 return Ok(None);
             }
-            // A superseded request never publishes again.
-            session.state.revision = revision;
-            session.state.input = input.clone();
-            session.state.context_complete = false;
-            session.committed_revision = None;
-            session.snapshot_seq = 0;
-            session.published_contexts = 0;
-            self.resolver.current.store(
-                crate::core::context::engine::stamp(session_id, revision),
-                std::sync::atomic::Ordering::Release,
-            );
-            // Build seeds from the guard we already hold; `seeds_for` would deadlock here.
+            self.file_search_source.clear();
+            session.file_filter = filter;
+            session.input_mode = input_mode;
+            session.begin_revision(revision, input.clone());
+            session.state.selected_scope = selected_scope.clone();
+            self.resolver.mark_current(session_id, revision);
             crate::application::session_runtime::seeds_from(&session, &input)
         };
         tracing::info!("input_revision_changed");
+        self.spawn_search_sources(
+            session_id,
+            revision,
+            &input,
+            selected_scope.as_deref(),
+            input_mode,
+        );
         tracing::info!(
             session_id,
             revision,
@@ -55,26 +109,16 @@ impl Application {
         );
         let execution_context = self.resolver.execution(session_id, revision);
         let run = self.resolver.build_run(&execution_context, execution);
-        let state = async {
-            let Some(resolution) = self
-                .resolver
-                .resolve_until_with_grace(session_id, run, self.budget, self.content_grace, start)
-                .await
-            else {
-                return Ok(None);
-            };
-            let complete_by_budget = resolution.complete;
-            let late_run = resolution.run;
-            let mut diagnostics = self.startup_diagnostics.clone();
-            diagnostics.extend(resolution.diagnostics);
-            let committed = self.resolver.commit(
-                session_id,
-                revision,
-                resolution.contexts,
-                diagnostics.clone(),
-                complete_by_budget,
-                start,
-            )?;
+        async {
+            let committed = self
+                .publish_resolution(
+                    session_id,
+                    revision,
+                    run,
+                    start,
+                    self.startup_diagnostics.clone(),
+                )
+                .await?;
             if committed.is_some() {
                 tracing::info!(
                     session_id,
@@ -83,13 +127,28 @@ impl Application {
                     "input_actions_ready"
                 );
             }
-            if !complete_by_budget {
-                self.spawn_completion(session_id, revision, late_run, start, diagnostics);
-            }
             Ok(committed)
         }
         .instrument(tracing::info_span!("update_input", session_id, revision))
-        .await;
-        state
+        .await
+    }
+}
+
+impl Application {
+    pub(super) async fn update_query_use_case(
+        &self,
+        session_id: SessionId,
+        input: String,
+        revision: Revision,
+        selected_scope: Option<GroupId>,
+    ) -> Result<Option<LauncherState>> {
+        self.update_context_input(
+            session_id,
+            input,
+            revision,
+            selected_scope,
+            InputMode::CapturedEnvironment,
+        )
+        .await
     }
 }
