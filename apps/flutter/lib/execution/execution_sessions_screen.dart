@@ -88,7 +88,8 @@ class _ExecutionSessionsAppState extends State<ExecutionSessionsApp> {
     try {
       await widget.channel.invokeMethod<void>(method);
     } catch (_) {
-      controller.reportError('The window could not be changed. Try again.');
+      if (!mounted) return;
+      controller.reportError(context.l10n.theWindowCouldNotBeChangedTry);
     }
   }
 }

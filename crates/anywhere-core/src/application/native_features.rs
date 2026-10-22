@@ -90,6 +90,7 @@ impl BuiltinCatalog {
                     active: enabled && error.is_none(),
                     needs_approval: false,
                     configurable: policy.is_configurable(),
+                    restart_required: false,
                     capabilities: descriptor
                         .capabilities
                         .iter()

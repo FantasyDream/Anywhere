@@ -18,6 +18,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var window: LauncherWindow!
     var controller: FlutterViewController!
     private var localeHost: LocaleHost?
+    private var localeObservers: [NSObjectProtocol] = []
     private var webToolsChannel: FlutterMethodChannel?
     private var webToolsActive = false
     private let webPackagePicker = WebPackagePicker()
@@ -52,7 +53,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     var launcherGlassMask: NSImage?
     lazy var taskWindows = TasksWindowController(onLauncher: { [weak self] in self?.activate(mode: "universal") })
     lazy var clipboardWindow = ToolWindowController(entrypoint: "clipboardShelfMain",
-        channelName: "anywhere/clipboard-shelf", title: "Anywhere · Clipboard Shelf")
+        channelName: "anywhere/clipboard-shelf", title: "Anywhere · \(NativeLocalization.text(.clipboardShelf))")
     var tasksWindow: NSWindow? { taskWindows.tasksWindow }
     var tasksChannel: FlutterMethodChannel? { taskWindows.tasksChannel }
     var tasksReady: Bool { taskWindows.tasksReady }
@@ -371,6 +372,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             }
         }
         installMenu()
+        for name in [LocaleHost.changed, NSLocale.currentLocaleDidChangeNotification] {
+            localeObservers.append(NotificationCenter.default.addObserver(forName: name,
+                object: nil, queue: .main) { [weak self] _ in
+                    guard let self else { return }
+                    self.installMenu()
+                    self.updateMenuTitles(self.stored)
+                    self.settingsWindow?.title = "Anywhere · \(NativeLocalization.text(.settings))"
+                    self.tasksWindow?.title = "Anywhere · \(NativeLocalization.text(.runningTasks))"
+                })
+        }
         // AppKit can route ⌘. as cancelOperation before key-equivalent menus.
         // Its characters may already be Escape, so match the period key code.
         // Shortcut recording consumes Settings keys only while explicitly requested.
@@ -520,8 +531,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     func applyHotKeys(_ settings: StoredSettings) -> String? { hotKeys.apply(settings) }
 
     func updateMenuTitles(_ settings: StoredSettings) {
-        currentAppItem?.title = "Current App  \(settings.shortcutLabel(code: settings.currentAppKeyCode, modifiers: settings.currentAppModifiers))"
-        universalItem?.title = "Universal Search  \(settings.shortcutLabel(code: settings.universalKeyCode, modifiers: settings.universalModifiers))"
+        currentAppItem?.title = "\(NativeLocalization.text(.currentApp))  \(settings.shortcutLabel(code: settings.currentAppKeyCode, modifiers: settings.currentAppModifiers))"
+        universalItem?.title = "\(NativeLocalization.text(.universalSearch))  \(settings.shortcutLabel(code: settings.universalKeyCode, modifiers: settings.universalModifiers))"
     }
 
     func applyLoginItem() -> String? {
@@ -618,26 +629,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
 
     func installMenu() {
+        if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "sparkle.magnifyingglass", accessibilityDescription: "Anywhere")
+        statusItem.button?.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: "Anywhere")?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 15, weight: .semibold))
         let menu = NSMenu()
-        let current = NSMenuItem(title: "Current App", action: #selector(activateCurrentApp), keyEquivalent: "")
+        let current = NSMenuItem(title: NativeLocalization.text(.currentApp), action: #selector(activateCurrentApp), keyEquivalent: "")
         current.target = self
         currentAppItem = current
         menu.addItem(current)
-        let universal = NSMenuItem(title: "Universal Search", action: #selector(activateUniversal), keyEquivalent: "")
+        let universal = NSMenuItem(title: NativeLocalization.text(.universalSearch), action: #selector(activateUniversal), keyEquivalent: "")
         universal.target = self
         universalItem = universal
         menu.addItem(universal)
-        let tasks = NSMenuItem(title: "Running Tasks…", action: #selector(openTasks), keyEquivalent: "")
+        let tasks = NSMenuItem(title: NativeLocalization.text(.runningTasksMenu), action: #selector(openTasks), keyEquivalent: "")
         tasks.target = self
         menu.addItem(tasks)
         menu.addItem(.separator())
-        let settingsItem = NSMenuItem(title: "Settings…", action: #selector(openSettings), keyEquivalent: ",")
+        let settingsItem = NSMenuItem(title: NativeLocalization.text(.settingsMenu), action: #selector(openSettings), keyEquivalent: ",")
         settingsItem.target = self
         menu.addItem(settingsItem)
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Quit Anywhere", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quit = NSMenuItem(title: NativeLocalization.text(.quitAnywhere), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
         menu.addItem(quit)
         statusItem.menu = menu
@@ -647,19 +660,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         let appItem = NSMenuItem()
         main.addItem(appItem)
         appItem.submenu = menu.copy() as? NSMenu
-        let editItem = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
-        editItem.submenu = editMenu.makeMenu()
+        let editItem = NSMenuItem(title: NativeLocalization.text(.edit), action: nil, keyEquivalent: "")
+        editItem.submenu = editMenu.makeMenu(title: NativeLocalization.text(.edit), labels: [NativeText.undo, .redo, .cut, .copy, .paste, .selectAll].map { NativeLocalization.text($0) })
         main.addItem(editItem)
         // Expose task commands through macOS menus. The local monitor reserves ⌘.;
         // Flutter owns Escape's clear-filter / hide logic.
-        let taskItem = NSMenuItem(title: "Tasks", action: nil, keyEquivalent: "")
-        let taskMenu = NSMenu(title: "Tasks")
+        let taskItem = NSMenuItem(title: NativeLocalization.text(.tasks), action: nil, keyEquivalent: "")
+        let taskMenu = NSMenu(title: NativeLocalization.text(.tasks))
         for (title, action, key) in [
-            ("Find Task…", #selector(findTask), "f"),
-            ("Stop Selected Task", #selector(stopTask), "."),
-            ("Refresh Tasks", #selector(refreshTasks), "r"),
-            ("Open Launcher", #selector(taskLauncher), "l"),
-            ("Close Task Window", #selector(hideTasks), "")
+            (NativeLocalization.text(.findTaskMenu), #selector(findTask), "f"),
+            (NativeLocalization.text(.stopSelectedTask), #selector(stopTask), "."),
+            (NativeLocalization.text(.refreshTasks), #selector(refreshTasks), "r"),
+            (NativeLocalization.text(.openLauncher), #selector(taskLauncher), "l"),
+            (NativeLocalization.text(.closeTaskWindow), #selector(hideTasks), "")
         ] {
             let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
             item.target = self
@@ -667,12 +680,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         }
         taskItem.submenu = taskMenu
         main.addItem(taskItem)
-        let windowItem = NSMenuItem(title: "Window", action: nil, keyEquivalent: "")
-        let windowMenu = NSMenu(title: "Window")
+        let windowItem = NSMenuItem(title: NativeLocalization.text(.window), action: nil, keyEquivalent: "")
+        let windowMenu = NSMenu(title: NativeLocalization.text(.window))
         for (title, action, key) in [
-            ("Close Window", #selector(closeActiveWindow), "w"),
-            ("Minimize", #selector(minimizeActiveWindow), "m"),
-            ("Zoom", #selector(zoomActiveWindow), "")
+            (NativeLocalization.text(.closeWindow), #selector(closeActiveWindow), "w"),
+            (NativeLocalization.text(.minimize), #selector(minimizeActiveWindow), "m"),
+            (NativeLocalization.text(.zoom), #selector(zoomActiveWindow), "")
         ] {
             let item = NSMenuItem(title: title, action: action, keyEquivalent: key)
             item.target = self
@@ -715,6 +728,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     func applicationWillTerminate(_ notification: Notification) {
         shortcutRecorder.cancel()
+        for observer in localeObservers { NotificationCenter.default.removeObserver(observer) }
+        localeObservers.removeAll()
         if let localKeyMonitor { NSEvent.removeMonitor(localKeyMonitor) }
         hotKeys.shutdown()
     }

@@ -33,6 +33,8 @@ pub struct ActionExpansion {
 pub struct ActionSpec {
     pub id: &'static str,
     pub title: &'static str,
+    /// Labels belong to the action's author; locale selection belongs to the host.
+    pub localized_titles: &'static [(&'static str, &'static str)],
     /// Legacy V0.1 type ids are normalized at registration time.
     pub accepts: &'static str,
     pub handler: &'static dyn ActionHandler,
@@ -59,6 +61,11 @@ impl ActionSpec {
             .map(|keyword| (*keyword).to_owned())
             .collect::<Vec<_>>();
         ActionDefinition {
+            localized_titles: self
+                .localized_titles
+                .iter()
+                .map(|(language, title)| ((*language).into(), (*title).into()))
+                .collect(),
             id: self.id.into(),
             title: self.title.into(),
             subtitle: None,

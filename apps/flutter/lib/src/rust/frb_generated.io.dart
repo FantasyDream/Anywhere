@@ -22,6 +22,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AnyhowException dco_decode_AnyhowException(dynamic raw);
 
   @protected
+  Map<String, String> dco_decode_Map_String_String_None(dynamic raw);
+
+  @protected
   String dco_decode_String(dynamic raw);
 
   @protected
@@ -47,6 +50,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ClipboardDetailDto dco_decode_box_autoadd_clipboard_detail_dto(dynamic raw);
+
+  @protected
+  ClipboardNoticeDto dco_decode_box_autoadd_clipboard_notice_dto(dynamic raw);
 
   @protected
   ExecutionSessionDetailDto dco_decode_box_autoadd_execution_session_detail_dto(
@@ -78,7 +84,13 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PluginDetailDto dco_decode_box_autoadd_plugin_detail_dto(dynamic raw);
 
   @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw);
+
+  @protected
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  WebConsentKindDto dco_decode_box_autoadd_web_consent_kind_dto(dynamic raw);
 
   @protected
   WebPluginLaunchDto dco_decode_box_autoadd_web_plugin_launch_dto(dynamic raw);
@@ -104,6 +116,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ClipboardItemDto dco_decode_clipboard_item_dto(dynamic raw);
+
+  @protected
+  ClipboardNoticeDto dco_decode_clipboard_notice_dto(dynamic raw);
 
   @protected
   ContextCaptureDto dco_decode_context_capture_dto(dynamic raw);
@@ -194,6 +209,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
+  List<(String, String)> dco_decode_list_record_string_string(dynamic raw);
+
+  @protected
   List<ScopeDto> dco_decode_list_scope_dto(dynamic raw);
 
   @protected
@@ -213,6 +231,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<WebPackageDto> dco_decode_list_web_package_dto(dynamic raw);
 
   @protected
+  List<WebPermissionDto> dco_decode_list_web_permission_dto(dynamic raw);
+
+  @protected
   NativeToolDto dco_decode_native_tool_dto(dynamic raw);
 
   @protected
@@ -224,6 +245,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ClipboardDetailDto? dco_decode_opt_box_autoadd_clipboard_detail_dto(
+      dynamic raw);
+
+  @protected
+  ClipboardNoticeDto? dco_decode_opt_box_autoadd_clipboard_notice_dto(
       dynamic raw);
 
   @protected
@@ -257,7 +282,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PluginDetailDto? dco_decode_opt_box_autoadd_plugin_detail_dto(dynamic raw);
 
   @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
+
+  @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
+
+  @protected
+  WebConsentKindDto? dco_decode_opt_box_autoadd_web_consent_kind_dto(
+      dynamic raw);
 
   @protected
   WebPluginLaunchDto? dco_decode_opt_box_autoadd_web_plugin_launch_dto(
@@ -274,6 +306,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PluginStatusDto dco_decode_plugin_status_dto(dynamic raw);
+
+  @protected
+  (String, String) dco_decode_record_string_string(dynamic raw);
 
   @protected
   ScopeDto dco_decode_scope_dto(dynamic raw);
@@ -312,10 +347,19 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void dco_decode_unit(dynamic raw);
 
   @protected
+  WebConsentKindDto dco_decode_web_consent_kind_dto(dynamic raw);
+
+  @protected
   WebDocumentDto dco_decode_web_document_dto(dynamic raw);
 
   @protected
   WebPackageDto dco_decode_web_package_dto(dynamic raw);
+
+  @protected
+  WebPermissionDto dco_decode_web_permission_dto(dynamic raw);
+
+  @protected
+  WebPermissionKindDto dco_decode_web_permission_kind_dto(dynamic raw);
 
   @protected
   WebPluginLaunchDto dco_decode_web_plugin_launch_dto(dynamic raw);
@@ -328,6 +372,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AnyhowException sse_decode_AnyhowException(SseDeserializer deserializer);
+
+  @protected
+  Map<String, String> sse_decode_Map_String_String_None(
+      SseDeserializer deserializer);
 
   @protected
   String sse_decode_String(SseDeserializer deserializer);
@@ -358,6 +406,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ClipboardDetailDto sse_decode_box_autoadd_clipboard_detail_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ClipboardNoticeDto sse_decode_box_autoadd_clipboard_notice_dto(
       SseDeserializer deserializer);
 
   @protected
@@ -395,7 +447,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  WebConsentKindDto sse_decode_box_autoadd_web_consent_kind_dto(
+      SseDeserializer deserializer);
 
   @protected
   WebPluginLaunchDto sse_decode_box_autoadd_web_plugin_launch_dto(
@@ -425,6 +484,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ClipboardItemDto sse_decode_clipboard_item_dto(SseDeserializer deserializer);
+
+  @protected
+  ClipboardNoticeDto sse_decode_clipboard_notice_dto(
+      SseDeserializer deserializer);
 
   @protected
   ContextCaptureDto sse_decode_context_capture_dto(
@@ -528,6 +591,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
+  List<(String, String)> sse_decode_list_record_string_string(
+      SseDeserializer deserializer);
+
+  @protected
   List<ScopeDto> sse_decode_list_scope_dto(SseDeserializer deserializer);
 
   @protected
@@ -551,6 +618,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  List<WebPermissionDto> sse_decode_list_web_permission_dto(
+      SseDeserializer deserializer);
+
+  @protected
   NativeToolDto sse_decode_native_tool_dto(SseDeserializer deserializer);
 
   @protected
@@ -562,6 +633,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ClipboardDetailDto? sse_decode_opt_box_autoadd_clipboard_detail_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ClipboardNoticeDto? sse_decode_opt_box_autoadd_clipboard_notice_dto(
       SseDeserializer deserializer);
 
   @protected
@@ -600,7 +675,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
+
+  @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
+
+  @protected
+  WebConsentKindDto? sse_decode_opt_box_autoadd_web_consent_kind_dto(
+      SseDeserializer deserializer);
 
   @protected
   WebPluginLaunchDto? sse_decode_opt_box_autoadd_web_plugin_launch_dto(
@@ -618,6 +700,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PluginStatusDto sse_decode_plugin_status_dto(SseDeserializer deserializer);
+
+  @protected
+  (String, String) sse_decode_record_string_string(
+      SseDeserializer deserializer);
 
   @protected
   ScopeDto sse_decode_scope_dto(SseDeserializer deserializer);
@@ -660,10 +746,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
+  WebConsentKindDto sse_decode_web_consent_kind_dto(
+      SseDeserializer deserializer);
+
+  @protected
   WebDocumentDto sse_decode_web_document_dto(SseDeserializer deserializer);
 
   @protected
   WebPackageDto sse_decode_web_package_dto(SseDeserializer deserializer);
+
+  @protected
+  WebPermissionDto sse_decode_web_permission_dto(SseDeserializer deserializer);
+
+  @protected
+  WebPermissionKindDto sse_decode_web_permission_kind_dto(
+      SseDeserializer deserializer);
 
   @protected
   WebPluginLaunchDto sse_decode_web_plugin_launch_dto(
@@ -678,6 +775,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_AnyhowException(
       AnyhowException self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_Map_String_String_None(
+      Map<String, String> self, SseSerializer serializer);
 
   @protected
   void sse_encode_String(String self, SseSerializer serializer);
@@ -712,6 +813,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_clipboard_detail_dto(
       ClipboardDetailDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_clipboard_notice_dto(
+      ClipboardNoticeDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_execution_session_detail_dto(
@@ -749,7 +854,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       PluginDetailDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
+
+  @protected
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_web_consent_kind_dto(
+      WebConsentKindDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_web_plugin_launch_dto(
@@ -781,6 +893,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_clipboard_item_dto(
       ClipboardItemDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_clipboard_notice_dto(
+      ClipboardNoticeDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_context_capture_dto(
@@ -888,6 +1004,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       Uint8List self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_record_string_string(
+      List<(String, String)> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_scope_dto(List<ScopeDto> self, SseSerializer serializer);
 
   @protected
@@ -911,6 +1031,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<WebPackageDto> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_web_permission_dto(
+      List<WebPermissionDto> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_native_tool_dto(NativeToolDto self, SseSerializer serializer);
 
   @protected
@@ -923,6 +1047,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_clipboard_detail_dto(
       ClipboardDetailDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_clipboard_notice_dto(
+      ClipboardNoticeDto? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_execution_session_detail_dto(
@@ -960,7 +1088,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       PluginDetailDto? self, SseSerializer serializer);
 
   @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
+
+  @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_web_consent_kind_dto(
+      WebConsentKindDto? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_web_plugin_launch_dto(
@@ -981,6 +1116,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_plugin_status_dto(
       PluginStatusDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_record_string_string(
+      (String, String) self, SseSerializer serializer);
 
   @protected
   void sse_encode_scope_dto(ScopeDto self, SseSerializer serializer);
@@ -1026,11 +1165,23 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_unit(void self, SseSerializer serializer);
 
   @protected
+  void sse_encode_web_consent_kind_dto(
+      WebConsentKindDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_web_document_dto(
       WebDocumentDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_web_package_dto(WebPackageDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_web_permission_dto(
+      WebPermissionDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_web_permission_kind_dto(
+      WebPermissionKindDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_web_plugin_launch_dto(

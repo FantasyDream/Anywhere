@@ -7,8 +7,8 @@ final class WebPackagePicker {
     func choose(in window: NSWindow, completion: @escaping (String?) -> Void) {
         guard panel == nil else { completion(nil); return }
         let picker = NSOpenPanel()
-        picker.title = "Import a local Web tool"
-        picker.message = "Choose a trusted .awplugin package to inspect before installing."
+        picker.title = NativeLocalization.text(.importLocalWebTool)
+        picker.message = NativeLocalization.text(.inspectTrustedPackage)
         picker.canChooseFiles = true
         picker.canChooseDirectories = false
         picker.allowsMultipleSelection = false

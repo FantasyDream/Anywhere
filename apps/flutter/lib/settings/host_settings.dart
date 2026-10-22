@@ -1,3 +1,5 @@
+import '../l10n/generated/app_localizations.dart';
+import 'dart:ui' show Locale;
 import '../l10n/language_preference.dart';
 import '../infrastructure/runtime_policy.dart';
 import '../src/rust/api.dart' show FileSearchEngineDto;
@@ -68,10 +70,12 @@ class HostSettings {
   final FileSearchEngineDto fileSearchEngine;
   final bool fileSearchIncludeHidden;
   final List<String> fileSearchRoots, fileSearchExcludedNames;
-  String? get fileSearchError {
+  String? get fileSearchError =>
+      fileSearchErrorFor(lookupAppLocalizations(const Locale('en')));
+  String? fileSearchErrorFor(AppLocalizations l10n) {
     if (fileSearchRoots.length > RuntimePolicy.maxSearchRoots ||
         fileSearchExcludedNames.length > RuntimePolicy.maxSearchExclusions) {
-      return 'Use at most 8 directories and 32 exclusions.';
+      return l10n.searchDirectoryLimits;
     }
     if (fileSearchRoots.any((p) =>
         !(DesktopEnvironment.current.platform == TargetPlatform.windows
@@ -79,7 +83,7 @@ class HostSettings {
             : p.startsWith('/')) ||
         utf8.encode(p).length > RuntimePolicy.maxSearchPathBytes ||
         p.contains(RegExp(r'[\x00-\x1f\x7f-\x9f]')))) {
-      return 'Search directories must be absolute paths, one per line.';
+      return l10n.absoluteSearchDirectories;
     }
     if (fileSearchExcludedNames.any((n) =>
         n.trim().isEmpty ||
@@ -87,7 +91,7 @@ class HostSettings {
         n.contains(RegExp(r'[/\\\x00-\x1f\x7f-\x9f]')) ||
         n == '.' ||
         n == '..')) {
-      return 'Exclusions must be directory names, one per line.';
+      return l10n.excludedDirectoryNames;
     }
     return null;
   }

@@ -260,8 +260,8 @@ void main() {
         theme: AppStyle.theme,
         builder: AppStyle.windowBuilder,
         home: Scaffold(
-            body: SingleChildScrollView(
-                child: FeaturesSection(controller: c)))));
+            body:
+                SingleChildScrollView(child: FeaturesSection(controller: c)))));
     await tester.tap(find.text('Review permissions…'));
     await tester.pumpAndSettle();
     expect(find.text('Allow Test Copy?'), findsOneWidget);
@@ -289,7 +289,6 @@ void main() {
     final modules = [
       'Git',
       'URL',
-      'Git',
       'Rust',
       'Maven',
       'Gradle',
@@ -339,8 +338,7 @@ void main() {
         scrollable: find.descendant(
             of: find.byKey(const PageStorageKey('settings-content-plugins')),
             matching: find.byType(Scrollable)));
-    expect(find.text('0.8.0 · Could not start · Storage unavailable'),
-        findsOneWidget);
+    expect(find.text('Could not start · Storage unavailable'), findsOneWidget);
     expect(find.text('Save extension data · Open files'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });

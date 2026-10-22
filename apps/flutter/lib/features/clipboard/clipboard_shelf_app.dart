@@ -85,20 +85,24 @@ class _ClipboardShelfAppState extends State<ClipboardShelfApp> {
       await widget.channel.invokeMethod<void>('close');
     } catch (_) {
       if (mounted) {
-        session.reportNotice(
-            'The window could not be closed. Use the window close button.');
+        session.reportNotice(context.l10n.theWindowCouldNotBeClosedUse);
       }
     }
   }
 
-  Future<void> _copied() async {
-    // The shelf stays visible. Return keyboard focus to the last destination so
-    // the normal paste shortcut works; never simulate Paste in another app.
+  Future<void> _returnToTarget() async {
+    // Only the explicit copy-and-return command changes the destination focus.
+    // The shelf stays visible; never simulate Paste in another app.
+    final epoch = _visibilityEpoch;
+    String? outcome;
     try {
-      await widget.channel.invokeMethod<void>('returnToTarget');
+      outcome = await widget.channel.invokeMethod<String>('returnToTarget');
     } catch (_) {
-      // Copy has already succeeded; the user can switch to the destination.
+      // Keep the successfully copied payload and report the focus failure below.
     }
+    if (!mounted || !_visible || epoch != _visibilityEpoch) return;
+    if (outcome == 'returned' || outcome == 'skipped') return;
+    session.reportReturnFailure(unavailable: outcome == 'unavailable');
   }
 
   @override
@@ -123,7 +127,7 @@ class _ClipboardShelfAppState extends State<ClipboardShelfApp> {
                   listenable: session,
                   builder: (context, _) => ClipboardShelfPage(
                       session: session,
-                      onCopied: _copied,
+                      onReturnToTarget: _returnToTarget,
                       onClose: () => unawaited(_close()),
                       presentation: _presentation,
                       visible: _visible)),

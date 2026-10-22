@@ -1,3 +1,4 @@
+import '../l10n/app_language.dart';
 import '../infrastructure/desktop_environment.dart';
 import '../ui/app_icons.dart';
 import 'dart:async';
@@ -19,13 +20,16 @@ TextStyle get _mono => TextStyle(
     height: DesignTokens.previewCodeLineHeight,
     color: AppStyle.primary);
 
-String taskStatus(ExecutionSessionStatusDto status) => switch (status) {
-      ExecutionSessionStatusDto.running => 'Running',
-      ExecutionSessionStatusDto.stopping => 'Stopping',
-      ExecutionSessionStatusDto.succeeded => 'Completed',
-      ExecutionSessionStatusDto.failed => 'Failed',
-      ExecutionSessionStatusDto.stopped => 'Stopped',
-    };
+String taskStatus(ExecutionSessionStatusDto status, [AppLocalizations? l10n]) {
+  final contextLabels = l10n ?? lookupAppLocalizations(const Locale('en'));
+  return switch (status) {
+    ExecutionSessionStatusDto.running => contextLabels.running,
+    ExecutionSessionStatusDto.stopping => contextLabels.stopping,
+    ExecutionSessionStatusDto.succeeded => contextLabels.completed,
+    ExecutionSessionStatusDto.failed => contextLabels.failed,
+    ExecutionSessionStatusDto.stopped => contextLabels.stopped,
+  };
+}
 
 Color _statusColor(ExecutionSessionStatusDto status) => switch (status) {
       ExecutionSessionStatusDto.running => AppStyle.accent,
@@ -52,6 +56,8 @@ class ExecutionSessionsViewState extends State<ExecutionSessionsView> {
   final _searchFocus = FocusNode();
   final _listFocus = FocusNode();
   final _listScroll = ScrollController();
+  final _taskActions = GlobalKey<PopupMenuButtonState<String>>();
+  final _windowActions = GlobalKey<PopupMenuButtonState<String>>();
   String? _lastSelection;
   String _lastFilter = '';
   double get _rowHeight {
@@ -148,6 +154,11 @@ class ExecutionSessionsViewState extends State<ExecutionSessionsView> {
     final tasks = controller.visibleSessions;
     return CallbackShortcuts(
         bindings: {
+          DesktopEnvironment.current.command(LogicalKeyboardKey.keyK): () {
+            if (!_search.value.composing.isCollapsed || controller.busy) return;
+            (_taskActions.currentState ?? _windowActions.currentState)
+                ?.showButtonMenu();
+          },
           DesktopEnvironment.current.command(LogicalKeyboardKey.keyF):
               focusSearch,
           DesktopEnvironment.current.command(LogicalKeyboardKey.keyL): () =>
@@ -189,8 +200,9 @@ class ExecutionSessionsViewState extends State<ExecutionSessionsView> {
                               Expanded(
                                   child: detail == null
                                       ? (tasks.isEmpty
-                                          ? const Center(
-                                              child: Text('No matching tasks',
+                                          ? Center(
+                                              child: Text(
+                                                  context.l10n.noMatchingTasks,
                                                   style: _body))
                                           : const Center(
                                               child: SizedBox.square(
@@ -203,61 +215,79 @@ class ExecutionSessionsViewState extends State<ExecutionSessionsView> {
                                       : _TaskDetail(
                                           key: ValueKey(detail.summary.id),
                                           detail: detail,
+                                          actionMenu: _taskActions,
                                           controller: controller)),
                             ])),
               const Divider(height: 1, color: AppStyle.divider),
               Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
-                  child: LayoutBuilder(builder: (context, constraints) {
-                    final hint = Text(
-                        '↑↓ Tasks   ${DesktopEnvironment.current.commandLabel('F')} Find   ${DesktopEnvironment.current.commandLabel('.')} Stop   Esc Hide',
-                        style: _label);
-                    const information = Row(children: [
-                      Tooltip(
-                          message:
-                              'Closing this window keeps tasks running. Quitting Anywhere stops them.',
-                          child: Icon(AppIcons.info,
-                              size: 13, color: AppStyle.muted)),
-                      SizedBox(width: 7),
-                      Expanded(
-                          child: Text('Tasks keep running when hidden',
-                              style: _label)),
-                    ]);
-                    if (constraints.maxWidth < 820 ||
-                        MediaQuery.textScalerOf(context).scale(11) > 13) {
-                      return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [information, SizedBox(height: 4), hint]);
-                    }
-                    return Row(children: [Expanded(child: information), hint]);
-                  })),
+                  child: Row(children: [
+                    Expanded(
+                        child: Text(context.l10n.tasksKeepRunningWhenHidden,
+                            style: _label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis)),
+                    TextButton(
+                        onPressed: () => showDialog<void>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                                    title: Text(context.l10n.keyboardHelp),
+                                    content: Text(context.l10n.taskKeyboardHelp(
+                                        DesktopEnvironment.current
+                                            .commandLabel('F'),
+                                        DesktopEnvironment.current
+                                            .commandLabel('.'))),
+                                    actions: [
+                                      TextButton(
+                                          onPressed: () =>
+                                              Navigator.pop(context),
+                                          child: Text(context.l10n.done))
+                                    ])),
+                        child: Text(context.l10n.keyboardHelp)),
+                  ])),
             ]),
           ),
         ));
   }
 
   Widget _toolbar(int running) => AppToolbar(
-          title: 'Running Tasks',
+          title: context.l10n.runningTasks,
           subtitle: running == 0
               ? (controller.sessions.isEmpty
-                  ? 'No running tasks'
-                  : 'All tasks finished')
-              : '$running running',
+                  ? context.l10n.noRunningTasks
+                  : context.l10n.allTasksFinished)
+              : context.l10n.runningCount(running),
           actions: [
-            Tooltip(
-                message:
-                    'Open Launcher · ${DesktopEnvironment.current.commandLabel('L')}',
-                child: TextButton.icon(
-                    onPressed: widget.onOpenLauncher,
-                    icon: const Icon(AppIcons.search, size: 15),
-                    label: const Text('Launcher'))),
-            const SizedBox(width: 4),
-            IconButton(
-                tooltip:
-                    'Refresh · ${DesktopEnvironment.current.commandLabel('R')}',
-                onPressed: controller.refresh,
-                icon: const Icon(AppIcons.refresh, size: 16)),
+            PopupMenuButton<String>(
+                key: _windowActions,
+                tooltip: context.l10n.toolOptions,
+                onSelected: (action) {
+                  if (action == 'launcher') {
+                    unawaited(widget.onOpenLauncher());
+                  } else {
+                    unawaited(controller.refresh());
+                  }
+                },
+                itemBuilder: (_) => [
+                      PopupMenuItem(
+                          value: 'refresh',
+                          child: Text(context.l10n.shortcutHint(
+                              context.l10n.refresh,
+                              DesktopEnvironment.current.commandLabel('R')))),
+                      PopupMenuItem(
+                          value: 'launcher',
+                          child: Text(context.l10n.shortcutHint(
+                              context.l10n.launcher,
+                              DesktopEnvironment.current.commandLabel('L')))),
+                    ],
+                child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(AppIcons.more, size: 16),
+                      const SizedBox(width: 6),
+                      Text(context.l10n.toolOptions, style: AppStyle.caption),
+                    ]))),
           ]);
 
   Widget _sidebar(List<ExecutionSessionSummaryDto> tasks) => Container(
@@ -275,7 +305,7 @@ class ExecutionSessionsViewState extends State<ExecutionSessionsView> {
                 style: _body,
                 cursorColor: AppStyle.accent,
                 decoration: InputDecoration(
-                  hintText: 'Find a task…',
+                  hintText: context.l10n.findATask,
                   hintStyle: _label,
                   prefixIcon: const Icon(AppIcons.search,
                       size: 16, color: AppStyle.muted),
@@ -284,7 +314,7 @@ class ExecutionSessionsViewState extends State<ExecutionSessionsView> {
                   suffixIcon: controller.filter.isEmpty
                       ? null
                       : IconButton(
-                          tooltip: 'Clear search',
+                          tooltip: context.l10n.clearSearch,
                           icon: const Icon(AppIcons.close, size: 15),
                           color: AppStyle.secondary,
                           onPressed: () => controller.setFilter('')),
@@ -309,7 +339,7 @@ class ExecutionSessionsViewState extends State<ExecutionSessionsView> {
         Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 10),
             child: Row(children: [
-              const Text('Tasks', style: _label),
+              Text(context.l10n.tasks, style: _label),
               const Spacer(),
               Text('${tasks.length}', style: _label)
             ])),
@@ -393,7 +423,7 @@ class _TaskRow extends StatelessWidget {
                           children: [
                             _TaskStatus(session.status, selected: selected),
                             if (session.exitCode != null)
-                              Text('Exit ${session.exitCode}',
+                              Text(context.l10n.exitCode('${session.exitCode}'),
                                   style: selected
                                       ? _label.copyWith(color: AppStyle.primary)
                                       : _label),
@@ -411,21 +441,26 @@ class _TaskStatus extends StatelessWidget {
   final ExecutionSessionStatusDto status;
   final bool selected;
   @override
-  Widget build(BuildContext context) => AppStatusBadge(taskStatus(status),
-      color: selected ? AppStyle.primary : _statusColor(status),
-      icon: switch (status) {
-        ExecutionSessionStatusDto.running => AppIcons.running,
-        ExecutionSessionStatusDto.stopping => AppIcons.hourglass,
-        ExecutionSessionStatusDto.succeeded => AppIcons.success,
-        ExecutionSessionStatusDto.failed => AppIcons.error,
-        ExecutionSessionStatusDto.stopped => AppIcons.paused,
-      });
+  Widget build(BuildContext context) =>
+      AppStatusBadge(taskStatus(status, context.l10n),
+          color: selected ? AppStyle.primary : _statusColor(status),
+          icon: switch (status) {
+            ExecutionSessionStatusDto.running => AppIcons.running,
+            ExecutionSessionStatusDto.stopping => AppIcons.hourglass,
+            ExecutionSessionStatusDto.succeeded => AppIcons.success,
+            ExecutionSessionStatusDto.failed => AppIcons.error,
+            ExecutionSessionStatusDto.stopped => AppIcons.paused,
+          });
 }
 
 class _TaskDetail extends StatelessWidget {
   const _TaskDetail(
-      {super.key, required this.detail, required this.controller});
+      {super.key,
+      required this.detail,
+      required this.controller,
+      required this.actionMenu});
   final ExecutionSessionDetailDto detail;
+  final GlobalKey<PopupMenuButtonState<String>> actionMenu;
   final ExecutionSessionsController controller;
 
   @override
@@ -463,23 +498,22 @@ class _TaskDetail extends StatelessWidget {
                                     const SizedBox(width: 16),
                                     if (active)
                                       Tooltip(
-                                          message:
-                                              'Stop task · ${DesktopEnvironment.current.commandLabel('.')}',
+                                          message: context.l10n.shortcutHint(
+                                              context.l10n.stop,
+                                              DesktopEnvironment.current
+                                                  .commandLabel('.')),
                                           child: TextButton.icon(
-                                              onPressed: controller.busy ||
-                                                      summary.status ==
-                                                          ExecutionSessionStatusDto
-                                                              .stopping
+                                              onPressed: controller.busy || summary.status == ExecutionSessionStatusDto.stopping
                                                   ? null
                                                   : () => controller
                                                       .stop(summary.id),
                                               icon: const Icon(AppIcons.stop,
                                                   size: 16),
-                                              label: Text(summary.status ==
-                                                      ExecutionSessionStatusDto
-                                                          .stopping
-                                                  ? 'Stopping…'
-                                                  : 'Stop'),
+                                              label: Text(
+                                                  summary.status == ExecutionSessionStatusDto.stopping
+                                                      ? context
+                                                          .l10n.stoppingProgress
+                                                      : context.l10n.stop),
                                               style: TextButton.styleFrom(
                                                   foregroundColor: AppStyle.danger,
                                                   backgroundColor: AppStyle.danger.withValues(alpha: .08),
@@ -489,7 +523,8 @@ class _TaskDetail extends StatelessWidget {
                                                   textStyle: _body,
                                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppStyle.controlRadius), side: const BorderSide(color: AppStyle.divider, width: .5))))),
                                     PopupMenuButton<String>(
-                                      tooltip: 'More actions',
+                                      key: actionMenu,
+                                      tooltip: context.l10n.moreActions,
                                       enabled: !controller.busy,
                                       color: AppStyle.card,
                                       icon: const Icon(AppIcons.more,
@@ -508,27 +543,30 @@ class _TaskDetail extends StatelessWidget {
                                                             summary.command)));
                                             if (context.mounted) {
                                               ScaffoldMessenger.of(context)
-                                                  .showSnackBar(const SnackBar(
-                                                      content: Text(
-                                                          'Command copied'),
+                                                  .showSnackBar(SnackBar(
+                                                      content: Text(context
+                                                          .l10n.commandCopied),
                                                       duration: Duration(
                                                           seconds: 2)));
                                             }
                                           } catch (_) {
-                                            controller.reportError(
-                                                'Command could not be copied. Try again.');
+                                            if (!context.mounted) return;
+                                            controller.reportError(context.l10n
+                                                .commandCouldNotBeCopiedTryAgain);
                                           }
                                         }
                                       },
                                       itemBuilder: (_) => [
-                                        const PopupMenuItem(
+                                        PopupMenuItem(
                                             value: 'copy',
-                                            child: Text('Copy command',
+                                            child: Text(
+                                                context.l10n.copyCommand,
                                                 style: _body)),
                                         if (!active)
-                                          const PopupMenuItem(
+                                          PopupMenuItem(
                                               value: 'remove',
-                                              child: Text('Remove result',
+                                              child: Text(
+                                                  context.l10n.removeResult,
                                                   style: _body)),
                                       ],
                                     ),
@@ -540,7 +578,9 @@ class _TaskDetail extends StatelessWidget {
                                   children: [
                                     _TaskStatus(summary.status),
                                     if (summary.exitCode != null)
-                                      Text('Exit ${summary.exitCode}',
+                                      Text(
+                                          context.l10n
+                                              .exitCode('${summary.exitCode}'),
                                           style: _label),
                                   ]),
                               const SizedBox(height: 10),
@@ -562,7 +602,7 @@ class _TaskDetail extends StatelessWidget {
                                     minTileHeight: 30,
                                     iconColor: AppStyle.muted,
                                     collapsedIconColor: AppStyle.muted,
-                                    title: const Text('Command details',
+                                    title: Text(context.l10n.commandDetails,
                                         style: _label),
                                     children: [
                                       Align(
@@ -584,8 +624,9 @@ class _TaskDetail extends StatelessWidget {
                                 const SizedBox(height: 10)
                               ],
                               if (summary.outputTruncated) ...[
-                                const _Notice(
-                                    'Showing the latest output (128 KiB per stream).',
+                                _Notice(
+                                    context
+                                        .l10n.showingTheLatestOutput128KiBPer,
                                     kind: NoticeKind.info),
                                 const SizedBox(height: 10)
                               ],
@@ -603,11 +644,11 @@ class _Notice extends AppNotice {
   const _Notice(super.message, {super.onDismiss, super.kind});
 }
 
-class _EmptyTasks extends AppEmptyState {
-  const _EmptyTasks()
-      : super(
-            icon: AppIcons.terminal,
-            title: 'No tasks yet.',
-            message:
-                'Choose a project Build, Test or Run action in the Launcher.');
+class _EmptyTasks extends StatelessWidget {
+  const _EmptyTasks();
+  @override
+  Widget build(BuildContext context) => AppEmptyState(
+      icon: AppIcons.terminal,
+      title: context.l10n.noTasksYet,
+      message: context.l10n.chooseAProjectBuildTestOrRun);
 }

@@ -1,0 +1,22 @@
+name: Feature request / 功能建议
+description: 描述使用场景与需要改善的工作流程。
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: 使用场景与问题 / Problem and use case
+      description: 当前需要完成什么，在哪一步遇到阻碍？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 建议的操作方式 / Proposed behavior
+      description: 可说明纯键盘、鼠标、Context 和返回原页面的预期。
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 替代方案与取舍 / Alternatives
+      description: 已尝试的方案、现有开源库或相关路线图项目。

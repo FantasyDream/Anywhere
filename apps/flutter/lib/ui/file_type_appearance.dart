@@ -1,31 +1,52 @@
+import '../l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import 'app_icons.dart';
 import 'app_style.dart';
+import 'semantic_icon.dart';
 
 /// Filename hints for presentation only. Never reads files or determines which
 /// results match a search; Rust remains responsible for filtering and targets.
 enum FileTypeAppearance {
-  folder('Folder', AppIcons.folder, Color(0xff92c9f6)),
-  pdf('PDF document', AppIcons.pdf, Color(0xfff0aaa8)),
-  document('Document', AppIcons.document, Color(0xffa7caff)),
-  text('Text file', AppIcons.document, Color(0xffd9e1ec)),
-  spreadsheet('Spreadsheet', AppIcons.spreadsheet, Color(0xffa0ceb9)),
-  presentation('Presentation', AppIcons.presentation, Color(0xffe9bd9c)),
-  image('Image', AppIcons.image, Color(0xffb1cee9)),
-  audio('Audio', AppIcons.audio, Color(0xffe7b4cf)),
-  video('Video', AppIcons.video, Color(0xffc3b4e4)),
-  archive('Archive', AppIcons.archive, Color(0xffdfc89f)),
-  code('Source code', AppIcons.code, Color(0xffc3b4e4)),
-  configuration('Configuration file', AppIcons.settings, Color(0xffbecbdc)),
-  book('E-book', AppIcons.book, Color(0xffdfc89f)),
-  font('Font', AppIcons.font, Color(0xffe7c3a6)),
-  package('Package or binary', AppIcons.package, Color(0xffbecbdc)),
-  file('File', AppIcons.file, Color(0xffd9e1ec));
+  folder(AppIcons.folder, DesignTokens.iconBlue),
+  pdf(AppIcons.pdf, DesignTokens.iconCoral, stamp: 'PDF'),
+  document(AppIcons.document, DesignTokens.iconBlue, stamp: 'DOC'),
+  text(AppIcons.text, DesignTokens.iconNeutral, stamp: 'TXT'),
+  spreadsheet(AppIcons.spreadsheet, DesignTokens.iconGreen),
+  presentation(AppIcons.presentation, DesignTokens.iconAmber),
+  image(AppIcons.image, DesignTokens.iconBlue),
+  audio(AppIcons.audio, DesignTokens.iconPink),
+  video(AppIcons.video, DesignTokens.iconPurple),
+  archive(AppIcons.archive, DesignTokens.iconAmber),
+  code(AppIcons.code, DesignTokens.iconPurple),
+  configuration(AppIcons.configuration, DesignTokens.iconAmber),
+  book(AppIcons.book, DesignTokens.iconGreen),
+  font(AppIcons.font, DesignTokens.iconPink),
+  package(AppIcons.package, DesignTokens.iconNeutral),
+  file(AppIcons.file, DesignTokens.iconNeutral);
 
-  const FileTypeAppearance(this.label, this.glyph, this.tint);
-  final String label;
+  const FileTypeAppearance(this.glyph, this.tint, {this.stamp});
+  String labelFor(AppLocalizations l10n) => switch (this) {
+        FileTypeAppearance.folder => l10n.folder,
+        FileTypeAppearance.pdf => l10n.pdfDocument,
+        FileTypeAppearance.document => l10n.document,
+        FileTypeAppearance.text => l10n.textFile,
+        FileTypeAppearance.spreadsheet => l10n.spreadsheet,
+        FileTypeAppearance.presentation => l10n.presentation,
+        FileTypeAppearance.image => l10n.image,
+        FileTypeAppearance.audio => l10n.audio,
+        FileTypeAppearance.video => l10n.video,
+        FileTypeAppearance.archive => l10n.archive,
+        FileTypeAppearance.code => l10n.sourceCode,
+        FileTypeAppearance.configuration => l10n.configurationFile,
+        FileTypeAppearance.book => l10n.ebook,
+        FileTypeAppearance.font => l10n.font,
+        FileTypeAppearance.package => l10n.packageOrBinary,
+        FileTypeAppearance.file => l10n.file,
+      };
+
   final IconData glyph;
   final Color tint;
+  final String? stamp;
 
   static FileTypeAppearance forName(String basename,
       {bool isDirectory = false}) {
@@ -228,7 +249,7 @@ enum FileTypeAppearance {
   };
 }
 
-/// Transparent outline glyphs: no thumbnail decoding, native icon calls or
+/// Transparent semantic glyphs: no thumbnail decoding, native icon calls or
 /// per-file raster cache. Rows and previews share the same presentation.
 class FileTypeIcon extends StatelessWidget {
   const FileTypeIcon(
@@ -241,10 +262,13 @@ class FileTypeIcon extends StatelessWidget {
   final bool disabled;
 
   @override
-  Widget build(BuildContext context) => SizedBox.square(
-      dimension: size,
-      child: Icon(appearance.glyph,
-          size: size * .66,
-          color: disabled ? AppStyle.muted : appearance.tint,
-          semanticLabel: appearance.label));
+  Widget build(BuildContext context) => Semantics(
+      image: true,
+      label: appearance.labelFor(context.l10n),
+      child: SemanticIcon(
+          glyph: appearance.glyph,
+          tint: appearance.tint,
+          size: size,
+          stamp: appearance.stamp,
+          disabled: disabled));
 }

@@ -1,3 +1,4 @@
+import '../l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import '../ui/app_style.dart';
 import '../ui/app_components.dart';
@@ -23,9 +24,9 @@ class WebActionsPanel extends StatelessWidget {
                   color: AppStyle.controlBorder,
                   width: DesignTokens.dividerWidth)),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            _action(0, AppIcons.refresh, 'Reload tool'),
+            _action(0, AppIcons.refresh, context.l10n.reloadTool),
             const SizedBox(height: 4),
-            _action(1, AppIcons.back, 'Back to search · Esc'),
+            _action(1, AppIcons.back, context.l10n.backToSearchEsc),
           ])));
 
   Widget _action(int index, IconData icon, String title) => Semantics(
@@ -78,8 +79,7 @@ class WebConsentPanel extends StatelessWidget {
                           children: [
                         Text(title, style: AppStyle.heading),
                         const SizedBox(height: 12),
-                        Text(
-                            '$toolTitle is requesting a clipboard operation. Approval applies once.',
+                        Text(context.l10n.clipboardConsent(toolTitle),
                             style: AppStyle.caption),
                         if (preview != null) ...[
                           const SizedBox(height: 12),
@@ -95,13 +95,13 @@ class WebConsentPanel extends StatelessWidget {
                               TextButton(
                                   onPressed: () => onAnswer(false),
                                   child: Text(allowSelected
-                                      ? 'Cancel · Esc'
-                                      : '✓ Cancel · Esc')),
+                                      ? context.l10n.cancelEsc
+                                      : context.l10n.cancelEscapeSelected)),
                               FilledButton(
                                   onPressed: () => onAnswer(true),
                                   child: Text(allowSelected
-                                      ? '✓ Allow once'
-                                      : 'Allow once')),
+                                      ? context.l10n.allowOnce
+                                      : context.l10n.allowOnceAction)),
                             ])
                       ]))))));
 }

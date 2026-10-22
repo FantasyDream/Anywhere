@@ -1,5 +1,4 @@
 import '../../l10n/app_language.dart';
-import '../../infrastructure/desktop_environment.dart';
 import 'package:flutter/material.dart';
 import '../../src/rust/api.dart';
 import '../../ui/app_components.dart';
@@ -15,14 +14,12 @@ class LauncherSearchArea extends StatelessWidget {
       required this.input,
       required this.focus,
       this.onToggleNavigation,
-      this.onBack,
-      this.trailing});
+      this.onBack});
   final LauncherViewState state;
   final TextEditingController input;
   final FocusNode focus;
   final VoidCallback? onToggleNavigation;
   final VoidCallback? onBack;
-  final Widget? trailing;
 
   String _fileRangeLabel(BuildContext context) {
     final roots = state.snapshot?.fileSearch?.roots ?? const <String>[];
@@ -99,6 +96,17 @@ class LauncherSearchArea extends StatelessWidget {
                                 style: AppStyle.caption.copyWith(
                                     fontSize: DesignTokens.pageModeSize,
                                     fontWeight: DesignTokens.pageModeWeight)))),
+                  if (!state.isFileSearch &&
+                      !state.isContent &&
+                      !state.hasScopeBar &&
+                      state.selectedScope?.isCurrentApp == true)
+                    Padding(
+                        padding: const EdgeInsets.only(bottom: 3),
+                        child: Text(state.selectedScope!.label,
+                            key: const Key('launcher-mode-label'),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppStyle.caption)),
                   if (state.isContent)
                     Padding(
                         padding: const EdgeInsets.only(bottom: 6),
@@ -143,7 +151,9 @@ class LauncherSearchArea extends StatelessWidget {
                                   : state.selectedScope == null
                                       ? context.l10n.searchAppsActions
                                       : context.l10n.searchAppActions(
-                                          state.selectedScope!.label),
+                                          localizedScopeLabel(
+                                              state.selectedScope!,
+                                              context.l10n)),
                           hintStyle: const TextStyle(
                               color: AppStyle.muted,
                               fontWeight: FontWeight.w400),
@@ -161,7 +171,7 @@ class LauncherSearchArea extends StatelessWidget {
               child: CircularProgressIndicator(
                   strokeWidth: 1.5, color: AppStyle.secondary))
         else
-          trailing ?? const AppKeycap('esc'),
+          const AppKeycap('esc'),
       ]));
 }
 
@@ -220,8 +230,9 @@ class LauncherRootNavigation extends StatelessWidget {
                                               fontWeight: FontWeight.w500)),
                                       Text(
                                           mode == InputModeDto.search
-                                              ? 'Find apps and actions'
-                                              : 'Actions for your current environment',
+                                              ? context.l10n.findAppsAndActions
+                                              : context.l10n
+                                                  .actionsForYourCurrentEnvironment,
                                           style: AppStyle.caption),
                                     ])),
                                 if (state.inputMode == mode)
@@ -250,10 +261,13 @@ class LauncherScopeBar extends StatelessWidget {
         for (final scope in scopes)
           LauncherFilterOption(
               scope.id,
-              scope.label,
-              scope.isCurrentApp
-                  ? 'All actions available in the current app'
-                  : 'Filter ${scope.label} actions'),
+              localizedScopeLabel(scope, context.l10n),
+              context.l10n.shortcutHint(
+                  scope.isCurrentApp
+                      ? context.l10n.allActionsAvailableInTheCurrentApp
+                      : context.l10n.filterActions(
+                          localizedScopeLabel(scope, context.l10n)),
+                  'Tab / Shift+Tab')),
       ],
       onSelect: onSelect);
 }
@@ -434,64 +448,6 @@ class LauncherResultHeading extends StatelessWidget {
           ])));
 }
 
-class LauncherFooter extends StatelessWidget {
-  const LauncherFooter(
-      {super.key,
-      required this.label,
-      required this.primaryLabel,
-      required this.onPrimary,
-      this.onRetry,
-      this.onActions,
-      this.onCopy,
-      this.onBack,
-      this.result = false});
-  final String label, primaryLabel;
-  final VoidCallback? onPrimary, onCopy, onBack, onActions, onRetry;
-  final bool result;
-  @override
-  Widget build(BuildContext context) => AppPageFooter(
-      key: const Key('launcher-footer'),
-      child: Row(children: [
-        Expanded(
-            child: Text(label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: AppStyle.caption.copyWith(fontSize: 10.5))),
-        if (onRetry != null)
-          TextButton(onPressed: onRetry, child: Text(context.l10n.retry)),
-        if (onActions != null)
-          Tooltip(
-              message: 'More actions for the selected item',
-              child: TextButton(
-                  key: const Key('launcher-actions'),
-                  onPressed: onActions,
-                  child: Text(
-                      'Actions · ${DesktopEnvironment.current.usesMetaCommand ? '⌘' : 'Ctrl'}K'))),
-        if (onCopy != null)
-          TextButton(onPressed: onCopy, child: Text(context.l10n.copy)),
-        if (onBack != null)
-          TextButton(onPressed: onBack, child: Text(context.l10n.back)),
-        if (!result && onPrimary != null) ...[
-          const SizedBox(width: 6),
-          Tooltip(
-              message: '↑ / ↓ to select · Return or double-click to activate',
-              child: OutlinedButton(
-                  onPressed: onPrimary,
-                  style: OutlinedButton.styleFrom(
-                      backgroundColor: AppStyle.actionSurface,
-                      foregroundColor: AppStyle.primary,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      minimumSize: const Size(0, 24)),
-                  child: Text(primaryLabel,
-                      style: const TextStyle(
-                          fontSize: 11, fontWeight: FontWeight.w500)))),
-          const SizedBox(width: 6),
-          const AppKeycap('↵'),
-        ],
-        if (result) const AppKeycap('esc'),
-      ]));
-}
-
 /// Compact guidance fits the same result region as ordinary rows.
 class LauncherEmptyState extends StatelessWidget {
   const LauncherEmptyState(
@@ -533,7 +489,7 @@ class MenuNavigationRow extends StatelessWidget {
       required this.title,
       required this.selected,
       required this.onTap,
-      this.icon = AppIcons.folder});
+      this.icon = AppIcons.menu});
   final IconData icon;
   final String title;
   final bool selected;
@@ -556,9 +512,9 @@ class MenuNavigationRow extends StatelessWidget {
                             width: 36,
                             height: 36,
                             child: Icon(icon,
-                                size: 22,
+                                size: 26,
                                 color: icon == AppIcons.folder
-                                    ? const Color(0xff92c9f6)
+                                    ? DesignTokens.iconBlue
                                     : AppStyle.secondary)),
                         const SizedBox(width: 14),
                         Expanded(
@@ -571,7 +527,11 @@ class MenuNavigationRow extends StatelessWidget {
                                         ? FontWeight.w600
                                         : FontWeight.w500,
                                     color: AppStyle.primary))),
-                        const Icon(AppIcons.chevron,
-                            size: 14, color: AppStyle.secondary),
+                        if (selected)
+                          AppRowActions(
+                              primaryLabel: context.l10n.open, onPrimary: onTap)
+                        else
+                          const Icon(AppIcons.chevron,
+                              size: 14, color: AppStyle.secondary),
                       ]))))));
 }

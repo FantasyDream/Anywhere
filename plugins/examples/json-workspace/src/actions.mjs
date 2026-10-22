@@ -2,10 +2,10 @@ import {validate, transform, MAX_BYTES, JsonToolError} from './json.mjs';
 
 const encoder = new TextEncoder();
 export const JSON_ACTIONS = [
-  {id: 'copy-format', title: 'Copy Formatted JSON', label: 'Copy formatted'},
-  {id: 'copy-minify', title: 'Copy Minified JSON', label: 'Copy minified'},
-  {id: 'copy-escaped', title: 'Copy Escaped JSON', label: 'Copy escaped'},
-  {id: 'unescape', title: 'Unescape JSON', label: 'Unescape'},
+  {id: 'copy-format', title: 'Copy Formatted JSON', label: 'Copy formatted', icon: 'format'},
+  {id: 'copy-minify', title: 'Copy Minified JSON', label: 'Copy minified', icon: 'minify'},
+  {id: 'copy-escaped', title: 'Copy Escaped JSON', label: 'Copy escaped', icon: 'escape'},
+  {id: 'unescape', title: 'Unescape JSON', label: 'Unescape', icon: 'unescape'},
 ];
 
 function bounded(text) {

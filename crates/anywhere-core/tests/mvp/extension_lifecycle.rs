@@ -24,6 +24,7 @@ async fn ui_definition_changes_require_restart_review_and_revoke_retained_views(
     let mut inspected = SettingsService::open(path.clone(), dirs.clone(), &boot).unwrap();
     let before = status(&inspected, "plugin:example_detail");
     assert!(before.needs_approval);
+    assert!(!before.restart_required);
     assert_eq!(before.capabilities, ["ui.render"]);
     inspected
         .change(
@@ -35,10 +36,11 @@ async fn ui_definition_changes_require_restart_review_and_revoke_retained_views(
         )
         .unwrap();
     assert!(!status(&inspected, &before.key).active);
-    assert!(status(&inspected, &before.key).detail.contains("Restart"));
+    assert!(status(&inspected, &before.key).restart_required);
     let app = app();
     let mut loaded = SettingsService::open(path, dirs, &app).unwrap();
     assert!(status(&loaded, &before.key).active);
+    assert!(!status(&loaded, &before.key).restart_required);
     let id = app.activate().await.unwrap().unwrap().session_id;
     app.update_input(id, "inspected object".into(), 1)
         .await
@@ -64,6 +66,7 @@ async fn ui_definition_changes_require_restart_review_and_revoke_retained_views(
     loaded.refresh(&app).unwrap();
     let changed = status(&loaded, &before.key);
     assert!(changed.needs_approval && !changed.active && !changed.configurable);
+    assert!(!changed.restart_required);
     assert!(loaded
         .change(
             &app,
@@ -183,6 +186,7 @@ async fn native_status_uses_app_version_and_preserves_metadata_through_disable_a
         assert_eq!(record.version, APP_VERSION);
         assert!(record.active && record.enabled && record.configurable);
         assert!(!record.needs_approval && !record.legacy);
+        assert!(!record.restart_required);
         assert!(record.approval_token.is_empty());
     }
     // External package versions remain independent, including unapproved packages.
@@ -192,6 +196,7 @@ async fn native_status_uses_app_version_and_preserves_metadata_through_disable_a
         .unwrap();
     let disabled = status(&manager, "first-party:url");
     assert!(!disabled.enabled && !disabled.active);
+    assert!(!disabled.restart_required);
     assert_eq!(disabled.version, APP_VERSION);
     drop(manager);
     let boot = self::app();
@@ -389,6 +394,7 @@ fn duplicate_ids_block_every_installation_and_legacy_can_be_disabled() {
         .find(|s| s.id == "controlled")
         .unwrap();
     assert!(!duplicate.configurable && !duplicate.active);
+    assert!(!duplicate.restart_required);
     assert!(duplicate.detail.contains("Duplicate"));
     assert!(status(&manager, "plugin:example").active);
     manager

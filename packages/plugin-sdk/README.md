@@ -61,7 +61,7 @@ scripts/check-web-sdk.sh
 
 匹配器是宿主提供的有限格式规则，不接受插件 JS、正则或自定义 DSL；以后新增格式沿用同一声明入口。修改 Manifest 后需重新构建、导入并核对批准新的包摘要，宿主不会修改已批准安装内容。
 
-Build 23 起还可声明 `json_escaped`，匹配带 / 不带外层引号的转义 JSON 容器，最多解开 4 层；编码原文仍受 16 KiB、解码容器受 128 层限制。它不匹配普通字符串 / 标量或已是正常 JSON 的对象，Invocation 保留编码原文。解码、格式化、复制仍由业务插件处理，Host 识别不执行插件代码。
+当前也可声明 `json_escaped`，该能力在 V0.11 Build 23 接入并延续到 V0.12。它匹配带 / 不带外层引号的转义 JSON 容器，最多解开 4 层；编码原文仍受 16 KiB、解码容器受 128 层限制。它不匹配普通字符串 / 标量或已是正常 JSON 的对象，Invocation 保留编码原文。解码、格式化、复制仍由业务插件处理，Host 识别不执行插件代码。
 
 ### 原始 API（进阶集成，自行管理生命周期）
 
@@ -101,6 +101,8 @@ cargo run -p anywhere-protocol --features web-schema --example generate_web_sdk_
 KV 每个命名空间的值合计 ≤ 1 MiB、最多 256 个键，单键值 JSON ≤ 64 KiB；调用仍受帧上限约束。配额检查与更新在同一个 SQLite 事务内，失败保留旧值。
 
 Host 通过 `HostTransport` 注入一条只传字符串帧的消息连接。原生来源 / 主 frame / Runtime / 文档 epoch 由 Host 另行交给 Rust，不进入 SDK 请求正文。生命周期事件已接入；主题由 Host 注入 CSS tokens。返回 / 重载由 Host 提供，尚未开放 SDK navigation / actions API。
+
+安装更新、禁用或撤销会失效旧调用，当前没有延迟替换编辑页的模式。卸载会清理该安装的私有 KV；没有保留数据选项。Host 的本地安装身份不等于已验证发布者，Action ID 与使用记录 / 快捷键也不提供跨发布者身份隔离。
 
 详细边界见 [Web 插件设计](../../docs/web-plugin-design.md)。
 
@@ -153,6 +155,14 @@ Build 19 起，编辑 / 查询工具可直接使用 `aw-workspace` → `aw-works
 
 `styles/tokens.css` 仅供独立浏览器预览使用，生产插件不要复制固定颜色覆盖 Host。插件仍可以自定义局部组件 CSS；根画布由 Host 统一管理，局部控件仍不要求第三方页面像素级一致。
 
+常用图标无需导入库或编写 SVG：
+
+```html
+<button><span class="aw-icon aw-icon--copy" aria-hidden="true"></span>复制</button>
+```
+
+Host 提供 `copy`、`paste`、`run`、`clear`、`format`、`minify`、`escape`、`unescape`、`check`、`chevron-down`，使用 `aw-icon aw-icon--名称`。图标继承文字颜色、统一尺寸与禁用态；保留按钮文字，纯图标按钮需提供 `aria-label`。图标属于呈现资源，不增加桥接 API、权限或运行时依赖。
+
 修改公共样式参数后，在仓库根运行：
 
 ```sh
@@ -178,3 +188,5 @@ the package; any normal Web translation library can be used. The JSON example
 uses i18next. This metadata needs no permission, conveys no native identity, and
 does not change Invocation input, grants, command IDs or stored data. Old hosts
 without the metadata default to English; old plugins keep their existing UI.
+
+低频命令和设置可用标准 `<details class="aw-disclosure"><summary>更多操作</summary><div class="aw-disclosure-body">…</div></details>` 在原位置展开；Host 自动提供箭头、焦点与间距，浏览器负责键盘和展开语义，不需要自定义菜单框架。主要操作继续直接显示。

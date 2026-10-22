@@ -54,7 +54,9 @@ pub(super) async fn preview_file(
         size_bytes: p.size_bytes,
         modified_ms: p.modified_ms,
         text: p.text,
-        notice: p.notice,
+        truncated_at_bytes: p.truncated_at_bytes,
+        encoding: p.encoding,
+        encoding_guessed: p.encoding_guessed,
     })
 }
 

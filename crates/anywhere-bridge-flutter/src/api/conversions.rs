@@ -156,6 +156,7 @@ pub(super) fn candidate_dto(candidate: protocol::CandidatePresentation) -> Candi
             protocol::FileObjectKind::Directory => FileObjectKindDto::Directory,
         }),
         title: candidate.title,
+        localized_titles: candidate.localized_titles.into_iter().collect(),
         menu_path: candidate.menu_path,
         context_keys: candidate.context_keys,
         execution_context_id: candidate.execution_context_id,

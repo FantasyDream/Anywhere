@@ -308,7 +308,15 @@ void main() {
     ];
     final git = candidate('git.status', 'Git Status', groupId: 'git');
     final copy = candidate('copy.path', 'Copy Path');
-    final offers = [sidebar, terminal, ...menus, git, copy];
+    final offers = [
+      sidebar,
+      terminal,
+      ...menus,
+      git,
+      copy,
+      for (var i = 0; i < 3; i++)
+        candidate('context.extra.$i', 'Context Extra $i')
+    ];
     final boundaries = <String?>[];
     var captures = 0;
     final executions = <String>[];
@@ -360,8 +368,10 @@ void main() {
     expect(find.byKey(const Key('scope-bar')), findsOneWidget);
     expect(find.byKey(const Key('active-context')), findsNothing);
     expect(find.text('All'), findsNothing);
-    expect(find.text('5 results'),
-        findsOneWidget); // Menu and context recommendations plus Browse.
+    expect(find.text('6 results'), findsNothing);
+    expect(find.byKey(const Key('launcher-footer')), findsNothing);
+    expect(find.text('Browse Menus…').hitTestable(), findsOneWidget);
+    expect(find.text('Context Extra 2'), findsNothing);
     expect(find.text('Git Status'), findsOneWidget);
     expect(find.text('Copy Path'), findsOneWidget);
     expect(find.text('Export 0'), findsNothing);
@@ -404,15 +414,20 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(executions, ['app.sidebar', 'git.status', 'copy.path']);
+    await tester.enterText(find.byType(TextField), 'Context Extra 2');
+    await tester.pumpAndSettle();
+    expect(
+        find.descendant(
+            of: find.byKey(const Key('action-list')),
+            matching: find.text('Context Extra 2')),
+        findsOneWidget);
     await tester.enterText(find.byType(TextField), 'absent');
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(boundaries.last,
         'app.editor'); // Enter cannot silently leave the scope.
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
     expect(boundaries.last, 'git');
     expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
@@ -577,6 +592,9 @@ void main() {
                         controller: controller.settings,
                         onClose: controller.closeSettings))))));
     await tester.tap(find.byKey(const ValueKey('settings-context')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Source status'));
+    await tester.tap(find.text('Source status'));
     await tester.pumpAndSettle();
     expect(find.text('Not supported by this app'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('settings-clipboard')));
@@ -804,7 +822,7 @@ void main() {
     expect(windowCalls, isNot(contains('hide')));
   });
 
-  testWidgets('scope bar changes query boundary without another capture',
+  testWidgets('Tab cycles scopes in both directions without losing input focus',
       (tester) async {
     final all =
         candidate('action:core.git.status:c1', 'Git Status', groupId: 'git');
@@ -858,11 +876,27 @@ void main() {
     expect(find.text('Git Log'), findsOneWidget);
     expect(tester.widget<TextField>(find.byType(TextField)).focusNode!.hasFocus,
         isTrue);
+    // Plain Tab wraps from Git to Folder, without traversing toolbar controls.
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(find.text('Copy Path'), findsOneWidget);
+    expect(find.text('Git Status'), findsNothing);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pumpAndSettle();
+    expect(find.text('Copy Path'), findsNothing);
+    expect(find.text('Git Status'), findsOneWidget);
+    // The existing Control chord remains an alias.
     await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
     await tester.pumpAndSettle();
     expect(find.text('Copy Path'), findsOneWidget);
+    expect(tester.widget<TextField>(find.byType(TextField)).focusNode!.hasFocus,
+        isTrue);
+    expect(tester.testTextInput.hasAnyClients, isTrue);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -1185,7 +1219,7 @@ void main() {
     expect(find.text('Second row'), findsNothing);
   });
 
-  testWidgets('keyboard selection scrolls the last result above the footer',
+  testWidgets('keyboard selection keeps its operation inside the last row',
       (tester) async {
     tester.view.physicalSize = const Size(648, 520);
     tester.view.devicePixelRatio = 1;
@@ -1224,18 +1258,15 @@ void main() {
     }
     final last = find.text('Action 14');
     expect(last.hitTestable(), findsOneWidget);
-    expect(tester.getRect(last).bottom,
-        lessThanOrEqualTo(tester.getRect(find.text('Run')).top));
-    expect(find.text('15 results'), findsOneWidget);
+    expect(find.text('15 results'), findsNothing);
+    expect(find.byKey(const Key('launcher-footer')), findsNothing);
     final panel = tester.getRect(find.byKey(const Key('launcher-panel')));
-    final footerKeycap = tester.getRect(find.descendant(
-        of: find.byKey(const Key('launcher-footer')),
-        matching: find.byType(AppKeycap)));
-    final runButton = tester.getRect(find.ancestor(
-        of: find.text('Run'), matching: find.byType(OutlinedButton)));
-    expect(panel.bottom - footerKeycap.bottom, greaterThanOrEqualTo(10));
-    expect(panel.right - footerKeycap.right, greaterThanOrEqualTo(24));
-    expect(panel.bottom - runButton.bottom, greaterThanOrEqualTo(10));
+    final action =
+        tester.getRect(find.byKey(const Key('selected-row-primary')));
+    expect(action.center.dy, closeTo(tester.getRect(last).center.dy, 10));
+    expect(action.bottom, lessThanOrEqualTo(panel.bottom - 8));
+    expect(action.right, lessThanOrEqualTo(panel.right - 20));
+    expect(find.byType(AppRowActions), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

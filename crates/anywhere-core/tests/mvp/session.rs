@@ -218,6 +218,7 @@ async fn a_registered_handler_executes_through_the_public_facade() {
     registry
         .register(
             ActionSpec {
+                localized_titles: &[],
                 id: "test.marker",
                 title: "Marker",
                 accepts: URL,

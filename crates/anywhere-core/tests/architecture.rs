@@ -207,6 +207,7 @@ fn every_candidate_kind_has_a_source_behind_it() {
         fn candidates(&self, _: &SearchContext<'_>) -> Vec<Candidate> {
             vec![Candidate {
                 presentation: CandidatePresentation {
+                    localized_titles: Default::default(),
                     shortcut: None,
                     id: "marker:test".into(),
                     kind: CandidateKind::Application,

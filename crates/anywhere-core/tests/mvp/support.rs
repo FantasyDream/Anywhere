@@ -74,8 +74,6 @@ pub(crate) struct TestPlatform {
     /// Simulates Finder Automation latency so the first snapshot budget cuts short.
     pub(crate) capture_delay: Option<Duration>,
     pub(crate) directory_error: Mutex<Option<anywhere_platform::ContextReadError>>,
-    /// Names the fake platform reports as this bundle's localized names.
-    pub(crate) localized: Vec<String>,
     pub(crate) frontmost_gate: Mutex<Option<Arc<CaptureGate>>>,
     pub(crate) frontmost_started: Notify,
     pub(crate) catalog_gate: Mutex<Option<Arc<CaptureGate>>>,
@@ -191,26 +189,13 @@ impl Platform for TestPlatform {
             .map(|stem| stem.to_string_lossy().into_owned())
             .unwrap_or_default();
         Ok(Some(BundleApplication {
+            localized_names: Default::default(),
             bundle_id: format!("app.{}.com", stem.replace(' ', "").to_lowercase()),
             name: stem,
             aliases: Vec::new(),
             path: Some(bundle.to_string_lossy().into_owned()),
             icon: None,
         }))
-    }
-    fn preferred_languages(&self) -> Vec<String> {
-        if self.localized.is_empty() {
-            Vec::new()
-        } else {
-            vec!["zh-Hans-CN".into()]
-        }
-    }
-    fn bundle_localized_names(&self, _: &Path, languages: &[String]) -> Result<Vec<String>> {
-        Ok(if languages.is_empty() {
-            Vec::new()
-        } else {
-            self.localized.clone()
-        })
     }
     fn launch_application(&self, path: &str) -> Result<bool> {
         self.launches.fetch_add(1, Ordering::Relaxed);

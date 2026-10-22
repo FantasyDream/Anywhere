@@ -1,3 +1,4 @@
+import '../l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import '../ui/app_components.dart';
 import '../ui/app_icons.dart';
@@ -21,17 +22,17 @@ class ClipboardSettingsSection extends StatelessWidget {
     final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-              title: const Text('Clear clipboard history?'),
-              content: const Text(
-                  'All saved entries will be permanently removed. The current system clipboard is unchanged.'),
+              title: Text(context.l10n.clearClipboardHistory),
+              content:
+                  Text(context.l10n.allSavedEntriesWillBePermanentlyRemoved),
               actions: [
                 TextButton(
                     autofocus: true,
                     onPressed: () => Navigator.pop(context, false),
-                    child: const Text('Cancel')),
+                    child: Text(context.l10n.cancel)),
                 TextButton(
                     onPressed: () => Navigator.pop(context, true),
-                    child: const Text('Clear History')),
+                    child: Text(context.l10n.clearHistory)),
               ],
             ));
     if (confirmed == true &&
@@ -51,58 +52,53 @@ class ClipboardSettingsSection extends StatelessWidget {
         return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const AppSectionHeading('Clipboard history',
+              AppSectionHeading(context.l10n.clipboardHistorySetting,
                   icon: AppIcons.clipboard),
-              if (controller.notice != null) ...[
-                AppNotice(controller.notice!),
+              if (controller.noticeFor(context.l10n) != null) ...[
+                AppNotice(controller.noticeFor(context.l10n)!),
                 const SizedBox(height: 10),
               ],
               AppCard(
                   child: SettingsToggleRow(
-                      title: 'Record clipboard history',
+                      title: context.l10n.recordClipboardHistory,
                       description:
-                          'Save future copies while Anywhere is running. Existing clipboard contents are not imported.',
+                          context.l10n.saveFutureCopiesWhileAnywhereIsRunning,
                       icon: AppIcons.clipboard,
                       value: controller.recording,
                       onChanged: enabled
                           ? (value) => controller.setRecording(value)
                           : null)),
               const SizedBox(height: 8),
-              const Text(
-                  'Text, images, rich text and file references are saved locally. Pausing keeps existing history.',
+              Text(context.l10n.textImagesRichTextAndFileReferences,
                   style: AppStyle.caption),
               if (!controller.loaded || !controller.available)
                 Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
                         onPressed: controller.busy ? null : controller.load,
-                        child:
-                            Text(controller.busy ? 'Loading…' : 'Try Again'))),
+                        child: Text(controller.busy
+                            ? context.l10n.loading
+                            : context.l10n.tryAgain))),
               const SizedBox(height: 20),
-              const AppSectionHeading('When opening Launcher',
+              AppSectionHeading(context.l10n.whenOpeningLauncher,
                   icon: AppIcons.search),
               AppCard(
                   child: SettingsToggleRow(
-                      title: 'Clipboard text',
+                      title: context.l10n.clipboardText,
                       description:
-                          'Auto-fill supported content copied within the last 15 seconds. Independent of history recording.',
+                          context.l10n.autoFillSupportedContentCopiedWithinThe,
                       icon: AppIcons.quote,
                       status: autoFillStatus,
                       value: autoFill,
                       onChanged: onAutoFill)),
               const SizedBox(height: 20),
-              const AppSectionHeading('History storage', icon: AppIcons.folder),
               AppCard(
-                  child: Padding(
-                      padding: const EdgeInsets.all(12),
+                  child: AppDisclosure(
+                      title: context.l10n.historyStorage,
                       child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Clear saved history',
-                                style: AppStyle.body),
-                            const SizedBox(height: 4),
-                            const Text(
-                                'Remove all saved entries. This does not change recording or the current system clipboard.',
+                            Text(context.l10n.removeAllSavedEntriesThisDoesNot,
                                 style: AppStyle.caption),
                             const SizedBox(height: 10),
                             Align(
@@ -112,7 +108,8 @@ class ClipboardSettingsSection extends StatelessWidget {
                                         enabled ? () => _clear(context) : null,
                                     style: OutlinedButton.styleFrom(
                                         foregroundColor: AppStyle.danger),
-                                    child: const Text('Clear History…'))),
+                                    child:
+                                        Text(context.l10n.clearHistoryAction))),
                           ]))),
             ]);
       });

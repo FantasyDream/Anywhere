@@ -1,12 +1,21 @@
+import '../l10n/app_language.dart';
+import 'dart:ui' show Locale;
 import '../infrastructure/desktop_environment.dart';
 import '../src/rust/api.dart';
 
 /// Presentation of safe capture metadata. No context values or system reads.
 class ContextSourceStatus {
-  const ContextSourceStatus(this.source, this.capture, {this.enabled = true});
+  const ContextSourceStatus(this.source, this.capture,
+      {this.enabled = true, this.localizations});
   final ContextSourceDto source;
   final ContextCaptureDto? capture;
   final bool enabled;
+  final AppLocalizations? localizations;
+  AppLocalizations get _l10n =>
+      localizations ?? lookupAppLocalizations(const Locale('en'));
+  ContextSourceStatus withLocalizations(AppLocalizations labels) =>
+      ContextSourceStatus(source, capture,
+          enabled: enabled, localizations: labels);
 
   static const sources = [
     ContextSourceDto.finderSelection,
@@ -17,33 +26,34 @@ class ContextSourceStatus {
 
   String get label => switch (source) {
         ContextSourceDto.finderSelection =>
-          DesktopEnvironment.current.fileSelectionLabel,
-        ContextSourceDto.selectedText => 'Selected text',
-        ContextSourceDto.browserCurrentPage => 'Browser current page',
-        ContextSourceDto.clipboard => 'Clipboard',
-        _ => 'Context',
+          DesktopEnvironment.current.usesMetaCommand
+              ? _l10n.finderSelection
+              : _l10n.fileSelection,
+        ContextSourceDto.selectedText => _l10n.selectedText,
+        ContextSourceDto.browserCurrentPage => _l10n.browserCurrentPage,
+        ContextSourceDto.clipboard => _l10n.clipboard,
+        _ => _l10n.context,
       };
 
   String get statusText {
-    if (!enabled) return 'Off · applies on the next wake';
+    if (!enabled) return _l10n.captureOff;
     return switch (capture?.status) {
-      null => 'Not captured in the last wake',
-      ContextCaptureStatusDto.captured => 'Ready · last wake',
+      null => _l10n.captureNotRead,
+      ContextCaptureStatusDto.captured => _l10n.captureReady,
       ContextCaptureStatusDto.empty => switch (source) {
-          ContextSourceDto.finderSelection => 'No items selected',
-          ContextSourceDto.selectedText => 'No text selected',
-          ContextSourceDto.browserCurrentPage => 'No web page available',
-          _ => 'No text copied',
+          ContextSourceDto.finderSelection => _l10n.noItemsSelected,
+          ContextSourceDto.selectedText => _l10n.noTextSelected,
+          ContextSourceDto.browserCurrentPage => _l10n.noPageAvailable,
+          _ => _l10n.noTextCopied,
         },
-      ContextCaptureStatusDto.permissionDenied => 'Permission needed',
-      ContextCaptureStatusDto.unsupported => 'Not supported by this app',
-      ContextCaptureStatusDto.applicationChanged =>
-        'App changed during capture',
-      ContextCaptureStatusDto.timedOut => 'Timed out',
-      ContextCaptureStatusDto.tooLarge => 'Content too long',
-      ContextCaptureStatusDto.tooManyItems => 'Too many selected items',
-      ContextCaptureStatusDto.unavailable => 'Could not read this source',
-      ContextCaptureStatusDto.failed => 'Read failed',
+      ContextCaptureStatusDto.permissionDenied => _l10n.permissionNeeded,
+      ContextCaptureStatusDto.unsupported => _l10n.sourceUnsupported,
+      ContextCaptureStatusDto.applicationChanged => _l10n.captureAppChanged,
+      ContextCaptureStatusDto.timedOut => _l10n.timedOut,
+      ContextCaptureStatusDto.tooLarge => _l10n.contentTooLong,
+      ContextCaptureStatusDto.tooManyItems => _l10n.tooManyItems,
+      ContextCaptureStatusDto.unavailable => _l10n.sourceUnavailable,
+      ContextCaptureStatusDto.failed => _l10n.readFailed,
     };
   }
 
@@ -51,28 +61,21 @@ class ContextSourceStatus {
       ? statusText
       : switch (capture?.status) {
           ContextCaptureStatusDto.permissionDenied => switch (source) {
-              ContextSourceDto.finderSelection =>
-                'Allow Finder Automation in System Settings, then reopen Anywhere.',
-              ContextSourceDto.selectedText =>
-                'Allow Accessibility in System Settings, then reopen Anywhere.',
+              ContextSourceDto.finderSelection => _l10n.finderPermissionHelp,
+              ContextSourceDto.selectedText => _l10n.selectedTextPermissionHelp,
               ContextSourceDto.browserCurrentPage =>
-                'Allow Anywhere to access this browser in System Settings → Privacy & Security → Automation, then reopen Anywhere.',
-              _ =>
-                'Allow clipboard access in System Settings, then reopen Anywhere.',
+                _l10n.browserPermissionHelp,
+              _ => _l10n.clipboardPermissionHelp,
             },
           ContextCaptureStatusDto.unsupported =>
-            '$label is not exposed by this app. Other sources still work.',
-          ContextCaptureStatusDto.applicationChanged =>
-            'The original app exited or restarted. Reopen Anywhere to capture it again.',
-          ContextCaptureStatusDto.timedOut =>
-            '$label took too long to respond. Reopen Anywhere to try again.',
-          ContextCaptureStatusDto.tooLarge =>
-            '$label is too long to use. Use less content and reopen Anywhere.',
-          ContextCaptureStatusDto.tooManyItems =>
-            'Select up to 32 items in Finder, then reopen Anywhere.',
+            _l10n.sourceUnsupportedHelp(label),
+          ContextCaptureStatusDto.applicationChanged => _l10n.appChangedHelp,
+          ContextCaptureStatusDto.timedOut => _l10n.sourceTimeoutHelp(label),
+          ContextCaptureStatusDto.tooLarge => _l10n.sourceTooLongHelp(label),
+          ContextCaptureStatusDto.tooManyItems => _l10n.tooManyItemsHelp,
           ContextCaptureStatusDto.unavailable ||
           ContextCaptureStatusDto.failed =>
-            '$label could not be read. Reopen Anywhere to try again; other sources still work.',
+            _l10n.sourceFailedHelp(label),
           _ => statusText,
         };
 

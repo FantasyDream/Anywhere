@@ -1,12 +1,12 @@
 # 扩展与声明式插件
 
-当前实现：V0.10 内置功能模块（外部 UI 协议保留 S1）；最后核对：2026-10-18。本页区分内置 Rust 功能模块和外部 TOML 插件。两者都复用正常 Context、Action、Candidate、Ranking 和执行链路。
+兼容协议：v1 / v2 / v3；最后整理：2026-10-23。本页区分内置 Rust 功能模块和外部 TOML 插件。两者都复用正常 Context、Action、Candidate、Ranking 和执行链路。
 
-第一方已改为内置功能模块，按 [P01–P09](feature-module-roadmap.md) 完成迁移。2026-10-18 调整后，Terminal 延后，下一阶段优先第三方 Web 插件，详见 [Web 平台设计与进度](web-plugin-design.md)。新的本地 Web 包、SDK 与预览安装入口由上述独立契约管理；本页只记录 v1 / v2 / v3 已实现协议与兼容行为，停止扩展 UI DSL。内置 Manifest 已在 P03 移除，旧 Reload / runtime 已在 P05c 退役；新的 Web 动态装载不会恢复第一方热加载。
+第一方已改为内置功能模块，按 [P01–P09](archive/feature-module-roadmap.md) 完成迁移。Terminal 延后；新的第三方 Web 插件已进入本地开发预览，详见 [Web 平台设计与进度](web-plugin-design.md)。新的本地 Web 包、SDK 与预览安装入口由上述独立契约管理；本页只记录 v1 / v2 / v3 已实现协议与兼容行为，停止扩展 UI DSL。内置 Manifest 已在 P03 移除，旧 Reload / runtime 已在 P05c 退役；新的 Web 动态装载不会恢复第一方热加载。
 
 ## 第一方模块
 
-URL、Git、Maven、Gradle、Node、Rust、Spring Boot、收藏目录实现位于 `crates/anywhere-core/src/features/`。各模块使用静态 FeatureDescriptor 声明 ID、名称和系统操作，registration.rs 编译期注册；内置描述不经过 TOML、外部协议版本或包版本校验，不从用户目录加载任意 Rust 动态库。设置状态使用 App 的 Cargo workspace 版本，内置模块没有独立版本。
+URL、Git、Maven、Gradle、Node、Rust、Spring Boot、收藏目录、剪贴板实现位于 `crates/anywhere-core/src/features/`。各模块使用静态 FeatureDescriptor 声明 ID、名称和系统操作，registration.rs 编译期注册；内置描述不经过 TOML、外部协议版本或包版本校验，不从用户目录加载任意 Rust 动态库。设置状态使用 App 的 Cargo workspace 版本，内置模块没有独立版本。
 
 `BuiltinFeature` / `FeatureContribution` 贡献 Provider、ActionBundle、动态动作及 启动绑定 Sources。FeatureDescriptor 的操作声明仍需通过 Host 允许列表，每次 HostServices 调用仍检查授权；Storage 的 namespace 仍由 Host 按稳定功能 ID 绑定。P04 起使用 FeatureServices 的具体业务 service，ExtensionState / Any 状态恢复已移除；收藏目录仅 repository 接触绑定存储，动作 / 来源只持有 SavedDirectoriesService。内部 Trait 不是稳定外部 ABI，也不构成进程沙箱。
 
@@ -16,7 +16,7 @@ URL、Git、Maven、Gradle、Node、Rust、Spring Boot、收藏目录实现位�
 
 支持 `~/Library/Application Support/Anywhere/plugins/*.toml` 和 `<plugin>/manifest.toml`。安装或修改后重启 Anywhere，在 Settings → Features 查看启动时检查的定义。Refresh 只刷新设置与数据、复验已有定义，不扫描新插件。
 
-插件只描述匹配与受限操作，不提供 Flutter Widget，也不运行 Shell、Node、Python、WASM 或任意进程。没有 Marketplace 或任意代码 UI runtime；v3 的受限数据视图由 Flutter Host 渲染。
+本节 TOML 插件只描述匹配与受限操作，不提供 Flutter Widget，也不运行 Shell、Node、Python、WASM 或任意进程；v3 的受限数据视图由 Flutter Host 渲染。这些限制不代表 Web 插件尚未实现：Web 包在独立 WebView 中运行页面 JS，使用另一套 Manifest 与批准记录，见[开发指南](plugin-development.md)。当前没有 Marketplace。
 
 ## v2：显式能力批准
 
@@ -82,7 +82,7 @@ action = { type = "open_url", url = "https://example.com/search?q={{context.valu
 
 ## 共用匹配与模板
 
-命令注册身份为 `<plugin.id>.<command.id>`。标识使用合法的小写片段，`core` 命名空间保留；matcher 使用命名空间类型，如 `core.text`、`git.repository`。`core.json` matcher 归一到 `json.document`，旧业务动作 `core.json.*` 已延期并从内置目录移除，委托该目标将失败；旧 matcher / Usage 迁移与动作 ID 仍保留兼容依据。
+TOML 命令注册身份为 `<plugin.id>.<command.id>`。标识使用合法的小写片段，`core` 命名空间保留；matcher 使用命名空间类型，如 `core.text`、`git.repository`。`core.json` matcher 归一到 `json.document`，旧业务动作 `core.json.*` 已退役并从内置目录移除，委托该目标将失败；旧 matcher / Usage 迁移与动作 ID 仍保留兼容依据。当前没有内置 JSON Provider 生成该 Context，新的 JSON Web 工具通过 `core.text` 与 `inputMatchers` 匹配，不复用旧动作 ID。
 
 可选 `group_id` 决定领域 Scope，默认 `plugin.<plugin_id>`；`aliases` / `keywords` 参与确定性查询匹配。插件不能通过 Group 改写 Context 来源或执行对象。
 
@@ -102,4 +102,4 @@ action = { type = "open_url", url = "https://example.com/search?q={{context.valu
 
 收藏目录最多 100 项 / 64 KiB，普通查询始终找目录；对象 Actions 的首项保持默认打开操作，移除通过明确选择 Forget Saved Directory；`forget` / `remove` / `unpin` 不被解析为隐式删除指令。
 
-当前实现与发布门槛见 [V0.9 MVP](mvp-v0.9.md)。历史 v1 / 版本迁移验收保存在 [归档](archive/README.md)。
+旧协议迁移与当时发布门槛见 [V0.9 记录](archive/mvp-v0.9.md)，当前整体状态见 [V0.12 MVP](mvp-v0.12.md)。历史 v1 / 版本迁移验收保存在 [归档](archive/README.md)。

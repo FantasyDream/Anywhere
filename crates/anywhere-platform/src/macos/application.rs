@@ -23,13 +23,12 @@ pub(super) fn frontmost_application() -> Result<Option<ApplicationInfo>> {
 }
 
 pub(super) fn installed_applications(roots: &[PathBuf]) -> crate::InstalledApplications {
-    let languages = preferred_languages();
     let mut applications = Vec::new();
     let mut skipped = 0usize;
     for path in crate::catalog::discover(roots, &|path| {
         crate::Platform::is_application_entry(&super::MacOsPlatform, path)
     }) {
-        match read_bundle(&path, &languages) {
+        match read_bundle(&path) {
             Ok(Some(application)) => applications.push(application),
             Ok(None) => skipped += 1,
             Err(error) => {
@@ -48,10 +47,10 @@ pub(super) fn installed_applications(roots: &[PathBuf]) -> crate::InstalledAppli
 }
 
 pub(super) fn bundle_application(bundle: &Path) -> Result<Option<BundleApplication>> {
-    read_bundle(bundle, &preferred_languages())
+    read_bundle(bundle)
 }
 
-fn read_bundle(bundle: &Path, languages: &[String]) -> Result<Option<BundleApplication>> {
+fn read_bundle(bundle: &Path) -> Result<Option<BundleApplication>> {
     let path = c_path(&bundle.to_string_lossy())?;
     // SAFETY: path outlives the call; the native side returns a malloc-owned JSON string.
     let decoded = unsafe {
@@ -72,7 +71,7 @@ fn read_bundle(bundle: &Path, languages: &[String]) -> Result<Option<BundleAppli
             .filter(|value| !value.is_empty())
             .map(str::to_owned)
     };
-    let (Some(bundle_id), Some(mut name)) = (string("bundle_id"), string("name")) else {
+    let (Some(bundle_id), Some(name)) = (string("bundle_id"), string("name")) else {
         return Ok(None);
     };
     let mut aliases = value
@@ -92,68 +91,22 @@ fn read_bundle(bundle: &Path, languages: &[String]) -> Result<Option<BundleAppli
             .iter()
             .map(|alias| (*alias).to_owned()),
     );
-    if !languages.is_empty() {
-        if let Ok(names) = bundle_localized_names(bundle, languages) {
-            if let Some(preferred) = names
-                .first()
-                .map(String::as_str)
-                .filter(|entry| !entry.is_empty())
-            {
-                if !preferred.eq_ignore_ascii_case(&name) {
-                    aliases.insert(0, name);
-                    name = preferred.to_owned();
-                }
-            }
-            for localized in names {
-                if localized != name && !aliases.iter().any(|alias| alias == &localized) {
-                    aliases.push(localized);
-                }
-            }
-        }
-    }
+    let localized_names = value
+        .get("localized_names")
+        .cloned()
+        .map(serde_json::from_value)
+        .transpose()
+        .context("decode localized application names")?
+        .unwrap_or_default();
     aliases.retain(|alias| !alias.eq_ignore_ascii_case(&name));
     Ok(Some(BundleApplication {
         aliases,
+        localized_names,
         bundle_id,
         name,
         path: string("path"),
         icon: None,
     }))
-}
-
-pub(super) fn preferred_languages() -> Vec<String> {
-    // SAFETY: returns a malloc-owned JSON string, freed exactly once here.
-    unsafe {
-        let raw = launcher_preferred_languages();
-        if raw.is_null() {
-            return Vec::new();
-        }
-        let decoded: std::result::Result<Vec<String>, _> =
-            serde_json::from_slice(CStr::from_ptr(raw).to_bytes());
-        launcher_free_string(raw);
-        decoded.unwrap_or_default()
-    }
-}
-
-pub(super) fn bundle_localized_names(bundle: &Path, languages: &[String]) -> Result<Vec<String>> {
-    if languages.is_empty() {
-        return Ok(Vec::new());
-    }
-    let path = c_path(&bundle.to_string_lossy())?;
-    let languages = c_path(&languages.join(","))?;
-    // SAFETY: both inputs are NUL-terminated and outlive the call; the returned
-    // string is malloc-owned and freed exactly once.
-    let decoded = unsafe {
-        let raw = launcher_bundle_localized_names(path.as_ptr(), languages.as_ptr());
-        if raw.is_null() {
-            return Ok(Vec::new());
-        }
-        let decoded: std::result::Result<Vec<String>, _> =
-            serde_json::from_slice(CStr::from_ptr(raw).to_bytes());
-        launcher_free_string(raw);
-        decoded
-    };
-    Ok(decoded.unwrap_or_default())
 }
 
 pub(super) fn launch_application(path: &str) -> Result<bool> {
@@ -406,16 +359,12 @@ mod tests {
             );
         }
         let lark = Path::new("/Applications/Lark.app");
-        if lark.exists()
-            && preferred_languages()
-                .iter()
-                .any(|language| language.to_ascii_lowercase().starts_with("zh"))
-        {
+        if lark.exists() {
             let bundle = platform.bundle_application(lark).unwrap().unwrap();
             assert_eq!(
-                bundle.name, "飞书",
-                "preferred-language title, not the English file name; aliases={:?}",
-                bundle.aliases
+                bundle.localized_names.get("zh").map(String::as_str),
+                Some("飞书"),
+                "Chinese search/presentation metadata must be independent of the system language"
             );
         }
         // A plain directory is not an application.

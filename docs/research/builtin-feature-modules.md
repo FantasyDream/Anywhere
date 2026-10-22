@@ -1,8 +1,10 @@
 # 内置功能模块架构：取消第一方热加载模型
 
-日期：2026-10-14。方案核对基线 `dev-0.9@e4dbedc`。用户已确认并按 [迁移路线图](../feature-module-roadmap.md) 分阶段实施；当前完成情况见 [MVP](../mvp-v0.9.md)。第一方不实现热加载，热加载只在最后阶段的第三方 WebView 插件中实现。本文替代前一份方案的第一方 Runtime / NativeProcessRuntime 方向。
+日期：2026-10-14。方案核对基线 `dev-0.9@e4dbedc`。用户已确认并按 [迁移路线图](../archive/feature-module-roadmap.md) 分阶段实施；当前完成情况见 [MVP](../archive/mvp-v0.9.md)。第一方不实现热加载，热加载只在最后阶段的第三方 WebView 插件中实现。本文替代前一份方案的第一方 Runtime / NativeProcessRuntime 方向。
 
-2026-10-16 补充：本文建议的首个 JSON 原生工具已被用户取消，JSON 整体延期到 WebView 插件机制完成后实现。当前范围与待清理项以 [V0.9 MVP](../mvp-v0.9.md) 为准，其余模块架构决策继续有效。
+**历史方案，核对说明更新于 2026-10-23。** 静态内置模块迁移已完成；下文包含当时的拟议目录 / 生成方式，不是当前目录或接口清单。现行实现见[架构](../architecture.md)，当前验收见 [V0.12 MVP](../mvp-v0.12.md)。第三方 Web 本地包已接入，但目录 watch / Vite HMR 尚未实现。
+
+2026-10-16 的范围变更取消了本文建议的 JSON 原生工具。JSON 后来已作为普通 Web 包实现，因此下文“JSON 业务在 Rust”等原生工具设想不适用于现有 JSON Workspace；见[插件示例](../../plugins/examples/json-workspace/README.md)。其余模块分层决策保留历史依据。
 ## 1. 命名与目标
 
 第一方称为内置功能模块（Feature Module），第三方扩展称为插件（Plugin）。模块编译进 App，随 App 一起发布；没有安装、卸载、加载、重载、独立版本协商或原生二进制热更新。

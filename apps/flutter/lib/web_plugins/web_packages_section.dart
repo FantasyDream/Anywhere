@@ -1,3 +1,5 @@
+import '../l10n/app_language.dart';
+import 'permission_labels.dart';
 import 'package:flutter/material.dart';
 import '../src/rust/api.dart' as api;
 import '../infrastructure/web_package_backend.dart';
@@ -14,9 +16,11 @@ class WebPackagesSection extends StatefulWidget {
   State<WebPackagesSection> createState() => _WebPackagesSectionState();
 }
 
+enum _PackageNotice { unavailable, installed, installFailed, operationFailed }
+
 class _WebPackagesSectionState extends State<WebPackagesSection> {
   List<api.WebPackageDto> _packages = [];
-  String? _notice;
+  _PackageNotice? _notice;
   bool _busy = false;
   int _generation = 0;
   @override
@@ -34,7 +38,7 @@ class _WebPackagesSectionState extends State<WebPackagesSection> {
       }
     } catch (_) {
       if (mounted && generation == _generation) {
-        setState(() => _notice = 'Web tools are unavailable on this platform.');
+        setState(() => _notice = _PackageNotice.unavailable);
       }
     }
   }
@@ -57,8 +61,9 @@ class _WebPackagesSectionState extends State<WebPackagesSection> {
           context: context,
           barrierDismissible: false,
           builder: (context) => AlertDialog(
-                  title: Text(
-                      '${review.updating ? 'Update' : 'Install'} ${review.name}?'),
+                  title: Text(review.updating
+                      ? context.l10n.updateToolReview(review.name)
+                      : context.l10n.installToolReview(review.name)),
                   content: SizedBox(
                       width: 440,
                       child: SingleChildScrollView(
@@ -68,22 +73,23 @@ class _WebPackagesSectionState extends State<WebPackagesSection> {
                               children: [
                             Text('${review.id} · ${review.version}'),
                             const SizedBox(height: 12),
-                            const Text('Requested access',
+                            Text(context.l10n.requestedAccess,
                                 style: AppStyle.body),
                             for (final permission in review.permissions)
                               Padding(
                                   padding: const EdgeInsets.only(top: 8),
-                                  child: Text('• $permission')),
+                                  child: Text(
+                                      '• ${webPermissionLabel(permission, context.l10n)}')),
                             if (review.permissions.isEmpty)
-                              const Text('No Host permissions.'),
+                              Text(context.l10n.noHostPermissions),
                             const SizedBox(height: 16),
-                            const Text(
-                                'Code runs in a local WebView. Network access and navigation are blocked. This is not an OS process sandbox.',
+                            Text(context.l10n.codeRunsInALocalWebViewNetwork,
                                 style: AppStyle.caption),
                             if (review.updating) ...[
                               const SizedBox(height: 12),
-                              const Text(
-                                  'This replaces the installed code, closes its active page, and keeps its local settings. A previously approved version can be restored.',
+                              Text(
+                                  context.l10n
+                                      .thisReplacesTheInstalledCodeClosesIts,
                                   style: AppStyle.caption)
                             ],
                             const SizedBox(height: 14),
@@ -93,24 +99,23 @@ class _WebPackagesSectionState extends State<WebPackagesSection> {
                   actions: [
                     TextButton(
                         onPressed: () => Navigator.pop(context, false),
-                        child: const Text('Cancel')),
+                        child: Text(context.l10n.cancel)),
                     FilledButton(
                         onPressed: () => Navigator.pop(context, true),
-                        child: const Text('Approve and install'))
+                        child: Text(context.l10n.approveAndInstall))
                   ]));
       if (approved == true && mounted) {
         final packages = await widget.backend.approve(review.token);
         if (mounted) {
           setState(() {
             _packages = packages;
-            _notice = 'Installed. Search for the tool by name to open it.';
+            _notice = _PackageNotice.installed;
           });
         }
       }
     } catch (_) {
       if (mounted) {
-        setState(() => _notice =
-            'The package could not be installed. The existing version is unchanged.');
+        setState(() => _notice = _PackageNotice.installFailed);
       }
     } finally {
       if (inspected) {
@@ -146,8 +151,7 @@ class _WebPackagesSectionState extends State<WebPackagesSection> {
         // Keep the last known rows when even status recovery is unavailable.
       }
       if (mounted) {
-        setState(() => _notice =
-            'The operation could not finish. Check the current tool status and try again.');
+        setState(() => _notice = _PackageNotice.operationFailed);
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -159,48 +163,54 @@ class _WebPackagesSectionState extends State<WebPackagesSection> {
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         const SizedBox(height: 22),
         Row(children: [
-          const Expanded(
-              child: AppSectionHeading('Web tools', icon: AppIcons.desktop)),
+          Expanded(
+              child: AppSectionHeading(context.l10n.webTools,
+                  icon: AppIcons.desktop)),
           TextButton.icon(
               onPressed: _busy ? null : _install,
               icon: const Icon(AppIcons.add, size: 16),
-              label: const Text('Import…'))
+              label: Text(context.l10n.import))
         ]),
-        const Text(
-            'Local development packages on macOS. Windows support and public distribution are still under validation.',
-            style: AppStyle.caption),
         const SizedBox(height: 10),
         if (_notice != null)
           Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: Text(_notice!, style: AppStyle.caption)),
+              child: Text(
+                  switch (_notice!) {
+                    _PackageNotice.unavailable =>
+                      context.l10n.webToolsAreUnavailableOnThisPlatform,
+                    _PackageNotice.installed =>
+                      context.l10n.installedSearchForTheToolByName,
+                    _PackageNotice.installFailed =>
+                      context.l10n.thePackageCouldNotBeInstalledThe,
+                    _PackageNotice.operationFailed =>
+                      context.l10n.theOperationCouldNotFinishCheckThe,
+                  },
+                  style: AppStyle.caption)),
         AppCard(
             child: Column(children: [
           if (_packages.isEmpty)
-            const Padding(
-                padding: EdgeInsets.all(14),
-                child:
-                    Text('No Web tools installed.', style: AppStyle.caption)),
-          for (final package in _packages)
             Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                padding: EdgeInsets.all(14),
+                child: Text(context.l10n.noWebToolsInstalled,
+                    style: AppStyle.caption)),
+          for (final package in _packages)
+            AppDisclosure(
+                key: ValueKey('web-package-${package.id}'),
+                title: package.name,
+                leading: const Icon(AppIcons.plugin,
+                    size: 18, color: AppStyle.secondary),
+                trailing: AppToggle(
+                    label: context.l10n.enableFeature(package.name),
+                    value: package.enabled,
+                    onChanged: _busy
+                        ? null
+                        : (enabled) =>
+                            _change(package, enabled ? 'enable' : 'disable')),
                 child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(children: [
-                        Expanded(
-                            child: Text(package.name, style: AppStyle.body)),
-                        const SizedBox(width: 10),
-                        AppToggle(
-                            label: 'Enable ${package.name}',
-                            value: package.enabled,
-                            onChanged: _busy
-                                ? null
-                                : (enabled) => _change(
-                                    package, enabled ? 'enable' : 'disable')),
-                      ]),
-                      Text('${package.version} · ${package.id}',
+                      SelectableText('${package.version} · ${package.id}',
                           style: AppStyle.caption),
                       const SizedBox(height: 6),
                       Wrap(spacing: 8, runSpacing: 6, children: [
@@ -210,13 +220,13 @@ class _WebPackagesSectionState extends State<WebPackagesSection> {
                                   ? null
                                   : () => _change(package, 'rollback'),
                               icon: const Icon(AppIcons.refresh, size: 14),
-                              label: const Text('Restore approved version')),
+                              label: Text(context.l10n.restoreApprovedVersion)),
                         TextButton.icon(
                             onPressed: _busy
                                 ? null
                                 : () => _change(package, 'uninstall'),
-                            icon: const Icon(AppIcons.close, size: 14),
-                            label: const Text('Uninstall')),
+                            icon: const Icon(AppIcons.delete, size: 16),
+                            label: Text(context.l10n.uninstall)),
                       ]),
                     ])),
         ])),

@@ -207,6 +207,7 @@ impl LegacyPluginSettings {
                 active,
                 needs_approval: !approved,
                 configurable: !self.preferences.recovery && p.error.is_none(),
+                restart_required: enabled && approved && !active,
                 capabilities: p
                     .manifest
                     .capabilities
@@ -235,6 +236,7 @@ pub(super) fn invalid(id: String, detail: String) -> ModuleStatus {
         active: false,
         needs_approval: false,
         configurable: false,
+        restart_required: false,
         capabilities: vec![],
         approval_token: String::new(),
         detail,

@@ -404,6 +404,7 @@ async fn a_disabled_text_fallback_cannot_execute() {
     registry
         .register(
             ActionSpec {
+                localized_titles: &[],
                 id: "test.text.require",
                 title: "Need Git Text",
                 accepts: TEXT,

@@ -4,10 +4,12 @@ cd "$(dirname "$0")/.."
 ROOT="$PWD"
 source scripts/env.sh
 python3 scripts/check-flutter.py
+python3 scripts/check-versions.py
 python3 scripts/generate-design-tokens.py --check
 python3 scripts/generate-keymap.py --check
 python3 scripts/generate-file-types.py --check
 python3 scripts/generate-runtime-policies.py --check
+python3 scripts/generate-native-localizations.py --check
 cargo run -p anywhere-core --example generate_feature_catalog --locked -- --check
 if [[ "$(uname -s)" != Darwin ]]; then
   echo 'This MVP builds on macOS only.' >&2
@@ -53,6 +55,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Frameworks" "$APP/Contents/Resourc
 cp apps/flutter/macos/Runner/Info.plist "$APP/Contents/Info.plist"
 cp apps/flutter/macos/Runner/Assets/Anywhere.icns "$APP/Contents/Resources/Anywhere.icns"
 ditto resources/licenses "$APP/Contents/Resources/Licenses"
+cp LICENSE "$APP/Contents/Resources/Licenses/Anywhere.txt"
+ditto resources/native-localizations "$APP/Contents/Resources"
 # ditto preserves framework symlinks required by dyld and code signing.
 ditto build/flutter/FlutterMacOS.framework "$APP/Contents/Frameworks/FlutterMacOS.framework"
 ditto build/flutter/App.framework "$APP/Contents/Frameworks/App.framework"

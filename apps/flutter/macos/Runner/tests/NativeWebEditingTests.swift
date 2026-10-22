@@ -1,5 +1,6 @@
 import AppKit
 import WebKit
+import ObjectiveC
 
 final class UnsupportedCanvasWebView: WKWebView {
     override func responds(to selector: Selector!) -> Bool {
@@ -12,15 +13,21 @@ final class UnsupportedCanvasWebView: WKWebView {
     }
 }
 
-final class LiveCanvasWebView: WKWebView {
-    override func takeSnapshot(with configuration: WKSnapshotConfiguration?, completionHandler: @escaping @MainActor @Sendable (NSImage?, Error?) -> Void) {
-        preconditionFailure("Live canvas setup must not create an offscreen snapshot")
-    }
-}
+final class LiveCanvasWebView: WKWebView {}
 
 @main
 struct NativeWebEditingTests {
     @MainActor static func main() {
+        // Swift SDKs disagree on actor/sendable annotations for this callback.
+        // Guard the stable Objective-C selector on this test subclass only;
+        // keep the no-snapshot regression without guessing an SDK version.
+        let selector = NSSelectorFromString("takeSnapshotWithConfiguration:completionHandler:")
+        let method = class_getInstanceMethod(WKWebView.self, selector)!
+        let rejectSnapshot: @convention(block) (AnyObject, AnyObject?, AnyObject) -> Void = { _, _, _ in
+            preconditionFailure("Live canvas setup must not create an offscreen snapshot")
+        }
+        precondition(class_addMethod(LiveCanvasWebView.self, selector,
+            imp_implementationWithBlock(rejectSnapshot), method_getTypeEncoding(method)))
         _ = NSApplication.shared
         let frame = NSRect(x: 0, y: 0, width: 400, height: 200)
         let window = NSWindow(contentRect: frame, styleMask: [.borderless], backing: .buffered, defer: false)

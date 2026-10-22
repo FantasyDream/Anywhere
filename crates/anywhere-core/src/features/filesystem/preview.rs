@@ -12,7 +12,9 @@ pub struct FilePreview {
     pub size_bytes: u64,
     pub modified_ms: Option<i64>,
     pub text: Option<String>,
-    pub notice: Option<String>,
+    pub truncated_at_bytes: Option<u32>,
+    pub encoding: Option<String>,
+    pub encoding_guessed: bool,
 }
 
 pub fn read(context: &ResolvedContext) -> Result<FilePreview> {
@@ -32,7 +34,9 @@ pub fn read(context: &ResolvedContext) -> Result<FilePreview> {
             .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
             .and_then(|d| i64::try_from(d.as_millis()).ok()),
         text: None,
-        notice: None,
+        truncated_at_bytes: None,
+        encoding: None,
+        encoding_guessed: false,
     };
     if metadata.is_dir() {
         return Ok(preview);
@@ -65,19 +69,10 @@ pub fn read(context: &ResolvedContext) -> Result<FilePreview> {
                 "txt" | "md" | "csv" | "tsv" | "log" | "rtf" | "svg"
             );
     if let Some(decoded) = text::decode(&bytes, truncated, allow_legacy) {
-        let mut notices = Vec::new();
-        if decoded.truncated {
-            notices.push("Showing the first 64 KiB".to_owned());
-        }
-        if decoded.guessed {
-            notices.push(format!("Encoding guessed as {}", decoded.encoding));
-        } else if decoded.encoding != "UTF-8" {
-            notices.push(format!("Decoded as {}", decoded.encoding));
-        }
-        preview.notice = (!notices.is_empty()).then(|| notices.join(" · "));
+        preview.truncated_at_bytes = decoded.truncated.then_some(MAX_PREVIEW_BYTES as u32);
+        preview.encoding = Some(decoded.encoding.to_owned());
+        preview.encoding_guessed = decoded.guessed;
         preview.text = Some(decoded.text);
-    } else {
-        preview.notice = Some("Text preview is unavailable for this file type".into());
     }
     Ok(preview)
 }
@@ -100,7 +95,9 @@ mod tests {
         std::fs::write(&path, "界".repeat(MAX_PREVIEW_BYTES)).unwrap();
         let p = read(&context).unwrap();
         assert!(p.text.unwrap().len() <= MAX_PREVIEW_BYTES);
-        assert_eq!(p.notice.as_deref(), Some("Showing the first 64 KiB"));
+        assert_eq!(p.truncated_at_bytes, Some(MAX_PREVIEW_BYTES as u32));
+        assert_eq!(p.encoding.as_deref(), Some("UTF-8"));
+        assert!(!p.encoding_guessed);
         std::fs::write(&path, [0, 1, 2, 255]).unwrap();
         assert!(read(&context).unwrap().text.is_none());
         std::fs::remove_file(&path).unwrap();
@@ -122,7 +119,8 @@ mod tests {
         std::fs::write(&path, &bytes).unwrap();
         let result = read(&context).unwrap();
         assert_eq!(result.text.as_deref(), Some(source.as_str()));
-        assert_eq!(result.notice.as_deref(), Some("Encoding guessed as GBK"));
+        assert_eq!(result.encoding.as_deref(), Some("GBK"));
+        assert!(result.encoding_guessed);
         let other = dir.path().canonicalize().unwrap().join("unknown.bin");
         std::fs::write(&other, &bytes).unwrap();
         let unknown = ResolvedContext::new(
@@ -139,7 +137,8 @@ mod tests {
         std::fs::write(&path, utf16).unwrap();
         let result = read(&context).unwrap();
         assert_eq!(result.text.as_deref(), Some(source.as_str()));
-        assert_eq!(result.notice.as_deref(), Some("Decoded as UTF-16LE"));
+        assert_eq!(result.encoding.as_deref(), Some("UTF-16LE"));
+        assert!(!result.encoding_guessed);
         std::fs::write(&path, b"\xef\xbb\xbfUTF-8 BOM").unwrap();
         assert_eq!(read(&context).unwrap().text.as_deref(), Some("UTF-8 BOM"));
     }

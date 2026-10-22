@@ -10,10 +10,15 @@ use serde_json::{json, Value};
 use std::sync::Arc;
 
 /// This value is not serializable and must go to Host chrome, never to JS.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WebConsentKind {
+    ReadClipboard,
+    WriteClipboard,
+}
 pub struct WebConfirmation {
     pub ticket: String,
     pub request_id: String,
-    pub title: &'static str,
+    pub kind: WebConsentKind,
     pub preview: Option<String>,
 }
 pub enum WebDispatch {
@@ -145,10 +150,10 @@ impl WebPluginService {
             return Err(error(WebErrorCode::Busy));
         }
         let ticket = super::token().map_err(|_| error(WebErrorCode::HostFailure))?;
-        let (title, preview) = match &operation {
-            ClipboardOperation::Read => ("Read clipboard text", None),
+        let (kind, preview) = match &operation {
+            ClipboardOperation::Read => (WebConsentKind::ReadClipboard, None),
             ClipboardOperation::Write(text) => (
-                "Copy text to clipboard",
+                WebConsentKind::WriteClipboard,
                 Some(text.chars().take(120).collect()),
             ),
         };
@@ -160,7 +165,7 @@ impl WebPluginService {
         Ok(Plan::Confirmation(WebConfirmation {
             ticket,
             request_id: request.id.clone(),
-            title,
+            kind,
             preview,
         }))
     }

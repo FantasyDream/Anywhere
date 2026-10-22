@@ -39,7 +39,6 @@ class _PluginDetailPageState extends State<PluginDetailPage> {
     final detail = widget.detail;
     return ToolPageShell(
       title: detail.title,
-      subtitle: 'Detail',
       onBack: widget.onBack,
       notice: widget.notice,
       scrollController: _scroll,

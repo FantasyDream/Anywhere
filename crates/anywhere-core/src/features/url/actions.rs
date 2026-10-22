@@ -46,6 +46,7 @@ pub fn bundle() -> ActionBundle {
         group: crate::features::groups::web(),
         actions: vec![
             ActionSpec {
+                localized_titles: &[("zh", "在默认浏览器中打开")],
                 id: "core.url.open",
                 title: "Open in Default Browser",
                 accepts: URL,
@@ -59,13 +60,14 @@ pub fn bundle() -> ActionBundle {
                 primary_action: true,
             },
             ActionSpec {
+                localized_titles: &[("zh", "复制网址")],
                 id: "core.url.copy",
                 title: "Copy URL",
                 accepts: URL,
                 handler: &CopyUrl,
                 availability: AvailabilityRule::hide_if(CLIPBOARD),
                 base_priority: 20,
-                icon: "copy",
+                icon: "copy-url",
                 aliases: &["copy", "link", "clipboard"],
                 keywords: &["url"],
                 home_eligible: true,

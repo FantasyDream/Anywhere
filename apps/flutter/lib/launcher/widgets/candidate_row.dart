@@ -1,7 +1,10 @@
+import '../../l10n/app_language.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import '../../ui/app_components.dart';
 import 'package:flutter/foundation.dart';
 import '../../src/rust/api.dart';
+import '../../l10n/localized_label.dart';
 import '../../ui/app_style.dart';
 import '../launcher_view_state.dart';
 import 'candidate_icon.dart';
@@ -15,6 +18,10 @@ class CandidateRow extends StatelessWidget {
     this.iconBytes,
     this.sourceLabel,
     this.actionShortcut,
+    this.primaryLabel,
+    this.onPrimary,
+    this.onActions,
+    this.onDoubleTap,
     this.fileObject = true,
   });
   final CandidateDto candidate;
@@ -23,58 +30,83 @@ class CandidateRow extends StatelessWidget {
   final Uint8List? iconBytes;
   final String? sourceLabel;
   final String? actionShortcut;
+  final String? primaryLabel;
+  final VoidCallback? onPrimary, onActions, onDoubleTap;
   final bool fileObject;
 
   @override
   Widget build(BuildContext context) {
     final disabled = candidate.availability != AvailabilityDto.enabled;
-    return Semantics(
-      selected: selected,
-      button: true,
-      enabled: !disabled,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: AppSelectionSurface(
+    final title =
+        context.localizedLabel(candidate.title, candidate.localizedTitles);
+    return Listener(
+        // Select immediately, independently of the double-click recognizer. This
+        // also lets row commands execute without waiting for a double-click timeout.
+        onPointerDown: disabled
+            ? null
+            : (event) {
+                if (event.buttons == kPrimaryMouseButton) onTap();
+              },
+        child: Semantics(
           selected: selected,
+          button: true,
+          enabled: !disabled,
           onTap: disabled ? null : onTap,
-          child: SizedBox(
-            height: LauncherViewState.rowHeight - 4,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              child: Row(
-                children: [
-                  CandidateIcon(
-                      candidate: candidate,
-                      bytes: iconBytes,
-                      size: 32,
-                      fileObject: fileObject),
-                  const SizedBox(width: 12),
-                  Expanded(child: _labels(disabled)),
-                  if (actionShortcut != null || candidate.shortcut != null) ...[
-                    const SizedBox(width: 8),
-                    Tooltip(
-                        message: actionShortcut != null
-                            ? 'Anywhere action shortcut'
-                            : 'Shortcut in the current app',
-                        child:
-                            _shortcut(actionShortcut ?? candidate.shortcut!)),
-                  ],
-                ],
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: AppSelectionSurface(
+              selected: selected,
+              child: SizedBox(
+                height: LauncherViewState.rowHeight - 4,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Row(
+                    children: [
+                      Expanded(
+                          // Only the object region recognizes double-clicks. A
+                          // parent double-tap recognizer would delay command taps.
+                          child: GestureDetector(
+                              behavior: HitTestBehavior.opaque,
+                              onDoubleTap: disabled ? null : onDoubleTap,
+                              child: Row(children: [
+                                CandidateIcon(
+                                    candidate: candidate,
+                                    bytes: iconBytes,
+                                    size: 32,
+                                    fileObject: fileObject),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                    child: _labels(context, disabled, title)),
+                              ]))),
+                      if (actionShortcut != null) ...[
+                        const SizedBox(width: 8),
+                        Tooltip(
+                            message: context.l10n.anywhereActionShortcut,
+                            child: _shortcut(actionShortcut!)),
+                      ],
+                      if (selected && !disabled && primaryLabel != null) ...[
+                        const SizedBox(width: 6),
+                        AppRowActions(
+                            primaryLabel: primaryLabel!,
+                            onPrimary: onPrimary,
+                            onActions: onActions),
+                      ],
+                    ],
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ),
-    );
+        ));
   }
 
-  Widget _labels(bool disabled) {
-    final subtitle = _visibleSubtitle();
+  Widget _labels(BuildContext context, bool disabled, String title) {
+    final subtitle = _visibleSubtitle(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _title(disabled),
+        _title(disabled, title),
         if (subtitle != null) ...[
           const SizedBox(height: 2),
           Tooltip(
@@ -96,8 +128,8 @@ class CandidateRow extends StatelessWidget {
     );
   }
 
-  Widget _title(bool disabled) => Text(
-        candidate.title,
+  Widget _title(bool disabled, String title) => Text(
+        title,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
@@ -109,10 +141,10 @@ class CandidateRow extends StatelessWidget {
             color: disabled ? AppStyle.muted : AppStyle.primary),
       );
 
-  String? _visibleSubtitle() {
+  String? _visibleSubtitle(BuildContext context) {
     final disabled = candidate.availability != AvailabilityDto.enabled;
     if (disabled) {
-      return candidate.availabilityReason ?? 'Not available right now';
+      return candidate.availabilityReason ?? context.l10n.notAvailableRightNow;
     }
     final menu = candidate.menuPath.join(' › ');
     if (menu.isNotEmpty) {

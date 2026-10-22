@@ -200,6 +200,9 @@ pub struct CandidatePresentation {
     #[serde(default)]
     pub file_kind: Option<FileObjectKind>,
     pub title: String,
+    /// Optional source-supplied labels. The host chooses a language for display only.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub localized_titles: BTreeMap<String, String>,
     pub subtitle: Option<String>,
     #[serde(default)]
     /// Display-only shortcut reported by the source application; never a user binding.
@@ -650,6 +653,7 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
             session_id: 1,
             candidates: vec![
                 CandidatePresentation {
+                    localized_titles: Default::default(),
                     id: "action:core.directory.copy:c1".into(),
                     kind: CandidateKind::Action,
                     is_menu: false,
@@ -673,6 +677,7 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
                     section_label: None,
                 },
                 CandidatePresentation {
+                    localized_titles: Default::default(),
                     id: "app:com.google.Chrome".into(),
                     kind: CandidateKind::Application,
                     is_menu: false,
@@ -714,6 +719,7 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
     #[test]
     fn current_app_membership_includes_domains_and_disabled_actions_only() {
         let hidden = CandidatePresentation {
+            localized_titles: Default::default(),
             id: "hidden".into(),
             kind: CandidateKind::Action,
             is_menu: false,

@@ -40,8 +40,7 @@ Future<void> executionSessionsMain() async {
         debugShowCheckedModeBanner: false,
         theme: AppStyle.theme,
         builder: AppStyle.windowBuilder,
-        home: AppFailureView(
-            title: 'Running Tasks could not open', detail: '$error')));
+        home: AppFailureView(kind: AppFailureKind.tasks, detail: '$error')));
   }
 }
 
@@ -63,7 +62,7 @@ Future<void> clipboardShelfMain() async {
         theme: AppStyle.theme,
         builder: AppStyle.windowBuilder,
         home: AppFailureView(
-            title: 'Clipboard Shelf could not open', detail: '$error')));
+            kind: AppFailureKind.clipboardShelf, detail: '$error')));
   }
 }
 
@@ -208,8 +207,7 @@ Future<void> main() async {
         debugShowCheckedModeBanner: false,
         theme: AppStyle.theme,
         builder: AppStyle.windowBuilder,
-        home: AppFailureView(
-            title: 'Launcher could not start', detail: '$error')));
+        home: AppFailureView(kind: AppFailureKind.launcher, detail: '$error')));
     await windowChannel.invokeMethod<void>('show', {
       'generation': 0,
       'height': 180.0,

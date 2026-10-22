@@ -1,3 +1,5 @@
+import '../l10n/app_language.dart';
+import 'dart:ui' show Locale;
 import 'dart:async';
 import 'clipboard_settings_controller.dart';
 import '../infrastructure/clipboard_preferences_backend.dart';
@@ -101,6 +103,7 @@ class SettingsController extends ChangeNotifier {
       _readSupportedShortcutActions;
   Future<void> _catalogQueue = Future.value();
   String? _catalogSyncError;
+  bool _catalogRegistrationFailed = false;
   String? get shortcutCatalogMessage => _catalogSyncError;
 
   String _shortcutCatalogFailure(Object error) => error is PlatformException &&
@@ -133,7 +136,32 @@ class SettingsController extends ChangeNotifier {
         _warning,
         if (_fileSearchInitializationFailed) fileSearchRecoveryMessage,
       ].where((s) => s.isNotEmpty).join('\n');
-  String? _statusMessage;
+  String? _statusText;
+  String Function(AppLocalizations)? _localizedStatus;
+  String? get _statusMessage => _statusText;
+  set _statusMessage(String? value) {
+    _statusText = value;
+    _localizedStatus = null;
+  }
+
+  String? statusMessageFor(AppLocalizations labels) =>
+      _localizedStatus?.call(labels) ?? _statusText;
+  void _setLocalizedStatus(String Function(AppLocalizations) render) {
+    _statusMessage = render(lookupAppLocalizations(const Locale('en')));
+    _localizedStatus = render;
+  }
+
+  void _reportLocalizedError(String Function(AppLocalizations) render) {
+    _setLocalizedStatus(render);
+    _notify();
+  }
+
+  String? shortcutCatalogMessageFor(AppLocalizations labels) =>
+      _catalogSyncError == null
+          ? null
+          : _catalogRegistrationFailed
+              ? labels.shortcutsPausedHelp
+              : labels.shortcutsRefreshFailed;
   String? _shortcutRestoreError;
   String? get statusMessage => _statusMessage;
   List<ContextCaptureDto> _captures = const [];
@@ -162,8 +190,7 @@ class SettingsController extends ChangeNotifier {
       _statusMessage = warning.isEmpty ? null : warning;
     }
     if (next.actionShortcutVersion != 4) {
-      _statusMessage =
-          'Action shortcuts were saved by a newer version. Update Anywhere before changing settings.';
+      _setLocalizedStatus((labels) => labels.shortcutsSavedByNewerVersion);
     }
     if (plugins) {
       try {
@@ -172,7 +199,7 @@ class SettingsController extends ChangeNotifier {
         _extensions = statuses;
       } catch (error) {
         if (_disposed || epoch != _loadEpoch) return;
-        _statusMessage = 'Extensions could not be loaded: $error';
+        _setLocalizedStatus((labels) => labels.extensionsLoadFailed('$error'));
       }
     }
     if (plugins && _readShortcutActions != null) {
@@ -207,6 +234,7 @@ class SettingsController extends ChangeNotifier {
       if (_disposed || current.actionShortcutVersion != 4) return;
       final previousError = _catalogSyncError;
       _catalogSyncError = null;
+      _catalogRegistrationFailed = false;
       final snapshot = current;
       final ids = _bindingActionIds(snapshot);
       try {
@@ -226,6 +254,8 @@ class SettingsController extends ChangeNotifier {
       } catch (error) {
         if (_disposed || !identical(snapshot, current)) return;
         _catalogSyncError = _shortcutCatalogFailure(error);
+        _catalogRegistrationFailed =
+            error is PlatformException && error.code == 'shortcuts';
         _supportedShortcutActions = const {};
         // An uncertain catalog must not keep a revoked action's system chord alive.
         try {
@@ -267,7 +297,8 @@ class SettingsController extends ChangeNotifier {
   void reportShortcutRestoreError(String detail) {
     _shortcutRestoreError =
         'Action shortcuts could not be restored. Change the conflicting shortcut or try closing again.\n$detail';
-    reportError(_shortcutRestoreError!);
+    _reportLocalizedError(
+        (labels) => '${labels.shortcutsRestoreFailed}\n$detail');
   }
 
   void shortcutsRestored() {
@@ -286,8 +317,8 @@ class SettingsController extends ChangeNotifier {
     // Finish catalog invalidation before the host restores global action hotkeys.
     await _extensionOperation;
     if (!await clipboard.waitForPending()) {
-      reportError(clipboard.notice ??
-          'Clipboard settings could not be updated. Try again.');
+      _reportLocalizedError((labels) =>
+          clipboard.noticeFor(labels) ?? labels.clipboardSettingsFailed);
       return false;
     }
     if (_disposed) return false;
@@ -306,24 +337,25 @@ class SettingsController extends ChangeNotifier {
 
   Future<bool> _save(HostSettings next) async {
     if (_disposed) return false;
-    if (next.fileSearchError case final error?) {
-      reportError(error);
+    if (next.fileSearchError != null) {
+      _reportLocalizedError((labels) => next.fileSearchErrorFor(labels)!);
       return false;
     }
     if (next.actionShortcutVersion != 4) {
-      reportError(
-          'Unsupported action shortcut settings version. Update Anywhere before changing settings.');
+      _reportLocalizedError((labels) => labels.unsupportedShortcutSettings);
       return false;
     }
     if (next.actionShortcuts.length > RuntimePolicy.maxActionShortcuts) {
-      reportError('At most 128 action shortcuts are supported.');
+      _reportLocalizedError((labels) =>
+          labels.maxActionShortcuts(RuntimePolicy.maxActionShortcuts));
       return false;
     }
     final ids = <String>{};
     for (final binding in next.actionShortcuts) {
       final error = binding.validate(next);
       if (error != null || !ids.add(binding.actionId)) {
-        reportError(error ?? 'An action can only have one shortcut.');
+        _reportLocalizedError((labels) =>
+            binding.validate(next, labels) ?? labels.oneShortcutPerAction);
         return false;
       }
     }
@@ -425,8 +457,7 @@ class SettingsController extends ChangeNotifier {
     } catch (_) {
       if (_disposed || configuration != _searchConfiguration) return;
       _fileSearchInitializationFailed = true;
-      _statusMessage =
-          'Directory access could not be prepared. Try again in Search settings.';
+      _setLocalizedStatus((labels) => labels.directoryAccessFailed);
     } finally {
       _authorizingFiles = false;
       _notify();
@@ -476,7 +507,8 @@ class SettingsController extends ChangeNotifier {
       ++_loadEpoch;
     } catch (error) {
       if (!_disposed) {
-        _statusMessage = 'Extension settings could not be updated: $error';
+        _setLocalizedStatus(
+            (labels) => labels.extensionsUpdateFailed('$error'));
       }
     } finally {
       if (!_disposed && _readShortcutActions != null) {
@@ -486,7 +518,10 @@ class SettingsController extends ChangeNotifier {
         } catch (error) {
           if (!_disposed) {
             _shortcutActions = const [];
-            _statusMessage ??= 'Action shortcuts could not be loaded: $error';
+            if (_statusMessage == null) {
+              _setLocalizedStatus(
+                  (labels) => labels.shortcutLoadFailed('$error'));
+            }
           }
         }
       }
@@ -503,8 +538,7 @@ class SettingsController extends ChangeNotifier {
       await _window.openPrivacySettings(pane);
       return true;
     } catch (_) {
-      reportError(
-          'System Settings could not be opened. Open the system settings manually.');
+      _reportLocalizedError((labels) => labels.openSystemSettingsFailed);
       return false;
     }
   }

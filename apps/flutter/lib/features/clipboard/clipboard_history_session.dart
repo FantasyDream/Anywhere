@@ -1,3 +1,5 @@
+import '../../l10n/app_language.dart';
+import '../../l10n/clipboard_labels.dart';
 import 'dart:async';
 import 'package:flutter/material.dart';
 import '../../src/rust/api.dart' as api;
@@ -7,6 +9,16 @@ import 'clipboard_history_presentation.dart';
 import '../../tools/tool_page.dart';
 
 /// Presentation state only. Persistence, matching, quotas and capture live in Rust.
+enum _HistoryNotice {
+  loadFailed,
+  missing,
+  previewFailed,
+  operationFailed,
+  copyFailed,
+  returnFailed,
+  returnUnavailable
+}
+
 class ClipboardHistorySession extends ToolPageSession {
   ClipboardHistorySession(this.backend,
       {this.rowExtent = clipboardHistoryRowHeight, bool previewEnabled = true})
@@ -24,7 +36,34 @@ class ClipboardHistorySession extends ToolPageSession {
   List<api.ClipboardItemDto> items = const [];
   api.ClipboardDetailDto? preview;
   bool recording = false, available = false, loading = true, mutating = false;
-  String? notice, status;
+  String? _notice, status;
+  api.ClipboardNoticeDto? _backendNotice;
+  _HistoryNotice? _noticeKind;
+  String? get notice => _notice;
+  bool get hasNotice => _backendNotice != null || _notice != null;
+  set notice(String? value) {
+    _notice = value;
+    _noticeKind = null;
+    _backendNotice = null;
+  }
+
+  void _setNotice(_HistoryNotice kind, String value) {
+    notice = value;
+    _noticeKind = kind;
+  }
+
+  String? noticeFor(AppLocalizations l10n) => switch (_noticeKind) {
+        _HistoryNotice.loadFailed => l10n.historyLoadFailed,
+        _HistoryNotice.missing => l10n.historyEntryMissing,
+        _HistoryNotice.previewFailed => l10n.historyPreviewFailed,
+        _HistoryNotice.operationFailed => l10n.historyOperationFailed,
+        _HistoryNotice.copyFailed => l10n.historyCopyFailed,
+        _HistoryNotice.returnFailed => l10n.shelfReturnFailed,
+        _HistoryNotice.returnUnavailable => l10n.shelfReturnUnavailable,
+        null => _backendNotice?.labelFor(l10n) ?? notice,
+      };
+  String? statusFor(AppLocalizations l10n) =>
+      status == null ? null : l10n.copiedPaste;
   int selectedIndex = 0;
   int _searchEpoch = 0, _detailEpoch = 0;
   Timer? _debounce;
@@ -96,13 +135,17 @@ class ClipboardHistorySession extends ToolPageSession {
           unchanged &&
           recording == result.recording &&
           available == result.available &&
-          notice == result.notice) {
+          (_notice == null ||
+              _noticeKind == _HistoryNotice.returnFailed ||
+              _noticeKind == _HistoryNotice.returnUnavailable) &&
+          _backendNotice == result.notice) {
         return;
       }
       changed = true;
       recording = result.recording;
       available = result.available;
-      notice = result.notice;
+      notice = null;
+      _backendNotice = result.notice;
       status = null;
       // A selection made while the search was running takes precedence.
       final selectedId = selected?.id;
@@ -128,7 +171,8 @@ class ClipboardHistorySession extends ToolPageSession {
     } catch (_) {
       if (disposed || epoch != _searchEpoch) return;
       // Keep usable rows and the current preview on a transient refresh failure.
-      notice = 'Clipboard history could not be loaded. Try Refresh.';
+      _setNotice(_HistoryNotice.loadFailed,
+          'Clipboard history could not be loaded. Try Refresh.');
       changed = true;
     } finally {
       if (!disposed && epoch == _searchEpoch) {
@@ -156,6 +200,16 @@ class ClipboardHistorySession extends ToolPageSession {
   void reportNotice(String message) {
     if (disposed) return;
     notice = message;
+    notifyListeners();
+  }
+
+  void reportReturnFailure({bool unavailable = false}) {
+    if (disposed) return;
+    _setNotice(
+        unavailable
+            ? _HistoryNotice.returnUnavailable
+            : _HistoryNotice.returnFailed,
+        'Copied, but the destination application could not be activated.');
     notifyListeners();
   }
 
@@ -218,12 +272,14 @@ class ClipboardHistorySession extends ToolPageSession {
           if (epoch != _detailEpoch || selected?.id != id) continue;
           preview = detail;
           if (detail == null) {
-            notice = 'This entry is no longer available. Refresh history.';
+            _setNotice(_HistoryNotice.missing,
+                'This entry is no longer available. Refresh history.');
           }
         } catch (_) {
           if (!canInteract || _composing || !_previewEnabled) return;
           if (epoch != _detailEpoch || selected?.id != id) continue;
-          notice = 'This entry could not be previewed.';
+          _setNotice(_HistoryNotice.previewFailed,
+              'This entry could not be previewed.');
         }
         notifyListeners();
         return;
@@ -234,7 +290,10 @@ class ClipboardHistorySession extends ToolPageSession {
   }
 
   Future<bool> _change(Future<void> Function() operation,
-      {String? success, String? failure, bool refreshAfter = true}) async {
+      {String? success,
+      String? failure,
+      _HistoryNotice failureKind = _HistoryNotice.operationFailed,
+      bool refreshAfter = true}) async {
     if (!canInteract || mutating) return false;
     mutating = true;
     status = null;
@@ -251,8 +310,10 @@ class ClipboardHistorySession extends ToolPageSession {
       return true;
     } catch (_) {
       if (!disposed) {
-        notice = failure ??
-            'The operation could not be completed. Refresh and try again.';
+        _setNotice(
+            failureKind,
+            failure ??
+                'The operation could not be completed. Refresh and try again.');
       }
       return false;
     } finally {
@@ -270,6 +331,7 @@ class ClipboardHistorySession extends ToolPageSession {
           // Restoring a payload does not mutate history. Background collection
           // can update row metadata later without delaying the successful copy.
           refreshAfter: false,
+          failureKind: _HistoryNotice.copyFailed,
           success: 'Copied. Paste in the destination app.',
           failure:
               'This entry could not be copied. For files, check that the originals still exist and are accessible.');
@@ -277,7 +339,7 @@ class ClipboardHistorySession extends ToolPageSession {
     return false;
   }
 
-  /// A compact shelf click copies by identity. Do not wait for image preview I/O
+  /// Explicit activation copies by identity. Do not wait for image preview I/O
   /// before restoring the payload; select updates the target synchronously.
   Future<bool> copyItem(String id) async {
     if (!canInteract || mutating) return false;
@@ -289,7 +351,19 @@ class ClipboardHistorySession extends ToolPageSession {
 
   Future<void> delete() async {
     final id = selected?.id;
-    if (id != null) await _change(() => backend.delete(id));
+    if (id != null) await deleteItem(id);
+  }
+
+  /// Confirmation targets an identity, even if collection refreshes the list.
+  Future<bool> deleteItem(String id) async {
+    if (!canInteract || mutating) return false;
+    if (!items.any((item) => item.id == id)) {
+      _setNotice(_HistoryNotice.missing,
+          'This entry is no longer available. Refresh history.');
+      notifyListeners();
+      return false;
+    }
+    return _change(() => backend.delete(id));
   }
 
   @override

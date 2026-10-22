@@ -1,3 +1,5 @@
+import '../l10n/app_language.dart';
+import 'dart:ui' show Locale;
 import '../tools/tool_page.dart';
 import '../ui/design_tokens.g.dart';
 import '../settings/host_settings.dart';
@@ -171,8 +173,7 @@ class LauncherViewState {
   static const rowHeight = 56.0,
       inputHeight = DesignTokens.pageHeaderHeight,
       scopeHeight = DesignTokens.pageToolbarHeight,
-      headerHeight = 24.0,
-      footerHeight = DesignTokens.pageFooterHeight;
+      headerHeight = 24.0;
   static const maxRows = 7;
   List<ScopeDto> get scopes => snapshot?.scopes ?? const [];
   late final ScopeDto? selectedScope = _findSelectedScope();
@@ -213,7 +214,8 @@ class LauncherViewState {
 
   /// Show the source of the execution target, rather than inferring it from a
   /// title or subtitle. Identical targets can have several merged context roots.
-  String? sourceLabelFor(CandidateDto candidate) {
+  String? sourceLabelFor(CandidateDto candidate, [AppLocalizations? labels]) {
+    final l10n = labels ?? lookupAppLocalizations(const Locale('en'));
     if (candidate.kind == CandidateKindDto.file) {
       return isFileSearch || objectActionTitle != null ? null : 'Files';
     }
@@ -238,11 +240,11 @@ class LauncherViewState {
       }
     }
     return switch (target?.source) {
-      ContextSourceDto.browserCurrentPage => 'Current page',
-      ContextSourceDto.clipboard => 'Clipboard',
-      ContextSourceDto.selectedText => 'Selected text',
-      ContextSourceDto.finderSelection => 'Selected files',
-      ContextSourceDto.userInput => 'Input',
+      ContextSourceDto.browserCurrentPage => l10n.currentPage,
+      ContextSourceDto.clipboard => l10n.clipboard,
+      ContextSourceDto.selectedText => l10n.selectedText,
+      ContextSourceDto.finderSelection => l10n.selectedFiles,
+      ContextSourceDto.userInput => l10n.input,
       _ => null,
     };
   }
@@ -330,7 +332,8 @@ class LauncherViewState {
     final recommended = source
         .where((candidate) =>
             candidate.kind == CandidateKindDto.action && candidate.homeEligible)
-        .take(7);
+        // Reserve room for the full-menu entry, including the Scope bar.
+        .take(canBrowseMenus ? 5 : maxRows);
     return [
       for (final candidate in recommended) LauncherEntry.candidate(candidate),
       if (canBrowseMenus) const LauncherEntry.menu([]),
@@ -351,7 +354,8 @@ class LauncherViewState {
       !(inputMode == InputModeDto.search &&
           scopeId == null &&
           input.trim().isEmpty) &&
-      scopes.isNotEmpty;
+      scopes.isNotEmpty &&
+      (scopes.length > 1 || !scopes.single.isCurrentApp);
   bool get searchLoading =>
       snapshot?.searchSources
           .any((s) => s.state == SearchSourceStateDto.loading) ??
@@ -378,28 +382,29 @@ class LauncherViewState {
 
   String get fileRangeDetail =>
       (snapshot?.fileSearch?.roots ?? const <String>[]).join('\n');
-  String? get searchStatus {
+  String? get searchStatus =>
+      searchStatusFor(lookupAppLocalizations(const Locale('en')));
+  String? searchStatusFor(AppLocalizations l10n) {
     final progress = isFileSearch && bindingChoices == null && output == null
         ? snapshot?.fileSearch
         : null;
     if (progress != null) {
-      final count = '${progress.confirmedMatches}';
+      final count = l10n.fileFoundCount(progress.confirmedMatches.toInt());
       if (searchPartial) {
-        final unit = progress.issueCount == BigInt.one ? 'issue' : 'issues';
-        return '$count found · Partial results · ${progress.issueCount} $unit';
+        return '$count · ${l10n.partialResults} · ${l10n.searchIssues(progress.issueCount.toInt())}';
       }
-      if (!progress.finished) return '$count found · Searching…';
+      if (!progress.finished) return '$count · ${l10n.searching}';
       if (progress.inaccessibleCount > BigInt.zero) {
-        return '$count found · ${progress.inaccessibleCount} restricted locations skipped';
+        return '$count · ${l10n.restrictedLocationsSkipped('${progress.inaccessibleCount}')}';
       }
-      return '$count found · Search complete';
+      return '$count · ${l10n.searchComplete}';
     }
     return searchLoading
-        ? 'Searching files…'
+        ? l10n.searchingFiles
         : searchUnavailable
             ? isFileSearch
-                ? 'File search unavailable'
-                : 'File search unavailable · Other results are still usable'
+                ? l10n.fileSearchUnavailable
+                : l10n.fileSearchOtherResults
             : null;
   }
 
@@ -412,25 +417,20 @@ class LauncherViewState {
       isFileSearch;
   String get emptyMessage =>
       input.isNotEmpty ? 'No matching actions' : 'No actions available';
-  String? get notice {
+  String? get notice => noticeFor(lookupAppLocalizations(const Locale('en')));
+  String? noticeFor(AppLocalizations l10n) {
     if (message != null) return message;
-    // File Search owns a separate query: ambient app/menu diagnostics must not
-    // appear as errors for a completed file query. File coverage errors remain.
     if (isFileSearch) {
       if (!searchPartial) return null;
       final count = snapshot?.fileSearch?.issueCount ?? BigInt.zero;
-      final detail = count > BigInt.zero
-          ? 'File search encountered $count ${count == BigInt.one ? 'issue' : 'issues'}.'
-          : 'File search is incomplete.';
-      return '$detail Available results are still usable.';
+      return count > BigInt.zero
+          ? l10n.fileSearchIssueNotice(count.toInt())
+          : l10n.fileSearchIncomplete;
     }
-    // Global search and explicit content do not consume ambient app contexts.
-    // Keep their capture diagnostics in Settings/logs instead of carrying an
-    // unrelated warning into these pages. Execution notices above still apply.
     if (inputMode != InputModeDto.environment) return null;
-    return captureNotice?.detail ??
+    return captureNotice?.withLocalizations(l10n).detail ??
         ((snapshot?.diagnostics.isNotEmpty ?? false)
-            ? 'Some actions could not be loaded. Reopen Anywhere to try again; other actions are still available.'
+            ? l10n.actionsLoadIncomplete
             : null);
   }
 
@@ -452,20 +452,22 @@ class LauncherViewState {
           : selectedScope == null
               ? 'Search apps and actions…'
               : 'Search ${selectedScope!.label} actions…';
-  String get resultHeading => output != null
-      ? (resultStatus == ActionStatusDto.failed ? 'Failed' : 'Succeeded')
+  String get resultHeading =>
+      resultHeadingFor(lookupAppLocalizations(const Locale('en')));
+  String resultHeadingFor(AppLocalizations l10n) => output != null
+      ? (resultStatus == ActionStatusDto.failed ? l10n.failed : l10n.succeeded)
       : bindingChoices != null
-          ? objectActionTitle ?? 'Choose a target'
+          ? objectActionTitle ?? l10n.chooseTarget
           : isContent
-              ? 'Actions for this content'
+              ? l10n.contentActions
               : input.trim().isNotEmpty
-                  ? 'Results'
+                  ? l10n.results
                   : browsing
-                      ? ['Menus', ...actionPath!].join(' › ')
+                      ? [l10n.menus, ...actionPath!].join(' › ')
                       : selectedScope != null &&
                               selectedScope!.isCurrentApp != true
-                          ? 'Actions'
-                          : 'Suggested';
+                          ? l10n.actions
+                          : l10n.suggested;
   // App and query are already visible in the input and Scope bar. Keep headings
   // for content, navigation, binding choices and execution results only.
   bool get hasResultHeading =>
@@ -487,9 +489,19 @@ class LauncherViewState {
             (hasControls ? scopeHeight : 0) +
             (hasPanel || hasControls ? 1 : 0) +
             (notice == null ? 0 : 44) +
-            (hasPanel
-                ? (hasResultHeading ? headerHeight : 0) + body + footerHeight
-                : 0))
+            (hasPanel ? (hasResultHeading ? headerHeight : 0) + body : 0))
         .clamp(inputHeight, 520.0);
   }
+}
+
+/// Stable scope IDs, never translated labels, choose built-in category names.
+String localizedScopeLabel(ScopeDto scope, AppLocalizations l10n) {
+  if (scope.isCurrentApp) return scope.label;
+  return switch (scope.id) {
+    'folder' => l10n.folder,
+    'file' => l10n.file,
+    'web' => l10n.web,
+    'tools' => l10n.tools,
+    _ => scope.label,
+  };
 }

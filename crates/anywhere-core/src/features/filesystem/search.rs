@@ -399,6 +399,7 @@ pub fn file_candidates(
         }
         candidates.push(Candidate {
             presentation: CandidatePresentation {
+                localized_titles: Default::default(),
                 id: format!("action:{id}:{kind}:{fingerprint:016x}"),
                 kind: CandidateKind::File,
                 is_menu: false,

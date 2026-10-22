@@ -2370,6 +2370,14 @@ impl SseDecode for flutter_rust_bridge::for_generated::anyhow::Error {
     }
 }
 
+impl SseDecode for std::collections::HashMap<String, String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <Vec<(String, String)>>::sse_decode(deserializer);
+        return inner.into_iter().collect();
+    }
+}
+
 impl SseDecode for String {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -2478,6 +2486,8 @@ impl SseDecode for crate::api::CandidateDto {
         let mut var_isMenu = <bool>::sse_decode(deserializer);
         let mut var_fileKind = <Option<crate::api::FileObjectKindDto>>::sse_decode(deserializer);
         let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_localizedTitles =
+            <std::collections::HashMap<String, String>>::sse_decode(deserializer);
         let mut var_menuPath = <Vec<String>>::sse_decode(deserializer);
         let mut var_contextKeys = <Vec<String>>::sse_decode(deserializer);
         let mut var_executionContextId = <Option<String>>::sse_decode(deserializer);
@@ -2500,6 +2510,7 @@ impl SseDecode for crate::api::CandidateDto {
             is_menu: var_isMenu,
             file_kind: var_fileKind,
             title: var_title,
+            localized_titles: var_localizedTitles,
             menu_path: var_menuPath,
             context_keys: var_contextKeys,
             execution_context_id: var_executionContextId,
@@ -2569,7 +2580,7 @@ impl SseDecode for crate::api::ClipboardHistoryDto {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_recording = <bool>::sse_decode(deserializer);
         let mut var_available = <bool>::sse_decode(deserializer);
-        let mut var_notice = <Option<String>>::sse_decode(deserializer);
+        let mut var_notice = <Option<crate::api::ClipboardNoticeDto>>::sse_decode(deserializer);
         let mut var_items = <Vec<crate::api::ClipboardItemDto>>::sse_decode(deserializer);
         return crate::api::ClipboardHistoryDto {
             recording: var_recording,
@@ -2585,7 +2596,7 @@ impl SseDecode for crate::api::ClipboardHistoryStatusDto {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_recording = <bool>::sse_decode(deserializer);
         let mut var_available = <bool>::sse_decode(deserializer);
-        let mut var_notice = <Option<String>>::sse_decode(deserializer);
+        let mut var_notice = <Option<crate::api::ClipboardNoticeDto>>::sse_decode(deserializer);
         return crate::api::ClipboardHistoryStatusDto {
             recording: var_recording,
             available: var_available,
@@ -2608,6 +2619,23 @@ impl SseDecode for crate::api::ClipboardItemDto {
             kind: var_kind,
             copied_at_ms: var_copiedAtMs,
             byte_count: var_byteCount,
+        };
+    }
+}
+
+impl SseDecode for crate::api::ClipboardNoticeDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::ClipboardNoticeDto::FeatureDisabled,
+            1 => crate::api::ClipboardNoticeDto::StorageUnavailable,
+            2 => crate::api::ClipboardNoticeDto::AccessRequired,
+            3 => crate::api::ClipboardNoticeDto::ItemTooLarge,
+            4 => crate::api::ClipboardNoticeDto::ReadFailed,
+            5 => crate::api::ClipboardNoticeDto::CaptureUnavailable,
+            6 => crate::api::ClipboardNoticeDto::MonitoringUnavailable,
+            _ => unreachable!("Invalid variant for ClipboardNoticeDto: {}", inner),
         };
     }
 }
@@ -2769,6 +2797,7 @@ impl SseDecode for crate::api::ExtensionStatusDto {
         let mut var_active = <bool>::sse_decode(deserializer);
         let mut var_needsApproval = <bool>::sse_decode(deserializer);
         let mut var_configurable = <bool>::sse_decode(deserializer);
+        let mut var_restartRequired = <bool>::sse_decode(deserializer);
         let mut var_capabilities = <Vec<String>>::sse_decode(deserializer);
         let mut var_approvalToken = <String>::sse_decode(deserializer);
         let mut var_detail = <String>::sse_decode(deserializer);
@@ -2783,6 +2812,7 @@ impl SseDecode for crate::api::ExtensionStatusDto {
             active: var_active,
             needs_approval: var_needsApproval,
             configurable: var_configurable,
+            restart_required: var_restartRequired,
             capabilities: var_capabilities,
             approval_token: var_approvalToken,
             detail: var_detail,
@@ -2817,14 +2847,18 @@ impl SseDecode for crate::api::FilePreviewDto {
         let mut var_sizeBytes = <u64>::sse_decode(deserializer);
         let mut var_modifiedMs = <Option<i64>>::sse_decode(deserializer);
         let mut var_text = <Option<String>>::sse_decode(deserializer);
-        let mut var_notice = <Option<String>>::sse_decode(deserializer);
+        let mut var_truncatedAtBytes = <Option<u32>>::sse_decode(deserializer);
+        let mut var_encoding = <Option<String>>::sse_decode(deserializer);
+        let mut var_encodingGuessed = <bool>::sse_decode(deserializer);
         return crate::api::FilePreviewDto {
             path: var_path,
             is_directory: var_isDirectory,
             size_bytes: var_sizeBytes,
             modified_ms: var_modifiedMs,
             text: var_text,
-            notice: var_notice,
+            truncated_at_bytes: var_truncatedAtBytes,
+            encoding: var_encoding,
+            encoding_guessed: var_encodingGuessed,
         };
     }
 }
@@ -3082,6 +3116,18 @@ impl SseDecode for Vec<u8> {
     }
 }
 
+impl SseDecode for Vec<(String, String)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<(String, String)>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::ScopeDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3156,6 +3202,18 @@ impl SseDecode for Vec<crate::api::WebPackageDto> {
     }
 }
 
+impl SseDecode for Vec<crate::api::WebPermissionDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::WebPermissionDto>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for crate::api::NativeToolDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3195,6 +3253,17 @@ impl SseDecode for Option<crate::api::ClipboardDetailDto> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::api::ClipboardDetailDto>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::ClipboardNoticeDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::ClipboardNoticeDto>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -3304,11 +3373,33 @@ impl SseDecode for Option<crate::api::PluginDetailDto> {
     }
 }
 
+impl SseDecode for Option<u32> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<u32>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
 impl SseDecode for Option<u64> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<u64>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::WebConsentKindDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::WebConsentKindDto>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -3379,6 +3470,15 @@ impl SseDecode for crate::api::PluginStatusDto {
     }
 }
 
+impl SseDecode for (String, String) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_field0 = <String>::sse_decode(deserializer);
+        let mut var_field1 = <String>::sse_decode(deserializer);
+        return (var_field0, var_field1);
+    }
+}
+
 impl SseDecode for crate::api::ScopeDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3428,10 +3528,13 @@ impl SseDecode for crate::api::ShortcutActionDto {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_actionId = <String>::sse_decode(deserializer);
         let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_localizedTitles =
+            <std::collections::HashMap<String, String>>::sse_decode(deserializer);
         let mut var_contextTypes = <Vec<String>>::sse_decode(deserializer);
         return crate::api::ShortcutActionDto {
             action_id: var_actionId,
             title: var_title,
+            localized_titles: var_localizedTitles,
             context_types: var_contextTypes,
         };
     }
@@ -3442,9 +3545,12 @@ impl SseDecode for crate::api::ShortcutApplicationDto {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_bundleId = <String>::sse_decode(deserializer);
         let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_localizedTitles =
+            <std::collections::HashMap<String, String>>::sse_decode(deserializer);
         return crate::api::ShortcutApplicationDto {
             bundle_id: var_bundleId,
             title: var_title,
+            localized_titles: var_localizedTitles,
         };
     }
 }
@@ -3517,6 +3623,18 @@ impl SseDecode for () {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {}
 }
 
+impl SseDecode for crate::api::WebConsentKindDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::WebConsentKindDto::ReadClipboard,
+            1 => crate::api::WebConsentKindDto::WriteClipboard,
+            _ => unreachable!("Invalid variant for WebConsentKindDto: {}", inner),
+        };
+    }
+}
+
 impl SseDecode for crate::api::WebDocumentDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3540,7 +3658,7 @@ impl SseDecode for crate::api::WebPackageDto {
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_version = <String>::sse_decode(deserializer);
         let mut var_digest = <String>::sse_decode(deserializer);
-        let mut var_permissions = <Vec<String>>::sse_decode(deserializer);
+        let mut var_permissions = <Vec<crate::api::WebPermissionDto>>::sse_decode(deserializer);
         let mut var_enabled = <bool>::sse_decode(deserializer);
         let mut var_rollback = <bool>::sse_decode(deserializer);
         return crate::api::WebPackageDto {
@@ -3551,6 +3669,33 @@ impl SseDecode for crate::api::WebPackageDto {
             permissions: var_permissions,
             enabled: var_enabled,
             rollback: var_rollback,
+        };
+    }
+}
+
+impl SseDecode for crate::api::WebPermissionDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_kind = <crate::api::WebPermissionKindDto>::sse_decode(deserializer);
+        let mut var_contextTypes = <Vec<String>>::sse_decode(deserializer);
+        return crate::api::WebPermissionDto {
+            kind: var_kind,
+            context_types: var_contextTypes,
+        };
+    }
+}
+
+impl SseDecode for crate::api::WebPermissionKindDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::WebPermissionKindDto::ContextRead,
+            1 => crate::api::WebPermissionKindDto::CurrentApp,
+            2 => crate::api::WebPermissionKindDto::ClipboardReadText,
+            3 => crate::api::WebPermissionKindDto::ClipboardWriteText,
+            4 => crate::api::WebPermissionKindDto::LocalStorage,
+            _ => unreachable!("Invalid variant for WebPermissionKindDto: {}", inner),
         };
     }
 }
@@ -3570,12 +3715,12 @@ impl SseDecode for crate::api::WebReplyDto {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         let mut var_frame = <Option<String>>::sse_decode(deserializer);
         let mut var_ticket = <Option<String>>::sse_decode(deserializer);
-        let mut var_title = <Option<String>>::sse_decode(deserializer);
+        let mut var_consent = <Option<crate::api::WebConsentKindDto>>::sse_decode(deserializer);
         let mut var_preview = <Option<String>>::sse_decode(deserializer);
         return crate::api::WebReplyDto {
             frame: var_frame,
             ticket: var_ticket,
-            title: var_title,
+            consent: var_consent,
             preview: var_preview,
         };
     }
@@ -3589,7 +3734,7 @@ impl SseDecode for crate::api::WebReviewDto {
         let mut var_name = <String>::sse_decode(deserializer);
         let mut var_version = <String>::sse_decode(deserializer);
         let mut var_digest = <String>::sse_decode(deserializer);
-        let mut var_permissions = <Vec<String>>::sse_decode(deserializer);
+        let mut var_permissions = <Vec<crate::api::WebPermissionDto>>::sse_decode(deserializer);
         let mut var_updating = <bool>::sse_decode(deserializer);
         return crate::api::WebReviewDto {
             token: var_token,
@@ -3810,6 +3955,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::CandidateDto {
             self.is_menu.into_into_dart().into_dart(),
             self.file_kind.into_into_dart().into_dart(),
             self.title.into_into_dart().into_dart(),
+            self.localized_titles.into_into_dart().into_dart(),
             self.menu_path.into_into_dart().into_dart(),
             self.context_keys.into_into_dart().into_dart(),
             self.execution_context_id.into_into_dart().into_dart(),
@@ -3964,6 +4110,32 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::ClipboardItemDto>
     for crate::api::ClipboardItemDto
 {
     fn into_into_dart(self) -> crate::api::ClipboardItemDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::ClipboardNoticeDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::FeatureDisabled => 0.into_dart(),
+            Self::StorageUnavailable => 1.into_dart(),
+            Self::AccessRequired => 2.into_dart(),
+            Self::ItemTooLarge => 3.into_dart(),
+            Self::ReadFailed => 4.into_dart(),
+            Self::CaptureUnavailable => 5.into_dart(),
+            Self::MonitoringUnavailable => 6.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::ClipboardNoticeDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::ClipboardNoticeDto>
+    for crate::api::ClipboardNoticeDto
+{
+    fn into_into_dart(self) -> crate::api::ClipboardNoticeDto {
         self
     }
 }
@@ -4155,6 +4327,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::ExtensionStatusDto {
             self.active.into_into_dart().into_dart(),
             self.needs_approval.into_into_dart().into_dart(),
             self.configurable.into_into_dart().into_dart(),
+            self.restart_required.into_into_dart().into_dart(),
             self.capabilities.into_into_dart().into_dart(),
             self.approval_token.into_into_dart().into_dart(),
             self.detail.into_into_dart().into_dart(),
@@ -4200,7 +4373,9 @@ impl flutter_rust_bridge::IntoDart for crate::api::FilePreviewDto {
             self.size_bytes.into_into_dart().into_dart(),
             self.modified_ms.into_into_dart().into_dart(),
             self.text.into_into_dart().into_dart(),
-            self.notice.into_into_dart().into_dart(),
+            self.truncated_at_bytes.into_into_dart().into_dart(),
+            self.encoding.into_into_dart().into_dart(),
+            self.encoding_guessed.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -4472,6 +4647,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::ShortcutActionDto {
         [
             self.action_id.into_into_dart().into_dart(),
             self.title.into_into_dart().into_dart(),
+            self.localized_titles.into_into_dart().into_dart(),
             self.context_types.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -4491,6 +4667,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::ShortcutApplicationDto {
         [
             self.bundle_id.into_into_dart().into_dart(),
             self.title.into_into_dart().into_dart(),
+            self.localized_titles.into_into_dart().into_dart(),
         ]
         .into_dart()
     }
@@ -4568,6 +4745,24 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::SnapshotWaitKindDto>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::WebConsentKindDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::ReadClipboard => 0.into_dart(),
+            Self::WriteClipboard => 1.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::WebConsentKindDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::WebConsentKindDto>
+    for crate::api::WebConsentKindDto
+{
+    fn into_into_dart(self) -> crate::api::WebConsentKindDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::WebDocumentDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
@@ -4607,6 +4802,48 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::WebPackageDto> for crate::api
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::WebPermissionDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.kind.into_into_dart().into_dart(),
+            self.context_types.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::WebPermissionDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::WebPermissionDto>
+    for crate::api::WebPermissionDto
+{
+    fn into_into_dart(self) -> crate::api::WebPermissionDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::WebPermissionKindDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::ContextRead => 0.into_dart(),
+            Self::CurrentApp => 1.into_dart(),
+            Self::ClipboardReadText => 2.into_dart(),
+            Self::ClipboardWriteText => 3.into_dart(),
+            Self::LocalStorage => 4.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::WebPermissionKindDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::WebPermissionKindDto>
+    for crate::api::WebPermissionKindDto
+{
+    fn into_into_dart(self) -> crate::api::WebPermissionKindDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::WebPluginLaunchDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [self.invocation_id.into_into_dart().into_dart()].into_dart()
@@ -4629,7 +4866,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::WebReplyDto {
         [
             self.frame.into_into_dart().into_dart(),
             self.ticket.into_into_dart().into_dart(),
-            self.title.into_into_dart().into_dart(),
+            self.consent.into_into_dart().into_dart(),
             self.preview.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -4667,6 +4904,13 @@ impl SseEncode for flutter_rust_bridge::for_generated::anyhow::Error {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(format!("{:?}", self), serializer);
+    }
+}
+
+impl SseEncode for std::collections::HashMap<String, String> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<(String, String)>>::sse_encode(self.into_iter().collect(), serializer);
     }
 }
 
@@ -4761,6 +5005,7 @@ impl SseEncode for crate::api::CandidateDto {
         <bool>::sse_encode(self.is_menu, serializer);
         <Option<crate::api::FileObjectKindDto>>::sse_encode(self.file_kind, serializer);
         <String>::sse_encode(self.title, serializer);
+        <std::collections::HashMap<String, String>>::sse_encode(self.localized_titles, serializer);
         <Vec<String>>::sse_encode(self.menu_path, serializer);
         <Vec<String>>::sse_encode(self.context_keys, serializer);
         <Option<String>>::sse_encode(self.execution_context_id, serializer);
@@ -4830,7 +5075,7 @@ impl SseEncode for crate::api::ClipboardHistoryDto {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.recording, serializer);
         <bool>::sse_encode(self.available, serializer);
-        <Option<String>>::sse_encode(self.notice, serializer);
+        <Option<crate::api::ClipboardNoticeDto>>::sse_encode(self.notice, serializer);
         <Vec<crate::api::ClipboardItemDto>>::sse_encode(self.items, serializer);
     }
 }
@@ -4840,7 +5085,7 @@ impl SseEncode for crate::api::ClipboardHistoryStatusDto {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.recording, serializer);
         <bool>::sse_encode(self.available, serializer);
-        <Option<String>>::sse_encode(self.notice, serializer);
+        <Option<crate::api::ClipboardNoticeDto>>::sse_encode(self.notice, serializer);
     }
 }
 
@@ -4852,6 +5097,27 @@ impl SseEncode for crate::api::ClipboardItemDto {
         <String>::sse_encode(self.kind, serializer);
         <i64>::sse_encode(self.copied_at_ms, serializer);
         <u32>::sse_encode(self.byte_count, serializer);
+    }
+}
+
+impl SseEncode for crate::api::ClipboardNoticeDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::ClipboardNoticeDto::FeatureDisabled => 0,
+                crate::api::ClipboardNoticeDto::StorageUnavailable => 1,
+                crate::api::ClipboardNoticeDto::AccessRequired => 2,
+                crate::api::ClipboardNoticeDto::ItemTooLarge => 3,
+                crate::api::ClipboardNoticeDto::ReadFailed => 4,
+                crate::api::ClipboardNoticeDto::CaptureUnavailable => 5,
+                crate::api::ClipboardNoticeDto::MonitoringUnavailable => 6,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
     }
 }
 
@@ -4986,6 +5252,7 @@ impl SseEncode for crate::api::ExtensionStatusDto {
         <bool>::sse_encode(self.active, serializer);
         <bool>::sse_encode(self.needs_approval, serializer);
         <bool>::sse_encode(self.configurable, serializer);
+        <bool>::sse_encode(self.restart_required, serializer);
         <Vec<String>>::sse_encode(self.capabilities, serializer);
         <String>::sse_encode(self.approval_token, serializer);
         <String>::sse_encode(self.detail, serializer);
@@ -5023,7 +5290,9 @@ impl SseEncode for crate::api::FilePreviewDto {
         <u64>::sse_encode(self.size_bytes, serializer);
         <Option<i64>>::sse_encode(self.modified_ms, serializer);
         <Option<String>>::sse_encode(self.text, serializer);
-        <Option<String>>::sse_encode(self.notice, serializer);
+        <Option<u32>>::sse_encode(self.truncated_at_bytes, serializer);
+        <Option<String>>::sse_encode(self.encoding, serializer);
+        <bool>::sse_encode(self.encoding_guessed, serializer);
     }
 }
 
@@ -5235,6 +5504,16 @@ impl SseEncode for Vec<u8> {
     }
 }
 
+impl SseEncode for Vec<(String, String)> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <(String, String)>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::ScopeDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -5295,6 +5574,16 @@ impl SseEncode for Vec<crate::api::WebPackageDto> {
     }
 }
 
+impl SseEncode for Vec<crate::api::WebPermissionDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::WebPermissionDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for crate::api::NativeToolDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -5329,6 +5618,16 @@ impl SseEncode for Option<crate::api::ClipboardDetailDto> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::ClipboardDetailDto>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::ClipboardNoticeDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::ClipboardNoticeDto>::sse_encode(value, serializer);
         }
     }
 }
@@ -5423,12 +5722,32 @@ impl SseEncode for Option<crate::api::PluginDetailDto> {
     }
 }
 
+impl SseEncode for Option<u32> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <u32>::sse_encode(value, serializer);
+        }
+    }
+}
+
 impl SseEncode for Option<u64> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <u64>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::WebConsentKindDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::WebConsentKindDto>::sse_encode(value, serializer);
         }
     }
 }
@@ -5480,6 +5799,14 @@ impl SseEncode for crate::api::PluginStatusDto {
     }
 }
 
+impl SseEncode for (String, String) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.0, serializer);
+        <String>::sse_encode(self.1, serializer);
+    }
+}
+
 impl SseEncode for crate::api::ScopeDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -5522,6 +5849,7 @@ impl SseEncode for crate::api::ShortcutActionDto {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.action_id, serializer);
         <String>::sse_encode(self.title, serializer);
+        <std::collections::HashMap<String, String>>::sse_encode(self.localized_titles, serializer);
         <Vec<String>>::sse_encode(self.context_types, serializer);
     }
 }
@@ -5531,6 +5859,7 @@ impl SseEncode for crate::api::ShortcutApplicationDto {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.bundle_id, serializer);
         <String>::sse_encode(self.title, serializer);
+        <std::collections::HashMap<String, String>>::sse_encode(self.localized_titles, serializer);
     }
 }
 
@@ -5596,6 +5925,22 @@ impl SseEncode for () {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {}
 }
 
+impl SseEncode for crate::api::WebConsentKindDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::WebConsentKindDto::ReadClipboard => 0,
+                crate::api::WebConsentKindDto::WriteClipboard => 1,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
 impl SseEncode for crate::api::WebDocumentDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -5613,9 +5958,36 @@ impl SseEncode for crate::api::WebPackageDto {
         <String>::sse_encode(self.name, serializer);
         <String>::sse_encode(self.version, serializer);
         <String>::sse_encode(self.digest, serializer);
-        <Vec<String>>::sse_encode(self.permissions, serializer);
+        <Vec<crate::api::WebPermissionDto>>::sse_encode(self.permissions, serializer);
         <bool>::sse_encode(self.enabled, serializer);
         <bool>::sse_encode(self.rollback, serializer);
+    }
+}
+
+impl SseEncode for crate::api::WebPermissionDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <crate::api::WebPermissionKindDto>::sse_encode(self.kind, serializer);
+        <Vec<String>>::sse_encode(self.context_types, serializer);
+    }
+}
+
+impl SseEncode for crate::api::WebPermissionKindDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::WebPermissionKindDto::ContextRead => 0,
+                crate::api::WebPermissionKindDto::CurrentApp => 1,
+                crate::api::WebPermissionKindDto::ClipboardReadText => 2,
+                crate::api::WebPermissionKindDto::ClipboardWriteText => 3,
+                crate::api::WebPermissionKindDto::LocalStorage => 4,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
     }
 }
 
@@ -5631,7 +6003,7 @@ impl SseEncode for crate::api::WebReplyDto {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <Option<String>>::sse_encode(self.frame, serializer);
         <Option<String>>::sse_encode(self.ticket, serializer);
-        <Option<String>>::sse_encode(self.title, serializer);
+        <Option<crate::api::WebConsentKindDto>>::sse_encode(self.consent, serializer);
         <Option<String>>::sse_encode(self.preview, serializer);
     }
 }
@@ -5644,7 +6016,7 @@ impl SseEncode for crate::api::WebReviewDto {
         <String>::sse_encode(self.name, serializer);
         <String>::sse_encode(self.version, serializer);
         <String>::sse_encode(self.digest, serializer);
-        <Vec<String>>::sse_encode(self.permissions, serializer);
+        <Vec<crate::api::WebPermissionDto>>::sse_encode(self.permissions, serializer);
         <bool>::sse_encode(self.updating, serializer);
     }
 }

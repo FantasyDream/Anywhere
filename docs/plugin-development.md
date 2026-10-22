@@ -2,7 +2,7 @@
 
 插件就是一个本地网页：你负责内容和交互，Anywhere 负责窗口、背景、返回、权限和宿主能力。可以用普通 JavaScript，也可以用 React、Vue、Svelte 等框架。
 
-**当前范围：macOS 本地开发预览，下述简化入口需 Build 23 或更新版本。** SDK 尚未发布到 npm，使用导出的 `.tgz` 安装。开发需要 Node.js 22+ 和 Python 3.10+；插件运行时不需要 Node、Python、Rust 或 Flutter。
+**当前范围：V0.12 的 macOS 本地开发预览。** 下述简化入口已在 V0.11 Build 23 接入，当前 V0.12 继续支持，不能跨版本仅比较构建号。SDK 尚未发布到 npm，使用导出的 `.tgz` 安装。开发需要 Node.js 22+ 和 Python 3.10+；插件运行时不需要 Node、Python、Rust 或 Flutter。
 
 ## 1. 从模板开始
 
@@ -86,6 +86,8 @@ await plugin.host.clipboard.writeText(input.value);
 
 不传 `onError` 时显示默认错误提示；需要业务提示时传入 `onError(error)`。业务按钮自身的异步操作仍应捕获失败、恢复按钮状态，取消复制后不能显示成功。SDK 自动处理协议和分块，不自动重试副作用。
 
+返回、重载和工具选项由 Host 提供，SDK 当前没有 `navigation.back`、`actions.set` 或 `host.theme.subscribe`。主题 / 背景由 Host 自动注入；不需要注册页面动作来适配样式。
+
 输入可能是 `text`、`url`、`resources` 或 `empty`。按工具名称打开时可以没有输入，不要把搜索关键词当成正文。`empty.reason` 会说明没有对象、未授权或超限等原因。
 
 | 功能 | SDK 调用 | Manifest 权限 |
@@ -124,11 +126,14 @@ Host 会识别输入、选中文本和 15 秒内新复制内容中的 JSON，展
 - 推荐直接保留模板的 `aw-tool`；需要自定义布局时使用 `aw-ui`、`aw-toolbar`、`aw-actions`、`aw-card`、`aw-muted`；按钮与输入框使用共享样式。
 - 编辑器 / 查询工具可用 `aw-workspace`、`aw-workspace-toolbar`、`aw-workspace-panes`、`aw-pane` 和 `aw-editor`；分栏与代码区域跟随 File Search 的共享设计，不用再画两张独立大卡片。完整类名见 SDK README。
 - 自定义局部组件时使用 `--aw-text`、`--aw-secondary`、`--aw-surface`、`--aw-border`、`--aw-accent` 等 CSS 变量。
+- 常用图标也由 Host 提供，例如 `<button><span class="aw-icon aw-icon--copy" aria-hidden="true"></span>复制</button>`。无需图标依赖或样式代码；保留文字标签，仅图标按钮须提供 `aria-label`。完整列表见 SDK README。
 - 保留 Esc 和 ⌘K 给 Host；局部快捷键不要拦截输入法组合输入。
 
 隐藏后页面最多保留 15 秒，未完成宿主请求会失效。`definePlugin` 自动取消待处理请求，恢复时重新就绪并保留文稿；插件无需监听可见性或重复读取输入。`onDispose` 可用于释放业务自己的计时器等资源。
 
 超过保留时间、返回或重载后，页面可能重新创建。Storage 适合保存偏好，不要默认持久化用户正文。
+
+导入批准新版本、禁用或撤销会立即失效旧调用，不提供“先保留旧编辑页、稍后更新”的模式。更新前保存需要保留的内容。卸载会清理该安装的私有 KV；目前没有保留数据选项。包的 ID / 名称不是发布者证明，同 ID 的本地更新仍需自行核对来源和全部权限。
 
 ## 6. 打包与排错
 

@@ -256,6 +256,7 @@ fn queued_execute_builtin_target_removal_revokes_execution() {
     // Keep the wrapper definition while revoking the referenced native implementation.
     replacement
         .register(ActionDefinition {
+            localized_titles: Default::default(),
             id: "wrap.copy".into(),
             title: "Wrapped Copy".into(),
             subtitle: None,

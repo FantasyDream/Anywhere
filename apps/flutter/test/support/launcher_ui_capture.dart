@@ -21,10 +21,12 @@ Future<void> loadCaptureFonts() async {
   }
   final monospace = File('/System/Library/Fonts/Menlo.ttc');
   if (await monospace.exists()) {
-    final loader = FontLoader('monospace');
-    loader.addFont(
-        monospace.readAsBytes().then((bytes) => ByteData.sublistView(bytes)));
-    await loader.load();
+    final bytes = await monospace.readAsBytes();
+    for (final family in ['monospace', 'Menlo']) {
+      final loader = FontLoader(family);
+      loader.addFont(Future.value(ByteData.sublistView(bytes)));
+      await loader.load();
+    }
   }
   final icons = FontLoader('packages/cupertino_icons/CupertinoIcons');
   icons.addFont(

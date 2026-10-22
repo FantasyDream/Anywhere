@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:anywhere/infrastructure/clipboard_preferences_backend.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
+import 'package:anywhere/l10n/app_language.dart';
 import 'package:anywhere/settings/clipboard_settings_controller.dart';
 import 'package:anywhere/settings/clipboard_settings_section.dart';
 import 'package:anywhere/settings/settings_controller.dart';
@@ -101,6 +102,28 @@ void main() {
     controller.dispose();
   });
 
+  test('a failed pending clipboard save blocks close with a translated message',
+      () async {
+    final backend = Preferences()
+      ..gate = Completer<void>()
+      ..fail = true;
+    final settings = SettingsController(
+        window: WindowHost(const MethodChannel('unused/settings')),
+        clipboardBackend: backend,
+        readPlugins: () => []);
+    addTearDown(settings.dispose);
+    final change = settings.clipboard.setRecording(true);
+    final close = settings.prepareClose();
+    backend.gate!.complete();
+    expect(await change, isFalse);
+    expect(await close, isFalse);
+    final zh = lookupAppLocalizations(const Locale('zh'));
+    final en = lookupAppLocalizations(const Locale('en'));
+    expect(settings.statusMessageFor(zh), zh.clipboardSettingsFailed);
+    expect(settings.statusMessageFor(en), en.clipboardSettingsFailed);
+    expect(settings.statusMessageFor(zh), isNot(settings.statusMessageFor(en)));
+  });
+
   testWidgets(
       'recording and clear live in settings; clear requires confirmation and preserves recording',
       (tester) async {
@@ -118,6 +141,9 @@ void main() {
     await tester.tap(find.text('Record clipboard history'));
     await tester.pumpAndSettle();
     expect(backend.recording, isTrue);
+    await tester.ensureVisible(find.text('History storage'));
+    await tester.tap(find.text('History storage'));
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Clear History…'));
     await tester.tap(find.text('Clear History…'));
     await tester.pumpAndSettle();

@@ -11,6 +11,7 @@ use std::{
 pub struct ShortcutAction {
     pub action_id: String,
     pub title: String,
+    pub localized_titles: BTreeMap<String, String>,
     pub context_types: Vec<String>,
 }
 
@@ -32,6 +33,7 @@ pub struct ShortcutRoute {
 pub struct ShortcutApplication {
     pub bundle_id: String,
     pub title: String,
+    pub localized_titles: BTreeMap<String, String>,
 }
 
 impl Application {
@@ -76,7 +78,7 @@ impl Application {
 
     /// Configuration labels only; never send captured paths or process identities.
     pub fn shortcut_applications(&self) -> Result<Vec<ShortcutApplication>> {
-        let mut apps: BTreeMap<String, String> = self
+        let mut apps: BTreeMap<String, ShortcutApplication> = self
             .resolver
             .catalog
             .lock()
@@ -84,15 +86,26 @@ impl Application {
             .full
             .applications()
             .iter()
-            .map(|a| (a.bundle_id.clone(), a.name.clone()))
+            .map(|a| {
+                (
+                    a.bundle_id.clone(),
+                    ShortcutApplication {
+                        bundle_id: a.bundle_id.clone(),
+                        title: a.name.clone(),
+                        localized_titles: a.localized_names.clone(),
+                    },
+                )
+            })
             .collect();
         if let Some(app) = &self.session()?.identity.frontmost {
-            apps.insert(app.bundle_id.clone(), app.name.clone());
+            apps.entry(app.bundle_id.clone())
+                .or_insert_with(|| ShortcutApplication {
+                    bundle_id: app.bundle_id.clone(),
+                    title: app.name.clone(),
+                    localized_titles: Default::default(),
+                });
         }
-        let mut apps: Vec<_> = apps
-            .into_iter()
-            .map(|(bundle_id, title)| ShortcutApplication { bundle_id, title })
-            .collect();
+        let mut apps: Vec<_> = apps.into_values().collect();
         apps.sort_by(|a, b| a.title.cmp(&b.title).then(a.bundle_id.cmp(&b.bundle_id)));
         Ok(apps)
     }
@@ -364,6 +377,7 @@ pub(super) fn catalog_options(
             Some(ShortcutAction {
                 action_id: binding.action_id.as_str().into(),
                 title: action.title.clone(),
+                localized_titles: action.localized_titles.clone(),
                 context_types: binding.context_types,
             })
         })

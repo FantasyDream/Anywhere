@@ -76,15 +76,21 @@ fn status(s: WebPackageStatus) -> WebPackageDto {
         rollback: s.rollback,
     }
 }
-fn permissions(p: &[anywhere_protocol::web_plugin::WebPermission]) -> Vec<String> {
+fn permissions(p: &[anywhere_protocol::web_plugin::WebPermission]) -> Vec<WebPermissionDto> {
     use anywhere_protocol::web_plugin::WebPermission::*;
     p.iter()
-        .map(|p| match p {
-            ContextRead { types } => format!("Selected context: {}", types.join(", ")),
-            CurrentApp {} => "Current application name".into(),
-            ClipboardReadText {} => "Read clipboard text (confirmed per operation)".into(),
-            ClipboardWriteText {} => "Copy text (confirmed per operation)".into(),
-            LocalStorage {} => "Private local settings (1 MiB)".into(),
+        .map(|permission| WebPermissionDto {
+            kind: match permission {
+                ContextRead { .. } => WebPermissionKindDto::ContextRead,
+                CurrentApp {} => WebPermissionKindDto::CurrentApp,
+                ClipboardReadText {} => WebPermissionKindDto::ClipboardReadText,
+                ClipboardWriteText {} => WebPermissionKindDto::ClipboardWriteText,
+                LocalStorage {} => WebPermissionKindDto::LocalStorage,
+            },
+            context_types: match permission {
+                ContextRead { types } => types.clone(),
+                _ => Vec::new(),
+            },
         })
         .collect()
 }
@@ -201,13 +207,20 @@ fn reply(dispatch: WebDispatch) -> WebReplyDto {
         WebDispatch::Reply(frame) => WebReplyDto {
             frame: Some(frame),
             ticket: None,
-            title: None,
+            consent: None,
             preview: None,
         },
         WebDispatch::Confirmation(c) => WebReplyDto {
             frame: None,
             ticket: Some(c.ticket),
-            title: Some(c.title.into()),
+            consent: Some(match c.kind {
+                anywhere_core::application::web_plugins::WebConsentKind::ReadClipboard => {
+                    WebConsentKindDto::ReadClipboard
+                }
+                anywhere_core::application::web_plugins::WebConsentKind::WriteClipboard => {
+                    WebConsentKindDto::WriteClipboard
+                }
+            }),
             preview: c.preview,
         },
     }

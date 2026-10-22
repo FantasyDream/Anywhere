@@ -1,3 +1,4 @@
+import '../l10n/app_language.dart';
 import '../infrastructure/desktop_environment.dart';
 import '../ui/app_icons.dart';
 import 'dart:async';
@@ -85,7 +86,7 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
         if (mounted) setState(() => _copied = false);
       });
     } catch (_) {
-      widget.onError('Output could not be copied. Try again.');
+      widget.onError(context.l10n.outputCouldNotBeCopiedTryAgain);
     }
   }
 
@@ -109,13 +110,15 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               child: LayoutBuilder(
                   builder: (context, constraints) => Row(children: [
-                        _tab('Output', false),
-                        _tab('Diagnostics', true),
+                        _tab(context.l10n.output, false),
+                        _tab(context.l10n.diagnostics, true),
                         const Spacer(),
                         _followButton(constraints.maxWidth < 500 ||
                             MediaQuery.textScalerOf(context).scale(11) > 13),
                         IconButton(
-                            tooltip: _copied ? 'Copied' : 'Copy output',
+                            tooltip: _copied
+                                ? context.l10n.copied
+                                : context.l10n.copyOutput,
                             onPressed: _text.isEmpty ? null : _copy,
                             constraints: const BoxConstraints.tightFor(
                                 width: 34, height: 34),
@@ -138,10 +141,10 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
                     child: SelectableText(
                         _text.isEmpty
                             ? (_diagnostics
-                                ? 'No diagnostic output.'
+                                ? context.l10n.noDiagnosticOutput
                                 : _active
-                                    ? 'Waiting for output…'
-                                    : 'No standard output.')
+                                    ? context.l10n.waitingForOutput
+                                    : context.l10n.noStandardOutput)
                             : _text,
                         key: const Key('task-output-text'),
                         style: TextStyle(
@@ -164,7 +167,9 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
     }
 
     final icon = Icon(_following ? AppIcons.latest : AppIcons.down, size: 15);
-    final message = _following ? 'Follow new output' : 'Jump to latest output';
+    final message = _following
+        ? context.l10n.followNewOutput
+        : context.l10n.jumpToLatestOutput;
     if (compact) {
       return IconButton(
           key: const Key('follow-output'),
@@ -179,7 +184,8 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
             key: const Key('follow-output'),
             onPressed: follow,
             icon: icon,
-            label: Text(_following ? 'Following' : 'Latest'),
+            label:
+                Text(_following ? context.l10n.following : context.l10n.latest),
             style: TextButton.styleFrom(
                 foregroundColor: _following ? AppStyle.muted : AppStyle.accent,
                 textStyle: const TextStyle(fontSize: 11),

@@ -1,5 +1,6 @@
 #import <AppKit/AppKit.h>
 #import "macos_process.h"
+#import "macos_application_names.h"
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
@@ -76,6 +77,25 @@ char *launcher_bundle_application(const char *utf8_path) {
         if (![name isKindOfClass:NSString.class] || name.length == 0) {
             name = path.lastPathComponent.stringByDeletingPathExtension;
         }
+        NSArray<NSString *> *preferredNames = launcher_names_for_languages(bundle, NSLocale.preferredLanguages);
+        if (preferredNames.count > 0) name = preferredNames.firstObject;
+        NSMutableDictionary<NSString *, NSString *> *localizedNames = [NSMutableDictionary dictionary];
+        for (NSString *language in @[ @"en", @"zh" ]) {
+            NSArray<NSString *> *translated = launcher_names_for_languages(
+                bundle, @[ [language isEqualToString:@"zh"] ? @"zh-Hans" : language ]);
+            if (translated.count > 0) localizedNames[language] = translated.firstObject;
+        }
+        // Some system apps (e.g. Calculator) keep English only in their base Info.plist.
+        if (!localizedNames[@"en"]) {
+            for (id candidate in @[ bundle.infoDictionary[@"CFBundleDisplayName"] ?: NSNull.null,
+                                     bundle.infoDictionary[@"CFBundleName"] ?: NSNull.null,
+                                     path.lastPathComponent.stringByDeletingPathExtension ]) {
+                if ([candidate isKindOfClass:NSString.class] && [candidate length] > 0) {
+                    localizedNames[@"en"] = candidate;
+                    break;
+                }
+            }
+        }
         NSMutableArray<NSString *> *aliases = [NSMutableArray array];
         NSMutableSet<NSString *> *seen = [NSMutableSet setWithObject:name];
         for (id candidate in @[
@@ -89,11 +109,18 @@ char *launcher_bundle_application(const char *utf8_path) {
             [seen addObject:alias];
             [aliases addObject:alias];
         }
+        for (NSString *alias in preferredNames) {
+            if (![seen containsObject:alias]) {
+                [seen addObject:alias];
+                [aliases addObject:alias];
+            }
+        }
         NSDictionary *value = @{
             @"bundle_id": identifier,
             @"name": name,
             @"path": bundle.bundlePath ?: path,
             @"aliases": aliases,
+            @"localized_names": localizedNames,
         };
         NSData *data = [NSJSONSerialization dataWithJSONObject:value options:0 error:NULL];
         if (!data) return NULL;
@@ -102,83 +129,9 @@ char *launcher_bundle_application(const char *utf8_path) {
     }
 }
 
-// The user's preferred languages, most preferred first, as a JSON array.
-//
-// Read from the system rather than from an environment variable: a Finder-launched
-// app has no AppleLanguages in its environment.
-char *launcher_preferred_languages(void) {
-    @autoreleasepool {
-        NSArray<NSString *> *languages = NSLocale.preferredLanguages;
-        NSData *data = [NSJSONSerialization dataWithJSONObject:languages options:0 error:NULL];
-        if (!data) return NULL;
-        NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-        return json ? strdup(json.UTF8String) : NULL;
-    }
-}
-
-// Names for one bundle in the given preference languages, as a JSON array.
-//
-// macOS keeps localized app names in <lang>.lproj/InfoPlist.strings, which
-// `bundleWithPath` does not surface for a bundle outside the running app. Without
-// this, searching for "Safari浏览器" found nothing: the index only ever held the
-// canonical English name.
-char *launcher_bundle_localized_names(const char *utf8_path, const char *utf8_languages) {
-    @autoreleasepool {
-        if (!utf8_path || !utf8_languages) return NULL;
-        NSString *path = [NSString stringWithUTF8String:utf8_path];
-        NSArray<NSString *> *languages =
-            [[NSString stringWithUTF8String:utf8_languages] componentsSeparatedByString:@","];
-        if (path.length == 0 || languages.count == 0) return NULL;
-        NSString *resources = [path stringByAppendingPathComponent:@"Contents/Resources"];
-        NSFileManager *files = NSFileManager.defaultManager;
-        NSMutableArray<NSString *> *names = [NSMutableArray array];
-        NSMutableSet<NSString *> *seen = [NSMutableSet set];
-        for (NSString *language in languages) {
-            NSString *trimmed = [language
-                stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-            if (trimmed.length == 0) continue;
-            // "zh-Hans-CN" also has to match "zh-Hans", "zh_CN" and "zh-Hans-CN".
-            NSMutableArray<NSString *> *candidates = [NSMutableArray arrayWithObject:trimmed];
-            NSArray<NSString *> *parts = [trimmed componentsSeparatedByString:@"-"];
-            if (parts.count >= 2) {
-                NSString *script = parts[1];
-                if ([script isEqualToString:@"Hans"]) {
-                    [candidates addObject:@"zh_CN"];
-                    [candidates addObject:@"zh-Hans"];
-                } else if ([script isEqualToString:@"Hant"]) {
-                    [candidates addObject:@"zh_TW"];
-                    [candidates addObject:@"zh_HK"];
-                    [candidates addObject:@"zh-Hant"];
-                }
-                [candidates addObject:[NSString stringWithFormat:@"%@_%@", parts[0], parts[1]]];
-            }
-            for (NSString *candidate in candidates) {
-                NSString *strings = [[resources
-                    stringByAppendingPathComponent:[candidate stringByAppendingPathExtension:@"lproj"]]
-                    stringByAppendingPathComponent:@"InfoPlist.strings"];
-                if (![files fileExistsAtPath:strings]) continue;
-                NSDictionary *entries = [NSDictionary dictionaryWithContentsOfFile:strings];
-                if (![entries isKindOfClass:NSDictionary.class]) continue;
-                for (NSString *key in @[ @"CFBundleDisplayName", @"CFBundleName" ]) {
-                    NSString *value = entries[key];
-                    if (![value isKindOfClass:NSString.class] || value.length == 0) continue;
-                    if (![seen containsObject:value]) {
-                        [seen addObject:value];
-                        [names addObject:value];
-                    }
-                }
-                if (names.count > 0) break;
-            }
-        }
-        if (names.count == 0) return NULL;
-        NSData *data = [NSJSONSerialization dataWithJSONObject:names options:0 error:NULL];
-        if (!data) return NULL;
-        NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-        return json ? strdup(json.UTF8String) : NULL;
-    }
-}
-
-// Activate a running instance, otherwise launch the canonical bundle path.
+// Open the selected install through LaunchServices, reusing a running instance.
+// NSWorkspace performs the cooperative activation handoff on macOS 14+; a bare
+// NSRunningApplication activation request can succeed without taking foreground.
 // Returns 1 when an application was activated or launched, 0 when nothing happened.
 int launcher_launch_application(const char *utf8_path) {
     @autoreleasepool {
@@ -186,18 +139,9 @@ int launcher_launch_application(const char *utf8_path) {
         NSString *path = [NSString stringWithUTF8String:utf8_path];
         if (path.length == 0) return 0;
         NSURL *url = [NSURL fileURLWithPath:path];
-        NSString *target = [[NSBundle bundleWithURL:url] bundleIdentifier];
-        if (target.length > 0) {
-            for (NSRunningApplication *running in NSWorkspace.sharedWorkspace.runningApplications) {
-                // Match the chosen install so a duplicate installation is not activated.
-                if ([running.bundleIdentifier isEqualToString:target] &&
-                    [running.bundleURL.path isEqualToString:path]) {
-                    return [running activateWithOptions:NSApplicationActivateAllWindows] ? 1 : 0;
-                }
-            }
-        }
         NSWorkspaceOpenConfiguration *configuration = [NSWorkspaceOpenConfiguration configuration];
         configuration.activates = YES;
+        configuration.createsNewApplicationInstance = NO;
         __block int launched = 0;
         dispatch_semaphore_t done = dispatch_semaphore_create(0);
         [NSWorkspace.sharedWorkspace openApplicationAtURL:url
@@ -209,8 +153,12 @@ int launcher_launch_application(const char *utf8_path) {
         }];
         // The completion handler runs off the main thread; a bounded wait keeps this
         // call synchronous without blocking the launcher for long.
-        dispatch_semaphore_wait(done,
-                                dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)));
+        if (dispatch_semaphore_wait(done,
+                dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC))) != 0) {
+            // A late callback owns its captured result. Do not read that result
+            // concurrently after timing out, or report a pending open as success.
+            return 0;
+        }
         return launched;
     }
 }

@@ -23,7 +23,11 @@ void main() {
         const DesktopEnvironment(platform: TargetPlatform.macOS));
     messenger.setMockMethodCallHandler(channel, (call) async {
       calls.add(call.method);
-      return call.method == 'ready' ? true : null;
+      return switch (call.method) {
+        'ready' => true,
+        'returnToTarget' => 'returned',
+        _ => null,
+      };
     });
   });
   tearDown(() {
@@ -120,7 +124,7 @@ void main() {
     expect(tester.getTopLeft(find.text('Entry 2')).dy, selectedTop);
     expect(find.text('Copied'), findsOneWidget);
     expect(backend.copied, ['2']);
-    expect(calls, contains('returnToTarget'));
+    expect(calls, isNot(contains('returnToTarget')));
     expect(calls, isNot(contains('close')));
     expect(find.byType(ClipboardShelfPage), findsOneWidget);
     expect(
@@ -134,6 +138,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(backend.copied, ['2', '1']);
     expect(backend.enabled, isFalse);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(calls, isNot(contains('close')));
+    expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('clipboard-search')))
+            .controller!
+            .text,
+        isEmpty);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
     expect(calls.last, 'close');
@@ -230,7 +243,7 @@ void main() {
   });
 
   testWidgets(
-      'compact shelf copies on click and numbered shortcuts without closing',
+      'compact shelf selects on click and copies explicitly without losing focus',
       (tester) async {
     tester.view.physicalSize = const Size(400, 520);
     tester.view.devicePixelRatio = 1;
@@ -241,11 +254,15 @@ void main() {
         .pumpWidget(ClipboardShelfApp(backend: backend, channel: channel));
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('clipboard-preview-pane')), findsNothing);
-    expect(find.text('⌘1'), findsOneWidget);
+    expect(find.text('⌘2'), findsOneWidget);
+    expect(find.byKey(const Key('selected-row-primary')), findsOneWidget);
     await tester.enterText(find.byKey(const Key('clipboard-search')), 'Entry');
     await tester.pump(const Duration(milliseconds: 150));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Entry 2'));
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(backend.copied, isEmpty);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(backend.copied, ['2']);
     await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
@@ -254,7 +271,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(backend.copied, ['2', '1']);
     expect(find.text('Copied'), findsOneWidget);
-    expect(calls.where((call) => call == 'returnToTarget').length, 2);
+    expect(calls, isNot(contains('returnToTarget')));
     expect(calls, isNot(contains('close')));
     final page =
         tester.widget<ClipboardShelfPage>(find.byType(ClipboardShelfPage));
@@ -292,6 +309,9 @@ void main() {
             .controller!
             .text,
         'Entry');
+    expect(calls, isNot(contains('close')));
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
     expect(calls, isNot(contains('close')));
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
@@ -360,7 +380,7 @@ void main() {
                     builder: (context, _) => ClipboardShelfPage(
                         session: session,
                         onClose: () {},
-                        onCopied: () async {},
+                        onReturnToTarget: () async {},
                         visible: true,
                         presentation: 0))))));
     await tester.pumpAndSettle();

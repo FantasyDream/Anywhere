@@ -1,6 +1,7 @@
 import '../../l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import '../../ui/app_style.dart';
+import '../../ui/app_components.dart';
 import '../../ui/file_type_appearance.dart';
 import '../file_search_controller.dart';
 import '../launcher_view_state.dart';
@@ -18,18 +19,8 @@ class FileSearchControls extends StatelessWidget {
   final VoidCallback onSelect;
   final bool enabled;
 
-  String _typeLabel(BuildContext context, FileFilter type) => switch (type) {
-        FileFilter.all => context.l10n.allTypes,
-        FileFilter.files => context.l10n.files,
-        FileFilter.folders => context.l10n.folders,
-        FileFilter.documents => context.l10n.documents,
-        FileFilter.pdf => context.l10n.pdf,
-        FileFilter.images => context.l10n.images,
-        FileFilter.audio => context.l10n.audio,
-        FileFilter.video => context.l10n.video,
-        FileFilter.archives => context.l10n.archives,
-        FileFilter.code => context.l10n.code,
-      };
+  String _typeLabel(BuildContext context, FileFilter type) =>
+      type.labelFor(context.l10n);
 
   @override
   Widget build(BuildContext context) => SizedBox(
@@ -43,13 +34,34 @@ class FileSearchControls extends StatelessWidget {
           options: [
             for (final type in FileFilter.values)
               LauncherFilterOption(type.name, _typeLabel(context, type),
-                  'Search this file type · Ctrl+Tab / Ctrl+Shift+Tab'),
+                  context.l10n.searchThisFileType),
           ],
           onSelect: (id) {
             files.setFilter(
                 FileFilter.values.firstWhere((type) => type.name == id));
             onSelect();
           }));
+}
+
+/// Search progress describes the file query, not the selected operation.
+class FileSearchStatus extends StatelessWidget {
+  const FileSearchStatus({super.key, required this.label, this.onRetry});
+  final String label;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+      key: const Key('file-search-status'),
+      padding: const EdgeInsets.fromLTRB(20, 0, 14, 4),
+      child: Row(children: [
+        Expanded(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppStyle.caption.copyWith(fontSize: 10.5))),
+        if (onRetry != null)
+          TextButton(onPressed: onRetry, child: Text(context.l10n.retry)),
+      ]));
 }
 
 class FileSearchPreview extends StatelessWidget {
@@ -91,7 +103,8 @@ class FileSearchPreview extends StatelessWidget {
                           child: Padding(
                               padding: const EdgeInsets.all(16),
                               child: Text(
-                                  files.error ?? 'Select a file to preview',
+                                  files.errorFor(context.l10n) ??
+                                      context.l10n.selectAFileToPreview,
                                   textAlign: TextAlign.center,
                                   style: AppStyle.caption)))
                       : KeyedSubtree(
@@ -104,37 +117,54 @@ class FileSearchPreview extends StatelessWidget {
                               child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    FileTypeIcon(
-                                        appearance: appearance!, size: 40),
-                                    const SizedBox(height: 12),
-                                    Text(name ?? path!,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: AppStyle.body.copyWith(
-                                            fontWeight: FontWeight.w600)),
-                                    const SizedBox(height: 14),
-                                    _property(
-                                        context.l10n.kind, appearance.label),
-                                    if (!preview.isDirectory)
-                                      _property(context.l10n.size,
-                                          _size(preview.sizeBytes)),
-                                    if (modified != null)
-                                      _property(context.l10n.modified,
-                                          '${localizations.formatMediumDate(modified)} · ${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(modified))}'),
-                                    const SizedBox(height: 12),
-                                    Text(context.l10n.location,
-                                        style: AppStyle.caption),
-                                    const SizedBox(height: 4),
-                                    SelectableText(path!,
-                                        style: AppStyle.caption.copyWith(
-                                            color: AppStyle.secondary)),
-                                    if (preview.notice != null) ...[
-                                      const SizedBox(height: 12),
-                                      Text(preview.notice!,
-                                          style: AppStyle.caption),
+                                    Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          FileTypeIcon(
+                                              appearance: appearance!,
+                                              size: 26),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                              child: Text(name ?? path!,
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: AppStyle.body.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w600))),
+                                        ]),
+                                    const SizedBox(height: 8),
+                                    Tooltip(
+                                        message: path!,
+                                        child: SelectableText(path,
+                                            maxLines: 2,
+                                            style: AppStyle.caption)),
+                                    const SizedBox(height: 8),
+                                    AppDisclosure(
+                                        key: const Key('file-preview-details'),
+                                        compact: true,
+                                        title: context.l10n.fileInformation,
+                                        initiallyExpanded: preview.text == null,
+                                        child: Column(children: [
+                                          _property(
+                                              context.l10n.kind,
+                                              appearance
+                                                  .labelFor(context.l10n)),
+                                          if (!preview.isDirectory)
+                                            _property(context.l10n.size,
+                                                _size(preview.sizeBytes)),
+                                          if (modified != null)
+                                            _property(context.l10n.modified,
+                                                '${localizations.formatMediumDate(modified)} · ${localizations.formatTimeOfDay(TimeOfDay.fromDateTime(modified))}'),
+                                        ])),
+                                    if (_notice(context)
+                                        case final notice?) ...[
+                                      const SizedBox(height: 10),
+                                      Text(notice, style: AppStyle.caption),
                                     ],
                                     if (preview.text != null) ...[
-                                      const Divider(height: 24),
+                                      const SizedBox(height: 12),
                                       Container(
                                           width: double.infinity,
                                           padding: const EdgeInsets.all(10),
@@ -157,6 +187,23 @@ class FileSearchPreview extends StatelessWidget {
         ]);
   }
 
+  String? _notice(BuildContext context) {
+    final preview = files.preview;
+    if (preview == null || preview.isDirectory) return null;
+    final l10n = context.l10n;
+    final notices = <String>[
+      if (preview.text == null) l10n.filePreviewUnsupported,
+      if (preview.truncatedAtBytes case final limit?)
+        l10n.filePreviewTruncated('${limit ~/ 1024} KiB'),
+      if (preview.encoding case final encoding?)
+        if (preview.encodingGuessed)
+          l10n.filePreviewEncodingGuessed(encoding)
+        else if (encoding != 'UTF-8')
+          l10n.filePreviewDecoded(encoding),
+    ];
+    return notices.isEmpty ? null : notices.join(' · ');
+  }
+
   Widget _property(String label, String value) => Padding(
       padding: const EdgeInsets.only(bottom: 6),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -175,4 +222,19 @@ class FileSearchPreview extends StatelessWidget {
     }
     return '${(amount / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
   }
+}
+
+extension FileFilterLocalization on FileFilter {
+  String labelFor(AppLocalizations l10n) => switch (this) {
+        FileFilter.all => l10n.allTypes,
+        FileFilter.files => l10n.files,
+        FileFilter.folders => l10n.folders,
+        FileFilter.documents => l10n.documents,
+        FileFilter.pdf => l10n.pdf,
+        FileFilter.images => l10n.images,
+        FileFilter.audio => l10n.audio,
+        FileFilter.video => l10n.video,
+        FileFilter.archives => l10n.archives,
+        FileFilter.code => l10n.code,
+      };
 }

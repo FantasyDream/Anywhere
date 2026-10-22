@@ -82,7 +82,13 @@ impl ActionHandler for DirectoryAction {
     }
 }
 fn definition(id: &str, title: &str, accepts: &str, handler: DirectoryAction) -> ActionDefinition {
+    let chinese = match handler.operation {
+        Operation::Save => "收藏文件夹",
+        Operation::Forget => "取消收藏文件夹",
+        Operation::Open => "打开收藏的文件夹",
+    };
     ActionDefinition {
+        localized_titles: [("zh".into(), chinese.into())].into(),
         id: id.into(),
         title: title.into(),
         subtitle: None,

@@ -63,6 +63,9 @@ fn walk(
     }
     paths.sort();
     for path in paths {
+        if bundles.len() >= MAX_APPS {
+            break;
+        }
         if is_application(&path) {
             bundles.push(path);
         } else if path.is_dir() {
@@ -101,5 +104,21 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(names, ["Alpha", "Beta", "Gamma"]);
         assert!(!names.iter().any(|name| name == "Nested"));
+    }
+
+    #[test]
+    fn discovery_stops_identifying_entries_at_the_catalog_limit() {
+        use std::cell::Cell;
+        let root = tempfile::tempdir().unwrap();
+        for index in 0..MAX_APPS + 3 {
+            std::fs::File::create(root.path().join(format!("{index:05}.app"))).unwrap();
+        }
+        let identified = Cell::new(0);
+        let bundles = discover(&[root.path().to_path_buf()], &|_| {
+            identified.set(identified.get() + 1);
+            true
+        });
+        assert_eq!(bundles.len(), MAX_APPS);
+        assert_eq!(identified.get(), MAX_APPS);
     }
 }

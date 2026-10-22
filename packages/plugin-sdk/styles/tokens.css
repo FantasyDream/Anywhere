@@ -33,6 +33,14 @@
   --aw-success: #73cc91ff;
   --aw-fallback-surface: #24262bff;
   --aw-text-selection: #a7caff4d;
+  --aw-icon-blue: #9dcbffff;
+  --aw-icon-green: #9de0bcff;
+  --aw-icon-coral: #ffb3a8ff;
+  --aw-icon-purple: #cebaffff;
+  --aw-icon-amber: #ffd28dff;
+  --aw-icon-pink: #f5bad9ff;
+  --aw-icon-neutral: #e6ebf2ff;
+  --aw-icon-badge-ink: #202832ff;
   --aw-radius: 18px;
   --aw-result-radius: 10px;
   --aw-control-radius: 8px;

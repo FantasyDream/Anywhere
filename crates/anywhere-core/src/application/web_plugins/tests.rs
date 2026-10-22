@@ -371,6 +371,7 @@ fn source_replacement_and_registration_collision_fail_without_partial_publicatio
     assert!(service.prepare_registry(&next, &registry).is_err());
     let mut conflict = ActionRegistry::default();
     let definition = crate::core::action::descriptor::ActionDefinition {
+        localized_titles: Default::default(),
         id: "web:dev.example.tool:open".into(),
         title: "collision".into(),
         subtitle: None,

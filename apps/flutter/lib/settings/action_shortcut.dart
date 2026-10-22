@@ -1,3 +1,7 @@
+import '../l10n/context_labels.dart';
+export '../l10n/context_labels.dart';
+import '../l10n/generated/app_localizations.dart';
+import 'dart:ui' show Locale;
 import 'dart:convert';
 import '../infrastructure/runtime_policy.dart';
 import '../infrastructure/desktop_environment.dart';
@@ -56,17 +60,19 @@ class ActionShortcut {
     return binding.chordError == null ? binding : null;
   }
 
-  String? get chordError {
+  String? get chordError =>
+      chordErrorFor(lookupAppLocalizations(const Locale('en')));
+  String? chordErrorFor(AppLocalizations l10n) {
     final name = shortcutKeyNames[keyCode];
     if (actionId.isEmpty ||
         utf8.encode(actionId).length > RuntimePolicy.maxActionIdBytes ||
         utf8.encode(title).length > RuntimePolicy.maxActionTitleBytes) {
-      return 'Invalid action identity.';
+      return l10n.invalidActionIdentity;
     }
     if (name == null ||
         name.length != 1 ||
         !RegExp(r'^[A-Z]$').hasMatch(name)) {
-      return 'Use a letter key with a modifier.';
+      return l10n.letterWithModifier;
     }
     const allowed = shortcutMetaKey |
         shortcutShiftKey |
@@ -75,7 +81,7 @@ class ActionShortcut {
     if (modifiers & ~allowed != 0 ||
         modifiers & (shortcutMetaKey | shortcutAltKey | shortcutControlKey) ==
             0) {
-      return 'Use a modifier with the letter key.';
+      return l10n.modifierWithLetter;
     }
     final primary = DesktopEnvironment.current.usesMetaCommand
         ? shortcutMetaKey
@@ -86,7 +92,7 @@ class ActionShortcut {
     if (modifiers & primary != 0 &&
         modifiers & (shortcutAltKey | secondary) == 0 &&
         reservedActionKeyCodes.contains(keyCode)) {
-      return 'This shortcut is reserved for editing or window commands.';
+      return l10n.reservedEditingShortcut;
     }
     return null;
   }
@@ -100,38 +106,43 @@ class ActionShortcut {
       routes: routes);
 
   bool sameChord(int code, int mask) => keyCode == code && modifiers == mask;
-  String? validate(HostSettings settings) =>
-      configurationError ?? validateChord(settings);
+  String? validate(HostSettings settings, [AppLocalizations? labels]) {
+    final l10n = labels ?? lookupAppLocalizations(const Locale('en'));
+    return configurationErrorFor(l10n) ?? validateChord(settings, l10n);
+  }
 
-  String? get configurationError {
+  String? get configurationError =>
+      configurationErrorFor(lookupAppLocalizations(const Locale('en')));
+  String? configurationErrorFor(AppLocalizations l10n) {
     if (isIntent != actionId.startsWith('intent:')) {
-      return 'Invalid shortcut intent identity.';
+      return l10n.invalidShortcutIntent;
     }
     if (!isIntent) return null;
     if (routes.length > RuntimePolicy.maxShortcutRoutes ||
         title.trim().isEmpty) {
-      return 'Name the shortcut and use at most 16 rules.';
+      return l10n.shortcutRuleLimit;
     }
     final conditions = <String>{};
     for (final route in routes) {
-      if (route.error != null) return route.error;
+      if (route.errorFor(l10n) case final error?) return error;
       if (!conditions
           .add('${route.appBundleId ?? ''}/${route.contextType ?? ''}')) {
-        return 'Rules must use different app and context conditions.';
+        return l10n.differentShortcutConditions;
       }
     }
     return null;
   }
 
-  String? validateChord(HostSettings settings) {
-    if (chordError != null) return chordError;
+  String? validateChord(HostSettings settings, [AppLocalizations? labels]) {
+    final l10n = labels ?? lookupAppLocalizations(const Locale('en'));
+    if (chordErrorFor(l10n) case final error?) return error;
     if (sameChord(settings.currentAppKeyCode, settings.currentAppModifiers) ||
         sameChord(settings.universalKeyCode, settings.universalModifiers)) {
-      return 'This shortcut already opens Anywhere.';
+      return l10n.shortcutAlreadyOpens;
     }
     for (final other in settings.actionShortcuts) {
       if (other.actionId != actionId && other.sameChord(keyCode, modifiers)) {
-        return 'This shortcut is assigned to ${other.title}.';
+        return l10n.shortcutAssignedTo(other.title);
       }
     }
     return null;
@@ -159,7 +170,8 @@ class ShortcutRoute {
       this.contextType});
   final String actionId, title;
   final String? appBundleId, appName, contextType;
-  String? get error {
+  String? get error => errorFor(lookupAppLocalizations(const Locale('en')));
+  String? errorFor(AppLocalizations l10n) {
     bool valid(String? value, int max) =>
         value == null ||
         (value.isNotEmpty &&
@@ -171,13 +183,15 @@ class ShortcutRoute {
         !valid(appBundleId, 256) ||
         !valid(contextType, 128) ||
         utf8.encode(appName ?? '').length > RuntimePolicy.maxActionTitleBytes) {
-      return 'Invalid shortcut rule.';
+      return l10n.invalidShortcutRule;
     }
     return null;
   }
 
   String get conditionLabel =>
-      '${appName ?? (appBundleId == null ? 'Any app' : 'Saved app')} · ${contextType == null ? 'Any compatible context' : contextTypeLabel(contextType!)}';
+      conditionLabelFor(lookupAppLocalizations(const Locale('en')));
+  String conditionLabelFor(AppLocalizations l10n) =>
+      '${appName ?? (appBundleId == null ? l10n.anyApp : l10n.savedApp)} · ${contextType == null ? l10n.anyCompatibleContext : contextTypeLabel(contextType!, l10n)}';
   Map<String, Object> toMap() => {
         'actionId': actionId,
         'title': title,
@@ -205,23 +219,3 @@ class ShortcutRoute {
     return route.error == null ? route : null;
   }
 }
-
-String contextTypeLabel(String id) =>
-    const {
-      'core.directory': 'Folder',
-      'core.file': 'File',
-      'core.file_selection': 'Selected files',
-      'core.text': 'Text',
-      'core.url': 'Web link',
-      'core.json': 'JSON',
-      'json.document': 'JSON',
-      'git.repository': 'Git repository',
-      'project.node': 'Node project',
-      'project.maven': 'Maven project',
-      'project.gradle': 'Gradle project',
-      'project.rust': 'Rust project',
-      'java.spring_boot': 'Spring Boot project',
-      'core.application': 'Current app',
-      'core.launcher': 'Anywhere tool',
-    }[id] ??
-    id;

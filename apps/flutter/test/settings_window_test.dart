@@ -1,3 +1,4 @@
+import 'package:anywhere/l10n/app_language.dart';
 import 'package:anywhere/infrastructure/desktop_environment.dart';
 import 'package:anywhere/src/rust/api.dart';
 import 'dart:async';
@@ -62,7 +63,8 @@ class SettingsHarness {
     shutdownTasks: () async {},
   );
 
-  Future<void> mount(WidgetTester tester, {double textScale = 1}) async {
+  Future<void> mount(WidgetTester tester,
+      {double textScale = 1, Locale? locale}) async {
     tester.view.physicalSize = const Size(648, 508);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -89,6 +91,9 @@ class SettingsHarness {
     addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
     controller.attach();
     await tester.pumpWidget(MaterialApp(
+      locale: locale,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       theme: AppStyle.theme,
       builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context)
@@ -120,6 +125,11 @@ class SettingsHarness {
 
   Future<void> draft(WidgetTester tester) async {
     await tester.tap(find.byKey(const ValueKey('settings-search')));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+        find.byKey(const Key('hidden-apps-disclosure')), 180,
+        scrollable: find.byType(Scrollable).last);
+    await tester.tap(find.text('Hidden apps'));
     await tester.pumpAndSettle();
     final field = find.byKey(const Key('hidden-apps'));
     await tester.scrollUntilVisible(field, 180,
@@ -368,10 +378,8 @@ void main() {
     await tester.enterText(
         find.byKey(const Key('file-search-roots')), '/Users/test/project');
     expect(find.byKey(const Key('file-search-engine')), findsNothing);
-    expect(
-        find.text(
-            'System search shows early results. Filename scanning uses accessible, authorized directories.'),
-        findsOneWidget);
+    expect(find.text('Search rules'), findsOneWidget);
+    expect(find.text('How search works'), findsOneWidget);
     expect(h.settings.fileSearchRoots, isEmpty);
     await tester.ensureVisible(find.text('Include hidden files'));
     await tester.tap(find.text('Include hidden files'));
@@ -399,6 +407,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('settings-search')));
     await tester.pumpAndSettle();
     final roots = find.byKey(const Key('file-search-roots'));
+    await tester.ensureVisible(find.text('Search rules'));
+    await tester.tap(find.text('Search rules'));
+    await tester.pumpAndSettle();
     final exclusions = find.byKey(const Key('file-search-exclusions'));
     await tester.enterText(roots, '/Users/test/submitted');
     final gate = Completer<void>();
@@ -474,4 +485,28 @@ void main() {
     expect(harness.controller.settings.statusMessage,
         contains('New edits were made'));
   });
+  for (final language in ['en', 'zh']) {
+    testWidgets('$language settings pages retain layout at larger text',
+        (tester) async {
+      final h = SettingsHarness();
+      await h.mount(tester, textScale: 1.3, locale: Locale(language));
+      final labels = lookupAppLocalizations(Locale(language));
+      expect(find.text(labels.settings), findsOneWidget);
+      for (final page in [
+        'general',
+        'shortcuts',
+        'context',
+        'search',
+        'clipboard',
+        'plugins'
+      ]) {
+        await tester.tap(find.byKey(Key('settings-$page')));
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull,
+            reason: '$language/$page must fit without errors');
+      }
+      expect(
+          find.text(labels.chooseTheToolsAvailableInAnywhere), findsOneWidget);
+    });
+  }
 }

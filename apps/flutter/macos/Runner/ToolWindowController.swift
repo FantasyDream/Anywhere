@@ -11,11 +11,13 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
     private var localeHost: LocaleHost?
     private let entrypoint: String
     private let channelName: String
-    private let title: String
+    private let title: () -> String
+    private var localeObservers: [NSObjectProtocol] = []
     private var activationObserver: NSObjectProtocol?
     private var destination: NSRunningApplication?
+    private let focusReturner = ApplicationFocusReturner()
 
-    init(entrypoint: String, channelName: String, title: String) {
+    init(entrypoint: String, channelName: String, title: @autoclosure @escaping () -> String) {
         self.entrypoint = entrypoint
         self.channelName = channelName
         self.title = title
@@ -26,10 +28,18 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
         ) { [weak self] notification in
             self?.rememberDestination(notification.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication)
         }
+        for name in [LocaleHost.changed, NSLocale.currentLocaleDidChangeNotification] {
+            localeObservers.append(NotificationCenter.default.addObserver(forName: name,
+                object: nil, queue: .main) { [weak self] _ in
+                    guard let self else { return }
+                    self.window?.title = self.title()
+                })
+        }
     }
 
     deinit {
         if let activationObserver { NSWorkspace.shared.notificationCenter.removeObserver(activationObserver) }
+        for observer in localeObservers { NotificationCenter.default.removeObserver(observer) }
     }
 
     private func rememberDestination(_ app: NSRunningApplication?) {
@@ -60,11 +70,12 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
                     reply(nil)
                     DispatchQueue.main.async { [weak self] in self?.window?.performClose(nil) }
                 case "returnToTarget":
-                    // A delayed copy completion must not steal focus from another window.
-                    if self.window?.isKeyWindow == true, let target = self.destination, !target.isTerminated {
-                        target.activate(options: [.activateIgnoringOtherApps])
-                    }
-                    reply(nil)
+                    let origin = self.window
+                    self.focusReturner.returnFocus(to: self.destination,
+                        mayReturn: { [weak self, weak origin] in
+                            guard let origin else { return false }
+                            return self?.window === origin && origin.isKeyWindow
+                        }, completion: { outcome in reply(outcome.rawValue) })
                 default: reply(FlutterMethodNotImplemented)
                 }
             }
@@ -77,7 +88,7 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
             let panel = NSWindow(contentRect: NSRect(origin: .zero, size: size),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                 backing: .buffered, defer: false)
-            panel.title = title
+            panel.title = title()
             panel.titleVisibility = .hidden
             panel.titlebarAppearsTransparent = true
             panel.appearance = NSAppearance(named: .darkAqua)
@@ -85,7 +96,7 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.backgroundColor = .clear
             panel.isOpaque = false
-            panel.minSize = NSSize(width: 320, height: 300)
+            panel.minSize = NSSize(width: 360, height: 360)
             panel.isReleasedWhenClosed = false
             panel.delegate = self
             view.backgroundColor = .clear

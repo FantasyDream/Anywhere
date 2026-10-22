@@ -8,7 +8,18 @@ use std::sync::{Arc, Mutex};
 pub struct HistoryStatus {
     pub recording: bool,
     pub available: bool,
-    pub notice: Option<String>,
+    pub notice: Option<HistoryNotice>,
+}
+/// Policy facts only; each presentation chooses its own localized wording.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum HistoryNotice {
+    FeatureDisabled,
+    StorageUnavailable,
+    AccessRequired,
+    ItemTooLarge,
+    ReadFailed,
+    CaptureUnavailable,
+    MonitoringUnavailable,
 }
 struct State {
     repository: Result<Box<dyn HistoryRepository>, String>,
@@ -16,7 +27,7 @@ struct State {
     recording: bool,
     epoch: u64,
     generation: Option<i64>,
-    notice: Option<String>,
+    notice: Option<HistoryNotice>,
 }
 pub struct HistoryService {
     state: Mutex<State>,
@@ -58,11 +69,11 @@ impl HistoryService {
             recording: state.recording,
             available: state.feature_enabled && state.repository.is_ok(),
             notice: if !state.feature_enabled {
-                Some("Clipboard History is disabled in Features.".into())
+                Some(HistoryNotice::FeatureDisabled)
             } else if state.repository.is_err() {
-                Some("Clipboard history storage is unavailable. Restart after repairing the data file.".into())
+                Some(HistoryNotice::StorageUnavailable)
             } else {
-                state.notice.clone()
+                state.notice
             },
         })
     }
@@ -106,7 +117,7 @@ impl HistoryService {
         if platform.request_clipboard_history_access().is_err() {
             let mut state = self.state()?;
             if state.epoch == epoch {
-                state.notice = Some("Allow clipboard access in system settings to record new copies. Background capture will not prompt.".into());
+                state.notice = Some(HistoryNotice::AccessRequired);
             }
         }
         Ok(())
@@ -216,21 +227,16 @@ impl HistoryService {
                 if error.downcast_ref::<ContextReadError>()
                     == Some(&ContextReadError::TooLarge) =>
             {
-                state.notice = Some(
-                    "The copied item exceeds the 16 MB history limit and was not saved.".into(),
-                );
+                state.notice = Some(HistoryNotice::ItemTooLarge);
             }
             Err(error)
                 if error.downcast_ref::<ContextReadError>()
                     == Some(&ContextReadError::PermissionDenied) =>
             {
-                state.notice = Some("Allow clipboard access in system settings to record new copies. Background capture will not prompt.".into());
+                state.notice = Some(HistoryNotice::AccessRequired);
             }
             Err(_) => {
-                state.notice = Some(
-                    "A clipboard item could not be read. Existing history is still available."
-                        .into(),
-                );
+                state.notice = Some(HistoryNotice::ReadFailed);
             }
         }
         Ok(())
@@ -246,13 +252,19 @@ impl HistoryService {
         let service = Arc::downgrade(self);
         let capture_platform = platform.clone();
         let watcher = platform.watch_clipboard(Box::new(move || {
-            let Some(service) = service.upgrade() else { return };
-            let now = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis().min(i64::MAX as u128) as i64;
+            let Some(service) = service.upgrade() else {
+                return;
+            };
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_millis()
+                .min(i64::MAX as u128) as i64;
             if service.poll(capture_platform.as_ref(), now).is_err() {
                 if let Ok(mut state) = service.state() {
                     // Never log errors containing bodies, paths or SQL parameters.
                     if state.recording && state.feature_enabled {
-                        state.notice = Some("Clipboard history capture is unavailable. Existing history is still available.".into());
+                        state.notice = Some(HistoryNotice::CaptureUnavailable);
                     }
                 }
             }
@@ -261,7 +273,7 @@ impl HistoryService {
             Ok(watcher) => watcher,
             Err(_) => {
                 let mut state = self.state()?;
-                state.notice = Some("Clipboard monitoring is unavailable on this platform.".into());
+                state.notice = Some(HistoryNotice::MonitoringUnavailable);
                 return Ok(());
             }
         };

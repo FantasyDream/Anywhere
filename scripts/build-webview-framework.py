@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Package the pinned native WebView using the same integration as the P0 probe."""
+"""Package the pinned native WebView framework and its third-party notices."""
 import shutil
 import subprocess
 import sys

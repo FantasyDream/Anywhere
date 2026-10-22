@@ -33,7 +33,7 @@ final class LauncherWindowCoordinator {
             let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 648, height: 508),
                                  styleMask: [.titled, .closable, .miniaturizable, .fullSizeContentView],
                                  backing: .buffered, defer: false)
-            panel.title = "Anywhere · Settings"
+            panel.title = "Anywhere · \(NativeLocalization.text(.settings))"
             panel.titleVisibility = .hidden
             panel.titlebarAppearsTransparent = true
             panel.appearance = NSAppearance(named: .darkAqua)

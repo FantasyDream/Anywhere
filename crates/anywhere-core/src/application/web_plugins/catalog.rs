@@ -105,6 +105,7 @@ impl WebPluginCatalog {
                     input_matchers: command.input_matchers.clone().into(),
                 };
                 let action = ActionDefinition {
+                    localized_titles: Default::default(),
                     id: reference.action_id(),
                     title: command.title.clone(),
                     subtitle: Some(entry.manifest.name.clone()),

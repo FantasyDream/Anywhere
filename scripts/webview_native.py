@@ -8,7 +8,6 @@ from pathlib import Path
 import plistlib
 import shutil
 import subprocess
-import sys
 import urllib.parse
 import urllib.request
 import zipfile
@@ -71,7 +70,7 @@ def framework_layout(path, name):
     (version / 'Headers' / f'{name}.h').write_text('#import <Cocoa/Cocoa.h>\n')
     (version / 'Modules/module.modulemap').write_text(
         f'framework module {name} {{\n  umbrella header "{name}.h"\n  export *\n}}\n')
-    info = {'CFBundleIdentifier': f'dev.anywhere.probe.{name}',
+    info = {'CFBundleIdentifier': f'dev.anywhere.frameworks.{name}',
             'CFBundleExecutable': name, 'CFBundlePackageType': 'FMWK',
             'CFBundleVersion': '1', 'CFBundleShortVersionString': '1.1.2'}
     (version / 'Resources/Info.plist').write_bytes(plistlib.dumps(info))
@@ -93,6 +92,9 @@ def build_framework(flutter_output, arch, project=ROOT / 'apps/flutter'):
     framework = native / 'flutter_inappwebview_macos.framework'
     digest = hashlib.sha256()
     digest.update((str(flutter_framework) + arch + ORDERED_SHA).encode())
+    # The engine path is stable across SDK upgrades; its pinned version is part
+    # of the native ABI input, so a new Flutter release must rebuild this cache.
+    digest.update((ROOT / '.flutter-version').read_bytes())
     digest.update(subprocess.check_output(['xcrun', 'swiftc', '--version']))
     for path in [Path(__file__), *sources, *ordered_sources]:
         digest.update(str(path).encode())

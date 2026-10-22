@@ -111,6 +111,8 @@ impl MenuDiscovery {
 pub struct BundleApplication {
     pub bundle_id: String,
     pub name: String,
+    /// Bundle-supplied display names by language. Never used as execution identity.
+    pub localized_names: std::collections::BTreeMap<String, String>,
     /// Further names this application answers to, beyond `name`.
     ///
     /// Searchable but not shown. A platform whose display name and lookup name disagree
@@ -305,20 +307,6 @@ pub trait Platform: Send + Sync {
     /// Metadata for one application entry (bundle, executable, or shortcut). `Ok(None)` means "not an application".
     fn bundle_application(&self, _bundle: &Path) -> Result<Option<BundleApplication>> {
         Ok(None)
-    }
-
-    /// The user's preferred languages, most preferred first.
-    fn preferred_languages(&self) -> Vec<String> {
-        Vec::new()
-    }
-
-    /// The bundle's display name in each of `languages`, most preferred first.
-    ///
-    /// Localized names live in `<lang>.lproj/InfoPlist.strings` and are not part of
-    /// `Info.plist`, so a search index that only reads the latter cannot be searched
-    /// in a localized language. Empty when the bundle ships no such localization.
-    fn bundle_localized_names(&self, _bundle: &Path, _languages: &[String]) -> Result<Vec<String>> {
-        Ok(Vec::new())
     }
 
     /// Activate a running instance, otherwise launch the canonical bundle path.

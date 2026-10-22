@@ -79,6 +79,7 @@ impl CandidateSource for ApplicationSource<'_> {
             );
             candidates.push(Candidate {
                 presentation: CandidatePresentation {
+                    localized_titles: application.localized_names.clone(),
                     shortcut: None,
                     id: application_candidate_id(&application.bundle_id, &application.path),
                     kind: CandidateKind::Application,

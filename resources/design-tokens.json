@@ -35,7 +35,15 @@
     "selectedBorder": "#ffb6c2d7",
     "success": "#ff73cc91",
     "fallbackSurface": "#ff24262b",
-    "textSelection": "#4da7caff"
+    "textSelection": "#4da7caff",
+    "iconBlue": "#ff9dcbff",
+    "iconGreen": "#ff9de0bc",
+    "iconCoral": "#ffffb3a8",
+    "iconPurple": "#ffcebaff",
+    "iconAmber": "#ffffd28d",
+    "iconPink": "#fff5bad9",
+    "iconNeutral": "#ffe6ebf2",
+    "iconBadgeInk": "#ff202832"
   },
   "metrics": {
     "radius": {

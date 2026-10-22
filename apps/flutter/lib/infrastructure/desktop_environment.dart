@@ -77,4 +77,5 @@ class DesktopEnvironment {
   String commandShiftLabel(String key) =>
       commandLabel('${modifierLabels[shortcutShiftKey]}$key');
   String commandLabel(String key) => '${usesMetaCommand ? '⌘' : 'Ctrl+'}$key';
+  String altLabel(String key) => '${modifierLabels[shortcutAltKey]}$key';
 }

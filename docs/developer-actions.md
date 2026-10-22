@@ -1,6 +1,6 @@
 # Git 与开发项目动作
 
-当前实现：V0.8；最后核对：2026-10-13。目录、仓库、项目 Context 复用现有 Current App / 领域 Scope、Ranking、快捷键与执行，不创建 IDE 专用 Launcher。
+现行专题说明；文档整理：2026-10-23。目录、仓库、项目 Context 复用现有 Current App / 领域 Scope、Ranking、快捷键与执行，不创建 IDE 专用 Launcher。
 
 ## 目录来源
 
@@ -56,6 +56,6 @@ Provider 只做标记与有界元数据读取，动态 Action 工厂基于已识
 
 ## 模块与验证
 
-Git 与开发项目属于第一方 Extensions，可在设置关闭；识别器、动作、快捷键资格一起撤销。命令请求通过审批的 HostServices，操作系统调用留在 Platform。
+Git 与开发项目属于编译内功能模块，可在 Settings → Features 关闭；识别器、动作、快捷键资格一起撤销。模块静态声明所需能力，命令经 HostServices 检查该声明和 Host 允许列表；不走第三方插件的安装批准 / 热加载流程。操作系统调用留在 Platform。
 
 回归包含临时 Git 仓库、worktree、remote 歧义 / 地址重写、失败不复制 / 不计 Usage、项目识别 / 动态目标、排队失效、进程取消与有界输出。真实 Maven / Gradle / Node / Cargo 工具的历史验收见 [V0.5 收尾](archive/v0.5-closeout.md)；不能据此标记新包的全部 GUI 与工具矩阵已验证。

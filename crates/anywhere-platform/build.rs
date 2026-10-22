@@ -5,6 +5,7 @@ fn main() {
     println!("cargo:rerun-if-changed=native/macos.m");
     println!("cargo:rerun-if-changed=native/macos_menu.m");
     println!("cargo:rerun-if-changed=native/macos_process.h");
+    println!("cargo:rerun-if-changed=native/macos_application_names.h");
     println!("cargo:rerun-if-env-changed=ANYWHERE_SKIP_NATIVE");
     println!("cargo:rerun-if-env-changed=ANYWHERE_MENU_IN_HOST");
     let skip = std::env::var("ANYWHERE_SKIP_NATIVE").is_ok_and(|value| value == "1");

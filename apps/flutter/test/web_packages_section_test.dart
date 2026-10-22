@@ -74,6 +74,10 @@ void main() {
     await tester.pumpWidget(page(backend));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
+    expect(find.text('Uninstall'), findsNothing);
+    await tester.tap(find.text(
+        'A very long workspace tool name that wraps across several lines'));
+    await tester.pumpAndSettle();
     expect(find.text('Uninstall'), findsOneWidget);
     expect(find.byType(Switch), findsNothing);
   });
@@ -84,6 +88,8 @@ void main() {
     await tester.pumpWidget(page(backend));
     await tester.pumpAndSettle();
     expect(find.text('Tool'), findsOneWidget);
+    await tester.tap(find.text('Tool'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Uninstall'));
     await tester.pumpAndSettle();
     expect(find.text('Tool'), findsNothing);

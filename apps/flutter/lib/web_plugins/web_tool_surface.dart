@@ -35,6 +35,8 @@ class WebToolSurface extends StatefulWidget {
   State<WebToolSurface> createState() => _WebToolSurfaceState();
 }
 
+enum _WebLoadError { notReady, unavailable, loadFailed, unsupported, stopped }
+
 class _WebToolSurfaceState extends State<WebToolSurface> {
   static final _resources = WebResourcePool();
   static _WebToolSurfaceState? _owner;
@@ -44,7 +46,14 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
       close: (handle) => api.closeWebDocument(handle: handle));
   api.WebDocumentDto? get _document => _lifetime.document;
   InAppWebViewController? _web;
-  String? _error;
+  _WebLoadError? _error;
+  String _errorLabel(AppLocalizations l10n) => switch (_error!) {
+        _WebLoadError.notReady => l10n.theToolDidNotBecomeReadyGo,
+        _WebLoadError.unavailable => l10n.thisToolIsNoLongerAvailableReturn,
+        _WebLoadError.loadFailed => l10n.theToolCouldNotLoadReloadIt,
+        _WebLoadError.unsupported => l10n.webToolsAreUnavailableOnThisPlatform,
+        _WebLoadError.stopped => l10n.theToolStoppedReloadItOrReturn,
+      };
   int _viewKey = 0;
   String _language = 'en';
   @override
@@ -222,15 +231,13 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
           await api.webResource(handle: document.handle, path: document.entry);
         } catch (_) {
           if (_lifetime.current(generation) && _current(document)) {
-            setState(() => _error =
-                'The tool did not become ready. Go back and reopen it.');
+            setState(() => _error = _WebLoadError.notReady);
           }
         }
       });
     } catch (_) {
       if (mounted && _lifetime.current(generation) && widget.visible) {
-        setState(() => _error =
-            'This tool is no longer available. Return to search and reopen it.');
+        setState(() => _error = _WebLoadError.unavailable);
       }
     }
   }
@@ -356,12 +363,11 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
       }
     } on PlatformException {
       if (_current(document) && sharesWebView(_web, controller)) {
-        setState(() =>
-            _error = 'The tool could not load. Reload it or return to search.');
+        setState(() => _error = _WebLoadError.loadFailed);
       }
     } on MissingPluginException {
       if (_current(document) && sharesWebView(_web, controller)) {
-        setState(() => _error = 'Web tools are unavailable on this platform.');
+        setState(() => _error = _WebLoadError.unsupported);
       }
     }
   }
@@ -420,31 +426,28 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
     final document = _document;
     final viewKey = _viewKey;
     return ToolPageShell(
-        title: document?.title ?? 'Opening tool…',
-        subtitle: context.l10n.workspace,
+        title: document?.title ?? context.l10n.openingTool,
         onBack: _back,
         onKeyEvent: _key,
         visible: widget.visible,
         presentation: widget.presentation,
         notice: widget.notice,
-        showFooterBack: false,
         footer: Row(children: [
           // Keep progress in Host chrome without covering the native editor.
           Expanded(
               child: Text(
-                  _loading && _error == null
-                      ? 'Loading tool…'
-                      : context.l10n.localProcessing,
+                  _loading && _error == null ? context.l10n.loadingTool : '',
                   style: AppStyle.caption)),
           TextButton(
               onPressed: widget.visible ? _toggleActions : null,
-              child: Text('${context.l10n.actions} · ⌘K')),
+              child: Text('${context.l10n.toolOptions} · ⌘K')),
         ]),
         child: Stack(fit: StackFit.expand, children: [
           if (_error != null)
             Center(
                 child: Padding(
-                    padding: const EdgeInsets.all(24), child: Text(_error!)))
+                    padding: const EdgeInsets.all(24),
+                    child: Text(_errorLabel(context.l10n))))
           else if (document == null)
             const Center(child: CircularProgressIndicator(strokeWidth: 2))
           else
@@ -514,16 +517,21 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
                     unawaited(api
                         .closeWebDocument(handle: document.handle)
                         .catchError((Object _) {}));
-                    setState(() => _error =
-                        'The tool stopped. Reload it or return to search.');
+                    setState(() => _error = _WebLoadError.stopped);
                   }
                 }),
           if (_actions && _confirmation == null)
             WebActionsPanel(selected: _actionIndex, onSelect: _runAction),
           if (_confirmation case final confirmation?)
             WebConsentPanel(
-                title: confirmation.title ?? 'Allow this operation?',
-                toolTitle: document?.title ?? 'This tool',
+                title: switch (confirmation.consent) {
+                  api.WebConsentKindDto.readClipboard =>
+                    context.l10n.readClipboardText,
+                  api.WebConsentKindDto.writeClipboard =>
+                    context.l10n.copyTextToClipboard,
+                  null => context.l10n.allowThisOperation,
+                },
+                toolTitle: document?.title ?? context.l10n.thisTool,
                 preview: confirmation.preview,
                 allowSelected: _approveSelected,
                 onAnswer: _answer),

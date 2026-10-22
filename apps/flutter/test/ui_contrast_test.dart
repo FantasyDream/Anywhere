@@ -53,7 +53,12 @@ void main() {
     ]) {
       for (final type in FileTypeAppearance.values) {
         expect(contrast(type.tint, surface), greaterThanOrEqualTo(3),
-            reason: type.label);
+            reason: type.name);
+        if (type.stamp != null) {
+          expect(contrast(DesignTokens.iconBadgeInk, type.tint),
+              greaterThanOrEqualTo(4.5),
+              reason: '${type.name} type label');
+        }
       }
     }
   });

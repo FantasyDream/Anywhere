@@ -1,4 +1,4 @@
-//! Repeatable local CPU timings for the V0.2 hot path.
+//! Repeatable local CPU timings for input recognition, matching and ranking.
 //!
 //! Reports the three phases of a candidate build separately — action matching, application
 //! matching and ranking — because the first two are matching work and only the third is

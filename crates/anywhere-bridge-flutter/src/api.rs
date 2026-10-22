@@ -37,16 +37,25 @@ pub struct ClipboardDetailDto {
     pub files: Vec<String>,
     pub formats: Vec<String>,
 }
+pub enum ClipboardNoticeDto {
+    FeatureDisabled,
+    StorageUnavailable,
+    AccessRequired,
+    ItemTooLarge,
+    ReadFailed,
+    CaptureUnavailable,
+    MonitoringUnavailable,
+}
 pub struct ClipboardHistoryDto {
     pub recording: bool,
     pub available: bool,
-    pub notice: Option<String>,
+    pub notice: Option<ClipboardNoticeDto>,
     pub items: Vec<ClipboardItemDto>,
 }
 pub struct ClipboardHistoryStatusDto {
     pub recording: bool,
     pub available: bool,
-    pub notice: Option<String>,
+    pub notice: Option<ClipboardNoticeDto>,
 }
 pub fn clipboard_history_status() -> Result<ClipboardHistoryStatusDto> {
     clipboard::status()
@@ -70,9 +79,12 @@ pub fn clear_clipboard_history() -> Result<()> {
     clipboard::clear()
 }
 
+#[flutter_rust_bridge::frb]
 pub struct ShortcutActionDto {
     pub action_id: String,
     pub title: String,
+    #[frb(default = "const {}")]
+    pub localized_titles: std::collections::HashMap<String, String>,
     pub context_types: Vec<String>,
 }
 
@@ -117,9 +129,12 @@ fn application() -> Result<&'static Application> {
 }
 
 #[derive(Clone, Debug)]
+#[flutter_rust_bridge::frb]
 pub struct ShortcutApplicationDto {
     pub bundle_id: String,
     pub title: String,
+    #[frb(default = "const {}")]
+    pub localized_titles: std::collections::HashMap<String, String>,
 }
 pub fn shortcut_applications() -> Result<Vec<ShortcutApplicationDto>> {
     shortcuts::shortcut_applications()
@@ -302,6 +317,7 @@ pub fn revoke_extension(key: String) -> Result<Vec<ExtensionStatusDto>> {
 }
 
 #[derive(Clone, Debug)]
+#[flutter_rust_bridge::frb]
 pub struct ExtensionStatusDto {
     pub key: String,
     pub id: String,
@@ -313,6 +329,8 @@ pub struct ExtensionStatusDto {
     pub active: bool,
     pub needs_approval: bool,
     pub configurable: bool,
+    #[frb(default = "false")]
+    pub restart_required: bool,
     pub capabilities: Vec<String>,
     pub approval_token: String,
     pub detail: String,
@@ -330,6 +348,7 @@ impl From<anywhere_core::application::settings_service::ModuleStatus> for Extens
             active: s.active,
             needs_approval: s.needs_approval,
             configurable: s.configurable,
+            restart_required: s.restart_required,
             capabilities: s.capabilities,
             approval_token: s.approval_token,
             detail: s.detail,
@@ -529,6 +548,8 @@ pub struct CandidateDto {
     pub is_menu: bool,
     pub file_kind: Option<FileObjectKindDto>,
     pub title: String,
+    #[frb(default = "const {}")]
+    pub localized_titles: std::collections::HashMap<String, String>,
     pub menu_path: Vec<String>,
     pub context_keys: Vec<String>,
     pub execution_context_id: Option<String>,
@@ -651,13 +672,17 @@ pub struct PluginKeyValueDto {
 }
 
 #[derive(Clone, Debug)]
+#[flutter_rust_bridge::frb]
 pub struct FilePreviewDto {
     pub path: String,
     pub is_directory: bool,
     pub size_bytes: u64,
     pub modified_ms: Option<i64>,
     pub text: Option<String>,
-    pub notice: Option<String>,
+    pub truncated_at_bytes: Option<u32>,
+    pub encoding: Option<String>,
+    #[frb(default = "false")]
+    pub encoding_guessed: bool,
 }
 
 pub async fn preview_file(
@@ -749,6 +774,7 @@ mod delivery_tests {
     use super::*;
     fn row(i: usize) -> protocol::CandidatePresentation {
         protocol::CandidatePresentation {
+            localized_titles: Default::default(),
             id: format!("row-{i}"),
             kind: protocol::CandidateKind::File,
             is_menu: false,
@@ -772,6 +798,27 @@ mod delivery_tests {
             section_label: None,
         }
     }
+    #[test]
+    fn localized_labels_cross_the_bridge_without_replacing_identity_or_paths() {
+        let mut application = row(0);
+        application.kind = protocol::CandidateKind::Application;
+        application.title = "Reminders".into();
+        application.localized_titles = [
+            ("zh".into(), "提醒事项".into()),
+            ("en".into(), "Reminders".into()),
+        ]
+        .into();
+        application.bundle_id = Some("com.apple.reminders".into());
+        let id = application.id.clone();
+        let path = application.subtitle.clone();
+        let dto = conversions::candidate_dto(application);
+        assert_eq!(dto.localized_titles["zh"], "提醒事项");
+        assert_eq!(dto.localized_titles["en"], "Reminders");
+        assert_eq!(dto.id, id);
+        assert_eq!(dto.subtitle, path);
+        assert_eq!(dto.bundle_id.as_deref(), Some("com.apple.reminders"));
+    }
+
     #[test]
     fn large_snapshots_deliver_only_progress_or_new_rows_and_resync_missed_replacements() {
         for count in [1000, 10000] {
@@ -820,7 +867,7 @@ pub struct WebPackageDto {
     pub name: String,
     pub version: String,
     pub digest: String,
-    pub permissions: Vec<String>,
+    pub permissions: Vec<WebPermissionDto>,
     pub enabled: bool,
     pub rollback: bool,
 }
@@ -831,7 +878,7 @@ pub struct WebReviewDto {
     pub name: String,
     pub version: String,
     pub digest: String,
-    pub permissions: Vec<String>,
+    pub permissions: Vec<WebPermissionDto>,
     pub updating: bool,
 }
 #[derive(Clone, Debug)]
@@ -842,10 +889,28 @@ pub struct WebDocumentDto {
     pub title: String,
 }
 #[derive(Clone, Debug)]
+pub struct WebPermissionDto {
+    pub kind: WebPermissionKindDto,
+    pub context_types: Vec<String>,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WebPermissionKindDto {
+    ContextRead,
+    CurrentApp,
+    ClipboardReadText,
+    ClipboardWriteText,
+    LocalStorage,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum WebConsentKindDto {
+    ReadClipboard,
+    WriteClipboard,
+}
+#[derive(Clone, Debug)]
 pub struct WebReplyDto {
     pub frame: Option<String>,
     pub ticket: Option<String>,
-    pub title: Option<String>,
+    pub consent: Option<WebConsentKindDto>,
     pub preview: Option<String>,
 }
 pub fn web_packages() -> Result<Vec<WebPackageDto>> {

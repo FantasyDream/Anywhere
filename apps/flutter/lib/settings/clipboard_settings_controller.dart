@@ -1,3 +1,6 @@
+import '../l10n/app_language.dart';
+import '../l10n/clipboard_labels.dart';
+import '../src/rust/api.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../infrastructure/clipboard_preferences_backend.dart';
@@ -8,6 +11,11 @@ class ClipboardSettingsController extends ChangeNotifier {
   final ClipboardPreferencesBackend backend;
   bool recording = false, available = false, loaded = false, busy = false;
   String? notice;
+  ClipboardNoticeDto? _backendNotice;
+  bool _operationFailed = false;
+  String? noticeFor(AppLocalizations l10n) => _operationFailed
+      ? l10n.clipboardSettingsFailed
+      : _backendNotice?.labelFor(l10n) ?? notice;
   Future<bool>? _pending;
   bool _disposed = false;
 
@@ -41,7 +49,9 @@ class ClipboardSettingsController extends ChangeNotifier {
       if (_disposed) return false;
       recording = state.recording;
       available = state.available;
-      notice = state.notice;
+      _operationFailed = false;
+      notice = null;
+      _backendNotice = state.notice;
       loaded = true;
       return true;
     } catch (_) {
@@ -49,6 +59,7 @@ class ClipboardSettingsController extends ChangeNotifier {
         // A write may have succeeded before readback failed. Do not show the old
         // value as an acknowledged preference or allow a second blind write.
         loaded = false;
+        _operationFailed = true;
         notice =
             'Clipboard settings could not be loaded or updated. Try again.';
       }

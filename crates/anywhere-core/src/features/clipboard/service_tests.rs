@@ -17,6 +17,7 @@ struct Clipboard {
     written: Mutex<Vec<anywhere_platform::clipboard::ClipboardPayload>>,
     on_read: Option<Box<dyn Fn() + Send + Sync>>,
     on_access: Option<Box<dyn Fn() -> Result<()> + Send + Sync>>,
+    read_error: Option<ContextReadError>,
 }
 impl Platform for Clipboard {
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
@@ -67,6 +68,9 @@ impl Platform for Clipboard {
         if let Some(callback) = &self.on_read {
             callback();
         }
+        if let Some(error) = self.read_error {
+            return Err(error.into());
+        }
         Ok(Some(self.payload.clone().unwrap_or_else(|| {
             anywhere_platform::clipboard::ClipboardPayload::text(&format!(
                 "generation {generation}"
@@ -85,6 +89,51 @@ fn service() -> (tempfile::TempDir, Arc<HistoryService>) {
         Arc::new(HistoryService::new(Ok(Box::new(repository)))),
     )
 }
+#[test]
+fn status_exposes_policy_facts_for_disabled_storage_permission_and_capture_failures() {
+    let broken = HistoryService::new(Err("private storage diagnostic".into()));
+    assert_eq!(
+        broken.status().unwrap().notice,
+        Some(HistoryNotice::StorageUnavailable)
+    );
+    let (_directory, history) = service();
+    let platform = Clipboard {
+        on_access: Some(Box::new(|| Err(ContextReadError::PermissionDenied.into()))),
+        ..Default::default()
+    };
+    history.request_recording(true, &platform).unwrap();
+    assert_eq!(
+        history.status().unwrap().notice,
+        Some(HistoryNotice::AccessRequired)
+    );
+    history.set_feature_enabled(false, &platform).unwrap();
+    assert_eq!(
+        history.status().unwrap().notice,
+        Some(HistoryNotice::FeatureDisabled)
+    );
+    for (error, expected) in [
+        (ContextReadError::TooLarge, HistoryNotice::ItemTooLarge),
+        (
+            ContextReadError::PermissionDenied,
+            HistoryNotice::AccessRequired,
+        ),
+        (ContextReadError::Unavailable, HistoryNotice::ReadFailed),
+    ] {
+        let (_directory, history) = service();
+        let platform = Clipboard {
+            read_error: Some(error),
+            ..Default::default()
+        };
+        history.request_recording(true, &platform).unwrap();
+        platform.generation.store(1, Ordering::Relaxed);
+        history.poll(&platform, 1).unwrap();
+        let status = history.status().unwrap();
+        assert!(status.available && status.recording);
+        assert_eq!(status.notice, Some(expected));
+        assert!(history.search("").unwrap().is_empty());
+    }
+}
+
 #[test]
 fn only_new_copies_are_recorded_and_pause_resume_never_imports_old_contents() {
     let (_directory, service) = service();

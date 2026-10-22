@@ -1963,6 +1963,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  Map<String, String> dco_decode_Map_String_String_None(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return Map.fromEntries(dco_decode_list_record_string_string(raw)
+        .map((e) => MapEntry(e.$1, e.$2)));
+  }
+
+  @protected
   String dco_decode_String(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as String;
@@ -2047,6 +2054,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ClipboardNoticeDto dco_decode_box_autoadd_clipboard_notice_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_clipboard_notice_dto(raw);
+  }
+
+  @protected
   ExecutionSessionDetailDto dco_decode_box_autoadd_execution_session_detail_dto(
       dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
@@ -2103,9 +2116,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int dco_decode_box_autoadd_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw as int;
+  }
+
+  @protected
   BigInt dco_decode_box_autoadd_u_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_u_64(raw);
+  }
+
+  @protected
+  WebConsentKindDto dco_decode_box_autoadd_web_consent_kind_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_web_consent_kind_dto(raw);
   }
 
   @protected
@@ -2118,30 +2143,31 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   CandidateDto dco_decode_candidate_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 21)
-      throw Exception('unexpected arr length: expect 21 but see ${arr.length}');
+    if (arr.length != 22)
+      throw Exception('unexpected arr length: expect 22 but see ${arr.length}');
     return CandidateDto(
       id: dco_decode_String(arr[0]),
       kind: dco_decode_candidate_kind_dto(arr[1]),
       isMenu: dco_decode_bool(arr[2]),
       fileKind: dco_decode_opt_box_autoadd_file_object_kind_dto(arr[3]),
       title: dco_decode_String(arr[4]),
-      menuPath: dco_decode_list_String(arr[5]),
-      contextKeys: dco_decode_list_String(arr[6]),
-      executionContextId: dco_decode_opt_String(arr[7]),
-      executionTargetLabel: dco_decode_opt_String(arr[8]),
-      homeEligible: dco_decode_bool(arr[9]),
-      primaryAction: dco_decode_bool(arr[10]),
-      sectionLabel: dco_decode_opt_String(arr[11]),
-      subtitle: dco_decode_opt_String(arr[12]),
-      shortcut: dco_decode_opt_String(arr[13]),
-      iconKey: dco_decode_String(arr[14]),
-      score: dco_decode_f_32(arr[15]),
-      groupId: dco_decode_String(arr[16]),
-      availability: dco_decode_availability_dto(arr[17]),
-      availabilityReason: dco_decode_opt_String(arr[18]),
-      commandId: dco_decode_opt_String(arr[19]),
-      bundleId: dco_decode_opt_String(arr[20]),
+      localizedTitles: dco_decode_Map_String_String_None(arr[5]),
+      menuPath: dco_decode_list_String(arr[6]),
+      contextKeys: dco_decode_list_String(arr[7]),
+      executionContextId: dco_decode_opt_String(arr[8]),
+      executionTargetLabel: dco_decode_opt_String(arr[9]),
+      homeEligible: dco_decode_bool(arr[10]),
+      primaryAction: dco_decode_bool(arr[11]),
+      sectionLabel: dco_decode_opt_String(arr[12]),
+      subtitle: dco_decode_opt_String(arr[13]),
+      shortcut: dco_decode_opt_String(arr[14]),
+      iconKey: dco_decode_String(arr[15]),
+      score: dco_decode_f_32(arr[16]),
+      groupId: dco_decode_String(arr[17]),
+      availability: dco_decode_availability_dto(arr[18]),
+      availabilityReason: dco_decode_opt_String(arr[19]),
+      commandId: dco_decode_opt_String(arr[20]),
+      bundleId: dco_decode_opt_String(arr[21]),
     );
   }
 
@@ -2181,7 +2207,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return ClipboardHistoryDto(
       recording: dco_decode_bool(arr[0]),
       available: dco_decode_bool(arr[1]),
-      notice: dco_decode_opt_String(arr[2]),
+      notice: dco_decode_opt_box_autoadd_clipboard_notice_dto(arr[2]),
       items: dco_decode_list_clipboard_item_dto(arr[3]),
     );
   }
@@ -2196,7 +2222,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return ClipboardHistoryStatusDto(
       recording: dco_decode_bool(arr[0]),
       available: dco_decode_bool(arr[1]),
-      notice: dco_decode_opt_String(arr[2]),
+      notice: dco_decode_opt_box_autoadd_clipboard_notice_dto(arr[2]),
     );
   }
 
@@ -2213,6 +2239,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       copiedAtMs: dco_decode_i_64(arr[3]),
       byteCount: dco_decode_u_32(arr[4]),
     );
+  }
+
+  @protected
+  ClipboardNoticeDto dco_decode_clipboard_notice_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return ClipboardNoticeDto.values[raw as int];
   }
 
   @protected
@@ -2310,8 +2342,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ExtensionStatusDto dco_decode_extension_status_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 13)
-      throw Exception('unexpected arr length: expect 13 but see ${arr.length}');
+    if (arr.length != 14)
+      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
     return ExtensionStatusDto(
       key: dco_decode_String(arr[0]),
       id: dco_decode_String(arr[1]),
@@ -2323,9 +2355,10 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       active: dco_decode_bool(arr[7]),
       needsApproval: dco_decode_bool(arr[8]),
       configurable: dco_decode_bool(arr[9]),
-      capabilities: dco_decode_list_String(arr[10]),
-      approvalToken: dco_decode_String(arr[11]),
-      detail: dco_decode_String(arr[12]),
+      restartRequired: dco_decode_bool(arr[10]),
+      capabilities: dco_decode_list_String(arr[11]),
+      approvalToken: dco_decode_String(arr[12]),
+      detail: dco_decode_String(arr[13]),
     );
   }
 
@@ -2345,15 +2378,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   FilePreviewDto dco_decode_file_preview_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 8)
+      throw Exception('unexpected arr length: expect 8 but see ${arr.length}');
     return FilePreviewDto(
       path: dco_decode_String(arr[0]),
       isDirectory: dco_decode_bool(arr[1]),
       sizeBytes: dco_decode_u_64(arr[2]),
       modifiedMs: dco_decode_opt_box_autoadd_i_64(arr[3]),
       text: dco_decode_opt_String(arr[4]),
-      notice: dco_decode_opt_String(arr[5]),
+      truncatedAtBytes: dco_decode_opt_box_autoadd_u_32(arr[5]),
+      encoding: dco_decode_opt_String(arr[6]),
+      encodingGuessed: dco_decode_bool(arr[7]),
     );
   }
 
@@ -2500,6 +2535,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<(String, String)> dco_decode_list_record_string_string(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_record_string_string).toList();
+  }
+
+  @protected
   List<ScopeDto> dco_decode_list_scope_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_scope_dto).toList();
@@ -2539,6 +2580,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<WebPermissionDto> dco_decode_list_web_permission_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_web_permission_dto).toList();
+  }
+
+  @protected
   NativeToolDto dco_decode_native_tool_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -2572,6 +2619,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return raw == null
         ? null
         : dco_decode_box_autoadd_clipboard_detail_dto(raw);
+  }
+
+  @protected
+  ClipboardNoticeDto? dco_decode_opt_box_autoadd_clipboard_notice_dto(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_clipboard_notice_dto(raw);
   }
 
   @protected
@@ -2638,9 +2694,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int? dco_decode_opt_box_autoadd_u_32(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null ? null : dco_decode_box_autoadd_u_32(raw);
+  }
+
+  @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw == null ? null : dco_decode_box_autoadd_u_64(raw);
+  }
+
+  @protected
+  WebConsentKindDto? dco_decode_opt_box_autoadd_web_consent_kind_dto(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_web_consent_kind_dto(raw);
   }
 
   @protected
@@ -2698,6 +2769,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  (String, String) dco_decode_record_string_string(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2) {
+      throw Exception('Expected 2 elements, got ${arr.length}');
+    }
+    return (
+      dco_decode_String(arr[0]),
+      dco_decode_String(arr[1]),
+    );
+  }
+
+  @protected
   ScopeDto dco_decode_scope_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -2734,12 +2818,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ShortcutActionDto dco_decode_shortcut_action_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 3)
-      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
     return ShortcutActionDto(
       actionId: dco_decode_String(arr[0]),
       title: dco_decode_String(arr[1]),
-      contextTypes: dco_decode_list_String(arr[2]),
+      localizedTitles: dco_decode_Map_String_String_None(arr[2]),
+      contextTypes: dco_decode_list_String(arr[3]),
     );
   }
 
@@ -2747,11 +2832,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ShortcutApplicationDto dco_decode_shortcut_application_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 2)
-      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    if (arr.length != 3)
+      throw Exception('unexpected arr length: expect 3 but see ${arr.length}');
     return ShortcutApplicationDto(
       bundleId: dco_decode_String(arr[0]),
       title: dco_decode_String(arr[1]),
+      localizedTitles: dco_decode_Map_String_String_None(arr[2]),
     );
   }
 
@@ -2812,6 +2898,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  WebConsentKindDto dco_decode_web_consent_kind_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return WebConsentKindDto.values[raw as int];
+  }
+
+  @protected
   WebDocumentDto dco_decode_web_document_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
@@ -2836,10 +2928,28 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       name: dco_decode_String(arr[1]),
       version: dco_decode_String(arr[2]),
       digest: dco_decode_String(arr[3]),
-      permissions: dco_decode_list_String(arr[4]),
+      permissions: dco_decode_list_web_permission_dto(arr[4]),
       enabled: dco_decode_bool(arr[5]),
       rollback: dco_decode_bool(arr[6]),
     );
+  }
+
+  @protected
+  WebPermissionDto dco_decode_web_permission_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 2)
+      throw Exception('unexpected arr length: expect 2 but see ${arr.length}');
+    return WebPermissionDto(
+      kind: dco_decode_web_permission_kind_dto(arr[0]),
+      contextTypes: dco_decode_list_String(arr[1]),
+    );
+  }
+
+  @protected
+  WebPermissionKindDto dco_decode_web_permission_kind_dto(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return WebPermissionKindDto.values[raw as int];
   }
 
   @protected
@@ -2862,7 +2972,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return WebReplyDto(
       frame: dco_decode_opt_String(arr[0]),
       ticket: dco_decode_opt_String(arr[1]),
-      title: dco_decode_opt_String(arr[2]),
+      consent: dco_decode_opt_box_autoadd_web_consent_kind_dto(arr[2]),
       preview: dco_decode_opt_String(arr[3]),
     );
   }
@@ -2879,7 +2989,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       name: dco_decode_String(arr[2]),
       version: dco_decode_String(arr[3]),
       digest: dco_decode_String(arr[4]),
-      permissions: dco_decode_list_String(arr[5]),
+      permissions: dco_decode_list_web_permission_dto(arr[5]),
       updating: dco_decode_bool(arr[6]),
     );
   }
@@ -2889,6 +2999,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var inner = sse_decode_String(deserializer);
     return AnyhowException(inner);
+  }
+
+  @protected
+  Map<String, String> sse_decode_Map_String_String_None(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_list_record_string_string(deserializer);
+    return Map.fromEntries(inner.map((e) => MapEntry(e.$1, e.$2)));
   }
 
   @protected
@@ -2990,6 +3108,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ClipboardNoticeDto sse_decode_box_autoadd_clipboard_notice_dto(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_clipboard_notice_dto(deserializer));
+  }
+
+  @protected
   ExecutionSessionDetailDto sse_decode_box_autoadd_execution_session_detail_dto(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -3051,9 +3176,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_u_32(deserializer));
+  }
+
+  @protected
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     return (sse_decode_u_64(deserializer));
+  }
+
+  @protected
+  WebConsentKindDto sse_decode_box_autoadd_web_consent_kind_dto(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_web_consent_kind_dto(deserializer));
   }
 
   @protected
@@ -3072,6 +3210,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_fileKind =
         sse_decode_opt_box_autoadd_file_object_kind_dto(deserializer);
     var var_title = sse_decode_String(deserializer);
+    var var_localizedTitles = sse_decode_Map_String_String_None(deserializer);
     var var_menuPath = sse_decode_list_String(deserializer);
     var var_contextKeys = sse_decode_list_String(deserializer);
     var var_executionContextId = sse_decode_opt_String(deserializer);
@@ -3094,6 +3233,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         isMenu: var_isMenu,
         fileKind: var_fileKind,
         title: var_title,
+        localizedTitles: var_localizedTitles,
         menuPath: var_menuPath,
         contextKeys: var_contextKeys,
         executionContextId: var_executionContextId,
@@ -3150,7 +3290,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_recording = sse_decode_bool(deserializer);
     var var_available = sse_decode_bool(deserializer);
-    var var_notice = sse_decode_opt_String(deserializer);
+    var var_notice =
+        sse_decode_opt_box_autoadd_clipboard_notice_dto(deserializer);
     var var_items = sse_decode_list_clipboard_item_dto(deserializer);
     return ClipboardHistoryDto(
         recording: var_recording,
@@ -3165,7 +3306,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_recording = sse_decode_bool(deserializer);
     var var_available = sse_decode_bool(deserializer);
-    var var_notice = sse_decode_opt_String(deserializer);
+    var var_notice =
+        sse_decode_opt_box_autoadd_clipboard_notice_dto(deserializer);
     return ClipboardHistoryStatusDto(
         recording: var_recording, available: var_available, notice: var_notice);
   }
@@ -3184,6 +3326,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         kind: var_kind,
         copiedAtMs: var_copiedAtMs,
         byteCount: var_byteCount);
+  }
+
+  @protected
+  ClipboardNoticeDto sse_decode_clipboard_notice_dto(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return ClipboardNoticeDto.values[inner];
   }
 
   @protected
@@ -3308,6 +3458,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_active = sse_decode_bool(deserializer);
     var var_needsApproval = sse_decode_bool(deserializer);
     var var_configurable = sse_decode_bool(deserializer);
+    var var_restartRequired = sse_decode_bool(deserializer);
     var var_capabilities = sse_decode_list_String(deserializer);
     var var_approvalToken = sse_decode_String(deserializer);
     var var_detail = sse_decode_String(deserializer);
@@ -3322,6 +3473,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         active: var_active,
         needsApproval: var_needsApproval,
         configurable: var_configurable,
+        restartRequired: var_restartRequired,
         capabilities: var_capabilities,
         approvalToken: var_approvalToken,
         detail: var_detail);
@@ -3349,14 +3501,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_sizeBytes = sse_decode_u_64(deserializer);
     var var_modifiedMs = sse_decode_opt_box_autoadd_i_64(deserializer);
     var var_text = sse_decode_opt_String(deserializer);
-    var var_notice = sse_decode_opt_String(deserializer);
+    var var_truncatedAtBytes = sse_decode_opt_box_autoadd_u_32(deserializer);
+    var var_encoding = sse_decode_opt_String(deserializer);
+    var var_encodingGuessed = sse_decode_bool(deserializer);
     return FilePreviewDto(
         path: var_path,
         isDirectory: var_isDirectory,
         sizeBytes: var_sizeBytes,
         modifiedMs: var_modifiedMs,
         text: var_text,
-        notice: var_notice);
+        truncatedAtBytes: var_truncatedAtBytes,
+        encoding: var_encoding,
+        encodingGuessed: var_encodingGuessed);
   }
 
   @protected
@@ -3589,6 +3745,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<(String, String)> sse_decode_list_record_string_string(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <(String, String)>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_record_string_string(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<ScopeDto> sse_decode_list_scope_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -3666,6 +3835,19 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<WebPermissionDto> sse_decode_list_web_permission_dto(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <WebPermissionDto>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_web_permission_dto(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   NativeToolDto sse_decode_native_tool_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_String(deserializer);
@@ -3703,6 +3885,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_clipboard_detail_dto(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  ClipboardNoticeDto? sse_decode_opt_box_autoadd_clipboard_notice_dto(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_clipboard_notice_dto(deserializer));
     } else {
       return null;
     }
@@ -3817,11 +4011,34 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_u_32(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     if (sse_decode_bool(deserializer)) {
       return (sse_decode_box_autoadd_u_64(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
+  WebConsentKindDto? sse_decode_opt_box_autoadd_web_consent_kind_dto(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_web_consent_kind_dto(deserializer));
     } else {
       return null;
     }
@@ -3883,6 +4100,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  (String, String) sse_decode_record_string_string(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_field0 = sse_decode_String(deserializer);
+    var var_field1 = sse_decode_String(deserializer);
+    return (var_field0, var_field1);
+  }
+
+  @protected
   ScopeDto sse_decode_scope_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_id = sse_decode_String(deserializer);
@@ -3920,10 +4146,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_actionId = sse_decode_String(deserializer);
     var var_title = sse_decode_String(deserializer);
+    var var_localizedTitles = sse_decode_Map_String_String_None(deserializer);
     var var_contextTypes = sse_decode_list_String(deserializer);
     return ShortcutActionDto(
         actionId: var_actionId,
         title: var_title,
+        localizedTitles: var_localizedTitles,
         contextTypes: var_contextTypes);
   }
 
@@ -3933,7 +4161,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_bundleId = sse_decode_String(deserializer);
     var var_title = sse_decode_String(deserializer);
-    return ShortcutApplicationDto(bundleId: var_bundleId, title: var_title);
+    var var_localizedTitles = sse_decode_Map_String_String_None(deserializer);
+    return ShortcutApplicationDto(
+        bundleId: var_bundleId,
+        title: var_title,
+        localizedTitles: var_localizedTitles);
   }
 
   @protected
@@ -3990,6 +4222,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  WebConsentKindDto sse_decode_web_consent_kind_dto(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return WebConsentKindDto.values[inner];
+  }
+
+  @protected
   WebDocumentDto sse_decode_web_document_dto(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_handle = sse_decode_String(deserializer);
@@ -4010,7 +4250,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_name = sse_decode_String(deserializer);
     var var_version = sse_decode_String(deserializer);
     var var_digest = sse_decode_String(deserializer);
-    var var_permissions = sse_decode_list_String(deserializer);
+    var var_permissions = sse_decode_list_web_permission_dto(deserializer);
     var var_enabled = sse_decode_bool(deserializer);
     var var_rollback = sse_decode_bool(deserializer);
     return WebPackageDto(
@@ -4021,6 +4261,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         permissions: var_permissions,
         enabled: var_enabled,
         rollback: var_rollback);
+  }
+
+  @protected
+  WebPermissionDto sse_decode_web_permission_dto(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_kind = sse_decode_web_permission_kind_dto(deserializer);
+    var var_contextTypes = sse_decode_list_String(deserializer);
+    return WebPermissionDto(kind: var_kind, contextTypes: var_contextTypes);
+  }
+
+  @protected
+  WebPermissionKindDto sse_decode_web_permission_kind_dto(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var inner = sse_decode_i_32(deserializer);
+    return WebPermissionKindDto.values[inner];
   }
 
   @protected
@@ -4036,12 +4292,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var var_frame = sse_decode_opt_String(deserializer);
     var var_ticket = sse_decode_opt_String(deserializer);
-    var var_title = sse_decode_opt_String(deserializer);
+    var var_consent =
+        sse_decode_opt_box_autoadd_web_consent_kind_dto(deserializer);
     var var_preview = sse_decode_opt_String(deserializer);
     return WebReplyDto(
         frame: var_frame,
         ticket: var_ticket,
-        title: var_title,
+        consent: var_consent,
         preview: var_preview);
   }
 
@@ -4053,7 +4310,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_name = sse_decode_String(deserializer);
     var var_version = sse_decode_String(deserializer);
     var var_digest = sse_decode_String(deserializer);
-    var var_permissions = sse_decode_list_String(deserializer);
+    var var_permissions = sse_decode_list_web_permission_dto(deserializer);
     var var_updating = sse_decode_bool(deserializer);
     return WebReviewDto(
         token: var_token,
@@ -4070,6 +4327,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       AnyhowException self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.message, serializer);
+  }
+
+  @protected
+  void sse_encode_Map_String_String_None(
+      Map<String, String> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_list_record_string_string(
+        self.entries.map((e) => (e.key, e.value)).toList(), serializer);
   }
 
   @protected
@@ -4150,6 +4415,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_clipboard_notice_dto(
+      ClipboardNoticeDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_clipboard_notice_dto(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_execution_session_detail_dto(
       ExecutionSessionDetailDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -4212,9 +4484,22 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_u_64(self, serializer);
+  }
+
+  @protected
+  void sse_encode_box_autoadd_web_consent_kind_dto(
+      WebConsentKindDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_web_consent_kind_dto(self, serializer);
   }
 
   @protected
@@ -4232,6 +4517,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.isMenu, serializer);
     sse_encode_opt_box_autoadd_file_object_kind_dto(self.fileKind, serializer);
     sse_encode_String(self.title, serializer);
+    sse_encode_Map_String_String_None(self.localizedTitles, serializer);
     sse_encode_list_String(self.menuPath, serializer);
     sse_encode_list_String(self.contextKeys, serializer);
     sse_encode_opt_String(self.executionContextId, serializer);
@@ -4281,7 +4567,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_bool(self.recording, serializer);
     sse_encode_bool(self.available, serializer);
-    sse_encode_opt_String(self.notice, serializer);
+    sse_encode_opt_box_autoadd_clipboard_notice_dto(self.notice, serializer);
     sse_encode_list_clipboard_item_dto(self.items, serializer);
   }
 
@@ -4291,7 +4577,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_bool(self.recording, serializer);
     sse_encode_bool(self.available, serializer);
-    sse_encode_opt_String(self.notice, serializer);
+    sse_encode_opt_box_autoadd_clipboard_notice_dto(self.notice, serializer);
   }
 
   @protected
@@ -4303,6 +4589,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.kind, serializer);
     sse_encode_i_64(self.copiedAtMs, serializer);
     sse_encode_u_32(self.byteCount, serializer);
+  }
+
+  @protected
+  void sse_encode_clipboard_notice_dto(
+      ClipboardNoticeDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
   }
 
   @protected
@@ -4393,6 +4686,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self.active, serializer);
     sse_encode_bool(self.needsApproval, serializer);
     sse_encode_bool(self.configurable, serializer);
+    sse_encode_bool(self.restartRequired, serializer);
     sse_encode_list_String(self.capabilities, serializer);
     sse_encode_String(self.approvalToken, serializer);
     sse_encode_String(self.detail, serializer);
@@ -4420,7 +4714,9 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_u_64(self.sizeBytes, serializer);
     sse_encode_opt_box_autoadd_i_64(self.modifiedMs, serializer);
     sse_encode_opt_String(self.text, serializer);
-    sse_encode_opt_String(self.notice, serializer);
+    sse_encode_opt_box_autoadd_u_32(self.truncatedAtBytes, serializer);
+    sse_encode_opt_String(self.encoding, serializer);
+    sse_encode_bool(self.encodingGuessed, serializer);
   }
 
   @protected
@@ -4594,6 +4890,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_record_string_string(
+      List<(String, String)> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_record_string_string(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_scope_dto(
       List<ScopeDto> self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -4654,6 +4960,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_web_permission_dto(
+      List<WebPermissionDto> self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_web_permission_dto(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_native_tool_dto(
       NativeToolDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -4690,6 +5006,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_clipboard_detail_dto(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_clipboard_notice_dto(
+      ClipboardNoticeDto? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_clipboard_notice_dto(self, serializer);
     }
   }
 
@@ -4792,12 +5119,33 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_u_32(self, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_u_64(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_web_consent_kind_dto(
+      WebConsentKindDto? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_web_consent_kind_dto(self, serializer);
     }
   }
 
@@ -4851,6 +5199,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_record_string_string(
+      (String, String) self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_String(self.$1, serializer);
+    sse_encode_String(self.$2, serializer);
+  }
+
+  @protected
   void sse_encode_scope_dto(ScopeDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.id, serializer);
@@ -4881,6 +5237,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.actionId, serializer);
     sse_encode_String(self.title, serializer);
+    sse_encode_Map_String_String_None(self.localizedTitles, serializer);
     sse_encode_list_String(self.contextTypes, serializer);
   }
 
@@ -4890,6 +5247,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_String(self.bundleId, serializer);
     sse_encode_String(self.title, serializer);
+    sse_encode_Map_String_String_None(self.localizedTitles, serializer);
   }
 
   @protected
@@ -4941,6 +5299,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_web_consent_kind_dto(
+      WebConsentKindDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
+  }
+
+  @protected
   void sse_encode_web_document_dto(
       WebDocumentDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -4958,9 +5323,24 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.name, serializer);
     sse_encode_String(self.version, serializer);
     sse_encode_String(self.digest, serializer);
-    sse_encode_list_String(self.permissions, serializer);
+    sse_encode_list_web_permission_dto(self.permissions, serializer);
     sse_encode_bool(self.enabled, serializer);
     sse_encode_bool(self.rollback, serializer);
+  }
+
+  @protected
+  void sse_encode_web_permission_dto(
+      WebPermissionDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_web_permission_kind_dto(self.kind, serializer);
+    sse_encode_list_String(self.contextTypes, serializer);
+  }
+
+  @protected
+  void sse_encode_web_permission_kind_dto(
+      WebPermissionKindDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.index, serializer);
   }
 
   @protected
@@ -4975,7 +5355,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_opt_String(self.frame, serializer);
     sse_encode_opt_String(self.ticket, serializer);
-    sse_encode_opt_String(self.title, serializer);
+    sse_encode_opt_box_autoadd_web_consent_kind_dto(self.consent, serializer);
     sse_encode_opt_String(self.preview, serializer);
   }
 
@@ -4987,7 +5367,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.name, serializer);
     sse_encode_String(self.version, serializer);
     sse_encode_String(self.digest, serializer);
-    sse_encode_list_String(self.permissions, serializer);
+    sse_encode_list_web_permission_dto(self.permissions, serializer);
     sse_encode_bool(self.updating, serializer);
   }
 }

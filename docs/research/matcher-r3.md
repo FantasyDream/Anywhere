@@ -38,7 +38,7 @@ API 核对使用官方 [Matcher 0.3.1](https://docs.rs/nucleo-matcher/0.3.1/nucl
 - 枚举部分 Unicode 名称的所有连续子串，包括孤立组合标记、ZWJ、大小写展开和字面标点；兼容方案与当前 / 冻结旧算法一致。
 - 回归原始库差异、短词噪声、metadata 禁止模糊命中、禁止跨 alias 拼 token，以及 tier 与 frecency 的所有权。
 
-新增 8 项功能回归通过（7 项原型 / 差异回归，1 项生产 helper 回归）。完整 `scripts/check.sh` 的结果见 [阶段记录](../open-source-refactor-plan.md)。
+新增 8 项功能回归通过（7 项原型 / 差异回归，1 项生产 helper 回归）。完整 `scripts/check.sh` 的结果见 [阶段记录](../archive/open-source-refactor-plan.md)。
 
 ## 测量方法与结果
 

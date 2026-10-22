@@ -187,11 +187,7 @@ function App() {
             setMode(value); setNotice(null); document.getElementById('json-path')?.focus();
           }}>{label}</button>)}
       </div>
-      <div class="aw-actions"><label class="indent">{t('indent')} <select value={spaces} onChange={event => {
-        const value = Number(event.currentTarget.value); indentEdited.current = true; setNotice(null); setSpaces(value);
-        void operation(() => plugin.current.host.storage.set('indent', value));
-      }}><option value={2}>{t('spaces', {count:2})}</option><option value={4}>{t('spaces', {count:4})}</option></select></label>
-      <button disabled={busy} onClick={() => operation(async () => {const text = await plugin.current.host.clipboard.readText(); if (text != null) {edited.current = true; const document = decodeDocument(text); load(document.text); if (document.escaped) setNotice({key: 'decoded', failed: false});}})}>{t('paste')}</button></div>
+      <div class="aw-actions">      <button disabled={busy} onClick={() => operation(async () => {const text = await plugin.current.host.clipboard.readText(); if (text != null) {edited.current = true; const document = decodeDocument(text); load(document.text); if (document.escaped) setNotice({key: 'decoded', failed: false});}})}><span class="aw-icon aw-icon--paste" aria-hidden="true"/>{t('paste')}</button></div>
     </nav>
     <div class="query-bar">
       <div class="formula-field" data-invalid={fresh && processed.queryError ? 'true' : 'false'}>
@@ -210,25 +206,35 @@ function App() {
         onCompositionStart={() => setComposing(true)} onCompositionEnd={() => setComposing(false)}
         onKeyDown={event => {if (event.key === 'Enter' && !event.isComposing && !event.metaKey && !event.ctrlKey) {event.preventDefault(); current.current.run();}}}/>
       </div>
-      <button class="aw-button--action" disabled={busy || composing || !input.trim()} onClick={run} title={t('calculateHint')}>{isJavaScript ? t('calculate') : t('query')} <kbd>⌘↵</kbd></button>
+      <button class="aw-button--action" disabled={busy || composing || !input.trim()} onClick={run} title={t('calculateHint')}><span class="aw-icon aw-icon--run" aria-hidden="true"/>{isJavaScript ? t('calculate') : t('query')} <kbd>⌘↵</kbd></button>
     </div>
     {(error || notice?.failed) && <aside id="json-error" role="alert" class="aw-workspace-notice" data-kind="error">{notice?.failed ? notice.text : error}</aside>}
     <section class="aw-workspace-panes">
-      <article class="aw-pane"><header class="aw-pane-header"><label for="json-input">{t('input')}</label><span>{t('bytes', {count:inputBytes})}</span></header>
+      <article class="aw-pane"><header class="aw-pane-header"><label for="json-input" title={t('autoFormat')}>{t('input')}</label><span>{t('bytes', {count:inputBytes})}</span></header>
         <div class="aw-pane-body"><textarea id="json-input" class="aw-editor" ref={inputRef} spellcheck={false} autocomplete="off" autocapitalize="off"
           placeholder={t('pasteHint')} value={input} onInput={edit}
           onCompositionStart={() => setComposing(true)} onCompositionEnd={() => setComposing(false)}/></div>
         <footer class="aw-pane-footer json-input-actions">
-          <div class="aw-actions" aria-label={t('actions')}>{JSON_ACTIONS.map(action =>
-            <button disabled={!input.trim() || busy || composing} onClick={() => jsonAction(action.id)}>{t(action.id)}</button>)}</div>
-          <div class="input-status"><span>{notice && !notice.failed ? t(notice.key) : t('autoFormat')}</span>
-          <button disabled={!input || busy} onClick={() => {
+          <details class="aw-disclosure">
+            <summary>{t('actions')}</summary>
+            <div class="aw-disclosure-body">
+              <label class="indent">{t('indent')} <select value={spaces} onChange={event => {
+                const value = Number(event.currentTarget.value); indentEdited.current = true; setNotice(null); setSpaces(value);
+                void operation(() => plugin.current.host.storage.set('indent', value));
+              }}><option value={2}>{t('spaces', {count:2})}</option><option value={4}>{t('spaces', {count:4})}</option></select></label>
+              <div class="aw-actions">{JSON_ACTIONS.map(action =>
+                <button disabled={!input.trim() || busy || composing} onClick={() => jsonAction(action.id)}><span class={`aw-icon aw-icon--${action.icon}`} aria-hidden="true"/>{t(action.id)}</button>)}</div>
+            </div>
+          </details>
+          {notice && !notice.failed && <span role="status">{t(notice.key)}</span>}
+          {input && <button disabled={busy || composing} onClick={() => {
             edited.current = true; engine.current.clear(); setInput(''); setNotice(null); inputRef.current?.focus();
-          }}>{t('clear')}</button></div></footer></article>
+          }}><span class="aw-icon aw-icon--clear" aria-hidden="true"/>{t('clear')}</button>}
+        </footer></article>
       <article class="aw-pane"><header class="aw-pane-header"><label for="json-output">{t('result')}</label><span>{count == null ? '—' : isJavaScript ? t('resultCount', {count:1}) : t('match', {count})} · {t('bytes', {count:outputBytes})}</span></header>
         <div class="aw-pane-body"><textarea id="json-output" class="aw-editor" readonly spellcheck={false} placeholder={t('outputHint')} value={output}/></div>
         <footer class="aw-pane-footer"><span/>
-          <button class="aw-button--action" disabled={!output || busy} onClick={copyResult} title={t('copyHint')}>{notice?.key === 'copiedResult' ? t('copied') : t('copyResult')} <kbd>⌘⇧C</kbd></button></footer></article>
+          <button class="aw-button--action" disabled={!output || busy} onClick={copyResult} title={t('copyHint')}><span class={`aw-icon aw-icon--${notice?.key === 'copiedResult' ? 'check' : 'copy'}`} aria-hidden="true"/>{notice?.key === 'copiedResult' ? t('copied') : t('copyResult')} <kbd>⌘⇧C</kbd></button></footer></article>
     </section>
     <output role="status" aria-live="polite" class="sr-only">{busy ? t('waiting') : (notice?.key ? t(notice.key) : notice?.text) ?? summary}</output>
   </main>;

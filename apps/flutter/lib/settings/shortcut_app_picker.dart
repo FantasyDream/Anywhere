@@ -1,3 +1,4 @@
+import '../l10n/app_language.dart';
 import '../ui/app_icons.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/services.dart';
 import '../ui/app_style.dart';
 import '../ui/app_components.dart';
 import '../src/rust/api.dart';
+import '../l10n/localized_label.dart';
 
 /// A null app means Any app; a null dialog result means Cancel.
 class ShortcutApplicationChoice {
@@ -33,7 +35,9 @@ class _ShortcutAppPickerState extends State<ShortcutAppPicker> {
     final query = _search.text.trim().toLowerCase();
     return widget.applications
         .where((app) =>
-            '${app.title} ${app.bundleId}'.toLowerCase().contains(query))
+            '${app.title} ${app.localizedTitles.values.join(' ')} ${app.bundleId}'
+                .toLowerCase()
+                .contains(query))
         .toList();
   }
 
@@ -70,7 +74,7 @@ class _ShortcutAppPickerState extends State<ShortcutAppPicker> {
   Widget build(BuildContext context) {
     final matches = _matches;
     return AlertDialog(
-        title: const Text('Choose app'),
+        title: Text(context.l10n.chooseApp),
         content: SizedBox(
             width: 420,
             height: min(320, MediaQuery.sizeOf(context).height - 180),
@@ -80,8 +84,8 @@ class _ShortcutAppPickerState extends State<ShortcutAppPicker> {
                   TextField(
                       controller: _search,
                       autofocus: true,
-                      decoration: const InputDecoration(
-                          hintText: 'Find an app…',
+                      decoration: InputDecoration(
+                          hintText: context.l10n.findAnApp,
                           prefixIcon: Icon(AppIcons.search, size: 17),
                           isDense: true),
                       onChanged: (_) => setState(() => _selected =
@@ -110,7 +114,11 @@ class _ShortcutAppPickerState extends State<ShortcutAppPicker> {
                                         : AppIcons.desktop,
                                     size: 28),
                                 selected: index == _selected,
-                                title: Text(app?.title ?? 'Any app',
+                                title: Text(
+                                    app == null
+                                        ? context.l10n.anyApp
+                                        : context.localizedLabel(
+                                            app.title, app.localizedTitles),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis),
                                 subtitle: app == null
@@ -129,13 +137,13 @@ class _ShortcutAppPickerState extends State<ShortcutAppPicker> {
                                 onTap: () => _choose(app));
                           })),
                   if (matches.isEmpty && _search.text.trim().isNotEmpty)
-                    const Text('No matching apps',
+                    Text(context.l10n.noMatchingApps,
                         style: TextStyle(fontSize: 11, color: AppStyle.muted)),
                 ]))),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'))
+              child: Text(context.l10n.cancel))
         ]);
   }
 }

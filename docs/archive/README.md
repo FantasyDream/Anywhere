@@ -1,6 +1,6 @@
 # 历史验收与审查
 
-以下内容保留原日期、版本和实验边界。**不作为当前使用或实现契约**；当前状态从 [文档导航](../README.md) 和 [V0.11 MVP](../mvp-v0.11.md) 阅读。
+以下内容保留原日期、版本和实验边界。**不作为当前使用或实现契约**；当前状态从 [文档导航](../README.md) 和 [V0.12 MVP](../mvp-v0.12.md) 阅读。
 
 ## 版本记录
 
@@ -14,9 +14,17 @@
 | [V0.7 build 14](validation-v0.7-build14.md) | 对应 fixture 与可见 App 的实测边界 |
 | [V0.8 开发记录](v0.8-development-records.md) | S1–S3、build 4–16 的回归、包校验、已知实机边界 |
 | [V0.9 开发记录](v0.9-development-records.md) | Detail / KeyValue 的协议、执行、Host 回归与开发包 |
+| [V0.8 MVP](mvp-v0.8.md) | 旧模块 / 协议及验收边界，已被静态内置模块替代 |
+| [V0.9 MVP](mvp-v0.9.md) / [模块迁移](feature-module-roadmap.md) | 已完成的第一方热加载退役和原生工具页迁移 |
+| [V0.10 MVP](mvp-v0.10.md) / [多格式改造](clipboard-multiformat-plan.md) | 剪贴板历史、存储 / 格式边界及初始验收 |
+| [开源复用重构](open-source-refactor-plan.md) | 已完成的 R1–R4 与未采用原型 |
+| [V0.11 MVP](mvp-v0.11.md) / [Web 实施记录](web-plugin-development-records.md) | Web 平台、JSON 与逐构建观察；不作为现行 SDK 文档 |
+| [P0 探针退役](web-plugin-p0.md) | 早期合成回显验证及删除原因，原代码在 Git 历史 |
 
 ## Review 与重构记录
 
+- [V0.12 最终代码与仓库收尾（2026-10-23）](reviews/closeout-v0.12-2026-10-23.md)：目录额度、设置错误、旧接口 / 文案、干净检出、原生 SDK 兼容与 main 集成。
+- [V0.12 文档与实现一致性审查（2026-10-23）](reviews/docs-alignment-v0.12-2026-10-23.md)：自动输入、交互、模块路径、Web SDK、安装 / 撤销与后续能力边界。
 - [V0.11 Build 51 性能与交互收尾](reviews/closeout-v0.11-build51.md)：组词查询、预览复用、复制延迟、设置提示与 JSON 文本复用。
 
 - [V0.11 Build 47 运行时验收](reviews/verification-v0.11-build47.md)：剪贴板异常边界、空设置窗口释放、移除 Web 首帧截图路径。

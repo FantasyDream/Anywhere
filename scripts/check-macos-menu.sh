@@ -21,3 +21,15 @@ xcrun clang -fobjc-arc -Wall -Wextra -Werror -Wno-deprecated-declarations \
   crates/anywhere-platform/native/tests/macos_identity_test.m \
   -framework AppKit -o "$MENU_TEST_DIR/identity-test"
 "$MENU_TEST_DIR/identity-test"
+xcrun clang -fobjc-arc -Wall -Wextra -Werror -Wno-deprecated-declarations \
+  crates/anywhere-platform/native/tests/macos_application_launch_test.m \
+  -framework AppKit -o "$MENU_TEST_DIR/application-launch-test"
+"$MENU_TEST_DIR/application-launch-test"
+for variant in modern legacy; do
+  APPLICATION_NAME_FLAGS=(-fobjc-arc -Wall -Wextra -Werror -Wno-deprecated-declarations)
+  if [[ "$variant" == legacy ]]; then APPLICATION_NAME_FLAGS+=(-DANYWHERE_TEST_LEGACY_SDK); fi
+  xcrun clang "${APPLICATION_NAME_FLAGS[@]}" \
+    crates/anywhere-platform/native/tests/macos_application_names_test.m \
+    -framework AppKit -o "$MENU_TEST_DIR/application-names-$variant-test"
+  "$MENU_TEST_DIR/application-names-$variant-test"
+done

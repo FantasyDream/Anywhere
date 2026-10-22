@@ -31,7 +31,7 @@
 
 ## 验证边界
 
-修复前两项包管理回归均失败，日志 `build/final-review-regressions-before31.log`；修复后 Web 相关回归与两个超时测试通过。全量工程检查及最终 App 记录以 [V0.11 MVP](../../mvp-v0.11.md) 的 Build 31 为准。
+修复前两项包管理回归均失败，日志 `build/final-review-regressions-before31.log`；修复后 Web 相关回归与两个超时测试通过。全量工程检查及最终 App 记录以 [V0.11 MVP](../mvp-v0.11.md) 的 Build 31 为准。
 
 本轮没有新引擎内存性能数字，不宣称跨平台、所有第三方自定义 UI、OS 沙箱或任意代码安全已完成。QuickJS worker 仍为方案，未增加任何脚本执行权限。
 

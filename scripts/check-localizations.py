@@ -2,6 +2,7 @@
 """Validate paired ARB messages and compare official Flutter-generated output."""
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 
@@ -25,18 +26,18 @@ def main():
             raise SystemExit(f'Placeholder definitions differ: {key}')
     # Generate in a disposable project, leaving the checkout untouched.
     with tempfile.TemporaryDirectory(prefix='anywhere-l10n-') as temporary:
-        project = Path(temporary)
+        # Mirror a fresh checkout: no root build/ or Flutter cache exists. Use
+        # the production config too, so path assumptions cannot escape this gate.
+        project = Path(temporary) / 'apps/flutter'
+        local_arb = project / 'lib/l10n'
+        local_arb.mkdir(parents=True)
         (project / 'pubspec.yaml').write_text((APP / 'pubspec.yaml').read_text())
-        configuration = {
-            'arb-dir': str(ARB), 'output-dir': str(project / 'generated'),
-            'template-arb-file': 'app_en.arb',
-            'output-localization-file': 'app_localizations.dart',
-            'nullable-getter': False, 'format': False,
-        }
-        (project / 'l10n.yaml').write_text(json.dumps(configuration))
-        subprocess.run(['flutter', '--no-version-check', 'gen-l10n', '--project-dir', temporary],
+        for source in ARB.glob('*.arb'):
+            shutil.copy2(source, local_arb / source.name)
+        shutil.copy2(APP / 'l10n.yaml', project / 'l10n.yaml')
+        subprocess.run(['flutter', '--no-version-check', 'gen-l10n', '--project-dir', str(project)],
                        cwd=project, check=True)
-        generated = {p.name: p.read_bytes() for p in (project / 'generated').glob('*.dart')}
+        generated = {p.name: p.read_bytes() for p in (local_arb / 'generated').glob('*.dart')}
         committed = {p.name: p.read_bytes() for p in (ARB / 'generated').glob('*.dart')}
         if not generated or generated != committed:
             raise SystemExit('Generated localizations are stale; run flutter gen-l10n')

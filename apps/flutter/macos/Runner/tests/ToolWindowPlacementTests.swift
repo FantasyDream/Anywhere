@@ -6,8 +6,8 @@ struct ToolWindowPlacementTests {
         // visibleFrame excludes a bottom Dock and a top menu bar.
         let main = NSRect(x: 0, y: 80, width: 1440, height: 797)
         let first = ToolWindowPlacement.bottomTrailing(size: ToolWindowPlacement.preferredSize, in: main)
-        assert(first.minX == 1024 && first.minY == 96)
-        assert(first.width == 400 && first.height == 520)
+        assert(first.minX == 1004 && first.minY == 96)
+        assert(first.width == 420 && first.height == 560)
         assert(main.contains(first))
 
         // Secondary screens need not start at (0,0).

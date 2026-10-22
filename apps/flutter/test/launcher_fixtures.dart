@@ -28,6 +28,7 @@ CandidateDto withRoots(CandidateDto candidate, List<ContextDto> roots) =>
       isMenu: candidate.isMenu,
       fileKind: candidate.fileKind,
       title: candidate.title,
+      localizedTitles: candidate.localizedTitles,
       menuPath: candidate.menuPath,
       contextKeys: {
         ...candidate.contextKeys,

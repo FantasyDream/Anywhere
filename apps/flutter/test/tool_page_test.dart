@@ -255,7 +255,6 @@ void main() {
           subtitle: 'Workspace',
           visible: visible,
           onBack: () => back++,
-          showFooterBack: false,
           footer: const Row(children: [
             Expanded(child: Text('Local processing')),
             Text('Actions · ⌘K')
@@ -268,7 +267,7 @@ void main() {
     expect(tester.getSize(find.byType(AppPageHeader)).height,
         LauncherViewState.inputHeight);
     expect(tester.getSize(find.byType(AppPageFooter)).height,
-        LauncherViewState.footerHeight);
+        DesignTokens.pageFooterHeight);
     expect(tester.getSize(find.byKey(const Key('workspace-body'))).height,
         greaterThan(450));
     expect(find.text('Back'), findsNothing);

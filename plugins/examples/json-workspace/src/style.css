@@ -14,6 +14,5 @@
 .formula-field input:focus-visible { box-shadow: none; }
 @media(max-width:560px) { .query-bar { flex-wrap: wrap; } .formula-field { flex-basis: 100%; } }
 
-.json-input-actions { align-items: stretch; flex-direction: column; }
-.json-input-actions .aw-actions { flex-wrap: wrap; }
-.input-status { display: flex; align-items: center; justify-content: space-between; gap: var(--aw-space-sm); }
+.json-input-actions { align-items: flex-start; }
+.json-input-actions .aw-disclosure { flex: 1; min-width: 0; }

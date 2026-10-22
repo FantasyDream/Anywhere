@@ -1,15 +1,16 @@
 import Foundation
 import FlutterMacOS
 
-/// Cross-engine preference distribution only; translation stays in Flutter/Web.
+/// Preference distribution to Flutter engines, Web views and native chrome.
 /// No timers, filesystem polling, clipboard reads, or new engine ownership.
 final class LocaleHost {
     static private(set) var preference = "system"
-    private static let changed = Notification.Name("AnywhereLanguageChanged")
+    static let changed = Notification.Name("AnywhereLanguageChanged")
     static func update(_ value: String?) {
         let next = ["system", "zh", "en"].contains(value ?? "") ? value! : "system"
         guard next != preference else { return }
         preference = next
+        NativeLocalization.preference = next
         NotificationCenter.default.post(name: changed, object: nil)
     }
     private let channel: FlutterMethodChannel

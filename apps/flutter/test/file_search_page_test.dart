@@ -771,8 +771,13 @@ void main() {
     await tester.enterText(find.byType(TextField), 'report');
     await tester.pumpAndSettle();
     final revision = queries.last.$2;
-    // Bare Tab and Shift+Tab have no navigation or file execution behavior.
+    // Scope and file types share bare Tab / Shift+Tab, preserving the query.
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(c.files.filter, FileFilter.files);
+    expect(fileRow('report-folder'), findsNothing);
+    expect(c.view.input, 'report');
+    expect(queries.last.$2, greaterThan(revision));
     await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
@@ -796,6 +801,9 @@ void main() {
     expect(find.text('Preview content'), findsOneWidget);
     expect(find.text('Copy Path'), findsOneWidget);
     expect(find.byKey(const Key('file-search-controls')), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(c.files.filter, FileFilter.all); // No switching behind Actions.
     await chord(tester, LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.tab);
     expect(c.files.filter, FileFilter.all); // The action layer has no type bar.
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -906,12 +914,15 @@ void main() {
     final executed = <String>[];
     final c = await mount(tester, executed: executed);
     await openFiles(tester);
-    await chord(tester, LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.tab,
-        shift: true);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pumpAndSettle();
     expect(c.files.filter, FileFilter.code);
     expect(find.byKey(const Key('file-filter-code')).hitTestable(),
         findsOneWidget);
-    await chord(tester, LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.tab);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
     expect(c.files.filter, FileFilter.all);
     expect(
         find.byKey(const Key('file-filter-all')).hitTestable(), findsOneWidget);
@@ -925,10 +936,65 @@ void main() {
       (tester) async {
     await mount(tester);
     expect(find.text('File Search'), findsNothing);
-    expect(find.byType(LauncherFooter), findsNothing);
+    expect(find.byKey(const Key('launcher-footer')), findsNothing);
     expect(find.byKey(const Key('scope-bar')), findsNothing);
     expect(tester.getSize(find.byKey(const Key('launcher-panel'))).height, 72);
     await saveLauncherUi(tester, 'global-empty');
+  });
+
+  testWidgets(
+      'Tab respects visible scopes, navigation layers and IME ownership',
+      (tester) async {
+    final queries = <(String, int, InputModeDto)>[];
+    final c = await mount(tester, queries: queries, environmentScope: true);
+    final editor = tester.state<EditableTextState>(find.byType(EditableText));
+    final initialQueries = queries.length;
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(c.view.inputMode, InputModeDto.search);
+    expect(c.view.scopeId, isNull);
+    expect(queries.length, initialQueries);
+
+    await c.navigateRoot(WakeMode.currentApp);
+    await tester.pumpAndSettle();
+    expect(c.view.scopeId, 'app.editor');
+    await tester.tap(find.byKey(const Key('launcher-navigation')));
+    await tester.pumpAndSettle();
+    final beforeNavigation = queries.length;
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(c.view.navigationOpen, isTrue);
+    expect(c.view.scopeId, 'app.editor');
+    expect(queries.length, beforeNavigation);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    const composing = TextEditingValue(
+        text: 'peizhi',
+        composing: TextRange(start: 0, end: 6),
+        selection: TextSelection.collapsed(offset: 6));
+    tester.testTextInput.updateEditingValue(composing);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await chord(tester, LogicalKeyboardKey.shiftLeft, LogicalKeyboardKey.tab);
+    await chord(tester, LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.tab);
+    expect(c.view.scopeId, 'app.editor');
+    expect(queries.length, beforeNavigation);
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.value,
+        composing);
+    tester.testTextInput.updateEditingValue(const TextEditingValue(
+        text: '配置', selection: TextSelection.collapsed(offset: 2)));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(c.view.scopeId, 'folder');
+    expect(c.view.input, '配置');
+    expect(tester.state<EditableTextState>(find.byType(EditableText)),
+        same(editor));
+    expect(tester.widget<TextField>(find.byType(TextField)).focusNode!.hasFocus,
+        isTrue);
+    expect(tester.testTextInput.hasAnyClients, isTrue);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(
@@ -952,7 +1018,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
     expect(c.view.inputMode, InputModeDto.search);
-    expect(find.byType(LauncherFooter), findsNothing);
+    expect(find.byKey(const Key('launcher-footer')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -1016,7 +1082,10 @@ void main() {
       (tester) async {
     final queries = <(String, int, InputModeDto)>[];
     final c = await mount(tester, queries: queries, environmentScope: true);
-    final editing = tester.state<EditableTextState>(find.byType(EditableText));
+    final editor = find.descendant(
+        of: find.byKey(const Key('launcher-search-input')),
+        matching: find.byType(EditableText));
+    final editing = tester.state<EditableTextState>(editor);
     await tester.tap(find.byKey(const Key('launcher-navigation')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('launcher-navigation-environment')));
@@ -1044,7 +1113,7 @@ void main() {
         same(editing));
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(find.byType(LauncherFooter), findsNothing);
+    expect(find.byKey(const Key('launcher-footer')), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -1111,6 +1180,84 @@ void main() {
   });
 
   testWidgets(
+      'background search progress preserves the third Chinese character composition',
+      (tester) async {
+    final pending = <Completer<SnapshotWaitDto>>[];
+    final queries = <(String, int, InputModeDto)>[];
+    final executed = <String>[];
+    final c = await mount(tester, queries: queries, executed: executed,
+        waitDelta: (_, __, ___, ____) {
+      final response = Completer<SnapshotWaitDto>();
+      pending.add(response);
+      return response.future;
+    });
+    await openFiles(tester);
+    await tester.enterText(find.byType(TextField), '配置');
+    await tester.pumpAndSettle();
+    final editor = find.descendant(
+        of: find.byKey(const Key('launcher-search-input')),
+        matching: find.byType(EditableText));
+    final editing = tester.state<EditableTextState>(editor);
+    final field = tester.widget<TextField>(find.byType(TextField));
+    final revision = queries.last.$2;
+    for (var batch = 0; batch < 2; batch++) {
+      final composing = TextEditingValue(
+          text: batch == 0 ? '配置yan' : '配置yanshou',
+          selection: TextSelection.collapsed(offset: batch == 0 ? 5 : 9),
+          composing: TextRange(start: 2, end: batch == 0 ? 5 : 9));
+      tester.testTextInput.updateEditingValue(composing);
+      await tester.pump();
+      // The native input method owns this suffix. Progress still describes the
+      // last submitted query and must never be written back into the editor.
+      pending.last.complete(SnapshotWaitDto(
+          kind: SnapshotWaitKindDto.updated,
+          candidateUpdate: CandidateUpdateDto.retain,
+          state: launcherSnapshot(
+              sessionId: 1,
+              revision: revision,
+              snapshotSeq: batch + 20,
+              candidateListVersion: 1,
+              input: '配置',
+              contextComplete: true,
+              candidates: [],
+              diagnostics: [],
+              fileSearch: searchProgress())));
+      await tester.pumpAndSettle();
+      expect(field.controller!.value, composing);
+      expect(tester.state<EditableTextState>(editor), same(editing));
+      expect(tester.testTextInput.hasAnyClients, isTrue);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await chord(tester, LogicalKeyboardKey.shiftLeft, LogicalKeyboardKey.tab);
+      expect(c.files.filter, FileFilter.all);
+      expect(field.controller!.value, composing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(executed, [entry.id]);
+      expect(queries.last.$1, '配置');
+    }
+    tester.testTextInput.updateEditingValue(const TextEditingValue(
+        text: '配置验收', selection: TextSelection.collapsed(offset: 4)));
+    await tester.pumpAndSettle();
+    expect(queries.last.$1, '配置验收');
+    expect(field.controller!.text, '配置验收');
+    // A deliberate new Host query still replaces an unfinished composition.
+    tester.testTextInput.updateEditingValue(const TextEditingValue(
+        text: '配置验收ce',
+        selection: TextSelection.collapsed(offset: 6),
+        composing: TextRange(start: 4, end: 6)));
+    await tester.pump();
+    await c.update('explicit host query');
+    await tester.pumpAndSettle();
+    expect(field.controller!.text, 'explicit host query');
+    expect(field.controller!.value.composing.isCollapsed, isTrue);
+    await c.dismiss(retain: false);
+    pending.last
+        .complete(const SnapshotWaitDto(kind: SnapshotWaitKindDto.superseded));
+    await tester.pumpWidget(const SizedBox());
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
       'Action opens workspace; filters, preview and Enter use selected file',
       (tester) async {
     final executed = <String>[];
@@ -1126,7 +1273,7 @@ void main() {
     expect(find.byKey(const Key('scope-bar')), findsNothing);
     expect(queries.last.$3, InputModeDto.fileSearch);
     expect(find.byType(LauncherSearchArea), findsOneWidget);
-    expect(find.byType(LauncherFooter), findsOneWidget);
+    expect(find.byKey(const Key('launcher-footer')), findsNothing);
     expect(find.byType(AppToolbar), findsNothing);
     expect(find.byType(TextField), findsOneWidget);
     expect(tester.getSize(find.byType(LauncherSearchArea)).height, 72);
@@ -1150,6 +1297,9 @@ void main() {
 
     await openPreview(tester, capture: true);
     expect(find.text('Preview content'), findsOneWidget);
+    expect(find.text('12 B'), findsNothing);
+    await tester.tap(find.text('File information'));
+    await tester.pumpAndSettle();
     expect(find.text('12 B'), findsOneWidget);
     await saveLauncherUi(tester, 'files-preview');
     expect(find.byTooltip('Close preview'), findsNothing);
@@ -1231,7 +1381,7 @@ void main() {
     expect(find.byKey(const Key('file-preview-pane')), findsOneWidget);
     expect(find.text('Open').hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
-    await tester.tap(find.byKey(const Key('launcher-actions')));
+    await tester.tap(find.byKey(const Key('selected-row-actions')));
     await tester.pumpAndSettle();
     expect(find.text('Copy Path').hitTestable(), findsOneWidget);
     expect(find.byIcon(AppIcons.copy), findsOneWidget,
@@ -1297,7 +1447,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'report');
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Actions · ⌘K'));
+    await tester.tap(find.byKey(const Key('selected-row-actions')));
     await tester.pumpAndSettle();
     expect(find.text('Copy Path'), findsOneWidget);
     expect(find.byKey(const Key('file-search-controls')), findsNothing);
@@ -1306,7 +1456,7 @@ void main() {
     expect(fileRow('report.txt'), findsOneWidget);
     expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
         'report');
-    await tester.tap(find.text('Actions · ⌘K'));
+    await tester.tap(find.byKey(const Key('selected-row-actions')));
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();

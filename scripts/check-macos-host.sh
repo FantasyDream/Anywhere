@@ -18,7 +18,7 @@ xcrun clang -fobjc-arc -Wall -Wextra -Werror -mmacosx-version-min=12.0 \
   apps/flutter/macos/Runner/tests/NativeFlutterSurfaceGuardTests.m \
   -o "$host_test_directory/flutter-surface-test"
 "$host_test_directory/flutter-surface-test" "$flutter_framework"
-xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   apps/flutter/macos/Runner/RuntimePolicy.swift apps/flutter/macos/Runner/SettingsStore.swift \
   apps/flutter/macos/Runner/HotKeyMap.swift \
   apps/flutter/macos/Runner/HotKeyService.swift \
@@ -27,7 +27,7 @@ xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   -o "$host_test_directory/host-test"
 "$host_test_directory/host-test"
 # Search scope authorization is separate from query-time filesystem traversal.
-xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   apps/flutter/macos/Runner/FileSearchAccess.swift \
   apps/flutter/macos/Runner/RuntimePolicy.swift apps/flutter/macos/Runner/SettingsStore.swift \
   apps/flutter/macos/Runner/HotKeyMap.swift \
@@ -35,31 +35,31 @@ xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   -o "$host_test_directory/file-access-test"
 "$host_test_directory/file-access-test"
 # Native material ownership and resizing must survive the shared-engine window move.
-xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   apps/flutter/macos/Runner/WindowMaterial.swift \
   apps/flutter/macos/Runner/tests/WindowMaterialTests.swift \
   -o "$host_test_directory/material-test"
 "$host_test_directory/material-test"
-xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   apps/flutter/macos/Runner/WindowInputFocus.swift \
   apps/flutter/macos/Runner/tests/WindowInputFocusTests.swift \
   -o "$host_test_directory/input-focus-test"
 "$host_test_directory/input-focus-test"
-xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   apps/flutter/macos/Runner/WindowMaterial.swift \
   apps/flutter/macos/Runner/WindowInputFocus.swift \
   apps/flutter/macos/Runner/LauncherWindowCoordinator.swift \
   apps/flutter/macos/Runner/tests/LauncherWindowCoordinatorTests.swift \
   -o "$host_test_directory/launcher-windows-test"
 "$host_test_directory/launcher-windows-test"
-xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   apps/flutter/macos/Runner/NativeEditMenu.swift \
   apps/flutter/macos/Runner/tests/NativeEditMenuTests.swift \
   -o "$host_test_directory/edit-menu-test"
 "$host_test_directory/edit-menu-test"
 
 # Web canvas compatibility stays in the native adapter, with an opaque fallback.
-xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   apps/flutter/macos/Runner/NativeWebEditing.swift \
   apps/flutter/macos/Runner/NativeWebAppearance.swift \
   apps/flutter/macos/Runner/tests/NativeWebEditingTests.swift \
@@ -67,8 +67,19 @@ xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
 "$host_test_directory/web-editing-test"
 
 # Shelf placement uses visible work areas, including nonzero/negative displays.
-xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   apps/flutter/macos/Runner/ToolWindowPlacement.swift \
   apps/flutter/macos/Runner/tests/ToolWindowPlacementTests.swift \
   -o "$host_test_directory/tool-placement-test"
 "$host_test_directory/tool-placement-test"
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  apps/flutter/macos/Runner/ApplicationFocusReturner.swift \
+  apps/flutter/macos/Runner/tests/ApplicationFocusReturnerTests.swift \
+  -o "$host_test_directory/application-return-test"
+"$host_test_directory/application-return-test"
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  apps/flutter/macos/Runner/NativeLocalization.swift \
+  apps/flutter/macos/Runner/NativeText.g.swift \
+  apps/flutter/macos/Runner/tests/NativeLocalizationTests.swift \
+  -o "$host_test_directory/localization-test"
+"$host_test_directory/localization-test" "$PWD/resources/native-localizations"

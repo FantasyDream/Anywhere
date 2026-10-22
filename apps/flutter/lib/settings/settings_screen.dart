@@ -40,8 +40,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   SettingsController get _controller => widget.controller;
   HostSettings get _settings => _controller.current;
   String? get _notice =>
-      _controller.statusMessage ??
-      (_page == 'shortcuts' ? _controller.shortcutCatalogMessage : null);
+      _controller.statusMessageFor(context.l10n) ??
+      (_page == 'shortcuts'
+          ? _controller.shortcutCatalogMessageFor(context.l10n)
+          : null);
 
   @override
   void initState() {
@@ -107,7 +109,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         }
         return saved;
       } catch (_) {
-        _controller.reportError('Settings could not be saved. Try again.');
+        if (!mounted) return false;
+        _controller.reportError(context.l10n.settingsSaveFailed);
         return false;
       }
     }
@@ -138,8 +141,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<bool> _prepareClose() async {
     if (!mounted) return false;
     if (_shortcutEditing) {
-      _controller.reportError(
-          'Finish or cancel editing the action shortcut before closing.');
+      _controller
+          .reportError(context.l10n.finishOrCancelEditingTheActionShortcut);
       return false;
     }
     setState(() => _closing = true);
@@ -157,8 +160,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
               : context.l10n.changesNotSaved),
           content: Text(dirty
               ? context.l10n.searchDrafts
-              : (_controller.statusMessage ??
-                  'Settings could not be saved. You can keep editing or close without saving.')),
+              : (_controller.statusMessageFor(context.l10n) ??
+                  context.l10n.settingsCouldNotBeSavedYouCan)),
           actions: [
             TextButton(
                 onPressed: () => Navigator.pop(context, 'cancel'),
@@ -183,8 +186,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           excluded: true,
           fileSearch: true);
       if (applied && mounted && _hasSearchDrafts) {
-        _controller.reportError(
-            'New edits were made while saving. Save them before closing.');
+        _controller.reportError(context.l10n.newEditsWereMadeWhileSavingSave);
         return false;
       }
       return applied;
@@ -235,9 +237,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           if (line.trim().isNotEmpty) line.trim(),
       ];
 
-  Widget _sourceStatus(ContextSourceDto source) {
+  Widget? _sourceStatus(ContextSourceDto source,
+      {bool includeHealthy = false}) {
     final status = _controller.contextSourceStatuses
-        .firstWhere((item) => item.source == source);
+        .firstWhere((item) => item.source == source)
+        .withLocalizations(context.l10n);
+    if (!includeHealthy && status.attention == 0) return null;
     return Tooltip(
       message: status.detail,
       child: Row(children: [
@@ -267,10 +272,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   static const _pages = <(String, IconData)>[
     ('general', AppIcons.settings),
     ('shortcuts', AppIcons.keyboard),
-    ('context', AppIcons.layers),
+    ('context', AppIcons.context),
     ('search', AppIcons.search),
     ('clipboard', AppIcons.clipboard),
-    ('plugins', AppIcons.layers),
+    ('plugins', AppIcons.features),
   ];
 
   String _pageTitle(String id) => switch (id) {
@@ -372,7 +377,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<Widget> _pageContent() {
     return switch (_page) {
       'shortcuts' => [
-          _section(context.l10n.shortcuts),
           _card(
             child: Column(
               children: [
@@ -407,7 +411,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SizedBox(height: DesktopEnvironment.current.titleBarInset),
         ],
       'general' => [
-          _section(context.l10n.general),
           _card(
               child: Padding(
                   padding: const EdgeInsets.all(12),
@@ -424,6 +427,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     const SizedBox(width: 12),
                     DropdownButton<String>(
                       key: const Key('settings-language'),
+                      icon: const Padding(
+                          padding: EdgeInsets.only(left: 8),
+                          child: Icon(AppIcons.chevronDown, size: 14)),
                       value: _settings.uiLanguage,
                       items: [
                         DropdownMenuItem(
@@ -457,7 +463,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       (current) => current.copyWith(launchAtLogin: value)))),
         ],
       'context' => [
-          _section(context.l10n.contextSources),
+          _section(context.l10n.contextSources, AppIcons.context),
           Text(context.l10n.contextDescription, style: AppStyle.caption),
           const SizedBox(height: 10),
           _card(
@@ -484,7 +490,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             const Divider(),
             SettingsToggleRow(
                 title: context.l10n.browserCurrentPage,
-                description: DesktopEnvironment.current.browserDescription,
+                description: DesktopEnvironment.current.usesMetaCommand
+                    ? context.l10n.browserPageDescription
+                    : context.l10n.supportedBrowserDescription,
                 icon: AppIcons.globe,
                 value: _settings.captureBrowserCurrentPage,
                 status: _sourceStatus(ContextSourceDto.browserCurrentPage),
@@ -492,12 +500,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     current.copyWith(captureBrowserCurrentPage: value))),
           ])),
           const SizedBox(height: 8),
-          const Text(
-              'Changes apply on the next wake. Status refers to the last capture.',
-              style: AppStyle.caption),
+          AppDisclosure(
+              title: context.l10n.sourceStatus,
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(context.l10n.changesApplyOnTheNextWakeStatus,
+                        style: AppStyle.caption),
+                    const SizedBox(height: 8),
+                    for (final source in [
+                      ContextSourceDto.finderSelection,
+                      ContextSourceDto.selectedText,
+                      ContextSourceDto.browserCurrentPage
+                    ])
+                      Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Text(
+                                    switch (source) {
+                                      ContextSourceDto.finderSelection =>
+                                        context.l10n.fileSelection,
+                                      ContextSourceDto.selectedText =>
+                                        context.l10n.selectedText,
+                                      _ => context.l10n.browserCurrentPage
+                                    },
+                                    style: AppStyle.caption),
+                                _sourceStatus(source, includeHealthy: true)!,
+                              ])),
+                  ])),
         ],
       'search' => [
-          _section(context.l10n.search),
           _card(
               child: FileSearchSettings(
                   enabled: _settings.fileSearchEnabled,
@@ -524,19 +558,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           fileSearch: true))),
           const SizedBox(height: 14),
           _card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
+            child: AppDisclosure(
+              key: const Key('hidden-apps-disclosure'),
+              title: context.l10n.hiddenApps,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text('Hidden apps',
-                      style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppStyle.primary)),
-                  const SizedBox(height: 3),
-                  const Text(
-                      'Enter one application ID per line to keep it out of search.',
+                  Text(context.l10n.enterOneApplicationIDPerLineTo,
                       style: TextStyle(fontSize: 11, color: AppStyle.muted)),
                   const SizedBox(height: 10),
                   TextField(
@@ -578,7 +606,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                             current.copyWith(excludedApps: _excludedIds()),
                         excluded: true,
                       ),
-                      child: const Text('Save apps'),
+                      child: Text(context.l10n.saveApps),
                     ),
                   ),
                 ],
@@ -602,22 +630,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     };
   }
 
-  Widget _section(String title) => AppSectionHeading(
-      switch (title) {
-        'SHORTCUTS' => 'Wake shortcuts',
-        'GENERAL' => 'Startup',
-        'CONTEXT SOURCES' => 'Context sources',
-        'SEARCH' => 'Search results',
-        'PLUGINS' => 'Features',
-        _ => title,
-      },
-      icon: switch (title) {
-        'SHORTCUTS' => AppIcons.keyboard,
-        'GENERAL' => AppIcons.power,
-        'CONTEXT SOURCES' => AppIcons.layers,
-        'SEARCH' => AppIcons.search,
-        _ => AppIcons.plugin,
-      });
+  Widget _section(String title, IconData icon) =>
+      AppSectionHeading(title, icon: icon);
 
   Widget _card({required Widget child}) => AppCard(child: child);
 
@@ -645,8 +659,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onError: () {
                     if (mounted) {
                       setState(() => _recording = null);
-                      _controller
-                          .reportError('Shortcut recording failed. Try again.');
+                      _controller.reportError(
+                          context.l10n.shortcutRecordingFailedTryAgain);
                     }
                   });
             },
@@ -660,7 +674,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   borderRadius: BorderRadius.circular(8)),
             ),
             child: Text(
-              recording ? 'Press a shortcut' : value,
+              recording ? context.l10n.pressShortcutKey : value,
               style: TextStyle(
                 fontSize: 12,
                 color: recording ? AppStyle.accent : AppStyle.secondary,

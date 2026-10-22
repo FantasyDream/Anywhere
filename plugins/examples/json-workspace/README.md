@@ -1,6 +1,6 @@
 # JSON Workspace
 
-普通第三方 Web 包示例：Preact 页面、jsonc-parser 格式化、jsonpath-js 查询、SandboxJS 计算、Anywhere 浏览器 SDK；无 JSON 专用 Rust API，无 Node 运行时。当前包版本为 0.5.0；配合 V0.11 的共享工作区样式使用。
+普通第三方 Web 包示例：Preact 页面、jsonc-parser 格式化、jsonpath-js 查询、SandboxJS 计算、Anywhere 浏览器 SDK；无 JSON 专用 Rust API，无 Node 运行时。当前包版本为 0.5.2，使用 Host 的共享工作区样式与图标。计算和结果复制直接可见；缩进、复制变体与去转义收在输入区的“JSON 操作”中。
 
 源码使用 `@anywhere/plugin-sdk` 标准包导入；本仓库开发时用 npm `file:` 依赖连接 SDK，独立工程可改为 SDK `.tgz`。通用打包器与新项目模板见 [第三方插件开发指南](../../../docs/plugin-development.md)。
 
@@ -8,7 +8,7 @@
 
 在仓库根运行 `python3 scripts/build-web-examples.py`。产物是 `build/web-examples/dev.anywhere.json-workspace.awplugin`。
 
-1. 启动 V0.11 预览版，在 Settings → Features → Web tools → Import 选择该包。
+1. 启动当前 V0.12 macOS 预览版，在 Settings → Features → Web tools → Import 选择该包。JSON 包与 App 独立更新，已安装的旧包不会随 App 构建自动替换。
 2. 核对名称、版本、SHA-256 和权限，批准后立即可用。可在 Global Search 搜索 `JSON Workspace`；直接输入合法 JSON 对象 / 数组也会匹配该 Action，打开后自动填入原文。选中或 15 秒内复制相同内容时沿用 Launcher 的自动填入规则；只有匹配成功才进入内容模式。已有旧包需重新导入更新。
 3. 左侧输入 JSON，停顿 300 ms 后自动格式化；不完整 / 非法内容保持原样并提示错误。格式化保留光标所在的 JSON token，中文组合输入期间不处理。只修改公式时复用已经格式化的文本，不重复扫描整个文档；修改内容或缩进后重新格式化。
 4. 默认使用 JavaScript 公式，固定显示 `this` 前缀。在顶部模式标签可切换 JavaScript / JSONPath，或用 Ctrl+Tab / Ctrl+Shift+Tab 切换。`$` / `this` 固定显示并自动加入公式，只需输入后面的内容；留空展示整个文档，完整公式也可直接粘贴。两种模式分别保留当前公式。`⌘↵` 或公式框中的 Enter 立即运行，也会在停顿后自动更新结果。`⌘⇧C` 请求复制右侧当前结果；输入或公式修改后，旧结果立即停止展示和复制。
@@ -69,7 +69,7 @@ Launcher 可搜索以下命令；当输入对应内容时也会自动匹配。�
 | Copy Escaped JSON | 先压缩，再编码为一个带外层双引号的合法 JSON 字符串 |
 | Unescape JSON | 解开外层字符串编码，将 JSON 放入左侧编辑器；不直接覆盖剪贴板 |
 
-页面左侧底部也有这四个按钮；右侧 Copy result 继续只复制查询结果。复制必须经 Host 本次确认，成功后才提示已复制；没有输入时只打开工作区，等待手动输入。
+页面左侧底部的“JSON 操作”展开后提供这四项命令和缩进设置；右侧 Copy result 继续只复制查询结果。复制必须经 Host 本次确认，成功后才提示已复制；没有输入时只打开工作区，等待手动输入。
 
 支持 `"{\"a\":1}"` 和 `{\"a\":1}` 等转义形式；自动匹配仍只接受对象 / 数组，原始编码文本最多 16 KiB、解码后嵌套最多 128 层、最多解开 4 层。普通 JSON 内字符串的合法转义不被替换。宿主只识别格式并原样传入，实际解码在插件内执行；工作区打开和 Paste 按钮会自动解码这些对象 / 数组。显式 Unescape 也可去除包裹 JSON 标量的一层编码，但普通搜索中的标量不会自动触发。
 

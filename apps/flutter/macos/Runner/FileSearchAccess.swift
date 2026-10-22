@@ -107,9 +107,9 @@ final class FileSearchAccess {
                 if let request = self.request { request(scope, accepted); return }
                 let panel = NSOpenPanel()
                 self.panel = panel
-                panel.title = "Authorize File Search"
-                panel.message = "Choose folders Anywhere may search. Access is saved for future launches. Protected system or app data may still require Full Disk Access in System Settings."
-                panel.prompt = "Authorize"
+                panel.title = NativeLocalization.text(.authorizeFileSearch)
+                panel.message = NativeLocalization.text(.fileSearchAccessMessage)
+                panel.prompt = NativeLocalization.text(.authorize)
                 panel.canChooseDirectories = true
                 panel.canChooseFiles = false
                 panel.allowsMultipleSelection = true

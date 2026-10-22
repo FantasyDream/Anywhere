@@ -1,6 +1,9 @@
 //! Typed clipboard adapter. No history body enters launcher queries or usage storage.
 use super::*;
-use anywhere_core::features::clipboard::{history::HistoryItem, service::HistoryService};
+use anywhere_core::features::clipboard::{
+    history::HistoryItem,
+    service::{HistoryNotice, HistoryService},
+};
 use std::sync::Arc;
 
 fn history() -> Result<Arc<HistoryService>> {
@@ -11,7 +14,7 @@ pub(super) fn status() -> Result<ClipboardHistoryStatusDto> {
     Ok(ClipboardHistoryStatusDto {
         recording: status.recording,
         available: status.available,
-        notice: status.notice,
+        notice: status.notice.map(notice),
     })
 }
 pub(super) fn search(query: String) -> Result<ClipboardHistoryDto> {
@@ -25,9 +28,20 @@ pub(super) fn search(query: String) -> Result<ClipboardHistoryDto> {
     Ok(ClipboardHistoryDto {
         recording: status.recording,
         available: status.available,
-        notice: status.notice,
+        notice: status.notice.map(notice),
         items: items.into_iter().map(convert).collect(),
     })
+}
+fn notice(value: HistoryNotice) -> ClipboardNoticeDto {
+    match value {
+        HistoryNotice::FeatureDisabled => ClipboardNoticeDto::FeatureDisabled,
+        HistoryNotice::StorageUnavailable => ClipboardNoticeDto::StorageUnavailable,
+        HistoryNotice::AccessRequired => ClipboardNoticeDto::AccessRequired,
+        HistoryNotice::ItemTooLarge => ClipboardNoticeDto::ItemTooLarge,
+        HistoryNotice::ReadFailed => ClipboardNoticeDto::ReadFailed,
+        HistoryNotice::CaptureUnavailable => ClipboardNoticeDto::CaptureUnavailable,
+        HistoryNotice::MonitoringUnavailable => ClipboardNoticeDto::MonitoringUnavailable,
+    }
 }
 fn convert(item: HistoryItem) -> ClipboardItemDto {
     ClipboardItemDto {

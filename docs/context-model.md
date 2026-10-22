@@ -1,6 +1,6 @@
 # Context 模型
 
-当前实现：V0.8；最后核对：2026-10-13。Context 表示被操作的数据或环境，Scope 表示搜索范围，二者不互相替代。
+现行专题说明；文档整理：2026-10-23。Context 表示被操作的数据或环境，Scope 表示搜索范围，二者不互相替代。
 
 ## 数据与来源
 
@@ -14,7 +14,7 @@ ContextValue 覆盖 Text、URL、保留 raw / parsed 的 JSON、File、FileSelec
 |---|---|
 | `core.text` | 非空输入或成功采集的文本 |
 | `core.url` | 明确合法的 HTTP(S) URL |
-| `json.document` | 保留数据 / matcher 兼容；当前无内置识别器或动作，JSON 工具延期到 WebView 阶段 |
+| `json.document` | 保留数据 / matcher 兼容；不再提供内置 JSON Provider / Action。现有 JSON Web 工具通过 `core.text` 与宿主 `inputMatchers` 接收原文，不派生此旧类型 |
 | `core.file` / `core.directory` | 已存在的文件 / 目录，以及应用目录或文件管理器选中项 |
 | `core.file_selection` | 多选集合；保留集合身份并有界派生子对象 |
 | `core.application` | 显示 Launcher 前冻结的应用身份 |
@@ -59,4 +59,4 @@ Provider 按注册顺序规则逐步处理；图的调用记录绑定 provider�
 
 同 Revision 的迟到结果使用更高 SnapshotSeq，Host 拒绝乱序。执行复验已提交资格及资源，不能根据展示标题或对象在列表中的 index 猜测目标。动态菜单的长期身份限制见 [菜单动作](current-app-actions.md)。
 
-详细装配和快照机制见 [架构](architecture.md)；当前工程验收与待验收矩阵见 [V0.8 MVP](mvp-v0.8.md)。
+详细装配和快照机制见 [架构](architecture.md)；当前工程验收与待验收矩阵见 [V0.12 MVP](mvp-v0.12.md)。

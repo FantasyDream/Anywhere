@@ -1,3 +1,5 @@
+import '../l10n/localized_label.dart';
+import '../l10n/app_language.dart';
 import '../ui/app_icons.dart';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -84,8 +86,8 @@ class _IntentShortcutDialogState extends State<IntentShortcutDialog> {
   }
 
   bool _acceptChord(int code, int modifiers) {
-    final error =
-        _draft(code: code, modifiers: modifiers).validateChord(widget.settings);
+    final error = _draft(code: code, modifiers: modifiers)
+        .validateChord(widget.settings, context.l10n);
     setState(() {
       _error = error;
       if (error == null) {
@@ -126,9 +128,9 @@ class _IntentShortcutDialogState extends State<IntentShortcutDialog> {
 
   void _save() {
     final draft = _draft();
-    final error = draft.validate(widget.settings);
+    final error = draft.validate(widget.settings, context.l10n);
     if (_rules.isEmpty) {
-      setState(() => _error = 'Add at least one rule.');
+      setState(() => _error = context.l10n.addAtLeastOneRule);
       return;
     }
     if (error != null) {
@@ -155,18 +157,20 @@ class _IntentShortcutDialogState extends State<IntentShortcutDialog> {
                   child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Context shortcut',
+                        Text(context.l10n.contextShortcut,
                             style: TextStyle(
                                 fontSize: 15, fontWeight: FontWeight.w600)),
                         const SizedBox(height: 12),
-                        const Text('Shortcut name', style: AppStyle.caption),
+                        Text(context.l10n.shortcutName,
+                            style: AppStyle.caption),
                         const SizedBox(height: 4),
                         TextField(
                             key: const ValueKey('context-shortcut-name'),
                             controller: _name,
                             autofocus: widget.existing == null,
-                            decoration: const InputDecoration(
-                                hintText: 'e.g. Open terminal', isDense: true)),
+                            decoration: InputDecoration(
+                                hintText: context.l10n.eGOpenTerminal,
+                                isDense: true)),
                         const SizedBox(height: 10),
                         Row(children: [
                           OutlinedButton(
@@ -189,40 +193,42 @@ class _IntentShortcutDialogState extends State<IntentShortcutDialog> {
                                       if (mounted) {
                                         setState(() {
                                           _recording = false;
-                                          _error =
-                                              'Shortcut recording failed. Try again.';
+                                          _error = context.l10n
+                                              .shortcutRecordingFailedTryAgain;
                                         });
                                       }
                                     });
                                 _focus.requestFocus();
                               },
                               child: Text(_recording
-                                  ? 'Press a shortcut…'
+                                  ? context.l10n.pressAShortcut
                                   : (_code == null
-                                      ? 'Record shortcut'
+                                      ? context.l10n.recordShortcut
                                       : _draft().label))),
                           const Spacer(),
-                          const Text('Global', style: TextStyle(fontSize: 12)),
+                          Text(context.l10n.global,
+                              style: TextStyle(fontSize: 12)),
                           AppToggle(
-                              label: 'Global shortcut',
+                              label: context.l10n.globalShortcut,
                               value: _global,
                               onChanged: _recording
                                   ? null
                                   : (v) => setState(() => _global = v)),
                         ]),
                         const SizedBox(height: 6),
-                        const Text(
-                            'More specific conditions take priority. Equal matches let you choose. An unavailable matching action will not fall back.',
+                        Text(
+                            context.l10n
+                                .moreSpecificConditionsTakePriorityEqualMatches,
                             style:
                                 TextStyle(fontSize: 11, color: AppStyle.muted)),
                         const SizedBox(height: 6),
                         Expanded(
                             child: ListView(children: [
                           if (_rules.isEmpty)
-                            const Padding(
+                            Padding(
                                 padding: EdgeInsets.symmetric(vertical: 8),
                                 child: AppNotice(
-                                    'No rules yet. Add an action and choose the app or context where it should run.',
+                                    context.l10n.noRulesYetAddAnActionAnd,
                                     kind: NoticeKind.info)),
                           for (var i = 0; i < _rules.length; i++)
                             ListTile(
@@ -231,11 +237,13 @@ class _IntentShortcutDialogState extends State<IntentShortcutDialog> {
                                 title: Text(_rules[i].title,
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis),
-                                subtitle: Text(_rules[i].conditionLabel,
-                                    maxLines: 2, style: AppStyle.caption),
+                                subtitle: Text(
+                                    _rules[i].conditionLabelFor(context.l10n),
+                                    maxLines: 2,
+                                    style: AppStyle.caption),
                                 onTap: () => _editRule(i),
                                 trailing: IconButton(
-                                    tooltip: 'Remove rule ${i + 1}',
+                                    tooltip: context.l10n.removeRule(i + 1),
                                     icon: const Icon(AppIcons.close, size: 16),
                                     onPressed: () => setState(() {
                                           _rules.removeAt(i);
@@ -248,7 +256,7 @@ class _IntentShortcutDialogState extends State<IntentShortcutDialog> {
                                       ? null
                                       : () => _editRule(),
                                   icon: const Icon(AppIcons.add, size: 16),
-                                  label: const Text('Add rule'))),
+                                  label: Text(context.l10n.addRule))),
                         ])),
                         if (_error != null)
                           Text(_error!,
@@ -263,11 +271,11 @@ class _IntentShortcutDialogState extends State<IntentShortcutDialog> {
                                 children: [
                                   TextButton(
                                       onPressed: () => Navigator.pop(context),
-                                      child: const Text('Cancel')),
+                                      child: Text(context.l10n.cancel)),
                                   FilledButton(
                                       onPressed: _recording ? null : _save,
-                                      child:
-                                          const Text('Save context shortcut')),
+                                      child: Text(
+                                          context.l10n.saveContextShortcut)),
                                 ])),
                       ])))));
 }
@@ -320,8 +328,10 @@ class _RuleDialogState extends State<_RuleDialog> {
     final apps = [...widget.applications];
     if (_app != null && !apps.any((a) => a.bundleId == _app)) {
       apps.add(ShortcutApplicationDto(
-          bundleId: _app!, title: widget.existing?.appName ?? 'Saved app'));
+          bundleId: _app!,
+          title: widget.existing?.appName ?? context.l10n.savedApp));
     }
+    final selectedApp = apps.where((app) => app.bundleId == _app).firstOrNull;
     final types = <String>{
       // The host capability is an Action target, not captured ambient Context.
       ...?_action?.contextTypes.where((type) => type != 'core.launcher'),
@@ -329,7 +339,7 @@ class _RuleDialogState extends State<_RuleDialog> {
     };
     return AlertDialog(
         scrollable: _action != null,
-        title: const Text('Shortcut rule'),
+        title: Text(context.l10n.shortcutRule),
         content: SizedBox(
             width: 420,
             height: _action == null ? 270 : null,
@@ -341,23 +351,25 @@ class _RuleDialogState extends State<_RuleDialog> {
                     TextField(
                         controller: _search,
                         autofocus: true,
-                        decoration: const InputDecoration(
-                            hintText: 'Find an action…',
+                        decoration: InputDecoration(
+                            hintText: context.l10n.findAnAction,
                             prefixIcon: Icon(AppIcons.search, size: 17),
                             isDense: true),
                         onChanged: (_) => setState(() {})),
                     Expanded(
                         child: ListView(children: [
                       for (final a in widget.actions.where((a) =>
-                          '${a.title} ${a.contextTypes.join(' ')}'
+                          '${a.title} ${a.localizedTitles.values.join(' ')} ${a.contextTypes.join(' ')}'
                               .toLowerCase()
                               .contains(_search.text.toLowerCase())))
                         ListTile(
                             dense: true,
-                            title: Text(a.title),
+                            title: Text(context.localizedLabel(
+                                a.title, a.localizedTitles)),
                             subtitle: Text(
                                 a.contextTypes
-                                    .map(contextTypeLabel)
+                                    .map((type) =>
+                                        contextTypeLabel(type, context.l10n))
                                     .join(' · '),
                                 style: AppStyle.caption),
                             onTap: () => setState(() {
@@ -367,10 +379,12 @@ class _RuleDialogState extends State<_RuleDialog> {
                                 })),
                     ])),
                   ] else ...[
-                    Text(_action!.title,
+                    Text(
+                        context.localizedLabel(
+                            _action!.title, _action!.localizedTitles),
                         style: const TextStyle(fontWeight: FontWeight.w600)),
                     const SizedBox(height: 10),
-                    const Text('In app',
+                    Text(context.l10n.inApp,
                         style: TextStyle(fontSize: 11, color: AppStyle.muted)),
                     const SizedBox(height: 4),
                     OutlinedButton(
@@ -390,32 +404,35 @@ class _RuleDialogState extends State<_RuleDialog> {
                         child: Row(children: [
                           Expanded(
                               child: Text(
-                                  _app == null
-                                      ? 'Any app'
-                                      : apps
-                                          .firstWhere((a) => a.bundleId == _app)
-                                          .title,
+                                  selectedApp == null
+                                      ? context.l10n.anyApp
+                                      : context.localizedLabel(
+                                          selectedApp.title,
+                                          selectedApp.localizedTitles),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis)),
                           const Icon(AppIcons.search, size: 16),
                         ])),
                     const SizedBox(height: 12),
-                    const Text('With context',
+                    Text(context.l10n.withContext,
                         style: TextStyle(fontSize: 11, color: AppStyle.muted)),
                     const SizedBox(height: 4),
                     DropdownButtonFormField<String>(
                         key: const ValueKey('rule-context'),
+                        icon: const Icon(AppIcons.chevronDown, size: 14),
                         decoration: const InputDecoration(isDense: true),
                         style: const TextStyle(
                             fontSize: 12, height: 1.2, color: AppStyle.primary),
                         isExpanded: true,
                         initialValue: _context ?? '',
                         items: [
-                          const DropdownMenuItem(
-                              value: '', child: Text('Any compatible context')),
+                          DropdownMenuItem(
+                              value: '',
+                              child: Text(context.l10n.anyCompatibleContext)),
                           for (final ty in types)
                             DropdownMenuItem(
-                                value: ty, child: Text(contextTypeLabel(ty)))
+                                value: ty,
+                                child: Text(contextTypeLabel(ty, context.l10n)))
                         ],
                         onChanged: (v) => setState(() {
                               _context = v == '' ? null : v;
@@ -432,21 +449,21 @@ class _RuleDialogState extends State<_RuleDialog> {
                               _context = null;
                               _error = null;
                             }),
-                        child: const Text('Choose another action')),
+                        child: Text(context.l10n.chooseAnotherAction)),
                   ],
                 ])),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel')),
+              child: Text(context.l10n.cancel)),
           FilledButton(
               onPressed: _action == null
                   ? null
                   : () {
                       if (widget.otherRules.any((r) =>
                           r.appBundleId == _app && r.contextType == _context)) {
-                        setState(() =>
-                            _error = 'A rule already uses these conditions.');
+                        setState(() => _error =
+                            context.l10n.aRuleAlreadyUsesTheseConditions);
                         return;
                       }
                       Navigator.pop(
@@ -461,7 +478,7 @@ class _RuleDialogState extends State<_RuleDialog> {
                                   ?.title,
                               contextType: _context));
                     },
-              child: const Text('Save rule')),
+              child: Text(context.l10n.saveRule)),
         ]);
   }
 }

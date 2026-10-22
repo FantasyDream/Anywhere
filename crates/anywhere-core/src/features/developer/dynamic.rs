@@ -96,7 +96,7 @@ impl crate::core::action::bundle::ContextActionFactory for DeveloperActions {
                         dynamic_definition(
                             (id, title),
                             anywhere_protocol::PROJECT_NODE,
-                            groups::NODE,
+                            (groups::NODE, super::actions::command_icon(&script)),
                             super::node::capability(&manager, &script),
                             handler,
                             vec![script.clone(), manager.clone(), "run".into()],
@@ -143,7 +143,7 @@ impl crate::core::action::bundle::ContextActionFactory for DeveloperActions {
                         dynamic_definition(
                             (id, title),
                             anywhere_protocol::PROJECT_RUST,
-                            groups::RUST,
+                            (groups::RUST, "developer-run"),
                             key,
                             handler,
                             aliases,
@@ -179,7 +179,7 @@ fn decode_identity(encoded: &str) -> Option<String> {
 fn dynamic_definition(
     (id, title): (String, String),
     accepts: &str,
-    group: &str,
+    (group, icon): (&str, &str),
     capability: String,
     handler: impl ActionHandler + 'static,
     aliases: Vec<String>,
@@ -190,6 +190,7 @@ fn dynamic_definition(
         handler::ActionHandlerRef,
     };
     ActionDefinition {
+        localized_titles: Default::default(),
         id,
         title,
         subtitle: None,
@@ -200,7 +201,7 @@ fn dynamic_definition(
         executor: ActionExecutor::Native(ActionHandlerRef::owned(handler)),
         availability: AvailabilityRule::RequireContextProperty { key: capability },
         base_priority: if home { 30 } else { 20 },
-        icon: "code".into(),
+        icon: icon.into(),
         group_id: group.into(),
         aliases,
         keywords: vec!["project".into()],

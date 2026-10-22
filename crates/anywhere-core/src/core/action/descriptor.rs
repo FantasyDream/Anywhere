@@ -52,6 +52,7 @@ impl ActionExecutor {
 pub struct ActionDefinition {
     pub id: ActionId,
     pub title: String,
+    pub localized_titles: BTreeMap<String, String>,
     pub subtitle: Option<String>,
     pub shortcut: Option<String>,
     pub accepts: Vec<ContextMatcher>,
@@ -75,6 +76,7 @@ pub struct ActionDefinition {
 pub struct ActionDescriptor {
     pub id: ActionId,
     pub title: String,
+    pub localized_titles: BTreeMap<String, String>,
     pub subtitle: Option<String>,
     pub shortcut: Option<String>,
     pub accepts: Vec<ContextMatcher>,
@@ -99,7 +101,12 @@ pub struct ActionDescriptor {
 }
 
 impl ActionDescriptor {
-    fn from_definition(definition: ActionDefinition) -> Self {
+    fn from_definition(mut definition: ActionDefinition) -> Self {
+        for title in definition.localized_titles.values() {
+            if title != &definition.title && !definition.aliases.contains(title) {
+                definition.aliases.push(title.clone());
+            }
+        }
         let primary = definition
             .search_title
             .as_deref()
@@ -108,6 +115,7 @@ impl ActionDescriptor {
         Self {
             id: definition.id,
             title: definition.title,
+            localized_titles: definition.localized_titles,
             subtitle: definition.subtitle,
             shortcut: definition.shortcut,
             accepts: definition.accepts,
@@ -478,6 +486,7 @@ impl ActionRegistry {
             let aliases = command.aliases.clone();
             let keywords = command.keywords.clone();
             commands.push(ActionDefinition {
+                localized_titles: Default::default(),
                 shortcut: None,
                 id,
                 title: command.title.clone(),
@@ -544,6 +553,44 @@ mod tests {
             ContextSource::UserInput,
             "legacy-fixture",
         )
+    }
+
+    #[test]
+    fn bundled_actions_supply_chinese_names_and_share_literal_and_pinyin_search() {
+        use crate::core::search::query::Query;
+        let registry = crate::application::builtin_registry();
+        for action in registry.commands() {
+            let chinese = action
+                .localized_titles
+                .get("zh")
+                .unwrap_or_else(|| panic!("missing Chinese action label: {}", action.id));
+            assert!(
+                action.search().matched(&Query::parse(chinese)).is_some(),
+                "{}",
+                action.id
+            );
+            assert!(
+                action
+                    .search()
+                    .matched(&Query::parse(&action.title))
+                    .is_some(),
+                "{}",
+                action.id
+            );
+        }
+        let action = registry.get("core.git.copy_branch_name").unwrap();
+        for query in ["复制分支名", "fuzhifenzhiming", "fzfzm", "Copy Branch Name"] {
+            assert!(
+                action.search().matched(&Query::parse(query)).is_some(),
+                "{query}"
+            );
+        }
+        assert_eq!(action.id, "core.git.copy_branch_name");
+        assert_eq!(action.localized_titles["zh"], "复制分支名");
+        assert!(action
+            .search()
+            .matched(&Query::parse("not-a-branch-action"))
+            .is_none());
     }
 
     #[test]
@@ -734,6 +781,7 @@ action = { type = "copy", text = "{{context.value}}" }
 
         let spec = |id: &'static str, availability: AvailabilityRule| {
             ActionSpec {
+                localized_titles: &[],
                 id,
                 title: "Bad",
                 accepts: TEXT,

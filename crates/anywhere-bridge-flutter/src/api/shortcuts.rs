@@ -12,6 +12,7 @@ pub(super) async fn shortcut_actions() -> Result<Vec<ShortcutActionDto>> {
         .map(|action| ShortcutActionDto {
             action_id: action.action_id,
             title: action.title,
+            localized_titles: action.localized_titles.into_iter().collect(),
             context_types: action.context_types,
         })
         .collect())
@@ -51,6 +52,7 @@ pub(super) fn shortcut_applications() -> Result<Vec<ShortcutApplicationDto>> {
         .map(|app| ShortcutApplicationDto {
             bundle_id: app.bundle_id,
             title: app.title,
+            localized_titles: app.localized_titles.into_iter().collect(),
         })
         .collect())
 }

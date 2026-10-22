@@ -79,12 +79,6 @@ impl Platform for MacOsPlatform {
     fn bundle_application(&self, bundle: &Path) -> Result<Option<BundleApplication>> {
         application::bundle_application(bundle)
     }
-    fn preferred_languages(&self) -> Vec<String> {
-        application::preferred_languages()
-    }
-    fn bundle_localized_names(&self, bundle: &Path, languages: &[String]) -> Result<Vec<String>> {
-        application::bundle_localized_names(bundle, languages)
-    }
     fn launch_application(&self, path: &str) -> Result<bool> {
         application::launch_application(path)
     }

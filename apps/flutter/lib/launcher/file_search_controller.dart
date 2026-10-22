@@ -1,4 +1,5 @@
 import '../infrastructure/runtime_policy.dart';
+import '../l10n/app_language.dart';
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../src/rust/api.dart';
@@ -9,6 +10,8 @@ export 'file_filter.dart';
 typedef LoadFilePreview = Future<FilePreviewDto> Function(
     int session, int revision, String candidate);
 
+enum _PreviewError { unavailable, changed }
+
 /// Presentation filters and a debounced, latest-selection-only preview.
 class FileSearchController extends ChangeNotifier {
   FileSearchController(this._load);
@@ -16,7 +19,12 @@ class FileSearchController extends ChangeNotifier {
   FileFilter filter = FileFilter.all;
   bool loading = false;
   FilePreviewDto? preview;
-  String? error;
+  _PreviewError? _error;
+  String? errorFor(AppLocalizations l10n) => switch (_error) {
+        _PreviewError.unavailable => l10n.previewUnavailable,
+        _PreviewError.changed => l10n.filePreviewChanged,
+        null => null,
+      };
   Timer? _timer;
   Record? _selection;
   int _request = 0;
@@ -44,12 +52,12 @@ class FileSearchController extends ChangeNotifier {
     final request = ++_request;
     _timer?.cancel();
     preview = null;
-    error = null;
+    _error = null;
     loading = selection != null;
     if (selection == null) return;
     if (_load == null) {
       loading = false;
-      error = 'Preview is unavailable';
+      _error = _PreviewError.unavailable;
       return;
     }
     _timer =
@@ -61,7 +69,7 @@ class FileSearchController extends ChangeNotifier {
         preview = value;
       } catch (_) {
         if (_disposed || request != _request) return;
-        error = 'Preview unavailable. Search again if the file has changed.';
+        _error = _PreviewError.changed;
       }
       loading = false;
       notifyListeners();
@@ -73,7 +81,7 @@ class FileSearchController extends ChangeNotifier {
     ++_request;
     _selection = null;
     preview = null;
-    error = null;
+    _error = null;
     loading = false;
     filter = FileFilter.all;
   }

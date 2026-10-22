@@ -1,15 +1,131 @@
+import '../l10n/app_language.dart';
+import '../infrastructure/desktop_environment.dart';
 import 'app_icons.dart';
 import 'package:flutter/material.dart';
 import 'app_style.dart';
+
+/// Progressive disclosure for secondary information, with an ordinary keyboard
+/// button. Trailing controls stay separate so expanding never toggles a setting.
+class AppDisclosure extends StatefulWidget {
+  const AppDisclosure(
+      {super.key,
+      required this.title,
+      required this.child,
+      this.leading,
+      this.trailing,
+      this.subtitle,
+      this.compact = false,
+      this.initiallyExpanded = false});
+  final String title;
+  final Widget child;
+  final Widget? leading, trailing, subtitle;
+  final bool initiallyExpanded, compact;
+  @override
+  State<AppDisclosure> createState() => _AppDisclosureState();
+}
+
+class _AppDisclosureState extends State<AppDisclosure> {
+  late bool _expanded = widget.initiallyExpanded;
+  bool _restored = false;
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_restored) return;
+    _restored = true;
+    if (widget.key != null) {
+      final stored = PageStorage.maybeOf(context)
+          ?.readState(context, identifier: widget.key);
+      if (stored is bool) _expanded = stored;
+    }
+  }
+
+  @override
+  void didUpdateWidget(AppDisclosure oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.initiallyExpanded && widget.initiallyExpanded) {
+      _expanded = true;
+    }
+  }
+
+  void _toggle() {
+    setState(() => _expanded = !_expanded);
+    if (widget.key != null) {
+      PageStorage.maybeOf(context)
+          ?.writeState(context, _expanded, identifier: widget.key);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(children: [
+          Expanded(
+              child: Semantics(
+                  expanded: _expanded,
+                  child: TextButton(
+                      onPressed: _toggle,
+                      style: TextButton.styleFrom(
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10)),
+                      child: Row(children: [
+                        if (widget.leading != null) ...[
+                          widget.leading!,
+                          const SizedBox(width: 10)
+                        ],
+                        Expanded(
+                            child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                              Text(widget.title,
+                                  style: widget.compact
+                                      ? AppStyle.caption
+                                          .copyWith(color: AppStyle.secondary)
+                                      : AppStyle.body,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis),
+                              if (widget.subtitle != null) ...[
+                                const SizedBox(height: 3),
+                                widget.subtitle!
+                              ]
+                            ])),
+                        const SizedBox(width: 8),
+                        Icon(
+                            _expanded ? AppIcons.chevronDown : AppIcons.chevron,
+                            size: 12,
+                            color: AppStyle.secondary),
+                      ])))),
+          if (widget.trailing != null)
+            Padding(
+                padding: const EdgeInsets.only(right: 12),
+                child: widget.trailing!),
+        ]),
+        if (_expanded)
+          Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              child: widget.child),
+      ]);
+}
 
 /// One transparent selection treatment for search, menus, history and tasks.
 /// Hover never adds a second wash over the keyboard-selected row.
 class AppSelectionSurface extends StatelessWidget {
   const AppSelectionSurface(
-      {super.key, required this.selected, required this.child, this.onTap});
+      {super.key,
+      required this.selected,
+      required this.child,
+      this.onTap,
+      this.onTapDown,
+      this.onDoubleTap,
+      this.onSecondaryTap,
+      this.canRequestFocus = true});
   final bool selected;
   final Widget child;
   final VoidCallback? onTap;
+  final GestureTapDownCallback? onTapDown;
+  final VoidCallback? onDoubleTap;
+  final VoidCallback? onSecondaryTap;
+  final bool canRequestFocus;
   @override
   Widget build(BuildContext context) => Material(
       color: selected ? AppStyle.selectedSurface : Colors.transparent,
@@ -22,6 +138,10 @@ class AppSelectionSurface extends StatelessWidget {
           borderRadius: BorderRadius.circular(AppStyle.resultRadius),
           hoverColor: selected ? Colors.transparent : AppStyle.hover,
           onTap: onTap,
+          onTapDown: onTapDown,
+          onDoubleTap: onDoubleTap,
+          onSecondaryTap: onSecondaryTap,
+          canRequestFocus: canRequestFocus,
           child: child));
 }
 
@@ -52,6 +172,57 @@ class AppPageFooter extends StatelessWidget {
             child: Padding(
                 padding: const EdgeInsets.fromLTRB(20, 3, 24, 10),
                 child: child)),
+      ]));
+}
+
+/// More commands expose their shortcut without requiring a hover or a footer.
+class AppMoreAction extends StatelessWidget {
+  const AppMoreAction({super.key, required this.onPressed});
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+      message: context.l10n.shortcutHint(
+          context.l10n.actions, DesktopEnvironment.current.commandLabel('K')),
+      child: TextButton(
+          onPressed: onPressed,
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            const Icon(AppIcons.more, size: 14),
+            const SizedBox(width: 4),
+            Text(DesktopEnvironment.current.commandLabel('K')),
+          ])));
+}
+
+/// Commands belong to the selected object, so they travel with its row.
+/// Parent rows still select on a single click; these targets explicitly execute.
+class AppRowActions extends StatelessWidget {
+  const AppRowActions({
+    super.key,
+    required this.primaryLabel,
+    required this.onPrimary,
+    this.onActions,
+  });
+  final String primaryLabel;
+  final VoidCallback? onPrimary, onActions;
+
+  @override
+  Widget build(BuildContext context) => ExcludeFocus(
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+        if (onActions != null)
+          AppMoreAction(
+              key: const Key('selected-row-actions'), onPressed: onActions),
+        Tooltip(
+            message: context.l10n.shortcutHint(primaryLabel, '↵'),
+            child: TextButton(
+                key: const Key('selected-row-primary'),
+                onPressed: onPrimary,
+                child: Row(mainAxisSize: MainAxisSize.min, children: [
+                  Text(primaryLabel),
+                  if (onActions == null) ...[
+                    const SizedBox(width: 5),
+                    const Icon(AppIcons.enter, size: 13),
+                  ],
+                ]))),
       ]));
 }
 
@@ -127,7 +298,7 @@ class AppSidebarItem extends StatelessWidget {
                 width: 20,
                 height: 20,
                 child: Icon(icon,
-                    size: 16,
+                    size: 18,
                     color: iconColor == null
                         ? AppStyle.secondary
                         : Color.lerp(iconColor, Colors.white, .35))),
@@ -162,7 +333,7 @@ class AppIconPlate extends StatelessWidget {
       width: size,
       height: size,
       child: Icon(icon,
-          size: size * .62,
+          size: size * .76,
           color: accent ? AppStyle.primary : AppStyle.secondary,
           shadows: AppStyle.textShadows));
 }
@@ -227,6 +398,7 @@ class AppNotice extends StatelessWidget {
                       switch (kind) {
                         NoticeKind.success => AppIcons.success,
                         NoticeKind.error => AppIcons.error,
+                        NoticeKind.warning => AppIcons.warning,
                         _ => AppIcons.info,
                       },
                       size: 16,
@@ -243,7 +415,7 @@ class AppNotice extends StatelessWidget {
                   if (trailing != null) trailing!,
                   if (onDismiss != null)
                     IconButton(
-                        tooltip: 'Dismiss message',
+                        tooltip: context.l10n.dismissMessage,
                         onPressed: onDismiss,
                         icon: Icon(AppIcons.close, size: 16, color: color)),
                 ])));
@@ -294,7 +466,7 @@ class AppKeycap extends StatelessWidget {
               color: AppStyle.keycapBorder, width: DesignTokens.dividerWidth)),
       child: label == '↵'
           ? Semantics(
-              label: 'Return',
+              label: context.l10n.returnKey,
               child: const Icon(AppIcons.enter,
                   size: 12, color: AppStyle.secondary))
           : Text(label,
@@ -307,9 +479,14 @@ class AppKeycap extends StatelessWidget {
 }
 
 /// Startup failures use the same surface and typography as regular windows.
+enum AppFailureKind { launcher, tasks, clipboardShelf }
+
 class AppFailureView extends StatelessWidget {
-  const AppFailureView({super.key, required this.title, required this.detail});
-  final String title, detail;
+  const AppFailureView({super.key, this.title, this.kind, required this.detail})
+      : assert(title != null || kind != null);
+  final String? title;
+  final AppFailureKind? kind;
+  final String detail;
   @override
   Widget build(BuildContext context) => Scaffold(
       body: Material(
@@ -323,7 +500,16 @@ class AppFailureView extends StatelessWidget {
                       const AppIconPlate(AppIcons.error),
                       const SizedBox(width: 12),
                       Expanded(
-                          child: Text(title,
+                          child: Text(
+                              switch (kind) {
+                                AppFailureKind.launcher =>
+                                  context.l10n.launcherStartupFailed,
+                                AppFailureKind.tasks =>
+                                  context.l10n.tasksStartupFailed,
+                                AppFailureKind.clipboardShelf =>
+                                  context.l10n.shelfStartupFailed,
+                                null => title!,
+                              },
                               style: AppStyle.heading.copyWith(fontSize: 15))),
                     ]),
                     const SizedBox(height: 14),

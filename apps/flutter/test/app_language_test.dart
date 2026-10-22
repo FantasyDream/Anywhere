@@ -40,7 +40,7 @@ void main() {
             body: Builder(
                 builder: (context) => Column(children: [
                       Text(context.l10n.settings),
-                      Text(context.l10n.resultsCount(2)),
+                      Text(context.l10n.formatsCount(2)),
                       TextField(controller: input, focusNode: focus),
                     ])))));
     await tester.pumpAndSettle();
@@ -49,7 +49,7 @@ void main() {
     AppLanguage.current.apply('zh');
     await tester.pumpAndSettle();
     expect(find.text('设置'), findsOneWidget);
-    expect(find.text('2 个结果'), findsOneWidget);
+    expect(find.text('2 种格式'), findsOneWidget);
     expect(input.text, '用户内容');
     expect(
         input.selection, const TextSelection(baseOffset: 1, extentOffset: 3));
@@ -61,7 +61,7 @@ void main() {
     AppLanguage.current.apply('en');
     await tester.pumpAndSettle();
     expect(find.text('Settings'), findsOneWidget);
-    expect(find.text('2 results'), findsOneWidget);
+    expect(find.text('2 formats'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });
 
@@ -83,6 +83,40 @@ void main() {
     pending.complete('zh');
     await attaching;
     messenger.setMockMethodCallHandler(channel, null);
+  });
+
+  testWidgets('language updates preserve an active IME composition',
+      (tester) async {
+    final language = AppLanguage.current;
+    final previous = language.preference;
+    final input = TextEditingController();
+    final focus = FocusNode();
+    language.apply('en');
+    addTearDown(() {
+      input.dispose();
+      focus.dispose();
+      language.apply(previous);
+    });
+    await tester.pumpWidget(LocalizedApp(
+        home: Scaffold(body: TextField(controller: input, focusNode: focus))));
+    await tester.tap(find.byType(TextField));
+    const composing = TextEditingValue(
+        text: 'wenjian',
+        selection: TextSelection.collapsed(offset: 7),
+        composing: TextRange(start: 0, end: 7));
+    tester.testTextInput.updateEditingValue(composing);
+    await tester.pump();
+    language.apply('zh');
+    await tester.pumpAndSettle();
+    expect(input.value, composing);
+    expect(focus.hasFocus, isTrue);
+    expect(tester.testTextInput.hasAnyClients, isTrue);
+    tester.testTextInput.updateEditingValue(const TextEditingValue(
+        text: '文件', selection: TextSelection.collapsed(offset: 2)));
+    await tester.pump();
+    expect(input.text, '文件');
+    expect(input.value.composing.isCollapsed, isTrue);
+    await tester.pumpWidget(const SizedBox());
   });
 
   testWidgets('a late initial read cannot overwrite a newer native language',

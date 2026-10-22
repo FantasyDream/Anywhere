@@ -11,11 +11,11 @@ final class NativeEditMenu: NSObject, NSMenuItemValidation {
         self.send = send
     }
 
-    func makeMenu() -> NSMenu {
-        let menu = NSMenu(title: "Edit")
-        for (index, entry) in [("Undo", "z"), ("Redo", "z"), ("Cut", "x"),
-                               ("Copy", "c"), ("Paste", "v"), ("Select All", "a")].enumerated() {
-            let item = NSMenuItem(title: entry.0, action: #selector(performCommand(_:)), keyEquivalent: entry.1)
+    func makeMenu(title: String = "Edit", labels: [String] = ["Undo", "Redo", "Cut", "Copy", "Paste", "Select All"]) -> NSMenu {
+        precondition(labels.count == Self.commands.count)
+        let menu = NSMenu(title: title)
+        for (index, key) in ["z", "z", "x", "c", "v", "a"].enumerated() {
+            let item = NSMenuItem(title: labels[index], action: #selector(performCommand(_:)), keyEquivalent: key)
             item.representedObject = Self.commands[index]
             item.target = self
             item.keyEquivalentModifierMask = index == 1 ? [.command, .shift] : [.command]

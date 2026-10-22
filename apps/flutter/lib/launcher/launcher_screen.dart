@@ -6,7 +6,6 @@ import 'package:flutter/rendering.dart' show ScrollDirection;
 import '../ui/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter/gestures.dart' show kPrimaryMouseButton;
 import '../src/rust/api.dart';
 import '../infrastructure/window_host.dart';
 import '../infrastructure/desktop_image_cache.dart';
@@ -17,7 +16,6 @@ import '../ui/app_style.dart';
 import '../ui/app_components.dart';
 import 'launcher_view_state.dart';
 import 'widgets/candidate_row.dart';
-import 'widgets/candidate_icon.dart';
 import 'widgets/launcher_components.dart';
 import '../settings/settings_screen.dart';
 import '../settings/settings_components.dart';
@@ -366,7 +364,13 @@ class _LauncherScreenState extends State<LauncherScreen> {
         _view.toolPage == null;
     final searchText =
         _view.visible || _controller.hasRetainedState ? _view.searchText : '';
-    if (_input.text != searchText) {
+    // Progress, preview and catalog updates still carry the last committed
+    // query. The input method owns any composing suffix until it commits.
+    // Only a deliberate new Host query (or expired workspace) may replace it.
+    final composing = !_input.value.composing.isCollapsed;
+    final hostQueryChanged = searchText != _submitted;
+    if (_input.text != searchText &&
+        (!composing || hostQueryChanged || releaseIdleResources)) {
       _submitted = searchText;
       _input.value = TextEditingValue(
         text: searchText,
@@ -520,9 +524,19 @@ class _LauncherScreenState extends State<LauncherScreen> {
       }
     }
     if (event.logicalKey == LogicalKeyboardKey.tab &&
-        !HardwareKeyboard.instance.isControlPressed &&
         !HardwareKeyboard.instance.isAltPressed &&
         !HardwareKeyboard.instance.isMetaPressed) {
+      // Tab (and the existing Ctrl+Tab alias) cycles the visible category bar,
+      // without traversing controls or changing the layer behind an action list.
+      if (_focus.hasFocus &&
+          _view.phase == LauncherPhase.ready &&
+          _view.hasControls &&
+          _view.bindingChoices == null &&
+          _view.objectActionTitle == null &&
+          _view.output == null) {
+        _controller
+            .cycleScope(HardwareKeyboard.instance.isShiftPressed ? -1 : 1);
+      }
       return KeyEventResult.handled;
     }
     // Controls keep their standard activation keys. Otherwise Enter
@@ -535,7 +549,6 @@ class _LauncherScreenState extends State<LauncherScreen> {
       }
       return KeyEventResult.ignored;
     }
-    final control = HardwareKeyboard.instance.isControlPressed;
     final command = DesktopEnvironment.current.commandPressed;
     if (event.logicalKey == LogicalKeyboardKey.escape) {
       _controller.escape();
@@ -561,9 +574,6 @@ class _LauncherScreenState extends State<LauncherScreen> {
       _controller.move(1);
     } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
       _controller.move(-1);
-    } else if (event.logicalKey == LogicalKeyboardKey.tab && control) {
-      final direction = HardwareKeyboard.instance.isShiftPressed ? -1 : 1;
-      _controller.cycleScope(direction);
     } else if (event.logicalKey == LogicalKeyboardKey.enter ||
         event.logicalKey == LogicalKeyboardKey.numpadEnter) {
       _controller.executeSelected();
@@ -651,18 +661,6 @@ class _LauncherScreenState extends State<LauncherScreen> {
     }
     final view = _view;
     if (view.toolPage != null) return _buildToolPanel(view);
-    final entries = view.visibleEntries;
-    final selected =
-        entries.isEmpty ? null : entries[view.selectedIndex].candidate;
-    Widget? selectedIcon;
-    if (selected?.kind == CandidateKindDto.application) {
-      selectedIcon = ListenableBuilder(
-          listenable: _controller.icons,
-          builder: (_, __) => CandidateIcon(
-              candidate: selected!,
-              bytes: _controller.icons.bytesFor(selected.id),
-              size: 32));
-    }
     return Align(
         alignment: Alignment.topCenter,
         child: SizedBox(
@@ -687,8 +685,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
                             ? _backFiles
                             : view.browsing
                                 ? _backMenu
-                                : null,
-                        trailing: selectedIcon),
+                                : null),
                     if (view.navigationOpen ||
                         view.hasPanel ||
                         view.hasControls)
@@ -717,13 +714,29 @@ class _LauncherScreenState extends State<LauncherScreen> {
                               !view.executing &&
                               view.objectActionTitle == null,
                           onSelect: _focus.requestFocus),
+                    if (!view.navigationOpen &&
+                        view.hasFileControls &&
+                        view.searchStatusFor(context.l10n) != null)
+                      FileSearchStatus(
+                          label: _controller.fileMoreLoading
+                              ? context.l10n.loadingMoreFiles
+                              : view.searchStatusFor(context.l10n)!,
+                          onRetry:
+                              (view.searchUnavailable || view.searchPartial) &&
+                                      !_fileSearchNeedsAuthorization &&
+                                      !view.executing &&
+                                      !view.resolving
+                                  ? () => _runAndFocus(_controller.retrySearch)
+                                  : null),
                     if (!view.navigationOpen && view.notice != null)
                       _notice(view),
                     if (!view.navigationOpen && view.hasPanel) ...[
                       if (view.hasResultHeading)
                         LauncherResultHeading(
-                            title: view.resultHeading,
-                            detail: view.isContent ? 'Global Search' : null),
+                            title: view.resultHeadingFor(context.l10n),
+                            detail: view.isContent
+                                ? context.l10n.globalSearch
+                                : null),
                       Expanded(
                           child: LayoutBuilder(
                               builder: (context, constraints) => Row(
@@ -742,48 +755,6 @@ class _LauncherScreenState extends State<LauncherScreen> {
                                                   files: _controller.files)),
                                         ],
                                       ]))),
-                      LauncherFooter(
-                          onRetry:
-                              (view.searchUnavailable || view.searchPartial) &&
-                                      !_fileSearchNeedsAuthorization &&
-                                      !view.executing &&
-                                      !view.resolving &&
-                                      view.objectActionTitle == null
-                                  ? () => _runAndFocus(_controller.retrySearch)
-                                  : null,
-                          onActions: _controller.canShowObjectActions
-                              ? () =>
-                                  _runAndFocus(_controller.showObjectActions)
-                              : null,
-                          label: (view.hasFileControls && _controller.fileMoreLoading
-                                  ? 'Loading more files…'
-                                  : view.searchStatus) ??
-                              (entries.length == 1
-                                  ? '1 result'
-                                  : '${entries.length} results'),
-                          primaryLabel: view.objectActionTitle == null &&
-                                  entries.isNotEmpty &&
-                                  (entries[view.selectedIndex].navigationPath !=
-                                          null ||
-                                      entries[view.selectedIndex].candidate?.kind ==
-                                          CandidateKindDto.file)
-                              ? 'Open'
-                              : selected?.commandId == 'core.files.search'
-                                  ? 'Search'
-                                  : selected?.kind ==
-                                          CandidateKindDto.application
-                                      ? 'Open'
-                                      : 'Run',
-                          onPrimary: entries.isEmpty ||
-                                  view.executing ||
-                                  view.resolving
-                              ? null
-                              : () => _runAndFocus(_controller.executeSelected),
-                          onBack: view.objectActionTitle != null
-                              ? _backFiles
-                              : view.browsing
-                                  ? _backMenu
-                                  : null),
                     ],
                   ]))),
         ));
@@ -794,11 +765,10 @@ class _LauncherScreenState extends State<LauncherScreen> {
     if (entries.isEmpty) {
       if (view.isFileSearch) {
         if (_fileSearchNeedsAuthorization) {
-          return const LauncherEmptyState(
+          return LauncherEmptyState(
               icon: AppIcons.folder,
-              title: 'Authorize search directories',
-              detail:
-                  'Open Settings → Search and authorize saved directories. No file search runs before access is prepared.');
+              title: context.l10n.authorizeSearchDirectories,
+              detail: context.l10n.authorizeSearchHelp);
         }
         final disabled = !_controller.hostSettings.fileSearchEnabled ||
             _controller.settings.fileSearchNeedsRecovery;
@@ -810,27 +780,29 @@ class _LauncherScreenState extends State<LauncherScreen> {
                     ? AppIcons.error
                     : AppIcons.search,
             title: disabled
-                ? 'File search is turned off'
+                ? context.l10n.fileSearchOff
                 : idle
-                    ? 'Find files and folders'
+                    ? context.l10n.findFilesFolders
                     : view.searchLoading
-                        ? 'Searching…'
+                        ? context.l10n.searching
                         : view.searchUnavailable
-                            ? 'Search is unavailable'
+                            ? context.l10n.searchUnavailable
                             : view.searchPartial
-                                ? 'Partial results'
-                                : 'No matching files',
+                                ? context.l10n.partialResults
+                                : context.l10n.noMatchingFiles,
             detail: _fileEmptyMessage(view));
       }
       final message = view.isContent
-          ? 'No actions for this content'
+          ? context.l10n.noContentActions
           : view.scopeId != null
-              ? view.emptyMessage
+              ? (view.input.isNotEmpty
+                  ? context.l10n.noMatchingActions
+                  : context.l10n.noActionsAvailable)
               : view.resolving || view.searchLoading
-                  ? 'Searching files…'
+                  ? context.l10n.searchingFiles
                   : view.searchUnavailable
-                      ? 'File search unavailable'
-                      : 'No results';
+                      ? context.l10n.fileSearchUnavailable
+                      : context.l10n.noResults;
       return Center(
           child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -891,22 +863,23 @@ class _LauncherScreenState extends State<LauncherScreen> {
   String _fileEmptyMessage(LauncherViewState view) {
     if (!_controller.hostSettings.fileSearchEnabled ||
         _controller.settings.fileSearchNeedsRecovery) {
-      return 'File search is disabled. Enable it in Settings → Search.';
+      return context.l10n.fileSearchDisabledHelp;
     }
     if (view.input.trim().isEmpty) {
       return view.snapshot?.fileSearch == null
-          ? 'Type a file or folder name to search'
-          : 'Searching files…';
+          ? context.l10n.typeFileName
+          : context.l10n.searchingFiles;
     }
-    if (view.searchLoading) return 'Searching files…';
+    if (view.searchLoading) return context.l10n.searchingFiles;
     if (view.searchPartial) {
-      return 'File search is incomplete. Check the issue details and retry.';
+      return context.l10n.fileSearchIncompleteHelp;
     }
-    if (view.searchUnavailable) return 'File search unavailable';
+    if (view.searchUnavailable) return context.l10n.fileSearchUnavailable;
     if (_controller.files.filter != FileFilter.all) {
-      return 'No ${_controller.files.filter.label.toLowerCase()} in these results. Try All types or another search.';
+      return context.l10n
+          .emptyFileType(_controller.files.filter.labelFor(context.l10n));
     }
-    return 'No matching files';
+    return context.l10n.noMatchingFiles;
   }
 
   bool get _fileSearchNeedsAuthorization =>
@@ -924,15 +897,15 @@ class _LauncherScreenState extends State<LauncherScreen> {
                       (view.snapshot?.fileSearch?.issueExamples.isNotEmpty ??
                           false)
                   ? view.snapshot!.fileSearch!.issueExamples.join('\n')
-                  : view.notice!,
-              child: AppNotice(view.notice!,
+                  : view.noticeFor(context.l10n)!,
+              child: AppNotice(view.noticeFor(context.l10n)!,
                   compact: true,
                   trailing: view.noticeSettingsPane == null
                       ? null
                       : TextButton(
                           onPressed: () => _controller
                               .openPrivacySettings(view.noticeSettingsPane!),
-                          child: const Text('Open Settings',
+                          child: Text(context.l10n.openSettings,
                               style: TextStyle(fontSize: 11)))))));
 
   void _selectPointerResult(int index) {
@@ -951,11 +924,30 @@ class _LauncherScreenState extends State<LauncherScreen> {
     final candidate = entry.candidate;
     if (candidate != null) {
       final selected = index == _view.selectedIndex;
-      final sourceLabel = _view.sourceLabelFor(candidate);
+      final sourceLabel = _view.sourceLabelFor(candidate, context.l10n);
       final shortcut = _controller.shortcutLabelFor(candidate);
       Widget row() => CandidateRow(
           fileObject: _view.objectActionTitle == null,
           actionShortcut: shortcut,
+          primaryLabel: _view.objectActionTitle == null &&
+                  (candidate.kind == CandidateKindDto.file ||
+                      candidate.kind == CandidateKindDto.application)
+              ? context.l10n.open
+              : candidate.commandId == 'core.files.search'
+                  ? context.l10n.search
+                  : context.l10n.run,
+          onPrimary: !_view.resolving && !_view.executing
+              ? () => _controller.selectAndExecute(candidate.id)
+              : null,
+          onActions: selected &&
+                  !_view.resolving &&
+                  !_view.executing &&
+                  _controller.canShowObjectActions
+              ? () => _runAndFocus(_controller.showObjectActions)
+              : null,
+          onDoubleTap: !_view.resolving && !_view.executing
+              ? () => _controller.selectAndExecute(candidate.id)
+              : null,
           candidate: candidate,
           selected: selected,
           iconBytes: _controller.icons.bytesFor(candidate.id),
@@ -967,24 +959,12 @@ class _LauncherScreenState extends State<LauncherScreen> {
           ? ListenableBuilder(
               listenable: _controller.icons, builder: (_, __) => row())
           : row();
-      return GestureDetector(
-          onDoubleTap: !_view.resolving &&
-                  !_view.executing &&
-                  candidate.availability == AvailabilityDto.enabled
-              ? () => _controller.selectAndExecute(candidate.id)
-              : null,
-          // Select on pointer down so double-click recognition never delays
-          // selection or lets an immediate Return activate the previous row.
-          child: Listener(
-              onPointerDown: (event) {
-                if (event.buttons == kPrimaryMouseButton) {
-                  _selectPointerResult(index);
-                }
-              },
-              child: child));
+      return child;
     }
     return MenuNavigationRow(
-        title: entry.title,
+        title: entry.navigationPath?.isEmpty == true
+            ? context.l10n.browseMenus
+            : entry.title,
         selected: index == _view.selectedIndex,
         onTap: () => _openEntry(index));
   }

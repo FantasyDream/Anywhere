@@ -189,6 +189,7 @@ impl ActionMatcher<'_> {
                 }
                 candidates.push(Candidate {
                     presentation: CandidatePresentation {
+                        localized_titles: action.localized_titles.clone(),
                         id: action_execution_candidate_id(action, context),
                         kind: CandidateKind::Action,
                         is_menu: action.executor.is_menu(),

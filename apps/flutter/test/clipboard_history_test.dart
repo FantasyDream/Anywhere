@@ -264,7 +264,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Enable Recording'), findsNothing);
     expect(find.text('History recording is off'), findsNothing);
-    await tester.tap(find.text('Actions · ⌘K'));
+    expect(find.byType(AppPageFooter), findsNothing);
+    expect(find.text('2 entries'), findsNothing);
+    expect(find.byKey(const Key('selected-row-primary')), findsOneWidget);
+    await tester.tap(find.byKey(const Key('selected-row-actions')));
     await tester.pumpAndSettle();
     expect(find.text('Copy · ↵'), findsOneWidget);
     expect(find.text('Delete Entry'), findsOneWidget);
@@ -287,10 +290,64 @@ void main() {
                     onBack: () {}, presentation: 1, visible: false)))));
     await tester.pumpAndSettle();
     expect(session.focus.hasFocus, isFalse);
-    await tester.tap(find.text('Actions · ⌘K'));
+    expect(find.byKey(const Key('selected-row-actions')), findsNothing);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
     await tester.pumpAndSettle();
     expect(find.text('Delete Entry'), findsNothing);
     expect(session.focus.hasFocus, isFalse);
+    await tester.pumpWidget(const SizedBox());
+    session.dispose();
+  });
+
+  testWidgets('empty history keeps Refresh discoverable without a footer',
+      (tester) async {
+    final backend = History()..rows = [];
+    final session = ClipboardHistorySession(backend);
+    await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme,
+        home: Scaffold(
+            body: ListenableBuilder(
+                listenable: session,
+                builder: (context, _) => session.build(context,
+                    onBack: () {}, presentation: 1, visible: true)))));
+    await tester.pumpAndSettle();
+    expect(find.byType(AppPageFooter), findsNothing);
+    await tester.tap(find.byKey(const Key('history-empty-actions')));
+    await tester.pumpAndSettle();
+    backend.rows = [item('new')];
+    await tester.tap(find.text('Refresh'));
+    await tester.pumpAndSettle();
+    expect(session.selected?.id, 'new');
+    expect(find.byKey(const Key('history-empty-actions')), findsNothing);
+    expect(find.byKey(const Key('selected-row-actions')), findsOneWidget);
+    expect(session.focus.hasFocus, isTrue);
+    await tester.pumpWidget(const SizedBox());
+    session.dispose();
+  });
+
+  testWidgets('history menu cannot delete a replacement selection',
+      (tester) async {
+    final backend = History();
+    final session = ClipboardHistorySession(backend);
+    await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme,
+        home: Scaffold(
+            body: ListenableBuilder(
+                listenable: session,
+                builder: (context, _) => session.build(context,
+                    onBack: () {}, presentation: 1, visible: true)))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('selected-row-actions')));
+    await tester.pumpAndSettle();
+    backend.rows = [item('replacement')];
+    await session.refresh();
+    await tester.pump();
+    await tester.tap(find.text('Delete Entry'));
+    await tester.pumpAndSettle();
+    expect(backend.rows.single.id, 'replacement');
+    expect(session.notice, contains('no longer available'));
     await tester.pumpWidget(const SizedBox());
     session.dispose();
   });
@@ -508,7 +565,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(backend.copied, ['2']);
-    await tester.tap(find.text('Copy ↵'));
+    await tester.tap(find.byKey(const Key('selected-row-primary')));
     await tester.pumpAndSettle();
     expect(session.focus.hasFocus, isTrue);
     expect(backend.copied, ['2', '2']);
@@ -549,9 +606,13 @@ void main() {
         lessThan(150),
         reason: 'A short snippet must not create a full-height empty card');
     final listBefore = tester.getRect(list);
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.tap(find.byKey(const Key('selected-row-primary')));
+    await tester.pump(const Duration(milliseconds: 30));
+    expect(session.status, contains('Copied'));
     await tester.pumpAndSettle();
     expect(find.text('Copied'), findsOneWidget);
+    expect(find.byKey(const Key('clipboard-row-status')), findsOneWidget);
+    expect(find.byType(AppPageFooter), findsNothing);
     expect(find.byType(AppNotice), findsNothing);
     expect(tester.getRect(list), listBefore);
     expect(find.text('Back'), findsNothing);
@@ -591,8 +652,11 @@ void main() {
     final text = tester.getRect(find.byKey(const Key('clipboard-preview')));
     expect(text.left, greaterThan(pane.left));
     expect(text.right, lessThan(pane.right));
+    expect(find.text('1 format'), findsNothing);
+    await tester.tap(find.text('Details'));
+    await tester.pumpAndSettle();
     expect(find.text('1 format'), findsOneWidget);
-    expect(find.text('text/plain;charset=utf-8'), findsNothing);
+    expect(find.text('text/plain;charset=utf-8'), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();

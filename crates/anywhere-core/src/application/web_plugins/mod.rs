@@ -10,7 +10,7 @@ pub use packages::{WebPackageReview, WebPackageStatus, WebPackageStore};
 mod rpc_dispatch;
 mod rpc_state;
 mod transfer;
-pub use broker::{WebConfirmation, WebDispatch};
+pub use broker::{WebConfirmation, WebConsentKind, WebDispatch};
 
 pub use catalog::{WebPackageApproval, WebPluginCatalog};
 pub use invocation::{WebDocumentBinding, WebMessageSource, WebPluginService};

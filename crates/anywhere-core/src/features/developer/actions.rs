@@ -20,46 +20,55 @@ struct ProjectCommand {
     kind: ProjectKind,
     operation: &'static str,
     title: &'static str,
+    localized_titles: &'static [(&'static str, &'static str)],
 }
 static CARGO_CHECK: ProjectCommand = ProjectCommand {
     kind: ProjectKind::Rust,
     operation: "check",
     title: "Cargo Check",
+    localized_titles: &[("zh", "Cargo 检查")],
 };
 static CARGO_TEST: ProjectCommand = ProjectCommand {
     kind: ProjectKind::Rust,
     operation: "test",
     title: "Cargo Test",
+    localized_titles: &[("zh", "Cargo 测试")],
 };
 static MAVEN_TEST: ProjectCommand = ProjectCommand {
     kind: ProjectKind::Maven,
     operation: "test",
     title: "Maven Test",
+    localized_titles: &[("zh", "Maven 测试")],
 };
 static MAVEN_PACKAGE: ProjectCommand = ProjectCommand {
     kind: ProjectKind::Maven,
     operation: "package",
     title: "Maven Package",
+    localized_titles: &[("zh", "Maven 打包")],
 };
 static GRADLE_BUILD: ProjectCommand = ProjectCommand {
     kind: ProjectKind::Gradle,
     operation: "build",
     title: "Gradle Build",
+    localized_titles: &[("zh", "Gradle 构建")],
 };
 static GRADLE_TEST: ProjectCommand = ProjectCommand {
     kind: ProjectKind::Gradle,
     operation: "test",
     title: "Gradle Test",
+    localized_titles: &[("zh", "Gradle 测试")],
 };
 static SPRING_MAVEN: ProjectCommand = ProjectCommand {
     kind: ProjectKind::SpringBoot,
     operation: "spring-boot:run",
     title: "Spring Boot Run · Maven",
+    localized_titles: &[("zh", "Spring Boot 运行 · Maven")],
 };
 static SPRING_GRADLE: ProjectCommand = ProjectCommand {
     kind: ProjectKind::SpringBoot,
     operation: "bootRun",
     title: "Spring Boot Run · Gradle",
+    localized_titles: &[("zh", "Spring Boot 运行 · Gradle")],
 };
 
 impl ActionHandler for ProjectCommand {
@@ -195,17 +204,30 @@ fn spec(id: &'static str, command: &'static ProjectCommand, home: bool) -> Actio
         },
     );
     ActionSpec {
+        localized_titles: command.localized_titles,
         id,
         title: command.title,
         accepts: command.kind.type_id(),
         handler: command,
         availability,
         base_priority: if home { 30 } else { 20 },
-        icon: "code",
+        icon: command_icon(command.operation),
         aliases,
         keywords,
         home_eligible: home,
         primary_action: false,
+    }
+}
+
+/// Presentation metadata follows the actual operation, not translated titles.
+pub(super) fn command_icon(operation: &str) -> &'static str {
+    match operation {
+        "check" | "lint" => "developer-check",
+        "test" => "developer-test",
+        "build" => "developer-build",
+        "package" => "developer-package",
+        "dev" | "start" | "run" | "bootRun" | "spring-boot:run" => "developer-run",
+        _ => "developer-script",
     }
 }
 

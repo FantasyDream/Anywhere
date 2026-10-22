@@ -271,7 +271,9 @@ void main() {
     expect(find.text('Diagnostic a'), findsOneWidget);
     expect(find.textContaining('Showing the latest output'), findsOneWidget);
     expect(find.text('Stop'), findsNothing);
-    await tester.tap(find.byTooltip('More actions'));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(find.text('Remove result'));

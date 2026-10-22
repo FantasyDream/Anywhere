@@ -1,3 +1,4 @@
+import '../l10n/app_language.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
 import '../infrastructure/desktop_environment.dart';
@@ -77,8 +78,7 @@ class ResultDetailSession extends ToolPageSession {
           String? notice,
           Future<void> Function()? onCopy}) =>
       ToolPageShell(
-          title: title,
-          subtitle: 'Result',
+          title: failed ? context.l10n.actionFailed : context.l10n.actionResult,
           onBack: onBack,
           notice: notice,
           presentation: presentation,
@@ -97,12 +97,12 @@ class ResultDetailSession extends ToolPageSession {
             return KeyEventResult.ignored;
           },
           footer: Row(children: [
-            const Expanded(child: Text('↑↓ Scroll', style: AppStyle.caption)),
+            const Spacer(),
             if (onCopy != null)
               TextButton(
                   onPressed: visible ? onCopy : null,
-                  child: Text(
-                      'Copy · ${DesktopEnvironment.current.commandShiftLabel('C')}')),
+                  child: Text(context.l10n.shortcutHint(context.l10n.copy,
+                      DesktopEnvironment.current.commandShiftLabel('C')))),
           ]),
           child: Scrollbar(
               controller: scroll,

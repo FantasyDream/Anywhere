@@ -6,8 +6,39 @@ import 'package:anywhere/ui/app_style.dart';
 import 'package:anywhere/settings/settings_components.dart';
 import 'package:anywhere/settings/intent_shortcut_dialog.dart';
 import 'package:anywhere/settings/host_settings.dart';
+import 'package:anywhere/ui/app_components.dart' show AppDisclosure;
 
 void main() {
+  testWidgets('secondary details open with keyboard without toggling a setting',
+      (tester) async {
+    var enabled = true;
+    await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme,
+        home: Scaffold(
+            body: StatefulBuilder(
+                builder: (context, setState) => AppDisclosure(
+                    title: 'Search rules',
+                    trailing: AppToggle(
+                        label: 'File search',
+                        value: enabled,
+                        onChanged: (value) => setState(() => enabled = value)),
+                    child: const Text('Excluded directories'))))));
+    expect(find.text('Excluded directories'), findsNothing);
+    Focus.of(tester.element(find.text('Search rules'))).requestFocus();
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.text('Excluded directories'), findsOneWidget);
+    expect(enabled, isTrue);
+    await tester.tap(find.byType(AppToggle));
+    await tester.pumpAndSettle();
+    expect(enabled, isFalse);
+    expect(find.text('Excluded directories'), findsOneWidget);
+    await tester.tap(find.text('Search rules'));
+    await tester.pumpAndSettle();
+    expect(find.text('Excluded directories'), findsNothing);
+  });
+
   testWidgets('context sheet remains usable with larger desktop text',
       (tester) async {
     tester.view.physicalSize = const Size(648, 508);

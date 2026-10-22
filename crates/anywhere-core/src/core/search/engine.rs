@@ -207,6 +207,7 @@ mod tests {
         availability: AvailabilityRule,
     ) -> ActionSpec {
         ActionSpec {
+            localized_titles: &[],
             id,
             title,
             accepts: TEXT,

@@ -1,47 +1,51 @@
 # 文档导航
 
-既有验收版本：V0.10 / Build 11；已收尾预览：V0.11 / Build 51；当前开发：V0.12 中英国际化与拼音检索；整理日期：2026-10-21。根 [README](../README.md) 是使用与开发入口；本目录保留当前设计契约，旧构建证据和调研分别放入 archive / research。
+当前开发：**V0.12 中英国际化与拼音检索**。最后整理：2026-10-23。先从[项目首页](../README.md)了解功能和平台状态。
 
-## 当前文档
+## 使用与参与
 
-| 文档 | 阅读用途 |
+| 文档 | 用途 |
 |---|---|
-| [V0.12 MVP](mvp-v0.12.md) | 中英语言、开源选型、拼音搜索与分步迁移验收 |
-| [架构](architecture.md) | Rust / Flutter / Host 分工、模块装配、快照、取消和执行 |
-| [第三方 Context 调研](research/third-party-context-providers.md) | 注册与派生边界、类型 / 权限隔离、QuickJS worker 与 Wasm 的取舍；尚未接入 |
+| [使用指南](usage.md) | 唤醒、权限、Scope、快捷键、搜索、剪贴板、项目工具和本地数据 |
+| [开发与构建](development.md) | 环境、App / SDK 构建、测试、生成物和代码入口 |
+| [发布检查](releasing.md) | 开发包、版本、签名 / 归档、验收与 GitHub 发布边界 |
+| [贡献指南](../CONTRIBUTING.md) | 改动约定、提交与 PR 验证 |
+| [更新记录](../CHANGELOG.md) | 用户可感知的变化与工程里程碑 |
+| [帮助](../SUPPORT.md) / [安全报告](../SECURITY.md) | 问题报告、敏感信息和维护边界 |
+
+## 当前设计契约
+
+| 文档 | 用途 |
+|---|---|
+| [架构](architecture.md) | Rust / Flutter / Host 分工、静态模块、快照、取消与执行 |
 | [Context 模型](context-model.md) | 类型、来源、Provider 图、等价与身份 |
 | [默认输入](context-input-navigation.md) | 选中文本、15 秒剪贴板、InputMode 和 Esc |
-| [Launcher 交互](launcher-interaction.md) | Scope、菜单、二级操作、快捷键和状态恢复 |
-| [Current App 菜单](current-app-actions.md) | Hidden、定位、重扫、身份与历史安全降级 |
-| [文件搜索](file-search.md) | 查询完整性、权限、稳定连续结果、固定预览和临时存储 |
+| [Launcher 交互](launcher-interaction.md) | Scope、菜单、二级操作、快捷键和隐藏恢复 |
+| [Current App 菜单](current-app-actions.md) | Hidden、定位、重扫、身份和安全降级 |
+| [文件搜索](file-search.md) | 范围、权限、稳定连续结果、固定预览和临时存储 |
 | [开发动作](developer-actions.md) | Git、项目识别、IDEA 来源和后台进程 |
-| [扩展协议](plugin-protocol.md) | 第一方模块、v1 / v2 / v3、Host UI、批准、存储与恢复 |
-| [V0.11 MVP](mvp-v0.11.md) | 本地 Web 包 / Host / SDK / 新 JSON 工具的实现、验收与发行边界 |
-| [第三方插件开发指南](plugin-development.md) | 从独立模板开始：安装 SDK、调用能力、统一样式、打包、更新与排错 |
-| [第三方 Web 插件设计](web-plugin-design.md) | P0 验证中，P1 包校验、P2 Rust 注册 / 调用与 HostView 协议已实现；P3 SDK / Rust 能力代理已实现，P4–P6 已实现 macOS 本地开发预览，正在进行原生验收，Windows / 公开分发未开放；Terminal 延后 |
-| [共享 UI](ui-design.md) | 组件、材质、输入与平台回退 |
-| [开源复用重构](open-source-refactor-plan.md) | R1 编码 / 工具查找，R2 SQLite、R3 匹配原型及验收 |
-| [性能](performance.md) | 资源预算、增量更新与测量边界 |
-| [跨平台](platform-portability.md) | Host 路径 / 能力、快捷键 schema 与 Windows 接入 |
-| [V0.9 MVP](mvp-v0.9.md) | 内置功能模块、Build 6 收尾结果与发行验收边界 |
-| [多格式剪贴板改造](clipboard-multiformat-plan.md) | clipboard-rs、格式保真、存储迁移和边界 |
-| [V0.10 MVP](mvp-v0.10.md) | 剪贴板历史、存储限额、采集策略、工具页和分步验收 |
-| [模块迁移路线图](feature-module-roadmap.md) | 小阶段范围、验收、回滚与续接规则 |
-| [V0.8 收尾](mvp-v0.8.md) | 上一阶段完成范围、最终构建证据和发布边界 |
-| [路线图](roadmap.md) | 下一阶段依赖、范围取舍和 1.0 门槛 |
+| [共享 UI](ui-design.md) | 组件、材质、交互信息层级与平台回退 |
+| [性能](performance.md) | 资源预算、取消、测量方法和历史样本边界 |
+| [跨平台](platform-portability.md) | 平台能力、路径、快捷键与未完成的 Windows 接入 |
+
+## 插件与后续计划
+
+| 文档 | 用途 |
+|---|---|
+| [第三方插件开发](plugin-development.md) | 独立模板、SDK、统一样式、权限、打包与更新 |
+| [Web 插件架构](web-plugin-design.md) | 包身份、能力代理、Context 输入、生命周期和系统边界 |
+| [旧声明式协议](plugin-protocol.md) | v1 / v2 / v3 兼容行为；停止扩展 UI DSL |
+| [V0.12 MVP](mvp-v0.12.md) | 当前范围、工程 / 实机验收及未完成项 |
+| [路线图](roadmap.md) | 后续功能、依赖与 1.0 门槛 |
+| [第三方 Context 调研](research/third-party-context-providers.md) | 尚未实现的类型注册、隔离和 worker 选型 |
 
 ## 历史与研究
 
-- [历史验收 / Review](archive/README.md)：指定版本与日期的证据，不是现行操作指南。
-- [调研资料](research/README.md)：外部产品、库与未落地设计，结论只对原调研范围有效。
+- [历史验收、迁移与 Review](archive/README.md)：旧 MVP、已完成迁移、实验和逐构建证据。
+- [研究资料](research/README.md)：外部产品、开源选型与未落地设计。
 
-文件名不含 build 号的当前专题是统一依据。旧 MVP 不作为当前实现状态；历史记录中的源码行号只用于还原当时审查。
+旧版本的通过数字、源码行号和本机构建材料只适用于当时环境，不覆盖当前状态。当前行为维护在专题文档；改变功能时同步其指南，避免复制一套版本号命名的使用说明。
 
-## 维护方式
+阅读实现状态时，使用指南与专题契约说明当前行为，MVP 记录当前构建的验证程度，路线图描述后续范围。研究稿和设计中的“后续 / 验收要求”不能当成已实现接口；SDK 调用与额度还应核对生成的协议和开发指南。
 
-- 产品行为变化时更新相应当前专题及 README，避免再创建多个版本号命名的现行指南。
-- 逐构建测试、包哈希和现场测量进入 archive；注明版本、环境及未验证边界。
-- 调研注明时间、来源、实验范围和是否接入，不把建议写成实现完成。
-- 移动 / 删除文档时更新本索引和所有 Markdown 引用；构建产物及本机日志不是仓库随附材料；`scripts/check-docs.py` 已进入门禁，检查路径、标题锚点和忽略的构建材料引用。
-
-本轮已合并 Scope / 菜单草案、预览开关、早期 UI 与性能记录、重复发布说明；Git 中已有的原文可以从相应历史版本恢复。
+`scripts/check-docs.py` 检查所有随仓库交付的 Markdown（包括根目录、GitHub 模板、SDK 与插件示例）、本地链接、标题、忽略路径和必要社区文件。移动文档时必须同步引用。构建包、日志与截图不属于随源码交付的文档资源。

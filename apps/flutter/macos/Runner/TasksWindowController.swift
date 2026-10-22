@@ -44,7 +44,7 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
             }
             let panel = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 920, height: 600),
                                  styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
-            panel.title = "Anywhere · Running Tasks"
+            panel.title = "Anywhere · \(NativeLocalization.text(.runningTasks))"
             panel.titleVisibility = .hidden
             panel.titlebarAppearsTransparent = true
             panel.appearance = NSAppearance(named: .darkAqua)

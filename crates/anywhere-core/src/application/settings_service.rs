@@ -24,6 +24,9 @@ pub struct ModuleStatus {
     pub active: bool,
     pub needs_approval: bool,
     pub configurable: bool,
+    /// An approved startup-only plugin is waiting for a fresh process.
+    /// Host presentation must not infer this from diagnostic prose.
+    pub restart_required: bool,
     pub capabilities: Vec<String>,
     pub approval_token: String,
     pub detail: String,

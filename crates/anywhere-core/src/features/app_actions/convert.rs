@@ -76,6 +76,7 @@ pub fn descriptors(
                 keywords.push(shortcut.clone());
             }
             ActionDefinition {
+                localized_titles: Default::default(),
                 id,
                 title: leaf.clone(),
                 subtitle: None,
@@ -97,7 +98,7 @@ pub fn descriptors(
                     AvailabilityRule::Hidden
                 },
                 base_priority: if recommend(&leaf) { 20 } else { 0 },
-                icon: "app".into(),
+                icon: "menu".into(),
                 group_id: groups::for_app(&app.bundle_id),
                 aliases,
                 keywords,

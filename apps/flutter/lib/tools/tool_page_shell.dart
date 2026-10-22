@@ -1,3 +1,4 @@
+import '../l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../ui/app_components.dart';
@@ -11,27 +12,27 @@ class ToolPageShell extends StatefulWidget {
       required this.title,
       required this.child,
       required this.onBack,
-      this.subtitle = 'Tool',
+      this.subtitle,
       this.notice,
       this.header,
       this.leading,
       this.headerHeight = DesignTokens.pageHeaderHeight,
       this.footer,
-      this.showFooterBack = true,
       this.scrollController,
       this.editorFocus,
       this.presentation = 0,
       this.visible = true,
       this.onKeyEvent,
+      this.escapeHint,
       this.detached = false});
-  final String title, subtitle;
+  final String title;
+  final String? subtitle;
   final String? notice;
   final Widget child;
   final Widget? header;
   final Widget? leading;
   final double headerHeight;
   final Widget? footer;
-  final bool showFooterBack;
   final VoidCallback onBack;
   final ScrollController? scrollController;
   final FocusNode? editorFocus;
@@ -39,6 +40,7 @@ class ToolPageShell extends StatefulWidget {
   final bool visible;
   final bool detached;
   final KeyEventResult Function(KeyEvent)? onKeyEvent;
+  final String? escapeHint;
   @override
   State<ToolPageShell> createState() => _ToolPageShellState();
 }
@@ -165,12 +167,13 @@ class _ToolPageShellState extends State<ToolPageShell> {
               child: Row(children: [
                 widget.leading ??
                     IconButton(
-                        tooltip: widget.detached ? 'Close · Esc' : 'Back · Esc',
+                        tooltip: widget.escapeHint ??
+                            (widget.detached
+                                ? context.l10n.closeEsc
+                                : context.l10n.backEsc),
                         onPressed: widget.visible ? widget.onBack : null,
                         icon: Icon(
-                            widget.detached
-                                ? AppIcons.close
-                                : AppIcons.back,
+                            widget.detached ? AppIcons.close : AppIcons.back,
                             size: 20)),
                 const SizedBox(width: 12),
                 Expanded(
@@ -179,11 +182,14 @@ class _ToolPageShellState extends State<ToolPageShell> {
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(widget.subtitle,
-                                  style: AppStyle.caption.copyWith(
-                                      fontSize: DesignTokens.pageModeSize,
-                                      fontWeight: DesignTokens.pageModeWeight)),
-                              const SizedBox(height: 3),
+                              if (widget.subtitle != null) ...[
+                                Text(widget.subtitle!,
+                                    style: AppStyle.caption.copyWith(
+                                        fontSize: DesignTokens.pageModeSize,
+                                        fontWeight:
+                                            DesignTokens.pageModeWeight)),
+                                const SizedBox(height: 3),
+                              ],
                               Text(widget.title,
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
@@ -192,7 +198,10 @@ class _ToolPageShellState extends State<ToolPageShell> {
                             ])),
                 const SizedBox(width: 14),
                 Tooltip(
-                    message: widget.detached ? 'Close · Esc' : 'Back · Esc',
+                    message: widget.escapeHint ??
+                        (widget.detached
+                            ? context.l10n.closeEsc
+                            : context.l10n.backEsc),
                     child: InkWell(
                         onTap: widget.visible ? widget.onBack : null,
                         borderRadius:
@@ -205,19 +214,7 @@ class _ToolPageShellState extends State<ToolPageShell> {
                 padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
                 child: AppNotice(widget.notice!)),
           Expanded(child: widget.child),
-          AppPageFooter(
-              child: Row(children: [
-            Expanded(
-                child: widget.footer ??
-                    const Text('↑↓ Scroll', style: AppStyle.caption)),
-            if (widget.showFooterBack) ...[
-              TextButton(
-                  onPressed: widget.visible ? widget.onBack : null,
-                  child: Text(widget.detached ? 'Close' : 'Back')),
-              const SizedBox(width: 8),
-              const Text('esc', style: AppStyle.caption),
-            ],
-          ])),
+          if (widget.footer != null) AppPageFooter(child: widget.footer!),
         ]),
       );
 }

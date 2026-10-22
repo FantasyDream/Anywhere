@@ -36,7 +36,7 @@
 :where(button:disabled, select:disabled, input:disabled, textarea:disabled) { opacity: var(--aw-disabled-opacity); cursor: default; }
 :where(select) {
   padding-right: calc(var(--aw-control-padding-x) + var(--aw-icon-size));
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m5 6.5 3 3 3-3' fill='none' stroke='%23e0e3e9' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m5 6.5 3 3 3-3' fill='none' stroke='%23e0e3e9' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right var(--aw-space-xs) center; background-size: var(--aw-icon-size);
 }
 :where(select option) { background: var(--aw-menu-surface); color: var(--aw-text); }
@@ -60,7 +60,7 @@
 :where(input[type="radio"]) { border-radius: 50%; }
 :where(input[type="checkbox"]:checked, input[type="radio"]:checked) { background-color: var(--aw-accent-fill); border-color: var(--aw-accent-fill); }
 :where(input[type="checkbox"]:checked) {
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 8 2.5 2.5L12 5' fill='none' stroke='white' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 8 2.5 2.5L12 5' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
 :where(input[type="radio"]:checked)::after { content: ''; display: block; width: 6px; height: 6px; margin: 4px; border-radius: 50%; background: var(--aw-primary); }
 :where(label) { font-size: var(--aw-label-size); font-weight: var(--aw-body-weight); }
@@ -120,3 +120,27 @@
   :where(.aw-pane) { min-height: 260px; }
   :where(.aw-pane + .aw-pane) { border-left: 0; border-top: var(--aw-divider-width) solid var(--aw-divider); }
 }
+
+/* Shared icon vocabulary. Keep text labels; icons are decorative and inherit ink. */
+:where(.aw-icon) { display: inline-block; width: var(--aw-icon-size); height: var(--aw-icon-size); flex: 0 0 var(--aw-icon-size); background-color: currentColor; -webkit-mask: var(--aw-icon-shape) center / contain no-repeat; mask: var(--aw-icon-shape) center / contain no-repeat; vertical-align: middle; pointer-events: none; }
+:where(.aw-icon--copy) { --aw-icon-shape: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%227%22%20y%3D%227%22%20width%3D%2210%22%20height%3D%2211%22%20rx%3D%222%22%2F%3E%3Cpath%20d%3D%22M12%203H5a2%202%200%200%200-2%202v7%22%2F%3E%3C%2Fsvg%3E"); }
+:where(.aw-icon--paste) { --aw-icon-shape: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Crect%20x%3D%224%22%20y%3D%224%22%20width%3D%2212%22%20height%3D%2214%22%20rx%3D%222%22%2F%3E%3Crect%20x%3D%227%22%20y%3D%222%22%20width%3D%226%22%20height%3D%224%22%20rx%3D%221%22%2F%3E%3Cpath%20d%3D%22M7%2010h6M7%2014h4%22%2F%3E%3C%2Fsvg%3E"); }
+:where(.aw-icon--run) { --aw-icon-shape: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m6%203%2011%207-11%207Z%22%2F%3E%3C%2Fsvg%3E"); }
+:where(.aw-icon--clear) { --aw-icon-shape: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%205h14M8%202h4M5%205l1%2013h8l1-13M8%209v5M12%209v5%22%2F%3E%3C%2Fsvg%3E"); }
+:where(.aw-icon--format) { --aw-icon-shape: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%203h14M7%207h10M7%2011h10M3%2017h14m-14-9%203%203-3%203%22%2F%3E%3C%2Fsvg%3E"); }
+:where(.aw-icon--minify) { --aw-icon-shape: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M2%205h5M2%2015h5M13%205h5M13%2015h5M2%2010h5m-2-3%203%203-3%203m13-3h-5m2-3-3%203%203%203%22%2F%3E%3C%2Fsvg%3E"); }
+:where(.aw-icon--escape) { --aw-icon-shape: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M3%205v4h3v5H3m8-9v4h3v5h-3m5-10%203%2012%22%2F%3E%3C%2Fsvg%3E"); }
+:where(.aw-icon--unescape) { --aw-icon-shape: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M2%206h5M2%2010h5m-2-3%203%203-3%203M12%204v5h4v6h-4%22%2F%3E%3C%2Fsvg%3E"); }
+:where(.aw-icon--check) { --aw-icon-shape: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m3%2010%204%204L17%204%22%2F%3E%3C%2Fsvg%3E"); }
+:where(.aw-icon--chevron-down) { --aw-icon-shape: url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2020%2020%22%20fill%3D%22none%22%20stroke%3D%22black%22%20stroke-width%3D%221.8%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22m5%207%205%205%205-5%22%2F%3E%3C%2Fsvg%3E"); }
+
+/* Secondary settings / commands expand in place, never over the editor. Native
+   summary provides pointer, Enter / Space and expanded accessibility semantics. */
+:where(.aw-disclosure) { min-width: 0; }
+:where(.aw-disclosure > summary) { display: flex; align-items: center; gap: var(--aw-space-sm); width: fit-content; max-width: 100%; min-height: var(--aw-control-height); padding: var(--aw-space-xs) 0; list-style: none; cursor: pointer; color: var(--aw-secondary); font-size: var(--aw-caption-size); }
+:where(.aw-disclosure > summary)::-webkit-details-marker { display: none; }
+:where(.aw-disclosure > summary)::after { content: ''; width: 6px; height: 6px; flex: 0 0 6px; margin-right: 4px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(-45deg); }
+:where(.aw-disclosure[open] > summary)::after { transform: rotate(45deg); }
+:where(.aw-disclosure > summary:hover) { color: var(--aw-primary); }
+:where(.aw-disclosure > summary:focus-visible) { outline: 1px solid var(--aw-selected-border); outline-offset: 3px; border-radius: var(--aw-control-radius); }
+:where(.aw-disclosure-body) { display: flex; flex-direction: column; gap: var(--aw-space-sm); padding: var(--aw-space-sm) 0; }

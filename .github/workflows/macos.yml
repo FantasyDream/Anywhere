@@ -10,6 +10,9 @@ on:
       - 'crates/**'
       - 'apps/flutter/**'
       - 'plugins/**'
+      - 'packages/plugin-sdk/**'
+      - 'resources/**'
+      - 'LICENSE'
       - 'scripts/**'
       - '.flutter-version'
       - '.github/workflows/macos.yml'
@@ -27,6 +30,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          package-manager-cache: false
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -38,5 +45,7 @@ jobs:
           flutter-version: ${{ steps.flutter-version.outputs.version }}
           channel: stable
           cache: true
+      - name: Prepare macOS engine artifacts for native checks
+        run: flutter --no-version-check precache --macos
       - name: Check Rust, native menus, architecture and Flutter
         run: ./scripts/check.sh

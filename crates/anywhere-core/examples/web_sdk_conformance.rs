@@ -141,7 +141,7 @@ async fn main() -> Result<()> {
         let output = match response {
             WebDispatch::Reply(frame) => json!({"kind":"reply","frame":frame}),
             WebDispatch::Confirmation(value) => {
-                json!({"kind":"confirmation","ticket":value.ticket,"requestId":value.request_id,"title":value.title,"preview":value.preview})
+                json!({"kind":"confirmation","ticket":value.ticket,"requestId":value.request_id,"operation":format!("{:?}", value.kind),"preview":value.preview})
             }
         };
         println!("{output}");

@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `application`, `snapshot_delivery`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
 
@@ -462,6 +462,7 @@ class CandidateDto {
   final bool isMenu;
   final FileObjectKindDto? fileKind;
   final String title;
+  final Map<String, String> localizedTitles;
   final List<String> menuPath;
   final List<String> contextKeys;
   final String? executionContextId;
@@ -485,6 +486,7 @@ class CandidateDto {
     this.isMenu = false,
     this.fileKind,
     required this.title,
+    this.localizedTitles = const {},
     required this.menuPath,
     required this.contextKeys,
     this.executionContextId,
@@ -510,6 +512,7 @@ class CandidateDto {
       isMenu.hashCode ^
       fileKind.hashCode ^
       title.hashCode ^
+      localizedTitles.hashCode ^
       menuPath.hashCode ^
       contextKeys.hashCode ^
       executionContextId.hashCode ^
@@ -537,6 +540,7 @@ class CandidateDto {
           isMenu == other.isMenu &&
           fileKind == other.fileKind &&
           title == other.title &&
+          localizedTitles == other.localizedTitles &&
           menuPath == other.menuPath &&
           contextKeys == other.contextKeys &&
           executionContextId == other.executionContextId &&
@@ -607,7 +611,7 @@ class ClipboardDetailDto {
 class ClipboardHistoryDto {
   final bool recording;
   final bool available;
-  final String? notice;
+  final ClipboardNoticeDto? notice;
   final List<ClipboardItemDto> items;
 
   const ClipboardHistoryDto({
@@ -638,7 +642,7 @@ class ClipboardHistoryDto {
 class ClipboardHistoryStatusDto {
   final bool recording;
   final bool available;
-  final String? notice;
+  final ClipboardNoticeDto? notice;
 
   const ClipboardHistoryStatusDto({
     required this.recording,
@@ -692,6 +696,17 @@ class ClipboardItemDto {
           kind == other.kind &&
           copiedAtMs == other.copiedAtMs &&
           byteCount == other.byteCount;
+}
+
+enum ClipboardNoticeDto {
+  featureDisabled,
+  storageUnavailable,
+  accessRequired,
+  itemTooLarge,
+  readFailed,
+  captureUnavailable,
+  monitoringUnavailable,
+  ;
 }
 
 class ContextCaptureDto {
@@ -916,6 +931,7 @@ class ExtensionStatusDto {
   final bool active;
   final bool needsApproval;
   final bool configurable;
+  final bool restartRequired;
   final List<String> capabilities;
   final String approvalToken;
   final String detail;
@@ -931,6 +947,7 @@ class ExtensionStatusDto {
     required this.active,
     required this.needsApproval,
     required this.configurable,
+    this.restartRequired = false,
     required this.capabilities,
     required this.approvalToken,
     required this.detail,
@@ -948,6 +965,7 @@ class ExtensionStatusDto {
       active.hashCode ^
       needsApproval.hashCode ^
       configurable.hashCode ^
+      restartRequired.hashCode ^
       capabilities.hashCode ^
       approvalToken.hashCode ^
       detail.hashCode;
@@ -967,6 +985,7 @@ class ExtensionStatusDto {
           active == other.active &&
           needsApproval == other.needsApproval &&
           configurable == other.configurable &&
+          restartRequired == other.restartRequired &&
           capabilities == other.capabilities &&
           approvalToken == other.approvalToken &&
           detail == other.detail;
@@ -984,7 +1003,9 @@ class FilePreviewDto {
   final BigInt sizeBytes;
   final PlatformInt64? modifiedMs;
   final String? text;
-  final String? notice;
+  final int? truncatedAtBytes;
+  final String? encoding;
+  final bool encodingGuessed;
 
   const FilePreviewDto({
     required this.path,
@@ -992,7 +1013,9 @@ class FilePreviewDto {
     required this.sizeBytes,
     this.modifiedMs,
     this.text,
-    this.notice,
+    this.truncatedAtBytes,
+    this.encoding,
+    this.encodingGuessed = false,
   });
 
   @override
@@ -1002,7 +1025,9 @@ class FilePreviewDto {
       sizeBytes.hashCode ^
       modifiedMs.hashCode ^
       text.hashCode ^
-      notice.hashCode;
+      truncatedAtBytes.hashCode ^
+      encoding.hashCode ^
+      encodingGuessed.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1014,7 +1039,9 @@ class FilePreviewDto {
           sizeBytes == other.sizeBytes &&
           modifiedMs == other.modifiedMs &&
           text == other.text &&
-          notice == other.notice;
+          truncatedAtBytes == other.truncatedAtBytes &&
+          encoding == other.encoding &&
+          encodingGuessed == other.encodingGuessed;
 }
 
 enum FileSearchEngineDto {
@@ -1347,17 +1374,22 @@ enum SearchSourceStateDto {
 class ShortcutActionDto {
   final String actionId;
   final String title;
+  final Map<String, String> localizedTitles;
   final List<String> contextTypes;
 
   const ShortcutActionDto({
     required this.actionId,
     required this.title,
+    this.localizedTitles = const {},
     required this.contextTypes,
   });
 
   @override
   int get hashCode =>
-      actionId.hashCode ^ title.hashCode ^ contextTypes.hashCode;
+      actionId.hashCode ^
+      title.hashCode ^
+      localizedTitles.hashCode ^
+      contextTypes.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1366,20 +1398,24 @@ class ShortcutActionDto {
           runtimeType == other.runtimeType &&
           actionId == other.actionId &&
           title == other.title &&
+          localizedTitles == other.localizedTitles &&
           contextTypes == other.contextTypes;
 }
 
 class ShortcutApplicationDto {
   final String bundleId;
   final String title;
+  final Map<String, String> localizedTitles;
 
   const ShortcutApplicationDto({
     required this.bundleId,
     required this.title,
+    this.localizedTitles = const {},
   });
 
   @override
-  int get hashCode => bundleId.hashCode ^ title.hashCode;
+  int get hashCode =>
+      bundleId.hashCode ^ title.hashCode ^ localizedTitles.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1387,7 +1423,8 @@ class ShortcutApplicationDto {
       other is ShortcutApplicationDto &&
           runtimeType == other.runtimeType &&
           bundleId == other.bundleId &&
-          title == other.title;
+          title == other.title &&
+          localizedTitles == other.localizedTitles;
 }
 
 class ShortcutRouteDto {
@@ -1447,6 +1484,12 @@ enum SnapshotWaitKindDto {
   ;
 }
 
+enum WebConsentKindDto {
+  readClipboard,
+  writeClipboard,
+  ;
+}
+
 class WebDocumentDto {
   final String handle;
   final String origin;
@@ -1481,7 +1524,7 @@ class WebPackageDto {
   final String name;
   final String version;
   final String digest;
-  final List<String> permissions;
+  final List<WebPermissionDto> permissions;
   final bool enabled;
   final bool rollback;
 
@@ -1519,6 +1562,36 @@ class WebPackageDto {
           rollback == other.rollback;
 }
 
+class WebPermissionDto {
+  final WebPermissionKindDto kind;
+  final List<String> contextTypes;
+
+  const WebPermissionDto({
+    required this.kind,
+    required this.contextTypes,
+  });
+
+  @override
+  int get hashCode => kind.hashCode ^ contextTypes.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is WebPermissionDto &&
+          runtimeType == other.runtimeType &&
+          kind == other.kind &&
+          contextTypes == other.contextTypes;
+}
+
+enum WebPermissionKindDto {
+  contextRead,
+  currentApp,
+  clipboardReadText,
+  clipboardWriteText,
+  localStorage,
+  ;
+}
+
 class WebPluginLaunchDto {
   final String invocationId;
 
@@ -1540,19 +1613,19 @@ class WebPluginLaunchDto {
 class WebReplyDto {
   final String? frame;
   final String? ticket;
-  final String? title;
+  final WebConsentKindDto? consent;
   final String? preview;
 
   const WebReplyDto({
     this.frame,
     this.ticket,
-    this.title,
+    this.consent,
     this.preview,
   });
 
   @override
   int get hashCode =>
-      frame.hashCode ^ ticket.hashCode ^ title.hashCode ^ preview.hashCode;
+      frame.hashCode ^ ticket.hashCode ^ consent.hashCode ^ preview.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -1561,7 +1634,7 @@ class WebReplyDto {
           runtimeType == other.runtimeType &&
           frame == other.frame &&
           ticket == other.ticket &&
-          title == other.title &&
+          consent == other.consent &&
           preview == other.preview;
 }
 
@@ -1571,7 +1644,7 @@ class WebReviewDto {
   final String name;
   final String version;
   final String digest;
-  final List<String> permissions;
+  final List<WebPermissionDto> permissions;
   final bool updating;
 
   const WebReviewDto({

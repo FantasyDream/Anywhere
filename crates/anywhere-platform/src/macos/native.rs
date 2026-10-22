@@ -21,11 +21,6 @@ extern "C" {
     pub fn launcher_free_string(value: *mut c_char);
     pub fn launcher_free_bytes(value: *mut u8);
     pub fn launcher_bundle_application(path: *const c_char) -> *mut c_char;
-    pub fn launcher_preferred_languages() -> *mut c_char;
-    pub fn launcher_bundle_localized_names(
-        path: *const c_char,
-        languages: *const c_char,
-    ) -> *mut c_char;
     pub fn launcher_launch_application(path: *const c_char) -> i32;
     pub fn launcher_application_icon(
         path: *const c_char,

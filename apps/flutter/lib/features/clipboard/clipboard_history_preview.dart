@@ -3,13 +3,20 @@ import 'package:flutter/material.dart';
 import '../../infrastructure/desktop_environment.dart';
 import '../../src/rust/api.dart';
 import '../../ui/app_style.dart';
+import '../../ui/app_components.dart';
 import '../../ui/file_type_appearance.dart';
 import 'clipboard_history_presentation.dart';
 
 /// Displays only the bounded Rust preview; never reads files or executes HTML.
 class ClipboardHistoryPreview extends StatefulWidget {
-  const ClipboardHistoryPreview({super.key, required this.detail});
+  const ClipboardHistoryPreview(
+      {super.key,
+      required this.detail,
+      this.compact = false,
+      this.scrollController});
   final ClipboardDetailDto detail;
+  final bool compact;
+  final ScrollController? scrollController;
   @override
   State<ClipboardHistoryPreview> createState() =>
       _ClipboardHistoryPreviewState();
@@ -47,17 +54,21 @@ class _ClipboardHistoryPreviewState extends State<ClipboardHistoryPreview> {
   @override
   Widget build(BuildContext context) {
     final detail = widget.detail;
+    if (widget.compact) {
+      return Padding(padding: const EdgeInsets.all(8), child: _content());
+    }
     return Padding(
         padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
         child:
             Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Row(children: [
             Icon(clipboardKindIcon(detail.item.kind),
-                size: 16, color: AppStyle.secondary),
+                size: 18, color: clipboardKindTint(detail.item.kind)),
             const SizedBox(width: 7),
             Expanded(
                 child: Text(
-                    '${clipboardKindLabel(detail.item.kind, context.l10n)} preview',
+                    context.l10n.contentPreview(
+                        clipboardKindLabel(detail.item.kind, context.l10n)),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: AppStyle.paneTitle)),
@@ -79,20 +90,25 @@ class _ClipboardHistoryPreviewState extends State<ClipboardHistoryPreview> {
                           BorderRadius.circular(AppStyle.controlRadius)),
                   child: _content())),
           const SizedBox(height: 10),
-          Row(children: [
-            Expanded(
-                child: Tooltip(
-                    message: 'Size of the saved clipboard data',
-                    child: Text(
-                        '${clipboardDataSize(detail.item.byteCount)} saved',
-                        style: AppStyle.caption))),
-            if (detail.formats.isNotEmpty)
-              Tooltip(
-                  message: detail.formats.join('\n'),
-                  child: Text(
-                      '${detail.formats.length} ${detail.formats.length == 1 ? 'format' : 'formats'}',
-                      style: AppStyle.caption)),
-          ]),
+          AppDisclosure(
+              compact: true,
+              title: context.l10n.details,
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                        context.l10n.savedSize(
+                            clipboardDataSize(detail.item.byteCount)),
+                        style: AppStyle.caption),
+                    if (detail.formats.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      Text(context.l10n.formatsCount(detail.formats.length),
+                          style: AppStyle.caption),
+                      const SizedBox(height: 4),
+                      SelectableText(detail.formats.join('\n'),
+                          style: AppStyle.caption),
+                    ],
+                  ])),
         ]));
   }
 
@@ -100,6 +116,7 @@ class _ClipboardHistoryPreviewState extends State<ClipboardHistoryPreview> {
     final detail = widget.detail;
     if (detail.files.isNotEmpty) {
       return ListView.separated(
+          controller: widget.scrollController,
           key: const Key('clipboard-file-preview'),
           // Short selections fit their content; large ones keep a lazy viewport.
           shrinkWrap: detail.files.length <= 3,
@@ -140,17 +157,18 @@ class _ClipboardHistoryPreviewState extends State<ClipboardHistoryPreview> {
                     width: double.infinity,
                     height: double.infinity,
                     errorBuilder: (_, error, stack) =>
-                        _unavailable('Image preview unavailable')))),
+                        _unavailable(context.l10n.imagePreviewUnavailable)))),
         if (detail.text.isNotEmpty) Expanded(child: _text(detail.text)),
       ]);
     }
     if (detail.text.isNotEmpty) return _text(detail.text);
     return _unavailable(detail.item.kind == 'image'
-        ? 'Preview unavailable. The original image can still be copied.'
-        : 'Preview is not available for this format. Copy restores its saved data.');
+        ? context.l10n.previewUnavailableTheOriginalImageCanStill
+        : context.l10n.previewIsNotAvailableForThisFormat);
   }
 
   Widget _text(String text) => SingleChildScrollView(
+      controller: widget.scrollController,
       padding: const EdgeInsets.all(12),
       child: SizedBox(
           width: double.infinity,
@@ -166,7 +184,7 @@ class _ClipboardHistoryPreviewState extends State<ClipboardHistoryPreview> {
           padding: const EdgeInsets.all(16),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Icon(clipboardKindIcon(widget.detail.item.kind),
-                size: 28, color: AppStyle.secondary),
+                size: 28, color: clipboardKindTint(widget.detail.item.kind)),
             const SizedBox(height: 10),
             Text(message, style: AppStyle.caption, textAlign: TextAlign.center),
           ])));

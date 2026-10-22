@@ -1,6 +1,6 @@
 # 跨平台架构与接入契约
 
-当前契约：V0.8；最后核对：2026-10-13。Windows 尚未交付可用 App。
+现行专题契约；文档整理：2026-10-23。Windows 尚未交付可用 App。
 
 目标：共享 Flutter 展示与 Rust 业务；只有必须与操作系统交互的接口使用平台适配器。
 
@@ -24,9 +24,9 @@ Flutter 控件不是 AppKit 控件。原生背景是可选能力，不影响共�
 - `data`、`plugins`：Rust 初始化的绝对目录。
 - 既有来源设置、排除应用和启动状态继续保持原字段。
 
-任务窗口同样支持 `paths`，只需 `library`，Rust Application 仍由主窗口初始化并共用。
+任务窗口与悬浮剪贴板窗口同样支持 `paths`，只需 `library`，Rust Application 仍由主窗口初始化并共用。
 
-两个窗口的 Host `capabilities` 返回布尔字段：
+各窗口的 Host `capabilities` 返回布尔字段：
 
 - `backdrop`：内容背后确实有系统材质、且用户未要求降低透明度。
 - `shortcutRecording`：支持设置窗口内原生按键录制。
@@ -44,7 +44,7 @@ Flutter 控件不是 AppKit 控件。原生背景是可选能力，不影响共�
 - Meta 在 Windows 表示 Windows 键；导入时不隐式替换为 Ctrl，避免意外抢占或改变动作意义。
 - 标准页面命令单独使用平台惯例：Command / Ctrl。
 - 未知版本不执行其中的绑定、不覆盖配置；macOS Host 使用安全的默认唤醒键。
-- 当前导入/导出入口若继续扩展，必须使用 schema 4；不得直接输出 Carbon 字段。
+- 当前快捷键导入 / 导出使用 schema 4 的 HID usages 与语义修饰位，不直接输出 Carbon 字段。
 
 ## 必须保留的系统实现
 
@@ -69,4 +69,4 @@ Flutter 控件不是 AppKit 控件。原生背景是可选能力，不影响共�
 
 共享 CI 配置验证目标编译与共享代码回归，不能据此宣称 Windows 窗口、系统权限、菜单、后台进程或安装包已经可用。真实平台接入仍需上方的 Host、系统后端和矩阵。
 
-当前 macOS 工程证据见 [V0.8 MVP](mvp-v0.8.md)，早期迁移检查与包记录见 [历史验收](archive/v0.6-final-acceptance.md)。本页没有新增跨平台 GUI 或系统授权验收。
+当前 macOS 工程证据见 [V0.12 MVP](mvp-v0.12.md)，早期迁移检查与包记录见 [历史验收](archive/v0.6-final-acceptance.md)。本页没有新增跨平台 GUI 或系统授权验收。

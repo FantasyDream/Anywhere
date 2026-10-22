@@ -3,7 +3,7 @@ import AppKit
 /// AppKit coordinates start at the bottom. visibleFrame already excludes Dock
 /// and menu bar; keep this calculation independent of window/focus side effects.
 enum ToolWindowPlacement {
-    static let preferredSize = NSSize(width: 400, height: 520)
+    static let preferredSize = NSSize(width: 420, height: 560)
 
     static func bottomTrailing(size: NSSize, in visible: NSRect) -> NSRect {
         let inset = min(16, max(0, (min(visible.width, visible.height) - 1) / 2))
