@@ -4,6 +4,8 @@ cd "$(dirname "$0")/.."
 source scripts/env.sh
 python3 scripts/check-flutter.py
 python3 scripts/check-versions.py
+python3 scripts/check-npm-sources.py
+python3 -m unittest discover -s scripts/tests -p test_npm_sources.py
 python3 scripts/check-localizations.py
 python3 scripts/generate-native-localizations.py --check
 python3 scripts/generate-design-tokens.py --check

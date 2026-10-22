@@ -16,7 +16,7 @@ async function init(destination) {
     await cp(resolve(sdk, 'templates/minimal'), target, {recursive: true});
     const vendor = resolve(target, 'vendor/plugin-sdk');
     await mkdir(vendor, {recursive: true});
-    for (const entry of ['dist', 'styles', 'tools', 'templates', 'package.json', 'README.md']) {
+    for (const entry of ['dist', 'styles', 'tools', 'templates', 'package.json', 'README.md', 'LICENSE']) {
       await cp(resolve(sdk, entry), resolve(vendor, entry), {recursive: true});
     }
     const pkg = JSON.parse(await readFile(resolve(target, 'package.json'), 'utf8'));

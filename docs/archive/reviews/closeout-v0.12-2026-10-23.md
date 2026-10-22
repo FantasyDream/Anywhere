@@ -13,6 +13,9 @@
 | WebView 原生框架仍使用 probe 包身份，缓存未包括 Flutter 版本 | 改为正式框架命名；固定 Flutter 版本进入构建缓存摘要，避免 SDK 升级后复用旧 ABI 产物 |
 | 干净 checkout 的 Flutter 本地化生成失败 | 删除无消费者、依赖根 build 目录的报告输出；检查器使用真实生产配置和全新临时项目，已先复现失败再验证通过 |
 | GitHub macOS 原生回归在旧 SDK 无法编译 | 将测试的 snapshot 禁用 guard 放到测试子类的稳定 Objective-C selector，保留无截图回归，不依赖 Swift SDK 的闭包 actor 标注 |
+| JSON 示例锁文件含不可由 GitHub 访问的本机 npm 镜像 | 四个依赖分别核对公共 registry 的相同版本 / integrity 后只替换下载地址；增加来源检查和回归，检查脚本显式使用公共 registry |
+| 独立模板 vendor SDK 未复制许可证 | 创建器复制 SDK LICENSE，仓库外模板检查同时比较 vendor 和安装后的许可证 |
+| 开发分支 push 与 PR 重复运行相同 CI | push 限定 main，PR 保留完整检查；轻量仓库检查也覆盖依赖来源 |
 | 架构说明仍写 Web 首帧使用一次 1×1 快照 | 按 NativeWebAppearance 的实际实现更新：受保护的画布开关与不透明回退，无快照 / 轮询 |
 
 ## 边界核对
@@ -27,6 +30,7 @@
 - `scripts/check.sh` 通过：Rust 567 项通过 / 6 项既有 ignored；Flutter 383；SDK 17；JSON 25。
 - 原生菜单 / 权限 / 焦点 / 名称回归、Clippy、架构、设计 / 协议 / 桥接生成物检查通过；484 条中英资源一致。
 - 本地化检查在无 build、无 Flutter 项目缓存的临时目录使用生产 l10n.yaml，验证干净检出可生成与源码一致的接口。
+- npm 公共来源的 2 项回归通过；SDK / JSON / 仓库外模板检查重跑通过，vendor 和安装后的 SDK LICENSE 均与项目一致。全新临时 npm 缓存下，两份锁文件均从公共 registry 实际安装成功，结束后临时缓存已删除。
 - Build 15 构建与交付状态记录在[当前 MVP](../../mvp-v0.12.md)；远端 CI 与合并结果以对应 GitHub PR 为准。
 - 本轮自动化与签名构建不代替物理键盘、VoiceOver、完整系统权限 / 安全发行矩阵或 Windows GUI 验收，不扩大正式发布承诺。
 

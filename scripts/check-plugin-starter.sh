@@ -15,6 +15,7 @@ mkdir "$STARTER_WORK/sdk"
 tar -xzf "$SDK_ARCHIVE" -C "$STARTER_WORK/sdk" --strip-components=1
 cmp "$ROOT/LICENSE" "$STARTER_WORK/sdk/LICENSE"
 node "$STARTER_WORK/sdk/tools/create.mjs" init "$STARTER_WORK/my-tool"
+cmp "$ROOT/LICENSE" "$STARTER_WORK/my-tool/vendor/plugin-sdk/LICENSE"
 # Refuse to overwrite an existing project, including its user changes.
 if node "$STARTER_WORK/sdk/tools/create.mjs" init "$STARTER_WORK/my-tool"; then
   echo 'Starter unexpectedly overwrote an existing directory.' >&2
@@ -22,7 +23,8 @@ if node "$STARTER_WORK/sdk/tools/create.mjs" init "$STARTER_WORK/my-tool"; then
 fi
 (
   cd "$STARTER_WORK/my-tool"
-  npm install --ignore-scripts --no-audit --no-fund
+  npm install --registry=https://registry.npmjs.org --ignore-scripts --no-audit --no-fund
+  cmp "$ROOT/LICENSE" node_modules/@anywhere/plugin-sdk/LICENSE
   npm run build
   npm run pack
 )

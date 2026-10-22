@@ -87,6 +87,8 @@ SDK 类型、测试和独立模板需要 Node.js 22+ / npm；这些检查不安�
 
 完整检查会下载 lock 文件中依赖及固定摘要的原生依赖，需要网络；本地首次构建也可能耗时较长。CI 的 macOS 工作流运行完整门禁；Linux / Windows 工作流验证共享代码，不打包原生 App。仓库文档有独立的轻量工作流。
 
+CI 在 PR 和 main 更新时运行，避免同一次开发分支推送与 PR 重复计费。npm 锁文件只使用公共 registry；新增依赖时显式使用 `--registry=https://registry.npmjs.org`，不要提交本机 / 公司镜像地址。`scripts/check-npm-sources.py` 在下载依赖前检查该约定；依赖内容仍由 lock 的 integrity 验证。
+
 ## 代码入口
 
 | 目录 | 职责 |

@@ -11,10 +11,10 @@ def run(args, path):
     subprocess.run(args, cwd=path, check=True)
 run(['python3','scripts/generate-design-tokens.py','--check'], ROOT)
 sdk = ROOT / 'packages/plugin-sdk'
-run(['npm','ci','--ignore-scripts','--no-audit','--no-fund'],sdk)
+run(['npm','ci','--registry=https://registry.npmjs.org','--ignore-scripts','--no-audit','--no-fund'],sdk)
 run(['npm','run','build'],sdk)
 json_tool = ROOT / 'plugins/examples/json-workspace'
-run(['npm','ci','--no-audit','--no-fund'], json_tool)
+run(['npm','ci','--registry=https://registry.npmjs.org','--no-audit','--no-fund'], json_tool)
 run(['npm','test'],json_tool)
 run(['npm','run','build'],json_tool)
 text_tool = ROOT / 'plugins/examples/web-text'
