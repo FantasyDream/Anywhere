@@ -56,6 +56,8 @@ scripts/generate-bridge.sh
 
 已生成绑定随源码提交，普通构建不需要生成器。键码、文件类型、运行策略修改后使用对应的 `scripts/generate-*.py` 同步生成代码；完整检查包含漂移校验。
 
+桥只导出 App 正在使用的接口。设置目录通过 `extensionStatus` / `refreshFeatures` 读取统一状态，包含内置功能和旧声明式插件；旧插件配置的读取与迁移留在 Rust 设置服务。不要在 Flutter 中重新转换一套旧插件状态，测试也注入同一组 DTO。
+
 ## 生成物与本地化
 
 - FRB 公开 API：`scripts/generate-bridge.sh`。普通 UI / 文案修改不重新生成桥。
@@ -74,6 +76,8 @@ scripts/check-web-examples.sh
 ```
 
 SDK 类型、测试和独立模板需要 Node.js 22+ / npm；这些检查不安装或批准插件，不读取真实剪贴板。SDK 构建后可在 `packages/plugin-sdk` 执行 `npm pack` 导出。独立插件开发见[指南](plugin-development.md)。
+
+模板检查会在仓库外解压 SDK、创建项目、构建并检查 `.awplugin`，同时核对许可证和导出文档链接。可用 `python3 scripts/check-docs.py --package <解压后的SDK目录>` 单独检查交付文档，避免源码目录中的文件掩盖缺失内容。
 
 ## 测试与测量
 

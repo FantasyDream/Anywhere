@@ -36,7 +36,7 @@ void main() {
         applyContextSources: (_) async {},
         applyFileSearch: (_) async {},
         authorizeFileSearch: (_) async {},
-        readPlugins: () => []);
+        readExtensions: () => []);
     await settings.load();
     final authorizationStates = <bool>[];
     settings
@@ -91,7 +91,7 @@ void main() {
           applyContextSources: (_) async {},
           applyFileSearch: (_) async {},
           authorizeFileSearch: (_) async {},
-          readPlugins: () => []);
+          readExtensions: () => []);
       await settings.load();
       held = true;
       final pending = settings.authorizeFileSearch();
@@ -140,7 +140,7 @@ void main() {
         applyFileSearch: (s) async {
           applied.add(s.fileSearchRoots);
         },
-        readPlugins: () => []);
+        readExtensions: () => []);
     final first = settings.save(host.copyWith(fileSearchRoots: ['/first']));
     await started.future;
     final second = settings.save(host.copyWith(fileSearchRoots: ['/second']));

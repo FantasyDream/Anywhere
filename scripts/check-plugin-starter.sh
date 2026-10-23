@@ -13,9 +13,11 @@ STARTER_WORK="$(mktemp -d "${TMPDIR:-/tmp}/anywhere-plugin-starter.XXXXXX")"
 trap 'rm -rf "$STARTER_WORK"' EXIT
 mkdir "$STARTER_WORK/sdk"
 tar -xzf "$SDK_ARCHIVE" -C "$STARTER_WORK/sdk" --strip-components=1
+python3 scripts/check-docs.py --package "$STARTER_WORK/sdk"
 cmp "$ROOT/LICENSE" "$STARTER_WORK/sdk/LICENSE"
 node "$STARTER_WORK/sdk/tools/create.mjs" init "$STARTER_WORK/my-tool"
 cmp "$ROOT/LICENSE" "$STARTER_WORK/my-tool/vendor/plugin-sdk/LICENSE"
+python3 scripts/check-docs.py --package "$STARTER_WORK/my-tool/vendor/plugin-sdk"
 # Refuse to overwrite an existing project, including its user changes.
 if node "$STARTER_WORK/sdk/tools/create.mjs" init "$STARTER_WORK/my-tool"; then
   echo 'Starter unexpectedly overwrote an existing directory.' >&2

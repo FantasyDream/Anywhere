@@ -147,7 +147,7 @@ void main() {
                       contextTypes: ['core.launcher'])
                 ]),
         window: WindowHost(channel),
-        readPlugins: () => [],
+        readExtensions: () => [],
         applyExcludedApps: (_) async {},
         applyFileSearch: (_) async {},
         applyContextSources: (_) async {},

@@ -203,9 +203,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<PluginKeyValueDto> dco_decode_list_plugin_key_value_dto(dynamic raw);
 
   @protected
-  List<PluginStatusDto> dco_decode_list_plugin_status_dto(dynamic raw);
-
-  @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
 
   @protected
@@ -303,9 +300,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PluginKeyValueDto dco_decode_plugin_key_value_dto(dynamic raw);
-
-  @protected
-  PluginStatusDto dco_decode_plugin_status_dto(dynamic raw);
 
   @protected
   (String, String) dco_decode_record_string_string(dynamic raw);
@@ -584,10 +578,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
-  List<PluginStatusDto> sse_decode_list_plugin_status_dto(
-      SseDeserializer deserializer);
-
-  @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
@@ -697,9 +687,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   PluginKeyValueDto sse_decode_plugin_key_value_dto(
       SseDeserializer deserializer);
-
-  @protected
-  PluginStatusDto sse_decode_plugin_status_dto(SseDeserializer deserializer);
 
   @protected
   (String, String) sse_decode_record_string_string(
@@ -996,10 +983,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<PluginKeyValueDto> self, SseSerializer serializer);
 
   @protected
-  void sse_encode_list_plugin_status_dto(
-      List<PluginStatusDto> self, SseSerializer serializer);
-
-  @protected
   void sse_encode_list_prim_u_8_strict(
       Uint8List self, SseSerializer serializer);
 
@@ -1112,10 +1095,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_plugin_key_value_dto(
       PluginKeyValueDto self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_plugin_status_dto(
-      PluginStatusDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_record_string_string(

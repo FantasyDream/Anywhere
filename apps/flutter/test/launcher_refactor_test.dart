@@ -71,7 +71,7 @@ void main() {
     final targets = <String>[];
     final c = LauncherController(
         window: WindowHost(channel),
-        readPlugins: () => [],
+        readExtensions: () => [],
         backend: LauncherBackend(
             beginActivation: () => 1,
             activate: (_,

@@ -66,7 +66,7 @@ void main() {
     final settings = SettingsController(
         window: WindowHost(const MethodChannel('unused/settings')),
         clipboardBackend: backend,
-        readPlugins: () => []);
+        readExtensions: () => []);
     var prepared = false;
     settings.beforeClose = () async {
       prepared = true;
@@ -110,7 +110,7 @@ void main() {
     final settings = SettingsController(
         window: WindowHost(const MethodChannel('unused/settings')),
         clipboardBackend: backend,
-        readPlugins: () => []);
+        readExtensions: () => []);
     addTearDown(settings.dispose);
     final change = settings.clipboard.setRecording(true);
     final close = settings.prepareClose();

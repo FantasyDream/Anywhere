@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location(
     'check_docs', Path(__file__).resolve().parents[1] / 'check-docs.py')
@@ -56,6 +57,19 @@ class DocumentationTests(unittest.TestCase):
         self.assertEqual(len(failures), 4)
         for reason in ['ignored target', 'outside repository', 'missing heading', 'unclosed code fence']:
             self.assertTrue(any(reason in failure for failure in failures), reason)
+
+    def test_exported_sdk_links_stay_inside_package_without_git(self):
+        package = self.root / 'exported'
+        readme = self.write('exported/README.md', '[License](LICENSE)\n[Guide](../docs/guide.md)\n')
+        self.write('exported/LICENSE', 'MIT\n')
+        self.write('docs/guide.md', '# Source-only guide\n')
+        # A source-tree link must fail even when that target exists on disk.
+        with patch.object(docs.subprocess, 'run', side_effect=AssertionError('Git is not available')):
+            failures, _ = docs.check_documents(package, [readme], check_ignored=False)
+            self.assertEqual(len(failures), 1)
+            self.assertIn('outside repository', failures[0])
+            readme.write_text('[License](LICENSE)\n[Guide](https://example.com/guide)\n')
+            self.assertEqual(docs.check_documents(package, [readme], check_ignored=False)[0], [])
 
 
 if __name__ == '__main__':

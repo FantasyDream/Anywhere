@@ -54,15 +54,15 @@ void main() {
 
   SettingsController controller(
           {required Future<List<String>> Function(List<String>) supported,
-          Future<List<PluginStatusDto>> Function()? refreshPluginReports,
+          Future<List<ExtensionStatusDto>> Function()? refreshFeatures,
           Future<List<ShortcutActionDto>> Function()? actions}) =>
       SettingsController(
           window: WindowHost(channel),
           applyExcludedApps: (_) async {},
           applyFileSearch: (_) async {},
           applyContextSources: (_) async {},
-          readPlugins: () => [],
-          refreshPluginReports: refreshPluginReports ?? () async => [],
+          readExtensions: () => [],
+          refreshFeatures: refreshFeatures ?? () async => [],
           readSupportedShortcutActions: supported,
           readShortcutActions: actions);
 
@@ -110,7 +110,7 @@ void main() {
                 ShortcutActionDto(actionId: id, title: id, contextTypes: [])
             ]);
     addTearDown(c.dispose);
-    await c.load(plugins: true);
+    await c.load(catalog: true);
     expect(requests.single.toSet(), {'plugin.copy', 'core.directory.terminal'});
     expect(syncs.last['supportedActionIds'], available);
     available = ['core.directory.terminal'];
@@ -221,11 +221,11 @@ void main() {
   test(
       'reload cannot overlap and eligibility still syncs if picker refresh fails',
       () async {
-    final gate = Completer<List<PluginStatusDto>>();
+    final gate = Completer<List<ExtensionStatusDto>>();
     var reloads = 0;
     final c = controller(
         supported: (ids) async => ids,
-        refreshPluginReports: () {
+        refreshFeatures: () {
           reloads++;
           return gate.future;
         },
@@ -233,13 +233,13 @@ void main() {
     addTearDown(c.dispose);
     await c.load();
     final refreshing = c.refreshFeatureData();
-    expect(c.refreshingPlugins, isTrue);
+    expect(c.updatingFeatures, isTrue);
     await c.refreshFeatureData();
     expect(reloads, 1);
     gate.complete([]);
     await refreshing;
     expect(syncs.length, 2);
-    expect(c.refreshingPlugins, isFalse);
+    expect(c.updatingFeatures, isFalse);
     expect(c.statusMessage, contains('picker unavailable'));
   });
 }

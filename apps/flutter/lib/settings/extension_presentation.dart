@@ -57,24 +57,3 @@ extension ExtensionPresentation on ExtensionStatusDto {
           _ => name,
         };
 }
-
-// Only for callers still using the v1 plugin-status facade.
-List<ExtensionStatusDto> legacyExtensionStatuses(
-        List<PluginStatusDto> plugins) =>
-    [
-      for (final p in plugins)
-        ExtensionStatusDto(
-            key: 'plugin:${p.id}',
-            id: p.id,
-            name: p.id,
-            version: 'v1',
-            firstParty: false,
-            legacy: true,
-            enabled: p.ok,
-            active: p.ok,
-            needsApproval: false,
-            configurable: false,
-            capabilities: const [],
-            approvalToken: '',
-            detail: p.detail),
-    ];

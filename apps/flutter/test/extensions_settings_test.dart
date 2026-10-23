@@ -70,7 +70,7 @@ void main() {
         },
         readSupportedShortcutActions: (ids) async => supported);
     addTearDown(c.dispose);
-    await c.load(plugins: true);
+    await c.load(catalog: true);
     expect(c.shortcutSupported('test.copy'), isTrue);
     await c.refreshFeatureData();
     expect(c.shortcutSupported('test.copy'), isFalse);
@@ -82,37 +82,12 @@ void main() {
     expect(c.statusMessage, isNull);
   });
 
-  test(
-      'legacy reload succeeds but status read fails: catalog is still reconciled',
-      () async {
-    var failed = false, available = true;
-    final c = SettingsController(
-        window: WindowHost(channel),
-        readExtensions: () {
-          if (failed) throw StateError('status read failed');
-          return [extension(active: true)];
-        },
-        refreshPluginReports: () async {
-          failed = true;
-          available = false;
-          return [];
-        },
-        readSupportedShortcutActions: (ids) async => available ? ids : []);
-    addTearDown(c.dispose);
-    await c.load(plugins: true);
-    await c.refreshFeatureData();
-    expect(c.shortcutSupported('test.copy'), isFalse);
-    expect(syncs.last['supportedActionIds'], isEmpty);
-    expect(c.statusMessage, contains('status read failed'));
-  });
-
   test('approve and revoke refresh picker and native hotkey eligibility',
       () async {
     var current = extension();
     final approvals = <(String, String)>[];
     final c = SettingsController(
         window: WindowHost(channel),
-        readPlugins: () => [],
         readExtensions: () => [current],
         grantExtension: (key, token) async {
           approvals.add((key, token));
@@ -132,7 +107,7 @@ void main() {
             ],
         readSupportedShortcutActions: (ids) async => current.active ? ids : []);
     addTearDown(c.dispose);
-    await c.load(plugins: true);
+    await c.load(catalog: true);
     expect(c.shortcutSupported('test.copy'), isFalse);
     await c.approveExtension(current);
     expect(approvals, [('plugin:test', 'inspection-1')]);
@@ -149,18 +124,17 @@ void main() {
     final old = extension(active: true, firstParty: true);
     final c = SettingsController(
         window: WindowHost(channel),
-        readPlugins: () => [],
         readExtensions: () => [old],
         enableExtension: (_, __) async => throw StateError('disk full'),
         readSupportedShortcutActions: (ids) async => ids);
     addTearDown(c.dispose);
-    await c.load(plugins: true);
+    await c.load(catalog: true);
     final count = syncs.length;
     await c.setExtensionEnabled(old, false);
     expect(c.extensions.single, same(old));
     expect(syncs.length, count + 1);
     expect(c.statusMessage, contains('disk full'));
-    expect(c.refreshingPlugins, isFalse);
+    expect(c.updatingFeatures, isFalse);
   });
 
   test(
@@ -171,7 +145,6 @@ void main() {
     var changes = 0, reads = 0;
     final c = SettingsController(
         window: WindowHost(channel),
-        readPlugins: () => [],
         readExtensions: () => [extension(active: true)],
         removeExtensionGrant: (_) {
           changes++;
@@ -180,7 +153,7 @@ void main() {
         readSupportedShortcutActions: (ids) =>
             ++reads == 1 ? Future.value(ids) : sync.future);
     addTearDown(c.dispose);
-    await c.load(plugins: true);
+    await c.load(catalog: true);
     final mutation = c.revokeExtension(extension(active: true));
     await c.revokeExtension(extension(active: true));
     expect(changes, 1);
@@ -191,12 +164,12 @@ void main() {
     gate.complete([extension()]);
     await Future<void>.delayed(Duration.zero);
     expect(closed, isFalse);
-    expect(c.refreshingPlugins, isTrue);
+    expect(c.updatingFeatures, isTrue);
     sync.complete([]);
     await mutation;
     await closing;
     expect(closed, isTrue);
-    expect(c.refreshingPlugins, isFalse);
+    expect(c.updatingFeatures, isFalse);
   });
 
   test(
@@ -205,11 +178,10 @@ void main() {
     final gate = Completer<List<ExtensionStatusDto>>();
     final c = SettingsController(
         window: WindowHost(channel),
-        readPlugins: () => [],
         readExtensions: () => [extension()],
         grantExtension: (_, __) => gate.future,
         readSupportedShortcutActions: (ids) async => ids);
-    await c.load(plugins: true);
+    await c.load(catalog: true);
     final count = syncs.length;
     final mutation = c.approveExtension(extension());
     c.dispose();
@@ -225,7 +197,6 @@ void main() {
     final started = Completer<void>();
     final c = SettingsController(
         window: WindowHost(channel),
-        readPlugins: () => [],
         readExtensions: () {
           started.complete();
           return gate.future;
@@ -233,7 +204,7 @@ void main() {
         enableExtension: (_, __) async =>
             [extension(firstParty: true, enabled: false)]);
     addTearDown(c.dispose);
-    final load = c.load(plugins: true);
+    final load = c.load(catalog: true);
     await started.future;
     await c.setExtensionEnabled(old, false);
     gate.complete([old]);
@@ -247,7 +218,6 @@ void main() {
     var grants = 0;
     final c = SettingsController(
         window: WindowHost(channel),
-        readPlugins: () => [],
         readExtensions: () =>
             [extension(active: true, firstParty: true), extension()],
         grantExtension: (_, __) async {
@@ -255,7 +225,7 @@ void main() {
           return [];
         });
     addTearDown(c.dispose);
-    await c.load(plugins: true);
+    await c.load(catalog: true);
     await tester.pumpWidget(MaterialApp(
         theme: AppStyle.theme,
         builder: AppStyle.windowBuilder,
@@ -298,7 +268,6 @@ void main() {
     ];
     final c = SettingsController(
         window: WindowHost(channel),
-        readPlugins: () => [],
         readExtensions: () => [
               for (final name in modules)
                 ExtensionStatusDto(
@@ -321,7 +290,7 @@ void main() {
                         : 'Enabled')
             ]);
     addTearDown(c.dispose);
-    await c.load(plugins: true);
+    await c.load(catalog: true);
     await tester.pumpWidget(MaterialApp(
         theme: AppStyle.theme,
         builder: (context, child) => AppStyle.windowBuilder(

@@ -220,14 +220,6 @@ pub fn freeze_file_results(session_id: u32, revision: u32) -> Result<()> {
     files::freeze_file_results(session_id, revision)
 }
 
-/// Latest committed snapshot for a session, read straight from the core.
-///
-/// The core is the only source of truth: a late pass publishes there, and nothing
-/// here has to be kept in step with it.
-pub fn latest_state(session_id: u32) -> Option<LauncherStateDto> {
-    queries::latest_state(session_id)
-}
-
 /// Block until the core publishes a snapshot beyond `after` for this session.
 pub async fn wait_for_snapshot(session_id: u32, after: u64) -> Result<SnapshotWaitDto> {
     queries::wait_for_snapshot(session_id, after).await
@@ -281,15 +273,6 @@ pub fn shutdown_execution_sessions() -> Result<()> {
 #[flutter_rust_bridge::frb(sync)]
 pub fn prompt_accessibility() -> Result<bool> {
     queries::prompt_accessibility()
-}
-
-#[flutter_rust_bridge::frb(sync)]
-pub fn plugin_status() -> Vec<PluginStatusDto> {
-    settings::plugin_status()
-}
-
-pub fn refresh_plugins() -> Result<Vec<PluginStatusDto>> {
-    settings::refresh_plugins()
 }
 
 /// Refresh preferences and feature data; no module or plugin code is loaded.
@@ -635,13 +618,6 @@ pub struct ExecutionSessionDetailDto {
     pub summary: ExecutionSessionSummaryDto,
     pub stdout: String,
     pub stderr: String,
-}
-
-#[derive(Clone, Debug)]
-pub struct PluginStatusDto {
-    pub id: String,
-    pub ok: bool,
-    pub detail: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

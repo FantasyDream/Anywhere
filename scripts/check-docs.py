@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check repository Markdown targets and heading links without network access."""
 from collections import Counter
+import argparse
 from pathlib import Path
 import re
 import subprocess
@@ -41,7 +42,7 @@ def heading_ids(text):
     return result
 
 
-def check_documents(root, documents):
+def check_documents(root, documents, *, check_ignored=True):
     failures, ignored, headings = [], {}, {}
     links = 0
     for document in documents:
@@ -61,12 +62,12 @@ def check_documents(root, documents):
             except ValueError:
                 failures.append(f"{source}: {raw}: target outside repository")
                 continue
-            if relative not in ignored:
+            if check_ignored and relative not in ignored:
                 ignored[relative] = subprocess.run(
                     ["git", "check-ignore", "-q", str(relative)], cwd=root,
                     check=False,
                 ).returncode == 0
-            if ignored[relative]:
+            if ignored.get(relative, False):
                 failures.append(f"{source}: {raw}: ignored target is not shipped")
                 continue
             if not target.exists():
@@ -81,6 +82,22 @@ def check_documents(root, documents):
 
 
 def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--package', type=Path,
+                        help='Check an extracted SDK without Git or repository community files')
+    package = parser.parse_args().package
+    if package is not None:
+        root = package.resolve()
+        if not root.is_dir():
+            raise SystemExit(f'Package directory does not exist: {root}')
+        documents = sorted(root.rglob('*.md'))
+        if not documents:
+            raise SystemExit('Package contains no Markdown documentation')
+        failures, links = check_documents(root, documents, check_ignored=False)
+        if failures:
+            raise SystemExit('\n'.join(failures))
+        print(f'Package documentation OK: {len(documents)} Markdown files, {links} local links')
+        return
     documents = repository_documents(ROOT)
     failures, links = check_documents(ROOT, documents)
     for name in ["LICENSE", "CONTRIBUTING.md", "CODE_OF_CONDUCT.md", "SECURITY.md",

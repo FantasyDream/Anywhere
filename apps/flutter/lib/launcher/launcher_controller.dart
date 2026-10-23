@@ -38,7 +38,7 @@ class LauncherController extends ChangeNotifier {
     ApplyExcludedApps? applyExcludedApps,
     Future<void> Function(HostSettings)? applyContextSources,
     Future<void> Function(HostSettings)? applyFileSearch,
-    List<PluginStatusDto> Function()? readPlugins,
+    FutureOr<List<ExtensionStatusDto>> Function()? readExtensions,
     Future<void> Function()? shutdownTasks,
     int Function()? nowMillis,
     ToolPageRegistry? toolPages,
@@ -54,7 +54,7 @@ class LauncherController extends ChangeNotifier {
             applyExcludedApps: applyExcludedApps,
             applyContextSources: applyContextSources,
             applyFileSearch: applyFileSearch,
-            readPlugins: readPlugins,
+            readExtensions: readExtensions,
             readShortcutActions: backend.shortcutActions,
             readSupportedShortcutActions: backend.supportedShortcutActions,
             readShortcutApplications: backend.shortcutApplications),
@@ -1366,7 +1366,7 @@ class LauncherController extends ChangeNotifier {
     final generation = ++_generation;
     _phase = LauncherPhase.settings;
     try {
-      await settings.load(plugins: true);
+      await settings.load(catalog: true);
     } catch (error) {
       settings.reportError('$error');
     }

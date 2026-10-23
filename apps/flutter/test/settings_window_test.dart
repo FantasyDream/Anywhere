@@ -59,7 +59,7 @@ class SettingsHarness {
     applyExcludedApps: (_) async {},
     applyFileSearch: (_) async {},
     applyContextSources: (_) async {},
-    readPlugins: () => [],
+    readExtensions: () => [],
     shutdownTasks: () async {},
   );
 

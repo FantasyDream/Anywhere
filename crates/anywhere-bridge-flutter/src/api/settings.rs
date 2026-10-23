@@ -79,24 +79,6 @@ pub(super) fn change_extension(
         .map(Into::into)
         .collect())
 }
-fn plugin_reports(
-    statuses: Vec<anywhere_core::application::settings_service::ModuleStatus>,
-) -> Vec<PluginStatusDto> {
-    statuses
-        .into_iter()
-        .filter(|s| !s.first_party)
-        .map(|s| PluginStatusDto {
-            id: s.id,
-            ok: s.active,
-            detail: s.detail,
-        })
-        .collect()
-}
-pub(super) fn plugin_status() -> Vec<PluginStatusDto> {
-    extensions()
-        .map(|m| plugin_reports(m.statuses()))
-        .unwrap_or_default()
-}
 pub(super) fn refresh_features() -> Result<Vec<ExtensionStatusDto>> {
     Ok(extensions()?
         .refresh(application()?)?
@@ -104,10 +86,6 @@ pub(super) fn refresh_features() -> Result<Vec<ExtensionStatusDto>> {
         .map(Into::into)
         .collect())
 }
-pub(super) fn refresh_plugins() -> Result<Vec<PluginStatusDto>> {
-    Ok(plugin_reports(extensions()?.refresh(application()?)?))
-}
-
 pub(super) fn excluded_apps() -> Result<Vec<String>> {
     Ok(application()?.excluded_apps())
 }
