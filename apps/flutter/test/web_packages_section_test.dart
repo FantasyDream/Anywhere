@@ -1,10 +1,11 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
+
 import 'package:anywhere/infrastructure/web_package_backend.dart';
 import 'package:anywhere/src/rust/api.dart';
 import 'package:anywhere/ui/app_style.dart';
 import 'package:anywhere/web_plugins/web_packages_section.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 WebPackageDto package(String name, {bool enabled = true}) => WebPackageDto(
     id: 'dev.example.tool',

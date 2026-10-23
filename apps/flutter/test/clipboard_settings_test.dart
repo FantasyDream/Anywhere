@@ -1,16 +1,17 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_test/flutter_test.dart';
+
 import 'package:anywhere/infrastructure/clipboard_preferences_backend.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/l10n/app_language.dart';
 import 'package:anywhere/settings/clipboard_settings_controller.dart';
 import 'package:anywhere/settings/clipboard_settings_section.dart';
-import 'package:anywhere/settings/settings_controller.dart';
 import 'package:anywhere/settings/settings_components.dart';
+import 'package:anywhere/settings/settings_controller.dart';
 import 'package:anywhere/src/rust/api.dart';
 import 'package:anywhere/ui/app_style.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 class Preferences implements ClipboardPreferencesBackend {
   bool recording = false, available = true, fail = false;
@@ -66,7 +67,7 @@ void main() {
     final settings = SettingsController(
         window: WindowHost(const MethodChannel('unused/settings')),
         clipboardBackend: backend,
-        readPlugins: () => []);
+        readExtensions: () => []);
     var prepared = false;
     settings.beforeClose = () async {
       prepared = true;
@@ -110,7 +111,7 @@ void main() {
     final settings = SettingsController(
         window: WindowHost(const MethodChannel('unused/settings')),
         clipboardBackend: backend,
-        readPlugins: () => []);
+        readExtensions: () => []);
     addTearDown(settings.dispose);
     final change = settings.clipboard.setRecording(true);
     final close = settings.prepareClose();

@@ -7,7 +7,8 @@ if [[ "$(uname -s)" != Darwin || $# -ne 1 ]]; then
   echo 'Usage: scripts/package-macos.sh build/Anywhere-dev-0.5.app (macOS only)' >&2
   exit 2
 fi
-APP="$(python3 - "$1" <<'PY'
+APP="$(
+  python3 - "$1" <<'PY'
 import pathlib, plistlib, re, sys
 
 root = pathlib.Path.cwd()
@@ -59,6 +60,6 @@ PY
 mv -f "$PACKAGING_DIR/$NAME" "$ROOT/build/$NAME"
 (
   cd "$ROOT/build"
-  shasum -a 256 "$NAME" > "$NAME.sha256"
+  shasum -a 256 "$NAME" >"$NAME.sha256"
 )
 printf 'App: %s\nZIP: %s\nChecksum: %s\n' "$APP" "$ROOT/build/$NAME" "$ROOT/build/$NAME.sha256"

@@ -52,10 +52,6 @@ pub(super) async fn update_input(
         .map(Into::into))
 }
 
-pub(super) fn latest_state(session_id: u32) -> Option<LauncherStateDto> {
-    application().ok()?.latest_state(session_id).map(Into::into)
-}
-
 pub(super) async fn wait_for_snapshot(session_id: u32, after: u64) -> Result<SnapshotWaitDto> {
     Ok(
         match application()?.wait_for_snapshot(session_id, after).await {

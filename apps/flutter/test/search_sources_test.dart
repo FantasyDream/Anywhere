@@ -1,7 +1,8 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:anywhere/launcher/launcher_view_state.dart';
 import 'package:anywhere/settings/host_settings.dart';
 import 'package:anywhere/src/rust/api.dart';
+import 'package:flutter_test/flutter_test.dart';
+
 import 'launcher_fixtures.dart';
 
 void main() {

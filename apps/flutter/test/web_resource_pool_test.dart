@@ -1,5 +1,5 @@
-import 'package:flutter_test/flutter_test.dart';
 import 'package:anywhere/web_plugins/web_resource_pool.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('resource admission remains bounded across document replacement',

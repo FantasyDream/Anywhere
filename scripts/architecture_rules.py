@@ -11,7 +11,8 @@ def _check_imports(source, name, forbidden):
 
 
 def check_core_imports(source, name):
-    _check_imports(source, name, r'\b(features|extensions|application|persistence)\b')
+    _check_imports(source, name,
+                   r'\b(features|extensions|application|persistence)\b')
 
 
 def check_feature_imports(source, name):

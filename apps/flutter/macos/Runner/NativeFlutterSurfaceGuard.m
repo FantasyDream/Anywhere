@@ -1,5 +1,5 @@
-#import <Foundation/Foundation.h>
 #import <CoreGraphics/CoreGraphics.h>
+#import <Foundation/Foundation.h>
 #import <objc/runtime.h>
 #include <stdatomic.h>
 #include <stdint.h>
@@ -51,10 +51,10 @@ int32_t anywhere_install_flutter_surface_guard(void) {
     Method take = class_getInstanceMethod(cache, @selector(removeSurfaceForSize:));
     Method size = class_getInstanceMethod(surface, @selector(size));
     if (!take || !size || method_getNumberOfArguments(take) != 3 ||
-        !hasType(take, UINT_MAX, @encode(id)) ||
-        !hasType(take, 2, @encode(CGSize)) ||
-        !hasType(size, UINT_MAX, @encode(CGSize))) return;
-    originalTakeSurface = (id (*)(id, SEL, CGSize))method_getImplementation(take);
+        !hasType(take, UINT_MAX, @encode(id)) || !hasType(take, 2, @encode(CGSize)) ||
+        !hasType(size, UINT_MAX, @encode(CGSize)))
+      return;
+    originalTakeSurface = (id(*)(id, SEL, CGSize))method_getImplementation(take);
     method_setImplementation(take, (IMP)takeMatchingSurface);
     installed = 1;
   });

@@ -1,12 +1,14 @@
-import '../../l10n/app_language.dart';
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../../ui/app_style.dart';
+
 import '../../infrastructure/clipboard_history_backend.dart';
-import 'clipboard_shelf_page.dart';
+import '../../l10n/app_language.dart';
+import '../../ui/app_style.dart';
 import 'clipboard_history_presentation.dart';
 import 'clipboard_history_session.dart';
+import 'clipboard_shelf_page.dart';
 
 /// An independent presentation of the same Rust history, with its own query and
 /// selection. It never initializes another Application or enables recording.

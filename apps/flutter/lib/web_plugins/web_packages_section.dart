@@ -1,11 +1,12 @@
-import '../l10n/app_language.dart';
-import 'permission_labels.dart';
 import 'package:flutter/material.dart';
-import '../src/rust/api.dart' as api;
+
 import '../infrastructure/web_package_backend.dart';
+import '../l10n/app_language.dart';
+import '../src/rust/api.dart' as api;
 import '../ui/app_components.dart';
-import '../ui/app_style.dart';
 import '../ui/app_icons.dart';
+import '../ui/app_style.dart';
+import 'permission_labels.dart';
 
 /// Host-owned inspection and exact-content approval. Package code never runs here.
 class WebPackagesSection extends StatefulWidget {

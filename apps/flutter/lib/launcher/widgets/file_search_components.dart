@@ -1,12 +1,13 @@
-import '../../l10n/app_language.dart';
 import 'package:flutter/material.dart';
-import '../../ui/app_style.dart';
+
+import '../../infrastructure/desktop_environment.dart';
+import '../../l10n/app_language.dart';
 import '../../ui/app_components.dart';
+import '../../ui/app_style.dart';
 import '../../ui/file_type_appearance.dart';
 import '../file_search_controller.dart';
 import '../launcher_view_state.dart';
 import 'launcher_components.dart';
-import '../../infrastructure/desktop_environment.dart';
 
 /// The file page uses the same filter chips and cycle keys as Scope.
 class FileSearchControls extends StatelessWidget {

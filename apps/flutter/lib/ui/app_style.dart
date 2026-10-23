@@ -1,9 +1,11 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../infrastructure/desktop_environment.dart';
+
 import '../infrastructure/desktop_edit_menu.dart';
+import '../infrastructure/desktop_environment.dart';
 import 'design_tokens.g.dart';
+
 export 'design_tokens.g.dart';
 
 /// One palette and control vocabulary for every window and sheet.

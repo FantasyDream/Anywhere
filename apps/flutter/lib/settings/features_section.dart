@@ -1,12 +1,13 @@
-import '../l10n/app_language.dart';
 import 'package:flutter/material.dart';
-import '../web_plugins/web_packages_section.dart';
+
+import '../l10n/app_language.dart';
 import '../src/rust/api.dart';
 import '../ui/app_components.dart';
 import '../ui/app_icons.dart';
 import '../ui/app_style.dart';
-import 'settings_controller.dart';
+import '../web_plugins/web_packages_section.dart';
 import 'extension_presentation.dart';
+import 'settings_controller.dart';
 
 /// Presentation only: Core owns the inspected definition, approval and persistence.
 class FeaturesSection extends StatelessWidget {
@@ -22,7 +23,7 @@ class FeaturesSection extends StatelessWidget {
                   style: AppStyle.caption)),
           IconButton(
               key: const ValueKey('refresh-features'),
-              onPressed: controller.refreshingPlugins
+              onPressed: controller.updatingFeatures
                   ? null
                   : controller.refreshFeatureData,
               icon: const Icon(AppIcons.refresh, size: 16),
@@ -72,7 +73,7 @@ class FeaturesSection extends StatelessWidget {
                 key: ValueKey('${e.key}-toggle'),
                 label: context.l10n.enableFeature(e.nameFor(context.l10n)),
                 value: e.enabled,
-                onChanged: controller.refreshingPlugins
+                onChanged: controller.updatingFeatures
                     ? null
                     : (value) => controller.setExtensionEnabled(e, value))
             : null,
@@ -98,7 +99,7 @@ class FeaturesSection extends StatelessWidget {
           if (!e.firstParty && !e.legacy && e.configurable)
             TextButton(
                 key: ValueKey('${e.key}-permission'),
-                onPressed: controller.refreshingPlugins
+                onPressed: controller.updatingFeatures
                     ? null
                     : () => e.needsApproval
                         ? _approve(context, e)

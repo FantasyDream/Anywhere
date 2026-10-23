@@ -1,17 +1,19 @@
-import 'package:anywhere/l10n/app_language.dart';
-import 'package:anywhere/infrastructure/desktop_environment.dart';
-import 'package:anywhere/src/rust/api.dart';
 import 'dart:async';
+
+import 'package:anywhere/infrastructure/desktop_environment.dart';
+import 'package:anywhere/infrastructure/window_host.dart';
+import 'package:anywhere/l10n/app_language.dart';
+import 'package:anywhere/launcher/launcher_controller.dart';
+import 'package:anywhere/launcher/launcher_screen.dart';
+import 'package:anywhere/launcher/launcher_view_state.dart';
+import 'package:anywhere/settings/host_settings.dart';
+import 'package:anywhere/settings/settings_components.dart';
+import 'package:anywhere/src/rust/api.dart';
+import 'package:anywhere/ui/app_style.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:anywhere/infrastructure/window_host.dart';
-import 'package:anywhere/launcher/launcher_controller.dart';
-import 'package:anywhere/launcher/launcher_view_state.dart';
-import 'package:anywhere/launcher/launcher_screen.dart';
-import 'package:anywhere/ui/app_style.dart';
-import 'package:anywhere/settings/host_settings.dart';
-import 'package:anywhere/settings/settings_components.dart';
+
 import 'launcher_fixtures.dart';
 
 class SettingsHarness {
@@ -59,7 +61,7 @@ class SettingsHarness {
     applyExcludedApps: (_) async {},
     applyFileSearch: (_) async {},
     applyContextSources: (_) async {},
-    readPlugins: () => [],
+    readExtensions: () => [],
     shutdownTasks: () async {},
   );
 

@@ -1,5 +1,6 @@
-import 'app_language.dart';
 import 'dart:ui' show Locale;
+
+import 'app_language.dart';
 
 String contextTypeLabel(String id, [AppLocalizations? labels]) {
   final l10n = labels ?? lookupAppLocalizations(const Locale('en'));

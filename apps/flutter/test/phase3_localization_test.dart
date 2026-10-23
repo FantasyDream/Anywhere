@@ -1,16 +1,16 @@
+import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/l10n/app_language.dart';
+import 'package:anywhere/launcher/context_source_status.dart';
 import 'package:anywhere/settings/action_shortcut.dart';
+import 'package:anywhere/settings/extension_presentation.dart';
 import 'package:anywhere/settings/host_settings.dart';
 import 'package:anywhere/settings/settings_controller.dart';
-import 'package:anywhere/settings/extension_presentation.dart';
-import 'package:anywhere/infrastructure/window_host.dart';
-import 'package:flutter/services.dart';
-import 'package:anywhere/launcher/context_source_status.dart';
 import 'package:anywhere/src/rust/api.dart';
 import 'package:anywhere/ui/file_type_appearance.dart';
 import 'package:anywhere/web_plugins/permission_labels.dart';
 import 'package:anywhere/web_plugins/web_host_panels.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {

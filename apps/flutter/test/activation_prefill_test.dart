@@ -1,13 +1,15 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_test/flutter_test.dart';
+
 import 'package:anywhere/infrastructure/window_host.dart';
-import 'package:anywhere/launcher/launcher_controller.dart';
 import 'package:anywhere/launcher/activation_prefill.dart';
+import 'package:anywhere/launcher/launcher_controller.dart';
 import 'package:anywhere/launcher/launcher_screen.dart';
 import 'package:anywhere/launcher/launcher_view_state.dart';
 import 'package:anywhere/src/rust/api.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+
 import 'launcher_fixtures.dart';
 
 ContextCaptureDto clipboard({int? age = 0}) => ContextCaptureDto(

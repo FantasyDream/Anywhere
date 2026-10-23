@@ -16,6 +16,7 @@ apps/flutter/macos/Pods/
 apps/flutter/.flutter-plugins-dependencies
 apps/flutter/windows/flutter/ephemeral/
 .idea/
+node_modules/
 *.log
 *.ips
 .env

@@ -24,8 +24,10 @@ def run(args, cwd=ROOT):
 
 def package_root(name, project):
     config = project / '.dart_tool/package_config.json'
-    package = next(p for p in json.loads(config.read_text())['packages'] if p['name'] == name)
-    uri = urllib.parse.urlparse(urllib.parse.urljoin(config.as_uri(), package['rootUri']))
+    package = next(p for p in json.loads(config.read_text())['packages']
+                   if p['name'] == name)
+    uri = urllib.parse.urlparse(
+        urllib.parse.urljoin(config.as_uri(), package['rootUri']))
     if uri.scheme != 'file' or uri.netloc:
         raise ValueError('Expected a local pub package')
     return Path(urllib.parse.unquote(uri.path))
@@ -47,7 +49,9 @@ def ordered_set_source():
     with zipfile.ZipFile(io.BytesIO(data)) as source:
         for entry in source.infolist():
             path = Path(entry.filename)
-            if path.is_absolute() or '..' in path.parts or not path.parts or path.parts[0] != 'OrderedSet-6.0.3':
+            if path.is_absolute(
+            ) or '..' in path.parts or not path.parts or path.parts[
+                    0] != 'OrderedSet-6.0.3':
                 raise ValueError('Invalid dependency archive path')
             if (entry.external_attr >> 16) & 0o170000 == 0o120000:
                 raise ValueError('Dependency symlinks are not permitted')
@@ -69,10 +73,15 @@ def framework_layout(path, name):
     # files rely on its Cocoa import; reproduce it without rewriting pub sources.
     (version / 'Headers' / f'{name}.h').write_text('#import <Cocoa/Cocoa.h>\n')
     (version / 'Modules/module.modulemap').write_text(
-        f'framework module {name} {{\n  umbrella header "{name}.h"\n  export *\n}}\n')
-    info = {'CFBundleIdentifier': f'dev.anywhere.frameworks.{name}',
-            'CFBundleExecutable': name, 'CFBundlePackageType': 'FMWK',
-            'CFBundleVersion': '1', 'CFBundleShortVersionString': '1.1.2'}
+        f'framework module {name} {{\n  umbrella header "{name}.h"\n  export *\n}}\n'
+    )
+    info = {
+        'CFBundleIdentifier': f'dev.anywhere.frameworks.{name}',
+        'CFBundleExecutable': name,
+        'CFBundlePackageType': 'FMWK',
+        'CFBundleVersion': '1',
+        'CFBundleShortVersionString': '1.1.2'
+    }
     (version / 'Resources/Info.plist').write_bytes(plistlib.dumps(info))
     return version
 
@@ -87,8 +96,10 @@ def build_framework(flutter_output, arch, project=ROOT / 'apps/flutter'):
     ordered_sources = sorted((ordered / 'Sources').rglob('*.swift'))
     native = WORK / 'native'
     native.mkdir(exist_ok=True)
-    os.environ.setdefault('CLANG_MODULE_CACHE_PATH', str(native / 'clang-cache'))
-    os.environ.setdefault('SWIFT_MODULE_CACHE_PATH', str(native / 'swift-cache'))
+    os.environ.setdefault('CLANG_MODULE_CACHE_PATH',
+                          str(native / 'clang-cache'))
+    os.environ.setdefault('SWIFT_MODULE_CACHE_PATH',
+                          str(native / 'swift-cache'))
     framework = native / 'flutter_inappwebview_macos.framework'
     digest = hashlib.sha256()
     digest.update((str(flutter_framework) + arch + ORDERED_SHA).encode())
@@ -100,29 +111,41 @@ def build_framework(flutter_output, arch, project=ROOT / 'apps/flutter'):
         digest.update(str(path).encode())
         digest.update(path.read_bytes())
     stamp = native / 'source.sha256'
-    if not framework.exists() or not stamp.exists() or stamp.read_text() != digest.hexdigest():
+    if not framework.exists() or not stamp.exists() or stamp.read_text(
+    ) != digest.hexdigest():
         stamp.unlink(missing_ok=True)
         if framework.exists():
             shutil.rmtree(framework)
         version = framework_layout(framework, 'flutter_inappwebview_macos')
         target = f'{arch}-apple-macos12.0'
-        run(['xcrun', 'swiftc', '-O', '-target', target, '-emit-library', '-static',
-             '-emit-module', '-module-name', 'OrderedSet',
-             '-emit-module-path', native / 'OrderedSet.swiftmodule',
-             *ordered_sources, '-o', native / 'libOrderedSet.a'])
+        run([
+            'xcrun', 'swiftc', '-O', '-target', target, '-emit-library',
+            '-static', '-emit-module', '-module-name', 'OrderedSet',
+            '-emit-module-path', native / 'OrderedSet.swiftmodule',
+            *ordered_sources, '-o', native / 'libOrderedSet.a'
+        ])
         modules = version / 'Modules/flutter_inappwebview_macos.swiftmodule'
         modules.mkdir()
-        run(['xcrun', 'swiftc', '-O', '-swift-version', '5', '-target', target,
-             '-emit-library', '-emit-module', '-module-name', 'flutter_inappwebview_macos',
-             '-emit-module-path', modules / f'{arch}-apple-macos.swiftmodule',
-             '-I', native, '-L', native, '-lOrderedSet', '-F', flutter_output,
-             '-F', native, '-import-underlying-module',
-             '-framework', 'FlutterMacOS', *sources,
-             '-Xlinker', '-install_name', '-Xlinker', '@rpath/flutter_inappwebview_macos.framework/Versions/A/flutter_inappwebview_macos',
-             '-o', version / 'flutter_inappwebview_macos'])
-        shutil.copy2(plugin / 'macos/Resources/PrivacyInfo.xcprivacy', version / 'Resources/PrivacyInfo.xcprivacy')
-        for storyboard in sorted((plugin / 'macos/Storyboards').glob('*.storyboard')):
-            run(['xcrun', 'ibtool', '--compile', version / 'Resources' / f'{storyboard.stem}.storyboardc', storyboard])
+        run([
+            'xcrun', 'swiftc', '-O', '-swift-version', '5', '-target', target,
+            '-emit-library', '-emit-module', '-module-name',
+            'flutter_inappwebview_macos', '-emit-module-path',
+            modules / f'{arch}-apple-macos.swiftmodule', '-I', native, '-L',
+            native, '-lOrderedSet', '-F', flutter_output, '-F', native,
+            '-import-underlying-module', '-framework', 'FlutterMacOS', *sources,
+            '-Xlinker', '-install_name', '-Xlinker',
+            '@rpath/flutter_inappwebview_macos.framework/Versions/A/flutter_inappwebview_macos',
+            '-o', version / 'flutter_inappwebview_macos'
+        ])
+        shutil.copy2(plugin / 'macos/Resources/PrivacyInfo.xcprivacy',
+                     version / 'Resources/PrivacyInfo.xcprivacy')
+        for storyboard in sorted(
+            (plugin / 'macos/Storyboards').glob('*.storyboard')):
+            run([
+                'xcrun', 'ibtool', '--compile',
+                version / 'Resources' / f'{storyboard.stem}.storyboardc',
+                storyboard
+            ])
         stamp.write_text(digest.hexdigest())
 
     return framework, plugin, ordered

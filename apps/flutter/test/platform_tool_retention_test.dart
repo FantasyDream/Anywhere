@@ -94,7 +94,7 @@ void main() {
             diagnostics: []);
     final host = LauncherController(
         window: WindowHost(channel),
-        readPlugins: () => [],
+        readExtensions: () => [],
         toolPages: ToolPageRegistry([
           ToolPageRegistration(
               id: page.id, view: HostViewDto.webPlugin, open: (_) => page)

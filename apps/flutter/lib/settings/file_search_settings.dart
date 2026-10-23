@@ -1,9 +1,10 @@
-import '../l10n/app_language.dart';
-import '../infrastructure/desktop_environment.dart';
-import '../ui/app_icons.dart';
 import 'package:flutter/material.dart';
-import '../ui/app_style.dart';
+
+import '../infrastructure/desktop_environment.dart';
+import '../l10n/app_language.dart';
 import '../ui/app_components.dart';
+import '../ui/app_icons.dart';
+import '../ui/app_style.dart';
 import 'settings_components.dart';
 
 /// Draft fields are owned by SettingsScreen so its close/save decision includes them.

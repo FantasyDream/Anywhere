@@ -1,7 +1,8 @@
-import '../l10n/app_language.dart';
-import '../infrastructure/desktop_environment.dart';
-import 'app_icons.dart';
 import 'package:flutter/material.dart';
+
+import '../infrastructure/desktop_environment.dart';
+import '../l10n/app_language.dart';
+import 'app_icons.dart';
 import 'app_style.dart';
 
 /// Progressive disclosure for secondary information, with an ordinary keyboard

@@ -1,15 +1,17 @@
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:anywhere/web_plugins/web_document_policy.dart';
-import 'package:anywhere/web_plugins/web_bootstrap.dart';
+
 import 'package:anywhere/ui/design_tokens.g.dart';
+import 'package:anywhere/web_plugins/web_bootstrap.dart';
+import 'package:anywhere/web_plugins/web_document_policy.dart';
 import 'package:anywhere/web_plugins/web_document_theme.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   final origin = 'anywhere-plugin://${'a' * 64}.plugin.local';
   final policy = WebDocumentPolicy(origin, 'dist/index.html');
-  test('protected HTML is ready for native bytes and preserves UTF-8 content', () {
+  test('protected HTML is ready for native bytes and preserves UTF-8 content',
+      () {
     const markup = '<body><p>中文 😀 café</p></body>';
     final Uint8List bytes = policy.protectHtml(utf8.encode(markup));
     expect(utf8.decode(bytes), endsWith('$markup</html>'));

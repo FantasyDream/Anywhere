@@ -2,9 +2,9 @@
 
 浏览器侧的最小 Web 插件 SDK，运行时无 npm 依赖，不启动 Node。已接入 macOS 本地 WebView、Host 确认 UI 与安装入口，也连接 Rust 合成测试宿主。当前仍是本地开发预览，完整安全 / 跨平台验收尚未完成。
 
-**第一次开发插件：** 阅读仓库中的 [第三方插件开发指南](../../docs/plugin-development.md)。SDK `.tgz` 自带 `templates/minimal/` 和 `tools/package.py`，可在独立目录使用；当前没有公开 npm 发布版。
+**第一次开发插件：** 阅读仓库中的 [第三方插件开发指南](https://github.com/FantasyDream/Anywhere/blob/main/docs/plugin-development.md)。SDK `.tgz` 自带 `templates/minimal/` 和 `tools/package.py`，可在独立目录使用；当前没有公开 npm 发布版。
 
-导出包只包含 `dist/`、类型、公共 CSS、模板、打包工具与本说明。业务通过 `@anywhere/plugin-sdk` / `@anywhere/plugin-sdk/styles/controls.css` 标准导入，不引用仓库源文件。模板的 `npm run build` 构建网页，`npm run pack` 生成 `.awplugin`；`vendor/` 中保留 SDK 包后，不再依赖原仓库位置。
+导出包包含 `dist/`、类型、公共 CSS、模板、打包工具、本说明和 MIT 许可证。业务通过 `@anywhere/plugin-sdk` / `@anywhere/plugin-sdk/styles/controls.css` 标准导入，不引用仓库源文件。模板的 `npm run build` 构建网页，`npm run pack` 生成 `.awplugin`；`vendor/` 中保留 SDK 包后，不再依赖原仓库位置。
 
 ## 默认入口：只写业务
 
@@ -32,7 +32,9 @@ await plugin.host.clipboard.writeText('hello');
 
 背景、默认控件样式自动注入，无需 CSS 导入；模板的 `aw-tool` 提供标准工具栏、可伸展编辑区和状态栏。可使用任意标准 HTML / 前端框架，自定义业务布局；这里没有新增 UI DSL。底层 API 继续兼容，只有进阶集成才需自行管理它们。
 
-## 开发与检查
+## SDK 自身的开发与检查
+
+以下命令仅在仓库的 `packages/plugin-sdk` 源码目录执行；导出包不包含 SDK 源码、测试或锁文件。插件作者在生成的项目中使用前面的 `npm run build` / `npm run pack` 即可。
 
 要求 Node.js 22+；TypeScript 版本在锁文件固定，仅用于构建。
 
@@ -61,7 +63,7 @@ scripts/check-web-sdk.sh
 
 匹配器是宿主提供的有限格式规则，不接受插件 JS、正则或自定义 DSL；以后新增格式沿用同一声明入口。修改 Manifest 后需重新构建、导入并核对批准新的包摘要，宿主不会修改已批准安装内容。
 
-当前也可声明 `json_escaped`，该能力在 V0.11 Build 23 接入并延续到 V0.12。它匹配带 / 不带外层引号的转义 JSON 容器，最多解开 4 层；编码原文仍受 16 KiB、解码容器受 128 层限制。它不匹配普通字符串 / 标量或已是正常 JSON 的对象，Invocation 保留编码原文。解码、格式化、复制仍由业务插件处理，Host 识别不执行插件代码。
+也可声明 `json_escaped`。它匹配带 / 不带外层引号的转义 JSON 容器，最多解开 4 层；编码原文仍受 16 KiB、解码容器受 128 层限制。它不匹配普通字符串 / 标量或已是正常 JSON 的对象，Invocation 保留编码原文。解码、格式化、复制仍由业务插件处理，Host 识别不执行插件代码。
 
 ### 原始 API（进阶集成，自行管理生命周期）
 
@@ -88,7 +90,7 @@ const clipboard = await host.clipboard.readText();
 
 ## 协议与限额
 
-`src/contract.ts` 来自 Rust 的请求 / DTO / 错误 schema 与配额常量，不手改；生成与漂移检查：
+仓库中的 `src/contract.ts` 来自 Rust 的请求 / DTO / 错误 schema 与配额常量，不手改；生成与漂移检查：
 
 ```sh
 cargo run -p anywhere-protocol --features web-schema --example generate_web_sdk_contract --locked
@@ -104,16 +106,16 @@ Host 通过 `HostTransport` 注入一条只传字符串帧的消息连接。原�
 
 安装更新、禁用或撤销会失效旧调用，当前没有延迟替换编辑页的模式。卸载会清理该安装的私有 KV；没有保留数据选项。Host 的本地安装身份不等于已验证发布者，Action ID 与使用记录 / 快捷键也不提供跨发布者身份隔离。
 
-详细边界见 [Web 插件设计](../../docs/web-plugin-design.md)。
+详细边界见 [Web 插件设计](https://github.com/FantasyDream/Anywhere/blob/main/docs/web-plugin-design.md)。
 
 
 ## 生产 Host 预览
 
-V0.11 的 macOS 页面在加载包之前注入默认 transport，业务可直接导入 `host`。Host 通过原生 main-frame / origin 回调提供身份，JS 不携带授权票据。隐藏立即使未完成请求失效；`lifecycle.onVisibility` 可监听展示事件，自行恢复时再次 `host.ready()`；使用 `definePlugin` 的普通插件无需处理。事件本身不会延长调用资格。
+macOS 页面在加载包之前注入默认 transport，业务可直接导入 `host`。Host 通过原生 main-frame / origin 回调提供身份，JS 不携带授权票据。隐藏立即使未完成请求失效；`lifecycle.onVisibility` 可监听展示事件，自行恢复时再次 `host.ready()`；使用 `definePlugin` 的普通插件无需处理。事件本身不会延长调用资格。
 
 页面复用 ToolPageShell，主题使用 `--aw-text` / `--aw-secondary` / `--aw-surface` / `--aw-border` / `--aw-accent` CSS tokens（当前为应用的深色外观）。Esc 和 ⌘K 由 Host 管理，插件不注册这两个全局键。导航返回与重载当前由 Host 按钮 / 菜单提供，没有通用 invoke、插件声明的原生 UI DSL 或第三方任意导航。
 
-生产页与 JSON / 无框架 Text Pad 示例见 [平台实施记录](../../docs/web-plugin-design.md)。
+生产页与 JSON / 无框架 Text Pad 示例见 [平台实施记录](https://github.com/FantasyDream/Anywhere/blob/main/docs/web-plugin-design.md)。
 
 ## 背景自动适配（Host 基础能力）
 
@@ -128,7 +130,7 @@ V0.11 的 macOS 页面在加载包之前注入默认 transport，业务可直接
 
 ## 统一样式
 
-Flutter 与 Web 的设计参数来自同一份 [`resources/design-tokens.json`](../../resources/design-tokens.json)。Build 18 起，Host 在插件 HTML 之前自动注入默认控件 CSS：普通 button / input / textarea / select / checkbox / radio / label / kbd 均使用共享字体、字号、字重、尺寸、圆角、边界和交互状态，无需插件导入 CSS。当前仅提供与 App 一致的深色外观，没有动态主题订阅 API。
+Flutter 与 Web 的设计参数来自同一份 [`resources/design-tokens.json`](https://github.com/FantasyDream/Anywhere/blob/main/resources/design-tokens.json)。Host 在插件 HTML 之前自动注入默认控件 CSS：普通 button / input / textarea / select / checkbox / radio / label / kbd 均使用共享字体、字号、字重、尺寸、圆角、边界和交互状态，无需插件导入 CSS。当前仅提供与 App 一致的深色外观，没有动态主题订阅 API。
 
 SDK 也提供相同 CSS 的导出，供独立浏览器预览使用，不要求前端框架。生产页不必重复导入：
 
@@ -151,7 +153,7 @@ import '@anywhere/plugin-sdk/styles/controls.css';
 
 按钮、输入框、下拉框、键帽、卡片、焦点 / 悬停 / 禁用状态均使用 Host 的 `--aw-*` 参数。JSON Workspace 和无框架 Text Pad 都使用这份 CSS；各自 CSS 只处理工具布局。公共卡片内的编辑器自动继承单层表面，无需业务 CSS 再写透明背景。支持时页面保持透明，玻璃由原生窗口提供，不添加第二层模糊；不支持时使用同一套深色回退。
 
-Build 19 起，编辑 / 查询工具可直接使用 `aw-workspace` → `aw-workspace-toolbar` / `aw-workspace-panes`，以及 `aw-pane`、`aw-pane-header`、`aw-pane-body`、`aw-editor`、`aw-pane-footer`。这些类提供与 File Search 一致的轻量工具栏、左宽右窄分栏、分隔线、代码字体 / 背景及留白；`aw-tabs` / `aw-tab` 的选中状态用 `aria-pressed` 表达。标题、返回、Esc 和宿主 Actions 仍由 Host 负责，不在插件里再绘制。
+编辑 / 查询工具可直接使用 `aw-workspace` → `aw-workspace-toolbar` / `aw-workspace-panes`，以及 `aw-pane`、`aw-pane-header`、`aw-pane-body`、`aw-editor`、`aw-pane-footer`。这些类提供与 File Search 一致的轻量工具栏、左宽右窄分栏、分隔线、代码字体 / 背景及留白；`aw-tabs` / `aw-tab` 的选中状态用 `aria-pressed` 表达。标题、返回、Esc 和宿主 Actions 仍由 Host 负责，不在插件里再绘制。
 
 `styles/tokens.css` 仅供独立浏览器预览使用，生产插件不要复制固定颜色覆盖 Host。插件仍可以自定义局部组件 CSS；根画布由 Host 统一管理，局部控件仍不要求第三方页面像素级一致。
 
@@ -163,14 +165,14 @@ Build 19 起，编辑 / 查询工具可直接使用 `aw-workspace` → `aw-works
 
 Host 提供 `copy`、`paste`、`run`、`clear`、`format`、`minify`、`escape`、`unescape`、`check`、`chevron-down`，使用 `aw-icon aw-icon--名称`。图标继承文字颜色、统一尺寸与禁用态；保留按钮文字，纯图标按钮需提供 `aria-label`。图标属于呈现资源，不增加桥接 API、权限或运行时依赖。
 
-修改公共样式参数后，在仓库根运行：
+维护 SDK 公共样式时，在仓库根运行（普通插件开发无需执行）：
 
 ```sh
 python3 scripts/generate-design-tokens.py
 python3 scripts/generate-design-tokens.py --check
 ```
 
-通用控件规则只修改 [`resources/web-controls.css`](../../resources/web-controls.css)，再运行生成脚本；生成的 Dart 与 SDK CSS 不手改。规则使用低优先级选择器，第三方可覆盖局部布局 / 组件；宿主不能保证任意第三方自定义组件与 Flutter 像素一致。`scripts/check.sh` 检查同步与透明度转换，并运行 Flutter / SDK / 示例回归测试。主题只属于呈现层，Rust 继续负责权限、生命周期和调用执行。
+通用控件规则只修改 [`resources/web-controls.css`](https://github.com/FantasyDream/Anywhere/blob/main/resources/web-controls.css)，再运行生成脚本；生成的 Dart 与 SDK CSS 不手改。规则使用低优先级选择器，第三方可覆盖局部布局 / 组件；宿主不能保证任意第三方自定义组件与 Flutter 像素一致。`scripts/check.sh` 检查同步与透明度转换，并运行 Flutter / SDK / 示例回归测试。主题只属于呈现层，Rust 继续负责权限、生命周期和调用执行。
 
 画布透明度由 Host 的平台适配结果控制，默认使用公共深色底色，防止默认白画布与白字冲突。macOS 的 WebView 库 1.1.2 仅清除 scroll-bounce 的 `underPageBackgroundColor`；当前另以存在性检查保护 WebKit 的 `drawsBackground` SPI，并隔离在 `NativeWebAppearance`，不修改 pub 缓存或 Rust。该兼容路径不是公开 Apple API，后续 SDK / OS 升级必须重新验收；接口不可用时保留可读的深色回退。原生测试覆盖真实 WKWebView 透明开关、焦点与接口缺失分支。
 

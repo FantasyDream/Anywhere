@@ -1,12 +1,14 @@
+import 'dart:async';
+
+import 'package:flutter/material.dart';
+
+import '../../infrastructure/clipboard_history_backend.dart';
 import '../../l10n/app_language.dart';
 import '../../l10n/clipboard_labels.dart';
-import 'dart:async';
-import 'package:flutter/material.dart';
 import '../../src/rust/api.dart' as api;
-import '../../infrastructure/clipboard_history_backend.dart';
+import '../../tools/tool_page.dart';
 import 'clipboard_history_page.dart';
 import 'clipboard_history_presentation.dart';
-import '../../tools/tool_page.dart';
 
 /// Presentation state only. Persistence, matching, quotas and capture live in Rust.
 enum _HistoryNotice {

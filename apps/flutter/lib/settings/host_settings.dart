@@ -1,13 +1,15 @@
-import '../l10n/generated/app_localizations.dart';
-import 'dart:ui' show Locale;
-import '../l10n/language_preference.dart';
-import '../infrastructure/runtime_policy.dart';
-import '../src/rust/api.dart' show FileSearchEngineDto;
 import 'dart:convert';
+import 'dart:ui' show Locale;
+
 import 'package:flutter/services.dart';
+
+import '../infrastructure/desktop_environment.dart';
 import '../infrastructure/hotkey_keymap.dart';
 import '../infrastructure/legacy_macos_shortcuts.dart';
-import '../infrastructure/desktop_environment.dart';
+import '../infrastructure/runtime_policy.dart';
+import '../l10n/generated/app_localizations.dart';
+import '../l10n/language_preference.dart';
+import '../src/rust/api.dart' show FileSearchEngineDto;
 import 'action_shortcut.dart';
 
 class HostSettings {

@@ -1,11 +1,13 @@
-import '../l10n/app_language.dart';
-import '../infrastructure/desktop_environment.dart';
-import '../ui/app_icons.dart';
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import '../ui/app_style.dart';
+
+import '../infrastructure/desktop_environment.dart';
+import '../l10n/app_language.dart';
 import '../src/rust/api.dart';
+import '../ui/app_icons.dart';
+import '../ui/app_style.dart';
 import 'execution_sessions_controller.dart';
 
 /// Follow live output only while the reader remains at the bottom.

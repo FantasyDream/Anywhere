@@ -1,8 +1,9 @@
 import 'dart:async';
 import 'dart:typed_data';
-import 'package:flutter_test/flutter_test.dart';
+
 import 'package:anywhere/infrastructure/application_icon_cache.dart';
 import 'package:anywhere/src/rust/api.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 CandidateDto app(String id) => CandidateDto(
     id: id,

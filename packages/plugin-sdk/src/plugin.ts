@@ -1,10 +1,13 @@
-import { createHost, HostError } from './client.js';
-import { lifecycle } from './lifecycle.js';
-import type { Invocation, JsonValue, CallOptions } from './client.js';
+import {createHost, HostError} from './client.js';
+import {lifecycle} from './lifecycle.js';
+import type {Invocation, JsonValue, CallOptions} from './client.js';
 
 export interface PluginOptions {
   /** Called once with this launch's input, after the Host connection is ready. */
-  onLaunch?: (invocation: Invocation, context: { signal: AbortSignal }) => void | Promise<void>;
+  onLaunch?: (
+    invocation: Invocation,
+    context: {signal: AbortSignal},
+  ) => void | Promise<void>;
   onError?: (error: unknown) => void;
   onDispose?: () => void;
 }
@@ -29,33 +32,53 @@ function showError(error: unknown) {
  */
 export function definePlugin(options: PluginOptions = {}) {
   let client: ReturnType<typeof createHost> | undefined;
-  let active = true, disposed = false, delivered = false, generation = 0;
+  let active = true,
+    disposed = false,
+    delivered = false,
+    generation = 0;
   const lifetime = new AbortController();
   let settleReady!: () => void;
-  const ready = new Promise<void>(resolve => { settleReady = resolve; });
+  const ready = new Promise<void>(resolve => {
+    settleReady = resolve;
+  });
   function report(error: unknown) {
     if (!active || disposed) return;
-    try { (options.onError ?? showError)(error); } catch { showError(error); }
+    try {
+      (options.onError ?? showError)(error);
+    } catch {
+      showError(error);
+    }
   }
   function current() {
     if (!active || disposed) throw new HostError('INACTIVE');
     if (!client) {
-      if (!globalThis.__anywhereTransport) throw new HostError('HOST_UNAVAILABLE');
+      if (!globalThis.__anywhereTransport)
+        throw new HostError('HOST_UNAVAILABLE');
       client = createHost(globalThis.__anywhereTransport);
     }
     return client;
   }
   // Stable facade: handlers created on first render also use the resumed binding.
   const host = {
-    context: { getCurrentApp: async (opts?: CallOptions) => current().context.getCurrentApp(opts) },
+    context: {
+      getCurrentApp: async (opts?: CallOptions) =>
+        current().context.getCurrentApp(opts),
+    },
     clipboard: {
-      readText: async (opts?: CallOptions) => current().clipboard.readText(opts),
-      writeText: async (text: string, opts?: CallOptions) => current().clipboard.writeText(text, opts),
+      readText: async (opts?: CallOptions) =>
+        current().clipboard.readText(opts),
+      writeText: async (text: string, opts?: CallOptions) =>
+        current().clipboard.writeText(text, opts),
     },
     storage: {
-      get: async <T extends JsonValue = JsonValue>(key: string, opts?: CallOptions) => current().storage.get<T>(key, opts),
-      set: async (key: string, value: JsonValue, opts?: CallOptions) => current().storage.set(key, value, opts),
-      remove: async (key: string, opts?: CallOptions) => current().storage.remove(key, opts),
+      get: async <T extends JsonValue = JsonValue>(
+        key: string,
+        opts?: CallOptions,
+      ) => current().storage.get<T>(key, opts),
+      set: async (key: string, value: JsonValue, opts?: CallOptions) =>
+        current().storage.set(key, value, opts),
+      remove: async (key: string, opts?: CallOptions) =>
+        current().storage.remove(key, opts),
     },
   };
   async function connect() {
@@ -70,26 +93,45 @@ export function definePlugin(options: PluginOptions = {}) {
         if (!isCurrent()) return;
         // A failed business callback must not be run twice on a subsequent wake.
         delivered = true;
-        await options.onLaunch?.(invocation, { signal: lifetime.signal });
+        await options.onLaunch?.(invocation, {signal: lifetime.signal});
       }
-    } catch (error) { if (isCurrent()) report(error); }
-    finally { if (isCurrent()) settleReady(); }
+    } catch (error) {
+      if (isCurrent()) report(error);
+    } finally {
+      if (isCurrent()) settleReady();
+    }
   }
   const stop = lifecycle.onVisibility(visible => {
     if (disposed || active === visible) return;
     active = visible;
     if (visible) void connect();
-    else { ++generation; client?.dispose(); client = undefined; }
+    else {
+      ++generation;
+      client?.dispose();
+      client = undefined;
+    }
   });
   function dispose() {
     if (disposed) return;
-    disposed = true; active = false; ++generation;
-    stop(); globalThis.removeEventListener('pagehide', dispose);
-    lifetime.abort(); client?.dispose(); client = undefined; settleReady();
-    try { options.onDispose?.(); } catch { /* Teardown must complete. */ }
+    disposed = true;
+    active = false;
+    ++generation;
+    stop();
+    globalThis.removeEventListener('pagehide', dispose);
+    lifetime.abort();
+    client?.dispose();
+    client = undefined;
+    settleReady();
+    try {
+      options.onDispose?.();
+    } catch {
+      /* Teardown must complete. */
+    }
   }
-  globalThis.addEventListener('pagehide', dispose, { once: true });
+  globalThis.addEventListener('pagehide', dispose, {once: true});
   // Let callers finish rendering / attaching handlers before acknowledging ready.
-  queueMicrotask(() => { if (!disposed) void connect(); });
-  return { host, ready, dispose };
+  queueMicrotask(() => {
+    if (!disposed) void connect();
+  });
+  return {host, ready, dispose};
 }

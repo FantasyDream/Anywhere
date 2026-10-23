@@ -1,7 +1,7 @@
 import 'package:anywhere/execution/execution_command.dart';
-import 'package:anywhere/settings/action_shortcut.dart';
 import 'package:anywhere/infrastructure/desktop_environment.dart';
 import 'package:anywhere/infrastructure/runtime_paths.dart';
+import 'package:anywhere/settings/action_shortcut.dart';
 import 'package:anywhere/settings/host_settings.dart';
 import 'package:anywhere/ui/app_style.dart';
 import 'package:flutter/material.dart';
@@ -126,7 +126,7 @@ void main() {
     expect(copy.chordError, contains('reserved'));
     expect(
         formatExecutionCommand(
-            [r"C:\tool path\tool.exe", r"it's a $(literal)"]),
+            [r'C:\tool path\tool.exe', r"it's a $(literal)"]),
         r"& 'C:\tool path\tool.exe' 'it''s a $(literal)'");
   });
 

@@ -1,6 +1,6 @@
+import 'package:anywhere/web_plugins/web_view_appearance.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:anywhere/web_plugins/web_view_appearance.dart';
 
 class TestWebController extends PlatformInAppWebViewController {
   TestWebController(int id)

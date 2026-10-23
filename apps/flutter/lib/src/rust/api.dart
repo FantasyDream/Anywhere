@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `application`, `snapshot_delivery`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
 
@@ -135,13 +135,6 @@ Future<void> freezeFileResults(
     RustLib.instance.api
         .crateApiFreezeFileResults(sessionId: sessionId, revision: revision);
 
-/// Latest committed snapshot for a session, read straight from the core.
-///
-/// The core is the only source of truth: a late pass publishes there, and nothing
-/// here has to be kept in step with it.
-Future<LauncherStateDto?> latestState({required int sessionId}) =>
-    RustLib.instance.api.crateApiLatestState(sessionId: sessionId);
-
 /// Block until the core publishes a snapshot beyond `after` for this session.
 Future<SnapshotWaitDto> waitForSnapshot(
         {required int sessionId, required BigInt after}) =>
@@ -185,12 +178,6 @@ Future<void> shutdownExecutionSessions() =>
 
 bool promptAccessibility() =>
     RustLib.instance.api.crateApiPromptAccessibility();
-
-List<PluginStatusDto> pluginStatus() =>
-    RustLib.instance.api.crateApiPluginStatus();
-
-Future<List<PluginStatusDto>> refreshPlugins() =>
-    RustLib.instance.api.crateApiRefreshPlugins();
 
 /// Refresh preferences and feature data; no module or plugin code is loaded.
 Future<List<ExtensionStatusDto>> refreshFeatures() =>
@@ -1281,30 +1268,6 @@ class PluginKeyValueDto {
           runtimeType == other.runtimeType &&
           label == other.label &&
           value == other.value;
-}
-
-class PluginStatusDto {
-  final String id;
-  final bool ok;
-  final String detail;
-
-  const PluginStatusDto({
-    required this.id,
-    required this.ok,
-    required this.detail,
-  });
-
-  @override
-  int get hashCode => id.hashCode ^ ok.hashCode ^ detail.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is PluginStatusDto &&
-          runtimeType == other.runtimeType &&
-          id == other.id &&
-          ok == other.ok &&
-          detail == other.detail;
 }
 
 class ScopeDto {

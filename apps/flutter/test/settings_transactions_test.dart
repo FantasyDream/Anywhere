@@ -1,9 +1,10 @@
 import 'dart:async';
+
+import 'package:anywhere/infrastructure/window_host.dart';
+import 'package:anywhere/settings/host_settings.dart';
+import 'package:anywhere/settings/settings_controller.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:anywhere/settings/settings_controller.dart';
-import 'package:anywhere/settings/host_settings.dart';
-import 'package:anywhere/infrastructure/window_host.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -36,7 +37,7 @@ void main() {
         applyContextSources: (_) async {},
         applyFileSearch: (_) async {},
         authorizeFileSearch: (_) async {},
-        readPlugins: () => []);
+        readExtensions: () => []);
     await settings.load();
     final authorizationStates = <bool>[];
     settings
@@ -91,7 +92,7 @@ void main() {
           applyContextSources: (_) async {},
           applyFileSearch: (_) async {},
           authorizeFileSearch: (_) async {},
-          readPlugins: () => []);
+          readExtensions: () => []);
       await settings.load();
       held = true;
       final pending = settings.authorizeFileSearch();
@@ -140,7 +141,7 @@ void main() {
         applyFileSearch: (s) async {
           applied.add(s.fileSearchRoots);
         },
-        readPlugins: () => []);
+        readExtensions: () => []);
     final first = settings.save(host.copyWith(fileSearchRoots: ['/first']));
     await started.future;
     final second = settings.save(host.copyWith(fileSearchRoots: ['/second']));

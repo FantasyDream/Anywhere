@@ -1,14 +1,15 @@
-import '../l10n/app_language.dart';
+import 'dart:collection';
+import 'dart:convert';
 import 'dart:ui' show Locale;
+
+import '../l10n/app_language.dart';
+import '../settings/host_settings.dart';
+import '../src/rust/api.dart';
 import '../tools/tool_page.dart';
 import '../ui/design_tokens.g.dart';
-import '../settings/host_settings.dart';
-import 'file_search_controller.dart';
-import 'dart:convert';
-import 'dart:collection';
-import 'stable_list.dart';
-import '../src/rust/api.dart';
 import 'context_source_status.dart';
+import 'file_search_controller.dart';
+import 'stable_list.dart';
 
 enum LauncherPhase { hidden, activating, ready, resolving, executing, settings }
 

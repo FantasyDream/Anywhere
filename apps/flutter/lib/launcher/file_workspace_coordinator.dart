@@ -1,7 +1,7 @@
 import '../src/rust/api.dart';
 import 'file_search_controller.dart';
-import 'launcher_navigation.dart';
 import 'launcher_backend.dart';
+import 'launcher_navigation.dart';
 import 'launcher_session_coordinator.dart';
 
 /// Owns tool state and asynchronous object/load requests. The Launcher controls

@@ -15,10 +15,11 @@ def check_lock(path):
         if not source or entry.get('link') or source.startswith('file:'):
             continue  # Local SDK snapshots are not registry downloads.
         url = urlsplit(source)
-        if (url.scheme != 'https' or url.netloc != 'registry.npmjs.org'
-                or url.query or url.fragment):
+        if (url.scheme != 'https' or url.netloc != 'registry.npmjs.org' or
+                url.query or url.fragment):
             # Do not print URLs that might contain credentials or query tokens.
-            failures.append(f'{name}: dependency must use the public npm registry')
+            failures.append(
+                f'{name}: dependency must use the public npm registry')
     return failures
 
 
@@ -34,7 +35,8 @@ def main():
         if not path.is_file():
             continue
         count += 1
-        failures.extend(f'{path.relative_to(ROOT)}: {failure}' for failure in check_lock(path))
+        failures.extend(f'{path.relative_to(ROOT)}: {failure}'
+                        for failure in check_lock(path))
     if failures:
         raise SystemExit('\n'.join(failures))
     print(f'npm dependency sources OK: {count} public-registry lockfiles')

@@ -5,19 +5,23 @@ import tempfile
 import unittest
 import zipfile
 
-spec = importlib.util.spec_from_file_location("web_pack", Path(__file__).parents[1] / "tools/package.py")
+spec = importlib.util.spec_from_file_location(
+    "web_pack",
+    Path(__file__).parents[1] / "tools/package.py")
 pack = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(pack)
 
 
 class PackageTests(unittest.TestCase):
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
         (self.root / "dist").mkdir()
         (self.root / "dist/index.html").write_text("<p>test</p>")
-        (self.root / "manifest.json").write_text(json.dumps({"entry": "dist/index.html"}))
+        (self.root / "manifest.json").write_text(
+            json.dumps({"entry": "dist/index.html"}))
         self.output = self.root / "output/tool.awplugin"
 
     def test_only_runtime_files_are_packaged_reproducibly(self):
@@ -30,7 +34,8 @@ class PackageTests(unittest.TestCase):
         pack.package(self.root, self.output)
         self.assertEqual(first, self.output.read_bytes())
         with zipfile.ZipFile(self.output) as archive:
-            self.assertEqual(archive.namelist(), ["dist/index.html", "manifest.json"])
+            self.assertEqual(archive.namelist(),
+                             ["dist/index.html", "manifest.json"])
 
     def test_missing_entry_does_not_replace_existing_output(self):
         pack.package(self.root, self.output)
@@ -45,7 +50,8 @@ class PackageTests(unittest.TestCase):
         outside.write_text("private")
         for directory in [False, True]:
             link = self.root / "dist/link"
-            link.symlink_to(self.root if directory else outside, target_is_directory=directory)
+            link.symlink_to(self.root if directory else outside,
+                            target_is_directory=directory)
             with self.assertRaises(ValueError):
                 pack.package(self.root, self.output)
             link.unlink()

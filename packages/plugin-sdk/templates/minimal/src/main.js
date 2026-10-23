@@ -11,7 +11,9 @@ const plugin = definePlugin({
   },
 });
 
-input.addEventListener('input', () => { edited = true; });
+input.addEventListener('input', () => {
+  edited = true;
+});
 document.querySelector('#uppercase').addEventListener('click', () => {
   edited = true;
   input.value = input.value.toUpperCase();
@@ -19,7 +21,12 @@ document.querySelector('#uppercase').addEventListener('click', () => {
 });
 copy.addEventListener('click', async () => {
   copy.disabled = true;
-  try { await plugin.host.clipboard.writeText(input.value); status.textContent = 'Copied'; }
-  catch { status.textContent = 'Copy was not completed. You can try again.'; }
-  finally { copy.disabled = false; }
+  try {
+    await plugin.host.clipboard.writeText(input.value);
+    status.textContent = 'Copied';
+  } catch {
+    status.textContent = 'Copy was not completed. You can try again.';
+  } finally {
+    copy.disabled = false;
+  }
 });

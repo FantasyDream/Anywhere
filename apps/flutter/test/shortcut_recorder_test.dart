@@ -1,8 +1,9 @@
 import 'dart:async';
-import 'package:flutter/services.dart';
-import 'package:flutter_test/flutter_test.dart';
+
 import 'package:anywhere/settings/host_settings.dart';
 import 'package:anywhere/settings/shortcut_recorder.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

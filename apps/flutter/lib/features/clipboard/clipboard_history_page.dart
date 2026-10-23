@@ -1,16 +1,18 @@
-import '../../l10n/app_language.dart';
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../infrastructure/desktop_environment.dart';
-import '../../ui/app_style.dart';
-import '../../ui/app_icons.dart';
-import '../../ui/app_components.dart';
+import '../../l10n/app_language.dart';
 import '../../src/rust/api.dart';
-import 'clipboard_history_list.dart';
-import 'clipboard_history_session.dart';
-import 'clipboard_history_preview.dart';
 import '../../tools/tool_page_shell.dart';
+import '../../ui/app_components.dart';
+import '../../ui/app_icons.dart';
+import '../../ui/app_style.dart';
+import 'clipboard_history_list.dart';
+import 'clipboard_history_preview.dart';
+import 'clipboard_history_session.dart';
 
 enum _HistoryAction { copy, delete, refresh }
 

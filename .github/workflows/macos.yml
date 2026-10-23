@@ -15,6 +15,13 @@ on:
       - 'resources/**'
       - 'LICENSE'
       - 'scripts/**'
+      - 'tools/code-style/**'
+      - '.editorconfig'
+      - '.clang-format'
+      - '.style.yapf'
+      - '.swift-format'
+      - '.prettierrc.cjs'
+      - 'rustfmt.toml'
       - '.flutter-version'
       - '.github/workflows/macos.yml'
 
@@ -35,6 +42,18 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Identify Swift toolchain
+        id: swift-toolchain
+        run: echo "hash=$(swift --version | shasum -a 256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: .tools/code-style/swift-format
+          key: code-style-${{ runner.os }}-${{ runner.arch }}-${{ steps.swift-toolchain.outputs.hash }}-${{ hashFiles('scripts/setup-code-style.sh', 'tools/code-style/swift-package.resolved') }}
+      - name: Install isolated code style tools
+        run: scripts/setup-code-style.sh
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy

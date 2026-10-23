@@ -8,6 +8,7 @@
 |---|---|
 | [使用指南](usage.md) | 唤醒、权限、Scope、快捷键、搜索、剪贴板、项目工具和本地数据 |
 | [开发与构建](development.md) | 环境、App / SDK 构建、测试、生成物和代码入口 |
+| [代码规范](code-style.md) | Google / 官方语言规范、隔离工具、自动检查与生成文件边界 |
 | [发布检查](releasing.md) | 开发包、版本、签名 / 归档、验收与 GitHub 发布边界 |
 | [贡献指南](../CONTRIBUTING.md) | 改动约定、提交与 PR 验证 |
 | [更新记录](../CHANGELOG.md) | 用户可感知的变化与工程里程碑 |
@@ -37,6 +38,7 @@
 | [旧声明式协议](plugin-protocol.md) | v1 / v2 / v3 兼容行为；停止扩展 UI DSL |
 | [V0.12 MVP](mvp-v0.12.md) | 当前范围、工程 / 实机验收及未完成项 |
 | [路线图](roadmap.md) | 后续功能、依赖与 1.0 门槛 |
+| [应用历史与收藏设计](application-history.md) | V0.14 计划：跨应用最近对象 / 书签、统一搜索与原应用打开；尚未实现 |
 | [第三方 Context 调研](research/third-party-context-providers.md) | 尚未实现的类型注册、隔离和 worker 选型 |
 
 ## 历史与研究

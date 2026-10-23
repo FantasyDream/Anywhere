@@ -1,5 +1,5 @@
-#import <Foundation/Foundation.h>
 #import <CoreGraphics/CoreGraphics.h>
+#import <Foundation/Foundation.h>
 #include <assert.h>
 #include <dlfcn.h>
 #include <stdint.h>
@@ -30,8 +30,8 @@ static TestSurface *makeSurface(CGFloat size, BOOL inUse) {
 
 static void returnMixedSizes(id<BufferCache> cache, TestSurface *held, TestSurface *idle) {
   [cache flush];
-  [cache returnSurfaces:@[held]];
-  [cache returnSurfaces:@[idle]];
+  [cache returnSurfaces:@[ held ]];
+  [cache returnSurfaces:@[ idle ]];
 }
 
 int main(int argc, char **argv) {
@@ -52,14 +52,15 @@ int main(int argc, char **argv) {
     returnMixedSizes(cache, held, idle);
     assert([cache removeSurfaceForSize:held.size] == nil);
     TestSurface *matching = makeSurface(100, NO);
-    [cache returnSurfaces:@[matching]];
+    [cache returnSurfaces:@[ matching ]];
     assert([cache removeSurfaceForSize:held.size] == matching);
-    assert([cache removeSurfaceForSize:held.size] == nil); // Only A in use remains.
+    assert([cache removeSurfaceForSize:held.size] == nil);  // Only A in use remains.
     [cache flush];
-    [cache returnSurfaces:@[idle]];
+    [cache returnSurfaces:@[ idle ]];
     assert([cache removeSurfaceForSize:idle.size] == idle);
-    assert([cache removeSurfaceForSize:idle.size] == nil); // Empty cache allocates.
-    printf("Flutter surface guard: real runtime %s; wrong-size rejected, matching/empty/in-use preserved\n",
+    assert([cache removeSurfaceForSize:idle.size] == nil);  // Empty cache allocates.
+    printf("Flutter surface guard: real runtime %s; wrong-size rejected, matching/empty/in-use "
+           "preserved\n",
            affectedRuntime ? "reproduced wrong-size reuse" : "already rejects mixed sizes");
   }
   return 0;

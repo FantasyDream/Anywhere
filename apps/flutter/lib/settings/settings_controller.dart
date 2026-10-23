@@ -1,22 +1,23 @@
-import '../l10n/app_language.dart';
-import 'dart:ui' show Locale;
 import 'dart:async';
-import 'clipboard_settings_controller.dart';
-import '../infrastructure/clipboard_preferences_backend.dart';
-import '../infrastructure/runtime_policy.dart';
-import '../infrastructure/file_search_access.dart';
+import 'dart:ui' show Locale;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
+import '../infrastructure/clipboard_preferences_backend.dart';
+import '../infrastructure/file_search_access.dart';
+import '../infrastructure/runtime_policy.dart';
 import '../infrastructure/window_host.dart';
+import '../l10n/app_language.dart';
 import '../launcher/context_source_status.dart';
-import '../src/rust/api.dart';
 import '../src/rust/api.dart' as extensions_api;
+import '../src/rust/api.dart';
+import 'clipboard_settings_controller.dart';
 import 'host_settings.dart';
-import 'extension_presentation.dart';
 
 typedef ApplyExcludedApps = Future<void> Function(List<String> bundleIds);
 
-/// Preferences and plugin status, independent of Launcher query/selection state.
+/// Preferences and feature status, independent of Launcher query/selection state.
 class SettingsController extends ChangeNotifier {
   SettingsController({
     required DesktopHost window,
@@ -27,12 +28,10 @@ class SettingsController extends ChangeNotifier {
     Future<void> Function(HostSettings)? applyContextSources,
     Future<void> Function(HostSettings)? applyFileSearch,
     Future<void> Function(HostSettings)? authorizeFileSearch,
-    List<PluginStatusDto> Function()? readPlugins,
     FutureOr<List<ExtensionStatusDto>> Function()? readExtensions,
     Future<List<ExtensionStatusDto>> Function(String, bool)? enableExtension,
     Future<List<ExtensionStatusDto>> Function(String, String)? grantExtension,
     Future<List<ExtensionStatusDto>> Function(String)? removeExtensionGrant,
-    Future<List<PluginStatusDto>> Function()? refreshPluginReports,
     Future<List<ExtensionStatusDto>> Function()? refreshFeatures,
     Future<List<ShortcutActionDto>> Function()? readShortcutActions,
     Future<List<String>> Function(List<String>)? readSupportedShortcutActions,
@@ -42,19 +41,8 @@ class SettingsController extends ChangeNotifier {
         _window = window,
         _warning = startupMessage,
         _fileSearchInitializationFailed = fileSearchInitializationFailed,
-        _readExtensions = readExtensions ??
-            (readPlugins == null
-                ? extensionStatus
-                : (() => legacyExtensionStatuses(readPlugins()))),
-        _refreshFeatures = refreshFeatures ??
-            (refreshPluginReports == null
-                ? extensions_api.refreshFeatures
-                : (() async {
-                    final legacy = await refreshPluginReports();
-                    return readExtensions == null
-                        ? legacyExtensionStatuses(legacy)
-                        : await readExtensions();
-                  })),
+        _readExtensions = readExtensions ?? extensionStatus,
+        _refreshFeatures = refreshFeatures ?? extensions_api.refreshFeatures,
         _enableExtension = enableExtension ??
             ((key, enabled) =>
                 extensions_api.setExtensionEnabled(key: key, enabled: enabled)),
@@ -104,16 +92,15 @@ class SettingsController extends ChangeNotifier {
   Future<void> _catalogQueue = Future.value();
   String? _catalogSyncError;
   bool _catalogRegistrationFailed = false;
-  String? get shortcutCatalogMessage => _catalogSyncError;
 
   String _shortcutCatalogFailure(Object error) => error is PlatformException &&
           error.code == 'shortcuts'
       ? 'Some action shortcuts are paused. Reopen Settings to try again, or choose a different key combination.'
       : 'Action shortcuts could not be refreshed. Reopen Settings to try again.';
   int _loadEpoch = 0;
-  bool _refreshingPlugins = false;
+  bool _updatingFeatures = false;
   Future<void>? _extensionOperation;
-  bool get refreshingPlugins => _refreshingPlugins;
+  bool get updatingFeatures => _updatingFeatures;
   Set<String> _supportedShortcutActions = const {};
   bool shortcutSupported(String id) =>
       _readSupportedShortcutActions == null ||
@@ -173,7 +160,7 @@ class SettingsController extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  Future<void> load({bool plugins = false}) async {
+  Future<void> load({bool catalog = false}) async {
     final epoch = ++_loadEpoch;
     final next = await _window.readSettings();
     if (_disposed || epoch != _loadEpoch) return;
@@ -192,7 +179,7 @@ class SettingsController extends ChangeNotifier {
     if (next.actionShortcutVersion != 4) {
       _setLocalizedStatus((labels) => labels.shortcutsSavedByNewerVersion);
     }
-    if (plugins) {
+    if (catalog) {
       try {
         final statuses = await _readExtensions();
         if (_disposed || epoch != _loadEpoch) return;
@@ -202,12 +189,12 @@ class SettingsController extends ChangeNotifier {
         _setLocalizedStatus((labels) => labels.extensionsLoadFailed('$error'));
       }
     }
-    if (plugins && _readShortcutActions != null) {
+    if (catalog && _readShortcutActions != null) {
       final actions = await _readShortcutActions();
       if (_disposed || epoch != _loadEpoch) return;
       _shortcutActions = actions;
     }
-    if (plugins && _readShortcutApplications != null) {
+    if (catalog && _readShortcutApplications != null) {
       final apps = await _readShortcutApplications();
       if (_disposed || epoch != _loadEpoch) return;
       _shortcutApplications = apps;
@@ -488,7 +475,7 @@ class SettingsController extends ChangeNotifier {
       });
 
   Future<void> _runExtensionOperation(Future<void> Function() operation) {
-    if (_refreshingPlugins || _disposed || _closing != null) {
+    if (_updatingFeatures || _disposed || _closing != null) {
       return Future.value();
     }
     final pending = _updateExtensions(operation);
@@ -498,7 +485,7 @@ class SettingsController extends ChangeNotifier {
 
   Future<void> _updateExtensions(Future<void> Function() operation) async {
     ++_loadEpoch;
-    _refreshingPlugins = true;
+    _updatingFeatures = true;
     _statusMessage = null;
     _notify();
     try {
@@ -528,7 +515,7 @@ class SettingsController extends ChangeNotifier {
       // The backend can commit before its response/status read fails. Always
       // reconcile eligibility; the sync itself unregisters uncertain chords.
       await _syncShortcutCatalog();
-      _refreshingPlugins = false;
+      _updatingFeatures = false;
       _notify();
     }
   }
