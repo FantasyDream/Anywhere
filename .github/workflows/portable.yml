@@ -12,6 +12,7 @@ on:
       - 'apps/flutter/lib/**'
       - 'apps/flutter/test/**'
       - 'apps/flutter/pubspec*'
+      - 'apps/flutter/analysis_options.yaml'
       - 'resources/**'
       - 'scripts/**'
       - '.flutter-version'

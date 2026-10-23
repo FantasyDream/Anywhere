@@ -15,6 +15,12 @@ updates:
       - /packages/plugin-sdk
       - /packages/plugin-sdk/templates/minimal
       - /plugins/examples/json-workspace
+      - /tools/code-style
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+  - package-ecosystem: pip
+    directory: /tools/code-style
     schedule:
       interval: monthly
     open-pull-requests-limit: 3

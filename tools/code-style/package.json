@@ -1,0 +1,11 @@
+{
+  "name": "@anywhere/code-style",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Development-only Google style tools; never shipped with the App or SDK.",
+  "devDependencies": {
+    "globals": "14.0.0",
+    "gts": "7.0.0",
+    "typescript": "5.9.3"
+  }
+}

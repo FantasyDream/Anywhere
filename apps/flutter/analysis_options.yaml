@@ -2,4 +2,11 @@ analyzer:
   exclude:
     - build/**
     - macos/**
+    - lib/src/rust/**
+    - lib/l10n/generated/**
 include: package:flutter_lints/flutter.yaml
+
+linter:
+  rules:
+    directives_ordering: true
+    prefer_single_quotes: true

@@ -10,9 +10,13 @@ trim_trailing_whitespace = true
 indent_style = space
 indent_size = 2
 
-[*.{rs,py,swift,m,h}]
+[*.{rs,py}]
 indent_style = space
 indent_size = 4
+
+[*.{swift,m,h,cpp,cc,c,sh}]
+indent_style = space
+indent_size = 2
 
 [*.md]
 trim_trailing_whitespace = false

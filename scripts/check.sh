@@ -2,6 +2,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 source scripts/env.sh
+python3 scripts/check-code-style.py
+python3 -m unittest discover -s scripts/tests -p test_code_style.py
 python3 scripts/check-flutter.py
 python3 scripts/check-versions.py
 python3 scripts/check-npm-sources.py
@@ -20,7 +22,6 @@ python3 scripts/check-docs.py
 python3 -m unittest discover -s scripts/tests -p test_docs.py
 scripts/check-macos-menu.sh
 scripts/check-macos-host.sh
-cargo fmt --all --check
 cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 scripts/check-web-sdk.sh

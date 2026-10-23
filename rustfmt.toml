@@ -1,0 +1,4 @@
+# Google Rust uses public Rust style. Keep stable rustfmt options only.
+edition = "2021"
+max_width = 100
+newline_style = "Unix"

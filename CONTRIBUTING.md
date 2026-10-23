@@ -10,6 +10,7 @@
 
 ## 实现约定
 
+- 按[代码规范](docs/code-style.md)使用 Google / 官方语言规则，首次开发安装隔离的规范工具。机械格式迁移与功能改动分开提交。
 - Rust Core 管模型与算法；Feature 管领域；Application 管编排；Flutter 管呈现；平台专属实现留在适配层。
 - 第一方功能通过静态贡献注册；新第三方工具优先使用 [Web SDK](docs/plugin-development.md)，不扩展旧 UI DSL。
 - 保持 ActionId / CandidateId、Session / Revision、取消、执行资格、权限和资源预算的既有契约。身份迁移须保留旧数据的恢复路径。

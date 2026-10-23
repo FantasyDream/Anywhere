@@ -38,6 +38,8 @@ scripts/package-macos.sh build/Anywhere-dev.app
 
 ## 检查与生成
 
+首次开发先运行 `scripts/setup-code-style.sh` 安装隔离工具；格式与检查方式见[代码规范](code-style.md)。App 构建本身不需要这些规范工具。
+
 ```bash
 # 完整工程检查：Native、Rust、架构规则、Flutter analyze / tests。
 scripts/check.sh
