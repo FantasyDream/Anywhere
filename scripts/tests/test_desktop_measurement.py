@@ -49,6 +49,21 @@ class DesktopMeasurementTests(unittest.TestCase):
         self.assertEqual(result['overflow'], 2)
         self.assertEqual(result['operations']['query']['count'], 2)
 
+    def test_clipboard_and_shelf_samples_remain_separate(self):
+        events = [
+            json.dumps(
+                dict(event='ui_performance',
+                     operation=operation,
+                     elapsed_us=value,
+                     native_visible=True))
+            for operation, value in [('clipboard_query',
+                                      120000), ('shelf_query', 125000)]
+        ]
+        result = module.timings(events)
+        self.assertEqual(result['operations']['clipboard_query']['p95_us'],
+                         120000)
+        self.assertEqual(result['operations']['shelf_query']['p95_us'], 125000)
+
 
 if __name__ == '__main__':
     unittest.main()

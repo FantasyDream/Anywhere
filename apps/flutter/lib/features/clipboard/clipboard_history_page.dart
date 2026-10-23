@@ -156,107 +156,118 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
           child: child));
 
   @override
-  Widget build(BuildContext context) => ToolPageShell(
-        title: context.l10n.clipboardHistory,
-        subtitle: context.l10n.clipboard,
-        onBack: widget.onBack,
-        editorFocus: session.focus,
-        presentation: widget.presentation,
+  Widget build(BuildContext context) {
+    final owner = session, presentation = widget.presentation;
+    owner.measureQueryFrame(
         visible: widget.visible,
-        onKeyEvent: _key,
-        notice: session.noticeFor(context.l10n),
-        header: Row(children: [
+        presentation: presentation,
+        current: () =>
+            mounted &&
+            widget.visible &&
+            identical(widget.session, owner) &&
+            widget.presentation == presentation);
+    return ToolPageShell(
+      title: context.l10n.clipboardHistory,
+      subtitle: context.l10n.clipboard,
+      onBack: widget.onBack,
+      editorFocus: session.focus,
+      presentation: widget.presentation,
+      visible: widget.visible,
+      onKeyEvent: _key,
+      notice: session.noticeFor(context.l10n),
+      header: Row(children: [
+        Expanded(
+            child: Column(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+              Text(context.l10n.clipboardHistory,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppStyle.caption.copyWith(
+                      fontSize: DesignTokens.pageModeSize,
+                      fontWeight: DesignTokens.pageModeWeight)),
+              const SizedBox(height: 3),
+              TextField(
+                  key: const Key('clipboard-search'),
+                  controller: session.query,
+                  focusNode: session.focus,
+                  autofocus: widget.visible,
+                  selectAllOnFocus: false,
+                  textInputAction: TextInputAction.none,
+                  onEditingComplete: () {},
+                  style: AppStyle.body
+                      .copyWith(fontSize: DesignTokens.pageHeadingSize),
+                  cursorColor: AppStyle.primary,
+                  cursorWidth: 1.4,
+                  decoration: InputDecoration(
+                      hintText: context.l10n.searchHistory,
+                      hintStyle: AppStyle.body.copyWith(
+                          fontSize: DesignTokens.pageHeadingSize,
+                          color: AppStyle.muted),
+                      isCollapsed: true,
+                      isDense: true,
+                      filled: false,
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      contentPadding: EdgeInsets.zero)),
+            ])),
+        if (session.items.isEmpty)
+          _actionMenu(AppMoreAction(
+              key: const Key('history-empty-actions'),
+              onPressed: active ? _showActions : null)),
+      ]),
+      child: LayoutBuilder(builder: (context, constraints) {
+        // Give browsing most of the window; short snippets should not reserve
+        // half the page. Keep a readable preview in narrower history windows.
+        final previewWidth = (constraints.maxWidth * .32).clamp(220.0, 340.0);
+        return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
           Expanded(
-              child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                Text(context.l10n.clipboardHistory,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppStyle.caption.copyWith(
-                        fontSize: DesignTokens.pageModeSize,
-                        fontWeight: DesignTokens.pageModeWeight)),
-                const SizedBox(height: 3),
-                TextField(
-                    key: const Key('clipboard-search'),
-                    controller: session.query,
-                    focusNode: session.focus,
-                    autofocus: widget.visible,
-                    selectAllOnFocus: false,
-                    textInputAction: TextInputAction.none,
-                    onEditingComplete: () {},
-                    style: AppStyle.body
-                        .copyWith(fontSize: DesignTokens.pageHeadingSize),
-                    cursorColor: AppStyle.primary,
-                    cursorWidth: 1.4,
-                    decoration: InputDecoration(
-                        hintText: context.l10n.searchHistory,
-                        hintStyle: AppStyle.body.copyWith(
-                            fontSize: DesignTokens.pageHeadingSize,
-                            color: AppStyle.muted),
-                        isCollapsed: true,
-                        isDense: true,
-                        filled: false,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none,
-                        contentPadding: EdgeInsets.zero)),
-              ])),
-          if (session.items.isEmpty)
-            _actionMenu(AppMoreAction(
-                key: const Key('history-empty-actions'),
-                onPressed: active ? _showActions : null)),
-        ]),
-        child: LayoutBuilder(builder: (context, constraints) {
-          // Give browsing most of the window; short snippets should not reserve
-          // half the page. Keep a readable preview in narrower history windows.
-          final previewWidth = (constraints.maxWidth * .32).clamp(220.0, 340.0);
-          return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Expanded(
-                key: const Key('clipboard-list-pane'),
-                child: session.items.isEmpty
-                    ? _empty()
-                    : ClipboardHistoryList(
-                        items: session.items,
-                        selectedIndex: session.selectedIndex,
-                        scroll: session.scroll,
-                        selectedStatus: session.statusFor(context.l10n) == null
-                            ? null
-                            : context.l10n.copied,
-                        selectedCommands: _actionMenu(AppRowActions(
-                            primaryLabel: context.l10n.copy,
-                            onPrimary: active && session.selected != null
-                                ? () => unawaited(_action(_HistoryAction.copy))
-                                : null,
-                            onActions: active ? _showActions : null)),
-                        onSelect: active ? _select : null,
-                        onActivate: active
-                            ? (item) => unawaited(
-                                _action(_HistoryAction.copy, target: item.id))
-                            : null,
-                        onActions: active ? _showActions : null,
-                      )),
-            const VerticalDivider(width: 1),
-            SizedBox(
-                key: const Key('clipboard-preview-pane'),
-                width: previewWidth,
-                child: session.preview == null
-                    ? Center(
-                        child: Text(
-                            session.items.isEmpty
-                                ? context.l10n.preview
-                                : session.hasNotice
-                                    ? context.l10n.previewUnavailable
-                                    : context.l10n.loadingPreview,
-                            style: AppStyle.caption))
-                    : ClipboardHistoryPreview(
-                        key: ValueKey(session.preview!.item.id),
-                        detail: session.preview!)),
-          ]);
-        }),
-      );
+              key: const Key('clipboard-list-pane'),
+              child: session.items.isEmpty
+                  ? _empty()
+                  : ClipboardHistoryList(
+                      items: session.items,
+                      selectedIndex: session.selectedIndex,
+                      scroll: session.scroll,
+                      selectedStatus: session.statusFor(context.l10n) == null
+                          ? null
+                          : context.l10n.copied,
+                      selectedCommands: _actionMenu(AppRowActions(
+                          primaryLabel: context.l10n.copy,
+                          onPrimary: active && session.selected != null
+                              ? () => unawaited(_action(_HistoryAction.copy))
+                              : null,
+                          onActions: active ? _showActions : null)),
+                      onSelect: active ? _select : null,
+                      onActivate: active
+                          ? (item) => unawaited(
+                              _action(_HistoryAction.copy, target: item.id))
+                          : null,
+                      onActions: active ? _showActions : null,
+                    )),
+          const VerticalDivider(width: 1),
+          SizedBox(
+              key: const Key('clipboard-preview-pane'),
+              width: previewWidth,
+              child: session.preview == null
+                  ? Center(
+                      child: Text(
+                          session.items.isEmpty
+                              ? context.l10n.preview
+                              : session.hasNotice
+                                  ? context.l10n.previewUnavailable
+                                  : context.l10n.loadingPreview,
+                          style: AppStyle.caption))
+                  : ClipboardHistoryPreview(
+                      key: ValueKey(session.preview!.item.id),
+                      detail: session.preview!)),
+        ]);
+      }),
+    );
+  }
 
   Widget _empty() => Center(
       child: Padding(

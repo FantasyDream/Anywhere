@@ -12,15 +12,22 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
   private let entrypoint: String
   private let channelName: String
   private let title: () -> String
+  private let onPerformanceEvent: ([String: Any]) -> Void
   private var localeObservers: [NSObjectProtocol] = []
   private var activationObserver: NSObjectProtocol?
   private var destination: NSRunningApplication?
   private let focusReturner = ApplicationFocusReturner()
 
-  init(entrypoint: String, channelName: String, title: @autoclosure @escaping () -> String) {
+  init(
+    entrypoint: String,
+    channelName: String,
+    title: @autoclosure @escaping () -> String,
+    onPerformanceEvent: @escaping ([String: Any]) -> Void = { _ in }
+  ) {
     self.entrypoint = entrypoint
     self.channelName = channelName
     self.title = title
+    self.onPerformanceEvent = onPerformanceEvent
     super.init()
     rememberDestination(NSWorkspace.shared.frontmostApplication)
     activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
@@ -80,7 +87,16 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
           return
         }
         switch call.method {
-        case "paths": reply(["library": HostRuntime.libraryPath])
+        case "paths":
+          reply([
+            "library": HostRuntime.libraryPath,
+            "profileUi": PresentationDiagnostics.enabled ? "1" : "0",
+          ])
+        case "performanceSample":
+          if let event = PresentationDiagnostics.event(call.arguments, visible: self.isVisible) {
+            self.onPerformanceEvent(event)
+          }
+          reply(nil)
         case "capabilities": reply(HostRuntime.capabilities)
         case "ready":
           self.ready = true

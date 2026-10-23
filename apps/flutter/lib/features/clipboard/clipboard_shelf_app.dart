@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../infrastructure/clipboard_history_backend.dart';
+import '../../infrastructure/presentation_metrics.dart';
 import '../../l10n/app_language.dart';
 import '../../ui/app_style.dart';
 import 'clipboard_history_presentation.dart';
@@ -29,7 +30,8 @@ class _ClipboardShelfAppState extends State<ClipboardShelfApp> {
   late final session = ClipboardHistorySession(
       widget.backend ?? RustClipboardHistoryBackend(),
       rowExtent: clipboardShelfRowHeight,
-      previewEnabled: false);
+      previewEnabled: false,
+      queryOperation: PresentationOperation.shelfQuery);
   Timer? _timer;
   bool _visible = true, _polling = false;
   int _presentation = 0, _visibilityEpoch = 0;

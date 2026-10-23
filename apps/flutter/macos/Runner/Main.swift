@@ -66,7 +66,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   lazy var clipboardWindow = ToolWindowController(
     entrypoint: "clipboardShelfMain",
     channelName: "anywhere/clipboard-shelf",
-    title: "Anywhere · \(NativeLocalization.text(.clipboardShelf))"
+    title: "Anywhere · \(NativeLocalization.text(.clipboardShelf))",
+    onPerformanceEvent: { [weak self] event in self?.log(event) }
   )
   var tasksWindow: NSWindow? { taskWindows.tasksWindow }
   var tasksChannel: FlutterMethodChannel? { taskWindows.tasksChannel }
@@ -270,24 +271,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
           "captureSelectedText": self.stored.captureSelectedText == false ? "0" : "1",
           "captureBrowserCurrentPage": self.stored.captureBrowserCurrentPage == false ? "0" : "1",
           "captureClipboard": self.stored.captureClipboard == false ? "0" : "1",
-          "profileUi": ProcessInfo.processInfo.environment["ANYWHERE_PROFILE_UI"] == "1"
-            ? "1" : "0",
+          "profileUi": PresentationDiagnostics.enabled ? "1" : "0",
         ])
       case "performanceSample":
-        guard ProcessInfo.processInfo.environment["ANYWHERE_PROFILE_UI"] == "1",
-          let args = call.arguments as? [String: Any],
-          let operation = args["operation"] as? String,
-          ["activation", "query", "file_query"].contains(operation),
-          let elapsed = args["elapsed_us"] as? Int, elapsed >= 0,
-          let rows = args["rows"] as? Int, (0...1_000_000).contains(rows)
-        else {
-          reply(nil)
-          return
+        if let event = PresentationDiagnostics.event(
+          call.arguments,
+          visible: self.window.isVisible
+        ) {
+          self.log(event)
         }
-        self.log([
-          "event": "ui_performance", "operation": operation, "elapsed_us": elapsed,
-          "rows": rows, "native_visible": self.window.isVisible,
-        ])
         reply(nil)
       case "settings":
         if let enabled = self.loginItemIsEnabled() {

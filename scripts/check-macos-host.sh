@@ -27,6 +27,12 @@ xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/mac
   apps/flutter/macos/Runner/tests/HostServicesTests.swift \
   -o "$host_test_directory/host-test"
 "$host_test_directory/host-test"
+# All engines share the same opt-in, content-free diagnostics contract.
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  apps/flutter/macos/Runner/PresentationDiagnostics.swift \
+  apps/flutter/macos/Runner/tests/PresentationDiagnosticsTests.swift \
+  -o "$host_test_directory/presentation-diagnostics-test"
+"$host_test_directory/presentation-diagnostics-test"
 # Search scope authorization is separate from query-time filesystem traversal.
 xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   apps/flutter/macos/Runner/FileSearchAccess.swift \

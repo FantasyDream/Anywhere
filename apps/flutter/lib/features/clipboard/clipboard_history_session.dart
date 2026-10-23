@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../infrastructure/clipboard_history_backend.dart';
+import '../../infrastructure/presentation_metrics.dart';
 import '../../l10n/app_language.dart';
 import '../../l10n/clipboard_labels.dart';
 import '../../src/rust/api.dart' as api;
@@ -23,13 +24,18 @@ enum _HistoryNotice {
 
 class ClipboardHistorySession extends ToolPageSession {
   ClipboardHistorySession(this.backend,
-      {this.rowExtent = clipboardHistoryRowHeight, bool previewEnabled = true})
+      {this.rowExtent = clipboardHistoryRowHeight,
+      bool previewEnabled = true,
+      this.queryOperation = PresentationOperation.clipboardQuery})
       : _previewEnabled = previewEnabled {
     query.addListener(_queryChanged);
     unawaited(refresh());
   }
   final ClipboardHistoryBackend backend;
   final double rowExtent;
+  final PresentationOperation queryOperation;
+  final performance = PresentationMetrics();
+  int _queryRevision = 0;
   bool _previewEnabled;
   bool get previewEnabled => _previewEnabled;
   final query = TextEditingController();
@@ -90,6 +96,7 @@ class ClipboardHistorySession extends ToolPageSession {
     if (!query.value.composing.isCollapsed) {
       if (!_composing) {
         _composing = true;
+        performance.cancel();
         _debounce?.cancel();
         ++_searchEpoch;
         ++_detailEpoch;
@@ -109,12 +116,43 @@ class ClipboardHistorySession extends ToolPageSession {
     // Invalidate both response paths immediately, before the debounce fires.
     ++_searchEpoch;
     ++_detailEpoch;
+    performance.begin(queryOperation,
+        generation: 0, revision: ++_queryRevision, presentation: 0);
     items = const [];
     preview = null;
     loading = true;
     notifyListeners();
     _debounce =
         Timer(const Duration(milliseconds: 120), () => unawaited(refresh()));
+  }
+
+  /// The result list is usable before its independently decoded preview.
+  /// Includes debounce, backend matching and bridge time; never composition.
+  void measureQueryFrame({
+    required bool visible,
+    required int presentation,
+    required bool Function() current,
+  }) {
+    if (!visible || !canInteract) {
+      performance.cancel();
+      return;
+    }
+    if (loading || !available || _composing) return;
+    final revision = _queryRevision;
+    performance.ready(
+        generation: 0,
+        revision: revision,
+        presentation: presentation,
+        rows: items.length,
+        afterFrame: (callback) =>
+            WidgetsBinding.instance.addPostFrameCallback((_) => callback()),
+        current: () =>
+            !disposed &&
+            canInteract &&
+            !loading &&
+            !_composing &&
+            revision == _queryRevision &&
+            current());
   }
 
   Future<void> refresh({bool background = false}) async {
@@ -172,6 +210,7 @@ class ClipboardHistorySession extends ToolPageSession {
       }
     } catch (_) {
       if (disposed || epoch != _searchEpoch) return;
+      performance.cancel();
       // Keep usable rows and the current preview on a transient refresh failure.
       _setNotice(_HistoryNotice.loadFailed,
           'Clipboard history could not be loaded. Try Refresh.');
@@ -383,6 +422,7 @@ class ClipboardHistorySession extends ToolPageSession {
 
   @override
   void dispose() {
+    performance.cancel();
     _debounce?.cancel();
     ++_searchEpoch;
     ++_detailEpoch;

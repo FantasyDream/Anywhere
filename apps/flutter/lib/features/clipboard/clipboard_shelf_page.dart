@@ -382,6 +382,15 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
 
   @override
   Widget build(BuildContext context) {
+    final owner = session, presentation = widget.presentation;
+    owner.measureQueryFrame(
+        visible: widget.visible,
+        presentation: presentation,
+        current: () =>
+            mounted &&
+            widget.visible &&
+            identical(widget.session, owner) &&
+            widget.presentation == presentation);
     final command = DesktopEnvironment.current.commandLabel;
     final selected = session.selected;
     final labels = [

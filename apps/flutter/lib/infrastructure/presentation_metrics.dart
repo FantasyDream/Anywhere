@@ -1,5 +1,11 @@
 /// Opt-in local measurements. No query, context, path or clipboard body is kept.
-enum PresentationOperation { activation, query, fileQuery }
+enum PresentationOperation {
+  activation,
+  query,
+  fileQuery,
+  clipboardQuery,
+  shelfQuery
+}
 
 class PresentationMetrics {
   static void Function(Map<String, Object>)? reporter;
@@ -48,6 +54,8 @@ class PresentationMetrics {
         PresentationOperation.activation => 'activation',
         PresentationOperation.query => 'query',
         PresentationOperation.fileQuery => 'file_query',
+        PresentationOperation.clipboardQuery => 'clipboard_query',
+        PresentationOperation.shelfQuery => 'shelf_query',
       };
       // Diagnostics cannot affect the normal interaction if a host is unavailable.
       try {

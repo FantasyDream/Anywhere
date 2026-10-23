@@ -7,7 +7,8 @@ import re
 import subprocess
 import time
 
-OPERATIONS = ('activation', 'query', 'file_query')
+OPERATIONS = ('activation', 'query', 'file_query', 'clipboard_query',
+              'shelf_query')
 MAX_SAMPLES = 10000
 
 
