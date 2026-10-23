@@ -56,7 +56,7 @@ struct StoredSettings: Codable {
       currentAppKeyCode: UInt32(kVK_Space),
       currentAppModifiers: UInt32(cmdKey | optionKey),
       universalKeyCode: UInt32(kVK_Space),
-      universalModifiers: UInt32(cmdKey | optionKey | shiftKey),
+      universalModifiers: UInt32(cmdKey),
       launchAtLogin: false,
       excludedApps: [],
       captureFinderSelection: nil,

@@ -69,3 +69,54 @@ jobs:
         run: flutter --no-version-check precache --macos
       - name: Check Rust, native menus, architecture and Flutter
         run: ./scripts/check.sh
+
+  package:
+    # Signing credentials are available only for an explicit maintainer dispatch.
+    if: github.event_name == 'workflow_dispatch'
+    needs: validate
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Read Flutter version
+        id: flutter-version
+        run: echo "version=$(cat .flutter-version)" >> "$GITHUB_OUTPUT"
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ steps.flutter-version.outputs.version }}
+          channel: stable
+          cache: true
+      - name: Install dedicated CI signing identity
+        env:
+          ANYWHERE_CI_SIGNING_P12: ${{ secrets.ANYWHERE_CI_SIGNING_P12 }}
+          ANYWHERE_CI_SIGNING_PASSWORD: ${{ secrets.ANYWHERE_CI_SIGNING_PASSWORD }}
+        run: scripts/ci-macos-signing.sh install
+      - name: Build and verify development package
+        env:
+          ANYWHERE_CODESIGN_IDENTITY: Anywhere CI Development
+        run: |
+          package_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' apps/flutter/macos/Runner/Info.plist)
+          package_build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' apps/flutter/macos/Runner/Info.plist)
+          export ANYWHERE_APP_OUTPUT="$PWD/build/Anywhere-$package_version-build$package_build.app"
+          scripts/build-macos.sh
+          scripts/package-macos.sh "$ANYWHERE_APP_OUTPUT"
+          python3 scripts/write-package-provenance.py "$ANYWHERE_APP_OUTPUT"
+          cd build
+          shasum -a 256 -c "$(basename "$ANYWHERE_APP_OUTPUT" .app)-macos-$(uname -m).zip.sha256"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Anywhere-macOS-${{ runner.arch }}-${{ github.sha }}
+          path: |
+            build/Anywhere-*-macos-*.zip
+            build/Anywhere-*-macos-*.zip.sha256
+            build/package-provenance.json
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
+      - name: Remove signing material
+        if: always()
+        run: scripts/ci-macos-signing.sh cleanup

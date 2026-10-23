@@ -24,7 +24,7 @@
 | 方式 | 如何进入 | 用途 |
 |---|---|---|
 | **Current App** | 默认按 `⌘⌥Space` | 操作当前环境，搜索应用菜单及适用的目录、Git、开发项目等动作 |
-| **Global Search** | 默认按 `⌘⌥⇧Space`，或通过搜索图标菜单切换 | 搜索应用、动作和收藏目录，查找 File Search 等工具入口 |
+| **Global Search** | 默认按 `⌘Space`，或通过搜索图标菜单切换 | 搜索应用、动作和收藏目录，查找 File Search 等工具入口 |
 | **内容输入** | Current App 唤醒时自动填入可识别的选中文本或新复制内容 | 操作这份内容，例如复制 URL、打开路径 |
 
 Current App 聚合当前环境的所有可用动作。顶部的 **Folder、Git、Rust 等 Scope** 用于缩小动作范围；切换 Scope 保留查询。菜单保留在当前应用中，可通过 **Browse Menus…** 按层级浏览，也可直接搜索菜单名称。
@@ -88,7 +88,7 @@ Web 工具复用 Launcher 页框，`⌘K` 打开宿主操作，Esc 返回搜索�
 | 按键 | 操作 |
 |---|---|
 | `⌘⌥Space` | 唤醒 Current App |
-| `⌘⌥⇧Space` | 唤醒 Global Search |
+| `⌘Space` | 唤醒 Global Search |
 | `↑` / `↓` | 选择候选项 |
 | `Enter` | 执行动作、打开对象或进入子菜单 |
 | `⌘K` | 打开选中对象的二级 Actions；支持菜单浏览时也可进入菜单 |

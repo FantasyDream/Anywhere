@@ -44,6 +44,22 @@ shasum -a 256 -c Anywhere-preview-macos-arm64.zip.sha256
 
 ## 4. GitHub 发布
 
+### 手动 GitHub 打包
+
+在 Actions 中手动运行 **macOS checks**，或执行：
+
+```bash
+gh workflow run macos.yml --ref main
+```
+
+PR / push 只执行检查；手动运行在完整检查通过后构建本机架构 App，上传包含 App 的 ZIP、SHA-256 和 `package-provenance.json` 到该次运行的 Artifact，保留 30 天。工作流固定该次运行的源码 SHA，不自动创建或替换 Release。首次验证工作流时可以通过 `--ref` 指定维护者的开发分支，产物元数据明确记录实际来源。
+
+仓库需配置 `ANYWHERE_CI_SIGNING_P12`（加密 PKCS#12 的 Base64）与 `ANYWHERE_CI_SIGNING_PASSWORD` 两项 Actions Secrets。使用独立的 **Anywhere CI Development** 自签开发证书，各次运行复用同一身份，在临时 keychain 中导入并最终清理；不导出或上传本机开发证书，不在 PR 运行中加载签名秘密。证书过期或轮换应显式处理，不在构建中自动创建新身份。
+
+CI 开发签名不等于 Developer ID / 公证。由本机签名包首次切换到 CI 签名包时，macOS 可能要求重新授予权限，之后同一 CI 签名身份继续复用。正式分发继续遵循下方的独立发布检查。
+
+### Release
+
 现存 `latest` 是 2026-09-18 的 V0.3 历史预览，其自动构建说明指向 `dev-0.3`，不能作为当前 V0.12 或 Windows 可用性的证据。首页显式提示该边界；保留旧 tag / 资产，不将其静默替换成新包。下一次上传使用包含发布版本和构建号的不可变 tag，并保留对应源码 commit 与校验文件。
 
 代码合并、打 tag、上传 Release 是独立操作，按维护者确认的版本执行。开发预览应标记为 pre-release，说明平台 / 架构、安装及权限需求、已知限制和校验方法；上传对应 ZIP 与 SHA-256，不附真实日志、剪贴板数据库或本机签名材料。

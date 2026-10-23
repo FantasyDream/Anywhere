@@ -4,7 +4,7 @@
 
 ## 入口与 Scope
 
-- Current App 默认 `⌘⌥Space`；Global Search 默认 `⌘⌥⇧Space`。搜索图标菜单也可切换两种入口。
+- Current App 默认 `⌘⌥Space`；Global Search 默认 `⌘Space`。搜索图标菜单也可切换两种入口。
 - 空白 Global 不常驻 File Search 等工具卡片；输入名称查找普通 Action，或设置 Action 快捷键。
 - Current App 聚合当前环境所有可用 Action，包括应用菜单、Folder、Git、Developer 等；其他 Scope 硬过滤原领域 Group，Action 不改写 group_id。
 - 当前应用组为 `app.<bundle_id>`，显示实际应用名。无可见动作不生成空 Scope；应用启动候选只属于 Global Search。

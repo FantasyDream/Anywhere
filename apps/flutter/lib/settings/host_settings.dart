@@ -45,7 +45,7 @@ class HostSettings {
     currentAppKeyCode: spaceKey,
     currentAppModifiers: metaKey | altKey,
     universalKeyCode: spaceKey,
-    universalModifiers: metaKey | altKey | shiftKey,
+    universalModifiers: metaKey,
     launchAtLogin: false,
     excludedApps: [],
     captureFinderSelection: true,
