@@ -1,4 +1,5 @@
 //! Bounded SQLite history. Lists contain metadata; representations are BLOBs.
+use crate::features::clipboard::policy::HistoryPolicy;
 use crate::features::clipboard::{content, history::*};
 use anyhow::{ensure, Result};
 use anywhere_platform::clipboard::{ClipboardFormat, ClipboardPayload};
@@ -15,7 +16,7 @@ impl SqliteHistoryRepository {
     fn connection(mut connection: Connection) -> Result<Self> {
         connection.busy_timeout(std::time::Duration::from_secs(2))?;
         let version: u32 = connection.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-        ensure!(version <= 2, "unsupported clipboard database version");
+        ensure!(version <= 3, "unsupported clipboard database version");
         connection.execute_batch("PRAGMA journal_mode=DELETE; PRAGMA secure_delete=ON; PRAGMA cache_size=-512; PRAGMA temp_store=FILE; PRAGMA foreign_keys=ON;")?;
         let tx = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
         if version == 1 {
@@ -52,7 +53,14 @@ impl SqliteHistoryRepository {
             drop(statement);
             tx.execute_batch("DROP TABLE clipboard_text_v1;")?;
         }
-        tx.execute_batch("PRAGMA user_version=2;")?;
+        tx.execute_batch(
+            "CREATE TABLE IF NOT EXISTS clipboard_policy(
+            id INTEGER PRIMARY KEY CHECK(id=1), paused_until_ms INTEGER,
+            retention_days INTEGER NOT NULL CHECK(retention_days IN(0,1,7,30,90)));
+            INSERT OR IGNORE INTO clipboard_policy VALUES(1,NULL,0);
+            CREATE INDEX IF NOT EXISTS clipboard_expiry ON clipboard_items(copied_at_ms);
+            PRAGMA user_version=3;",
+        )?;
         tx.commit()?;
         Ok(Self(connection))
     }
@@ -119,6 +127,52 @@ fn load(connection: &Connection, id: i64) -> Result<Option<ClipboardPayload>> {
     Ok(Some(payload))
 }
 impl HistoryRepository for SqliteHistoryRepository {
+    fn policy(&self) -> Result<HistoryPolicy> {
+        let policy = self.0.query_row(
+            "SELECT paused_until_ms,retention_days FROM clipboard_policy WHERE id=1",
+            [],
+            |row| {
+                Ok(HistoryPolicy {
+                    paused_until_ms: row.get(0)?,
+                    retention_days: row.get(1)?,
+                })
+            },
+        )?;
+        policy.validate()?;
+        Ok(policy)
+    }
+    fn set_policy(&mut self, policy: HistoryPolicy) -> Result<()> {
+        policy.validate()?;
+        self.0.execute(
+            "UPDATE clipboard_policy SET paused_until_ms=?1,retention_days=?2 WHERE id=1",
+            params![policy.paused_until_ms, policy.retention_days],
+        )?;
+        Ok(())
+    }
+    fn expire(&mut self, cutoff_ms: i64) -> Result<()> {
+        // Most reads have nothing to expire. Avoid a write transaction and its
+        // lock contention on each search, status read and preview recheck.
+        let due: bool = self.0.query_row(
+            "SELECT EXISTS(SELECT 1 FROM clipboard_items WHERE copied_at_ms<=?1)",
+            [cutoff_ms],
+            |row| row.get(0),
+        )?;
+        if !due {
+            return Ok(());
+        }
+        self.0.execute(
+            "DELETE FROM clipboard_items WHERE copied_at_ms<=?1",
+            [cutoff_ms],
+        )?;
+        Ok(())
+    }
+    fn usage(&self) -> Result<(u32, u32)> {
+        Ok(self.0.query_row(
+            "SELECT COUNT(*),COALESCE(SUM(stored_bytes),0) FROM clipboard_items",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?)
+    }
     fn recording_enabled(&self) -> Result<bool> {
         Ok(self.0.query_row(
             "SELECT recording FROM clipboard_settings WHERE id=1",
@@ -127,10 +181,16 @@ impl HistoryRepository for SqliteHistoryRepository {
         )?)
     }
     fn set_recording_enabled(&mut self, enabled: bool) -> Result<()> {
-        self.0.execute(
+        let tx = self.0.transaction()?;
+        tx.execute(
             "UPDATE clipboard_settings SET recording=?1 WHERE id=1",
             [enabled],
         )?;
+        tx.execute(
+            "UPDATE clipboard_policy SET paused_until_ms=NULL WHERE id=1",
+            [],
+        )?;
+        tx.commit()?;
         Ok(())
     }
     fn record_payload(
@@ -350,6 +410,44 @@ mod multiformat_tests {
             name: name.into(),
             data: data.to_vec(),
         }
+    }
+    #[test]
+    fn expiry_checks_are_read_only_until_a_record_is_due_and_delete_failure_is_not_ignored() {
+        let mut repo = memory();
+        repo.record("fresh", 100).unwrap();
+        repo.0.execute_batch("PRAGMA query_only=ON").unwrap();
+        repo.expire(99).unwrap();
+        assert!(repo.expire(100).is_err());
+    }
+    #[test]
+    fn v2_upgrade_preserves_history_and_policy_persists_without_enabling_recording() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("history");
+        let mut repo = SqliteHistoryRepository::open(&path).unwrap();
+        let id = repo.record("preserved", 10).unwrap().unwrap();
+        repo.0
+            .execute_batch("DROP TABLE clipboard_policy; PRAGMA user_version=2;")
+            .unwrap();
+        drop(repo);
+        let mut repo = SqliteHistoryRepository::open(&path).unwrap();
+        assert_eq!(repo.policy().unwrap(), HistoryPolicy::default());
+        assert!(!repo.recording_enabled().unwrap());
+        assert_eq!(repo.search("").unwrap()[0].id, id);
+        let policy = HistoryPolicy {
+            paused_until_ms: Some(1000),
+            retention_days: 7,
+        };
+        repo.set_policy(policy).unwrap();
+        drop(repo);
+        let mut repo = SqliteHistoryRepository::open(&path).unwrap();
+        assert_eq!(repo.policy().unwrap(), policy);
+        assert_eq!(
+            repo.payload(id).unwrap().unwrap().plain_text(),
+            Some("preserved")
+        );
+        repo.set_recording_enabled(false).unwrap();
+        assert!(repo.policy().unwrap().paused_until_ms.is_none());
+        assert_eq!(repo.policy().unwrap().retention_days, 7);
     }
     #[test]
     fn multiple_representations_are_one_identity_and_restore_original_bytes() {

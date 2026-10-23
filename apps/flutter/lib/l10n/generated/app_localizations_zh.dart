@@ -1541,4 +1541,51 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get shelfReturnUnavailable => '已复制，原目标应用已不可用。请切换到需要的应用后粘贴。';
+
+  @override
+  String get historyRecordingPaused => '历史记录已暂停采集，已有历史仍可使用。';
+
+  @override
+  String get pauseHistoryRecording => '暂时停止采集，保留已有历史';
+
+  @override
+  String historyPausedUntil(String time) {
+    return '暂停至 $time';
+  }
+
+  @override
+  String get resumeRecording => '恢复记录';
+
+  @override
+  String get pauseFor => '暂停…';
+
+  @override
+  String pauseMinutes(int minutes) {
+    return '$minutes 分钟';
+  }
+
+  @override
+  String get keepHistoryFor => '历史保留时间';
+
+  @override
+  String get untilStorageLimit => '直到达到容量上限';
+
+  @override
+  String retentionDays(int days) {
+    return '$days 天';
+  }
+
+  @override
+  String get changeHistoryRetention => '更改历史保留时间？';
+
+  @override
+  String get historyRetentionWarning => '超过所选期限的历史将立即永久删除。之后延长保留时间也无法恢复。';
+
+  @override
+  String historyStorageUsage(int count, String mib) {
+    return '已保存 $count 条 · $mib MiB';
+  }
+
+  @override
+  String get historyStorageExplanation => '仅保存在本机，未加密。最多 1,000 条 / 128 MiB 逻辑数据，数据库文件大小可能不同。过期会删除全部已存格式，不影响系统剪贴板和原始文件。';
 }

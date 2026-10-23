@@ -15,13 +15,20 @@ import 'package:flutter_test/flutter_test.dart';
 
 class Preferences implements ClipboardPreferencesBackend {
   bool recording = false, available = true, fail = false;
-  int cleared = 0, writes = 0;
+  int cleared = 0, writes = 0, retentionDays = 0;
+  int? pausedUntilMs;
   Completer<void>? gate;
   @override
   Future<ClipboardHistoryStatusDto> read() async {
     if (fail) throw StateError('unavailable');
     return ClipboardHistoryStatusDto(
-        recording: recording, available: available);
+        recording: recording && pausedUntilMs == null,
+        recordingEnabled: recording,
+        available: available,
+        pausedUntilMs: pausedUntilMs,
+        retentionDays: retentionDays,
+        storedEntries: 10,
+        storedBytes: 1024);
   }
 
   @override
@@ -33,12 +40,77 @@ class Preferences implements ClipboardPreferencesBackend {
   }
 
   @override
+  Future<void> pause(int minutes) async {
+    pausedUntilMs = minutes == 0
+        ? null
+        : DateTime.now().millisecondsSinceEpoch + minutes * 60000;
+  }
+
+  @override
+  Future<void> setRetention(int days) async {
+    retentionDays = days;
+  }
+
+  @override
   Future<void> clear() async {
     ++cleared;
   }
 }
 
 void main() {
+  test(
+      'timed pause and retention readback keep the configured recording switch enabled',
+      () async {
+    final backend = Preferences()..recording = true;
+    final controller = ClipboardSettingsController(backend);
+    addTearDown(controller.dispose);
+    await controller.load();
+    await controller.pause(15);
+    expect(controller.recording, isTrue);
+    expect(controller.pausedUntilMs, isNotNull);
+    await controller.setRetention(7);
+    expect(controller.retentionDays, 7);
+    await controller.pause(0);
+    expect(controller.pausedUntilMs, isNull);
+    expect(controller.recording, isTrue);
+  });
+
+  testWidgets(
+      'shortening retention requires confirmation and cancel leaves the policy intact',
+      (tester) async {
+    final backend = Preferences();
+    final controller = ClipboardSettingsController(backend);
+    addTearDown(controller.dispose);
+    await controller.load();
+    await tester.pumpWidget(MaterialApp(
+      theme: SettingsStyle.theme(AppStyle.theme),
+      home: Scaffold(
+          body: SingleChildScrollView(
+              child: ClipboardSettingsSection(
+                  controller: controller, autoFill: true, onAutoFill: (_) {}))),
+    ));
+    await tester.ensureVisible(find.text('History storage'));
+    await tester.tap(find.text('History storage'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Until storage limit'));
+    await tester.tap(find.text('Until storage limit'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('7 days').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Change history retention?'), findsOneWidget);
+    await tester.tap(find.text('Cancel'));
+    await tester.pumpAndSettle();
+    expect(backend.retentionDays, 0);
+    await tester.tap(find.text('Until storage limit'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('7 days').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save changes'));
+    await tester.pumpAndSettle();
+    expect(backend.retentionDays, 7);
+    expect(find.text('7 days'), findsOneWidget);
+  });
+
   test(
       'preferences readback, failures, and feature disable never acknowledge a stale setting',
       () async {

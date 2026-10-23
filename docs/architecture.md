@@ -1,6 +1,6 @@
 # 架构
 
-当前实现：V0.12 开发预览，沿用静态内置模块、剪贴板与 Web 插件基础；最后整理：2026-10-23。使用入口见 [README](../README.md)，专题文档见 [文档导航](README.md)。
+当前实现：V0.13 开发中，沿用静态内置模块、剪贴板与 Web 插件基础；最后整理：2026-10-23。使用入口见 [README](../README.md)，专题文档见 [文档导航](README.md)。
 
 当前阶段为中英国际化、拼音与交互收尾，Terminal 延后。[详细方案](web-plugin-design.md)按 P0–P6 实施：P1 的协议 DTO 在 `anywhere-protocol::web_plugin`，包验证 / 资源摘要在 `anywhere-plugin::web`，不依赖 UI 或 Core 状态；P2 的 `application/web_plugins/` 已实现目录贡献、调用身份、Context 投影与生命周期，Core 只持有类型化命令引用，Bridge 只传不透明 HostView 票据；P3 的能力规划 / 调度 / 分块分别位于 `broker.rs`、`rpc_dispatch.rs`、`transfer.rs`，复用有界 SQLite 存储，SDK 位于 `packages/plugin-sdk/`；P4 的 `web_plugins/` Flutter 页面通过原生 main-frame 消息转发至 FRB，再由 Rust Broker 检查资格；P5 的 `application/web_plugins/packages.rs` 协调批准、启停、更新、回滚与目录发布，`persistence/web_packages.rs` 只处理收据 / 包文件 / 有界资源读取，Web 的持久 KV 使用独立数据库；P6 的 JSON / Text Pad 作为普通包交叉验证；静态内置模块、Rust / Flutter / Platform 的分工继续保持。
 
@@ -112,12 +112,12 @@ Flutter 的 `StableList` 共享 256 条不可变块，索引按块复用，仅�
 
 | 位置 | 职责 |
 |---|---|
-| `features/clipboard/{history,service,content}.rs` | 存储契约、采集与执行资格、元数据及有界预览 |
+| `features/clipboard/{history,service,policy,content}.rs` | 存储契约、采集与执行资格、持久策略、元数据及有界预览 |
 | `persistence/clipboard.rs` | SQLite 事务、迁移、配额、去重和摘要 / 原始数据读取；不生成预览 |
 | `anywhere-platform/clipboard` | clipboard-rs 格式读写；macOS 薄适配提供异常边界、权限、代数轮询与大小检查 |
 | Flutter `features/clipboard/` | 两个界面的静态注册、查询 / 选择 / 焦点、共享列表与预览 |
 | Flutter `infrastructure/clipboard_*_backend.dart` | 类型化 Bridge 适配；使用和配置接口分离 |
-| Flutter `settings/clipboard_*` | 采集、清空、自动填入配置及异步保存协调 |
+| Flutter `settings/clipboard_*` | 采集、定时暂停、保留期限、存储说明、清空、自动填入配置及异步保存协调 |
 | Native `ToolWindowController` | 悬浮窗置顶、生命周期和返回目标应用焦点 |
 
 剪贴板历史作为编译内 `clipboard` 模块贡献普通 Action，通过 `NativeTool` 路由到统一 `ToolPageRegistry`。`HistoryRepository` 声明存储契约，独立 SQLite 实现负责有界落盘与摘要查询；`HistoryService` 控制开关、采集代数、去重写入和清理期间的 epoch。系统读取在业务锁外完成，写入前复验 epoch。Platform 使用 clipboard-rs 统一格式读写；Windows / Linux 使用库的变化监听，macOS 通过有异常保护的原生 changeCount 每 500 ms 查询代数，退出时立即唤醒停止。Cocoa 异常在平台边界转换为不可用错误，不穿过 Rust 线程边界。一次复制的多种表示以 SQLite BLOB 保存，指纹去重并复验实际内容；旧纯文本 schema 事务迁移且保留 ID。缩略图解码在 Rust 生成并限制尺寸和分配，Flutter 只接收单条有界预览。正文不进入通用 Context / Usage，Host 不持有全部历史正文。Flutter 仅管理查询、选择与单条预览，并拒绝过期响应。独立悬浮窗由另一个普通 Action 路由到 `ToolWindowRegistration`，原生 `ToolWindowController` 负责置顶与生命周期，`ApplicationFocusReturner` 负责异步切回并确认目标应用已取得焦点。窗口按需创建独立 Flutter engine，调用共享 Rust Application 的同一 HistoryService，不重新初始化存储或开启采集；主历史页与 ClipboardShelfPage 共用 ClipboardHistorySession、列表和预览组件。窗口关闭销毁其 engine，最小化暂停摘要刷新；Launcher 的 15 秒保留规则不会关闭该窗口。采集开关、清空和唤醒自动填入统一位于 Settings → Clipboard，使用页后端仅暴露查询、详情、复制和单条删除；独立设置后端通过轻量状态 DTO 读取状态，不查询历史列表。设置关闭等待变更和读回完成。历史格式演进见 [V0.10 MVP](archive/mvp-v0.10.md)，当前交互见 [UI 契约](ui-design.md)。

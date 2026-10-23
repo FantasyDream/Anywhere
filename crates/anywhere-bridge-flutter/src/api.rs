@@ -45,6 +45,7 @@ pub enum ClipboardNoticeDto {
     ReadFailed,
     CaptureUnavailable,
     MonitoringUnavailable,
+    Paused,
 }
 pub struct ClipboardHistoryDto {
     pub recording: bool,
@@ -54,6 +55,11 @@ pub struct ClipboardHistoryDto {
 }
 pub struct ClipboardHistoryStatusDto {
     pub recording: bool,
+    pub recording_enabled: bool,
+    pub paused_until_ms: Option<i64>,
+    pub retention_days: u32,
+    pub stored_entries: u32,
+    pub stored_bytes: u32,
     pub available: bool,
     pub notice: Option<ClipboardNoticeDto>,
 }
@@ -68,6 +74,12 @@ pub fn clipboard_history_detail(id: String) -> Result<Option<ClipboardDetailDto>
 }
 pub fn set_clipboard_recording(enabled: bool) -> Result<()> {
     clipboard::set_recording(enabled)
+}
+pub fn pause_clipboard_recording(minutes: u32) -> Result<()> {
+    clipboard::pause(minutes)
+}
+pub fn set_clipboard_retention(days: u32) -> Result<()> {
+    clipboard::set_retention(days)
 }
 pub fn copy_clipboard_entry(id: String) -> Result<()> {
     clipboard::copy(id)

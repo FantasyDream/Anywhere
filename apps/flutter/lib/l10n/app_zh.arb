@@ -776,5 +776,49 @@
     }
   },
   "shelfReturnFailed": "已复制，但未能返回目标应用。请切换到该应用后粘贴。",
-  "shelfReturnUnavailable": "已复制，原目标应用已不可用。请切换到需要的应用后粘贴。"
+  "shelfReturnUnavailable": "已复制，原目标应用已不可用。请切换到需要的应用后粘贴。",
+  "historyRecordingPaused": "历史记录已暂停采集，已有历史仍可使用。",
+  "pauseHistoryRecording": "暂时停止采集，保留已有历史",
+  "historyPausedUntil": "暂停至 {time}",
+  "resumeRecording": "恢复记录",
+  "pauseFor": "暂停…",
+  "pauseMinutes": "{minutes} 分钟",
+  "keepHistoryFor": "历史保留时间",
+  "untilStorageLimit": "直到达到容量上限",
+  "retentionDays": "{days} 天",
+  "changeHistoryRetention": "更改历史保留时间？",
+  "historyRetentionWarning": "超过所选期限的历史将立即永久删除。之后延长保留时间也无法恢复。",
+  "historyStorageUsage": "已保存 {count} 条 · {mib} MiB",
+  "historyStorageExplanation": "仅保存在本机，未加密。最多 1,000 条 / 128 MiB 逻辑数据，数据库文件大小可能不同。过期会删除全部已存格式，不影响系统剪贴板和原始文件。",
+  "@historyPausedUntil": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "@pauseMinutes": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "@retentionDays": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "@historyStorageUsage": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "mib": {
+        "type": "String"
+      }
+    }
+  }
 }

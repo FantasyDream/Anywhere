@@ -18,6 +18,7 @@ struct Clipboard {
     on_read: Option<Box<dyn Fn() + Send + Sync>>,
     on_access: Option<Box<dyn Fn() -> Result<()> + Send + Sync>>,
     read_error: Option<ContextReadError>,
+    generation_error: bool,
 }
 impl Platform for Clipboard {
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
@@ -53,6 +54,9 @@ impl Platform for Clipboard {
         Ok(())
     }
     fn clipboard_generation(&self) -> Result<i64> {
+        if self.generation_error {
+            return Err(ContextReadError::Unavailable.into());
+        }
         Ok(self.generation.load(Ordering::Relaxed))
     }
     fn request_clipboard_history_access(&self) -> Result<()> {
@@ -78,6 +82,24 @@ impl Platform for Clipboard {
         })))
     }
 }
+
+#[test]
+fn failed_resume_metadata_does_not_block_startup_or_import_old_content() {
+    let (_directory, history, now) = timed_service();
+    history
+        .request_recording(true, &Clipboard::default())
+        .unwrap();
+    history.pause(5, &Clipboard::default()).unwrap();
+    now.fetch_add(300_000, Ordering::SeqCst);
+    let platform = Arc::new(Clipboard {
+        generation_error: true,
+        ..Default::default()
+    });
+    history.start(platform.clone()).unwrap();
+    assert!(history.status().unwrap().available);
+    assert!(!history.status().unwrap().recording);
+    assert_eq!(platform.reads.load(Ordering::Relaxed), 0);
+}
 fn service() -> (tempfile::TempDir, Arc<HistoryService>) {
     let directory = tempfile::tempdir().unwrap();
     let repository = crate::persistence::clipboard::SqliteHistoryRepository::open(
@@ -88,6 +110,181 @@ fn service() -> (tempfile::TempDir, Arc<HistoryService>) {
         directory,
         Arc::new(HistoryService::new(Ok(Box::new(repository)))),
     )
+}
+
+fn timed_service() -> (tempfile::TempDir, Arc<HistoryService>, Arc<AtomicI64>) {
+    let directory = tempfile::tempdir().unwrap();
+    let repository = crate::persistence::clipboard::SqliteHistoryRepository::open(
+        &directory.path().join("clipboard.sqlite3"),
+    )
+    .unwrap();
+    let now = Arc::new(AtomicI64::new(10 * super::policy::DAY_MS));
+    let clock = now.clone();
+    let service = Arc::new(HistoryService::with_clock(
+        Ok(Box::new(repository)),
+        Arc::new(move || clock.load(Ordering::SeqCst)),
+    ));
+    (directory, service, now)
+}
+
+#[test]
+fn background_resume_needs_no_open_window_and_drop_releases_the_worker() {
+    let (_directory, history, now) = timed_service();
+    let platform = Arc::new(Clipboard::default());
+    history.request_recording(true, platform.as_ref()).unwrap();
+    history.pause(5, platform.as_ref()).unwrap();
+    history.start(platform.clone()).unwrap();
+    now.fetch_add(300_000, Ordering::SeqCst);
+    // The injected wall clock advanced without waiting five real minutes.
+    history.wake_maintenance();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !history.status().unwrap().recording {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "background resume did not run"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(platform.reads.load(Ordering::Relaxed), 0);
+    let weak = Arc::downgrade(&history);
+    let platform_weak = Arc::downgrade(&platform);
+    drop(platform);
+    drop(history);
+    assert!(weak.upgrade().is_none());
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while platform_weak.upgrade().is_some() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "worker retained the platform"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+}
+
+#[test]
+fn timed_pause_survives_restart_and_resumes_without_importing_paused_copies() {
+    let (directory, history, now) = timed_service();
+    let platform = Clipboard::default();
+    history.request_recording(true, &platform).unwrap();
+    history.pause(5, &platform).unwrap();
+    let deadline = now.load(Ordering::SeqCst) + 300_000;
+    let status = history.status().unwrap();
+    assert!(status.recording_enabled && !status.recording);
+    assert_eq!(status.policy.paused_until_ms, Some(deadline));
+    drop(history);
+    let repository = crate::persistence::clipboard::SqliteHistoryRepository::open(
+        &directory.path().join("clipboard.sqlite3"),
+    )
+    .unwrap();
+    let clock = now.clone();
+    let history = HistoryService::with_clock(
+        Ok(Box::new(repository)),
+        Arc::new(move || clock.load(Ordering::SeqCst)),
+    );
+    platform.generation.store(1, Ordering::Relaxed);
+    history.poll(&platform, deadline - 1).unwrap();
+    assert_eq!(platform.reads.load(Ordering::Relaxed), 0);
+    now.store(deadline, Ordering::SeqCst);
+    history.maintain(&platform).unwrap();
+    history.poll(&platform, deadline).unwrap();
+    assert!(history.status().unwrap().recording);
+    assert_eq!(platform.reads.load(Ordering::Relaxed), 0);
+    platform.generation.store(2, Ordering::Relaxed);
+    history.poll(&platform, deadline + 1).unwrap();
+    assert_eq!(history.search("").unwrap()[0].summary, "generation 2");
+}
+
+#[test]
+fn pause_revokes_a_late_native_read_and_explicit_resume_excludes_existing_content() {
+    let (_directory, history, now) = timed_service();
+    let target = history.clone();
+    let platform = Clipboard {
+        on_read: Some(Box::new(move || {
+            target.pause(15, &Clipboard::default()).unwrap()
+        })),
+        ..Default::default()
+    };
+    history.request_recording(true, &platform).unwrap();
+    platform.generation.store(1, Ordering::Relaxed);
+    history.poll(&platform, now.load(Ordering::SeqCst)).unwrap();
+    assert!(history.search("").unwrap().is_empty());
+    history.pause(0, &platform).unwrap();
+    history.poll(&platform, now.load(Ordering::SeqCst)).unwrap();
+    assert_eq!(platform.reads.load(Ordering::Relaxed), 1);
+    history.pause(60, &platform).unwrap();
+    history.request_recording(false, &platform).unwrap();
+    assert!(history.status().unwrap().policy.paused_until_ms.is_none());
+    now.fetch_add(3_600_000, Ordering::SeqCst);
+    history.maintain(&platform).unwrap();
+    assert!(!history.status().unwrap().recording_enabled);
+}
+
+#[test]
+fn expired_history_cannot_be_searched_previewed_or_copied_and_formats_are_deleted() {
+    let (directory, history, now) = timed_service();
+    let platform = Clipboard::default();
+    history.request_recording(true, &platform).unwrap();
+    history.set_retention_days(1).unwrap();
+    platform.generation.store(1, Ordering::Relaxed);
+    history.poll(&platform, now.load(Ordering::SeqCst)).unwrap();
+    let id = history.search("").unwrap()[0].id;
+    now.fetch_add(super::policy::DAY_MS, Ordering::SeqCst);
+    assert!(history.detail(id).unwrap().is_none());
+    assert!(history.copy(id, &platform).is_err());
+    assert!(history.search("").unwrap().is_empty());
+    assert!(platform.written.lock().unwrap().is_empty());
+    assert_eq!(history.usage().unwrap(), (0, 0));
+    let connection =
+        rusqlite::Connection::open(directory.path().join("clipboard.sqlite3")).unwrap();
+    assert_eq!(
+        connection
+            .query_row("SELECT COUNT(*) FROM clipboard_formats", [], |r| r
+                .get::<_, usize>(0))
+            .unwrap(),
+        0
+    );
+}
+
+#[test]
+fn expiry_or_policy_change_during_preview_never_publishes_the_old_body() {
+    for change_policy in [false, true] {
+        let (_directory, history, now) = timed_service();
+        let platform = Clipboard::default();
+        history.request_recording(true, &platform).unwrap();
+        history.set_retention_days(1).unwrap();
+        platform.generation.store(1, Ordering::Relaxed);
+        history.poll(&platform, now.load(Ordering::SeqCst)).unwrap();
+        let id = history.search("").unwrap()[0].id;
+        let result = history
+            .detail_with(id, |item, payload| {
+                if change_policy {
+                    history.set_retention_days(7).unwrap();
+                } else {
+                    now.fetch_add(super::policy::DAY_MS, Ordering::SeqCst);
+                }
+                super::super::content::preview(item, payload)
+            })
+            .unwrap();
+        assert!(result.is_none());
+    }
+}
+
+#[test]
+fn shortening_retention_is_immediate_and_expanding_it_does_not_restore_deleted_entries() {
+    let (_directory, history, now) = timed_service();
+    let platform = Clipboard::default();
+    history.request_recording(true, &platform).unwrap();
+    platform.generation.store(1, Ordering::Relaxed);
+    history.poll(&platform, now.load(Ordering::SeqCst)).unwrap();
+    now.fetch_add(2 * super::policy::DAY_MS, Ordering::SeqCst);
+    assert_eq!(history.search("").unwrap().len(), 1);
+    history.set_retention_days(1).unwrap();
+    assert!(history.search("").unwrap().is_empty());
+    history.set_retention_days(0).unwrap();
+    assert!(history.search("").unwrap().is_empty());
+    assert!(history.pause(2, &platform).is_err());
+    assert!(history.set_retention_days(u32::MAX).is_err());
+    assert_eq!(history.status().unwrap().policy.retention_days, 0);
 }
 #[test]
 fn status_exposes_policy_facts_for_disabled_storage_permission_and_capture_failures() {

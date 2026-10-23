@@ -6,14 +6,14 @@
 
 ## 项目状态
 
-当前为 **V0.12 开发预览**：中英国际化、拼音检索，以及交互与性能打磨。版本和构建号以 [pubspec.yaml](apps/flutter/pubspec.yaml) 为准；开发构建不等于正式发行。
+当前为 **V0.13 开发中**：基于中英国际化和拼音检索，增加剪贴板定时暂停、保留期限与可靠性检查。版本和构建号以 [pubspec.yaml](apps/flutter/pubspec.yaml) 为准；开发构建不等于正式发行。
 
 | 平台 | 状态 |
 |---|---|
 | macOS 12+ | 主要开发和验证平台；从源码构建本机架构的 App |
 | Windows / Linux | 部分共享代码有编译与测试检查，尚未交付可用 App |
 
-本地开发包使用持久本机签名；公开分发所需的签名、公证、安装升级和完整辅助功能矩阵仍需验收。具体证据见 [V0.12 MVP](docs/mvp-v0.12.md)。
+本地开发包使用持久本机签名，手动 GitHub 打包使用独立 CI 开发签名；公开分发所需的签名、公证、安装升级和完整辅助功能矩阵仍需验收。当前进度见 [V0.13 MVP](docs/mvp-v0.13.md)，上一阶段验收见 [V0.12 MVP](docs/mvp-v0.12.md)。
 
 **下载提示：** GitHub 的 [`latest` 历史预览](https://github.com/FantasyDream/Anywhere/releases/tag/latest) 是 2026-09-18 的 V0.3 开发包，不包含本页介绍的 V0.12 功能，也不代表当前 Windows 支持状态。当前版本请按下文从源码构建；新版预览尚未上传 Release。
 

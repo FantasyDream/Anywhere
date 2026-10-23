@@ -25,6 +25,11 @@ pub struct HistoryDetail {
     pub formats: Vec<String>,
 }
 pub trait HistoryRepository: Send {
+    fn policy(&self) -> Result<super::policy::HistoryPolicy>;
+    fn set_policy(&mut self, policy: super::policy::HistoryPolicy) -> Result<()>;
+    fn expire(&mut self, cutoff_ms: i64) -> Result<()>;
+    /// Entry count and logical stored bytes; never loads clipboard bodies.
+    fn usage(&self) -> Result<(u32, u32)>;
     fn recording_enabled(&self) -> Result<bool>;
     fn set_recording_enabled(&mut self, enabled: bool) -> Result<()>;
     fn record_payload(

@@ -13,5 +13,6 @@ extension ClipboardNoticeLabel on ClipboardNoticeDto {
         ClipboardNoticeDto.captureUnavailable => l10n.historyCaptureUnavailable,
         ClipboardNoticeDto.monitoringUnavailable =>
           l10n.historyMonitoringUnavailable,
+        ClipboardNoticeDto.paused => l10n.historyRecordingPaused,
       };
 }

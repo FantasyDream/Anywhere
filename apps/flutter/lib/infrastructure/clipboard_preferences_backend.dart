@@ -5,6 +5,8 @@ import '../src/rust/api.dart' as api;
 abstract interface class ClipboardPreferencesBackend {
   Future<api.ClipboardHistoryStatusDto> read();
   Future<void> setRecording(bool enabled);
+  Future<void> pause(int minutes);
+  Future<void> setRetention(int days);
   Future<void> clear();
 }
 
@@ -14,6 +16,11 @@ class RustClipboardPreferencesBackend implements ClipboardPreferencesBackend {
   @override
   Future<void> setRecording(bool enabled) =>
       api.setClipboardRecording(enabled: enabled);
+  @override
+  Future<void> pause(int minutes) =>
+      api.pauseClipboardRecording(minutes: minutes);
+  @override
+  Future<void> setRetention(int days) => api.setClipboardRetention(days: days);
   @override
   Future<void> clear() => api.clearClipboardHistory();
 }

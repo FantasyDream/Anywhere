@@ -23,6 +23,12 @@ Future<ClipboardDetailDto?> clipboardHistoryDetail({required String id}) =>
 Future<void> setClipboardRecording({required bool enabled}) =>
     RustLib.instance.api.crateApiSetClipboardRecording(enabled: enabled);
 
+Future<void> pauseClipboardRecording({required int minutes}) =>
+    RustLib.instance.api.crateApiPauseClipboardRecording(minutes: minutes);
+
+Future<void> setClipboardRetention({required int days}) =>
+    RustLib.instance.api.crateApiSetClipboardRetention(days: days);
+
 Future<void> copyClipboardEntry({required String id}) =>
     RustLib.instance.api.crateApiCopyClipboardEntry(id: id);
 
@@ -628,17 +634,35 @@ class ClipboardHistoryDto {
 
 class ClipboardHistoryStatusDto {
   final bool recording;
+  final bool recordingEnabled;
+  final PlatformInt64? pausedUntilMs;
+  final int retentionDays;
+  final int storedEntries;
+  final int storedBytes;
   final bool available;
   final ClipboardNoticeDto? notice;
 
   const ClipboardHistoryStatusDto({
     required this.recording,
+    required this.recordingEnabled,
+    this.pausedUntilMs,
+    required this.retentionDays,
+    required this.storedEntries,
+    required this.storedBytes,
     required this.available,
     this.notice,
   });
 
   @override
-  int get hashCode => recording.hashCode ^ available.hashCode ^ notice.hashCode;
+  int get hashCode =>
+      recording.hashCode ^
+      recordingEnabled.hashCode ^
+      pausedUntilMs.hashCode ^
+      retentionDays.hashCode ^
+      storedEntries.hashCode ^
+      storedBytes.hashCode ^
+      available.hashCode ^
+      notice.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -646,6 +670,11 @@ class ClipboardHistoryStatusDto {
       other is ClipboardHistoryStatusDto &&
           runtimeType == other.runtimeType &&
           recording == other.recording &&
+          recordingEnabled == other.recordingEnabled &&
+          pausedUntilMs == other.pausedUntilMs &&
+          retentionDays == other.retentionDays &&
+          storedEntries == other.storedEntries &&
+          storedBytes == other.storedBytes &&
           available == other.available &&
           notice == other.notice;
 }
@@ -693,6 +722,7 @@ enum ClipboardNoticeDto {
   readFailed,
   captureUnavailable,
   monitoringUnavailable,
+  paused,
   ;
 }
 

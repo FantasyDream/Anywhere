@@ -1565,4 +1565,51 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get shelfReturnUnavailable => 'Copied. The destination app is no longer available. Switch to an app to paste.';
+
+  @override
+  String get historyRecordingPaused => 'History recording is paused. Existing history is still available.';
+
+  @override
+  String get pauseHistoryRecording => 'Pause without clearing saved history';
+
+  @override
+  String historyPausedUntil(String time) {
+    return 'Paused until $time';
+  }
+
+  @override
+  String get resumeRecording => 'Resume';
+
+  @override
+  String get pauseFor => 'Pause…';
+
+  @override
+  String pauseMinutes(int minutes) {
+    return '$minutes minutes';
+  }
+
+  @override
+  String get keepHistoryFor => 'Keep history for';
+
+  @override
+  String get untilStorageLimit => 'Until storage limit';
+
+  @override
+  String retentionDays(int days) {
+    return '$days days';
+  }
+
+  @override
+  String get changeHistoryRetention => 'Change history retention?';
+
+  @override
+  String get historyRetentionWarning => 'Entries older than the selected period will be permanently deleted now. Extending the period later cannot restore them.';
+
+  @override
+  String historyStorageUsage(int count, String mib) {
+    return '$count entries · $mib MiB stored';
+  }
+
+  @override
+  String get historyStorageExplanation => 'Stored only on this Mac, without encryption. Up to 1,000 entries / 128 MiB of logical data; database file size may differ. Expiry deletes all saved formats, not the system clipboard or original files.';
 }

@@ -1,6 +1,7 @@
 //! App-owned clipboard history. Capturing is opt-in and independent of activation input.
 pub(crate) mod content;
 pub mod history;
+pub mod policy;
 pub mod service;
 
 use crate::{

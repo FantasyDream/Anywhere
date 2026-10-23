@@ -16,9 +16,19 @@ class NoticePreferences implements ClipboardPreferencesBackend {
   ClipboardNoticeDto notice = ClipboardNoticeDto.accessRequired;
   @override
   Future<ClipboardHistoryStatusDto> read() async => ClipboardHistoryStatusDto(
-      recording: true, available: true, notice: notice);
+      recording: true,
+      recordingEnabled: true,
+      available: true,
+      notice: notice,
+      retentionDays: 0,
+      storedEntries: 0,
+      storedBytes: 0);
   @override
   Future<void> setRecording(bool enabled) async {}
+  @override
+  Future<void> pause(int minutes) async {}
+  @override
+  Future<void> setRetention(int days) async {}
   @override
   Future<void> clear() async {}
 }

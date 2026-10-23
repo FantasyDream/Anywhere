@@ -12,6 +12,9 @@ class ClipboardSettingsController extends ChangeNotifier {
   ClipboardSettingsController(this.backend);
   final ClipboardPreferencesBackend backend;
   bool recording = false, available = false, loaded = false, busy = false;
+  int? pausedUntilMs;
+  int retentionDays = 0, storedEntries = 0, storedBytes = 0;
+  Timer? _pauseRefresh;
   String? notice;
   ClipboardNoticeDto? _backendNotice;
   bool _operationFailed = false;
@@ -26,6 +29,8 @@ class ClipboardSettingsController extends ChangeNotifier {
   Future<bool> setRecording(bool enabled) =>
       _run(() => backend.setRecording(enabled));
   Future<bool> clear() => _run(backend.clear);
+  Future<bool> pause(int minutes) => _run(() => backend.pause(minutes));
+  Future<bool> setRetention(int days) => _run(() => backend.setRetention(days));
 
   Future<bool> _run([Future<void> Function()? change]) {
     if (_disposed) return Future.value(false);
@@ -49,7 +54,19 @@ class ClipboardSettingsController extends ChangeNotifier {
       await change?.call();
       final state = await backend.read();
       if (_disposed) return false;
-      recording = state.recording;
+      recording = state.recordingEnabled;
+      pausedUntilMs = state.pausedUntilMs;
+      retentionDays = state.retentionDays;
+      storedEntries = state.storedEntries;
+      storedBytes = state.storedBytes;
+      if (pausedUntilMs != null) {
+        _pauseRefresh ??= Timer.periodic(const Duration(seconds: 2), (_) {
+          if (!_disposed && !busy) unawaited(load());
+        });
+      } else {
+        _pauseRefresh?.cancel();
+        _pauseRefresh = null;
+      }
       available = state.available;
       _operationFailed = false;
       notice = null;
@@ -77,6 +94,7 @@ class ClipboardSettingsController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _pauseRefresh?.cancel();
     super.dispose();
   }
 }

@@ -10,9 +10,16 @@ fn history() -> Result<Arc<HistoryService>> {
     Ok(settings::extensions()?.clipboard())
 }
 pub(super) fn status() -> Result<ClipboardHistoryStatusDto> {
-    let status = history()?.status()?;
+    let history = history()?;
+    let status = history.status()?;
+    let (stored_entries, stored_bytes) = history.usage()?;
     Ok(ClipboardHistoryStatusDto {
         recording: status.recording,
+        recording_enabled: status.recording_enabled,
+        paused_until_ms: status.policy.paused_until_ms,
+        retention_days: status.policy.retention_days,
+        stored_entries,
+        stored_bytes,
         available: status.available,
         notice: status.notice.map(notice),
     })
@@ -41,6 +48,7 @@ fn notice(value: HistoryNotice) -> ClipboardNoticeDto {
         HistoryNotice::ReadFailed => ClipboardNoticeDto::ReadFailed,
         HistoryNotice::CaptureUnavailable => ClipboardNoticeDto::CaptureUnavailable,
         HistoryNotice::MonitoringUnavailable => ClipboardNoticeDto::MonitoringUnavailable,
+        HistoryNotice::Paused => ClipboardNoticeDto::Paused,
     }
 }
 fn convert(item: HistoryItem) -> ClipboardItemDto {
@@ -65,6 +73,12 @@ pub(super) fn detail(id: String) -> Result<Option<ClipboardDetailDto>> {
 }
 pub(super) fn set_recording(enabled: bool) -> Result<()> {
     history()?.request_recording(enabled, application()?.platform())
+}
+pub(super) fn pause(minutes: u32) -> Result<()> {
+    history()?.pause(minutes, application()?.platform())
+}
+pub(super) fn set_retention(days: u32) -> Result<()> {
+    history()?.set_retention_days(days)
 }
 pub(super) fn copy(id: String) -> Result<()> {
     history()?.copy(id.parse()?, application()?.platform())

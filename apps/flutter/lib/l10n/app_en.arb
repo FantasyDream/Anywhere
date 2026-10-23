@@ -776,5 +776,49 @@
     }
   },
   "shelfReturnFailed": "Copied. Could not return to the app. Switch to it to paste.",
-  "shelfReturnUnavailable": "Copied. The destination app is no longer available. Switch to an app to paste."
+  "shelfReturnUnavailable": "Copied. The destination app is no longer available. Switch to an app to paste.",
+  "historyRecordingPaused": "History recording is paused. Existing history is still available.",
+  "pauseHistoryRecording": "Pause without clearing saved history",
+  "historyPausedUntil": "Paused until {time}",
+  "@historyPausedUntil": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "resumeRecording": "Resume",
+  "pauseFor": "Pause…",
+  "pauseMinutes": "{minutes} minutes",
+  "@pauseMinutes": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "keepHistoryFor": "Keep history for",
+  "untilStorageLimit": "Until storage limit",
+  "retentionDays": "{days} days",
+  "@retentionDays": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "changeHistoryRetention": "Change history retention?",
+  "historyRetentionWarning": "Entries older than the selected period will be permanently deleted now. Extending the period later cannot restore them.",
+  "historyStorageUsage": "{count} entries · {mib} MiB stored",
+  "@historyStorageUsage": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "mib": {
+        "type": "String"
+      }
+    }
+  },
+  "historyStorageExplanation": "Stored only on this Mac, without encryption. Up to 1,000 entries / 128 MiB of logical data; database file size may differ. Expiry deletes all saved formats, not the system clipboard or original files."
 }

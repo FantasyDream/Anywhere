@@ -2998,6 +2998,84 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Copied. The destination app is no longer available. Switch to an app to paste.'**
   String get shelfReturnUnavailable;
+
+  /// No description provided for @historyRecordingPaused.
+  ///
+  /// In en, this message translates to:
+  /// **'History recording is paused. Existing history is still available.'**
+  String get historyRecordingPaused;
+
+  /// No description provided for @pauseHistoryRecording.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause without clearing saved history'**
+  String get pauseHistoryRecording;
+
+  /// No description provided for @historyPausedUntil.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused until {time}'**
+  String historyPausedUntil(String time);
+
+  /// No description provided for @resumeRecording.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get resumeRecording;
+
+  /// No description provided for @pauseFor.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause…'**
+  String get pauseFor;
+
+  /// No description provided for @pauseMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} minutes'**
+  String pauseMinutes(int minutes);
+
+  /// No description provided for @keepHistoryFor.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep history for'**
+  String get keepHistoryFor;
+
+  /// No description provided for @untilStorageLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'Until storage limit'**
+  String get untilStorageLimit;
+
+  /// No description provided for @retentionDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{days} days'**
+  String retentionDays(int days);
+
+  /// No description provided for @changeHistoryRetention.
+  ///
+  /// In en, this message translates to:
+  /// **'Change history retention?'**
+  String get changeHistoryRetention;
+
+  /// No description provided for @historyRetentionWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Entries older than the selected period will be permanently deleted now. Extending the period later cannot restore them.'**
+  String get historyRetentionWarning;
+
+  /// No description provided for @historyStorageUsage.
+  ///
+  /// In en, this message translates to:
+  /// **'{count} entries · {mib} MiB stored'**
+  String historyStorageUsage(int count, String mib);
+
+  /// No description provided for @historyStorageExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'Stored only on this Mac, without encryption. Up to 1,000 entries / 128 MiB of logical data; database file size may differ. Expiry deletes all saved formats, not the system clipboard or original files.'**
+  String get historyStorageExplanation;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {
