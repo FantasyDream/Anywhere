@@ -1,0 +1,135 @@
+{
+  "date": "2026-10-23",
+  "app_version": "0.13.0+4",
+  "source_commit": "6066d38",
+  "binary_sha256": "69faa72eaa78c6da4bd8399a6cb0c3c5eea737faf94a6602148df1fcc2a3bf3a",
+  "environment": {
+    "os": "macOS 27.0.1",
+    "architecture": "arm64",
+    "flutter": "3.47.4",
+    "renderer": "Impeller MetalSDF",
+    "release": true,
+    "isolated_data_directory": true,
+    "recording_enabled": false,
+    "external_context_sources_enabled": false,
+    "auxiliary_accessibility_permission": false,
+    "concurrent_build_or_test_load": false
+  },
+  "fixture": {
+    "history_items": 350,
+    "approximate_text_bytes_per_item": 8000,
+    "history_kind": "synthetic text only",
+    "retention_days": 30,
+    "generated_files": 200,
+    "search_roots": "only the generated fixture directory; saved offline before launch",
+    "personal_history_used": false
+  },
+  "ui_checks": {
+    "history_query_replacements": 20,
+    "history_expired_query_empty": true,
+    "history_unmatched_query_empty": true,
+    "history_preview_follows_query": true,
+    "shelf_query_replacements": 20,
+    "shelf_final_result_verified_by_screenshot": true,
+    "shelf_escape_clears_then_closes": true,
+    "file_exact_queries": 20,
+    "file_each_exact_query_one_result_and_text_preview": true,
+    "file_common_prefix_results": 200,
+    "history_enter_back_cycles": 20,
+    "shelf_create_close_cycles": 20,
+    "second_shelf_batch_completed": false
+  },
+  "timing": {
+    "operations": {
+      "activation": {
+        "count": 2,
+        "p50_us": 28635,
+        "p95_us": 121487,
+        "max_us": 121487
+      },
+      "query": {
+        "count": 3,
+        "p50_us": 19584,
+        "p95_us": 361073,
+        "max_us": 361073
+      },
+      "file_query": {
+        "count": 22,
+        "p50_us": 10239,
+        "p95_us": 18774,
+        "max_us": 20723
+      },
+      "clipboard_query": {
+        "count": 20,
+        "p50_us": 144869,
+        "p95_us": 158342,
+        "max_us": 165888
+      },
+      "shelf_query": {
+        "count": 21,
+        "p50_us": 131694,
+        "p95_us": 148173,
+        "max_us": 148888
+      }
+    },
+    "rejected": 0,
+    "hidden": 0,
+    "overflow": 0
+  },
+  "timing_scope": "Committed input through Rust/bridge and current Flutter post-frame. History/shelf include 120 ms debounce; usable list frame does not wait for preview decoding. Only completed current presentations are sampled, not every input attempt. Excludes IME candidate selection, GPU raster and physical display presentation.",
+  "resource_observation": {
+    "duration_seconds": 600.07,
+    "sample_count": 61,
+    "main_rss_first_bytes": 75464704,
+    "main_rss_min_bytes": 67289088,
+    "main_rss_max_bytes": 167165952,
+    "main_rss_last_bytes": 73531392,
+    "initial_footprint_bytes": 137887744,
+    "final_footprint_bytes": 201746022,
+    "descendants_observed": false,
+    "web_plugin_opened": false,
+    "scope": "Mixed query and window use, including the first history/shelf cycle batch; process ancestry only. Not a same-state or long-duration leak proof."
+  },
+  "cycle_resource_snapshots": [
+    {
+      "stage": "before_repeated_history_shelf_cycles",
+      "main_rss_bytes": 87457792,
+      "footprint_bytes": 127192269,
+      "seconds_since_baseline": 0.0
+    },
+    {
+      "stage": "after_20_history_and_20_shelf_cycles",
+      "main_rss_bytes": 121520128,
+      "footprint_bytes": 201116877,
+      "seconds_since_baseline": 142.52
+    },
+    {
+      "stage": "after_cycles_idle_main_search",
+      "main_rss_bytes": 63930368,
+      "footprint_bytes": 170917888,
+      "seconds_since_baseline": 265.8
+    }
+  ],
+  "post_close_object_counts": {
+    "tool": "macOS heap --noContent; class totals only",
+    "flutter_engine": 1,
+    "flutter_view_controller": 1,
+    "flutter_vsync_waiter": 1,
+    "window_material_controller": 1,
+    "tool_window_controller": 1,
+    "scope": "After closing the shelf; one main engine remains. This is an object-count snapshot, not a total graphics-memory or leak proof."
+  },
+  "observed_diagnostics": {
+    "invalid_engine_vsync_messages": 18,
+    "crash_observed": false,
+    "scope": "Messages occurred during shelf teardown. The pinned local Flutter VSyncWaiter schedules delayed callbacks; their cancellation and complete helper release remain unverified. No private runtime workaround was added."
+  },
+  "limitations": [
+    "The Mac locked before a second shelf-cycle batch and explicit hide/resume sampling.",
+    "The shelf Flutter controls were not exposed in the automation accessibility tree; input/results were checked with screenshots and opt-in timing. No VoiceOver result is claimed.",
+    "File search scope was saved offline as fixture preparation; this run does not validate the previous interrupted Settings Save click.",
+    "Shorter retention with immediate deletion through the real confirmation UI remains pending; automated and prior startup-expiry coverage are separate.",
+    "Physical keyboard/IME, full Web/XPC helper attribution and same-state long-duration stability were not validated.",
+    "RSS compression and graphics caches differ from allocated object counts; these samples do not establish an improvement versus an earlier app."
+  ]
+}
