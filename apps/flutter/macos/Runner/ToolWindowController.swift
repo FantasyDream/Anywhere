@@ -17,6 +17,7 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
   private var activationObserver: NSObjectProtocol?
   private var destination: NSRunningApplication?
   private let focusReturner = ApplicationFocusReturner()
+  private let closeCoordinator = FlutterWindowCloseCoordinator()
 
   init(
     entrypoint: String,
@@ -69,6 +70,7 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
   }
 
   func show() -> Bool {
+    if closeCoordinator.openAfterClose({ [weak self] in _ = self?.show() }) { return true }
     rememberDestination(NSWorkspace.shared.frontmostApplication)
     let pointer = NSEvent.mouseLocation
     let screen =
@@ -183,6 +185,16 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
   func windowDidDeminiaturize(_ notification: Notification) { publishVisibility() }
   func applicationVisibilityChanged() { publishVisibility() }
 
+  func windowShouldClose(_ sender: NSWindow) -> Bool {
+    guard sender === window, ready, let channel else { return true }
+    return closeCoordinator.shouldClose(
+      prepare: { finish in
+        channel.invokeMethod("prepareToClose", arguments: nil) { _ in finish() }
+      },
+      close: { [weak sender] in sender?.performClose(nil) }
+    )
+  }
+
   func windowWillClose(_ notification: Notification) {
     guard notification.object as? NSWindow === window else { return }
     channel?.invokeMethod("visibility", arguments: false)
@@ -194,5 +206,6 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
     controller = nil
     channel = nil
     ready = false
+    closeCoordinator.didClose()
   }
 }

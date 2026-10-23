@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../infrastructure/tool_window_lifecycle.dart';
 import '../l10n/app_language.dart';
 import '../ui/app_style.dart';
 import 'execution_sessions_controller.dart';
@@ -26,6 +27,10 @@ class _ExecutionSessionsAppState extends State<ExecutionSessionsApp> {
   void initState() {
     super.initState();
     widget.channel.setMethodCallHandler((call) async {
+      if (call.method == 'prepareToClose') {
+        await prepareToolWindowToClose();
+        return;
+      }
       if (call.method == 'select' && call.arguments is String) {
         controller.select(call.arguments as String);
       }

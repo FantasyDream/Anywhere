@@ -1,0 +1,77 @@
+{
+  "date": "2026-10-24",
+  "timezone": "Asia/Shanghai",
+  "app_version": "0.13.0+5",
+  "source_commit": "bb5c4b0",
+  "binary_sha256": "c53d5fca0eb6b9ddeffc4cf30c002518cee474f19bfa15fa1a16360945ee1125",
+  "fixture": {
+    "isolated_directory": true,
+    "history_items": 350,
+    "approximate_text_bytes_per_item": 8000,
+    "kind": "synthetic text only",
+    "recording": false,
+    "external_context_sources": false,
+    "personal_history_used": false
+  },
+  "checks": {
+    "shelf_query_input_and_result_in_accessibility_tree": true,
+    "shelf_copy_and_more_controls_in_accessibility_tree": true,
+    "shelf_escape_clear_then_close": true,
+    "repeated_create_close_batches": [
+      20,
+      20
+    ],
+    "controls_exposed_on_every_cycle": true,
+    "invalid_engine_handle_messages": 0,
+    "crash_observed": false
+  },
+  "resource_snapshots": [
+    {
+      "stage": "before_40_shelf_cycles",
+      "seconds_since_baseline": 0.0,
+      "main_rss_bytes": 56197120,
+      "footprint_bytes": 121634816,
+      "descendants_observed": false
+    },
+    {
+      "stage": "after_20_shelf_cycles",
+      "seconds_since_baseline": 87.29,
+      "main_rss_bytes": 76906496,
+      "footprint_bytes": 227750707,
+      "descendants_observed": false
+    },
+    {
+      "stage": "after_40_shelf_cycles",
+      "seconds_since_baseline": 203.63,
+      "main_rss_bytes": 62111744,
+      "footprint_bytes": 320339968,
+      "descendants_observed": false
+    }
+  ],
+  "post_close_class_counts": {
+    "flutter_engine": 1,
+    "flutter_view_controller": 42,
+    "flutter_vsync_waiter": 1,
+    "window_material_controller": 1,
+    "tool": "macOS heap --noContent",
+    "closed_shelf_count_including_initial_query_check": 41
+  },
+  "failed_acceptance": "View controllers accumulated after shelf teardown despite one remaining engine and no invalid-handle messages. Do not treat close navigation or engine release alone as successful lifecycle cleanup.",
+  "followup": {
+    "build": "0.13.0+6",
+    "change": "Unmount each dedicated Dart view and complete its frame before native teardown; merge close requests, reject stale replies and queue reopening.",
+    "automated_gate": "Rust 576 passed, 6 existing ignored; Flutter 398 passed; native/style/SDK/architecture passed.",
+    "runtime_status": "Not started: Mac locked again after Build 6 was built."
+  },
+  "final_isolated_database": {
+    "recording": 0,
+    "items": 350,
+    "formats": 350
+  },
+  "limits": [
+    "Class-count and reference-tree probes used no object content; raw diagnostic output stays in ignored build/.",
+    "The runtime observation does not prove complete VoiceOver usability, long-term stability or full Web/XPC helper release.",
+    "No Web plugin was opened and no change to system clock, permissions or sleep/lock settings was made.",
+    "The retention-shortening deletion confirmation path was not exercised in this run."
+  ]
+}

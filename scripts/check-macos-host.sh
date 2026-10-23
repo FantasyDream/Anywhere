@@ -47,6 +47,11 @@ xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   apps/flutter/macos/Runner/tests/FlutterEngineLifecycleTests.swift \
   -o "$host_test_directory/flutter-engine-lifecycle-test"
 "$host_test_directory/flutter-engine-lifecycle-test"
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  apps/flutter/macos/Runner/FlutterWindowCloseCoordinator.swift \
+  apps/flutter/macos/Runner/tests/FlutterWindowCloseCoordinatorTests.swift \
+  -o "$host_test_directory/flutter-window-close-test"
+"$host_test_directory/flutter-window-close-test"
 # Search scope authorization is separate from query-time filesystem traversal.
 xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   apps/flutter/macos/Runner/FileSearchAccess.swift \

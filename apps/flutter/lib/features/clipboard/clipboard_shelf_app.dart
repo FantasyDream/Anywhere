@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../infrastructure/clipboard_history_backend.dart';
 import '../../infrastructure/presentation_metrics.dart';
+import '../../infrastructure/tool_window_lifecycle.dart';
 import '../../l10n/app_language.dart';
 import '../../ui/app_style.dart';
 import 'clipboard_history_presentation.dart';
@@ -40,7 +41,9 @@ class _ClipboardShelfAppState extends State<ClipboardShelfApp> {
     super.initState();
     session.bindInteraction(() => mounted && _visible);
     widget.channel.setMethodCallHandler((call) async {
-      if (call.method == 'visibility') {
+      if (call.method == 'prepareToClose') {
+        await prepareToolWindowToClose();
+      } else if (call.method == 'visibility') {
         ++_visibilityEpoch;
         _visibility(call.arguments == true);
       } else if (call.method == 'present') {

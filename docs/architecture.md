@@ -200,7 +200,7 @@ JSON Workspace 已作为普通 Web 示例包实现，页面内校验 / token 格
 
 macOS Host 在启动引擎前安装 `NativeFlutterSurfaceGuard`：对 Flutter 后备表面的实际尺寸与请求尺寸做校验，不匹配时返回空值让引擎重新分配。该适配仅处理固定 SDK 的缓存缺陷，检查内部选择器 ABI，不修改全局 SDK、渲染器或业务层。实际框架回归随原生门禁运行；升级到包含上游修复的版本后应移除，证据和边界见 [Build 51 收尾](archive/reviews/closeout-v0.11-build51.md)。
 
-独立悬浮窗 / 任务窗在清除消息处理器后，通过 `FlutterEngineLifecycle` 显式解除视图与其专用引擎的绑定，再释放窗口内容；失败启动也清理。使用 Flutter 公开接口，由非 headless 引擎的既有规则完成关闭，不销毁 Launcher / Settings 的共享引擎。原生回归检查真实框架的解绑幂等、独立引擎隔离及对象释放；它不启动 Dart 或绘制，实际 VSync / 窗口关闭行为仍由实机验收确认。
+独立悬浮窗 / 任务窗通过 `FlutterWindowCloseCoordinator` 发起关闭握手，工具 isolate 用通用 `prepareToolWindowToClose` 卸载页面并完成一帧，清理编辑器、语义节点和视图轮询后再回复。Host 随后清除消息处理器，通过 `FlutterEngineLifecycle` 显式解除视图与专用引擎的绑定，再释放窗口内容；失败启动直接清理。重复关闭合并，旧回复受代数隔离，重新打开排队到清理结束；2 秒无响应则回退关闭。使用 Flutter 公开接口，不销毁 Launcher / Settings 的共享引擎，不停止 Rust 持有的任务。原生回归中的解绑对象测试不启动 Dart 或绘制；Widget 覆盖卸载与轮询，实际 VSync / 视图释放仍由实机验收确认。
 
 `FlutterAccessibilityState` 只在 macOS Host 缓存已经收到的 AppKit 辅助功能启用 / 禁用通知，新建引擎后重放，避免懒加载窗口错过请求。没有已观察状态时不执行，不强制开启语义树，不增加系统权限。通知名称沿用固定 Flutter SDK 的实现契约，并非新的跨平台业务协议；升级 SDK 时须复核 `FlutterEngine.mm` 的通知处理和晚建窗口的实际 AX 树，不能只依赖适配器自身测试。
 

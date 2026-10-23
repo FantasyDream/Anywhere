@@ -8,10 +8,14 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
   var tasksChannel: FlutterMethodChannel?
   var tasksReady = false
   private var localeHost: LocaleHost?
+  private let closeCoordinator = FlutterWindowCloseCoordinator()
   var pendingTaskId: String?
   let onLauncher: () -> Void
   init(onLauncher: @escaping () -> Void) { self.onLauncher = onLauncher }
   func showTasks(id: String?) -> Bool {
+    if closeCoordinator.openAfterClose({ [weak self] in _ = self?.showTasks(id: id) }) {
+      return true
+    }
     pendingTaskId = id
     let created = tasksWindow == nil
     if created {
@@ -93,6 +97,16 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
     return true
   }
 
+  func windowShouldClose(_ sender: NSWindow) -> Bool {
+    guard sender === tasksWindow, tasksReady, let channel = tasksChannel else { return true }
+    return closeCoordinator.shouldClose(
+      prepare: { finish in
+        channel.invokeMethod("prepareToClose", arguments: nil) { _ in finish() }
+      },
+      close: { [weak sender] in sender?.performClose(nil) }
+    )
+  }
+
   func windowWillClose(_ notification: Notification) {
     guard notification.object as? NSWindow === tasksWindow else { return }
     tasksChannel?.invokeMethod("visibility", arguments: false)
@@ -105,6 +119,7 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
     tasksChannel = nil
     tasksReady = false
     pendingTaskId = nil
+    closeCoordinator.didClose()
   }
 
   func windowDidMiniaturize(_ notification: Notification) {
