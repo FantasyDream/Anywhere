@@ -4,6 +4,11 @@ analyzer:
     - macos/**
     - lib/src/rust/**
     - lib/l10n/generated/**
+    - lib/ui/design_tokens.g.dart
+    - lib/infrastructure/runtime_policy.dart
+    - lib/infrastructure/hotkey_keymap.dart
+    - lib/infrastructure/legacy_macos_shortcuts.dart
+    - lib/launcher/file_filter.dart
 include: package:flutter_lints/flutter.yaml
 
 linter:

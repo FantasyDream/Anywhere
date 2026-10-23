@@ -15,6 +15,8 @@
 
 本地开发包使用持久本机签名；公开分发所需的签名、公证、安装升级和完整辅助功能矩阵仍需验收。具体证据见 [V0.12 MVP](docs/mvp-v0.12.md)。
 
+**下载提示：** GitHub 的 [`latest` 历史预览](https://github.com/FantasyDream/Anywhere/releases/tag/latest) 是 2026-09-18 的 V0.3 开发包，不包含本页介绍的 V0.12 功能，也不代表当前 Windows 支持状态。当前版本请按下文从源码构建；新版预览尚未上传 Release。
+
 ## 能做什么
 
 - **应用与动作搜索**：启动或切回应用，搜索当前应用的可用菜单，通过 Scope 筛选领域动作。

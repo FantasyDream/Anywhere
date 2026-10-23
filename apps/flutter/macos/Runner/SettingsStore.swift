@@ -89,7 +89,8 @@ struct StoredSettings: Codable {
         let bindings = StoredActionShortcut.nativeBindings(stored.actionShortcuts ?? [])
       else {
         var protected = defaults
-        protected.actionShortcutVersion = Int.max  // Invalid portable data must not be overwritten.
+        // Invalid portable data must not be overwritten.
+        protected.actionShortcutVersion = Int.max
         return protected
       }
       stored.currentAppKeyCode = currentCode
