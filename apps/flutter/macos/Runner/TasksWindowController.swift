@@ -46,8 +46,10 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
       guard view.engine.run(withEntrypoint: "executionSessionsMain") else {
         channel.setMethodCallHandler(nil)
         localeHost = nil
+        FlutterEngineLifecycle.detach(view)
         return false
       }
+      FlutterAccessibilityState.shared.synchronizeNewEngine()
       let panel = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 920, height: 600),
         styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
@@ -95,9 +97,10 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
     guard notification.object as? NSWindow === tasksWindow else { return }
     tasksChannel?.invokeMethod("visibility", arguments: false)
     tasksChannel?.setMethodCallHandler(nil)
+    localeHost = nil
+    FlutterEngineLifecycle.detach(tasksController)
     tasksWindow?.contentViewController = nil
     tasksWindow = nil
-    localeHost = nil
     tasksController = nil
     tasksChannel = nil
     tasksReady = false

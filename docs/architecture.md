@@ -2,7 +2,7 @@
 
 当前实现：V0.13 开发中，沿用静态内置模块、剪贴板与 Web 插件基础；最后整理：2026-10-23。使用入口见 [README](../README.md)，专题文档见 [文档导航](README.md)。
 
-当前阶段为中英国际化、拼音与交互收尾，Terminal 延后。[详细方案](web-plugin-design.md)按 P0–P6 实施：P1 的协议 DTO 在 `anywhere-protocol::web_plugin`，包验证 / 资源摘要在 `anywhere-plugin::web`，不依赖 UI 或 Core 状态；P2 的 `application/web_plugins/` 已实现目录贡献、调用身份、Context 投影与生命周期，Core 只持有类型化命令引用，Bridge 只传不透明 HostView 票据；P3 的能力规划 / 调度 / 分块分别位于 `broker.rs`、`rpc_dispatch.rs`、`transfer.rs`，复用有界 SQLite 存储，SDK 位于 `packages/plugin-sdk/`；P4 的 `web_plugins/` Flutter 页面通过原生 main-frame 消息转发至 FRB，再由 Rust Broker 检查资格；P5 的 `application/web_plugins/packages.rs` 协调批准、启停、更新、回滚与目录发布，`persistence/web_packages.rs` 只处理收据 / 包文件 / 有界资源读取，Web 的持久 KV 使用独立数据库；P6 的 JSON / Text Pad 作为普通包交叉验证；静态内置模块、Rust / Flutter / Platform 的分工继续保持。
+当前阶段为剪贴板暂停 / 保留策略、性能基线与日常可靠性收尾，Terminal 延后。[详细方案](web-plugin-design.md)按 P0–P6 实施：P1 的协议 DTO 在 `anywhere-protocol::web_plugin`，包验证 / 资源摘要在 `anywhere-plugin::web`，不依赖 UI 或 Core 状态；P2 的 `application/web_plugins/` 已实现目录贡献、调用身份、Context 投影与生命周期，Core 只持有类型化命令引用，Bridge 只传不透明 HostView 票据；P3 的能力规划 / 调度 / 分块分别位于 `broker.rs`、`rpc_dispatch.rs`、`transfer.rs`，复用有界 SQLite 存储，SDK 位于 `packages/plugin-sdk/`；P4 的 `web_plugins/` Flutter 页面通过原生 main-frame 消息转发至 FRB，再由 Rust Broker 检查资格；P5 的 `application/web_plugins/packages.rs` 协调批准、启停、更新、回滚与目录发布，`persistence/web_packages.rs` 只处理收据 / 包文件 / 有界资源读取，Web 的持久 KV 使用独立数据库；P6 的 JSON / Text Pad 作为普通包交叉验证；静态内置模块、Rust / Flutter / Platform 的分工继续保持。
 
 已确认转向内置功能模块，按 [迁移路线图](archive/feature-module-roadmap.md) 分阶段实施。P01 集中构造与身份检查；P02 由模块自己的 registration.rs 声明功能，Cargo 编译时自动发现并生成 features/catalog 使用的目录，迁移阶段保留既有功能身份与顺序；JSON 延期后 V0.9 交付 8 个可配置内置功能，V0.10 增加 clipboard 模块。P03 将内置描述改为 Rust FeatureDescriptor，移除内置 TOML 和协议解析，状态显示统一使用 Cargo workspace 构建版本。P04 将收藏目录拆为 repository / service，FeatureServices 持有具体 service，移除 ExtensionState / Any 状态恢复。没有运行期扫描或加载。P05c 已删除旧 FirstPartyExtension / ExtensionRuntime / ExtensionManager / Reload；Native 只在启动绑定贡献，设置与业务数据刷新单独管理。
 
@@ -170,7 +170,7 @@ Web 包 accepts / inputMatchers 只声明 Action 的输入与宿主识别条件�
 - 新工具页面：HostViewNavigator 注册路由，复用导航、共享 UI 和对象 Actions。
 - 新系统能力：扩展 Platform / DesktopHost，实现各平台适配器。
 
-`scripts/check-architecture.py` 检查 Cargo 依赖及 core 模块反向导入；行为由公开 Facade、平台和 Widget 回归覆盖。完整门禁是 `scripts/check.sh`。自动化通过不代替真实键盘、权限、窗口、升级及 Windows 验收；当前记录见 [V0.12 MVP](mvp-v0.12.md)，历史 Web 验证见 [V0.11 MVP](archive/mvp-v0.11.md)。
+`scripts/check-architecture.py` 检查 Cargo 依赖及 core 模块反向导入；行为由公开 Facade、平台和 Widget 回归覆盖。完整门禁是 `scripts/check.sh`。自动化通过不代替真实键盘、权限、窗口、升级及 Windows 验收；当前记录见 [V0.13 MVP](mvp-v0.13.md)，真实键盘基线见 [V0.12 MVP](mvp-v0.12.md)，历史 Web 验证见 [V0.11 MVP](archive/mvp-v0.11.md)。
 
 
 ### JSON Web 工具与旧身份兼容
@@ -199,6 +199,10 @@ JSON Workspace 已作为普通 Web 示例包实现，页面内校验 / token 格
 ### 固定 Flutter 版本的表面缓存保护
 
 macOS Host 在启动引擎前安装 `NativeFlutterSurfaceGuard`：对 Flutter 后备表面的实际尺寸与请求尺寸做校验，不匹配时返回空值让引擎重新分配。该适配仅处理固定 SDK 的缓存缺陷，检查内部选择器 ABI，不修改全局 SDK、渲染器或业务层。实际框架回归随原生门禁运行；升级到包含上游修复的版本后应移除，证据和边界见 [Build 51 收尾](archive/reviews/closeout-v0.11-build51.md)。
+
+独立悬浮窗 / 任务窗在清除消息处理器后，通过 `FlutterEngineLifecycle` 显式解除视图与其专用引擎的绑定，再释放窗口内容；失败启动也清理。使用 Flutter 公开接口，由非 headless 引擎的既有规则完成关闭，不销毁 Launcher / Settings 的共享引擎。原生回归检查真实框架的解绑幂等、独立引擎隔离及对象释放；它不启动 Dart 或绘制，实际 VSync / 窗口关闭行为仍由实机验收确认。
+
+`FlutterAccessibilityState` 只在 macOS Host 缓存已经收到的 AppKit 辅助功能启用 / 禁用通知，新建引擎后重放，避免懒加载窗口错过请求。没有已观察状态时不执行，不强制开启语义树，不增加系统权限。通知名称沿用固定 Flutter SDK 的实现契约，并非新的跨平台业务协议；升级 SDK 时须复核 `FlutterEngine.mm` 的通知处理和晚建窗口的实际 AX 树，不能只依赖适配器自身测试。
 
 
 ## 语言与名称检索

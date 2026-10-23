@@ -33,6 +33,20 @@ xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   apps/flutter/macos/Runner/tests/PresentationDiagnosticsTests.swift \
   -o "$host_test_directory/presentation-diagnostics-test"
 "$host_test_directory/presentation-diagnostics-test"
+# Lazy engines must inherit the last accessibility request and detach explicitly.
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  apps/flutter/macos/Runner/FlutterAccessibilityState.swift \
+  apps/flutter/macos/Runner/tests/FlutterAccessibilityStateTests.swift \
+  -o "$host_test_directory/flutter-accessibility-test"
+"$host_test_directory/flutter-accessibility-test"
+flutter_framework_directory="$(dirname "$(dirname "$flutter_framework")")"
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  -F "$flutter_framework_directory" -framework FlutterMacOS \
+  -Xlinker -rpath -Xlinker "$flutter_framework_directory" \
+  apps/flutter/macos/Runner/FlutterEngineLifecycle.swift \
+  apps/flutter/macos/Runner/tests/FlutterEngineLifecycleTests.swift \
+  -o "$host_test_directory/flutter-engine-lifecycle-test"
+"$host_test_directory/flutter-engine-lifecycle-test"
 # Search scope authorization is separate from query-time filesystem traversal.
 xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   apps/flutter/macos/Runner/FileSearchAccess.swift \

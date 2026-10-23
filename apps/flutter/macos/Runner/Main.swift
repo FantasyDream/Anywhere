@@ -15,6 +15,7 @@ final class LauncherWindow: NSWindow {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation {
+  private let accessibilityState = FlutterAccessibilityState.shared
   var window: LauncherWindow!
   var controller: FlutterViewController!
   private var localeHost: LocaleHost?
@@ -575,6 +576,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     if !controller.engine.run(withEntrypoint: nil) {
       log(["event": "flutter_engine_start_failed"])
       NSApp.terminate(nil)
+    } else {
+      accessibilityState.synchronizeNewEngine()
     }
   }
 

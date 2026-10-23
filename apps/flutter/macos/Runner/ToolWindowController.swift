@@ -120,8 +120,10 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
       guard view.engine.run(withEntrypoint: entrypoint) else {
         transport.setMethodCallHandler(nil)
         localeHost = nil
+        FlutterEngineLifecycle.detach(view)
         return false
       }
+      FlutterAccessibilityState.shared.synchronizeNewEngine()
       let size = ToolWindowPlacement.preferredSize
       let panel = NSWindow(
         contentRect: NSRect(origin: .zero, size: size),
@@ -185,9 +187,10 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
     guard notification.object as? NSWindow === window else { return }
     channel?.invokeMethod("visibility", arguments: false)
     channel?.setMethodCallHandler(nil)
+    localeHost = nil
+    FlutterEngineLifecycle.detach(controller)
     window?.contentViewController = nil
     window = nil
-    localeHost = nil
     controller = nil
     channel = nil
     ready = false
