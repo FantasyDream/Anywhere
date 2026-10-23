@@ -11,6 +11,15 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'support/clipboard_fixtures.dart';
 
+class FrameTrackingBinding extends AutomatedTestWidgetsFlutterBinding {
+  int warmUpRequests = 0;
+  @override
+  void scheduleWarmUpFrame() {
+    ++warmUpRequests;
+    super.scheduleWarmUpFrame();
+  }
+}
+
 class OwnedEditor extends StatefulWidget {
   const OwnedEditor(this.onDispose, {super.key});
   final VoidCallback onDispose;
@@ -32,7 +41,7 @@ class _OwnedEditorState extends State<OwnedEditor> {
 }
 
 void main() {
-  TestWidgetsFlutterBinding.ensureInitialized();
+  final binding = FrameTrackingBinding();
   final messenger =
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   const channel = MethodChannel('anywhere/tool-close-test');
@@ -49,6 +58,7 @@ void main() {
     var disposedWhenAcknowledged = false;
     await tester.pumpWidget(OwnedEditor(() => disposed = true));
     await tester.enterText(find.byType(TextField), 'Synthetic close test');
+    final warmUpBefore = binding.warmUpRequests;
     unawaited(prepareToolWindowToClose().then((_) {
       disposedWhenAcknowledged = disposed;
       acknowledged = true;
@@ -58,6 +68,7 @@ void main() {
     expect(disposed, isTrue);
     expect(acknowledged, isTrue);
     expect(disposedWhenAcknowledged, isTrue);
+    expect(binding.warmUpRequests, warmUpBefore);
     expect(find.byType(TextField), findsNothing);
   });
 

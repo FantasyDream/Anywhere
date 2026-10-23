@@ -100,7 +100,17 @@ Build 2（`0.13.0+2`）、macOS 27.0.1 arm64、Flutter 3.47.4、Impeller MetalSD
 
 相同隔离历史、采集关闭，Build 5 的晚建悬浮窗已能在 AX 树中展示搜索、候选、复制与更多操作。初次查询 / 关闭后，再完成两批共 40 次开关，所有循环的控件可读取且正常退出，没有出现 invalid engine handle 日志。但关闭后的类统计为 1 个 FlutterEngine、42 个 FlutterViewController、1 个 FlutterVSyncWaiter；循环前 / 20 次后 / 40 次后的 footprint 为 116.0 / 217.2 / 305.5 MiB。引擎释放和界面退出不能证明视图资源也已释放，本轮生命周期验收不通过。详情见 [Build 5 数值记录](benchmarks/desktop-v0.13-build5-2026-10-24.json)。
 
-Build 6 已加入先卸载 Flutter 页面和语义节点、完成一帧再关闭引擎的握手，以及重复 / 迟到 / 超时 / 重开回归。完整检查和打包通过，构建后再次因锁屏未进行实机复测；目前不宣称控制器残留或 footprint 增长已消除。
+Build 6 加入先卸载 Flutter 页面和语义节点、完成一帧再关闭引擎的握手，以及重复 / 迟到 / 超时 / 重开回归。完整检查和打包通过；随后解锁补验单次关闭，对象回到主窗口的一套引擎 / 控制器，但仍出现 1 次无效句柄日志。单次结果不替代完整循环。
+
+### Build 7 普通帧卸载补验（2026-10-24）
+
+Build 7 通过 Flutter 公开接口挂载空根并等待普通帧，避免 `runApp` 在关闭时另行安排预热帧；自动化同时检查编辑器卸载、回复顺序、轮询取消和不新增预热帧。Flutter 398 项及分析通过，App / ZIP 签名与内容校验通过。原生 / Rust 行为未改变，沿用 Build 6 的完整检查结果。
+
+相同隔离目录、350 条合成历史且采集关闭，四个短批次共 20 次开关逐次确认搜索框、候选及返回主窗口；末次 `heap --noContent` 为 1 个 FlutterEngine、1 个 FlutterViewController、1 个 FlutterVSyncWaiter、1 个 WindowMaterialController。初次长自动化调用曾超时，其部分循环不计入 20 次完整验证，但引擎启动总数和日志统计包含它们。第二批 20 次开始前 Mac 又自动锁屏，未继续发送界面按键。详见 [Build 7 数值记录](benchmarks/desktop-v0.13-build7-2026-10-24.json)。
+
+包含前期操作的循环区间，RSS 快照为 66.75 → 63.03 MiB，footprint 为 110.10 → 76.70 MiB；关闭后未见视图控制器逐次累积。区间包含自动化超时和额外前期循环，不能与 Build 5 作为等次数 / 等负载的性能对照，不能据此承诺内存上限或长期无泄漏。没有打开 Web 插件，空的子进程列表仍不覆盖无父子归属的 XPC。
+
+完整运行仍记录到 1 次 `FlutterEngineOnVsync` 无效句柄消息，未观察到崩溃。固定 Flutter 引擎源码的 `FlutterVSyncWaiter.waitForVSync` 会安排合成计时回调，`invalidate` 未撤销该已排队回调；`FlutterEngine.viewControllerViewDidLoad` 的回调只判断引擎对象存在，`onVSync` 也会将工作投递到主循环。这与关闭后的迟到回调警告一致，但本轮未追踪具体 baton，不能断言唯一原因；没有为消除日志新增私有运行时补丁。对象释放、日志与完整长期 / 辅助功能矩阵分别记录。
 
 
 ## V0.9 收尾基线（2026-10-16）
