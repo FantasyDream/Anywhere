@@ -1,5 +1,9 @@
 import AppKit
 
+private final class ContentFocusView: NSView {
+  override var acceptsFirstResponder: Bool { true }
+}
+
 @main
 struct WindowMaterialTests {
   @MainActor static func main() {
@@ -73,8 +77,28 @@ struct WindowMaterialTests {
     launcher.contentView?.layoutSubtreeIfNeeded()
     assert(contentController.view.window === launcher)
     assert(contentController.view.bounds.size == frame.size)
+
+    // Closing a dedicated window must release its native content and responder
+    // while the controller (and, in production, its engine) is still alive.
+    let editor = ContentFocusView(frame: frame)
+    contentController.view.addSubview(editor)
+    assert(launcher.makeFirstResponder(editor))
+    assert(launcher.firstResponder === editor)
+    host.detachContent()
+    assert(contentController.parent == nil && host.children.isEmpty)
+    assert(contentController.view.window == nil && contentController.view.superview == nil)
+    assert(launcher.firstResponder !== editor)
+    #if compiler(>=6.2)
+      if #available(macOS 26.0, *) {
+        assert((host.material.subviews.first as? NSGlassEffectView)?.contentView == nil)
+      }
+    #endif
+    host.detachContent()
+    assert(host.children.isEmpty)
+    fallback.detachContent(fallbackContent)
+    assert(fallbackContent.superview == nil)
     print(
-      "Window material: native content containment, fallback, corners, resize and reparenting passed"
+      "Window material: containment, fallback, resize, reparenting and input teardown passed"
     )
   }
 }

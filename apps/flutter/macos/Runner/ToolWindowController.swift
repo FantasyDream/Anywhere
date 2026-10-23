@@ -200,6 +200,7 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
     channel?.invokeMethod("visibility", arguments: false)
     channel?.setMethodCallHandler(nil)
     localeHost = nil
+    (window?.contentViewController as? WindowMaterialController)?.detachContent()
     FlutterEngineLifecycle.detach(controller)
     window?.contentViewController = nil
     window = nil

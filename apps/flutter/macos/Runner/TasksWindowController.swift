@@ -112,6 +112,7 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
     tasksChannel?.invokeMethod("visibility", arguments: false)
     tasksChannel?.setMethodCallHandler(nil)
     localeHost = nil
+    (tasksWindow?.contentViewController as? WindowMaterialController)?.detachContent()
     FlutterEngineLifecycle.detach(tasksController)
     tasksWindow?.contentViewController = nil
     tasksWindow = nil
