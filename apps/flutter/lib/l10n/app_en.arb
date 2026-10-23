@@ -799,7 +799,7 @@
   },
   "keepHistoryFor": "Keep history for",
   "untilStorageLimit": "Until storage limit",
-  "retentionDays": "{days} days",
+  "retentionDays": "{days, plural, =1{1 day} other{{days} days}}",
   "@retentionDays": {
     "placeholders": {
       "days": {
@@ -809,7 +809,7 @@
   },
   "changeHistoryRetention": "Change history retention?",
   "historyRetentionWarning": "Entries older than the selected period will be permanently deleted now. Extending the period later cannot restore them.",
-  "historyStorageUsage": "{count} entries · {mib} MiB stored",
+  "historyStorageUsage": "{count, plural, =1{1 entry} other{{count} entries}} · {mib} MiB stored",
   "@historyStorageUsage": {
     "placeholders": {
       "count": {

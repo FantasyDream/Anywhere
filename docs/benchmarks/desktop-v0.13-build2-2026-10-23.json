@@ -1,0 +1,861 @@
+{
+  "date": "2026-10-23",
+  "build": {
+    "app_version": "0.13.0+2",
+    "source_parent": "e156f52",
+    "source_state": "uncommitted V0.13 settings lifecycle and opt-in measurement changes",
+    "binary_sha256": "5fa5c2a2d96aba68042cb53084d4d3d9bded8a0ebc6d438ab55c93db8c7473c2",
+    "source_sha256": {
+      "apps/flutter/lib/infrastructure/presentation_metrics.dart": "71a88e7c804abc237962805db6f73db8af8a5f6ae505efea2b2b6c84f8db89c5",
+      "apps/flutter/lib/launcher/launcher_controller.dart": "5ec4bb07192c65fe752f542f64282086dde8013307193afc2c5fbdb5a3353c80",
+      "apps/flutter/lib/launcher/launcher_screen.dart": "adf359f63d88b2d2c04b24f1a4a8a774bf3a897fc7687e41b476c8322d7bb5de",
+      "apps/flutter/macos/Runner/Main.swift": "c3303c48914c475dafc61c7036d687d8dc86cce455673d80bec445b7e5f30cce",
+      "apps/flutter/lib/settings/clipboard_settings_controller.dart": "4e83ddd70ab1ee94247f66779431be5bd1b806a85dc8a93b6dd7ee677dea9d0a"
+    }
+  },
+  "environment": {
+    "os": "macOS 27.0.1",
+    "architecture": "arm64",
+    "flutter": "3.47.4",
+    "dart": "3.13.3",
+    "renderer": "Impeller MetalSDF",
+    "profile_ui": true,
+    "isolated_data": true,
+    "accessibility_trusted": false
+  },
+  "fixture": {
+    "history_entries": 100,
+    "kind": "synthetic plain text",
+    "recording_at_end": false,
+    "external_context_sources_enabled": false,
+    "file_search_enabled": false,
+    "clipboard_body_exported": false
+  },
+  "interactions": {
+    "launcher_query_replacements": 50,
+    "history_page_open_and_back_cycles": 20,
+    "checked": [
+      "history search and following preview",
+      "English and Chinese settings layout",
+      "pause options 5/15/60 minutes",
+      "pause 15 minutes and resume",
+      "settings tab switch preserves pause status",
+      "retention shortening confirmation and cancel",
+      "recording disabled at end"
+    ],
+    "not_checked": [
+      "physical IME and hardware hotkeys",
+      "Accessibility-dependent Current App menus",
+      "retention deletion via GUI",
+      "real restart and deadline expiry via GUI",
+      "long-running stability",
+      "Web plugin helper teardown"
+    ]
+  },
+  "final_log_timings": {
+    "operations": {
+      "activation": {
+        "count": 4,
+        "p50_us": 50600,
+        "p95_us": 79087,
+        "max_us": 79087
+      },
+      "query": {
+        "count": 59,
+        "p50_us": 12429,
+        "p95_us": 26169,
+        "max_us": 47916
+      }
+    },
+    "rejected": 0,
+    "hidden": 0,
+    "overflow": 0
+  },
+  "mixed_settings_and_queries": {
+    "scope": "Committed input through Rust/bridge and Flutter post-frame; excludes physical display presentation.",
+    "latency": {
+      "operations": {
+        "activation": {
+          "count": 2,
+          "p50_us": 50600,
+          "p95_us": 79087,
+          "max_us": 79087
+        },
+        "query": {
+          "count": 15,
+          "p50_us": 13155,
+          "p95_us": 28438,
+          "max_us": 28438
+        }
+      },
+      "rejected": 0,
+      "hidden": 0,
+      "overflow": 0
+    },
+    "resources": [
+      {
+        "elapsed_seconds": 1.49,
+        "main_rss_bytes": 103366656,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 6.56,
+        "main_rss_bytes": 103661568,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 11.63,
+        "main_rss_bytes": 103628800,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 16.7,
+        "main_rss_bytes": 103809024,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 21.77,
+        "main_rss_bytes": 114638848,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 26.84,
+        "main_rss_bytes": 115064832,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 31.91,
+        "main_rss_bytes": 115081216,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 36.98,
+        "main_rss_bytes": 116867072,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 42.05,
+        "main_rss_bytes": 116801536,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 47.12,
+        "main_rss_bytes": 115425280,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 52.18,
+        "main_rss_bytes": 129597440,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 57.25,
+        "main_rss_bytes": 124911616,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 62.32,
+        "main_rss_bytes": 122765312,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 67.38,
+        "main_rss_bytes": 125468672,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 72.44,
+        "main_rss_bytes": 70467584,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 77.53,
+        "main_rss_bytes": 69353472,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 82.58,
+        "main_rss_bytes": 58720256,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 87.64,
+        "main_rss_bytes": 75661312,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 92.7,
+        "main_rss_bytes": 71942144,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 97.76,
+        "main_rss_bytes": 71942144,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 102.83,
+        "main_rss_bytes": 98516992,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 107.88,
+        "main_rss_bytes": 98861056,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 112.94,
+        "main_rss_bytes": 84967424,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 118.01,
+        "main_rss_bytes": 93519872,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 123.07,
+        "main_rss_bytes": 89866240,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 128.12,
+        "main_rss_bytes": 74629120,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 133.18,
+        "main_rss_bytes": 68468736,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 138.25,
+        "main_rss_bytes": 65060864,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 143.28,
+        "main_rss_bytes": 65011712,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 148.34,
+        "main_rss_bytes": 87687168,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 153.4,
+        "main_rss_bytes": 87556096,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 158.47,
+        "main_rss_bytes": 74203136,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 163.52,
+        "main_rss_bytes": 45432832,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 168.56,
+        "main_rss_bytes": 76169216,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 173.62,
+        "main_rss_bytes": 76333056,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 178.67,
+        "main_rss_bytes": 76365824,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 183.73,
+        "main_rss_bytes": 62685184,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 188.85,
+        "main_rss_bytes": 74137600,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 193.91,
+        "main_rss_bytes": 69763072,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 198.96,
+        "main_rss_bytes": 71172096,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 204.01,
+        "main_rss_bytes": 75431936,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 209.08,
+        "main_rss_bytes": 69894144,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 214.14,
+        "main_rss_bytes": 70090752,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 219.2,
+        "main_rss_bytes": 70041600,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 224.26,
+        "main_rss_bytes": 49659904,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 229.32,
+        "main_rss_bytes": 53100544,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 234.38,
+        "main_rss_bytes": 68141056,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 239.46,
+        "main_rss_bytes": 67977216,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 244.52,
+        "main_rss_bytes": 67960832,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 249.57,
+        "main_rss_bytes": 68009984,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 254.61,
+        "main_rss_bytes": 74465280,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 259.66,
+        "main_rss_bytes": 76546048,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 264.72,
+        "main_rss_bytes": 76496896,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 269.77,
+        "main_rss_bytes": 74203136,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 274.83,
+        "main_rss_bytes": 71925760,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 279.88,
+        "main_rss_bytes": 59916288,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 284.94,
+        "main_rss_bytes": 56131584,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 290.0,
+        "main_rss_bytes": 71385088,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 295.06,
+        "main_rss_bytes": 65421312,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 300.12,
+        "main_rss_bytes": 62078976,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 305.18,
+        "main_rss_bytes": 69500928,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 310.23,
+        "main_rss_bytes": 66650112,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 315.27,
+        "main_rss_bytes": 55902208,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 320.32,
+        "main_rss_bytes": 81510400,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 325.38,
+        "main_rss_bytes": 68304896,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 330.44,
+        "main_rss_bytes": 65781760,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 335.5,
+        "main_rss_bytes": 74416128,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 340.55,
+        "main_rss_bytes": 69484544,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 345.61,
+        "main_rss_bytes": 53952512,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 350.67,
+        "main_rss_bytes": 76562432,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 355.74,
+        "main_rss_bytes": 72155136,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 360.8,
+        "main_rss_bytes": 70041600,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 365.86,
+        "main_rss_bytes": 90472448,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 370.91,
+        "main_rss_bytes": 69648384,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 376.07,
+        "main_rss_bytes": 69632000,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 381.14,
+        "main_rss_bytes": 59588608,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 386.19,
+        "main_rss_bytes": 52969472,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 391.25,
+        "main_rss_bytes": 54591488,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 396.31,
+        "main_rss_bytes": 53624832,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 401.36,
+        "main_rss_bytes": 53624832,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 406.42,
+        "main_rss_bytes": 53624832,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 411.48,
+        "main_rss_bytes": 52953088,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 416.53,
+        "main_rss_bytes": 52822016,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 421.59,
+        "main_rss_bytes": 52871168,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 426.64,
+        "main_rss_bytes": 52133888,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 431.7,
+        "main_rss_bytes": 35274752,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 436.76,
+        "main_rss_bytes": 40222720,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 441.82,
+        "main_rss_bytes": 38010880,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 446.87,
+        "main_rss_bytes": 35979264,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 451.93,
+        "main_rss_bytes": 35979264,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 456.99,
+        "main_rss_bytes": 84443136,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 462.05,
+        "main_rss_bytes": 69566464,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 467.12,
+        "main_rss_bytes": 68419584,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 472.18,
+        "main_rss_bytes": 61374464,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 477.25,
+        "main_rss_bytes": 60801024,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 482.32,
+        "main_rss_bytes": 81870848,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 487.39,
+        "main_rss_bytes": 74792960,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 492.45,
+        "main_rss_bytes": 74399744,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 497.51,
+        "main_rss_bytes": 74170368,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 502.58,
+        "main_rss_bytes": 74350592,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 507.65,
+        "main_rss_bytes": 74547200,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 512.73,
+        "main_rss_bytes": 88670208,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 517.8,
+        "main_rss_bytes": 84492288,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 522.86,
+        "main_rss_bytes": 84443136,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 527.92,
+        "main_rss_bytes": 84590592,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 532.99,
+        "main_rss_bytes": 84819968,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 538.05,
+        "main_rss_bytes": 104873984,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 543.09,
+        "main_rss_bytes": 97681408,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 548.15,
+        "main_rss_bytes": 95207424,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 553.23,
+        "main_rss_bytes": 92078080,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 558.3,
+        "main_rss_bytes": 70352896,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 563.37,
+        "main_rss_bytes": 67715072,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 568.43,
+        "main_rss_bytes": 76480512,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 573.5,
+        "main_rss_bytes": 80969728,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 578.56,
+        "main_rss_bytes": 81526784,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 583.61,
+        "main_rss_bytes": 74989568,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 588.68,
+        "main_rss_bytes": 74989568,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 593.74,
+        "main_rss_bytes": 75235328,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 598.83,
+        "main_rss_bytes": 75431936,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 600.07,
+        "main_rss_bytes": 75448320,
+        "descendants": []
+      }
+    ],
+    "initial_footprint_bytes": 108317901,
+    "final_footprint_bytes": 130757427,
+    "limits": "RSS and footprint are separate metrics. Descendants are attributed by PID ancestry only; unparented XPC helpers are not counted. Not a leak or long-term stability proof."
+  },
+  "repeated_history_open_and_back": {
+    "scope": "Committed input through Rust/bridge and Flutter post-frame; excludes physical display presentation.",
+    "latency": {
+      "operations": {
+        "activation": {
+          "count": 3,
+          "p50_us": 54552,
+          "p95_us": 79087,
+          "max_us": 79087
+        },
+        "query": {
+          "count": 59,
+          "p50_us": 12429,
+          "p95_us": 26169,
+          "max_us": 47916
+        }
+      },
+      "rejected": 0,
+      "hidden": 0,
+      "overflow": 0
+    },
+    "resources": [
+      {
+        "elapsed_seconds": 1.61,
+        "main_rss_bytes": 87474176,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 6.67,
+        "main_rss_bytes": 87621632,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 11.74,
+        "main_rss_bytes": 87818240,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 16.8,
+        "main_rss_bytes": 88031232,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 21.87,
+        "main_rss_bytes": 112623616,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 26.9,
+        "main_rss_bytes": 109854720,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 31.95,
+        "main_rss_bytes": 110002176,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 37.02,
+        "main_rss_bytes": 110116864,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 42.09,
+        "main_rss_bytes": 110313472,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 47.15,
+        "main_rss_bytes": 112787456,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 52.23,
+        "main_rss_bytes": 108494848,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 57.29,
+        "main_rss_bytes": 105267200,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 62.36,
+        "main_rss_bytes": 100663296,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 67.42,
+        "main_rss_bytes": 101138432,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 72.48,
+        "main_rss_bytes": 101302272,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 77.55,
+        "main_rss_bytes": 101433344,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 82.61,
+        "main_rss_bytes": 101564416,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 87.67,
+        "main_rss_bytes": 96223232,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 92.72,
+        "main_rss_bytes": 101187584,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 97.79,
+        "main_rss_bytes": 92766208,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 102.87,
+        "main_rss_bytes": 92946432,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 107.92,
+        "main_rss_bytes": 98942976,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 112.99,
+        "main_rss_bytes": 99090432,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 118.06,
+        "main_rss_bytes": 99123200,
+        "descendants": []
+      },
+      {
+        "elapsed_seconds": 120.13,
+        "main_rss_bytes": 95485952,
+        "descendants": []
+      }
+    ],
+    "initial_footprint_bytes": 139250893,
+    "final_footprint_bytes": 145647206,
+    "limits": "RSS and footprint are separate metrics. Descendants are attributed by PID ancestry only; unparented XPC helpers are not counted. Not a leak or long-term stability proof."
+  },
+  "limits": [
+    "Measured Build 2; Build 3 changes only English plural forms and version metadata. Its final GUI smoke test remains pending.",
+    "Counts are committed edits actually reported, not one sample per automation trial. Newer edits replace pending samples.",
+    "Activation measures the first ready snapshot, which may contain zero rows; it does not wait for late Context providers.",
+    "Mixed UI states and OS page compression make before/after RSS unsuitable as a leak proof or release comparison.",
+    "No Web plugin was opened; absence of descendant helpers is not proof of Web/XPC helper teardown.",
+    "Final GUI continuation was blocked by macOS locking; recording was already disabled and the isolated process was terminated."
+  ]
+}

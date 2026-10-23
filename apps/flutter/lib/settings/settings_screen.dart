@@ -65,6 +65,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
+    _controller.clipboard.setVisible(false);
     if (_controller.beforeClose == _prepareClose) {
       _controller.beforeClose = null;
     }
@@ -291,7 +292,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _selectPage(String id) {
     if (_page == id) return;
-    if (id == 'clipboard') unawaited(_controller.clipboard.load());
+    _controller.clipboard.setVisible(id == 'clipboard');
     _recorder.cancel();
     setState(() {
       _page = id;

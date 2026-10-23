@@ -23,6 +23,29 @@ class ClipboardSettingsController extends ChangeNotifier {
       : _backendNotice?.labelFor(l10n) ?? notice;
   Future<bool>? _pending;
   bool _disposed = false;
+  bool _visible = false;
+
+  void setVisible(bool visible) {
+    if (_disposed || _visible == visible) return;
+    _visible = visible;
+    _updateRefresh();
+    if (visible) unawaited(load());
+  }
+
+  void _updateRefresh() {
+    _pauseRefresh?.cancel();
+    _pauseRefresh = null;
+    if (_visible && pausedUntilMs != null && loaded) {
+      final remaining = pausedUntilMs! - DateTime.now().millisecondsSinceEpoch;
+      // The UI displays a deadline, not a ticking counter. Rust owns resuming.
+      // Re-read near that deadline; failed native recovery retries only while visible.
+      _pauseRefresh = Timer(
+          Duration(milliseconds: remaining <= 0 ? 2000 : remaining + 250), () {
+        _pauseRefresh = null;
+        if (!_disposed && _visible) unawaited(load());
+      });
+    }
+  }
 
   Future<bool> waitForPending() async => await (_pending ?? Future.value(true));
   Future<bool> load() => _run();
@@ -34,7 +57,8 @@ class ClipboardSettingsController extends ChangeNotifier {
 
   Future<bool> _run([Future<void> Function()? change]) {
     if (_disposed) return Future.value(false);
-    if (_pending != null) return _pending!;
+    if (change == null && _pending != null) return _pending!;
+    final previous = _pending;
     // Publish the pending operation before notifying listeners: a close callback
     // or another observer must wait for this write and its readback too.
     final completion = Completer<bool>();
@@ -42,10 +66,16 @@ class ClipboardSettingsController extends ChangeNotifier {
     _pending = future;
     busy = true;
     notifyListeners();
-    unawaited(_apply(change).then((result) {
-      if (identical(_pending, future)) _pending = null;
+    unawaited(() async {
+      await previous;
+      final result = _disposed ? false : await _apply(change);
+      if (identical(_pending, future)) {
+        _pending = null;
+        busy = false;
+      }
+      if (!_disposed) notifyListeners();
       completion.complete(result);
-    }));
+    }());
     return future;
   }
 
@@ -59,35 +89,24 @@ class ClipboardSettingsController extends ChangeNotifier {
       retentionDays = state.retentionDays;
       storedEntries = state.storedEntries;
       storedBytes = state.storedBytes;
-      if (pausedUntilMs != null) {
-        _pauseRefresh ??= Timer.periodic(const Duration(seconds: 2), (_) {
-          if (!_disposed && !busy) unawaited(load());
-        });
-      } else {
-        _pauseRefresh?.cancel();
-        _pauseRefresh = null;
-      }
       available = state.available;
       _operationFailed = false;
       notice = null;
       _backendNotice = state.notice;
       loaded = true;
+      _updateRefresh();
       return true;
     } catch (_) {
       if (!_disposed) {
         // A write may have succeeded before readback failed. Do not show the old
         // value as an acknowledged preference or allow a second blind write.
         loaded = false;
+        _updateRefresh();
         _operationFailed = true;
         notice =
             'Clipboard settings could not be loaded or updated. Try again.';
       }
       return false;
-    } finally {
-      if (!_disposed) {
-        busy = false;
-        notifyListeners();
-      }
     }
   }
 

@@ -18,8 +18,12 @@ class Preferences implements ClipboardPreferencesBackend {
   int cleared = 0, writes = 0, retentionDays = 0;
   int? pausedUntilMs;
   Completer<void>? gate;
+  Completer<void>? readGate;
+  int reads = 0;
   @override
   Future<ClipboardHistoryStatusDto> read() async {
+    ++reads;
+    await readGate?.future;
     if (fail) throw StateError('unavailable');
     return ClipboardHistoryStatusDto(
         recording: recording && pausedUntilMs == null,
@@ -58,6 +62,57 @@ class Preferences implements ClipboardPreferencesBackend {
 }
 
 void main() {
+  testWidgets(
+      'hidden clipboard preferences stop refreshing and reopening reads current policy',
+      (tester) async {
+    final backend = Preferences()..recording = true;
+    final controller = ClipboardSettingsController(backend);
+    addTearDown(controller.dispose);
+    await controller.pause(5);
+    final hiddenReads = backend.reads;
+    await tester.pump(const Duration(seconds: 6));
+    expect(backend.reads, hiddenReads);
+    controller.setVisible(true);
+    await tester.pump();
+    final visibleReads = backend.reads;
+    await tester.pump(const Duration(seconds: 2));
+    expect(backend.reads, visibleReads);
+    backend.pausedUntilMs = DateTime.now().millisecondsSinceEpoch + 1000;
+    await controller.load();
+    final beforeDeadline = backend.reads;
+    await tester.pump(const Duration(seconds: 2));
+    expect(backend.reads, greaterThan(beforeDeadline));
+    controller.setVisible(false);
+    final closedReads = backend.reads;
+    await tester.pump(const Duration(seconds: 6));
+    expect(backend.reads, closedReads);
+    backend.pausedUntilMs = null;
+    controller.setVisible(true);
+    await tester.pump();
+    expect(controller.pausedUntilMs, isNull);
+  });
+
+  test(
+      'a write queued behind a refresh is retained and close waits for its readback',
+      () async {
+    final backend = Preferences()..readGate = Completer<void>();
+    final controller = ClipboardSettingsController(backend);
+    addTearDown(controller.dispose);
+    final read = controller.load();
+    final write = controller.setRecording(true);
+    final closing = controller.waitForPending();
+    var closed = false;
+    unawaited(closing.then((_) => closed = true));
+    await Future<void>.delayed(Duration.zero);
+    expect(backend.writes, 0);
+    expect(closed, isFalse);
+    backend.readGate!.complete();
+    expect(await read, isTrue);
+    expect(await write, isTrue);
+    expect(await closing, isTrue);
+    expect(backend.writes, 1);
+    expect(controller.recording, isTrue);
+  });
   test(
       'timed pause and retention readback keep the configured recording switch enabled',
       () async {

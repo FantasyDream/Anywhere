@@ -4,6 +4,7 @@ cd "$(dirname "$0")/.."
 source scripts/env.sh
 python3 scripts/check-code-style.py
 python3 -m unittest discover -s scripts/tests -p test_code_style.py
+python3 -m unittest discover -s scripts/tests -p test_desktop_measurement.py
 python3 scripts/check-flutter.py
 python3 scripts/check-versions.py
 python3 scripts/check-npm-sources.py

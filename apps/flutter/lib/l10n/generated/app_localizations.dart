@@ -3050,7 +3050,7 @@ abstract class AppLocalizations {
   /// No description provided for @retentionDays.
   ///
   /// In en, this message translates to:
-  /// **'{days} days'**
+  /// **'{days, plural, =1{1 day} other{{days} days}}'**
   String retentionDays(int days);
 
   /// No description provided for @changeHistoryRetention.
@@ -3068,7 +3068,7 @@ abstract class AppLocalizations {
   /// No description provided for @historyStorageUsage.
   ///
   /// In en, this message translates to:
-  /// **'{count} entries · {mib} MiB stored'**
+  /// **'{count, plural, =1{1 entry} other{{count} entries}} · {mib} MiB stored'**
   String historyStorageUsage(int count, String mib);
 
   /// No description provided for @historyStorageExplanation.

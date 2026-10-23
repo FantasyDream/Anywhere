@@ -91,6 +91,28 @@ SDK 类型、测试和独立模板需要 Node.js 22+ / npm；这些检查不安�
 
 先完成代码、自动化与构建，最后做 GUI。真实中文候选、物理组合键、跨应用焦点与 VoiceOver 须单独记录；模拟组合键不稳定时，不据此修改生产按键语义。
 
+### 独立实机测量（macOS）
+
+验收实例可显式指定 `ANYWHERE_DATA_DIRECTORY`：必须是绝对路径，不能是根目录或包含 `..`。路径错误或创建失败时退出，不回退到个人数据。该模式不修改系统登录启动项；空目录下历史采集仍默认关闭，文件授权、日志与设置也使用独立目录。
+
+```bash
+mkdir -p build/acceptance-v0.13
+ANYWHERE_DATA_DIRECTORY="$PWD/build/acceptance-v0.13" ANYWHERE_PROFILE_UI=1 \
+  build/Anywhere-0.13-preview-build3.app/Contents/MacOS/Anywhere
+```
+
+`ANYWHERE_PROFILE_UI=1` 仅为本机显式诊断：记录操作类别、耗时与结果条数，不记录查询、路径、Context 或剪贴板正文；默认不创建测量任务或上传数据。Launcher / 文件查询测量从提交的输入开始，经过 Rust / Bridge，到匹配当前版本的 Flutter 帧结束；激活还等待原生窗口显示确认，取第一份 ready 快照，不等待迟到 Context；Clipboard History / Shelf 的内部查询暂未接入该计时。不包含输入法候选选择时间、GPU raster 或显示器实际呈现延迟。
+
+确认验收实例 PID 后，在另一终端采集；示例 PID 需替换为实际值：
+
+```bash
+python3 scripts/measure-desktop.py --pid 12345 \
+  --log build/acceptance-v0.13/launcher.log \
+  --output build/desktop-measurement.json --duration 300 --interval 5 --footprint
+```
+
+采集器仅输出数值汇总：按操作报告实际样本数、p50 / p95 / 最大值，另记主进程与其子进程 RSS、首尾 Physical footprint。样本有上限，隐藏窗口、非法记录和超额样本单独计数；子进程归属只根据 PID 关系，不能冒充完整的 XPC helper 归属。两类内存指标不要混算；隐藏 / 显示、Settings / Shelf 生命周期和长时间趋势应分别记录。原始日志留在被忽略的 `build/`，不要直接提交含真实运行信息的日志。
+
 完整检查会下载 lock 文件中依赖及固定摘要的原生依赖，需要网络；本地首次构建也可能耗时较长。CI 的 macOS 工作流运行完整门禁；Linux / Windows 工作流验证共享代码，不打包原生 App。仓库文档有独立的轻量工作流。
 
 CI 在 PR 和 main 更新时运行，避免同一次开发分支推送与 PR 重复计费。npm 锁文件只使用公共 registry；新增依赖时显式使用 `--registry=https://registry.npmjs.org`，不要提交本机 / 公司镜像地址。`scripts/check-npm-sources.py` 在下载依赖前检查该约定；依赖内容仍由 lock 的 integrity 验证。

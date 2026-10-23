@@ -42,6 +42,8 @@ void main() {
                 builder: (context) => Column(children: [
                       Text(context.l10n.settings),
                       Text(context.l10n.formatsCount(2)),
+                      Text(context.l10n.retentionDays(1)),
+                      Text(context.l10n.historyStorageUsage(1, '0.1')),
                       TextField(controller: input, focusNode: focus),
                     ])))));
     await tester.pumpAndSettle();
@@ -62,6 +64,8 @@ void main() {
     AppLanguage.current.apply('en');
     await tester.pumpAndSettle();
     expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('1 day'), findsOneWidget);
+    expect(find.text('1 entry · 0.1 MiB stored'), findsOneWidget);
     expect(find.text('2 formats'), findsOneWidget);
     await tester.pumpWidget(const SizedBox());
   });

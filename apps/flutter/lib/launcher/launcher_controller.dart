@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../infrastructure/application_icon_cache.dart';
 import '../infrastructure/application_lifecycle.dart';
+import '../infrastructure/presentation_metrics.dart';
 import '../infrastructure/runtime_policy.dart';
 import '../infrastructure/window_host.dart';
 import '../settings/action_shortcut.dart';
@@ -108,6 +109,7 @@ class LauncherController extends ChangeNotifier {
   final DesktopHost _window;
   final int Function() _nowMillis;
   final ActivationFlow _activation = ActivationFlow();
+  final performance = PresentationMetrics();
   final ObjectActionCoordinator _objectActions = ObjectActionCoordinator();
   final HostViewNavigator hostViews = HostViewNavigator();
   InputModeDto _snapshotInputMode = InputModeDto.environment;
@@ -406,6 +408,8 @@ class LauncherController extends ChangeNotifier {
       }
     }
     final generation = ++_generation;
+    performance.begin(PresentationOperation.activation,
+        generation: generation, presentation: _windowPresentation + 1);
     _phase = LauncherPhase.activating;
     _wakeMode = mode;
     _notify();
@@ -514,6 +518,7 @@ class LauncherController extends ChangeNotifier {
     // Native focus loss and an explicit hide can arrive for the same window.
     // A repeated hide must not turn retained work into a destructive dismissal.
     if (retain && _phase == LauncherPhase.hidden) return;
+    performance.cancel();
     if (retain &&
         _phase != LauncherPhase.hidden &&
         _phase != LauncherPhase.settings &&
@@ -798,6 +803,15 @@ class LauncherController extends ChangeNotifier {
     _navigationMode = null;
     final revision = ++_revision;
     _requestedRevision = revision;
+    if (!automatic) {
+      performance.begin(
+          _activation.mode == InputModeDto.fileSearch
+              ? PresentationOperation.fileQuery
+              : PresentationOperation.query,
+          generation: _generation,
+          revision: revision,
+          presentation: _windowPresentation);
+    }
     files.invalidateOperations();
     _objectActions.invalidate();
 
@@ -1619,6 +1633,7 @@ class LauncherController extends ChangeNotifier {
 
   @override
   void dispose() {
+    performance.cancel();
     _activation.dispose();
     _sessionFlow.dispose();
     _toolPage = null;

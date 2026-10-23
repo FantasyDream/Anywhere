@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
@@ -7,6 +9,7 @@ import 'features/clipboard/clipboard_shelf_app.dart';
 import 'infrastructure/desktop_environment.dart';
 import 'infrastructure/desktop_image_cache.dart';
 import 'infrastructure/file_search_access.dart';
+import 'infrastructure/presentation_metrics.dart';
 import 'infrastructure/runtime_paths.dart';
 import 'infrastructure/web_platform.dart';
 import 'infrastructure/window_host.dart';
@@ -73,6 +76,11 @@ Future<void> main() async {
   await AppLanguage.current.attach();
   try {
     final runtime = await RuntimePaths.read(windowChannel);
+    if (runtime.values['profileUi'] == '1') {
+      PresentationMetrics.reporter = (sample) => unawaited(windowChannel
+          .invokeMethod<void>('performanceSample', sample)
+          .catchError((Object _) {}));
+    }
     DesktopEnvironment.configure(await DesktopEnvironment.read(windowChannel));
     await initializeRustLibrary(runtime);
     final paths = runtime.values;

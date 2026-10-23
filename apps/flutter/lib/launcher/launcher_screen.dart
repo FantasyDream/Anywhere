@@ -587,6 +587,29 @@ class _LauncherScreenState extends State<LauncherScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final owner = _controller;
+    final view = _view;
+    final snapshot = view.snapshot;
+    if (owner.performance.pending &&
+        view.phase == LauncherPhase.ready &&
+        snapshot != null &&
+        view.toolPage == null &&
+        view.output == null) {
+      owner.performance.ready(
+        generation: view.generation,
+        revision: snapshot.revision,
+        presentation: owner.windowPresentation,
+        rows: view.visibleEntries.length,
+        afterFrame: (callback) =>
+            WidgetsBinding.instance.addPostFrameCallback((_) => callback()),
+        current: () =>
+            mounted &&
+            identical(_controller, owner) &&
+            _view.generation == view.generation &&
+            _view.phase == LauncherPhase.ready &&
+            _view.snapshot?.revision == snapshot.revision,
+      );
+    }
     final platformPage = _view.toolPage?.embedsPlatformView == true;
     final settings = _view.phase == LauncherPhase.settings;
     // Settings reuses this engine. Keep the retained native page mounted but

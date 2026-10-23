@@ -1596,7 +1596,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String retentionDays(int days) {
-    return '$days days';
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days',
+      one: '1 day',
+    );
+    return '$_temp0';
   }
 
   @override
@@ -1607,7 +1613,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String historyStorageUsage(int count, String mib) {
-    return '$count entries · $mib MiB stored';
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count entries',
+      one: '1 entry',
+    );
+    return '$_temp0 · $mib MiB stored';
   }
 
   @override
