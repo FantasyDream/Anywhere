@@ -1,9 +1,10 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+
 import '../../src/rust/api.dart';
 import '../../ui/action_icon_appearance.dart';
-import '../../ui/semantic_icon.dart';
 import '../../ui/file_type_appearance.dart';
+import '../../ui/semantic_icon.dart';
 
 /// The same icon vocabulary is used by result rows and the selected-app hint.
 class CandidateIcon extends StatelessWidget {

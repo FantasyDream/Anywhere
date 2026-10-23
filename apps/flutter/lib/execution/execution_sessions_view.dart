@@ -1,14 +1,16 @@
-import '../l10n/app_language.dart';
-import '../infrastructure/desktop_environment.dart';
-import '../ui/app_icons.dart';
 import 'dart:async';
+
 import 'package:flutter/material.dart';
-import '../ui/app_components.dart';
 import 'package:flutter/services.dart';
-import 'execution_output_view.dart';
-import 'execution_command.dart';
-import '../ui/app_style.dart';
+
+import '../infrastructure/desktop_environment.dart';
+import '../l10n/app_language.dart';
 import '../src/rust/api.dart';
+import '../ui/app_components.dart';
+import '../ui/app_icons.dart';
+import '../ui/app_style.dart';
+import 'execution_command.dart';
+import 'execution_output_view.dart';
 import 'execution_sessions_controller.dart';
 
 const _label = TextStyle(fontSize: 11, color: AppStyle.muted);

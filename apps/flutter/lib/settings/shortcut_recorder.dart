@@ -1,6 +1,8 @@
-import '../infrastructure/desktop_environment.dart';
 import 'dart:async';
+
 import 'package:flutter/services.dart';
+
+import '../infrastructure/desktop_environment.dart';
 
 /// Host recording captures registered chords; Flutter is the portable fallback.
 /// A cancelled or disposed dialog cannot accept a late native response.

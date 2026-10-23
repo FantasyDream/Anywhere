@@ -1,9 +1,10 @@
-import '../l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+import '../l10n/app_language.dart';
 import '../ui/app_style.dart';
-import 'execution_sessions_view.dart';
 import 'execution_sessions_controller.dart';
+import 'execution_sessions_view.dart';
 
 class ExecutionSessionsApp extends StatefulWidget {
   const ExecutionSessionsApp(

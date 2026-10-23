@@ -1,10 +1,11 @@
 import 'dart:async';
+
 import 'package:anywhere/infrastructure/window_host.dart';
-import 'package:anywhere/settings/features_section.dart';
-import 'package:anywhere/settings/settings_screen.dart';
-import 'package:anywhere/settings/settings_controller.dart';
-import 'package:anywhere/settings/host_settings.dart';
 import 'package:anywhere/settings/action_shortcut.dart';
+import 'package:anywhere/settings/features_section.dart';
+import 'package:anywhere/settings/host_settings.dart';
+import 'package:anywhere/settings/settings_controller.dart';
+import 'package:anywhere/settings/settings_screen.dart';
 import 'package:anywhere/src/rust/api.dart';
 import 'package:anywhere/ui/app_style.dart';
 import 'package:flutter/material.dart';

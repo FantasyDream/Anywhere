@@ -1,12 +1,13 @@
 import 'dart:ui' show Tristate;
+
+import 'package:anywhere/settings/host_settings.dart';
+import 'package:anywhere/settings/intent_shortcut_dialog.dart';
+import 'package:anywhere/settings/settings_components.dart';
+import 'package:anywhere/ui/app_components.dart' show AppDisclosure;
+import 'package:anywhere/ui/app_style.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:anywhere/ui/app_style.dart';
-import 'package:anywhere/settings/settings_components.dart';
-import 'package:anywhere/settings/intent_shortcut_dialog.dart';
-import 'package:anywhere/settings/host_settings.dart';
-import 'package:anywhere/ui/app_components.dart' show AppDisclosure;
 
 void main() {
   testWidgets('secondary details open with keyboard without toggling a setting',

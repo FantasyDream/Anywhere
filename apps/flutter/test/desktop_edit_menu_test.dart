@@ -1,8 +1,9 @@
 import 'dart:async';
+
+import 'package:anywhere/infrastructure/desktop_edit_menu.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:anywhere/infrastructure/desktop_edit_menu.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

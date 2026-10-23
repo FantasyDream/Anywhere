@@ -1,10 +1,11 @@
 import 'dart:ui' show PointerDeviceKind, Tristate;
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
+
+import 'package:anywhere/settings/settings_components.dart';
 import 'package:anywhere/ui/app_components.dart';
 import 'package:anywhere/ui/app_style.dart';
-import 'package:anywhere/settings/settings_components.dart';
 import 'package:anywhere/web_plugins/web_host_panels.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets('selected row stays distinct while pointer moves over it',

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import '../ui/app_style.dart';
+
 import '../ui/app_components.dart';
+import '../ui/app_style.dart';
+
 export '../ui/app_components.dart' show AppToggle;
 
 /// Desktop-sized controls shared by settings and its sheets. Rows have no

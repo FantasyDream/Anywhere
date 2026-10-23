@@ -1,15 +1,17 @@
 import 'dart:io';
 import 'dart:ui' as ui;
-import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:flutter_test/flutter_test.dart';
+
+import 'package:anywhere/infrastructure/desktop_environment.dart';
 import 'package:anywhere/ui/action_icon_appearance.dart';
 import 'package:anywhere/ui/app_components.dart';
 import 'package:anywhere/ui/app_icons.dart';
 import 'package:anywhere/ui/app_style.dart';
 import 'package:anywhere/ui/file_type_appearance.dart';
 import 'package:anywhere/ui/semantic_icon.dart';
-import 'package:anywhere/infrastructure/desktop_environment.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter_test/flutter_test.dart';
+
 import 'support/launcher_ui_capture.dart';
 
 // Opt-in, real-font design sheet. No app window, native glass or clipboard I/O.

@@ -1,5 +1,6 @@
-import '../l10n/app_language.dart';
 import 'package:flutter/material.dart';
+
+import '../l10n/app_language.dart';
 import 'app_icons.dart';
 import 'app_style.dart';
 import 'semantic_icon.dart';

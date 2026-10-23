@@ -1,18 +1,20 @@
-import '../l10n/app_language.dart';
-import 'web_locale.dart';
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+
+import '../l10n/app_language.dart';
 import '../src/rust/api.dart' as api;
 import '../tools/tool_page_shell.dart';
 import '../ui/app_style.dart';
-import 'web_document_policy.dart';
 import 'web_bootstrap.dart';
 import 'web_document_lifetime.dart';
-import 'web_resource_pool.dart';
+import 'web_document_policy.dart';
 import 'web_host_panels.dart';
+import 'web_locale.dart';
 import 'web_message_transport.dart';
+import 'web_resource_pool.dart';
 import 'web_view_appearance.dart';
 import 'web_view_events.dart';
 

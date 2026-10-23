@@ -1,10 +1,12 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+
 import '../infrastructure/runtime_policy.dart';
 import '../l10n/app_language.dart';
-import 'dart:async';
-import 'package:flutter/foundation.dart';
 import '../src/rust/api.dart';
-
 import 'file_filter.dart';
+
 export 'file_filter.dart';
 
 typedef LoadFilePreview = Future<FilePreviewDto> Function(

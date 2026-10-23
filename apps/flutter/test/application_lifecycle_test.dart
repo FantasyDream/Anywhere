@@ -1,6 +1,7 @@
 import 'dart:async';
-import 'package:flutter_test/flutter_test.dart';
+
 import 'package:anywhere/infrastructure/application_lifecycle.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   test('cancelled draft decision keeps running tasks and allows a later quit',

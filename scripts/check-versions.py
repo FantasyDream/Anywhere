@@ -18,15 +18,21 @@ def main():
     flutter = re.search(r'^version:\s*(\S+)\s*$',
                         (APP / 'pubspec.yaml').read_text(), re.MULTILINE)
     if flutter is None or flutter.group(1) != expected:
-        raise SystemExit(f'Flutter and native App versions differ; expected {expected}')
-    metadata = json.loads(subprocess.check_output(
-        ['cargo', 'metadata', '--locked', '--no-deps', '--format-version', '1'],
-        cwd=ROOT, text=True))
+        raise SystemExit(
+            f'Flutter and native App versions differ; expected {expected}')
+    metadata = json.loads(
+        subprocess.check_output([
+            'cargo', 'metadata', '--locked', '--no-deps', '--format-version',
+            '1'
+        ],
+                                cwd=ROOT,
+                                text=True))
     members = set(metadata['workspace_members'])
     for package in metadata['packages']:
         if package['id'] in members and package['version'] != release:
-            raise SystemExit(f"{package['name']} version {package['version']} differs "
-                             f'from App release {release}')
+            raise SystemExit(
+                f"{package['name']} version {package['version']} differs "
+                f'from App release {release}')
     print(f'App versions OK: Rust {release}, Flutter/native {expected}')
 
 

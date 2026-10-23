@@ -1,22 +1,24 @@
-import '../l10n/app_language.dart';
-import '../infrastructure/desktop_environment.dart';
-import '../ui/app_icons.dart';
 import 'dart:async';
-import 'package:flutter/material.dart';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'settings_controller.dart';
-import 'settings_components.dart';
-import 'features_section.dart';
-import 'action_shortcuts_section.dart';
-import 'shortcut_recorder.dart';
-import 'action_shortcut.dart';
-import '../ui/app_style.dart';
-import '../ui/app_components.dart';
-import 'host_settings.dart';
-import 'file_search_settings.dart';
-import 'clipboard_settings_section.dart';
+
+import '../infrastructure/desktop_environment.dart';
+import '../l10n/app_language.dart';
 import '../src/rust/api.dart';
+import '../ui/app_components.dart';
+import '../ui/app_icons.dart';
+import '../ui/app_style.dart';
+import 'action_shortcut.dart';
+import 'action_shortcuts_section.dart';
+import 'clipboard_settings_section.dart';
+import 'features_section.dart';
+import 'file_search_settings.dart';
+import 'host_settings.dart';
+import 'settings_components.dart';
+import 'settings_controller.dart';
+import 'shortcut_recorder.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen(

@@ -1,9 +1,10 @@
-import '../../l10n/app_language.dart';
 import 'package:flutter/material.dart';
+
 import '../../infrastructure/desktop_environment.dart';
+import '../../l10n/app_language.dart';
 import '../../src/rust/api.dart';
-import '../../ui/app_style.dart';
 import '../../ui/app_components.dart';
+import '../../ui/app_style.dart';
 import '../../ui/file_type_appearance.dart';
 import 'clipboard_history_presentation.dart';
 

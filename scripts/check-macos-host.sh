@@ -5,7 +5,8 @@ cd "$(dirname "$0")/.."
 host_test_directory="$(mktemp -d "${TMPDIR:-/tmp}/anywhere-host-test.XXXXXX")"
 trap 'rm -rf "$host_test_directory"' EXIT
 # Check the real release engine cache without starting a Flutter engine or GPU.
-flutter_framework="$(python3 - <<'PY'
+flutter_framework="$(
+  python3 - <<'PY'
 from pathlib import Path
 import shutil
 sdk = Path(shutil.which('flutter')).resolve().parents[1]

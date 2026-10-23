@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
+
+import 'package:anywhere/features/clipboard/clipboard_history_session.dart';
+import 'package:anywhere/infrastructure/desktop_environment.dart';
+import 'package:anywhere/src/rust/api.dart';
+import 'package:anywhere/ui/app_components.dart';
+import 'package:anywhere/ui/app_style.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:anywhere/infrastructure/desktop_environment.dart';
-import 'package:anywhere/src/rust/api.dart';
-import 'package:anywhere/features/clipboard/clipboard_history_session.dart';
-import 'package:anywhere/ui/app_style.dart';
-import 'package:anywhere/ui/app_components.dart';
+
 import 'support/clipboard_fixtures.dart';
 
 void main() {

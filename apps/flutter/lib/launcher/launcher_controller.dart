@@ -1,31 +1,32 @@
-import '../tools/tool_page.dart';
-import '../tools/builtin_tool_pages.dart';
-import 'launcher_session_coordinator.dart';
-import 'launcher_backend.dart';
-export 'launcher_backend.dart';
-import 'file_workspace_coordinator.dart';
-import '../infrastructure/runtime_policy.dart';
-import 'activation_flow.dart';
-import 'object_action_coordinator.dart';
-import 'host_view_navigator.dart';
-import 'shortcut_coordinator.dart';
-import 'launcher_navigation.dart';
-import 'file_search_controller.dart';
 import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import '../src/rust/api.dart';
+
 import '../infrastructure/application_icon_cache.dart';
+import '../infrastructure/application_lifecycle.dart';
+import '../infrastructure/runtime_policy.dart';
 import '../infrastructure/window_host.dart';
+import '../settings/action_shortcut.dart';
 import '../settings/host_settings.dart';
 import '../settings/settings_controller.dart';
-import '../settings/action_shortcut.dart';
-import '../infrastructure/application_lifecycle.dart';
+import '../src/rust/api.dart';
+import '../tools/builtin_tool_pages.dart';
+import '../tools/tool_page.dart';
+import 'activation_flow.dart';
+import 'file_search_controller.dart';
+import 'file_workspace_coordinator.dart';
+import 'host_view_navigator.dart';
+import 'launcher_backend.dart';
+import 'launcher_navigation.dart';
+import 'launcher_session_coordinator.dart';
 import 'launcher_view_state.dart';
+import 'object_action_coordinator.dart';
+import 'shortcut_coordinator.dart';
 
 export '../infrastructure/application_icon_cache.dart' show LoadIcon;
 export '../settings/settings_controller.dart' show ApplyExcludedApps;
-
+export 'launcher_backend.dart';
 export 'launcher_navigation.dart' show WakeMode, parseWakeMode;
 
 /// Owns asynchronous presentation lifecycle; matching and execution stay in Rust.

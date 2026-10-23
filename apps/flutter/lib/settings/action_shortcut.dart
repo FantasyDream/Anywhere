@@ -1,14 +1,17 @@
-import '../l10n/context_labels.dart';
-export '../l10n/context_labels.dart';
-import '../l10n/generated/app_localizations.dart';
-import 'dart:ui' show Locale;
 import 'dart:convert';
-import '../infrastructure/runtime_policy.dart';
-import '../infrastructure/desktop_environment.dart';
+import 'dart:ui' show Locale;
+
 import 'package:flutter/services.dart';
-import '../src/rust/api.dart';
+
+import '../infrastructure/desktop_environment.dart';
 import '../infrastructure/hotkey_keymap.dart';
+import '../infrastructure/runtime_policy.dart';
+import '../l10n/context_labels.dart';
+import '../l10n/generated/app_localizations.dart';
+import '../src/rust/api.dart';
 import 'host_settings.dart';
+
+export '../l10n/context_labels.dart';
 
 /// A persistent business action, never a captured object or Candidate ID.
 class ActionShortcut {

@@ -1,16 +1,18 @@
-import 'package:anywhere/infrastructure/desktop_environment.dart';
-import 'package:anywhere/ui/app_icons.dart';
-import 'package:anywhere/ui/app_components.dart';
 import 'dart:async';
+
+import 'package:anywhere/infrastructure/desktop_environment.dart';
+import 'package:anywhere/infrastructure/window_host.dart';
+import 'package:anywhere/launcher/launcher_controller.dart';
+import 'package:anywhere/launcher/launcher_screen.dart';
+import 'package:anywhere/launcher/launcher_view_state.dart';
+import 'package:anywhere/settings/settings_screen.dart';
+import 'package:anywhere/src/rust/api.dart';
+import 'package:anywhere/ui/app_components.dart';
+import 'package:anywhere/ui/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:anywhere/launcher/launcher_screen.dart';
-import 'package:anywhere/launcher/launcher_controller.dart';
-import 'package:anywhere/launcher/launcher_view_state.dart';
-import 'package:anywhere/infrastructure/window_host.dart';
-import 'package:anywhere/settings/settings_screen.dart';
-import 'package:anywhere/src/rust/api.dart';
+
 import 'launcher_fixtures.dart';
 
 /// Two action candidates with the documented stable ids.

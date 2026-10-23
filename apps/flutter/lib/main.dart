@@ -1,21 +1,21 @@
-import 'l10n/app_language.dart';
-import 'infrastructure/file_search_access.dart';
-import 'infrastructure/web_platform.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-import 'src/rust/frb_generated.dart';
-import 'src/rust/api.dart' as bridge;
-import 'launcher/launcher_screen.dart';
-import 'ui/app_style.dart';
-import 'ui/app_components.dart';
-import 'infrastructure/runtime_paths.dart';
-import 'infrastructure/window_host.dart';
-import 'infrastructure/desktop_image_cache.dart';
-import 'infrastructure/desktop_environment.dart';
 import 'execution/execution_sessions_screen.dart';
 import 'features/clipboard/clipboard_shelf_app.dart';
+import 'infrastructure/desktop_environment.dart';
+import 'infrastructure/desktop_image_cache.dart';
+import 'infrastructure/file_search_access.dart';
+import 'infrastructure/runtime_paths.dart';
+import 'infrastructure/web_platform.dart';
+import 'infrastructure/window_host.dart';
+import 'l10n/app_language.dart';
+import 'launcher/launcher_screen.dart';
+import 'src/rust/api.dart' as bridge;
+import 'src/rust/frb_generated.dart';
+import 'ui/app_components.dart';
+import 'ui/app_style.dart';
 
 const windowChannel = MethodChannel('anywhere/window');
 

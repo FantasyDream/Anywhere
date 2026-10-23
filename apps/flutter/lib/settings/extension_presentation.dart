@@ -1,6 +1,7 @@
+import 'package:flutter/widgets.dart';
+
 import '../l10n/app_language.dart';
 import '../src/rust/api.dart';
-import 'package:flutter/widgets.dart';
 import '../ui/app_icons.dart';
 
 enum ExtensionPhase {

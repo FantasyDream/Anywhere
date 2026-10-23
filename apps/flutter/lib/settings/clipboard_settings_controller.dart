@@ -1,9 +1,11 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
+
+import '../infrastructure/clipboard_preferences_backend.dart';
 import '../l10n/app_language.dart';
 import '../l10n/clipboard_labels.dart';
 import '../src/rust/api.dart';
-import 'dart:async';
-import 'package:flutter/foundation.dart';
-import '../infrastructure/clipboard_preferences_backend.dart';
 
 /// Owns asynchronous preferences operations, independently of the mounted tab.
 class ClipboardSettingsController extends ChangeNotifier {

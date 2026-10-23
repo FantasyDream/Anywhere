@@ -26,8 +26,7 @@ def package(project, destination, assets=("dist",)):
     total_bytes = 0
     for relative in roots:
         if not relative or Path(relative).is_absolute() or any(
-            part in (".", "..") for part in relative.split("/")
-        ):
+                part in (".", "..") for part in relative.split("/")):
             raise ValueError("asset paths must be relative to the project")
         root = project / relative
         if not root.exists() or root.is_symlink():
@@ -37,8 +36,11 @@ def package(project, destination, assets=("dist",)):
         # Never include source/dependencies implicitly; only explicit runtime roots.
         for path in runtime_paths(root):
             if path.is_symlink() or project not in path.resolve().parents:
-                raise ValueError("assets must be regular project files, without symbolic links")
-            if path.is_file() and path.name != ".DS_Store" and path not in files:
+                raise ValueError(
+                    "assets must be regular project files, without symbolic links"
+                )
+            if path.is_file(
+            ) and path.name != ".DS_Store" and path not in files:
                 if path == destination:
                     raise ValueError("output must be outside the asset roots")
                 size = path.stat().st_size
@@ -48,9 +50,12 @@ def package(project, destination, assets=("dist",)):
                 if len(files) >= 2000 or size > 16 * 1024 * 1024:
                     raise ValueError("too many or oversized runtime assets")
                 if total_bytes > 20 * 1024 * 1024:
-                    raise ValueError("runtime assets exceed this packer's 20 MiB stored ZIP budget")
+                    raise ValueError(
+                        "runtime assets exceed this packer's 20 MiB stored ZIP budget"
+                    )
                 files.add(path)
-    manifest = json.loads((project / "manifest.json").read_text(encoding="utf-8"))
+    manifest = json.loads(
+        (project / "manifest.json").read_text(encoding="utf-8"))
     if not isinstance(manifest, dict):
         raise ValueError("manifest must be a JSON object")
     entry = manifest.get("entry")
@@ -63,13 +68,19 @@ def package(project, destination, assets=("dist",)):
     destination.parent.mkdir(parents=True, exist_ok=True)
     temporary = None
     try:
-        with tempfile.NamedTemporaryFile(dir=destination.parent, delete=False) as work:
+        with tempfile.NamedTemporaryFile(dir=destination.parent,
+                                         delete=False) as work:
             temporary = Path(work.name)
-        with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_STORED) as archive:
-            for path in sorted(files, key=lambda path: path.relative_to(project).as_posix()):
-                item = zipfile.ZipInfo(path.relative_to(project).as_posix(), (2026, 1, 1, 0, 0, 0))
+        with zipfile.ZipFile(temporary, "w",
+                             compression=zipfile.ZIP_STORED) as archive:
+            for path in sorted(
+                    files,
+                    key=lambda path: path.relative_to(project).as_posix()):
+                item = zipfile.ZipInfo(
+                    path.relative_to(project).as_posix(), (2026, 1, 1, 0, 0, 0))
                 item.external_attr = 0o100644 << 16
-                with path.open("rb") as source, archive.open(item, "w") as target:
+                with path.open("rb") as source, archive.open(item,
+                                                             "w") as target:
                     shutil.copyfileobj(source, target, length=64 * 1024)
         if temporary.stat().st_size > 20 * 1024 * 1024:
             raise ValueError("package exceeds 20 MiB")
@@ -82,15 +93,22 @@ def package(project, destination, assets=("dist",)):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("project", type=Path, help="directory containing manifest.json")
+    parser.add_argument("project",
+                        type=Path,
+                        help="directory containing manifest.json")
     parser.add_argument("--output", "-o", required=True, type=Path)
-    parser.add_argument("--assets", action="append", help="runtime file/directory; repeatable, default: dist")
+    parser.add_argument(
+        "--assets",
+        action="append",
+        help="runtime file/directory; repeatable, default: dist")
     args = parser.parse_args()
     try:
         result = package(args.project, args.output, args.assets or ["dist"])
     except (ValueError, OSError, zipfile.BadZipFile) as error:
         parser.exit(1, f"Cannot package plugin: {error}\n")
-    print(f"Built {result} ({result.stat().st_size:,} bytes); import into Anywhere to validate and approve.")
+    print(
+        f"Built {result} ({result.stat().st_size:,} bytes); import into Anywhere to validate and approve."
+    )
 
 
 if __name__ == "__main__":

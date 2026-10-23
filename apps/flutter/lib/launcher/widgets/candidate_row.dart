@@ -1,10 +1,11 @@
-import '../../l10n/app_language.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter/gestures.dart';
-import '../../ui/app_components.dart';
 import 'package:flutter/foundation.dart';
-import '../../src/rust/api.dart';
+import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
+
+import '../../l10n/app_language.dart';
 import '../../l10n/localized_label.dart';
+import '../../src/rust/api.dart';
+import '../../ui/app_components.dart';
 import '../../ui/app_style.dart';
 import '../launcher_view_state.dart';
 import 'candidate_icon.dart';

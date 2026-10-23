@@ -1,11 +1,12 @@
 import 'dart:async';
-import 'package:flutter/services.dart';
-import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:flutter_test/flutter_test.dart';
+
 import 'package:anywhere/web_plugins/web_document_theme.dart';
 import 'package:anywhere/web_plugins/web_locale.dart';
 import 'package:anywhere/web_plugins/web_view_appearance.dart';
 import 'package:anywhere/web_plugins/web_view_events.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 class RecordingWebController extends PlatformInAppWebViewController {
   RecordingWebController()
@@ -106,7 +107,7 @@ void main() {
   test('presentation events tolerate teardown and carry no plugin capability',
       () async {
     await notifyWebPresentation(web, WebPresentationEvent.visibility, false);
-    expect(platform.scripts.single, contains("anywhere:visibility"));
+    expect(platform.scripts.single, contains('anywhere:visibility'));
     expect(platform.scripts.single, contains('detail:false'));
     platform.disposed = true;
     await notifyWebPresentation(web, WebPresentationEvent.panel, false);

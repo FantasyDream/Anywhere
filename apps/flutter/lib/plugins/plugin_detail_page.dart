@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import '../tools/tool_page_shell.dart';
+
 import '../src/rust/api.dart';
+import '../tools/tool_page_shell.dart';
 import '../ui/app_style.dart';
 
 /// Host owns layout, keyboard navigation and theme. Plugin data is plain text;

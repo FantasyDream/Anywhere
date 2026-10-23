@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
-import '../settings/host_settings.dart';
+
 import '../settings/action_shortcut.dart';
+import '../settings/host_settings.dart';
 
 /// Window and preferences port. Native channels, plugins, or test doubles
 /// implement the same contract without exposing OS types to controllers.

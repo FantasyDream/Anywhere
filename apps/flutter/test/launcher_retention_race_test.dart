@@ -1,10 +1,12 @@
 import 'dart:async';
-import 'package:flutter/services.dart';
-import 'package:flutter_test/flutter_test.dart';
+
 import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/launcher/launcher_controller.dart';
 import 'package:anywhere/launcher/launcher_view_state.dart';
 import 'package:anywhere/src/rust/api.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_test/flutter_test.dart';
+
 import 'launcher_fixtures.dart';
 
 const channel = MethodChannel('test/retention-races');

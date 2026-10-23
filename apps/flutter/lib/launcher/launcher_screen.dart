@@ -1,24 +1,26 @@
-import '../l10n/app_language.dart';
-import 'activation_prefill.dart';
 import 'dart:async';
-import '../infrastructure/desktop_environment.dart';
-import 'package:flutter/rendering.dart' show ScrollDirection;
-import '../ui/app_icons.dart';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
-import '../src/rust/api.dart';
-import '../infrastructure/window_host.dart';
+
+import '../infrastructure/desktop_environment.dart';
 import '../infrastructure/desktop_image_cache.dart';
-import 'launcher_controller.dart';
-import 'widgets/file_search_components.dart';
-import 'file_search_controller.dart' show FileFilter, LoadFilePreview;
-import '../ui/app_style.dart';
+import '../infrastructure/window_host.dart';
+import '../l10n/app_language.dart';
+import '../settings/settings_components.dart';
+import '../settings/settings_screen.dart';
+import '../src/rust/api.dart';
 import '../ui/app_components.dart';
+import '../ui/app_icons.dart';
+import '../ui/app_style.dart';
+import 'activation_prefill.dart';
+import 'file_search_controller.dart' show FileFilter, LoadFilePreview;
+import 'launcher_controller.dart';
 import 'launcher_view_state.dart';
 import 'widgets/candidate_row.dart';
+import 'widgets/file_search_components.dart';
 import 'widgets/launcher_components.dart';
-import '../settings/settings_screen.dart';
-import '../settings/settings_components.dart';
 
 export 'launcher_controller.dart'
     show

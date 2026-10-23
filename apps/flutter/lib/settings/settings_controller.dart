@@ -1,16 +1,18 @@
-import '../l10n/app_language.dart';
-import 'dart:ui' show Locale;
 import 'dart:async';
-import 'clipboard_settings_controller.dart';
-import '../infrastructure/clipboard_preferences_backend.dart';
-import '../infrastructure/runtime_policy.dart';
-import '../infrastructure/file_search_access.dart';
+import 'dart:ui' show Locale;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
+import '../infrastructure/clipboard_preferences_backend.dart';
+import '../infrastructure/file_search_access.dart';
+import '../infrastructure/runtime_policy.dart';
 import '../infrastructure/window_host.dart';
+import '../l10n/app_language.dart';
 import '../launcher/context_source_status.dart';
-import '../src/rust/api.dart';
 import '../src/rust/api.dart' as extensions_api;
+import '../src/rust/api.dart';
+import 'clipboard_settings_controller.dart';
 import 'host_settings.dart';
 
 typedef ApplyExcludedApps = Future<void> Function(List<String> bundleIds);

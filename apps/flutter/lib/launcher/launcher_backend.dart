@@ -1,5 +1,5 @@
-import '../src/rust/api.dart';
 import '../infrastructure/application_icon_cache.dart';
+import '../src/rust/api.dart';
 import 'activation_prefill.dart';
 import 'file_search_controller.dart';
 

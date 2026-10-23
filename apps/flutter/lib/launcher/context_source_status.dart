@@ -1,6 +1,7 @@
-import '../l10n/app_language.dart';
 import 'dart:ui' show Locale;
+
 import '../infrastructure/desktop_environment.dart';
+import '../l10n/app_language.dart';
 import '../src/rust/api.dart';
 
 /// Presentation of safe capture metadata. No context values or system reads.

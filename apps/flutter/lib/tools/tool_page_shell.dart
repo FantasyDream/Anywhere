@@ -1,9 +1,10 @@
-import '../l10n/app_language.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
+import '../l10n/app_language.dart';
 import '../ui/app_components.dart';
-import '../ui/app_style.dart';
 import '../ui/app_icons.dart';
+import '../ui/app_style.dart';
 
 /// Shared frame and keyboard / focus rules. Bodies remain ordinary Flutter widgets.
 class ToolPageShell extends StatefulWidget {
