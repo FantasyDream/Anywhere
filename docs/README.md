@@ -37,6 +37,7 @@
 | [旧声明式协议](plugin-protocol.md) | v1 / v2 / v3 兼容行为；停止扩展 UI DSL |
 | [V0.12 MVP](mvp-v0.12.md) | 当前范围、工程 / 实机验收及未完成项 |
 | [路线图](roadmap.md) | 后续功能、依赖与 1.0 门槛 |
+| [应用历史与收藏设计](application-history.md) | V0.14 计划：跨应用最近对象 / 书签、统一搜索与原应用打开；尚未实现 |
 | [第三方 Context 调研](research/third-party-context-providers.md) | 尚未实现的类型注册、隔离和 worker 选型 |
 
 ## 历史与研究
