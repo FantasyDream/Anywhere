@@ -2,5 +2,5 @@
 yapf==0.43.0
 platformdirs==4.4.0
 clang-format==19.1.7
-shfmt-py==3.12.0.2
+shfmt-py==4.2.0
 shellcheck-py==0.11.0.1
