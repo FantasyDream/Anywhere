@@ -13,6 +13,22 @@ spec.loader.exec_module(module)
 
 class CodeStyleSourcesTests(unittest.TestCase):
 
+    def test_dart_resolves_package_language_before_formatting_clean_checkout(
+            self):
+        with patch.object(module,
+                          'sources',
+                          return_value={
+                              'dart': ['sample.dart']
+                          }), patch.object(module, 'run') as run, patch.object(
+                              module.sys, 'argv',
+                              ['check-code-style.py', '--language', 'dart']):
+            module.main()
+        self.assertEqual(run.call_args_list[0].args[0],
+                         ['flutter', '--no-version-check', 'pub', 'get'])
+        self.assertEqual(run.call_args_list[0].kwargs['cwd'],
+                         module.ROOT / 'apps/flutter')
+        self.assertEqual(run.call_args_list[1].args[0][0:2], ['dart', 'format'])
+
     def discover(self, files):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

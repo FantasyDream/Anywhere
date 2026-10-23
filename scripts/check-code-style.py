@@ -57,8 +57,8 @@ def sources():
     return groups
 
 
-def run(command):
-    subprocess.run([str(value) for value in command], cwd=ROOT, check=True)
+def run(command, *, cwd=ROOT):
+    subprocess.run([str(value) for value in command], cwd=cwd, check=True)
 
 
 def main():
@@ -79,6 +79,10 @@ def main():
             continue
         print(f'Code style: {language} ({len(files)} files)', flush=True)
         if language == 'dart':
+            # Formatter language versions come from package_config.json. A clean
+            # checkout otherwise uses SDK defaults and produces different output.
+            run(['flutter', '--no-version-check', 'pub', 'get'],
+                cwd=ROOT / 'apps/flutter')
             run([
                 'dart', 'format', *([] if args.fix else
                                     ['--output=none', '--set-exit-if-changed']),
