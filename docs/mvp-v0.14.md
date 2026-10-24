@@ -231,3 +231,6 @@ Build 2 工程门禁：`scripts/check.sh` 全部通过，Flutter 406 项通过�
 
 
 工程验收：`scripts/check.sh` 完整通过，Core 单元 274 通过 / 1 项既有忽略，MVP 集成 190 通过 / 4 项既有忽略，Flutter 407 项通过（历史页定向 7 项）。新增真实 Launcher 服务路径回归：IDEA / VS Code 无关键词显示自己的入口、不显示另一应用入口，快捷键分别只有一个目标，NativeTool 路由固定来源，关闭整个功能后旧入口不能执行；来源查询缺失时不回退。独立 Action 和具体 Context 的重复空入口同时在 Web 共享路径回归。此处尚未记录 Build 3 原生界面与真实应用数据验收。
+
+
+Build 3 App / arm64 ZIP 与 SHA-256 已生成，源码 `3cb6b00`，版本 `0.14.0+3`；持久签名、严格包 / 归档 / 版本校验通过，Impeller 保持启用。独立合成来源实例已启动，但第一次原生 UI 读取即被 Mac 锁屏阻断，未将 Build 1 / 2 的界面结果套用于本次更改。已核对进程路径并关闭本轮测试实例；源码和自动化证明上述应用匹配逻辑，Build 3 实机界面与实际来源打开仍待复验。[本轮结构化记录](benchmarks/application-history-actions-v0.14-build3-2026-10-25.json)。
