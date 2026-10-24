@@ -593,6 +593,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
     if (owner.performance.pending &&
         view.phase == LauncherPhase.ready &&
         snapshot != null &&
+        view.canMeasureQueryFrame &&
         view.toolPage == null &&
         view.output == null) {
       owner.performance.ready(
@@ -607,6 +608,10 @@ class _LauncherScreenState extends State<LauncherScreen> {
             identical(_controller, owner) &&
             _view.generation == view.generation &&
             _view.phase == LauncherPhase.ready &&
+            _view.inputMode == view.inputMode &&
+            _view.toolPage == null &&
+            _view.output == null &&
+            _view.canMeasureQueryFrame &&
             _view.snapshot?.revision == snapshot.revision,
       );
     }

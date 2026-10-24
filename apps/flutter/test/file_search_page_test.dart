@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:anywhere/infrastructure/desktop_environment.dart';
+import 'package:anywhere/infrastructure/presentation_metrics.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/launcher/file_search_controller.dart';
 import 'package:anywhere/launcher/launcher_controller.dart';
@@ -288,6 +289,8 @@ void main() {
 
   FileSearchProgressDto searchProgress(
           {int page = 0,
+          bool finished = true,
+          int matches = 5,
           int inaccessible = 0,
           int issues = 0,
           List<String> examples = const [],
@@ -298,8 +301,8 @@ void main() {
           queryId: BigInt.one,
           roots: const ['/project'],
           scannedEntries: BigInt.from(5),
-          confirmedMatches: BigInt.from(5),
-          finished: true,
+          confirmedMatches: BigInt.from(matches),
+          finished: finished,
           issueCount: BigInt.from(issues),
           inaccessibleCount: BigInt.from(inaccessible),
           issueExamples: examples,
@@ -307,6 +310,72 @@ void main() {
           nextCursor: next,
           previousCursor: previous,
           needsRefresh: refresh);
+
+  for (final hasMatch in [true, false]) {
+    testWidgets('file timing waits for a usable result frame: match=$hasMatch',
+        (tester) async {
+      final samples = <Map<String, Object>>[];
+      PresentationMetrics.reporter = samples.add;
+      addTearDown(() => PresentationMetrics.reporter = null);
+      final pending = <Completer<SnapshotWaitDto>>[];
+      final queries = <(String, int, InputModeDto)>[];
+      final previewGate = Completer<FilePreviewDto>();
+      final c = await mount(tester,
+          queries: queries,
+          hits: [],
+          progress: searchProgress(finished: false, matches: 0),
+          load: (_, __, ___) => previewGate.future,
+          waitDelta: (_, __, ___, ____) {
+            final reply = Completer<SnapshotWaitDto>();
+            pending.add(reply);
+            return reply.future;
+          });
+      await openFiles(tester);
+      samples.clear();
+      await tester.enterText(find.byType(TextField), 'report');
+      await tester.pumpAndSettle();
+      // Core has acknowledged the input, but its first search batch has not
+      // arrived. The ready Launcher phase is not a usable file-result frame.
+      expect(samples, isEmpty);
+      final revision = queries.last.$2;
+      SnapshotWaitDto packet(int sequence, {required bool finished}) =>
+          SnapshotWaitDto(
+              kind: SnapshotWaitKindDto.updated,
+              state: launcherSnapshot(
+                  sessionId: 1,
+                  revision: revision,
+                  snapshotSeq: sequence,
+                  candidateListVersion: 1,
+                  input: 'report',
+                  contextComplete: true,
+                  candidates: hasMatch ? [text] : [],
+                  diagnostics: [],
+                  fileSearch: searchProgress(
+                      finished: finished, matches: hasMatch ? 1 : 0)));
+      pending.last.complete(packet(20, finished: !hasMatch));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(samples, hasLength(1));
+      expect(samples.single['operation'], 'file_query');
+      expect(samples.single['rows'], hasMatch ? 1 : 0);
+      expect(find.text('Preview content'), findsNothing);
+      // A nonempty first batch is useful before the search or preview finishes.
+      // Later progress cannot produce a second measurement for the same query.
+      pending.last.complete(packet(21, finished: true));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(samples, hasLength(1));
+      previewGate.complete(preview('/project/report.txt'));
+      await tester.pumpAndSettle();
+      expect(samples, hasLength(1));
+      await c.dismiss(retain: false);
+      pending.last
+          .complete(const SnapshotWaitDto(kind: SnapshotWaitKindDto.closed));
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets(
       'incomplete search keeps results and exposes the actual diagnostic',

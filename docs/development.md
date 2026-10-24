@@ -98,10 +98,10 @@ SDK 类型、测试和独立模板需要 Node.js 22+ / npm；这些检查不安�
 ```bash
 mkdir -p build/acceptance-v0.13
 ANYWHERE_DATA_DIRECTORY="$PWD/build/acceptance-v0.13" ANYWHERE_PROFILE_UI=1 \
-  build/Anywhere-0.13-preview-build10.app/Contents/MacOS/Anywhere
+  build/Anywhere-0.13-preview-build11.app/Contents/MacOS/Anywhere
 ```
 
-`ANYWHERE_PROFILE_UI=1` 仅为本机显式诊断：记录操作类别、耗时与结果条数，不记录查询、路径、Context 或剪贴板正文；默认不创建测量任务或上传数据。Launcher / 文件查询测量从提交的输入开始，经过 Rust / Bridge，到匹配当前版本的 Flutter 帧结束；激活还等待原生窗口显示确认，取第一份 ready 快照，不等待迟到 Context；Clipboard History / Shelf 的内部查询分别记录为 clipboard_query / shelf_query，包含原有的 120ms 防抖，取可用列表首帧，不等待预览解码；后台刷新与输入法组合态不计入。每个独立 Flutter engine 通过自己的 Host 通道显式启用，工具窗不可见或退出时撤销在途计时。不包含输入法候选选择时间、GPU raster 或显示器实际呈现延迟。
+`ANYWHERE_PROFILE_UI=1` 仅为本机显式诊断：记录操作类别、耗时与结果条数，不记录查询、路径、Context 或剪贴板正文；默认不创建测量任务或上传数据。Launcher / 文件查询测量从提交的输入开始，经过 Rust / Bridge，到匹配当前版本的 Flutter 帧结束；激活还等待原生窗口显示确认，取第一份 ready 快照，不等待迟到 Context。Build 11 起，文件查询等待首批可见结果，或已确认结束的空结果，不把输入确认后的加载占位帧计为结果，不等待完整遍历或预览。Clipboard History / Shelf 的内部查询分别记录为 clipboard_query / shelf_query，包含原有的 120ms 防抖，取可用列表首帧，不等待预览解码；后台刷新与输入法组合态不计入。每个独立 Flutter engine 通过自己的 Host 通道显式启用，工具窗不可见或退出时撤销在途计时。不包含输入法候选选择时间、GPU raster 或显示器实际呈现延迟。
 
 确认验收实例 PID 后，在另一终端采集；示例 PID 需替换为实际值：
 

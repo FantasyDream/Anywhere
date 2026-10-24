@@ -131,5 +131,13 @@
     "Shorter retention with immediate deletion through the real confirmation UI remains pending; automated and prior startup-expiry coverage are separate.",
     "Physical keyboard/IME, full Web/XPC helper attribution and same-state long-duration stability were not validated.",
     "RSS compression and graphics caches differ from allocated object counts; these samples do not establish an improvement versus an earlier app."
-  ]
+  ],
+  "invalidated_timing_interpretations": {
+    "file_query": {
+      "invalidated_on": "2026-10-24",
+      "discovered_during": "Build 10 cold-start follow-up; reproduced and fixed in Build 11",
+      "usable_result_latency_valid": false,
+      "reason": "The original Launcher ready phase could acknowledge input before the asynchronous file search delivered its first batch. Original file_query numbers may describe an empty loading frame and are retained only for traceability. Functional file checks and other operations are not invalidated by this timing defect."
+    }
+  }
 }

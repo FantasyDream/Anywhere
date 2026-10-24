@@ -146,6 +146,15 @@ class LauncherViewState {
       isFileSearch && bindingChoices == null && output == null;
   bool get hasControls => hasScopeBar || hasFileControls;
   bool get isFileSearch => inputMode == InputModeDto.fileSearch;
+  // Input acknowledgement can precede the first asynchronous file-search
+  // batch. Measure a nonempty batch immediately, or a confirmed finished empty
+  // result; a loading placeholder is not a usable list frame.
+  bool get canMeasureQueryFrame =>
+      inputModeReady &&
+      snapshot?.input == input &&
+      (!isFileSearch ||
+          visibleEntries.isNotEmpty ||
+          snapshot?.fileSearch?.finished == true);
   bool get isContent => inputMode == InputModeDto.content;
   String get contentLabel => contentSource == ContextSourceDto.selectedText
       ? 'Selected text'
