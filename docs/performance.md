@@ -134,6 +134,14 @@ Build 8 补齐原生内容拆卸：解除输入响应、显式清空玻璃内容
 
 另做 302.35 秒、31 个 RSS 样本的隐藏采样；期间用户完成真实失焦恢复，日志出现三次重新显示，故不将整段混合状态数据列为固定隐藏负载的长期基线。
 
+### Build 9 任务存活与固定隐藏基线
+
+最新签名包通过正常 Action 启动无外部依赖的合成 Cargo Test。任务先写入开始标记并等待测试释放；关闭任务窗口后，原 Cargo 与测试进程身份均保留，再释放测试。重新打开窗口显示 Completed / Exit 0 与 1 项测试通过，之后子进程列表为空。它验证了实际运行任务独立于窗口生命周期，不能代替所有执行器和异常退出场景。
+
+随后通过正常菜单隐藏，等待超过 15 秒再采样 301.85 秒，共 31 个样本；期间无激活或重新显示事件，属于固定隐藏状态。RSS 首尾约 50.05 / 24.33 MiB，Physical footprint 首尾 81.4 / 80.5 MiB。关闭任务窗后的类统计回到主窗口基线，各 1 个 FlutterEngine、FlutterViewController、FlutterVSyncWaiter、WindowMaterialController。此进程没有打开 Web 工具；按 PID 关系无子进程，不代表完整 XPC helper 统计。系统压缩和其他进程活动未控制，不能以 RSS 下降宣称总体优化或以五分钟样本保证无长期泄漏。该短进程的日志未见无效句柄或 dead-channel 消息，不覆盖其他构建的已知 SDK 路径。原始数值和限制见 [Build 9 记录](benchmarks/desktop-v0.13-build9-2026-10-24.json)。
+
+WKWebView 本身采用多进程结构，完整资源验收需要同时确认辅助进程归属；仅退出页面或查看主进程不足以代表总资源释放。[WebKit 进程说明](https://webkit.org/debugging-webkit/)
+
 
 ## V0.9 收尾基线（2026-10-16）
 
