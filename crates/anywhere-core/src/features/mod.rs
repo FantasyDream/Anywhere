@@ -6,6 +6,7 @@
 //! Providers, Actions and Sources use shared Core contracts. The collection
 //! helpers below support isolated consumers; they do not reload the live app.
 pub mod app_actions;
+pub mod application_history;
 pub mod applications;
 pub mod catalog;
 pub mod clipboard;

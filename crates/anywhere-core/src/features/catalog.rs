@@ -185,7 +185,8 @@ mod tests {
                 "node",
                 "spring_boot",
                 "saved_directories",
-                "clipboard"
+                "clipboard",
+                "application_history"
             ]
         );
         for (entry, module) in BUILTIN_FEATURES.iter().zip(modules) {

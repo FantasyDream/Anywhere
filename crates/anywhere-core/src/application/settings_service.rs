@@ -92,6 +92,16 @@ impl SettingsService {
             .map_err(|_| "clipboard history storage unavailable".into()),
         ));
         services.bind_clipboard(clipboard.clone());
+        let history_storage = storage.as_ref().map_err(Clone::clone).and_then(|host| {
+            host.bind("application_history")
+                .map_err(|_| "history preferences unavailable".into())
+        });
+        services.bind_application_history(Arc::new(
+            crate::features::application_history::service::HistoryService::new(
+                history_storage,
+                crate::application::application_history::OfficialSources::bundled()?,
+            ),
+        ));
         let mut catalog = BuiltinCatalog::assemble(&mut services)?;
         let legacy = LegacyPluginSettings::open(path, directories, &mut catalog.registry)?;
         let native = FeatureSettings::open(
@@ -137,7 +147,27 @@ impl SettingsService {
     pub fn clipboard(&self) -> Arc<crate::features::clipboard::service::HistoryService> {
         self.services.clipboard()
     }
+    pub fn application_history(
+        &self,
+    ) -> Result<Arc<crate::features::application_history::service::HistoryService>> {
+        self.services.application_history()
+    }
     fn refresh_business_data(&mut self) {
+        match self
+            .services
+            .application_history()
+            .and_then(|service| service.refresh())
+        {
+            Ok(()) => {
+                self.data_errors.remove("application_history");
+            }
+            Err(_) => {
+                self.data_errors.insert(
+                    "application_history".into(),
+                    "Application history preferences unavailable".into(),
+                );
+            }
+        }
         if self.native.policy.is_enabled("saved_directories") {
             if let Ok(host) = &self.storage {
                 if let Err(e) = host.reopen() {
@@ -249,6 +279,8 @@ impl SettingsService {
             }
         }
         let clipboard_enabled = policy.is_enabled("clipboard");
+        let history_enabled = policy.is_enabled("application_history")
+            && !self.data_errors.contains_key("application_history");
         app.publish_selected_catalog(
             self.catalog.registry.clone(),
             self.catalog.providers.clone(),
@@ -257,6 +289,9 @@ impl SettingsService {
             excluded,
             persist,
         )?;
+        self.services
+            .application_history()?
+            .set_enabled(history_enabled);
         self.services
             .clipboard()
             .set_feature_enabled(clipboard_enabled, app.platform.as_ref())

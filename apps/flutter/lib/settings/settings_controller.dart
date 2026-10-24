@@ -4,6 +4,7 @@ import 'dart:ui' show Locale;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../infrastructure/application_history_backend.dart';
 import '../infrastructure/clipboard_preferences_backend.dart';
 import '../infrastructure/file_search_access.dart';
 import '../infrastructure/runtime_policy.dart';
@@ -12,6 +13,7 @@ import '../l10n/app_language.dart';
 import '../launcher/context_source_status.dart';
 import '../src/rust/api.dart' as extensions_api;
 import '../src/rust/api.dart';
+import 'application_history_settings_controller.dart';
 import 'clipboard_settings_controller.dart';
 import 'host_settings.dart';
 
@@ -22,6 +24,7 @@ class SettingsController extends ChangeNotifier {
   SettingsController({
     required DesktopHost window,
     ClipboardPreferencesBackend? clipboardBackend,
+    AppHistoryPreferencesBackend? appHistoryBackend,
     String startupMessage = '',
     bool fileSearchInitializationFailed = false,
     ApplyExcludedApps? applyExcludedApps,
@@ -36,7 +39,9 @@ class SettingsController extends ChangeNotifier {
     Future<List<ShortcutActionDto>> Function()? readShortcutActions,
     Future<List<String>> Function(List<String>)? readSupportedShortcutActions,
     Future<List<ShortcutApplicationDto>> Function()? readShortcutApplications,
-  })  : clipboard = ClipboardSettingsController(
+  })  : appHistory = AppHistorySettingsController(
+            appHistoryBackend ?? RustAppHistoryPreferencesBackend()),
+        clipboard = ClipboardSettingsController(
             clipboardBackend ?? RustClipboardPreferencesBackend()),
         _window = window,
         _warning = startupMessage,
@@ -67,9 +72,11 @@ class SettingsController extends ChangeNotifier {
                 browserCurrentPage: s.captureBrowserCurrentPage,
                 clipboard: s.captureClipboard)) {
     clipboard.addListener(_notify);
+    appHistory.addListener(_notify);
   }
 
   final ClipboardSettingsController clipboard;
+  final AppHistorySettingsController appHistory;
   final DesktopHost _window;
   final ApplyExcludedApps _applyExcludedApps;
   final Future<void> Function(HostSettings) _applyContextSources;
@@ -301,9 +308,18 @@ class SettingsController extends ChangeNotifier {
   Future<bool> prepareClose() =>
       _closing ??= _prepareClose().whenComplete(() => _closing = null);
   Future<bool> _prepareClose() async {
+    // Capture every pending result before awaiting another controller. A failed
+    // save can finish and clear its queue while the other queue is draining.
+    final historyPending = appHistory.waitForPending();
+    final clipboardPending = clipboard.waitForPending();
     // Finish catalog invalidation before the host restores global action hotkeys.
     await _extensionOperation;
-    if (!await clipboard.waitForPending()) {
+    final results = await Future.wait([historyPending, clipboardPending]);
+    if (!results[0]) {
+      _reportLocalizedError((labels) => labels.appHistorySettingsFailed);
+      return false;
+    }
+    if (!results[1]) {
       _reportLocalizedError((labels) =>
           clipboard.noticeFor(labels) ?? labels.clipboardSettingsFailed);
       return false;
@@ -535,6 +551,8 @@ class SettingsController extends ChangeNotifier {
     _disposed = true;
     clipboard.removeListener(_notify);
     clipboard.dispose();
+    appHistory.removeListener(_notify);
+    appHistory.dispose();
     super.dispose();
   }
 }

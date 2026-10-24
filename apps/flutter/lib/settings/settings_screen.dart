@@ -12,6 +12,7 @@ import '../ui/app_icons.dart';
 import '../ui/app_style.dart';
 import 'action_shortcut.dart';
 import 'action_shortcuts_section.dart';
+import 'application_history_settings_section.dart';
 import 'clipboard_settings_section.dart';
 import 'features_section.dart';
 import 'file_search_settings.dart';
@@ -278,6 +279,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ('context', AppIcons.context),
     ('search', AppIcons.search),
     ('clipboard', AppIcons.clipboard),
+    ('app_history', AppIcons.history),
     ('plugins', AppIcons.features),
   ];
 
@@ -287,6 +289,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'context' => context.l10n.context,
         'search' => context.l10n.search,
         'clipboard' => context.l10n.clipboard,
+        'app_history' => context.l10n.appHistory,
         _ => context.l10n.features,
       };
 
@@ -627,6 +630,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ? null
                   : (value) => _save(
                       (current) => current.copyWith(captureClipboard: value)))
+        ],
+      'app_history' => [
+          AppHistorySettingsSection(controller: _controller.appHistory)
         ],
       'plugins' => [FeaturesSection(controller: _controller)],
       _ => const [],

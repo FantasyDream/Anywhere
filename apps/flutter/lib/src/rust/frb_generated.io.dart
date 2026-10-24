@@ -37,6 +37,18 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   ActivationInputDto dco_decode_activation_input_dto(dynamic raw);
 
   @protected
+  AppHistoryDto dco_decode_app_history_dto(dynamic raw);
+
+  @protected
+  AppHistoryItemDto dco_decode_app_history_item_dto(dynamic raw);
+
+  @protected
+  AppHistoryNoticeDto dco_decode_app_history_notice_dto(dynamic raw);
+
+  @protected
+  AppHistorySourceDto dco_decode_app_history_source_dto(dynamic raw);
+
+  @protected
   AvailabilityDto dco_decode_availability_dto(dynamic raw);
 
   @protected
@@ -47,6 +59,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ActivationInputDto dco_decode_box_autoadd_activation_input_dto(dynamic raw);
+
+  @protected
+  AppHistoryNoticeDto dco_decode_box_autoadd_app_history_notice_dto(
+      dynamic raw);
 
   @protected
   ClipboardDetailDto dco_decode_box_autoadd_clipboard_detail_dto(dynamic raw);
@@ -181,6 +197,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> dco_decode_list_String(dynamic raw);
 
   @protected
+  List<AppHistoryItemDto> dco_decode_list_app_history_item_dto(dynamic raw);
+
+  @protected
+  List<AppHistorySourceDto> dco_decode_list_app_history_source_dto(dynamic raw);
+
+  @protected
   List<CandidateDto> dco_decode_list_candidate_dto(dynamic raw);
 
   @protected
@@ -238,6 +260,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ActivationInputDto? dco_decode_opt_box_autoadd_activation_input_dto(
+      dynamic raw);
+
+  @protected
+  AppHistoryNoticeDto? dco_decode_opt_box_autoadd_app_history_notice_dto(
       dynamic raw);
 
   @protected
@@ -385,6 +411,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  AppHistoryDto sse_decode_app_history_dto(SseDeserializer deserializer);
+
+  @protected
+  AppHistoryItemDto sse_decode_app_history_item_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  AppHistoryNoticeDto sse_decode_app_history_notice_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  AppHistorySourceDto sse_decode_app_history_source_dto(
+      SseDeserializer deserializer);
+
+  @protected
   AvailabilityDto sse_decode_availability_dto(SseDeserializer deserializer);
 
   @protected
@@ -396,6 +437,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ActivationInputDto sse_decode_box_autoadd_activation_input_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  AppHistoryNoticeDto sse_decode_box_autoadd_app_history_notice_dto(
       SseDeserializer deserializer);
 
   @protected
@@ -550,6 +595,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<String> sse_decode_list_String(SseDeserializer deserializer);
 
   @protected
+  List<AppHistoryItemDto> sse_decode_list_app_history_item_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  List<AppHistorySourceDto> sse_decode_list_app_history_source_dto(
+      SseDeserializer deserializer);
+
+  @protected
   List<CandidateDto> sse_decode_list_candidate_dto(
       SseDeserializer deserializer);
 
@@ -619,6 +672,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   ActivationInputDto? sse_decode_opt_box_autoadd_activation_input_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  AppHistoryNoticeDto? sse_decode_opt_box_autoadd_app_history_notice_dto(
       SseDeserializer deserializer);
 
   @protected
@@ -783,6 +840,21 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       ActivationInputDto self, SseSerializer serializer);
 
   @protected
+  void sse_encode_app_history_dto(AppHistoryDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_app_history_item_dto(
+      AppHistoryItemDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_app_history_notice_dto(
+      AppHistoryNoticeDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_app_history_source_dto(
+      AppHistorySourceDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_availability_dto(
       AvailabilityDto self, SseSerializer serializer);
 
@@ -796,6 +868,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_activation_input_dto(
       ActivationInputDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_app_history_notice_dto(
+      AppHistoryNoticeDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_clipboard_detail_dto(
@@ -955,6 +1031,14 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_list_String(List<String> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_list_app_history_item_dto(
+      List<AppHistoryItemDto> self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_list_app_history_source_dto(
+      List<AppHistorySourceDto> self, SseSerializer serializer);
+
+  @protected
   void sse_encode_list_candidate_dto(
       List<CandidateDto> self, SseSerializer serializer);
 
@@ -1026,6 +1110,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_activation_input_dto(
       ActivationInputDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_app_history_notice_dto(
+      AppHistoryNoticeDto? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_clipboard_detail_dto(

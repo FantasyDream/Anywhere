@@ -1,3 +1,4 @@
+mod application_history;
 mod clipboard;
 mod conversions;
 mod web;
@@ -89,6 +90,52 @@ pub fn delete_clipboard_entry(id: String) -> Result<()> {
 }
 pub fn clear_clipboard_history() -> Result<()> {
     clipboard::clear()
+}
+
+pub struct AppHistorySourceDto {
+    pub id: String,
+    pub title: String,
+    pub file_hint: String,
+    pub path: String,
+}
+pub struct AppHistoryItemDto {
+    pub id: String,
+    pub object_key: String,
+    pub source_id: String,
+    pub title: String,
+    pub value: String,
+    pub kind: String,
+    pub can_open: bool,
+}
+pub enum AppHistoryNoticeDto {
+    Disabled,
+    Unconfigured,
+    ReadFailed,
+    Busy,
+    Stale,
+}
+pub struct AppHistoryDto {
+    pub items: Vec<AppHistoryItemDto>,
+    pub failed_sources: Vec<String>,
+    pub notice: Option<AppHistoryNoticeDto>,
+}
+pub fn app_history_sources() -> Result<Vec<AppHistorySourceDto>> {
+    application_history::sources()
+}
+pub fn configure_app_history_source(id: String, path: String) -> Result<()> {
+    application_history::configure(id, path)
+}
+pub fn app_history_search(session_id: u32, query: String, source: String) -> Result<AppHistoryDto> {
+    application_history::search(session_id, query, source)
+}
+pub fn open_app_history_session() -> Result<u32> {
+    application_history::open()
+}
+pub fn cancel_app_history(session_id: u32) -> Result<()> {
+    application_history::cancel(session_id)
+}
+pub fn use_app_history_item(id: String, copy: bool) -> Result<()> {
+    application_history::use_item(id, copy)
 }
 
 #[flutter_rust_bridge::frb]

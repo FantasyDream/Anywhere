@@ -1,15 +1,15 @@
 # V0.14 技术方案：应用历史与收藏
 
-状态：**方案阶段，功能尚未实现**。2026-10-25 创建 `codex/dev-0.14`，基于 V0.13 收尾提交 `c76287d`。本轮只整理方案，不修改产品代码、依赖或 App 版本；源码仍为 `0.13.0+11`。产品范围见[应用历史与收藏](application-history.md)，本页明确实现决策、边界和小步交付顺序。
+状态：**第一轮原型开发与验证中，V0.14 尚未收尾**。分支 `codex/dev-0.14`，基于 V0.13 收尾提交 `c76287d`，当前源码版本 `0.14.0+1`。2026-10-25 用户确认改为通用读取器 + 来源配置 / JS 转换，先验证效果。当前接入 IDEA / VS Code 合成来源、历史页和设置；准确的已验收范围在本轮完成后记录。原型作者接口见[来源配置与脚本](application-history-sources.md)。
 
 ## 1. 本版决策
 
-将应用历史作为一个静态内置模块 `application_history`，提供普通 Action 和 Launcher 二级页面。来源适配器读取已启用应用的最近对象 / 书签，统一检索和打开。第一批覆盖 IDEA、VS Code、Chrome / Edge，Obsidian 先通过本地元数据的可行性门槛。
+将应用历史作为一个静态内置模块 `application_history`，提供普通 Action 和 Launcher 二级页面。Rust 通用读取器读取所选文件，来源配置及纯 JS 脚本解释应用格式，统一返回历史条目；新增官方来源通常只增加配置和脚本。先验证 IDEA / VS Code，随后接入 Chrome / Edge；Obsidian 先通过本地元数据的可行性门槛。
 
 - 复用主窗口、ToolPageShell、候选行、图标、更多操作、Tab 和 15 秒隐藏规则；不增加 Scope、常驻首页区域或默认全局快捷键。
 - Rust 管理来源、授权设置、查询、身份与执行；Flutter 只管理页面呈现、输入、选择和焦点；Platform 管理系统目录、应用身份、访问和打开路由。
 - 来源业务数据只读，默认全部关闭。配置中启用的 App / 配置实例 / 集合才可读取；进入页面和执行时都检查有效资格。
-- 小列表按需读取，大历史按批查询；不建立永久历史镜像，不启动常驻监听器，不引入 WebView、QuickJS、Companion 或新的搜索服务。
+- 小列表按需读取；首轮使用受限 QuickJS 运行随 App 发布的官方纯转换脚本，取代原先“每应用一个 Rust 解析器”的方案。不建立永久历史镜像，不创建 WebView 或常驻 Node，不开放外部脚本安装。大历史分批、Companion 和第三方安装另行验证。
 - 首版的“收藏”指来源应用已有的书签。Anywhere 自有收藏、删除外部历史、跨设备同步、Safari / Firefox、远端工作区打开后续单独排期。
 
 ## 2. 当前代码可以复用什么
@@ -24,7 +24,7 @@
 | `features/filesystem` 的连续结果经验 | 复用取消、稳定显示和查询期临时存储原则；其 ScanStore / RankedHit 依赖文件路径，不能直接当通用历史存储 |
 | `Platform::open_url/open_file/launch_application` | 现有接口不能表达“用指定应用、指定 Profile 打开对象”，需要补类型化路由；不能用默认打开后再切换焦点来冒充来源打开 |
 
-当前没有跨应用历史读取实现。`editor_context.rs` 中 IDEA 路径读取只解释当前窗口明确给出的路径；最近项目不用于推断当前窗口 Context。现有架构门禁禁止 Feature 导入具体 persistence 或 Application，新增模块沿用该规则。
+本轮此前没有跨应用历史读取实现；现已新增下面标注的 H1 原型。`editor_context.rs` 中 IDEA 路径读取只解释当前窗口明确给出的路径；最近项目不用于推断当前窗口 Context。现有架构门禁禁止 Feature 导入具体 persistence 或 Application，新增模块沿用该规则。
 
 ## 3. 总体结构
 
@@ -34,8 +34,9 @@ flowchart TB
     Bridge --> App[Application：装配 / 冻结调用信息 / 策略协调]
     App --> Service[ApplicationHistoryService：查询会话 / 身份 / 对象操作]
     Service --> Contract[HistorySource / HistoryPreferences 契约]
-    Readers[Persistence：IDEA / VS Code / Chromium / Obsidian 只读适配器] -.实现.-> Contract
-    App --> Readers
+    Loader[Application：官方配置目录 / 受限 JS 转换] -.实现.-> Contract
+    App --> Loader
+    Loader --> Readers[Persistence：通用 JSON / XML / SQLite 读取器]
     App --> Platform[Platform：授权位置 / 应用实例 / 打开路由]
     Readers --> External[已启用来源的配置 / SQLite 元数据]
     Service --> Match[已有文字 / 拼音匹配与评分]
@@ -49,19 +50,23 @@ flowchart TB
 ```text
 anywhere-core/src/
   features/application_history/   model、source 契约、service、query、actions、registration
-  persistence/application_history/  来源格式适配、只读 SQLite、来源偏好、查询期结果缓冲
-  application/application_history/  装配、设置提交与策略失效协调
+  persistence/application_history.rs  通用 JSON / XML / SQLite 只读读取
+  application/application_history/  官方包装配与纯 JS 运行适配
 anywhere-platform/src/application_history/  系统位置发现、访问校验、指定应用打开
 anywhere-bridge-flutter/src/api/application_history.rs  DTO 与薄转发
 apps/flutter/lib/
   features/application_history/  registration、session、page、列表呈现
   infrastructure/application_history_backend.dart  Rust 端口适配
   settings/                     来源配置界面
+anywhere-core/resources/application-history/<source>/
+  source.json、transform.js      应用格式及转换，不定义 UI
 ```
 
-这些是计划路径，尚未创建。Feature 只依赖来源 / 偏好 / 结果缓冲契约，Persistence 实现契约，Application 注入；通用 Core 不导入应用名称、表名或来源配置。适配器负责某应用的格式，Platform 不解析业务数据库；平台固定目录、bundle ID 和应用启动细节不进入共享 Feature。
+以上为职责划分，部分路径已由原型创建，其余仍属计划。Feature 依赖读取 / 转换契约，Application 注入官方包执行适配，Persistence 只执行通用只读读取，不运行脚本。具体表名、键和应用身份放在来源配置，格式提取放在转换脚本；通用 Core、Flutter 和 Platform 不解析各应用业务数据库。
 
 入口建议为 `core.application_history.open`，页面为 `application.history`。FeatureServices 持有一个共享服务，适配器代码在启动时一次注册。设置只选择允许读取的来源实例；停用时撤销会话与缓存，不重建或卸载模块。服务即使已创建，也不能绕过功能策略或来源设置。
+
+下面第 4–9 节保留完整 V0.14 目标。原型当前只有一个来源对应一个显式文件、完整有界小结果、应用级打开与复制；不包含自动发现、多实例路由、浏览器大历史或对象 Context。当前接口和限额以[来源指南](application-history-sources.md)及末尾验证记录为准。
 
 ## 4. 模型、端口与身份
 
@@ -111,7 +116,9 @@ Obsidian 官方插件 API 提供最近 10 个文件，但不能从外部 App 直
 | 临时存储 | 现有私有临时目录与 `tempfile`；大历史有需要时用当前 rusqlite 做查询期缓冲 |
 | 异步 / 取消 | 当前 Tokio、ExecutionContext、epoch 和 worker admission；不新增运行时 |
 
-`rusqlite` 已提供 progress handler，中断正在执行的 SQLite 工作无需手写 C FFI；本项目当前只启用 bundled，相关 feature 在实施时按需增加。[固定版本实现](https://github.com/rusqlite/rusqlite/blob/v0.32.1/src/hooks/mod.rs)
+2026-10-25 方案修订：新增精确锁定的 `rquickjs 0.14.0`，不开启自定义分配器；官方脚本独立 Runtime、32 MiB 堆 / 256 KiB 栈和 250ms 中断预算，宿主验证输出。首轮为进程内受控调用，不作为不可信第三方脚本沙箱。来源数据输入、取消与查询代数继续由 Rust 管理；具体原型边界见[作者指南](application-history-sources.md)。
+
+`rusqlite` 已提供 progress handler，中断正在执行的 SQLite 工作无需手写 C FFI；原型已启用 bundled / hooks / limits。[固定版本实现](https://github.com/rusqlite/rusqlite/blob/v0.32.1/src/hooks/mod.rs)
 
 ## 6. 外部数据的读取规则
 
@@ -121,7 +128,7 @@ SQLite 使用独立只读连接、参数化固定 SELECT、短事务和短 busy 
 
 **首版默认不备份整个浏览器历史库**。若特定来源实测必须快照，才用 SQLite Backup API 创建有磁盘 / 时间限额的私有短期快照；Backup 仍需要成功读取源连接，不能解决所有锁或权限问题，也不能作为源库无限膨胀时的默认回退。[SQLite Backup](https://sqlite.org/backup.html)
 
-JSON / XML 打开后有界读取，同一文件句柄检查长度和身份；并发替换、截断或修改时丢弃不完整结果，至多有限重试。文件元信息用于提示失效，不能当作跨重启的执行身份。笔记相对路径不得逃出所选 Vault；授权配置指向位置变化时重新校验，不按旧地址继续读取。
+JSON / XML 打开后有界读取，原型在同一文件句柄检查长度和修改时间，拒绝已检测到的截断或修改；这不是完整的原子快照或文件替换检测，执行时还须重新读取核对目标。文件元信息用于提示失效，不能当作跨重启的执行身份。笔记相对路径不得逃出所选 Vault；授权配置指向位置变化时重新校验，不按旧地址继续读取。
 
 ## 7. 查询、排序与性能
 
@@ -187,4 +194,13 @@ worker 实际退出前仍持有 admission，取消只撤销发布资格并请求
 
 本轮不重新开启 VoiceOver；V0.13 已知 SDK 关闭消息与 GPU 保留继续单独记录，不混入新功能通过声明。Windows 保留平台端口和 fixture 覆盖，未经 Windows 实机验证不宣称已交付。
 
-进入开发后的状态更新在本页逐工作包记录；目前 H1a–H4 均未开始，不将设计中的类型、端口、预算或性能目标列为现有能力。
+本轮 H1 原型验证中，H2–H4 尚未开始。首轮仅支持手动指定每来源一个元数据文件，不支持自动发现、多 Profile / 安装实例选择、浏览历史流式查询或对象 Context 操作；这些设计、预算和性能目标不能列为已交付能力。
+
+
+## 第一轮原型验证（2026-10-25）
+
+- 通用 JSON / XML / SQLite 只读读取器、随包配置 / 纯 JS 转换、IDEA / VS Code 小来源、类型化 Bridge、历史页和手动来源设置已实现。每来源最多 4,096 条完整有界结果，当前只有一个真实读取槽；H2 的流式批次和窗口化尚未实现。
+- `scripts/check.sh` 通过：Rust / 原生 / Web / 架构 / 生成物 / 文档 / Dart analyze 与 405 项 Flutter 测试。Core 单元测试 272 通过、1 项既有忽略；MVP 集成 189 通过、4 项既有忽略。忽略项不属于本轮通过声明。
+- 新增 10 项 Rust 来源 / 脚本 / 取消 / 持久化回归，以及 5 项 Flutter 页面 / IME 模拟 / 生命周期 / 来源保存回归；原有剪贴板关闭失败测试复现了跨设置等待竞争，现已修复。设置关闭先捕获全部在途结果，再等待，避免漏掉已完成的失败。
+- 首轮 Release 测量仅使用 500 条 IDEA + 500 条 VS Code 合成记录；每种查询 30 次。Rust 读取、JS 转换和匹配 p95 为约 9–15.5ms；整个测量进程峰值 RSS 22,904,832 字节（约 21.8MiB）。不包含 Flutter、Bridge 传输、输入防抖或物理显示，不能当成 App RSS / 首帧指标。
+- 本段记录时尚未完成本轮原生界面验收、真实来源格式矩阵或实际来源应用打开。真实中文输入法与物理组合键不以 Widget 测试替代；浏览器、Obsidian、多安装 / Profile、自动发现与对象 Context 仍待后续步骤。

@@ -820,5 +820,19 @@
         "type": "String"
       }
     }
-  }
+  },
+  "appHistory": "应用历史",
+  "appHistorySearch": "搜索最近项目和文件…",
+  "appHistorySources": "历史来源",
+  "appHistorySourceDescription": "指定应用的历史元数据文件后启用该来源，仅按需读取所选文件，不永久导入历史。本次预览支持 IDEA 和 VS Code。",
+  "appHistorySourcePath": "历史元数据文件路径",
+  "appHistoryEnable": "启用来源",
+  "appHistoryDisable": "关闭来源",
+  "appHistoryUnconfigured": "在「设置 → 应用历史」中启用来源，即可搜索最近项目和文件。",
+  "appHistoryReadFailed": "部分来源暂时无法读取，请在「设置 → 应用历史」中检查所选文件。",
+  "appHistoryDisabled": "应用历史已停用，可在「设置 → 功能」中启用。",
+  "appHistoryOperationFailed": "历史操作未完成，请刷新列表后重试。",
+  "appHistorySettingsFailed": "无法读取或保存历史来源，请检查文件路径后重试。",
+  "appHistoryAll": "全部应用",
+  "appHistoryCopyTarget": "复制路径或 URI"
 }

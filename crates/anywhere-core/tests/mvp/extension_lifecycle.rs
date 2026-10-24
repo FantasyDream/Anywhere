@@ -158,7 +158,7 @@ async fn native_status_uses_app_version_and_preserves_metadata_through_disable_a
         .into_iter()
         .filter(|s| s.first_party)
         .collect();
-    let expected: [(&str, &str, &[&str]); 9] = [
+    let expected: [(&str, &str, &[&str]); 10] = [
         ("git", "Git", &["git.read", "clipboard.write"]),
         ("url", "URL", &["url.open", "clipboard.write"]),
         ("rust", "Rust", &["process.start"]),
@@ -175,6 +175,11 @@ async fn native_status_uses_app_version_and_preserves_metadata_through_disable_a
             "clipboard",
             "Clipboard History",
             &["storage", "clipboard.write", "ui.render"],
+        ),
+        (
+            "application_history",
+            "App History",
+            &["storage", "ui.render", "file.open", "clipboard.write"],
         ),
     ];
     assert_eq!(native.len(), expected.len());

@@ -3076,6 +3076,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Stored only on this Mac, without encryption. Up to 1,000 entries / 128 MiB of logical data; database file size may differ. Expiry deletes all saved formats, not the system clipboard or original files.'**
   String get historyStorageExplanation;
+
+  /// No description provided for @appHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'App History'**
+  String get appHistory;
+
+  /// No description provided for @appHistorySearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search recent projects and files…'**
+  String get appHistorySearch;
+
+  /// No description provided for @appHistorySources.
+  ///
+  /// In en, this message translates to:
+  /// **'History sources'**
+  String get appHistorySources;
+
+  /// No description provided for @appHistorySourceDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable a source by choosing its history metadata file. Only that file is read; history is not imported permanently. This preview supports IDEA and VS Code.'**
+  String get appHistorySourceDescription;
+
+  /// No description provided for @appHistorySourcePath.
+  ///
+  /// In en, this message translates to:
+  /// **'History metadata file path'**
+  String get appHistorySourcePath;
+
+  /// No description provided for @appHistoryEnable.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable source'**
+  String get appHistoryEnable;
+
+  /// No description provided for @appHistoryDisable.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable source'**
+  String get appHistoryDisable;
+
+  /// No description provided for @appHistoryUnconfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable a source in Settings → App History to see recent projects and files.'**
+  String get appHistoryUnconfigured;
+
+  /// No description provided for @appHistoryReadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Some sources could not be read. Check their files in Settings → App History.'**
+  String get appHistoryReadFailed;
+
+  /// No description provided for @appHistoryDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'App History is disabled. Enable it in Settings → Features.'**
+  String get appHistoryDisabled;
+
+  /// No description provided for @appHistoryOperationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The history operation could not be completed. Refresh the list and try again.'**
+  String get appHistoryOperationFailed;
+
+  /// No description provided for @appHistorySettingsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'History sources could not be loaded or saved. Check the file path and try again.'**
+  String get appHistorySettingsFailed;
+
+  /// No description provided for @appHistoryAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All apps'**
+  String get appHistoryAll;
+
+  /// No description provided for @appHistoryCopyTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy path or URI'**
+  String get appHistoryCopyTarget;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

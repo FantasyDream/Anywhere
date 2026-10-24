@@ -24,6 +24,31 @@ pub(super) fn open_file(path: &Path) -> Result<()> {
     run("/usr/bin/open", &[path.as_os_str()], None).map(|_| ())
 }
 
+pub(super) fn open_file_in_application(application: &Path, target: &Path) -> Result<()> {
+    anyhow::ensure!(
+        application.is_absolute()
+            && application.is_dir()
+            && application.extension().is_some_and(|ext| ext == "app"),
+        "source application unavailable"
+    );
+    anyhow::ensure!(
+        target.is_absolute() && target.exists(),
+        "history target unavailable"
+    );
+    let application = application.canonicalize()?;
+    let target = target.canonicalize()?;
+    run(
+        "/usr/bin/open",
+        &[
+            OsStr::new("-a"),
+            application.as_os_str(),
+            target.as_os_str(),
+        ],
+        None,
+    )
+    .map(|_| ())
+}
+
 pub(super) fn reveal_file(path: &Path) -> Result<()> {
     if !path.is_file() {
         bail!("file no longer exists: {}", path.display());
@@ -102,8 +127,9 @@ pub(super) fn run(program: &str, args: &[&OsStr], stdin: Option<&str>) -> Result
         }
         String::from_utf8(output.stdout).context("platform response is not UTF-8")
     })();
-    if let Err(error) = &result {
-        tracing::error!(program, error = %error, "platform_api_failure");
+    if result.is_err() {
+        // System diagnostics may contain private history URLs or target paths.
+        tracing::error!(program, "platform_api_failure");
     }
     result
 }
@@ -124,6 +150,12 @@ mod tests {
             .is_err());
         assert!(platform
             .open_directory(Path::new("/nonexistent-launcher-test"))
+            .is_err());
+        assert!(platform
+            .open_file_in_application(
+                Path::new("/nonexistent-launcher-test.app"),
+                Path::new("/tmp")
+            )
             .is_err());
     }
 }

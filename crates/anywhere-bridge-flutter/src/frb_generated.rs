@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1613166104;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -95003659;
 
 // Section: executor
 
@@ -83,6 +83,78 @@ fn wire__crate__api__activate_impl(
                         Ok(output_ok)
                     })()
                     .await,
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__app_history_search_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "app_history_search",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_session_id = <u32>::sse_decode(&mut deserializer);
+            let api_query = <String>::sse_decode(&mut deserializer);
+            let api_source = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok =
+                            crate::api::app_history_search(api_session_id, api_query, api_source)?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__app_history_sources_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "app_history_sources",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::app_history_sources()?;
+                        Ok(output_ok)
+                    })(),
                 )
             }
         },
@@ -222,6 +294,41 @@ fn wire__crate__api__begin_activation_impl(
                     Ok(output_ok)
                 })(),
             )
+        },
+    )
+}
+fn wire__crate__api__cancel_app_history_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "cancel_app_history",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_session_id = <u32>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::cancel_app_history(api_session_id)?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
         },
     )
 }
@@ -504,6 +611,42 @@ fn wire__crate__api__close_web_document_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || {
                         let output_ok = crate::api::close_web_document(api_handle)?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__configure_app_history_source_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "configure_app_history_source",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_id = <String>::sse_decode(&mut deserializer);
+            let api_path = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::configure_app_history_source(api_id, api_path)?;
                         Ok(output_ok)
                     })(),
                 )
@@ -1150,6 +1293,40 @@ fn wire__crate__api__object_actions_impl(
                             api_revision,
                             api_candidate_id,
                         )?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__open_app_history_session_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "open_app_history_session",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::open_app_history_session()?;
                         Ok(output_ok)
                     })(),
                 )
@@ -2094,6 +2271,42 @@ fn wire__crate__api__update_input_impl(
         },
     )
 }
+fn wire__crate__api__use_app_history_item_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "use_app_history_item",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_id = <String>::sse_decode(&mut deserializer);
+            let api_copy = <bool>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::use_app_history_item(api_id, api_copy)?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__wait_action_binding_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -2414,6 +2627,73 @@ impl SseDecode for crate::api::ActivationInputDto {
             source: var_source,
             text: var_text,
             valid_until_ms: var_validUntilMs,
+        };
+    }
+}
+
+impl SseDecode for crate::api::AppHistoryDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_items = <Vec<crate::api::AppHistoryItemDto>>::sse_decode(deserializer);
+        let mut var_failedSources = <Vec<String>>::sse_decode(deserializer);
+        let mut var_notice = <Option<crate::api::AppHistoryNoticeDto>>::sse_decode(deserializer);
+        return crate::api::AppHistoryDto {
+            items: var_items,
+            failed_sources: var_failedSources,
+            notice: var_notice,
+        };
+    }
+}
+
+impl SseDecode for crate::api::AppHistoryItemDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <String>::sse_decode(deserializer);
+        let mut var_objectKey = <String>::sse_decode(deserializer);
+        let mut var_sourceId = <String>::sse_decode(deserializer);
+        let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_value = <String>::sse_decode(deserializer);
+        let mut var_kind = <String>::sse_decode(deserializer);
+        let mut var_canOpen = <bool>::sse_decode(deserializer);
+        return crate::api::AppHistoryItemDto {
+            id: var_id,
+            object_key: var_objectKey,
+            source_id: var_sourceId,
+            title: var_title,
+            value: var_value,
+            kind: var_kind,
+            can_open: var_canOpen,
+        };
+    }
+}
+
+impl SseDecode for crate::api::AppHistoryNoticeDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut inner = <i32>::sse_decode(deserializer);
+        return match inner {
+            0 => crate::api::AppHistoryNoticeDto::Disabled,
+            1 => crate::api::AppHistoryNoticeDto::Unconfigured,
+            2 => crate::api::AppHistoryNoticeDto::ReadFailed,
+            3 => crate::api::AppHistoryNoticeDto::Busy,
+            4 => crate::api::AppHistoryNoticeDto::Stale,
+            _ => unreachable!("Invalid variant for AppHistoryNoticeDto: {}", inner),
+        };
+    }
+}
+
+impl SseDecode for crate::api::AppHistorySourceDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <String>::sse_decode(deserializer);
+        let mut var_title = <String>::sse_decode(deserializer);
+        let mut var_fileHint = <String>::sse_decode(deserializer);
+        let mut var_path = <String>::sse_decode(deserializer);
+        return crate::api::AppHistorySourceDto {
+            id: var_id,
+            title: var_title,
+            file_hint: var_fileHint,
+            path: var_path,
         };
     }
 }
@@ -2991,6 +3271,30 @@ impl SseDecode for Vec<String> {
     }
 }
 
+impl SseDecode for Vec<crate::api::AppHistoryItemDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::AppHistoryItemDto>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
+impl SseDecode for Vec<crate::api::AppHistorySourceDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut len_ = <i32>::sse_decode(deserializer);
+        let mut ans_ = vec![];
+        for idx_ in 0..len_ {
+            ans_.push(<crate::api::AppHistorySourceDto>::sse_decode(deserializer));
+        }
+        return ans_;
+    }
+}
+
 impl SseDecode for Vec<crate::api::CandidateDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3215,6 +3519,17 @@ impl SseDecode for Option<crate::api::ActivationInputDto> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::api::ActivationInputDto>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::AppHistoryNoticeDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::AppHistoryNoticeDto>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -3717,64 +4032,72 @@ fn pde_ffi_dispatcher_primary_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         1 => wire__crate__api__activate_impl(port, ptr, rust_vec_len, data_len),
-        2 => wire__crate__api__application_icon_impl(port, ptr, rust_vec_len, data_len),
-        3 => wire__crate__api__approve_extension_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__approve_web_package_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__cancel_web_review_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__change_web_package_impl(port, ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__choose_activation_input_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__clear_clipboard_history_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__clipboard_history_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__clipboard_history_detail_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__clipboard_history_status_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__close_web_document_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__confirm_web_operation_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__copy_clipboard_entry_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__deactivate_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__delete_clipboard_entry_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__dispatch_web_frame_impl(port, ptr, rust_vec_len, data_len),
-        19 => wire__crate__api__excluded_apps_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__execute_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__execution_session_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__execution_sessions_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__extension_status_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__file_actions_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__freeze_file_results_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__initialize_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__inspect_web_package_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__load_more_files_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__load_more_files_delta_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__object_actions_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__open_web_document_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__pause_clipboard_recording_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__ping_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__preview_file_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__refresh_features_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__remove_execution_session_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__resolve_action_binding_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__resolve_shortcut_intent_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__resume_launcher_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__revoke_extension_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__set_clipboard_recording_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__set_clipboard_retention_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__set_context_sources_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__set_excluded_apps_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__set_extension_enabled_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__set_file_search_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__shortcut_actions_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__shortcut_applications_impl(port, ptr, rust_vec_len, data_len),
-        50 => wire__crate__api__shutdown_execution_sessions_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__stop_execution_session_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__supported_shortcut_actions_impl(port, ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__suspend_launcher_impl(port, ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__update_file_input_impl(port, ptr, rust_vec_len, data_len),
-        55 => wire__crate__api__update_input_impl(port, ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__wait_action_binding_impl(port, ptr, rust_vec_len, data_len),
-        57 => wire__crate__api__wait_for_snapshot_impl(port, ptr, rust_vec_len, data_len),
-        58 => wire__crate__api__wait_for_snapshot_delta_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__wait_shortcut_intent_impl(port, ptr, rust_vec_len, data_len),
-        60 => wire__crate__api__web_packages_impl(port, ptr, rust_vec_len, data_len),
-        61 => wire__crate__api__web_resource_impl(port, ptr, rust_vec_len, data_len),
+        2 => wire__crate__api__app_history_search_impl(port, ptr, rust_vec_len, data_len),
+        3 => wire__crate__api__app_history_sources_impl(port, ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__application_icon_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__approve_extension_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__approve_web_package_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__cancel_app_history_impl(port, ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__cancel_web_review_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__change_web_package_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__choose_activation_input_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__clear_clipboard_history_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__clipboard_history_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__clipboard_history_detail_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__clipboard_history_status_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__close_web_document_impl(port, ptr, rust_vec_len, data_len),
+        17 => {
+            wire__crate__api__configure_app_history_source_impl(port, ptr, rust_vec_len, data_len)
+        }
+        18 => wire__crate__api__confirm_web_operation_impl(port, ptr, rust_vec_len, data_len),
+        19 => wire__crate__api__copy_clipboard_entry_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__deactivate_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__delete_clipboard_entry_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__dispatch_web_frame_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__excluded_apps_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__execute_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__execution_session_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__execution_sessions_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__extension_status_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__file_actions_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__freeze_file_results_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__initialize_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__inspect_web_package_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__load_more_files_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__load_more_files_delta_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__object_actions_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__open_app_history_session_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__open_web_document_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__pause_clipboard_recording_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__ping_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__preview_file_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__refresh_features_impl(port, ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__remove_execution_session_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__resolve_action_binding_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__resolve_shortcut_intent_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__resume_launcher_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__revoke_extension_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__set_clipboard_recording_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__set_clipboard_retention_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__set_context_sources_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__set_excluded_apps_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__set_extension_enabled_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__set_file_search_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__shortcut_actions_impl(port, ptr, rust_vec_len, data_len),
+        54 => wire__crate__api__shortcut_applications_impl(port, ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__shutdown_execution_sessions_impl(port, ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__stop_execution_session_impl(port, ptr, rust_vec_len, data_len),
+        57 => wire__crate__api__supported_shortcut_actions_impl(port, ptr, rust_vec_len, data_len),
+        58 => wire__crate__api__suspend_launcher_impl(port, ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__update_file_input_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__update_input_impl(port, ptr, rust_vec_len, data_len),
+        61 => wire__crate__api__use_app_history_item_impl(port, ptr, rust_vec_len, data_len),
+        62 => wire__crate__api__wait_action_binding_impl(port, ptr, rust_vec_len, data_len),
+        63 => wire__crate__api__wait_for_snapshot_impl(port, ptr, rust_vec_len, data_len),
+        64 => wire__crate__api__wait_for_snapshot_delta_impl(port, ptr, rust_vec_len, data_len),
+        65 => wire__crate__api__wait_shortcut_intent_impl(port, ptr, rust_vec_len, data_len),
+        66 => wire__crate__api__web_packages_impl(port, ptr, rust_vec_len, data_len),
+        67 => wire__crate__api__web_resource_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -3787,8 +4110,8 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        5 => wire__crate__api__begin_activation_impl(ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__prompt_accessibility_impl(ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__begin_activation_impl(ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__prompt_accessibility_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -3860,6 +4183,93 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::ActivationInputDto>
     for crate::api::ActivationInputDto
 {
     fn into_into_dart(self) -> crate::api::ActivationInputDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::AppHistoryDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.items.into_into_dart().into_dart(),
+            self.failed_sources.into_into_dart().into_dart(),
+            self.notice.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::AppHistoryDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::AppHistoryDto> for crate::api::AppHistoryDto {
+    fn into_into_dart(self) -> crate::api::AppHistoryDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::AppHistoryItemDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.id.into_into_dart().into_dart(),
+            self.object_key.into_into_dart().into_dart(),
+            self.source_id.into_into_dart().into_dart(),
+            self.title.into_into_dart().into_dart(),
+            self.value.into_into_dart().into_dart(),
+            self.kind.into_into_dart().into_dart(),
+            self.can_open.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::AppHistoryItemDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::AppHistoryItemDto>
+    for crate::api::AppHistoryItemDto
+{
+    fn into_into_dart(self) -> crate::api::AppHistoryItemDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::AppHistoryNoticeDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        match self {
+            Self::Disabled => 0.into_dart(),
+            Self::Unconfigured => 1.into_dart(),
+            Self::ReadFailed => 2.into_dart(),
+            Self::Busy => 3.into_dart(),
+            Self::Stale => 4.into_dart(),
+            _ => unreachable!(),
+        }
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::AppHistoryNoticeDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::AppHistoryNoticeDto>
+    for crate::api::AppHistoryNoticeDto
+{
+    fn into_into_dart(self) -> crate::api::AppHistoryNoticeDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::AppHistorySourceDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.id.into_into_dart().into_dart(),
+            self.title.into_into_dart().into_dart(),
+            self.file_hint.into_into_dart().into_dart(),
+            self.path.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
+    for crate::api::AppHistorySourceDto
+{
+}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::AppHistorySourceDto>
+    for crate::api::AppHistorySourceDto
+{
+    fn into_into_dart(self) -> crate::api::AppHistorySourceDto {
         self
     }
 }
@@ -4909,6 +5319,57 @@ impl SseEncode for crate::api::ActivationInputDto {
     }
 }
 
+impl SseEncode for crate::api::AppHistoryDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Vec<crate::api::AppHistoryItemDto>>::sse_encode(self.items, serializer);
+        <Vec<String>>::sse_encode(self.failed_sources, serializer);
+        <Option<crate::api::AppHistoryNoticeDto>>::sse_encode(self.notice, serializer);
+    }
+}
+
+impl SseEncode for crate::api::AppHistoryItemDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.object_key, serializer);
+        <String>::sse_encode(self.source_id, serializer);
+        <String>::sse_encode(self.title, serializer);
+        <String>::sse_encode(self.value, serializer);
+        <String>::sse_encode(self.kind, serializer);
+        <bool>::sse_encode(self.can_open, serializer);
+    }
+}
+
+impl SseEncode for crate::api::AppHistoryNoticeDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(
+            match self {
+                crate::api::AppHistoryNoticeDto::Disabled => 0,
+                crate::api::AppHistoryNoticeDto::Unconfigured => 1,
+                crate::api::AppHistoryNoticeDto::ReadFailed => 2,
+                crate::api::AppHistoryNoticeDto::Busy => 3,
+                crate::api::AppHistoryNoticeDto::Stale => 4,
+                _ => {
+                    unimplemented!("");
+                }
+            },
+            serializer,
+        );
+    }
+}
+
+impl SseEncode for crate::api::AppHistorySourceDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.id, serializer);
+        <String>::sse_encode(self.title, serializer);
+        <String>::sse_encode(self.file_hint, serializer);
+        <String>::sse_encode(self.path, serializer);
+    }
+}
+
 impl SseEncode for crate::api::AvailabilityDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -5365,6 +5826,26 @@ impl SseEncode for Vec<String> {
     }
 }
 
+impl SseEncode for Vec<crate::api::AppHistoryItemDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::AppHistoryItemDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
+impl SseEncode for Vec<crate::api::AppHistorySourceDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.len() as _, serializer);
+        for item in self {
+            <crate::api::AppHistorySourceDto>::sse_encode(item, serializer);
+        }
+    }
+}
+
 impl SseEncode for Vec<crate::api::CandidateDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -5549,6 +6030,16 @@ impl SseEncode for Option<crate::api::ActivationInputDto> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::ActivationInputDto>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::AppHistoryNoticeDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::AppHistoryNoticeDto>::sse_encode(value, serializer);
         }
     }
 }

@@ -17,6 +17,12 @@ fn approved(id: &str) -> &'static [Capability] {
             Capability::ClipboardWrite,
             Capability::RenderUi,
         ],
+        "application_history" => &[
+            Capability::Storage,
+            Capability::RenderUi,
+            Capability::OpenFile,
+            Capability::ClipboardWrite,
+        ],
         "url" => &[Capability::OpenUrl, Capability::ClipboardWrite],
         _ => &[],
     }

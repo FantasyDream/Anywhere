@@ -38,6 +38,29 @@ Future<void> deleteClipboardEntry({required String id}) =>
 Future<void> clearClipboardHistory() =>
     RustLib.instance.api.crateApiClearClipboardHistory();
 
+Future<List<AppHistorySourceDto>> appHistorySources() =>
+    RustLib.instance.api.crateApiAppHistorySources();
+
+Future<void> configureAppHistorySource(
+        {required String id, required String path}) =>
+    RustLib.instance.api.crateApiConfigureAppHistorySource(id: id, path: path);
+
+Future<AppHistoryDto> appHistorySearch(
+        {required int sessionId,
+        required String query,
+        required String source}) =>
+    RustLib.instance.api.crateApiAppHistorySearch(
+        sessionId: sessionId, query: query, source: source);
+
+Future<int> openAppHistorySession() =>
+    RustLib.instance.api.crateApiOpenAppHistorySession();
+
+Future<void> cancelAppHistory({required int sessionId}) =>
+    RustLib.instance.api.crateApiCancelAppHistory(sessionId: sessionId);
+
+Future<void> useAppHistoryItem({required String id, required bool copy}) =>
+    RustLib.instance.api.crateApiUseAppHistoryItem(id: id, copy: copy);
+
 Future<List<String>> supportedShortcutActions(
         {required List<String> actionIds}) =>
     RustLib.instance.api.crateApiSupportedShortcutActions(actionIds: actionIds);
@@ -415,6 +438,110 @@ class ActivationInputDto {
           source == other.source &&
           text == other.text &&
           validUntilMs == other.validUntilMs;
+}
+
+class AppHistoryDto {
+  final List<AppHistoryItemDto> items;
+  final List<String> failedSources;
+  final AppHistoryNoticeDto? notice;
+
+  const AppHistoryDto({
+    required this.items,
+    required this.failedSources,
+    this.notice,
+  });
+
+  @override
+  int get hashCode => items.hashCode ^ failedSources.hashCode ^ notice.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppHistoryDto &&
+          runtimeType == other.runtimeType &&
+          items == other.items &&
+          failedSources == other.failedSources &&
+          notice == other.notice;
+}
+
+class AppHistoryItemDto {
+  final String id;
+  final String objectKey;
+  final String sourceId;
+  final String title;
+  final String value;
+  final String kind;
+  final bool canOpen;
+
+  const AppHistoryItemDto({
+    required this.id,
+    required this.objectKey,
+    required this.sourceId,
+    required this.title,
+    required this.value,
+    required this.kind,
+    required this.canOpen,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      objectKey.hashCode ^
+      sourceId.hashCode ^
+      title.hashCode ^
+      value.hashCode ^
+      kind.hashCode ^
+      canOpen.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppHistoryItemDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          objectKey == other.objectKey &&
+          sourceId == other.sourceId &&
+          title == other.title &&
+          value == other.value &&
+          kind == other.kind &&
+          canOpen == other.canOpen;
+}
+
+enum AppHistoryNoticeDto {
+  disabled,
+  unconfigured,
+  readFailed,
+  busy,
+  stale,
+  ;
+}
+
+class AppHistorySourceDto {
+  final String id;
+  final String title;
+  final String fileHint;
+  final String path;
+
+  const AppHistorySourceDto({
+    required this.id,
+    required this.title,
+    required this.fileHint,
+    required this.path,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^ title.hashCode ^ fileHint.hashCode ^ path.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is AppHistorySourceDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          title == other.title &&
+          fileHint == other.fileHint &&
+          path == other.path;
 }
 
 enum AvailabilityDto {

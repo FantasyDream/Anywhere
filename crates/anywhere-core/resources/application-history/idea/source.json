@@ -1,0 +1,8 @@
+{
+  "schema": 1,
+  "id": "idea",
+  "title": "IntelliJ IDEA",
+  "file_hint": "recentProjects.xml",
+  "applications": ["com.jetbrains.intellij", "com.jetbrains.intellij.ce", "com.jetbrains.intellij-EAP"],
+  "reader": { "format": "xml" }
+}

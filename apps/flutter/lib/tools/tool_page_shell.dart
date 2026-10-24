@@ -121,14 +121,14 @@ class _ToolPageShellState extends State<ToolPageShell> {
       return KeyEventResult.handled;
     }
     final keyboard = HardwareKeyboard.instance;
+    final handled = widget.onKeyEvent?.call(event);
+    if (handled != null && handled != KeyEventResult.ignored) return handled;
     if (event.logicalKey == LogicalKeyboardKey.tab &&
         !keyboard.isControlPressed &&
         !keyboard.isAltPressed &&
         !keyboard.isMetaPressed) {
       return KeyEventResult.handled;
     }
-    final handled = widget.onKeyEvent?.call(event);
-    if (handled != null && handled != KeyEventResult.ignored) return handled;
     if (editor != null ||
         keyboard.isShiftPressed ||
         keyboard.isControlPressed ||

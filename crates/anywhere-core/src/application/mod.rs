@@ -4,6 +4,7 @@
 //! registered in [`crate::features`]. Recognition, matching, ranking and storage live
 //! elsewhere; this layer owns session lifecycle and snapshot publication.
 pub mod activate;
+pub mod application_history;
 pub mod execute;
 pub mod launcher_service;
 mod legacy_plugins;

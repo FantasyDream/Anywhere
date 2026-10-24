@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "id": "vscode",
+  "title": "Visual Studio Code",
+  "file_hint": "state.vscdb",
+  "applications": ["com.microsoft.VSCode"],
+  "reader": {
+    "format": "sqlite",
+    "query": "SELECT value FROM ItemTable WHERE key = ?1",
+    "parameters": ["history.recentlyOpenedPathsList"],
+    "tables": ["ItemTable"]
+  }
+}

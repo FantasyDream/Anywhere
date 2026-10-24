@@ -1624,4 +1624,46 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get historyStorageExplanation => 'Stored only on this Mac, without encryption. Up to 1,000 entries / 128 MiB of logical data; database file size may differ. Expiry deletes all saved formats, not the system clipboard or original files.';
+
+  @override
+  String get appHistory => 'App History';
+
+  @override
+  String get appHistorySearch => 'Search recent projects and files…';
+
+  @override
+  String get appHistorySources => 'History sources';
+
+  @override
+  String get appHistorySourceDescription => 'Enable a source by choosing its history metadata file. Only that file is read; history is not imported permanently. This preview supports IDEA and VS Code.';
+
+  @override
+  String get appHistorySourcePath => 'History metadata file path';
+
+  @override
+  String get appHistoryEnable => 'Enable source';
+
+  @override
+  String get appHistoryDisable => 'Disable source';
+
+  @override
+  String get appHistoryUnconfigured => 'Enable a source in Settings → App History to see recent projects and files.';
+
+  @override
+  String get appHistoryReadFailed => 'Some sources could not be read. Check their files in Settings → App History.';
+
+  @override
+  String get appHistoryDisabled => 'App History is disabled. Enable it in Settings → Features.';
+
+  @override
+  String get appHistoryOperationFailed => 'The history operation could not be completed. Refresh the list and try again.';
+
+  @override
+  String get appHistorySettingsFailed => 'History sources could not be loaded or saved. Check the file path and try again.';
+
+  @override
+  String get appHistoryAll => 'All apps';
+
+  @override
+  String get appHistoryCopyTarget => 'Copy path or URI';
 }

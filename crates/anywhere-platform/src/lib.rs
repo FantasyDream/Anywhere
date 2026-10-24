@@ -300,6 +300,10 @@ pub trait Platform: Send + Sync {
     fn reveal_file(&self, path: &Path) -> Result<()>;
     fn open_directory(&self, path: &Path) -> Result<()>;
     fn open_terminal(&self, path: &Path) -> Result<()>;
+    /// Open a local history object in an explicitly selected installed application.
+    fn open_file_in_application(&self, _application: &Path, _target: &Path) -> Result<()> {
+        bail!("opening an object in a specific application is unsupported")
+    }
     fn copy_text(&self, text: &str) -> Result<()>;
 
     // ---- V0.2 capabilities; unsupported platforms keep their V0.1 behaviour ----

@@ -1588,4 +1588,46 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get historyStorageExplanation => '仅保存在本机，未加密。最多 1,000 条 / 128 MiB 逻辑数据，数据库文件大小可能不同。过期会删除全部已存格式，不影响系统剪贴板和原始文件。';
+
+  @override
+  String get appHistory => '应用历史';
+
+  @override
+  String get appHistorySearch => '搜索最近项目和文件…';
+
+  @override
+  String get appHistorySources => '历史来源';
+
+  @override
+  String get appHistorySourceDescription => '指定应用的历史元数据文件后启用该来源，仅按需读取所选文件，不永久导入历史。本次预览支持 IDEA 和 VS Code。';
+
+  @override
+  String get appHistorySourcePath => '历史元数据文件路径';
+
+  @override
+  String get appHistoryEnable => '启用来源';
+
+  @override
+  String get appHistoryDisable => '关闭来源';
+
+  @override
+  String get appHistoryUnconfigured => '在「设置 → 应用历史」中启用来源，即可搜索最近项目和文件。';
+
+  @override
+  String get appHistoryReadFailed => '部分来源暂时无法读取，请在「设置 → 应用历史」中检查所选文件。';
+
+  @override
+  String get appHistoryDisabled => '应用历史已停用，可在「设置 → 功能」中启用。';
+
+  @override
+  String get appHistoryOperationFailed => '历史操作未完成，请刷新列表后重试。';
+
+  @override
+  String get appHistorySettingsFailed => '无法读取或保存历史来源，请检查文件路径后重试。';
+
+  @override
+  String get appHistoryAll => '全部应用';
+
+  @override
+  String get appHistoryCopyTarget => '复制路径或 URI';
 }
