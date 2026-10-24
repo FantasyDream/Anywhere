@@ -204,6 +204,8 @@ macOS Host 在启动引擎前安装 `NativeFlutterSurfaceGuard`：对 Flutter �
 
 `FlutterAccessibilityState` 只在 macOS Host 缓存已经收到的 AppKit 辅助功能启用 / 禁用通知，新建引擎后重放，避免懒加载窗口错过请求。没有已观察状态时不执行，不强制开启语义树，不增加系统权限。通知名称沿用固定 Flutter SDK 的实现契约，并非新的跨平台业务协议；升级 SDK 时须复核 `FlutterEngine.mm` 的通知处理和晚建窗口的实际 AX 树，不能只依赖适配器自身测试。
 
+固定 Flutter 3.47 的 `FlutterViewWrapper.accessibilityChildren` 只返回渲染视图，macOS 语义桥没有连接嵌入的 WebKit 控件。Host 的 `NativeAccessibilityContainer` 通过公开 AppKit 接口补充这一子树：原有 Flutter 节点每次动态读取，嵌入视图及原父节点仅弱引用；关闭、隐藏、弹出 Host 操作面板或移动共享窗口时撤销连接并恢复父节点。`NativeWebView` 统一发现窗口内唯一的 WebView；新旧视图重叠时不猜测，不向其中任意一个转移焦点或暴露节点。适配不改 SDK、不轮询、不要求插件编写无障碍桥接代码；升级 Flutter 后须复核是否仍有必要，真实辅助技术的验收范围单独记录。
+
 
 ## 语言与名称检索
 

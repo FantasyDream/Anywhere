@@ -3,16 +3,8 @@ import WebKit
 
 /// Presentation must not depend on the app being key or steal keyboard focus.
 enum NativeWebAppearance {
-  private static func find(in content: NSView) -> WKWebView? {
-    if let web = content as? WKWebView { return web }
-    for child in content.subviews {
-      if let web = find(in: child) { return web }
-    }
-    return nil
-  }
-
   static func configure(in content: NSView) -> Bool? {
-    guard let web = find(in: content) else { return nil }
+    guard let web = NativeWebView.unique(in: content) else { return nil }
     return configure(web)
   }
 

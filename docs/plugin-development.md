@@ -127,6 +127,7 @@ Host 会识别输入、选中文本和 15 秒内新复制内容中的 JSON，展
 - 编辑器 / 查询工具可用 `aw-workspace`、`aw-workspace-toolbar`、`aw-workspace-panes`、`aw-pane` 和 `aw-editor`；分栏与代码区域跟随 File Search 的共享设计，不用再画两张独立大卡片。完整类名见 SDK README。
 - 自定义局部组件时使用 `--aw-text`、`--aw-secondary`、`--aw-surface`、`--aw-border`、`--aw-accent` 等 CSS 变量。
 - 常用图标也由 Host 提供，例如 `<button><span class="aw-icon aw-icon--copy" aria-hidden="true"></span>复制</button>`。无需图标依赖或样式代码；保留文字标签，仅图标按钮须提供 `aria-label`。完整列表见 SDK README。
+- 使用标准 HTML 控件并为输入框提供标签；宿主负责 macOS 嵌入视图的无障碍连接与生命周期，无需插件注册原生节点或修改框架。实际 VoiceOver 可操作性仍需验收，不能用样式一致或单元测试代替。
 - 保留 Esc 和 ⌘K 给 Host；局部快捷键不要拦截输入法组合输入。
 
 隐藏后页面最多保留 15 秒，未完成宿主请求会失效。`definePlugin` 自动取消待处理请求，恢复时重新就绪并保留文稿；插件无需监听可见性或重复读取输入。`onDispose` 可用于释放业务自己的计时器等资源。

@@ -2,7 +2,7 @@ import AppKit
 
 /// Hosts content inside the native effect rather than overlaying sibling views.
 /// One material per window keeps Flutter's engine and responder chain intact.
-final class WindowMaterial: NSView {
+final class WindowMaterial: NativeAccessibilityContainer {
   private let effect: NSView
   let usesLiquidGlass: Bool
   var maskImage: NSImage? {
@@ -49,6 +49,7 @@ final class WindowMaterial: NSView {
   required init?(coder: NSCoder) { fatalError("Use init(frame:content:cornerRadius:)") }
 
   func detachContent(_ content: NSView) {
+    setEmbeddedAccessibilityChild(nil)
     #if compiler(>=6.2)
       if #available(macOS 26.0, *), let glass = effect as? NSGlassEffectView,
         glass.contentView === content

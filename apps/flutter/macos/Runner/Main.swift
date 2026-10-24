@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   private var localeObservers: [NSObjectProtocol] = []
   private var webToolsChannel: FlutterMethodChannel?
   private var webToolsActive = false
+  private var webToolsHostPanelVisible = false
   private let webPackagePicker = WebPackagePicker()
   var glass: WindowMaterial!
   var materialController: WindowMaterialController!
@@ -136,21 +137,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
       binaryMessenger: controller.engine.binaryMessenger
     )
     webToolsChannel?.setMethodCallHandler { [weak self] call, reply in
-      if call.method == "focusHost", let self, self.webToolsActive,
-        NSApp.keyWindow === self.window
-      {
-        self.window.makeFirstResponder(nil)
-        WindowInputFocus.restore(in: self.window, content: self.controller.view)
+      if call.method == "focusHost", let self, self.webToolsActive {
+        self.webToolsHostPanelVisible = true
+        self.updateWebAccessibility()
+        if NSApp.keyWindow === self.window {
+          self.window.makeFirstResponder(nil)
+          WindowInputFocus.restore(in: self.window, content: self.controller.view)
+        }
         reply(nil)
-      } else if call.method == "focusWeb", let self, self.webToolsActive,
-        NSApp.keyWindow === self.window
-      {
-        NativeWebEditing.focus(
-          in: self.window,
-          content: self.window.contentView ?? self.controller.view
-        )
+      } else if call.method == "focusWeb", let self, self.webToolsActive {
+        self.webToolsHostPanelVisible = false
+        self.updateWebAccessibility()
+        if NSApp.keyWindow === self.window {
+          NativeWebEditing.focus(
+            in: self.window,
+            content: self.window.contentView ?? self.controller.view
+          )
+        }
         reply(nil)
       } else if call.method == "configureWebAppearance", let self, self.webToolsActive {
+        self.updateWebAccessibility()
         let transparent = NativeWebAppearance.configure(
           in: self.window.contentView ?? self.controller.view
         )
@@ -161,6 +167,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         reply(transparent)
       } else if call.method == "active", let active = call.arguments as? Bool {
         self?.webToolsActive = active
+        if !active {
+          self?.webToolsHostPanelVisible = false
+          self?.updateWebAccessibility()
+        }
         // Background dragging otherwise steals WebKit mouse-up/click events.
         self?.window.isMovableByWindowBackground = !active
         reply(nil)
@@ -587,7 +597,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   func resizeWindow(_ height: Double, width: Double = 648) {
     launcherWindows.resizeWindow(height, width: width)
   }
-  func hideLauncherWindow() { launcherWindows.hideLauncherWindow() }
+  private func updateWebAccessibility() {
+    NativeWebView.exposeAccessibility(
+      in: window.contentView ?? controller.view,
+      enabled: webToolsActive && !webToolsHostPanelVisible
+    )
+  }
+
+  func hideLauncherWindow() {
+    NativeWebView.exposeAccessibility(in: window.contentView ?? controller.view, enabled: false)
+    launcherWindows.hideLauncherWindow()
+  }
 
   func dismissForFocusLoss() {
     if settingsOpen || terminationPending { return }

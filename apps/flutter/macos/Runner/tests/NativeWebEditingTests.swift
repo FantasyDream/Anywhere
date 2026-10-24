@@ -43,7 +43,7 @@ struct NativeWebEditingTests {
       defer: false
     )
     window.isReleasedWhenClosed = false
-    let content = NSView(frame: frame)
+    let content = NativeAccessibilityContainer(frame: frame)
     window.contentView = content
     // Flutter may place the platform view beside its rendering surface.
     // Discover from this window's content root, not only the Flutter view.
@@ -58,10 +58,26 @@ struct NativeWebEditingTests {
     let supported = web.responds(to: NSSelectorFromString("_setDrawsBackground:"))
     assert(!window.isKeyWindow)
     assert(NativeWebAppearance.configure(in: content) == supported)
+    let originalParent = web.accessibilityParent() as AnyObject?
+    NativeWebView.exposeAccessibility(in: content, enabled: true)
+    assert(web.accessibilityParent() as AnyObject? === content)
+    assert(content.accessibilityChildren()?.contains { $0 as AnyObject === web } == true)
     NativeWebEditing.focus(in: window, content: content)
     assert(window.firstResponder === web)
     if supported { assert(web.value(forKey: "drawsBackground") as? Bool == false) }
     if #available(macOS 12.0, *) { assert(web.underPageBackgroundColor.alphaComponent == 0) }
+    NativeWebView.exposeAccessibility(in: content, enabled: false)
+    assert(web.accessibilityParent() as AnyObject? === originalParent)
+    assert(window.firstResponder === web, "AX exposure must not move keyboard focus")
+    let overlapping = WKWebView(frame: frame, configuration: config)
+    content.addSubview(overlapping)
+    assert(NativeWebView.unique(in: content) == nil)
+    assert(NativeWebAppearance.configure(in: content) == nil)
+    NativeWebEditing.focus(in: window, content: content)
+    assert(window.firstResponder === web, "Do not focus a guessed document during replacement")
+    NativeWebView.exposeAccessibility(in: content, enabled: true)
+    assert(web.accessibilityParent() as AnyObject? === originalParent)
+    overlapping.removeFromSuperview()
     web.removeFromSuperview()
     let fallback = UnsupportedCanvasWebView(frame: frame, configuration: config)
     content.addSubview(fallback)

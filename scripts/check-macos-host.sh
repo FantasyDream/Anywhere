@@ -61,7 +61,13 @@ xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/mac
   -o "$host_test_directory/file-access-test"
 "$host_test_directory/file-access-test"
 # Native material ownership and resizing must survive the shared-engine window move.
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  apps/flutter/macos/Runner/NativeAccessibilityContainer.swift \
+  apps/flutter/macos/Runner/tests/NativeAccessibilityContainerTests.swift \
+  -o "$host_test_directory/native-accessibility-test"
+"$host_test_directory/native-accessibility-test"
 xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  apps/flutter/macos/Runner/NativeAccessibilityContainer.swift \
   apps/flutter/macos/Runner/WindowMaterial.swift \
   apps/flutter/macos/Runner/tests/WindowMaterialTests.swift \
   -o "$host_test_directory/material-test"
@@ -72,6 +78,7 @@ xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/mac
   -o "$host_test_directory/input-focus-test"
 "$host_test_directory/input-focus-test"
 xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  apps/flutter/macos/Runner/NativeAccessibilityContainer.swift \
   apps/flutter/macos/Runner/WindowMaterial.swift \
   apps/flutter/macos/Runner/WindowInputFocus.swift \
   apps/flutter/macos/Runner/LauncherWindowCoordinator.swift \
@@ -86,6 +93,8 @@ xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/mac
 
 # Web canvas compatibility stays in the native adapter, with an opaque fallback.
 xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  apps/flutter/macos/Runner/NativeAccessibilityContainer.swift \
+  apps/flutter/macos/Runner/NativeWebView.swift \
   apps/flutter/macos/Runner/NativeWebEditing.swift \
   apps/flutter/macos/Runner/NativeWebAppearance.swift \
   apps/flutter/macos/Runner/tests/NativeWebEditingTests.swift \
