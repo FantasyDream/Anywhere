@@ -1,0 +1,57 @@
+{
+  "private_history_used": false,
+  "queries": [
+    {
+      "max_us": 11524,
+      "p50_us": 8720,
+      "p95_us": 10040,
+      "query_kind": "empty",
+      "rows": 1000,
+      "samples": 30
+    },
+    {
+      "max_us": 9194,
+      "p50_us": 8713,
+      "p95_us": 9133,
+      "query_kind": "literal",
+      "rows": 1000,
+      "samples": 30
+    },
+    {
+      "max_us": 12631,
+      "p50_us": 9307,
+      "p95_us": 10052,
+      "query_kind": "pinyin",
+      "rows": 1000,
+      "samples": 30
+    },
+    {
+      "max_us": 22119,
+      "p50_us": 9765,
+      "p95_us": 15495,
+      "query_kind": "path",
+      "rows": 2,
+      "samples": 30
+    },
+    {
+      "max_us": 9544,
+      "p50_us": 8924,
+      "p95_us": 9485,
+      "query_kind": "unmatched",
+      "rows": 0,
+      "samples": 30
+    }
+  ],
+  "scope": "Rust service, source reads, QuickJS transforms and matching; excludes Bridge/Flutter/physical display",
+  "synthetic_entries": 1000,
+  "date": "2026-10-25",
+  "source_commit": "1239659b23e554af28089021c241344d85ea5fb3",
+  "version": "0.14.0+1",
+  "build_mode": "release",
+  "architecture": "arm64",
+  "macos": "27.0.1",
+  "maximum_resident_set_size_bytes": 22904832,
+  "peak_memory_footprint_bytes": 13730344,
+  "memory_scope": "Entire standalone synthetic measurement process; not the GUI app, helpers or a per-query allocation measurement",
+  "cold_warm_boundary": "30 sequential calls per query kind; no OS cache purge or separate cold-cache distribution"
+}

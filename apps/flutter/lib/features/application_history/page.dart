@@ -193,7 +193,10 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
           LauncherFilterBar(
               keyPrefix: 'app-history-source',
               selectedId: session.filter,
-              onSelect: session.selectFilter,
+              onSelect: (id) {
+                session.selectFilter(id);
+                session.focus.requestFocus();
+              },
               enabled: session.interactive,
               options: [
                 LauncherFilterOption(

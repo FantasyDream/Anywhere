@@ -24,6 +24,7 @@ class AppHistorySession extends ToolPageSession {
   String filter = '', _lastText = '';
   Timer? _debounce;
   bool _visible = true, _running = false, _again = false, _composing = false;
+  bool _resetSelection = true;
   Future<void> _cancellation = Future.value();
   AppHistoryItemDto? get selected =>
       items.isEmpty ? null : items[selectedIndex];
@@ -59,6 +60,7 @@ class AppHistorySession extends ToolPageSession {
     if (!committed && query.text == _lastText) return;
     _lastText = query.text;
     ++_revision;
+    _resetSelection = true;
     copied = false;
     _cancelRead();
     _debounce?.cancel();
@@ -118,11 +120,12 @@ class AppHistorySession extends ToolPageSession {
           }
         }
         if (!interactive || revision != _revision) continue;
-        final previous = selected?.objectKey;
+        final previous = _resetSelection ? null : selected?.objectKey;
         sources = available;
         items = List.unmodifiable(result.items);
         final index = items.indexWhere((item) => item.objectKey == previous);
         selectedIndex = index < 0 ? 0 : index;
+        _resetSelection = false;
         notice = result.notice;
         failed = false;
       } catch (_) {
@@ -136,6 +139,11 @@ class AppHistorySession extends ToolPageSession {
     if (!disposed) {
       loading = _debounce?.isActive == true;
       notifyListeners();
+      if (scroll.hasClients) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!disposed && _visible) _revealSelection();
+        });
+      }
     }
   }
 
@@ -143,6 +151,11 @@ class AppHistorySession extends ToolPageSession {
     if (!interactive || items.isEmpty) return;
     selectedIndex = index.clamp(0, items.length - 1);
     copied = false;
+    _revealSelection();
+    notifyListeners();
+  }
+
+  void _revealSelection() {
     if (scroll.hasClients) {
       final top = selectedIndex * 64.0;
       if (top < scroll.offset ||
@@ -150,13 +163,13 @@ class AppHistorySession extends ToolPageSession {
         scroll.jumpTo(top.clamp(0, scroll.position.maxScrollExtent));
       }
     }
-    notifyListeners();
   }
 
   void selectFilter(String id) {
     if (!interactive || filter == id) return;
     filter = id;
     ++_revision;
+    _resetSelection = true;
     copied = false;
     _cancelRead();
     unawaited(refresh());

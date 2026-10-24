@@ -185,6 +185,45 @@ void main() {
     expect(backend.closed, 1);
   });
 
+  testWidgets(
+      'new queries reset selection while refresh preserves and reveals its identity',
+      (tester) async {
+    var rows = List.generate(40, (index) => item('$index'));
+    final backend = HistoryBackend()
+      ..searchOverride =
+          (_, __) async => AppHistoryDto(items: rows, failedSources: const []);
+    final session = AppHistorySession(backend);
+    await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme,
+        home: Scaffold(
+            body: ListenableBuilder(
+                listenable: session,
+                builder: (context, _) => session.build(context,
+                    onBack: () {}, presentation: 1, visible: true)))));
+    await tester.pumpAndSettle();
+    session.select(20);
+    rows = [...List.generate(10, (index) => item('new-$index')), ...rows];
+    await session.refresh();
+    await tester.pumpAndSettle();
+    expect(session.selected?.objectKey, '20');
+    expect(session.selectedIndex, 30);
+    expect(session.scroll.offset, greaterThan(0));
+    expect(session.scroll.offset + session.scroll.position.viewportDimension,
+        greaterThanOrEqualTo(31 * 64));
+    session.query.text = 'new query';
+    await tester.pump(const Duration(milliseconds: 130));
+    await tester.pumpAndSettle();
+    expect(session.selectedIndex, 0);
+    expect(session.scroll.offset, 0);
+    session.select(20);
+    session.selectFilter('idea');
+    await tester.pumpAndSettle();
+    expect(session.selectedIndex, 0);
+    expect(session.scroll.offset, 0);
+    await tester.pumpWidget(const SizedBox());
+    session.dispose();
+  });
+
   test('settings serializes writes and closing waits for the final readback',
       () async {
     final backend = Preferences();
