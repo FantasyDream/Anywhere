@@ -1,6 +1,6 @@
 # 应用历史与收藏
 
-状态：**V0.14 设计目标，尚未实现**。2026-10-23 用户将 Recent Projects 扩展为跨应用历史与收藏：浏览器历史 / 书签、编辑器最近项目 / 文件、笔记应用最近笔记等均可读取、检索并回到来源应用。
+状态：**V0.14 方案阶段，尚未实现**。2026-10-25 已从 V0.13 收尾基线创建 `codex/dev-0.14`，具体实现决策、模块边界和分步验收见 [V0.14 技术方案](mvp-v0.14.md)。2026-10-23 用户将 Recent Projects 扩展为跨应用历史与收藏：浏览器历史 / 书签、编辑器最近项目 / 文件、笔记应用最近笔记等均可读取、检索并回到来源应用。
 
 这是同一内置功能的多个来源适配器，不为每个 App 新建页面、Scope 或脚本运行时。本页描述目标与接入条件，不代表已经访问用户的实际历史、安装 Companion 或验证所有 App 版本。
 
@@ -23,7 +23,7 @@
 - 提供普通 **应用历史** Action，可通过既有 Action 快捷键设置快速打开；中文“历史记录 / 最近项目 / 书签”等可作为检索别名。
 - 使用现有 Launcher 的二级页面、搜索框、候选行、选中态和更多操作。首页不常挂一排历史记录，保持应用 / 动作搜索的主体结构。
 - 在 Current App 中执行入口时，若来源已启用并支持该 App，默认过滤到该 App；否则进入全部已启用来源。该过滤属于历史页，不改 Current App / Global Search 的 Scope 契约。
-- 页面复用 Scope 的分类样式和 Tab / Shift+Tab 交互，按应用、记录类别过滤；Profile / Vault 选择收进来源筛选或更多操作，不将所有组合平铺。
+- 页面复用 Scope 的分类样式和 Tab / Shift+Tab 交互，顶部仅按应用过滤；记录类别、Profile / Vault 收进 ⌘K 的筛选面板，不将所有组合平铺，不增加第二排分类和快捷键。
 - 空查询显示最近对象；输入后搜索标题、URL、路径、书签文件夹等来源允许的元数据。匹配 / 拼音 / 排序复用现有 Rust 能力，不能让不匹配的固定记录混进结果。
 - Enter 执行选中对象；⌘K 提供复制 URL / 路径、用其他应用打开、文件位置、项目相关动作等适用操作。回退与 Esc 沿已有导航规则，保留上层查询与选择。
 - 列表说明只保留必要来源，如 `Edge · 工作 Profile · 书签`、`IDEA · 项目`、`Obsidian · 工作 Vault`。默认不加载网页、笔记正文、远程图标或新增空白预览大面板。
@@ -70,7 +70,7 @@ HistoryEntry
 
 1. **Rust Feature**：来源注册、条目模型、过滤、去重、排序和对象 Actions。第一方适配器随 App 编译；新应用按实际需求添加，不引入 QuickJS / WebView 自动解析历史。
 2. **Application**：设置与授权、异步查询、取消、快照提交、执行路由；复用 Session / Revision、来源失效和有界 worker 机制。
-3. **来源读取适配器**：读取 SQLite / JSON / XML 或受控 Companion 元数据；格式差异留在适配器。可共享 SQLite / 文件读取工具，不向通用搜索暴露每个 App 的表名和配置键。
+3. **来源读取适配器**：Feature 声明契约，Persistence 实现 SQLite / JSON / XML 的只读适配，Application 注入；Feature 不导入具体 Persistence。格式差异留在适配器，不向通用搜索暴露每个 App 的表名和配置键。本版不安装 Companion，本地格式不可靠的来源明确降级。
 4. **Platform / Native Host**：定位已授权 App / Profile / 配置目录、OS 文件访问、应用打开与必要的协议路由。共享 Core 不拼 macOS 固定目录或 bundle ID。
 5. **Flutter**：统一页面、来源标签、筛选、授权设置和可恢复错误，不解析浏览器数据库、IDE 配置或决定项目类型。
 
@@ -92,11 +92,11 @@ HistoryEntry
 
 ### Chrome / Edge
 
-Chromium 源码分别维护历史数据库与书签存储；书签实现中已有明文 / 加密存储路径，因此不能预设所有版本都可直接解析同一种 JSON。计划先验证明确版本与 Profile 的只读本地适配，不接触 Cookie、密码或认证材料。[历史实现](https://github.com/chromium/chromium/blob/main/components/history/core/browser/history_database.cc)、[书签实现](https://github.com/chromium/chromium/blob/main/components/bookmarks/browser/bookmark_storage.cc)
+Chromium 源码分别维护历史数据库与书签存储；内部格式不是公开稳定协议，不能预设所有版本都可直接解析同一种 JSON。计划先验证明确版本与 Profile 的只读本地适配，未知或不可读格式明确降级，不接触 Cookie、密码或认证材料。[历史实现](https://github.com/chromium/chromium/blob/main/components/history/core/browser/history_database.cc)、[书签实现](https://github.com/chromium/chromium/blob/main/components/bookmarks/browser/bookmark_storage.cc)
 
 官方扩展分别提供 history / bookmarks API，并要求对应权限。这是遇到本地格式不可靠时可评估的 Companion 路径，不代表外部 App 可直接调用浏览器内部 API。Chrome 与 Edge 发行版仍需分别验收，不能只凭同为 Chromium 宣称全兼容。[history](https://developer.chrome.com/docs/extensions/reference/api/history)、[bookmarks](https://developer.chrome.com/docs/extensions/reference/api/bookmarks)
 
-SQLite 来源先验证有界只读事务；需要独立快照时采用 SQLite 提供的快照 / Backup 路径并限制磁盘、时间与缓存寿命。不直接复制一个正被写入的数据库文件并假定它一致，不迁移、修复或切换源库 journal 模式。[SQLite Online Backup](https://sqlite.org/backup.html)
+SQLite 来源默认按需使用有界只读事务，不备份整份历史库；实测确需独立快照时再采用 SQLite Backup 并限制磁盘、时间与缓存寿命。Backup 不能绕过源库访问条件。不直接复制一个正被写入的数据库主文件并假定它一致，不迁移、修复或切换源库 journal 模式。[SQLite Online Backup](https://sqlite.org/backup.html)
 
 ### VS Code
 
@@ -108,7 +108,7 @@ SQLite 来源先验证有界只读事务；需要独立快照时采用 SQLite �
 
 ### Obsidian
 
-官方插件 API 的 `Workspace.getLastOpenFiles()` 提供最近 10 个文件名；URI 支持定位 Vault / 笔记。API 在 Obsidian 插件环境内使用，不是外部进程接口。读取本地 workspace 元数据可作为待验证的无 Companion 方案，格式不可靠时再评估小型 Companion；不把文件修改时间当作打开时间。[API 定义](https://github.com/obsidianmd/obsidian-api/blob/master/obsidian.d.ts)、[Obsidian URI](https://help.obsidian.md/Extending+Obsidian/Obsidian+URI)
+官方插件 API 的 `Workspace.getLastOpenFiles()` 提供最近 10 个文件名；URI 支持定位 Vault / 笔记。API 在 Obsidian 插件环境内使用，不是外部进程接口。读取本地 workspace 元数据作为本版待验证方案；格式不可靠的版本明确不支持，不把文件修改时间当作打开时间。Companion 作为后续独立选项，不自动纳入 V0.14。[API 定义](https://github.com/obsidianmd/obsidian-api/blob/master/obsidian.d.ts)、[Obsidian URI](https://help.obsidian.md/Extending+Obsidian/Obsidian+URI)
 
 Vault 及配置目录由用户选择或可靠来源定位。Obsidian 允许修改默认 `.obsidian` 配置目录，不能硬编码一个配置目录后宣称覆盖所有 Vault；首版只读已授权位置的最近记录元数据。[配置目录](https://help.obsidian.md/configuration-folder)
 
@@ -130,7 +130,7 @@ Vault 及配置目录由用户选择或可靠来源定位。Obsidian 允许修�
 |---|---|---|
 | H1 共同框架 + IDEA / VS Code 最近项目 | 统一来源模型、应用历史 Action、页面、来源设置和在原 App 打开 | Unicode / 空格、工作区与目录区别、App 多版本、失效路径、全键盘、取消与旧结果 |
 | H2 Chrome / Edge 书签与浏览历史 | Profile 选择、类型过滤、只读查询、来源浏览器打开 | 多 Profile、同 URL 多来源、活跃数据库、未知 schema / 加密格式、拒绝权限、内存与查询覆盖范围 |
-| H3 Obsidian 最近笔记 | 显式 Vault、最近记录读取方案及 URI 打开 | 多 Vault、非默认配置目录、仅有顺序的记录、重命名 / 删除、不读取正文、是否确需 Companion |
-| H4 通用对象动作与更多来源 | 当前选中对象按需解析 Context，复用复制 / 文件位置 / Git 等动作；根据需求扩展 Safari / Firefox / 其他 App | 不把全部历史变成环境 Context；不新增专属 Scope；停用不泄露旧对象；逐来源支持矩阵 |
+| H3 Obsidian 最近笔记 | 显式 Vault、本地最近元数据可行性门槛及 URI 打开 | 多 Vault、非默认配置目录、仅有顺序的记录、重命名 / 删除、不读取正文；不可靠版本明确降级 |
+| H4 通用对象动作与收尾 | 当前选中对象按需解析 Context，复用复制 / 文件位置 / Git 等动作；清理与交付 | 不把全部历史变成环境 Context；不新增专属 Scope；停用不泄露旧对象；逐来源支持矩阵；更多应用后续单独排期 |
 
-H1 验证接口后再固定抽象；H2 / H3 分别评估读取可行性并实现，失败有明确降级。每个工作包先完成代码和自动化，再用用户明确同意的测试来源做实机验收；计划本身不授权读取真实私人历史或新增系统权限。无需等第三方 ContextProvider、Terminal 或插件热加载。
+实施时将 H1 拆为 IDEA 闭环 / VS Code 验证第二来源，H2 拆为书签 / 大历史查询；详细预算与交付门槛见 [V0.14 技术方案](mvp-v0.14.md)。H1 验证接口后再固定抽象；H2 / H3 分别评估读取可行性并实现，失败有明确降级。各步先完成代码和自动化，最后集中构建与 UI 验收，使用明确的合成来源；计划本身不授权读取真实私人历史或新增系统权限。无需等第三方 ContextProvider、Terminal 或插件热加载。
