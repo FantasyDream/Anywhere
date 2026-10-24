@@ -140,6 +140,14 @@ Build 8 补齐原生内容拆卸：解除输入响应、显式清空玻璃内容
 
 随后通过正常菜单隐藏，等待超过 15 秒再采样 301.85 秒，共 31 个样本；期间无激活或重新显示事件，属于固定隐藏状态。RSS 首尾约 50.05 / 24.33 MiB，Physical footprint 首尾 81.4 / 80.5 MiB。关闭任务窗后的类统计回到主窗口基线，各 1 个 FlutterEngine、FlutterViewController、FlutterVSyncWaiter、WindowMaterialController。此进程没有打开 Web 工具；按 PID 关系无子进程，不代表完整 XPC helper 统计。系统压缩和其他进程活动未控制，不能以 RSS 下降宣称总体优化或以五分钟样本保证无长期泄漏。该短进程的日志未见无效句柄或 dead-channel 消息，不覆盖其他构建的已知 SDK 路径。原始数值和限制见 [Build 9 记录](benchmarks/desktop-v0.13-build9-2026-10-24.json)。
 
+### Build 10 Web 子树与 helper 归属补验
+
+同一 Build 10 进程中的零宿主权限 Text Pad 完成 3 次打开与 1 次重载，Web 编辑器在加载后可读，键盘输入和 Host 操作面板切换通过。首次快照尚无 Web 控件、聚焦后出现，后续文档无需鼠标即可暴露；不据此承诺同步首帧 AX 就绪或完整 VoiceOver 可操作。退出后的 WebView / WKWebViewConfiguration 回到 0，FlutterEngine / FlutterViewController / 材质容器各 1 个，仍有 1 个 WKProcessPool。固定 WebView 库将共享进程池保存为静态值，这是保留池的代码证据，尚不能单独证明 GPU 生命周期的全部原因。
+
+通过主进程自己的 XPC 服务域发现 GPU / WebContent / Networking 的唯一实例，再读取相应实例任务确认运行状态和 PID；不再只按新增进程名判断。这次同时采到的各进程 Physical footprint 分别约为主进程 71.8 MiB、WebContent 21.6 MiB、GPU 8.3 MiB、Networking 5.1 MiB，不相加为 App 总量、不作为前后优化对照。退出后的第一份快照已无 WebContent / Networking；随后 60 秒、13 份样本中 GPU 仍存在，末次 RSS 约 5.7 MiB，未终止任何 helper。该进程还有两条原生 NSSpellServer 超时消息，未见无效引擎句柄或 dead-channel 消息，不宣称日志完全无异常。
+
+采集始终关闭、50 条合成历史不变。桌面再次锁定后，菜单隐藏未完成，后续画面状态不作为固定隐藏基线。测量工具现支持显式 `--webkit-helpers`，仅保留归属确认后的 PID、名称与 RSS；未知值和已确认空列表分开，格式 / 权限失败不当作零内存。更多插件、完整辅助技术和长期资源行为仍待验，版本、方法与逐样本边界见 [Build 10 补验记录](benchmarks/desktop-v0.13-build10-followup-2026-10-24.json)。
+
 WKWebView 本身采用多进程结构，完整资源验收需要同时确认辅助进程归属；仅退出页面或查看主进程不足以代表总资源释放。[WebKit 进程说明](https://webkit.org/debugging-webkit/)
 
 
