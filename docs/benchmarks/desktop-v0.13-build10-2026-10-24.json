@@ -1,0 +1,57 @@
+{
+  "date": "2026-10-24",
+  "timezone": "Asia/Shanghai",
+  "recorded_at_utc": "2026-10-24T05:43:43.298046+00:00",
+  "app_version": "0.13.0+10",
+  "source_commit": "e5f51978d32a0ba03816ca9eb0221cc792c8fb8a",
+  "binary_sha256": "e712527a307909066a02f955547e4e81b0747830e474cd003ffd939fcb69a862",
+  "rust_library_sha256": "90604dc77dd4c55f48cb04f8e8d12bf25316525b9925d77a690832b472e5b2c3",
+  "zip_sha256": "fdbc87212b8417242d2b60d3fec317ba7a52fde3fdad92785ba420c624caa817",
+  "checks": {
+    "full_gate_exit_code": 0,
+    "rust_passed": 577,
+    "existing_rust_ignored": 6,
+    "flutter_passed": 398,
+    "style_native_architecture_clippy_web_sdk_examples": "passed",
+    "persistent_signature_version_and_archive_contents": "passed",
+    "renderer_configuration": "Impeller retained"
+  },
+  "native_accessibility_regressions": [
+    "Read current framework AX children instead of retaining a snapshot",
+    "Avoid duplicate direct native child entries",
+    "Hide hidden or detached native views",
+    "Restore the original AX parent before rebinding or disabling",
+    "Keep the supplementary child and original parent weak",
+    "Clear the connection when the host moves to another window",
+    "Connect and disconnect a real WKWebView without moving keyboard focus",
+    "Reject ambiguous native view discovery for appearance, focus and AX exposure"
+  ],
+  "fixture": {
+    "isolated_directory": true,
+    "personal_history_used": false,
+    "synthetic_items": 50,
+    "formats": 50,
+    "recording": 0,
+    "retention_days": 30,
+    "automatic_context_sources_enabled": false
+  },
+  "desktop": {
+    "old_owned_build9_instance_stopped": true,
+    "old_instance_children_before_stop": [],
+    "old_runtime_log_preserved_before_restart": true,
+    "build10_explicitly_started_with_isolated_directory": true,
+    "startup_ax_trusted": true,
+    "startup_impeller_log": true,
+    "gui_acceptance_status": "blocked_by_locked_mac",
+    "native_web_ax_tree_verified_in_app": false,
+    "host_panel_and_plugin_exit_verified_in_app": false,
+    "voiceover_verified": false
+  },
+  "limits": [
+    "Native tests exercise AppKit and a real WKWebView; they do not prove that the full Flutter/Web document tree is exposed in the packaged app.",
+    "Two desktop binding attempts reported a locked Mac. Build 10 was explicitly started, but no GUI or keyboard acceptance is claimed.",
+    "No new resource or Web helper release measurement was performed for this build. Build 9 hidden-state observations do not cover this adapter.",
+    "The complete VoiceOver, physical IME/context-source permission and Web XPC ownership matrices remain open.",
+    "V0.13 is not sealed and V0.14 has not started."
+  ]
+}
