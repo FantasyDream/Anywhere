@@ -42,6 +42,8 @@ shasum -a 256 -c Anywhere-preview-macos-arm64.zip.sha256
 
 记录设备 / 系统、构建、使用的数据范围、真实输入与模拟输入，以及未验证项。只使用脱敏验收内容，先完成单元与构建再进行 UI；不要让 UI 自动化意外执行真实业务动作。
 
+V0.13 开发预览的已知 SDK 边界见 [收尾记录](mvp-v0.13.md#已知边界与后续发布验收)：专用窗口关闭仍可能出现输入组件 dead-channel 警告与 VSync 无效句柄消息；WebView 释放后 GPU helper 可能继续保留。升级 Flutter / WebView 或修改窗口生命周期后应复验循环关闭和 helper 归属，不以对象回到基线或主进程 RSS 代替完整资源检查。更长趋势、首次 / 部分权限、真实硬件输入与完整 VoiceOver 验收在正式发布前单独记录；本轮用户选择跳过旁白，不标记为通过。
+
 ## 4. GitHub 发布
 
 ### 手动 GitHub 打包
