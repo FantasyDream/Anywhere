@@ -3149,12 +3149,6 @@ abstract class AppLocalizations {
   /// **'History sources could not be loaded or saved. Check the file path and try again.'**
   String get appHistorySettingsFailed;
 
-  /// No description provided for @appHistoryAll.
-  ///
-  /// In en, this message translates to:
-  /// **'All apps'**
-  String get appHistoryAll;
-
   /// No description provided for @appHistoryCopyTarget.
   ///
   /// In en, this message translates to:

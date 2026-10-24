@@ -27,7 +27,7 @@ V0.14 正在 `codex/dev-0.14` 验证[应用历史原型](docs/mvp-v0.14.md)：�
 - **剪贴板历史**：本机保存和检索文本、图片、文件列表及可读取格式；另有支持连续复制的常驻悬浮窗。采集默认关闭。
 - **开发工具**：Git 常用动作、Maven / Gradle / Node / Cargo 与 Spring Boot 动作，长任务可返回查看输出与停止。
 - **快捷键与语言**：自定义 Action / 全局 / Context 快捷键，支持简体中文、English、全拼与首字母搜索。
-- **应用历史原型**：搜索“应用历史”或 `yyls`，进入统一历史页；来源路径在设置中显式启用，支持标题 / 路径 / 拼音匹配。接入与限制见[来源指南](docs/application-history-sources.md)。
+- **应用历史原型**：每个应用有独立 Action，如“IDEA 最近项目”“VS Code 最近项目与文件”；在对应 Current App 中自动出现，全局搜索也可找到；来源路径在设置中显式启用，支持标题 / 路径 / 拼音匹配。接入与限制见[来源指南](docs/application-history-sources.md)。
 - **Web 插件预览**：可信本地包、明确权限、统一主题与 SDK；JSON Workspace 作为普通插件实现。
 
 终端 / PTY、第三方 ContextProvider、插件市场和浏览器历史暂未交付。文件预览以元数据和有界文本为主。

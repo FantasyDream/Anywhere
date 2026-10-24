@@ -62,6 +62,21 @@ pub struct SourceDescriptor {
     pub title: String,
     pub file_hint: String,
     pub applications: Vec<String>,
+    pub action: SourceAction,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SourceAction {
+    pub title: String,
+    pub localized_titles: std::collections::BTreeMap<String, String>,
+    pub aliases: Vec<String>,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PageInput {
+    pub source_id: String,
+    pub title: String,
+    pub localized_titles: std::collections::BTreeMap<String, String>,
 }
 pub type Cancelled = std::sync::Arc<dyn Fn() -> bool + Send + Sync>;
 pub trait SourceLoader: Send + Sync {

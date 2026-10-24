@@ -516,9 +516,11 @@ fn current_app_aggregates_context_commands_and_global_tools_do_not_create_scopes
     assert_eq!(results.candidates.len(), 1);
     assert_eq!(results.candidates[0].context().unwrap().type_id, DIRECTORY);
     assert!(offers(&registry, "", &[], None).is_empty());
-    let shortcuts = crate::features::tools::EntrySource { search: &search }.binding_offers();
+    let entry = crate::features::tools::EntrySource { search: &search };
+    let shortcuts = entry.binding_offers(&[]);
     assert_eq!(shortcuts.len(), 1);
     assert_eq!(shortcuts[0].context().unwrap().type_id, ENTRY_CONTEXT);
+    assert!(entry.binding_offers(&results.candidates).is_empty());
 }
 
 #[tokio::test]

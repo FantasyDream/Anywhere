@@ -1662,8 +1662,5 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appHistorySettingsFailed => 'History sources could not be loaded or saved. Check the file path and try again.';
 
   @override
-  String get appHistoryAll => 'All apps';
-
-  @override
   String get appHistoryCopyTarget => 'Copy path or URI';
 }

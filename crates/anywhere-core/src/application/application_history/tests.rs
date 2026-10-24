@@ -305,7 +305,7 @@ fn cancellation_during_source_work_rejects_publication_and_retains_admission() {
 fn a_json_source_only_needs_a_manifest_and_a_transform() {
     let reader = crate::persistence::application_history::Reader::Json;
     let loader = OfficialSources { packages: vec![Package {
-        manifest: Manifest { schema:1, id:"example".into(), title:"Example".into(), file_hint:"recent.json".into(), applications:vec!["example.editor".into()], reader },
+        manifest: Manifest { schema:1, id:"example".into(), title:"Example".into(), file_hint:"recent.json".into(), applications:vec!["example.editor".into()], action:SourceAction{title:"Example History".into(),localized_titles:std::collections::BTreeMap::from([("zh".into(),"示例历史".into())]),aliases:vec![]}, reader },
         script: "export function transform(input) { return input.projects.map(p => ({key:p.path,title:p.name,target:{kind:'directory',path:p.path}})); }",
     }] };
     let temp = tempfile::tempdir().unwrap();
@@ -325,4 +325,162 @@ fn a_json_source_only_needs_a_manifest_and_a_transform() {
         )
         .unwrap();
     assert_eq!(entries[0].title, "Example");
+}
+
+#[test]
+fn source_actions_follow_captured_app_and_explicit_search_without_an_extra_scope() {
+    use crate::{
+        core::{
+            action::descriptor::{ActionExecutor, ActionRegistry},
+            context::{ContextSource, ContextValue, ResolvedContext},
+            search::{engine::ActionSearch, query::Query},
+            session::facts::SessionFacts,
+        },
+        features::{application_history::Feature, services::FeatureServices, BuiltinFeature},
+    };
+    let service = Arc::new(HistoryService::new(
+        Ok(storage()),
+        OfficialSources::bundled().unwrap(),
+    ));
+    let mut services = FeatureServices::new(Ok(storage()));
+    services.bind_application_history(service.clone());
+    let mut registry = ActionRegistry::default();
+    for action in Feature.bind_services(&mut services).unwrap().actions {
+        registry
+            .register_owned(action, Some("application_history"))
+            .unwrap();
+    }
+    assert!(registry.get("core.application_history.open").is_none());
+    let context = |id: &str| {
+        ResolvedContext::new(
+            anywhere_protocol::APPLICATION,
+            ContextValue::Application {
+                bundle_id: id.into(),
+                name: id.into(),
+            },
+            ContextSource::ForegroundApplication,
+            "test",
+        )
+    };
+    let usage = |_: &str, _: &str| Default::default();
+    for (bundle, expected) in [
+        ("com.jetbrains.intellij", Some("idea")),
+        ("com.jetbrains.intellij.ce", Some("idea")),
+        ("com.microsoft.VSCode", Some("vscode")),
+        ("test.unrelated", None),
+    ] {
+        let app = anywhere_platform::ApplicationInfo {
+            bundle_id: bundle.into(),
+            name: bundle.into(),
+            pid: 42,
+            instance_id: Some("captured".into()),
+        };
+        let facts = SessionFacts::from_map(Some(app.clone()), Default::default()).unwrap();
+        let search = ActionSearch::new(
+            &registry,
+            &usage,
+            &facts,
+            0,
+            crate::features::context_semantic,
+        );
+        let contexts = [context(bundle)];
+        let group = crate::core::action::group::groups::for_app(bundle);
+        let result = search.search_scoped(&Query::parse(""), &contexts, &[], Some(&group));
+        assert_eq!(result.candidates.len(), usize::from(expected.is_some()));
+        if let Some(source) = expected {
+            let candidate = &result.candidates[0];
+            assert_eq!(
+                candidate.presentation.command_id.as_deref(),
+                Some(format!("core.application_history.{source}.open").as_str())
+            );
+            assert_eq!(candidate.presentation.group_id, group);
+            assert_eq!(candidate.presentation.owning_app.as_deref(), Some(bundle));
+            assert!(candidate.presentation.home_eligible);
+            let scopes = crate::core::search::scope::build(
+                &result.candidates,
+                &registry,
+                &Default::default(),
+                Some(&app),
+                0,
+            );
+            assert_eq!(scopes.len(), 1);
+            assert_eq!(scopes[0].id, group);
+        }
+    }
+    // Explicit global search still finds another app's independent entry.
+    let facts = SessionFacts::from_map(
+        Some(anywhere_platform::ApplicationInfo {
+            bundle_id: "com.jetbrains.intellij".into(),
+            name: "IDEA".into(),
+            pid: 42,
+            instance_id: Some("captured".into()),
+        }),
+        Default::default(),
+    )
+    .unwrap();
+    let search = ActionSearch::new(
+        &registry,
+        &usage,
+        &facts,
+        0,
+        crate::features::context_semantic,
+    );
+    let entry = crate::features::tools::EntrySource { search: &search };
+    let result = search.search(
+        &Query::parse("VS Code 最近项目"),
+        &[context("com.jetbrains.intellij")],
+        &[&entry],
+    );
+    assert_eq!(result.candidates.len(), 1);
+    assert_eq!(
+        result.candidates[0].presentation.command_id.as_deref(),
+        Some("core.application_history.vscode.open")
+    );
+    assert_eq!(
+        result.candidates[0].presentation.owning_app.as_deref(),
+        Some("com.microsoft.VSCode")
+    );
+    assert!(registry
+        .persistent_binding("core.application_history.idea.open")
+        .is_ok());
+    assert!(registry
+        .persistent_binding("core.application_history.vscode.open")
+        .is_ok());
+    let action = registry.get("core.application_history.idea.open").unwrap();
+    let ActionExecutor::Native(handler) = &action.executor else {
+        panic!("expected native history entry")
+    };
+    let platform = crate::application::source_catalog_tests::QuietPlatform;
+    let output = handler
+        .execute(&context("com.jetbrains.intellij"), &platform)
+        .unwrap();
+    let Some(anywhere_protocol::HostView::NativeTool { id, input }) = output.view else {
+        panic!("expected shared history page")
+    };
+    assert_eq!(id, "application.history");
+    let input: PageInput = serde_json::from_str(&input).unwrap();
+    assert_eq!(input.source_id, "idea");
+    assert_eq!(input.localized_titles["zh"], "IDEA 最近项目");
+    assert!(handler
+        .execute(&context("test.unrelated"), &platform)
+        .is_err());
+    service.set_enabled(false);
+    assert!(handler
+        .execute(&context("com.jetbrains.intellij"), &platform)
+        .is_err());
+}
+
+#[test]
+fn an_unconfigured_app_never_falls_back_to_another_enabled_source() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("recent.xml");
+    std::fs::write(&path, idea(temp.path())).unwrap();
+    let service = HistoryService::new(Ok(storage()), OfficialSources::bundled().unwrap());
+    service
+        .configure("idea", Some(path.to_str().unwrap()))
+        .unwrap();
+    let result = service.search(0, "", "vscode").unwrap();
+    assert_eq!(result.notice, Some(Notice::Unconfigured));
+    assert!(result.items.is_empty());
+    assert_eq!(service.search(0, "", "idea").unwrap().items.len(), 1);
 }

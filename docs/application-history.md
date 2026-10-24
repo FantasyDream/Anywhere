@@ -20,10 +20,10 @@
 
 ## 2. 入口与交互
 
-- 提供普通 **应用历史** Action，可通过既有 Action 快捷键设置快速打开；中文“历史记录 / 最近项目 / 书签”等可作为检索别名。
+- 每个应用 / 来源提供独立 Action，例如 **IDEA 最近项目**、**VS Code 最近项目与文件**；标题与别名由来源配置声明，各自支持既有 Action 快捷键。
 - 使用现有 Launcher 的二级页面、搜索框、候选行、选中态和更多操作。首页不常挂一排历史记录，保持应用 / 动作搜索的主体结构。
-- 在 Current App 中执行入口时，若来源已启用并支持该 App，默认过滤到该 App；否则进入全部已启用来源。该过滤属于历史页，不改 Current App / Global Search 的 Scope 契约。
-- 页面复用 Scope 的分类样式和 Tab / Shift+Tab 交互，顶部仅按应用过滤；记录类别、Profile / Vault 收进 ⌘K 的筛选面板，不将所有组合平铺，不增加第二排分类和快捷键。
+- 在对应 Current App 中无需输入关键词即匹配该应用的 Action；全局检索可按名称找到各独立入口。打开后固定到该来源，未配置时提示配置，不退回其他应用。保持 Current App / Global Search 的 Scope 契约。
+- 页面复用主窗口搜索头与列表；不显示全部应用或跨应用切换。后续记录类别、Profile / Vault 的应用内筛选收进适用的更多操作，不添加一套顶层 Scope。
 - 空查询显示最近对象；输入后搜索标题、URL、路径、书签文件夹等来源允许的元数据。匹配 / 拼音 / 排序复用现有 Rust 能力，不能让不匹配的固定记录混进结果。
 - Enter 执行选中对象；⌘K 提供复制 URL / 路径、用其他应用打开、文件位置、项目相关动作等适用操作。回退与 Esc 沿已有导航规则，保留上层查询与选择。
 - 列表说明只保留必要来源，如 `Edge · 工作 Profile · 书签`、`IDEA · 项目`、`Obsidian · 工作 Vault`。默认不加载网页、笔记正文、远程图标或新增空白预览大面板。
@@ -68,7 +68,7 @@ HistoryEntry
 └─ sourceRevision              本次读取快照身份
 ```
 
-1. **Rust Feature**：来源注册、条目模型、过滤、去重、排序和对象 Actions。第一方适配器随 App 编译；新应用按实际需求添加，不引入 QuickJS / WebView 自动解析历史。
+1. **Rust Feature**：来源注册、条目模型、过滤、去重、排序和对象 Actions。第一方适配器随 App 编译；新应用按实际需求添加配置与受限纯 JS 转换，通用读文件和执行预算由宿主管理；不引入 WebView 解析历史。
 2. **Application**：设置与授权、异步查询、取消、快照提交、执行路由；复用 Session / Revision、来源失效和有界 worker 机制。
 3. **来源读取适配器**：Feature 声明契约，Persistence 实现 SQLite / JSON / XML 的只读适配，Application 注入；Feature 不导入具体 Persistence。格式差异留在适配器，不向通用搜索暴露每个 App 的表名和配置键。本版不安装 Companion，本地格式不可靠的来源明确降级。
 4. **Platform / Native Host**：定位已授权 App / Profile / 配置目录、OS 文件访问、应用打开与必要的协议路由。共享 Core 不拼 macOS 固定目录或 bundle ID。
@@ -128,7 +128,7 @@ Vault 及配置目录由用户选择或可靠来源定位。Obsidian 允许修�
 
 | 工作包 | 交付 | 验收重点 |
 |---|---|---|
-| H1 共同框架 + IDEA / VS Code 最近项目 | 统一来源模型、应用历史 Action、页面、来源设置和在原 App 打开 | Unicode / 空格、工作区与目录区别、App 多版本、失效路径、全键盘、取消与旧结果 |
+| H1 共同框架 + IDEA / VS Code 最近项目 | 统一来源模型、每应用独立历史 Action、共享页面、来源设置和在原 App 打开 | Unicode / 空格、工作区与目录区别、App 多版本、失效路径、全键盘、取消与旧结果 |
 | H2 Chrome / Edge 书签与浏览历史 | Profile 选择、类型过滤、只读查询、来源浏览器打开 | 多 Profile、同 URL 多来源、活跃数据库、未知 schema / 加密格式、拒绝权限、内存与查询覆盖范围 |
 | H3 Obsidian 最近笔记 | 显式 Vault、本地最近元数据可行性门槛及 URI 打开 | 多 Vault、非默认配置目录、仅有顺序的记录、重命名 / 删除、不读取正文；不可靠版本明确降级 |
 | H4 通用对象动作与收尾 | 当前选中对象按需解析 Context，复用复制 / 文件位置 / Git 等动作；清理与交付 | 不把全部历史变成环境 Context；不新增专属 Scope；停用不泄露旧对象；逐来源支持矩阵；更多应用后续单独排期 |

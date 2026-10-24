@@ -1,6 +1,6 @@
 # 应用历史来源配置与脚本
 
-状态：V0.14 第一轮原型，仅运行随 App 编译的官方来源。不是已开放安装的第三方插件协议。本轮先验证通用读取器、纯 JS 转换和统一页面；尚未接入浏览器 / Obsidian、自动发现配置或多 Profile 选择。
+状态：V0.14 第一轮原型，仅运行随 App 编译的官方来源。不是已开放安装的第三方插件协议。本轮先验证通用读取器、纯 JS 转换及每应用独立 Action / 共享页面；尚未接入浏览器 / Obsidian、自动发现配置或多 Profile 选择。
 
 ## 添加一个来源
 
@@ -15,11 +15,16 @@
   "title": "Example Editor",
   "file_hint": "recent.json",
   "applications": ["example.editor"],
+  "action": {
+    "title": "Example Recent Projects",
+    "localized_titles": { "zh": "Example 最近项目" },
+    "aliases": ["example history", "最近项目"]
+  },
   "reader": { "format": "json" }
 }
 ```
 
-`applications` 是匹配安装应用的身份列表；当前 macOS 适配使用 bundle ID。它属于官方来源定义，转换脚本不能覆盖。只有找到唯一应用才允许打开；缺失或多个安装实例时不猜测。首轮没有提供安装实例选择器，遇到歧义应先明确降级。
+`applications` 是匹配安装应用的身份列表；当前 macOS 适配使用 bundle ID。它属于官方来源定义，转换脚本不能覆盖。宿主根据该列表与本次冻结的 Application Context 匹配 Action；不会读取实时焦点反推应用。只有找到唯一应用才允许打开；缺失或多个安装实例时不猜测。首轮没有提供安装实例选择器，遇到歧义应先明确降级。
 
 `transform.js`：
 
@@ -36,7 +41,9 @@ export function transform(input) {
 }
 ```
 
-作者只处理“原数据如何变成条目”。脚本不能定义 UI、来源权限、打开命令或写入命令 Usage。搜索、拼音、排序、过滤、键盘与主窗口布局由宿主统一提供。
+`action` 定义独立入口的标题、中文名和检索别名，稳定 Action ID 为 `core.application_history.<source-id>.open`。在对应 Current App 首页无需输入关键词即出现，也可全局检索、单独绑定快捷键。页面仍为共享的 `application.history`，来源 ID 和标题由 Action 传入；页面只查询这个来源，关闭来源时显示配置提示，不退回其他应用。旧原型的统一 `core.application_history.open` 已移除，如曾绑定它，应重新选择具体应用 Action。
+
+转换脚本作者只处理“原数据如何变成条目”。脚本不能定义 UI、来源权限、打开命令或写入命令 Usage。搜索、拼音、排序、过滤、键盘与主窗口布局由宿主统一提供。
 
 ## 配置读取位置
 

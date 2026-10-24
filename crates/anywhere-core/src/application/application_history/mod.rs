@@ -22,6 +22,7 @@ struct Manifest {
     title: String,
     file_hint: String,
     applications: Vec<String>,
+    action: SourceAction,
     reader: crate::persistence::application_history::Reader,
 }
 struct Package {
@@ -42,7 +43,12 @@ impl OfficialSources {
                 "invalid source manifest"
             );
             ensure!(
-                !manifest.applications.is_empty() && !manifest.title.is_empty(),
+                crate::features::descriptor::valid_id(&manifest.id)
+                    && manifest.id.len() <= 64
+                    && !manifest.applications.is_empty()
+                    && !manifest.title.is_empty()
+                    && !manifest.action.title.trim().is_empty()
+                    && manifest.action.localized_titles.contains_key("zh"),
                 "source identity missing"
             );
             packages.push(Package { manifest, script });
@@ -59,6 +65,7 @@ impl SourceLoader for OfficialSources {
                 title: p.manifest.title.clone(),
                 file_hint: p.manifest.file_hint.clone(),
                 applications: p.manifest.applications.clone(),
+                action: p.manifest.action.clone(),
             })
             .collect()
     }

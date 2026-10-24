@@ -1626,8 +1626,5 @@ class AppLocalizationsZh extends AppLocalizations {
   String get appHistorySettingsFailed => '无法读取或保存历史来源，请检查文件路径后重试。';
 
   @override
-  String get appHistoryAll => '全部应用';
-
-  @override
   String get appHistoryCopyTarget => '复制路径或 URI';
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:anywhere/features/application_history/registration.dart';
 import 'package:anywhere/features/application_history/session.dart';
 import 'package:anywhere/infrastructure/application_history_backend.dart';
 import 'package:anywhere/infrastructure/desktop_environment.dart';
@@ -38,8 +39,6 @@ class HistoryBackend implements AppHistoryQueryBackend {
   Future<AppHistoryDto> Function(String, String)? searchOverride;
   final calls = <String>[], used = <String>[];
   int cancelled = 0, closed = 0;
-  @override
-  Future<List<AppHistorySourceDto>> sources() async => sourceRows;
   @override
   Future<AppHistoryDto> search(String query, String source) async {
     calls.add('$source:$query');
@@ -83,6 +82,28 @@ void main() {
       const DesktopEnvironment(platform: TargetPlatform.macOS)));
   tearDown(DesktopEnvironment.reset);
 
+  testWidgets('native Action input fixes the source and labels the page',
+      (tester) async {
+    final backend = HistoryBackend();
+    final session = openAppHistory(
+        '{"source_id":"vscode","title":"VS Code Recent Projects and Files","localized_titles":{"zh":"VS Code 最近项目与文件"}}',
+        backend);
+    await tester.pump();
+    expect(session.sourceId, 'vscode');
+    expect(session.labelFor('zh'), 'VS Code 最近项目与文件');
+    expect(backend.calls, ['vscode:']);
+    session.query.text = 'project';
+    await tester.pump(const Duration(milliseconds: 130));
+    await tester.pump();
+    expect(backend.calls.last, 'vscode:project');
+    session.dispose();
+    expect(() => openAppHistory('{}', backend), throwsFormatException);
+    expect(
+        () => openAppHistory(
+            '{"source_id":"","title":"Wrong","localized_titles":{}}', backend),
+        throwsFormatException);
+  });
+
   test('a failed history save prevents settings close', () async {
     final backend = Preferences()
       ..gate = Completer<void>()
@@ -100,10 +121,11 @@ void main() {
   });
 
   testWidgets(
-      'Tab filters, arrow selection and Return share the launcher keyboard model',
+      'each app page stays on its source and shares row keyboard actions',
       (tester) async {
     final backend = HistoryBackend();
-    final active = AppHistorySession(backend);
+    final active = AppHistorySession(backend,
+        sourceId: 'idea', title: 'IDEA Recent Projects');
     await tester.pumpWidget(MaterialApp(
         theme: AppStyle.theme,
         home: Scaffold(
@@ -114,8 +136,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pumpAndSettle();
-    expect(active.filter, 'idea');
-    expect(backend.calls.last, 'idea:');
+    expect(active.sourceId, 'idea');
+    expect(backend.calls, ['idea:']);
+    expect(find.text('All apps'), findsNothing);
+    expect(find.text('Visual Studio Code'), findsNothing);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
@@ -140,7 +164,8 @@ void main() {
       'IME composition blocks search and stale response publication then resumes committed input',
       (tester) async {
     final backend = HistoryBackend();
-    final session = AppHistorySession(backend);
+    final session = AppHistorySession(backend,
+        sourceId: 'idea', title: 'IDEA Recent Projects');
     await tester.pump();
     final pending = Completer<AppHistoryDto>();
     backend.searchOverride = (_, __) => pending.future;
@@ -169,7 +194,8 @@ void main() {
       'hidden pages reject results and actions, resume retains query and close releases the backend',
       () async {
     final backend = HistoryBackend();
-    final session = AppHistorySession(backend);
+    final session = AppHistorySession(backend,
+        sourceId: 'idea', title: 'IDEA Recent Projects');
     await Future<void>.delayed(Duration.zero);
     session.query.text = 'project';
     session.setVisible(false);
@@ -192,7 +218,8 @@ void main() {
     final backend = HistoryBackend()
       ..searchOverride =
           (_, __) async => AppHistoryDto(items: rows, failedSources: const []);
-    final session = AppHistorySession(backend);
+    final session = AppHistorySession(backend,
+        sourceId: 'idea', title: 'IDEA Recent Projects');
     await tester.pumpWidget(MaterialApp(
         theme: AppStyle.theme,
         home: Scaffold(
@@ -212,11 +239,6 @@ void main() {
         greaterThanOrEqualTo(31 * 64));
     session.query.text = 'new query';
     await tester.pump(const Duration(milliseconds: 130));
-    await tester.pumpAndSettle();
-    expect(session.selectedIndex, 0);
-    expect(session.scroll.offset, 0);
-    session.select(20);
-    session.selectFilter('idea');
     await tester.pumpAndSettle();
     expect(session.selectedIndex, 0);
     expect(session.scroll.offset, 0);

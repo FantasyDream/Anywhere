@@ -833,6 +833,5 @@
   "appHistoryDisabled": "App History is disabled. Enable it in Settings → Features.",
   "appHistoryOperationFailed": "The history operation could not be completed. Refresh the list and try again.",
   "appHistorySettingsFailed": "History sources could not be loaded or saved. Check the file path and try again.",
-  "appHistoryAll": "All apps",
   "appHistoryCopyTarget": "Copy path or URI"
 }

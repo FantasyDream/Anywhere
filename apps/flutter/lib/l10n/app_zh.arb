@@ -833,6 +833,5 @@
   "appHistoryDisabled": "应用历史已停用，可在「设置 → 功能」中启用。",
   "appHistoryOperationFailed": "历史操作未完成，请刷新列表后重试。",
   "appHistorySettingsFailed": "无法读取或保存历史来源，请检查文件路径后重试。",
-  "appHistoryAll": "全部应用",
   "appHistoryCopyTarget": "复制路径或 URI"
 }

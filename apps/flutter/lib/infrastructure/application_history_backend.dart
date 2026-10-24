@@ -1,7 +1,6 @@
 import '../src/rust/api.dart' as api;
 
 abstract interface class AppHistoryQueryBackend {
-  Future<List<api.AppHistorySourceDto>> sources();
   Future<api.AppHistoryDto> search(String query, String source);
   Future<void> useItem(String id, {required bool copy});
   Future<void> cancel();
@@ -26,8 +25,6 @@ class RustAppHistoryQueryBackend implements AppHistoryQueryBackend {
   Future<int>? _lease;
   bool _closed = false;
   Future<int> _session() => _lease ??= api.openAppHistorySession();
-  @override
-  Future<List<api.AppHistorySourceDto>> sources() => api.appHistorySources();
   @override
   Future<api.AppHistoryDto> search(String query, String source) async {
     if (_closed) throw StateError('History page closed');

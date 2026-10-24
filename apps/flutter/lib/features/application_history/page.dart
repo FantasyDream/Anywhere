@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 
 import '../../infrastructure/desktop_environment.dart';
 import '../../l10n/app_language.dart';
-import '../../launcher/widgets/launcher_components.dart';
 import '../../src/rust/api.dart';
 import '../../tools/tool_page_shell.dart';
 import '../../ui/app_components.dart';
@@ -57,10 +56,6 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
         keyboard.isControlPressed ||
         keyboard.isAltPressed) {
       return KeyEventResult.ignored;
-    }
-    if (key == LogicalKeyboardKey.tab) {
-      session.cycleFilter(keyboard.isShiftPressed);
-      return KeyEventResult.handled;
     }
     if (keyboard.isShiftPressed) return KeyEventResult.ignored;
     if (key == LogicalKeyboardKey.arrowDown ||
@@ -146,7 +141,7 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
 
   @override
   Widget build(BuildContext context) => ToolPageShell(
-        title: context.l10n.appHistory,
+        title: session.labelFor(Localizations.localeOf(context).languageCode),
         onBack: widget.onBack,
         presentation: widget.presentation,
         visible: widget.visible,
@@ -159,7 +154,9 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                Text(context.l10n.appHistory,
+                Text(
+                    session
+                        .labelFor(Localizations.localeOf(context).languageCode),
                     style: AppStyle.caption.copyWith(
                         fontSize: DesignTokens.pageModeSize,
                         fontWeight: DesignTokens.pageModeWeight)),
@@ -190,22 +187,6 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
             _actionMenu(AppMoreAction(onPressed: _actions)),
         ]),
         child: Column(children: [
-          LauncherFilterBar(
-              keyPrefix: 'app-history-source',
-              selectedId: session.filter,
-              onSelect: (id) {
-                session.selectFilter(id);
-                session.focus.requestFocus();
-              },
-              enabled: session.interactive,
-              options: [
-                LauncherFilterOption(
-                    '', context.l10n.appHistoryAll, 'Tab / Shift+Tab'),
-                for (final source
-                    in session.sources.where((s) => s.path.isNotEmpty))
-                  LauncherFilterOption(
-                      source.id, source.title, 'Tab / Shift+Tab')
-              ]),
           if (session.loading) const LinearProgressIndicator(minHeight: 1),
           Expanded(
               child: session.items.isEmpty
@@ -239,11 +220,6 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
   Widget _row(int index) {
     final item = session.items[index],
         selected = index == session.selectedIndex;
-    final source = session.sources
-            .where((s) => s.id == item.sourceId)
-            .firstOrNull
-            ?.title ??
-        item.sourceId;
     return Padding(
         padding: const EdgeInsets.symmetric(vertical: 3),
         child: AppSelectionSurface(
@@ -288,7 +264,7 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
                         Text(
                             selected && session.copied
                                 ? context.l10n.copied
-                                : '$source · ${item.value}',
+                                : item.value,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                             style: AppStyle.caption),

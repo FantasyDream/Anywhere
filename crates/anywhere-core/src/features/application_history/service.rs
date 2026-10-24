@@ -103,6 +103,23 @@ impl HistoryService {
             })
             .collect()
     }
+    pub fn page_input(&self, id: &str) -> Result<PageInput> {
+        ensure!(
+            self.enabled.load(Ordering::Acquire),
+            "history feature disabled"
+        );
+        let source = self
+            .loader
+            .descriptors()
+            .into_iter()
+            .find(|source| source.id == id)
+            .ok_or_else(|| anyhow::anyhow!("unknown history source"))?;
+        Ok(PageInput {
+            source_id: source.id,
+            title: source.action.title,
+            localized_titles: source.action.localized_titles,
+        })
+    }
     pub fn configure(&self, id: &str, path: Option<&str>) -> Result<()> {
         let _configuration = self.configuration.lock().unwrap();
         let mut next = self.state.lock().unwrap().sources.clone();
@@ -219,7 +236,10 @@ impl HistoryService {
         let cancelled = self.cancellation(epoch);
         let current = || !cancelled();
         let sources = self.state.lock().unwrap().sources.clone();
-        if sources.is_empty() {
+        if !sources
+            .iter()
+            .any(|source| filter.is_empty() || source.id == filter)
+        {
             return Ok(empty(Notice::Unconfigured));
         }
         let query = Query::parse(text);

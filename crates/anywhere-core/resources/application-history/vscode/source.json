@@ -3,11 +3,34 @@
   "id": "vscode",
   "title": "Visual Studio Code",
   "file_hint": "state.vscdb",
-  "applications": ["com.microsoft.VSCode"],
+  "applications": [
+    "com.microsoft.VSCode"
+  ],
   "reader": {
     "format": "sqlite",
     "query": "SELECT value FROM ItemTable WHERE key = ?1",
-    "parameters": ["history.recentlyOpenedPathsList"],
-    "tables": ["ItemTable"]
+    "parameters": [
+      "history.recentlyOpenedPathsList"
+    ],
+    "tables": [
+      "ItemTable"
+    ]
+  },
+  "action": {
+    "title": "VS Code Recent Projects and Files",
+    "localized_titles": {
+      "zh": "VS Code 最近项目与文件"
+    },
+    "aliases": [
+      "Visual Studio Code recent projects",
+      "vscode recent",
+      "recent projects",
+      "recent files",
+      "最近项目",
+      "最近文件",
+      "历史记录",
+      "app history",
+      "应用历史"
+    ]
   }
 }

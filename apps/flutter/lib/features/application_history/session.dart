@@ -8,20 +8,27 @@ import '../../tools/tool_page.dart';
 import 'page.dart';
 
 class AppHistorySession extends ToolPageSession {
-  AppHistorySession(this.backend) {
+  AppHistorySession(this.backend,
+      {required this.sourceId,
+      required this.title,
+      this.localizedTitles = const {}}) {
     query.addListener(_changed);
     unawaited(refresh());
   }
   final AppHistoryQueryBackend backend;
+  final String sourceId;
+  @override
+  final String title;
+  final Map<String, String> localizedTitles;
+  String labelFor(String language) => localizedTitles[language] ?? title;
   final query = TextEditingController();
   final focus = FocusNode(debugLabel: 'app-history-search');
   final scroll = ScrollController();
   List<AppHistoryItemDto> items = const [];
-  List<AppHistorySourceDto> sources = const [];
   AppHistoryNoticeDto? notice;
   bool loading = true, busy = false, failed = false, copied = false;
   int selectedIndex = 0, _revision = 0;
-  String filter = '', _lastText = '';
+  String _lastText = '';
   Timer? _debounce;
   bool _visible = true, _running = false, _again = false, _composing = false;
   bool _resetSelection = true;
@@ -32,8 +39,6 @@ class AppHistorySession extends ToolPageSession {
       _visible && canInteract && !busy && query.value.composing.isCollapsed;
   @override
   String get id => 'application.history';
-  @override
-  String get title => 'App History';
   @override
   double get width => 760;
   @override
@@ -94,20 +99,11 @@ class AppHistorySession extends ToolPageSession {
     do {
       _again = false;
       final revision = _revision;
-      final text = query.text, source = filter;
+      final text = query.text;
       try {
         await _cancellation;
         if (!interactive || revision != _revision) continue;
-        final available = await backend.sources();
-        if (!interactive || revision != _revision) continue;
-        if (filter.isNotEmpty &&
-            !available.any((s) => s.id == filter && s.path.isNotEmpty)) {
-          filter = '';
-          ++_revision;
-          _again = true;
-          continue;
-        }
-        var result = await backend.search(text, source);
+        var result = await backend.search(text, sourceId);
         for (var attempt = 0;
             attempt < 4 &&
                 result.notice == AppHistoryNoticeDto.busy &&
@@ -116,12 +112,11 @@ class AppHistorySession extends ToolPageSession {
             attempt++) {
           await Future<void>.delayed(const Duration(milliseconds: 80));
           if (interactive && revision == _revision) {
-            result = await backend.search(text, source);
+            result = await backend.search(text, sourceId);
           }
         }
         if (!interactive || revision != _revision) continue;
         final previous = _resetSelection ? null : selected?.objectKey;
-        sources = available;
         items = List.unmodifiable(result.items);
         final index = items.indexWhere((item) => item.objectKey == previous);
         selectedIndex = index < 0 ? 0 : index;
@@ -163,25 +158,6 @@ class AppHistorySession extends ToolPageSession {
         scroll.jumpTo(top.clamp(0, scroll.position.maxScrollExtent));
       }
     }
-  }
-
-  void selectFilter(String id) {
-    if (!interactive || filter == id) return;
-    filter = id;
-    ++_revision;
-    _resetSelection = true;
-    copied = false;
-    _cancelRead();
-    unawaited(refresh());
-  }
-
-  void cycleFilter(bool backwards) {
-    final ids = [
-      '',
-      ...sources.where((s) => s.path.isNotEmpty).map((s) => s.id)
-    ];
-    selectFilter(
-        ids[(ids.indexOf(filter) + (backwards ? -1 : 1)) % ids.length]);
   }
 
   Future<void> useItem({bool copy = false}) async {

@@ -3,6 +3,27 @@
   "id": "idea",
   "title": "IntelliJ IDEA",
   "file_hint": "recentProjects.xml",
-  "applications": ["com.jetbrains.intellij", "com.jetbrains.intellij.ce", "com.jetbrains.intellij-EAP"],
-  "reader": { "format": "xml" }
+  "applications": [
+    "com.jetbrains.intellij",
+    "com.jetbrains.intellij.ce",
+    "com.jetbrains.intellij-EAP"
+  ],
+  "reader": {
+    "format": "xml"
+  },
+  "action": {
+    "title": "IDEA Recent Projects",
+    "localized_titles": {
+      "zh": "IDEA 最近项目"
+    },
+    "aliases": [
+      "IntelliJ IDEA recent projects",
+      "recent projects",
+      "recent history",
+      "最近项目",
+      "历史记录",
+      "app history",
+      "应用历史"
+    ]
+  }
 }

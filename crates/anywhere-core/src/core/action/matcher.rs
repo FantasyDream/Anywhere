@@ -205,7 +205,11 @@ impl ActionMatcher<'_> {
                         availability,
                         command_id: Some(action.id.clone()),
                         bundle_id: None,
-                        owning_app: owned_by.clone().or_else(|| action.owning_app.clone()),
+                        owning_app: if context.type_id == LAUNCHER_ENTRY_CONTEXT {
+                            action.owning_app.clone().or_else(|| owned_by.clone())
+                        } else {
+                            owned_by.clone().or_else(|| action.owning_app.clone())
+                        },
                         menu_path: action.menu_path.clone(),
                         context_keys: vec![crate::core::context::navigation::root_key(
                             context, contexts,

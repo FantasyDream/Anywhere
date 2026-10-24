@@ -58,6 +58,7 @@ impl CaptureGate {
 
 #[derive(Default)]
 pub(crate) struct TestPlatform {
+    pub(crate) frontmost_bundle: Option<&'static str>,
     pub(crate) directory: PathBuf,
     pub(crate) finder: bool,
     pub(crate) directory_captures: AtomicUsize,
@@ -136,12 +137,14 @@ impl Platform for TestPlatform {
             gate.wait();
         }
         Ok(Some(ApplicationInfo {
-            bundle_id: if self.finder {
-                "com.apple.finder"
-            } else {
-                "test.editor"
-            }
-            .into(),
+            bundle_id: self
+                .frontmost_bundle
+                .unwrap_or(if self.finder {
+                    "com.apple.finder"
+                } else {
+                    "test.editor"
+                })
+                .into(),
             name: if self.finder { "Finder" } else { "Editor" }.into(),
             instance_id: Some(
                 self.menu_instance

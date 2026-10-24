@@ -1,7 +1,7 @@
 //! Whether an applicable action should be shown, and whether it can run.
 //!
 //! Separate from `accepts`, which answers "does this action apply to this object at all".
-//! Visibility is a closed rule over named [`SessionFacts`] values: memory only, no file
+//! Visibility is a closed rule over resolved Context and [`SessionFacts`]: memory only, no file
 //! system, no process, no network. Custom actions declare the same operations against a
 //! fact key; they do not add fields or run code.
 //!
@@ -33,6 +33,12 @@ pub enum AvailabilityRule {
     RequireFlag { fact: String, reason: String },
     /// Project-local capability metadata; evaluation performs no IO.
     RequireContextProperty { key: String },
+    /// App-owned actions match the captured application, with an optional explicit
+    /// launcher entry target for keyword search and configured shortcuts.
+    ForApplications {
+        bundle_ids: Vec<String>,
+        entry_context: Option<String>,
+    },
 }
 
 impl AvailabilityRule {
@@ -50,6 +56,25 @@ impl AvailabilityRule {
     pub fn validate(&self) -> Result<()> {
         match self {
             Self::Enabled | Self::Hidden => Ok(()),
+            Self::ForApplications {
+                bundle_ids,
+                entry_context,
+            } => {
+                if bundle_ids.is_empty()
+                    || bundle_ids.len() > 32
+                    || bundle_ids.iter().any(|id| {
+                        id.is_empty() || id.len() > 256 || id.chars().any(char::is_control)
+                    })
+                {
+                    bail!("application availability requires bounded application identities");
+                }
+                if entry_context.as_ref().is_some_and(|id| {
+                    id.is_empty() || id.len() > 128 || id == anywhere_protocol::APPLICATION
+                }) {
+                    bail!("invalid explicit entry context");
+                }
+                Ok(())
+            }
             Self::RequireContextProperty { key } => {
                 if key.trim().is_empty() {
                     bail!("context property key must not be empty");
@@ -79,6 +104,23 @@ pub fn evaluate(
 ) -> Availability {
     match rule {
         AvailabilityRule::Enabled => Availability::enabled(),
+        AvailabilityRule::ForApplications {
+            bundle_ids,
+            entry_context,
+        } => {
+            let matches = match &context.value {
+                ContextValue::Application { bundle_id, .. } => {
+                    context.type_id == anywhere_protocol::APPLICATION
+                        && bundle_ids.contains(bundle_id)
+                }
+                _ => entry_context.as_deref() == Some(context.type_id.as_str()),
+            };
+            if matches {
+                Availability::enabled()
+            } else {
+                Availability::hidden()
+            }
+        }
         AvailabilityRule::RequireContextProperty { key } => {
             if context
                 .value

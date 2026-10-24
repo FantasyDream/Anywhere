@@ -596,7 +596,7 @@ mod tests {
     #[test]
     fn exact_type_match_and_builtin_command_count() {
         let registry = crate::application::builtin_registry();
-        assert_eq!(registry.commands().count(), 31);
+        assert_eq!(registry.commands().count(), 30);
         let url = seed("https://github.com")
             .into_iter()
             .find(|c| c.type_id == URL)
