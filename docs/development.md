@@ -98,7 +98,7 @@ SDK 类型、测试和独立模板需要 Node.js 22+ / npm；这些检查不安�
 ```bash
 mkdir -p build/acceptance-v0.13
 ANYWHERE_DATA_DIRECTORY="$PWD/build/acceptance-v0.13" ANYWHERE_PROFILE_UI=1 \
-  build/Anywhere-0.13-preview-build8.app/Contents/MacOS/Anywhere
+  build/Anywhere-0.13-preview-build9.app/Contents/MacOS/Anywhere
 ```
 
 `ANYWHERE_PROFILE_UI=1` 仅为本机显式诊断：记录操作类别、耗时与结果条数，不记录查询、路径、Context 或剪贴板正文；默认不创建测量任务或上传数据。Launcher / 文件查询测量从提交的输入开始，经过 Rust / Bridge，到匹配当前版本的 Flutter 帧结束；激活还等待原生窗口显示确认，取第一份 ready 快照，不等待迟到 Context；Clipboard History / Shelf 的内部查询分别记录为 clipboard_query / shelf_query，包含原有的 120ms 防抖，取可用列表首帧，不等待预览解码；后台刷新与输入法组合态不计入。每个独立 Flutter engine 通过自己的 Host 通道显式启用，工具窗不可见或退出时撤销在途计时。不包含输入法候选选择时间、GPU raster 或显示器实际呈现延迟。
@@ -112,6 +112,8 @@ python3 scripts/measure-desktop.py --pid 12345 \
 ```
 
 采集器仅输出数值汇总：按操作报告实际样本数、p50 / p95 / 最大值，另记主进程与其子进程 RSS、首尾 Physical footprint。样本有上限，隐藏窗口、非法记录和超额样本单独计数；子进程归属只根据 PID 关系，不能冒充完整的 XPC helper 归属。两类内存指标不要混算；隐藏 / 显示、Settings / Shelf 生命周期和长时间趋势应分别记录。原始日志留在被忽略的 `build/`，不要直接提交含真实运行信息的日志。
+
+Physical footprint 使用的系统检查可能因权限或系统状态停滞，每次检查最多等待 15 秒；工具缺失、失败或超时记为 `null`，继续保留 RSS 和界面计时。缺失值不表示零内存，也不能据此判断资源已释放。
 
 桌面工具在正常退出后读取 App 状态可能通过 Launch Services 重新启动默认实例，且不会继承终端环境。验收中退出后应使用只读进程检查确认结束；重启必须再次显式传入独立数据目录，再绑定现有实例，避免自动重启触碰个人目录。
 

@@ -103,11 +103,12 @@ impl HistoryService {
         if state.repository.is_ok() {
             state.expire((self.clock)())?;
         }
+        let available = state.feature_enabled && state.repository.is_ok();
         Ok(HistoryStatus {
-            recording: state.recording && state.policy.paused_until_ms.is_none(),
+            recording: available && state.recording && state.policy.paused_until_ms.is_none(),
             recording_enabled: state.recording,
             policy: state.policy,
-            available: state.feature_enabled && state.repository.is_ok(),
+            available,
             notice: if !state.feature_enabled {
                 Some(HistoryNotice::FeatureDisabled)
             } else if state.repository.is_err() {

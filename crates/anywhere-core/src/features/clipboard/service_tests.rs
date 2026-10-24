@@ -112,6 +112,32 @@ fn service() -> (tempfile::TempDir, Arc<HistoryService>) {
     )
 }
 
+#[test]
+fn disabled_feature_reports_capture_inactive_without_losing_recording_preference() {
+    let (_directory, history) = service();
+    let platform = Clipboard::default();
+    history.request_recording(true, &platform).unwrap();
+    assert!(history.status().unwrap().recording);
+
+    history.set_feature_enabled(false, &platform).unwrap();
+    let disabled = history.status().unwrap();
+    assert!(!disabled.available && !disabled.recording);
+    assert!(disabled.recording_enabled);
+    platform.generation.store(1, Ordering::Relaxed);
+    history.poll(&platform, 1).unwrap();
+    assert_eq!(platform.reads.load(Ordering::Relaxed), 0);
+
+    history.set_feature_enabled(true, &platform).unwrap();
+    let enabled = history.status().unwrap();
+    assert!(enabled.available && enabled.recording && enabled.recording_enabled);
+    history.poll(&platform, 2).unwrap();
+    assert!(history.search("").unwrap().is_empty());
+    platform.generation.store(2, Ordering::Relaxed);
+    history.poll(&platform, 3).unwrap();
+    assert_eq!(platform.reads.load(Ordering::Relaxed), 1);
+    assert_eq!(history.search("").unwrap().len(), 1);
+}
+
 fn timed_service() -> (tempfile::TempDir, Arc<HistoryService>, Arc<AtomicI64>) {
     let directory = tempfile::tempdir().unwrap();
     let repository = crate::persistence::clipboard::SqliteHistoryRepository::open(

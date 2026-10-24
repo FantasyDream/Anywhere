@@ -10,6 +10,7 @@ import time
 OPERATIONS = ('activation', 'query', 'file_query', 'clipboard_query',
               'shelf_query')
 MAX_SAMPLES = 10000
+FOOTPRINT_TIMEOUT_SECONDS = 15
 
 
 def timings(lines, limit=MAX_SAMPLES):
@@ -84,9 +85,16 @@ def process_sample(pid):
 
 
 def footprint(pid):
-    result = subprocess.run(['vmmap', '-summary', str(pid)],
-                            text=True,
-                            capture_output=True)
+    try:
+        result = subprocess.run(
+            ['vmmap', '-summary', str(pid)],
+            text=True,
+            capture_output=True,
+            timeout=FOOTPRINT_TIMEOUT_SECONDS)
+    except (OSError, subprocess.TimeoutExpired):
+        # A diagnostic must remain optional when task inspection is unavailable
+        # or stalls. Missing footprint data does not imply zero memory usage.
+        return None
     match = re.search(r'^Physical footprint:\s*([\d.]+)([KMG]?)', result.stdout,
                       re.MULTILINE)
     if result.returncode or match is None:

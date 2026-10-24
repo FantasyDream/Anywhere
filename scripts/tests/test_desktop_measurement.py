@@ -1,7 +1,9 @@
 import importlib.util
 import json
 from pathlib import Path
+import subprocess
 import unittest
+from unittest import mock
 
 spec = importlib.util.spec_from_file_location(
     'desktop_measurement',
@@ -63,6 +65,32 @@ class DesktopMeasurementTests(unittest.TestCase):
         self.assertEqual(result['operations']['clipboard_query']['p95_us'],
                          120000)
         self.assertEqual(result['operations']['shelf_query']['p95_us'], 125000)
+
+    def test_footprint_timeout_and_unavailable_tool_leave_measurement_missing(
+            self):
+        for error in [
+                subprocess.TimeoutExpired('vmmap', 15),
+                FileNotFoundError('vmmap'),
+        ]:
+            with self.subTest(error=type(error).__name__), mock.patch.object(
+                    module.subprocess, 'run', side_effect=error) as run:
+                self.assertIsNone(module.footprint(123))
+                self.assertEqual(run.call_args.kwargs['timeout'],
+                                 module.FOOTPRINT_TIMEOUT_SECONDS)
+
+    def test_footprint_preserves_units_and_failed_samples_are_not_zero(self):
+        for output, code, expected in [
+            ('Physical footprint: 12.5M\n', 0, 13107200),
+            ('Physical footprint: 1024K\n', 0, 1048576),
+            ('Physical footprint: 1G\n', 0, 1073741824),
+            ('task inspection denied', 1, None),
+            ('no footprint field', 0, None),
+        ]:
+            with self.subTest(output=output), mock.patch.object(
+                    module.subprocess,
+                    'run',
+                    return_value=subprocess.CompletedProcess([], code, output)):
+                self.assertEqual(module.footprint(123), expected)
 
 
 if __name__ == '__main__':
