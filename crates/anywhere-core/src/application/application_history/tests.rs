@@ -373,12 +373,20 @@ fn source_actions_follow_captured_app_and_explicit_search_without_an_extra_scope
         )
     };
     let usage = |_: &str, _: &str| Default::default();
-    for (bundle, expected) in [
-        ("com.jetbrains.intellij", Some("idea")),
-        ("com.jetbrains.intellij.ce", Some("idea")),
-        ("com.microsoft.VSCode", Some("vscode")),
-        ("test.unrelated", None),
-    ] {
+    let descriptors = SourceCatalog::bundled_with_config_directory(None)
+        .unwrap()
+        .descriptors();
+    let mut cases: Vec<_> = descriptors
+        .iter()
+        .flat_map(|source| {
+            source
+                .applications
+                .iter()
+                .map(|app| (app.as_str(), Some(source.id.as_str())))
+        })
+        .collect();
+    cases.push(("test.unrelated", None));
+    for (bundle, expected) in cases {
         let app = anywhere_platform::ApplicationInfo {
             bundle_id: bundle.into(),
             name: bundle.into(),
@@ -441,13 +449,16 @@ fn source_actions_follow_captured_app_and_explicit_search_without_an_extra_scope
         &[context("com.jetbrains.intellij")],
         &[&entry],
     );
-    assert_eq!(result.candidates.len(), 1);
+    let exact: Vec<_> = result
+        .candidates
+        .iter()
+        .filter(|row| {
+            row.presentation.command_id.as_deref() == Some("core.application_history.vscode.open")
+        })
+        .collect();
+    assert_eq!(exact.len(), 1);
     assert_eq!(
-        result.candidates[0].presentation.command_id.as_deref(),
-        Some("core.application_history.vscode.open")
-    );
-    assert_eq!(
-        result.candidates[0].presentation.owning_app.as_deref(),
+        exact[0].presentation.owning_app.as_deref(),
         Some("com.microsoft.VSCode")
     );
     assert!(registry

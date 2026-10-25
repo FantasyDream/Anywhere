@@ -42,9 +42,13 @@ pub(super) fn decode(
                     action_enabled: true,
                 })
                 .collect();
-            // Old omissions meant off. Preserve that choice during migration.
+            // Schema 1 knew only these two sources. New bundled adapters must
+            // not inherit an omission made before they existed.
             for descriptor in descriptors {
-                if descriptor.built_in && !migrated.iter().any(|s| s.id == descriptor.id) {
+                if descriptor.built_in
+                    && matches!(descriptor.id.as_str(), "idea" | "vscode")
+                    && !migrated.iter().any(|s| s.id == descriptor.id)
+                {
                     migrated.push(SourceConfiguration {
                         id: descriptor.id.clone(),
                         mode: SourceMode::Disabled,

@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "id": "windsurf",
+  "extends": "vscode",
+  "title": "Windsurf",
+  "applications": [
+    "com.exafunction.windsurf"
+  ],
+  "config_paths": [
+    "Windsurf/User/globalStorage/state.vscdb"
+  ],
+  "action": {
+    "title": "Windsurf Recent Projects and Files",
+    "localized_titles": {
+      "zh": "Windsurf 最近项目与文件"
+    },
+    "aliases": [
+      "windsurf recent",
+      "recent files",
+      "最近文件",
+      "recent projects",
+      "recent history",
+      "最近项目",
+      "历史记录",
+      "app history",
+      "应用历史"
+    ]
+  }
+}

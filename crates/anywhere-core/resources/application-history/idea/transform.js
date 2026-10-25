@@ -1,17 +1,25 @@
 /** Extract recent projects from the host's XML tree; never read files here. */
 export function transform(root) {
+  if (root.name !== 'application')
+    throw new Error('Unsupported recent-project document');
   const nodes = [];
   function walk(node) {
     nodes.push(node);
     for (const child of node.children) walk(child);
   }
   walk(root);
-  const component = nodes.find(
+  const components = nodes.filter(
     node =>
       node.name === 'component' &&
-      node.attributes.name === 'RecentProjectsManager',
+      node.children.some(
+        child =>
+          child.name === 'option' &&
+          ['additionalInfo', 'recentPaths'].includes(child.attributes.name),
+      ),
   );
-  if (!component) throw new Error('Unsupported recent-project document');
+  if (components.length !== 1)
+    throw new Error('Unknown or ambiguous recent-project schema');
+  const component = components[0];
   const additional = component.children.find(
     node => node.name === 'option' && node.attributes.name === 'additionalInfo',
   );
@@ -45,7 +53,10 @@ export function transform(root) {
     entries.push({
       key: path,
       title: title || path.split(/[\\/]/).filter(Boolean).pop() || path,
-      target: {kind: 'directory', path},
+      target: {
+        kind: /\.(sln|slnx|slnf)$/i.test(path) ? 'file' : 'directory',
+        path,
+      },
       last_used_at: time ? Number(time) : null,
     });
   }

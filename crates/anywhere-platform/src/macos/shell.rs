@@ -25,25 +25,41 @@ pub(super) fn open_file(path: &Path) -> Result<()> {
 }
 
 pub(super) fn open_file_in_application(application: &Path, target: &Path) -> Result<()> {
+    let application = application_path(application)?;
+    anyhow::ensure!(
+        target.is_absolute() && target.exists(),
+        "history target unavailable"
+    );
+    let target = target.canonicalize()?;
+    open_in_application(&application, target.as_os_str())
+}
+
+pub(super) fn open_url_in_application(application: &Path, value: &str) -> Result<()> {
+    let application = application_path(application)?;
+    let url = url::Url::parse(value).context("invalid application URL")?;
+    anyhow::ensure!(
+        value.len() <= 16 * 1024
+            && !value.contains('\0')
+            && !matches!(url.scheme(), "file" | "javascript" | "data"),
+        "unsupported application URL"
+    );
+    open_in_application(&application, OsStr::new(url.as_str()))
+}
+
+fn application_path(application: &Path) -> Result<std::path::PathBuf> {
     anyhow::ensure!(
         application.is_absolute()
             && application.is_dir()
             && application.extension().is_some_and(|ext| ext == "app"),
         "source application unavailable"
     );
-    anyhow::ensure!(
-        target.is_absolute() && target.exists(),
-        "history target unavailable"
-    );
-    let application = application.canonicalize()?;
-    let target = target.canonicalize()?;
+    Ok(application.canonicalize()?)
+}
+
+fn open_in_application(application: &Path, target: &OsStr) -> Result<()> {
     run(
         "/usr/bin/open",
-        &[
-            OsStr::new("-a"),
-            application.as_os_str(),
-            target.as_os_str(),
-        ],
+        &[OsStr::new("-a"), application.as_os_str(), target],
         None,
     )
     .map(|_| ())
@@ -148,6 +164,17 @@ mod tests {
         assert!(platform
             .open_file(Path::new("/nonexistent-launcher-test/file"))
             .is_err());
+        let temporary = tempfile::tempdir().unwrap();
+        let app = temporary.path().join("Test.app");
+        std::fs::create_dir(&app).unwrap();
+        for url in [
+            "javascript:alert(1)",
+            "data:text/plain,test",
+            "file:///tmp/test",
+            "relative",
+        ] {
+            assert!(platform.open_url_in_application(&app, url).is_err());
+        }
         assert!(platform
             .open_directory(Path::new("/nonexistent-launcher-test"))
             .is_err());

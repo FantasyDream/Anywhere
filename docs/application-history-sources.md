@@ -1,6 +1,6 @@
 # 应用历史来源配置与脚本
 
-状态：V0.14 H1 原型。支持内置与可信的用户本机适配配置，使用同一读取、转换、Action 和页面契约；不是第三方插件商店或通用命令执行协议。尚未接入浏览器 / Obsidian 或多 Profile 选择。
+状态：V0.14 H1 原型。支持内置与可信的用户本机适配配置，使用同一读取、转换、Action 和页面契约；不是第三方插件商店或通用命令执行协议。已内置 18 个来源；浏览器、Obsidian 最近笔记和多 Profile 选择仍待接入。
 
 ## 添加一个来源
 
@@ -66,7 +66,7 @@ export function transform(input) {
 }
 ```
 
-`extends` 当前可引用内置来源 `idea` 或 `vscode`，继承读取器、文件名提示和转换脚本；新应用默认手动配置文件位置，也可声明自己的 `config_paths`。模板不继承应用身份、Action 标题或路径规则，避免把新应用接到错误的配置上。其他格式提供自己的 `reader` 和 `transform.js`；现有读取器仅支持 JSON / XML / 有界 SQLite，不包含注册表、二进制 plist 或任意文件夹遍历。
+`extends` 可引用任一内置来源，例如 `idea` 或 `vscode`，继承读取器、文件名提示和转换脚本；新应用默认手动配置文件位置，也可声明自己的 `config_paths`。模板不继承应用身份、Action 标题或路径规则，避免把新应用接到错误的配置上。内置适配也使用相同继承器：JetBrains 系列共享 XML 转换，Code 同类编辑器共享 SQLite 转换，没有逐应用复制脚本。其他格式提供自己的 `reader` 和 `transform.js`；现有读取器仅支持 JSON / XML / 有界 SQLite，不包含注册表、二进制 plist 或任意文件夹遍历。
 
 同 ID 用户配置优先于内置定义，且只产生一个 Action。省略读取器或脚本时可以沿用原内置实现；省略 `config_paths` 也沿用原路径规则。覆盖同 ID 时必须保持应用身份列表一致；改为另一应用应使用新 ID，避免复用错误的快捷键 / 使用记录。用户包重复 ID、非法格式、越界文件或超额时，整个历史功能降级并在设置中提示，其他内置功能继续使用，不静默忽略坏覆盖。修正后重启。
 
@@ -74,7 +74,7 @@ export function transform(input) {
 
 ## 配置读取位置
 
-IDEA / VS Code 默认自动检测标准配置目录中的文件，无需先手动填写路径。**设置 → 应用历史** 会显示来源模式与实际使用位置：
+内置来源默认自动检测标准配置目录中的文件，无需先手动填写路径。来源较多时可按应用名或来源 ID 筛选设置列表。**设置 → 应用历史** 会显示来源模式与实际使用位置：
 
 - **自动检测**：点击“重新检测”刷新；没找到文件时可直接填写自定义路径。
 - **自定义路径**：修改路径后点击“保存自定义路径”。此路径优先，失效时不会静默换用另一配置。支持 `~/`，保存后显示规范绝对路径。
@@ -90,10 +90,31 @@ IDEA / VS Code 默认自动检测标准配置目录中的文件，无需先手�
 |---|---|
 | IDEA | `JetBrains/IntelliJIdea*/options/recentProjects.xml`、`JetBrains/IdeaIC*/options/recentProjects.xml` |
 | VS Code | `Code/User/globalStorage/state.vscdb` |
+| VS Code Insiders | `Code - Insiders/User/globalStorage/state.vscdb` |
+| Cursor | `Cursor/User/globalStorage/state.vscdb` |
+| Windsurf | `Windsurf/User/globalStorage/state.vscdb` |
+| VSCodium | `VSCodium/User/globalStorage/state.vscdb` |
+| PyCharm | `JetBrains/PyCharm*/options/recentProjects.xml`、`JetBrains/PyCharmCE*/options/recentProjects.xml` |
+| WebStorm / GoLand / CLion / PhpStorm / RubyMine / DataGrip / RustRover | `JetBrains/<产品名>*/options/recentProjects.xml` |
+| Rider | `JetBrains/Rider*/options/recentSolutions.xml`，兼容旧文件名 `recentSolution.xml` |
+| Android Studio | `Google/AndroidStudio*/options/recentProjects.xml` |
+| Sublime Text | `Sublime Text/Local/Session.sublime_session`，兼容 `Sublime Text 3/Local/Session.sublime_session` |
+| Obsidian 最近仓库 | `obsidian/obsidian.json` |
+
 
 规则最多 8 条、每条最多 8 层；通配目录枚举共享 512 个条目预算，禁止绝对路径、`..`、递归 `**` 以及逃出配置根目录的符号链接。多个候选按文件修改时间降序、路径升序选择一份，不合并历史；这只是配置选择，不代表精确识别当前 IDE 安装版本。需要固定版本时使用自定义路径。
 
 默认目录依据 [JetBrains 文档](https://www.jetbrains.com/help/idea/directories-used-by-the-ide-to-store-settings-caches-plugins-and-logs.html)和 [VS Code 用户数据路径实现](https://github.com/microsoft/vscode/blob/main/src/vs/platform/environment/node/userDataPath.ts)。便携版、`--user-data-dir`、`idea.config.path`、非标准配置与超出枚举预算的目录仍使用自定义路径。每来源暂时仅支持一个文件，不宣称已支持多安装 / Profile 选择；Windows / Linux 默认根目录保留实现，原生运行未验收。可使用自建合成文件验证。
+
+### 适配范围与证据
+
+本轮参照上游的应用家族划分独立编写配置与转换，没有复制上游 GPL 代码。JetBrains XML 允许不同产品的 component 名称，但只接受唯一的已知近期记录结构；Rider 的 solution 作为文件打开。Code 同类编辑器使用同一受限查询，远端条目仍仅复制。来源中没有时间时保留原顺序，不借用文件访问时间制造“最近使用”。
+
+Obsidian 本轮只列出 `obsidian.json` 登记的仓库，不扫描 Vault 文件树；同名仓库以稳定 ID 区分。[官方 URI 文档](https://obsidian.md/help/uri)支持按仓库 ID 打开。最近笔记、多 Vault 文件聚合仍在后续阶段。Sublime 会话文件可能包含编辑缓冲区数据，读取受总量上限约束，转换只提取 `folder_history` / `file_history` / `recent_workspaces`，不展示或保存缓冲区正文。
+
+全部来源使用合成文件验证解析、检测、应用身份及分发，不等同于已在 18 个真实应用中完成实机打开。自动路径是标准位置，非标准安装、应用版本或格式变化需要自定义路径；未知结构报来源不可用。上游 Typora 适配没有 macOS 支持；浏览器需要批量读取、Profile 路由和更大的来源边界，未借此批次冒充完成。
+
+配置位置依据 [JetBrains 目录规则](https://www.jetbrains.com/help/idea/directories-used-by-the-ide-to-store-settings-caches-plugins-and-logs.html)、[Android Studio 官方排错资料](https://developer.android.com/studio/troubleshoot)、[Obsidian 全局数据说明](https://obsidian.md/help/data-storage)。Rider 当前使用 `recentSolutions.xml`，见 [JetBrains 支持记录](https://rider-support.jetbrains.com/hc/en-us/community/posts/36380823627922-Rider-on-Windows-seems-to-rely-on-old-versions-of-user-data-in-Appdata-Local)。本机仅核对已安装应用的 bundle 元数据，没有为路径研究读取私人历史正文。
 
 ## 输入格式
 
@@ -129,6 +150,7 @@ SQLite 配置示例：
 
 - 返回条目数组。`key` 必须在本来源内唯一且稳定；不用标题或数组位置代替身份。
 - `target.kind` 支持 `directory`、`file`、`workspace`，均使用绝对路径。`remote` 使用 `uri`，原型只保留 `vscode-remote` 元数据并支持复制，不打开或转成本地目录。
+- `target.kind: "obsidian_vault"` 另带绝对 `path` 和 16 位十六进制 `vault_id`。只允许匹配到 Obsidian 的来源打开；宿主重新验证 ID 与路径，再构造固定的只读 `obsidian://open?vault=…` 请求并交给指定应用。脚本不能提供任意 URL 或新增笔记等写入指令。复制得到仓库路径。
 - `last_used_at` 可省略 / null，只在确有最近使用时间时提供 Unix 毫秒；无时间时保留源数组顺序。
 - `history.localPath(value)` 是纯路径辅助函数，处理 `file:` URI 和 `~/`，不读取目标文件；无法转换时返回空值。实际存在性和类型在打开前重新检查。
 - 不接受额外身份 / 权限 / 脚本动作字段。重复 key、相对路径、未知目标类型、非法时间等使该来源失败，不猜测修复成可执行对象。
@@ -141,7 +163,7 @@ SQLite 配置示例：
 
 页面查询串行合并最新请求，组合输入期间不搜索；会话和查询代数复验阻止旧结果发布，旧页面迟到取消不能清空新页面。隐藏取消读取，15 秒规则仍由 Launcher 管理；重新显示先读回配置和有效数据。执行 / 复制前重新读取对应来源，确认 key 与目标未变。
 
-来源文件、格式或脚本失败显示来源不可用；其他来源仍可搜索。未知 schema 不当作真正空结果。关闭 Action 立即清除选择资格；配置 schema 2 只持久保存来源 ID、模式、Action 开关与自定义文件位置，自动路径按需重新定位，历史正文与查询结果不写入模块存储。schema 1 的已保存路径迁移为自定义，省略的来源保持关闭；损坏或未来 schema 不覆盖。移除用户适配后，其设置保留为未激活数据，不阻断其他来源；恢复相同稳定 ID 可继续使用原设置。
+来源文件、格式或脚本失败显示来源不可用；其他来源仍可搜索。未知 schema 不当作真正空结果。关闭 Action 立即清除选择资格；配置 schema 2 只持久保存来源 ID、模式、Action 开关与自定义文件位置，自动路径按需重新定位，历史正文与查询结果不写入模块存储。schema 1 的已保存路径迁移为自定义，省略的旧来源 IDEA / VS Code 保持关闭；之后新增的内置与用户来源默认自动检测，不继承它们出现前的省略状态；损坏或未来 schema 不覆盖。移除用户适配后，其设置保留为未激活数据，不阻断其他来源；恢复相同稳定 ID 可继续使用原设置。
 
 ## 参考项目
 

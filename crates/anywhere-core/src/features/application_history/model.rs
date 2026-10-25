@@ -11,20 +11,25 @@ pub enum Target {
     Directory { path: PathBuf },
     File { path: PathBuf },
     Workspace { path: PathBuf },
+    ObsidianVault { path: PathBuf, vault_id: String },
     Remote { uri: String },
 }
 impl Target {
     pub fn text(&self) -> String {
         match self {
-            Self::Directory { path } | Self::File { path } | Self::Workspace { path } => {
-                path.to_string_lossy().into_owned()
-            }
+            Self::Directory { path }
+            | Self::File { path }
+            | Self::Workspace { path }
+            | Self::ObsidianVault { path, .. } => path.to_string_lossy().into_owned(),
             Self::Remote { uri } => uri.clone(),
         }
     }
     pub fn local_path(&self) -> Option<&Path> {
         match self {
-            Self::Directory { path } | Self::File { path } | Self::Workspace { path } => Some(path),
+            Self::Directory { path }
+            | Self::File { path }
+            | Self::Workspace { path }
+            | Self::ObsidianVault { path, .. } => Some(path),
             Self::Remote { .. } => None,
         }
     }
@@ -34,6 +39,11 @@ impl Target {
             && text.len() <= 16 * 1024
             && !text.contains('\0')
             && match self {
+                Self::ObsidianVault { path, vault_id } => {
+                    path.is_absolute()
+                        && vault_id.len() == 16
+                        && vault_id.bytes().all(|b| b.is_ascii_hexdigit())
+                }
                 Self::Remote { uri } => {
                     url::Url::parse(uri).is_ok_and(|u| matches!(u.scheme(), "vscode-remote"))
                 }

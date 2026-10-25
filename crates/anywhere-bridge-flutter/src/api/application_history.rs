@@ -65,6 +65,7 @@ pub(super) fn search(session_id: u32, query: String, source: String) -> Result<A
             .map(|item| {
                 let kind = match item.entry.target {
                     Target::Directory { .. } => "directory",
+                    Target::ObsidianVault { .. } => "directory",
                     Target::File { .. } => "file",
                     Target::Workspace { .. } => "workspace",
                     Target::Remote { .. } => "remote",

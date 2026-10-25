@@ -27,7 +27,7 @@ V0.9 静态模块、V0.10 剪贴板与开源复用、V0.11 Web 本地预览已�
 | **V0.11 第三方 Web 插件基础** | 本地包、flutter_inappwebview、Context 输入、SDK、能力代理、安装批准 / 更新 / 重载 | 用户已确认统一 WebView 路线；P0–P6 已接入本地预览，继续核对原生键盘、安全矩阵与发行边界 |
 | **V0.12 国际化 / 拼音** | 跟随系统 / 中英切换、跨窗口语言通知、Web 资源、全拼 / 首字母名称匹配 | I1–I4 已接入；Build 16 工程与本轮界面验收通过，用户确认真实中文输入、Tab 与 ⌘K 正常；完整发行矩阵保留 |
 | **V0.13 日常可靠性** | 剪贴板定时暂停、保留期限、存储说明与高频可靠性 | Build 11 工程与本轮常规 macOS 验收收尾；SDK 关闭警告、GPU 保留、长期和正式发布矩阵分别记录 |
-| **V0.14 应用历史与收藏** | IDEA / VS Code 最近对象、Chrome / Edge 书签与历史、Obsidian 最近笔记及对象操作 | H1 原型：通用读取器 + 配置 / JS，IDEA / VS Code 自动检测或自定义单文件来源；浏览器、Obsidian 与多实例仍待实现 |
+| **V0.14 应用历史与收藏** | IDEA / VS Code 最近对象、Chrome / Edge 书签与历史、Obsidian 最近笔记及对象操作 | H1 原型：18 个配置化来源，JetBrains / Code 同类编辑器 / Sublime / Obsidian 仓库；浏览器、Obsidian 最近笔记与多实例仍待实现 |
 | Web 平台验证：JSON 工具 | JSON 编辑、格式化、压缩、校验、错误定位与复制 | P6 已实现 JSONPath / JavaScript 与复制动作；普通 Web 包，随 V0.11 验证，不恢复 Flutter 原生 JSON 工作区 |
 | 后续第一方能力与核心收尾 | 应用历史与收藏（含 Recent Projects）、项目工具、性能、可用性与平台适配 | 按真实功能验证内置模块与原生页面接口；跨应用历史 H1 原型验证中 |
 | V1.0 | Context-aware Launcher、搜索、多来源 Context、开发动作、内置工具、可返回进程会话与最小 Web 插件闭环 | 满足下方发布条件；不要求 PTY 或 Marketplace |
@@ -86,7 +86,7 @@ Windows 可因明确用户需求提前，但需独立最小 Host 和实机矩阵
 
 ## 范围取舍
 
-- 现有文件搜索复用 Spotlight 快速路径，加完整遍历，不维护长期文件索引；Clipboard History 已完成工程接入，当前行为见 [使用指南](usage.md)，历史验收见 [V0.10 记录](archive/mvp-v0.10.md)。2026-10-23 用户将 Recent Projects 扩展为[应用历史与收藏](application-history.md)，浏览器历史 / 书签纳入 V0.14 计划，当前仍未交付；IDEA / VS Code 已有 H1 小来源原型；不改变剪贴板的独立存储与采集规则。
+- 现有文件搜索复用 Spotlight 快速路径，加完整遍历，不维护长期文件索引；Clipboard History 已完成工程接入，当前行为见 [使用指南](usage.md)，历史验收见 [V0.10 记录](archive/mvp-v0.10.md)。2026-10-23 用户将 Recent Projects 扩展为[应用历史与收藏](application-history.md)，浏览器历史 / 书签纳入 V0.14 计划，当前仍未交付；18 个来源已有 H1 配置化适配，包含 Obsidian 最近仓库；不改变剪贴板的独立存储与采集规则。
 - 第一方正式称为内置功能模块，随 App 编译与发布，取消加载 / 重载 / 卸载模型。旧 TOML 外部功能独立兼容；第三方 Web 包已接入，不将内置模块改回插件运行时。
 - 文件预览先保持元数据 / 有界文本。图片、PDF、系统 Quick Look 等逐项验证，不把图标分类当作富预览。
 - 最小 Web 插件闭环提前：本地安装 / 批准、统一 Action、受限 SDK、更新撤销与真实工具验证。后台插件、任意进程、第三方搜索源、Code Agent 管理、ACP、Screenshot / OCR / Translate、Marketplace 不列入 1.0 门槛。

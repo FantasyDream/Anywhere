@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "id": "rider",
+  "extends": "idea",
+  "title": "Rider",
+  "applications": [
+    "com.jetbrains.rider",
+    "com.jetbrains.rider-EAP"
+  ],
+  "config_paths": [
+    "JetBrains/Rider*/options/recentSolutions.xml",
+    "JetBrains/Rider*/options/recentSolution.xml"
+  ],
+  "action": {
+    "title": "Rider Recent Projects",
+    "localized_titles": {
+      "zh": "Rider 最近项目"
+    },
+    "aliases": [
+      "rider recent",
+      "recent projects",
+      "recent history",
+      "最近项目",
+      "历史记录",
+      "app history",
+      "应用历史"
+    ]
+  },
+  "file_hint": "recentSolutions.xml"
+}

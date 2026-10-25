@@ -416,7 +416,7 @@ impl HistoryService {
         };
         ensure!(
             match item.entry.target {
-                Target::Directory { .. } => path.is_dir(),
+                Target::Directory { .. } | Target::ObsidianVault { .. } => path.is_dir(),
                 _ => path.is_file(),
             },
             "history target unavailable"
@@ -441,6 +441,15 @@ impl HistoryService {
             .path
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("application path unavailable"))?;
+        if let Target::ObsidianVault { vault_id, .. } = &item.entry.target {
+            ensure!(
+                matches[0].bundle_id == "md.obsidian",
+                "vault target requires Obsidian"
+            );
+            let mut uri = url::Url::parse("obsidian://open")?;
+            uri.query_pairs_mut().append_pair("vault", vault_id);
+            return platform.open_url_in_application(std::path::Path::new(app), uri.as_str());
+        }
         platform
             .open_file_in_application(std::path::Path::new(app), path)
             .map_err(|_| anyhow::anyhow!("history open could not be submitted"))

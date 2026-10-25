@@ -8,7 +8,7 @@
 
 当前为 **V0.13 开发预览，工程与本轮常规 macOS 验收已收尾**：基于中英国际化和拼音检索，增加剪贴板定时暂停、保留期限与可靠性检查。已知 SDK 警告、WebKit GPU 保留及未验收矩阵见 [V0.13 MVP](docs/mvp-v0.13.md)。版本和构建号以 [pubspec.yaml](apps/flutter/pubspec.yaml) 为准；开发构建不等于正式发行。
 
-V0.14 正在 `codex/dev-0.14` 验证[应用历史原型](docs/mvp-v0.14.md)：通用文件读取器 + 官方配置 / JS 转换，共享历史页已接入 IDEA / VS Code 合成来源。当前自动检测 IDEA / VS Code 的标准历史文件，也支持自定义路径、Action 开关与可信用户适配配置；浏览器、Obsidian 与多 Profile 仍在后续计划。
+V0.14 正在 `codex/dev-0.14` 验证[应用历史原型](docs/mvp-v0.14.md)：通用文件读取器 + 官方配置 / JS 转换，共享历史页已接入 18 个来源，覆盖 JetBrains、VS Code 同类编辑器、Sublime Text 和 Obsidian 最近仓库。支持默认路径检测、自定义路径、逐来源 Action 开关与可信用户适配；浏览器、Obsidian 最近笔记与多 Profile 仍在后续计划。
 
 | 平台 | 状态 |
 |---|---|

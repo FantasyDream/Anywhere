@@ -304,6 +304,10 @@ pub trait Platform: Send + Sync {
     fn open_file_in_application(&self, _application: &Path, _target: &Path) -> Result<()> {
         bail!("opening an object in a specific application is unsupported")
     }
+    /// Deliver a feature-validated deep link to an explicit application.
+    fn open_url_in_application(&self, _application: &Path, _url: &str) -> Result<()> {
+        bail!("opening a URL in a specific application is unsupported")
+    }
     fn copy_text(&self, text: &str) -> Result<()>;
 
     // ---- V0.2 capabilities; unsupported platforms keep their V0.1 behaviour ----

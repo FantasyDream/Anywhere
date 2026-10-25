@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "id": "webstorm",
+  "extends": "idea",
+  "title": "WebStorm",
+  "applications": [
+    "com.jetbrains.WebStorm",
+    "com.jetbrains.WebStorm-EAP"
+  ],
+  "config_paths": [
+    "JetBrains/WebStorm*/options/recentProjects.xml"
+  ],
+  "action": {
+    "title": "WebStorm Recent Projects",
+    "localized_titles": {
+      "zh": "WebStorm 最近项目"
+    },
+    "aliases": [
+      "webstorm recent",
+      "recent projects",
+      "recent history",
+      "最近项目",
+      "历史记录",
+      "app history",
+      "应用历史"
+    ]
+  }
+}

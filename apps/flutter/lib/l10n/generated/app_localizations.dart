@@ -3089,6 +3089,12 @@ abstract class AppLocalizations {
   /// **'Search recent projects and files…'**
   String get appHistorySearch;
 
+  /// No description provided for @appHistoryFilterSources.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter apps…'**
+  String get appHistoryFilterSources;
+
   /// No description provided for @appHistorySources.
   ///
   /// In en, this message translates to:
@@ -3098,7 +3104,7 @@ abstract class AppLocalizations {
   /// No description provided for @appHistorySourceDescription.
   ///
   /// In en, this message translates to:
-  /// **'Finds IDEA and VS Code history files automatically. You can use a custom path or turn a source off. History is read only when you use its action.'**
+  /// **'Finds supported apps’ history files automatically. Use a custom path or turn individual actions off. History is read only when you use its action.'**
   String get appHistorySourceDescription;
 
   /// No description provided for @appHistorySourcePath.

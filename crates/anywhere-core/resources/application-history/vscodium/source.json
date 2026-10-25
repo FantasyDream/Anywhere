@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "id": "vscodium",
+  "extends": "vscode",
+  "title": "VSCodium",
+  "applications": [
+    "com.vscodium"
+  ],
+  "config_paths": [
+    "VSCodium/User/globalStorage/state.vscdb"
+  ],
+  "action": {
+    "title": "VSCodium Recent Projects and Files",
+    "localized_titles": {
+      "zh": "VSCodium 最近项目与文件"
+    },
+    "aliases": [
+      "vscodium recent",
+      "recent files",
+      "最近文件",
+      "recent projects",
+      "recent history",
+      "最近项目",
+      "历史记录",
+      "app history",
+      "应用历史"
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "id": "clion",
+  "extends": "idea",
+  "title": "CLion",
+  "applications": [
+    "com.jetbrains.CLion",
+    "com.jetbrains.CLion-EAP"
+  ],
+  "config_paths": [
+    "JetBrains/CLion*/options/recentProjects.xml"
+  ],
+  "action": {
+    "title": "CLion Recent Projects",
+    "localized_titles": {
+      "zh": "CLion 最近项目"
+    },
+    "aliases": [
+      "clion recent",
+      "recent projects",
+      "recent history",
+      "最近项目",
+      "历史记录",
+      "app history",
+      "应用历史"
+    ]
+  }
+}

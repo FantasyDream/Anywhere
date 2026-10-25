@@ -108,6 +108,9 @@ async fn history_entries_match_current_app_and_bind_independently_without_duplic
     for (bundle, source, other) in [
         ("com.jetbrains.intellij", "idea", "vscode"),
         ("com.microsoft.VSCode", "vscode", "idea"),
+        ("com.todesktop.230313mzl4w4u92", "cursor", "vscode"),
+        ("com.jetbrains.WebStorm", "webstorm", "idea"),
+        ("md.obsidian", "obsidian", "idea"),
     ] {
         let tmp = tempfile::tempdir().unwrap();
         let project = tmp.path().join("project");

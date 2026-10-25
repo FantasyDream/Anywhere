@@ -1632,10 +1632,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appHistorySearch => 'Search recent projects and files…';
 
   @override
+  String get appHistoryFilterSources => 'Filter apps…';
+
+  @override
   String get appHistorySources => 'History sources';
 
   @override
-  String get appHistorySourceDescription => 'Finds IDEA and VS Code history files automatically. You can use a custom path or turn a source off. History is read only when you use its action.';
+  String get appHistorySourceDescription => 'Finds supported apps’ history files automatically. Use a custom path or turn individual actions off. History is read only when you use its action.';
 
   @override
   String get appHistorySourcePath => 'History metadata file path';

@@ -293,3 +293,15 @@ Build 5 的 App / arm64 ZIP / SHA-256 已生成，版本 `0.14.0+5`，持久签�
 `scripts/check.sh` 完整通过：Core 单元 287 通过 / 1 项既有忽略、MVP 集成 192 通过 / 4 项既有忽略、Flutter 411 通过；原生、Web、Clippy、架构、生成物及文档检查通过。Build 6 App / arm64 ZIP / SHA-256 已生成，版本 `0.14.0+6`，持久签名与严格归档校验通过，Impeller 保持开启；未发布 GitHub Release。
 
 原生界面使用前次合成数据复验：来源关闭状态和路径跨重启保留，重新启用后中文 Action 恢复并正确读取原合成记录；VS Code 和 IDEA 均检测到标准配置文件，随后恢复合成路径。检测真实文件仅检查元数据，没有读取私人历史正文。自定义适配帮助、目录文字、设置页切换及整个设置窗口重开均正常，运行日志为空；通过 App 菜单正常退出，验收进程退出码为 0，原用户 Build 4 保留。物理输入法、全局快捷键、来源应用实际打开与内存释放没有在本次配置验收中重测，不扩大既有 Build 4 打开验收结论。[Build 6 结构化记录](benchmarks/application-history-configuration-v0.14-build6-2026-10-25.json)。
+
+## Build 7：应用家族适配
+
+按用户要求先正常退出原 Build 4，启动默认数据目录的 Build 6，并确认当前仅运行该新版本；设置中的旧 IDEA / VS Code 关闭状态没有重置。随后参考 `utools-recent-projects` 的应用家族划分，独立增加 16 个来源配置，总计 18 个：JetBrains 系列及 Android Studio、VS Code / Insiders / Cursor / Windsurf / VSCodium、Sublime Text、Obsidian 最近仓库。每来源都有独立 Action，复用 Current App 匹配和来源固定页面，不改变 Scope。浏览器与 Obsidian 最近笔记不包含在本增量中。
+
+内置来源现在也可用 `extends` 继承共享解析器，与用户配置使用同一个定义校验器。构建支持省略已继承的脚本，启动按依赖顺序解析模板并拒绝循环 / 缺失依赖；修改配置仍需重启。JetBrains 按已知近期结构定位唯一 component，兼容产品名称差异及 Rider solution 文件；Code 同类编辑器共用同一个受限 SQLite 读取器和脚本。旧 schema 1 的省略关闭状态只作用于当时存在的 IDEA / VS Code，之后新增的来源不被误关闭。
+
+Obsidian 只读全局仓库登记及时间，不扫描全部笔记或用访问时间冒充历史。仓库 ID 与路径形成类型化目标，执行前重读验证；只允许投递给唯一的 Obsidian 实例，宿主构造固定 `open` URI，Platform 负责指定应用的 URL 分发。脚本不能提供任意打开命令。Sublime 仅将会话历史路径投影为候选，不显示或保存编辑缓冲内容。设置增加应用名 / 来源 ID 筛选，沿用统一组件和中英文文案。
+
+自动化验收：`scripts/check.sh` 完整通过，Core 单元 293 通过 / 1 项既有忽略、MVP 集成 192 通过 / 4 项既有忽略、Flutter 411 通过；应用历史定向 Core 31 项及 MVP 3 项通过。覆盖 18 个来源的路径隔离与应用身份唯一性、家族解析 / 目标类型、全部应用身份的 Current App 匹配、Cursor / WebStorm / Obsidian 实际 Launcher 路由、Obsidian 指定应用分发 / 目标失效 / 多实例拒绝、Sublime 元数据投影及中英文来源筛选。既有忽略项不计通过。
+
+Build 7 App / arm64 ZIP / SHA-256 已生成，版本 `0.14.0+7`，持久签名与严格归档校验通过，Impeller 保持开启；没有上传 GitHub Release。独立合成来源验收目录已准备，自动真实来源全部关闭；但开始本次原生复验时桌面再次锁定，尚未启动 Build 7 的 UI 验收，也未把默认运行版本切换到 Build 7。已请求解锁，不能将构建和测试通过表述为 18 个真实应用均已验收。[结构化记录](benchmarks/application-history-adapters-v0.14-build7-2026-10-25.json)。

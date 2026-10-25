@@ -1596,10 +1596,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get appHistorySearch => '搜索最近项目和文件…';
 
   @override
+  String get appHistoryFilterSources => '筛选应用…';
+
+  @override
   String get appHistorySources => '历史来源';
 
   @override
-  String get appHistorySourceDescription => '自动查找 IDEA 和 VS Code 的历史文件，也可自定义路径或关闭来源。使用对应 Action 时才读取历史内容。';
+  String get appHistorySourceDescription => '自动查找已适配应用的历史文件，也可自定义路径或逐个关闭 Action。使用对应 Action 时才读取历史内容。';
 
   @override
   String get appHistorySourcePath => '历史元数据文件路径';

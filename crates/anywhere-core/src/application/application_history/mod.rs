@@ -1,6 +1,9 @@
 //! One source format for bundled and trusted user-owned history adapters.
 #[cfg(test)]
+mod adapters_tests;
+#[cfg(test)]
 mod catalog_tests;
+mod definition;
 #[cfg(test)]
 mod discovery_tests;
 #[cfg(test)]
@@ -70,21 +73,46 @@ impl SourceCatalog {
         Ok(Arc::new(catalog))
     }
     fn load_bundled(config_directory: Option<std::path::PathBuf>) -> Result<Self> {
-        let mut packages = Vec::new();
-        let mut ids = BTreeSet::new();
-        for (manifest, script) in BUNDLED_HISTORY_SOURCES {
-            let manifest: Manifest = serde_json::from_str(manifest)?;
+        let mut packages: Vec<Package> = Vec::new();
+        let mut pending: Vec<_> = BUNDLED_HISTORY_SOURCES
+            .iter()
+            .map(|(manifest, script)| {
+                Ok((
+                    serde_json::from_str::<serde_json::Value>(manifest)?,
+                    *script,
+                ))
+            })
+            .collect::<Result<_>>()?;
+        while !pending.is_empty() {
+            let previous = pending.len();
+            let mut deferred = Vec::new();
+            for (value, script) in pending {
+                if value
+                    .get("extends")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|base| !packages.iter().any(|p| p.manifest.id == base))
+                {
+                    deferred.push((value, script));
+                    continue;
+                }
+                let mut package = definition::resolve(value, script.map(str::to_owned), &packages)?;
+                ensure!(
+                    !packages
+                        .iter()
+                        .any(|p| p.manifest.id == package.manifest.id),
+                    "duplicate bundled source"
+                );
+                package.built_in = true;
+                packages.push(package);
+            }
             ensure!(
-                manifest.schema == 1 && ids.insert(manifest.id.clone()),
-                "invalid source manifest"
+                deferred.len() < previous,
+                "unknown or cyclic bundled source template"
             );
-            validate_manifest(&manifest)?;
-            packages.push(Package {
-                manifest,
-                script: (*script).into(),
-                built_in: true,
-            });
+            pending = deferred;
         }
+        ensure!(packages.len() <= 32, "too many bundled sources");
+        packages.sort_by(|a, b| a.manifest.id.cmp(&b.manifest.id));
         Ok(Self {
             packages,
             config_directory,
@@ -96,69 +124,16 @@ impl SourceCatalog {
         let mut users = Vec::new();
         let mut ids = BTreeSet::new();
         for file in files {
-            let mut value: serde_json::Value = serde_json::from_str(&file.manifest)?;
-            let object = value
-                .as_object_mut()
-                .ok_or_else(|| anyhow::anyhow!("source must be an object"))?;
-            let id = object
-                .get("id")
-                .and_then(|v| v.as_str())
-                .ok_or_else(|| anyhow::anyhow!("source id missing"))?
-                .to_owned();
-            ensure!(ids.insert(id.clone()), "duplicate user source");
-            let extends = object
-                .remove("extends")
-                .map(serde_json::from_value::<String>)
-                .transpose()?;
-            let base = self
-                .packages
-                .iter()
-                .find(|p| p.manifest.id == extends.as_deref().unwrap_or(&id));
+            let package = definition::resolve(
+                serde_json::from_str(&file.manifest)?,
+                file.script,
+                &self.packages,
+            )?;
             ensure!(
-                extends.is_none() || base.is_some(),
-                "unknown built-in source template"
+                ids.insert(package.manifest.id.clone()),
+                "duplicate user source"
             );
-            if let Some(base) = base {
-                if !object.contains_key("reader") {
-                    object.insert(
-                        "reader".into(),
-                        serde_json::to_value(&base.manifest.reader)?,
-                    );
-                }
-                if !object.contains_key("file_hint") {
-                    object.insert("file_hint".into(), base.manifest.file_hint.clone().into());
-                }
-                if id == base.manifest.id && !object.contains_key("config_paths") {
-                    object.insert(
-                        "config_paths".into(),
-                        serde_json::to_value(&base.manifest.config_paths)?,
-                    );
-                }
-            }
-            let manifest: Manifest = serde_json::from_value(value)?;
-            validate_manifest(&manifest)?;
-            if let Some(original) = self.packages.iter().find(|p| p.manifest.id == manifest.id) {
-                ensure!(
-                    manifest.applications.iter().collect::<BTreeSet<_>>()
-                        == original
-                            .manifest
-                            .applications
-                            .iter()
-                            .collect::<BTreeSet<_>>(),
-                    "use a new source id when changing application identity"
-                );
-            }
-            let script = file
-                .script
-                .or_else(|| base.map(|p| p.script.clone()))
-                .ok_or_else(|| anyhow::anyhow!("transform.js required"))?;
-            ensure!(!script.trim().is_empty(), "empty source transform");
-            let built_in = self.packages.iter().any(|p| p.manifest.id == manifest.id);
-            users.push(Package {
-                manifest,
-                script,
-                built_in,
-            });
+            users.push(package);
         }
         ensure!(
             self.packages

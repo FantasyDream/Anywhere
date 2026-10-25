@@ -16,6 +16,7 @@ struct OpenRecorder {
     apps: Vec<BundleApplication>,
     opened: Mutex<Vec<(PathBuf, PathBuf)>>,
     copied: Mutex<Vec<String>>,
+    urls: Mutex<Vec<(PathBuf, String)>>,
 }
 impl OpenRecorder {
     fn new(ids: &[(&str, &str)]) -> Self {
@@ -33,6 +34,7 @@ impl OpenRecorder {
                 .collect(),
             opened: Default::default(),
             copied: Default::default(),
+            urls: Default::default(),
         }
     }
 }
@@ -75,6 +77,13 @@ impl Platform for OpenRecorder {
         self.copied.lock().unwrap().push(text.into());
         Ok(())
     }
+    fn open_url_in_application(&self, application: &Path, url: &str) -> Result<()> {
+        self.urls
+            .lock()
+            .unwrap()
+            .push((application.into(), url.into()));
+        Ok(())
+    }
 }
 fn service() -> HistoryService {
     let storage = ModuleStorageHost::memory()
@@ -88,6 +97,45 @@ fn service() -> HistoryService {
 }
 fn write_idea(source: &Path, project: &Path) {
     std::fs::write(source, format!("<application><component name=\"RecentProjectsManager\"><option name=\"recentPaths\"><list><option value=\"{}\"/></list></option></component></application>", project.display())).unwrap();
+}
+
+#[test]
+fn obsidian_opens_the_exact_registered_vault_in_the_selected_app_and_revalidates_it() {
+    let temp = tempfile::tempdir().unwrap();
+    let vault = temp.path().join("合成仓库");
+    std::fs::create_dir(&vault).unwrap();
+    let source = temp.path().join("obsidian.json");
+    let write = |id: &str| {
+        std::fs::write(
+            &source,
+            json!({"vaults":{id:{"path":vault,"ts":1700000000000_i64}}}).to_string(),
+        )
+        .unwrap()
+    };
+    write("0123456789abcdef");
+    let service = service();
+    service.configure("obsidian", source.to_str()).unwrap();
+    let row = service.search(0, "", "obsidian").unwrap().items.remove(0);
+    let platform = OpenRecorder::new(&[("md.obsidian", "/mock/Obsidian.app")]);
+    service.use_item(&row.id, false, &platform).unwrap();
+    assert_eq!(
+        *platform.urls.lock().unwrap(),
+        vec![(
+            PathBuf::from("/mock/Obsidian.app"),
+            "obsidian://open?vault=0123456789abcdef".into()
+        )]
+    );
+    assert!(platform.opened.lock().unwrap().is_empty());
+    write("fedcba9876543210");
+    assert!(service.use_item(&row.id, false, &platform).is_err());
+    assert_eq!(platform.urls.lock().unwrap().len(), 1);
+    let row = service.search(0, "", "obsidian").unwrap().items.remove(0);
+    let duplicate = OpenRecorder::new(&[
+        ("md.obsidian", "/mock/A.app"),
+        ("md.obsidian", "/mock/B.app"),
+    ]);
+    assert!(service.use_item(&row.id, false, &duplicate).is_err());
+    assert!(duplicate.urls.lock().unwrap().is_empty());
 }
 
 #[test]

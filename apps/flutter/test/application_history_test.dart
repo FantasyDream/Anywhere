@@ -212,6 +212,12 @@ void main() {
                 child: AppHistorySettingsSection(controller: controller))),
       ));
       await tester.pumpAndSettle();
+      final filter = find.byKey(const Key('history-source-filter'));
+      await tester.enterText(filter, 'missing app');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('history-path-idea')), findsNothing);
+      await tester.enterText(filter, 'IDEA');
+      await tester.pumpAndSettle();
       final path = find.byKey(const Key('history-path-idea'));
       String value() => tester.widget<TextField>(path).controller!.text;
       expect(value(), isEmpty);

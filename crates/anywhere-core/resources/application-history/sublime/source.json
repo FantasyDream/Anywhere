@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "id": "sublime",
+  "title": "Sublime Text",
+  "file_hint": "Session.sublime_session",
+  "applications": [
+    "com.sublimetext.4",
+    "com.sublimetext.3"
+  ],
+  "config_paths": [
+    "Sublime Text/Local/Session.sublime_session",
+    "Sublime Text 3/Local/Session.sublime_session"
+  ],
+  "reader": {
+    "format": "json"
+  },
+  "action": {
+    "title": "Sublime Text Recent Projects and Files",
+    "localized_titles": {
+      "zh": "Sublime Text 最近项目与文件"
+    },
+    "aliases": [
+      "sublime recent",
+      "recent files",
+      "最近文件",
+      "recent projects",
+      "recent history",
+      "最近项目",
+      "历史记录",
+      "app history",
+      "应用历史"
+    ]
+  }
+}

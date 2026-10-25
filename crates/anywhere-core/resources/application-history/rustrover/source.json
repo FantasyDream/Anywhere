@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "id": "rustrover",
+  "extends": "idea",
+  "title": "RustRover",
+  "applications": [
+    "com.jetbrains.rustrover",
+    "com.jetbrains.rustrover-EAP"
+  ],
+  "config_paths": [
+    "JetBrains/RustRover*/options/recentProjects.xml"
+  ],
+  "action": {
+    "title": "RustRover Recent Projects",
+    "localized_titles": {
+      "zh": "RustRover 最近项目"
+    },
+    "aliases": [
+      "rustrover recent",
+      "recent projects",
+      "recent history",
+      "最近项目",
+      "历史记录",
+      "app history",
+      "应用历史"
+    ]
+  }
+}

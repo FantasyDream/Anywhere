@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "id": "obsidian",
+  "title": "Obsidian",
+  "file_hint": "obsidian.json",
+  "applications": [
+    "md.obsidian"
+  ],
+  "config_paths": [
+    "obsidian/obsidian.json"
+  ],
+  "reader": {
+    "format": "json"
+  },
+  "action": {
+    "title": "Obsidian Recent Vaults",
+    "localized_titles": {
+      "zh": "Obsidian 最近仓库"
+    },
+    "aliases": [
+      "obsidian vault",
+      "recent vaults",
+      "最近仓库",
+      "笔记仓库",
+      "recent projects",
+      "recent history",
+      "最近项目",
+      "历史记录",
+      "app history",
+      "应用历史"
+    ]
+  }
+}

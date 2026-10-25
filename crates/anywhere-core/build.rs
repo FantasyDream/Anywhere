@@ -16,21 +16,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rerun-if-changed=resources/application-history");
     let mut packages: Vec<_> = std::fs::read_dir(directory)?.collect::<Result<_, _>>()?;
     packages.sort_by_key(|entry| entry.file_name());
-    let mut embedded = String::from("const BUNDLED_HISTORY_SOURCES: &[(&str, &str)] = &[\n");
+    let mut embedded =
+        String::from("const BUNDLED_HISTORY_SOURCES: &[(&str, Option<&str>)] = &[\n");
     for package in packages {
         if !package.file_type()?.is_dir() {
             continue;
         }
         let manifest = package.path().join("source.json");
         let script = package.path().join("transform.js");
-        assert!(
-            manifest.is_file() && script.is_file(),
-            "history source requires source.json and transform.js"
-        );
-        embedded.push_str(&format!(
-            "(include_str!({:?}), include_str!({:?})),\n",
-            manifest, script
-        ));
+        assert!(manifest.is_file(), "history source requires source.json");
+        let script = if script.is_file() {
+            format!("Some(include_str!({script:?}))")
+        } else {
+            "None".into()
+        };
+        embedded.push_str(&format!("(include_str!({manifest:?}), {script}),\n"));
     }
     embedded.push_str("];\n");
     std::fs::write(output.join("history_sources.rs"), embedded)?;

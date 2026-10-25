@@ -18,6 +18,7 @@ class AppHistorySettingsSection extends StatefulWidget {
 }
 
 class _AppHistorySettingsSectionState extends State<AppHistorySettingsSection> {
+  String _filter = '';
   @override
   void initState() {
     super.initState();
@@ -34,11 +35,23 @@ class _AppHistorySettingsSectionState extends State<AppHistorySettingsSection> {
             Text(context.l10n.appHistorySourceDescription,
                 style: AppStyle.caption),
             const SizedBox(height: 12),
+            TextField(
+                key: const Key('history-source-filter'),
+                style: AppStyle.body,
+                decoration: InputDecoration(
+                    hintText: context.l10n.appHistoryFilterSources,
+                    prefixIcon: const Icon(AppIcons.search, size: 18)),
+                onChanged: (value) =>
+                    setState(() => _filter = value.trim().toLowerCase())),
+            const SizedBox(height: 12),
             if (widget.controller.failed)
               AppNotice(context.l10n.appHistorySettingsFailed),
             if (!widget.controller.loaded && widget.controller.busy)
               const LinearProgressIndicator(minHeight: 1),
-            for (final source in widget.controller.sources) ...[
+            for (final source in widget.controller.sources.where((source) =>
+                '${source.title} ${source.id}'
+                    .toLowerCase()
+                    .contains(_filter))) ...[
               _SourceRow(
                   key: ValueKey(source.id),
                   source: source,

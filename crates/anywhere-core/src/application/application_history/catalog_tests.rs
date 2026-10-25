@@ -33,7 +33,10 @@ fn user_sources_share_the_bundled_contract_and_are_captured_once() {
     write(root.path(), "example", &definition("example"), Some(script));
     let catalog = SourceCatalog::with_directories(None, root.path()).unwrap();
     assert!(catalog.configuration_error().is_none());
-    assert_eq!(catalog.descriptors().len(), 3);
+    assert_eq!(
+        catalog.descriptors().len(),
+        BUNDLED_HISTORY_SOURCES.len() + 1
+    );
     let service = HistoryService::new(Ok(storage()), catalog.clone());
     service.configure("example", source.to_str()).unwrap();
     assert_eq!(
@@ -133,7 +136,7 @@ fn malformed_or_ambiguous_user_definitions_fail_closed_without_partial_overrides
         assert!(catalog.configuration_error().is_some(), "{kind}");
         assert_eq!(
             catalog.descriptors().len(),
-            2,
+            BUNDLED_HISTORY_SOURCES.len(),
             "invalid input must not partially replace the built-ins"
         );
         assert!(HistoryService::new(Ok(storage()), catalog)
@@ -204,7 +207,7 @@ fn removing_a_user_adapter_preserves_inactive_preferences_without_disabling_buil
         SourceCatalog::with_directories(None, root.path()).unwrap(),
     );
     restarted.refresh().unwrap();
-    assert_eq!(restarted.sources().len(), 2);
+    assert_eq!(restarted.sources().len(), BUNDLED_HISTORY_SOURCES.len());
     assert!(String::from_utf8(storage.get("sources").unwrap().unwrap())
         .unwrap()
         .contains("example"));
@@ -231,6 +234,14 @@ fn legacy_disabled_builtins_do_not_implicitly_disable_new_user_adapters() {
     );
     service.refresh().unwrap();
     let statuses = service.sources();
+    assert!(
+        statuses
+            .iter()
+            .find(|s| s.descriptor.id == "cursor")
+            .unwrap()
+            .action_enabled,
+        "new bundled sources were unknown to schema 1 and must not inherit its omissions"
+    );
     assert!(
         !statuses
             .iter()
