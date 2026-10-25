@@ -1602,7 +1602,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get appHistorySources => '历史来源';
 
   @override
-  String get appHistorySourceDescription => '自动查找已适配应用的历史文件，也可自定义路径或逐个关闭 Action。使用对应 Action 时才读取历史内容。';
+  String get appHistorySourceDescription => '默认仅开启已安装应用的 Action，手动开关优先。可自定义历史文件路径，使用对应 Action 时才读取历史内容。';
 
   @override
   String get appHistorySourcePath => '历史元数据文件路径';

@@ -1,7 +1,6 @@
 use super::*;
 use crate::{
-    features::application_history::{model::Notice, service::HistoryService},
-    persistence::module_storage::ModuleStorageHost,
+    features::application_history::model::Notice, persistence::module_storage::ModuleStorageHost,
 };
 use serde_json::json;
 use std::path::Path;
@@ -25,7 +24,7 @@ fn official_idea_xml_to_searchable_history_is_configured_not_special_cased() {
     std::fs::create_dir(&project).unwrap();
     let source = temp.path().join("recentProjects.xml");
     std::fs::write(&source, idea(&project)).unwrap();
-    let service = HistoryService::new(
+    let service = installed_service(
         Ok(storage()),
         SourceCatalog::bundled_with_config_directory(None).unwrap(),
     );
@@ -198,12 +197,12 @@ fn source_preferences_persist_without_mirroring_history_and_disable_invalidates_
     std::fs::write(&path, idea(temp.path())).unwrap();
     let storage = storage();
     let loader = SourceCatalog::bundled_with_config_directory(None).unwrap();
-    let first = HistoryService::new(Ok(storage.clone()), loader.clone());
+    let first = installed_service(Ok(storage.clone()), loader.clone());
     first.refresh().unwrap();
     first
         .configure("idea", Some(path.to_str().unwrap()))
         .unwrap();
-    let second = HistoryService::new(Ok(storage.clone()), loader);
+    let second = installed_service(Ok(storage.clone()), loader);
     second.refresh().unwrap();
     assert_eq!(second.search(0, "", "idea").unwrap().items.len(), 1);
     let saved = String::from_utf8(storage.get("sources").unwrap().unwrap()).unwrap();
@@ -222,7 +221,7 @@ fn corrupted_or_future_preferences_are_preserved_on_save() {
     let storage = storage();
     let original = br#"{"schema":99,"sources":[]}"#;
     storage.put("sources", original).unwrap();
-    let service = HistoryService::new(
+    let service = installed_service(
         Ok(storage.clone()),
         SourceCatalog::bundled_with_config_directory(None).unwrap(),
     );
@@ -236,7 +235,7 @@ fn delayed_old_page_cancellation_cannot_invalidate_a_new_page() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("recent.xml");
     std::fs::write(&path, idea(temp.path())).unwrap();
-    let service = HistoryService::new(
+    let service = installed_service(
         Ok(storage()),
         SourceCatalog::bundled_with_config_directory(None).unwrap(),
     );
@@ -292,7 +291,7 @@ fn cancellation_during_source_work_rejects_publication_and_retains_admission() {
         release: Barrier::new(2),
         inner: SourceCatalog::bundled_with_config_directory(None).unwrap(),
     });
-    let service = Arc::new(HistoryService::new(Ok(storage()), loader.clone()));
+    let service = Arc::new(installed_service(Ok(storage()), loader.clone()));
     service
         .configure("idea", Some(path.to_str().unwrap()))
         .unwrap();
@@ -348,7 +347,7 @@ fn source_actions_follow_captured_app_and_explicit_search_without_an_extra_scope
         },
         features::{application_history::Feature, services::FeatureServices, BuiltinFeature},
     };
-    let service = Arc::new(HistoryService::new(
+    let service = Arc::new(installed_service(
         Ok(storage()),
         SourceCatalog::bundled_with_config_directory(None).unwrap(),
     ));
@@ -496,7 +495,7 @@ fn an_unconfigured_app_never_falls_back_to_another_enabled_source() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("recent.xml");
     std::fs::write(&path, idea(temp.path())).unwrap();
-    let service = HistoryService::new(
+    let service = installed_service(
         Ok(storage()),
         SourceCatalog::bundled_with_config_directory(None).unwrap(),
     );

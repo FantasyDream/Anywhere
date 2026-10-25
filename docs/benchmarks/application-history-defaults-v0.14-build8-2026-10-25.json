@@ -1,0 +1,42 @@
+{
+  "date": "2026-10-25",
+  "source_base_commit": "2e61be9",
+  "build_from_working_tree": true,
+  "package_version": "0.14.0+8",
+  "zip_sha256": "1b5a4e7dd906e32711a2fd26c60a4bd94dc54f399d41d214aa4bbe13331ab9b7",
+  "rule": "Without an explicit preference, enable a source only when its application identity appears in the startup installation snapshot.",
+  "explicit_preferences_preserved": true,
+  "defaults_persisted": false,
+  "installation_snapshot_refreshed": "on process startup; restart after installing or uninstalling an app",
+  "checks": {
+    "scripts_check_sh": "passed",
+    "core_unit_passed": 297,
+    "core_unit_existing_ignored": 1,
+    "mvp_integration_passed": 193,
+    "mvp_integration_existing_ignored": 4,
+    "flutter_passed": 411,
+    "new_default_policy_cases": 4,
+    "new_launcher_route_cases": 1,
+    "persistent_signing_and_strict_package_verification": "passed"
+  },
+  "coverage": [
+    "Missing apps are off; installed application variants match one source",
+    "Implicit defaults are recomputed after restart and never become explicit choices through another source's save",
+    "Explicit on/off and custom paths survive installation-state changes",
+    "Leftover metadata files do not count as an installed application",
+    "Uninstalled implicit actions are absent from global search and shortcut targets; explicit toggles republish the same registry",
+    "Existing parser and lifecycle fixtures use synthetic installation snapshots"
+  ],
+  "native_ui": {
+    "status": "blocked: computer-use tool reports the Mac locked",
+    "success_claimed": false,
+    "current_user_version": "Build 6",
+    "build8_became_user_running_version": false,
+    "private_history_read_for_acceptance": false
+  },
+  "browser_sources": {
+    "history": "not implemented",
+    "bookmarks": "not implemented",
+    "current_page_url_context": "existing separate capability"
+  }
+}

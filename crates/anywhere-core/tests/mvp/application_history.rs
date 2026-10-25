@@ -2,6 +2,57 @@ use crate::support::*;
 use anywhere_core::application::settings_service::{SettingsChange, SettingsService};
 
 #[tokio::test]
+async fn uninstalled_history_actions_are_absent_from_search_and_shortcut_targets_by_default() {
+    let tmp = tempfile::tempdir().unwrap();
+    let app = app(Arc::new(TestPlatform::new(tmp.path().into(), false)));
+    let mut settings =
+        SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+    let service = settings.application_history().unwrap();
+    assert!(service
+        .sources()
+        .iter()
+        .all(|source| !source.action_enabled));
+    let id = app.activate().await.unwrap().unwrap().session_id;
+    let first = settled(&app, id, 0).await;
+    let action = "core.application_history.webstorm.open";
+    assert!(app
+        .resolve_action_binding(id, first.revision, action)
+        .is_err());
+    let off = app
+        .update_input(id, "WebStorm Recent Projects".into(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!off.candidates.iter().any(|row| row
+        .command_id
+        .as_deref()
+        .is_some_and(|id| id.starts_with("core.application_history."))));
+    service.set_action_enabled("webstorm", true).unwrap();
+    settings.synchronize_application_history(&app).unwrap();
+    app.deactivate(id).unwrap();
+    let id = app.activate().await.unwrap().unwrap().session_id;
+    settled(&app, id, 0).await;
+    let on = app
+        .update_input(id, "WebStorm Recent Projects".into(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(on
+        .candidates
+        .iter()
+        .any(|row| row.command_id.as_deref() == Some(action)));
+    assert_eq!(
+        app.resolve_action_binding(id, on.revision, action)
+            .unwrap()
+            .len(),
+        1
+    );
+    service.set_action_enabled("webstorm", false).unwrap();
+    settings.synchronize_application_history(&app).unwrap();
+    assert!(app.resolve_action_binding(id, on.revision, action).is_err());
+}
+
+#[tokio::test]
 async fn a_broken_user_adapter_does_not_break_the_native_feature_catalog() {
     let tmp = tempfile::tempdir().unwrap();
     let directory = tmp.path().join("application-history-sources/broken");
@@ -46,6 +97,12 @@ async fn user_history_actions_register_once_and_switch_off_search_bindings_and_o
     }));
     let mut settings =
         SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+    settings
+        .application_history()
+        .unwrap()
+        .set_action_enabled("example", true)
+        .unwrap();
+    settings.synchronize_application_history(&app).unwrap();
     let action = "core.application_history.example.open";
     let first = settled(&app, app.activate().await.unwrap().unwrap().session_id, 0).await;
     let old = candidate(&first, action);
@@ -128,6 +185,16 @@ async fn history_entries_match_current_app_and_bind_independently_without_duplic
         let app = app(platform);
         let mut settings =
             SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+        // Route tests explicitly enable their synthetic sources; installation defaults
+        // are exercised separately with an empty installed-application snapshot.
+        for source in [source, other] {
+            settings
+                .application_history()
+                .unwrap()
+                .set_action_enabled(source, true)
+                .unwrap();
+        }
+        settings.synchronize_application_history(&app).unwrap();
         let id = app.activate().await.unwrap().unwrap().session_id;
         let state = settled(&app, id, 0).await;
         let own = format!("core.application_history.{source}.open");

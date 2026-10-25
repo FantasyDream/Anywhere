@@ -1,8 +1,5 @@
 use super::*;
-use crate::{
-    features::application_history::service::HistoryService,
-    persistence::module_storage::ModuleStorageHost,
-};
+use crate::persistence::module_storage::ModuleStorageHost;
 use serde_json::{json, Value};
 use std::{fs, path::Path};
 
@@ -37,7 +34,7 @@ fn user_sources_share_the_bundled_contract_and_are_captured_once() {
         catalog.descriptors().len(),
         BUNDLED_HISTORY_SOURCES.len() + 1
     );
-    let service = HistoryService::new(Ok(storage()), catalog.clone());
+    let service = installed_service(Ok(storage()), catalog.clone());
     service.configure("example", source.to_str()).unwrap();
     assert_eq!(
         service.search(0, "", "example").unwrap().items[0]
@@ -139,9 +136,7 @@ fn malformed_or_ambiguous_user_definitions_fail_closed_without_partial_overrides
             BUNDLED_HISTORY_SOURCES.len(),
             "invalid input must not partially replace the built-ins"
         );
-        assert!(HistoryService::new(Ok(storage()), catalog)
-            .refresh()
-            .is_err());
+        assert!(installed_service(Ok(storage()), catalog).refresh().is_err());
     }
 }
 
@@ -153,7 +148,7 @@ fn action_switch_preserves_custom_paths_and_revokes_old_selections() {
     write(root.path(), "example", &definition("example"), Some("export function transform(input) {return [{key:input.path,title:'Item',target:{kind:'directory',path:input.path}}];}"));
     let catalog = SourceCatalog::with_directories(None, root.path()).unwrap();
     let storage = storage();
-    let service = HistoryService::new(Ok(storage.clone()), catalog.clone());
+    let service = installed_service(Ok(storage.clone()), catalog.clone());
     service.configure("example", path.to_str()).unwrap();
     let id = service.search(0, "", "example").unwrap().items[0]
         .id
@@ -170,7 +165,7 @@ fn action_switch_preserves_custom_paths_and_revokes_old_selections() {
             &crate::application::source_catalog_tests::QuietPlatform
         )
         .is_err());
-    let restarted = HistoryService::new(Ok(storage), catalog);
+    let restarted = installed_service(Ok(storage), catalog);
     restarted.refresh().unwrap();
     let status = restarted
         .sources()
@@ -196,13 +191,13 @@ fn removing_a_user_adapter_preserves_inactive_preferences_without_disabling_buil
         Some("export function transform(){return [];}"),
     );
     let storage = storage();
-    let first = HistoryService::new(
+    let first = installed_service(
         Ok(storage.clone()),
         SourceCatalog::with_directories(None, root.path()).unwrap(),
     );
     first.configure("example", source.to_str()).unwrap();
     fs::remove_dir_all(root.path().join("example")).unwrap();
-    let restarted = HistoryService::new(
+    let restarted = installed_service(
         Ok(storage.clone()),
         SourceCatalog::with_directories(None, root.path()).unwrap(),
     );
@@ -228,7 +223,7 @@ fn legacy_disabled_builtins_do_not_implicitly_disable_new_user_adapters() {
     storage
         .put("sources", br#"{"schema":1,"sources":[]}"#)
         .unwrap();
-    let service = HistoryService::new(
+    let service = installed_service(
         Ok(storage),
         SourceCatalog::with_directories(None, root.path()).unwrap(),
     );

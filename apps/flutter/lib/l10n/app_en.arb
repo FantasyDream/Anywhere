@@ -825,7 +825,7 @@
   "appHistorySearch": "Search recent projects and files…",
   "appHistoryFilterSources": "Filter apps…",
   "appHistorySources": "History sources",
-  "appHistorySourceDescription": "Finds supported apps’ history files automatically. Use a custom path or turn individual actions off. History is read only when you use its action.",
+  "appHistorySourceDescription": "Actions default to on for installed apps and off for apps not found. Your switches take priority. History is read only when you use its action.",
   "appHistorySourcePath": "History metadata file path",
   "appHistoryUnconfigured": "No history file is available. Check automatic detection or set a custom path in Settings → App History.",
   "appHistoryReadFailed": "Some sources could not be read. Check their files in Settings → App History.",

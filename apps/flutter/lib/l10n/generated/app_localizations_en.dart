@@ -1638,7 +1638,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appHistorySources => 'History sources';
 
   @override
-  String get appHistorySourceDescription => 'Finds supported apps’ history files automatically. Use a custom path or turn individual actions off. History is read only when you use its action.';
+  String get appHistorySourceDescription => 'Actions default to on for installed apps and off for apps not found. Your switches take priority. History is read only when you use its action.';
 
   @override
   String get appHistorySourcePath => 'History metadata file path';

@@ -7,6 +7,8 @@ mod definition;
 #[cfg(test)]
 mod discovery_tests;
 #[cfg(test)]
+mod installation_tests;
+#[cfg(test)]
 mod open_tests;
 mod script;
 #[cfg(test)]
@@ -22,6 +24,22 @@ use std::{
 };
 
 include!(concat!(env!("OUT_DIR"), "/history_sources.rs"));
+
+#[cfg(test)]
+fn installed_service(
+    storage: Result<Arc<dyn crate::core::storage::ExtensionStorage>, String>,
+    loader: Arc<dyn SourceLoader>,
+) -> crate::features::application_history::service::HistoryService {
+    // Existing parser/lifecycle fixtures simulate their declared apps as installed.
+    // Installation-policy tests deliberately supply their own smaller snapshots.
+    let apps: Vec<_> = loader
+        .descriptors()
+        .into_iter()
+        .flat_map(|s| s.applications)
+        .collect();
+    crate::features::application_history::service::HistoryService::new(storage, loader)
+        .with_installed_applications(apps)
+}
 
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

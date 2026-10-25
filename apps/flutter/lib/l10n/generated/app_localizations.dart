@@ -3104,7 +3104,7 @@ abstract class AppLocalizations {
   /// No description provided for @appHistorySourceDescription.
   ///
   /// In en, this message translates to:
-  /// **'Finds supported apps’ history files automatically. Use a custom path or turn individual actions off. History is read only when you use its action.'**
+  /// **'Actions default to on for installed apps and off for apps not found. Your switches take priority. History is read only when you use its action.'**
   String get appHistorySourceDescription;
 
   /// No description provided for @appHistorySourcePath.

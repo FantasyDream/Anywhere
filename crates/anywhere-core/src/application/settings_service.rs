@@ -102,6 +102,14 @@ impl SettingsService {
                 crate::application::application_history::SourceCatalog::with_user_directory(
                     &path.with_file_name("application-history-sources"),
                 )?,
+            )
+            .with_installed_applications(
+                app.platform
+                    .installed_applications()
+                    .applications
+                    .into_iter()
+                    .filter(|app| app.path.is_some())
+                    .map(|app| app.bundle_id),
             ),
         ));
         let mut catalog = BuiltinCatalog::assemble(&mut services)?;

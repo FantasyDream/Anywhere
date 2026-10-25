@@ -22,6 +22,7 @@ struct State {
 pub struct HistoryService {
     storage: Result<Arc<dyn ExtensionStorage>, String>,
     loader: Arc<dyn SourceLoader>,
+    installed_applications: std::collections::BTreeSet<String>,
     state: Mutex<State>,
     worker: Mutex<()>,
     configuration: Mutex<()>,
@@ -37,6 +38,7 @@ impl HistoryService {
         Self {
             storage,
             loader,
+            installed_applications: Default::default(),
             state: Mutex::new(State {
                 configurations: vec![],
                 sources: vec![],
@@ -48,6 +50,29 @@ impl HistoryService {
             owner: AtomicU64::new(0),
             enabled: Arc::new(AtomicBool::new(true)),
         }
+    }
+    /// Startup metadata only; implicit defaults never become saved user choices.
+    pub fn with_installed_applications(
+        mut self,
+        applications: impl IntoIterator<Item = String>,
+    ) -> Self {
+        self.installed_applications = applications.into_iter().collect();
+        self
+    }
+    fn action_enabled(
+        &self,
+        source: &SourceDescriptor,
+        setting: Option<&SourceConfiguration>,
+    ) -> bool {
+        setting.map_or_else(
+            || {
+                source
+                    .applications
+                    .iter()
+                    .any(|id| self.installed_applications.contains(id))
+            },
+            |s| s.action_enabled && s.mode != SourceMode::Disabled,
+        )
     }
     pub fn refresh(&self) -> Result<()> {
         let _configuration = self.configuration.lock().unwrap();
@@ -71,7 +96,7 @@ impl HistoryService {
             .into_iter()
             .filter_map(|descriptor| {
                 let setting = configurations.iter().find(|s| s.id == descriptor.id);
-                if setting.is_some_and(|s| !s.action_enabled) {
+                if !self.action_enabled(&descriptor, setting) {
                     return None;
                 }
                 let path = match setting.map_or(SourceMode::Automatic, |s| s.mode) {
@@ -99,11 +124,8 @@ impl HistoryService {
             .descriptors()
             .into_iter()
             .map(|d| SourceStatus {
-                action_enabled: state
-                    .configurations
-                    .iter()
-                    .find(|s| s.id == d.id)
-                    .is_none_or(|s| s.action_enabled && s.mode != SourceMode::Disabled),
+                action_enabled: self
+                    .action_enabled(&d, state.configurations.iter().find(|s| s.id == d.id)),
                 mode: state
                     .configurations
                     .iter()

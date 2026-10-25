@@ -2,10 +2,7 @@
 mod cases {
     // Only synthetic configuration roots are inspected by these tests.
     use super::super::*;
-    use crate::{
-        features::application_history::service::HistoryService,
-        persistence::module_storage::ModuleStorageHost,
-    };
+    use crate::persistence::module_storage::ModuleStorageHost;
     use std::{
         fs,
         path::{Path, PathBuf},
@@ -27,7 +24,10 @@ mod cases {
             .bind("application_history")
             .unwrap()
     }
-    fn status(service: &HistoryService, id: &str) -> SourceStatus {
+    fn status(
+        service: &crate::features::application_history::service::HistoryService,
+        id: &str,
+    ) -> SourceStatus {
         service
             .sources()
             .into_iter()
@@ -80,7 +80,7 @@ mod cases {
         let loader =
             SourceCatalog::bundled_with_config_directory(Some(temp.path().into())).unwrap();
         let storage = storage();
-        let service = HistoryService::new(Ok(storage.clone()), loader.clone());
+        let service = installed_service(Ok(storage.clone()), loader.clone());
         service.refresh().unwrap();
         assert_eq!(status(&service, "idea").mode, SourceMode::Automatic);
         assert_eq!(status(&service, "idea").path, Some(auto.clone()));
@@ -125,7 +125,7 @@ mod cases {
             .configure_mode("idea", SourceMode::Automatic, None)
             .unwrap();
         assert_eq!(status(&service, "idea").path, Some(auto.clone()));
-        let automatic = HistoryService::new(Ok(storage.clone()), loader.clone());
+        let automatic = installed_service(Ok(storage.clone()), loader.clone());
         automatic.refresh().unwrap();
         assert_eq!(status(&automatic, "idea").mode, SourceMode::Automatic);
         assert_eq!(status(&automatic, "idea").path, Some(auto));
@@ -138,7 +138,7 @@ mod cases {
                 &crate::application::source_catalog_tests::QuietPlatform
             )
             .is_err());
-        let reopened = HistoryService::new(Ok(storage), loader);
+        let reopened = installed_service(Ok(storage), loader);
         reopened.refresh().unwrap();
         assert_eq!(status(&reopened, "idea").mode, SourceMode::Disabled);
         assert_eq!(status(&reopened, "idea").path, None);
@@ -151,7 +151,7 @@ mod cases {
     #[test]
     fn an_automatic_source_created_later_is_found_when_its_page_opens() {
         let temp = tempfile::tempdir().unwrap();
-        let service = HistoryService::new(
+        let service = installed_service(
             Ok(storage()),
             SourceCatalog::bundled_with_config_directory(Some(temp.path().into())).unwrap(),
         );
@@ -190,7 +190,7 @@ mod cases {
                 .unwrap(),
             )
             .unwrap();
-        let service = HistoryService::new(
+        let service = installed_service(
             Ok(storage.clone()),
             SourceCatalog::bundled_with_config_directory(Some(temp.path().into())).unwrap(),
         );
