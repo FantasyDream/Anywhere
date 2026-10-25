@@ -25,5 +25,9 @@
       "app history",
       "应用历史"
     ]
-  }
+  },
+  "config_paths": [
+    "JetBrains/IntelliJIdea*/options/recentProjects.xml",
+    "JetBrains/IdeaIC*/options/recentProjects.xml"
+  ]
 }

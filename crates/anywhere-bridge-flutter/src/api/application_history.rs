@@ -7,19 +7,47 @@ fn service() -> Result<Arc<HistoryService>> {
     settings::extensions()?.application_history()
 }
 pub(super) fn sources() -> Result<Vec<AppHistorySourceDto>> {
-    Ok(service()?
+    let service = service()?;
+    service.refresh()?;
+    Ok(service
         .sources()
         .into_iter()
-        .map(|(d, p)| AppHistorySourceDto {
-            id: d.id,
-            title: d.title,
-            file_hint: d.file_hint,
-            path: p.map_or_else(String::new, |p| p.path.to_string_lossy().into_owned()),
+        .map(|s| AppHistorySourceDto {
+            id: s.descriptor.id,
+            title: s.descriptor.title,
+            file_hint: s.descriptor.file_hint,
+            action_enabled: s.action_enabled,
+            path: s
+                .path
+                .map_or_else(String::new, |p| p.to_string_lossy().into_owned()),
+            mode: match s.mode {
+                SourceMode::Automatic => AppHistorySourceModeDto::Automatic,
+                SourceMode::Custom => AppHistorySourceModeDto::Custom,
+                SourceMode::Disabled => AppHistorySourceModeDto::Disabled,
+            },
         })
         .collect())
 }
-pub(super) fn configure(id: String, path: String) -> Result<()> {
-    service()?.configure(&id, (!path.trim().is_empty()).then_some(path.as_str()))
+pub(super) fn configure(id: String, path: String, mode: AppHistorySourceModeDto) -> Result<()> {
+    let mode = match mode {
+        AppHistorySourceModeDto::Automatic => SourceMode::Automatic,
+        AppHistorySourceModeDto::Custom => SourceMode::Custom,
+        AppHistorySourceModeDto::Disabled => SourceMode::Disabled,
+    };
+    service()?.configure_mode(&id, mode, Some(path.as_str()))?;
+    settings::extensions()?.synchronize_application_history(application()?)
+}
+pub(super) fn set_action_enabled(id: String, enabled: bool) -> Result<()> {
+    service()?.set_action_enabled(&id, enabled)?;
+    settings::extensions()?.synchronize_application_history(application()?)
+}
+pub(super) fn custom_directory(open: bool) -> Result<String> {
+    let directory = settings::extensions()?.application_history_directory();
+    if open {
+        std::fs::create_dir_all(&directory)?;
+        application()?.platform().open_directory(&directory)?;
+    }
+    Ok(directory.to_string_lossy().into_owned())
 }
 pub(super) fn open() -> Result<u32> {
     Ok(u32::try_from(service()?.open_session()?)?)

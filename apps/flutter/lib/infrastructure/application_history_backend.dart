@@ -9,15 +9,28 @@ abstract interface class AppHistoryQueryBackend {
 
 abstract interface class AppHistoryPreferencesBackend {
   Future<List<api.AppHistorySourceDto>> read();
-  Future<void> configure(String id, String path);
+  Future<void> configure(String id, String path,
+      {api.AppHistorySourceModeDto mode = api.AppHistorySourceModeDto.custom});
+  Future<void> setActionEnabled(String id, bool enabled);
+  Future<String> customDirectory();
+  Future<void> openCustomDirectory();
 }
 
 class RustAppHistoryPreferencesBackend implements AppHistoryPreferencesBackend {
   @override
+  Future<void> setActionEnabled(String id, bool enabled) =>
+      api.setAppHistoryActionEnabled(id: id, enabled: enabled);
+  @override
+  Future<String> customDirectory() => api.appHistoryCustomDirectory();
+  @override
+  Future<void> openCustomDirectory() => api.openAppHistoryCustomDirectory();
+  @override
   Future<List<api.AppHistorySourceDto>> read() => api.appHistorySources();
   @override
-  Future<void> configure(String id, String path) =>
-      api.configureAppHistorySource(id: id, path: path);
+  Future<void> configure(String id, String path,
+          {api.AppHistorySourceModeDto mode =
+              api.AppHistorySourceModeDto.custom}) =>
+      api.configureAppHistorySource(id: id, path: path, mode: mode);
 }
 
 /// Each page owns its lease. A late close cannot cancel a newly opened page.

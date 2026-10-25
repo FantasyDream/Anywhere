@@ -1,7 +1,7 @@
 //! Synthetic source fixtures only; never opens an installed app's private history.
 use anyhow::{ensure, Result};
 use anywhere_core::{
-    application::application_history::OfficialSources,
+    application::application_history::SourceCatalog,
     features::application_history::service::HistoryService,
     persistence::module_storage::ModuleStorageHost,
 };
@@ -40,7 +40,10 @@ fn fixture(directory: &Path) -> Result<HistoryService> {
     drop(db);
     let storage = ModuleStorageHost::open(&directory.join("extension-storage.sqlite3"))?
         .bind("application_history")?;
-    let service = HistoryService::new(Ok(storage), OfficialSources::bundled()?);
+    let service = HistoryService::new(
+        Ok(storage),
+        SourceCatalog::bundled_with_config_directory(None)?,
+    );
     service.refresh()?;
     service.configure("idea", Some(idea.to_str().unwrap()))?;
     service.configure("vscode", Some(vscode.to_str().unwrap()))?;

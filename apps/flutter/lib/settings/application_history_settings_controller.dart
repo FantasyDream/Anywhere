@@ -9,10 +9,16 @@ class AppHistorySettingsController extends ChangeNotifier {
   final AppHistoryPreferencesBackend backend;
   List<AppHistorySourceDto> sources = const [];
   bool loaded = false, busy = false, failed = false, _disposed = false;
+  String customDirectory = '';
+  Future<void> Function()? onCatalogChanged;
   Future<bool>? _pending;
   Future<bool> load() => _pending ?? _run();
-  Future<bool> configure(String id, String path) =>
-      _run(() => backend.configure(id, path));
+  Future<bool> configure(String id, String path,
+          {AppHistorySourceModeDto mode = AppHistorySourceModeDto.custom}) =>
+      _run(() => backend.configure(id, path, mode: mode));
+  Future<bool> setActionEnabled(String id, bool enabled) =>
+      _run(() => backend.setActionEnabled(id, enabled));
+  Future<bool> openCustomDirectory() => _run(backend.openCustomDirectory);
   Future<bool> waitForPending() async => await (_pending ?? Future.value(true));
   Future<bool> _run([Future<void> Function()? change]) {
     final previous = _pending ?? Future.value(true);
@@ -20,7 +26,14 @@ class AppHistorySettingsController extends ChangeNotifier {
     next = previous.then((_) async {
       if (_disposed) return false;
       try {
-        await change?.call();
+        if (change != null) {
+          try {
+            await change();
+          } finally {
+            if (!_disposed) await onCatalogChanged?.call();
+          }
+        }
+        customDirectory = await backend.customDirectory();
         final result = await backend.read();
         if (_disposed) return false;
         sources = result;

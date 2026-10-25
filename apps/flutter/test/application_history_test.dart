@@ -5,7 +5,9 @@ import 'package:anywhere/features/application_history/session.dart';
 import 'package:anywhere/infrastructure/application_history_backend.dart';
 import 'package:anywhere/infrastructure/desktop_environment.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
+import 'package:anywhere/l10n/generated/app_localizations.dart';
 import 'package:anywhere/settings/application_history_settings_controller.dart';
+import 'package:anywhere/settings/application_history_settings_section.dart';
 import 'package:anywhere/settings/settings_controller.dart';
 import 'package:anywhere/src/rust/api.dart';
 import 'package:anywhere/ui/app_style.dart';
@@ -27,11 +29,15 @@ final sourceRows = [
       id: 'idea',
       title: 'IntelliJ IDEA',
       fileHint: 'recentProjects.xml',
+      mode: AppHistorySourceModeDto.custom,
+      actionEnabled: true,
       path: '/synthetic/recent.xml'),
   AppHistorySourceDto(
       id: 'vscode',
       title: 'Visual Studio Code',
       fileHint: 'state.vscdb',
+      mode: AppHistorySourceModeDto.custom,
+      actionEnabled: true,
       path: '/synthetic/state.vscdb'),
 ];
 
@@ -65,15 +71,67 @@ class HistoryBackend implements AppHistoryQueryBackend {
 
 class Preferences implements AppHistoryPreferencesBackend {
   final writes = <String>[];
+  final modes = <AppHistorySourceModeDto>[];
+  List<AppHistorySourceDto> rows = sourceRows;
   Completer<void>? gate;
   bool fail = false;
+  final actionChanges = <bool>[];
   @override
-  Future<List<AppHistorySourceDto>> read() async => sourceRows;
+  Future<String> customDirectory() async => '/synthetic/adapters';
   @override
-  Future<void> configure(String id, String path) async {
+  Future<void> openCustomDirectory() async {}
+  @override
+  Future<void> setActionEnabled(String id, bool enabled) async {
+    actionChanges.add(enabled);
+    rows = [
+      for (final row in rows)
+        if (row.id != id)
+          row
+        else
+          AppHistorySourceDto(
+            id: id,
+            title: row.title,
+            fileHint: row.fileHint,
+            mode: row.mode == AppHistorySourceModeDto.disabled && enabled
+                ? AppHistorySourceModeDto.automatic
+                : row.mode,
+            actionEnabled: enabled,
+            path: row.mode == AppHistorySourceModeDto.custom
+                ? row.path
+                : enabled
+                    ? '/automatic/${row.fileHint}'
+                    : '',
+          ),
+    ];
+  }
+
+  @override
+  Future<List<AppHistorySourceDto>> read() async => rows;
+  @override
+  Future<void> configure(String id, String path,
+      {AppHistorySourceModeDto mode = AppHistorySourceModeDto.custom}) async {
     writes.add('$id:$path');
+    modes.add(mode);
     await gate?.future;
     if (fail) throw StateError('synthetic save failure');
+    rows = [
+      for (final row in rows)
+        if (row.id != id)
+          row
+        else
+          AppHistorySourceDto(
+            id: id,
+            title: row.title,
+            fileHint: row.fileHint,
+            mode: mode,
+            actionEnabled: mode != AppHistorySourceModeDto.disabled,
+            path: switch (mode) {
+              AppHistorySourceModeDto.automatic => '/automatic/${row.fileHint}',
+              AppHistorySourceModeDto.custom => path,
+              AppHistorySourceModeDto.disabled => '',
+            },
+          ),
+    ];
   }
 }
 
@@ -81,6 +139,77 @@ void main() {
   setUp(() => DesktopEnvironment.configure(
       const DesktopEnvironment(platform: TargetPlatform.macOS)));
   tearDown(DesktopEnvironment.reset);
+
+  for (final language in ['en', 'zh']) {
+    testWidgets('history settings auto, custom and off modes work in $language',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final backend = Preferences()
+        ..rows = [
+          AppHistorySourceDto(
+              id: 'idea',
+              title: 'IntelliJ IDEA',
+              fileHint: 'recentProjects.xml',
+              path: '',
+              actionEnabled: true,
+              mode: AppHistorySourceModeDto.automatic),
+        ];
+      final controller = AppHistorySettingsController(backend);
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(MaterialApp(
+        locale: Locale(language),
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: AppStyle.theme,
+        builder: AppStyle.windowBuilder,
+        home: Scaffold(
+            body: SingleChildScrollView(
+                child: AppHistorySettingsSection(controller: controller))),
+      ));
+      await tester.pumpAndSettle();
+      final path = find.byKey(const Key('history-path-idea'));
+      String value() => tester.widget<TextField>(path).controller!.text;
+      expect(value(), isEmpty);
+      expect(
+          tester
+              .widget<TextButton>(find.byKey(const Key('history-save-idea')))
+              .onPressed,
+          isNull);
+      await tester.tap(find.byKey(const Key('history-auto-idea')));
+      await tester.pumpAndSettle();
+      expect(value(), '/automatic/recentProjects.xml');
+      expect(controller.sources.single.mode, AppHistorySourceModeDto.automatic);
+      await tester.enterText(path, '/custom/recent.xml');
+      await tester.tap(find.byKey(const Key('history-save-idea')));
+      await tester.pumpAndSettle();
+      expect(value(), '/custom/recent.xml');
+      expect(controller.sources.single.mode, AppHistorySourceModeDto.custom);
+      await tester.enterText(path, '/unsaved/draft.xml');
+      await tester.tap(find.byKey(const Key('history-auto-idea')));
+      await tester.pumpAndSettle();
+      expect(value(), '/automatic/recentProjects.xml',
+          reason:
+              'explicit auto detection replaces the draft with the resolved path');
+      await tester.tap(find.byKey(const Key('history-action-idea')));
+      await tester.pumpAndSettle();
+      expect(value(), isEmpty);
+      expect(controller.sources.single.actionEnabled, isFalse);
+      expect(tester.widget<TextField>(path).enabled, isFalse);
+      await tester.tap(find.byKey(const Key('history-action-idea')));
+      await tester.pumpAndSettle();
+      expect(value(), '/automatic/recentProjects.xml');
+      expect(backend.modes, [
+        AppHistorySourceModeDto.automatic,
+        AppHistorySourceModeDto.custom,
+        AppHistorySourceModeDto.automatic
+      ]);
+      expect(backend.actionChanges, [false, true]);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('native Action input fixes the source and labels the page',
       (tester) async {
@@ -118,6 +247,32 @@ void main() {
     backend.gate!.complete();
     expect(await write, isFalse);
     expect(await close, isFalse);
+  });
+
+  test('history changes reconcile system hotkeys even after a failed response',
+      () async {
+    const channel = MethodChannel('test/history-action-switch');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final calls = <String>[];
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      calls.add(call.method);
+      return call.method == 'settingsStatus' ? <String, Object?>{} : null;
+    });
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    final backend = Preferences();
+    final settings = SettingsController(
+        window: WindowHost(channel),
+        appHistoryBackend: backend,
+        readExtensions: () => [],
+        readShortcutActions: () async => [],
+        readSupportedShortcutActions: (_) async => []);
+    addTearDown(settings.dispose);
+    expect(await settings.appHistory.setActionEnabled('idea', false), isTrue);
+    expect(calls.where((m) => m == 'syncActionShortcutCatalog').length, 1);
+    backend.fail = true;
+    expect(await settings.appHistory.configure('idea', '/failed'), isFalse);
+    expect(calls.where((m) => m == 'syncActionShortcutCatalog').length, 2);
   });
 
   testWidgets(

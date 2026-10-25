@@ -1,0 +1,65 @@
+{
+  "date": "2026-10-25",
+  "source_base_commit": "4a2cca3",
+  "build_from_working_tree": true,
+  "package_version": "0.14.0+5",
+  "zip_sha256": "eb1ed4b7d46ac91bb303287833e5cad932058fbdfc00fbc4ae24a30e5a392fae",
+  "features": [
+    "Metadata-only detection of standard source locations",
+    "Custom path precedence and persisted source action switches",
+    "Shared manifest, reader, transform and Action contract for built-in and trusted local user adapters",
+    "User-over-built-in precedence and optional built-in parser reuse",
+    "Startup-only adapter capture; no module hot loading",
+    "Registry and system shortcut eligibility synchronized after configuration changes"
+  ],
+  "checks": {
+    "scripts_check_sh": "passed",
+    "core_unit_passed": 287,
+    "core_unit_existing_ignored": 1,
+    "mvp_integration_passed": 192,
+    "mvp_integration_existing_ignored": 4,
+    "flutter_passed": 410,
+    "generated_bridge_compile": "passed",
+    "architecture_and_code_style": "passed",
+    "persistent_signing_and_strict_package_verification": "passed"
+  },
+  "regression_coverage": [
+    "Recent configuration selection across IDEA variants",
+    "Detection does not parse history bodies",
+    "Missing automatic source found on later page open",
+    "Custom paths never silently fall back",
+    "Action switches retain custom paths across restart and revoke old execution",
+    "No closed action in search or shortcut targets",
+    "Settings reconcile system hotkeys even after an uncertain save response",
+    "User definitions register their own Action and can reuse built-in readers",
+    "Same-ID override yields one source and cannot change built-in application identity",
+    "Invalid user packages fail closed for history without disabling other native features",
+    "Removed user definitions leave inactive preferences without blocking built-ins",
+    "Legacy closed built-ins do not disable newly introduced user adapters",
+    "Configuration containment, size limits and unknown schemas",
+    "English and Chinese settings interaction"
+  ],
+  "native_ui": {
+    "status": "blocked before first inspection",
+    "reason": "Computer-use tool reported Mac locked; manual unlock requested",
+    "fixture": "build/acceptance-v0.14-user-adapters5",
+    "prepared_user_adapters": 2,
+    "private_history_read": false,
+    "selected_text_clipboard_and_browser_capture": false,
+    "existing_build4_preserved": true,
+    "production_ui_success_claimed": false,
+    "cleanup": "Locked desktop prevented app-menu quit; only the isolated Build 5 process was terminated after checking its exact executable path. Existing Build 4 was preserved. Normal quit and memory release were not validated."
+  },
+  "limits": [
+    "Trusted local configuration, not a sandbox for arbitrary downloaded scripts",
+    "JSON, XML and bounded SQLite only",
+    "Directory, file and workspace targets; remote URI copy only",
+    "Browser history/bookmarks, exact Profile/Vault routing and Windows runtime not validated"
+  ],
+  "upstream_reference": {
+    "repository": "https://github.com/LanyuanXiaoyao-Studio/utools-recent-projects",
+    "reviewed": ["Applications.ts", "Types.ts", "JetBrains.ts", "Vscode.ts", "Obsidian.ts", "LICENSE", "package.json"],
+    "code_copied": false,
+    "reason": "Reference uses application-specific TypeScript classes; LICENSE and package metadata differ. Existing independent Rust contracts were extended instead."
+  }
+}

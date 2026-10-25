@@ -1,5 +1,6 @@
 //! Each source contributes an app-owned entry; the reader and page stay shared.
 pub mod model;
+mod preferences;
 pub mod service;
 
 use crate::{
@@ -69,7 +70,8 @@ impl BuiltinFeature for Feature {
         let actions = service
             .sources()
             .into_iter()
-            .map(|(source, _)| {
+            .map(|status| {
+                let source = status.descriptor;
                 let availability = AvailabilityRule::ForApplications {
                     bundle_ids: source.applications.clone(),
                     entry_context: Some(crate::features::tools::ENTRY_CONTEXT.into()),

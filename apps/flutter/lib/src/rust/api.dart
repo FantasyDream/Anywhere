@@ -41,9 +41,23 @@ Future<void> clearClipboardHistory() =>
 Future<List<AppHistorySourceDto>> appHistorySources() =>
     RustLib.instance.api.crateApiAppHistorySources();
 
+Future<void> setAppHistoryActionEnabled(
+        {required String id, required bool enabled}) =>
+    RustLib.instance.api
+        .crateApiSetAppHistoryActionEnabled(id: id, enabled: enabled);
+
+Future<String> appHistoryCustomDirectory() =>
+    RustLib.instance.api.crateApiAppHistoryCustomDirectory();
+
+Future<void> openAppHistoryCustomDirectory() =>
+    RustLib.instance.api.crateApiOpenAppHistoryCustomDirectory();
+
 Future<void> configureAppHistorySource(
-        {required String id, required String path}) =>
-    RustLib.instance.api.crateApiConfigureAppHistorySource(id: id, path: path);
+        {required String id,
+        required String path,
+        required AppHistorySourceModeDto mode}) =>
+    RustLib.instance.api
+        .crateApiConfigureAppHistorySource(id: id, path: path, mode: mode);
 
 Future<AppHistoryDto> appHistorySearch(
         {required int sessionId,
@@ -521,17 +535,26 @@ class AppHistorySourceDto {
   final String title;
   final String fileHint;
   final String path;
+  final AppHistorySourceModeDto mode;
+  final bool actionEnabled;
 
   const AppHistorySourceDto({
     required this.id,
     required this.title,
     required this.fileHint,
     required this.path,
+    required this.mode,
+    required this.actionEnabled,
   });
 
   @override
   int get hashCode =>
-      id.hashCode ^ title.hashCode ^ fileHint.hashCode ^ path.hashCode;
+      id.hashCode ^
+      title.hashCode ^
+      fileHint.hashCode ^
+      path.hashCode ^
+      mode.hashCode ^
+      actionEnabled.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -541,7 +564,16 @@ class AppHistorySourceDto {
           id == other.id &&
           title == other.title &&
           fileHint == other.fileHint &&
-          path == other.path;
+          path == other.path &&
+          mode == other.mode &&
+          actionEnabled == other.actionEnabled;
+}
+
+enum AppHistorySourceModeDto {
+  automatic,
+  custom,
+  disabled,
+  ;
 }
 
 enum AvailabilityDto {

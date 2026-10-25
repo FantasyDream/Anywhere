@@ -3098,7 +3098,7 @@ abstract class AppLocalizations {
   /// No description provided for @appHistorySourceDescription.
   ///
   /// In en, this message translates to:
-  /// **'Enable a source by choosing its history metadata file. Only that file is read; history is not imported permanently. This preview supports IDEA and VS Code.'**
+  /// **'Finds IDEA and VS Code history files automatically. You can use a custom path or turn a source off. History is read only when you use its action.'**
   String get appHistorySourceDescription;
 
   /// No description provided for @appHistorySourcePath.
@@ -3107,22 +3107,10 @@ abstract class AppLocalizations {
   /// **'History metadata file path'**
   String get appHistorySourcePath;
 
-  /// No description provided for @appHistoryEnable.
-  ///
-  /// In en, this message translates to:
-  /// **'Enable source'**
-  String get appHistoryEnable;
-
-  /// No description provided for @appHistoryDisable.
-  ///
-  /// In en, this message translates to:
-  /// **'Disable source'**
-  String get appHistoryDisable;
-
   /// No description provided for @appHistoryUnconfigured.
   ///
   /// In en, this message translates to:
-  /// **'Enable a source in Settings → App History to see recent projects and files.'**
+  /// **'No history file is available. Check automatic detection or set a custom path in Settings → App History.'**
   String get appHistoryUnconfigured;
 
   /// No description provided for @appHistoryReadFailed.
@@ -3154,6 +3142,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Copy path or URI'**
   String get appHistoryCopyTarget;
+
+  /// No description provided for @appHistoryAutomatic.
+  ///
+  /// In en, this message translates to:
+  /// **'Using an automatically detected file'**
+  String get appHistoryAutomatic;
+
+  /// No description provided for @appHistoryCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Using your custom file path'**
+  String get appHistoryCustom;
+
+  /// No description provided for @appHistorySourceOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Source turned off'**
+  String get appHistorySourceOff;
+
+  /// No description provided for @appHistoryNotDetected.
+  ///
+  /// In en, this message translates to:
+  /// **'No file found automatically. You can set a custom path.'**
+  String get appHistoryNotDetected;
+
+  /// No description provided for @appHistoryUseAutomatic.
+  ///
+  /// In en, this message translates to:
+  /// **'Use automatic detection'**
+  String get appHistoryUseAutomatic;
+
+  /// No description provided for @appHistoryDetectAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Detect again'**
+  String get appHistoryDetectAgain;
+
+  /// No description provided for @appHistorySaveCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Save custom path'**
+  String get appHistorySaveCustom;
+
+  /// No description provided for @appHistoryActionEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Show action'**
+  String get appHistoryActionEnabled;
+
+  /// No description provided for @appHistoryCustomAdapters.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom adapters'**
+  String get appHistoryCustomAdapters;
+
+  /// No description provided for @appHistoryCustomAdaptersHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Place source.json and transform.js in a subfolder here, then restart Anywhere. Matching IDs override built-ins. Import only trusted local configuration; transforms run when you use their action.'**
+  String get appHistoryCustomAdaptersHelp;
+
+  /// No description provided for @appHistoryOpenAdapters.
+  ///
+  /// In en, this message translates to:
+  /// **'Open adapters folder'**
+  String get appHistoryOpenAdapters;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

@@ -25,7 +25,10 @@ fn official_idea_xml_to_searchable_history_is_configured_not_special_cased() {
     std::fs::create_dir(&project).unwrap();
     let source = temp.path().join("recentProjects.xml");
     std::fs::write(&source, idea(&project)).unwrap();
-    let service = HistoryService::new(Ok(storage()), OfficialSources::bundled().unwrap());
+    let service = HistoryService::new(
+        Ok(storage()),
+        SourceCatalog::bundled_with_config_directory(None).unwrap(),
+    );
     service.refresh().unwrap();
     assert_eq!(
         service.search(0, "", "").unwrap().notice,
@@ -69,7 +72,7 @@ fn vscode_uses_the_same_sqlite_reader_and_preserves_workspace_and_remote_types()
         rusqlite::params!["history.recentlyOpenedPathsList", value],
     )
     .unwrap();
-    let loader = OfficialSources::bundled().unwrap();
+    let loader = SourceCatalog::bundled_with_config_directory(None).unwrap();
     let entries = loader
         .read(
             &SourcePreference {
@@ -176,7 +179,7 @@ fn generic_readers_reject_writes_external_tables_unknown_xml_and_oversize_files(
     assert!(read(&document, &Reader::Json, Arc::new(|| false)).is_err());
     let xml = temp.path().join("empty.xml");
     std::fs::write(&xml, "<unrelated />").unwrap();
-    assert!(OfficialSources::bundled()
+    assert!(SourceCatalog::bundled_with_config_directory(None)
         .unwrap()
         .read(
             &SourcePreference {
@@ -194,7 +197,7 @@ fn source_preferences_persist_without_mirroring_history_and_disable_invalidates_
     let path = temp.path().join("recent.xml");
     std::fs::write(&path, idea(temp.path())).unwrap();
     let storage = storage();
-    let loader = OfficialSources::bundled().unwrap();
+    let loader = SourceCatalog::bundled_with_config_directory(None).unwrap();
     let first = HistoryService::new(Ok(storage.clone()), loader.clone());
     first.refresh().unwrap();
     first
@@ -219,7 +222,10 @@ fn corrupted_or_future_preferences_are_preserved_on_save() {
     let storage = storage();
     let original = br#"{"schema":99,"sources":[]}"#;
     storage.put("sources", original).unwrap();
-    let service = HistoryService::new(Ok(storage.clone()), OfficialSources::bundled().unwrap());
+    let service = HistoryService::new(
+        Ok(storage.clone()),
+        SourceCatalog::bundled_with_config_directory(None).unwrap(),
+    );
     assert!(service.refresh().is_err());
     assert!(service.configure("idea", None).is_err());
     assert_eq!(storage.get("sources").unwrap().unwrap(), original);
@@ -230,7 +236,10 @@ fn delayed_old_page_cancellation_cannot_invalidate_a_new_page() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("recent.xml");
     std::fs::write(&path, idea(temp.path())).unwrap();
-    let service = HistoryService::new(Ok(storage()), OfficialSources::bundled().unwrap());
+    let service = HistoryService::new(
+        Ok(storage()),
+        SourceCatalog::bundled_with_config_directory(None).unwrap(),
+    );
     service
         .configure("idea", Some(path.to_str().unwrap()))
         .unwrap();
@@ -260,7 +269,7 @@ fn cancellation_during_source_work_rejects_publication_and_retains_admission() {
         first: AtomicBool,
         entered: Barrier,
         release: Barrier,
-        inner: Arc<OfficialSources>,
+        inner: Arc<SourceCatalog>,
     }
     impl SourceLoader for Gated {
         fn descriptors(&self) -> Vec<SourceDescriptor> {
@@ -281,7 +290,7 @@ fn cancellation_during_source_work_rejects_publication_and_retains_admission() {
         first: AtomicBool::new(true),
         entered: Barrier::new(2),
         release: Barrier::new(2),
-        inner: OfficialSources::bundled().unwrap(),
+        inner: SourceCatalog::bundled_with_config_directory(None).unwrap(),
     });
     let service = Arc::new(HistoryService::new(Ok(storage()), loader.clone()));
     service
@@ -304,9 +313,10 @@ fn cancellation_during_source_work_rejects_publication_and_retains_admission() {
 #[test]
 fn a_json_source_only_needs_a_manifest_and_a_transform() {
     let reader = crate::persistence::application_history::Reader::Json;
-    let loader = OfficialSources { packages: vec![Package {
-        manifest: Manifest { schema:1, id:"example".into(), title:"Example".into(), file_hint:"recent.json".into(), applications:vec!["example.editor".into()], action:SourceAction{title:"Example History".into(),localized_titles:std::collections::BTreeMap::from([("zh".into(),"示例历史".into())]),aliases:vec![]}, reader },
-        script: "export function transform(input) { return input.projects.map(p => ({key:p.path,title:p.name,target:{kind:'directory',path:p.path}})); }",
+    let loader = SourceCatalog { config_directory: None, configuration_error: None, packages: vec![Package {
+        built_in: false,
+        manifest: Manifest { schema:1, id:"example".into(), title:"Example".into(), file_hint:"recent.json".into(), config_paths:vec![], applications:vec!["example.editor".into()], action:SourceAction{title:"Example History".into(),localized_titles:std::collections::BTreeMap::from([("zh".into(),"示例历史".into())]),aliases:vec![]}, reader },
+        script: "export function transform(input) { return input.projects.map(p => ({key:p.path,title:p.name,target:{kind:'directory',path:p.path}})); }".into(),
     }] };
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("recent.json");
@@ -340,7 +350,7 @@ fn source_actions_follow_captured_app_and_explicit_search_without_an_extra_scope
     };
     let service = Arc::new(HistoryService::new(
         Ok(storage()),
-        OfficialSources::bundled().unwrap(),
+        SourceCatalog::bundled_with_config_directory(None).unwrap(),
     ));
     let mut services = FeatureServices::new(Ok(storage()));
     services.bind_application_history(service.clone());
@@ -475,7 +485,10 @@ fn an_unconfigured_app_never_falls_back_to_another_enabled_source() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("recent.xml");
     std::fs::write(&path, idea(temp.path())).unwrap();
-    let service = HistoryService::new(Ok(storage()), OfficialSources::bundled().unwrap());
+    let service = HistoryService::new(
+        Ok(storage()),
+        SourceCatalog::bundled_with_config_directory(None).unwrap(),
+    );
     service
         .configure("idea", Some(path.to_str().unwrap()))
         .unwrap();

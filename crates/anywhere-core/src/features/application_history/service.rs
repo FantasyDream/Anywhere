@@ -1,24 +1,21 @@
 //! Source preferences, publication and execution share one revocable lifetime.
-use super::model::*;
+use super::{
+    model::*,
+    preferences::{self, Preferences},
+};
 use crate::core::{
     search::query::{Query, SearchFields},
     storage::ExtensionStorage,
 };
 use anyhow::{bail, ensure, Result};
-use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
     Arc, Mutex,
 };
 
-#[derive(Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Preferences {
-    schema: u32,
-    sources: Vec<SourcePreference>,
-}
 struct State {
+    configurations: Vec<SourceConfiguration>,
     sources: Vec<SourcePreference>,
     items: Vec<Item>,
 }
@@ -41,6 +38,7 @@ impl HistoryService {
             storage,
             loader,
             state: Mutex::new(State {
+                configurations: vec![],
                 sources: vec![],
                 items: vec![],
             }),
@@ -53,53 +51,77 @@ impl HistoryService {
     }
     pub fn refresh(&self) -> Result<()> {
         let _configuration = self.configuration.lock().unwrap();
+        ensure!(
+            self.loader.configuration_error().is_none(),
+            "custom history adapters unavailable; repair configuration and restart"
+        );
         let bytes = self
             .storage
             .as_ref()
             .map_err(|_| anyhow::anyhow!("history preferences unavailable"))?
             .get("sources")?;
-        let sources = match bytes {
-            Some(bytes) => {
-                let p: Preferences = serde_json::from_slice(&bytes)?;
-                ensure!(p.schema == 1, "unsupported history preferences");
-                self.validate_sources(&p.sources)?;
-                p.sources
-            }
-            None => vec![],
-        };
+        let configurations = preferences::decode(bytes.as_deref(), &self.loader.descriptors())?;
+        self.publish_configuration(configurations);
+        Ok(())
+    }
+    fn publish_configuration(&self, configurations: Vec<SourceConfiguration>) {
+        let sources = self
+            .loader
+            .descriptors()
+            .into_iter()
+            .filter_map(|descriptor| {
+                let setting = configurations.iter().find(|s| s.id == descriptor.id);
+                if setting.is_some_and(|s| !s.action_enabled) {
+                    return None;
+                }
+                let path = match setting.map_or(SourceMode::Automatic, |s| s.mode) {
+                    SourceMode::Automatic => self.loader.detect(&descriptor.id),
+                    SourceMode::Custom => setting.and_then(|s| s.path.clone()),
+                    SourceMode::Disabled => None,
+                }?;
+                Some(SourcePreference {
+                    id: descriptor.id,
+                    path,
+                })
+            })
+            .collect::<Vec<_>>();
         let mut state = self.state.lock().unwrap();
-        self.epoch.fetch_add(1, Ordering::AcqRel);
-        state.sources = sources;
-        state.items.clear();
-        Ok(())
-    }
-    fn validate_sources(&self, sources: &[SourcePreference]) -> Result<()> {
-        let descriptors = self.loader.descriptors();
-        ensure!(
-            sources.len() <= descriptors.len(),
-            "too many history sources"
-        );
-        let mut ids = std::collections::BTreeSet::new();
-        for source in sources {
-            ensure!(
-                ids.insert(&source.id) && descriptors.iter().any(|d| d.id == source.id),
-                "unknown or duplicate source"
-            );
-            ensure!(
-                source.path.is_absolute() && source.path.as_os_str().len() <= 16 * 1024,
-                "invalid source path"
-            );
+        if state.configurations != configurations || state.sources != sources {
+            self.epoch.fetch_add(1, Ordering::AcqRel);
+            state.configurations = configurations;
+            state.sources = sources;
+            state.items.clear();
         }
-        Ok(())
     }
-    pub fn sources(&self) -> Vec<(SourceDescriptor, Option<SourcePreference>)> {
+    pub fn sources(&self) -> Vec<SourceStatus> {
         let state = self.state.lock().unwrap();
         self.loader
             .descriptors()
             .into_iter()
-            .map(|d| {
-                let p = state.sources.iter().find(|p| p.id == d.id).cloned();
-                (d, p)
+            .map(|d| SourceStatus {
+                action_enabled: state
+                    .configurations
+                    .iter()
+                    .find(|s| s.id == d.id)
+                    .is_none_or(|s| s.action_enabled && s.mode != SourceMode::Disabled),
+                mode: state
+                    .configurations
+                    .iter()
+                    .find(|p| p.id == d.id)
+                    .map_or(SourceMode::Automatic, |s| s.mode),
+                path: state
+                    .sources
+                    .iter()
+                    .find(|p| p.id == d.id)
+                    .map(|s| s.path.clone())
+                    .or_else(|| {
+                        state
+                            .configurations
+                            .iter()
+                            .find(|s| s.id == d.id)
+                            .and_then(|s| s.path.clone())
+                    }),
+                descriptor: d,
             })
             .collect()
     }
@@ -107,6 +129,12 @@ impl HistoryService {
         ensure!(
             self.enabled.load(Ordering::Acquire),
             "history feature disabled"
+        );
+        ensure!(
+            self.sources()
+                .iter()
+                .any(|s| s.descriptor.id == id && s.action_enabled),
+            "history action disabled"
         );
         let source = self
             .loader
@@ -121,56 +149,96 @@ impl HistoryService {
         })
     }
     pub fn configure(&self, id: &str, path: Option<&str>) -> Result<()> {
+        self.configure_mode(
+            id,
+            if path.is_some_and(|p| !p.trim().is_empty()) {
+                SourceMode::Custom
+            } else {
+                SourceMode::Disabled
+            },
+            path,
+        )
+    }
+    pub fn configure_mode(&self, id: &str, mode: SourceMode, path: Option<&str>) -> Result<()> {
         let _configuration = self.configuration.lock().unwrap();
-        let mut next = self.state.lock().unwrap().sources.clone();
-        next.retain(|s| s.id != id);
         ensure!(
             self.loader.descriptors().iter().any(|d| d.id == id),
             "unknown source"
         );
-        if let Some(path) = path.filter(|p| !p.trim().is_empty()) {
+        let path = if mode == SourceMode::Custom {
+            let path = path
+                .filter(|p| !p.trim().is_empty())
+                .ok_or_else(|| anyhow::anyhow!("custom source path required"))?;
             let path = anywhere_platform::paths::expand_home(path.trim())
                 .ok_or_else(|| anyhow::anyhow!("invalid source path"))?
                 .canonicalize()?;
             ensure!(path.is_file(), "source must be a file");
             std::fs::File::open(&path)?;
-            next.push(SourcePreference {
+            Some(path)
+        } else {
+            None
+        };
+        let next = SourceConfiguration {
+            id: id.into(),
+            mode,
+            path,
+            action_enabled: mode != SourceMode::Disabled,
+        };
+        self.save_configuration(next)
+    }
+    pub fn set_action_enabled(&self, id: &str, enabled: bool) -> Result<()> {
+        let _configuration = self.configuration.lock().unwrap();
+        ensure!(
+            self.loader.descriptors().iter().any(|s| s.id == id),
+            "unknown source"
+        );
+        let current = self
+            .storage
+            .as_ref()
+            .map_err(|_| anyhow::anyhow!("history preferences unavailable"))?
+            .get("sources")?;
+        let mut next = preferences::decode(current.as_deref(), &self.loader.descriptors())?
+            .into_iter()
+            .find(|s| s.id == id)
+            .unwrap_or(SourceConfiguration {
                 id: id.into(),
-                path,
+                mode: SourceMode::Automatic,
+                path: None,
+                action_enabled: true,
             });
+        next.action_enabled = enabled;
+        if enabled && next.mode == SourceMode::Disabled {
+            next.mode = SourceMode::Automatic;
         }
-        self.validate_sources(&next)?;
+        self.save_configuration(next)
+    }
+    pub fn disabled_action_ids(&self) -> std::collections::BTreeSet<String> {
+        self.sources()
+            .into_iter()
+            .filter(|s| !s.action_enabled)
+            .map(|s| format!("core.application_history.{}.open", s.descriptor.id))
+            .collect()
+    }
+    fn save_configuration(&self, next: SourceConfiguration) -> Result<()> {
+        preferences::validate(std::slice::from_ref(&next))?;
         let storage = self
             .storage
             .as_ref()
             .map_err(|_| anyhow::anyhow!("history preferences unavailable"))?;
         let updated = storage
             .update("sources", &mut |current| {
-                let mut merged = match current {
-                    Some(bytes) => {
-                        let p: Preferences = serde_json::from_slice(bytes)?;
-                        ensure!(p.schema == 1, "unsupported history preferences");
-                        self.validate_sources(&p.sources)?;
-                        p.sources
-                    }
-                    None => vec![],
-                };
-                merged.retain(|source| source.id != id);
-                if let Some(source) = next.iter().find(|source| source.id == id) {
-                    merged.push(source.clone());
-                }
-                self.validate_sources(&merged)?;
+                let mut merged = preferences::decode(current, &self.loader.descriptors())?;
+                merged.retain(|source| source.id != next.id);
+                merged.push(next.clone());
+                preferences::validate(&merged)?;
                 Ok(Some(serde_json::to_vec(&Preferences {
-                    schema: 1,
+                    schema: 2,
                     sources: merged,
                 })?))
             })?
             .ok_or_else(|| anyhow::anyhow!("history preferences missing"))?;
         let next = serde_json::from_slice::<Preferences>(&updated)?.sources;
-        let mut state = self.state.lock().unwrap();
-        self.epoch.fetch_add(1, Ordering::AcqRel);
-        state.sources = next;
-        state.items.clear();
+        self.publish_configuration(next);
         Ok(())
     }
     pub fn set_enabled(&self, enabled: bool) {
@@ -190,6 +258,7 @@ impl HistoryService {
         state.items.clear();
     }
     pub fn open_session(&self) -> Result<u64> {
+        self.refresh()?;
         let mut state = self.state.lock().unwrap();
         let owner = self
             .owner

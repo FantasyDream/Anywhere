@@ -49,6 +49,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   AppHistorySourceDto dco_decode_app_history_source_dto(dynamic raw);
 
   @protected
+  AppHistorySourceModeDto dco_decode_app_history_source_mode_dto(dynamic raw);
+
+  @protected
   AvailabilityDto dco_decode_availability_dto(dynamic raw);
 
   @protected
@@ -423,6 +426,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AppHistorySourceDto sse_decode_app_history_source_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  AppHistorySourceModeDto sse_decode_app_history_source_mode_dto(
       SseDeserializer deserializer);
 
   @protected
@@ -853,6 +860,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_app_history_source_dto(
       AppHistorySourceDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_app_history_source_mode_dto(
+      AppHistorySourceModeDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_availability_dto(

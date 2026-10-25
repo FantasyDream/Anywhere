@@ -56,6 +56,31 @@ pub struct SourcePreference {
     pub id: String,
     pub path: PathBuf,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SourceMode {
+    Automatic,
+    Custom,
+    Disabled,
+}
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SourceConfiguration {
+    pub id: String,
+    pub mode: SourceMode,
+    pub path: Option<PathBuf>,
+    #[serde(default = "enabled_by_default")]
+    pub action_enabled: bool,
+}
+fn enabled_by_default() -> bool {
+    true
+}
+pub struct SourceStatus {
+    pub descriptor: SourceDescriptor,
+    pub mode: SourceMode,
+    pub path: Option<PathBuf>,
+    pub action_enabled: bool,
+}
 #[derive(Debug, Clone)]
 pub struct SourceDescriptor {
     pub id: String,
@@ -63,12 +88,15 @@ pub struct SourceDescriptor {
     pub file_hint: String,
     pub applications: Vec<String>,
     pub action: SourceAction,
+    pub built_in: bool,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SourceAction {
     pub title: String,
+    #[serde(default)]
     pub localized_titles: std::collections::BTreeMap<String, String>,
+    #[serde(default)]
     pub aliases: Vec<String>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -81,6 +109,13 @@ pub struct PageInput {
 pub type Cancelled = std::sync::Arc<dyn Fn() -> bool + Send + Sync>;
 pub trait SourceLoader: Send + Sync {
     fn descriptors(&self) -> Vec<SourceDescriptor>;
+    /// Metadata-only detection. Never parse history while configuring a source.
+    fn detect(&self, _id: &str) -> Option<PathBuf> {
+        None
+    }
+    fn configuration_error(&self) -> Option<&str> {
+        None
+    }
     fn read(&self, source: &SourcePreference, cancelled: Cancelled) -> anyhow::Result<Vec<Entry>>;
 }
 #[derive(Debug, Clone)]

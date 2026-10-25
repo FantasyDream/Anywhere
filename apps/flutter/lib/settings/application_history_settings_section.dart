@@ -45,6 +45,31 @@ class _AppHistorySettingsSectionState extends State<AppHistorySettingsSection> {
                   controller: widget.controller),
               const SizedBox(height: 10),
             ],
+            AppCard(
+                child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: ExpansionTile(
+                      tilePadding: EdgeInsets.zero,
+                      title: Text(context.l10n.appHistoryCustomAdapters,
+                          style: AppStyle.body),
+                      children: [
+                        Text(context.l10n.appHistoryCustomAdaptersHelp,
+                            style: AppStyle.caption),
+                        const SizedBox(height: 8),
+                        SelectableText(widget.controller.customDirectory,
+                            style: AppStyle.caption),
+                        Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                                key: const Key('history-custom-directory'),
+                                onPressed: widget.controller.busy
+                                    ? null
+                                    : () => unawaited(widget.controller
+                                        .openCustomDirectory()),
+                                child:
+                                    Text(context.l10n.appHistoryOpenAdapters))),
+                      ],
+                    ))),
             if (widget.controller.failed)
               TextButton(
                   onPressed: () => unawaited(widget.controller.load()),
@@ -80,42 +105,92 @@ class _SourceRowState extends State<_SourceRow> {
     super.dispose();
   }
 
+  Future<void> _configure(AppHistorySourceModeDto mode) async {
+    if (mode == AppHistorySourceModeDto.custom && _path.text.trim().isEmpty) {
+      return;
+    }
+    final saved = await widget.controller.configure(widget.source.id,
+        mode == AppHistorySourceModeDto.custom ? _path.text : '',
+        mode: mode);
+    if (mounted && saved) {
+      _path.text = widget.controller.sources
+          .firstWhere((source) => source.id == widget.source.id)
+          .path;
+    }
+  }
+
+  String _status(BuildContext context) => !widget.source.actionEnabled
+      ? context.l10n.appHistorySourceOff
+      : switch (widget.source.mode) {
+          AppHistorySourceModeDto.automatic => widget.source.path.isEmpty
+              ? context.l10n.appHistoryNotDetected
+              : context.l10n.appHistoryAutomatic,
+          AppHistorySourceModeDto.custom => context.l10n.appHistoryCustom,
+          AppHistorySourceModeDto.disabled => context.l10n.appHistorySourceOff,
+        };
+
   @override
   Widget build(BuildContext context) => AppCard(
       child: Padding(
           padding: const EdgeInsets.all(12),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(widget.source.title, style: AppStyle.body),
+            Row(children: [
+              Expanded(child: Text(widget.source.title, style: AppStyle.body)),
+              Text(context.l10n.appHistoryActionEnabled,
+                  style: AppStyle.caption),
+              const SizedBox(width: 6),
+              AppToggle(
+                  key: Key('history-action-${widget.source.id}'),
+                  label:
+                      '${widget.source.title} ${context.l10n.appHistoryActionEnabled}',
+                  value: widget.source.actionEnabled,
+                  onChanged: widget.controller.busy
+                      ? null
+                      : (enabled) => unawaited(widget.controller
+                          .setActionEnabled(widget.source.id, enabled))),
+            ]),
+            const SizedBox(height: 4),
+            Text(_status(context),
+                key: Key('history-mode-${widget.source.id}'),
+                style: AppStyle.caption),
             const SizedBox(height: 8),
             TextField(
                 key: Key('history-path-${widget.source.id}'),
                 controller: _path,
-                enabled: !widget.controller.busy,
+                enabled: !widget.controller.busy && widget.source.actionEnabled,
                 style: AppStyle.body,
                 decoration: InputDecoration(
                     labelText: context.l10n.appHistorySourcePath,
                     hintText: widget.source.fileHint),
-                onSubmitted: (_) => unawaited(
-                    widget.controller.configure(widget.source.id, _path.text))),
+                onSubmitted: (_) =>
+                    unawaited(_configure(AppHistorySourceModeDto.custom))),
             const SizedBox(height: 8),
-            Row(mainAxisAlignment: MainAxisAlignment.end, children: [
-              if (widget.source.path.isNotEmpty)
-                TextButton(
-                    onPressed: widget.controller.busy
-                        ? null
-                        : () => unawaited(
-                            widget.controller.configure(widget.source.id, '')),
-                    child: Text(context.l10n.appHistoryDisable)),
+            Row(children: [
+              const Spacer(),
               TextButton(
-                  key: Key('history-save-${widget.source.id}'),
-                  onPressed: widget.controller.busy
-                      ? null
-                      : () => unawaited(widget.controller
-                          .configure(widget.source.id, _path.text)),
-                  child: Text(widget.source.path.isEmpty
-                      ? context.l10n.appHistoryEnable
-                      : context.l10n.saveChanges)),
+                  key: Key('history-auto-${widget.source.id}'),
+                  onPressed:
+                      widget.controller.busy || !widget.source.actionEnabled
+                          ? null
+                          : () => unawaited(
+                              _configure(AppHistorySourceModeDto.automatic)),
+                  child: Text(
+                      widget.source.mode == AppHistorySourceModeDto.automatic
+                          ? context.l10n.appHistoryDetectAgain
+                          : context.l10n.appHistoryUseAutomatic)),
+              const SizedBox(width: 8),
+              ValueListenableBuilder<TextEditingValue>(
+                  valueListenable: _path,
+                  builder: (context, value, _) => TextButton(
+                      key: Key('history-save-${widget.source.id}'),
+                      onPressed: widget.controller.busy ||
+                              !widget.source.actionEnabled ||
+                              value.text.trim().isEmpty
+                          ? null
+                          : () => unawaited(
+                              _configure(AppHistorySourceModeDto.custom)),
+                      child: Text(context.l10n.appHistorySaveCustom))),
             ]),
           ])));
 }

@@ -73,6 +73,10 @@ class SettingsController extends ChangeNotifier {
                 clipboard: s.captureClipboard)) {
     clipboard.addListener(_notify);
     appHistory.addListener(_notify);
+    appHistory.onCatalogChanged = () => _updateExtensions(() async {
+          final statuses = await _readExtensions();
+          if (!_disposed) _extensions = statuses;
+        });
   }
 
   final ClipboardSettingsController clipboard;

@@ -1,5 +1,5 @@
 //! Open dispatch tests deliberately never launch an application or touch the OS clipboard.
-use super::OfficialSources;
+use super::SourceCatalog;
 use crate::{
     features::application_history::{model::*, service::HistoryService},
     persistence::module_storage::ModuleStorageHost,
@@ -81,7 +81,10 @@ fn service() -> HistoryService {
         .unwrap()
         .bind("application_history")
         .unwrap();
-    HistoryService::new(Ok(storage), OfficialSources::bundled().unwrap())
+    HistoryService::new(
+        Ok(storage),
+        SourceCatalog::bundled_with_config_directory(None).unwrap(),
+    )
 }
 fn write_idea(source: &Path, project: &Path) {
     std::fs::write(source, format!("<application><component name=\"RecentProjectsManager\"><option name=\"recentPaths\"><list><option value=\"{}\"/></list></option></component></application>", project.display())).unwrap();

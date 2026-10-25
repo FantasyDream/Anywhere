@@ -13,6 +13,23 @@ pub fn home_directory() -> Option<PathBuf> {
         .find(|path| path.is_absolute())
 }
 
+/// Standard per-user configuration root. Product-relative paths belong to adapters.
+pub fn configuration_directory() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    let path = home_directory().map(|home| home.join("Library/Application Support"));
+    #[cfg(windows)]
+    let path = std::env::var_os("APPDATA")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .or_else(|| home_directory().map(|home| home.join("AppData/Roaming")));
+    #[cfg(not(any(target_os = "macos", windows)))]
+    let path = std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .filter(|path| path.is_absolute())
+        .or_else(|| home_directory().map(|home| home.join(".config")));
+    path
+}
+
 /// Expand `~`, `~/…`, and the full-width `～` spelling at the start only.
 /// Other characters, spaces, and relative paths keep their literal meaning.
 pub fn expand_home(raw: &str) -> Option<PathBuf> {

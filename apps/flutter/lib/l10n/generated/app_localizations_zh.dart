@@ -1599,19 +1599,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get appHistorySources => '历史来源';
 
   @override
-  String get appHistorySourceDescription => '指定应用的历史元数据文件后启用该来源，仅按需读取所选文件，不永久导入历史。本次预览支持 IDEA 和 VS Code。';
+  String get appHistorySourceDescription => '自动查找 IDEA 和 VS Code 的历史文件，也可自定义路径或关闭来源。使用对应 Action 时才读取历史内容。';
 
   @override
   String get appHistorySourcePath => '历史元数据文件路径';
 
   @override
-  String get appHistoryEnable => '启用来源';
-
-  @override
-  String get appHistoryDisable => '关闭来源';
-
-  @override
-  String get appHistoryUnconfigured => '在「设置 → 应用历史」中启用来源，即可搜索最近项目和文件。';
+  String get appHistoryUnconfigured => '暂无可用的历史文件，请在「设置 → 应用历史」中重新检测或指定自定义路径。';
 
   @override
   String get appHistoryReadFailed => '部分来源暂时无法读取，请在「设置 → 应用历史」中检查所选文件。';
@@ -1627,4 +1621,37 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get appHistoryCopyTarget => '复制路径或 URI';
+
+  @override
+  String get appHistoryAutomatic => '正在使用自动检测的文件';
+
+  @override
+  String get appHistoryCustom => '正在使用自定义路径';
+
+  @override
+  String get appHistorySourceOff => '来源已关闭';
+
+  @override
+  String get appHistoryNotDetected => '未自动找到文件，可填写自定义路径。';
+
+  @override
+  String get appHistoryUseAutomatic => '使用自动检测';
+
+  @override
+  String get appHistoryDetectAgain => '重新检测';
+
+  @override
+  String get appHistorySaveCustom => '保存自定义路径';
+
+  @override
+  String get appHistoryActionEnabled => '显示 Action';
+
+  @override
+  String get appHistoryCustomAdapters => '自定义适配';
+
+  @override
+  String get appHistoryCustomAdaptersHelp => '在下列目录的子文件夹中放入 source.json 和 transform.js，重启后生效。同 ID 配置覆盖内置适配。请只放入可信的本机配置；使用对应 Action 时才运行转换。';
+
+  @override
+  String get appHistoryOpenAdapters => '打开适配目录';
 }

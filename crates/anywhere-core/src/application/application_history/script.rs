@@ -1,4 +1,5 @@
-//! Only bundled, reviewed pure transforms run here; no Host functions or loaders.
+//! Local source transforms run here with no file, network or module-loading APIs.
+//! User-authored scripts are trusted local configuration, not a download sandbox.
 use crate::features::application_history::model::*;
 use anyhow::{ensure, Result};
 use rquickjs::{Context, Function, Module, Runtime};

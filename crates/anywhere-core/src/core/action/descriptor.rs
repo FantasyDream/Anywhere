@@ -262,10 +262,13 @@ impl ActionRegistry {
 
     /// Filter once at a configuration boundary, including not-yet-expanded factories.
     pub fn retain_contributors(&mut self, enabled: impl Fn(&str) -> bool) {
-        self.actions
-            .retain(|_, action| action.contributor().is_none_or(&enabled));
         self.factories
             .retain(|factory| factory.contributor.as_deref().is_none_or(&enabled));
+        self.retain_actions(|action| action.contributor().is_none_or(&enabled));
+    }
+    /// Select configured commands without reconstructing their contributors.
+    pub fn retain_actions(&mut self, enabled: impl Fn(&ActionDescriptor) -> bool) {
+        self.actions.retain(|_, action| enabled(action));
         // Delegating commands must disappear with their target, even if the delegate
         // has a different contribution owner. Execution and binding also revalidate.
         let missing: BTreeSet<_> = self

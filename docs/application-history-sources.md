@@ -1,10 +1,15 @@
 # 应用历史来源配置与脚本
 
-状态：V0.14 第一轮原型，仅运行随 App 编译的官方来源。不是已开放安装的第三方插件协议。本轮先验证通用读取器、纯 JS 转换及每应用独立 Action / 共享页面；尚未接入浏览器 / Obsidian、自动发现配置或多 Profile 选择。
+状态：V0.14 H1 原型。支持内置与可信的用户本机适配配置，使用同一读取、转换、Action 和页面契约；不是第三方插件商店或通用命令执行协议。尚未接入浏览器 / Obsidian 或多 Profile 选择。
 
 ## 添加一个来源
 
-在 `crates/anywhere-core/resources/application-history/<name>/` 放两个文件。构建时自动按目录收录，无需增加应用专用 Rust 解析分支或 Flutter 页面；修改后重新构建 App，不在运行中加载外部代码。
+1. 打开 **设置 → 应用历史 → 自定义适配 → 打开适配目录**。
+2. 新建一个子文件夹，例如 `my-editor`，放入下面两个文件。
+3. 重启 Anywhere，在同一设置页填写历史数据文件路径，或在配置中声明自动检测规则。
+4. 全局搜索 Action 的标题即可使用；在对应应用中唤醒 Current App 也会匹配。
+
+内置适配位于 `crates/anywhere-core/resources/application-history/<name>/`，与用户适配使用同样的文件格式、校验及执行流程。内置包预先附带常见路径规则；用户目录在 App 启动时读取一次，新增 / 修改配置需要重启，无需重新编译 App。第一方模块代码仍只绑定一次，不恢复热加载。
 
 `source.json`：
 
@@ -14,6 +19,7 @@
   "id": "example",
   "title": "Example Editor",
   "file_hint": "recent.json",
+  "config_paths": ["ExampleEditor/recent.json"],
   "applications": ["example.editor"],
   "action": {
     "title": "Example Recent Projects",
@@ -24,7 +30,7 @@
 }
 ```
 
-`applications` 是匹配安装应用的身份列表；当前 macOS 适配使用 bundle ID。它属于官方来源定义，转换脚本不能覆盖。宿主根据该列表与本次冻结的 Application Context 匹配 Action；不会读取实时焦点反推应用。只有找到唯一应用才允许打开；缺失或多个安装实例时不猜测。首轮没有提供安装实例选择器，遇到歧义应先明确降级。
+`applications` 是匹配安装应用的身份列表；当前 macOS 适配使用 bundle ID。它属于来源配置，转换脚本不能覆盖。宿主根据该列表与本次冻结的 Application Context 匹配 Action；不会读取实时焦点反推应用。只有找到唯一应用才允许打开；缺失或多个安装实例时不猜测。首轮没有提供安装实例选择器。
 
 `transform.js`：
 
@@ -41,15 +47,53 @@ export function transform(input) {
 }
 ```
 
-`action` 定义独立入口的标题、中文名和检索别名，稳定 Action ID 为 `core.application_history.<source-id>.open`。在对应 Current App 首页无需输入关键词即出现，也可全局检索、单独绑定快捷键。页面仍为共享的 `application.history`，来源 ID 和标题由 Action 传入；页面只查询这个来源，关闭来源时显示配置提示，不退回其他应用。旧原型的统一 `core.application_history.open` 已移除，如曾绑定它，应重新选择具体应用 Action。
+`action` 定义独立入口的标题、可选中文名和检索别名，稳定 Action ID 为 `core.application_history.<source-id>.open`。在对应 Current App 首页无需输入关键词即出现，也可全局检索、单独绑定快捷键。页面仍为共享的 `application.history`，只查询传入的来源。旧原型的统一 `core.application_history.open` 已移除，如曾绑定它，应重新选择具体应用 Action。
 
 转换脚本作者只处理“原数据如何变成条目”。脚本不能定义 UI、来源权限、打开命令或写入命令 Usage。搜索、拼音、排序、过滤、键盘与主窗口布局由宿主统一提供。
 
+### 复用解析器与覆盖内置适配
+
+相同数据格式可省略 `transform.js`，在 `source.json` 中使用内置模板。例如某编辑器采用与 IDEA 相同的最近项目 XML：
+
+```json
+{
+  "schema": 1,
+  "id": "my-editor",
+  "extends": "idea",
+  "title": "My Editor",
+  "applications": ["example.editor"],
+  "action": { "title": "My Editor Recent Projects" }
+}
+```
+
+`extends` 当前可引用内置来源 `idea` 或 `vscode`，继承读取器、文件名提示和转换脚本；新应用默认手动配置文件位置，也可声明自己的 `config_paths`。模板不继承应用身份、Action 标题或路径规则，避免把新应用接到错误的配置上。其他格式提供自己的 `reader` 和 `transform.js`；现有读取器仅支持 JSON / XML / 有界 SQLite，不包含注册表、二进制 plist 或任意文件夹遍历。
+
+同 ID 用户配置优先于内置定义，且只产生一个 Action。省略读取器或脚本时可以沿用原内置实现；省略 `config_paths` 也沿用原路径规则。覆盖同 ID 时必须保持应用身份列表一致；改为另一应用应使用新 ID，避免复用错误的快捷键 / 使用记录。用户包重复 ID、非法格式、越界文件或超额时，整个历史功能降级并在设置中提示，其他内置功能继续使用，不静默忽略坏覆盖。修正后重启。
+
+默认用户目录是 App 数据目录下的 `application-history-sources`，以设置显示为准。最多 32 个有效来源；目录最多检查 64 个条目 / 32 个用户子目录，单个定义或脚本最多 64 KiB，总计最多 1 MiB。目录外的符号链接文件不加载。只放入自己编写或已审查的可信配置；QuickJS 的运行限额不是用于安装不可信下载代码的进程沙箱。
+
 ## 配置读取位置
 
-打开 **设置 → 应用历史**，为某来源填写实际元数据文件路径，再点击“启用来源”。填写草稿不会读取历史；保存时检查文件可打开性，进入页面时才解析正文。路径支持 `~/`，保存后使用规范绝对路径；空路径或“关闭来源”撤销该来源。
+IDEA / VS Code 默认自动检测标准配置目录中的文件，无需先手动填写路径。**设置 → 应用历史** 会显示来源模式与实际使用位置：
 
-首轮只支持每个来源一个明确文件，未自动扫描用户配置。IDEA 选择对应版本的 `recentProjects.xml`；VS Code 选择对应用户数据目录的 `state.vscdb`。可以使用自建的合成文件验证，不能把路径示例当作已授予真实数据读取权限。
+- **自动检测**：点击“重新检测”刷新；没找到文件时可直接填写自定义路径。
+- **自定义路径**：修改路径后点击“保存自定义路径”。此路径优先，失效时不会静默换用另一配置。支持 `~/`，保存后显示规范绝对路径。
+- **显示 Action 开关**：关闭后移除当前应用、全局搜索与快捷键候选，停止该来源读取并撤销旧执行资格；系统快捷键目录同步更新。重启后仍关闭，再次开启会保留原自定义路径。
+
+已有手动路径与关闭状态保持不变。自动路径不永久钉死在某个 IDEA 版本目录：启动、打开对应历史页或读取设置时重新检测；每次输入查询不扫描目录。检测只检查文件位置、类型和可读性，使用 Action 时才读取历史正文，不导入或镜像历史。
+
+### 自动检测规则
+
+官方包通过可选 `config_paths` 声明相对于系统用户配置根目录的路径。Platform 提供根目录：macOS 为 `~/Library/Application Support`，Windows 为 `%APPDATA%`（缺失时使用用户目录下的 `AppData/Roaming`），Linux 为绝对 `XDG_CONFIG_HOME` 或 `~/.config`。通用扫描器不包含应用名称判断，不调用脚本或外部命令。
+
+| 来源 | 相对于配置根目录的规则 |
+|---|---|
+| IDEA | `JetBrains/IntelliJIdea*/options/recentProjects.xml`、`JetBrains/IdeaIC*/options/recentProjects.xml` |
+| VS Code | `Code/User/globalStorage/state.vscdb` |
+
+规则最多 8 条、每条最多 8 层；通配目录枚举共享 512 个条目预算，禁止绝对路径、`..`、递归 `**` 以及逃出配置根目录的符号链接。多个候选按文件修改时间降序、路径升序选择一份，不合并历史；这只是配置选择，不代表精确识别当前 IDE 安装版本。需要固定版本时使用自定义路径。
+
+默认目录依据 [JetBrains 文档](https://www.jetbrains.com/help/idea/directories-used-by-the-ide-to-store-settings-caches-plugins-and-logs.html)和 [VS Code 用户数据路径实现](https://github.com/microsoft/vscode/blob/main/src/vs/platform/environment/node/userDataPath.ts)。便携版、`--user-data-dir`、`idea.config.path`、非标准配置与超出枚举预算的目录仍使用自定义路径。每来源暂时仅支持一个文件，不宣称已支持多安装 / Profile 选择；Windows / Linux 默认根目录保留实现，原生运行未验收。可使用自建合成文件验证。
 
 ## 输入格式
 
@@ -91,13 +135,17 @@ SQLite 配置示例：
 
 ## 运行和生命周期
 
-当前只运行受信任、随 App 发布的纯转换脚本，使用独立 QuickJS Runtime，在受控 Rust 调用中按需创建和释放。没有 WebView、DOM、Node、模块加载器或文件 / 网络 / 进程 Host API。不是用于下载脚本的进程沙箱；第三方安装仍未开放。
+内置及用户纯转换脚本都使用独立 QuickJS Runtime，在受控 Rust 调用中按需创建和释放。没有 WebView、DOM、Node、模块加载器或文件 / 网络 / 进程 Host API。自定义配置只扩展此历史模块，不获得第三方 Web 插件的权限，也不注册全局 Context 类型；不支持 shell 命令或自定义可执行程序参数。
 
 原型限额为输入 8 MiB、输出 2 MiB、每来源 4,096 条、标题 4 KiB、目标 16 KiB、XML 50,000 节点 / 转换深度 64、JS 堆 32 MiB / 栈 256 KiB / 执行中断预算 250 ms，来源总截止 5 秒。JS 中断不等于所有 OS 文件 I/O 都能硬停止，worker 在实际返回前仍占用唯一读取槽。这些是输入和执行约束，不是整个 App RSS 上限。
 
 页面查询串行合并最新请求，组合输入期间不搜索；会话和查询代数复验阻止旧结果发布，旧页面迟到取消不能清空新页面。隐藏取消读取，15 秒规则仍由 Launcher 管理；重新显示先读回配置和有效数据。执行 / 复制前重新读取对应来源，确认 key 与目标未变。
 
-来源文件、格式或脚本失败显示来源不可用；其他来源仍可搜索。未知 schema 不当作真正空结果。关闭来源立即清除选择资格；配置只持久保存来源 ID 与文件位置，历史正文与查询结果不写入模块存储。
+来源文件、格式或脚本失败显示来源不可用；其他来源仍可搜索。未知 schema 不当作真正空结果。关闭 Action 立即清除选择资格；配置 schema 2 只持久保存来源 ID、模式、Action 开关与自定义文件位置，自动路径按需重新定位，历史正文与查询结果不写入模块存储。schema 1 的已保存路径迁移为自定义，省略的来源保持关闭；损坏或未来 schema 不覆盖。移除用户适配后，其设置保留为未激活数据，不阻断其他来源；恢复相同稳定 ID 可继续使用原设置。
+
+## 参考项目
+
+已核对 [utools-recent-projects](https://github.com/LanyuanXiaoyao-Studio/utools-recent-projects) 的注册、JetBrains / VS Code / Obsidian 读取器及设置实现。它使用 TypeScript 应用适配类与逐应用开关；可以借鉴分族解析与支持矩阵，但不是直接可加载的通用配置库。其 `LICENSE` 为 GPL-3.0、`package.json` 标注 MIT，本项目没有复制其代码。保留本项目的只读读取、类型化打开、有界资源与真实来源顺序；不沿用 shell 拼接或把文件访问时间当作最近打开时间。
 
 ## 验证
 

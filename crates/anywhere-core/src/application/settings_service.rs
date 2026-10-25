@@ -99,7 +99,9 @@ impl SettingsService {
         services.bind_application_history(Arc::new(
             crate::features::application_history::service::HistoryService::new(
                 history_storage,
-                crate::application::application_history::OfficialSources::bundled()?,
+                crate::application::application_history::SourceCatalog::with_user_directory(
+                    &path.with_file_name("application-history-sources"),
+                )?,
             ),
         ));
         let mut catalog = BuiltinCatalog::assemble(&mut services)?;
@@ -151,6 +153,20 @@ impl SettingsService {
         &self,
     ) -> Result<Arc<crate::features::application_history::service::HistoryService>> {
         self.services.application_history()
+    }
+    pub fn application_history_directory(&self) -> PathBuf {
+        self.storage_path
+            .with_file_name("application-history-sources")
+    }
+    /// Refresh data and command selection; first-party handlers remain bound once.
+    pub fn synchronize_application_history(&mut self, app: &Application) -> Result<()> {
+        self.refresh_business_data();
+        self.publish(
+            app,
+            self.native.policy.clone(),
+            &self.legacy.preferences,
+            || Ok(()),
+        )
     }
     fn refresh_business_data(&mut self) {
         match self
@@ -281,8 +297,11 @@ impl SettingsService {
         let clipboard_enabled = policy.is_enabled("clipboard");
         let history_enabled = policy.is_enabled("application_history")
             && !self.data_errors.contains_key("application_history");
+        let mut registry = self.catalog.registry.clone();
+        let hidden = self.services.application_history()?.disabled_action_ids();
+        registry.retain_actions(|action| !hidden.contains(&action.id));
         app.publish_selected_catalog(
-            self.catalog.registry.clone(),
+            registry,
             self.catalog.providers.clone(),
             self.catalog.sources.clone(),
             policy,

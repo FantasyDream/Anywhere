@@ -32,5 +32,8 @@
       "app history",
       "应用历史"
     ]
-  }
+  },
+  "config_paths": [
+    "Code/User/globalStorage/state.vscdb"
+  ]
 }

@@ -1,4 +1,6 @@
 //! Bounded source reads only. This adapter never executes transformation scripts.
+pub(crate) mod discovery;
+pub(crate) mod packages;
 use crate::features::application_history::model::{Cancelled, MAX_INPUT};
 use anyhow::{bail, ensure, Result};
 use serde::{Deserialize, Serialize};

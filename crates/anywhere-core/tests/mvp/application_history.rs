@@ -2,6 +2,108 @@ use crate::support::*;
 use anywhere_core::application::settings_service::{SettingsChange, SettingsService};
 
 #[tokio::test]
+async fn a_broken_user_adapter_does_not_break_the_native_feature_catalog() {
+    let tmp = tempfile::tempdir().unwrap();
+    let directory = tmp.path().join("application-history-sources/broken");
+    std::fs::create_dir_all(&directory).unwrap();
+    std::fs::write(directory.join("source.json"), "{invalid").unwrap();
+    let app = app(Arc::new(TestPlatform::default()));
+    let settings = SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+    let statuses = settings.statuses();
+    assert!(
+        !statuses
+            .iter()
+            .find(|s| s.id == "application_history")
+            .unwrap()
+            .active
+    );
+    assert!(statuses.iter().find(|s| s.id == "git").unwrap().active);
+    let first = settled(&app, app.activate().await.unwrap().unwrap().session_id, 0).await;
+    assert!(app
+        .resolve_action_binding(
+            first.session_id,
+            first.revision,
+            "core.application_history.idea.open"
+        )
+        .is_err());
+}
+
+#[tokio::test]
+async fn user_history_actions_register_once_and_switch_off_search_bindings_and_old_execution() {
+    let tmp = tempfile::tempdir().unwrap();
+    let directory = tmp.path().join("application-history-sources/example");
+    std::fs::create_dir_all(&directory).unwrap();
+    std::fs::write(directory.join("source.json"), r#"{"schema":1,"id":"example","title":"Example","file_hint":"history.json","applications":["example.editor"],"action":{"title":"Example Recent Items"},"reader":{"format":"json"}}"#).unwrap();
+    std::fs::write(
+        directory.join("transform.js"),
+        "export function transform() { return []; }",
+    )
+    .unwrap();
+    let app = app(Arc::new(TestPlatform {
+        frontmost_bundle: Some("example.editor"),
+        directory: tmp.path().into(),
+        ..Default::default()
+    }));
+    let mut settings =
+        SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+    let action = "core.application_history.example.open";
+    let first = settled(&app, app.activate().await.unwrap().unwrap().session_id, 0).await;
+    let old = candidate(&first, action);
+    assert_eq!(
+        app.resolve_action_binding(first.session_id, first.revision, action)
+            .unwrap()
+            .len(),
+        1
+    );
+    settings
+        .application_history()
+        .unwrap()
+        .set_action_enabled("example", false)
+        .unwrap();
+    settings.synchronize_application_history(&app).unwrap();
+    assert!(app
+        .execute(first.session_id, first.revision, old)
+        .await
+        .is_err());
+    assert!(app
+        .resolve_action_binding(first.session_id, first.revision, action)
+        .is_err());
+    app.deactivate(first.session_id).unwrap();
+    let off = settled(&app, app.activate().await.unwrap().unwrap().session_id, 0).await;
+    assert!(!off
+        .context_candidates
+        .iter()
+        .any(|row| row.command_id.as_deref() == Some(action)));
+    let query = app
+        .update_input(off.session_id, "Example Recent Items".into(), 1)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(!query
+        .candidates
+        .iter()
+        .any(|row| row.command_id.as_deref() == Some(action)));
+    settings
+        .application_history()
+        .unwrap()
+        .set_action_enabled("example", true)
+        .unwrap();
+    settings.synchronize_application_history(&app).unwrap();
+    app.deactivate(off.session_id).unwrap();
+    let on = settled(&app, app.activate().await.unwrap().unwrap().session_id, 0).await;
+    assert!(on
+        .context_candidates
+        .iter()
+        .any(|row| row.command_id.as_deref() == Some(action)));
+    assert_eq!(
+        app.resolve_action_binding(on.session_id, on.revision, action)
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[tokio::test]
 async fn history_entries_match_current_app_and_bind_independently_without_duplicate_targets() {
     for (bundle, source, other) in [
         ("com.jetbrains.intellij", "idea", "vscode"),

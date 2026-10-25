@@ -97,6 +97,13 @@ pub struct AppHistorySourceDto {
     pub title: String,
     pub file_hint: String,
     pub path: String,
+    pub mode: AppHistorySourceModeDto,
+    pub action_enabled: bool,
+}
+pub enum AppHistorySourceModeDto {
+    Automatic,
+    Custom,
+    Disabled,
 }
 pub struct AppHistoryItemDto {
     pub id: String,
@@ -122,8 +129,21 @@ pub struct AppHistoryDto {
 pub fn app_history_sources() -> Result<Vec<AppHistorySourceDto>> {
     application_history::sources()
 }
-pub fn configure_app_history_source(id: String, path: String) -> Result<()> {
-    application_history::configure(id, path)
+pub fn set_app_history_action_enabled(id: String, enabled: bool) -> Result<()> {
+    application_history::set_action_enabled(id, enabled)
+}
+pub fn app_history_custom_directory() -> Result<String> {
+    application_history::custom_directory(false)
+}
+pub fn open_app_history_custom_directory() -> Result<()> {
+    application_history::custom_directory(true).map(|_| ())
+}
+pub fn configure_app_history_source(
+    id: String,
+    path: String,
+    mode: AppHistorySourceModeDto,
+) -> Result<()> {
+    application_history::configure(id, path, mode)
 }
 pub fn app_history_search(session_id: u32, query: String, source: String) -> Result<AppHistoryDto> {
     application_history::search(session_id, query, source)

@@ -1635,19 +1635,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appHistorySources => 'History sources';
 
   @override
-  String get appHistorySourceDescription => 'Enable a source by choosing its history metadata file. Only that file is read; history is not imported permanently. This preview supports IDEA and VS Code.';
+  String get appHistorySourceDescription => 'Finds IDEA and VS Code history files automatically. You can use a custom path or turn a source off. History is read only when you use its action.';
 
   @override
   String get appHistorySourcePath => 'History metadata file path';
 
   @override
-  String get appHistoryEnable => 'Enable source';
-
-  @override
-  String get appHistoryDisable => 'Disable source';
-
-  @override
-  String get appHistoryUnconfigured => 'Enable a source in Settings → App History to see recent projects and files.';
+  String get appHistoryUnconfigured => 'No history file is available. Check automatic detection or set a custom path in Settings → App History.';
 
   @override
   String get appHistoryReadFailed => 'Some sources could not be read. Check their files in Settings → App History.';
@@ -1663,4 +1657,37 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appHistoryCopyTarget => 'Copy path or URI';
+
+  @override
+  String get appHistoryAutomatic => 'Using an automatically detected file';
+
+  @override
+  String get appHistoryCustom => 'Using your custom file path';
+
+  @override
+  String get appHistorySourceOff => 'Source turned off';
+
+  @override
+  String get appHistoryNotDetected => 'No file found automatically. You can set a custom path.';
+
+  @override
+  String get appHistoryUseAutomatic => 'Use automatic detection';
+
+  @override
+  String get appHistoryDetectAgain => 'Detect again';
+
+  @override
+  String get appHistorySaveCustom => 'Save custom path';
+
+  @override
+  String get appHistoryActionEnabled => 'Show action';
+
+  @override
+  String get appHistoryCustomAdapters => 'Custom adapters';
+
+  @override
+  String get appHistoryCustomAdaptersHelp => 'Place source.json and transform.js in a subfolder here, then restart Anywhere. Matching IDs override built-ins. Import only trusted local configuration; transforms run when you use their action.';
+
+  @override
+  String get appHistoryOpenAdapters => 'Open adapters folder';
 }
