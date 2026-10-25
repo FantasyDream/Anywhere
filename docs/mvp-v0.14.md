@@ -234,3 +234,12 @@ Build 2 工程门禁：`scripts/check.sh` 全部通过，Flutter 406 项通过�
 
 
 Build 3 App / arm64 ZIP 与 SHA-256 已生成，源码 `3cb6b00`，版本 `0.14.0+3`；持久签名、严格包 / 归档 / 版本校验通过，Impeller 保持启用。独立合成来源实例已启动，但第一次原生 UI 读取即被 Mac 锁屏阻断，未将 Build 1 / 2 的界面结果套用于本次更改。已核对进程路径并关闭本轮测试实例；源码和自动化证明上述应用匹配逻辑，Build 3 实机界面与实际来源打开仍待复验。[本轮结构化记录](benchmarks/application-history-actions-v0.14-build3-2026-10-25.json)。
+
+
+## 原应用打开专项验证（2026-10-25）
+
+当前已实现 IDEA 本地项目目录、VS Code 目录 / 工作区文件 / 普通文件的指定应用打开：重新读取来源并核对目标后，选择唯一匹配的安装应用，通过平台端口提交；不使用默认文件关联。远端 URI 当前仅能复制。Chrome / Edge 历史和书签尚未接入，不属于已支持或本轮通过范围。
+
+新增 `application/application_history/open_tests.rs`，使用记录器验证真实服务路径而不启动 OS 应用：四种本地目标正确提交原应用及原路径，中文 / 空格路径完整；远端只复制、不打开；应用缺失 / 多安装歧义、目标被替换 / 类型改变、来源关闭均在提交前拒绝。历史相关 Core 定向测试 14 项及 Launcher 集成 1 项通过，Core all-targets Clippy、Rust 格式与架构检查通过。仅添加测试和记录，产品二进制仍为 Build 3；不将这组记录器测试当作实际窗口验收。
+
+已只读核对安装元数据：IntelliJ IDEA 2026.2.3、Visual Studio Code 1.143.0。准备了独立合成 IDEA 项目、VS Code 目录、两根工作区和文本文件，Context / 剪贴板采集关闭，未读取个人历史。首次检查 IDEA 原生窗口时工具报告 Mac 锁定，已请求解锁；实际打开和目标窗口、原 Profile / Vault 仍未确认。[专项验证记录](benchmarks/application-history-opening-v0.14-build3-2026-10-25.json)。

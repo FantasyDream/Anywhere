@@ -1,4 +1,6 @@
 //! Composition for the official source packages. No external script installation.
+#[cfg(test)]
+mod open_tests;
 mod script;
 #[cfg(test)]
 mod tests;
