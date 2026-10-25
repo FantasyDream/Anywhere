@@ -246,7 +246,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get changesNotSaved => '部分修改尚未保存';
 
   @override
-  String get searchDrafts => '搜索设置存在尚未应用的修改。';
+  String get settingsDrafts => '部分设置存在尚未保存的修改。';
 
   @override
   String get settingsSaveFailed => '设置保存失败，请重试。';
@@ -1597,6 +1597,18 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get appHistoryFilterSources => '筛选应用…';
+
+  @override
+  String get appHistoryAllSources => '全部来源';
+
+  @override
+  String get appHistoryShowAllSources => '清除筛选并显示全部来源';
+
+  @override
+  String get appHistoryRevertPath => '还原编辑';
+
+  @override
+  String get appHistoryUnsavedPath => '路径未保存';
 
   @override
   String get appHistorySources => '历史来源';

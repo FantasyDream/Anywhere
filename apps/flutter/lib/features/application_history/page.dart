@@ -64,9 +64,14 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
           (key == LogicalKeyboardKey.arrowDown ? 1 : -1));
       return KeyEventResult.handled;
     }
+    if (key == LogicalKeyboardKey.pageDown ||
+        key == LogicalKeyboardKey.pageUp) {
+      session.movePage(key == LogicalKeyboardKey.pageDown ? 1 : -1);
+      return KeyEventResult.handled;
+    }
     if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.numpadEnter) {
-      unawaited(session.useItem());
+      unawaited(session.useSelection());
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -144,6 +149,17 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
   Widget build(BuildContext context) => ToolPageShell(
         title: session.labelFor(Localizations.localeOf(context).languageCode),
         onBack: widget.onBack,
+        escapeHint: session.query.text.isEmpty
+            ? context.l10n.backEsc
+            : context.l10n.clearSearch,
+        onEscape: () {
+          if (session.query.text.isNotEmpty) {
+            session.query.clear();
+            session.focus.requestFocus();
+          } else {
+            widget.onBack();
+          }
+        },
         presentation: widget.presentation,
         visible: widget.visible,
         editorFocus: session.focus,
@@ -232,7 +248,7 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
             },
             onDoubleTap: () {
               session.select(index);
-              unawaited(session.useItem());
+              unawaited(session.useSelection());
             },
             onSecondaryTap: () {
               session.select(index);
@@ -272,11 +288,11 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
                       ])),
                   if (selected)
                     _actionMenu(AppRowActions(
-                        primaryLabel: context.l10n.open,
-                        onPrimary: session.interactive &&
-                                !session.loading &&
-                                item.canOpen
-                            ? () => unawaited(session.useItem())
+                        primaryLabel: item.canOpen
+                            ? context.l10n.open
+                            : context.l10n.copy,
+                        onPrimary: session.interactive && !session.loading
+                            ? () => unawaited(session.useSelection())
                             : null,
                         onActions: _actions)),
                 ]))));

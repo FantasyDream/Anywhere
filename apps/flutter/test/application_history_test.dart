@@ -9,13 +9,15 @@ import 'package:anywhere/l10n/generated/app_localizations.dart';
 import 'package:anywhere/settings/application_history_settings_controller.dart';
 import 'package:anywhere/settings/application_history_settings_section.dart';
 import 'package:anywhere/settings/settings_controller.dart';
+import 'package:anywhere/settings/settings_screen.dart';
 import 'package:anywhere/src/rust/api.dart';
 import 'package:anywhere/ui/app_style.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-AppHistoryItemDto item(String id, {String source = 'idea'}) =>
+AppHistoryItemDto item(String id,
+        {String source = 'idea', bool canOpen = true}) =>
     AppHistoryItemDto(
         id: id,
         objectKey: id,
@@ -23,7 +25,7 @@ AppHistoryItemDto item(String id, {String source = 'idea'}) =>
         title: 'Project $id',
         value: '/synthetic/$id',
         kind: 'directory',
-        canOpen: true);
+        canOpen: canOpen);
 final sourceRows = [
   AppHistorySourceDto(
       id: 'idea',
@@ -127,7 +129,8 @@ class Preferences implements AppHistoryPreferencesBackend {
             title: row.title,
             fileHint: row.fileHint,
             mode: mode,
-            actionEnabled: mode != AppHistorySourceModeDto.disabled,
+            actionEnabled:
+                mode != AppHistorySourceModeDto.disabled && row.actionEnabled,
             path: switch (mode) {
               AppHistorySourceModeDto.automatic => '/automatic/${row.fileHint}',
               AppHistorySourceModeDto.custom => path,
@@ -142,6 +145,232 @@ void main() {
   setUp(() => DesktopEnvironment.configure(
       const DesktopEnvironment(platform: TargetPlatform.macOS)));
   tearDown(DesktopEnvironment.reset);
+
+  test(
+      'saving drafts retains newer edits and does not refresh the catalog for a folder',
+      () async {
+    final backend = Preferences()..gate = Completer<void>();
+    final controller = AppHistorySettingsController(backend);
+    addTearDown(controller.dispose);
+    await controller.load();
+    final source = controller.sources.first;
+    controller.editPath(source, '/submitted');
+    final saving = controller.saveDrafts();
+    await Future<void>.delayed(Duration.zero);
+    controller.editPath(source, '/newer');
+    backend.gate!.complete();
+    expect(await saving, isTrue);
+    expect(controller.draftPath(controller.sources.first), '/newer');
+    expect(controller.hasDrafts, isTrue);
+    var changes = 0;
+    controller.onCatalogChanged = () async {
+      changes++;
+    };
+    await controller.openCustomDirectory();
+    expect(changes, 0);
+    controller.discardDrafts();
+    expect(controller.hasDrafts, isFalse);
+  });
+
+  testWidgets(
+      'source filters and remounts preserve path drafts; revert restores the saved path',
+      (tester) async {
+    final controller = AppHistorySettingsController(Preferences());
+    addTearDown(controller.dispose);
+    Widget page(bool visible) => MaterialApp(
+        theme: AppStyle.theme,
+        home: Scaffold(
+            body: SingleChildScrollView(
+                child: visible
+                    ? AppHistorySettingsSection(controller: controller)
+                    : const SizedBox())));
+    await tester.pumpWidget(page(true));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const Key('history-path-idea')), findsNothing);
+    await tester.tap(find.text('IntelliJ IDEA'));
+    await tester.pumpAndSettle();
+    final path = find.byKey(const Key('history-path-idea'));
+    await tester.enterText(path, '/unsaved/draft.xml');
+    await tester.enterText(
+        find.byKey(const Key('history-source-filter')), 'no such app');
+    await tester.pumpAndSettle();
+    expect(find.text('Clear filters and show all sources'), findsOneWidget);
+    await tester.pumpWidget(page(false));
+    await tester.pumpWidget(page(true));
+    await tester.pumpAndSettle();
+    expect(
+        tester
+            .widget<TextField>(find.byKey(const Key('history-source-filter')))
+            .controller!
+            .text,
+        'no such app');
+    await tester.tap(find.byKey(const Key('history-clear-filter')));
+    await tester.pumpAndSettle();
+    expect(
+        tester.widget<TextField>(path).controller!.text, '/unsaved/draft.xml');
+    await tester.ensureVisible(find.byKey(const Key('history-revert-idea')));
+    await tester.tap(find.byKey(const Key('history-revert-idea')));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextField>(path).controller!.text,
+        '/synthetic/recent.xml');
+    expect(controller.hasDrafts, isFalse);
+  });
+
+  for (final choice in [
+    'Keep editing',
+    'Close without saving',
+    'Save changes'
+  ]) {
+    testWidgets('settings close handles a history draft with $choice',
+        (tester) async {
+      tester.view.physicalSize = const Size(900, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final backend = Preferences();
+      final settings = SettingsController(
+          window: WindowHost(const MethodChannel('unused/history-close')),
+          appHistoryBackend: backend,
+          readExtensions: () => []);
+      settings.appHistory.onCatalogChanged = () async {};
+      addTearDown(settings.dispose);
+      await tester.pumpWidget(MaterialApp(
+          theme: AppStyle.theme,
+          home: Scaffold(
+              body: SettingsScreen(
+                  controller: settings, onClose: settings.prepareClose))));
+      await tester.tap(find.byKey(const ValueKey('settings-app_history')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('IntelliJ IDEA'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+          find.byKey(const Key('history-path-idea')), '/draft/history.xml');
+      await tester.tap(find.byKey(const ValueKey('settings-general')));
+      await tester.pumpAndSettle();
+      final closing = settings.prepareClose();
+      await tester.pumpAndSettle();
+      expect(find.text('Save changes before closing?'), findsOneWidget);
+      await tester.tap(find.text(choice));
+      await tester.pumpAndSettle();
+      expect(await closing, choice != 'Keep editing');
+      expect(settings.appHistory.hasDrafts, choice == 'Keep editing');
+      expect(backend.writes,
+          choice == 'Save changes' ? ['idea:/draft/history.xml'] : isEmpty);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  testWidgets(
+      'a failed save-and-close reveals the affected source and retains its draft',
+      (tester) async {
+    final backend = Preferences()..fail = true;
+    final settings = SettingsController(
+        window: WindowHost(const MethodChannel('unused/history-close-failure')),
+        appHistoryBackend: backend,
+        readExtensions: () => []);
+    settings.appHistory.onCatalogChanged = () async {};
+    addTearDown(settings.dispose);
+    await settings.appHistory.load();
+    settings.appHistory
+        .editPath(settings.appHistory.sources.first, '/bad/path.xml');
+    await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme,
+        home: Scaffold(
+            body: SettingsScreen(
+                controller: settings, onClose: settings.prepareClose))));
+    final closing = settings.prepareClose();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save changes'));
+    await tester.pumpAndSettle();
+    expect(await closing, isFalse);
+    expect(find.byKey(const Key('history-path-idea')), findsOneWidget);
+    expect(settings.appHistory.hasDrafts, isTrue);
+    expect(settings.appHistory.failedSource, 'idea');
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+      'a disabled source can be configured with Enter and keeps editor focus',
+      (tester) async {
+    final backend = Preferences();
+    final controller = AppHistorySettingsController(backend);
+    addTearDown(controller.dispose);
+    await controller.load();
+    await controller.setActionEnabled('idea', false);
+    await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme,
+        home: Scaffold(
+            body: SingleChildScrollView(
+                child: AppHistorySettingsSection(controller: controller)))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('IntelliJ IDEA'));
+    await tester.pumpAndSettle();
+    final path = find.byKey(const Key('history-path-idea'));
+    await tester.enterText(path, '/prepared/while-off.xml');
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    expect(controller.sources.first.actionEnabled, isFalse);
+    expect(controller.sources.first.path, '/prepared/while-off.xml');
+    expect(controller.hasDrafts, isFalse);
+    expect(tester.widget<TextField>(path).focusNode!.hasFocus, isTrue);
+    await tester.tap(find.byKey(const Key('history-filter-enabled')));
+    await tester.pumpAndSettle();
+    expect(find.text('IntelliJ IDEA'), findsNothing);
+    await tester.tap(find.byKey(const Key('history-filter-all')));
+    await tester.pumpAndSettle();
+    expect(find.text('IntelliJ IDEA'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'history supports page navigation, clear-then-back Escape and copying remote rows',
+      (tester) async {
+    final backend = HistoryBackend()
+      ..searchOverride = (_, __) async => AppHistoryDto(items: [
+            item('remote', canOpen: false),
+            ...List.generate(30, (i) => item('$i'))
+          ], failedSources: const []);
+    final session =
+        AppHistorySession(backend, sourceId: 'vscode', title: 'VS Code');
+    var backs = 0;
+    await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme,
+        home: Scaffold(
+            body: ListenableBuilder(
+                listenable: session,
+                builder: (context, _) => session.build(context,
+                    onBack: () => backs++, presentation: 1, visible: true)))));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(backend.used, ['remote:true']);
+    await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
+    expect(session.selectedIndex, greaterThan(1));
+    await tester.sendKeyEvent(LogicalKeyboardKey.pageUp);
+    expect(session.selectedIndex, 0);
+    session.query.text = 'query';
+    await tester.pump(const Duration(milliseconds: 130));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump(const Duration(milliseconds: 130));
+    await tester.pumpAndSettle();
+    expect(session.query.text, isEmpty);
+    expect(backs, 0);
+    session.query.text = 'another query';
+    await tester.pump(const Duration(milliseconds: 130));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('esc'));
+    await tester.pump(const Duration(milliseconds: 130));
+    await tester.pumpAndSettle();
+    expect(session.query.text, isEmpty);
+    expect(backs, 0,
+        reason: 'the Esc control follows the same rule as the key');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    expect(backs, 1);
+    await tester.pumpWidget(const SizedBox());
+    session.dispose();
+  });
 
   testWidgets('custom adapters reopen independently of settings scroll state',
       (tester) async {
@@ -248,7 +477,8 @@ void main() {
       await tester.pumpAndSettle();
       expect(value(), isEmpty);
       expect(controller.sources.single.actionEnabled, isFalse);
-      expect(tester.widget<TextField>(path).enabled, isFalse);
+      expect(tester.widget<TextField>(path).enabled, isTrue,
+          reason: 'a location can be prepared without enabling its action');
       await tester.tap(find.byKey(const Key('history-action-idea')));
       await tester.pumpAndSettle();
       expect(value(), '/automatic/recentProjects.xml');

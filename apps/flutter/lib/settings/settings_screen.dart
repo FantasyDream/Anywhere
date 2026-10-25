@@ -153,7 +153,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final saved = await (_pending ?? Future<bool>.value(true));
       if (!mounted) return false;
-      final dirty = _hasSearchDrafts;
+      final dirty = _hasSearchDrafts || _controller.appHistory.hasDrafts;
       if (!dirty && saved) return true;
       final choice = await showDialog<String>(
         context: context,
@@ -163,7 +163,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ? context.l10n.saveBeforeClose
               : context.l10n.changesNotSaved),
           content: Text(dirty
-              ? context.l10n.searchDrafts
+              ? context.l10n.settingsDrafts
               : (_controller.statusMessageFor(context.l10n) ??
                   context.l10n.settingsCouldNotBeSavedYouCan)),
           actions: [
@@ -180,20 +180,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ],
         ),
       );
-      if (choice == 'discard') return true;
+      if (choice == 'discard') {
+        _controller.appHistory.discardDrafts();
+        return true;
+      }
       if (choice != 'save') return false;
-      final applied = await _save(
-          (current) => current.copyWith(
-              excludedApps: _excludedIds(),
-              fileSearchRoots: _lines(_fileRoots),
-              fileSearchExcludedNames: _lines(_fileExclusions)),
-          excluded: true,
-          fileSearch: true);
-      if (applied && mounted && _hasSearchDrafts) {
+      final applied = !_hasSearchDrafts ||
+          await _save(
+              (current) => current.copyWith(
+                  excludedApps: _excludedIds(),
+                  fileSearchRoots: _lines(_fileRoots),
+                  fileSearchExcludedNames: _lines(_fileExclusions)),
+              excluded: true,
+              fileSearch: true);
+      final historyApplied =
+          applied && await _controller.appHistory.saveDrafts();
+      if (applied && !historyApplied && mounted) {
+        _controller.appHistory.setFilter(
+            _controller.appHistory.failedSource ?? '',
+            onlyEnabled: false);
+        _selectPage('app_history');
+      }
+      if (historyApplied &&
+          mounted &&
+          (_hasSearchDrafts || _controller.appHistory.hasDrafts)) {
         _controller.reportError(context.l10n.newEditsWereMadeWhileSavingSave);
         return false;
       }
-      return applied;
+      return historyApplied;
     } finally {
       if (mounted) setState(() => _closing = false);
     }

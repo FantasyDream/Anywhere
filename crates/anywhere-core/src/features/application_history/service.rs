@@ -171,10 +171,12 @@ impl HistoryService {
     }
     pub fn configure_mode(&self, id: &str, mode: SourceMode, path: Option<&str>) -> Result<()> {
         let _configuration = self.configuration.lock().unwrap();
-        ensure!(
-            self.loader.descriptors().iter().any(|d| d.id == id),
-            "unknown source"
-        );
+        let descriptor = self
+            .loader
+            .descriptors()
+            .into_iter()
+            .find(|source| source.id == id)
+            .ok_or_else(|| anyhow::anyhow!("unknown source"))?;
         let path = if mode == SourceMode::Custom {
             let path = path
                 .filter(|p| !p.trim().is_empty())
@@ -188,13 +190,15 @@ impl HistoryService {
         } else {
             None
         };
-        let next = SourceConfiguration {
+        self.save_configuration(id, |current| SourceConfiguration {
             id: id.into(),
             mode,
-            path,
-            action_enabled: mode != SourceMode::Disabled,
-        };
-        self.save_configuration(id, |_| next.clone())
+            path: path.clone(),
+            // Choosing a location must not undo an explicit action switch,
+            // including one committed by another service during validation.
+            action_enabled: mode != SourceMode::Disabled
+                && self.action_enabled(&descriptor, current),
+        })
     }
     pub fn set_action_enabled(&self, id: &str, enabled: bool) -> Result<()> {
         let _configuration = self.configuration.lock().unwrap();

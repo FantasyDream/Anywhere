@@ -569,11 +569,11 @@ abstract class AppLocalizations {
   /// **'Some changes were not saved'**
   String get changesNotSaved;
 
-  /// No description provided for @searchDrafts.
+  /// No description provided for @settingsDrafts.
   ///
   /// In en, this message translates to:
-  /// **'Search settings have unapplied changes.'**
-  String get searchDrafts;
+  /// **'Some settings have unsaved changes.'**
+  String get settingsDrafts;
 
   /// No description provided for @settingsSaveFailed.
   ///
@@ -3094,6 +3094,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Filter apps…'**
   String get appHistoryFilterSources;
+
+  /// No description provided for @appHistoryAllSources.
+  ///
+  /// In en, this message translates to:
+  /// **'All sources'**
+  String get appHistoryAllSources;
+
+  /// No description provided for @appHistoryShowAllSources.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear filters and show all sources'**
+  String get appHistoryShowAllSources;
+
+  /// No description provided for @appHistoryRevertPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Revert edits'**
+  String get appHistoryRevertPath;
+
+  /// No description provided for @appHistoryUnsavedPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsaved path'**
+  String get appHistoryUnsavedPath;
 
   /// No description provided for @appHistorySources.
   ///

@@ -94,6 +94,11 @@ fn service() -> HistoryService {
         Ok(storage),
         SourceCatalog::bundled_with_config_directory(None).unwrap(),
     )
+    .with_installed_applications([
+        "com.jetbrains.intellij".into(),
+        "com.microsoft.VSCode".into(),
+        "md.obsidian".into(),
+    ])
 }
 fn write_idea(source: &Path, project: &Path) {
     std::fs::write(source, format!("<application><component name=\"RecentProjectsManager\"><option name=\"recentPaths\"><list><option value=\"{}\"/></list></option></component></application>", project.display())).unwrap();

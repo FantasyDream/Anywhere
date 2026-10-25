@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-25",
+  "version": "0.14.0+10",
+  "comparison_base": "f75c3f2",
+  "changes": [
+    "Compact source disclosures with all/enabled and name filters; missing locations remain discoverable",
+    "Controller-owned path drafts survive filters and settings category changes; per-source revert and unsaved status",
+    "Settings close shares Save, Keep editing and Discard across search and history drafts; readback retains newer edits",
+    "Failed save-and-close reveals the affected source, preserves draft and failure notice across remount",
+    "Location changes preserve both implicit installed-app defaults and explicit action switches; disabled actions can be configured",
+    "Enter saves a path and restores its editor focus; opening adapter folder does not publish a catalog change",
+    "History PageUp/PageDown; Escape and clickable Esc clear a query before returning; remote default is Copy URI",
+    "Initial settings load is deferred until after mounting to avoid notifying a building ancestor"
+  ],
+  "automated": {
+    "full_gate": "scripts/check.sh",
+    "exit_code": 0,
+    "core": {
+      "passed": 299,
+      "ignored_existing": 1
+    },
+    "mvp": {
+      "passed": 193,
+      "ignored_existing": 4
+    },
+    "flutter": {
+      "passed": 424
+    },
+    "native_web_architecture_clippy_analyze_generated_docs_style": "passed",
+    "targeted": {
+      "history_core": 37,
+      "history_mvp": 4,
+      "history_and_settings_flutter": 40
+    }
+  },
+  "package": {
+    "app": "build/Anywhere-0.14-preview-build10.app",
+    "zip": "build/Anywhere-0.14-preview-build10-macos-arm64.zip",
+    "sha256": "6a0f97395535ba7a5f38b3d7da026bb4b1ff72e4f1fd629168ff7f44e915453f",
+    "persistent_signing_and_strict_validation": "passed",
+    "github_release_uploaded": false
+  },
+  "native_ui": {
+    "status": "blocked",
+    "reason": "Mac locked; CUA could not unlock",
+    "current_running_bundle": "build/Anywhere-0.14-preview-build6.app",
+    "build10_launched": false,
+    "physical_ime_keyboard_and_visual_acceptance": "not performed on Build 10"
+  },
+  "privacy": {
+    "private_history_bodies_read": false,
+    "new_permissions_granted": false,
+    "capture_or_user_preferences_changed": false
+  },
+  "scope_preserved": [
+    "Scope membership and shortcuts",
+    "15-second launcher retention",
+    "history source and execution revalidation",
+    "browser remains a later independent phase"
+  ],
+  "remaining": [
+    "V0.14 native acceptance",
+    "H3 recent notes feasibility",
+    "H4 object-context actions",
+    "previously documented Web publisher/source-identity and SDK/resource boundaries"
+  ]
+}

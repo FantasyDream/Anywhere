@@ -13,6 +13,7 @@ class ToolPageShell extends StatefulWidget {
       required this.title,
       required this.child,
       required this.onBack,
+      this.onEscape,
       this.subtitle,
       this.notice,
       this.header,
@@ -35,6 +36,7 @@ class ToolPageShell extends StatefulWidget {
   final double headerHeight;
   final Widget? footer;
   final VoidCallback onBack;
+  final VoidCallback? onEscape;
   final ScrollController? scrollController;
   final FocusNode? editorFocus;
   final int presentation;
@@ -117,7 +119,7 @@ class _ToolPageShellState extends State<ToolPageShell> {
       return KeyEventResult.ignored;
     }
     if (event.logicalKey == LogicalKeyboardKey.escape) {
-      widget.onBack();
+      (widget.onEscape ?? widget.onBack)();
       return KeyEventResult.handled;
     }
     final keyboard = HardwareKeyboard.instance;
@@ -168,10 +170,14 @@ class _ToolPageShellState extends State<ToolPageShell> {
               child: Row(children: [
                 widget.leading ??
                     IconButton(
-                        tooltip: widget.escapeHint ??
-                            (widget.detached
-                                ? context.l10n.closeEsc
-                                : context.l10n.backEsc),
+                        tooltip: widget.onEscape != null
+                            ? (widget.detached
+                                ? context.l10n.close
+                                : context.l10n.back)
+                            : widget.escapeHint ??
+                                (widget.detached
+                                    ? context.l10n.closeEsc
+                                    : context.l10n.backEsc),
                         onPressed: widget.visible ? widget.onBack : null,
                         icon: Icon(
                             widget.detached ? AppIcons.close : AppIcons.back,
@@ -204,7 +210,9 @@ class _ToolPageShellState extends State<ToolPageShell> {
                             ? context.l10n.closeEsc
                             : context.l10n.backEsc),
                     child: InkWell(
-                        onTap: widget.visible ? widget.onBack : null,
+                        onTap: widget.visible
+                            ? (widget.onEscape ?? widget.onBack)
+                            : null,
                         borderRadius:
                             BorderRadius.circular(DesignTokens.keycapRadius),
                         child: const AppKeycap('esc'))),

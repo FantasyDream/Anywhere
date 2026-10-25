@@ -157,6 +157,18 @@ class AppHistorySession extends ToolPageSession {
     notifyListeners();
   }
 
+  void movePage(int direction) {
+    final rows = scroll.hasClients
+        ? (scroll.position.viewportDimension / 64).floor().clamp(1, 100)
+        : 6;
+    select(selectedIndex + rows * direction);
+  }
+
+  Future<void> useSelection() async {
+    final item = selected;
+    if (item != null) await useItem(copy: !item.canOpen);
+  }
+
   void _revealSelection() {
     if (scroll.hasClients) {
       final top = selectedIndex * 64.0;

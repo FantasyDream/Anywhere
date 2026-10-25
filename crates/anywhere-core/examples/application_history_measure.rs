@@ -43,7 +43,11 @@ fn fixture(directory: &Path) -> Result<HistoryService> {
     let service = HistoryService::new(
         Ok(storage),
         SourceCatalog::bundled_with_config_directory(None)?,
-    );
+    )
+    .with_installed_applications([
+        "com.jetbrains.intellij".into(),
+        "com.microsoft.VSCode".into(),
+    ]);
     service.refresh()?;
     service.configure_mode("idea", SourceMode::Custom, Some(idea.to_str().unwrap()))?;
     service.configure_mode("vscode", SourceMode::Custom, Some(vscode.to_str().unwrap()))?;

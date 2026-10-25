@@ -329,6 +329,10 @@ class SettingsController extends ChangeNotifier {
       return false;
     }
     if (_disposed) return false;
+    if (beforeClose == null && appHistory.hasDrafts) {
+      _reportLocalizedError((labels) => labels.settingsDrafts);
+      return false;
+    }
     return await (beforeClose?.call() ?? Future.value(true));
   }
 

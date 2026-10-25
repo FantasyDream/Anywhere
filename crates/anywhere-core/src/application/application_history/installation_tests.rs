@@ -24,6 +24,39 @@ fn enabled(service: &HistoryService, id: &str) -> bool {
 }
 
 #[test]
+fn changing_a_location_keeps_hidden_actions_off() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("recent.xml");
+    std::fs::write(&path, "synthetic metadata").unwrap();
+    for explicitly_disabled in [false, true] {
+        let storage = storage();
+        let service = HistoryService::new(Ok(storage.clone()), loader());
+        if explicitly_disabled {
+            service.set_action_enabled("idea", false).unwrap();
+        }
+        service
+            .configure_mode("idea", SourceMode::Custom, path.to_str())
+            .unwrap();
+        assert!(!enabled(&service, "idea"));
+        let saved = service
+            .sources()
+            .into_iter()
+            .find(|s| s.descriptor.id == "idea")
+            .unwrap();
+        assert_eq!(saved.path, Some(path.canonicalize().unwrap()));
+        service
+            .configure_mode("idea", SourceMode::Automatic, None)
+            .unwrap();
+        let restarted = HistoryService::new(Ok(storage), loader())
+            .with_installed_applications(["com.jetbrains.intellij".into()]);
+        restarted.refresh().unwrap();
+        assert!(!enabled(&restarted, "idea"));
+        restarted.set_action_enabled("idea", true).unwrap();
+        assert!(enabled(&restarted, "idea"));
+    }
+}
+
+#[test]
 fn absent_apps_are_off_and_installed_variants_share_one_default() {
     let storage = storage();
     let missing = HistoryService::new(Ok(storage.clone()), loader());
@@ -85,8 +118,8 @@ fn explicit_disable_and_custom_paths_survive_changes_in_installed_apps() {
         .configure_mode("idea", SourceMode::Custom, path.to_str())
         .unwrap();
     assert!(
-        enabled(&first, "idea"),
-        "setting a custom path is an explicit enable"
+        !enabled(&first, "idea"),
+        "a path change does not enable the action"
     );
     first.set_action_enabled("idea", false).unwrap();
     let installed = HistoryService::new(Ok(storage.clone()), loader())

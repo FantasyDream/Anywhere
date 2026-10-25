@@ -246,7 +246,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get changesNotSaved => 'Some changes were not saved';
 
   @override
-  String get searchDrafts => 'Search settings have unapplied changes.';
+  String get settingsDrafts => 'Some settings have unsaved changes.';
 
   @override
   String get settingsSaveFailed => 'Settings could not be saved. Try again.';
@@ -1633,6 +1633,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appHistoryFilterSources => 'Filter apps…';
+
+  @override
+  String get appHistoryAllSources => 'All sources';
+
+  @override
+  String get appHistoryShowAllSources => 'Clear filters and show all sources';
+
+  @override
+  String get appHistoryRevertPath => 'Revert edits';
+
+  @override
+  String get appHistoryUnsavedPath => 'Unsaved path';
 
   @override
   String get appHistorySources => 'History sources';
