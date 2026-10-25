@@ -829,6 +829,8 @@
   "appHistorySourcePath": "历史元数据文件路径",
   "appHistoryUnconfigured": "暂无可用的历史文件，请在「设置 → 应用历史」中重新检测或指定自定义路径。",
   "appHistoryReadFailed": "部分来源暂时无法读取，请在「设置 → 应用历史」中检查所选文件。",
+  "appHistoryBusy": "正在结束上一次历史操作，请稍后刷新重试。",
+  "appHistoryExpired": "此历史页面已过期，请返回并重新打开相应操作。",
   "appHistoryDisabled": "应用历史已停用，可在「设置 → 功能」中启用。",
   "appHistoryOperationFailed": "历史操作未完成，请刷新列表后重试。",
   "appHistorySettingsFailed": "无法读取或保存历史来源，请检查文件路径后重试。",

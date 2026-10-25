@@ -829,6 +829,8 @@
   "appHistorySourcePath": "History metadata file path",
   "appHistoryUnconfigured": "No history file is available. Check automatic detection or set a custom path in Settings → App History.",
   "appHistoryReadFailed": "Some sources could not be read. Check their files in Settings → App History.",
+  "appHistoryBusy": "A previous history operation is finishing. Refresh to try again.",
+  "appHistoryExpired": "This history page has expired. Go back and reopen the action.",
   "appHistoryDisabled": "App History is disabled. Enable it in Settings → Features.",
   "appHistoryOperationFailed": "The history operation could not be completed. Refresh the list and try again.",
   "appHistorySettingsFailed": "History sources could not be loaded or saved. Check the file path and try again.",

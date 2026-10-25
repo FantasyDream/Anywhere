@@ -1650,6 +1650,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get appHistoryReadFailed => 'Some sources could not be read. Check their files in Settings → App History.';
 
   @override
+  String get appHistoryBusy => 'A previous history operation is finishing. Refresh to try again.';
+
+  @override
+  String get appHistoryExpired => 'This history page has expired. Go back and reopen the action.';
+
+  @override
   String get appHistoryDisabled => 'App History is disabled. Enable it in Settings → Features.';
 
   @override

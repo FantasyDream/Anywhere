@@ -81,7 +81,9 @@ fn explicit_disable_and_custom_paths_survive_changes_in_installed_apps() {
     .unwrap();
     let storage = storage();
     let first = HistoryService::new(Ok(storage.clone()), loader());
-    first.configure("idea", path.to_str()).unwrap();
+    first
+        .configure_mode("idea", SourceMode::Custom, path.to_str())
+        .unwrap();
     assert!(
         enabled(&first, "idea"),
         "setting a custom path is an explicit enable"

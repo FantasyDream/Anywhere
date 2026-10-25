@@ -45,7 +45,10 @@ class AppHistorySession extends ToolPageSession {
   double get height => 520;
 
   void _cancelRead() {
-    _cancellation = backend.cancel().catchError((Object _) {});
+    // Every earlier cancel must finish before the next read. Awaiting only the
+    // latest Future permits an older native callback to cancel that new read.
+    _cancellation =
+        _cancellation.then((_) => backend.cancel()).catchError((Object _) {});
   }
 
   void _changed() {
@@ -88,6 +91,10 @@ class AppHistorySession extends ToolPageSession {
   }
 
   Future<void> refresh() async {
+    if (busy && _visible && canInteract) {
+      _again = true;
+      return;
+    }
     if (!interactive) return;
     if (_running) {
       _again = true;
@@ -179,6 +186,9 @@ class AppHistorySession extends ToolPageSession {
       if (!disposed) {
         busy = false;
         notifyListeners();
+        if (_again && interactive && _debounce?.isActive != true) {
+          unawaited(refresh());
+        }
       }
     }
   }

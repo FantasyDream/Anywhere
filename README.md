@@ -6,7 +6,7 @@
 
 ## 项目状态
 
-当前为 **V0.13 开发预览，工程与本轮常规 macOS 验收已收尾**：基于中英国际化和拼音检索，增加剪贴板定时暂停、保留期限与可靠性检查。已知 SDK 警告、WebKit GPU 保留及未验收矩阵见 [V0.13 MVP](docs/mvp-v0.13.md)。版本和构建号以 [pubspec.yaml](apps/flutter/pubspec.yaml) 为准；开发构建不等于正式发行。
+当前分支为 **V0.14 应用历史开发原型，尚未收尾**。此前 V0.13 已完成工程检查与该轮常规 macOS 验收；已知 SDK 警告、WebKit GPU 保留及未验收矩阵见 [V0.13 MVP](docs/mvp-v0.13.md)。版本和构建号以 [pubspec.yaml](apps/flutter/pubspec.yaml) 为准；开发构建不等于正式发行。
 
 V0.14 正在 `codex/dev-0.14` 验证[应用历史原型](docs/mvp-v0.14.md)：通用文件读取器 + 官方配置 / JS 转换，共享历史页已接入 18 个来源，覆盖 JetBrains、VS Code 同类编辑器、Sublime Text 和 Obsidian 最近仓库。支持默认路径检测、自定义路径、逐来源 Action 开关与可信用户适配；Obsidian 最近笔记与多实例仍待验证；浏览器历史、书签与 Tab 管理调整为[后续独立功能](docs/browser-feature.md)，不属于 V0.14 收尾前置。
 
@@ -15,9 +15,9 @@ V0.14 正在 `codex/dev-0.14` 验证[应用历史原型](docs/mvp-v0.14.md)：�
 | macOS 12+ | 主要开发和验证平台；从源码构建本机架构的 App |
 | Windows / Linux | 部分共享代码有编译与测试检查，尚未交付可用 App |
 
-本地开发包使用持久本机签名，手动 GitHub 打包使用独立 CI 开发签名；公开分发所需的签名、公证、安装升级和完整辅助功能矩阵仍需验收。当前进度见 [V0.13 MVP](docs/mvp-v0.13.md)，上一阶段验收见 [V0.12 MVP](docs/mvp-v0.12.md)。
+本地开发包使用持久本机签名，手动 GitHub 打包使用独立 CI 开发签名；公开分发所需的签名、公证、安装升级和完整辅助功能矩阵仍需验收。当前进度见 [V0.14 技术方案](docs/mvp-v0.14.md)，此前验收见 [V0.13 MVP](docs/mvp-v0.13.md)。
 
-**下载提示：** GitHub 的 [`latest` 历史预览](https://github.com/FantasyDream/Anywhere/releases/tag/latest) 是 2026-09-18 的 V0.3 开发包，不包含本页介绍的 V0.12 功能，也不代表当前 Windows 支持状态。当前版本请按下文从源码构建；新版预览尚未上传 Release。
+**下载提示：** GitHub 的 [`latest` 历史预览](https://github.com/FantasyDream/Anywhere/releases/tag/latest) 是 2026-09-18 的 V0.3 开发包，不包含本页介绍的后续功能，也不代表当前 Windows 支持状态。当前版本请按下文从源码构建；新版预览尚未上传 Release。
 
 ## 能做什么
 

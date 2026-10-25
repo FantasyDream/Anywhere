@@ -1614,6 +1614,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get appHistoryReadFailed => '部分来源暂时无法读取，请在「设置 → 应用历史」中检查所选文件。';
 
   @override
+  String get appHistoryBusy => '正在结束上一次历史操作，请稍后刷新重试。';
+
+  @override
+  String get appHistoryExpired => '此历史页面已过期，请返回并重新打开相应操作。';
+
+  @override
   String get appHistoryDisabled => '应用历史已停用，可在「设置 → 功能」中启用。';
 
   @override

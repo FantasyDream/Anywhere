@@ -37,18 +37,27 @@ class RustAppHistoryPreferencesBackend implements AppHistoryPreferencesBackend {
 class RustAppHistoryQueryBackend implements AppHistoryQueryBackend {
   Future<int>? _lease;
   bool _closed = false;
-  Future<int> _session() => _lease ??= api.openAppHistorySession();
+  Future<int> _session() async {
+    final lease = _lease ??= api.openAppHistorySession();
+    try {
+      return await lease;
+    } catch (_) {
+      // An explicit refresh may retry a transient failure. Do not cache the
+      // failed Future for the rest of this page's lifetime.
+      if (identical(_lease, lease)) _lease = null;
+      rethrow;
+    }
+  }
+
   @override
   Future<api.AppHistoryDto> search(String query, String source) async {
     if (_closed) throw StateError('History page closed');
-    var result = await api.appHistorySearch(
-        sessionId: await _session(), query: query, source: source);
-    if (!_closed && result.notice == api.AppHistoryNoticeDto.stale) {
-      _lease = null;
-      result = await api.appHistorySearch(
-          sessionId: await _session(), query: query, source: source);
-    }
-    return result;
+    final session = await _session();
+    if (_closed) throw StateError('History page closed');
+    // A stale result may belong to a replaced page. Reopening here would steal
+    // the newer page's lease before its presentation can reject this response.
+    return api.appHistorySearch(
+        sessionId: session, query: query, source: source);
   }
 
   @override

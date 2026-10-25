@@ -43,6 +43,7 @@ final sourceRows = [
 
 class HistoryBackend implements AppHistoryQueryBackend {
   Future<AppHistoryDto> Function(String, String)? searchOverride;
+  Future<void> Function()? useOverride, cancelOverride;
   final calls = <String>[], used = <String>[];
   int cancelled = 0, closed = 0;
   @override
@@ -56,11 +57,13 @@ class HistoryBackend implements AppHistoryQueryBackend {
   @override
   Future<void> useItem(String id, {required bool copy}) async {
     used.add('$id:$copy');
+    await useOverride?.call();
   }
 
   @override
   Future<void> cancel() async {
     cancelled++;
+    await cancelOverride?.call();
   }
 
   @override
@@ -361,6 +364,47 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
     active.dispose();
+  });
+
+  testWidgets(
+      'a query committed during an operation runs after the operation finishes',
+      (tester) async {
+    final operation = Completer<void>();
+    final backend = HistoryBackend()..useOverride = () => operation.future;
+    final session = AppHistorySession(backend,
+        sourceId: 'idea', title: 'IDEA Recent Projects');
+    await tester.pump();
+    final using = session.useItem();
+    session.query.text = 'latest query';
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(backend.calls, ['idea:']);
+    operation.complete();
+    await using;
+    await tester.pump();
+    expect(backend.calls.last, 'idea:latest query');
+    expect(session.loading, isFalse);
+    session.dispose();
+  });
+
+  testWidgets('all pending cancellations finish before the next read',
+      (tester) async {
+    final firstCancel = Completer<void>();
+    final backend = HistoryBackend();
+    final session = AppHistorySession(backend,
+        sourceId: 'idea', title: 'IDEA Recent Projects');
+    await tester.pump();
+    backend.cancelOverride =
+        () => backend.cancelled == 1 ? firstCancel.future : Future.value();
+    session.query.text = 'first';
+    await tester.pump();
+    session.query.text = 'latest';
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(backend.calls, ['idea:'],
+        reason: 'a delayed old cancel must not invalidate the latest read');
+    firstCancel.complete();
+    await tester.pump();
+    expect(backend.calls.last, 'idea:latest');
+    session.dispose();
   });
 
   testWidgets(

@@ -101,7 +101,9 @@ mod cases {
             "unchanged detection must not revoke selections"
         );
 
-        service.configure("idea", custom.to_str()).unwrap();
+        service
+            .configure_mode("idea", SourceMode::Custom, custom.to_str())
+            .unwrap();
         assert!(service
             .use_item(
                 &first,
@@ -130,7 +132,9 @@ mod cases {
         assert_eq!(status(&automatic, "idea").mode, SourceMode::Automatic);
         assert_eq!(status(&automatic, "idea").path, Some(auto));
         let selected = service.search(0, "", "idea").unwrap().items[0].id.clone();
-        service.configure("idea", None).unwrap();
+        service
+            .configure_mode("idea", SourceMode::Disabled, None)
+            .unwrap();
         assert!(service
             .use_item(
                 &selected,

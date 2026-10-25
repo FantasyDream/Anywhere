@@ -3125,6 +3125,18 @@ abstract class AppLocalizations {
   /// **'Some sources could not be read. Check their files in Settings → App History.'**
   String get appHistoryReadFailed;
 
+  /// No description provided for @appHistoryBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'A previous history operation is finishing. Refresh to try again.'**
+  String get appHistoryBusy;
+
+  /// No description provided for @appHistoryExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'This history page has expired. Go back and reopen the action.'**
+  String get appHistoryExpired;
+
   /// No description provided for @appHistoryDisabled.
   ///
   /// In en, this message translates to:

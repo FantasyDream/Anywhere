@@ -1,6 +1,6 @@
 # 第三方 Web 插件：架构与实施方案
 
-当前实现：V0.12 开发预览；最后核对：2026-10-23。第三方采用 WebView，第一方为静态内置模块；JSON 已作为普通 Web 包接入。本文说明架构与设计边界，实际 Manifest / SDK 用法以[开发指南](plugin-development.md)和生成的协议为准；逐构建证据见[历史实施记录](archive/web-plugin-development-records.md)。Terminal 延后，Windows 与完整发行矩阵尚未交付。标为“后续”或“验收要求”的内容不代表已有实现。
+现行 Web 插件架构；文档整理：2026-10-25。第三方采用 WebView，第一方为静态内置模块；JSON 已作为普通 Web 包接入。本文说明架构与设计边界，实际 Manifest / SDK 用法以[开发指南](plugin-development.md)和生成的协议为准；逐构建证据见[历史实施记录](archive/web-plugin-development-records.md)。Terminal 延后，Windows 与完整发行矩阵尚未交付。标为“后续”或“验收要求”的内容不代表已有实现。
 
 ## 1. 结论与范围
 

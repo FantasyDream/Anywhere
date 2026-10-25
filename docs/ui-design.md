@@ -1,6 +1,6 @@
 # 共享 UI 与原生材质
 
-当前实现：V0.12 / Build 16；最后核对：2026-10-23。页面行为以 [Launcher 交互](launcher-interaction.md) 为准，本页只说明视觉组件与平台边界。
+现行共享视觉契约；文档整理：2026-10-25。页面行为以 [Launcher 交互](launcher-interaction.md) 为准，本页只说明视觉组件与平台边界。
 
 ## 页面任务与信息优先级
 

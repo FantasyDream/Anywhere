@@ -2,7 +2,7 @@
 use anyhow::{ensure, Result};
 use anywhere_core::{
     application::application_history::SourceCatalog,
-    features::application_history::service::HistoryService,
+    features::application_history::{model::SourceMode, service::HistoryService},
     persistence::module_storage::ModuleStorageHost,
 };
 use serde_json::json;
@@ -45,8 +45,8 @@ fn fixture(directory: &Path) -> Result<HistoryService> {
         SourceCatalog::bundled_with_config_directory(None)?,
     );
     service.refresh()?;
-    service.configure("idea", Some(idea.to_str().unwrap()))?;
-    service.configure("vscode", Some(vscode.to_str().unwrap()))?;
+    service.configure_mode("idea", SourceMode::Custom, Some(idea.to_str().unwrap()))?;
+    service.configure_mode("vscode", SourceMode::Custom, Some(vscode.to_str().unwrap()))?;
     Ok(service)
 }
 fn main() -> Result<()> {

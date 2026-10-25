@@ -22,6 +22,75 @@ fn storage() -> Arc<dyn crate::core::storage::ExtensionStorage> {
 }
 
 #[test]
+fn toggling_an_action_preserves_a_path_committed_by_another_service() {
+    use crate::core::storage::{ExtensionStorage, StorageUpdate};
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Barrier,
+    };
+    struct GatedStorage {
+        inner: Arc<dyn ExtensionStorage>,
+        armed: AtomicBool,
+        entered: Barrier,
+        release: Barrier,
+    }
+    impl ExtensionStorage for GatedStorage {
+        fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
+            self.inner.get(key)
+        }
+        fn put(&self, key: &str, bytes: &[u8]) -> Result<()> {
+            self.inner.put(key, bytes)
+        }
+        fn remove(&self, key: &str) -> Result<()> {
+            self.inner.remove(key)
+        }
+        fn update(&self, key: &str, change: &mut StorageUpdate<'_>) -> Result<Option<Vec<u8>>> {
+            if self.armed.swap(false, Ordering::AcqRel) {
+                self.entered.wait();
+                self.release.wait();
+            }
+            self.inner.update(key, change)
+        }
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let first_path = temp.path().join("first.xml");
+    let latest_path = temp.path().join("latest.xml");
+    fs::write(&first_path, "synthetic metadata").unwrap();
+    fs::write(&latest_path, "synthetic metadata").unwrap();
+    let storage = storage();
+    let gated = Arc::new(GatedStorage {
+        inner: storage.clone(),
+        armed: AtomicBool::new(false),
+        entered: Barrier::new(2),
+        release: Barrier::new(2),
+    });
+    let loader = SourceCatalog::bundled_with_config_directory(None).unwrap();
+    let first = Arc::new(installed_service(Ok(gated.clone()), loader.clone()));
+    first
+        .configure_mode("idea", SourceMode::Custom, first_path.to_str())
+        .unwrap();
+    let second = installed_service(Ok(storage), loader);
+    gated.armed.store(true, Ordering::Release);
+    let worker = first.clone();
+    let toggling = std::thread::spawn(move || worker.set_action_enabled("idea", false));
+    gated.entered.wait();
+    second
+        .configure_mode("idea", SourceMode::Custom, latest_path.to_str())
+        .unwrap();
+    gated.release.wait();
+    toggling.join().unwrap().unwrap();
+    second.refresh().unwrap();
+    let status = second
+        .sources()
+        .into_iter()
+        .find(|s| s.descriptor.id == "idea")
+        .unwrap();
+    assert!(!status.action_enabled);
+    assert_eq!(status.mode, SourceMode::Custom);
+    assert_eq!(status.path, Some(latest_path.canonicalize().unwrap()));
+}
+
+#[test]
 fn user_sources_share_the_bundled_contract_and_are_captured_once() {
     let root = tempfile::tempdir().unwrap();
     let source = root.path().join("history.json");
@@ -35,7 +104,9 @@ fn user_sources_share_the_bundled_contract_and_are_captured_once() {
         BUNDLED_HISTORY_SOURCES.len() + 1
     );
     let service = installed_service(Ok(storage()), catalog.clone());
-    service.configure("example", source.to_str()).unwrap();
+    service
+        .configure_mode("example", SourceMode::Custom, source.to_str())
+        .unwrap();
     assert_eq!(
         service.search(0, "", "example").unwrap().items[0]
             .entry
@@ -149,7 +220,9 @@ fn action_switch_preserves_custom_paths_and_revokes_old_selections() {
     let catalog = SourceCatalog::with_directories(None, root.path()).unwrap();
     let storage = storage();
     let service = installed_service(Ok(storage.clone()), catalog.clone());
-    service.configure("example", path.to_str()).unwrap();
+    service
+        .configure_mode("example", SourceMode::Custom, path.to_str())
+        .unwrap();
     let id = service.search(0, "", "example").unwrap().items[0]
         .id
         .clone();
@@ -195,7 +268,9 @@ fn removing_a_user_adapter_preserves_inactive_preferences_without_disabling_buil
         Ok(storage.clone()),
         SourceCatalog::with_directories(None, root.path()).unwrap(),
     );
-    first.configure("example", source.to_str()).unwrap();
+    first
+        .configure_mode("example", SourceMode::Custom, source.to_str())
+        .unwrap();
     fs::remove_dir_all(root.path().join("example")).unwrap();
     let restarted = installed_service(
         Ok(storage.clone()),

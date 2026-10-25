@@ -1,0 +1,189 @@
+{
+  "date": "2026-10-25",
+  "version": "0.14.0+9",
+  "comparison_base": "82d5584",
+  "scope": [
+    "Rust domain and persistence boundaries",
+    "Flutter history page and Bridge adapter lifetimes",
+    "file search cancellation and bounded storage",
+    "clipboard preview bounds",
+    "Web document ownership and RPC limits",
+    "current documentation and retired interfaces"
+  ],
+  "reproduced_and_fixed": [
+    {
+      "issue": "stale history reads reopened leases and superseded a newer page",
+      "regression": "application_history_backend_test.dart: a stale read never reacquires ownership from a newer page"
+    },
+    {
+      "issue": "a query entered during copy or open was dropped",
+      "regression": "application_history_test.dart: a query committed during an operation runs after the operation finishes"
+    },
+    {
+      "issue": "an older cancellation could complete after a newer read started",
+      "regression": "application_history_test.dart: all pending cancellations finish before the next read"
+    },
+    {
+      "issue": "a failed lease-open Future stayed cached and prevented retry",
+      "regression": "application_history_backend_test.dart: an explicit retry can recover from a failed lease open"
+    },
+    {
+      "issue": "closing during lease open still allowed a late source read",
+      "regression": "application_history_backend_test.dart: closing during lease open never starts a source read"
+    },
+    {
+      "issue": "an action toggle overwrote a concurrent source-path change",
+      "regression": "catalog_tests.rs: toggling_an_action_preserves_a_path_committed_by_another_service"
+    }
+  ],
+  "cleanup": [
+    "split history configuration, query and execution implementation",
+    "remove the unused production configure shortcut and migrate fixtures to explicit modes",
+    "skip empty-query search-field allocation and duplicate source-id sort storage",
+    "separate busy, expired and read-failure notices in both languages",
+    "update README, changelog, architecture and current guides; distinguish current capabilities from H3/H4 plans"
+  ],
+  "automated": {
+    "full_gate": "scripts/check.sh",
+    "exit_code": 0,
+    "core": {
+      "passed": 298,
+      "ignored_existing": 1
+    },
+    "mvp": {
+      "passed": 193,
+      "ignored_existing": 4
+    },
+    "flutter": {
+      "passed": 416
+    },
+    "native_web_architecture_clippy_analyze_generated_docs_style": "passed",
+    "targeted_history": {
+      "core": 36,
+      "mvp": 4,
+      "flutter": 16
+    }
+  },
+  "performance": {
+    "before": {
+      "private_history_used": false,
+      "queries": [
+        {
+          "max_us": 11170,
+          "p50_us": 8482,
+          "p95_us": 9592,
+          "query_kind": "empty",
+          "rows": 1000,
+          "samples": 30
+        },
+        {
+          "max_us": 8652,
+          "p50_us": 8417,
+          "p95_us": 8644,
+          "query_kind": "literal",
+          "rows": 1000,
+          "samples": 30
+        },
+        {
+          "max_us": 9131,
+          "p50_us": 8792,
+          "p95_us": 9003,
+          "query_kind": "pinyin",
+          "rows": 1000,
+          "samples": 30
+        },
+        {
+          "max_us": 8681,
+          "p50_us": 8457,
+          "p95_us": 8625,
+          "query_kind": "path",
+          "rows": 2,
+          "samples": 30
+        },
+        {
+          "max_us": 8586,
+          "p50_us": 8434,
+          "p95_us": 8576,
+          "query_kind": "unmatched",
+          "rows": 0,
+          "samples": 30
+        }
+      ],
+      "scope": "Rust service, source reads, QuickJS transforms and matching; excludes Bridge/Flutter/physical display",
+      "synthetic_entries": 1000
+    },
+    "after": {
+      "private_history_used": false,
+      "queries": [
+        {
+          "max_us": 11512,
+          "p50_us": 8469,
+          "p95_us": 9591,
+          "query_kind": "empty",
+          "rows": 1000,
+          "samples": 30
+        },
+        {
+          "max_us": 8823,
+          "p50_us": 8553,
+          "p95_us": 8768,
+          "query_kind": "literal",
+          "rows": 1000,
+          "samples": 30
+        },
+        {
+          "max_us": 9751,
+          "p50_us": 8929,
+          "p95_us": 9726,
+          "query_kind": "pinyin",
+          "rows": 1000,
+          "samples": 30
+        },
+        {
+          "max_us": 9240,
+          "p50_us": 8654,
+          "p95_us": 9231,
+          "query_kind": "path",
+          "rows": 2,
+          "samples": 30
+        },
+        {
+          "max_us": 8969,
+          "p50_us": 8646,
+          "p95_us": 8913,
+          "query_kind": "unmatched",
+          "rows": 0,
+          "samples": 30
+        }
+      ],
+      "scope": "Rust service, source reads, QuickJS transforms and matching; excludes Bridge/Flutter/physical display",
+      "synthetic_entries": 1000
+    },
+    "interpretation": "No material end-to-end improvement established. The change removes unnecessary allocations; source reads and transforms still dominate. Warm filesystem cache and host load were not controlled. No App RSS or physical-display latency measurement."
+  },
+  "package": {
+    "app": "build/Anywhere-0.14-preview-build9.app",
+    "zip": "build/Anywhere-0.14-preview-build9-macos-arm64.zip",
+    "sha256": "22d442b9b5204a63e00b4898bcb3d0d1ed982c1fdcef9a58a0135ed0ed58e5f6",
+    "persistent_signing_and_strict_validation": "passed",
+    "github_release_uploaded": false
+  },
+  "native_ui": {
+    "status": "blocked",
+    "reason": "Mac locked; CUA could not unlock",
+    "current_running_bundle": "build/Anywhere-0.14-preview-build6.app",
+    "build9_launched": false
+  },
+  "privacy": {
+    "personal_history_bodies_read": false,
+    "clipboard_capture_enabled_for_review": false,
+    "new_permissions_granted": false
+  },
+  "remaining_boundaries": [
+    "V0.14 native acceptance and H3/H4 work remain incomplete",
+    "Web package publisher and cross-source persistent action-identity isolation remain later hardening; content-based grants are independent",
+    "fixed Flutter SDK cleanup warning and WebKit GPU retention remain separately documented; neither was remeasured",
+    "shared compilation does not establish Windows or Linux app acceptance",
+    "no dependency-advisory scan or complete adversarial system security matrix was performed"
+  ]
+}

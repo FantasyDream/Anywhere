@@ -1,10 +1,10 @@
 # 架构
 
-当前实现：V0.13 开发中，沿用静态内置模块、剪贴板与 Web 插件基础；最后整理：2026-10-23。使用入口见 [README](../README.md)，专题文档见 [文档导航](README.md)。
+当前源码为 V0.14 应用历史原型，尚未收尾；最后核对：2026-10-25。使用入口见 [README](../README.md)，专题契约见 [文档导航](README.md)，当前验证程度见 [V0.14 技术方案](mvp-v0.14.md)。
 
-当前阶段为剪贴板暂停 / 保留策略、性能基线与日常可靠性收尾，Terminal 延后。[详细方案](web-plugin-design.md)按 P0–P6 实施：P1 的协议 DTO 在 `anywhere-protocol::web_plugin`，包验证 / 资源摘要在 `anywhere-plugin::web`，不依赖 UI 或 Core 状态；P2 的 `application/web_plugins/` 已实现目录贡献、调用身份、Context 投影与生命周期，Core 只持有类型化命令引用，Bridge 只传不透明 HostView 票据；P3 的能力规划 / 调度 / 分块分别位于 `broker.rs`、`rpc_dispatch.rs`、`transfer.rs`，复用有界 SQLite 存储，SDK 位于 `packages/plugin-sdk/`；P4 的 `web_plugins/` Flutter 页面通过原生 main-frame 消息转发至 FRB，再由 Rust Broker 检查资格；P5 的 `application/web_plugins/packages.rs` 协调批准、启停、更新、回滚与目录发布，`persistence/web_packages.rs` 只处理收据 / 包文件 / 有界资源读取，Web 的持久 KV 使用独立数据库；P6 的 JSON / Text Pad 作为普通包交叉验证；静态内置模块、Rust / Flutter / Platform 的分工继续保持。
+第一方能力是静态内置模块：模块声明 `FeatureDescriptor` 与 `registration.rs`，编译期生成目录，启动时绑定一次服务与贡献；设置刷新独立更新策略和业务数据。没有第一方热加载、目录重建或 `Any` 状态恢复框架。迁移过程仅保留在[历史路线图](archive/feature-module-roadmap.md)。
 
-已确认转向内置功能模块，按 [迁移路线图](archive/feature-module-roadmap.md) 分阶段实施。P01 集中构造与身份检查；P02 由模块自己的 registration.rs 声明功能，Cargo 编译时自动发现并生成 features/catalog 使用的目录，迁移阶段保留既有功能身份与顺序；JSON 延期后 V0.9 交付 8 个可配置内置功能，V0.10 增加 clipboard 模块。P03 将内置描述改为 Rust FeatureDescriptor，移除内置 TOML 和协议解析，状态显示统一使用 Cargo workspace 构建版本。P04 将收藏目录拆为 repository / service，FeatureServices 持有具体 service，移除 ExtensionState / Any 状态恢复。没有运行期扫描或加载。P05c 已删除旧 FirstPartyExtension / ExtensionRuntime / ExtensionManager / Reload；Native 只在启动绑定贡献，设置与业务数据刷新单独管理。
+第三方 Web 包通过独立 Manifest、资源验证和能力代理接入，不复用第一方装配寿命。协议位于 `anywhere-protocol`，包验证位于 `anywhere-plugin`，目录 / 调用 / 权限协调位于 `application/web_plugins/`，文件和 KV 适配位于 Persistence；Flutter / Native Host 负责 WebView 呈现。JSON / Text Pad 用普通包验证公共接口，详见 [Web 插件设计](web-plugin-design.md)。
 
 ## 分层
 
@@ -41,15 +41,17 @@ flowchart TD
 crates/anywhere-core/src/
 ├── core/           模型与算法；context / action / search / ranking / session / execution
 ├── application/    activate、update_query、execute、session_runtime、source_runtime
-├── features/       applications、filesystem、text、url、git、developer、saved_directories、clipboard
+├── features/       applications、filesystem、text、url、git、developer
+│                   saved_directories、clipboard、application_history
 │                   编译期 catalog、FeatureDescriptor、服务绑定与策略
-└── persistence/    usage、features、extensions、module_storage、clipboard、web_packages
+└── persistence/    usage、features、extensions、module_storage、clipboard
+                    application_history、web_packages
 
 apps/flutter/lib/
 ├── launcher/       Controller、ActivationFlow、导航、Session / FileWorkspace 协调器
 │                   ShortcutCoordinator、ObjectActionCoordinator、HostViewNavigator
 ├── tools/          静态 ToolPageRegistry、ToolPageSession、共享 ToolPageShell
-├── features/       功能自己的页面、展示会话与静态注册（当前 clipboard）
+├── features/       clipboard / application_history 的页面、展示会话与静态注册
 ├── plugins/        Legacy Detail / KeyValue 兼容 Body（纯数据）
 ├── web_plugins/    Web 页面、包管理、资源池、宿主弹层与生命周期
 ├── settings/       设置草稿、保存队列、快捷键与扩展状态
@@ -128,6 +130,24 @@ Flutter 的 `StableList` 共享 256 条不可变块，索引按块复用，仅�
 
 后台刷新在提交结果时保留最新选中 ID，增加其他条目不重新解码当前正文。临时查询失败保留已有结果，后续查询成功清除该查询错误；复制成功但切回应用失败的提示不会被无变化轮询冲掉。查询变化、禁用、删除后返回的旧预览不会覆盖当前选择。剪贴板服务提示与文件编码 / 截断信息跨 Bridge 传递类型化事实，Flutter 按当前语言呈现，不在 Rust 拼接界面英文。当前回归与限制见 [V0.12 MVP](mvp-v0.12.md)。
 
+## 应用历史
+
+18 个内置来源和可信用户适配使用同一份 `source.json` / `transform.js` 契约，新增应用不修改主窗口分支或 Scope。来源 Action 经统一 Registry 在所属 Current App 和显式全局搜索中出现；页面固定到调用来源。浏览器历史、书签和 Tab 管理是[后续独立功能](browser-feature.md)，当前未实现。
+
+| 位置 | 职责 |
+|---|---|
+| `application/application_history/` | 装配内置 / 用户配置、模板继承、校验，按需运行有界纯 JS 转换 |
+| `features/application_history/model.rs` | 普通元数据、类型化目标与 SourceLoader 契约 |
+| `features/application_history/service.rs` | 默认安装开关、持久偏好与配置发布；部分修改在存储事务内合并 |
+| `features/application_history/service/query.rs` | 单一读取槽、可撤销页面会话、匹配与排序、结果发布 |
+| `features/application_history/service/execution.rs` | 重新读取来源并核对 key / 目标，唯一来源应用分发；歧义或失效时拒绝 |
+| `persistence/application_history/` 与同名 `.rs` | 只读 JSON / XML / SQLite、有界配置读取与默认路径检测；不执行脚本 |
+| Flutter `features/application_history/` | 查询、IME、选择、更多操作与可见性；不解析来源文件或决定打开目标 |
+
+安装信息只在启动收集为默认开关的依据；手动偏好优先，不随其他来源保存而变成手动配置。关闭 Action 保留自定义路径，并同步统一候选和快捷键资格。配置定义在启动加载，修改后需重启；没有常驻 JS、文件监听或全量历史索引。
+
+页面首次进入时刷新配置，保留期内恢复只重新读取有效数据。取消串行完成后才能开始新读取；操作期间的新输入继续合并。旧页面不会因过期结果自动重新申请会话，首次申请失败可以显式重试。读取预算不等于 OS I/O 可被硬中断；执行 / 复制仍重新读取并复验目标。支持矩阵、限额和降级见[来源指南](application-history-sources.md)。
+
 ## 第一方模块与持久化
 
 `BuiltinFeature` 通过 FeatureContribution 提交 Provider / Bundle / Factory，启动时通过 FeatureBindings 接入已绑定的类型化服务动作与来源。BuiltinCatalog 保存编译内目录，不保留重建模块的工厂 / 生命周期；编译期目录构造器只用于启动与测试。第二次装配同一 Application 被拒绝。内部 Trait 不是第三方 Native ABI 或进程沙箱。
@@ -154,7 +174,7 @@ Bridge 将内容转成 typed `PluginDetailDto`，不将 UI JSON 塞进 output_te
 
 ## Native Tools 与操作
 
-ToolPageRegistry 选择编译内 Flutter 会话，ToolPageShell 统一布局、返回、焦点和 IME。`builtin_tool_pages.dart` 组合文本结果 / 旧 Detail、Web 工具适配器与剪贴板页面 / 窗口注册；文件工作区由独立 FileSearch 路由协调。Launcher 不按 JSON / 剪贴板业务 ID 选择页面。NativeTool 保留普通页面 ID / 输入的类型化路由契约，未知或歧义路由拒绝打开；它不是第三方 UI DSL。`features/tools.rs` 的工具 EntrySource 复用普通 Action 搜索，不依赖文件领域。
+ToolPageRegistry 选择编译内 Flutter 会话，ToolPageShell 统一布局、返回、焦点和 IME。`builtin_tool_pages.dart` 组合文本结果 / 旧 Detail、Web 工具适配器、剪贴板页面 / 窗口与应用历史页注册；文件工作区由独立 FileSearch 路由协调。Launcher 不按 JSON / 剪贴板业务 ID 选择页面。NativeTool 保留普通页面 ID / 输入的类型化路由契约，未知或歧义路由拒绝打开；它不是第三方 UI DSL。`features/tools.rs` 的工具 EntrySource 复用普通 Action 搜索，不依赖文件领域。
 
 图标分为语义声明与呈现：功能模块在注册 Action 时声明 `icon` key；Flutter `ActionIconAppearance` 只将 key 映射到图形、色彩及操作角标，不解析动作 ID / 翻译标题或决定执行行为。`AppIcons` 复用随包携带的 Cupertino 字体，`SemanticIcon` 负责透明图形 / 小角标，文件列表与预览共用 `FileTypeIcon`。颜色来自共享设计参数；不读取系统文件图标、不为每个文件创建位图缓存。Web 的常用图标类随 Host CSS 注入，不增加权限、桥接协议或运行期图标依赖。
 
@@ -167,10 +187,11 @@ Web 包 accepts / inputMatchers 只声明 Action 的输入与宿主识别条件�
 - 新 Context：定义类型和值，实现 ContextProvider 并贡献注册。
 - 新 Action：ActionSpec / Handler / Bundle；执行能力与绑定资格显式声明。
 - 新来源：CandidateSource / AsyncCandidateSource；沿用 Ranking 和生命周期。
-- 新工具页面：HostViewNavigator 注册路由，复用导航、共享 UI 和对象 Actions。
+- 新工具页面：在功能目录贡献 ToolPageRegistration，由 builtin_tool_pages 组合；HostViewNavigator 只协调已注册路由，复用导航与共享 UI。
+- 新应用历史来源：增加配置与合成 fixture；复用读取 / 转换 / 搜索 / 打开契约，不能以脚本生成任意系统命令。
 - 新系统能力：扩展 Platform / DesktopHost，实现各平台适配器。
 
-`scripts/check-architecture.py` 检查 Cargo 依赖及 core 模块反向导入；行为由公开 Facade、平台和 Widget 回归覆盖。完整门禁是 `scripts/check.sh`。自动化通过不代替真实键盘、权限、窗口、升级及 Windows 验收；当前记录见 [V0.13 MVP](mvp-v0.13.md)，真实键盘基线见 [V0.12 MVP](mvp-v0.12.md)，历史 Web 验证见 [V0.11 MVP](archive/mvp-v0.11.md)。
+`scripts/check-architecture.py` 检查 Cargo 依赖及 core 模块反向导入；行为由公开 Facade、平台和 Widget 回归覆盖。完整门禁是 `scripts/check.sh`。自动化通过不代替真实键盘、权限、窗口、升级及 Windows 验收；当前记录见 [V0.14 技术方案](mvp-v0.14.md)，此前常规验收见 [V0.13 MVP](mvp-v0.13.md)，真实键盘基线见 [V0.12 MVP](mvp-v0.12.md)，历史 Web 验证见 [V0.11 MVP](archive/mvp-v0.11.md)。
 
 
 ### JSON Web 工具与旧身份兼容

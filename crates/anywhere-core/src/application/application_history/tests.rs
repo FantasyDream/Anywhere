@@ -34,7 +34,7 @@ fn official_idea_xml_to_searchable_history_is_configured_not_special_cased() {
         Some(Notice::Unconfigured)
     );
     service
-        .configure("idea", Some(source.to_str().unwrap()))
+        .configure_mode("idea", SourceMode::Custom, Some(source.to_str().unwrap()))
         .unwrap();
     let first = service.search(0, "pzys", "").unwrap();
     assert_eq!(first.items.len(), 1);
@@ -48,7 +48,9 @@ fn official_idea_xml_to_searchable_history_is_configured_not_special_cased() {
         .unwrap()
         .items
         .is_empty());
-    service.configure("idea", None).unwrap();
+    service
+        .configure_mode("idea", SourceMode::Disabled, None)
+        .unwrap();
     assert!(service.search(0, "", "").unwrap().items.is_empty());
 }
 
@@ -200,7 +202,7 @@ fn source_preferences_persist_without_mirroring_history_and_disable_invalidates_
     let first = installed_service(Ok(storage.clone()), loader.clone());
     first.refresh().unwrap();
     first
-        .configure("idea", Some(path.to_str().unwrap()))
+        .configure_mode("idea", SourceMode::Custom, Some(path.to_str().unwrap()))
         .unwrap();
     let second = installed_service(Ok(storage.clone()), loader);
     second.refresh().unwrap();
@@ -226,7 +228,9 @@ fn corrupted_or_future_preferences_are_preserved_on_save() {
         SourceCatalog::bundled_with_config_directory(None).unwrap(),
     );
     assert!(service.refresh().is_err());
-    assert!(service.configure("idea", None).is_err());
+    assert!(service
+        .configure_mode("idea", SourceMode::Disabled, None)
+        .is_err());
     assert_eq!(storage.get("sources").unwrap().unwrap(), original);
 }
 
@@ -240,7 +244,7 @@ fn delayed_old_page_cancellation_cannot_invalidate_a_new_page() {
         SourceCatalog::bundled_with_config_directory(None).unwrap(),
     );
     service
-        .configure("idea", Some(path.to_str().unwrap()))
+        .configure_mode("idea", SourceMode::Custom, Some(path.to_str().unwrap()))
         .unwrap();
     let old = service.open_session().unwrap();
     let old_id = service.search(old, "", "").unwrap().items[0].id.clone();
@@ -293,7 +297,7 @@ fn cancellation_during_source_work_rejects_publication_and_retains_admission() {
     });
     let service = Arc::new(installed_service(Ok(storage()), loader.clone()));
     service
-        .configure("idea", Some(path.to_str().unwrap()))
+        .configure_mode("idea", SourceMode::Custom, Some(path.to_str().unwrap()))
         .unwrap();
     let owner = service.open_session().unwrap();
     let running = service.clone();
@@ -500,7 +504,7 @@ fn an_unconfigured_app_never_falls_back_to_another_enabled_source() {
         SourceCatalog::bundled_with_config_directory(None).unwrap(),
     );
     service
-        .configure("idea", Some(path.to_str().unwrap()))
+        .configure_mode("idea", SourceMode::Custom, Some(path.to_str().unwrap()))
         .unwrap();
     let result = service.search(0, "", "vscode").unwrap();
     assert_eq!(result.notice, Some(Notice::Unconfigured));

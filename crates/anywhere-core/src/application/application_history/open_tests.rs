@@ -114,7 +114,9 @@ fn obsidian_opens_the_exact_registered_vault_in_the_selected_app_and_revalidates
     };
     write("0123456789abcdef");
     let service = service();
-    service.configure("obsidian", source.to_str()).unwrap();
+    service
+        .configure_mode("obsidian", SourceMode::Custom, source.to_str())
+        .unwrap();
     let row = service.search(0, "", "obsidian").unwrap().items.remove(0);
     let platform = OpenRecorder::new(&[("md.obsidian", "/mock/Obsidian.app")]);
     service.use_item(&row.id, false, &platform).unwrap();
@@ -169,10 +171,14 @@ fn each_local_kind_dispatches_to_its_source_app_without_using_default_openers() 
     .unwrap();
     let service = service();
     service
-        .configure("idea", Some(xml.to_str().unwrap()))
+        .configure_mode("idea", SourceMode::Custom, Some(xml.to_str().unwrap()))
         .unwrap();
     service
-        .configure("vscode", Some(db_path.to_str().unwrap()))
+        .configure_mode(
+            "vscode",
+            SourceMode::Custom,
+            Some(db_path.to_str().unwrap()),
+        )
         .unwrap();
     let platform = OpenRecorder::new(&[
         ("com.jetbrains.intellij", "/mock/IDEA.app"),
@@ -216,7 +222,7 @@ fn ambiguous_apps_changed_targets_and_revoked_sources_fail_before_dispatch() {
     write_idea(&xml, &project);
     let service = service();
     service
-        .configure("idea", Some(xml.to_str().unwrap()))
+        .configure_mode("idea", SourceMode::Custom, Some(xml.to_str().unwrap()))
         .unwrap();
     let row = service.search(0, "", "idea").unwrap().items.remove(0);
     for apps in [
@@ -238,7 +244,9 @@ fn ambiguous_apps_changed_targets_and_revoked_sources_fail_before_dispatch() {
     std::fs::remove_dir(&project).unwrap();
     std::fs::write(&project, "changed type").unwrap();
     assert!(service.use_item(&row.id, false, &platform).is_err());
-    service.configure("idea", None).unwrap();
+    service
+        .configure_mode("idea", SourceMode::Disabled, None)
+        .unwrap();
     assert!(service.use_item(&row.id, false, &platform).is_err());
     assert!(platform.opened.lock().unwrap().is_empty());
 }

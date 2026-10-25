@@ -134,7 +134,8 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
     return switch (session.notice) {
       AppHistoryNoticeDto.disabled => l.appHistoryDisabled,
       AppHistoryNoticeDto.readFailed => l.appHistoryReadFailed,
-      AppHistoryNoticeDto.busy => l.appHistoryReadFailed,
+      AppHistoryNoticeDto.busy => l.appHistoryBusy,
+      AppHistoryNoticeDto.stale => l.appHistoryExpired,
       _ => null,
     };
   }
