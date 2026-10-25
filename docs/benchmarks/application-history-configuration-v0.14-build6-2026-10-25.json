@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-25",
+  "source_base_commit": "c5d8e51",
+  "build_from_working_tree": true,
+  "package_version": "0.14.0+6",
+  "zip_sha256": "809b91f98d47eb9c58e00fdeb1f287ecf5e2aa6ec7b65fc3c1351388beb81845",
+  "change": "Use shared keyed AppDisclosure for custom adapter help, isolating expansion state from the settings scroll offset.",
+  "checks": {
+    "scripts_check_sh": "passed",
+    "core_unit_passed": 287,
+    "core_unit_existing_ignored": 1,
+    "mvp_integration_passed": 192,
+    "mvp_integration_existing_ignored": 4,
+    "flutter_passed": 411,
+    "history_targeted_passed": 11,
+    "regression_on_previous_source": "failed with the same double-to-bool exception seen in native Build 5",
+    "regression_after_fix": "passed",
+    "persistent_signing_and_strict_package_verification": "passed"
+  },
+  "native_ui": {
+    "status": "passed for the listed configuration scenarios",
+    "fixture": "build/acceptance-v0.14-user-adapters5",
+    "prepared_user_adapters": 2,
+    "passed": [
+      "Source action disabled in Build 5 remained disabled after restarting with Build 6",
+      "The disabled custom source retained its exact synthetic metadata path",
+      "Re-enabling the custom source restored its Chinese Action in global search",
+      "Opening that Action displayed its single synthetic record at the retained path",
+      "VS Code automatic mode found the standard state.vscdb metadata path",
+      "IDEA automatic mode found the IntelliJIdea2026.2 recentProjects.xml metadata path",
+      "Both built-in sources were restored to custom synthetic paths before leaving settings",
+      "Custom adapter help displayed the isolated adapter directory and restart instructions",
+      "Settings page switching preserved expansion state without a scroll-state exception",
+      "Closing and reopening settings kept the help usable without an exception"
+    ],
+    "real_default_paths_checked_by_metadata_only": true,
+    "private_history_read": false,
+    "selected_text_clipboard_and_browser_capture": false,
+    "normal_app_menu_quit": true,
+    "normal_exit_code": 0,
+    "existing_build4_preserved": true,
+    "test_process_absent_after_quit": true,
+    "runtime_log_bytes": 0,
+    "runtime_log": "build/v0.14-user-adapters-ui6.log",
+    "screenshots": ["build/ui-v0.14-config6/adapters-expanded.png"]
+  },
+  "limits": [
+    "Synthetic source parsing only; private history bodies were not read",
+    "Same-ID override search and bundled parser reuse were exercised in the preceding Build 5 follow-up; source-app opening remains the separate Build 4 acceptance",
+    "Physical IME and global keyboard shortcuts were not revalidated in this configuration pass",
+    "Normal process exit was checked; this is not a memory-release benchmark",
+    "Trusted local scripts, not a process sandbox for arbitrary downloaded adapters",
+    "Browser history/bookmarks, precise Profile/Vault routing and Windows runtime remain outside this increment"
+  ]
+}

@@ -48,7 +48,29 @@
     "selected_text_clipboard_and_browser_capture": false,
     "existing_build4_preserved": true,
     "production_ui_success_claimed": false,
-    "cleanup": "Locked desktop prevented app-menu quit; only the isolated Build 5 process was terminated after checking its exact executable path. Existing Build 4 was preserved. Normal quit and memory release were not validated."
+    "cleanup": "Locked desktop prevented app-menu quit; only the isolated Build 5 process was terminated after checking its exact executable path. Existing Build 4 was preserved. Normal quit and memory release were not validated.",
+    "follow_up": {
+      "status": "partial acceptance; settings disclosure defect reproduced",
+      "after_user_unlock": true,
+      "passed": [
+        "Custom path saved for a new synthetic source",
+        "Custom source Action found by its Chinese configured title",
+        "Opening the Action showed exactly the synthetic source record",
+        "Same-ID IDEA override appeared once and reused the bundled parser",
+        "Disabling custom Action retained its path and removed its search result"
+      ],
+      "defect": "Reopening the history settings page could restore the ListView scroll offset as the unkeyed ExpansionTile expansion state: double is not bool.",
+      "normal_quit": true,
+      "existing_build4_preserved": true,
+      "screenshots": [
+        "build/ui-v0.14-config5/custom-source.png"
+      ],
+      "logs": [
+        "build/v0.14-user-adapters-ui5-followup.log"
+      ],
+      "private_history_read": false,
+      "continuation": "Build 6 replaces this tile with the shared keyed AppDisclosure; a regression fails on Build 5 source and passes after the fix."
+    }
   },
   "limits": [
     "Trusted local configuration, not a sandbox for arbitrary downloaded scripts",
@@ -58,7 +80,15 @@
   ],
   "upstream_reference": {
     "repository": "https://github.com/LanyuanXiaoyao-Studio/utools-recent-projects",
-    "reviewed": ["Applications.ts", "Types.ts", "JetBrains.ts", "Vscode.ts", "Obsidian.ts", "LICENSE", "package.json"],
+    "reviewed": [
+      "Applications.ts",
+      "Types.ts",
+      "JetBrains.ts",
+      "Vscode.ts",
+      "Obsidian.ts",
+      "LICENSE",
+      "package.json"
+    ],
     "code_copied": false,
     "reason": "Reference uses application-specific TypeScript classes; LICENSE and package metadata differ. Existing independent Rust contracts were extended instead."
   }

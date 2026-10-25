@@ -46,12 +46,11 @@ class _AppHistorySettingsSectionState extends State<AppHistorySettingsSection> {
               const SizedBox(height: 10),
             ],
             AppCard(
-                child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: ExpansionTile(
-                      tilePadding: EdgeInsets.zero,
-                      title: Text(context.l10n.appHistoryCustomAdapters,
-                          style: AppStyle.body),
+                child: AppDisclosure(
+                    key: const ValueKey('history-custom-adapters'),
+                    title: context.l10n.appHistoryCustomAdapters,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(context.l10n.appHistoryCustomAdaptersHelp,
                             style: AppStyle.caption),

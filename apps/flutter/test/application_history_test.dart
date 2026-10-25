@@ -140,6 +140,48 @@ void main() {
       const DesktopEnvironment(platform: TargetPlatform.macOS)));
   tearDown(DesktopEnvironment.reset);
 
+  testWidgets('custom adapters reopen independently of settings scroll state',
+      (tester) async {
+    final controller = AppHistorySettingsController(Preferences());
+    addTearDown(controller.dispose);
+    final bucket = PageStorageBucket();
+    Widget page({required bool showHistory}) => MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          theme: AppStyle.theme,
+          home: Scaffold(
+              body: PageStorage(
+                  bucket: bucket,
+                  child: SingleChildScrollView(
+                      key: const PageStorageKey('settings-content-history'),
+                      child: Builder(builder: (context) {
+                        if (showHistory) {
+                          return AppHistorySettingsSection(
+                              controller: controller);
+                        }
+                        // A settings page can already have a saved scroll offset
+                        // before its secondary details are mounted again.
+                        bucket.writeState(context, 80.0);
+                        return const SizedBox(height: 1200);
+                      })))),
+        );
+    await tester.pumpWidget(page(showHistory: false));
+    await tester.pumpWidget(page(showHistory: true));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    final details = find.text('Custom adapters');
+    await tester.ensureVisible(details);
+    await tester.tap(details);
+    await tester.pumpAndSettle();
+    expect(find.text('/synthetic/adapters'), findsOneWidget);
+    await tester.pumpWidget(page(showHistory: false));
+    await tester.pumpWidget(page(showHistory: true));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('/synthetic/adapters'), findsOneWidget,
+        reason: 'expansion state survives without replacing the scroll offset');
+  });
+
   for (final language in ['en', 'zh']) {
     testWidgets('history settings auto, custom and off modes work in $language',
         (tester) async {
