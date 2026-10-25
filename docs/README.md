@@ -40,7 +40,8 @@
 | [V0.14 技术方案](mvp-v0.14.md) | 应用历史的具体分层、读取 / 查询 / 执行边界、开源复用与小步验收；H1 原型验证中 |
 | [V0.12 MVP](mvp-v0.12.md) | 上一阶段工程与真实键盘验收基线 |
 | [路线图](roadmap.md) | 后续功能、依赖与 1.0 门槛 |
-| [应用历史与收藏设计](application-history.md) | V0.14 计划：跨应用最近对象 / 书签、统一搜索与原应用打开；当前仅 IDEA / VS Code 小来源原型 |
+| [应用历史设计](application-history.md) | V0.14：IDE / 编辑器 / 笔记最近对象与原应用打开；当前已有 18 个配置化来源 |
+| [独立浏览器规划](browser-feature.md) | 后续单独实现历史、书签与 Tab 管理；尚未实现，版本待定 |
 | [应用历史来源指南](application-history-sources.md) | 官方配置 / JS 转换、通用读取器、手动启用和当前限额 |
 | [第三方 Context 调研](research/third-party-context-providers.md) | 尚未实现的类型注册、隔离和 worker 选型 |
 
