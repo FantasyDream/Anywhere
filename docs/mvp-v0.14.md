@@ -243,3 +243,21 @@ Build 3 App / arm64 ZIP 与 SHA-256 已生成，源码 `3cb6b00`，版本 `0.14.
 新增 `application/application_history/open_tests.rs`，使用记录器验证真实服务路径而不启动 OS 应用：四种本地目标正确提交原应用及原路径，中文 / 空格路径完整；远端只复制、不打开；应用缺失 / 多安装歧义、目标被替换 / 类型改变、来源关闭均在提交前拒绝。历史相关 Core 定向测试 14 项及 Launcher 集成 1 项通过，Core all-targets Clippy、Rust 格式与架构检查通过。仅添加测试和记录，产品二进制仍为 Build 3；不将这组记录器测试当作实际窗口验收。
 
 已只读核对安装元数据：IntelliJ IDEA 2026.2.3、Visual Studio Code 1.143.0。准备了独立合成 IDEA 项目、VS Code 目录、两根工作区和文本文件，Context / 剪贴板采集关闭，未读取个人历史。首次检查 IDEA 原生窗口时工具报告 Mac 锁定，已请求解锁；实际打开和目标窗口、原 Profile / Vault 仍未确认。[专项验证记录](benchmarks/application-history-opening-v0.14-build3-2026-10-25.json)。
+
+
+## Build 4：原应用打开实机复验
+
+2026-10-25，先完成代码及完整自动化检查，再构建并进行原生界面验收。Build 3 补验确认 IDEA 正确打开合成项目；首次 VS Code 回车尝试未确认目标窗口，桌面工具长时间无响应后报告锁屏，用户也反馈没有该目录窗口，不计通过。Build 4 重新逐项操作，不能用前次打开请求代替窗口证据。
+
+发现并修复 Current App 首页可见性问题：历史 Action 已匹配，但前台应用 Context 权重低于派生项目 Context，被首页数量上限截掉。空查询时，明确属于当前应用且非菜单的入口与该应用项目动作使用相同 Context 权重；菜单仍按原规则推荐，关键词检索评分不变，Scope 逻辑不变。历史入口的基础优先级改为评分允许的 50，替代原先会被截断到 50 的 90。Launcher 集成回归使用同时含 Git / Rust 标记的合成项目，确认候选超过首页容量时自己的历史入口仍在前五项，另一应用入口不出现；去掉修复可复现失败。
+
+`scripts/check.sh` 全部通过：Core 单元 276 通过 / 1 项既有忽略、MVP 集成 190 通过 / 4 项既有忽略、Flutter 407 通过，原生、Web、Clippy、架构与生成物检查通过。既有忽略项不属于本轮通过声明。Build 4 App、arm64 ZIP 与校验文件已生成，版本 `0.14.0+4`，持久签名及严格包校验通过，Impeller 保持开启；未上传 GitHub Release。
+
+最新构建实机通过以下合成来源用例：
+
+- IDEA 项目在 IntelliJ IDEA 中打开，窗口标题与项目树目录一致；IDEA 同时含 Git / 文件夹 / Rust 动作时，首页无需搜索即显示 IDEA 最近项目。
+- VS Code 目录在 Code 中打开，窗口标题和文件树指向准确目标；自己的 Current App 首页显示独立历史入口。
+- 方向键选择并回车打开 `.code-workspace`，Code 将其识别为 Workspace，文件树显示两个预期根目录。
+- 方向键选择并回车打开普通文本文件，Code 编辑器的路径、标签和合成正文一致。
+
+只读取独立合成来源文件，未读取私人应用历史；剪贴板、选中文本、浏览器页面和 Finder 选中项采集关闭。用于复验首页竞争的当前项目目录识别仍有效。验收后关闭本轮合成项目 / 工作区窗口并通过菜单正常退出 Anywhere，核对测试进程已退出。未进行真实中文 IME、物理组合键、退出内存、多安装或 Profile / Vault 验收。浏览器历史与书签尚未实现，远端目标仍仅能复制。[Build 4 结构化结果](benchmarks/application-history-opening-v0.14-build4-2026-10-25.json)。

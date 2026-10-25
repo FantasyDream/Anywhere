@@ -8,8 +8,16 @@ async fn history_entries_match_current_app_and_bind_independently_without_duplic
         ("com.microsoft.VSCode", "vscode", "idea"),
     ] {
         let tmp = tempfile::tempdir().unwrap();
+        let project = tmp.path().join("project");
+        std::fs::create_dir_all(project.join(".git")).unwrap();
+        std::fs::write(
+            project.join("Cargo.toml"),
+            "[package]\nname='history-home'\nversion='0.1.0'\n",
+        )
+        .unwrap();
         let platform = Arc::new(TestPlatform {
             frontmost_bundle: Some(bundle),
+            directory: project,
             ..Default::default()
         });
         let app = app(platform);
@@ -27,6 +35,20 @@ async fn history_entries_match_current_app_and_bind_independently_without_duplic
             .candidates
             .iter()
             .any(|row| row.command_id.as_deref() == Some(&another)));
+        // Match the host's smaller, five-action Home when Browse Menus is present.
+        // A project adds more eligible actions than fit; merely matching is insufficient.
+        let home: Vec<_> = state
+            .context_candidates
+            .iter()
+            .filter(|row| row.home_eligible)
+            .collect();
+        assert!(home.len() > 5, "fixture must overflow Home: {home:?}");
+        assert!(home
+            .iter()
+            .take(5)
+            .any(|row| row.command_id.as_deref() == Some(&own)));
+        assert!(state.scopes.iter().any(|scope| scope.id == "git"));
+        assert!(state.scopes.iter().any(|scope| scope.id == "rust"));
         assert!(state
             .scopes
             .iter()

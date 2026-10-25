@@ -92,7 +92,7 @@ impl BuiltinFeature for Feature {
                         availability: availability.clone(),
                     })),
                     availability,
-                    base_priority: 90,
+                    base_priority: 50,
                     icon: "history".into(),
                     group_id: groups::APP.into(),
                     aliases: source.action.aliases,

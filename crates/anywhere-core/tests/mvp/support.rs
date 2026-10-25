@@ -164,7 +164,7 @@ impl Platform for TestPlatform {
         }))
     }
     fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
-        if !self.finder {
+        if !self.finder && self.frontmost_bundle.is_none() {
             return Ok(None);
         }
         self.directory_captures.fetch_add(1, Ordering::Relaxed);

@@ -185,7 +185,7 @@ impl ActionMatcher<'_> {
                     self.now,
                 );
                 if !searching {
-                    score += home_bonus(context);
+                    score += home_bonus(context, action);
                 }
                 candidates.push(Candidate {
                     presentation: CandidatePresentation {
@@ -243,14 +243,27 @@ impl ActionMatcher<'_> {
 ///
 /// There is deliberately no per-group term here: Git actions only ever accept a
 /// `git.repository` context, so a rule keyed on a directory could never apply.
-fn home_bonus(context: &ResolvedContext) -> f32 {
-    match context.source {
+fn home_bonus(context: &ResolvedContext, action: &ActionDescriptor) -> f32 {
+    let bonus = match context.source {
         ContextSource::FinderSelection => 240.0,
         ContextSource::SelectedText => 220.0,
         ContextSource::BrowserCurrentPage => 210.0,
         ContextSource::ApplicationContext | ContextSource::ForegroundApplication => 200.0,
         ContextSource::Clipboard => 80.0,
         ContextSource::UserInput => 0.0,
+    };
+    // Explicit app-owned entries compete with the app's project actions on Home.
+    // Menus retain their lower foreground weight, and queries keep normal ranking.
+    if context.source == ContextSource::ForegroundApplication
+        && context.type_id == APPLICATION
+        && action.owning_app.is_some()
+        && !action.executor.is_menu()
+    {
+        bonus
+            + (score::context_relevance(ContextSource::ApplicationContext, false, 0)
+                - score::context_relevance(context.source, false, 0)) as f32
+    } else {
+        bonus
     }
 }
 
