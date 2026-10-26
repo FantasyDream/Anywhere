@@ -113,6 +113,7 @@ impl Application {
             .store(true, std::sync::atomic::Ordering::Release);
         let web = self.web_plugins.clone();
         let history = self.resolver.history.clone();
+        let platform = self.platform.clone();
         let worker_binding = binding.clone();
         let worker_source = source.clone();
         let worker_request = request.clone();
@@ -125,6 +126,18 @@ impl Application {
             worker_request.control.check()?;
             let value = match plan {
                 Plan::Value(value) => value,
+                Plan::Snapshot | Plan::Context | Plan::Input | Plan::SetInput(_) => {
+                    return Ok(Work::Host(plan))
+                }
+                Plan::FrontmostApp => {
+                    let app = platform
+                        .frontmost_application()
+                        .map_err(|_| error(WebErrorCode::HostFailure))?;
+                    json!(app.map(|app| anywhere_protocol::web_plugin::WebCurrentApp {
+                        id: app.bundle_id,
+                        name: app.name
+                    }))
+                }
                 Plan::Confirmation(confirmation) => return Ok(Work::Confirmation(confirmation)),
                 Plan::Ready => {
                     let usage = web
@@ -175,6 +188,24 @@ impl Application {
         });
         let result = tokio::time::timeout_at(request.control.deadline, worker).await;
         match result {
+            Ok(Ok(Ok(Work::Host(plan)))) => {
+                let result = match plan {
+                    Plan::SetInput(text) => {
+                        self.set_web_input(binding, source.get(), text, &request.control)
+                            .await
+                    }
+                    _ => self.web_snapshot(binding, source.get()).and_then(|state| {
+                        match plan {
+                            Plan::Snapshot => serde_json::to_value(state),
+                            Plan::Context => serde_json::to_value(state.context),
+                            Plan::Input => serde_json::to_value(state.input),
+                            _ => unreachable!("Host state plan"),
+                        }
+                        .map_err(|_| error(WebErrorCode::HostFailure))
+                    }),
+                };
+                self.finish_web_reply(binding, &source, &request, result)
+            }
             Ok(Ok(Ok(Work::Confirmation(confirmation)))) => {
                 request
                     .control
@@ -330,6 +361,7 @@ impl Application {
     }
 }
 enum Work {
+    Host(Plan),
     Value(Value),
     Confirmation(WebConfirmation),
 }

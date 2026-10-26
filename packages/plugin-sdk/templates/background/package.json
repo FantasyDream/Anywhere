@@ -1,0 +1,15 @@
+{
+  "name": "anywhere-background-tool",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "pack": "python3 node_modules/@anywhere/sdk/tools/package.py . --output output/background-tool.awplugin",
+    "check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  }
+}

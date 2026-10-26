@@ -1,7 +1,7 @@
 use super::{path, MAX_MANIFEST_BYTES};
 use anyhow::{ensure, Context, Result};
 use anywhere_protocol::web_plugin::{
-    WebPermission, WebPluginManifest, API_VERSION, SCHEMA_VERSION,
+    PluginRuntime, WebPermission, WebPluginManifest, API_VERSION, SCHEMA_VERSION,
 };
 use std::collections::BTreeSet;
 
@@ -47,16 +47,62 @@ pub fn validate_manifest(manifest: &WebPluginManifest) -> Result<()> {
         platforms.len() == manifest.platforms.len(),
         "duplicate Web platform"
     );
-    path::validate(&manifest.entry)?;
-    ensure!(
-        manifest.entry.ends_with(".html"),
-        "Web entry must be local HTML"
-    );
+    if !manifest.entry.is_empty() {
+        path::validate(&manifest.entry)?;
+        ensure!(
+            manifest.entry.ends_with(".html"),
+            "Web entry must be local HTML"
+        );
+    }
+    let prefix = format!("plugin.{}.", manifest.id);
+    if let Some(background) = &manifest.background {
+        path::validate(&background.entry)?;
+        ensure!(
+            (background.entry.ends_with(".js") || background.entry.ends_with(".mjs")),
+            "background entry must be compiled JavaScript"
+        );
+        ensure!(
+            background.resolvers.len() <= 16,
+            "too many background resolvers"
+        );
+        let mut ids = BTreeSet::new();
+        for resolver in &background.resolvers {
+            ensure!(
+                segment(&resolver.id)
+                    && ids.insert(&resolver.id)
+                    && export_name(&resolver.entrypoint),
+                "invalid or duplicate resolver"
+            );
+            unique_types(&resolver.accepts)?;
+            unique_types(&resolver.produces)?;
+            ensure!(
+                !resolver.accepts.is_empty()
+                    && resolver.accepts.len() <= 8
+                    && !resolver.produces.is_empty()
+                    && resolver.produces.len() <= 8,
+                "invalid resolver types"
+            );
+            ensure!(
+                resolver
+                    .produces
+                    .iter()
+                    .all(|kind| kind.starts_with(&prefix)),
+                "resolver types must belong to the plugin namespace"
+            );
+            ensure!(
+                resolver.accepts.iter().all(|kind| {
+                    manifest.permissions.iter().any(|permission|
+                matches!(permission, WebPermission::ContextRead { types } if types.contains(kind)))
+                }),
+                "resolvers require context.read for their input types"
+            );
+        }
+    }
     if let Some(icon) = &manifest.icon {
         path::validate(icon)?;
         ensure!(icon.ends_with(".png"), "Web icon must be PNG");
     }
-    ensure!(manifest.permissions.len() <= 5, "too many Web permissions");
+    ensure!(manifest.permissions.len() <= 8, "too many Web permissions");
     let mut permissions = BTreeSet::new();
     for permission in &manifest.permissions {
         ensure!(
@@ -70,20 +116,26 @@ pub fn validate_manifest(manifest: &WebPluginManifest) -> Result<()> {
             );
             unique_types(types)?;
             ensure!(
-                types.iter().all(|kind| matches!(
-                    kind.as_str(),
-                    anywhere_protocol::TEXT
-                        | anywhere_protocol::URL
-                        | anywhere_protocol::FILE
-                        | anywhere_protocol::DIRECTORY
-                        | anywhere_protocol::FILE_SELECTION
-                )),
+                types.iter().all(|kind| kind.starts_with(&prefix)
+                    || matches!(
+                        kind.as_str(),
+                        anywhere_protocol::TEXT
+                            | anywhere_protocol::URL
+                            | anywhere_protocol::FILE
+                            | anywhere_protocol::DIRECTORY
+                            | anywhere_protocol::FILE_SELECTION
+                    )),
                 "unsupported Context projection type"
             );
         }
     }
     ensure!(
-        !manifest.commands.is_empty() && manifest.commands.len() <= 32,
+        manifest.commands.len() <= 32
+            && (!manifest.commands.is_empty()
+                || manifest
+                    .background
+                    .as_ref()
+                    .is_some_and(|b| !b.resolvers.is_empty())),
         "expected 1..32 Web commands"
     );
     let mut commands = BTreeSet::new();
@@ -92,7 +144,20 @@ pub fn validate_manifest(manifest: &WebPluginManifest) -> Result<()> {
             segment(&command.id) && commands.insert(&command.id),
             "invalid or duplicate Web command id"
         );
-        ensure!(segment(&command.entrypoint), "invalid Web entrypoint");
+        ensure!(
+            match command.runtime {
+                PluginRuntime::Webview => segment(&command.entrypoint),
+                PluginRuntime::Background => export_name(&command.entrypoint),
+            },
+            "invalid plugin entrypoint"
+        );
+        ensure!(
+            match command.runtime {
+                PluginRuntime::Webview => !manifest.entry.is_empty(),
+                PluginRuntime::Background => manifest.background.is_some(),
+            },
+            "command runtime has no entry resource"
+        );
         ensure!(label(&command.title, 200), "invalid Web command title");
         ensure!(command.keywords.len() <= 16, "too many Web keywords");
         let mut keywords = BTreeSet::new();
@@ -155,4 +220,14 @@ fn segment(value: &str) -> bool {
         && value
             .bytes()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == b'-' || c == b'_')
+}
+
+fn export_name(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 64
+        && value.bytes().enumerate().all(|(index, byte)| {
+            byte.is_ascii_alphabetic()
+                || matches!(byte, b'_' | b'$')
+                || (index > 0 && byte.is_ascii_digit())
+        })
 }

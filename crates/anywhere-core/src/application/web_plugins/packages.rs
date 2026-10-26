@@ -197,6 +197,17 @@ impl WebPackageStore {
                     },
                 )],
             )?)?;
+            if let Some(background) = &m.background {
+                let asset = package
+                    .assets()
+                    .find(|a| a.path() == background.entry)
+                    .context("background resource missing")?;
+                catalog
+                    .entries
+                    .get_mut(&m.id)
+                    .expect("prepared package")
+                    .background_file = Some(self.repository.resource_file(&receipt.digest, asset));
+            }
             for a in package.assets().filter(|a| a.path() != "manifest.json") {
                 assets.insert(
                     (receipt.digest.clone(), a.path().into()),

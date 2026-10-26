@@ -1,4 +1,4 @@
-import {definePlugin} from '@anywhere/plugin-sdk';
+import {definePlugin} from '@anywhere/sdk';
 
 const input = document.querySelector('#input');
 const status = document.querySelector('#status');

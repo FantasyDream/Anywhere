@@ -53,6 +53,14 @@ pub(super) fn build_with_resources(
             // directories; unknown is accurate until a separately authorized Host operation.
             return resources(source, paths.iter().map(|p| (p, WebResourceKind::Unknown)));
         }
+        (kind, ContextValue::Extension(text))
+            if kind.starts_with("plugin.") && text.len() <= MAX_TEXT_BYTES =>
+        {
+            WebInput::Data {
+                type_id: kind.into(),
+                value: serde_json::from_str(text)?,
+            }
+        }
         _ => return Ok(empty(WebInputReason::UnsupportedType)),
     };
     Ok((input, BTreeMap::new()))

@@ -73,7 +73,7 @@ V0.9 静态模块、V0.10 剪贴板与开源复用、V0.11 Web 本地预览已�
 
 定时暂停的状态属于采集策略，配置仍在设置中；历史页与悬浮窗保持使用导向。保留期限与 15 秒唤醒填入、15 秒窗口状态保留分别建模。
 
-第三方 ContextProvider 继续延后：先有真实用例，再验证类型 / grant / 输出校验和独立 worker；不提前新增运行时或空 Manifest 接口。Provider 并发同样先测，现有来源采集与串行派生分开评估。完整 HMR、HTTP / 文件访问 / Secrets 按真实插件需求逐项补齐。
+第三方 ContextProvider 已进入 `codex/plugin-runtime-refactor` 实施：复用现有 Graph、类型所有权、grant 与输出校验，通过按需 QuickJS worker 运行，见 [实施清单](plugin-runtime-refactor.md)。Provider 并发同样先测，现有来源采集与串行派生分开评估。完整 HMR、HTTP / 文件访问 / Secrets 按真实插件需求逐项补齐。
 
 Windows 可因明确用户需求提前，但需独立最小 Host 和实机矩阵；共享 CI 通过不能视为交付。Terminal 继续延后，恢复时间另定，不是本轮或 Web SDK 的前置。OCR / Translate、Marketplace 等继续作为独立候选，不同时扩张范围。
 
@@ -124,6 +124,6 @@ V0.8 的贡献接口、Storage 和执行资格继续复用。V0.9 整理为静�
 
 工程检查和开发包完成不能替代发布矩阵。当前进度与已知限制见 [V0.13 MVP](mvp-v0.13.md)，上一阶段真实键盘基线见 [V0.12 MVP](mvp-v0.12.md)；历史剪贴板与开源重构证据见[V0.10 MVP](archive/mvp-v0.10.md)和[开源复用收尾](archive/open-source-refactor-plan.md)，V0.8 证据仍保留在 [上一阶段收尾](archive/mvp-v0.8.md)。
 
-## 第三方 Context：研究排期
+## 第三方 Context：插件运行时重构
 
-现有 Web UI 基础继续使用；自动派生 Context 是另一种受限贡献，先做类型所有权 / grant / 输出校验，再验证独立 QuickJS worker，最后决定公开 SDK。统一使用现有 Graph / Action / Scope / Ranking，不为第三方复制主流程；详细比较、风险和验收门槛见 [调研](research/third-party-context-providers.md)。当前未实现，不将 worker 或任意 Context 注册列为本版已完成能力。
+现有 Web UI 基础继续使用；自动派生 Context 是另一种受限贡献，先做类型所有权 / grant / 输出校验，再验证独立 QuickJS worker，最后决定公开 SDK。统一使用现有 Graph / Action / Scope / Ranking，不为第三方复制主流程；详细比较、风险和验收门槛见 [调研](research/third-party-context-providers.md)。该阶段现在按 [插件运行时清单](plugin-runtime-refactor.md) 实施；类型仅限包自身命名空间，不开放任意原生 Context 注册，验收与正式发布状态单独记录。

@@ -152,3 +152,75 @@ test('download transfer validates sequence and cancels malformed streams', async
   assert.equal(fake.calls.at(-1).method, 'text.cancel');
   client.dispose();
 });
+
+test('state snapshot and pushed updates share one cache and reject old revisions', async () => {
+  let initial;
+  const fake = mock((call, reply) => {
+    if (call.method === 'state.subscribe')
+      initial = () =>
+        reply(call, {
+          version: 1,
+          context: {kind: 'text', source: 'selected_text', text: 'old'},
+          input: 'old',
+        });
+  });
+  const client = createHost(fake.transport);
+  const contexts = [],
+    inputs = [];
+  const stopContext = client.context.onChange(value => contexts.push(value));
+  const stopInput = client.input.onChange(value => inputs.push(value));
+  const query = client.input.get();
+  assert.equal(fake.calls.length, 1);
+  fake.receive(
+    JSON.stringify({
+      event: 'state.changed',
+      version: 2,
+      state: {
+        version: 2,
+        context: {kind: 'text', source: 'user_input', text: 'new'},
+        input: 'new',
+      },
+    }),
+  );
+  initial();
+  assert.equal(await query, 'new');
+  assert.equal((await client.context.get()).text, 'new');
+  assert.deepEqual(inputs, ['new']);
+  stopContext();
+  stopInput();
+  fake.receive(
+    JSON.stringify({
+      event: 'state.changed',
+      version: 3,
+      state: {
+        version: 3,
+        context: {kind: 'empty', reason: 'no_object'},
+        input: 'next',
+      },
+    }),
+  );
+  assert.equal(contexts.length, 1);
+  assert.equal(inputs.length, 1);
+  client.dispose();
+  await assert.rejects(client.input.set('late'), {code: 'INACTIVE'});
+});
+
+test('missing input grants and new app methods remain distinct typed calls', async () => {
+  const fake = mock((call, reply) =>
+    reply(
+      call,
+      call.method === 'state.subscribe'
+        ? {
+            version: 1,
+            context: {kind: 'empty', reason: 'permission_denied'},
+            input: null,
+          }
+        : {id: call.method, name: call.method},
+    ),
+  );
+  const client = createHost(fake.transport);
+  await assert.rejects(client.input.get(), {code: 'PERMISSION_DENIED'});
+  assert.equal((await client.app.getSource()).id, 'app.getSource');
+  assert.equal((await client.app.getFrontmost()).id, 'app.getFrontmost');
+  client.dispose();
+});

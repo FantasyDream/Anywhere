@@ -58,11 +58,52 @@ export function definePlugin(options: PluginOptions = {}) {
     }
     return client;
   }
+  const subscriptions = new Set<{bind: () => () => void; stop?: () => void}>();
+  function subscribe<K extends 'context' | 'input'>(
+    kind: K,
+    callback: Parameters<ReturnType<typeof createHost>[K]['onChange']>[0],
+  ) {
+    const item = {
+      bind: () =>
+        kind === 'input'
+          ? current().input.onChange(callback as (input: string) => void)
+          : current().context.onChange(
+              callback as Parameters<
+                ReturnType<typeof createHost>['context']['onChange']
+              >[0],
+            ),
+      stop: undefined as (() => void) | undefined,
+    };
+    subscriptions.add(item);
+    item.stop = item.bind();
+    return () => {
+      item.stop?.();
+      subscriptions.delete(item);
+    };
+  }
   // Stable facade: handlers created on first render also use the resumed binding.
   const host = {
     context: {
+      get: async () => current().context.get(),
+      onChange: (
+        callback: Parameters<
+          ReturnType<typeof createHost>['context']['onChange']
+        >[0],
+      ) => subscribe('context', callback),
       getCurrentApp: async (opts?: CallOptions) =>
         current().context.getCurrentApp(opts),
+    },
+    input: {
+      get: async () => current().input.get(),
+      set: async (text: string, opts?: CallOptions) =>
+        current().input.set(text, opts),
+      onChange: (callback: (input: string) => void) =>
+        subscribe('input', callback),
+    },
+    app: {
+      getSource: async (opts?: CallOptions) => current().app.getSource(opts),
+      getFrontmost: async (opts?: CallOptions) =>
+        current().app.getFrontmost(opts),
     },
     clipboard: {
       readText: async (opts?: CallOptions) =>
@@ -86,6 +127,10 @@ export function definePlugin(options: PluginOptions = {}) {
     const isCurrent = () => active && !disposed && ticket === generation;
     try {
       const api = current();
+      for (const item of subscriptions) {
+        item.stop?.();
+        item.stop = item.bind();
+      }
       await api.ready();
       if (!isCurrent()) return;
       if (!delivered) {
@@ -117,6 +162,8 @@ export function definePlugin(options: PluginOptions = {}) {
     active = false;
     ++generation;
     stop();
+    for (const item of subscriptions) item.stop?.();
+    subscriptions.clear();
     globalThis.removeEventListener('pagehide', dispose);
     lifetime.abort();
     client?.dispose();
@@ -133,5 +180,5 @@ export function definePlugin(options: PluginOptions = {}) {
   queueMicrotask(() => {
     if (!disposed) void connect();
   });
-  return {host, ready, dispose};
+  return {host, anywhere: host, ready, dispose};
 }

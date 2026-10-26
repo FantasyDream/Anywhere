@@ -3250,6 +3250,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Open adapters folder'**
   String get appHistoryOpenAdapters;
+
+  /// No description provided for @permissionInputRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Read Launcher search text'**
+  String get permissionInputRead;
+
+  /// No description provided for @permissionInputWrite.
+  ///
+  /// In en, this message translates to:
+  /// **'Change Launcher search text'**
+  String get permissionInputWrite;
+
+  /// No description provided for @permissionFrontmostApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Read the currently active application'**
+  String get permissionFrontmostApp;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

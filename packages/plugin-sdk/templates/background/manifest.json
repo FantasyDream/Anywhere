@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "dev.example.json-summary",
+  "name": "JSON Summary",
+  "version": "0.1.0",
+  "apiVersion": "1",
+  "platforms": ["macos"],
+  "permissions": [
+    {"name": "context.read", "types": ["core.text", "plugin.dev.example.json-summary.summary"]},
+    {"name": "clipboard.writeText"}
+  ],
+  "background": {
+    "entry": "dist/background.js",
+    "resolvers": [{
+      "id": "json-summary", "accepts": ["core.text"],
+      "produces": ["plugin.dev.example.json-summary.summary"],
+      "entrypoint": "resolve"
+    }]
+  },
+  "commands": [{
+    "id": "copy-summary", "title": "Copy JSON Summary", "keywords": ["json", "summary"],
+    "accepts": ["plugin.dev.example.json-summary.summary"],
+    "runtime": "background", "entrypoint": "copy"
+  }]
+}

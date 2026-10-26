@@ -6,6 +6,25 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('state waits start only after an accepted matching SDK subscription',
+      () {
+    const request = '{"requestId":"s1","method":"state.subscribe"}';
+    expect(
+        webStateSubscribed(request, '{"requestId":"s1","result":{"value":{}}}'),
+        isTrue);
+    expect(
+        webStateSubscribed(request, '{"requestId":"s2","result":{"value":{}}}'),
+        isFalse);
+    expect(
+        webStateSubscribed(
+            request, '{"requestId":"s1","error":{"code":"INACTIVE"}}'),
+        isFalse);
+    expect(
+        webStateSubscribed('{"requestId":"s1","method":"state.get"}',
+            '{"requestId":"s1","result":{"value":{}}}'),
+        isFalse);
+  });
+
   test('loading ends only on the matching broker ready acknowledgement', () {
     const request = '{"requestId":"r1","method":"lifecycle.ready"}';
     expect(

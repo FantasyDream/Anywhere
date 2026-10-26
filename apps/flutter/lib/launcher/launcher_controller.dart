@@ -697,6 +697,12 @@ class LauncherController extends ChangeNotifier {
         fileTitle = _objectActionTitle,
         fileParent = _objectActionParent;
     final overlay = _overlay;
+    // A qualified plugin input.set is committed by Rust while its tool stays open.
+    final toolInputChanged = _page != null && state.revision > _revision;
+    if (toolInputChanged) {
+      _input = state.input;
+      _requestedRevision = state.revision;
+    }
     _snapshot = state;
     _snapshotInputMode = _activation.mode;
     _overlay = overlay is RootChooser ? overlay : const LauncherHome();
@@ -718,6 +724,7 @@ class LauncherController extends ChangeNotifier {
     }
     settings.recordCaptures(state.contextCaptures);
     _revision = state.revision;
+    if (toolInputChanged) _bindToolPage(_page);
     if (_scopeId != null && !view.scopes.any((scope) => scope.id == _scopeId)) {
       final removed = _scopeId;
       _scopeId = null;
@@ -731,7 +738,7 @@ class LauncherController extends ChangeNotifier {
               _session == state.sessionId &&
               _requestedRevision == revision &&
               _scopeId == null) {
-            await update(_input);
+            await update(_input, automatic: toolInputChanged);
           }
         });
       }
@@ -834,6 +841,7 @@ class LauncherController extends ChangeNotifier {
     final session = _session;
     if (session == null || !view.visible) return;
     _navigationMode = null;
+    final retainedTool = automatic ? _page : null;
     final revision = ++_revision;
     _requestedRevision = revision;
     if (!automatic) {
@@ -860,7 +868,7 @@ class LauncherController extends ChangeNotifier {
     _shortcuts.invalidate();
     _phase = LauncherPhase.resolving;
     _output = _message = null;
-    _toolPage = null;
+    if (retainedTool == null) _toolPage = null;
     _userMoved = false;
     icons.retryFailures();
     _notify();
@@ -883,12 +891,14 @@ class LauncherController extends ChangeNotifier {
       _apply(state);
       if (revision != _requestedRevision) return;
       _phase = LauncherPhase.ready;
+      if (retainedTool != null) _bindToolPage(_page);
       _notify();
       await _syncWindow();
     } catch (error) {
       if (!_current(generation) || revision != _revision) return;
       _message = '$error';
       _phase = LauncherPhase.ready;
+      if (retainedTool != null) _bindToolPage(_page);
       _notify();
       await _syncWindow();
     }

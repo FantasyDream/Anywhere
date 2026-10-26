@@ -16,6 +16,13 @@ export type Calls = {
   "invocation.get": Record<string, never>;
   "lifecycle.ready": Record<string, never>;
   "context.getCurrentApp": Record<string, never>;
+  "state.subscribe": Record<string, never>;
+  "state.get": Record<string, never>;
+  "context.get": Record<string, never>;
+  "input.get": Record<string, never>;
+  "input.set": { "text": string };
+  "app.getSource": Record<string, never>;
+  "app.getFrontmost": Record<string, never>;
   "clipboard.readText": Record<string, never>;
   "clipboard.writeText": { "text": string };
   "storage.get": { "key": string };
@@ -29,8 +36,9 @@ export type Calls = {
   "request.cancel": { "request_id": string };
 };
 export type WebInvocation = { "command_id": string; "entrypoint": string; "input": WebInput; "plugin_id": string };
-export type WebInput = { "kind": "empty"; "reason": WebInputReason } | { "kind": "text"; "source": string; "text": string } | { "kind": "url"; "source": string; "url": string } | { "items": Array<WebResource>; "kind": "resources"; "source": string };
+export type WebInput = { "kind": "empty"; "reason": WebInputReason } | { "kind": "text"; "source": string; "text": string } | { "kind": "url"; "source": string; "url": string } | { "kind": "data"; "type_id": string; "value": JsonValue } | { "items": Array<WebResource>; "kind": "resources"; "source": string };
 export type WebInputReason = "no_object" | "permission_denied" | "unsupported_type" | "too_large";
 export type WebResource = { "handle": string; "kind": WebResourceKind; "name": string };
 export type WebResourceKind = "file" | "directory" | "unknown";
 export type WebCurrentApp = { "id": string; "name": string };
+export type PluginSnapshot = { "context": WebInput; "input": string | null; "version": number };

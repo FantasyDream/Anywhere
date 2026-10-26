@@ -1,15 +1,35 @@
-# @anywhere/plugin-sdk（开发中）
+# @anywhere/sdk（开发中）
 
 浏览器侧的最小 Web 插件 SDK，运行时无 npm 依赖，不启动 Node。已接入 macOS 本地 WebView、Host 确认 UI 与安装入口，也连接 Rust 合成测试宿主。当前仍是本地开发预览，完整安全 / 跨平台验收尚未完成。
 
 **第一次开发插件：** 阅读仓库中的 [第三方插件开发指南](https://github.com/FantasyDream/Anywhere/blob/main/docs/plugin-development.md)。SDK `.tgz` 自带 `templates/minimal/` 和 `tools/package.py`，可在独立目录使用；当前没有公开 npm 发布版。
 
-导出包包含 `dist/`、类型、公共 CSS、模板、打包工具、本说明和 MIT 许可证。业务通过 `@anywhere/plugin-sdk` / `@anywhere/plugin-sdk/styles/controls.css` 标准导入，不引用仓库源文件。模板的 `npm run build` 构建网页，`npm run pack` 生成 `.awplugin`；`vendor/` 中保留 SDK 包后，不再依赖原仓库位置。
+导出包包含 `dist/`、类型、公共 CSS、模板、打包工具、本说明和 MIT 许可证。业务通过 `@anywhere/sdk` / `@anywhere/sdk/styles/controls.css` 标准导入，不引用仓库源文件。模板的 `npm run build` 构建网页，`npm run pack` 生成 `.awplugin`；`vendor/` 中保留 SDK 包后，不再依赖原仓库位置。
+
+## 统一业务 API
+
+```ts
+import {anywhere} from '@anywhere/sdk';
+const context = await anywhere.context.get();
+const input = await anywhere.input.get();
+await anywhere.input.set('hello');
+const stop = anywhere.context.onChange(context => { /* update business UI */ });
+stop();
+await anywhere.clipboard.readText();
+await anywhere.clipboard.writeText('hello');
+await anywhere.app.getSource();     // 唤醒前冻结的来源应用
+await anywhere.app.getFrontmost();  // 实时前台应用
+```
+
+接口使用 Promise，事件订阅返回取消函数。`context.read`、`input.read`、`input.write`、`context.currentApp`、`app.frontmost`、剪贴板权限由 Rust 校验，插件不能指定宿主身份。Context/Input 初始化快照后按变化推送，不自行轮询。只使用这些 API 时不需要启动代码；需要启动输入和自定义错误处理时继续使用 `definePlugin`，它也返回 `anywhere`。
+
+创建后台模板时在 `init my-tool` 后添加 `--background`。模板把 TypeScript 构建为单个 ES module，并设置 `anywhere-background` 导出条件，同样导入 `@anywhere/sdk`。后台解析器仅返回自身 `plugin.<插件 id>.*` Context，自动解析无副作用；显式后台 Action 沿用宿主确认。没有常驻后台监听，订阅仅属于这次有限调用。WebView 与 QuickJS 不直接通信。
+
 
 ## 默认入口：只写业务
 
 ```sh
-npm exec --package=/绝对路径/anywhere-plugin-sdk-0.1.0.tgz -- anywhere-plugin init my-tool
+npm exec --package=/绝对路径/anywhere-sdk-0.1.0.tgz -- anywhere-plugin init my-tool
 cd my-tool
 npm install --ignore-scripts
 npm run build
@@ -19,7 +39,7 @@ npm run pack
 创建器复制独立 SDK 快照到 `vendor/plugin-sdk/`，生成普通 HTML / JS 项目并拒绝覆盖现有目录；不依赖原仓库，不要求安装 Flutter / Rust。
 
 ```js
-import {definePlugin} from '@anywhere/plugin-sdk';
+import {definePlugin} from '@anywhere/sdk';
 const plugin = definePlugin({
   onLaunch({input}) { /* 只处理本次输入；不在恢复后重复执行 */ },
   // onError(error) 可选：缺省使用共享样式的错误提示。
@@ -70,7 +90,7 @@ scripts/check-web-sdk.sh
 ### 原始 API（进阶集成，自行管理生命周期）
 
 ```ts
-import { host } from '@anywhere/plugin-sdk';
+import { host } from '@anywhere/sdk';
 
 // 页面先渲染，只有第一次有效 ready 记录一次入口 Usage。
 await host.ready();
@@ -137,7 +157,7 @@ Flutter 与 Web 的设计参数来自同一份 [`resources/design-tokens.json`](
 SDK 也提供相同 CSS 的导出，供独立浏览器预览使用，不要求前端框架。生产页不必重复导入：
 
 ```js
-import '@anywhere/plugin-sdk/styles/controls.css';
+import '@anywhere/sdk/styles/controls.css';
 ```
 
 ```html

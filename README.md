@@ -64,13 +64,14 @@ flowchart TD
     Application --> Persistence[SQLite / 配置存储]
     Application --> Platform[系统能力适配器]
     Features --> Platform
-    Web[Web 插件 + TypeScript SDK] --> Broker[Rust 能力代理]
+    Web[Web UI + TypeScript SDK] --> Broker[Rust 能力代理]
+    Background[按需 QuickJS 后台插件 + 同一 SDK] --> Broker
     Broker --> Application
 ```
 
-Rust 负责识别、匹配、排序、执行和资源预算；Flutter 负责呈现与交互；系统差异留在平台适配层。第一方模块编译期自动注册，第三方 Web 插件通过独立包和受限能力接入。
+Rust 负责识别、匹配、排序、执行和资源预算；Flutter 负责呈现与交互；系统差异留在平台适配层。第一方模块编译期自动注册，第三方插件通过独立包与统一 TypeScript SDK 接入：WebView 运行界面，按需 QuickJS 运行后台 Context / Action，权限与生命周期统一由 Rust 管理。
 
-代码定位先看 [AGENTS.md](AGENTS.md)。详见[架构与代码地图](docs/architecture.md)、[Context 模型](docs/context-model.md)与[Web 插件设计](docs/web-plugin-design.md)。
+代码定位先看 [AGENTS.md](AGENTS.md)。详见[架构与代码地图](docs/architecture.md)、[Context 模型](docs/context-model.md)与[插件开发指南](docs/plugin-development.md)与[运行时实施清单](docs/plugin-runtime-refactor.md)。
 
 ## 从源码构建
 

@@ -12,7 +12,7 @@ pub const MAX_RUNNING: usize = 8;
 pub const REQUEST_TIMEOUT_MS: u64 = 5000;
 pub const CONFIRM_TIMEOUT_MS: u64 = 30_000;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "web-schema", derive(schemars::JsonSchema))]
 #[serde(tag = "method", content = "params", deny_unknown_fields)]
 pub enum WebCall {
@@ -22,6 +22,20 @@ pub enum WebCall {
     Ready {},
     #[serde(rename = "context.getCurrentApp")]
     CurrentApp {},
+    #[serde(rename = "state.subscribe")]
+    StateSubscribe {},
+    #[serde(rename = "state.get")]
+    StateGet {},
+    #[serde(rename = "context.get")]
+    ContextGet {},
+    #[serde(rename = "input.get")]
+    InputGet {},
+    #[serde(rename = "input.set")]
+    InputSet { text: String },
+    #[serde(rename = "app.getSource")]
+    SourceApp {},
+    #[serde(rename = "app.getFrontmost")]
+    FrontmostApp {},
     #[serde(rename = "clipboard.readText")]
     ClipboardRead {},
     #[serde(rename = "clipboard.writeText")]
@@ -53,7 +67,7 @@ pub enum WebCall {
     Cancel { request_id: String },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "web-schema", derive(schemars::JsonSchema))]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum WebErrorCode {

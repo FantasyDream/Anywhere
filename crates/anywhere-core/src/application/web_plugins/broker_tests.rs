@@ -24,10 +24,11 @@ struct ClipboardPort {
     writes: Mutex<Vec<String>>,
     text: Mutex<String>,
     fail: bool,
+    frontmost: Option<anywhere_platform::ApplicationInfo>,
 }
 impl anywhere_platform::Platform for ClipboardPort {
     fn frontmost_application(&self) -> anyhow::Result<Option<anywhere_platform::ApplicationInfo>> {
-        Ok(None)
+        Ok(self.frontmost.clone())
     }
     fn application_directory(
         &self,
@@ -98,11 +99,9 @@ fn setup_named(
     else {
         panic!("wrong fixture action");
     };
-    let id = start(
-        &mut app.web_plugins.lock().unwrap(),
-        reference,
-        &context("synthetic input"),
-    );
+    let mut input = context("synthetic input");
+    input.session_id = app.session().unwrap().state.session_id;
+    let id = start(&mut app.web_plugins.lock().unwrap(), reference, &input);
     let binding = app.bind_web_document(&id, WebPlatform::Macos).unwrap();
     (app, binding)
 }
@@ -730,4 +729,149 @@ fn web_storage_key_limit_does_not_expand_native_module_quotas() {
         native.put(&format!("k{n}"), b"null").unwrap();
     }
     assert!(native.put("overflow", b"null").is_err());
+}
+
+#[tokio::test]
+async fn snapshot_input_and_live_app_require_separate_grants_and_reject_closed_documents() {
+    let port = Arc::new(ClipboardPort::default());
+    let (app, binding) = setup(
+        json!([{"name":"context.read","types":["core.text"]},{"name":"input.read"},{"name":"input.write"},{"name":"context.currentApp"},{"name":"app.frontmost"}]),
+        port,
+        ModuleStorageHost::memory().unwrap(),
+        "state",
+    );
+    let value = reply(call(&app, &binding, "state", "state.get", json!({})).await);
+    assert_eq!(
+        value["result"]["value"]["context"]["text"],
+        "synthetic input"
+    );
+    assert_eq!(value["result"]["value"]["input"], "");
+    assert!(
+        reply(call(&app, &binding, "source", "app.getSource", json!({})).await)["result"]["value"]
+            .is_null()
+    );
+    assert!(
+        reply(call(&app, &binding, "live", "app.getFrontmost", json!({})).await)["result"]["value"]
+            .is_null()
+    );
+    assert!(reply(
+        call(
+            &app,
+            &binding,
+            "write",
+            "input.set",
+            json!({"text":"hello"})
+        )
+        .await
+    )
+    .get("error")
+    .is_none());
+    assert_eq!(app.session().unwrap().state.input, "hello");
+    let event = app.wait_web_state(&binding, 0).await.unwrap().unwrap();
+    assert_eq!(
+        serde_json::from_str::<Value>(&event).unwrap()["state"]["input"],
+        "hello"
+    );
+    let pending = {
+        let app = app.clone();
+        let binding = binding.clone();
+        tokio::spawn(async move { app.wait_web_state(&binding, u64::MAX).await })
+    };
+    tokio::task::yield_now().await;
+    app.close_web_document(&binding).unwrap();
+    assert!(tokio::time::timeout(Duration::from_millis(250), pending)
+        .await
+        .unwrap()
+        .unwrap()
+        .is_err());
+    assert!(app.wait_web_state(&binding, 0).await.is_err());
+    assert!(
+        reply(call(&app, &binding, "late", "input.set", json!({"text":"wrong"})).await)
+            .get("error")
+            .is_some()
+    );
+    assert_eq!(app.session().unwrap().state.input, "hello");
+    let (app, binding) = setup(
+        json!([]),
+        Arc::new(ClipboardPort::default()),
+        ModuleStorageHost::memory().unwrap(),
+        "denied",
+    );
+    for method in ["input.get", "app.getSource", "app.getFrontmost"] {
+        assert_eq!(
+            reply(
+                call(
+                    &app,
+                    &binding,
+                    &format!("denied_{}", method.replace('.', "_")),
+                    method,
+                    json!({})
+                )
+                .await
+            )["error"]["code"],
+            "PERMISSION_DENIED"
+        );
+    }
+    let value = reply(call(&app, &binding, "state", "state.get", json!({})).await);
+    assert!(value["result"]["value"]["input"].is_null());
+    assert_eq!(
+        value["result"]["value"]["context"]["reason"],
+        "permission_denied"
+    );
+}
+
+#[tokio::test]
+async fn source_application_is_frozen_while_frontmost_is_queried_live() {
+    let live = anywhere_platform::ApplicationInfo {
+        bundle_id: "app.live".into(),
+        name: "Live".into(),
+        pid: 2,
+        instance_id: None,
+    };
+    let frozen = anywhere_platform::ApplicationInfo {
+        bundle_id: "app.source".into(),
+        name: "Source".into(),
+        pid: 1,
+        instance_id: None,
+    };
+    let (app, old) = setup(
+        json!([{"name":"context.currentApp"},{"name":"app.frontmost"}]),
+        Arc::new(ClipboardPort {
+            frontmost: Some(live),
+            ..Default::default()
+        }),
+        ModuleStorageHost::memory().unwrap(),
+        "apps",
+    );
+    app.close_web_document(&old).unwrap();
+    let registry = app.resolver.base_registry();
+    let crate::core::action::descriptor::ActionExecutor::WebCommand(command) =
+        &registry.get("web:dev.example.tool:open").unwrap().executor
+    else {
+        panic!("command")
+    };
+    let mut input = context("text");
+    input.session_id = app.session().unwrap().state.session_id;
+    let anywhere_protocol::HostView::WebPlugin { invocation_id } = app
+        .web_plugins
+        .lock()
+        .unwrap()
+        .start(command, &input, Some(&frozen), &frozen.bundle_id)
+        .unwrap()
+    else {
+        panic!("view")
+    };
+    let binding = app
+        .bind_web_document(&invocation_id, WebPlatform::Macos)
+        .unwrap();
+    assert_eq!(
+        reply(call(&app, &binding, "source", "app.getSource", json!({})).await)["result"]["value"]
+            ["id"],
+        "app.source"
+    );
+    assert_eq!(
+        reply(call(&app, &binding, "live", "app.getFrontmost", json!({})).await)["result"]["value"]
+            ["id"],
+        "app.live"
+    );
 }

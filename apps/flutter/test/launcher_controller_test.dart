@@ -7,7 +7,9 @@ import 'package:anywhere/launcher/launcher_controller.dart';
 import 'package:anywhere/launcher/launcher_view_state.dart';
 import 'package:anywhere/settings/host_settings.dart';
 import 'package:anywhere/src/rust/api.dart';
+import 'package:anywhere/tools/tool_page.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'launcher_fixtures.dart';
@@ -71,6 +73,7 @@ void main() {
     required Execute execute,
     required Future<void> Function(int) deactivate,
     WaitForSnapshot? waitForSnapshot,
+    ToolPageRegistry? toolPages,
     LoadIcon? loadIcon,
     PromptAccessibility? promptAccessibility,
     String startupMessage = '',
@@ -90,6 +93,7 @@ void main() {
         ),
         window: WindowHost(channel),
         startupMessage: startupMessage,
+        toolPages: toolPages,
         applyExcludedApps: applyExcludedApps,
         applyFileSearch: (_) async {},
         applyContextSources: applyContextSources,
@@ -814,4 +818,79 @@ void main() {
     expect(controller.view.visibleCandidates.single.id, 'copy');
     controller.dispose();
   });
+  test(
+      'Host input updates preserve the tool even when its prior scope disappears',
+      () async {
+    final tool = action('web.tool', 'Tool', 'folder');
+    final page = _PluginInputPage();
+    final queue = <Completer<SnapshotWaitDto>>[];
+    final controller = open(
+      beginActivation: () => 1,
+      activate: (_,
+              {promptAccessibility = false,
+              capturedEnvironment = false}) async =>
+          captured(offers: [tool], scopes: [folderScope]),
+      updateInput: (_, input, revision,
+              {scopeId, inputMode = InputModeDto.environment}) async =>
+          captured(
+              revision: revision,
+              input: input,
+              offers: [tool],
+              scopes: input == 'changed by plugin' ? [] : [folderScope]),
+      execute: (_, revision, __) async => ActionResultDto(
+          sessionId: 1,
+          revision: revision,
+          status: ActionStatusDto.succeeded,
+          closeWindow: false,
+          view: HostViewDto.webPlugin),
+      deactivate: (_) async {},
+      waitForSnapshot: (_, __) {
+        final pending = Completer<SnapshotWaitDto>();
+        queue.add(pending);
+        return pending.future;
+      },
+      toolPages: ToolPageRegistry([
+        ToolPageRegistration(
+            id: 'test.plugin', view: HostViewDto.webPlugin, open: (_) => page)
+      ]),
+    );
+    await controller.activate();
+    await controller.selectScope('folder');
+    await controller.executeSelected();
+    expect(controller.view.toolPage, same(page));
+    queue.last.complete(SnapshotWaitDto(
+        kind: SnapshotWaitKindDto.updated,
+        state: captured(
+            revision: 2,
+            input: 'changed by plugin',
+            scopes: [],
+            offers: [tool],
+            selectedScope: 'folder')));
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+    expect(controller.view.input, 'changed by plugin');
+    expect(controller.view.scopeId, isNull);
+    expect(controller.view.toolPage, same(page));
+    expect(page.disposed, isFalse);
+    expect(page.canInteract, isTrue);
+    expect(page.host!.revision, 3);
+    controller.dispose();
+    queue.last
+        .complete(const SnapshotWaitDto(kind: SnapshotWaitKindDto.closed));
+  });
+}
+
+class _PluginInputPage extends ToolPageSession {
+  @override
+  String get id => 'test.plugin';
+  @override
+  String get title => 'Plugin';
+  @override
+  Widget build(BuildContext context,
+          {required VoidCallback onBack,
+          required int presentation,
+          required bool visible,
+          String? notice,
+          Future<void> Function()? onCopy}) =>
+      const SizedBox.shrink();
 }

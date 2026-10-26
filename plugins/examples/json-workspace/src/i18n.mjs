@@ -1,5 +1,5 @@
 import i18next from 'i18next';
-import {environment} from '@anywhere/plugin-sdk';
+import {environment} from '@anywhere/sdk';
 
 export const resources = {
   en: {

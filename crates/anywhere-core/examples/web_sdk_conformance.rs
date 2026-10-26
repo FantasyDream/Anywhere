@@ -72,6 +72,15 @@ fn package() -> Result<anywhere_plugin::web::VerifiedWebPackage> {
 }
 #[tokio::main]
 async fn main() -> Result<()> {
+    let args = std::env::args().skip(1).collect::<Vec<_>>();
+    if let [mode, path] = args.as_slice() {
+        anyhow::ensure!(mode == "--background", "unknown harness mode");
+        return check_background(Path::new(path)).await;
+    }
+    anyhow::ensure!(
+        args.is_empty(),
+        "expected --background PACKAGE or no arguments"
+    );
     let app = Application::new(
         Arc::new(SyntheticPlatform(Mutex::new("synthetic clipboard".into()))),
         ActionRegistry::default(),
@@ -147,5 +156,78 @@ async fn main() -> Result<()> {
         println!("{output}");
         std::io::stdout().flush()?;
     }
+    Ok(())
+}
+
+/// Execute the built TypeScript bundle through real package approval, Context,
+/// Action qualification, QuickJS, the SDK adapter and the existing consent broker.
+async fn check_background(path: &Path) -> Result<()> {
+    let platform = Arc::new(SyntheticPlatform(Mutex::new(String::new())));
+    let app = Arc::new(Application::new(
+        platform.clone(),
+        ActionRegistry::default(),
+        Box::<MemoryUsage>::default(),
+        vec![],
+    ));
+    let root = tempfile::tempdir()?;
+    let mut store = WebPackageStore::open(root.path().join("plugins"), WebPlatform::Macos, &app)?;
+    let review = store.inspect(path)?;
+    let plugin_id = review.id.clone();
+    store.approve(&app, &review.token)?;
+    let id = app.begin_activation()?;
+    let state = app
+        .update_context_input(
+            id,
+            r#"{"one":1,"two":2}"#.into(),
+            1,
+            None,
+            anywhere_protocol::InputMode::Content,
+        )
+        .await?
+        .context("background Context did not publish")?;
+    let candidate = state
+        .candidates
+        .iter()
+        .find(|candidate| {
+            candidate.command_id.as_deref() == Some(&format!("web:{plugin_id}:copy-summary"))
+        })
+        .context("background action did not match derived Context")?;
+    let output = app.execute(id, 1, candidate.id.clone()).await?;
+    let Some(HostView::WebPlugin { invocation_id }) = output.view else {
+        anyhow::bail!("missing background invocation")
+    };
+    let binding = app.bind_web_document(&invocation_id, WebPlatform::Macos)?;
+    anyhow::ensure!(
+        app.web_document_is_background(&binding)?,
+        "unexpected UI command"
+    );
+    let job = {
+        let app = app.clone();
+        let binding = binding.clone();
+        tokio::spawn(async move { app.run_background_command(&binding).await })
+    };
+    let notice = tokio::time::timeout(std::time::Duration::from_secs(5), async {
+        loop {
+            if let Some(notice) = app.wait_background_confirmation(&binding, "").await? {
+                return Ok::<_, anyhow::Error>(notice);
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await??;
+    anyhow::ensure!(
+        platform.0.lock().unwrap().is_empty(),
+        "clipboard changed before consent"
+    );
+    app.confirm_background_operation(&binding, &notice.ticket, true)
+        .await?;
+    tokio::time::timeout(std::time::Duration::from_secs(5), job).await???;
+    let copied: Value = serde_json::from_str(&platform.0.lock().unwrap())?;
+    anyhow::ensure!(
+        copied == json!({"kind":"object", "count":2}),
+        "SDK result did not survive the complete pipeline"
+    );
+    app.close_web_document(&binding)?;
+    println!("TypeScript background SDK conformance passed (synthetic clipboard only)");
     Ok(())
 }

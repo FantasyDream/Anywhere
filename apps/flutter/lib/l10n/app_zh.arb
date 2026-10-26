@@ -849,5 +849,8 @@
   "appHistoryActionEnabled": "显示 Action",
   "appHistoryCustomAdapters": "自定义适配",
   "appHistoryCustomAdaptersHelp": "在下列目录的子文件夹中放入 source.json 和 transform.js，重启后生效。同 ID 配置覆盖内置适配。请只放入可信的本机配置；使用对应 Action 时才运行转换。",
-  "appHistoryOpenAdapters": "打开适配目录"
+  "appHistoryOpenAdapters": "打开适配目录",
+  "permissionInputRead": "读取启动器搜索内容",
+  "permissionInputWrite": "修改启动器搜索内容",
+  "permissionFrontmostApp": "读取实时前台应用"
 }

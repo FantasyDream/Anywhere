@@ -2,7 +2,7 @@
 
 普通第三方 Web 包示例：Preact 页面、jsonc-parser 格式化、jsonpath-js 查询、SandboxJS 计算、Anywhere 浏览器 SDK；无 JSON 专用 Rust API，无 Node 运行时。当前包版本为 0.5.3，使用 Host 的共享工作区样式与图标。计算和结果复制直接可见；缩进、复制变体与去转义收在输入区的“JSON 操作”中。
 
-源码使用 `@anywhere/plugin-sdk` 标准包导入；本仓库开发时用 npm `file:` 依赖连接 SDK，独立工程可改为 SDK `.tgz`。通用打包器与新项目模板见 [第三方插件开发指南](../../../docs/plugin-development.md)。
+源码使用 `@anywhere/sdk` 标准包导入；本仓库开发时用 npm `file:` 依赖连接 SDK，独立工程可改为 SDK `.tgz`。通用打包器与新项目模板见 [第三方插件开发指南](../../../docs/plugin-development.md)。
 
 ## 构建与使用
 

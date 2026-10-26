@@ -1711,4 +1711,13 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get appHistoryOpenAdapters => 'Open adapters folder';
+
+  @override
+  String get permissionInputRead => 'Read Launcher search text';
+
+  @override
+  String get permissionInputWrite => 'Change Launcher search text';
+
+  @override
+  String get permissionFrontmostApp => 'Read the currently active application';
 }

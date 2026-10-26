@@ -13,4 +13,7 @@ String webPermissionLabel(WebPermissionDto permission, AppLocalizations l10n) =>
       WebPermissionKindDto.clipboardReadText => l10n.permissionReadClipboard,
       WebPermissionKindDto.clipboardWriteText => l10n.permissionWriteClipboard,
       WebPermissionKindDto.localStorage => l10n.permissionLocalStorage,
+      WebPermissionKindDto.inputRead => l10n.permissionInputRead,
+      WebPermissionKindDto.inputWrite => l10n.permissionInputWrite,
+      WebPermissionKindDto.frontmostApp => l10n.permissionFrontmostApp,
     };

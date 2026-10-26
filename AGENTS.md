@@ -20,8 +20,10 @@ old plans; dated records under `docs/archive/` describe earlier implementations.
 | Web plugins | Plugin business logic through the shared SDK and theme | `packages/plugin-sdk/`, `plugins/examples/` |
 
 First-party features are compiled modules with registration contributions, not
-hot-loaded plugins. Third-party Web plugins use the existing package/grant/SDK
-boundary. The legacy declarative protocol is compatibility code; do not extend
+hot-loaded plugins. Third-party plugins use the existing package/grant/SDK boundary: WebView for UI,
+on-demand QuickJS for finite background jobs, and the same Rust capability broker.
+Third-party Context types must stay in `plugin.<package-id>.*`; use the existing
+Context registry and never convert script data into native file authority. The legacy declarative protocol is compatibility code; do not extend
 it into another UI framework.
 
 ## Find the behavior before editing

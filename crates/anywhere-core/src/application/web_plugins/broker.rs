@@ -15,6 +15,7 @@ pub enum WebConsentKind {
     ReadClipboard,
     WriteClipboard,
 }
+#[derive(Clone)]
 pub struct WebConfirmation {
     pub ticket: String,
     pub request_id: String,
@@ -54,6 +55,11 @@ impl Source {
 pub(super) enum Plan {
     Value(Value),
     Ready,
+    Snapshot,
+    Context,
+    Input,
+    SetInput(String),
+    FrontmostApp,
     Get(Arc<dyn ExtensionStorage>, String),
     Set(Arc<dyn ExtensionStorage>, String, Vec<u8>),
     Remove(Arc<dyn ExtensionStorage>, String),
@@ -184,13 +190,30 @@ impl WebPluginService {
                     .map_err(|_| error(WebErrorCode::Inactive))?,
             )
             .map_err(|_| error(WebErrorCode::HostFailure))?,
-            WebCall::CurrentApp {} => {
+            WebCall::CurrentApp {} | WebCall::SourceApp {} => {
                 self.require(binding, source.get(), WebPermission::CurrentApp {})?;
                 serde_json::to_value(
                     self.current_app(binding, source.get())
                         .map_err(|_| error(WebErrorCode::Inactive))?,
                 )
                 .map_err(|_| error(WebErrorCode::HostFailure))?
+            }
+            WebCall::StateGet {} | WebCall::StateSubscribe {} => return Ok(Plan::Snapshot),
+            WebCall::ContextGet {} => return Ok(Plan::Context),
+            WebCall::InputGet {} => {
+                self.require(binding, source.get(), WebPermission::InputRead {})?;
+                return Ok(Plan::Input);
+            }
+            WebCall::InputSet { text } => {
+                self.require(binding, source.get(), WebPermission::InputWrite {})?;
+                if text.len() > MAX_TEXT_BYTES {
+                    return Err(error(WebErrorCode::TooLarge));
+                }
+                return Ok(Plan::SetInput(text));
+            }
+            WebCall::FrontmostApp {} => {
+                self.require(binding, source.get(), WebPermission::FrontmostApp {})?;
+                return Ok(Plan::FrontmostApp);
             }
             WebCall::Ready {} => return Ok(Plan::Ready),
             WebCall::ClipboardRead {} => {

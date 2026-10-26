@@ -943,6 +943,7 @@ pub struct WebReviewDto {
 }
 #[derive(Clone, Debug)]
 pub struct WebDocumentDto {
+    pub background: bool,
     pub handle: String,
     pub origin: String,
     pub entry: String,
@@ -960,6 +961,9 @@ pub enum WebPermissionKindDto {
     ClipboardReadText,
     ClipboardWriteText,
     LocalStorage,
+    InputRead,
+    InputWrite,
+    FrontmostApp,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum WebConsentKindDto {
@@ -982,10 +986,10 @@ pub fn inspect_web_package(path: String) -> Result<WebReviewDto> {
 pub fn cancel_web_review() -> Result<()> {
     web::cancel_review()
 }
-pub fn approve_web_package(token: String) -> Result<Vec<WebPackageDto>> {
+pub async fn approve_web_package(token: String) -> Result<Vec<WebPackageDto>> {
     web::approve(token)
 }
-pub fn change_web_package(id: String, operation: String) -> Result<Vec<WebPackageDto>> {
+pub async fn change_web_package(id: String, operation: String) -> Result<Vec<WebPackageDto>> {
     web::change(id, operation)
 }
 pub async fn open_web_document(
@@ -1015,4 +1019,22 @@ pub async fn confirm_web_operation(
 }
 pub fn web_resource(handle: String, path: String) -> Result<Vec<u8>> {
     web::resource(handle, path)
+}
+
+/// One bounded latest-state wait, scoped to the Host-issued document handle.
+pub async fn wait_web_state(handle: String, after: u64) -> Result<Option<String>> {
+    web::wait_state(handle, after).await
+}
+
+pub async fn run_web_background(handle: String) -> Result<String> {
+    web::run_background(handle).await
+}
+pub async fn wait_web_background_confirmation(
+    handle: String,
+    after: String,
+) -> Result<Option<WebReplyDto>> {
+    web::wait_background_confirmation(handle, after).await
+}
+pub async fn confirm_web_background(handle: String, ticket: String, approved: bool) -> Result<()> {
+    web::confirm_background(handle, ticket, approved).await
 }

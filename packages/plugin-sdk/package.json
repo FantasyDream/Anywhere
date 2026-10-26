@@ -1,12 +1,18 @@
 {
-  "name": "@anywhere/plugin-sdk",
+  "name": "@anywhere/sdk",
   "version": "0.1.0",
   "type": "module",
   "private": true,
   "license": "MIT",
-  "bin": {"anywhere-plugin": "tools/create.mjs"},
+  "bin": {
+    "anywhere-plugin": "tools/create.mjs"
+  },
   "exports": {
     ".": {
+      "anywhere-background": {
+        "types": "./dist/background.d.ts",
+        "default": "./dist/background.js"
+      },
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
@@ -14,7 +20,14 @@
     "./styles/tokens.css": "./styles/tokens.css"
   },
   "types": "./dist/index.d.ts",
-  "files": ["dist", "styles", "tools/package.py", "tools/create.mjs", "templates", "README.md"],
+  "files": [
+    "dist",
+    "styles",
+    "tools/package.py",
+    "tools/create.mjs",
+    "templates",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
     "check": "tsc --noEmit",

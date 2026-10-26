@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {definePlugin} from '../dist/index.js';
+import {definePlugin, anywhere} from '../dist/index.js';
 
 function environment(handler) {
   const events = new EventTarget(),
@@ -160,4 +160,39 @@ test('failed business launch is reported once and disposal before startup create
     plugin.dispose();
     env.close();
   }
+});
+
+test('zero-setup SDK subscribes once and reconnects without retaining hidden clients', async () => {
+  let value = 'first';
+  const env = environment((call, reply) =>
+    reply(
+      call.method === 'state.subscribe'
+        ? {
+            version: value === 'first' ? 1 : 2,
+            context: {kind: 'text', source: 'user_input', text: value},
+            input: value,
+          }
+        : call.method === 'invocation.get'
+          ? launch
+          : null,
+    ),
+  );
+  try {
+    assert.equal((await anywhere.context.get()).text, 'first');
+    const received = [];
+    const stop = anywhere.context.onChange(input => received.push(input.text));
+    await tick();
+    assert.deepEqual(received, ['first']);
+    env.visibility(false);
+    assert.equal(env.listeners.size, 0);
+    value = 'resumed';
+    env.visibility(true);
+    await tick();
+    assert.deepEqual(received, ['first', 'resumed']);
+    assert.equal(env.listeners.size, 1);
+    stop();
+  } finally {
+    env.close();
+  }
+  assert.equal(env.listeners.size, 0);
 });

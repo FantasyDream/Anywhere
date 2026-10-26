@@ -36,7 +36,14 @@ shutil.copytree(sdk / 'dist',
 shutil.copytree(sdk / 'styles',
                 text_tool / 'dist/sdk/styles',
                 dirs_exist_ok=True)
-for directory in [json_tool, text_tool]:
+background_tool = ROOT / 'plugins/examples/background-context'
+run([
+    'npm', 'ci', '--registry=https://registry.npmjs.org', '--ignore-scripts',
+    '--no-audit', '--no-fund'
+], background_tool)
+run(['npm', 'run', 'check'], background_tool)
+run(['npm', 'run', 'build'], background_tool)
+for directory in [json_tool, text_tool, background_tool]:
     manifest = json.loads((directory / 'manifest.json').read_text())
     destination = OUT / (manifest['id'] + '.awplugin')
     run([

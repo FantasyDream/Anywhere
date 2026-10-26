@@ -186,9 +186,13 @@ ToolPageRegistry 选择编译内 Flutter 会话，ToolPageShell 统一布局、�
 
 图标分为语义声明与呈现：功能模块在注册 Action 时声明 `icon` key；Flutter `ActionIconAppearance` 只将 key 映射到图形、色彩及操作角标，不解析动作 ID / 翻译标题或决定执行行为。`AppIcons` 复用随包携带的 Cupertino 字体，`SemanticIcon` 负责透明图形 / 小角标，文件列表与预览共用 `FileTypeIcon`。颜色来自共享设计参数；不读取系统文件图标、不为每个文件创建位图缓存。Web 的常用图标类随 Host CSS 注入，不增加权限、桥接协议或运行期图标依赖。
 
-## 第三方 Context 的当前边界
+## 第三方插件的运行边界
 
-Web 包 accepts / inputMatchers 只声明 Action 的输入与宿主识别条件，不注册新的 ContextProvider。`core/context/input_patterns.rs` 拥有有界识别，包加载模块只负责资源与协议校验。第三方只能获得 `projection.rs` 校验后的最小输入；不能传入 ResolvedContext 或自行声称宿主类型 / 来源。后续类型所有权、权限与 worker 方案见 [第三方 Context 调研](research/third-party-context-providers.md)，本版本未开放此能力。
+Web 包继续使用现有安装批准、Action ID、最小 Context 投影和 Rust 能力代理。`@anywhere/sdk` 提供同一套 Context / Input / 剪贴板 / 来源与实时应用 API，Flutter 负责原生文档身份与消息转发，不做权限决策。Context/Input 通过初始快照和最新值事件传递；页面关闭使订阅与请求失效。
+
+Manifest 可声明 `background.resolvers`，由现有 ContextProviderRegistry / ContextGraph 调度；只允许生成 `plugin.<包 id>.*` 数据，使用 `ContextValue::Extension`，与具有原生权限的第一方 Context 隔离。包批准后只保留脚本文件的校验描述符，按需读取并创建 rquickjs VM，不缓存档案或常驻 VM。自动解析不允许副作用；显式后台命令使用同一 Rust broker 和逐次确认，不创建 WebView。JS 引擎与宿主调用分别受预算 / 生命周期控制，当前仍为进程内 worker，进程隔离后续独立实现。
+
+界面与后台共享 TypeScript 类型，构建条件选择不同 Adapter；两种运行时不直接通信。详见 [开发指南](plugin-development.md) 和 [本轮实施清单](plugin-runtime-refactor.md)。历史 [Context 调研](research/third-party-context-providers.md) 保留为方案来源，不再代表当前实现状态。
 
 ## 扩展入口与验证
 

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -75,6 +76,7 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
   api.WebReplyDto? _confirmation;
   Completer<bool>? _consent;
   Timer? _readyTimer;
+  String? _followingState;
   @override
   void initState() {
     super.initState();
@@ -218,6 +220,10 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
         }
       });
       _active(true);
+      if (document.background) {
+        unawaited(_runBackground(document));
+        return;
+      }
       if (resume) {
         await notifyWebPresentation(
             _web, WebPresentationEvent.visibility, true);
@@ -323,6 +329,12 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
       if (_current(document) && response.frame != null) {
         await reply.postMessage(webReplyMessage(response.frame!));
         if (_current(document) &&
+            webStateSubscribed(frame, response.frame!) &&
+            _followingState != document.handle) {
+          _followingState = document.handle;
+          unawaited(_followState(controller, document));
+        }
+        if (_current(document) &&
             webReadyAcknowledged(frame, response.frame!)) {
           _readyTimer?.cancel();
           if (_loading && !_preparingDisplay) {
@@ -338,6 +350,66 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
         }
       }
     } catch (_) {/* No unqualified reply or internal error reaches the page. */}
+  }
+
+  Future<void> _runBackground(api.WebDocumentDto document) async {
+    var done = false;
+    // The first long wait must be started after Rust has registered the worker.
+    final running = api.runWebBackground(handle: document.handle);
+    Future<void> confirmations() async {
+      var after = '';
+      while (!done && _current(document)) {
+        final response = await api.waitWebBackgroundConfirmation(
+            handle: document.handle, after: after);
+        if (done || !_current(document)) return;
+        if (response == null) {
+          await Future<void>.delayed(const Duration(milliseconds: 100));
+          continue;
+        }
+        after = response.ticket!;
+        final consent = Completer<bool>();
+        _consent = consent;
+        setState(() {
+          _confirmation = response;
+          _approveSelected = false;
+        });
+        _hostPanel(true);
+        final approved = await consent.future
+            .timeout(const Duration(seconds: 29), onTimeout: () => false);
+        if (!_current(document)) return;
+        _answer(false);
+        await api.confirmWebBackground(
+            handle: document.handle, ticket: after, approved: approved);
+      }
+    }
+
+    unawaited(confirmations().catchError((Object _) {}));
+    try {
+      await running;
+      if (_current(document)) widget.onBack();
+    } catch (_) {
+      if (_current(document)) setState(() => _error = _WebLoadError.stopped);
+    } finally {
+      done = true;
+    }
+  }
+
+  Future<void> _followState(
+      InAppWebViewController controller, api.WebDocumentDto document) async {
+    var version = BigInt.zero;
+    try {
+      while (_current(document) && sharesWebView(_web, controller)) {
+        final frame =
+            await api.waitWebState(handle: document.handle, after: version);
+        if (!_current(document) || !sharesWebView(_web, controller)) return;
+        if (frame == null) continue;
+        final event = jsonDecode(frame) as Map<String, dynamic>;
+        version = BigInt.from(event['version'] as num);
+        await controller.evaluateJavascript(
+            source:
+                "window.dispatchEvent(new CustomEvent('anywhere:state', {detail: ${jsonEncode(frame)}}));");
+      }
+    } catch (_) {/* Disposal/revocation ends the subscription. */}
   }
 
   Future<void> _attach(InAppWebViewController controller,
@@ -450,7 +522,7 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
                 child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Text(_errorLabel(context.l10n))))
-          else if (document == null)
+          else if (document == null || document.background)
             const Center(child: CircularProgressIndicator(strokeWidth: 2))
           else
             InAppWebView(

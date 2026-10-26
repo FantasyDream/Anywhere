@@ -86,6 +86,9 @@ fn permissions(p: &[anywhere_protocol::web_plugin::WebPermission]) -> Vec<WebPer
                 ClipboardReadText {} => WebPermissionKindDto::ClipboardReadText,
                 ClipboardWriteText {} => WebPermissionKindDto::ClipboardWriteText,
                 LocalStorage {} => WebPermissionKindDto::LocalStorage,
+                InputRead {} => WebPermissionKindDto::InputRead,
+                InputWrite {} => WebPermissionKindDto::InputWrite,
+                FrontmostApp {} => WebPermissionKindDto::FrontmostApp,
             },
             context_types: match permission {
                 ContextRead { types } => types.clone(),
@@ -154,7 +157,9 @@ pub(super) async fn open(
         .into_iter()
         .find(|p| p.id == invocation.plugin_id && p.enabled && p.digest == binding.content_digest())
         .context("Web package unavailable")?;
+    let background = app.web_document_is_background(&binding)?;
     let result = WebDocumentDto {
+        background,
         handle: binding.runtime_id().into(),
         origin: binding.origin().into(),
         entry: installed.entry,
@@ -233,4 +238,36 @@ pub(super) fn resource(handle: String, path: String) -> Result<Vec<u8>> {
     let bytes = file.read()?;
     app.validate_web_document(&binding, source(&binding, binding.origin(), true))?;
     Ok(bytes)
+}
+
+pub(super) async fn wait_state(handle: String, after: u64) -> Result<Option<String>> {
+    let binding = document(&handle)?;
+    application()?
+        .wait_web_state(&binding, after)
+        .await
+        .map_err(|_| anyhow::anyhow!("Plugin state unavailable"))
+}
+
+pub(super) async fn run_background(handle: String) -> Result<String> {
+    application()?
+        .run_background_command(&document(&handle)?)
+        .await
+}
+pub(super) async fn wait_background_confirmation(
+    handle: String,
+    after: String,
+) -> Result<Option<WebReplyDto>> {
+    Ok(application()?
+        .wait_background_confirmation(&document(&handle)?, &after)
+        .await?
+        .map(|notice| reply(WebDispatch::Confirmation(notice))))
+}
+pub(super) async fn confirm_background(
+    handle: String,
+    ticket: String,
+    approved: bool,
+) -> Result<()> {
+    application()?
+        .confirm_background_operation(&document(&handle)?, &ticket, approved)
+        .await
 }

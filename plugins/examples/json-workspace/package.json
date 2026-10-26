@@ -1,6 +1,6 @@
 {
   "name": "@anywhere/example-json-workspace",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "private": true,
   "type": "module",
   "scripts": {
@@ -8,7 +8,7 @@
     "test": "node --disallow-code-generation-from-strings --test test/*.test.mjs"
   },
   "dependencies": {
-    "@anywhere/plugin-sdk": "file:../../../packages/plugin-sdk",
+    "@anywhere/sdk": "file:../../../packages/plugin-sdk",
     "@nyariv/sandboxjs": "0.9.7",
     "acorn": "8.15.0",
     "i18next": "26.5.4",

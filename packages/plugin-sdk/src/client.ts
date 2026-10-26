@@ -4,12 +4,14 @@ import type {
   JsonValue,
   WebInvocation as Invocation,
   WebCurrentApp as CurrentApp,
+  PluginSnapshot,
 } from './contract.js';
 export type {
   JsonValue,
   WebInput as Input,
   WebInvocation as Invocation,
   WebCurrentApp as CurrentApp,
+  PluginSnapshot,
 } from './contract.js';
 
 export interface HostTransport {
@@ -19,17 +21,8 @@ export interface HostTransport {
 export interface CallOptions {
   signal?: AbortSignal;
 }
-export class HostError extends Error {
-  readonly code: string;
-  constructor(
-    code: string,
-    message = 'The Host request could not be completed.',
-  ) {
-    super(message);
-    this.name = 'HostError';
-    this.code = code;
-  }
-}
+import {HostError} from './errors.js';
+export {HostError} from './errors.js';
 
 type Body = {value: unknown} | {transfer: {ticket: string; bytes: number}};
 type Job = {
@@ -56,6 +49,50 @@ export function createHost(transport: HostTransport) {
   );
   let sequence = 0,
     disposed = false;
+  let snapshot: PluginSnapshot | undefined;
+  let reading: Promise<PluginSnapshot> | undefined;
+  const contextListeners = new Set<
+    (context: PluginSnapshot['context']) => void
+  >();
+  const inputListeners = new Set<(input: string) => void>();
+  function accept(state: PluginSnapshot) {
+    if (disposed || (snapshot && state.version <= snapshot.version)) return;
+    const previous = snapshot;
+    snapshot = state;
+    if (
+      !previous ||
+      JSON.stringify(previous.context) !== JSON.stringify(state.context)
+    )
+      for (const listener of contextListeners) {
+        try {
+          listener(state.context);
+        } catch {
+          /* One subscriber must not interrupt other callbacks. */
+        }
+      }
+    if (state.input !== null && state.input !== previous?.input)
+      for (const listener of inputListeners) {
+        try {
+          listener(state.input);
+        } catch {
+          /* One subscriber must not interrupt other callbacks. */
+        }
+      }
+  }
+  function state(): Promise<PluginSnapshot> {
+    if (snapshot) return Promise.resolve(snapshot);
+    return (reading ??= invoke<'state.subscribe', PluginSnapshot>(
+      'state.subscribe',
+      {},
+    )
+      .then(value => {
+        accept(value);
+        return snapshot!;
+      })
+      .finally(() => {
+        reading = undefined;
+      }));
+  }
   const pending = new Map<string, Job>();
   const queue: Job[] = [];
   const id = () => `${prefix}_${++sequence}`;
@@ -113,7 +150,21 @@ export function createHost(transport: HostTransport) {
     } catch {
       return;
     }
-    if (!object(message) || typeof message.requestId !== 'string') return;
+    if (!object(message)) return;
+    if (
+      message.event === 'state.changed' &&
+      typeof message.version === 'number'
+    ) {
+      if (object(message.state))
+        accept(message.state as unknown as PluginSnapshot);
+      else if (!snapshot || message.version > snapshot.version) {
+        void invoke<'state.get', PluginSnapshot>('state.get', {})
+          .then(accept)
+          .catch(() => {});
+      }
+      return;
+    }
+    if (typeof message.requestId !== 'string') return;
     const job = pending.get(message.requestId);
     if (!job) return;
     if ('error' in message && !('result' in message) && object(message.error)) {
@@ -190,7 +241,7 @@ export function createHost(transport: HostTransport) {
       pump();
     });
   }
-  async function call<M extends keyof Calls, T = unknown>(
+  async function invoke<M extends keyof Calls, T = unknown>(
     method: M,
     params: Calls[M],
     options?: CallOptions,
@@ -234,14 +285,14 @@ export function createHost(transport: HostTransport) {
       encoder.encode(JSON.stringify({text})).length + 256 <=
       limits.frameBytes
     ) {
-      return call(
+      return invoke(
         'clipboard.writeText',
         {text},
         options,
         limits.confirmTimeoutMs,
       );
     }
-    const {ticket} = await call<'text.begin', {ticket: string}>(
+    const {ticket} = await invoke<'text.begin', {ticket: string}>(
       'text.begin',
       {bytes: bytes.length},
       options,
@@ -250,14 +301,14 @@ export function createHost(transport: HostTransport) {
       for (let offset = 0, sequence = 0; offset < bytes.length; sequence++) {
         let end = Math.min(offset + limits.chunkBytes, bytes.length);
         while (end < bytes.length && (bytes[end]! & 0xc0) === 0x80) end--;
-        await call(
+        await invoke(
           'text.chunk',
           {ticket, sequence, text: decoder.decode(bytes.subarray(offset, end))},
           options,
         );
         offset = end;
       }
-      await call('text.commit', {ticket}, options, limits.confirmTimeoutMs);
+      await invoke('text.commit', {ticket}, options, limits.confirmTimeoutMs);
     } catch (error) {
       void raw('text.cancel', {ticket}).catch(() => {});
       throw error;
@@ -265,22 +316,86 @@ export function createHost(transport: HostTransport) {
   }
   return {
     ready: (options?: CallOptions) =>
-      call<'lifecycle.ready', void>('lifecycle.ready', {}, options),
+      invoke<'lifecycle.ready', void>('lifecycle.ready', {}, options),
     invocation: {
       get: (options?: CallOptions) =>
-        call<'invocation.get', Invocation>('invocation.get', {}, options),
+        invoke<'invocation.get', Invocation>('invocation.get', {}, options),
     },
     context: {
+      get: async () => (await state()).context,
+      onChange(callback: (context: PluginSnapshot['context']) => void) {
+        let delivered: number | undefined;
+        const receive = (context: PluginSnapshot['context']) => {
+          if (delivered === snapshot?.version) return;
+          delivered = snapshot?.version;
+          callback(context);
+        };
+        contextListeners.add(receive);
+        void state()
+          .then(() => {
+            if (contextListeners.has(receive) && snapshot)
+              receive(snapshot.context);
+          })
+          .catch(() => {});
+        return () => {
+          contextListeners.delete(receive);
+        };
+      },
       getCurrentApp: (options?: CallOptions) =>
-        call<'context.getCurrentApp', CurrentApp | null>(
+        invoke<'context.getCurrentApp', CurrentApp | null>(
           'context.getCurrentApp',
+          {},
+          options,
+        ),
+    },
+    input: {
+      get: async () => {
+        const value = (await state()).input;
+        if (value === null) throw new HostError('PERMISSION_DENIED');
+        return value;
+      },
+      set: (text: string, options?: CallOptions) =>
+        invoke<'input.set', void>('input.set', {text}, options),
+      onChange(callback: (input: string) => void) {
+        let delivered: number | undefined;
+        const receive = (input: string) => {
+          if (delivered === snapshot?.version) return;
+          delivered = snapshot?.version;
+          callback(input);
+        };
+        inputListeners.add(receive);
+        void state()
+          .then(() => {
+            if (
+              inputListeners.has(receive) &&
+              snapshot &&
+              snapshot.input !== null
+            )
+              receive(snapshot.input);
+          })
+          .catch(() => {});
+        return () => {
+          inputListeners.delete(receive);
+        };
+      },
+    },
+    app: {
+      getSource: (options?: CallOptions) =>
+        invoke<'app.getSource', CurrentApp | null>(
+          'app.getSource',
+          {},
+          options,
+        ),
+      getFrontmost: (options?: CallOptions) =>
+        invoke<'app.getFrontmost', CurrentApp | null>(
+          'app.getFrontmost',
           {},
           options,
         ),
     },
     clipboard: {
       readText: (options?: CallOptions) =>
-        call<'clipboard.readText', string | null>(
+        invoke<'clipboard.readText', string | null>(
           'clipboard.readText',
           {},
           options,
@@ -292,16 +407,19 @@ export function createHost(transport: HostTransport) {
       get: <T extends JsonValue = JsonValue>(
         key: string,
         options?: CallOptions,
-      ) => call<'storage.get', T | null>('storage.get', {key}, options),
+      ) => invoke<'storage.get', T | null>('storage.get', {key}, options),
       set: (key: string, value: JsonValue, options?: CallOptions) =>
-        call<'storage.set', void>('storage.set', {key, value}, options),
+        invoke<'storage.set', void>('storage.set', {key, value}, options),
       remove: (key: string, options?: CallOptions) =>
-        call<'storage.remove', void>('storage.remove', {key}, options),
+        invoke<'storage.remove', void>('storage.remove', {key}, options),
     },
     dispose() {
       if (disposed) return;
       disposed = true;
       unsubscribe();
+      contextListeners.clear();
+      inputListeners.clear();
+      snapshot = undefined;
       const sent = [...pending.keys()];
       for (const job of [...queue, ...pending.values()])
         settle(job, new HostError('INACTIVE'));
@@ -328,8 +446,23 @@ export const host = {
     get: (options?: CallOptions) => injected().invocation.get(options),
   },
   context: {
+    get: () => injected().context.get(),
+    onChange: (callback: (context: PluginSnapshot['context']) => void) =>
+      injected().context.onChange(callback),
     getCurrentApp: (options?: CallOptions) =>
       injected().context.getCurrentApp(options),
+  },
+  input: {
+    get: () => injected().input.get(),
+    set: (text: string, options?: CallOptions) =>
+      injected().input.set(text, options),
+    onChange: (callback: (input: string) => void) =>
+      injected().input.onChange(callback),
+  },
+  app: {
+    getSource: (options?: CallOptions) => injected().app.getSource(options),
+    getFrontmost: (options?: CallOptions) =>
+      injected().app.getFrontmost(options),
   },
   clipboard: {
     readText: (options?: CallOptions) => injected().clipboard.readText(options),

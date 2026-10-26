@@ -7,7 +7,7 @@ mkdir -p build/plugin-sdk
   cd packages/plugin-sdk
   npm pack --pack-destination "$ROOT/build/plugin-sdk"
 )
-SDK_ARCHIVE="$ROOT/build/plugin-sdk/anywhere-plugin-sdk-0.1.0.tgz"
+SDK_ARCHIVE="$ROOT/build/plugin-sdk/anywhere-sdk-0.1.0.tgz"
 # Build outside the repository: source-relative SDK imports cannot accidentally work.
 STARTER_WORK="$(mktemp -d "${TMPDIR:-/tmp}/anywhere-plugin-starter.XXXXXX")"
 trap 'rm -rf "$STARTER_WORK"' EXIT
@@ -26,10 +26,21 @@ fi
 (
   cd "$STARTER_WORK/my-tool"
   npm install --registry=https://registry.npmjs.org --ignore-scripts --no-audit --no-fund
-  cmp "$ROOT/LICENSE" node_modules/@anywhere/plugin-sdk/LICENSE
+  cmp "$ROOT/LICENSE" node_modules/@anywhere/sdk/LICENSE
   npm run build
   npm run pack
 )
 cargo run -p anywhere-plugin --example inspect_web_package --locked -- "$STARTER_WORK/my-tool/output/my-tool.awplugin"
 cp "$STARTER_WORK/my-tool/output/my-tool.awplugin" "$ROOT/build/plugin-sdk/text-transform.awplugin"
 printf 'Standalone starter built and validated outside the checkout.\n'
+
+node "$STARTER_WORK/sdk/tools/create.mjs" init "$STARTER_WORK/my-parser" --background
+(
+  cd "$STARTER_WORK/my-parser"
+  npm install --registry=https://registry.npmjs.org --ignore-scripts --no-audit --no-fund
+  npm run check
+  npm run build
+  npm run pack
+)
+cargo run -p anywhere-plugin --example inspect_web_package --locked -- "$STARTER_WORK/my-parser/output/my-parser.awplugin"
+cargo run -p anywhere-core --example web_sdk_conformance --locked -- --background "$STARTER_WORK/my-parser/output/my-parser.awplugin"

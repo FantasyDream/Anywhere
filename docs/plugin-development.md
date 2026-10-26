@@ -1,15 +1,15 @@
 # 第三方插件开发指南
 
-插件就是一个本地网页：你负责内容和交互，Anywhere 负责窗口、背景、返回、权限和宿主能力。可以用普通 JavaScript，也可以用 React、Vue、Svelte 等框架。
+插件可以是 Web 界面，也可以是无需界面的后台 JavaScript。你只负责 TypeScript / JavaScript 业务；Anywhere 负责容器、默认样式、权限、Context 调度和资源释放。界面可使用普通 HTML，也可以使用 React、Vue、Svelte。
 
-**当前范围：V0.12 的 macOS 本地开发预览。** 下述简化入口已在 V0.11 Build 23 接入，当前 V0.12 继续支持，不能跨版本仅比较构建号。SDK 尚未发布到 npm，使用导出的 `.tgz` 安装。开发需要 Node.js 22+ 和 Python 3.10+；插件运行时不需要 Node、Python、Rust 或 Flutter。
+**当前范围：macOS 本地开发预览。** 统一 SDK / 后台运行时改造位于 `codex/plugin-runtime-refactor`，不代表此前发布包已经支持以下新增 API。SDK 尚未发布到 npm，使用导出的 `.tgz` 安装。开发需要 Node.js 22+ 和 Python 3.10+；插件运行时不需要 Node、Python、Rust 或 Flutter。
 
 ## 1. 从模板开始
 
 取得 SDK 安装包后，执行：
 
 ```sh
-npm exec --package=/绝对路径/anywhere-plugin-sdk-0.1.0.tgz -- anywhere-plugin init my-tool
+npm exec --package=/绝对路径/anywhere-sdk-0.1.0.tgz -- anywhere-plugin init my-tool
 cd my-tool
 npm install --ignore-scripts
 npm run build
@@ -69,7 +69,7 @@ my-tool/
 页面渲染后调用 `definePlugin`，业务只处理输入和操作：
 
 ```js
-import {definePlugin} from '@anywhere/plugin-sdk';
+import {definePlugin} from '@anywhere/sdk';
 
 const input = document.querySelector('textarea');
 const plugin = definePlugin({
@@ -88,15 +88,32 @@ await plugin.host.clipboard.writeText(input.value);
 
 返回、重载和工具选项由 Host 提供，SDK 当前没有 `navigation.back`、`actions.set` 或 `host.theme.subscribe`。主题 / 背景由 Host 自动注入；不需要注册页面动作来适配样式。
 
-输入可能是 `text`、`url`、`resources` 或 `empty`。按工具名称打开时可以没有输入，不要把搜索关键词当成正文。`empty.reason` 会说明没有对象、未授权或超限等原因。
+输入可能是 `text`、`url`、`resources`、插件自有的 `data` 或 `empty`。按工具名称打开时可以没有输入，不要把搜索关键词当成正文。`empty.reason` 会说明没有对象、未授权或超限等原因。
+
+只需要宿主能力时，无需初始化桥接，直接导入：
+
+```ts
+import {anywhere} from '@anywhere/sdk';
+const context = await anywhere.context.get();
+const stop = anywhere.input.onChange(text => console.log(text));
+// 不再使用订阅时调用；页面销毁也会自动释放。
+stop();
+```
 
 | 功能 | SDK 调用 | Manifest 权限 |
 |---|---|---|
-| 接收文本 | `onLaunch(invocation)` | `{"name":"context.read","types":["core.text"]}`，同时声明 `accepts: ["core.text"]` |
-| 获取唤醒前的应用名称与 ID | `plugin.host.context.getCurrentApp()` | `{"name":"context.currentApp"}` |
-| 读取剪贴板文本 | `plugin.host.clipboard.readText()` | `{"name":"clipboard.readText"}` |
-| 复制文本 | `plugin.host.clipboard.writeText(text)` | `{"name":"clipboard.writeText"}` |
-| 读写自己的小型设置 | `plugin.host.storage.get(key)`、`set(key, value)`、`remove(key)` | `{"name":"storage.local"}` |
+| 当前获准的输入对象 | `anywhere.context.get()`、`context.onChange(fn)` | `context.read` 的对应 `types` |
+| 搜索框内容 | `anywhere.input.get()`、`input.onChange(fn)` | `input.read` |
+| 修改搜索框 | `anywhere.input.set(text)` | `input.write` |
+| 唤醒前的来源应用 | `anywhere.app.getSource()` | `context.currentApp` |
+| 此刻真正的前台应用 | `anywhere.app.getFrontmost()` | `app.frontmost` |
+| 读取剪贴板文本 | `anywhere.clipboard.readText()` | `clipboard.readText` |
+| 复制文本 | `anywhere.clipboard.writeText(text)` | `clipboard.writeText` |
+| 私有小型设置（界面插件） | `plugin.host.storage.get(key)`、`set(key, value)`、`remove(key)` | `storage.local` |
+
+所有异步调用返回 Promise，订阅返回取消函数。Context 和 Input 使用初始快照与变化推送；旧版本事件不会覆盖新快照。`context.get()` 返回获准的单个对象，绝不返回完整原生图。无 Context 授权时得到 `empty`；缺少 Input / 应用权限时读写调用失败，订阅不推送未授权的内容。来源应用在唤醒前冻结，实时前台应用可能是 Anywhere 自身，二者不可混用。
+
+`definePlugin()` 仍适用于需要 `onLaunch`、`onError` 或私有 Storage 的页面，返回的 `plugin.anywhere` 提供同一套业务 API；`plugin.host` 是已有兼容入口。
 
 剪贴板读写每次都需宿主确认，取消返回 `USER_CANCELLED`。成功后才显示“已复制”，不要自动重试写入。模板已处理错误和等待状态。
 
@@ -120,6 +137,37 @@ Host 会识别输入、选中文本和 15 秒内新复制内容中的 JSON，展
 若命令必须依赖有效内容（例如复制格式化 JSON），再声明 `"requireInputMatch": true`。此时必须提供 `inputMatchers`，无匹配内容时连名称搜索与无对象快捷键入口也不显示，执行前再次复验。默认值为 `false`，适合仍可空白打开的工作区。
 
 `json` 识别严格 JSON **对象 / 数组**；`json_escaped` 识别经过字符串编码的对象 / 数组（允许省略外层引号，最多 4 层）。自动识别最多 16 KiB 原文、解码后 128 层；标量、不完整内容、注释和尾随逗号不匹配。识别期间不启动 WebView，Invocation 保留原文，具体解码由插件实现。不要另写监听剪贴板的代码。
+
+### 后台 Context 与 Action
+
+```sh
+npm exec --package=/绝对路径/anywhere-sdk-0.1.0.tgz -- anywhere-plugin init my-parser --background
+```
+
+模板已配置 TypeScript 转译、SDK 的 `anywhere-background` 构建条件和打包命令。只改 `src/main.ts` 的业务。构建结果是单个 ES module；运行时不依赖浏览器、Node、TypeScript 编译器或网络加载器。
+
+Manifest 的 `background.entry` 指向构建出的 `.js`，`background.resolvers` 静态声明解析函数和输入 / 输出类型。输出必须属于 `plugin.<插件 id>.<类型>`；只允许 Manifest 中声明的类型。示例：
+
+```ts
+import {anywhere} from '@anywhere/sdk';
+export async function resolve() {
+  const input = await anywhere.context.get();
+  if (input.kind !== 'text') return [];
+  return [{type: 'plugin.dev.example.my-parser.summary', value: {length: input.text.length}}];
+}
+```
+
+对应 Manifest 需有 `context.read(core.text)`，解析器 `accepts: ["core.text"]`、`produces: ["plugin.dev.example.my-parser.summary"]`、`entrypoint: "resolve"`。它通过现有 Context Graph 调度，不能伪造 `core.file` 等第一方类型，也不能把输出变成原生文件权限。未匹配时返回 `[]`。
+
+无界面命令在 `commands[]` 声明 `runtime: "background"`，`entrypoint` 为导出的函数名。接受 Context 的后台命令只在匹配对象存在时出现；`accepts: []` 可定义无对象的全局命令。普通 Web 命令省略 `runtime` 即可，继续使用 HTML `entry` 和路由 `entrypoint`。仅后台包可省略 HTML `entry`。
+
+自动解析器只能读取获准的 Context / Input / 应用快照，不得弹确认、改输入或读写剪贴板。显式后台 Action 可以调用宿主能力，并沿用原有剪贴板逐次确认。后台任务是有限调用，无常驻监听；订阅提供本任务初始状态及自身输入修改后的状态，任务结束一起释放。不是后台守护程序。
+
+第三方文本解析器也参与现有的默认输入识别；预填识别单任务采用 75 ms JS 预算，整轮在 150 ms 后不再启动额外识别器，避免大量插件拖慢唤醒。识别之后仍由正常 Context Graph 解析，不把预填探测直接当作执行资格。
+
+QuickJS 每次按需创建，32 MiB 内存、256 KiB 栈、250 ms JS 执行预算，等待宿主确认的时间不计入 JS 预算；每任务最多 128 次宿主调用。脚本包不超过 256 KiB，单次解析最多 16 个 Context，安装目录总计最多 64 个第三方解析器。输出 JSON 不超过 256 KiB。取消、禁用、更新、关闭会使旧任务失效。纯界面包不会启动 QuickJS；后台命令不会创建 WebView。
+
+完整示例：[JSON Summary 后台插件](../plugins/examples/background-context/README.md)；界面示例：[Text Pad](../plugins/examples/web-text/README.md)。当前后台执行仍在主程序的受限 worker 中，并非操作系统进程隔离；不要把 JS 引擎限制视为完整 OS 沙箱。
 
 ## 5. 界面与生命周期
 
@@ -145,7 +193,7 @@ Host 会识别输入、选中文本和 15 秒内新复制内容中的 JSON，展
 资源放在别处时，显式指定运行资源目录：
 
 ```sh
-python3 node_modules/@anywhere/plugin-sdk/tools/package.py . \
+python3 node_modules/@anywhere/sdk/tools/package.py . \
   --assets dist --assets assets --output output/my-tool.awplugin
 ```
 

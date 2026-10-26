@@ -849,5 +849,8 @@
   "appHistoryActionEnabled": "Show action",
   "appHistoryCustomAdapters": "Custom adapters",
   "appHistoryCustomAdaptersHelp": "Place source.json and transform.js in a subfolder here, then restart Anywhere. Matching IDs override built-ins. Import only trusted local configuration; transforms run when you use their action.",
-  "appHistoryOpenAdapters": "Open adapters folder"
+  "appHistoryOpenAdapters": "Open adapters folder",
+  "permissionInputRead": "Read Launcher search text",
+  "permissionInputWrite": "Change Launcher search text",
+  "permissionFrontmostApp": "Read the currently active application"
 }

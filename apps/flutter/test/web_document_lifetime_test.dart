@@ -3,6 +3,7 @@ import 'package:anywhere/web_plugins/web_document_lifetime.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 WebDocumentDto document(String id) => WebDocumentDto(
+    background: false,
     handle: id,
     origin: 'anywhere-plugin://$id.plugin.local',
     entry: 'index.html',

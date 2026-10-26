@@ -6,7 +6,7 @@ import {
   useRef,
   useState,
 } from 'preact/hooks';
-import {definePlugin, environment} from '@anywhere/plugin-sdk';
+import {definePlugin, environment} from '@anywhere/sdk';
 import {i18n, t} from './i18n.mjs';
 import {MAX_BYTES} from './json.mjs';
 import {

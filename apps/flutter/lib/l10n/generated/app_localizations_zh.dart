@@ -1675,4 +1675,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get appHistoryOpenAdapters => '打开适配目录';
+
+  @override
+  String get permissionInputRead => '读取启动器搜索内容';
+
+  @override
+  String get permissionInputWrite => '修改启动器搜索内容';
+
+  @override
+  String get permissionFrontmostApp => '读取实时前台应用';
 }

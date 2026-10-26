@@ -25,6 +25,10 @@ const webBootstrap = r'''
     pending.delete(message.requestId);
     for (const receive of receivers) receive(frame);
   };
+  window.addEventListener('anywhere:state', event => {
+    if (!visible || typeof event.detail !== 'string') return;
+    for (const receive of receivers) receive(event.detail);
+  });
   Object.defineProperty(window, '__anywhereTransport', {value: Object.freeze({
     send(frame) {
       if (!visible) throw new Error('INACTIVE');

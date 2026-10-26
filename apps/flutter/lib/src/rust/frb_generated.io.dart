@@ -115,6 +115,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   WebPluginLaunchDto dco_decode_box_autoadd_web_plugin_launch_dto(dynamic raw);
 
   @protected
+  WebReplyDto dco_decode_box_autoadd_web_reply_dto(dynamic raw);
+
+  @protected
   CandidateDto dco_decode_candidate_dto(dynamic raw);
 
   @protected
@@ -322,6 +325,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  WebReplyDto? dco_decode_opt_box_autoadd_web_reply_dto(dynamic raw);
+
+  @protected
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
 
   @protected
@@ -504,6 +510,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   WebPluginLaunchDto sse_decode_box_autoadd_web_plugin_launch_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  WebReplyDto sse_decode_box_autoadd_web_reply_dto(
       SseDeserializer deserializer);
 
   @protected
@@ -743,6 +753,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  WebReplyDto? sse_decode_opt_box_autoadd_web_reply_dto(
+      SseDeserializer deserializer);
+
+  @protected
   Uint8List? sse_decode_opt_list_prim_u_8_strict(SseDeserializer deserializer);
 
   @protected
@@ -940,6 +954,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_web_plugin_launch_dto(
       WebPluginLaunchDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_web_reply_dto(
+      WebReplyDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_candidate_dto(CandidateDto self, SseSerializer serializer);
@@ -1182,6 +1200,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_web_plugin_launch_dto(
       WebPluginLaunchDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_web_reply_dto(
+      WebReplyDto? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_list_prim_u_8_strict(

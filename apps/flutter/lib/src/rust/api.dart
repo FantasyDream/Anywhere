@@ -366,6 +366,25 @@ Future<WebReplyDto> confirmWebOperation(
 Future<Uint8List> webResource({required String handle, required String path}) =>
     RustLib.instance.api.crateApiWebResource(handle: handle, path: path);
 
+/// One bounded latest-state wait, scoped to the Host-issued document handle.
+Future<String?> waitWebState({required String handle, required BigInt after}) =>
+    RustLib.instance.api.crateApiWaitWebState(handle: handle, after: after);
+
+Future<String> runWebBackground({required String handle}) =>
+    RustLib.instance.api.crateApiRunWebBackground(handle: handle);
+
+Future<WebReplyDto?> waitWebBackgroundConfirmation(
+        {required String handle, required String after}) =>
+    RustLib.instance.api
+        .crateApiWaitWebBackgroundConfirmation(handle: handle, after: after);
+
+Future<void> confirmWebBackground(
+        {required String handle,
+        required String ticket,
+        required bool approved}) =>
+    RustLib.instance.api.crateApiConfirmWebBackground(
+        handle: handle, ticket: ticket, approved: approved);
+
 class ActionResultDto {
   final int sessionId;
   final int revision;
@@ -1644,12 +1663,14 @@ enum WebConsentKindDto {
 }
 
 class WebDocumentDto {
+  final bool background;
   final String handle;
   final String origin;
   final String entry;
   final String title;
 
   const WebDocumentDto({
+    required this.background,
     required this.handle,
     required this.origin,
     required this.entry,
@@ -1658,13 +1679,18 @@ class WebDocumentDto {
 
   @override
   int get hashCode =>
-      handle.hashCode ^ origin.hashCode ^ entry.hashCode ^ title.hashCode;
+      background.hashCode ^
+      handle.hashCode ^
+      origin.hashCode ^
+      entry.hashCode ^
+      title.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is WebDocumentDto &&
           runtimeType == other.runtimeType &&
+          background == other.background &&
           handle == other.handle &&
           origin == other.origin &&
           entry == other.entry &&
@@ -1742,6 +1768,9 @@ enum WebPermissionKindDto {
   clipboardReadText,
   clipboardWriteText,
   localStorage,
+  inputRead,
+  inputWrite,
+  frontmostApp,
   ;
 }
 

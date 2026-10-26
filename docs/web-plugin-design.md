@@ -2,6 +2,8 @@
 
 现行 Web 插件架构；文档整理：2026-10-25。第三方采用 WebView，第一方为静态内置模块；JSON 已作为普通 Web 包接入。本文说明架构与设计边界，实际 Manifest / SDK 用法以[开发指南](plugin-development.md)和生成的协议为准；逐构建证据见[历史实施记录](archive/web-plugin-development-records.md)。Terminal 延后，Windows 与完整发行矩阵尚未交付。标为“后续”或“验收要求”的内容不代表已有实现。
 
+> 本文记录最初 Web UI 阶段的设计与验收。当前统一 SDK、后台 Context / Action 的实现以 [开发指南](plugin-development.md) 和 [运行时清单](plugin-runtime-refactor.md) 为准；旧阶段不含后台运行时的排除项不再适用于当前重构分支。
+
 ## 1. 结论与范围
 
 确定采用：**本地 Web 包 + flutter_inappwebview + 版本化 TypeScript SDK + Rust 能力代理**。通过 WebPluginSurface 封装库依赖；关键接口缺口才补薄原生适配。不引入 QuickJS、Node 或独立 Wasm 运行时，也不将第三方 UI 改回宿主 DSL。
@@ -206,7 +208,7 @@ example.awplugin                 ZIP 容器，扩展名只用于识别
 ### 7.1 最小 SDK
 
 ```js
-import {definePlugin} from '@anywhere/plugin-sdk';
+import {definePlugin} from '@anywhere/sdk';
 
 // 页面渲染后连接；SDK 处理 ready、输入交付和隐藏后的重新绑定。
 const input = document.querySelector('textarea');

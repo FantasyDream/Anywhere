@@ -52,7 +52,9 @@ pub(super) struct UsageRecord {
 
 pub(super) struct Invocation {
     pub(super) command: WebCommandRef,
-    input: WebInvocation,
+    pub(super) input: WebInvocation,
+    pub(super) session_id: anywhere_protocol::SessionId,
+    pub(super) launch_revision: anywhere_protocol::Revision,
     // Paths stay private; the public broker grants no filesystem operation.
     _resources: projection::Resources,
     app: Option<WebCurrentApp>,
@@ -64,12 +66,15 @@ pub(super) struct Invocation {
     usage: UsageRecord,
     pub(super) rpc: super::rpc_state::RpcState,
     bound_at: Instant,
+    pub(super) closed: tokio::sync::watch::Sender<bool>,
 }
 
 #[derive(Default)]
 pub struct WebPluginService {
     pub(super) catalog: WebPluginCatalog,
     pub(super) invocations: BTreeMap<String, Invocation>,
+    pub(super) backgrounds:
+        BTreeMap<String, std::sync::Arc<super::background_action::BackgroundJob>>,
     pub(super) storage: Option<crate::persistence::module_storage::ModuleStorageHost>,
 }
 
@@ -83,7 +88,20 @@ impl WebPluginService {
             .is_some_and(|invocation| invocation.document_epoch == binding.document_epoch)
         {
             self.invocations.remove(&binding.invocation_id);
+            if let Some(job) = self.backgrounds.remove(binding.runtime_id()) {
+                job.cancel();
+            }
         }
+    }
+    pub(crate) fn restore_providers(
+        &self,
+        providers: &crate::core::context::registry::ContextProviderRegistry,
+        session: std::sync::Arc<
+            std::sync::Mutex<crate::application::session_model::LauncherSession>,
+        >,
+        platform: std::sync::Arc<dyn anywhere_platform::Platform>,
+    ) -> Result<crate::core::context::registry::ContextProviderRegistry> {
+        self.catalog.append_providers(providers, session, platform)
     }
     pub(crate) fn restore_actions(&self, base: &ActionRegistry) -> Result<ActionRegistry> {
         self.catalog.append_to(base)
@@ -105,10 +123,19 @@ impl WebPluginService {
     }
     pub(super) fn replace_catalog(&mut self, catalog: WebPluginCatalog) {
         self.invalidate();
+        for entry in self.catalog.entries.values() {
+            entry
+                .active
+                .store(false, std::sync::atomic::Ordering::Release);
+        }
         self.catalog = catalog;
     }
     pub(crate) fn invalidate(&mut self) {
         self.invocations.clear();
+        for job in self.backgrounds.values() {
+            job.cancel();
+        }
+        self.backgrounds.clear();
     }
 
     pub(crate) fn start(
@@ -161,6 +188,8 @@ impl WebPluginService {
         let id = super::token()?;
         let invocation = Invocation {
             command: command.clone(),
+            session_id: context.session_id,
+            launch_revision: context.revision,
             input: WebInvocation {
                 plugin_id: command.plugin_id.clone(),
                 command_id: command.command_id.clone(),
@@ -179,14 +208,15 @@ impl WebPluginService {
             document_ready: false,
             rpc: Default::default(),
             bound_at: Instant::now(),
+            closed: tokio::sync::watch::channel(false).0,
             usage: UsageRecord {
                 action_id: command.action_id(),
                 context_type: context.type_id.clone(),
                 source_app: source_app.into(),
             },
         };
-        // One live page by default. Replacement drops prior data and tickets atomically.
-        self.invocations.clear();
+        // One active tool by default. Replacement cancels its finite background job too.
+        self.invalidate();
         self.invocations.insert(id.clone(), invocation);
         Ok(HostView::WebPlugin { invocation_id: id })
     }
@@ -231,6 +261,7 @@ impl WebPluginService {
         };
         invocation.document_epoch = document_epoch;
         invocation.rpc = Default::default();
+        invocation.closed = tokio::sync::watch::channel(false).0;
         invocation.bound_at = Instant::now();
         invocation.document_ready = false;
         invocation.binding = Some(binding.clone());
@@ -276,6 +307,19 @@ impl WebPluginService {
         source: WebMessageSource<'_>,
     ) -> Result<WebInvocation> {
         Ok(self.authorize(binding, source)?.input.clone())
+    }
+
+    pub fn is_background(
+        &mut self,
+        binding: &WebDocumentBinding,
+        source: WebMessageSource<'_>,
+    ) -> Result<bool> {
+        let command = self.authorize(binding, source)?.command.clone();
+        let entry = &self.catalog.entries[&command.plugin_id];
+        Ok(entry.manifest.commands.iter().any(|c| {
+            c.id == command.command_id
+                && c.runtime == anywhere_protocol::web_plugin::PluginRuntime::Background
+        }))
     }
 
     pub fn current_app(
@@ -324,7 +368,12 @@ impl WebPluginService {
     }
 
     pub(crate) fn suspend(&mut self) {
+        for job in self.backgrounds.values() {
+            job.cancel();
+        }
+        self.backgrounds.clear();
         for invocation in self.invocations.values_mut() {
+            invocation.closed.send_replace(true);
             invocation.binding = None;
             invocation.rpc = Default::default();
             // Repeated focus notifications must not restart the retention interval.

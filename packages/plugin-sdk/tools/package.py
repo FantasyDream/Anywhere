@@ -58,10 +58,16 @@ def package(project, destination, assets=("dist",)):
         (project / "manifest.json").read_text(encoding="utf-8"))
     if not isinstance(manifest, dict):
         raise ValueError("manifest must be a JSON object")
-    entry = manifest.get("entry")
+    entry = manifest.get("entry", "")
     names = {path.relative_to(project).as_posix() for path in files}
-    if not isinstance(entry, str) or entry not in names:
+    if not isinstance(entry, str) or (entry and entry not in names):
         raise ValueError("manifest entry is missing from the packaged assets")
+    background = manifest.get("background")
+    if background is not None and (not isinstance(background, dict) or
+                                   background.get("entry") not in names):
+        raise ValueError("background entry is missing from the packaged assets")
+    if not entry and background is None:
+        raise ValueError("manifest needs a UI or background entry")
     icon = manifest.get("icon")
     if icon is not None and (not isinstance(icon, str) or icon not in names):
         raise ValueError("manifest icon is missing; include it in --assets")

@@ -6,4 +6,12 @@ text.addEventListener('input', () => {
   count.value = `${length} character${length === 1 ? '' : 's'}`;
 });
 
-definePlugin();
+const {anywhere} = definePlugin({
+  async onLaunch() {
+    const input = await anywhere.context.get();
+    if (input.kind === 'text') text.value = input.text;
+  },
+});
+anywhere.input.onChange(query => {
+  document.title = query ? `Text Pad · ${query}` : 'Text Pad';
+});

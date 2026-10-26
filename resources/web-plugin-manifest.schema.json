@@ -1,5 +1,62 @@
 {
   "$defs": {
+    "PluginBackground": {
+      "additionalProperties": false,
+      "description": "Code is compiled to one local ES module when building the package.",
+      "properties": {
+        "entry": {
+          "type": "string"
+        },
+        "resolvers": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/PluginResolver"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "entry"
+      ],
+      "type": "object"
+    },
+    "PluginResolver": {
+      "additionalProperties": false,
+      "properties": {
+        "accepts": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "entrypoint": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "produces": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "accepts",
+        "produces",
+        "entrypoint"
+      ],
+      "type": "object"
+    },
+    "PluginRuntime": {
+      "enum": [
+        "webview",
+        "background"
+      ],
+      "type": "string"
+    },
     "WebCommand": {
       "additionalProperties": false,
       "properties": {
@@ -33,6 +90,9 @@
         "requireInputMatch": {
           "description": "Hide commands that cannot run without recognized content, including keyword search.",
           "type": "boolean"
+        },
+        "runtime": {
+          "$ref": "#/$defs/PluginRuntime"
         },
         "title": {
           "type": "string"
@@ -98,6 +158,45 @@
           "additionalProperties": false,
           "properties": {
             "name": {
+              "const": "input.read",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "const": "input.write",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
+              "const": "app.frontmost",
+              "type": "string"
+            }
+          },
+          "required": [
+            "name"
+          ],
+          "type": "object"
+        },
+        {
+          "additionalProperties": false,
+          "properties": {
+            "name": {
               "const": "clipboard.readText",
               "type": "string"
             }
@@ -150,7 +249,18 @@
       "const": "1",
       "type": "string"
     },
+    "background": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PluginBackground"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "commands": {
+      "default": [],
       "items": {
         "$ref": "#/$defs/WebCommand"
       },
@@ -200,9 +310,7 @@
     "version",
     "apiVersion",
     "platforms",
-    "entry",
-    "permissions",
-    "commands"
+    "permissions"
   ],
   "title": "WebPluginManifest",
   "type": "object"

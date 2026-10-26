@@ -356,6 +356,11 @@ impl Application {
             .map_err(|_| anyhow::anyhow!("contribution policy lock poisoned"))?;
         let enabled = |id: &str| policy.allows_contributor(id) && !excluded.contains(id);
         registry.retain_contributors(enabled);
+        providers = web.restore_providers(
+            &providers,
+            self.resolver.session.clone(),
+            self.platform.clone(),
+        )?;
         providers.retain_contributors(enabled);
         sources.retain_contributors(enabled);
         persist()?;

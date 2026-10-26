@@ -20,6 +20,18 @@ export default [
     languageOptions: {globals: globals.node, sourceType: 'commonjs'},
   },
   {
+    files: [
+      'plugins/examples/background-context/**/*.ts',
+      'packages/plugin-sdk/templates/background/**/*.ts',
+    ],
+    languageOptions: {
+      parserOptions: {
+        project: './tools/code-style/tsconfig-plugins.json',
+        tsconfigRootDir: root,
+      },
+    },
+  },
+  {
     files: ['packages/plugin-sdk/src/**/*.ts'],
     languageOptions: {
       parserOptions: {

@@ -39,3 +39,19 @@ WebMessage webReplyMessage(String frame) {
   return WebMessage(
       data: Uint8List.fromList(bytes), type: WebMessageType.ARRAY_BUFFER);
 }
+
+/// Start the native state wait only after a qualified SDK subscription was accepted.
+bool webStateSubscribed(String request, String response) {
+  try {
+    final sent = jsonDecode(request), received = jsonDecode(response);
+    return sent is Map &&
+        sent['method'] == 'state.subscribe' &&
+        sent['requestId'] is String &&
+        received is Map &&
+        received['requestId'] == sent['requestId'] &&
+        !received.containsKey('error') &&
+        received['result'] is Map;
+  } on FormatException {
+    return false;
+  }
+}

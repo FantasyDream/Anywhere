@@ -1,9 +1,11 @@
-//! A bounded, synchronous recognizer used before opening a content workspace.
-//! It may inspect metadata, but must not start a process or perform an action.
+//! A bounded synchronous recognizer used before opening a content workspace.
+//! Runs on a Host worker, never the UI thread; cannot perform an action.
 use super::ResolvedContext;
-#[derive(Clone, Copy)]
+use std::sync::Arc;
+pub type RecognizeInput = Arc<dyn Fn(&str) -> Option<ResolvedContext> + Send + Sync>;
+#[derive(Clone)]
 pub struct InputRecognizer {
-    pub id: &'static str,
+    pub id: String,
     pub priority: i32,
-    pub recognize: fn(&str) -> Option<ResolvedContext>,
+    pub recognize: RecognizeInput,
 }
