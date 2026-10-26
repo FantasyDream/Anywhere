@@ -40,6 +40,16 @@
 
 ## 最新已验证基线
 
+### 插件运行时重构 — Build 21
+
+`codex/plugin-runtime-refactor` 已实现统一 `@anywhere/sdk`、Context/Input 快照与事件、来源 / 实时应用区分，以及按需 QuickJS Context / 后台 Action。复用现有安装批准、Registry、执行资格和剪贴板确认，不为第三方复制 Context / Action 主流程。开发者指南与默认样式继续共用；完整范围见 [实施清单](plugin-runtime-refactor.md)。
+
+Build 21 全量门禁通过：Core 316 项 / 1 项既有忽略，MVP 195 项 / 4 项既有忽略，Flutter 435 项，SDK 21 项，JSON 示例 25 项。后台示例与仓库外独立模板均通过真实编译包的完整链路，剪贴板为合成端口。最后的替换取消补丁另通过 47 项插件专项回归、Clippy 和 Bridge 编译。后台生命周期、权限、伪造类型、超时 / 内存、Unicode 分块、关闭后取消、事件版本以及插件输入变更后页面保留都有回归。
+
+签名 App、ZIP、SDK tgz 和两个模式的示例已生成；源提交、校验值与检查边界见 [Build 21 记录](benchmarks/plugin-runtime-v0.14-build21-2026-10-27.json)。桌面工具不允许打开终端以配置独立验收环境，本轮未启动独立 GUI 实例；不把合成端到端或原生单元测试当作真实界面 / 权限 / 内存采样通过。没有读取私人应用历史，也没有发布 GitHub Release。
+
+## 此前已验证基线
+
 Build 20：Core 307 项通过 / 1 项既有忽略，MVP 195 项通过 / 4 项既有忽略，Flutter 433 项通过；桥接编译、原生、Web、Clippy、架构、规范与生成物检查通过。新增回归覆盖来源配置的完整发布、失败发生时机相同的关闭选择、不同列表行高与逗号输入的草稿一致性。
 
 本轮落实架构评审的四项建议：来源保存与动作发布由应用层单一入口拥有；SettingsController 统一关闭决策，SettingsEdits 拥有搜索 / 隐藏应用草稿和顺序保存；Launcher 和应用历史复用公共 ObjectActionCoordinator；历史会话独占 rowExtent，页面渲染、翻页与定位不再各写一个常量。目标校验与各页面菜单语义继续留在原有所有者。现行入口见 [架构](architecture.md) 与 [AGENTS.md](../AGENTS.md)。

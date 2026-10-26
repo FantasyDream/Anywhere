@@ -42,5 +42,7 @@ Automatic resolvers cannot perform user-visible side effects. They receive only
 approved projected input, not the native Context graph or paths. UI-only packages
 create no QuickJS runtime. TypeScript is compiled when building packages.
 
-The stages above are implemented on this branch and under final verification.
+The stages above are implemented. Repository gates and standalone UI/background
+package conformance passed; native GUI acceptance is still pending. Evidence is
+recorded in [Build 21](benchmarks/plugin-runtime-v0.14-build21-2026-10-27.json).
 Supported API, budgets and package format are documented in [plugin-development.md](plugin-development.md).
