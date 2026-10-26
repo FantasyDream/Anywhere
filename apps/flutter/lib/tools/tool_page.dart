@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
 import '../src/rust/api.dart';
 
+/// Generic access to the current Launcher execution flow; no feature IDs here.
+class ToolPageHost {
+  const ToolPageHost(
+      {required this.sessionId, required this.revision, required this.execute});
+  final int sessionId, revision;
+  final Future<bool> Function(CandidateDto candidate) execute;
+}
+
 /// A native presentation session owned by its Launcher page or independent window.
 abstract class ToolPageSession extends ChangeNotifier {
   String get id;
@@ -15,6 +23,13 @@ abstract class ToolPageSession extends ChangeNotifier {
   bool get disposed => _disposed;
   bool _disposed = false;
   bool Function()? _interaction;
+  ToolPageHost? _host;
+  ToolPageHost? get host => _host;
+  void bindHost(ToolPageHost host) {
+    _host = host;
+  }
+
+  void setVisible(bool visible) {}
   bool get canInteract => !disposed && (_interaction?.call() ?? true);
   void bindInteraction(bool Function() active) {
     _interaction = active;
@@ -31,6 +46,7 @@ abstract class ToolPageSession extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _interaction = null;
+    _host = null;
     super.dispose();
   }
 }

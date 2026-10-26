@@ -17,6 +17,7 @@ fn manifest() -> Value {
 fn input_matchers_are_optional_bounded_and_require_the_reviewed_text_projection() {
     let old = parse_manifest(&serde_json::to_vec(&manifest()).unwrap()).unwrap();
     assert!(old.commands[0].input_matchers.is_empty());
+    assert!(!old.commands[0].require_input_match);
     let mut value = manifest();
     value["commands"][0]["inputMatchers"] = json!(["json"]);
     assert!(parse_manifest(&serde_json::to_vec(&value).unwrap()).is_err());
@@ -34,6 +35,18 @@ fn input_matchers_are_optional_bounded_and_require_the_reviewed_text_projection(
         value["commands"][0]["inputMatchers"] = invalid;
         assert!(parse_manifest(&serde_json::to_vec(&value).unwrap()).is_err());
     }
+}
+
+#[test]
+fn input_required_commands_must_declare_a_matcher() {
+    let mut value = manifest();
+    value["commands"][0]["requireInputMatch"] = json!(true);
+    assert!(parse_manifest(&serde_json::to_vec(&value).unwrap()).is_err());
+    value["commands"][0]["inputMatchers"] = json!(["json"]);
+    value["commands"][0]["accepts"] = json!(["core.text"]);
+    value["permissions"] = json!([{"name":"context.read","types":["core.text"]}]);
+    let parsed = parse_manifest(&serde_json::to_vec(&value).unwrap()).unwrap();
+    assert!(parsed.commands[0].require_input_match);
 }
 
 fn base() -> Vec<(String, Vec<u8>)> {

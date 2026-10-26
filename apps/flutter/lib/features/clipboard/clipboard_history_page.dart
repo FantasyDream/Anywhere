@@ -177,43 +177,21 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
       notice: session.noticeFor(context.l10n),
       header: Row(children: [
         Expanded(
-            child: Column(
-                mainAxisSize: MainAxisSize.min,
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-              Text(context.l10n.clipboardHistory,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppStyle.caption.copyWith(
-                      fontSize: DesignTokens.pageModeSize,
-                      fontWeight: DesignTokens.pageModeWeight)),
-              const SizedBox(height: 3),
-              TextField(
-                  key: const Key('clipboard-search'),
-                  controller: session.query,
-                  focusNode: session.focus,
-                  autofocus: widget.visible,
-                  selectAllOnFocus: false,
-                  textInputAction: TextInputAction.none,
-                  onEditingComplete: () {},
-                  style: AppStyle.body
-                      .copyWith(fontSize: DesignTokens.pageHeadingSize),
-                  cursorColor: AppStyle.primary,
-                  cursorWidth: 1.4,
-                  decoration: InputDecoration(
-                      hintText: context.l10n.searchHistory,
-                      hintStyle: AppStyle.body.copyWith(
-                          fontSize: DesignTokens.pageHeadingSize,
-                          color: AppStyle.muted),
-                      isCollapsed: true,
-                      isDense: true,
-                      filled: false,
-                      border: InputBorder.none,
-                      enabledBorder: InputBorder.none,
-                      focusedBorder: InputBorder.none,
-                      contentPadding: EdgeInsets.zero)),
-            ])),
+            child: AppPageTitle(
+                label: context.l10n.clipboardHistory,
+                child: TextField(
+                    key: const Key('clipboard-search'),
+                    controller: session.query,
+                    focusNode: session.focus,
+                    autofocus: widget.visible,
+                    selectAllOnFocus: false,
+                    textInputAction: TextInputAction.none,
+                    onEditingComplete: () {},
+                    style: AppStyle.pageHeading,
+                    cursorColor: AppStyle.primary,
+                    cursorWidth: DesignTokens.searchCaretWidth,
+                    decoration: AppStyle.searchDecoration(
+                        context.l10n.searchHistory)))),
         if (session.items.isEmpty)
           _actionMenu(AppMoreAction(
               key: const Key('history-empty-actions'),

@@ -101,7 +101,6 @@ impl BuiltinFeature for Feature {
                     keywords: vec![],
                     owning_app: source.applications.first().cloned(),
                     menu_path: vec![],
-                    home_eligible: true,
                     primary_action: false,
                     search_title: None,
                 }

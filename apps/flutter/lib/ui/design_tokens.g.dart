@@ -99,6 +99,9 @@ abstract final class DesignTokens {
   static const filterRadius = 10.0;
   static const filterHeight = 26.0;
   static const previewFraction = 0.38;
+  static const pageTitleGap = 3.0;
+  static const contentInputSize = 17.0;
+  static const searchCaretWidth = 1.4;
 }
 
 const webDesignTokensCss = r'''
@@ -201,6 +204,9 @@ const webDesignTokensCss = r'''
   --aw-filter-radius: 10px;
   --aw-filter-height: 26px;
   --aw-preview-fraction: 0.38;
+  --aw-page-title-gap: 3px;
+  --aw-content-input-size: 17px;
+  --aw-search-caret-width: 1.4px;
   --aw-font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --aw-font-mono: Menlo, Consolas, monospace;
   --aw-text: var(--aw-primary);
@@ -211,6 +217,7 @@ html, body { background: var(--aw-web-canvas, var(--aw-fallback-surface)); color
 const webControlsCss = r'''
 /* Shared Host defaults. Low specificity lets tools customize local components. */
 :where(*, *::before, *::after) { box-sizing: border-box; }
+:where(html, body) { margin: 0; height: 100%; }
 :where(body, .aw-ui) {
   color: var(--aw-text);
   font: var(--aw-body-weight) var(--aw-body-size)/var(--aw-body-line-height) var(--aw-font-ui);
@@ -298,6 +305,20 @@ const webControlsCss = r'''
 ::-webkit-scrollbar { width: var(--aw-scrollbar-size); height: var(--aw-scrollbar-size); }
 ::-webkit-scrollbar-thumb { background: var(--aw-border); border-radius: var(--aw-scrollbar-size); }
 
+/* Ordinary semantic elements inherit the Host style without SDK classes. */
+:where(a) { color: var(--aw-accent); }
+:where(hr) { margin: var(--aw-space-md) 0; border: 0; border-top: var(--aw-divider-width) solid var(--aw-divider); }
+:where(pre, code, samp, .aw-code, .aw-editor) { font: var(--aw-body-weight) var(--aw-preview-code-size)/var(--aw-preview-code-line-height) var(--aw-font-mono); }
+:where(pre) { margin: 0; padding: var(--aw-control-padding-x); overflow: auto; border-radius: var(--aw-control-radius); background: var(--aw-action-surface); }
+
+/* A normal input with a fixed prefix, shared by formula and other input groups. */
+:where(.aw-input-group) { display: flex; align-items: stretch; min-width: 0; overflow: hidden; background: var(--aw-action-surface); border: var(--aw-field-border-width) solid var(--aw-control-border); border-radius: var(--aw-control-radius); }
+:where(.aw-input-group:focus-within) { border-color: var(--aw-selected-border); box-shadow: inset 0 0 0 calc(var(--aw-field-focus-border-width) - var(--aw-field-border-width)) var(--aw-selected-border); }
+:where(.aw-input-group[data-invalid="true"]) { border-color: var(--aw-danger); box-shadow: none; }
+:where(.aw-input-prefix) { display: flex; align-items: center; padding: var(--aw-field-padding-y) var(--aw-field-padding-x); border-right: var(--aw-divider-width) solid var(--aw-divider); color: var(--aw-secondary); user-select: none; }
+:where(.aw-input-group > input) { flex: 1; border: 0; border-radius: 0; background: transparent; }
+:where(.aw-input-group > input:focus-visible) { box-shadow: none; }
+
 /* Launcher-style workspaces: toolbar, unframed panes, quiet code surfaces. */
 :where(.aw-workspace) { height: 100%; min-height: 0; display: flex; flex-direction: column; }
 :where(.aw-workspace-toolbar) { min-height: var(--aw-page-toolbar-height); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--aw-space-sm); padding: var(--aw-space-xs) var(--aw-space-lg); }
@@ -312,7 +333,7 @@ const webControlsCss = r'''
 :where(.aw-pane-header label) { color: var(--aw-primary); font-size: var(--aw-label-size); font-weight: var(--aw-primary-control-weight); line-height: var(--aw-body-line-height); }
 :where(.aw-pane-header span) { font-variant-numeric: tabular-nums; }
 :where(.aw-pane-body) { flex: 1; min-height: 0; display: flex; margin: 0 var(--aw-space-lg); }
-:where(.aw-editor) { flex: 1; min-height: 0; width: 100%; resize: none; padding: var(--aw-control-padding-x); border: var(--aw-divider-width) solid transparent; border-radius: var(--aw-control-radius); background: var(--aw-action-surface); font: var(--aw-body-weight) var(--aw-preview-code-size)/var(--aw-preview-code-line-height) var(--aw-font-mono); white-space: pre; tab-size: 2; }
+:where(.aw-editor) { flex: 1; min-height: 0; width: 100%; resize: none; padding: var(--aw-control-padding-x); border: var(--aw-divider-width) solid transparent; border-radius: var(--aw-control-radius); background: var(--aw-action-surface); white-space: pre; tab-size: 2; }
 :where(.aw-editor:focus-visible) { outline: none; border-color: var(--aw-selected-border); box-shadow: inset 0 0 0 calc(var(--aw-field-focus-border-width) - var(--aw-divider-width)) var(--aw-selected-border); }
 :where(.aw-pane-footer) { flex-wrap: wrap; overflow-wrap: anywhere; min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: var(--aw-space-sm); padding: var(--aw-space-sm) var(--aw-space-lg); color: var(--aw-secondary); font-size: var(--aw-caption-size); }
 :where(.aw-button--action) { font-weight: var(--aw-primary-control-weight); }

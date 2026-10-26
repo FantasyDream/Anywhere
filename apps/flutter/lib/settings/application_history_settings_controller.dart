@@ -80,7 +80,8 @@ class AppHistorySettingsController extends ChangeNotifier {
       _run(change: () => backend.setActionEnabled(id, enabled), source: id);
   Future<bool> openCustomDirectory() =>
       _run(change: backend.openCustomDirectory, changesCatalog: false);
-  Future<bool> waitForPending() async => await (_pending ?? Future.value(true));
+  Future<bool> waitForPending() async =>
+      await (_pending ?? Future.value(!failed));
   Future<bool> _run(
       {Future<void> Function()? change,
       String? source,

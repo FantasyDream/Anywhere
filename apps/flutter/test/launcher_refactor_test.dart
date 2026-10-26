@@ -7,9 +7,9 @@ import 'package:anywhere/launcher/launcher_controller.dart';
 import 'package:anywhere/launcher/launcher_screen.dart';
 import 'package:anywhere/launcher/launcher_session_coordinator.dart';
 import 'package:anywhere/launcher/launcher_view_state.dart';
-import 'package:anywhere/launcher/object_action_coordinator.dart';
 import 'package:anywhere/launcher/stable_list.dart';
 import 'package:anywhere/src/rust/api.dart';
+import 'package:anywhere/tools/object_action_coordinator.dart';
 import 'package:anywhere/ui/app_style.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -26,7 +26,6 @@ CandidateDto file(int i) => CandidateDto(
     score: 1,
     availability: AvailabilityDto.enabled,
     primaryAction: true,
-    homeEligible: false,
     menuPath: const [],
     contextKeys: const [],
     executionContextId: 'file:$i');
@@ -57,7 +56,6 @@ void main() {
             menuPath: const [],
             contextKeys: const [],
             primaryAction: primary,
-            homeEligible: false,
             executionContextId: 'saved-object');
     final bookmark = object('saved_directories.open', 'remove draft', true);
     final forget =

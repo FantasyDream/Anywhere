@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 2141157139;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 657005199;
 
 // Section: executor
 
@@ -117,6 +117,49 @@ fn wire__crate__api__app_history_custom_directory_impl(
                         let output_ok = crate::api::app_history_custom_directory()?;
                         Ok(output_ok)
                     })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__app_history_object_actions_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "app_history_object_actions",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_session_id = <u32>::sse_decode(&mut deserializer);
+            let api_revision = <u32>::sse_decode(&mut deserializer);
+            let api_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| async move {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || async move {
+                        let output_ok = crate::api::app_history_object_actions(
+                            api_session_id,
+                            api_revision,
+                            api_id,
+                        )
+                        .await?;
+                        Ok(output_ok)
+                    })()
+                    .await,
                 )
             }
         },
@@ -2870,7 +2913,6 @@ impl SseDecode for crate::api::CandidateDto {
         let mut var_contextKeys = <Vec<String>>::sse_decode(deserializer);
         let mut var_executionContextId = <Option<String>>::sse_decode(deserializer);
         let mut var_executionTargetLabel = <Option<String>>::sse_decode(deserializer);
-        let mut var_homeEligible = <bool>::sse_decode(deserializer);
         let mut var_primaryAction = <bool>::sse_decode(deserializer);
         let mut var_sectionLabel = <Option<String>>::sse_decode(deserializer);
         let mut var_subtitle = <Option<String>>::sse_decode(deserializer);
@@ -2893,7 +2935,6 @@ impl SseDecode for crate::api::CandidateDto {
             context_keys: var_contextKeys,
             execution_context_id: var_executionContextId,
             execution_target_label: var_executionTargetLabel,
-            home_eligible: var_homeEligible,
             primary_action: var_primaryAction,
             section_label: var_sectionLabel,
             subtitle: var_subtitle,
@@ -4157,81 +4198,82 @@ fn pde_ffi_dispatcher_primary_impl(
     match func_id {
         1 => wire__crate__api__activate_impl(port, ptr, rust_vec_len, data_len),
         2 => wire__crate__api__app_history_custom_directory_impl(port, ptr, rust_vec_len, data_len),
-        3 => wire__crate__api__app_history_search_impl(port, ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__app_history_sources_impl(port, ptr, rust_vec_len, data_len),
-        5 => wire__crate__api__application_icon_impl(port, ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__approve_extension_impl(port, ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__approve_web_package_impl(port, ptr, rust_vec_len, data_len),
-        9 => wire__crate__api__cancel_app_history_impl(port, ptr, rust_vec_len, data_len),
-        10 => wire__crate__api__cancel_web_review_impl(port, ptr, rust_vec_len, data_len),
-        11 => wire__crate__api__change_web_package_impl(port, ptr, rust_vec_len, data_len),
-        12 => wire__crate__api__choose_activation_input_impl(port, ptr, rust_vec_len, data_len),
-        13 => wire__crate__api__clear_clipboard_history_impl(port, ptr, rust_vec_len, data_len),
-        14 => wire__crate__api__clipboard_history_impl(port, ptr, rust_vec_len, data_len),
-        15 => wire__crate__api__clipboard_history_detail_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__clipboard_history_status_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__close_web_document_impl(port, ptr, rust_vec_len, data_len),
-        18 => {
+        3 => wire__crate__api__app_history_object_actions_impl(port, ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__app_history_search_impl(port, ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__app_history_sources_impl(port, ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__application_icon_impl(port, ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__approve_extension_impl(port, ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__approve_web_package_impl(port, ptr, rust_vec_len, data_len),
+        10 => wire__crate__api__cancel_app_history_impl(port, ptr, rust_vec_len, data_len),
+        11 => wire__crate__api__cancel_web_review_impl(port, ptr, rust_vec_len, data_len),
+        12 => wire__crate__api__change_web_package_impl(port, ptr, rust_vec_len, data_len),
+        13 => wire__crate__api__choose_activation_input_impl(port, ptr, rust_vec_len, data_len),
+        14 => wire__crate__api__clear_clipboard_history_impl(port, ptr, rust_vec_len, data_len),
+        15 => wire__crate__api__clipboard_history_impl(port, ptr, rust_vec_len, data_len),
+        16 => wire__crate__api__clipboard_history_detail_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__clipboard_history_status_impl(port, ptr, rust_vec_len, data_len),
+        18 => wire__crate__api__close_web_document_impl(port, ptr, rust_vec_len, data_len),
+        19 => {
             wire__crate__api__configure_app_history_source_impl(port, ptr, rust_vec_len, data_len)
         }
-        19 => wire__crate__api__confirm_web_operation_impl(port, ptr, rust_vec_len, data_len),
-        20 => wire__crate__api__copy_clipboard_entry_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__deactivate_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__delete_clipboard_entry_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__dispatch_web_frame_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__excluded_apps_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__execute_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__execution_session_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__execution_sessions_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__extension_status_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__file_actions_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__freeze_file_results_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__initialize_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__inspect_web_package_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__load_more_files_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__load_more_files_delta_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__object_actions_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__open_app_history_custom_directory_impl(
+        20 => wire__crate__api__confirm_web_operation_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__copy_clipboard_entry_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__deactivate_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__delete_clipboard_entry_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__dispatch_web_frame_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__excluded_apps_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__execute_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__execution_session_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__execution_sessions_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__extension_status_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__file_actions_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__freeze_file_results_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__initialize_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__inspect_web_package_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__load_more_files_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__load_more_files_delta_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__object_actions_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__open_app_history_custom_directory_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        37 => wire__crate__api__open_app_history_session_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__open_web_document_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__pause_clipboard_recording_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__ping_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__preview_file_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__refresh_features_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__remove_execution_session_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__resolve_action_binding_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__resolve_shortcut_intent_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__resume_launcher_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__revoke_extension_impl(port, ptr, rust_vec_len, data_len),
-        49 => {
+        38 => wire__crate__api__open_app_history_session_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__open_web_document_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__pause_clipboard_recording_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__ping_impl(port, ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__preview_file_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__refresh_features_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__remove_execution_session_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__resolve_action_binding_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__resolve_shortcut_intent_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__resume_launcher_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__revoke_extension_impl(port, ptr, rust_vec_len, data_len),
+        50 => {
             wire__crate__api__set_app_history_action_enabled_impl(port, ptr, rust_vec_len, data_len)
         }
-        50 => wire__crate__api__set_clipboard_recording_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__set_clipboard_retention_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__set_context_sources_impl(port, ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__set_excluded_apps_impl(port, ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__set_extension_enabled_impl(port, ptr, rust_vec_len, data_len),
-        55 => wire__crate__api__set_file_search_impl(port, ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__shortcut_actions_impl(port, ptr, rust_vec_len, data_len),
-        57 => wire__crate__api__shortcut_applications_impl(port, ptr, rust_vec_len, data_len),
-        58 => wire__crate__api__shutdown_execution_sessions_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__stop_execution_session_impl(port, ptr, rust_vec_len, data_len),
-        60 => wire__crate__api__supported_shortcut_actions_impl(port, ptr, rust_vec_len, data_len),
-        61 => wire__crate__api__suspend_launcher_impl(port, ptr, rust_vec_len, data_len),
-        62 => wire__crate__api__update_file_input_impl(port, ptr, rust_vec_len, data_len),
-        63 => wire__crate__api__update_input_impl(port, ptr, rust_vec_len, data_len),
-        64 => wire__crate__api__use_app_history_item_impl(port, ptr, rust_vec_len, data_len),
-        65 => wire__crate__api__wait_action_binding_impl(port, ptr, rust_vec_len, data_len),
-        66 => wire__crate__api__wait_for_snapshot_impl(port, ptr, rust_vec_len, data_len),
-        67 => wire__crate__api__wait_for_snapshot_delta_impl(port, ptr, rust_vec_len, data_len),
-        68 => wire__crate__api__wait_shortcut_intent_impl(port, ptr, rust_vec_len, data_len),
-        69 => wire__crate__api__web_packages_impl(port, ptr, rust_vec_len, data_len),
-        70 => wire__crate__api__web_resource_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__set_clipboard_recording_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__set_clipboard_retention_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__set_context_sources_impl(port, ptr, rust_vec_len, data_len),
+        54 => wire__crate__api__set_excluded_apps_impl(port, ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__set_extension_enabled_impl(port, ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__set_file_search_impl(port, ptr, rust_vec_len, data_len),
+        57 => wire__crate__api__shortcut_actions_impl(port, ptr, rust_vec_len, data_len),
+        58 => wire__crate__api__shortcut_applications_impl(port, ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__shutdown_execution_sessions_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__stop_execution_session_impl(port, ptr, rust_vec_len, data_len),
+        61 => wire__crate__api__supported_shortcut_actions_impl(port, ptr, rust_vec_len, data_len),
+        62 => wire__crate__api__suspend_launcher_impl(port, ptr, rust_vec_len, data_len),
+        63 => wire__crate__api__update_file_input_impl(port, ptr, rust_vec_len, data_len),
+        64 => wire__crate__api__update_input_impl(port, ptr, rust_vec_len, data_len),
+        65 => wire__crate__api__use_app_history_item_impl(port, ptr, rust_vec_len, data_len),
+        66 => wire__crate__api__wait_action_binding_impl(port, ptr, rust_vec_len, data_len),
+        67 => wire__crate__api__wait_for_snapshot_impl(port, ptr, rust_vec_len, data_len),
+        68 => wire__crate__api__wait_for_snapshot_delta_impl(port, ptr, rust_vec_len, data_len),
+        69 => wire__crate__api__wait_shortcut_intent_impl(port, ptr, rust_vec_len, data_len),
+        70 => wire__crate__api__web_packages_impl(port, ptr, rust_vec_len, data_len),
+        71 => wire__crate__api__web_resource_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -4244,8 +4286,8 @@ fn pde_ffi_dispatcher_sync_impl(
 ) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
-        8 => wire__crate__api__begin_activation_impl(ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__prompt_accessibility_impl(ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__begin_activation_impl(ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__prompt_accessibility_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -4486,7 +4528,6 @@ impl flutter_rust_bridge::IntoDart for crate::api::CandidateDto {
             self.context_keys.into_into_dart().into_dart(),
             self.execution_context_id.into_into_dart().into_dart(),
             self.execution_target_label.into_into_dart().into_dart(),
-            self.home_eligible.into_into_dart().into_dart(),
             self.primary_action.into_into_dart().into_dart(),
             self.section_label.into_into_dart().into_dart(),
             self.subtitle.into_into_dart().into_dart(),
@@ -5593,7 +5634,6 @@ impl SseEncode for crate::api::CandidateDto {
         <Vec<String>>::sse_encode(self.context_keys, serializer);
         <Option<String>>::sse_encode(self.execution_context_id, serializer);
         <Option<String>>::sse_encode(self.execution_target_label, serializer);
-        <bool>::sse_encode(self.home_eligible, serializer);
         <bool>::sse_encode(self.primary_action, serializer);
         <Option<String>>::sse_encode(self.section_label, serializer);
         <Option<String>>::sse_encode(self.subtitle, serializer);

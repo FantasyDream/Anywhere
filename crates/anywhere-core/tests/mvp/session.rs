@@ -228,7 +228,6 @@ async fn a_registered_handler_executes_through_the_public_facade() {
                 icon: "copy",
                 aliases: &[],
                 keywords: &[],
-                home_eligible: true,
                 primary_action: false,
             }
             .descriptor("test"),

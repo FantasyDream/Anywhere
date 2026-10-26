@@ -75,6 +75,11 @@ Future<void> cancelAppHistory({required int sessionId}) =>
 Future<void> useAppHistoryItem({required String id, required bool copy}) =>
     RustLib.instance.api.crateApiUseAppHistoryItem(id: id, copy: copy);
 
+Future<List<CandidateDto>> appHistoryObjectActions(
+        {required int sessionId, required int revision, required String id}) =>
+    RustLib.instance.api.crateApiAppHistoryObjectActions(
+        sessionId: sessionId, revision: revision, id: id);
+
 Future<List<String>> supportedShortcutActions(
         {required List<String> actionIds}) =>
     RustLib.instance.api.crateApiSupportedShortcutActions(actionIds: actionIds);
@@ -619,7 +624,6 @@ class CandidateDto {
   final List<String> contextKeys;
   final String? executionContextId;
   final String? executionTargetLabel;
-  final bool homeEligible;
   final bool primaryAction;
   final String? sectionLabel;
   final String? subtitle;
@@ -643,7 +647,6 @@ class CandidateDto {
     required this.contextKeys,
     this.executionContextId,
     this.executionTargetLabel,
-    required this.homeEligible,
     required this.primaryAction,
     this.sectionLabel,
     this.subtitle,
@@ -669,7 +672,6 @@ class CandidateDto {
       contextKeys.hashCode ^
       executionContextId.hashCode ^
       executionTargetLabel.hashCode ^
-      homeEligible.hashCode ^
       primaryAction.hashCode ^
       sectionLabel.hashCode ^
       subtitle.hashCode ^
@@ -697,7 +699,6 @@ class CandidateDto {
           contextKeys == other.contextKeys &&
           executionContextId == other.executionContextId &&
           executionTargetLabel == other.executionTargetLabel &&
-          homeEligible == other.homeEligible &&
           primaryAction == other.primaryAction &&
           sectionLabel == other.sectionLabel &&
           subtitle == other.subtitle &&

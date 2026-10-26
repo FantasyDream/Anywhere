@@ -122,7 +122,6 @@ pub fn bundle() -> ActionBundle {
                 icon: "copy-url",
                 aliases: &["remote url", "origin", "clone url", "复制远程地址"],
                 keywords: &["git", "repository", "clipboard", "remote"],
-                home_eligible: false,
                 primary_action: false,
             },
             ActionSpec {
@@ -139,7 +138,6 @@ pub fn bundle() -> ActionBundle {
                 icon: "git-status",
                 aliases: &["status"],
                 keywords: &["repository", "branch"],
-                home_eligible: true,
                 primary_action: false,
             },
             ActionSpec {
@@ -156,7 +154,6 @@ pub fn bundle() -> ActionBundle {
                 icon: "git-log",
                 aliases: &["log", "history", "commits"],
                 keywords: &["repository"],
-                home_eligible: true,
                 primary_action: false,
             },
             ActionSpec {
@@ -173,7 +170,6 @@ pub fn bundle() -> ActionBundle {
                 icon: "git-diff",
                 aliases: &["diff", "changes"],
                 keywords: &["repository", "worktree"],
-                home_eligible: true,
                 primary_action: false,
             },
             ActionSpec {
@@ -190,7 +186,6 @@ pub fn bundle() -> ActionBundle {
                 icon: "git-staged",
                 aliases: &["staged diff", "cached diff", "index changes", "暂存区差异"],
                 keywords: &["repository", "staged"],
-                home_eligible: false,
                 primary_action: false,
             },
             ActionSpec {
@@ -207,7 +202,6 @@ pub fn bundle() -> ActionBundle {
                 icon: "git-branches",
                 aliases: &["branches", "local branches", "分支列表"],
                 keywords: &["repository", "branch"],
-                home_eligible: false,
                 primary_action: false,
             },
             ActionSpec {
@@ -224,7 +218,6 @@ pub fn bundle() -> ActionBundle {
                 icon: "copy-branch",
                 aliases: &["current branch", "branch name", "复制分支名"],
                 keywords: &["git", "repository", "clipboard"],
-                home_eligible: false,
                 primary_action: false,
             },
             ActionSpec {
@@ -241,7 +234,6 @@ pub fn bundle() -> ActionBundle {
                 icon: "copy-commit",
                 aliases: &["commit hash", "sha", "复制提交哈希"],
                 keywords: &["git", "repository", "clipboard", "head"],
-                home_eligible: false,
                 primary_action: false,
             },
             ActionSpec {
@@ -258,7 +250,6 @@ pub fn bundle() -> ActionBundle {
                 icon: "copy-short-commit",
                 aliases: &["short sha", "short hash", "复制短哈希"],
                 keywords: &["git", "repository", "clipboard", "head"],
-                home_eligible: false,
                 primary_action: false,
             },
             ActionSpec {
@@ -272,7 +263,6 @@ pub fn bundle() -> ActionBundle {
                 icon: "copy-path",
                 aliases: &["repo path", "repository root", "复制仓库路径"],
                 keywords: &["git", "clipboard", "root"],
-                home_eligible: false,
                 primary_action: false,
             },
         ],

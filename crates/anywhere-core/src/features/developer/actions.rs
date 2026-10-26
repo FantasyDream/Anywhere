@@ -214,7 +214,6 @@ fn spec(id: &'static str, command: &'static ProjectCommand, home: bool) -> Actio
         icon: command_icon(command.operation),
         aliases,
         keywords,
-        home_eligible: home,
         primary_action: false,
     }
 }

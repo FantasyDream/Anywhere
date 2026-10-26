@@ -33,7 +33,6 @@ CandidateDto action(String id, String group) => CandidateDto(
     title: id,
     menuPath: const [],
     contextKeys: const [],
-    homeEligible: true,
     primaryAction: true,
     iconKey: 'file',
     score: 100,

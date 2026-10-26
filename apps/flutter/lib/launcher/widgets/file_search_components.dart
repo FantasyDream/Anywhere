@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../infrastructure/desktop_environment.dart';
 import '../../l10n/app_language.dart';
 import '../../ui/app_components.dart';
 import '../../ui/app_style.dart';
@@ -175,14 +174,7 @@ class FileSearchPreview extends StatelessWidget {
                                                   BorderRadius.circular(
                                                       AppStyle.controlRadius)),
                                           child: SelectableText(preview.text!,
-                                              style: TextStyle(
-                                                  fontFamily: DesktopEnvironment
-                                                      .current.monoFontFamily,
-                                                  fontSize: DesignTokens
-                                                      .previewCodeSize,
-                                                  height: DesignTokens
-                                                      .previewCodeLineHeight,
-                                                  color: AppStyle.primary))),
+                                              style: AppStyle.code)),
                                     ],
                                   ])))),
         ]);

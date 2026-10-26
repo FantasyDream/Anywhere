@@ -166,9 +166,29 @@ impl SettingsService {
         self.storage_path
             .with_file_name("application-history-sources")
     }
-    /// Refresh data and command selection; first-party handlers remain bound once.
-    pub fn synchronize_application_history(&mut self, app: &Application) -> Result<()> {
-        self.refresh_business_data();
+    /// A successful configuration change includes publication and revokes old targets.
+    pub fn configure_application_history(
+        &mut self,
+        app: &Application,
+        id: &str,
+        mode: crate::features::application_history::model::SourceMode,
+        path: Option<&str>,
+    ) -> Result<()> {
+        self.application_history()?.configure_mode(id, mode, path)?;
+        self.publish_application_history(app)
+    }
+    pub fn set_application_history_action_enabled(
+        &mut self,
+        app: &Application,
+        id: &str,
+        enabled: bool,
+    ) -> Result<()> {
+        self.application_history()?
+            .set_action_enabled(id, enabled)?;
+        self.publish_application_history(app)
+    }
+    fn publish_application_history(&mut self, app: &Application) -> Result<()> {
+        self.refresh_application_history();
         self.publish(
             app,
             self.native.policy.clone(),
@@ -176,7 +196,7 @@ impl SettingsService {
             || Ok(()),
         )
     }
-    fn refresh_business_data(&mut self) {
+    fn refresh_application_history(&mut self) {
         match self
             .services
             .application_history()
@@ -192,6 +212,9 @@ impl SettingsService {
                 );
             }
         }
+    }
+    fn refresh_business_data(&mut self) {
+        self.refresh_application_history();
         if self.native.policy.is_enabled("saved_directories") {
             if let Ok(host) = &self.storage {
                 if let Err(e) = host.reopen() {

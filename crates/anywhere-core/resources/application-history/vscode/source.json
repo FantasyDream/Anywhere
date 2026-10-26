@@ -35,5 +35,8 @@
   },
   "config_paths": [
     "Code/User/globalStorage/state.vscdb"
+  ],
+  "home_paths": [
+    ".vscode-shared/sharedStorage/state.vscdb"
   ]
 }

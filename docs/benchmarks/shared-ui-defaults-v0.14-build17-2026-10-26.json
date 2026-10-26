@@ -1,0 +1,75 @@
+{
+  "date": "2026-10-26",
+  "version": "0.14.0+17",
+  "source_base_commit": "fd1e70d5be100c899394bf01906bb1bfd9bf6f5f",
+  "working_tree_changes": true,
+  "scope": "Shared default styling and small presentation cleanup; no new business features",
+  "implementation": [
+    "Flutter root themes provide ordinary controls, cards, AppBar, menus and typography defaults",
+    "Shared button styles remove repeated shape, size, text and state definitions",
+    "AppPageTitle, search decoration and code typography replace repeated presentation in actual consumers",
+    "AppCard delegates to ordinary Card and inherits its theme",
+    "Host-injected HTML defaults cover semantic code, links and separators; aw-ui is optional",
+    "JSON formula uses shared prefix input classes; local CSS owns horizontal growth",
+    "Removed duplicated history action publication predicate; retained revision, identity, visibility and disposal checks",
+    "Added default-style repository rules and documented defaults versus page layout"
+  ],
+  "automated": {
+    "full_gate": "scripts/check.sh",
+    "log": "build/v0.14-styles17-check-final.log",
+    "exit_code": 0,
+    "core": {
+      "passed": 305,
+      "ignored_existing": 1
+    },
+    "mvp": {
+      "passed": 195,
+      "ignored_existing": 4
+    },
+    "flutter_passed": 429,
+    "native_web_clippy_architecture_style_generated_checks": "passed",
+    "new_regression": "Ordinary widgets without local styles inherit shared typography, heights and surfaces; controls remain interactive"
+  },
+  "web_preview": {
+    "fixture": "build/ui-styles17/index.html",
+    "local_page_css": false,
+    "shared_tokens_and_controls_loaded": true,
+    "plain_button_height_px": 24,
+    "plain_button_radius_px": 8,
+    "plain_input_font_px": 13,
+    "semantic_code_font_px": 11,
+    "prefix_input_height_in_column_px": 32.046875,
+    "prefix_input_flex_grow": "0",
+    "input_and_focus_observed": true,
+    "screenshot": "build/ui-styles17/default-controls.png",
+    "scope": "Computed browser styles and visual smoke; not native WebKit pixel equivalence"
+  },
+  "package": {
+    "app": "build/Anywhere-0.14-preview-build17.app",
+    "zip": "build/Anywhere-0.14-preview-build17-macos-arm64.zip",
+    "sha256": "c252559ee478039d927b0b15f10d8672b180121c37474552068fc898def3ec59",
+    "persistent_signature_and_archive_checks": "passed",
+    "impeller": true,
+    "release_published": false
+  },
+  "native": {
+    "old_build16_exited": true,
+    "only_build17_process_confirmed": true,
+    "launcher_query_and_candidates_observed": true,
+    "json_workspace_default_prefix_and_code_surfaces_observed": true,
+    "back_navigation_preserved_JSON_query": true,
+    "screenshot": "build/ui-styles17/json-workspace.png",
+    "scope": "Native presentation smoke only; no explicit clipboard-read action or external application action invoked",
+    "full_application_matrix_physical_ime_and_memory": "not reverified"
+  },
+  "remaining": [
+    "Explicit multi-install/Profile selection is not implemented",
+    "Obsidian recent files and browser history/bookmarks/tabs remain deferred",
+    "Full native application/version/permission/opening matrix and formal release acceptance remain unverified"
+  ],
+  "git": {
+    "branch": "codex/dev-0.14",
+    "committed": false,
+    "next_branch_created": false
+  }
+}

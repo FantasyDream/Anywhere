@@ -183,7 +183,7 @@ fn dynamic_definition(
     capability: String,
     handler: impl ActionHandler + 'static,
     aliases: Vec<String>,
-    home: bool,
+    preferred: bool,
 ) -> crate::core::action::descriptor::ActionDefinition {
     use crate::core::action::{
         descriptor::{ActionDefinition, ActionExecutor},
@@ -200,14 +200,13 @@ fn dynamic_definition(
         }],
         executor: ActionExecutor::Native(ActionHandlerRef::owned(handler)),
         availability: AvailabilityRule::RequireContextProperty { key: capability },
-        base_priority: if home { 30 } else { 20 },
+        base_priority: if preferred { 30 } else { 20 },
         icon: icon.into(),
         group_id: group.into(),
         aliases,
         keywords: vec!["project".into()],
         owning_app: None,
         menu_path: Vec::new(),
-        home_eligible: home,
         primary_action: false,
         search_title: None,
     }

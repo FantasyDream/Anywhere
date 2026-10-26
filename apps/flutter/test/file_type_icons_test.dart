@@ -25,7 +25,6 @@ CandidateDto candidate(String name,
         title: name,
         menuPath: const [],
         contextKeys: const [],
-        homeEligible: false,
         primaryAction: true,
         iconKey: action
             ? 'copy'

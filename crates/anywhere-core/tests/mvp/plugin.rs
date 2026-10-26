@@ -275,7 +275,6 @@ fn queued_execute_builtin_target_removal_revokes_execution() {
             keywords: vec![],
             owning_app: None,
             menu_path: vec![],
-            home_eligible: true,
             primary_action: false,
             search_title: None,
         })

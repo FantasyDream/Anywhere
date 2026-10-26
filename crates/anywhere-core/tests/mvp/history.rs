@@ -175,16 +175,10 @@ async fn activation_loads_history_scoped_to_the_foreground_application() {
     );
     let state = app.activate().await.unwrap().unwrap();
     let state = settled(&app, state.session_id, state.revision).await;
-    let top = state
-        .candidates
-        .iter()
-        .find(|candidate| candidate.command_id.as_deref() == Some("core.directory.copy"))
-        .expect("the directory actions need an ambient context");
-    assert!(
-        top.score >= 500.0,
-        "usage never reached ranking: {} scored {}",
-        top.title,
-        top.score
+    assert_eq!(
+        state.candidates.first().unwrap().command_id.as_deref(),
+        Some("core.directory.copy"),
+        "the loaded frequency must rank Copy Path first"
     );
 }
 

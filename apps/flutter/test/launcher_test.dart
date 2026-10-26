@@ -9,6 +9,7 @@ import 'package:anywhere/settings/settings_screen.dart';
 import 'package:anywhere/src/rust/api.dart';
 import 'package:anywhere/ui/app_components.dart';
 import 'package:anywhere/ui/app_icons.dart';
+import 'package:anywhere/ui/app_style.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -25,7 +26,6 @@ CandidateDto candidate(
   String iconKey = 'file',
   String groupId = 'folder',
   double score = 100,
-  bool homeEligible = true,
   String? sectionLabel,
   String? executionContextId,
   String? executionTargetLabel,
@@ -36,7 +36,6 @@ CandidateDto candidate(
 }) =>
     CandidateDto(
       contextKeys: const [],
-      homeEligible: homeEligible,
       primaryAction: false,
       id: id,
       kind: kind,
@@ -123,13 +122,11 @@ void main() {
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
   test(
-      'explicit feature scopes expose run targets and custom scripts without flooding home',
+      'home and feature scopes preserve the Rust order without an action whitelist',
       () {
     final actions = [
-      candidate('action:custom:c1', 'pnpm Run · check:types',
-          groupId: 'node', homeEligible: false),
-      candidate('action:run:c2', 'Cargo Run · server / main',
-          groupId: 'rust', homeEligible: false),
+      candidate('action:custom:c1', 'pnpm Run · check:types', groupId: 'node'),
+      candidate('action:run:c2', 'Cargo Run · server / main', groupId: 'rust'),
       candidate('action:copy:c3', 'Copy Path'),
     ];
     final snapshot = launcherSnapshot(
@@ -150,7 +147,8 @@ void main() {
         ]);
     final home = LauncherViewState(
         phase: LauncherPhase.ready, generation: 1, snapshot: snapshot);
-    expect(home.visibleCandidates.map((c) => c.title), ['Copy Path']);
+    expect(home.visibleCandidates.map((c) => c.title),
+        ['pnpm Run · check:types', 'Cargo Run · server / main', 'Copy Path']);
     final node = LauncherViewState(
         phase: LauncherPhase.ready,
         generation: 1,
@@ -175,6 +173,53 @@ void main() {
         scopeId: 'rust');
     expect(rust.visibleCandidates.map((c) => c.title),
         ['Cargo Run · server / main']);
+  });
+
+  test('Current App takes the ranked prefix while Git keeps its relative order',
+      () {
+    final offers = [
+      candidate('git.copy_branch', 'Copy Branch Name',
+          groupId: 'git', score: 1),
+      candidate('history', 'IDEA Recent Projects',
+          groupId: 'app.editor', score: 900),
+      candidate('terminal', 'Open Terminal Here', score: 800),
+      candidate('git.status', 'Git Status', groupId: 'git', score: 700),
+      candidate('git.log', 'Git Log', groupId: 'git', score: 600),
+      candidate('git.branches', 'Git Branches', groupId: 'git', score: 500),
+      candidate('menu.save', 'Save', groupId: 'app.editor', menuPath: ['File']),
+    ];
+    final snapshot = launcherSnapshot(
+        sessionId: 1,
+        revision: 0,
+        snapshotSeq: 1,
+        input: '',
+        contextComplete: true,
+        candidates: offers,
+        diagnostics: [],
+        scopes: const [
+          ScopeDto(id: 'app.editor', label: 'IDEA', isCurrentApp: true),
+          ScopeDto(id: 'git', label: 'Git', isCurrentApp: false)
+        ]);
+    final home = LauncherViewState(
+        phase: LauncherPhase.ready,
+        generation: 1,
+        snapshot: snapshot,
+        scopeId: 'app.editor');
+    final git = LauncherViewState(
+        phase: LauncherPhase.ready,
+        generation: 1,
+        snapshot: snapshot,
+        scopeId: 'git');
+    expect(home.visibleCandidates.map((c) => c.id),
+        ['git.copy_branch', 'history', 'terminal', 'git.status', 'git.log']);
+    expect(home.visibleEntries.last.title, 'Browse Menus…');
+    expect(
+        home.visibleCandidates
+            .where((c) => c.groupId == 'git')
+            .map((c) => c.id),
+        git.visibleCandidates.take(3).map((c) => c.id));
+    expect(git.visibleCandidates.map((c) => c.id),
+        ['git.copy_branch', 'git.status', 'git.log', 'git.branches']);
   });
 
   Future<void> toggle(WidgetTester tester, {String mode = 'currentApp'}) async {
@@ -306,16 +351,16 @@ void main() {
     final menus = [
       for (var i = 0; i < 60; i++)
         candidate('app.export.$i', 'Export $i',
-            groupId: 'app.editor', menuPath: ['File'], homeEligible: false)
+            groupId: 'app.editor', menuPath: ['File'])
     ];
     final git = candidate('git.status', 'Git Status', groupId: 'git');
     final copy = candidate('copy.path', 'Copy Path');
     final offers = [
       sidebar,
       terminal,
-      ...menus,
       git,
       copy,
+      ...menus,
       for (var i = 0; i < 3; i++)
         candidate('context.extra.$i', 'Context Extra $i')
     ];
@@ -376,7 +421,7 @@ void main() {
     expect(find.text('Context Extra 2'), findsNothing);
     expect(find.text('Git Status'), findsOneWidget);
     expect(find.text('Copy Path'), findsOneWidget);
-    expect(find.text('Export 0'), findsNothing);
+    expect(find.text('Export 0'), findsOneWidget);
     await tester.tap(find.text('Browse Menus…'));
     await tester.pumpAndSettle();
     expect(find.text('File'), findsOneWidget);
@@ -585,6 +630,7 @@ void main() {
     await controller.activate();
     await controller.dismiss();
     await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme,
         home: Center(
             child: SizedBox(
                 width: 648,
@@ -1276,7 +1322,6 @@ void main() {
       (tester) async {
     final chrome = CandidateDto(
       contextKeys: const [],
-      homeEligible: true,
       primaryAction: false,
       id: 'app:com.google.Chrome:/Applications/Google Chrome.app',
       kind: CandidateKindDto.application,
@@ -1293,7 +1338,6 @@ void main() {
     );
     final notes = CandidateDto(
       contextKeys: const [],
-      homeEligible: true,
       primaryAction: false,
       id: 'app:com.apple.Notes:/System/Applications/Notes.app',
       kind: CandidateKindDto.application,
@@ -1365,7 +1409,6 @@ void main() {
       (tester) async {
     CandidateDto app(String id, String title) => CandidateDto(
           contextKeys: const [],
-          homeEligible: true,
           primaryAction: false,
           id: id,
           kind: CandidateKindDto.application,

@@ -157,6 +157,13 @@ pub fn cancel_app_history(session_id: u32) -> Result<()> {
 pub fn use_app_history_item(id: String, copy: bool) -> Result<()> {
     application_history::use_item(id, copy)
 }
+pub async fn app_history_object_actions(
+    session_id: u32,
+    revision: u32,
+    id: String,
+) -> Result<Vec<CandidateDto>> {
+    application_history::object_actions(session_id, revision, id).await
+}
 
 #[flutter_rust_bridge::frb]
 pub struct ShortcutActionDto {
@@ -616,7 +623,6 @@ pub struct CandidateDto {
     pub context_keys: Vec<String>,
     pub execution_context_id: Option<String>,
     pub execution_target_label: Option<String>,
-    pub home_eligible: bool,
     pub primary_action: bool,
     pub section_label: Option<String>,
     pub subtitle: Option<String>,
@@ -848,7 +854,6 @@ mod delivery_tests {
             context_keys: vec![],
             execution_context_id: None,
             execution_target_label: None,
-            home_eligible: false,
             primary_action: true,
             section_label: None,
         }

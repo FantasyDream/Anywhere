@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "dev.anywhere.json-workspace",
   "name": "JSON Workspace",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "apiVersion": "1",
   "platforms": [
     "macos"
@@ -63,7 +63,8 @@
         "json",
         "json_escaped"
       ],
-      "entrypoint": "copy-format"
+      "entrypoint": "copy-format",
+      "requireInputMatch": true
     },
     {
       "id": "copy-minify",
@@ -82,7 +83,8 @@
         "json",
         "json_escaped"
       ],
-      "entrypoint": "copy-minify"
+      "entrypoint": "copy-minify",
+      "requireInputMatch": true
     },
     {
       "id": "copy-escaped",
@@ -100,7 +102,8 @@
         "json",
         "json_escaped"
       ],
-      "entrypoint": "copy-escaped"
+      "entrypoint": "copy-escaped",
+      "requireInputMatch": true
     },
     {
       "id": "unescape",
@@ -118,7 +121,8 @@
       "inputMatchers": [
         "json_escaped"
       ],
-      "entrypoint": "unescape"
+      "entrypoint": "unescape",
+      "requireInputMatch": true
     }
   ]
 }

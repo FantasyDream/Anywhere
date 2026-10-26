@@ -1,5 +1,7 @@
 # 开发与构建
 
+首次定位代码先读 [AGENTS.md](../AGENTS.md)；它给出模块入口和改动边界，详细契约从 [文档导航](README.md)进入。
+
 ## 环境
 
 - macOS 12 或以上，以及 Apple Command Line Tools。

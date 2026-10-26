@@ -92,16 +92,15 @@ fn unrecognized_text_is_not_suggested_but_keywords_still_open_an_empty_workspace
         )
         .is_empty());
     }
-    for keyword in ["json", "format", "格式化"] {
+    for keyword in ["json", "JSON", "format", "格式化"] {
         let results = offers(
             &registry,
             keyword,
             &[raw(keyword, ContextSource::UserInput)],
             None,
         );
-        assert!(results
-            .iter()
-            .any(|offer| offer.presentation.title == "JSON Workspace"));
+        assert_eq!(results.len(), 1, "keyword: {keyword}");
+        assert_eq!(results[0].presentation.title, "JSON Workspace");
         assert!(
             results
                 .iter()
@@ -115,6 +114,73 @@ fn unrecognized_text_is_not_suggested_but_keywords_still_open_an_empty_workspace
         4
     );
     assert!(offers(&registry, "unrelated", &[selected], None).is_empty());
+}
+
+#[test]
+fn json_helpers_require_matching_content_even_with_keywords_or_shortcuts() {
+    let (_, registry) = service(&json_package());
+    for source in [ContextSource::SelectedText, ContextSource::Clipboard] {
+        for text in ["ordinary text", "{broken}", "123"] {
+            let input = raw(text, source);
+            let results = offers(&registry, "json", std::slice::from_ref(&input), None);
+            assert_eq!(results.len(), 1);
+            assert_eq!(results[0].presentation.title, "JSON Workspace");
+            for keyword in ["copy", "minify", "escape", "unescape", "复制"] {
+                assert!(offers(&registry, keyword, std::slice::from_ref(&input), None).is_empty());
+            }
+        }
+        assert_eq!(offers(&registry, "", &[raw("[]", source)], None).len(), 4);
+        let escaped = serde_json::to_string("[]").unwrap();
+        assert_eq!(
+            offers(&registry, "", &[raw(&escaped, source)], None).len(),
+            5
+        );
+    }
+    let facts = crate::core::session::facts::SessionFacts::default();
+    let search = crate::core::search::engine::ActionSearch::new(
+        &registry,
+        &|_, _| Default::default(),
+        &facts,
+        1000,
+        |_| 0,
+    );
+    let bindings = crate::features::tools::EntrySource { search: &search }.binding_offers(&[]);
+    assert_eq!(bindings.len(), 1);
+    assert_eq!(bindings[0].presentation.title, "JSON Workspace");
+}
+
+#[test]
+fn json_helpers_reject_unmatched_execution_without_starting_a_webview() {
+    let (mut service, registry) = service(&json_package());
+    let workspace = ResolvedContext::new(
+        crate::features::tools::ENTRY_CONTEXT,
+        ContextValue::Text("".into()),
+        ContextSource::ForegroundApplication,
+        "core.launcher",
+    );
+    for id in ["copy-format", "copy-minify", "copy-escaped", "unescape"] {
+        let action = registry
+            .get(&format!("web:dev.anywhere.json-workspace:{id}"))
+            .unwrap();
+        let crate::core::action::descriptor::ActionExecutor::WebCommand(command) = &action.executor
+        else {
+            panic!("expected Web command");
+        };
+        for input in [
+            workspace.clone(),
+            raw("json", ContextSource::UserInput),
+            raw("{broken}", ContextSource::SelectedText),
+            raw("ordinary text", ContextSource::Clipboard),
+        ] {
+            assert!(service.start(command, &input, None, "").is_err(), "{id}");
+        }
+        if id == "unescape" {
+            assert!(service
+                .start(command, &raw("{}", ContextSource::SelectedText), None, "")
+                .is_err());
+        }
+    }
+    assert!(service.invocations.is_empty());
 }
 
 fn capture(source: ContextSource, text: &str, age: u64) -> ContextCapturePresentation {
@@ -198,7 +264,19 @@ async fn launcher_search_and_content_mode_execute_the_committed_json_candidate()
     let app = app();
     app.publish_web_catalog(catalog(&json_package())).unwrap();
     let session = app.begin_activation().unwrap();
-    for (revision, mode) in [(1, InputMode::Search), (2, InputMode::Content)] {
+    let keyword = app
+        .update_context_input(session, "JSON".into(), 1, None, InputMode::Search)
+        .await
+        .unwrap()
+        .unwrap();
+    let commands: Vec<_> = keyword
+        .candidates
+        .iter()
+        .filter_map(|candidate| candidate.command_id.as_deref())
+        .filter(|id| id.starts_with("web:dev.anywhere.json-workspace:"))
+        .collect();
+    assert_eq!(commands, ["web:dev.anywhere.json-workspace:open"]);
+    for (revision, mode) in [(2, InputMode::Search), (3, InputMode::Content)] {
         let input = " {\"numbers\":[1,2,3]} ";
         let state = app
             .update_context_input(session, input.into(), revision, None, mode)

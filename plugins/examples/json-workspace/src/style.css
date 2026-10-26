@@ -2,17 +2,8 @@
 #app { height: 100%; }
 .indent { display: flex; align-items: center; gap: var(--aw-space-sm); color: var(--aw-secondary); font-size: var(--aw-caption-size); }
 .query-bar { display: flex; align-items: center; gap: var(--aw-space-sm); padding: var(--aw-space-xs) var(--aw-space-lg) var(--aw-space-sm); }
-.formula-field { display: flex; align-items: stretch; flex: 1; min-width: 0; overflow: hidden;
-  background: var(--aw-action-surface); border: var(--aw-field-border-width) solid var(--aw-control-border); border-radius: var(--aw-control-radius); }
-.formula-field:focus-within { border-color: var(--aw-selected-border); }
-.formula-field[data-invalid="true"] { border-color: var(--aw-danger); }
-.formula-root { display: flex; align-items: center; padding: var(--aw-field-padding-y) var(--aw-field-padding-x);
-  border-right: var(--aw-divider-width) solid var(--aw-divider); color: var(--aw-secondary);
-  font: var(--aw-body-weight) var(--aw-preview-code-size)/var(--aw-preview-code-line-height) var(--aw-font-mono); user-select: none; }
-.formula-field input { flex: 1; border: 0; border-radius: 0; background: transparent;
-  font: var(--aw-body-weight) var(--aw-preview-code-size)/var(--aw-preview-code-line-height) var(--aw-font-mono); }
-.formula-field input:focus-visible { box-shadow: none; }
-@media(max-width:560px) { .query-bar { flex-wrap: wrap; } .formula-field { flex-basis: 100%; } }
+.query-bar > .aw-input-group { flex: 1; }
+@media(max-width:560px) { .query-bar { flex-wrap: wrap; } .query-bar > .aw-input-group { flex-basis: 100%; } }
 
 .json-input-actions { align-items: flex-start; }
 .json-input-actions .aw-disclosure { flex: 1; min-width: 0; }

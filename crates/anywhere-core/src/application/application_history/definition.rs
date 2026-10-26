@@ -35,10 +35,17 @@ pub(super) fn resolve(
         ] {
             object.entry(key).or_insert(inherited);
         }
-        if id == base.manifest.id {
+        if id == base.manifest.id
+            && !object.contains_key("config_paths")
+            && !object.contains_key("home_paths")
+        {
             object
                 .entry("config_paths")
                 .or_insert(serde_json::to_value(&base.manifest.config_paths)?);
+            object.insert(
+                "home_paths".into(),
+                serde_json::to_value(&base.manifest.home_paths)?,
+            );
         }
     }
     let manifest: Manifest = serde_json::from_value(value)?;

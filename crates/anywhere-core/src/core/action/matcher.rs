@@ -119,14 +119,14 @@ impl ActionMatcher<'_> {
                         }
                         _ => false,
                     };
-                if matches!(
-                    action.executor,
-                    super::descriptor::ActionExecutor::WebCommand(_)
-                ) && context.source == ContextSource::UserInput
-                    && context.type_id == TEXT
-                    && !content_match
-                {
-                    continue;
+                if let super::descriptor::ActionExecutor::WebCommand(command) = &action.executor {
+                    if !content_match
+                        && (command.require_input_match
+                            || (context.source == ContextSource::UserInput
+                                && context.type_id == TEXT))
+                    {
+                        continue;
+                    }
                 }
                 let action_query = if searching && scope_id.is_none() && action.owning_app.is_some()
                 {
@@ -154,7 +154,7 @@ impl ActionMatcher<'_> {
                 {
                     continue;
                 }
-                // Declared content matchers narrow automatic suggestions. An explicit
+                // Optional content matchers narrow automatic suggestions. An explicit
                 // keyword still opens the tool for editing invalid/incomplete input.
                 if let super::descriptor::ActionExecutor::WebCommand(command) = &action.executor {
                     if context.type_id == TEXT
@@ -175,7 +175,7 @@ impl ActionMatcher<'_> {
                 } else {
                     Default::default()
                 };
-                let mut score = score::score(
+                let score = score::score(
                     match_level,
                     searching,
                     context.source,
@@ -184,10 +184,9 @@ impl ActionMatcher<'_> {
                     stats,
                     self.now,
                 );
-                if !searching {
-                    score += home_bonus(context, action);
-                }
                 candidates.push(Candidate {
+                    guard: None,
+                    usage: stats,
                     presentation: CandidatePresentation {
                         localized_titles: action.localized_titles.clone(),
                         id: action_execution_candidate_id(action, context),
@@ -216,8 +215,6 @@ impl ActionMatcher<'_> {
                         )],
                         execution_context_id: Some(context.id.clone()),
                         execution_target_label: Some(context.display_detail()),
-                        home_eligible: action.home_eligible
-                            || (!action.menu_path.is_empty() && stats.execute_count > 0),
                         primary_action: action.primary_action,
                         section_label: Some(match &context.value {
                             ContextValue::Application { name, .. }
@@ -243,30 +240,6 @@ impl ActionMatcher<'_> {
 ///
 /// There is deliberately no per-group term here: Git actions only ever accept a
 /// `git.repository` context, so a rule keyed on a directory could never apply.
-fn home_bonus(context: &ResolvedContext, action: &ActionDescriptor) -> f32 {
-    let bonus = match context.source {
-        ContextSource::FinderSelection => 240.0,
-        ContextSource::SelectedText => 220.0,
-        ContextSource::BrowserCurrentPage => 210.0,
-        ContextSource::ApplicationContext | ContextSource::ForegroundApplication => 200.0,
-        ContextSource::Clipboard => 80.0,
-        ContextSource::UserInput => 0.0,
-    };
-    // Explicit app-owned entries compete with the app's project actions on Home.
-    // Menus retain their lower foreground weight, and queries keep normal ranking.
-    if context.source == ContextSource::ForegroundApplication
-        && context.type_id == APPLICATION
-        && action.owning_app.is_some()
-        && !action.executor.is_menu()
-    {
-        bonus
-            + (score::context_relevance(ContextSource::ApplicationContext, false, 0)
-                - score::context_relevance(context.source, false, 0)) as f32
-    } else {
-        bonus
-    }
-}
-
 fn subtitle(action: &ActionDescriptor, context: &ResolvedContext) -> String {
     if !action.menu_path.is_empty() {
         return action.menu_path.join(" › ");

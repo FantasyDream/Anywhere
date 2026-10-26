@@ -65,7 +65,6 @@ pub struct ActionDefinition {
     pub keywords: Vec<String>,
     pub owning_app: Option<String>,
     pub menu_path: Vec<String>,
-    pub home_eligible: bool,
     pub primary_action: bool,
     /// Visible title used for search when it differs from the row title.
     pub search_title: Option<String>,
@@ -94,7 +93,6 @@ pub struct ActionDescriptor {
     pub owning_app: Option<String>,
     /// Ancestor menu titles. The row title is the leaf; display joins the two.
     pub menu_path: Vec<String>,
-    pub home_eligible: bool,
     pub primary_action: bool,
     search: SearchFields,
     contributor: Option<std::sync::Arc<str>>,
@@ -128,7 +126,6 @@ impl ActionDescriptor {
             keywords: definition.keywords,
             owning_app: definition.owning_app,
             menu_path: definition.menu_path,
-            home_eligible: definition.home_eligible,
             primary_action: definition.primary_action,
             search,
             contributor: None,
@@ -512,7 +509,6 @@ impl ActionRegistry {
                 group_id: command.group_id.unwrap_or_else(|| default_group.clone()),
                 owning_app: None,
                 menu_path: Vec::new(),
-                home_eligible: true,
                 primary_action: false,
                 aliases,
                 keywords,
@@ -794,7 +790,6 @@ action = { type = "copy", text = "{{context.value}}" }
                 icon: "copy",
                 aliases: &[],
                 keywords: &[],
-                home_eligible: true,
                 primary_action: false,
             }
             .descriptor("test")

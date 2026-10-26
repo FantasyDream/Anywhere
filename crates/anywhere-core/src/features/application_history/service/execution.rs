@@ -1,6 +1,6 @@
 //! Revalidate the offered object before copying or opening its source application.
 use super::HistoryService;
-use crate::features::application_history::model::Target;
+use crate::features::application_history::model::{Cancelled, Item, Target};
 use anyhow::{bail, ensure, Result};
 use std::sync::atomic::Ordering;
 
@@ -11,6 +11,18 @@ impl HistoryService {
         copy: bool,
         platform: &dyn anywhere_platform::Platform,
     ) -> Result<()> {
+        self.with_validated_item(id, |item, cancelled| {
+            self.use_validated_item(item, cancelled, copy, platform)
+        })
+    }
+
+    /// The callback runs while holding the shared read admission. It must not
+    /// reenter this service. Callers cannot substitute an arbitrary target path.
+    pub(crate) fn with_validated_item<T>(
+        &self,
+        id: &str,
+        use_item: impl FnOnce(&Item, &Cancelled) -> Result<T>,
+    ) -> Result<T> {
         let epoch = self.epoch.load(Ordering::Acquire);
         ensure!(
             self.enabled.load(Ordering::Acquire),
@@ -45,6 +57,16 @@ impl HistoryService {
                     .any(|e| e.key == item.entry.key && e.target == item.entry.target),
             "history target changed"
         );
+        use_item(&item, &cancelled)
+    }
+
+    fn use_validated_item(
+        &self,
+        item: &Item,
+        cancelled: &Cancelled,
+        copy: bool,
+        platform: &dyn anywhere_platform::Platform,
+    ) -> Result<()> {
         if copy {
             return platform.copy_text(&item.entry.target.text());
         }

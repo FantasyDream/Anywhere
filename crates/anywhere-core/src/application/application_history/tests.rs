@@ -30,13 +30,13 @@ fn official_idea_xml_to_searchable_history_is_configured_not_special_cased() {
     );
     service.refresh().unwrap();
     assert_eq!(
-        service.search(0, "", "").unwrap().notice,
+        service.search(0, "", "idea").unwrap().notice,
         Some(Notice::Unconfigured)
     );
     service
         .configure_mode("idea", SourceMode::Custom, Some(source.to_str().unwrap()))
         .unwrap();
-    let first = service.search(0, "pzys", "").unwrap();
+    let first = service.search(0, "pzys", "idea").unwrap();
     assert_eq!(first.items.len(), 1);
     assert_eq!(
         first.items[0].entry.target,
@@ -44,14 +44,85 @@ fn official_idea_xml_to_searchable_history_is_configured_not_special_cased() {
     );
     assert_eq!(first.items[0].entry.last_used_at, Some(1700000000000));
     assert!(service
-        .search(0, "does not match", "")
+        .search(0, "does not match", "idea")
         .unwrap()
         .items
         .is_empty());
     service
         .configure_mode("idea", SourceMode::Disabled, None)
         .unwrap();
-    assert!(service.search(0, "", "").unwrap().items.is_empty());
+    assert!(service.search(0, "", "idea").unwrap().items.is_empty());
+}
+
+#[test]
+fn history_queries_read_only_the_action_source_without_an_all_sources_fallback() {
+    struct Observed {
+        inner: Arc<SourceCatalog>,
+        reads: std::sync::Mutex<Vec<String>>,
+    }
+    impl SourceLoader for Observed {
+        fn descriptors(&self) -> Vec<SourceDescriptor> {
+            self.inner.descriptors()
+        }
+        fn read(&self, source: &SourcePreference, cancelled: Cancelled) -> Result<Vec<Entry>> {
+            self.reads.lock().unwrap().push(source.id.clone());
+            self.inner.read(source, cancelled)
+        }
+    }
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("recent.xml");
+    std::fs::write(&path, idea(temp.path())).unwrap();
+    let loader = Arc::new(Observed {
+        inner: SourceCatalog::bundled_with_config_directory(None).unwrap(),
+        reads: std::sync::Mutex::new(vec![]),
+    });
+    let service = installed_service(Ok(storage()), loader.clone());
+    for source in ["idea", "webstorm"] {
+        service
+            .configure_mode(source, SourceMode::Custom, path.to_str())
+            .unwrap();
+    }
+    let owner = service.open_session().unwrap();
+    for source in ["", "unknown", "IDEA"] {
+        let result = service.search(owner, "", source).unwrap();
+        assert_eq!(result.notice, Some(Notice::Unconfigured));
+        assert!(result.items.is_empty());
+        assert!(loader.reads.lock().unwrap().is_empty());
+    }
+    for source in ["idea", "webstorm"] {
+        let result = service.search(owner, "", source).unwrap();
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(result.items[0].source_id, source);
+        assert_eq!(*loader.reads.lock().unwrap(), [source]);
+        loader.reads.lock().unwrap().clear();
+    }
+    service.set_action_enabled("webstorm", false).unwrap();
+    assert_eq!(
+        service.search(owner, "", "webstorm").unwrap().notice,
+        Some(Notice::Unconfigured)
+    );
+    assert!(loader.reads.lock().unwrap().is_empty());
+}
+
+#[test]
+fn vscode_distinguishes_a_missing_history_key_from_an_explicit_empty_history() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("state.vscdb");
+    let db = rusqlite::Connection::open(&path).unwrap();
+    db.execute_batch("CREATE TABLE ItemTable(key TEXT PRIMARY KEY, value BLOB)")
+        .unwrap();
+    let loader = SourceCatalog::bundled_with_config_directory(None).unwrap();
+    let source = SourcePreference {
+        id: "vscode".into(),
+        path,
+    };
+    assert!(loader.read(&source, Arc::new(|| false)).is_err());
+    db.execute(
+        "INSERT INTO ItemTable VALUES (?1,?2)",
+        rusqlite::params!["history.recentlyOpenedPathsList", "{\"entries\":[]}",],
+    )
+    .unwrap();
+    assert!(loader.read(&source, Arc::new(|| false)).unwrap().is_empty());
 }
 
 #[test]
@@ -211,11 +282,11 @@ fn source_preferences_persist_without_mirroring_history_and_disable_invalidates_
     assert!(!saved.contains("配置验收项目") && !saved.contains("1700000000000"));
     second.set_enabled(false);
     assert_eq!(
-        second.search(0, "", "").unwrap().notice,
+        second.search(0, "", "idea").unwrap().notice,
         Some(Notice::Disabled)
     );
     second.set_enabled(true);
-    assert_eq!(second.search(0, "", "").unwrap().items.len(), 1);
+    assert_eq!(second.search(0, "", "idea").unwrap().items.len(), 1);
 }
 
 #[test]
@@ -247,12 +318,14 @@ fn delayed_old_page_cancellation_cannot_invalidate_a_new_page() {
         .configure_mode("idea", SourceMode::Custom, Some(path.to_str().unwrap()))
         .unwrap();
     let old = service.open_session().unwrap();
-    let old_id = service.search(old, "", "").unwrap().items[0].id.clone();
+    let old_id = service.search(old, "", "idea").unwrap().items[0].id.clone();
     let current = service.open_session().unwrap();
-    let new_id = service.search(current, "", "").unwrap().items[0].id.clone();
+    let new_id = service.search(current, "", "idea").unwrap().items[0]
+        .id
+        .clone();
     service.cancel_session(old);
     assert_eq!(
-        service.search(old, "", "").unwrap().notice,
+        service.search(old, "", "idea").unwrap().notice,
         Some(Notice::Stale)
     );
     let platform = crate::application::source_catalog_tests::QuietPlatform;
@@ -301,26 +374,45 @@ fn cancellation_during_source_work_rejects_publication_and_retains_admission() {
         .unwrap();
     let owner = service.open_session().unwrap();
     let running = service.clone();
-    let worker = std::thread::spawn(move || running.search(owner, "", "").unwrap());
+    let worker = std::thread::spawn(move || running.search(owner, "", "idea").unwrap());
     loader.entered.wait();
     service.cancel_session(owner);
     assert_eq!(
-        service.search(owner, "new", "").unwrap().notice,
+        service.search(owner, "new", "idea").unwrap().notice,
         Some(Notice::Busy)
     );
     loader.release.wait();
     assert_eq!(worker.join().unwrap().notice, Some(Notice::Stale));
-    assert_eq!(service.search(owner, "", "").unwrap().items.len(), 1);
+    assert_eq!(service.search(owner, "", "idea").unwrap().items.len(), 1);
 }
 
 #[test]
 fn a_json_source_only_needs_a_manifest_and_a_transform() {
     let reader = crate::persistence::application_history::Reader::Json;
-    let loader = SourceCatalog { config_directory: None, configuration_error: None, packages: vec![Package {
-        built_in: false,
-        manifest: Manifest { schema:1, id:"example".into(), title:"Example".into(), file_hint:"recent.json".into(), config_paths:vec![], applications:vec!["example.editor".into()], action:SourceAction{title:"Example History".into(),localized_titles:std::collections::BTreeMap::from([("zh".into(),"示例历史".into())]),aliases:vec![]}, reader },
-        script: "export function transform(input) { return input.projects.map(p => ({key:p.path,title:p.name,target:{kind:'directory',path:p.path}})); }".into(),
-    }] };
+    let loader = SourceCatalog {
+        config_directory: None,
+        home_directory: None,
+        configuration_error: None,
+        packages: vec![Package {
+            built_in: false,
+            manifest: Manifest {
+                schema: 1,
+                id: "example".into(),
+                title: "Example".into(),
+                file_hint: "recent.json".into(),
+                config_paths: vec![],
+                home_paths: vec![],
+                applications: vec!["example.editor".into()],
+                action: SourceAction {
+                    title: "Example History".into(),
+                    localized_titles: std::collections::BTreeMap::from([("zh".into(), "示例历史".into())]),
+                    aliases: vec![],
+                },
+                reader,
+            },
+            script: "export function transform(input) { return input.projects.map(p => ({key:p.path,title:p.name,target:{kind:'directory',path:p.path}})); }".into(),
+        }],
+    };
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("recent.json");
     std::fs::write(
@@ -416,7 +508,6 @@ fn source_actions_follow_captured_app_and_explicit_search_without_an_extra_scope
             );
             assert_eq!(candidate.presentation.group_id, group);
             assert_eq!(candidate.presentation.owning_app.as_deref(), Some(bundle));
-            assert!(candidate.presentation.home_eligible);
             let scopes = crate::core::search::scope::build(
                 &result.candidates,
                 &registry,

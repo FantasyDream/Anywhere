@@ -470,7 +470,7 @@ fn disable_or_clear_during_native_read_revokes_the_pending_write() {
 }
 
 #[test]
-fn captured_multiformat_item_restores_all_original_formats() {
+fn captured_multiformat_item_restores_long_format_names_and_original_bytes() {
     use anywhere_platform::clipboard::{ClipboardFormat, ClipboardPayload};
     let (_directory, service) = service();
     let payload = ClipboardPayload {
@@ -480,7 +480,7 @@ fn captured_multiformat_item_restores_all_original_formats() {
                 data: vec![137, 80, 78, 71],
             },
             ClipboardFormat {
-                name: "com.example.binary".into(),
+                name: format!("dyn.{}", "a".repeat(257)),
                 data: vec![0, 255, 1],
             },
         ],

@@ -43,7 +43,6 @@ CandidateDto row(String id, String title, String command,
         menuPath: [],
         contextKeys: [],
         executionContextId: file ? id : null,
-        homeEligible: !file && command != 'core.files.search',
         primaryAction: file,
         subtitle: command == 'core.files.search' ? '' : '/project');
 final entry = row('search-entry', 'File Search', 'core.files.search');
@@ -154,7 +153,6 @@ void main() {
                         menuPath: [],
                         contextKeys: [],
                         executionContextId: 'text-file',
-                        homeEligible: false,
                         primaryAction: false)
                   ],
             searchSources: mode != InputModeDto.fileSearch || input.length < 2

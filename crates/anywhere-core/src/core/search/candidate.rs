@@ -4,6 +4,7 @@
 //! ranking's job, and *finding* them is the sources' job.
 use crate::core::action::descriptor::ActionDescriptor;
 use crate::core::context::ResolvedContext;
+use crate::core::ranking::usage::UsageStats;
 use anywhere_protocol::*;
 use std::collections::BTreeMap;
 use std::sync::Arc;
@@ -13,6 +14,16 @@ use std::sync::Arc;
 pub struct Candidate {
     pub presentation: CandidatePresentation,
     pub target: CandidateTarget,
+    /// Object offers may expire independently of an Action's stable definition.
+    pub guard: Option<Arc<dyn CandidateGuard>>,
+    /// In-memory ranking data only; never exposed as UI policy or persisted here.
+    pub usage: UsageStats,
+}
+
+/// Rechecked on the blocking execution worker, including before a planned spawn.
+/// Implementations validate caller-owned data; the search engine knows no feature.
+pub trait CandidateGuard: std::fmt::Debug + Send + Sync {
+    fn validate(&self) -> anyhow::Result<()>;
 }
 
 /// Execution data for the two candidate types the product currently supports.
@@ -66,6 +77,10 @@ impl CandidateTarget {
 }
 
 impl Candidate {
+    pub fn validate(&self) -> anyhow::Result<()> {
+        self.guard.as_ref().map_or(Ok(()), |guard| guard.validate())
+    }
+
     pub fn context(&self) -> Option<&ResolvedContext> {
         match &self.target {
             CandidateTarget::Action { context, .. } => Some(context),
@@ -128,6 +143,23 @@ pub fn compare_candidates(a: &Candidate, b: &Candidate) -> std::cmp::Ordering {
             let (b_command, b_id) = candidate_sort_key(b);
             a_command.cmp(b_command).then_with(|| a_id.cmp(b_id))
         })
+}
+
+/// Empty action lists share one order across Current App and domain scopes.
+/// Exact counts avoid the query scorer's cap and floating-point precision loss.
+pub fn compare_empty_query_candidates(a: &Candidate, b: &Candidate) -> std::cmp::Ordering {
+    let last_used = |usage: UsageStats| {
+        if usage.execute_count == 0 {
+            0
+        } else {
+            usage.last_executed_at
+        }
+    };
+    b.usage
+        .execute_count
+        .cmp(&a.usage.execute_count)
+        .then_with(|| last_used(b.usage).cmp(&last_used(a.usage)))
+        .then_with(|| compare_candidates(a, b))
 }
 
 /// Keep one row per action and canonical object, preferring the highest-ranked occurrence.

@@ -269,6 +269,18 @@
     "previewFraction": {
       "value": 0.38,
       "unit": "number"
+    },
+    "pageTitleGap": {
+      "value": 3,
+      "unit": "px"
+    },
+    "contentInputSize": {
+      "value": 17,
+      "unit": "px"
+    },
+    "searchCaretWidth": {
+      "value": 1.4,
+      "unit": "px"
     }
   },
   "fonts": {

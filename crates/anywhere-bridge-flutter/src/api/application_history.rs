@@ -34,12 +34,15 @@ pub(super) fn configure(id: String, path: String, mode: AppHistorySourceModeDto)
         AppHistorySourceModeDto::Custom => SourceMode::Custom,
         AppHistorySourceModeDto::Disabled => SourceMode::Disabled,
     };
-    service()?.configure_mode(&id, mode, Some(path.as_str()))?;
-    settings::extensions()?.synchronize_application_history(application()?)
+    settings::extensions()?.configure_application_history(
+        application()?,
+        &id,
+        mode,
+        Some(path.as_str()),
+    )
 }
 pub(super) fn set_action_enabled(id: String, enabled: bool) -> Result<()> {
-    service()?.set_action_enabled(&id, enabled)?;
-    settings::extensions()?.synchronize_application_history(application()?)
+    settings::extensions()?.set_application_history_action_enabled(application()?, &id, enabled)
 }
 pub(super) fn custom_directory(open: bool) -> Result<String> {
     let directory = settings::extensions()?.application_history_directory();
@@ -93,4 +96,16 @@ pub(super) fn search(session_id: u32, query: String, source: String) -> Result<A
 }
 pub(super) fn use_item(id: String, copy: bool) -> Result<()> {
     service()?.use_item(&id, copy, application()?.platform())
+}
+pub(super) async fn object_actions(
+    session_id: u32,
+    revision: u32,
+    id: String,
+) -> Result<Vec<CandidateDto>> {
+    Ok(application()?
+        .history_object_actions(service()?, session_id, revision, id)
+        .await?
+        .into_iter()
+        .map(conversions::candidate_dto)
+        .collect())
 }

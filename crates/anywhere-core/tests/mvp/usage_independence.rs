@@ -41,23 +41,20 @@ async fn history_publishes_before_blocked_clipboard() {
     }
     started.expect("clipboard read never started");
 
-    let ranked = tokio::time::timeout(Duration::from_secs(2), async {
-        loop {
-            if let Some(state) = app.latest_state(first.session_id) {
-                if let Some(copy) = state
-                    .candidates
-                    .iter()
-                    .find(|item| item.command_id.as_deref() == Some("core.directory.copy"))
-                {
-                    if copy.score >= 500.0 {
+    let ranked =
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if let Some(state) = app.latest_state(first.session_id) {
+                    if state.candidates.first().is_some_and(|item| {
+                        item.command_id.as_deref() == Some("core.directory.copy")
+                    }) {
                         break state;
                     }
                 }
+                tokio::task::yield_now().await;
             }
-            tokio::task::yield_now().await;
-        }
-    })
-    .await;
+        })
+        .await;
     if ranked.is_err() {
         gate.release();
     }
@@ -66,12 +63,10 @@ async fn history_publishes_before_blocked_clipboard() {
         !app.supplemental_ready(first.session_id),
         "the clipboard is still blocked, so the supplemental group is unfinished"
     );
-    assert!(ranked
-        .candidates
-        .iter()
-        .any(
-            |item| item.command_id.as_deref() == Some("core.directory.copy") && item.score >= 500.0
-        ));
+    assert_eq!(
+        ranked.candidates.first().unwrap().command_id.as_deref(),
+        Some("core.directory.copy")
+    );
 
     gate.release();
     settled(&app, first.session_id, first.revision).await;

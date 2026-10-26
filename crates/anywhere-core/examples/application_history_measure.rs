@@ -77,30 +77,32 @@ fn main() -> Result<()> {
     let service = fixture(directory.path())?;
     let owner = service.open_session()?;
     let mut output = Vec::new();
-    for (query, expected) in [
-        ("", 1000),
-        ("配置", 1000),
-        ("pzys", 1000),
-        ("project-0042", 2),
-        ("no-matching-history", 0),
-    ] {
-        let mut times = Vec::new();
-        for _ in 0..30 {
-            let started = Instant::now();
-            let result = service.search(owner, query, "")?;
-            ensure!(
-                result.notice.is_none() && result.items.len() == expected,
-                "synthetic source query mismatch"
-            );
-            times.push(started.elapsed().as_micros() as u64);
+    for source in ["idea", "vscode"] {
+        for (query, expected) in [
+            ("", 500),
+            ("配置", 500),
+            ("pzys", 500),
+            ("project-0042", 1),
+            ("no-matching-history", 0),
+        ] {
+            let mut times = Vec::new();
+            for _ in 0..30 {
+                let started = Instant::now();
+                let result = service.search(owner, query, source)?;
+                ensure!(
+                    result.notice.is_none() && result.items.len() == expected,
+                    "synthetic source query mismatch"
+                );
+                times.push(started.elapsed().as_micros() as u64);
+            }
+            times.sort_unstable();
+            output.push(json!({"source":source,"query_kind":if query.is_empty(){"empty"}else if query=="配置"{"literal"}else if query=="pzys"{"pinyin"}else if expected==0{"unmatched"}else{"path"},"samples":times.len(),"rows":expected,"p50_us":times[times.len()/2],"p95_us":times[(times.len()*95).div_ceil(100)-1],"max_us":times[times.len()-1]}));
         }
-        times.sort_unstable();
-        output.push(json!({"query_kind":if query.is_empty(){"empty"}else if query=="配置"{"literal"}else if query=="pzys"{"pinyin"}else if expected==0{"unmatched"}else{"path"},"samples":times.len(),"rows":expected,"p50_us":times[times.len()/2],"p95_us":times[(times.len()*95).div_ceil(100)-1],"max_us":times[times.len()-1]}));
     }
     println!(
         "{}",
         serde_json::to_string_pretty(
-            &json!({"scope":"Rust service, source reads, QuickJS transforms and matching; excludes Bridge/Flutter/physical display", "synthetic_entries":1000,"private_history_used":false,"queries":output})
+            &json!({"scope":"Rust service, source reads, QuickJS transforms and matching; excludes Bridge/Flutter/physical display", "synthetic_entries":1000,"entries_per_source":500,"query_scope":"one source per Action; not comparable to the removed cross-source query","private_history_used":false,"queries":output})
         )?
     );
     Ok(())

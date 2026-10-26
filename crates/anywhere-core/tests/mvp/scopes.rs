@@ -121,22 +121,12 @@ async fn app_scope_is_first_and_menu_name_queries_do_not_expand_all_menus() {
         .context_candidates
         .iter()
         .any(|candidate| candidate.title == "Unavailable"));
-    assert!(
-        state
+    for title in ["Toggle Terminal", "Export"] {
+        assert!(state
             .context_candidates
             .iter()
-            .find(|candidate| candidate.title == "Toggle Terminal")
-            .unwrap()
-            .home_eligible
-    );
-    assert!(
-        !state
-            .context_candidates
-            .iter()
-            .find(|candidate| candidate.title == "Export")
-            .unwrap()
-            .home_eligible
-    );
+            .any(|candidate| candidate.title == title));
+    }
     let app_only = app
         .update_input(initial.session_id, "editor".into(), 1)
         .await

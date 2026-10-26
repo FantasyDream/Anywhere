@@ -208,6 +208,7 @@ pub struct CandidatePresentation {
     /// Display-only shortcut reported by the source application; never a user binding.
     pub shortcut: Option<String>,
     pub icon: IconDescriptor,
+    /// Relevance score. Empty action lists compare usage before this tie-breaker.
     pub score: f32,
     pub group_id: GroupId,
     pub availability: Availability,
@@ -226,19 +227,12 @@ pub struct CandidatePresentation {
     /// Actual graph node used for execution; may be a capability derived from the root.
     pub execution_context_id: Option<ContextId>,
     pub execution_target_label: Option<String>,
-    /// Whether this candidate may be recommended directly on an empty-query home.
-    #[serde(default = "default_true")]
-    pub home_eligible: bool,
     /// The default operation when Enter is pressed on its context.
     #[serde(default)]
     pub primary_action: bool,
     /// Core-provided visual section within the context action panel.
     #[serde(default)]
     pub section_label: Option<String>,
-}
-
-fn default_true() -> bool {
-    true
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -672,7 +666,6 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
                     context_keys: Vec::new(),
                     execution_context_id: None,
                     execution_target_label: None,
-                    home_eligible: true,
                     primary_action: false,
                     section_label: None,
                 },
@@ -698,7 +691,6 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
                     context_keys: Vec::new(),
                     execution_context_id: None,
                     execution_target_label: None,
-                    home_eligible: true,
                     primary_action: true,
                     section_label: None,
                 },
@@ -738,7 +730,6 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
             context_keys: Vec::new(),
             execution_context_id: None,
             execution_target_label: None,
-            home_eligible: true,
             primary_action: false,
             section_label: None,
         };

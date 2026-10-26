@@ -1,6 +1,6 @@
 # JSON Workspace
 
-普通第三方 Web 包示例：Preact 页面、jsonc-parser 格式化、jsonpath-js 查询、SandboxJS 计算、Anywhere 浏览器 SDK；无 JSON 专用 Rust API，无 Node 运行时。当前包版本为 0.5.2，使用 Host 的共享工作区样式与图标。计算和结果复制直接可见；缩进、复制变体与去转义收在输入区的“JSON 操作”中。
+普通第三方 Web 包示例：Preact 页面、jsonc-parser 格式化、jsonpath-js 查询、SandboxJS 计算、Anywhere 浏览器 SDK；无 JSON 专用 Rust API，无 Node 运行时。当前包版本为 0.5.3，使用 Host 的共享工作区样式与图标。计算和结果复制直接可见；缩进、复制变体与去转义收在输入区的“JSON 操作”中。
 
 源码使用 `@anywhere/plugin-sdk` 标准包导入；本仓库开发时用 npm `file:` 依赖连接 SDK，独立工程可改为 SDK `.tgz`。通用打包器与新项目模板见 [第三方插件开发指南](../../../docs/plugin-development.md)。
 
@@ -8,7 +8,9 @@
 
 在仓库根运行 `python3 scripts/build-web-examples.py`。产物是 `build/web-examples/dev.anywhere.json-workspace.awplugin`。
 
-1. 启动当前 V0.12 macOS 预览版，在 Settings → Features → Web tools → Import 选择该包。JSON 包与 App 独立更新，已安装的旧包不会随 App 构建自动替换。
+三个复制 Action 仅在识别到 JSON 对象 / 数组或转义 JSON 时显示；去转义 Action 仅在识别到转义 JSON 时显示。直接搜索名称只提供可空白打开的 Workspace。
+
+1. 启动当前 macOS 预览版，在 Settings → Features → Web tools → Import 选择该包。JSON 包与 App 独立更新，已安装的旧包不会随 App 构建自动替换。
 2. 核对名称、版本、SHA-256 和权限，批准后立即可用。可在 Global Search 搜索 `JSON Workspace`；直接输入合法 JSON 对象 / 数组也会匹配该 Action，打开后自动填入原文。选中或 15 秒内复制相同内容时沿用 Launcher 的自动填入规则；只有匹配成功才进入内容模式。已有旧包需重新导入更新。
 3. 左侧输入 JSON，停顿 300 ms 后自动格式化；不完整 / 非法内容保持原样并提示错误。格式化保留光标所在的 JSON token，中文组合输入期间不处理。只修改公式时复用已经格式化的文本，不重复扫描整个文档；修改内容或缩进后重新格式化。
 4. 默认使用 JavaScript 公式，固定显示 `this` 前缀。在顶部模式标签可切换 JavaScript / JSONPath，或用 Ctrl+Tab / Ctrl+Shift+Tab 切换。`$` / `this` 固定显示并自动加入公式，只需输入后面的内容；留空展示整个文档，完整公式也可直接粘贴。两种模式分别保留当前公式。`⌘↵` 或公式框中的 Enter 立即运行，也会在停顿后自动更新结果。`⌘⇧C` 请求复制右侧当前结果；输入或公式修改后，旧结果立即停止展示和复制。

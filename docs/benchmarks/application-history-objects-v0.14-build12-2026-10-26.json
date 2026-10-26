@@ -1,0 +1,83 @@
+{
+  "date": "2026-10-26",
+  "version": "0.14.0+12",
+  "source_base_commit": "fd1e70d5be100c899394bf01906bb1bfd9bf6f5f",
+  "working_tree_changes": true,
+  "scope": "H4 history object actions; H3 notes and final native acceptance remain",
+  "changes": [
+    "Resolve only the selected local history target through the existing ContextGraph and Registry",
+    "Retain workspace File semantics, remote Copy fallback and frozen Current App",
+    "First-party Native actions only; no new Web grants or legacy DSL execution",
+    "Memory-only CandidateGuard survives snapshot replacement and validates source key, target, canonical path and object epoch",
+    "Revalidate before side effects, planned process spawn and Web invocation; stable usage identity excludes the history target",
+    "Generic ToolPageHost and bounded parent stack preserve query, selection and focus on return",
+    "Suspend pages before a hidden-window frame; ignore late results after leaving a page",
+    "Keep Copy and Refresh recovery choices if object enrichment fails; preserve Cmd+K, Enter default Copy Path"
+  ],
+  "automated": {
+    "full_gate": "scripts/check.sh",
+    "exit_code": 0,
+    "log": "build/v0.14-object12-check-final.log",
+    "core": {
+      "passed": 301,
+      "ignored_existing": 1
+    },
+    "mvp": {
+      "passed": 194,
+      "ignored_existing": 4
+    },
+    "flutter": {
+      "passed": 427
+    },
+    "native_web_clippy_architecture_analyze_style_generated_localization_docs": "passed",
+    "targeted_flutter_passed": 50,
+    "bridge_generated_and_compiled": true
+  },
+  "regressions": [
+    "History directory offers existing Git and Cargo actions without executing Git during discovery",
+    "Usage records stable command and context type without history path",
+    "New object request revokes older offers even with the same path and command",
+    "Source target change and disabling the source produce no platform side effect",
+    "VS Code workspace returns only file actions; frozen application scopes are retained",
+    "Object revocation during planning blocks the actual process spawn",
+    "Shared menu executes through its owning host; edited query rejects late choices",
+    "Recovery Copy and Refresh remain keyboard accessible after enrichment failure",
+    "Nested results retain parent query and focus; popped host and late execution results are rejected",
+    "Page suspension does not depend on rendering another Flutter frame"
+  ],
+  "package": {
+    "app": "build/Anywhere-0.14-preview-build12.app",
+    "zip": "build/Anywhere-0.14-preview-build12-macos-arm64.zip",
+    "sha256": "7278a97b6073d3a844c736c641cddd478255d8e1ec045638d290e87c1386303f",
+    "persistent_signing_strict_archive_and_version_validation": "passed",
+    "impeller": true,
+    "github_release_uploaded": false
+  },
+  "native_ui": {
+    "status": "deferred",
+    "reason": "Finish remaining implementation and automated tests before final native UI acceptance, as requested",
+    "build12_launched": false,
+    "physical_ime_keyboard_and_visual_acceptance": "not performed on Build 12"
+  },
+  "measurement": {
+    "app_rss_sampled": false,
+    "native_interaction_latency_sampled": false,
+    "performance_improvement_claimed": false
+  },
+  "privacy": {
+    "private_history_used_for_acceptance": false,
+    "new_permissions_granted": false,
+    "personal_preferences_modified": false,
+    "new_web_permissions": false
+  },
+  "completion": {
+    "h4_code_and_automated_tests": true,
+    "v0_14_complete": false,
+    "remaining": [
+      "H3 Obsidian recent-note metadata and Vault/config binding",
+      "Final native UI acceptance"
+    ],
+    "committed_this_round": false,
+    "next_branch_created": false
+  }
+}

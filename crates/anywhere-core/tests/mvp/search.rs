@@ -417,7 +417,6 @@ async fn a_disabled_text_fallback_cannot_execute() {
                 icon: "copy",
                 aliases: &[],
                 keywords: &[],
-                home_eligible: true,
                 primary_action: false,
             }
             .descriptor("test"),

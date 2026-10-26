@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../infrastructure/desktop_environment.dart';
 import '../l10n/app_language.dart';
 import '../src/rust/api.dart';
 import '../ui/app_icons.dart';
@@ -149,12 +148,7 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
                                     : context.l10n.noStandardOutput)
                             : _text,
                         key: const Key('task-output-text'),
-                        style: TextStyle(
-                            fontFamily:
-                                DesktopEnvironment.current.monoFontFamily,
-                            fontFamilyFallback: const ['monospace'],
-                            fontSize: DesignTokens.previewCodeSize,
-                            height: DesignTokens.previewCodeLineHeight,
+                        style: AppStyle.code.copyWith(
                             color: _diagnostics
                                 ? AppStyle.warning
                                 : AppStyle.primary)),

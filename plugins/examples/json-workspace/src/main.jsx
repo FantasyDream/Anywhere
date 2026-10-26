@@ -360,14 +360,19 @@ function App() {
       </nav>
       <div class="query-bar">
         <div
-          class="formula-field"
+          class="aw-input-group"
           data-invalid={fresh && processed.queryError ? 'true' : 'false'}
         >
-          <label for="json-path" class="formula-root" title={t('rootHint')}>
+          <label
+            for="json-path"
+            class="aw-input-prefix aw-code"
+            title={t('rootHint')}
+          >
             {isJavaScript ? 'this' : '$'}
           </label>
           <input
             id="json-path"
+            class="aw-code"
             aria-label={isJavaScript ? t('jsFormula') : t('pathFormula')}
             type="text"
             value={path}

@@ -6,6 +6,7 @@ pub struct WebCommandRef {
     pub(crate) command_id: String,
     pub(crate) registration: String,
     pub(crate) input_matchers: std::sync::Arc<[anywhere_protocol::web_plugin::WebInputMatcher]>,
+    pub(crate) require_input_match: bool,
 }
 
 impl WebCommandRef {

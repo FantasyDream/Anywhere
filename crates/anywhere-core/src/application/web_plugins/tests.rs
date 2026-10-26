@@ -172,7 +172,6 @@ fn normal_search_never_exports_keywords_or_unmatched_text_fallbacks() {
     let global = offers(&registry, "scratchpad", &[raw], None);
     assert_eq!(global.len(), 1);
     assert_eq!(global[0].context().unwrap().type_id, ENTRY_CONTEXT);
-    assert!(!global[0].presentation.home_eligible);
     assert_eq!(
         registry
             .persistent_binding("web:dev.example.tool:open")
@@ -386,7 +385,6 @@ fn source_replacement_and_registration_collision_fail_without_partial_publicatio
         keywords: vec![],
         owning_app: None,
         menu_path: vec![],
-        home_eligible: false,
         primary_action: false,
         search_title: None,
     };

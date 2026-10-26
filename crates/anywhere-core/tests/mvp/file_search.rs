@@ -252,7 +252,6 @@ async fn file_search_entry_is_a_real_action_without_context_or_scope_and_support
         .iter()
         .all(|c| c.type_id != "core.launcher"));
     assert!(state.scopes.iter().all(|s| s.id != "tools"));
-    assert!(!entry.home_eligible);
     let output = app.execute(id, 2, entry.id.clone()).await.unwrap();
     assert_eq!(output.view, Some(HostView::FileSearch));
     assert!(!output.close_window && output.output_text.is_none());
@@ -667,7 +666,7 @@ fn file_results_are_limited_deduplicated_and_ignore_unrelated_names() {
     assert_eq!(candidates.len(), 64);
     assert!(candidates
         .iter()
-        .all(|c| c.presentation.kind == CandidateKind::File && !c.presentation.home_eligible));
+        .all(|c| c.presentation.kind == CandidateKind::File));
     assert_eq!(
         candidates
             .iter()

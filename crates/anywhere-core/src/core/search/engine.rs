@@ -3,7 +3,9 @@
 //! It knows nothing about what a source contains. Applications, actions and text fallbacks
 //! are all `CandidateSource`s, so adding a new kind of result — files, clipboard entries,
 //! history — is a new source and a registration, not a branch here.
-use super::candidate::{compare_candidates, deduplicate_actions, CandidateSet};
+use super::candidate::{
+    compare_candidates, compare_empty_query_candidates, deduplicate_actions, CandidateSet,
+};
 use super::candidate_source::{CandidateSource, SearchContext, SourceStage};
 use super::fallback::TextFallbackSource;
 use super::query::Query;
@@ -136,7 +138,11 @@ impl SearchEngine<'_> {
         }
 
         let ranking_started = Instant::now();
-        candidates.sort_by(compare_candidates);
+        candidates.sort_by(if query.is_empty() {
+            compare_empty_query_candidates
+        } else {
+            compare_candidates
+        });
         deduplicate_actions(&mut candidates);
         for source in fallback {
             let mut batch = source.contribute(&search, &candidates);
@@ -217,7 +223,6 @@ mod tests {
             icon: "copy",
             aliases: &[],
             keywords: &[],
-            home_eligible: true,
             primary_action: false,
         }
     }
@@ -270,6 +275,88 @@ mod tests {
             app_usage: usage,
             now: 1000,
         }))]
+    }
+
+    #[test]
+    fn empty_lists_use_exact_frequency_then_recency_and_scopes_keep_the_same_order() {
+        let registry = crate::application::builtin_registry();
+        let contexts = vec![
+            ResolvedContext::new(
+                DIRECTORY,
+                ContextValue::Directory("/tmp/project".into()),
+                ContextSource::ApplicationContext,
+                "directory",
+            ),
+            ResolvedContext::new(
+                GIT_REPOSITORY,
+                ContextValue::Repository("/tmp/project".into()),
+                ContextSource::ApplicationContext,
+                "git",
+            ),
+        ];
+        let usage = |action: &str, _: &str| match action {
+            // All exceed the old 20-use cap and f32's exact integer range.
+            "core.git.copy_branch_name" => UsageStats {
+                execute_count: u32::MAX,
+                last_executed_at: 1,
+            },
+            "core.git.status" => UsageStats {
+                execute_count: u32::MAX - 1,
+                last_executed_at: 500,
+            },
+            "core.git.log" => UsageStats {
+                execute_count: u32::MAX - 1,
+                last_executed_at: 900,
+            },
+            _ => UsageStats::default(),
+        };
+        let mut facts = facts();
+        facts.frontmost = Some(ApplicationInfo {
+            bundle_id: "test.editor".into(),
+            name: "Editor".into(),
+            pid: 1,
+            instance_id: Some("instance".into()),
+        });
+        let engine = builtin_engine(&registry, &usage, &facts);
+        let all = engine.search_scoped(&Query::parse(""), &contexts, &[], Some("app.test.editor"));
+        let ids: Vec<_> = all
+            .candidates
+            .iter()
+            .map(|row| row.presentation.command_id.as_deref().unwrap())
+            .collect();
+        assert_eq!(
+            &ids[..3],
+            [
+                "core.git.copy_branch_name",
+                "core.git.log",
+                "core.git.status"
+            ]
+        );
+        let git = engine.search_scoped(&Query::parse(""), &contexts, &[], Some("git"));
+        let git_ids: Vec<_> = git
+            .candidates
+            .iter()
+            .map(|row| row.presentation.id.clone())
+            .collect();
+        let from_all: Vec<_> = all
+            .candidates
+            .iter()
+            .filter(|row| row.presentation.group_id == "git")
+            .map(|row| row.presentation.id.clone())
+            .collect();
+        assert_eq!(git_ids, from_all);
+        let queried = engine.search(&Query::parse("Git Status"), &contexts, &[]);
+        assert_eq!(
+            queried.candidates[0].presentation.command_id.as_deref(),
+            Some("core.git.status")
+        );
+        // No usage still yields the stable context/default-priority cold start.
+        let unused =
+            builtin_engine(&registry, &no_usage, &facts).search(&Query::parse(""), &contexts, &[]);
+        assert_eq!(
+            unused.candidates[0].presentation.command_id.as_deref(),
+            Some("core.git.status")
+        );
     }
 
     #[test]

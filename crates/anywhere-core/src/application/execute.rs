@@ -167,6 +167,7 @@ impl Application {
                     bail!("menu discovery expired; choose a current action");
                 }
             }
+            candidate.validate()?;
             let mut output = match &candidate.target {
                 crate::core::search::candidate::CandidateTarget::Action { action, context } => {
                     if crate::features::filesystem::search::is_search_target(&candidate) {
@@ -190,6 +191,7 @@ impl Application {
                 } => crate::features::applications::launch::execute(path, platform.as_ref())?,
             };
             if let Some(command) = output.web_command.take() {
+                candidate.validate()?;
                 // Mint the invocation under the same lock used by hide/activation/catalog
                 // publication. A queued worker cannot recreate a ticket after revocation.
                 let session = session_for_execution
@@ -224,6 +226,7 @@ impl Application {
                 {
                     bail!("action expired before the task started");
                 }
+                candidate.validate()?;
                 Some(executions.start(request)?)
             } else {
                 None

@@ -65,7 +65,8 @@ fn guard_format(_: &str, _: usize) -> Result<bool> {
     Ok(true)
 }
 fn persistent_format(name: &str) -> bool {
-    !sensitive_format(name)
+    valid_format_name(name)
+        && !sensitive_format(name)
         && !matches!(
             name,
             "com.apple.pasteboard.promised-file-url"

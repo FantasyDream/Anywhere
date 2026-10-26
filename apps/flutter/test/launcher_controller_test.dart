@@ -28,7 +28,6 @@ LauncherStateDto snapshot(int session) => launcherSnapshot(
 
 CandidateDto appCandidate() => const CandidateDto(
       contextKeys: [],
-      homeEligible: true,
       primaryAction: false,
       id: 'app:test',
       kind: CandidateKindDto.application,
@@ -416,7 +415,6 @@ void main() {
 
   CandidateDto action(String id, String title, String group,
           {List<String> path = const [],
-          bool recommended = true,
           AvailabilityDto availability = AvailabilityDto.enabled}) =>
       CandidateDto(
           id: id,
@@ -426,7 +424,6 @@ void main() {
           groupId: group,
           menuPath: path,
           contextKeys: const [],
-          homeEligible: recommended,
           primaryAction: false,
           iconKey: 'file',
           score: 100,
@@ -610,8 +607,7 @@ void main() {
       () async {
     final sidebar = action('app.sidebar', 'Toggle Sidebar', 'app.editor',
         path: ['View', 'Appearance']);
-    final export = action('app.export', 'Export', 'app.editor',
-        path: ['File'], recommended: false);
+    final export = action('app.export', 'Export', 'app.editor', path: ['File']);
     final offers = [sidebar, export];
     var queries = 0;
     final executed = <String>[];

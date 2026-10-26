@@ -398,6 +398,8 @@ pub fn file_candidates(
             }
         }
         candidates.push(Candidate {
+            guard: None,
+            usage: Default::default(),
             presentation: CandidatePresentation {
                 localized_titles: Default::default(),
                 id: format!("action:{id}:{kind}:{fingerprint:016x}"),
@@ -431,7 +433,6 @@ pub fn file_candidates(
                 context_keys: Vec::new(),
                 execution_context_id: Some(context.id.clone()),
                 execution_target_label: None,
-                home_eligible: false,
                 primary_action: true,
                 section_label: Some("Files".into()),
                 shortcut: None,
@@ -491,7 +492,6 @@ pub fn result_actions(
             offer.presentation.group_id = "files".into();
             offer.presentation.execution_context_id = Some(context.id.clone());
             offer.presentation.context_keys.clear();
-            offer.presentation.home_eligible = false;
             offer.presentation.shortcut = None;
             result_actions.push(offer);
         }

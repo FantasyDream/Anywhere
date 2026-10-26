@@ -234,6 +234,25 @@ void main() {
   });
 
   testWidgets(
+      'native close saves comma-separated hidden apps without phantom drafts',
+      (tester) async {
+    final h = SettingsHarness();
+    await h.mount(tester);
+    await h.draft(tester);
+    await tester.enterText(
+        find.byKey(const Key('hidden-apps')), 'test.one, test.two\ntest.one');
+    final closing = h.native('closeSettings');
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save changes'));
+    await tester.pumpAndSettle();
+    expect(await closing, isTrue);
+    expect(h.settings.excludedApps, ['test.one', 'test.two']);
+    expect(h.controller.view.phase, LauncherPhase.hidden);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
       'native quit and launcher activation honor cancellation; discard does not save',
       (tester) async {
     final h = SettingsHarness();

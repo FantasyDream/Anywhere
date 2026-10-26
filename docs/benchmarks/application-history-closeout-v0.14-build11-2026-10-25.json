@@ -1,0 +1,190 @@
+{
+  "date": "2026-10-25",
+  "version": "0.14.0+11",
+  "source_base_commit": "fd1e70d5be100c899394bf01906bb1bfd9bf6f5f",
+  "working_tree_changes": true,
+  "changes": [
+    "Removed the obsolete empty-source aggregation path from HistoryService.search",
+    "Missing, unknown, mismatched and disabled sources do not read other configured histories",
+    "Clone and rank only one selected source; measurement and lifecycle fixtures use explicit sources"
+  ],
+  "automated": {
+    "full_gate": "scripts/check.sh",
+    "exit_code": 0,
+    "core": {
+      "passed": 300,
+      "ignored_existing": 1
+    },
+    "mvp": {
+      "passed": 193,
+      "ignored_existing": 4
+    },
+    "flutter": {
+      "passed": 424
+    },
+    "history_targeted": {
+      "core": 38,
+      "mvp": 4
+    },
+    "native_web_clippy_architecture_analyze_style_generated_localization_docs": "passed"
+  },
+  "regression": {
+    "test": "history_queries_read_only_the_action_source_without_an_all_sources_fallback",
+    "assertions": [
+      "No read for empty, unknown or case-mismatched sources",
+      "Only the named source is read once",
+      "Disabled source does not read another source"
+    ]
+  },
+  "measurement": {
+    "entries_per_source": 500,
+    "private_history_used": false,
+    "queries": [
+      {
+        "max_us": 8889,
+        "p50_us": 6658,
+        "p95_us": 7245,
+        "query_kind": "empty",
+        "rows": 500,
+        "samples": 30,
+        "source": "idea"
+      },
+      {
+        "max_us": 6785,
+        "p50_us": 6663,
+        "p95_us": 6771,
+        "query_kind": "literal",
+        "rows": 500,
+        "samples": 30,
+        "source": "idea"
+      },
+      {
+        "max_us": 7042,
+        "p50_us": 6817,
+        "p95_us": 6959,
+        "query_kind": "pinyin",
+        "rows": 500,
+        "samples": 30,
+        "source": "idea"
+      },
+      {
+        "max_us": 6782,
+        "p50_us": 6673,
+        "p95_us": 6757,
+        "query_kind": "path",
+        "rows": 1,
+        "samples": 30,
+        "source": "idea"
+      },
+      {
+        "max_us": 7232,
+        "p50_us": 6651,
+        "p95_us": 6742,
+        "query_kind": "unmatched",
+        "rows": 0,
+        "samples": 30,
+        "source": "idea"
+      },
+      {
+        "max_us": 2087,
+        "p50_us": 1959,
+        "p95_us": 2023,
+        "query_kind": "empty",
+        "rows": 500,
+        "samples": 30,
+        "source": "vscode"
+      },
+      {
+        "max_us": 2074,
+        "p50_us": 2042,
+        "p95_us": 2064,
+        "query_kind": "literal",
+        "rows": 500,
+        "samples": 30,
+        "source": "vscode"
+      },
+      {
+        "max_us": 2263,
+        "p50_us": 2209,
+        "p95_us": 2254,
+        "query_kind": "pinyin",
+        "rows": 500,
+        "samples": 30,
+        "source": "vscode"
+      },
+      {
+        "max_us": 2101,
+        "p50_us": 2078,
+        "p95_us": 2098,
+        "query_kind": "path",
+        "rows": 1,
+        "samples": 30,
+        "source": "vscode"
+      },
+      {
+        "max_us": 2068,
+        "p50_us": 2037,
+        "p95_us": 2060,
+        "query_kind": "unmatched",
+        "rows": 0,
+        "samples": 30,
+        "source": "vscode"
+      }
+    ],
+    "query_scope": "one source per Action; not comparable to the removed cross-source query",
+    "scope": "Rust service, source reads, QuickJS transforms and matching; excludes Bridge/Flutter/physical display",
+    "synthetic_entries": 1000
+  },
+  "measurement_limitations": [
+    "Per-source workload is not comparable to old cross-source measurements",
+    "No App RSS or physical display latency measured"
+  ],
+  "package": {
+    "app": "build/Anywhere-0.14-preview-build11.app",
+    "zip": "build/Anywhere-0.14-preview-build11-macos-arm64.zip",
+    "sha256": "66de99d729a21ce6c86495b263d09b9abafb30b282a075995caab327a594bece",
+    "persistent_signing_strict_archive_and_version_validation": "passed",
+    "impeller": true,
+    "github_release_uploaded": false
+  },
+  "native_ui": {
+    "build10_follow_up": {
+      "status": "partial",
+      "fixture": "build/acceptance-v0.14-closeout10",
+      "observed": [
+        "Settings window opened",
+        "Compact source list rendered",
+        "Refresh recovered after correcting BLOB storage in the synthetic fixture"
+      ],
+      "not_completed": [
+        "Path drafts, save/keep/discard and keyboard workflows",
+        "History page keyboard and source-open workflows"
+      ],
+      "interruption": "Mac locked after sources loaded",
+      "fixture_error_was_product_bug": false
+    },
+    "build11": {
+      "started": true,
+      "user_settings_changed": false,
+      "status": "blocked",
+      "reason": "Mac locked; CUA could not unlock",
+      "physical_ime_keyboard_and_visual_acceptance": "not performed"
+    }
+  },
+  "remaining": [
+    "H3 recent-note metadata compatibility and explicit Vault/config binding",
+    "H4 guarded object Context and existing secondary Actions",
+    "Final build native acceptance"
+  ],
+  "completion": {
+    "v0_14_complete": false,
+    "committed_this_round": false,
+    "next_branch_created": false
+  },
+  "privacy": {
+    "synthetic_acceptance_capture_disabled": true,
+    "private_history_bodies_read_for_acceptance": false,
+    "new_permissions_granted": false,
+    "personal_preferences_modified": false
+  }
+}

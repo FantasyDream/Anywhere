@@ -23,7 +23,6 @@ void main() {
       score: 1,
       groupId: 'app',
       contextKeys: const [],
-      homeEligible: true,
       primaryAction: false,
       availability:
           enabled ? AvailabilityDto.enabled : AvailabilityDto.disabled);

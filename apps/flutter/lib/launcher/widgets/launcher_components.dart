@@ -94,9 +94,7 @@ class LauncherSearchArea extends StatelessWidget {
                                 key: const Key('launcher-mode-label'),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: AppStyle.caption.copyWith(
-                                    fontSize: DesignTokens.pageModeSize,
-                                    fontWeight: DesignTokens.pageModeWeight)))),
+                                style: AppStyle.pageMode))),
                   if (!state.isFileSearch &&
                       !state.isContent &&
                       !state.hasScopeBar &&
@@ -135,17 +133,13 @@ class LauncherSearchArea extends StatelessWidget {
                       textInputAction: TextInputAction.none,
                       onEditingComplete: () {},
                       maxLines: state.isContent ? 2 : 1,
-                      style: TextStyle(
-                          fontSize: state.isContent
-                              ? 17
-                              : DesignTokens.pageHeadingSize,
-                          height: 1.25,
-                          fontWeight: FontWeight.w400,
-                          color: AppStyle.primary),
+                      style: state.isContent
+                          ? AppStyle.contentInput
+                          : AppStyle.pageHeading,
                       cursorColor: AppStyle.primary,
-                      cursorWidth: 1.4,
-                      decoration: InputDecoration(
-                          hintText: state.isFileSearch
+                      cursorWidth: DesignTokens.searchCaretWidth,
+                      decoration: AppStyle.searchDecoration(
+                          state.isFileSearch
                               ? context.l10n.searchFilesFolders
                               : state.isContent
                                   ? context.l10n.editCapturedContent
@@ -155,15 +149,10 @@ class LauncherSearchArea extends StatelessWidget {
                                           localizedScopeLabel(
                                               state.selectedScope!,
                                               context.l10n)),
-                          hintStyle: const TextStyle(
-                              color: AppStyle.muted,
-                              fontWeight: FontWeight.w400),
-                          filled: false,
-                          contentPadding: EdgeInsets.zero,
-                          enabledBorder: InputBorder.none,
-                          focusedBorder: InputBorder.none,
-                          border: InputBorder.none,
-                          isDense: true)),
+                          style: state.isContent
+                              ? AppStyle.contentInput
+                              : AppStyle.pageHeading,
+                          collapsed: false)),
                 ])),
         const SizedBox(width: 14),
         if (state.resolving || state.executing)

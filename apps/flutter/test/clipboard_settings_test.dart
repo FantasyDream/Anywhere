@@ -196,12 +196,11 @@ void main() {
         clipboardBackend: backend,
         readExtensions: () => []);
     var prepared = false;
-    settings.beforeClose = () async {
-      prepared = true;
-      return true;
-    };
     final change = settings.clipboard.setRecording(true);
-    final close = settings.prepareClose();
+    final close = settings.prepareClose().then((result) {
+      prepared = true;
+      return result;
+    });
     await Future<void>.delayed(Duration.zero);
     expect(prepared, isFalse);
     backend.gate!.complete();

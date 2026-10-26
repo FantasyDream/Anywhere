@@ -78,6 +78,8 @@ impl CandidateSource for ApplicationSource<'_> {
                 self.now,
             );
             candidates.push(Candidate {
+                guard: None,
+                usage,
                 presentation: CandidatePresentation {
                     localized_titles: application.localized_names.clone(),
                     shortcut: None,
@@ -100,7 +102,6 @@ impl CandidateSource for ApplicationSource<'_> {
                     context_keys: Vec::new(),
                     execution_context_id: None,
                     execution_target_label: None,
-                    home_eligible: true,
                     primary_action: true,
                     section_label: None,
                 },

@@ -109,6 +109,10 @@ pub fn validate_manifest(manifest: &WebPluginManifest) -> Result<()> {
             matchers.len() <= 8 && matchers.len() == command.input_matchers.len(),
             "invalid or duplicate Web input matcher"
         );
+        ensure!(
+            !command.require_input_match || !matchers.is_empty(),
+            "required Web input matching needs inputMatchers"
+        );
         if !matchers.is_empty() {
             ensure!(
                 command

@@ -3,8 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../infrastructure/desktop_environment.dart';
 import '../../l10n/app_language.dart';
+import '../../l10n/localized_label.dart';
 import '../../src/rust/api.dart';
 import '../../tools/tool_page_shell.dart';
 import '../../ui/app_components.dart';
@@ -18,11 +18,13 @@ class AppHistoryPage extends StatefulWidget {
       required this.session,
       required this.onBack,
       required this.presentation,
-      required this.visible});
+      required this.visible,
+      this.hostNotice});
   final AppHistorySession session;
   final VoidCallback onBack;
   final int presentation;
   final bool visible;
+  final String? hostNotice;
   @override
   State<AppHistoryPage> createState() => _AppHistoryPageState();
 }
@@ -47,11 +49,6 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
   KeyEventResult _key(KeyEvent event) {
     if (!session.interactive) return KeyEventResult.ignored;
     final key = event.logicalKey, keyboard = HardwareKeyboard.instance;
-    if (DesktopEnvironment.current.commandPressed &&
-        key == LogicalKeyboardKey.keyK) {
-      _actions();
-      return KeyEventResult.handled;
-    }
     if (keyboard.isMetaPressed ||
         keyboard.isControlPressed ||
         keyboard.isAltPressed) {
@@ -77,9 +74,14 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
     return KeyEventResult.ignored;
   }
 
-  void _actions() {
+  Future<void> _actions() async {
     if (!session.interactive) return;
     final target = session.selected?.id;
+    if (!await session.prepareActions() ||
+        !mounted ||
+        session.selected?.id != target) {
+      return;
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !session.interactive || session.selected?.id != target) {
         return;
@@ -99,7 +101,11 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
           final target = _firstAction.currentContext;
           if (mounted && target != null) FocusScope.of(target).nextFocus();
         }),
-        initialValue: session.selected == null ? 'refresh' : 'copy',
+        initialValue: session.objectActions.isNotEmpty
+            ? 'object:${session.objectActions.first.id}'
+            : session.selected == null
+                ? 'refresh'
+                : 'copy',
         onCanceled: () {
           _menuTarget = null;
           if (session.interactive) session.focus.requestFocus();
@@ -114,10 +120,29 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
             await session.useItem(copy: true);
           }
           if (action == 'refresh') await session.refresh();
+          if (action.startsWith('object:') &&
+              target != null &&
+              session.selected?.id == target) {
+            final candidates =
+                session.objectActions.where((a) => a.id == action.substring(7));
+            if (candidates.length == 1) {
+              await session.runAction(candidates.single);
+            }
+          }
           if (mounted && widget.visible) session.focus.requestFocus();
         },
         itemBuilder: (_) => [
-          if (session.selected != null)
+          for (var index = 0; index < session.objectActions.length; index++)
+            PopupMenuItem(
+                key: index == 0 ? _firstAction : null,
+                value: 'object:${session.objectActions[index].id}',
+                height: 32,
+                enabled: session.objectActions[index].availability ==
+                    AvailabilityDto.enabled,
+                child: Text(context.localizedLabel(
+                    session.objectActions[index].title,
+                    session.objectActions[index].localizedTitles))),
+          if (session.selected != null && session.objectActions.isEmpty)
             PopupMenuItem(
                 key: _firstAction,
                 value: 'copy',
@@ -125,7 +150,9 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
                 enabled: !session.loading,
                 child: Text(context.l10n.appHistoryCopyTarget)),
           PopupMenuItem(
-              key: session.selected == null ? _firstAction : null,
+              key: session.selected == null && session.objectActions.isEmpty
+                  ? _firstAction
+                  : null,
               value: 'refresh',
               height: 32,
               child: Text(context.l10n.refresh)),
@@ -135,6 +162,7 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
 
   String? _notice() {
     final l = context.l10n;
+    if (widget.hostNotice != null) return widget.hostNotice;
     if (session.failed) return l.appHistoryOperationFailed;
     return switch (session.notice) {
       AppHistoryNoticeDto.disabled => l.appHistoryDisabled,
@@ -167,41 +195,25 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
         notice: _notice(),
         header: Row(children: [
           Expanded(
-              child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                Text(
-                    session
-                        .labelFor(Localizations.localeOf(context).languageCode),
-                    style: AppStyle.caption.copyWith(
-                        fontSize: DesignTokens.pageModeSize,
-                        fontWeight: DesignTokens.pageModeWeight)),
-                const SizedBox(height: 3),
-                TextField(
-                    key: const Key('app-history-search'),
-                    controller: session.query,
-                    focusNode: session.focus,
-                    autofocus: widget.visible,
-                    selectAllOnFocus: false,
-                    textInputAction: TextInputAction.none,
-                    onEditingComplete: () {},
-                    style: AppStyle.body
-                        .copyWith(fontSize: DesignTokens.pageHeadingSize),
-                    decoration: InputDecoration(
-                        hintText: context.l10n.appHistorySearch,
-                        hintStyle: AppStyle.body.copyWith(
-                            fontSize: DesignTokens.pageHeadingSize,
-                            color: AppStyle.muted),
-                        isCollapsed: true,
-                        isDense: true,
-                        filled: false,
-                        border: InputBorder.none,
-                        enabledBorder: InputBorder.none,
-                        focusedBorder: InputBorder.none)),
-              ])),
+              child: AppPageTitle(
+                  label: session
+                      .labelFor(Localizations.localeOf(context).languageCode),
+                  child: TextField(
+                      key: const Key('app-history-search'),
+                      controller: session.query,
+                      focusNode: session.focus,
+                      autofocus: widget.visible,
+                      selectAllOnFocus: false,
+                      textInputAction: TextInputAction.none,
+                      onEditingComplete: () {},
+                      style: AppStyle.pageHeading,
+                      cursorColor: AppStyle.primary,
+                      cursorWidth: DesignTokens.searchCaretWidth,
+                      decoration: AppStyle.searchDecoration(
+                          context.l10n.appHistorySearch)))),
           if (session.items.isEmpty)
-            _actionMenu(AppMoreAction(onPressed: _actions)),
+            _actionMenu(
+                AppMoreAction(onPressed: _actions, showShortcut: false)),
         ]),
         child: Column(children: [
           if (session.loading) const LinearProgressIndicator(minHeight: 1),
@@ -227,7 +239,7 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
                           ])))
                   : ListView.builder(
                       controller: session.scroll,
-                      itemExtent: 64,
+                      itemExtent: session.rowExtent,
                       itemCount: session.items.length,
                       padding: const EdgeInsets.symmetric(
                           horizontal: 10, vertical: 3),
@@ -294,7 +306,8 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
                         onPrimary: session.interactive && !session.loading
                             ? () => unawaited(session.useSelection())
                             : null,
-                        onActions: _actions)),
+                        onActions: _actions,
+                        showActionsShortcut: false)),
                 ]))));
   }
 }

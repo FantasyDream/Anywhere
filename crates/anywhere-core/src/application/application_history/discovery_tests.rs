@@ -70,6 +70,56 @@ mod cases {
     }
 
     #[test]
+    fn migrated_vscode_home_storage_wins_over_a_newer_legacy_profile_database() {
+        let config = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let shared = write(home.path(), ".vscode-shared/sharedStorage/state.vscdb", "");
+        let db = rusqlite::Connection::open(&shared).unwrap();
+        db.execute_batch("CREATE TABLE ItemTable(key TEXT PRIMARY KEY, value BLOB)")
+            .unwrap();
+        db.execute(
+            "INSERT INTO ItemTable VALUES (?1, ?2)",
+            rusqlite::params![
+                "history.recentlyOpenedPathsList",
+                serde_json::json!({"entries":[{"folderUri":"file:///synthetic-project"}]})
+                    .to_string(),
+            ],
+        )
+        .unwrap();
+        drop(db);
+        fs::File::open(&shared)
+            .unwrap()
+            .set_times(
+                fs::FileTimes::new().set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(10)),
+            )
+            .unwrap();
+        let legacy = write(config.path(), "Code/User/globalStorage/state.vscdb", "");
+        let loader =
+            SourceCatalog::bundled_with_roots(Some(config.path().into()), Some(home.path().into()))
+                .unwrap();
+        assert_eq!(loader.detect("vscode"), Some(shared.clone()));
+        let service = installed_service(Ok(storage()), loader.clone());
+        service.refresh().unwrap();
+        let owner = service.open_session().unwrap();
+        let result = service.search(owner, "", "vscode").unwrap();
+        assert_eq!(result.items.len(), 1);
+        assert_eq!(result.items[0].entry.title, "synthetic-project");
+        service
+            .configure_mode("vscode", SourceMode::Custom, Some(legacy.to_str().unwrap()))
+            .unwrap();
+        assert_eq!(status(&service, "vscode").path, Some(legacy.clone()));
+        assert_eq!(
+            service.search(owner, "", "vscode").unwrap().notice,
+            Some(Notice::ReadFailed)
+        );
+        fs::remove_file(shared).unwrap();
+        assert_eq!(loader.detect("vscode"), Some(legacy));
+        // Test-only explicit config roots never fall through to the real home.
+        let isolated = SourceCatalog::bundled_with_config_directory(None).unwrap();
+        assert_eq!(isolated.detect("vscode"), None);
+    }
+
+    #[test]
     fn automatic_custom_and_disabled_modes_persist_without_overriding_the_user() {
         let temp = tempfile::tempdir().unwrap();
         let auto = xml(

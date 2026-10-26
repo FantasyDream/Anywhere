@@ -16,6 +16,9 @@ import '../src/rust/api.dart';
 import 'application_history_settings_controller.dart';
 import 'clipboard_settings_controller.dart';
 import 'host_settings.dart';
+import 'settings_edits.dart';
+
+enum SettingsCloseChoice { save, discard, cancel }
 
 typedef ApplyExcludedApps = Future<void> Function(List<String> bundleIds);
 
@@ -163,7 +166,34 @@ class SettingsController extends ChangeNotifier {
   String? _shortcutRestoreError;
   String? get statusMessage => _statusMessage;
   List<ContextCaptureDto> _captures = const [];
-  Future<bool> Function()? beforeClose;
+  Future<SettingsCloseChoice> Function(bool hasDrafts)? confirmClose;
+  VoidCallback? revealHistoryFailure;
+  bool _shortcutEditing = false;
+  bool get closing => _closing != null;
+  void setShortcutEditing(bool editing) {
+    if (_shortcutEditing == editing) return;
+    _shortcutEditing = editing;
+    _notify();
+  }
+
+  SettingsEdits? _edits;
+  SettingsEdits get edits => _edits ??= _createEdits();
+  SettingsEdits _createEdits() => SettingsEdits(
+      read: () => current,
+      save: save,
+      reportFailure: () =>
+          _reportLocalizedError((labels) => labels.settingsSaveFailed))
+    ..addListener(_notify);
+  void openEditing() {
+    if (!edits.hasDrafts && !edits.busy) edits.reset();
+  }
+
+  Future<bool> saveEdit(HostSettings Function(HostSettings) update,
+      {bool excluded = false, bool fileSearch = false}) {
+    if (closing || _disposed) return Future.value(false);
+    return edits.apply(update, excludedApps: excluded, fileSearch: fileSearch);
+  }
+
   Future<bool>? _closing;
   bool _disposed = false;
 
@@ -309,31 +339,56 @@ class SettingsController extends ChangeNotifier {
   }
 
   /// Native close, Done, Escape, Launcher switching and quit share one draft decision.
-  Future<bool> prepareClose() =>
-      _closing ??= _prepareClose().whenComplete(() => _closing = null);
+  Future<bool> prepareClose() => _closing ??= _prepareClose().whenComplete(() {
+        _closing = null;
+        _notify();
+      });
   Future<bool> _prepareClose() async {
-    // Capture every pending result before awaiting another controller. A failed
-    // save can finish and clear its queue while the other queue is draining.
-    final historyPending = appHistory.waitForPending();
-    final clipboardPending = clipboard.waitForPending();
-    // Finish catalog invalidation before the host restores global action hotkeys.
+    _notify();
+    if (_shortcutEditing) {
+      _reportLocalizedError(
+          (labels) => labels.finishOrCancelEditingTheActionShortcut);
+      return false;
+    }
+    // Capture all queues before awaiting one: a failure may finish and clear its
+    // queue while another write is still running. Each module retains its outcome.
+    final results = await Future.wait([
+      appHistory.waitForPending(),
+      clipboard.waitForPending(),
+      _edits?.waitForPending() ?? Future.value(true),
+    ]);
+    // A source write can start catalog reconciliation while these queues drain.
     await _extensionOperation;
-    final results = await Future.wait([historyPending, clipboardPending]);
+    if (_disposed) return false;
     if (!results[0]) {
       _reportLocalizedError((labels) => labels.appHistorySettingsFailed);
-      return false;
-    }
-    if (!results[1]) {
+    } else if (!results[1]) {
       _reportLocalizedError((labels) =>
           clipboard.noticeFor(labels) ?? labels.clipboardSettingsFailed);
-      return false;
     }
+    final dirty = (_edits?.hasDrafts ?? false) || appHistory.hasDrafts;
+    if (!dirty && results.every((saved) => saved)) return true;
+    final choice = await (confirmClose?.call(dirty) ??
+        Future.value(SettingsCloseChoice.cancel));
     if (_disposed) return false;
-    if (beforeClose == null && appHistory.hasDrafts) {
-      _reportLocalizedError((labels) => labels.settingsDrafts);
+    if (choice == SettingsCloseChoice.discard) {
+      _edits?.reset();
+      appHistory.discardDrafts();
+      return true;
+    }
+    if (choice != SettingsCloseChoice.save) return false;
+    final applied = !(_edits?.hasDrafts ?? false) || await edits.saveDrafts();
+    final historyApplied = applied && await appHistory.saveDrafts();
+    if (applied && !historyApplied) {
+      appHistory.setFilter(appHistory.failedSource ?? '', onlyEnabled: false);
+      revealHistoryFailure?.call();
+    }
+    if (historyApplied &&
+        ((_edits?.hasDrafts ?? false) || appHistory.hasDrafts)) {
+      _reportLocalizedError((labels) => labels.newEditsWereMadeWhileSavingSave);
       return false;
     }
-    return await (beforeClose?.call() ?? Future.value(true));
+    return historyApplied;
   }
 
   Future<bool> save(HostSettings next) {
@@ -557,6 +612,8 @@ class SettingsController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _edits?.removeListener(_notify);
+    _edits?.dispose();
     clipboard.removeListener(_notify);
     clipboard.dispose();
     appHistory.removeListener(_notify);

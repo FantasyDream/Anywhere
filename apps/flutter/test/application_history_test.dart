@@ -11,6 +11,8 @@ import 'package:anywhere/settings/application_history_settings_section.dart';
 import 'package:anywhere/settings/settings_controller.dart';
 import 'package:anywhere/settings/settings_screen.dart';
 import 'package:anywhere/src/rust/api.dart';
+import 'package:anywhere/tools/tool_page.dart';
+import 'package:anywhere/ui/app_components.dart';
 import 'package:anywhere/ui/app_style.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -44,6 +46,15 @@ final sourceRows = [
 ];
 
 class HistoryBackend implements AppHistoryQueryBackend {
+  Future<List<CandidateDto>> Function(String)? actionOverride;
+  final actionCalls = <String>[];
+  @override
+  Future<List<CandidateDto>> actions(String id,
+      {required int sessionId, required int revision}) async {
+    actionCalls.add('$sessionId:$revision:$id');
+    return await actionOverride?.call(id) ?? [];
+  }
+
   Future<AppHistoryDto> Function(String, String)? searchOverride;
   Future<void> Function()? useOverride, cancelOverride;
   final calls = <String>[], used = <String>[];
@@ -331,8 +342,8 @@ void main() {
             item('remote', canOpen: false),
             ...List.generate(30, (i) => item('$i'))
           ], failedSources: const []);
-    final session =
-        AppHistorySession(backend, sourceId: 'vscode', title: 'VS Code');
+    final session = AppHistorySession(backend,
+        sourceId: 'vscode', title: 'VS Code', rowExtent: 80);
     var backs = 0;
     await tester.pumpWidget(MaterialApp(
         theme: AppStyle.theme,
@@ -346,7 +357,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(backend.used, ['remote:true']);
     await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
-    expect(session.selectedIndex, greaterThan(1));
+    expect(tester.widget<ListView>(find.byType(ListView)).itemExtent, 80);
+    expect(session.selectedIndex,
+        (session.scroll.position.viewportDimension / 80).floor());
     await tester.sendKeyEvent(LogicalKeyboardKey.pageUp);
     expect(session.selectedIndex, 0);
     session.query.text = 'query';
@@ -514,6 +527,47 @@ void main() {
         throwsFormatException);
   });
 
+  for (final finishBeforeClose in [false, true]) {
+    testWidgets(
+        'failed source save has one close decision (completed: $finishBeforeClose)',
+        (tester) async {
+      final backend = Preferences()
+        ..gate = Completer<void>()
+        ..fail = true;
+      final settings = SettingsController(
+          window: WindowHost(const MethodChannel('unused/history-close-order')),
+          appHistoryBackend: backend,
+          readExtensions: () => []);
+      settings.appHistory.onCatalogChanged = () async {};
+      addTearDown(settings.dispose);
+      await tester.pumpWidget(MaterialApp(
+          theme: AppStyle.theme,
+          home: Scaffold(
+              body: SettingsScreen(
+                  controller: settings, onClose: settings.prepareClose))));
+      final write = settings.appHistory.configure('idea', '/bad/path');
+      if (finishBeforeClose) {
+        backend.gate!.complete();
+        expect(await write, isFalse);
+      }
+      final closing = settings.prepareClose();
+      expect(identical(closing, settings.prepareClose()), isTrue);
+      if (!finishBeforeClose) {
+        await tester.pump();
+        expect(find.byType(AlertDialog), findsNothing);
+        backend.gate!.complete();
+      }
+      await tester.pumpAndSettle();
+      expect(await write, isFalse);
+      expect(find.byType(AlertDialog), findsOneWidget);
+      await tester.tap(find.text('Close without saving'));
+      await tester.pumpAndSettle();
+      expect(await closing, isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
   test('a failed history save prevents settings close', () async {
     final backend = Preferences()
       ..gate = Completer<void>()
@@ -557,7 +611,7 @@ void main() {
   });
 
   testWidgets(
-      'each app page stays on its source and shares row keyboard actions',
+      'history keeps source navigation without binding the more-actions shortcut',
       (tester) async {
     final backend = HistoryBackend();
     final active = AppHistorySession(backend,
@@ -584,6 +638,12 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
     await tester.pumpAndSettle();
+    expect(find.text('Copy path or URI'), findsNothing);
+    expect(backend.actionCalls, isEmpty);
+    expect(find.text('⌘K'), findsNothing);
+    await tester.tap(find.byType(AppMoreAction));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
     expect(find.text('Copy path or URI'), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
@@ -592,6 +652,78 @@ void main() {
     await tester.pumpAndSettle();
     expect(active.query.text, '');
     expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    active.dispose();
+  });
+
+  testWidgets(
+      'object actions use the host and reject delayed results for an edited query',
+      (tester) async {
+    const action = CandidateDto(
+        id: 'guarded-copy',
+        commandId: 'core.directory.copy',
+        kind: CandidateKindDto.action,
+        title: 'Copy Path',
+        score: 1,
+        availability: AvailabilityDto.enabled,
+        groupId: 'folder',
+        iconKey: 'copy',
+        menuPath: [],
+        contextKeys: [],
+        primaryAction: false);
+    final backend = HistoryBackend()..actionOverride = (_) async => [action];
+    final active =
+        AppHistorySession(backend, sourceId: 'idea', title: 'IDEA History');
+    final executed = <String>[];
+    active.bindHost(ToolPageHost(
+        sessionId: 7,
+        revision: 3,
+        execute: (candidate) async {
+          executed.add(candidate.id);
+          return true;
+        }));
+    await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme,
+        home: Scaffold(
+            body: ListenableBuilder(
+                listenable: active,
+                builder: (context, _) => active.build(context,
+                    onBack: () {}, presentation: 1, visible: true)))));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(AppMoreAction));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+    expect(backend.actionCalls, ['7:3:1']);
+    expect(find.text('Copy Path'), findsOneWidget);
+    expect(find.text('Copy path or URI'), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(executed, ['guarded-copy']);
+    backend.actionOverride =
+        (_) async => throw StateError('unavailable object');
+    await tester.tap(find.byType(AppMoreAction));
+    await tester.pump(const Duration(milliseconds: 350));
+    await tester.pumpAndSettle();
+    expect(find.text('Copy path or URI'), findsOneWidget);
+    expect(find.text('Refresh'), findsOneWidget);
+    final reads = backend.calls.length;
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(backend.calls.length, reads + 1);
+    expect(active.failed, isFalse);
+    final pending = Completer<List<CandidateDto>>();
+    backend.actionOverride = (_) => pending.future;
+    final loading = active.prepareActions();
+    active.query.text = 'new query';
+    await tester.pump(const Duration(milliseconds: 150));
+    pending.complete([action]);
+    expect(await loading, isFalse);
+    await tester.pumpAndSettle();
+    expect(active.objectActions, isEmpty);
+    await active.runAction(action);
+    expect(executed, ['guarded-copy']);
+    expect(backend.calls.last, 'idea:new query');
     await tester.pumpWidget(const SizedBox());
     active.dispose();
   });
@@ -688,40 +820,48 @@ void main() {
     expect(backend.closed, 1);
   });
 
-  testWidgets(
-      'new queries reset selection while refresh preserves and reveals its identity',
-      (tester) async {
-    var rows = List.generate(40, (index) => item('$index'));
-    final backend = HistoryBackend()
-      ..searchOverride =
-          (_, __) async => AppHistoryDto(items: rows, failedSources: const []);
-    final session = AppHistorySession(backend,
-        sourceId: 'idea', title: 'IDEA Recent Projects');
-    await tester.pumpWidget(MaterialApp(
-        theme: AppStyle.theme,
-        home: Scaffold(
-            body: ListenableBuilder(
-                listenable: session,
-                builder: (context, _) => session.build(context,
-                    onBack: () {}, presentation: 1, visible: true)))));
-    await tester.pumpAndSettle();
-    session.select(20);
-    rows = [...List.generate(10, (index) => item('new-$index')), ...rows];
-    await session.refresh();
-    await tester.pumpAndSettle();
-    expect(session.selected?.objectKey, '20');
-    expect(session.selectedIndex, 30);
-    expect(session.scroll.offset, greaterThan(0));
-    expect(session.scroll.offset + session.scroll.position.viewportDimension,
-        greaterThanOrEqualTo(31 * 64));
-    session.query.text = 'new query';
-    await tester.pump(const Duration(milliseconds: 130));
-    await tester.pumpAndSettle();
-    expect(session.selectedIndex, 0);
-    expect(session.scroll.offset, 0);
-    await tester.pumpWidget(const SizedBox());
-    session.dispose();
-  });
+  for (final rowExtent in [52.0, 80.0]) {
+    testWidgets(
+        'refresh preserves and reveals identity with row height $rowExtent',
+        (tester) async {
+      var rows = List.generate(40, (index) => item('$index'));
+      final backend = HistoryBackend()
+        ..searchOverride = (_, __) async =>
+            AppHistoryDto(items: rows, failedSources: const []);
+      final session = AppHistorySession(backend,
+          sourceId: 'idea',
+          title: 'IDEA Recent Projects',
+          rowExtent: rowExtent);
+      await tester.pumpWidget(MaterialApp(
+          theme: AppStyle.theme,
+          home: Scaffold(
+              body: ListenableBuilder(
+                  listenable: session,
+                  builder: (context, _) => session.build(context,
+                      onBack: () {}, presentation: 1, visible: true)))));
+      await tester.pumpAndSettle();
+      session.select(20);
+      rows = [...List.generate(10, (index) => item('new-$index')), ...rows];
+      await session.refresh();
+      await tester.pumpAndSettle();
+      expect(session.selected?.objectKey, '20');
+      expect(session.selectedIndex, 30);
+      expect(session.scroll.offset, greaterThan(0));
+      expect(session.scroll.offset + session.scroll.position.viewportDimension,
+          greaterThanOrEqualTo(31 * rowExtent));
+      final viewport = tester.getRect(find.byType(ListView));
+      final selected = tester.getRect(find.text(session.selected!.title));
+      expect(selected.top, greaterThanOrEqualTo(viewport.top));
+      expect(selected.bottom, lessThanOrEqualTo(viewport.bottom));
+      session.query.text = 'new query';
+      await tester.pump(const Duration(milliseconds: 130));
+      await tester.pumpAndSettle();
+      expect(session.selectedIndex, 0);
+      expect(session.scroll.offset, 0);
+      await tester.pumpWidget(const SizedBox());
+      session.dispose();
+    });
+  }
 
   test('settings serializes writes and closing waits for the final readback',
       () async {

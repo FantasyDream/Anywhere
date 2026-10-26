@@ -337,15 +337,15 @@ class LauncherViewState {
         if (canBrowseMenus) const LauncherEntry.menu([]),
       ];
     }
-    // No applications on Context Home; app menus only contribute a small shortlist.
+    // Rust ranks every applicable action. Home only limits the visible rows;
+    // domain scopes retain the same order without a recommendation whitelist.
     final source = scopeId == null ? scopedCandidates : allActions;
-    final recommended = source
-        .where((candidate) =>
-            candidate.kind == CandidateKindDto.action && candidate.homeEligible)
+    final rankedPrefix = source
+        .where((candidate) => candidate.kind == CandidateKindDto.action)
         // Reserve room for the full-menu entry, including the Scope bar.
         .take(canBrowseMenus ? 5 : maxRows);
     return [
-      for (final candidate in recommended) LauncherEntry.candidate(candidate),
+      for (final candidate in rankedPrefix) LauncherEntry.candidate(candidate),
       if (canBrowseMenus) const LauncherEntry.menu([]),
     ];
   }

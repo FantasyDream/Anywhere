@@ -59,11 +59,13 @@ scripts/check-web-sdk.sh
 
 命令可在 Manifest 声明 `"accepts": ["core.text"], "inputMatchers": ["json"]`，并申请 `context.read` 的 `core.text` 类型。宿主在用户输入、选中文本或 15 秒内的新剪贴板内容中识别严格 JSON 对象 / 数组，匹配时只展示 Action；执行后通过 `host.invocation.get()` 传入原文。插件无需写识别代码，匹配期间不创建 WebView、不执行 JS。
 
-`json` 自动识别上限 16 KiB、128 层；不匹配标量、注释、尾随逗号或不完整 JSON。超限 / 无匹配时保持原唤醒规则，仍可搜索插件名称打开后手动输入。匹配结果仅在当前识别过程复用，不保存正文。未声明匹配器的包保持原行为；插件停用、卸载或撤销后停止自动匹配。普通搜索关键词仍不会当作插件输入。
+`json` 自动识别上限 16 KiB、128 层；不匹配标量、注释、尾随逗号或不完整 JSON。超限 / 无匹配时保持原唤醒规则；默认仍可搜索插件名称打开空工作区后手动输入。匹配结果仅在当前识别过程复用，不保存正文。未声明匹配器的包保持原行为；插件停用、卸载或撤销后停止自动匹配。普通搜索关键词仍不会当作插件输入。
 
 匹配器是宿主提供的有限格式规则，不接受插件 JS、正则或自定义 DSL；以后新增格式沿用同一声明入口。修改 Manifest 后需重新构建、导入并核对批准新的包摘要，宿主不会修改已批准安装内容。
 
 也可声明 `json_escaped`。它匹配带 / 不带外层引号的转义 JSON 容器，最多解开 4 层；编码原文仍受 16 KiB、解码容器受 128 层限制。它不匹配普通字符串 / 标量或已是正常 JSON 的对象，Invocation 保留编码原文。解码、格式化、复制仍由业务插件处理，Host 识别不执行插件代码。
+
+必须有匹配内容才能使用的命令可声明 `"requireInputMatch": true`（默认为 `false`），且必须设置 `inputMatchers`。此类命令不会提供无对象的名称搜索或快捷键入口；捕获内容不匹配时隐藏，执行前再次验证。JSON 示例的三个复制命令使用 `json` / `json_escaped`，去转义命令仅使用 `json_escaped`；Workspace 仍可独立打开。
 
 ### 原始 API（进阶集成，自行管理生命周期）
 
@@ -139,7 +141,7 @@ import '@anywhere/plugin-sdk/styles/controls.css';
 ```
 
 ```html
-<main class="aw-ui">
+<main class="aw-tool">
   <nav class="aw-toolbar">
     <div class="aw-actions">
       <button class="aw-button--primary">Run</button>
@@ -151,11 +153,24 @@ import '@anywhere/plugin-sdk/styles/controls.css';
 </main>
 ```
 
+生产插件的普通 HTML 默认继承主题，不需要导入样式，也不需要 `aw-ui` 包装。`button`、`input`、`select`、`textarea`、标题、链接、`hr` 和 `pre` / `code` 已有默认样式。页面 CSS 只负责布局或确实需要的局部例外。
+
 按钮、输入框、下拉框、键帽、卡片、焦点 / 悬停 / 禁用状态均使用 Host 的 `--aw-*` 参数。JSON Workspace 和无框架 Text Pad 都使用这份 CSS；各自 CSS 只处理工具布局。公共卡片内的编辑器自动继承单层表面，无需业务 CSS 再写透明背景。支持时页面保持透明，玻璃由原生窗口提供，不添加第二层模糊；不支持时使用同一套深色回退。
 
 编辑 / 查询工具可直接使用 `aw-workspace` → `aw-workspace-toolbar` / `aw-workspace-panes`，以及 `aw-pane`、`aw-pane-header`、`aw-pane-body`、`aw-editor`、`aw-pane-footer`。这些类提供与 File Search 一致的轻量工具栏、左宽右窄分栏、分隔线、代码字体 / 背景及留白；`aw-tabs` / `aw-tab` 的选中状态用 `aria-pressed` 表达。标题、返回、Esc 和宿主 Actions 仍由 Host 负责，不在插件里再绘制。
 
 `styles/tokens.css` 仅供独立浏览器预览使用，生产插件不要复制固定颜色覆盖 Host。插件仍可以自定义局部组件 CSS；根画布由 Host 统一管理，局部控件仍不要求第三方页面像素级一致。
+
+固定前缀输入使用共享组合控件，无需另外编写边框、字体或焦点样式：
+
+```html
+<div class="aw-input-group">
+  <span class="aw-input-prefix aw-code">this</span>
+  <input class="aw-code" aria-label="Expression" placeholder=".users.length">
+</div>
+```
+
+无效输入在组合容器上设置 `data-invalid="true"`，普通 UI 文字不加 `aw-code`；代码内容才使用等宽字体。类名只决定呈现，输入处理由插件业务负责。
 
 常用图标无需导入库或编写 SVG：
 

@@ -13,6 +13,7 @@ import '../settings/host_settings.dart';
 import '../settings/settings_controller.dart';
 import '../src/rust/api.dart';
 import '../tools/builtin_tool_pages.dart';
+import '../tools/object_action_coordinator.dart';
 import '../tools/tool_page.dart';
 import 'activation_flow.dart';
 import 'file_search_controller.dart';
@@ -22,7 +23,6 @@ import 'launcher_backend.dart';
 import 'launcher_navigation.dart';
 import 'launcher_session_coordinator.dart';
 import 'launcher_view_state.dart';
-import 'object_action_coordinator.dart';
 import 'shortcut_coordinator.dart';
 
 export '../infrastructure/application_icon_cache.dart' show LoadIcon;
@@ -75,7 +75,7 @@ class LauncherController extends ChangeNotifier {
           return;
         }
         final page = _toolPages.open(result);
-        _toolPage = page;
+        _pushToolPage(page);
         _message = result.warning;
         _notify();
         await _syncWindow();
@@ -185,11 +185,20 @@ class LauncherController extends ChangeNotifier {
   ActionStatusDto? _resultStatus;
   final ToolPageRegistry _toolPages;
   ToolPageSession? _page;
+  final List<ToolPageSession> _pageParents = [];
   ToolPageSession? get _toolPage => _page;
   set _toolPage(ToolPageSession? value) {
     if (identical(_page, value)) return;
     _page?.dispose();
+    for (final parent in _pageParents) {
+      parent.dispose();
+    }
+    _pageParents.clear();
     _page = value;
+    _bindToolPage(value);
+  }
+
+  void _bindToolPage(ToolPageSession? value) {
     final session = _session, revision = _revision;
     value?.bindInteraction(() =>
         !_disposed &&
@@ -197,6 +206,28 @@ class LauncherController extends ChangeNotifier {
         _phase == LauncherPhase.ready &&
         _session == session &&
         _revision == revision);
+    if (value != null && session != null) {
+      value.bindHost(ToolPageHost(
+          sessionId: session,
+          revision: revision,
+          execute: (candidate) => _executeCandidate(candidate, owner: value)));
+    }
+  }
+
+  void _pushToolPage(ToolPageSession value) {
+    // Nested results retain their parent, but must not grow an unbounded cache.
+    if (_pageParents.length >= 4) {
+      value.dispose();
+      throw StateError('Too many nested tool pages');
+    }
+    if (_page == null) {
+      _toolPage = value;
+      return;
+    }
+    _page!.setVisible(false);
+    _pageParents.add(_page!);
+    _page = value;
+    _bindToolPage(value);
   }
 
   bool _userMoved = false, _disposed = false;
@@ -531,6 +562,7 @@ class LauncherController extends ChangeNotifier {
       ++_generation;
       _shortcuts.invalidate();
       _phase = LauncherPhase.hidden;
+      _page?.setVisible(false);
       _activation.stopPrefill();
       files.invalidateOperations();
       _objectActions.invalidate();
@@ -640,6 +672,7 @@ class LauncherController extends ChangeNotifier {
         await update(_input, automatic: true);
       }
       _retainedPhase = null;
+      _page?.setVisible(true);
       _notify();
       await _syncWindow(show: true);
       unawaited(_follow(generation, session));
@@ -1216,34 +1249,41 @@ class LauncherController extends ChangeNotifier {
     return null;
   }
 
-  Future<void> _executeCandidate(CandidateDto candidate) async {
+  Future<bool> _executeCandidate(CandidateDto candidate,
+      {ToolPageSession? owner}) async {
     final state = _snapshot;
     if (_phase != LauncherPhase.ready ||
-        _toolPage != null ||
+        (owner == null
+            ? _toolPage != null
+            : !identical(_toolPage, owner) || owner.disposed) ||
         state == null ||
         state.revision != _revision) {
-      return;
+      return false;
     }
     if (candidate.availability != AvailabilityDto.enabled) {
       _message = candidate.availabilityReason ??
           'This action is not available right now.';
       _notify();
       await _syncWindow();
-      return;
+      return false;
     }
     final generation = _generation, revision = _revision;
     _activation.stopPrefill();
     _phase = LauncherPhase.executing;
+    _message = null;
     _notify();
+    var succeeded = false;
     try {
       final result =
           await _backend.execute(state.sessionId, revision, candidate.id);
       if (!_current(generation) ||
           revision != _revision ||
           result.sessionId != state.sessionId ||
-          result.revision != revision) {
-        return;
+          result.revision != revision ||
+          (owner != null && (!identical(_page, owner) || owner.disposed))) {
+        return false;
       }
+      succeeded = result.status == ActionStatusDto.succeeded;
       if (result.status == ActionStatusDto.succeeded &&
           hostViews.accepts(result.view)) {
         _phase = LauncherPhase.ready;
@@ -1264,7 +1304,7 @@ class LauncherController extends ChangeNotifier {
           }
         } catch (_) {
           if (!_current(generation) || revision != _revision) {
-            return;
+            return false;
           }
           _message =
               'Task started. Open Running Tasks from the menu bar to view it.';
@@ -1275,18 +1315,21 @@ class LauncherController extends ChangeNotifier {
           result.closeWindow) {
         await dismiss();
       } else {
-        _message = result.executionSessionId != null && result.warning != null
-            ? 'Task started. ${result.warning} Open Running Tasks from the menu bar to view it.'
-            : result.warning ?? result.error;
+        _message = owner != null
+            ? null
+            : result.executionSessionId != null && result.warning != null
+                ? 'Task started. ${result.warning} Open Running Tasks from the menu bar to view it.'
+                : result.warning ?? result.error;
         _output = result.outputText;
         _resultStatus = result.status;
-        if (_output != null) _toolPage = _toolPages.openResult(result);
+        if (_output != null) _pushToolPage(_toolPages.openResult(result));
         _notify();
         await _syncWindow();
       }
     } catch (error) {
-      if (!_current(generation) || revision != _revision) return;
-      _message = '$error';
+      succeeded = false;
+      if (!_current(generation) || revision != _revision) return false;
+      _message = owner == null ? '$error' : null;
       _notify();
       await _syncWindow();
     } finally {
@@ -1295,6 +1338,7 @@ class LauncherController extends ChangeNotifier {
         _notify();
       }
     }
+    return succeeded;
   }
 
   void move(int direction) {
@@ -1355,11 +1399,27 @@ class LauncherController extends ChangeNotifier {
 
   void back() {
     if (_output == null && _toolPage == null) return;
-    _toolPage = null;
+    if (_pageParents.isEmpty) {
+      _toolPage = null;
+    } else {
+      _page?.dispose();
+      _page = _pageParents.removeLast();
+      _page!.setVisible(true);
+    }
+    _message = null;
     _output = null;
     _resultStatus = null;
     _notify();
-    unawaited(_syncWindow());
+    final parent = _page;
+    unawaited(_syncWindow().then((_) {
+      if (!_disposed &&
+          parent != null &&
+          identical(_page, parent) &&
+          view.visible) {
+        ++_windowPresentation;
+        _notify();
+      }
+    }));
   }
 
   Future<void> copyResult() async {

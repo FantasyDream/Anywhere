@@ -4,7 +4,15 @@ use serde_json::{json, Value};
 use std::{fs, path::Path};
 
 fn definition(id: &str) -> Value {
-    json!({"schema":1,"id":id,"title":"Example Editor","applications":["example.editor"],"file_hint":"history.json","action":{"title":"Example History"},"reader":{"format":"json"}})
+    json!({
+        "schema": 1,
+        "id": id,
+        "title": "Example Editor",
+        "applications": ["example.editor"],
+        "file_hint": "history.json",
+        "action": {"title": "Example History"},
+        "reader": {"format": "json"},
+    })
 }
 fn write(root: &Path, folder: &str, value: &Value, script: Option<&str>) {
     let path = root.join(folder);
@@ -19,6 +27,31 @@ fn storage() -> Arc<dyn crate::core::storage::ExtensionStorage> {
         .unwrap()
         .bind("application_history")
         .unwrap()
+}
+
+#[test]
+fn discovery_overrides_keep_both_roots_bounded_and_do_not_inherit_unrelated_locations() {
+    let catalog = SourceCatalog::bundled_with_config_directory(None).unwrap();
+    let original = catalog
+        .packages
+        .iter()
+        .find(|p| p.manifest.id == "vscode")
+        .unwrap();
+    let manifest = serde_json::to_value(&original.manifest).unwrap();
+    let mut inherited = manifest.clone();
+    inherited.as_object_mut().unwrap().remove("config_paths");
+    inherited.as_object_mut().unwrap().remove("home_paths");
+    let package = definition::resolve(inherited.clone(), None, &catalog.packages).unwrap();
+    assert_eq!(package.manifest.home_paths, original.manifest.home_paths);
+    inherited["config_paths"] = json!(["Custom/state.vscdb"]);
+    let package = definition::resolve(inherited, None, &catalog.packages).unwrap();
+    assert!(package.manifest.home_paths.is_empty());
+    let mut invalid = manifest.clone();
+    invalid["home_paths"] = json!(["../outside/state.vscdb"]);
+    assert!(definition::resolve(invalid, None, &catalog.packages).is_err());
+    let mut invalid = manifest;
+    invalid["home_paths"] = json!(vec!["safe/file"; 8]);
+    assert!(definition::resolve(invalid, None, &catalog.packages).is_err());
 }
 
 #[test]

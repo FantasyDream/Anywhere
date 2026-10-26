@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../infrastructure/application_history_backend.dart';
 import '../../src/rust/api.dart';
+import '../../tools/object_action_coordinator.dart';
 import '../../tools/tool_page.dart';
 import 'page.dart';
 
@@ -11,12 +12,15 @@ class AppHistorySession extends ToolPageSession {
   AppHistorySession(this.backend,
       {required this.sourceId,
       required this.title,
+      this.rowExtent = 64,
       this.localizedTitles = const {}}) {
     query.addListener(_changed);
     unawaited(refresh());
   }
   final AppHistoryQueryBackend backend;
   final String sourceId;
+  final double rowExtent;
+  final _actionRequests = ObjectActionCoordinator();
   @override
   final String title;
   final Map<String, String> localizedTitles;
@@ -25,6 +29,7 @@ class AppHistorySession extends ToolPageSession {
   final focus = FocusNode(debugLabel: 'app-history-search');
   final scroll = ScrollController();
   List<AppHistoryItemDto> items = const [];
+  List<CandidateDto> objectActions = const [];
   AppHistoryNoticeDto? notice;
   bool loading = true, busy = false, failed = false, copied = false;
   int selectedIndex = 0, _revision = 0;
@@ -44,6 +49,11 @@ class AppHistorySession extends ToolPageSession {
   @override
   double get height => 520;
 
+  void _invalidateActions() {
+    _actionRequests.invalidate();
+    objectActions = const [];
+  }
+
   void _cancelRead() {
     // Every earlier cancel must finish before the next read. Awaiting only the
     // latest Future permits an older native callback to cancel that new read.
@@ -57,6 +67,7 @@ class AppHistorySession extends ToolPageSession {
     if (composing) {
       if (!_composing) {
         ++_revision;
+        _invalidateActions();
         _debounce?.cancel();
         _cancelRead();
       }
@@ -67,6 +78,7 @@ class AppHistorySession extends ToolPageSession {
     _composing = false;
     if (!committed && query.text == _lastText) return;
     _lastText = query.text;
+    _invalidateActions();
     ++_revision;
     _resetSelection = true;
     copied = false;
@@ -78,9 +90,11 @@ class AppHistorySession extends ToolPageSession {
         Timer(const Duration(milliseconds: 120), () => unawaited(refresh()));
   }
 
+  @override
   void setVisible(bool visible) {
     if (_visible == visible || disposed) return;
     _visible = visible;
+    _invalidateActions();
     ++_revision;
     _debounce?.cancel();
     if (visible) {
@@ -101,6 +115,7 @@ class AppHistorySession extends ToolPageSession {
       return;
     }
     _running = true;
+    _invalidateActions();
     loading = true;
     notifyListeners();
     do {
@@ -152,6 +167,7 @@ class AppHistorySession extends ToolPageSession {
   void select(int index) {
     if (!interactive || items.isEmpty) return;
     selectedIndex = index.clamp(0, items.length - 1);
+    _invalidateActions();
     copied = false;
     _revealSelection();
     notifyListeners();
@@ -159,7 +175,7 @@ class AppHistorySession extends ToolPageSession {
 
   void movePage(int direction) {
     final rows = scroll.hasClients
-        ? (scroll.position.viewportDimension / 64).floor().clamp(1, 100)
+        ? (scroll.position.viewportDimension / rowExtent).floor().clamp(1, 100)
         : 6;
     select(selectedIndex + rows * direction);
   }
@@ -169,11 +185,79 @@ class AppHistorySession extends ToolPageSession {
     if (item != null) await useItem(copy: !item.canOpen);
   }
 
+  Future<bool> prepareActions() async {
+    final item = selected, owner = host;
+    if (!interactive || loading) return false;
+    _invalidateActions();
+    if (item == null || !item.canOpen || owner == null) return true;
+    final revision = _revision;
+    bool current() =>
+        !disposed &&
+        revision == _revision &&
+        selected?.id == item.id &&
+        _visible &&
+        canInteract;
+    busy = true;
+    failed = false;
+    notifyListeners();
+    try {
+      final actions = await _actionRequests.load(
+          () => backend.actions(item.id,
+              sessionId: owner.sessionId, revision: owner.revision),
+          current);
+      if (actions == null || !current()) {
+        return false;
+      }
+      objectActions = List.unmodifiable(actions);
+      return true;
+    } catch (_) {
+      if (current()) {
+        // Unavailable enrichment must not hide Copy / Refresh recovery actions.
+        failed = true;
+        return true;
+      }
+      return false;
+    } finally {
+      _finishOperation();
+    }
+  }
+
+  Future<void> runAction(CandidateDto action) async {
+    final owner = host;
+    if (!interactive ||
+        loading ||
+        owner == null ||
+        !objectActions.any((a) => a.id == action.id)) {
+      return;
+    }
+    busy = true;
+    failed = false;
+    notifyListeners();
+    final revision = _revision;
+    try {
+      final succeeded = await owner.execute(action);
+      if (!disposed && revision == _revision) failed = !succeeded;
+    } catch (_) {
+      if (!disposed && revision == _revision) failed = true;
+    } finally {
+      _finishOperation();
+    }
+  }
+
+  void _finishOperation() {
+    if (disposed) return;
+    busy = false;
+    notifyListeners();
+    if (_again && interactive && _debounce?.isActive != true) {
+      unawaited(refresh());
+    }
+  }
+
   void _revealSelection() {
     if (scroll.hasClients) {
-      final top = selectedIndex * 64.0;
+      final top = selectedIndex * rowExtent;
       if (top < scroll.offset ||
-          top + 64 > scroll.offset + scroll.position.viewportDimension) {
+          top + rowExtent > scroll.offset + scroll.position.viewportDimension) {
         scroll.jumpTo(top.clamp(0, scroll.position.maxScrollExtent));
       }
     }
@@ -195,13 +279,7 @@ class AppHistorySession extends ToolPageSession {
     } catch (_) {
       if (!disposed && revision == _revision) failed = true;
     } finally {
-      if (!disposed) {
-        busy = false;
-        notifyListeners();
-        if (_again && interactive && _debounce?.isActive != true) {
-          unawaited(refresh());
-        }
-      }
+      _finishOperation();
     }
   }
 
@@ -216,10 +294,12 @@ class AppHistorySession extends ToolPageSession {
           session: this,
           onBack: onBack,
           presentation: presentation,
-          visible: visible);
+          visible: visible,
+          hostNotice: notice);
   @override
   void dispose() {
     ++_revision;
+    _actionRequests.invalidate();
     _debounce?.cancel();
     unawaited(backend.close().catchError((Object _) {}));
     query.dispose();

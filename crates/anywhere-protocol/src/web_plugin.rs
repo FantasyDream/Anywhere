@@ -70,6 +70,9 @@ pub struct WebCommand {
     /// Host-owned content recognition. No plugin code runs during search or capture.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub input_matchers: Vec<WebInputMatcher>,
+    /// Hide commands that cannot run without recognized content, including keyword search.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub require_input_match: bool,
     pub entrypoint: String,
 }
 

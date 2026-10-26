@@ -1,0 +1,70 @@
+{
+  "date": "2026-10-26",
+  "version": "0.14.0+16",
+  "source_base_commit": "fd1e70d5be100c899394bf01906bb1bfd9bf6f5f",
+  "working_tree_changes": true,
+  "scope": "Final code/documentation cleanup; no new product features",
+  "code_cleanup": [
+    "Removed unused SourceCatalog::bundled production constructor",
+    "Kept explicit-root source fixtures; made other fixture constructors test-only and private",
+    "Restricted validated history callbacks to the core crate",
+    "Named history sorting fields instead of positional tuple access and consolidated empty results",
+    "Removed stale Cmd+K and recommendation comments; clarified relevance score versus exact usage ordering",
+    "Updated the older weighted-score test to cover a keyword tier instead of implying it defines Home ordering",
+    "Expanded dense source fixtures for readability"
+  ],
+  "documentation": [
+    "Added root AGENTS.md with code map, native host boundary, navigation and validation rules",
+    "Rewrote application-history.md around implemented fields, source-local queries and actual keyboard behavior",
+    "Moved the original V0.14 plan and Build 1-15 chronology to docs/archive/v0.14-development-records.md",
+    "Reduced the current MVP to implemented scope, explicit limits, code entry points and evidence",
+    "Aligned README, contribution/development entry points, docs index, roadmap, changelog and source guide",
+    "Separated Launcher Usage, external application history and clipboard history; separated action ranking from source-entry ordering"
+  ],
+  "automated": {
+    "full_gate": "scripts/check.sh",
+    "exit_code": 0,
+    "log": "build/v0.14-closeout16-check.log",
+    "core": {
+      "passed": 305,
+      "ignored_existing": 1
+    },
+    "mvp": {
+      "passed": 195,
+      "ignored_existing": 4
+    },
+    "flutter_passed": 428,
+    "native_web_clippy_architecture_style_generated_checks": "passed",
+    "targeted_history_and_ranking_regressions": "passed",
+    "final_document_check": "passed",
+    "diff_whitespace_check": "passed"
+  },
+  "package": {
+    "app": "build/Anywhere-0.14-preview-build16.app",
+    "zip": "build/Anywhere-0.14-preview-build16-macos-arm64.zip",
+    "sha256": "cb473974bd56a2e4c0f8f3f23ab585bfc21efc46c134e08bb98d03257774fd62",
+    "persistent_signature_and_archive_checks": "passed",
+    "impeller": true,
+    "release_published": false
+  },
+  "native": {
+    "old_build15_exited": true,
+    "only_build16_process_confirmed": true,
+    "launch_current_app_candidate_list_observed": true,
+    "captured_application": "ChatGPT",
+    "external_application_actions_executed": false,
+    "scope": "startup and candidate presentation smoke only",
+    "full_application_matrix_physical_ime_and_memory": "not reverified"
+  },
+  "remaining": [
+    "Explicit multi-install/Profile selection is not implemented; unique-application safe fallback remains",
+    "Obsidian recent files deferred; current source is recent vaults",
+    "Browser history/bookmarks/tabs remain a separate unimplemented phase",
+    "Full native application/version/permission/opening matrix and formal release acceptance remain unverified"
+  ],
+  "git": {
+    "branch": "codex/dev-0.14",
+    "committed": false,
+    "next_branch_created": false
+  }
+}

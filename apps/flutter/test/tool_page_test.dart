@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/launcher/launcher_controller.dart';
 import 'package:anywhere/launcher/launcher_screen.dart';
 import 'package:anywhere/launcher/launcher_view_state.dart';
 import 'package:anywhere/src/rust/api.dart';
+import 'package:anywhere/tools/detail_tool.dart';
 import 'package:anywhere/tools/tool_page.dart';
 import 'package:anywhere/tools/tool_page_shell.dart';
 import 'package:anywhere/ui/app_components.dart';
@@ -14,6 +17,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'launcher_fixtures.dart';
 
 class EditorSession extends ToolPageSession {
+  final visibility = <bool>[];
+  @override
+  void setVisible(bool visible) {
+    visibility.add(visible);
+  }
+
   final input = TextEditingController(text: 'Initial');
   final focus = FocusNode();
   @override
@@ -85,7 +94,8 @@ void main() {
             closeWindow: false)),
         throwsStateError);
   });
-  LauncherController controller(int Function() now) {
+  LauncherController controller(int Function() now,
+      {Completer<ActionResultDto>? objectResult}) {
     var session = 0;
     LauncherStateDto? held;
     const candidate = CandidateDto(
@@ -99,12 +109,12 @@ void main() {
         iconKey: 'code',
         menuPath: [],
         contextKeys: [],
-        homeEligible: true,
         primaryAction: false);
     return LauncherController(
         window: WindowHost(channel),
         nowMillis: now,
-        toolPages: ToolPageRegistry(pages),
+        toolPages: ToolPageRegistry(
+            [...pages, ...detailPages.where((p) => p.id == 'result.detail')]),
         backend: LauncherBackend(
           beginActivation: () => ++session,
           activate: (id,
@@ -128,17 +138,113 @@ void main() {
                   diagnostics: [],
                   input: text,
                   candidates: [candidate]),
-          execute: (id, revision, _) async => ActionResultDto(
-              sessionId: id,
-              revision: revision,
-              status: ActionStatusDto.succeeded,
-              view: HostViewDto.pluginDetail,
-              closeWindow: false),
+          execute: (id, revision, candidateId) async =>
+              candidateId == 'test-object-result'
+                  ? objectResult != null
+                      ? await objectResult.future
+                      : ActionResultDto(
+                          sessionId: id,
+                          revision: revision,
+                          status: ActionStatusDto.succeeded,
+                          outputText: 'Object output',
+                          closeWindow: false)
+                  : ActionResultDto(
+                      sessionId: id,
+                      revision: revision,
+                      status: ActionStatusDto.succeeded,
+                      view: HostViewDto.pluginDetail,
+                      closeWindow: false),
           deactivate: (_) async {},
           suspend: (_) async {},
           resume: (_) async => held,
         ));
   }
+
+  testWidgets(
+      'nested action results retain the parent and revoke a popped page host',
+      (tester) async {
+    final host = controller(() => 0);
+    addTearDown(host.dispose);
+    await tester
+        .pumpWidget(MaterialApp(home: LauncherScreen(controller: host)));
+    await host.activate(mode: WakeMode.universal);
+    await host.update('editor');
+    await host.executeSelected();
+    await tester.pumpAndSettle();
+    final parent = host.view.toolPage! as EditorSession;
+    parent.input.text = 'retained object query';
+    const action = CandidateDto(
+        id: 'test-object-result',
+        kind: CandidateKindDto.action,
+        title: 'Object action',
+        score: 1,
+        availability: AvailabilityDto.enabled,
+        groupId: 'test',
+        iconKey: 'copy',
+        menuPath: [],
+        contextKeys: [],
+        primaryAction: false);
+    expect(await parent.host!.execute(action), isTrue);
+    await tester.pumpAndSettle();
+    final child = host.view.toolPage!;
+    final childHost = child.host!;
+    expect(child.id, 'result.detail');
+    expect(parent.disposed, isFalse);
+    expect(parent.canInteract, isFalse);
+    host.back();
+    await tester.pumpAndSettle();
+    expect(child.disposed, isTrue);
+    expect(host.view.toolPage, same(parent));
+    expect(parent.input.text, 'retained object query');
+    expect(parent.focus.hasFocus, isTrue);
+    expect(await childHost.execute(action), isFalse);
+    host.back();
+    await tester.pumpAndSettle();
+    expect(parent.disposed, isTrue);
+    expect(host.view.input, 'editor');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('leaving a page rejects its late action result', (tester) async {
+    final result = Completer<ActionResultDto>();
+    final host = controller(() => 0, objectResult: result);
+    addTearDown(host.dispose);
+    await tester
+        .pumpWidget(MaterialApp(home: LauncherScreen(controller: host)));
+    await host.activate(mode: WakeMode.universal);
+    await host.update('editor');
+    await host.executeSelected();
+    await tester.pumpAndSettle();
+    final parent = host.view.toolPage!;
+    final port = parent.host!;
+    const action = CandidateDto(
+        id: 'test-object-result',
+        kind: CandidateKindDto.action,
+        title: 'Object action',
+        score: 1,
+        availability: AvailabilityDto.enabled,
+        groupId: 'test',
+        iconKey: 'copy',
+        menuPath: [],
+        contextKeys: [],
+        primaryAction: false);
+    final running = port.execute(action);
+    await tester.pump();
+    host.back();
+    await tester.pump();
+    result.complete(ActionResultDto(
+        sessionId: port.sessionId,
+        revision: port.revision,
+        status: ActionStatusDto.succeeded,
+        outputText: 'Late output',
+        closeWindow: false));
+    expect(await running, isFalse);
+    await tester.pumpAndSettle();
+    expect(parent.disposed, isTrue);
+    expect(host.view.toolPage, isNull);
+    expect(host.view.input, 'editor');
+    expect(find.text('Late output'), findsNothing);
+  });
 
   testWidgets('native editor focus, IME, retention and return use shared rules',
       (tester) async {
@@ -166,10 +272,13 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     expect(page.focus.hasFocus, isTrue);
     await host.dismiss(hostAlreadyHidden: true);
+    expect(page.visibility.last, isFalse,
+        reason: 'suspend the page before another Flutter frame');
     await tester.pump();
     expect(page.canInteract, isFalse);
     now = 14000;
     await host.activate();
+    expect(page.visibility.last, isTrue);
     await tester.pump();
     await tester.pump();
     expect(host.view.toolPage, same(page));

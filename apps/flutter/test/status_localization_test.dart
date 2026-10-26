@@ -39,7 +39,6 @@ const file = CandidateDto(
     title: 'test.txt',
     menuPath: [],
     contextKeys: [],
-    homeEligible: false,
     primaryAction: true,
     iconKey: 'file',
     score: 1,

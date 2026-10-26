@@ -117,13 +117,15 @@ await plugin.host.clipboard.writeText(input.value);
 
 Host 会识别输入、选中文本和 15 秒内新复制内容中的 JSON，展示对应 Action；用户执行后才将原文传入页面，插件不用编写识别器。
 
+若命令必须依赖有效内容（例如复制格式化 JSON），再声明 `"requireInputMatch": true`。此时必须提供 `inputMatchers`，无匹配内容时连名称搜索与无对象快捷键入口也不显示，执行前再次复验。默认值为 `false`，适合仍可空白打开的工作区。
+
 `json` 识别严格 JSON **对象 / 数组**；`json_escaped` 识别经过字符串编码的对象 / 数组（允许省略外层引号，最多 4 层）。自动识别最多 16 KiB 原文、解码后 128 层；标量、不完整内容、注释和尾随逗号不匹配。识别期间不启动 WebView，Invocation 保留原文，具体解码由插件实现。不要另写监听剪贴板的代码。
 
 ## 5. 界面与生命周期
 
 - **背景自动适配**：无需权限、API 或背景 CSS。不要给根节点设置不透明背景或覆盖 Host 的 `color-scheme`。
 - **窗口由 Host 提供**：不用再画标题栏、关闭按钮、搜索框或返回按钮。
-- 推荐直接保留模板的 `aw-tool`；需要自定义布局时使用 `aw-ui`、`aw-toolbar`、`aw-actions`、`aw-card`、`aw-muted`；按钮与输入框使用共享样式。
+- **默认控件样式**：普通 HTML 自动继承 Host 的字体、颜色和控件外观，无需样式导入或 `aw-ui` 包装。模板的 `aw-tool` 提供页面留白；组合输入和分栏复用 [SDK 公共类](../packages/plugin-sdk/README.md#统一样式)，局部 CSS 只负责业务布局或例外。
 - 编辑器 / 查询工具可用 `aw-workspace`、`aw-workspace-toolbar`、`aw-workspace-panes`、`aw-pane` 和 `aw-editor`；分栏与代码区域跟随 File Search 的共享设计，不用再画两张独立大卡片。完整类名见 SDK README。
 - 自定义局部组件时使用 `--aw-text`、`--aw-secondary`、`--aw-surface`、`--aw-border`、`--aw-accent` 等 CSS 变量。
 - 常用图标也由 Host 提供，例如 `<button><span class="aw-icon aw-icon--copy" aria-hidden="true"></span>复制</button>`。无需图标依赖或样式代码；保留文字标签，仅图标按钮须提供 `aria-label`。完整列表见 SDK README。

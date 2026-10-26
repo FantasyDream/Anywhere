@@ -103,6 +103,7 @@ impl WebPluginCatalog {
                     command_id: command.id.clone(),
                     registration: entry.token.clone(),
                     input_matchers: command.input_matchers.clone().into(),
+                    require_input_match: command.require_input_match,
                 };
                 let action = ActionDefinition {
                     localized_titles: Default::default(),
@@ -114,7 +115,10 @@ impl WebPluginCatalog {
                         .accepts
                         .iter()
                         .map(String::as_str)
-                        .chain(std::iter::once(crate::features::tools::ENTRY_CONTEXT))
+                        .chain(
+                            (!command.require_input_match)
+                                .then_some(crate::features::tools::ENTRY_CONTEXT),
+                        )
                         .map(|type_id| ContextMatcher {
                             type_id: type_id.into(),
                         })
@@ -131,7 +135,6 @@ impl WebPluginCatalog {
                     keywords: command.keywords.clone(),
                     owning_app: None,
                     menu_path: vec![],
-                    home_eligible: false,
                     primary_action: false,
                     search_title: None,
                 };

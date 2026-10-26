@@ -29,6 +29,7 @@ mod app_actions;
 mod shortcuts;
 pub use shortcuts::{BindingResolution, ShortcutAction, ShortcutApplication, ShortcutRoute};
 
+mod history_object_actions;
 mod object_actions;
 
 pub mod input_policy;

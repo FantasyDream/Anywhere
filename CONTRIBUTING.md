@@ -4,7 +4,7 @@
 
 ## 开始之前
 
-1. 阅读[项目状态](README.md#项目状态)、[路线图](docs/roadmap.md)和[架构](docs/architecture.md)。较大的交互、协议或架构调整先开 Issue 讨论。
+1. 从 [AGENTS.md](AGENTS.md) 定位模块；阅读[项目状态](README.md#项目状态)、[路线图](docs/roadmap.md)和[架构](docs/architecture.md)。较大的交互、协议或架构调整先开 Issue 讨论。
 2. 按[开发指南](docs/development.md)准备工具并构建。普通修改使用已提交的生成绑定；只有接口变化才重新生成。
 3. 从最新 `main` 创建工作分支，PR 默认合并到 `main`；专项开发分支另有安排时，在 PR 中明确目标和依赖。
 

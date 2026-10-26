@@ -34,7 +34,6 @@ void main() {
           title: 'Action for $app',
           menuPath: const [],
           contextKeys: const [],
-          homeEligible: true,
           primaryAction: true,
           iconKey: 'application',
           score: 100,

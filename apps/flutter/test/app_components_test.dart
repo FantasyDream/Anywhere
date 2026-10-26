@@ -1,5 +1,6 @@
 import 'dart:ui' show PointerDeviceKind, Tristate;
 
+import 'package:anywhere/infrastructure/desktop_environment.dart';
 import 'package:anywhere/settings/settings_components.dart';
 import 'package:anywhere/ui/app_components.dart';
 import 'package:anywhere/ui/app_style.dart';
@@ -8,6 +9,62 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  testWidgets('ordinary page controls inherit the shared defaults',
+      (tester) async {
+    var calls = 0;
+    await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme,
+        home: Scaffold(
+            appBar: AppBar(title: const Text('Default page')),
+            body: Column(children: [
+              const TextField(),
+              Row(children: [
+                TextButton(onPressed: () => calls++, child: const Text('Text')),
+                OutlinedButton(
+                    onPressed: () => calls++, child: const Text('Outlined')),
+                FilledButton(
+                    onPressed: () => calls++, child: const Text('Filled')),
+                ElevatedButton(
+                    onPressed: () => calls++, child: const Text('Elevated')),
+              ]),
+              const Card(child: Text('Standard card')),
+              const AppCard(child: Text('Shared card')),
+            ]))));
+    final title = tester.widget<RichText>(find.descendant(
+        of: find.text('Default page'), matching: find.byType(RichText)));
+    expect(title.text.style!.fontSize, AppStyle.pageHeading.fontSize);
+    expect(title.text.style!.fontFamily, DesktopEnvironment.current.fontFamily);
+    final input = tester.widget<EditableText>(find.byType(EditableText));
+    expect(input.style.fontSize, AppStyle.body.fontSize);
+    expect(input.style.fontFamily, title.text.style!.fontFamily);
+    final sizes = [
+      for (final type in [
+        TextButton,
+        OutlinedButton,
+        FilledButton,
+        ElevatedButton
+      ])
+        tester.getSize(find.byType(type)).height
+    ];
+    expect(sizes.toSet(), hasLength(1));
+    expect(sizes.first, 24);
+    final surfaces = tester
+        .widgetList<Material>(find.descendant(
+            of: find.byType(Card), matching: find.byType(Material)))
+        .toList();
+    expect(surfaces, hasLength(2));
+    for (final surface in surfaces) {
+      expect(surface.color, AppStyle.card);
+      expect(surface.shape, surfaces.first.shape);
+      expect(surface.elevation, 0);
+    }
+    for (final label in ['Text', 'Outlined', 'Filled', 'Elevated']) {
+      await tester.tap(find.text(label));
+    }
+    expect(calls, 4);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('selected row stays distinct while pointer moves over it',
       (tester) async {
     var calls = 0;

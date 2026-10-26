@@ -70,7 +70,6 @@ impl BuiltinFeature for Feature {
                         icon: "clipboard-history",
                         aliases: &["clipboard", "history", "剪贴板", "剪切板", "复制历史"],
                         keywords: &[],
-                        home_eligible: false,
                         primary_action: false,
                     },
                     ActionSpec {
@@ -90,7 +89,6 @@ impl BuiltinFeature for Feature {
                             "常驻剪贴板",
                         ],
                         keywords: &[],
-                        home_eligible: false,
                         primary_action: false,
                     },
                 ],

@@ -1,6 +1,6 @@
 # 架构
 
-当前源码为 V0.14 应用历史原型，尚未收尾；最后核对：2026-10-25。使用入口见 [README](../README.md)，专题契约见 [文档导航](README.md)，当前验证程度见 [V0.14 技术方案](mvp-v0.14.md)。
+当前源码为 V0.14 开发预览，完整发布和实机矩阵未完成；最后核对：2026-10-26。使用入口见 [README](../README.md)，专题契约见 [文档导航](README.md)，当前验证程度见 [V0.14 技术方案](mvp-v0.14.md)。
 
 第一方能力是静态内置模块：模块声明 `FeatureDescriptor` 与 `registration.rs`，编译期生成目录，启动时绑定一次服务与贡献；设置刷新独立更新策略和业务数据。没有第一方热加载、目录重建或 `Any` 状态恢复框架。迁移过程仅保留在[历史路线图](archive/feature-module-roadmap.md)。
 
@@ -49,8 +49,9 @@ crates/anywhere-core/src/
 
 apps/flutter/lib/
 ├── launcher/       Controller、ActivationFlow、导航、Session / FileWorkspace 协调器
-│                   ShortcutCoordinator、ObjectActionCoordinator、HostViewNavigator
+│                   ShortcutCoordinator、HostViewNavigator
 ├── tools/          静态 ToolPageRegistry、ToolPageSession、共享 ToolPageShell
+│                   ObjectActionCoordinator（共享迟到结果 / 请求顺序）
 ├── features/       clipboard / application_history 的页面、展示会话与静态注册
 ├── plugins/        Legacy Detail / KeyValue 兼容 Body（纯数据）
 ├── web_plugins/    Web 页面、包管理、资源池、宿主弹层与生命周期
@@ -91,6 +92,8 @@ resources/                 键码、文件类型、运行策略、设计参数�
 | Feature policy snapshot | 内置功能开关 / 恢复资格，请求持有同一 Arc 身份 |
 | Host generation | 原生显示、隐藏与迟到回调 |
 
+空输入动作列表由 Rust 比较内存中的 Usage 原始计数和时间，再比较上下文 / 默认优先级分数及稳定 ID。关键词评分保持有界 Usage 和匹配优先；桥接不暴露首页资格字段，Flutter 只展示排序前缀，详见 [Launcher 交互契约](launcher-interaction.md)。
+
 发布采用“锁内复制不可变输入和版本 → 锁外匹配 / 排序 → 锁内复验并发布”。索引、历史和 Registry 共享不可变快照；并发提交改变输入时重新计算，旧 Session / Revision 的结果直接丢弃。
 
 执行仅接受当前已提交凭据，排队 worker 开始副作用前再次验证；进程计划生成后、spawn 前也检查版本。副作用成功后仍记 Usage，即使窗口已隐藏。菜单另有 discovery token，不能把可重扫的菜单 ActionId 当作永久身份；见 [菜单安全契约](current-app-actions.md)。
@@ -122,7 +125,7 @@ Flutter 的 `StableList` 共享 256 条不可变块，索引按块复用，仅�
 | Flutter `settings/clipboard_*` | 采集、定时暂停、保留期限、存储说明、清空、自动填入配置及异步保存协调 |
 | Native `ToolWindowController` | 悬浮窗置顶、生命周期和返回目标应用焦点 |
 
-剪贴板历史作为编译内 `clipboard` 模块贡献普通 Action，通过 `NativeTool` 路由到统一 `ToolPageRegistry`。`HistoryRepository` 声明存储契约，独立 SQLite 实现负责有界落盘与摘要查询；`HistoryService` 控制开关、采集代数、去重写入和清理期间的 epoch。系统读取在业务锁外完成，写入前复验 epoch。Platform 使用 clipboard-rs 统一格式读写；Windows / Linux 使用库的变化监听，macOS 通过有异常保护的原生 changeCount 每 500 ms 查询代数，退出时立即唤醒停止。Cocoa 异常在平台边界转换为不可用错误，不穿过 Rust 线程边界。一次复制的多种表示以 SQLite BLOB 保存，指纹去重并复验实际内容；旧纯文本 schema 事务迁移且保留 ID。缩略图解码在 Rust 生成并限制尺寸和分配，Flutter 只接收单条有界预览。正文不进入通用 Context / Usage，Host 不持有全部历史正文。Flutter 仅管理查询、选择与单条预览，并拒绝过期响应。独立悬浮窗由另一个普通 Action 路由到 `ToolWindowRegistration`，原生 `ToolWindowController` 负责置顶与生命周期，`ApplicationFocusReturner` 负责异步切回并确认目标应用已取得焦点。窗口按需创建独立 Flutter engine，调用共享 Rust Application 的同一 HistoryService，不重新初始化存储或开启采集；主历史页与 ClipboardShelfPage 共用 ClipboardHistorySession、列表和预览组件。窗口关闭销毁其 engine，最小化暂停摘要刷新；Launcher 的 15 秒保留规则不会关闭该窗口。采集开关、清空和唤醒自动填入统一位于 Settings → Clipboard，使用页后端仅暴露查询、详情、复制和单条删除；独立设置后端通过轻量状态 DTO 读取状态，不查询历史列表。设置关闭等待变更和读回完成。历史格式演进见 [V0.10 MVP](archive/mvp-v0.10.md)，当前交互见 [UI 契约](ui-design.md)。
+剪贴板历史作为编译内 `clipboard` 模块贡献普通 Action，通过 `NativeTool` 路由到统一 `ToolPageRegistry`。`HistoryRepository` 声明存储契约，独立 SQLite 实现负责有界落盘与摘要查询；`HistoryService` 控制开关、采集代数、去重写入和清理期间的 epoch。系统读取在业务锁外完成，写入前复验 epoch。Platform 使用 clipboard-rs 统一格式读写；Windows / Linux 使用库的变化监听，macOS 通过有异常保护的原生 changeCount 每 500 ms 查询代数，退出时立即唤醒停止。Cocoa 异常在平台边界转换为不可用错误，不穿过 Rust 线程边界。格式名最多 4 KiB，兼容 IDEA 等应用的长动态 UTI；不可保存的空、含 NUL 或超长附加格式在原生内容读取前跳过，整个条目仍维持 64 种格式 / 16 MiB 数据上限，敏感标记继续使整条采集跳过。一次复制的多种表示以 SQLite BLOB 保存，指纹去重并复验实际内容；旧纯文本 schema 事务迁移且保留 ID。缩略图解码在 Rust 生成并限制尺寸和分配，Flutter 只接收单条有界预览。正文不进入通用 Context / Usage，Host 不持有全部历史正文。Flutter 仅管理查询、选择与单条预览，并拒绝过期响应。独立悬浮窗由另一个普通 Action 路由到 `ToolWindowRegistration`，原生 `ToolWindowController` 负责置顶与生命周期，`ApplicationFocusReturner` 负责异步切回并确认目标应用已取得焦点。窗口按需创建独立 Flutter engine，调用共享 Rust Application 的同一 HistoryService，不重新初始化存储或开启采集；主历史页与 ClipboardShelfPage 共用 ClipboardHistorySession、列表和预览组件。窗口关闭销毁其 engine，最小化暂停摘要刷新；Launcher 的 15 秒保留规则不会关闭该窗口。采集开关、清空和唤醒自动填入统一位于 Settings → Clipboard，使用页后端仅暴露查询、详情、复制和单条删除；独立设置后端通过轻量状态 DTO 读取状态，不查询历史列表。设置关闭等待变更和读回完成。历史格式演进见 [V0.10 MVP](archive/mvp-v0.10.md)，当前交互见 [UI 契约](ui-design.md)。
 
 剪贴板界面通过功能目录内的 `registration.dart` 贡献页面 / 窗口工厂，`builtin_tool_pages.dart` 仅负责组合；Launcher 不判断剪贴板业务 ID。测试夹具位于 `test/support`，测试入口不互相导入。
 
@@ -140,13 +143,16 @@ Flutter 的 `StableList` 共享 256 条不可变块，索引按块复用，仅�
 | `features/application_history/model.rs` | 普通元数据、类型化目标与 SourceLoader 契约 |
 | `features/application_history/service.rs` | 默认安装开关、持久偏好与配置发布；部分修改在存储事务内合并 |
 | `features/application_history/service/query.rs` | 单一读取槽、可撤销页面会话、匹配与排序、结果发布 |
+| `application/history_object_actions.rs` | 对单个来源句柄按需解析 Context / Registry 动作，挂接内存执行守卫；不改变冻结 Current App |
 | `features/application_history/service/execution.rs` | 重新读取来源并核对 key / 目标，唯一来源应用分发；歧义或失效时拒绝 |
 | `persistence/application_history/` 与同名 `.rs` | 只读 JSON / XML / SQLite、有界配置读取与默认路径检测；不执行脚本 |
 | Flutter `features/application_history/` | 查询、IME、选择、更多操作与可见性；不解析来源文件或决定打开目标 |
 
 安装信息只在启动收集为默认开关的依据；手动偏好优先，不随其他来源保存而变成手动配置。关闭 Action 保留自定义路径，并同步统一候选和快捷键资格。配置定义在启动加载，修改后需重启；没有常驻 JS、文件监听或全量历史索引。
 
-设置 Controller 只持有来源筛选、路径草稿和保存反馈；切页 / 筛选不销毁草稿，关闭设置复用同一保存决策。保存路径与开启 Action 是独立操作，Rust 在事务内保留有效开关；未提交草稿不写入偏好，也不触发来源正文读取或目录发布。打开适配文件夹不作为配置变更发布。
+应用层的 `SettingsService.configure_application_history` / `set_application_history_action_enabled` 一次完成来源保存、History epoch 失效和 ActionRegistry 发布；Bridge 仅做参数 / DTO 转换，不再拼接两步调用。集成测试通过同一入口检查搜索、快捷键与旧候选失效，独立领域服务仍供只读测量器和单元测试使用。
+
+`AppHistorySettingsController` 持有来源筛选、路径草稿和保存反馈；切页 / 筛选不销毁草稿，关闭设置复用同一保存决策。保存路径与开启 Action 是独立操作，Rust 在事务内保留有效开关；未提交草稿不写入偏好，也不触发来源正文读取或目录发布。打开适配文件夹不作为配置变更发布。
 
 页面首次进入时刷新配置，保留期内恢复只重新读取有效数据。取消串行完成后才能开始新读取；操作期间的新输入继续合并。旧页面不会因过期结果自动重新申请会话，首次申请失败可以显式重试。读取预算不等于 OS I/O 可被硬中断；执行 / 复制仍重新读取并复验目标。支持矩阵、限额和降级见[来源指南](application-history-sources.md)。
 
@@ -176,7 +182,7 @@ Bridge 将内容转成 typed `PluginDetailDto`，不将 UI JSON 塞进 output_te
 
 ## Native Tools 与操作
 
-ToolPageRegistry 选择编译内 Flutter 会话，ToolPageShell 统一布局、返回、焦点和 IME。`builtin_tool_pages.dart` 组合文本结果 / 旧 Detail、Web 工具适配器、剪贴板页面 / 窗口与应用历史页注册；文件工作区由独立 FileSearch 路由协调。Launcher 不按 JSON / 剪贴板业务 ID 选择页面。NativeTool 保留普通页面 ID / 输入的类型化路由契约，未知或歧义路由拒绝打开；它不是第三方 UI DSL。`features/tools.rs` 的工具 EntrySource 复用普通 Action 搜索，不依赖文件领域。
+ToolPageRegistry 选择编译内 Flutter 会话，ToolPageShell 统一布局、返回、焦点和 IME。ToolPageHost 仅允许当前页借用当前 Launcher 会话执行普通候选；通用父页栈有四层上限，返回保留父页状态并恢复焦点，退出会释放整栈。历史页不自行实现结果展示或进程启动。`builtin_tool_pages.dart` 组合文本结果 / 旧 Detail、Web 工具适配器、剪贴板页面 / 窗口与应用历史页注册；文件工作区由独立 FileSearch 路由协调。Launcher 不按 JSON / 剪贴板业务 ID 选择页面。NativeTool 保留普通页面 ID / 输入的类型化路由契约，未知或歧义路由拒绝打开；它不是第三方 UI DSL。`features/tools.rs` 的工具 EntrySource 复用普通 Action 搜索，不依赖文件领域。
 
 图标分为语义声明与呈现：功能模块在注册 Action 时声明 `icon` key；Flutter `ActionIconAppearance` 只将 key 映射到图形、色彩及操作角标，不解析动作 ID / 翻译标题或决定执行行为。`AppIcons` 复用随包携带的 Cupertino 字体，`SemanticIcon` 负责透明图形 / 小角标，文件列表与预览共用 `FileTypeIcon`。颜色来自共享设计参数；不读取系统文件图标、不为每个文件创建位图缓存。Web 的常用图标类随 Host CSS 注入，不增加权限、桥接协议或运行期图标依赖。
 
@@ -215,6 +221,7 @@ JSON Workspace 已作为普通 Web 示例包实现，页面内校验 / token 格
 - `web_document_policy.dart` 管 HTML / CSP / 资源路径；`web_bootstrap.dart` 只提供消息和可见性传输；`web_view_appearance.dart` 管原生画布适配。SDK 取消 / dispose 同时释放传输待回复名额，Rust 始终保留独立授权与预算检查。
 - 设置页经 `WebPackageBackend` 使用薄类型化端口；防止初始列表回读覆盖安装结果，文件选择期间禁止重入，清理失败不会锁死控件。失败后回读实际安装状态，不将已提交的卸载显示为仍安装。
 
+- Flutter 窗口入口统一安装 `AppStyle.theme`，普通页面控件继承默认外观；公共布局在 `ui/app_components.dart`。Web 的普通 HTML 由 Host 自动注入共享样式，两端参数由 `resources/design-tokens.json` 生成，领域与 Rust 层不定义视觉样式。
 - 插件作者默认使用 `definePlugin`，SDK 负责连接寿命、首次输入与保留后重绑定；业务模块不感知原生桥与默认样式。创建器只生成标准网页项目，不定义 UI DSL。字体 / 控件 / 画布仍由 Host 呈现层提供，Rust 不处理网页布局。
 
 - Web 首次显示经过 Rust ready 确认与 Host 画布应用；macOS 的 NativeWebAppearance 将私有 drawsBackground 开关限制在有 selector 检查的适配器中，不可用时使用统一不透明回退。当前不创建 WebKit 快照或通过截图刷新页面，也不轮询。迟到结果由 Flutter 文档 / 视图身份守卫丢弃，Rust 不参与绘制。该兼容路径的桌面验收状态见 MVP，不能以原生单元测试替代视觉验证。
@@ -239,3 +246,9 @@ macOS Host 在启动引擎前安装 `NativeFlutterSurfaceGuard`：对 Flutter �
 - Web 权限与确认通过类型化 DTO 传递，Host 负责本地化；第三方页面通过 SDK 的语言通知选择包内资源。权限判定不读取显示文案，未知上下文类型和外部诊断保留原始值。
 - 旧插件是否等待重启由 Rust 的实际激活状态明确产生，界面不解析英文说明来判断状态。内置模块名称与控件朗读标签共用本地化映射；技术诊断仅在故障状态显示原文。
 - Rust 工作区版本与 App 的发布版本一致，Flutter / 原生另共享构建号。`scripts/check-versions.py` 在门禁与构建前核对，避免内置功能元数据停留在旧版本；第三方包版本仍独立。
+
+## 设置关闭与列表呈现状态
+
+`SettingsController.prepareClose` 是原生关闭、完成、Esc、切回 Launcher 和退出的统一决策入口：等待来源、剪贴板、搜索设置保存与目录同步，然后处理草稿、失败与保存 / 放弃 / 取消。来源与剪贴板控制器保留失败结果，因此操作恰好结束不会改变关闭决策。`SettingsEdits` 拥有搜索 / 隐藏应用的文本草稿和顺序写入，保存只规范化本次提交且未被再次编辑的字段。`SettingsScreen` 只呈现选择和失败来源，不再有第二个保存队列或关闭规则。
+
+`tools/ObjectActionCoordinator` 统一 Launcher 与应用历史的请求顺序、失效与迟到响应；各会话仍在发布前复验自己的目标，菜单呈现和回退动作留在各页面。应用历史的 `rowExtent` 由 `AppHistorySession` 拥有，翻页、定位与 Page 的 ListView 使用同一值；不另建通用菜单或列表框架。

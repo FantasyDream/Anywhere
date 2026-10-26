@@ -1,6 +1,6 @@
 /** The SQLite reader supplies bounded rows; interpretation stays in this file. */
 export function transform(input) {
-  if (input.rows.length === 0) return [];
+  if (input.rows.length === 0) throw new Error('Recent history key missing');
   const document = JSON.parse(input.rows[0].value);
   if (!Array.isArray(document.entries))
     throw new Error('Unknown recent schema');

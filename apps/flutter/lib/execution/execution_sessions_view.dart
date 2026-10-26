@@ -15,12 +15,7 @@ import 'execution_sessions_controller.dart';
 
 const _label = TextStyle(fontSize: 11, color: AppStyle.muted);
 const _body = TextStyle(fontSize: 12, color: AppStyle.secondary);
-TextStyle get _mono => TextStyle(
-    fontFamily: DesktopEnvironment.current.monoFontFamily,
-    fontFamilyFallback: ['monospace'],
-    fontSize: DesignTokens.previewCodeSize,
-    height: DesignTokens.previewCodeLineHeight,
-    color: AppStyle.primary);
+TextStyle get _mono => AppStyle.code;
 
 String taskStatus(ExecutionSessionStatusDto status, [AppLocalizations? l10n]) {
   final contextLabels = l10n ?? lookupAppLocalizations(const Locale('en'));

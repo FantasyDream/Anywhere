@@ -5,7 +5,6 @@ import '../ui/design_tokens.g.dart';
 const webDocumentThemeCss = '''
 $webDesignTokensCss
 $webControlsCss
-html, body { margin: 0; height: 100%; }
 html:root, html:root > body, #app, #root, #__next {
   background: var(--aw-web-canvas, var(--aw-fallback-surface)) !important;
   color: var(--aw-text) !important;

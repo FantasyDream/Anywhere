@@ -27,8 +27,9 @@ async fn uninstalled_history_actions_are_absent_from_search_and_shortcut_targets
         .command_id
         .as_deref()
         .is_some_and(|id| id.starts_with("core.application_history."))));
-    service.set_action_enabled("webstorm", true).unwrap();
-    settings.synchronize_application_history(&app).unwrap();
+    settings
+        .set_application_history_action_enabled(&app, "webstorm", true)
+        .unwrap();
     app.deactivate(id).unwrap();
     let id = app.activate().await.unwrap().unwrap().session_id;
     settled(&app, id, 0).await;
@@ -47,8 +48,19 @@ async fn uninstalled_history_actions_are_absent_from_search_and_shortcut_targets
             .len(),
         1
     );
-    service.set_action_enabled("webstorm", false).unwrap();
-    settings.synchronize_application_history(&app).unwrap();
+    use anywhere_core::features::application_history::model::SourceMode;
+    assert!(settings
+        .configure_application_history(&app, "webstorm", SourceMode::Custom, None)
+        .is_err());
+    assert_eq!(
+        app.resolve_action_binding(id, on.revision, action)
+            .unwrap()
+            .len(),
+        1
+    );
+    settings
+        .configure_application_history(&app, "webstorm", SourceMode::Disabled, None)
+        .unwrap();
     assert!(app.resolve_action_binding(id, on.revision, action).is_err());
 }
 
@@ -98,11 +110,8 @@ async fn user_history_actions_register_once_and_switch_off_search_bindings_and_o
     let mut settings =
         SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
     settings
-        .application_history()
-        .unwrap()
-        .set_action_enabled("example", true)
+        .set_application_history_action_enabled(&app, "example", true)
         .unwrap();
-    settings.synchronize_application_history(&app).unwrap();
     let action = "core.application_history.example.open";
     let first = settled(&app, app.activate().await.unwrap().unwrap().session_id, 0).await;
     let old = candidate(&first, action);
@@ -113,11 +122,8 @@ async fn user_history_actions_register_once_and_switch_off_search_bindings_and_o
         1
     );
     settings
-        .application_history()
-        .unwrap()
-        .set_action_enabled("example", false)
+        .set_application_history_action_enabled(&app, "example", false)
         .unwrap();
-    settings.synchronize_application_history(&app).unwrap();
     assert!(app
         .execute(first.session_id, first.revision, old)
         .await
@@ -141,11 +147,8 @@ async fn user_history_actions_register_once_and_switch_off_search_bindings_and_o
         .iter()
         .any(|row| row.command_id.as_deref() == Some(action)));
     settings
-        .application_history()
-        .unwrap()
-        .set_action_enabled("example", true)
+        .set_application_history_action_enabled(&app, "example", true)
         .unwrap();
-    settings.synchronize_application_history(&app).unwrap();
     app.deactivate(off.session_id).unwrap();
     let on = settled(&app, app.activate().await.unwrap().unwrap().session_id, 0).await;
     assert!(on
@@ -189,12 +192,9 @@ async fn history_entries_match_current_app_and_bind_independently_without_duplic
         // are exercised separately with an empty installed-application snapshot.
         for source in [source, other] {
             settings
-                .application_history()
-                .unwrap()
-                .set_action_enabled(source, true)
+                .set_application_history_action_enabled(&app, source, true)
                 .unwrap();
         }
-        settings.synchronize_application_history(&app).unwrap();
         let id = app.activate().await.unwrap().unwrap().session_id;
         let state = settled(&app, id, 0).await;
         let own = format!("core.application_history.{source}.open");
@@ -207,17 +207,11 @@ async fn history_entries_match_current_app_and_bind_independently_without_duplic
             .candidates
             .iter()
             .any(|row| row.command_id.as_deref() == Some(&another)));
-        // Match the host's smaller, five-action Home when Browse Menus is present.
-        // A project adds more eligible actions than fit; merely matching is insufficient.
-        let home: Vec<_> = state
+        // Home no longer promises a fixed slot: every available action competes
+        // through the shared usage ordering, including the app history entry.
+        assert!(state
             .context_candidates
             .iter()
-            .filter(|row| row.home_eligible)
-            .collect();
-        assert!(home.len() > 5, "fixture must overflow Home: {home:?}");
-        assert!(home
-            .iter()
-            .take(5)
             .any(|row| row.command_id.as_deref() == Some(&own)));
         assert!(state.scopes.iter().any(|scope| scope.id == "git"));
         assert!(state.scopes.iter().any(|scope| scope.id == "rust"));
@@ -275,4 +269,193 @@ async fn history_entries_match_current_app_and_bind_independently_without_duplic
             .resolve_action_binding(id, state.revision, &own)
             .is_err());
     }
+}
+
+#[tokio::test]
+async fn history_objects_reuse_actions_without_leaking_targets_to_usage_or_accepting_stale_offers()
+{
+    use anywhere_core::features::application_history::model::SourceMode;
+    let temp = tempfile::tempdir().unwrap();
+    let project = temp.path().join("history-only-project");
+    std::fs::create_dir_all(project.join(".git")).unwrap();
+    std::fs::write(
+        project.join("Cargo.toml"),
+        "[package]\nname='history-only'\nversion='0.1.0'\n",
+    )
+    .unwrap();
+    let workspace = project.join("multiple.code-workspace");
+    std::fs::write(
+        &workspace,
+        r#"{"folders":[{"path":"first"},{"path":"second"}]}"#,
+    )
+    .unwrap();
+    let source = temp.path().join("recent.xml");
+    let document = |path: &Path| {
+        format!("<application><component><option name='recentPaths'><list><option value='{}'/></list></option></component></application>", path.display())
+    };
+    std::fs::write(&source, document(&project)).unwrap();
+    let platform = Arc::new(TestPlatform::default());
+    let usage = Arc::new(Mutex::new(MemoryUsage::default()));
+    let app = Application::new(
+        platform.clone(),
+        registry(),
+        Box::new(SharedHistory(usage.clone())),
+        vec![],
+    );
+    let mut settings =
+        SettingsService::open(temp.path().join("extensions.json"), vec![], &app).unwrap();
+    let history = settings.application_history().unwrap();
+    settings
+        .set_application_history_action_enabled(&app, "idea", true)
+        .unwrap();
+    settings
+        .configure_application_history(&app, "idea", SourceMode::Custom, source.to_str())
+        .unwrap();
+    let state = settled(&app, app.activate().await.unwrap().unwrap().session_id, 0).await;
+    let owner = history.open_session().unwrap();
+    let item = history.search(owner, "", "idea").unwrap().items.remove(0);
+    let actions = app
+        .history_object_actions(
+            history.clone(),
+            state.session_id,
+            state.revision,
+            item.id.clone(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        actions
+            .first()
+            .and_then(|action| action.command_id.as_deref()),
+        Some("core.directory.copy")
+    );
+    for command in [
+        "core.directory.copy",
+        "core.git.status",
+        "developer.cargo.check",
+    ] {
+        assert!(
+            actions
+                .iter()
+                .any(|a| a.command_id.as_deref() == Some(command)),
+            "missing {command}"
+        );
+    }
+    let current = app.latest_state(state.session_id).unwrap();
+    assert_eq!(
+        current
+            .scopes
+            .iter()
+            .filter(|scope| scope.is_current_app)
+            .map(|scope| &scope.id)
+            .collect::<Vec<_>>(),
+        state
+            .scopes
+            .iter()
+            .filter(|scope| scope.is_current_app)
+            .map(|scope| &scope.id)
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        platform.git_calls.load(Ordering::Relaxed),
+        0,
+        "discovery must not run Git commands"
+    );
+    let copy = actions
+        .iter()
+        .find(|a| a.command_id.as_deref() == Some("core.directory.copy"))
+        .unwrap()
+        .id
+        .clone();
+    let result = app
+        .execute(state.session_id, state.revision, copy.clone())
+        .await
+        .unwrap();
+    assert!(result.succeeded());
+    assert_eq!(
+        platform.calls.lock().unwrap().last(),
+        Some(&(
+            "copy".into(),
+            project
+                .canonicalize()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        ))
+    );
+    let records = usage.lock().unwrap().load_global().unwrap();
+    assert!(records
+        .keys()
+        .any(|(action, kind)| action == "core.directory.copy" && kind == DIRECTORY));
+    assert!(!format!("{records:?}").contains("history-only-project"));
+
+    // Same Action and path, new object-actions request: the old offer is revoked.
+    let second = app
+        .history_object_actions(
+            history.clone(),
+            state.session_id,
+            state.revision,
+            item.id.clone(),
+        )
+        .await
+        .unwrap();
+    assert!(app
+        .execute(state.session_id, state.revision, copy)
+        .await
+        .is_err());
+    let current = second
+        .iter()
+        .find(|a| a.command_id.as_deref() == Some("core.directory.copy"))
+        .unwrap()
+        .id
+        .clone();
+    std::fs::write(&source, document(&workspace)).unwrap();
+    let calls = platform.calls.lock().unwrap().len();
+    assert!(!app
+        .execute(state.session_id, state.revision, current)
+        .await
+        .unwrap()
+        .succeeded());
+    assert_eq!(platform.calls.lock().unwrap().len(), calls);
+    let code_source = temp.path().join("state.vscdb");
+    let db = rusqlite::Connection::open(&code_source).unwrap();
+    db.execute_batch("CREATE TABLE ItemTable(key TEXT PRIMARY KEY,value TEXT)")
+        .unwrap();
+    let value = serde_json::json!({"entries":[{"workspace":{"id":"multi-root","configPath":url::Url::from_file_path(&workspace).unwrap().as_str()}}]}).to_string();
+    db.execute(
+        "INSERT INTO ItemTable VALUES (?1,?2)",
+        rusqlite::params!["history.recentlyOpenedPathsList", value],
+    )
+    .unwrap();
+    // Simulate an out-of-band change: execution must revalidate the source even
+    // before an application-level catalog refresh. Normal settings use the seam above.
+    history.set_action_enabled("vscode", true).unwrap();
+    history
+        .configure_mode("vscode", SourceMode::Custom, code_source.to_str())
+        .unwrap();
+    let file = history.search(owner, "", "vscode").unwrap().items.remove(0);
+    let actions = app
+        .history_object_actions(history.clone(), state.session_id, state.revision, file.id)
+        .await
+        .unwrap();
+    assert!(actions
+        .iter()
+        .any(|a| a.command_id.as_deref() == Some("core.file.copy")));
+    assert!(actions
+        .iter()
+        .all(|a| a.group_id != "git" && a.group_id != "rust"));
+    let current = actions
+        .iter()
+        .find(|a| a.command_id.as_deref() == Some("core.file.copy"))
+        .unwrap()
+        .id
+        .clone();
+    history.set_action_enabled("vscode", false).unwrap();
+    let calls = platform.calls.lock().unwrap().len();
+    assert!(!app
+        .execute(state.session_id, state.revision, current)
+        .await
+        .unwrap()
+        .succeeded());
+    assert_eq!(platform.calls.lock().unwrap().len(), calls);
 }

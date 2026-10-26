@@ -30,6 +30,10 @@
           },
           "type": "array"
         },
+        "requireInputMatch": {
+          "description": "Hide commands that cannot run without recognized content, including keyword search.",
+          "type": "boolean"
+        },
         "title": {
           "type": "string"
         }

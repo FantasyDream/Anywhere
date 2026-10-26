@@ -47,7 +47,8 @@ class ClipboardSettingsController extends ChangeNotifier {
     }
   }
 
-  Future<bool> waitForPending() async => await (_pending ?? Future.value(true));
+  Future<bool> waitForPending() async =>
+      await (_pending ?? Future.value(!_operationFailed));
   Future<bool> load() => _run();
   Future<bool> setRecording(bool enabled) =>
       _run(() => backend.setRecording(enabled));

@@ -185,24 +185,10 @@ class _ToolPageShellState extends State<ToolPageShell> {
                 const SizedBox(width: 12),
                 Expanded(
                     child: widget.header ??
-                        Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (widget.subtitle != null) ...[
-                                Text(widget.subtitle!,
-                                    style: AppStyle.caption.copyWith(
-                                        fontSize: DesignTokens.pageModeSize,
-                                        fontWeight:
-                                            DesignTokens.pageModeWeight)),
-                                const SizedBox(height: 3),
-                              ],
-                              Text(widget.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: AppStyle.body.copyWith(
-                                      fontSize: DesignTokens.pageHeadingSize)),
-                            ])),
+                        AppPageTitle(
+                            label: widget.subtitle,
+                            child: Text(widget.title,
+                                maxLines: 1, overflow: TextOverflow.ellipsis))),
                 const SizedBox(width: 14),
                 Tooltip(
                     message: widget.escapeHint ??

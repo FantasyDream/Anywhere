@@ -3,6 +3,8 @@ import '../src/rust/api.dart' as api;
 abstract interface class AppHistoryQueryBackend {
   Future<api.AppHistoryDto> search(String query, String source);
   Future<void> useItem(String id, {required bool copy});
+  Future<List<api.CandidateDto>> actions(String id,
+      {required int sessionId, required int revision});
   Future<void> cancel();
   Future<void> close();
 }
@@ -63,6 +65,14 @@ class RustAppHistoryQueryBackend implements AppHistoryQueryBackend {
   @override
   Future<void> useItem(String id, {required bool copy}) =>
       api.useAppHistoryItem(id: id, copy: copy);
+  @override
+  Future<List<api.CandidateDto>> actions(String id,
+      {required int sessionId, required int revision}) async {
+    if (_closed) throw StateError('History page closed');
+    return api.appHistoryObjectActions(
+        sessionId: sessionId, revision: revision, id: id);
+  }
+
   @override
   Future<void> cancel() async {
     final lease = _lease;

@@ -1,4 +1,6 @@
 //! Source preferences, publication and execution share one revocable lifetime.
+//! Live applications change configuration through SettingsService, which also
+//! publishes the action catalog; domain mutations alone serve standalone readers.
 use super::{
     model::*,
     preferences::{self, Preferences},

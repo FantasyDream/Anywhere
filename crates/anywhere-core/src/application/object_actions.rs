@@ -31,6 +31,10 @@ impl Application {
             if !file.presentation.primary_action || file.context().is_none() {
                 bail!("choose an object result");
             }
+            session
+                .resolution
+                .object_action_epoch
+                .fetch_add(1, Ordering::AcqRel);
             (
                 file,
                 session.actions.clone(),

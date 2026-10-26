@@ -6,9 +6,9 @@
 
 ## 项目状态
 
-当前分支为 **V0.14 应用历史开发原型，尚未收尾**。此前 V0.13 已完成工程检查与该轮常规 macOS 验收；已知 SDK 警告、WebKit GPU 保留及未验收矩阵见 [V0.13 MVP](docs/mvp-v0.13.md)。版本和构建号以 [pubspec.yaml](apps/flutter/pubspec.yaml) 为准；开发构建不等于正式发行。
+当前为 **V0.14 开发预览**。应用历史、所选对象动作与统一频次排序已接入，完整发布和实机矩阵尚未完成。此前 V0.13 已完成工程检查与该轮常规 macOS 验收；已知 SDK 警告、WebKit GPU 保留及未验收矩阵见 [V0.13 MVP](docs/mvp-v0.13.md)。版本和构建号以 [pubspec.yaml](apps/flutter/pubspec.yaml) 为准；开发构建不等于正式发行。
 
-V0.14 正在 `codex/dev-0.14` 验证[应用历史原型](docs/mvp-v0.14.md)：通用文件读取器 + 官方配置 / JS 转换，共享历史页已接入 18 个来源，覆盖 JetBrains、VS Code 同类编辑器、Sublime Text 和 Obsidian 最近仓库。支持默认路径检测、自定义路径、逐来源 Action 开关与可信用户适配；Obsidian 最近笔记与多实例仍待验证；浏览器历史、书签与 Tab 管理调整为[后续独立功能](docs/browser-feature.md)，不属于 V0.14 收尾前置。
+V0.14 正在 `codex/dev-0.14` 开发[应用历史与动作排序](docs/mvp-v0.14.md)：通用文件读取器 + 官方配置 / JS 转换，共享历史页已接入 18 个来源，覆盖 JetBrains、VS Code 同类编辑器、Sublime Text 和 Obsidian 最近仓库。支持默认路径检测、自定义路径、逐来源 Action 开关与可信用户适配；Obsidian 最近笔记暂缓接入，多实例仍待验证；浏览器历史、书签与 Tab 管理调整为[后续独立功能](docs/browser-feature.md)，不属于 V0.14 收尾前置。
 
 | 平台 | 状态 |
 |---|---|
@@ -42,7 +42,7 @@ V0.14 正在 `codex/dev-0.14` 验证[应用历史原型](docs/mvp-v0.14.md)：�
 | `⌘Space` | 全局搜索：查找应用与动作 |
 | `↑` / `↓`、`Enter` | 选择、执行 |
 | `Tab` / `Shift+Tab` | 前后切换 Scope；文件页切类型，兼容 Ctrl 组合 |
-| `⌘K` | 选中对象的更多操作 |
+| `⌘K` | 支持此快捷键的页面中查看更多操作；应用历史使用右键或行内入口 |
 | `Esc` | 清空查询、返回上一层，最后隐藏窗口 |
 
 例如，输入“文件搜索”或 `wjss` 进入文件页；在 Git 项目目录唤醒后执行 Git Status 或 Copy Branch Name。选中文本 / 新复制内容仅在能识别具体 Context，或被已批准且启用的 Web 工具命令匹配时自动填入；剪贴板有效期为 15 秒。输入法组词期间不抢分类切换键。
@@ -70,7 +70,7 @@ flowchart TD
 
 Rust 负责识别、匹配、排序、执行和资源预算；Flutter 负责呈现与交互；系统差异留在平台适配层。第一方模块编译期自动注册，第三方 Web 插件通过独立包和受限能力接入。
 
-详见[架构与代码地图](docs/architecture.md)、[Context 模型](docs/context-model.md)与[Web 插件设计](docs/web-plugin-design.md)。
+代码定位先看 [AGENTS.md](AGENTS.md)。详见[架构与代码地图](docs/architecture.md)、[Context 模型](docs/context-model.md)与[Web 插件设计](docs/web-plugin-design.md)。
 
 ## 从源码构建
 

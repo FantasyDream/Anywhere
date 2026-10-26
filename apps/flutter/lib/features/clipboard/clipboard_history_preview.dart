@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../infrastructure/desktop_environment.dart';
 import '../../l10n/app_language.dart';
 import '../../src/rust/api.dart';
 import '../../ui/app_components.dart';
@@ -174,11 +173,7 @@ class _ClipboardHistoryPreviewState extends State<ClipboardHistoryPreview> {
       child: SizedBox(
           width: double.infinity,
           child: SelectableText(text,
-              key: const Key('clipboard-preview'),
-              style: AppStyle.body.copyWith(
-                  fontFamily: DesktopEnvironment.current.monoFontFamily,
-                  fontSize: DesignTokens.previewCodeSize,
-                  height: DesignTokens.previewCodeLineHeight))));
+              key: const Key('clipboard-preview'), style: AppStyle.code)));
 
   Widget _unavailable(String message) => Center(
       child: Padding(

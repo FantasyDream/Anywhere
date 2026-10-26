@@ -1,4 +1,6 @@
-//! One source format for bundled and trusted user-owned history adapters.
+//! Catalog and orchestration for bundled and trusted local history adapters.
+//! `definition` validates packages, Persistence reads bounded files, `script`
+//! transforms plain data, and HistoryService owns query/execution lifetimes.
 #[cfg(test)]
 mod adapters_tests;
 #[cfg(test)]
@@ -50,6 +52,8 @@ struct Manifest {
     file_hint: String,
     #[serde(default)]
     config_paths: Vec<String>,
+    #[serde(default)]
+    home_paths: Vec<String>,
     applications: Vec<String>,
     action: SourceAction,
     reader: crate::persistence::application_history::Reader,
@@ -62,35 +66,53 @@ struct Package {
 pub struct SourceCatalog {
     packages: Vec<Package>,
     config_directory: Option<std::path::PathBuf>,
+    home_directory: Option<std::path::PathBuf>,
     configuration_error: Option<String>,
 }
 impl SourceCatalog {
-    pub fn bundled() -> Result<Arc<Self>> {
-        Self::bundled_with_config_directory(anywhere_platform::paths::configuration_directory())
-    }
     /// Explicit root keeps fixtures isolated from personal application data.
     pub fn bundled_with_config_directory(
         config_directory: Option<std::path::PathBuf>,
     ) -> Result<Arc<Self>> {
-        Ok(Arc::new(Self::load_bundled(config_directory)?))
+        Ok(Arc::new(Self::load_bundled(config_directory, None)?))
+    }
+    /// Explicit roots keep detection tests isolated from personal application data.
+    #[cfg(test)]
+    fn bundled_with_roots(
+        config_directory: Option<std::path::PathBuf>,
+        home_directory: Option<std::path::PathBuf>,
+    ) -> Result<Arc<Self>> {
+        Ok(Arc::new(Self::load_bundled(
+            config_directory,
+            home_directory,
+        )?))
     }
     pub fn with_user_directory(directory: &std::path::Path) -> Result<Arc<Self>> {
-        Self::with_directories(
+        let mut catalog = Self::load_bundled(
             anywhere_platform::paths::configuration_directory(),
-            directory,
-        )
+            anywhere_platform::paths::home_directory(),
+        )?;
+        catalog.load_user_directory(directory);
+        Ok(Arc::new(catalog))
     }
-    pub fn with_directories(
+    #[cfg(test)]
+    fn with_directories(
         config_directory: Option<std::path::PathBuf>,
         directory: &std::path::Path,
     ) -> Result<Arc<Self>> {
-        let mut catalog = Self::load_bundled(config_directory)?;
-        if catalog.load_users(directory).is_err() {
-            catalog.configuration_error = Some("Custom history adapters are invalid. Repair their source.json / transform.js files and restart.".into());
-        }
+        let mut catalog = Self::load_bundled(config_directory, None)?;
+        catalog.load_user_directory(directory);
         Ok(Arc::new(catalog))
     }
-    fn load_bundled(config_directory: Option<std::path::PathBuf>) -> Result<Self> {
+    fn load_user_directory(&mut self, directory: &std::path::Path) {
+        if self.load_users(directory).is_err() {
+            self.configuration_error = Some("Custom history adapters are invalid. Repair their source.json / transform.js files and restart.".into());
+        }
+    }
+    fn load_bundled(
+        config_directory: Option<std::path::PathBuf>,
+        home_directory: Option<std::path::PathBuf>,
+    ) -> Result<Self> {
         let mut packages: Vec<Package> = Vec::new();
         let mut pending: Vec<_> = BUNDLED_HISTORY_SOURCES
             .iter()
@@ -134,6 +156,7 @@ impl SourceCatalog {
         Ok(Self {
             packages,
             config_directory,
+            home_directory,
             configuration_error: None,
         })
     }
@@ -202,6 +225,11 @@ fn validate_manifest(manifest: &Manifest) -> Result<()> {
                 .all(|(k, v)| k.len() <= 32 && !v.trim().is_empty() && v.len() <= 256),
         "invalid source search metadata"
     );
+    ensure!(
+        manifest.config_paths.len() + manifest.home_paths.len() <= 8,
+        "too many source discovery patterns"
+    );
+    crate::persistence::application_history::discovery::validate(&manifest.home_paths)?;
     crate::persistence::application_history::discovery::validate(&manifest.config_paths)
 }
 impl SourceLoader for SourceCatalog {
@@ -210,10 +238,24 @@ impl SourceLoader for SourceCatalog {
     }
     fn detect(&self, id: &str) -> Option<std::path::PathBuf> {
         let package = self.packages.iter().find(|p| p.manifest.id == id)?;
-        crate::persistence::application_history::discovery::detect(
-            self.config_directory.as_deref()?,
-            &package.manifest.config_paths,
-        )
+        // Migrated home storage is authoritative even if the old profile DB was
+        // modified later by unrelated settings. Do not compare their mtimes.
+        self.home_directory
+            .as_deref()
+            .and_then(|root| {
+                crate::persistence::application_history::discovery::detect(
+                    root,
+                    &package.manifest.home_paths,
+                )
+            })
+            .or_else(|| {
+                self.config_directory.as_deref().and_then(|root| {
+                    crate::persistence::application_history::discovery::detect(
+                        root,
+                        &package.manifest.config_paths,
+                    )
+                })
+            })
     }
     fn descriptors(&self) -> Vec<SourceDescriptor> {
         self.packages

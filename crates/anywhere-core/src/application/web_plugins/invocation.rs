@@ -138,9 +138,14 @@ impl WebPluginService {
             workspace || definition.accepts.contains(&context.type_id),
             "Web command does not accept this object"
         );
-        if context.source == anywhere_protocol::ContextSource::UserInput
-            && context.type_id == anywhere_protocol::TEXT
+        if definition.require_input_match
+            || (context.source == anywhere_protocol::ContextSource::UserInput
+                && context.type_id == anywhere_protocol::TEXT)
         {
+            ensure!(
+                context.type_id == anywhere_protocol::TEXT,
+                "Web command requires recognized text input"
+            );
             let text = match &context.value {
                 crate::core::context::ContextValue::Text(text) => text.as_ref(),
                 _ => anyhow::bail!("invalid Web text input"),
