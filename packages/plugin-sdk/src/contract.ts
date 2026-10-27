@@ -3,7 +3,6 @@ export type JsonValue = null | boolean | number | string | JsonValue[] | { [key:
 export const protocol = 1 as const;
 export const limits = {
   "chunkBytes": 4096,
-  "confirmTimeoutMs": 30000,
   "frameBytes": 65536,
   "queue": 16,
   "running": 8,

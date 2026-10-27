@@ -12,6 +12,18 @@ await build({
   jsxFragment: 'Fragment',
   legalComments: 'eof',
 });
+await build({
+  entryPoints: ['src/background.mjs'],
+  bundle: true,
+  format: 'esm',
+  platform: 'neutral',
+  conditions: ['anywhere-background'],
+  mainFields: ['module', 'main'],
+  target: 'es2022',
+  outfile: 'dist/background.js',
+  minify: true,
+  legalComments: 'eof',
+});
 await writeFile(
   'dist/index.html',
   '<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="./main.css"></head><body><div id="app"></div><script type="module" src="./main.js"></script></body></html>',

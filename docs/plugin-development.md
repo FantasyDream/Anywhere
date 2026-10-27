@@ -109,13 +109,13 @@ stop();
 | 此刻真正的前台应用 | `anywhere.app.getFrontmost()` | `app.frontmost` |
 | 读取剪贴板文本 | `anywhere.clipboard.readText()` | `clipboard.readText` |
 | 复制文本 | `anywhere.clipboard.writeText(text)` | `clipboard.writeText` |
-| 私有小型设置（界面插件） | `plugin.host.storage.get(key)`、`set(key, value)`、`remove(key)` | `storage.local` |
+| 私有小型设置（界面 / 后台命令共用） | `anywhere.storage.get(key)`、`set(key, value)`、`remove(key)` | `storage.local` |
 
 所有异步调用返回 Promise，订阅返回取消函数。Context 和 Input 使用初始快照与变化推送；旧版本事件不会覆盖新快照。`context.get()` 返回获准的单个对象，绝不返回完整原生图。无 Context 授权时得到 `empty`；缺少 Input / 应用权限时读写调用失败，订阅不推送未授权的内容。来源应用在唤醒前冻结，实时前台应用可能是 Anywhere 自身，二者不可混用。
 
-`definePlugin()` 仍适用于需要 `onLaunch`、`onError` 或私有 Storage 的页面，返回的 `plugin.anywhere` 提供同一套业务 API；`plugin.host` 是已有兼容入口。
+`definePlugin()` 仍适用于需要 `onLaunch` 或 `onError` 的页面，返回的 `plugin.anywhere` 提供同一套业务 API；`plugin.host` 是已有兼容入口。
 
-剪贴板读写每次都需宿主确认，取消返回 `USER_CANCELLED`。成功后才显示“已复制”，不要自动重试写入。模板已处理错误和等待状态。
+从 V0.14 Build 25 起，剪贴板读写只需安装时批准相应权限，运行时不再逐次弹窗。缺少权限、隐藏 / 撤销或失效的实例仍被拒绝；成功后才显示“已复制”，不要自动重试写入。旧版 Host 仍使用逐次确认。
 
 `context.read` 也支持 `core.url`、`core.file`、`core.directory`、`core.file_selection`，需要同时加入 `accepts`。文件只提供名称、类型和不透明句柄，目前不能读取文件正文或取得完整路径。
 
@@ -135,6 +135,8 @@ stop();
 Host 会识别输入、选中文本和 15 秒内新复制内容中的 JSON，展示对应 Action；用户执行后才将原文传入页面，插件不用编写识别器。
 
 若命令必须依赖有效内容（例如复制格式化 JSON），再声明 `"requireInputMatch": true`。此时必须提供 `inputMatchers`，无匹配内容时连名称搜索与无对象快捷键入口也不显示，执行前再次复验。默认值为 `false`，适合仍可空白打开的工作区。
+
+若依赖的是自定义 Context 而非框架静态格式，声明 `"requireContext": true` 和非空 `accepts`；无对应对象时，命令不会成为可空白打开的全局入口，执行前也会检查对象类型。后台命令在有 `accepts` 时默认要求 Context；Web 命令默认仍可从名称空白打开。JSON 混合示例的三个复制命令使用这一规则，Workspace 保留空白入口。所有命令接受同一个 `plugin.dev.anywhere.json-workspace.json`；其后台解析器先解开外层转义，再发布保留原始数字 / 重复键的 JSON 文本值，不再单独注册转义类型或 Unescape 动作。
 
 `json` 识别严格 JSON **对象 / 数组**；`json_escaped` 识别经过字符串编码的对象 / 数组（允许省略外层引号，最多 4 层）。自动识别最多 16 KiB 原文、解码后 128 层；标量、不完整内容、注释和尾随逗号不匹配。识别期间不启动 WebView，Invocation 保留原文，具体解码由插件实现。不要另写监听剪贴板的代码。
 
@@ -161,13 +163,13 @@ export async function resolve() {
 
 无界面命令在 `commands[]` 声明 `runtime: "background"`，`entrypoint` 为导出的函数名。接受 Context 的后台命令只在匹配对象存在时出现；`accepts: []` 可定义无对象的全局命令。普通 Web 命令省略 `runtime` 即可，继续使用 HTML `entry` 和路由 `entrypoint`。仅后台包可省略 HTML `entry`。
 
-自动解析器只能读取获准的 Context / Input / 应用快照，不得弹确认、改输入或读写剪贴板。显式后台 Action 可以调用宿主能力，并沿用原有剪贴板逐次确认。后台任务是有限调用，无常驻监听；订阅提供本任务初始状态及自身输入修改后的状态，任务结束一起释放。不是后台守护程序。
+自动解析器只能读取获准的 Context / Input / 应用快照，不得弹确认、改输入或读写剪贴板。显式后台 Action 可以调用获准的宿主能力，剪贴板操作不再逐次确认。后台命令由 Rust 执行到完成，不创建工具页；成功后关闭 Launcher，失败留在原搜索显示错误。后台任务是有限调用，无常驻监听；订阅提供本任务初始状态及自身输入修改后的状态，任务结束一起释放。不是后台守护程序。
 
 第三方文本解析器也参与现有的默认输入识别；预填识别单任务采用 75 ms JS 预算，整轮在 150 ms 后不再启动额外识别器，避免大量插件拖慢唤醒。识别之后仍由正常 Context Graph 解析，不把预填探测直接当作执行资格。
 
-QuickJS 每次按需创建，32 MiB 内存、256 KiB 栈、250 ms JS 执行预算，等待宿主确认的时间不计入 JS 预算；每任务最多 128 次宿主调用。脚本包不超过 256 KiB，单次解析最多 16 个 Context，安装目录总计最多 64 个第三方解析器。输出 JSON 不超过 256 KiB。取消、禁用、更新、关闭会使旧任务失效。纯界面包不会启动 QuickJS；后台命令不会创建 WebView。
+QuickJS 每次按需创建，32 MiB 内存、256 KiB 栈、250 ms JS 执行预算，等待宿主 I/O 的时间不计入 JS 预算；每任务最多 128 次宿主调用。脚本包不超过 256 KiB，单次解析最多 16 个 Context，安装目录总计最多 64 个第三方解析器。输出 JSON 不超过 256 KiB。取消、禁用、更新、关闭会使旧任务失效。纯界面包不会启动 QuickJS；后台命令不会创建 WebView。
 
-完整示例：[JSON Summary 后台插件](../plugins/examples/background-context/README.md)；界面示例：[Text Pad](../plugins/examples/web-text/README.md)。当前后台执行仍在主程序的受限 worker 中，并非操作系统进程隔离；不要把 JS 引擎限制视为完整 OS 沙箱。
+混合示例：[JSON Workspace](../plugins/examples/json-workspace/README.md) 使用后台解析 / 复制和 Web 编辑器，共享私有缩进设置。自动解析器仍是只读环境，不能写设置或剪贴板。完整后台示例：[JSON Summary 后台插件](../plugins/examples/background-context/README.md)；界面示例：[Text Pad](../plugins/examples/web-text/README.md)。当前后台执行仍在主程序的受限 worker 中，并非操作系统进程隔离；不要把 JS 引擎限制视为完整 OS 沙箱。
 
 ## 5. 界面与生命周期
 
@@ -221,6 +223,8 @@ cd packages/plugin-sdk
 npm ci --ignore-scripts
 npm pack --pack-destination ../../build/plugin-sdk
 ```
+
+插件和宿主都不显示固定页脚。主要操作放到工具栏或对应内容区标题，成功 / 失败反馈就近显示；宿主负责页头返回、Esc 和工具选项，插件不用重复实现。
 
 SDK 包含编译后的接口、类型、公共 CSS、模板和打包器。更多信息：[SDK 说明](../packages/plugin-sdk/README.md)、[JSON 示例](../plugins/examples/json-workspace/README.md)、[平台设计](web-plugin-design.md)。
 

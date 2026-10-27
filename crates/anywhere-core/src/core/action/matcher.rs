@@ -244,6 +244,10 @@ fn subtitle(action: &ActionDescriptor, context: &ResolvedContext) -> String {
     if !action.menu_path.is_empty() {
         return action.menu_path.join(" › ");
     }
+    // Extension values are opaque plugin payloads, not human-readable labels.
+    if matches!(&context.value, ContextValue::Extension(_)) {
+        return action.subtitle.clone().unwrap_or_default();
+    }
     let detail = context.display_detail();
     match &action.subtitle {
         Some(subtitle) => format!("{subtitle} · {detail}"),

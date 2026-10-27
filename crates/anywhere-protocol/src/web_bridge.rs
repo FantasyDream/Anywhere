@@ -10,7 +10,6 @@ pub const MAX_REQUESTS: usize = 4096;
 pub const MAX_PENDING: usize = 24;
 pub const MAX_RUNNING: usize = 8;
 pub const REQUEST_TIMEOUT_MS: u64 = 5000;
-pub const CONFIRM_TIMEOUT_MS: u64 = 30_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "web-schema", derive(schemars::JsonSchema))]

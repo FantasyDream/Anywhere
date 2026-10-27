@@ -9,14 +9,11 @@ import {
 import {definePlugin, environment} from '@anywhere/sdk';
 import {i18n, t} from './i18n.mjs';
 import {MAX_BYTES} from './json.mjs';
-import {
-  JSON_ACTIONS,
-  decodeDocument,
-  prepareJsonAction,
-  prepareJsonLaunch,
-} from './actions.mjs';
+import {JSON_ACTIONS, decodeDocument, prepareJsonAction} from './actions.mjs';
 import {QueryEngine, QueryError, MAX_QUERY_LENGTH} from './query.mjs';
 import {stripRoot} from './expression.mjs';
+import {workspaceInput} from './workspace-input.mjs';
+import {jsonInputText} from './input.mjs';
 import './style.css';
 
 const encoder = new TextEncoder();
@@ -50,6 +47,7 @@ function App() {
   const [processed, setProcessed] = useState(null);
   const [notice, setNotice] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
   const [composing, setComposing] = useState(false);
   const inputRef = useRef(),
     current = useRef({}),
@@ -59,7 +57,8 @@ function App() {
     indentEdited = useRef(false),
     operationBusy = useRef(false);
   const engine = useRef(),
-    plugin = useRef();
+    plugin = useRef(),
+    actionsRef = useRef();
   engine.current ??= new QueryEngine();
   const fresh = matches(processed, input, path, spaces, mode) && !composing;
   const output = fresh ? (processed.output ?? '') : '';
@@ -169,7 +168,7 @@ function App() {
       return;
     const text = state.processed.output;
     void operation(async () => {
-      await plugin.current.host.clipboard.writeText(text);
+      await plugin.current.anywhere.clipboard.writeText(text);
       setNotice({key: 'copiedResult', failed: false});
     });
   }
@@ -178,12 +177,7 @@ function App() {
     if (state.composing) return;
     void operation(async () => {
       const result = prepareJsonAction(state.input, id, state.spaces);
-      if (result.copy)
-        await plugin.current.host.clipboard.writeText(result.text);
-      else {
-        edited.current = true;
-        load(result.text);
-      }
+      await plugin.current.anywhere.clipboard.writeText(result.text);
       setNotice({key: result.message, failed: false});
     });
   }
@@ -193,7 +187,6 @@ function App() {
     selection.current = {start: 0, end: 0, direction: 'none', top: 0, left: 0};
     setNotice(null);
     setInput(text);
-    requestAnimationFrame(() => inputRef.current?.focus());
   }
   function edit(event) {
     const text = event.currentTarget.value;
@@ -233,38 +226,40 @@ function App() {
     editor.scrollLeft = pending.left;
   }, [input]);
   useEffect(() => {
+    const incoming = workspaceInput({
+      canReplace: () => !edited.current && !operationBusy.current,
+      load,
+      notice: key => setNotice({key, failed: false}),
+      report,
+    });
     const instance = definePlugin({
       onError: report,
       async onLaunch(invocation, {signal}) {
-        // Show the source immediately. Optional preferences cannot block input.
-        if (!edited.current && invocation.input.kind === 'text')
-          load(invocation.input.text);
-        else if (!edited.current) inputRef.current?.focus();
-        let indent = 2;
+        incoming.launch(invocation);
+        requestAnimationFrame(() => {
+          const target =
+            jsonInputText(invocation.input) === null
+              ? inputRef.current
+              : document.getElementById('json-path');
+          target?.focus();
+        });
         try {
-          const stored = await instance.host.storage.get('indent');
-          if ([2, 4].includes(stored)) indent = stored;
+          const stored = await instance.anywhere.storage.get('indent');
+          if (
+            !signal.aborted &&
+            !edited.current &&
+            !indentEdited.current &&
+            [2, 4].includes(stored)
+          )
+            setSpaces(stored);
         } catch {
-          /* A copy command still works with the default indentation. */
-        }
-        if (signal.aborted || edited.current || operationBusy.current) return;
-        if (!indentEdited.current) setSpaces(indent);
-        try {
-          const launch = prepareJsonLaunch(invocation, indent);
-          if (!launch) return;
-          load(launch.input);
-          if (launch.clipboard !== null) {
-            await operation(async () => {
-              await instance.host.clipboard.writeText(launch.clipboard);
-              setNotice({key: launch.message, failed: false});
-            });
-          } else if (launch.message)
-            setNotice({key: launch.message, failed: false});
-        } catch (error) {
-          report(error);
+          /* Optional preferences never block the launch input. */
         }
       },
     });
+    const stopContext = instance.anywhere.context.onChange(input =>
+      incoming.context(input),
+    );
     plugin.current = instance;
     const shortcut = event => {
       if (event.isComposing || current.current.composing) return;
@@ -282,7 +277,10 @@ function App() {
         return;
       }
       if (!event.metaKey || event.altKey || event.ctrlKey) return;
-      if (event.key === 'Enter') {
+      if (!event.shiftKey && event.key.toLowerCase() === 'l') {
+        event.preventDefault();
+        document.getElementById('json-path')?.focus();
+      } else if (event.key === 'Enter') {
         event.preventDefault();
         current.current.run();
       } else if (event.shiftKey && event.key.toLowerCase() === 'c') {
@@ -290,12 +288,19 @@ function App() {
         current.current.copyResult();
       }
     };
+    const dismissActions = event => {
+      const menu = actionsRef.current;
+      if (menu && !menu.contains(event.target)) setActionsOpen(false);
+    };
+    window.addEventListener('pointerdown', dismissActions);
     window.addEventListener('keydown', shortcut);
     return () => {
+      stopContext();
       instance.dispose();
       clearTimeout(timer.current);
       engine.current.clear();
       window.removeEventListener('keydown', shortcut);
+      window.removeEventListener('pointerdown', dismissActions);
     };
   }, []);
 
@@ -315,50 +320,21 @@ function App() {
             ? t('jsSummary')
             : t('pathSummary', {count}));
   return (
-    <main class="aw-ui aw-workspace" lang={language}>
-      <nav class="aw-workspace-toolbar" aria-label={t('tools')}>
-        <div class="aw-tabs" role="group" aria-label={t('mode')}>
-          {[
-            ['javascript', 'JavaScript'],
-            ['jsonpath', 'JSONPath'],
-          ].map(([value, label]) => (
-            <button
-              class="aw-tab"
-              aria-pressed={mode === value}
-              title={t('switchMode')}
-              onClick={() => {
-                setMode(value);
-                setNotice(null);
-                document.getElementById('json-path')?.focus();
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        <div class="aw-actions">
-          {' '}
-          <button
-            disabled={busy}
-            onClick={() =>
-              operation(async () => {
-                const text = await plugin.current.host.clipboard.readText();
-                if (text != null) {
-                  edited.current = true;
-                  const document = decodeDocument(text);
-                  load(document.text);
-                  if (document.escaped)
-                    setNotice({key: 'decoded', failed: false});
-                }
-              })
-            }
-          >
-            <span class="aw-icon aw-icon--paste" aria-hidden="true" />
-            {t('paste')}
-          </button>
-        </div>
-      </nav>
-      <div class="query-bar">
+    <main class="aw-ui aw-workspace json-workspace" lang={language}>
+      <nav class="json-query-toolbar" aria-label={t('tools')}>
+        <select
+          aria-label={t('mode')}
+          title={t('switchMode')}
+          value={mode}
+          onChange={event => {
+            setMode(event.currentTarget.value);
+            setNotice(null);
+            document.getElementById('json-path')?.focus();
+          }}
+        >
+          <option value="javascript">JavaScript</option>
+          <option value="jsonpath">JSONPath</option>
+        </select>
         <div
           class="aw-input-group"
           data-invalid={fresh && processed.queryError ? 'true' : 'false'}
@@ -374,6 +350,7 @@ function App() {
             id="json-path"
             class="aw-code"
             aria-label={isJavaScript ? t('jsFormula') : t('pathFormula')}
+            title={t('focusFormula')}
             type="text"
             value={path}
             maxLength={MAX_QUERY_LENGTH}
@@ -430,7 +407,7 @@ function App() {
           <span class="aw-icon aw-icon--run" aria-hidden="true" />
           {isJavaScript ? t('calculate') : t('query')} <kbd>⌘↵</kbd>
         </button>
-      </div>
+      </nav>
       {(error || notice?.failed) && (
         <aside
           id="json-error"
@@ -441,13 +418,142 @@ function App() {
           {notice?.failed ? notice.text : error}
         </aside>
       )}
-      <section class="aw-workspace-panes">
+      <section class="aw-workspace-panes json-panes">
         <article class="aw-pane">
           <header class="aw-pane-header">
-            <label for="json-input" title={t('autoFormat')}>
-              {t('input')}
-            </label>
-            <span>{t('bytes', {count: inputBytes})}</span>
+            <div class="json-pane-heading">
+              <label for="json-input" title={t('autoFormat')}>
+                {t('input')}
+              </label>
+              <span role="status">
+                {notice && !notice.failed && notice.key !== 'copiedResult'
+                  ? t(notice.key)
+                  : t('bytes', {count: inputBytes})}
+              </span>
+            </div>
+            <div
+              class="json-menu"
+              data-open={actionsOpen}
+              ref={actionsRef}
+              onKeyDown={event => {
+                if (event.isComposing || composing) return;
+                const menu = event.currentTarget;
+                if (event.key === 'Escape' && actionsOpen) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setActionsOpen(false);
+                  menu.querySelector('.json-more').focus();
+                } else if (
+                  ['ArrowDown', 'ArrowUp'].includes(event.key) &&
+                  event.target.tagName !== 'SELECT'
+                ) {
+                  event.preventDefault();
+                  setActionsOpen(true);
+                  const focusItem = () => {
+                    const controls = [
+                      ...menu.querySelectorAll(
+                        '.json-menu-panel select:not(:disabled), .json-menu-panel button:not(:disabled)',
+                      ),
+                    ];
+                    if (!controls.length) return;
+                    const index = controls.indexOf(event.target);
+                    const next =
+                      index < 0
+                        ? event.key === 'ArrowDown'
+                          ? 0
+                          : controls.length - 1
+                        : (index +
+                            (event.key === 'ArrowDown' ? 1 : -1) +
+                            controls.length) %
+                          controls.length;
+                    controls[next].focus();
+                  };
+                  if (actionsOpen) focusItem();
+                  else requestAnimationFrame(focusItem);
+                }
+              }}
+              onFocusOut={event => {
+                if (
+                  event.relatedTarget &&
+                  !event.currentTarget.contains(event.relatedTarget)
+                )
+                  setActionsOpen(false);
+              }}
+            >
+              <button
+                class="json-more"
+                aria-label={t('actions')}
+                title={t('actions')}
+                aria-expanded={actionsOpen}
+                aria-controls={actionsOpen ? 'json-actions-panel' : undefined}
+                onClick={() => setActionsOpen(value => !value)}
+              >
+                <span aria-hidden="true">⋯</span>
+              </button>
+              {actionsOpen && (
+                <div
+                  id="json-actions-panel"
+                  class="json-menu-panel"
+                  role="group"
+                  aria-label={t('actions')}
+                >
+                  <label class="indent">
+                    {t('indent')}
+                    <select
+                      aria-label={t('indent')}
+                      value={spaces}
+                      disabled={busy || composing}
+                      onChange={event => {
+                        const value = Number(event.currentTarget.value);
+                        setActionsOpen(false);
+                        actionsRef.current.querySelector('.json-more').focus();
+                        indentEdited.current = true;
+                        setNotice(null);
+                        setSpaces(value);
+                        void operation(() =>
+                          plugin.current.anywhere.storage.set('indent', value),
+                        );
+                      }}
+                    >
+                      <option value={2}>{t('spaces', {count: 2})}</option>
+                      <option value={4}>{t('spaces', {count: 4})}</option>
+                    </select>
+                  </label>
+                  <hr />
+                  {JSON_ACTIONS.map(action => (
+                    <button
+                      disabled={!input.trim() || busy || composing}
+                      onClick={() => {
+                        setActionsOpen(false);
+                        actionsRef.current.querySelector('.json-more').focus();
+                        jsonAction(action.id);
+                      }}
+                    >
+                      <span
+                        class={`aw-icon aw-icon--${action.icon}`}
+                        aria-hidden="true"
+                      />
+                      {t(action.id)}
+                    </button>
+                  ))}
+                  <hr />
+                  <button
+                    disabled={!input || busy || composing}
+                    onClick={() => {
+                      setActionsOpen(false);
+                      edited.current = true;
+                      engine.current.clear();
+                      setInput('');
+                      setNotice(null);
+                      inputRef.current?.focus();
+                    }}
+                  >
+                    <span class="aw-icon aw-icon--clear" aria-hidden="true" />
+                    {t('clear')}
+                  </button>
+                </div>
+              )}
+            </div>
           </header>
           <div class="aw-pane-body">
             <textarea
@@ -460,79 +566,60 @@ function App() {
               placeholder={t('pasteHint')}
               value={input}
               onInput={edit}
+              onPaste={event => {
+                const editor = event.currentTarget;
+                if (
+                  composing ||
+                  (input &&
+                    (editor.selectionStart !== 0 ||
+                      editor.selectionEnd !== input.length))
+                )
+                  return;
+                const text = event.clipboardData?.getData('text/plain');
+                if (!text) return;
+                try {
+                  const document = decodeDocument(text);
+                  if (!document.escaped) return;
+                  event.preventDefault();
+                  edited.current = true;
+                  load(document.text);
+                  setNotice({key: 'decoded', failed: false});
+                } catch {
+                  // Let native paste and the existing validator handle incomplete text.
+                }
+              }}
               onCompositionStart={() => setComposing(true)}
               onCompositionEnd={() => setComposing(false)}
             />
           </div>
-          <footer class="aw-pane-footer json-input-actions">
-            <details class="aw-disclosure">
-              <summary>{t('actions')}</summary>
-              <div class="aw-disclosure-body">
-                <label class="indent">
-                  {t('indent')}{' '}
-                  <select
-                    value={spaces}
-                    onChange={event => {
-                      const value = Number(event.currentTarget.value);
-                      indentEdited.current = true;
-                      setNotice(null);
-                      setSpaces(value);
-                      void operation(() =>
-                        plugin.current.host.storage.set('indent', value),
-                      );
-                    }}
-                  >
-                    <option value={2}>{t('spaces', {count: 2})}</option>
-                    <option value={4}>{t('spaces', {count: 4})}</option>
-                  </select>
-                </label>
-                <div class="aw-actions">
-                  {JSON_ACTIONS.map(action => (
-                    <button
-                      disabled={!input.trim() || busy || composing}
-                      onClick={() => jsonAction(action.id)}
-                    >
-                      <span
-                        class={`aw-icon aw-icon--${action.icon}`}
-                        aria-hidden="true"
-                      />
-                      {t(action.id)}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </details>
-            {notice && !notice.failed && (
-              <span role="status">{t(notice.key)}</span>
-            )}
-            {input && (
-              <button
-                disabled={busy || composing}
-                onClick={() => {
-                  edited.current = true;
-                  engine.current.clear();
-                  setInput('');
-                  setNotice(null);
-                  inputRef.current?.focus();
-                }}
-              >
-                <span class="aw-icon aw-icon--clear" aria-hidden="true" />
-                {t('clear')}
-              </button>
-            )}
-          </footer>
         </article>
         <article class="aw-pane">
           <header class="aw-pane-header">
-            <label for="json-output">{t('result')}</label>
-            <span>
-              {count == null
-                ? '—'
-                : isJavaScript
-                  ? t('resultCount', {count: 1})
-                  : t('match', {count})}{' '}
-              · {t('bytes', {count: outputBytes})}
-            </span>
+            <div class="json-pane-heading">
+              <label for="json-output">{t('result')}</label>
+              <span>
+                {count == null
+                  ? '—'
+                  : isJavaScript
+                    ? t('resultCount', {count: 1})
+                    : t('match', {count})}
+                {' · '}
+                {t('bytes', {count: outputBytes})}
+              </span>
+            </div>
+            <button
+              class="aw-button--action"
+              disabled={!output || busy || composing}
+              onClick={copyResult}
+              title={t('copyHint')}
+            >
+              <span
+                class={`aw-icon aw-icon--${notice?.key === 'copiedResult' ? 'check' : 'copy'}`}
+                aria-hidden="true"
+              />
+              {notice?.key === 'copiedResult' ? t('copied') : t('copyResult')}
+              <kbd>⌘⇧C</kbd>
+            </button>
           </header>
           <div class="aw-pane-body">
             <textarea
@@ -544,22 +631,6 @@ function App() {
               value={output}
             />
           </div>
-          <footer class="aw-pane-footer">
-            <span />
-            <button
-              class="aw-button--action"
-              disabled={!output || busy}
-              onClick={copyResult}
-              title={t('copyHint')}
-            >
-              <span
-                class={`aw-icon aw-icon--${notice?.key === 'copiedResult' ? 'check' : 'copy'}`}
-                aria-hidden="true"
-              />
-              {notice?.key === 'copiedResult' ? t('copied') : t('copyResult')}{' '}
-              <kbd>⌘⇧C</kbd>
-            </button>
-          </footer>
         </article>
       </section>
       <output role="status" aria-live="polite" class="sr-only">

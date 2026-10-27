@@ -19,7 +19,7 @@ class ToolPageShell extends StatefulWidget {
       this.header,
       this.leading,
       this.headerHeight = DesignTokens.pageHeaderHeight,
-      this.footer,
+      this.trailing,
       this.scrollController,
       this.editorFocus,
       this.presentation = 0,
@@ -34,7 +34,7 @@ class ToolPageShell extends StatefulWidget {
   final Widget? header;
   final Widget? leading;
   final double headerHeight;
-  final Widget? footer;
+  final Widget? trailing;
   final VoidCallback onBack;
   final VoidCallback? onEscape;
   final ScrollController? scrollController;
@@ -190,6 +190,10 @@ class _ToolPageShellState extends State<ToolPageShell> {
                             child: Text(widget.title,
                                 maxLines: 1, overflow: TextOverflow.ellipsis))),
                 const SizedBox(width: 14),
+                if (widget.trailing != null) ...[
+                  widget.trailing!,
+                  const SizedBox(width: 8),
+                ],
                 Tooltip(
                     message: widget.escapeHint ??
                         (widget.detached
@@ -209,7 +213,6 @@ class _ToolPageShellState extends State<ToolPageShell> {
                 padding: const EdgeInsets.fromLTRB(24, 12, 24, 0),
                 child: AppNotice(widget.notice!)),
           Expanded(child: widget.child),
-          if (widget.footer != null) AppPageFooter(child: widget.footer!),
         ]),
       );
 }

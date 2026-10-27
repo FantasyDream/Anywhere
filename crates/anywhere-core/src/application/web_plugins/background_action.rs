@@ -1,8 +1,6 @@
-//! A headless command uses the same broker and trusted consent as a Web document.
+//! A headless command uses the same grant-checked broker as a Web document.
 //! The async driver owns Host work; the blocking VM only exchanges bounded messages.
-use super::{
-    background_runtime, WebConfirmation, WebDispatch, WebDocumentBinding, WebMessageSource,
-};
+use super::{background_runtime, WebDocumentBinding, WebMessageSource};
 use crate::application::Application;
 use anyhow::{ensure, Context, Result};
 use anywhere_protocol::{web_bridge::*, web_plugin::PluginRuntime};
@@ -11,21 +9,14 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
 };
-use tokio::sync::{mpsc, oneshot, watch};
+use tokio::sync::{mpsc, oneshot};
 
-type ConsentReply = (String, oneshot::Sender<WebDispatch>);
 pub(super) struct BackgroundJob {
     active: Arc<AtomicBool>,
-    notices: watch::Sender<Option<WebConfirmation>>,
-    consent: Mutex<Option<ConsentReply>>,
 }
 impl BackgroundJob {
     pub(super) fn cancel(&self) {
         self.active.store(false, Ordering::Release);
-        self.notices.send_replace(None);
-        if let Ok(mut pending) = self.consent.lock() {
-            pending.take();
-        }
     }
 }
 impl Drop for BackgroundJob {
@@ -39,6 +30,18 @@ impl Drop for Running {
         self.0.cancel();
     }
 }
+// A cancelled execution future must retire its binding as well as its VM job.
+struct HeadlessDocument {
+    service: Arc<Mutex<super::WebPluginService>>,
+    binding: WebDocumentBinding,
+}
+impl Drop for HeadlessDocument {
+    fn drop(&mut self) {
+        if let Ok(mut service) = self.service.lock() {
+            service.close_document(&self.binding);
+        }
+    }
+}
 fn source(binding: &WebDocumentBinding) -> WebMessageSource<'_> {
     WebMessageSource {
         runtime_id: binding.runtime_id(),
@@ -49,7 +52,53 @@ fn source(binding: &WebDocumentBinding) -> WebMessageSource<'_> {
 }
 
 impl Application {
-    pub async fn run_background_command(&self, binding: &WebDocumentBinding) -> Result<String> {
+    pub(crate) async fn run_headless_web_action(
+        &self,
+        view: Option<&anywhere_protocol::HostView>,
+        session_id: anywhere_protocol::SessionId,
+        revision: anywhere_protocol::Revision,
+    ) -> Result<bool> {
+        let Some(anywhere_protocol::HostView::WebPlugin { invocation_id }) = view else {
+            return Ok(false);
+        };
+        let binding = {
+            let session = self.session()?;
+            ensure!(
+                !session.suspended
+                    && session.state.session_id == session_id
+                    && session.state.revision == revision,
+                "plugin execution expired"
+            );
+            let mut web = self
+                .web_plugins
+                .lock()
+                .map_err(|_| anyhow::anyhow!("plugin service unavailable"))?;
+            let invocation = web
+                .invocations
+                .get(invocation_id)
+                .context("plugin invocation expired")?;
+            let entry = &web.catalog.entries[&invocation.command.plugin_id];
+            if !entry.manifest.commands.iter().any(|command| {
+                command.id == invocation.command.command_id
+                    && command.runtime == PluginRuntime::Background
+            }) {
+                return Ok(false);
+            }
+            let platform = entry.platform;
+            web.bind(invocation_id, platform)?
+        };
+        let document = HeadlessDocument {
+            service: self.web_plugins.clone(),
+            binding,
+        };
+        self.run_background_command(&document.binding).await?;
+        Ok(true)
+    }
+
+    pub(super) async fn run_background_command(
+        &self,
+        binding: &WebDocumentBinding,
+    ) -> Result<String> {
         let (file, entrypoint, input, registered, job) = {
             let mut web = self
                 .web_plugins
@@ -86,8 +135,6 @@ impl Application {
             );
             let job = Arc::new(BackgroundJob {
                 active: Arc::new(AtomicBool::new(true)),
-                notices: watch::channel(None).0,
-                consent: Mutex::new(None),
             });
             web.backgrounds
                 .insert(binding.runtime_id().into(), job.clone());
@@ -119,7 +166,6 @@ impl Application {
             background_runtime::run(&code, &entrypoint, &input, invoke, current)
         });
         let mut sequence = 0u64;
-        let mut declined = false;
         let result = loop {
             tokio::select! {
                 result = &mut worker => break result.context("background worker failed")?,
@@ -129,22 +175,8 @@ impl Application {
                     let mut frame = serde_json::to_value(call)?;
                     frame["protocol"] = json!(PROTOCOL);
                     frame["requestId"] = json!(format!("background_{sequence}"));
-                    let response = self.dispatch_web_message(binding, source(binding), &frame.to_string()).await;
-                    let response = match response {
-                        WebDispatch::Confirmation(notice) => {
-                            let (answer, result) = oneshot::channel();
-                            *job.consent.lock().map_err(|_| anyhow::anyhow!("consent unavailable"))? = Some((notice.ticket.clone(), answer));
-                            job.notices.send_replace(Some(notice));
-                            match tokio::time::timeout(std::time::Duration::from_secs(30), result).await {
-                                Ok(Ok(value)) => value,
-                                _ => { let _ = reply.send(Err(WebError::new(WebErrorCode::Timeout))); break Err(anyhow::anyhow!("background consent expired")); }
-                            }
-                        }
-                        value => value,
-                    };
-                    let WebDispatch::Reply(raw) = response else { unreachable!("consent returns a reply") };
+                    let raw = self.dispatch_web_message(binding, source(binding), &frame.to_string()).await;
                     let result = self.background_reply_value(binding, &raw, &mut sequence).await;
-                    declined |= result.as_ref().is_err_and(|error| error.code == WebErrorCode::UserCancelled);
                     let _ = reply.send(result);
                 }
             }
@@ -154,10 +186,6 @@ impl Application {
             .map_err(|_| anyhow::anyhow!("plugin service unavailable"))?
             .backgrounds
             .remove(binding.runtime_id());
-        // Declining a Host operation is a normal exit, not a crashed-tool page.
-        if declined && result.is_err() {
-            return Ok("null".into());
-        }
         Ok(serde_json::to_string(&result?)?)
     }
 
@@ -189,12 +217,9 @@ impl Application {
         for chunk in 0..=(MAX_TRANSFER_BYTES / MAX_CHUNK_BYTES) {
             *sequence += 1;
             let frame = json!({"protocol":PROTOCOL,"requestId":format!("background_{}",sequence),"method":"text.read","params":{"ticket":ticket,"sequence":chunk}}).to_string();
-            let WebDispatch::Reply(raw) = self
+            let raw = self
                 .dispatch_web_message(binding, source(binding), &frame)
-                .await
-            else {
-                return Err(WebError::new(WebErrorCode::HostFailure));
-            };
+                .await;
             let response: Value =
                 serde_json::from_str(&raw).map_err(|_| WebError::new(WebErrorCode::HostFailure))?;
             let value = &response["result"]["value"];
@@ -212,73 +237,5 @@ impl Application {
             }
         }
         Err(WebError::new(WebErrorCode::TooLarge))
-    }
-
-    pub async fn wait_background_confirmation(
-        &self,
-        binding: &WebDocumentBinding,
-        after: &str,
-    ) -> Result<Option<WebConfirmation>> {
-        self.validate_web_document(binding, source(binding))?;
-        let job = self
-            .web_plugins
-            .lock()
-            .map_err(|_| anyhow::anyhow!("plugin service unavailable"))?
-            .backgrounds
-            .get(binding.runtime_id())
-            .cloned();
-        let Some(job) = job else { return Ok(None) };
-        let mut notices = job.notices.subscribe();
-        loop {
-            if !job.active.load(Ordering::Acquire) {
-                return Ok(None);
-            }
-            if let Some(notice) = notices
-                .borrow_and_update()
-                .clone()
-                .filter(|n| n.ticket != after)
-            {
-                return Ok(Some(notice));
-            }
-            if tokio::time::timeout(std::time::Duration::from_secs(15), notices.changed())
-                .await
-                .is_err()
-            {
-                return Ok(None);
-            }
-        }
-    }
-
-    pub async fn confirm_background_operation(
-        &self,
-        binding: &WebDocumentBinding,
-        ticket: &str,
-        approved: bool,
-    ) -> Result<()> {
-        let job = self
-            .web_plugins
-            .lock()
-            .map_err(|_| anyhow::anyhow!("plugin service unavailable"))?
-            .backgrounds
-            .get(binding.runtime_id())
-            .cloned()
-            .context("background command expired")?;
-        let answer = {
-            let mut pending = job
-                .consent
-                .lock()
-                .map_err(|_| anyhow::anyhow!("consent unavailable"))?;
-            ensure!(
-                pending.as_ref().is_some_and(|(id, _)| id == ticket),
-                "consent ticket expired"
-            );
-            pending.take().expect("checked ticket").1
-        };
-        let reply = self
-            .confirm_web_operation(binding, source(binding), ticket, approved)
-            .await;
-        let _ = answer.send(reply);
-        job.notices.send_replace(None);
-        Ok(())
     }
 }

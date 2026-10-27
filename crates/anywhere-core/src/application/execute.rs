@@ -256,6 +256,18 @@ impl Application {
             Ok::<_, anyhow::Error>((output, history_result, execution_session_id))
         })
         .await?;
+        let result = async {
+            let (mut output, history_result, execution_session_id) = result?;
+            if self
+                .run_headless_web_action(output.view.as_ref(), session_id, revision)
+                .await?
+            {
+                output.view = None;
+                output.close_window = true;
+            }
+            Ok::<_, anyhow::Error>((output, history_result, execution_session_id))
+        }
+        .await;
         match result {
             Ok((output, history_result, execution_session_id)) => {
                 let (warning, close_window) = match history_result {

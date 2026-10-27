@@ -162,7 +162,8 @@ impl WebPluginService {
             .context("Web command no longer exists")?;
         let workspace = context.type_id == crate::features::tools::ENTRY_CONTEXT;
         ensure!(
-            workspace || definition.accepts.contains(&context.type_id),
+            (workspace && !definition.needs_context())
+                || definition.accepts.contains(&context.type_id),
             "Web command does not accept this object"
         );
         if definition.require_input_match

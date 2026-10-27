@@ -15,6 +15,9 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+#[path = "web_sdk_conformance/json.rs"]
+mod json_workspace;
+
 struct SyntheticPlatform(Mutex<String>);
 impl Platform for SyntheticPlatform {
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
@@ -74,12 +77,15 @@ fn package() -> Result<anywhere_plugin::web::VerifiedWebPackage> {
 async fn main() -> Result<()> {
     let args = std::env::args().skip(1).collect::<Vec<_>>();
     if let [mode, path] = args.as_slice() {
-        anyhow::ensure!(mode == "--background", "unknown harness mode");
-        return check_background(Path::new(path)).await;
+        return match mode.as_str() {
+            "--background" => check_background(Path::new(path)).await,
+            "--json" => json_workspace::check(Path::new(path)).await,
+            _ => anyhow::bail!("unknown harness mode"),
+        };
     }
     anyhow::ensure!(
         args.is_empty(),
-        "expected --background PACKAGE or no arguments"
+        "expected --background PACKAGE, --json PACKAGE or no arguments"
     );
     let app = Application::new(
         Arc::new(SyntheticPlatform(Mutex::new("synthetic clipboard".into()))),
@@ -130,14 +136,11 @@ async fn main() -> Result<()> {
                 )
                 .await
             }
-            Some("confirm") => {
-                app.confirm_web_operation(
-                    &binding,
-                    source(&binding),
-                    input["ticket"].as_str().context("missing confirmation")?,
-                    input["approved"] == true,
-                )
-                .await
+            Some("hide") => {
+                app.suspend_session(1).await?;
+                println!("{}", json!({"kind":"hidden"}));
+                std::io::stdout().flush()?;
+                continue;
             }
             Some("reload") => {
                 binding = app.bind_web_document(&invocation_id, WebPlatform::Macos)?;
@@ -147,12 +150,7 @@ async fn main() -> Result<()> {
             }
             _ => anyhow::bail!("unknown test harness command"),
         };
-        let output = match response {
-            WebDispatch::Reply(frame) => json!({"kind":"reply","frame":frame}),
-            WebDispatch::Confirmation(value) => {
-                json!({"kind":"confirmation","ticket":value.ticket,"requestId":value.request_id,"operation":format!("{:?}", value.kind),"preview":value.preview})
-            }
-        };
+        let output = json!({"kind":"reply","frame":response});
         println!("{output}");
         std::io::stdout().flush()?;
     }
@@ -160,7 +158,7 @@ async fn main() -> Result<()> {
 }
 
 /// Execute the built TypeScript bundle through real package approval, Context,
-/// Action qualification, QuickJS, the SDK adapter and the existing consent broker.
+/// Action qualification, QuickJS, the SDK adapter and the grant-checked broker.
 async fn check_background(path: &Path) -> Result<()> {
     let platform = Arc::new(SyntheticPlatform(Mutex::new(String::new())));
     let app = Arc::new(Application::new(
@@ -193,41 +191,16 @@ async fn check_background(path: &Path) -> Result<()> {
         })
         .context("background action did not match derived Context")?;
     let output = app.execute(id, 1, candidate.id.clone()).await?;
-    let Some(HostView::WebPlugin { invocation_id }) = output.view else {
-        anyhow::bail!("missing background invocation")
-    };
-    let binding = app.bind_web_document(&invocation_id, WebPlatform::Macos)?;
     anyhow::ensure!(
-        app.web_document_is_background(&binding)?,
-        "unexpected UI command"
+        output.succeeded() && output.view.is_none() && output.close_window,
+        "background command opened a page or failed: {:?}",
+        output.error
     );
-    let job = {
-        let app = app.clone();
-        let binding = binding.clone();
-        tokio::spawn(async move { app.run_background_command(&binding).await })
-    };
-    let notice = tokio::time::timeout(std::time::Duration::from_secs(5), async {
-        loop {
-            if let Some(notice) = app.wait_background_confirmation(&binding, "").await? {
-                return Ok::<_, anyhow::Error>(notice);
-            }
-            tokio::task::yield_now().await;
-        }
-    })
-    .await??;
-    anyhow::ensure!(
-        platform.0.lock().unwrap().is_empty(),
-        "clipboard changed before consent"
-    );
-    app.confirm_background_operation(&binding, &notice.ticket, true)
-        .await?;
-    tokio::time::timeout(std::time::Duration::from_secs(5), job).await???;
     let copied: Value = serde_json::from_str(&platform.0.lock().unwrap())?;
     anyhow::ensure!(
         copied == json!({"kind":"object", "count":2}),
         "SDK result did not survive the complete pipeline"
     );
-    app.close_web_document(&binding)?;
     println!("TypeScript background SDK conformance passed (synthetic clipboard only)");
     Ok(())
 }

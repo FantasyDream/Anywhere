@@ -89,7 +89,7 @@ Launcher / Settings 共享 Flutter engine；Running Tasks engine 按需创建。
 
 文件预览的产品 / Quick Look 接口研究保存在 [预览调研](research/file-preview.md)，未接入的富预览与系统面板不作为现有 UI 能力。
 
-编辑 / 查询工作区复用 File Search 页框：Flutter 的 `AppPageHeader` 用于 Launcher 与工具页面；工具页面有实际操作时可用 `AppPageFooter`，搜索页不再占用固定底栏，Web 的 `aw-workspace` / `aw-pane` 使用同一份尺寸参数。JSON 工具使用模式标签、左宽右窄分栏和轻量代码表面；取消双卡片重边框、强焦点矩形和重复常驻说明。返回与 Esc 保留在页头，Web 页脚保留加载状态与宿主工具选项，不常驻“本地处理”说明。
+编辑 / 查询工作区复用 File Search 页框：Flutter 的 `AppPageHeader` 用于 Launcher 与工具页面，`ToolPageShell.trailing` 放页头操作，内容区域占满余下高度，不设固定页脚。Web 的 `aw-workspace` / `aw-pane` 使用同一份尺寸参数；主要操作在工具栏或编辑区标题旁，不自行重画底栏。JSON 工具使用单行公式栏、接近等宽的双编辑区和轻量代码表面。返回与 Esc 保留在页头，宿主工具选项也位于页头，加载状态仅在加载期间显示。
 
 ## 剪贴板操作与输入状态
 

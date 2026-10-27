@@ -809,12 +809,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get cancelEscapeSelected => '✓ 取消 · Esc';
 
   @override
-  String get allowOnce => '✓ 允许一次';
-
-  @override
-  String get allowOnceAction => '允许一次';
-
-  @override
   String get webToolsAreUnavailableOnThisPlatform => '此平台暂不支持 Web 工具。';
 
   @override
@@ -824,7 +818,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noHostPermissions => '未请求宿主权限。';
 
   @override
-  String get codeRunsInALocalWebViewNetwork => '代码在本地 WebView 中运行，禁止联网和页面跳转。此限制不等同于操作系统级进程沙箱。';
+  String get pluginExecutionBoundary => '插件在本机处理数据，只能调用已批准的宿主能力，不提供任意文件或网络访问。这些限制不等同于操作系统级进程隔离。';
 
   @override
   String get thisReplacesTheInstalledCodeClosesIts => '这将替换已安装的代码并关闭其当前页面，保留本地设置。之后可恢复到曾经批准的版本。';
@@ -873,12 +867,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get theToolStoppedReloadItOrReturn => '工具已停止，请重新加载或返回搜索。';
-
-  @override
-  String get allowThisOperation => '允许此操作？';
-
-  @override
-  String get thisTool => '此工具';
 
   @override
   String get dismissMessage => '关闭提示';
@@ -1220,11 +1208,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String clipboardConsent(String tool) {
-    return '$tool请求执行剪贴板操作。授权仅对本次操作有效。';
-  }
-
-  @override
   String get quitAnywhere => '退出 Anywhere';
 
   @override
@@ -1297,19 +1280,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get inspectTrustedPackage => '请选择可信的 .awplugin 包，在安装前检查其内容。';
 
   @override
-  String get readClipboardText => '读取剪贴板文本';
-
-  @override
-  String get copyTextToClipboard => '将文本复制到剪贴板';
-
-  @override
   String get permissionCurrentApp => '当前应用名称';
 
   @override
-  String get permissionReadClipboard => '读取剪贴板文本（每次操作均需确认）';
+  String get permissionReadClipboard => '读取剪贴板文本';
 
   @override
-  String get permissionWriteClipboard => '复制文本（每次操作均需确认）';
+  String get permissionWriteClipboard => '写入剪贴板文本';
 
   @override
   String get permissionLocalStorage => '独立本地设置（1 MiB）';

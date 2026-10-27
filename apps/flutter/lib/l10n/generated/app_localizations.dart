@@ -1679,18 +1679,6 @@ abstract class AppLocalizations {
   /// **'✓ Cancel · Esc'**
   String get cancelEscapeSelected;
 
-  /// No description provided for @allowOnce.
-  ///
-  /// In en, this message translates to:
-  /// **'✓ Allow once'**
-  String get allowOnce;
-
-  /// No description provided for @allowOnceAction.
-  ///
-  /// In en, this message translates to:
-  /// **'Allow once'**
-  String get allowOnceAction;
-
   /// No description provided for @webToolsAreUnavailableOnThisPlatform.
   ///
   /// In en, this message translates to:
@@ -1709,11 +1697,11 @@ abstract class AppLocalizations {
   /// **'No Host permissions.'**
   String get noHostPermissions;
 
-  /// No description provided for @codeRunsInALocalWebViewNetwork.
+  /// No description provided for @pluginExecutionBoundary.
   ///
   /// In en, this message translates to:
-  /// **'Code runs in a local WebView. Network access and navigation are blocked. This is not an OS process sandbox.'**
-  String get codeRunsInALocalWebViewNetwork;
+  /// **'Plugins process data locally and can call only approved host capabilities. Arbitrary filesystem and network access are unavailable. These restrictions are not OS process isolation.'**
+  String get pluginExecutionBoundary;
 
   /// No description provided for @thisReplacesTheInstalledCodeClosesIts.
   ///
@@ -1810,18 +1798,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The tool stopped. Reload it or return to search.'**
   String get theToolStoppedReloadItOrReturn;
-
-  /// No description provided for @allowThisOperation.
-  ///
-  /// In en, this message translates to:
-  /// **'Allow this operation?'**
-  String get allowThisOperation;
-
-  /// No description provided for @thisTool.
-  ///
-  /// In en, this message translates to:
-  /// **'This tool'**
-  String get thisTool;
 
   /// No description provided for @dismissMessage.
   ///
@@ -2417,12 +2393,6 @@ abstract class AppLocalizations {
   /// **'{count} restricted locations skipped'**
   String restrictedLocationsSkipped(String count);
 
-  /// No description provided for @clipboardConsent.
-  ///
-  /// In en, this message translates to:
-  /// **'{tool} is requesting a clipboard operation. Approval applies once.'**
-  String clipboardConsent(String tool);
-
   /// No description provided for @quitAnywhere.
   ///
   /// In en, this message translates to:
@@ -2567,18 +2537,6 @@ abstract class AppLocalizations {
   /// **'Choose a trusted .awplugin package to inspect before installing.'**
   String get inspectTrustedPackage;
 
-  /// No description provided for @readClipboardText.
-  ///
-  /// In en, this message translates to:
-  /// **'Read clipboard text'**
-  String get readClipboardText;
-
-  /// No description provided for @copyTextToClipboard.
-  ///
-  /// In en, this message translates to:
-  /// **'Copy text to clipboard'**
-  String get copyTextToClipboard;
-
   /// No description provided for @permissionCurrentApp.
   ///
   /// In en, this message translates to:
@@ -2588,13 +2546,13 @@ abstract class AppLocalizations {
   /// No description provided for @permissionReadClipboard.
   ///
   /// In en, this message translates to:
-  /// **'Read clipboard text (confirmed per operation)'**
+  /// **'Read clipboard text'**
   String get permissionReadClipboard;
 
   /// No description provided for @permissionWriteClipboard.
   ///
   /// In en, this message translates to:
-  /// **'Copy text (confirmed per operation)'**
+  /// **'Write clipboard text'**
   String get permissionWriteClipboard;
 
   /// No description provided for @permissionLocalStorage.

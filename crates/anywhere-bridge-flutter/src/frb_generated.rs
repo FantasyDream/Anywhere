@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 513369934;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1860969057;
 
 // Section: executor
 
@@ -731,94 +731,6 @@ fn wire__crate__api__configure_app_history_source_impl(
                             crate::api::configure_app_history_source(api_id, api_path, api_mode)?;
                         Ok(output_ok)
                     })(),
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__confirm_web_background_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "confirm_web_background",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_handle = <String>::sse_decode(&mut deserializer);
-            let api_ticket = <String>::sse_decode(&mut deserializer);
-            let api_approved = <bool>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let output_ok = crate::api::confirm_web_background(
-                            api_handle,
-                            api_ticket,
-                            api_approved,
-                        )
-                        .await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__confirm_web_operation_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "confirm_web_operation",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_handle = <String>::sse_decode(&mut deserializer);
-            let api_origin = <String>::sse_decode(&mut deserializer);
-            let api_ticket = <String>::sse_decode(&mut deserializer);
-            let api_approved = <bool>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let output_ok = crate::api::confirm_web_operation(
-                            api_handle,
-                            api_origin,
-                            api_ticket,
-                            api_approved,
-                        )
-                        .await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
                 )
             }
         },
@@ -1896,42 +1808,6 @@ fn wire__crate__api__revoke_extension_impl(
         },
     )
 }
-fn wire__crate__api__run_web_background_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "run_web_background",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_handle = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let output_ok = crate::api::run_web_background(api_handle).await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
 fn wire__crate__api__set_app_history_action_enabled_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -2700,45 +2576,6 @@ fn wire__crate__api__wait_shortcut_intent_impl(
                             api_routes,
                         )
                         .await?;
-                        Ok(output_ok)
-                    })()
-                    .await,
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__wait_web_background_confirmation_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "wait_web_background_confirmation",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_handle = <String>::sse_decode(&mut deserializer);
-            let api_after = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| async move {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || async move {
-                        let output_ok =
-                            crate::api::wait_web_background_confirmation(api_handle, api_after)
-                                .await?;
                         Ok(output_ok)
                     })()
                     .await,
@@ -4006,33 +3843,11 @@ impl SseDecode for Option<u64> {
     }
 }
 
-impl SseDecode for Option<crate::api::WebConsentKindDto> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        if (<bool>::sse_decode(deserializer)) {
-            return Some(<crate::api::WebConsentKindDto>::sse_decode(deserializer));
-        } else {
-            return None;
-        }
-    }
-}
-
 impl SseDecode for Option<crate::api::WebPluginLaunchDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::api::WebPluginLaunchDto>::sse_decode(deserializer));
-        } else {
-            return None;
-        }
-    }
-}
-
-impl SseDecode for Option<crate::api::WebReplyDto> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        if (<bool>::sse_decode(deserializer)) {
-            return Some(<crate::api::WebReplyDto>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -4231,28 +4046,14 @@ impl SseDecode for () {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {}
 }
 
-impl SseDecode for crate::api::WebConsentKindDto {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut inner = <i32>::sse_decode(deserializer);
-        return match inner {
-            0 => crate::api::WebConsentKindDto::ReadClipboard,
-            1 => crate::api::WebConsentKindDto::WriteClipboard,
-            _ => unreachable!("Invalid variant for WebConsentKindDto: {}", inner),
-        };
-    }
-}
-
 impl SseDecode for crate::api::WebDocumentDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_background = <bool>::sse_decode(deserializer);
         let mut var_handle = <String>::sse_decode(deserializer);
         let mut var_origin = <String>::sse_decode(deserializer);
         let mut var_entry = <String>::sse_decode(deserializer);
         let mut var_title = <String>::sse_decode(deserializer);
         return crate::api::WebDocumentDto {
-            background: var_background,
             handle: var_handle,
             origin: var_origin,
             entry: var_entry,
@@ -4323,22 +4124,6 @@ impl SseDecode for crate::api::WebPluginLaunchDto {
     }
 }
 
-impl SseDecode for crate::api::WebReplyDto {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_frame = <Option<String>>::sse_decode(deserializer);
-        let mut var_ticket = <Option<String>>::sse_decode(deserializer);
-        let mut var_consent = <Option<crate::api::WebConsentKindDto>>::sse_decode(deserializer);
-        let mut var_preview = <Option<String>>::sse_decode(deserializer);
-        return crate::api::WebReplyDto {
-            frame: var_frame,
-            ticket: var_ticket,
-            consent: var_consent,
-            preview: var_preview,
-        };
-    }
-}
-
 impl SseDecode for crate::api::WebReviewDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -4390,73 +4175,64 @@ fn pde_ffi_dispatcher_primary_impl(
         19 => {
             wire__crate__api__configure_app_history_source_impl(port, ptr, rust_vec_len, data_len)
         }
-        20 => wire__crate__api__confirm_web_background_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__confirm_web_operation_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__copy_clipboard_entry_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__deactivate_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__delete_clipboard_entry_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__dispatch_web_frame_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__excluded_apps_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__execute_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__execution_session_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__execution_sessions_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__extension_status_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__file_actions_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__freeze_file_results_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__initialize_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__inspect_web_package_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__load_more_files_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__load_more_files_delta_impl(port, ptr, rust_vec_len, data_len),
-        37 => wire__crate__api__object_actions_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__open_app_history_custom_directory_impl(
+        20 => wire__crate__api__copy_clipboard_entry_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__deactivate_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__delete_clipboard_entry_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__dispatch_web_frame_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__excluded_apps_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__execute_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__execution_session_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__execution_sessions_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__extension_status_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__file_actions_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__freeze_file_results_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__initialize_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__inspect_web_package_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__load_more_files_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__load_more_files_delta_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__object_actions_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__open_app_history_custom_directory_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        39 => wire__crate__api__open_app_history_session_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__open_web_document_impl(port, ptr, rust_vec_len, data_len),
-        41 => wire__crate__api__pause_clipboard_recording_impl(port, ptr, rust_vec_len, data_len),
-        42 => wire__crate__api__ping_impl(port, ptr, rust_vec_len, data_len),
-        43 => wire__crate__api__preview_file_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__refresh_features_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__remove_execution_session_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__resolve_action_binding_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__resolve_shortcut_intent_impl(port, ptr, rust_vec_len, data_len),
-        49 => wire__crate__api__resume_launcher_impl(port, ptr, rust_vec_len, data_len),
-        50 => wire__crate__api__revoke_extension_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__run_web_background_impl(port, ptr, rust_vec_len, data_len),
-        52 => {
+        37 => wire__crate__api__open_app_history_session_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__open_web_document_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__pause_clipboard_recording_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__ping_impl(port, ptr, rust_vec_len, data_len),
+        41 => wire__crate__api__preview_file_impl(port, ptr, rust_vec_len, data_len),
+        43 => wire__crate__api__refresh_features_impl(port, ptr, rust_vec_len, data_len),
+        44 => wire__crate__api__remove_execution_session_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__resolve_action_binding_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__resolve_shortcut_intent_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__resume_launcher_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__revoke_extension_impl(port, ptr, rust_vec_len, data_len),
+        49 => {
             wire__crate__api__set_app_history_action_enabled_impl(port, ptr, rust_vec_len, data_len)
         }
-        53 => wire__crate__api__set_clipboard_recording_impl(port, ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__set_clipboard_retention_impl(port, ptr, rust_vec_len, data_len),
-        55 => wire__crate__api__set_context_sources_impl(port, ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__set_excluded_apps_impl(port, ptr, rust_vec_len, data_len),
-        57 => wire__crate__api__set_extension_enabled_impl(port, ptr, rust_vec_len, data_len),
-        58 => wire__crate__api__set_file_search_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__shortcut_actions_impl(port, ptr, rust_vec_len, data_len),
-        60 => wire__crate__api__shortcut_applications_impl(port, ptr, rust_vec_len, data_len),
-        61 => wire__crate__api__shutdown_execution_sessions_impl(port, ptr, rust_vec_len, data_len),
-        62 => wire__crate__api__stop_execution_session_impl(port, ptr, rust_vec_len, data_len),
-        63 => wire__crate__api__supported_shortcut_actions_impl(port, ptr, rust_vec_len, data_len),
-        64 => wire__crate__api__suspend_launcher_impl(port, ptr, rust_vec_len, data_len),
-        65 => wire__crate__api__update_file_input_impl(port, ptr, rust_vec_len, data_len),
-        66 => wire__crate__api__update_input_impl(port, ptr, rust_vec_len, data_len),
-        67 => wire__crate__api__use_app_history_item_impl(port, ptr, rust_vec_len, data_len),
-        68 => wire__crate__api__wait_action_binding_impl(port, ptr, rust_vec_len, data_len),
-        69 => wire__crate__api__wait_for_snapshot_impl(port, ptr, rust_vec_len, data_len),
-        70 => wire__crate__api__wait_for_snapshot_delta_impl(port, ptr, rust_vec_len, data_len),
-        71 => wire__crate__api__wait_shortcut_intent_impl(port, ptr, rust_vec_len, data_len),
-        72 => wire__crate__api__wait_web_background_confirmation_impl(
-            port,
-            ptr,
-            rust_vec_len,
-            data_len,
-        ),
-        73 => wire__crate__api__wait_web_state_impl(port, ptr, rust_vec_len, data_len),
-        74 => wire__crate__api__web_packages_impl(port, ptr, rust_vec_len, data_len),
-        75 => wire__crate__api__web_resource_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__set_clipboard_recording_impl(port, ptr, rust_vec_len, data_len),
+        51 => wire__crate__api__set_clipboard_retention_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__set_context_sources_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__set_excluded_apps_impl(port, ptr, rust_vec_len, data_len),
+        54 => wire__crate__api__set_extension_enabled_impl(port, ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__set_file_search_impl(port, ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__shortcut_actions_impl(port, ptr, rust_vec_len, data_len),
+        57 => wire__crate__api__shortcut_applications_impl(port, ptr, rust_vec_len, data_len),
+        58 => wire__crate__api__shutdown_execution_sessions_impl(port, ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__stop_execution_session_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__supported_shortcut_actions_impl(port, ptr, rust_vec_len, data_len),
+        61 => wire__crate__api__suspend_launcher_impl(port, ptr, rust_vec_len, data_len),
+        62 => wire__crate__api__update_file_input_impl(port, ptr, rust_vec_len, data_len),
+        63 => wire__crate__api__update_input_impl(port, ptr, rust_vec_len, data_len),
+        64 => wire__crate__api__use_app_history_item_impl(port, ptr, rust_vec_len, data_len),
+        65 => wire__crate__api__wait_action_binding_impl(port, ptr, rust_vec_len, data_len),
+        66 => wire__crate__api__wait_for_snapshot_impl(port, ptr, rust_vec_len, data_len),
+        67 => wire__crate__api__wait_for_snapshot_delta_impl(port, ptr, rust_vec_len, data_len),
+        68 => wire__crate__api__wait_shortcut_intent_impl(port, ptr, rust_vec_len, data_len),
+        69 => wire__crate__api__wait_web_state_impl(port, ptr, rust_vec_len, data_len),
+        70 => wire__crate__api__web_packages_impl(port, ptr, rust_vec_len, data_len),
+        71 => wire__crate__api__web_resource_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -4470,7 +4246,7 @@ fn pde_ffi_dispatcher_sync_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         9 => wire__crate__api__begin_activation_impl(ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__prompt_accessibility_impl(ptr, rust_vec_len, data_len),
+        42 => wire__crate__api__prompt_accessibility_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -5482,28 +5258,9 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::SnapshotWaitKindDto>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::WebConsentKindDto {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        match self {
-            Self::ReadClipboard => 0.into_dart(),
-            Self::WriteClipboard => 1.into_dart(),
-            _ => unreachable!(),
-        }
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::WebConsentKindDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::WebConsentKindDto>
-    for crate::api::WebConsentKindDto
-{
-    fn into_into_dart(self) -> crate::api::WebConsentKindDto {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::WebDocumentDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
-            self.background.into_into_dart().into_dart(),
             self.handle.into_into_dart().into_dart(),
             self.origin.into_into_dart().into_dart(),
             self.entry.into_into_dart().into_dart(),
@@ -5598,24 +5355,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::WebPluginLaunchDto>
     for crate::api::WebPluginLaunchDto
 {
     fn into_into_dart(self) -> crate::api::WebPluginLaunchDto {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::WebReplyDto {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.frame.into_into_dart().into_dart(),
-            self.ticket.into_into_dart().into_dart(),
-            self.consent.into_into_dart().into_dart(),
-            self.preview.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::WebReplyDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::WebReplyDto> for crate::api::WebReplyDto {
-    fn into_into_dart(self) -> crate::api::WebReplyDto {
         self
     }
 }
@@ -6578,32 +6317,12 @@ impl SseEncode for Option<u64> {
     }
 }
 
-impl SseEncode for Option<crate::api::WebConsentKindDto> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <bool>::sse_encode(self.is_some(), serializer);
-        if let Some(value) = self {
-            <crate::api::WebConsentKindDto>::sse_encode(value, serializer);
-        }
-    }
-}
-
 impl SseEncode for Option<crate::api::WebPluginLaunchDto> {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::WebPluginLaunchDto>::sse_encode(value, serializer);
-        }
-    }
-}
-
-impl SseEncode for Option<crate::api::WebReplyDto> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <bool>::sse_encode(self.is_some(), serializer);
-        if let Some(value) = self {
-            <crate::api::WebReplyDto>::sse_encode(value, serializer);
         }
     }
 }
@@ -6762,26 +6481,9 @@ impl SseEncode for () {
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {}
 }
 
-impl SseEncode for crate::api::WebConsentKindDto {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <i32>::sse_encode(
-            match self {
-                crate::api::WebConsentKindDto::ReadClipboard => 0,
-                crate::api::WebConsentKindDto::WriteClipboard => 1,
-                _ => {
-                    unimplemented!("");
-                }
-            },
-            serializer,
-        );
-    }
-}
-
 impl SseEncode for crate::api::WebDocumentDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <bool>::sse_encode(self.background, serializer);
         <String>::sse_encode(self.handle, serializer);
         <String>::sse_encode(self.origin, serializer);
         <String>::sse_encode(self.entry, serializer);
@@ -6836,16 +6538,6 @@ impl SseEncode for crate::api::WebPluginLaunchDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
         <String>::sse_encode(self.invocation_id, serializer);
-    }
-}
-
-impl SseEncode for crate::api::WebReplyDto {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <Option<String>>::sse_encode(self.frame, serializer);
-        <Option<String>>::sse_encode(self.ticket, serializer);
-        <Option<crate::api::WebConsentKindDto>>::sse_encode(self.consent, serializer);
-        <Option<String>>::sse_encode(self.preview, serializer);
     }
 }
 

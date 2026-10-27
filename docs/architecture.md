@@ -190,7 +190,7 @@ ToolPageRegistry 选择编译内 Flutter 会话，ToolPageShell 统一布局、�
 
 Web 包继续使用现有安装批准、Action ID、最小 Context 投影和 Rust 能力代理。`@anywhere/sdk` 提供同一套 Context / Input / 剪贴板 / 来源与实时应用 API，Flutter 负责原生文档身份与消息转发，不做权限决策。Context/Input 通过初始快照和最新值事件传递；页面关闭使订阅与请求失效。
 
-Manifest 可声明 `background.resolvers`，由现有 ContextProviderRegistry / ContextGraph 调度；只允许生成 `plugin.<包 id>.*` 数据，使用 `ContextValue::Extension`，与具有原生权限的第一方 Context 隔离。包批准后只保留脚本文件的校验描述符，按需读取并创建 rquickjs VM，不缓存档案或常驻 VM。自动解析不允许副作用；显式后台命令使用同一 Rust broker 和逐次确认，不创建 WebView。JS 引擎与宿主调用分别受预算 / 生命周期控制，当前仍为进程内 worker，进程隔离后续独立实现。
+Manifest 可声明 `background.resolvers`，由现有 ContextProviderRegistry / ContextGraph 调度；只允许生成 `plugin.<包 id>.*` 数据，使用 `ContextValue::Extension`，与具有原生权限的第一方 Context 隔离。包批准后只保留脚本文件的校验描述符，按需读取并创建 rquickjs VM，不缓存档案或常驻 VM。自动解析不允许副作用；显式后台命令使用同一 Rust broker 和安装权限，直接执行并返回结果，不发布工具页或创建 WebView。JS 引擎与宿主调用分别受预算 / 生命周期控制，当前仍为进程内 worker，进程隔离后续独立实现。
 
 界面与后台共享 TypeScript 类型，构建条件选择不同 Adapter；两种运行时不直接通信。详见 [开发指南](plugin-development.md) 和 [本轮实施清单](plugin-runtime-refactor.md)。历史 [Context 调研](research/third-party-context-providers.md) 保留为方案来源，不再代表当前实现状态。
 
@@ -208,7 +208,7 @@ Manifest 可声明 `background.resolvers`，由现有 ContextProviderRegistry / 
 
 ### JSON Web 工具与旧身份兼容
 
-JSON Workspace 已作为普通 Web 示例包实现，页面内校验 / token 格式化，SDK 负责显式输入与剪贴板确认；Host 不提供 JSON 专用业务接口。当前已移除原生工作区、内置 Provider / Actions / 注册入口、Flutter 页面和专用桥接操作；仅供该工具使用的 FeatureOperation / worker 框架同时移除，避免零业务消费者的执行体系常驻 Core。通用页面注册 / Shell、结果导航、会话 / 策略 / 执行 epoch 与既有 worker admission 继续服务现有业务。
+JSON Workspace 是混合插件示例：WebView 负责编辑、校验、token 格式化与公式；按需 QuickJS 负责自有 JSON Context 识别和显式复制命令。两个运行时通过统一 SDK 访问 Host，共享私有缩进设置，不直接通信；原始 JSON 以文本传递，避免数字精度损失。Context 依赖命令没有空白搜索入口，剪贴板写入按安装权限执行，不再逐次确认；Host 不提供 JSON 专用业务接口。当前已移除原生工作区、内置 Provider / Actions / 注册入口、Flutter 页面和专用桥接操作；仅供该工具使用的 FeatureOperation / worker 框架同时移除，避免零业务消费者的执行体系常驻 Core。通用页面注册 / Shell、结果导航、会话 / 策略 / 执行 epoch 与既有 worker admission 继续服务现有业务。
 
 `json.document` / `core.json` 的 matcher 归一、ContextValue 数据类型与旧 Usage 迁移保留兼容；旧 `core.json.*` 动作 ID 不分配给其他动作。现有禁用键、快捷键配置和历史不主动删除，但无法找到当前目标的快捷键不会注册 / 执行，旧插件不能委托已退役动作。新的命令为 `web:dev.anywhere.json-workspace:open`，不复用退役动作身份或权限。
 

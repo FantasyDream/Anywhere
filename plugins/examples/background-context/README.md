@@ -6,7 +6,8 @@ builds this example. No WebView, CSS, native code or runtime TypeScript compiler
 is involved.
 
 When the Context graph receives a JSON text object/array, `resolve` contributes
-a package-owned summary. Its separate **Copy JSON Summary** Action asks the Host
-for clipboard consent, copies the summary, then exits. Ordinary non-JSON text
+a package-owned summary. Its separate **Copy JSON Summary** Action uses the installed clipboard grant,
+copies the summary headlessly, then dismisses the Launcher. It creates no tool
+page or WebView and needs no per-operation confirmation (Build 25+). Ordinary non-JSON text
 produces no Context or Action. Automatic resolvers cannot write the clipboard
 or change the query, even when the package declares those grants for a command.

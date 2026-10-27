@@ -98,14 +98,12 @@ class ResultDetailSession extends ToolPageSession {
             }
             return KeyEventResult.ignored;
           },
-          footer: Row(children: [
-            const Spacer(),
-            if (onCopy != null)
-              TextButton(
+          trailing: onCopy == null
+              ? null
+              : TextButton(
                   onPressed: visible ? onCopy : null,
                   child: Text(context.l10n.shortcutHint(context.l10n.copy,
                       DesktopEnvironment.current.commandShiftLabel('C')))),
-          ]),
           child: Scrollbar(
               controller: scroll,
               child: SingleChildScrollView(

@@ -1,0 +1,69 @@
+{
+  "date": "2026-10-27",
+  "app": "0.14.0+25",
+  "plugin": "0.7.1",
+  "source_base_commit": "8a3e757970c1e477979bbc8e8774bb19f92fbb6f",
+  "source_state": "working tree; not committed by this change",
+  "contract": {
+    "clipboard": "All plugins use installed read/write grants without per-operation confirmation",
+    "boundaries": "Declared permissions, trusted document, session/revision, request deadlines and transfer limits remain enforced; implicit resolvers remain read-only",
+    "background_commands": "Generic Rust execution with no Flutter tool view; successful copies close Launcher; errors retain normal failure handling",
+    "lifecycle": "Headless document RAII retires bindings and cancels jobs on completion, failure or dropped execution"
+  },
+  "checks": {
+    "full_gate": "passed again after final cleanup; build/final-closeout-build25-check.log",
+    "core_passed": 319,
+    "core_ignored": 1,
+    "mvp_passed": 195,
+    "mvp_ignored": 4,
+    "flutter_passed": 434,
+    "sdk_passed": 21,
+    "json_passed": 30,
+    "bridge": "FRB regenerated and bridge crate compiled",
+    "real_package_conformance": "Passed actual JSON package through Application.execute: no view, close_window, exact copies, grants, stored indentation and normalized Context",
+    "security_and_lifecycle": "Missing grants, hidden documents, replay, bounded Unicode upload, stale cancellation, failed platform writes and aborted headless execution covered"
+  },
+  "artifacts": {
+    "app": "build/Anywhere-0.14-preview-build25.app",
+    "zip_sha256": "8333fb938dc18e689ad2e42dd25e42f78d0e450eae8d1e6cd5050d30f554870e",
+    "plugin": "build/web-examples/json-workspace-0.7.1.awplugin",
+    "plugin_sha256": "957104d7abd619704bfc438c01a33b8ecd53f962009dd2eddc77eb94f74a8944",
+    "content_digest": "82be184e648bccd58c15bd4444ecd87aca3eb9cbd11e3c0604aa299765ef4609",
+    "build": "Persistent signing and archive verification passed; build/no-consent-build25.log"
+  },
+  "native": {
+    "app_started": "Build 25 launched through native app control after quitting Build 24",
+    "plugin_updated": "Settings review displayed 0.7.1 and expected content digest; approved with unchanged permissions",
+    "observed": [
+      "Formatted, minified and escaped copy actions run without a confirmation panel or Workspace",
+      "Each successful copy dismisses Launcher; explicit Global Search plus native Command-V verifies clipboard output",
+      "Synthetic document preserves duplicate n keys, 900719925474099312345, 1e9999 and Chinese text",
+      "Escaped output is recognized again as the single normalized JSON Context",
+      "Workspace preloads {test:3}; JavaScript .test produces 3; Copy result shows success with no confirmation and keeps the editor open",
+      "Native Command-V into the formula field confirms the copied result is 3"
+    ],
+    "interruption": "One attempted minify sequence was interrupted by external focus/clipboard changes; discarded and repeated successfully with synthetic input",
+    "screenshots": [
+      "build/ui-v0.14-build25/escaped-copy-result.png",
+      "build/ui-v0.14-build25/workspace-copy-no-prompt.png"
+    ]
+  },
+  "limits": [
+    "Clipboard read and missing-permission behavior verified by automated SDK/Core tests, not a separate native read plugin",
+    "No new memory/GPU-helper, physical IME or cross-platform measurement",
+    "This task does not certify all application-history sources or a production release"
+  ],
+  "final_review": {
+    "boundaries": "Reviewed Rust execution and grant broker, Flutter presentation, SDK adapters, package-owned Context and JSON actions; no JSON business logic added to Host",
+    "cleanup": [
+      "Restricted background command runner to its owning module",
+      "Removed redundant reply alias",
+      "Updated test naming to installed clipboard grants",
+      "Replaced stale branch and acceptance descriptions; consolidated superseded Unreleased JSON notes"
+    ],
+    "compatibility": "Kept static matcher fixtures for previously installed packages; removed consent UI, RPC and transfer bookkeeping no longer used",
+    "repository_hygiene": "No build, target, node_modules, logs, temporary files or private acceptance screenshots included in source changes",
+    "verification": "Full gate passed on final code; native clipboard evidence above uses Build 25 before visibility-only and local-variable cleanup; no runtime behavior changed in this final cleanup",
+    "limits": "Full history-source/platform/release matrix and fresh memory/physical-input measurements remain outside this task"
+  }
+}

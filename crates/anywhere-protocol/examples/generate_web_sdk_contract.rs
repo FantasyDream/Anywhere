@@ -94,7 +94,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let invocation = output_schema::<WebInvocation>()?;
     let app = output_schema::<WebCurrentApp>()?;
     let snapshot = output_schema::<PluginSnapshot>()?;
-    let limits = json!({"frameBytes":MAX_FRAME_BYTES,"chunkBytes":MAX_CHUNK_BYTES,"textBytes":MAX_TEXT_BYTES,"transferBytes":MAX_TRANSFER_BYTES,"running":MAX_RUNNING,"queue":MAX_PENDING-MAX_RUNNING,"timeoutMs":REQUEST_TIMEOUT_MS,"confirmTimeoutMs":CONFIRM_TIMEOUT_MS});
+    let limits = json!({"frameBytes":MAX_FRAME_BYTES,"chunkBytes":MAX_CHUNK_BYTES,"textBytes":MAX_TEXT_BYTES,"transferBytes":MAX_TRANSFER_BYTES,"running":MAX_RUNNING,"queue":MAX_PENDING-MAX_RUNNING,"timeoutMs":REQUEST_TIMEOUT_MS});
     let schema = serde_json::to_string_pretty(
         &json!({"protocol":PROTOCOL,"limits":limits,"calls":calls,"errors":codes,"invocation":invocation,"currentApp":app,"snapshot":snapshot}),
     )? + "\n";

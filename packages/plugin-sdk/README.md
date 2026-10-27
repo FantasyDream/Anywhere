@@ -1,6 +1,6 @@
 # @anywhere/sdk（开发中）
 
-浏览器侧的最小 Web 插件 SDK，运行时无 npm 依赖，不启动 Node。已接入 macOS 本地 WebView、Host 确认 UI 与安装入口，也连接 Rust 合成测试宿主。当前仍是本地开发预览，完整安全 / 跨平台验收尚未完成。
+WebView / 按需后台任务共用的最小插件 SDK，运行时无 npm 依赖，不启动 Node。已接入 macOS 本地 WebView、Host 确认 UI 与安装入口，也连接 Rust 合成测试宿主。当前仍是本地开发预览，完整安全 / 跨平台验收尚未完成。
 
 **第一次开发插件：** 阅读仓库中的 [第三方插件开发指南](https://github.com/FantasyDream/Anywhere/blob/main/docs/plugin-development.md)。SDK `.tgz` 自带 `templates/minimal/` 和 `tools/package.py`，可在独立目录使用；当前没有公开 npm 发布版。
 
@@ -17,11 +17,13 @@ const stop = anywhere.context.onChange(context => { /* update business UI */ });
 stop();
 await anywhere.clipboard.readText();
 await anywhere.clipboard.writeText('hello');
+await anywhere.storage.set('indent', 2);  // storage.local，同一插件的 UI / 后台命令共享
+const indent = await anywhere.storage.get<number>('indent');
 await anywhere.app.getSource();     // 唤醒前冻结的来源应用
 await anywhere.app.getFrontmost();  // 实时前台应用
 ```
 
-接口使用 Promise，事件订阅返回取消函数。`context.read`、`input.read`、`input.write`、`context.currentApp`、`app.frontmost`、剪贴板权限由 Rust 校验，插件不能指定宿主身份。Context/Input 初始化快照后按变化推送，不自行轮询。只使用这些 API 时不需要启动代码；需要启动输入和自定义错误处理时继续使用 `definePlugin`，它也返回 `anywhere`。
+接口使用 Promise，事件订阅返回取消函数。`context.read`、`input.read`、`input.write`、`context.currentApp`、`app.frontmost`、剪贴板及 `storage.local` 权限由 Rust 校验，插件不能指定宿主身份。Context/Input 初始化快照后按变化推送，不自行轮询。只使用这些 API 时不需要启动代码；需要启动输入和自定义错误处理时继续使用 `definePlugin`，它也返回 `anywhere`。
 
 创建后台模板时在 `init my-tool` 后添加 `--background`。模板把 TypeScript 构建为单个 ES module，并设置 `anywhere-background` 导出条件，同样导入 `@anywhere/sdk`。后台解析器仅返回自身 `plugin.<插件 id>.*` Context，自动解析无副作用；显式后台 Action 沿用宿主确认。没有常驻后台监听，订阅仅属于这次有限调用。WebView 与 QuickJS 不直接通信。
 
@@ -105,7 +107,7 @@ const clipboard = await host.clipboard.readText();
 
 - `context.read` 只允许本次调用中声明的类型，不包含完整 Context Graph；文件只给显示名称与不透明句柄。
 - `context.currentApp` 是唤醒前冻结的 ID / 名称，需要单独批准。
-- 剪贴板读写分别需要对应权限，还需要 Host 对本次操作的确认。网页不能用 `approved`、`userGesture` 或自报 pluginId 获得资格。SDK Promise 等待 Host 的最终响应，不会自动重试副作用。
+- 剪贴板读写分别需要安装时批准对应权限；Build 25+ 不再逐次确认。网页不能用 `approved`、`userGesture` 或自报 pluginId 获得资格。SDK Promise 等待 Host 的最终响应，不会自动重试副作用。
 - `storage.local` 只能使用当前插件及来源绑定的键空间，不接受 namespace。值是 JSON；`get` 返回值或 `null`。
 - 支持 `AbortSignal`。隐藏、重载、返回、撤销时 Host 负责撤销 Rust 文档资格并释放旧客户端；`createHost(transport)` 提供的实例也有 `dispose()`。
 - 没有通用 `invoke`、Shell、后台监控、历史剪贴板、任意文件或网络 API。
@@ -118,7 +120,7 @@ const clipboard = await host.clipboard.readText();
 cargo run -p anywhere-protocol --features web-schema --example generate_web_sdk_contract --locked
 ```
 
-帧 ≤ 64 KiB；8 个进行中请求、16 个排队请求；单文档最多 4,096 个请求 ID。普通调用 5 秒，Host 确认最多 30 秒；首次 ready 最多 10 秒。取消或超时无法撤回已经开始的 OS I/O，错误不承诺可以安全重试。
+帧 ≤ 64 KiB；8 个进行中请求、16 个排队请求；单文档最多 4,096 个请求 ID。普通调用 5 秒；首次 ready 最多 10 秒。取消或超时无法撤回已经开始的 OS I/O，错误不承诺可以安全重试。
 
 复制文本原始 UTF-8 ≤ 1 MiB；大文本每块 ≤ 4 KiB 原始字节，编码后 ≤ 32 KiB。结果 JSON 采用单个下载缓冲，编码后总量 ≤ 2 MiB，超过返回 `TOO_LARGE`，不静默截断。缓冲 5 秒过期，后台每秒清理；隐藏 / 销毁立即释放。SDK 按 UTF-8 边界切分，保留中文、表情和 BOM。
 
@@ -177,7 +179,7 @@ import '@anywhere/sdk/styles/controls.css';
 
 按钮、输入框、下拉框、键帽、卡片、焦点 / 悬停 / 禁用状态均使用 Host 的 `--aw-*` 参数。JSON Workspace 和无框架 Text Pad 都使用这份 CSS；各自 CSS 只处理工具布局。公共卡片内的编辑器自动继承单层表面，无需业务 CSS 再写透明背景。支持时页面保持透明，玻璃由原生窗口提供，不添加第二层模糊；不支持时使用同一套深色回退。
 
-编辑 / 查询工具可直接使用 `aw-workspace` → `aw-workspace-toolbar` / `aw-workspace-panes`，以及 `aw-pane`、`aw-pane-header`、`aw-pane-body`、`aw-editor`、`aw-pane-footer`。这些类提供与 File Search 一致的轻量工具栏、左宽右窄分栏、分隔线、代码字体 / 背景及留白；`aw-tabs` / `aw-tab` 的选中状态用 `aria-pressed` 表达。标题、返回、Esc 和宿主 Actions 仍由 Host 负责，不在插件里再绘制。
+编辑 / 查询工具可直接使用 `aw-workspace` → `aw-workspace-toolbar` / `aw-workspace-panes`，以及 `aw-pane`、`aw-pane-header`、`aw-pane-body`、`aw-editor`。这些类提供与 File Search 一致的轻量工具栏、左宽右窄分栏、分隔线、代码字体 / 背景及留白；`aw-tabs` / `aw-tab` 的选中状态用 `aria-pressed` 表达。标题、返回、Esc 和宿主 Actions 仍由 Host 负责，工具选项在页头，不在插件里再绘制。工作区不设固定页脚；主要操作放在工具栏或对应编辑区标题，反馈就近显示。
 
 `styles/tokens.css` 仅供独立浏览器预览使用，生产插件不要复制固定颜色覆盖 Host。插件仍可以自定义局部组件 CSS；根画布由 Host 统一管理，局部控件仍不要求第三方页面像素级一致。
 

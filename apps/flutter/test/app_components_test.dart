@@ -148,33 +148,6 @@ void main() {
     expect(opened, isTrue);
   });
 
-  testWidgets('web permission actions wrap in a narrow window at large text',
-      (tester) async {
-    tester.view.physicalSize = const Size(320, 300);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    bool? allowed;
-    await tester.pumpWidget(MaterialApp(
-        theme: AppStyle.theme,
-        builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context)
-                .copyWith(textScaler: TextScaler.linear(1.5)),
-            child: child!),
-        home: Scaffold(
-            body: Stack(children: [
-          WebConsentPanel(
-              title: 'Copy text',
-              toolTitle: 'JSON Workspace',
-              allowSelected: true,
-              onAnswer: (value) => allowed = value)
-        ]))));
-    expect(tester.takeException(), isNull);
-    await tester.ensureVisible(find.text('✓ Allow once'));
-    await tester.tap(find.text('✓ Allow once'));
-    expect(allowed, isTrue);
-  });
-
   testWidgets(
       'web action menu keeps selection semantics and commands at large text',
       (tester) async {

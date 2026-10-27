@@ -285,12 +285,7 @@ export function createHost(transport: HostTransport) {
       encoder.encode(JSON.stringify({text})).length + 256 <=
       limits.frameBytes
     ) {
-      return invoke(
-        'clipboard.writeText',
-        {text},
-        options,
-        limits.confirmTimeoutMs,
-      );
+      return invoke('clipboard.writeText', {text}, options, limits.timeoutMs);
     }
     const {ticket} = await invoke<'text.begin', {ticket: string}>(
       'text.begin',
@@ -308,7 +303,7 @@ export function createHost(transport: HostTransport) {
         );
         offset = end;
       }
-      await invoke('text.commit', {ticket}, options, limits.confirmTimeoutMs);
+      await invoke('text.commit', {ticket}, options);
     } catch (error) {
       void raw('text.cancel', {ticket}).catch(() => {});
       throw error;
@@ -399,7 +394,6 @@ export function createHost(transport: HostTransport) {
           'clipboard.readText',
           {},
           options,
-          limits.confirmTimeoutMs,
         ),
       writeText,
     },

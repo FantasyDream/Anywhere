@@ -114,29 +114,20 @@ async fn call(
     id: &str,
     method: &str,
     params: Value,
-) -> WebDispatch {
+) -> String {
     app.dispatch_web_message(binding, source(binding), &frame(id, method, params))
         .await
 }
-fn reply(result: WebDispatch) -> Value {
-    let WebDispatch::Reply(raw) = result else {
-        panic!("unexpected confirmation");
-    };
+fn reply(raw: String) -> Value {
     assert!(raw.len() <= MAX_FRAME_BYTES);
     serde_json::from_str(&raw).unwrap()
-}
-fn confirmation(result: WebDispatch) -> WebConfirmation {
-    let WebDispatch::Confirmation(value) = result else {
-        panic!("expected native confirmation");
-    };
-    value
 }
 fn permissions() -> Value {
     json!([{"name":"clipboard.readText"},{"name":"clipboard.writeText"},{"name":"storage.local"},{"name":"context.read","types":[anywhere_protocol::TEXT]}])
 }
 
 #[tokio::test]
-async fn typed_permissions_and_native_consent_are_required_and_not_replayable() {
+async fn installed_permissions_allow_direct_clipboard_io_and_requests_cannot_replay() {
     let port = Arc::new(ClipboardPort {
         text: Mutex::new("synthetic clipboard".into()),
         ..Default::default()
@@ -147,44 +138,26 @@ async fn typed_permissions_and_native_consent_are_required_and_not_replayable() 
         ModuleStorageHost::memory().unwrap(),
         "one",
     );
-    let read = confirmation(call(&app, &binding, "read", "clipboard.readText", json!({})).await);
-    assert_eq!(port.reads.load(Ordering::Acquire), 0);
+    let read = reply(call(&app, &binding, "read", "clipboard.readText", json!({})).await);
+    assert_eq!(read["result"]["value"], "synthetic clipboard");
+    assert_eq!(port.reads.load(Ordering::Acquire), 1);
     assert_eq!(
         reply(call(&app, &binding, "read", "clipboard.readText", json!({})).await)["error"]["code"],
         "DUPLICATE_REQUEST"
     );
-    let value = reply(
-        app.confirm_web_operation(&binding, source(&binding), &read.ticket, true)
-            .await,
-    );
-    assert_eq!(value["result"]["value"], "synthetic clipboard");
     assert_eq!(port.reads.load(Ordering::Acquire), 1);
-    assert!(reply(
-        app.confirm_web_operation(&binding, source(&binding), &read.ticket, true)
-            .await
-    )
-    .get("error")
-    .is_some());
-    assert_eq!(port.reads.load(Ordering::Acquire), 1);
-    let copy = confirmation(
+    let copy = reply(
         call(
             &app,
             &binding,
             "copy",
             "clipboard.writeText",
-            json!({"text":"exact approved text"}),
+            json!({"text":"exact granted text"}),
         )
         .await,
     );
-    assert!(port.writes.lock().unwrap().is_empty());
-    assert_eq!(
-        reply(
-            app.confirm_web_operation(&binding, source(&binding), &copy.ticket, false)
-                .await
-        )["error"]["code"],
-        "USER_CANCELLED"
-    );
-    assert!(port.writes.lock().unwrap().is_empty());
+    assert!(copy.get("error").is_none());
+    assert_eq!(*port.writes.lock().unwrap(), ["exact granted text"]);
     assert_eq!(
         reply(
             call(
@@ -394,7 +367,7 @@ async fn storage_quota_failures_preserve_existing_values() {
 }
 
 #[tokio::test]
-async fn large_unicode_copy_is_bounded_sequenced_and_only_runs_after_confirmation() {
+async fn large_unicode_copy_is_bounded_sequenced_and_only_runs_on_commit() {
     let port = Arc::new(ClipboardPort::default());
     let (app, binding) = setup(
         permissions(),
@@ -449,7 +422,8 @@ async fn large_unicode_copy_is_bounded_sequenced_and_only_runs_after_confirmatio
         sequence += 1;
         offset = end;
     }
-    let confirm = confirmation(
+    assert!(port.writes.lock().unwrap().is_empty());
+    let committed = reply(
         call(
             &app,
             &binding,
@@ -459,13 +433,7 @@ async fn large_unicode_copy_is_bounded_sequenced_and_only_runs_after_confirmatio
         )
         .await,
     );
-    assert!(port.writes.lock().unwrap().is_empty());
-    assert!(reply(
-        app.confirm_web_operation(&binding, source(&binding), &confirm.ticket, true)
-            .await
-    )
-    .get("error")
-    .is_none());
+    assert!(committed.get("error").is_none());
     assert_eq!(*port.writes.lock().unwrap(), vec![text]);
 }
 
@@ -541,7 +509,7 @@ async fn large_input_is_downloaded_in_bounded_utf8_chunks_and_ticket_is_single_u
 }
 
 #[tokio::test]
-async fn queued_confirmed_operation_is_rechecked_after_hide_and_errors_do_not_leak_paths() {
+async fn queued_clipboard_operation_is_rechecked_after_hide_and_errors_do_not_leak_paths() {
     let port = Arc::new(ClipboardPort {
         fail: true,
         ..Default::default()
@@ -552,24 +520,10 @@ async fn queued_confirmed_operation_is_rechecked_after_hide_and_errors_do_not_le
         ModuleStorageHost::memory().unwrap(),
         "hide",
     );
-    let bad = confirmation(call(&app, &binding, "read", "clipboard.readText", json!({})).await);
-    let failure = reply(
-        app.confirm_web_operation(&binding, source(&binding), &bad.ticket, true)
-            .await,
-    );
+    let failure = reply(call(&app, &binding, "read", "clipboard.readText", json!({})).await);
     assert_eq!(failure["error"]["code"], "HOST_FAILURE");
     assert!(!failure.to_string().contains("/Users"));
     assert!(!failure.to_string().contains("sensitive"));
-    let pending = confirmation(
-        call(
-            &app,
-            &binding,
-            "copy",
-            "clipboard.writeText",
-            json!({"text":"must not copy"}),
-        )
-        .await,
-    );
     let held = app
         .web_rpc_workers
         .clone()
@@ -578,20 +532,33 @@ async fn queued_confirmed_operation_is_rechecked_after_hide_and_errors_do_not_le
         .unwrap();
     let worker_app = app.clone();
     let worker_binding = binding.clone();
-    let confirm = tokio::spawn(async move {
-        worker_app
-            .confirm_web_operation(
-                &worker_binding,
-                source(&worker_binding),
-                &pending.ticket,
-                true,
-            )
-            .await
+    let copy = tokio::spawn(async move {
+        call(
+            &worker_app,
+            &worker_binding,
+            "copy",
+            "clipboard.writeText",
+            json!({"text":"must not copy"}),
+        )
+        .await
     });
-    tokio::task::yield_now().await;
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            if app.web_plugins.lock().unwrap().invocations[&binding.invocation_id]
+                .rpc
+                .pending
+                .contains_key("copy")
+            {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
     app.suspend_session(1).await.unwrap();
     drop(held);
-    assert!(reply(confirm.await.unwrap()).get("error").is_some());
+    assert!(reply(copy.await.unwrap()).get("error").is_some());
     assert!(port.writes.lock().unwrap().is_empty());
     assert!(
         reply(call(&app, &binding, "stale", "invocation.get", json!({})).await)
@@ -601,7 +568,7 @@ async fn queued_confirmed_operation_is_rechecked_after_hide_and_errors_do_not_le
 }
 
 #[tokio::test(start_paused = true)]
-async fn text_and_consent_timeouts_release_buffers_and_request_bookkeeping_is_bounded() {
+async fn text_timeouts_release_buffers_and_request_bookkeeping_is_bounded() {
     use super::rpc_state::RpcState;
     let mut state = RpcState::default();
     assert_eq!(
@@ -618,20 +585,20 @@ async fn text_and_consent_timeouts_release_buffers_and_request_bookkeeping_is_bo
         WebErrorCode::Expired
     );
     for n in 0..MAX_PENDING {
-        let request = state.admit(&format!("r{n}"), false, true).unwrap();
+        let request = state.admit(&format!("r{n}"), true).unwrap();
         if n < MAX_RUNNING {
             request.control.running.store(true, Ordering::Release);
         }
     }
     assert_eq!(
-        state.admit("overflow", false, true).err().unwrap().code,
+        state.admit("overflow", true).err().unwrap().code,
         WebErrorCode::Busy
     );
-    let cancel = state.admit("cancel", false, false).unwrap();
+    let cancel = state.admit("cancel", false).unwrap();
     assert!(state.cancel("r0"));
     state.finish(&cancel);
     assert_eq!(
-        state.admit("r0", false, false).err().unwrap().code,
+        state.admit("r0", false).err().unwrap().code,
         WebErrorCode::DuplicateRequest
     );
     let old = state.pending["r1"].clone();
@@ -640,7 +607,7 @@ async fn text_and_consent_timeouts_release_buffers_and_request_bookkeeping_is_bo
 }
 
 #[tokio::test(start_paused = true)]
-async fn idle_documents_eagerly_release_expired_transfers_and_consent_without_new_requests() {
+async fn idle_documents_eagerly_release_expired_transfers_without_new_requests() {
     let (app, binding) = setup(
         permissions(),
         Arc::new(ClipboardPort::default()),
@@ -665,19 +632,8 @@ async fn idle_documents_eagerly_release_expired_transfers_and_consent_without_ne
         let mut web = app.web_plugins.lock().unwrap();
         let rpc = &mut web.invocations.get_mut(&id).unwrap().rpc;
         assert!(rpc.transfer.is_none());
-        let request = rpc.admit("prompt", true, true).unwrap();
-        rpc.confirmation = Some(super::rpc_state::Confirmation {
-            id: "native-only".into(),
-            request,
-            operation: super::rpc_state::ClipboardOperation::Read,
-        });
+        assert!(rpc.pending.is_empty());
     }
-    tokio::time::advance(Duration::from_secs(31)).await;
-    tokio::task::yield_now().await;
-    let web = app.web_plugins.lock().unwrap();
-    let rpc = &web.invocations[&id].rpc;
-    assert!(rpc.confirmation.is_none());
-    assert!(rpc.pending.is_empty());
 }
 
 #[tokio::test]

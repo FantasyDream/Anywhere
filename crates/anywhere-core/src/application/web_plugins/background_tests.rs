@@ -132,16 +132,63 @@ async fn undeclared_native_contexts_and_changed_script_bytes_are_rejected() {
 }
 
 #[tokio::test]
-async fn background_action_reuses_consent_and_closing_it_cancels_the_wait() {
-    let code = r#"export function parse(){return []} export async function copy(){
+async fn headless_actions_use_installed_grants_and_retire_their_internal_binding() {
+    let code = r#"export function parse(){return []} export function copy(){
       const result=JSON.parse(__anywhereInvoke('clipboard.writeText', '{"text":"synthetic"}'));
       if(result.error) throw Error(result.error.code);
     }"#;
+    for allowed in [true, false] {
+        let app = app();
+        let root = tempfile::tempdir().unwrap();
+        let mut grants = permissions();
+        if !allowed {
+            grants.as_array_mut().unwrap().pop();
+        }
+        let package = background_package(code, grants);
+        let _store = install(&app, root.path(), &package);
+        let id = app.begin_activation().unwrap();
+        let registry = app.resolver.base_registry();
+        let crate::core::action::descriptor::ActionExecutor::WebCommand(command) = &registry
+            .get("web:dev.example.background:copy")
+            .unwrap()
+            .executor
+        else {
+            panic!("command missing")
+        };
+        let mut input = ResolvedContext::new(
+            "plugin.dev.example.background.result",
+            ContextValue::Extension("{}".into()),
+            ContextSource::UserInput,
+            "test",
+        );
+        input.session_id = id;
+        let invocation = start(&mut app.web_plugins.lock().unwrap(), command, &input);
+        let result = app
+            .run_headless_web_action(
+                Some(&HostView::WebPlugin {
+                    invocation_id: invocation,
+                }),
+                id,
+                0,
+            )
+            .await;
+        assert_eq!(result.is_ok(), allowed);
+        let web = app.web_plugins.lock().unwrap();
+        assert!(web.invocations.is_empty());
+        assert!(web.backgrounds.is_empty());
+    }
+}
+
+#[tokio::test]
+async fn closing_or_replacing_a_background_document_cancels_its_job() {
+    let package = background_package(
+        "export function parse(){return []} export function copy(){while(true){}}",
+        permissions(),
+    );
     let app = Arc::new(app());
     let root = tempfile::tempdir().unwrap();
-    let package = background_package(code, permissions());
     let _store = install(&app, root.path(), &package);
-    let session_id = app.begin_activation().unwrap();
+    let id = app.begin_activation().unwrap();
     let registry = app.resolver.base_registry();
     let crate::core::action::descriptor::ActionExecutor::WebCommand(command) = &registry
         .get("web:dev.example.background:copy")
@@ -156,78 +203,8 @@ async fn background_action_reuses_consent_and_closing_it_cancels_the_wait() {
         ContextSource::UserInput,
         "test",
     );
-    input.session_id = session_id;
-    let invocation = start(&mut app.web_plugins.lock().unwrap(), command, &input);
-    let binding = app
-        .bind_web_document(&invocation, WebPlatform::Macos)
-        .unwrap();
-    assert!(app.web_document_is_background(&binding).unwrap());
-    let work = {
-        let app = app.clone();
-        let binding = binding.clone();
-        tokio::spawn(async move { app.run_background_command(&binding).await })
-    };
-    let notice = tokio::time::timeout(Duration::from_secs(2), async {
-        loop {
-            if let Some(notice) = app
-                .wait_background_confirmation(&binding, "")
-                .await
-                .unwrap()
-            {
-                break notice;
-            }
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .unwrap();
-    assert_eq!(notice.kind, WebConsentKind::WriteClipboard);
-    app.close_web_document(&binding).unwrap();
-    assert!(tokio::time::timeout(Duration::from_secs(2), work)
-        .await
-        .unwrap()
-        .unwrap()
-        .is_err());
-    assert!(app
-        .confirm_background_operation(&binding, &notice.ticket, true)
-        .await
-        .is_err());
-    assert!(app.web_plugins.lock().unwrap().backgrounds.is_empty());
-    // A new tool must release the old job even if native disposal arrives late.
-    let invocation = start(&mut app.web_plugins.lock().unwrap(), command, &input);
-    let old = app
-        .bind_web_document(&invocation, WebPlatform::Macos)
-        .unwrap();
-    let work = {
-        let app = app.clone();
-        let old = old.clone();
-        tokio::spawn(async move { app.run_background_command(&old).await })
-    };
-    tokio::time::timeout(Duration::from_secs(2), async {
-        while app
-            .wait_background_confirmation(&old, "")
-            .await
-            .unwrap()
-            .is_none()
-        {
-            tokio::task::yield_now().await;
-        }
-    })
-    .await
-    .unwrap();
-    let replacement = start(&mut app.web_plugins.lock().unwrap(), command, &input);
-    app.close_web_document(&old).unwrap();
-    assert!(tokio::time::timeout(Duration::from_secs(2), work)
-        .await
-        .unwrap()
-        .unwrap()
-        .is_err());
-    let replacement = app
-        .bind_web_document(&replacement, WebPlatform::Macos)
-        .unwrap();
-    assert!(app.web_document_is_background(&replacement).unwrap());
-    app.close_web_document(&replacement).unwrap();
-    for approved in [false, true] {
+    input.session_id = id;
+    for replace in [false, true] {
         let invocation = start(&mut app.web_plugins.lock().unwrap(), command, &input);
         let binding = app
             .bind_web_document(&invocation, WebPlatform::Macos)
@@ -237,33 +214,89 @@ async fn background_action_reuses_consent_and_closing_it_cancels_the_wait() {
             let binding = binding.clone();
             tokio::spawn(async move { app.run_background_command(&binding).await })
         };
-        let notice = tokio::time::timeout(Duration::from_secs(2), async {
-            loop {
-                if let Some(notice) = app
-                    .wait_background_confirmation(&binding, "")
-                    .await
-                    .unwrap()
-                {
-                    break notice;
-                }
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while !app
+                .web_plugins
+                .lock()
+                .unwrap()
+                .backgrounds
+                .contains_key(binding.runtime_id())
+            {
                 tokio::task::yield_now().await;
             }
         })
         .await
         .unwrap();
-        app.confirm_background_operation(&binding, &notice.ticket, approved)
-            .await
-            .unwrap();
-        assert_eq!(
-            tokio::time::timeout(Duration::from_secs(2), work)
-                .await
-                .unwrap()
-                .unwrap()
-                .unwrap(),
-            "null"
-        );
+        let replacement =
+            replace.then(|| start(&mut app.web_plugins.lock().unwrap(), command, &input));
         app.close_web_document(&binding).unwrap();
+        assert!(tokio::time::timeout(Duration::from_secs(2), work)
+            .await
+            .unwrap()
+            .unwrap()
+            .is_err());
+        assert!(app.web_plugins.lock().unwrap().backgrounds.is_empty());
+        if let Some(invocation) = replacement {
+            let next = app
+                .bind_web_document(&invocation, WebPlatform::Macos)
+                .unwrap();
+            assert!(app.web_document_is_background(&next).unwrap());
+            app.close_web_document(&next).unwrap();
+        }
     }
+}
+
+#[tokio::test]
+async fn dropping_a_headless_execution_retires_its_binding_and_job() {
+    let package = background_package(
+        "export function parse(){return []} export function copy(){while(true){}}",
+        permissions(),
+    );
+    let app = Arc::new(app());
+    let root = tempfile::tempdir().unwrap();
+    let _store = install(&app, root.path(), &package);
+    let id = app.begin_activation().unwrap();
+    let registry = app.resolver.base_registry();
+    let crate::core::action::descriptor::ActionExecutor::WebCommand(command) = &registry
+        .get("web:dev.example.background:copy")
+        .unwrap()
+        .executor
+    else {
+        panic!("command missing")
+    };
+    let mut input = ResolvedContext::new(
+        "plugin.dev.example.background.result",
+        ContextValue::Extension("{}".into()),
+        ContextSource::UserInput,
+        "test",
+    );
+    input.session_id = id;
+    let invocation = start(&mut app.web_plugins.lock().unwrap(), command, &input);
+    let work = {
+        let app = app.clone();
+        tokio::spawn(async move {
+            app.run_headless_web_action(
+                Some(&HostView::WebPlugin {
+                    invocation_id: invocation,
+                }),
+                id,
+                0,
+            )
+            .await
+        })
+    };
+    tokio::time::timeout(Duration::from_secs(2), async {
+        while app.web_plugins.lock().unwrap().backgrounds.is_empty() {
+            tokio::task::yield_now().await;
+        }
+    })
+    .await
+    .unwrap();
+    work.abort();
+    assert!(work.await.unwrap_err().is_cancelled());
+    let web = app.web_plugins.lock().unwrap();
+    assert!(web.invocations.is_empty());
+    assert!(web.backgrounds.is_empty());
 }
 
 #[tokio::test]

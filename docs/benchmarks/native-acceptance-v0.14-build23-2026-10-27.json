@@ -1,0 +1,35 @@
+{
+  "date": "2026-10-27",
+  "app": "0.14.0+23",
+  "installed_json_plugin": "0.6.1",
+  "source_base_commit": "8a3e757970c1e477979bbc8e8774bb19f92fbb6f",
+  "status": "partial; follow-up fixes prepared for Build 24 / JSON 0.6.2",
+  "native_passed": [
+    "Quit older Build 19 and restarted Build 23 through the native application menu; read-only process inventory confirmed only Build 23 running",
+    "Settings hidden-application draft survives Continue editing; Done and Command-W both request a close decision; Discard closes without persisting the temporary acceptance marker",
+    "Updated installed JSON 0.5.3 to 0.6.1 through Settings package review; no clipboard.readText permission",
+    "Explicit Global Search for JSON offers only Workspace; Workspace opens without a fixed footer or Paste button",
+    "Native paste updates the actual JSON document and autoformats it; Command-L focuses the formula",
+    "JavaScript .users.map(x => x.name) returns Ada and Lin; JSONPath .users[0].score returns 3",
+    "Result copy cancellation retains source and query; retry and Allow once writes 3 to the system clipboard, verified by native paste",
+    "Header options panel opens beside the header; returning to search preserves the original query",
+    "Background Copy Minified JSON opens the Host consent directly without an editor; consent timeout returns to the prior search"
+  ],
+  "issues_found": [
+    "Workspace used a different Context from background helpers, putting it in a different relevance band; migrate it to the shared package-owned document Context",
+    "Extension payload wrapper was visible in candidate subtitles; use the action subtitle instead of opaque serialized data",
+    "Package approval description incorrectly said all plugin code runs in WebView; describe capability restrictions and lack of OS process isolation"
+  ],
+  "pending": [
+    "Install JSON 0.6.2 on Build 24 and recheck affected native routes",
+    "Background copy Allow/Cancel and exact original JSON tokens through the system clipboard",
+    "Recognized JSON launch prefill and escaped JSON native route",
+    "Application history navigation/object-action integration and retention paths from earlier refactors",
+    "Settings Save branch is covered by automated tests, not by this native session",
+    "Physical IME, VoiceOver, Windows/Linux and process memory were not validated"
+  ],
+  "blocker": "Mac relocked during background-copy acceptance; further desktop actions are waiting for manual unlock",
+  "screenshot": "build/ui-v0.14-build23/json-host-options.png",
+  "data_handling": "JSON test documents were synthetic. Temporary settings drafts were discarded. The system clipboard was verified as synthetic text 3 after the copy test.",
+  "follow_up": "acceptance-fixes-v0.14-build24-2026-10-27.json; affected native routes, history navigation, directory and multi-root opening now verified"
+}

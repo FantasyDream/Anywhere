@@ -809,12 +809,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cancelEscapeSelected => '✓ Cancel · Esc';
 
   @override
-  String get allowOnce => '✓ Allow once';
-
-  @override
-  String get allowOnceAction => 'Allow once';
-
-  @override
   String get webToolsAreUnavailableOnThisPlatform => 'Web tools are unavailable on this platform.';
 
   @override
@@ -824,7 +818,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noHostPermissions => 'No Host permissions.';
 
   @override
-  String get codeRunsInALocalWebViewNetwork => 'Code runs in a local WebView. Network access and navigation are blocked. This is not an OS process sandbox.';
+  String get pluginExecutionBoundary => 'Plugins process data locally and can call only approved host capabilities. Arbitrary filesystem and network access are unavailable. These restrictions are not OS process isolation.';
 
   @override
   String get thisReplacesTheInstalledCodeClosesIts => 'This replaces the installed code, closes its active page, and keeps its local settings. A previously approved version can be restored.';
@@ -873,12 +867,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get theToolStoppedReloadItOrReturn => 'The tool stopped. Reload it or return to search.';
-
-  @override
-  String get allowThisOperation => 'Allow this operation?';
-
-  @override
-  String get thisTool => 'This tool';
 
   @override
   String get dismissMessage => 'Dismiss message';
@@ -1238,11 +1226,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String clipboardConsent(String tool) {
-    return '$tool is requesting a clipboard operation. Approval applies once.';
-  }
-
-  @override
   String get quitAnywhere => 'Quit Anywhere';
 
   @override
@@ -1315,19 +1298,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get inspectTrustedPackage => 'Choose a trusted .awplugin package to inspect before installing.';
 
   @override
-  String get readClipboardText => 'Read clipboard text';
-
-  @override
-  String get copyTextToClipboard => 'Copy text to clipboard';
-
-  @override
   String get permissionCurrentApp => 'Current application name';
 
   @override
-  String get permissionReadClipboard => 'Read clipboard text (confirmed per operation)';
+  String get permissionReadClipboard => 'Read clipboard text';
 
   @override
-  String get permissionWriteClipboard => 'Copy text (confirmed per operation)';
+  String get permissionWriteClipboard => 'Write clipboard text';
 
   @override
   String get permissionLocalStorage => 'Private local settings (1 MiB)';

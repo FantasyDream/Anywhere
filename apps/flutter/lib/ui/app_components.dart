@@ -184,21 +184,6 @@ class AppPageTitle extends StatelessWidget {
           ]);
 }
 
-class AppPageFooter extends StatelessWidget {
-  const AppPageFooter({super.key, required this.child});
-  final Widget child;
-  @override
-  Widget build(BuildContext context) => SizedBox(
-      height: DesignTokens.pageFooterHeight,
-      child: Column(children: [
-        const Divider(height: 1),
-        Expanded(
-            child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 3, 24, 10),
-                child: child)),
-      ]));
-}
-
 /// Show a shortcut hint only on pages that bind it; the menu remains discoverable.
 class AppMoreAction extends StatelessWidget {
   const AppMoreAction(

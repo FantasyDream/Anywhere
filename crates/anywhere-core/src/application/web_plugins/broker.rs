@@ -1,6 +1,6 @@
-//! Closed Rust capability broker. Only trusted Host code can approve clipboard operations.
+//! Closed Rust capability broker. Installed grants authorize clipboard operations.
 use super::{
-    rpc_state::{ClipboardOperation, Confirmation, RequestTicket, RpcState},
+    rpc_state::{RequestTicket, RpcState},
     transfer::{bounded_json, failure},
     WebDocumentBinding, WebMessageSource, WebPluginService,
 };
@@ -8,24 +8,6 @@ use crate::core::storage::ExtensionStorage;
 use anywhere_protocol::{web_bridge::*, web_plugin::WebPermission};
 use serde_json::{json, Value};
 use std::sync::Arc;
-
-/// This value is not serializable and must go to Host chrome, never to JS.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum WebConsentKind {
-    ReadClipboard,
-    WriteClipboard,
-}
-#[derive(Clone)]
-pub struct WebConfirmation {
-    pub ticket: String,
-    pub request_id: String,
-    pub kind: WebConsentKind,
-    pub preview: Option<String>,
-}
-pub enum WebDispatch {
-    Reply(String),
-    Confirmation(WebConfirmation),
-}
 
 #[derive(Clone)]
 pub(super) struct Source {
@@ -63,7 +45,8 @@ pub(super) enum Plan {
     Get(Arc<dyn ExtensionStorage>, String),
     Set(Arc<dyn ExtensionStorage>, String, Vec<u8>),
     Remove(Arc<dyn ExtensionStorage>, String),
-    Confirmation(WebConfirmation),
+    ReadClipboard,
+    WriteClipboard(String),
 }
 pub(super) fn error(code: WebErrorCode) -> WebError {
     WebError::new(code)
@@ -144,37 +127,6 @@ impl WebPluginService {
             .bind_with_quota(&namespace, 1024 * 1024, 256)
             .map_err(|_| error(WebErrorCode::StorageUnavailable))
     }
-    fn confirm(
-        &mut self,
-        binding: &WebDocumentBinding,
-        source: &Source,
-        request: &RequestTicket,
-        operation: ClipboardOperation,
-    ) -> WebResult<Plan> {
-        let rpc = self.rpc(binding, source.get())?;
-        if rpc.confirmation.is_some() || rpc.transfer.is_some() {
-            return Err(error(WebErrorCode::Busy));
-        }
-        let ticket = super::token().map_err(|_| error(WebErrorCode::HostFailure))?;
-        let (kind, preview) = match &operation {
-            ClipboardOperation::Read => (WebConsentKind::ReadClipboard, None),
-            ClipboardOperation::Write(text) => (
-                WebConsentKind::WriteClipboard,
-                Some(text.chars().take(120).collect()),
-            ),
-        };
-        rpc.confirmation = Some(Confirmation {
-            id: ticket.clone(),
-            request: request.clone(),
-            operation,
-        });
-        Ok(Plan::Confirmation(WebConfirmation {
-            ticket,
-            request_id: request.id.clone(),
-            kind,
-            preview,
-        }))
-    }
     pub(super) fn prepare_call(
         &mut self,
         binding: &WebDocumentBinding,
@@ -218,14 +170,14 @@ impl WebPluginService {
             WebCall::Ready {} => return Ok(Plan::Ready),
             WebCall::ClipboardRead {} => {
                 self.require(binding, source.get(), WebPermission::ClipboardReadText {})?;
-                return self.confirm(binding, source, request, ClipboardOperation::Read);
+                return Ok(Plan::ReadClipboard);
             }
             WebCall::ClipboardWrite { text } => {
                 self.require(binding, source.get(), WebPermission::ClipboardWriteText {})?;
                 if text.len() > MAX_TEXT_BYTES {
                     return Err(error(WebErrorCode::TooLarge));
                 }
-                return self.confirm(binding, source, request, ClipboardOperation::Write(text));
+                return Ok(Plan::WriteClipboard(text));
             }
             WebCall::StorageGet { key } => {
                 return Ok(Plan::Get(self.storage_for(binding, source, &key)?, key))
@@ -255,7 +207,7 @@ impl WebPluginService {
             WebCall::TextCommit { ticket } => {
                 self.require(binding, source.get(), WebPermission::ClipboardWriteText {})?;
                 let text = self.rpc(binding, source.get())?.commit_text(&ticket)?;
-                return self.confirm(binding, source, request, ClipboardOperation::Write(text));
+                return Ok(Plan::WriteClipboard(text));
             }
             WebCall::TextRead { ticket, sequence } => self
                 .rpc(binding, source.get())?

@@ -1,6 +1,6 @@
 {
   "name": "@anywhere/example-json-workspace",
-  "version": "0.5.4",
+  "version": "0.7.1",
   "private": true,
   "type": "module",
   "scripts": {

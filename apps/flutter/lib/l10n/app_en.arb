@@ -292,12 +292,10 @@
   "backToSearchEsc": "Back to search · Esc",
   "cancelEsc": "Cancel · Esc",
   "cancelEscapeSelected": "✓ Cancel · Esc",
-  "allowOnce": "✓ Allow once",
-  "allowOnceAction": "Allow once",
   "webToolsAreUnavailableOnThisPlatform": "Web tools are unavailable on this platform.",
   "requestedAccess": "Requested access",
   "noHostPermissions": "No Host permissions.",
-  "codeRunsInALocalWebViewNetwork": "Code runs in a local WebView. Network access and navigation are blocked. This is not an OS process sandbox.",
+  "pluginExecutionBoundary": "Plugins process data locally and can call only approved host capabilities. Arbitrary filesystem and network access are unavailable. These restrictions are not OS process isolation.",
   "thisReplacesTheInstalledCodeClosesIts": "This replaces the installed code, closes its active page, and keeps its local settings. A previously approved version can be restored.",
   "approveAndInstall": "Approve and install",
   "installedSearchForTheToolByName": "Installed. Search for the tool by name to open it.",
@@ -314,8 +312,6 @@
   "openingTool": "Opening tool…",
   "loadingTool": "Loading tool…",
   "theToolStoppedReloadItOrReturn": "The tool stopped. Reload it or return to search.",
-  "allowThisOperation": "Allow this operation?",
-  "thisTool": "This tool",
   "dismissMessage": "Dismiss message",
   "returnKey": "Return",
   "folder": "Folder",
@@ -568,14 +564,6 @@
       }
     }
   },
-  "clipboardConsent": "{tool} is requesting a clipboard operation. Approval applies once.",
-  "@clipboardConsent": {
-    "placeholders": {
-      "tool": {
-        "type": "String"
-      }
-    }
-  },
   "quitAnywhere": "Quit Anywhere",
   "edit": "Edit",
   "undo": "Undo",
@@ -600,11 +588,9 @@
   "importPackage": "Import",
   "fileSearchAccessMessage": "Choose folders Anywhere may search. Access is saved for future launches. Protected system or app data may still require Full Disk Access in System Settings.",
   "inspectTrustedPackage": "Choose a trusted .awplugin package to inspect before installing.",
-  "readClipboardText": "Read clipboard text",
-  "copyTextToClipboard": "Copy text to clipboard",
   "permissionCurrentApp": "Current application name",
-  "permissionReadClipboard": "Read clipboard text (confirmed per operation)",
-  "permissionWriteClipboard": "Copy text (confirmed per operation)",
+  "permissionReadClipboard": "Read clipboard text",
+  "permissionWriteClipboard": "Write clipboard text",
   "permissionLocalStorage": "Private local settings (1 MiB)",
   "launcherStartupFailed": "Launcher could not start",
   "tasksStartupFailed": "Running Tasks could not open",

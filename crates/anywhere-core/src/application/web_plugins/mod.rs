@@ -15,7 +15,6 @@ mod host_state;
 mod rpc_dispatch;
 mod rpc_state;
 mod transfer;
-pub use broker::{WebConfirmation, WebConsentKind, WebDispatch};
 
 pub use catalog::{WebPackageApproval, WebPluginCatalog};
 pub use invocation::{WebDocumentBinding, WebMessageSource, WebPluginService};

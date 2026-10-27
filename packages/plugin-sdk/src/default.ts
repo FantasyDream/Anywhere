@@ -25,6 +25,11 @@ export const anywhere: Anywhere = {
     readText: () => current().clipboard.readText(),
     writeText: text => current().clipboard.writeText(text),
   },
+  storage: {
+    get: key => current().storage.get(key),
+    set: (key, value) => current().storage.set(key, value),
+    remove: key => current().storage.remove(key),
+  },
   app: {
     getSource: () => current().app.getSource(),
     getFrontmost: () => current().app.getFrontmost(),

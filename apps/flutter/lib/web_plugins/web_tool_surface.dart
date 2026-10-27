@@ -8,7 +8,7 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import '../l10n/app_language.dart';
 import '../src/rust/api.dart' as api;
 import '../tools/tool_page_shell.dart';
-import '../ui/app_style.dart';
+import '../ui/app_components.dart';
 import 'web_bootstrap.dart';
 import 'web_document_lifetime.dart';
 import 'web_document_policy.dart';
@@ -72,9 +72,6 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
   bool _loading = true;
   bool _preparingDisplay = false;
   int _actionIndex = 0;
-  bool _approveSelected = false;
-  api.WebReplyDto? _confirmation;
-  Completer<bool>? _consent;
   Timer? _readyTimer;
   String? _followingState;
   @override
@@ -85,7 +82,7 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
       if (!mounted || !widget.visible) return;
       if (call.method == 'back') {
         _back();
-      } else if (call.method == 'actions' && _consent == null) {
+      } else if (call.method == 'actions') {
         _toggleActions();
       }
     });
@@ -93,9 +90,7 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
   }
 
   void _back() {
-    if (_consent != null) {
-      _answer(false);
-    } else if (_actions) {
+    if (_actions) {
       _toggleActions();
     } else {
       widget.onBack();
@@ -133,8 +128,7 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
           !widget.visible ||
           _document == null ||
           _loading ||
-          _actions ||
-          _consent != null) {
+          _actions) {
         return;
       }
       _hostPanel(false);
@@ -167,17 +161,7 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
     if (!widget.visible || event is! KeyDownEvent) {
       return KeyEventResult.ignored;
     }
-    if (_consent != null) {
-      if (event.logicalKey == LogicalKeyboardKey.arrowLeft ||
-          event.logicalKey == LogicalKeyboardKey.arrowRight) {
-        setState(() => _approveSelected = !_approveSelected);
-        return KeyEventResult.handled;
-      }
-      if (event.logicalKey == LogicalKeyboardKey.enter) {
-        _answer(_approveSelected);
-        return KeyEventResult.handled;
-      }
-    } else if (_actions) {
+    if (_actions) {
       if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
           event.logicalKey == LogicalKeyboardKey.arrowDown) {
         setState(() => _actionIndex = 1 - _actionIndex);
@@ -220,10 +204,6 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
         }
       });
       _active(true);
-      if (document.background) {
-        unawaited(_runBackground(document));
-        return;
-      }
       if (resume) {
         await notifyWebPresentation(
             _web, WebPresentationEvent.visibility, true);
@@ -264,7 +244,6 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
       _resources.cancel(this);
       _readyTimer?.cancel();
       _active(false);
-      _answer(false);
       _actions = false;
       unawaited(
           notifyWebPresentation(_web, WebPresentationEvent.visibility, false));
@@ -275,14 +254,6 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
 
   bool _current(api.WebDocumentDto d) =>
       mounted && identical(_owner, this) && widget.visible && _lifetime.owns(d);
-  void _answer(bool approved) {
-    final consent = _consent;
-    _consent = null;
-    if (consent != null && !consent.isCompleted) consent.complete(approved);
-    if (_confirmation != null && widget.visible) _hostPanel(false);
-    if (mounted && _confirmation != null) setState(() => _confirmation = null);
-  }
-
   Future<void> _message(
       InAppWebViewController controller,
       WebMessage? message,
@@ -301,41 +272,21 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
       return;
     }
     try {
-      var response = await api.dispatchWebFrame(
+      final response = await api.dispatchWebFrame(
           handle: document.handle,
           origin: origin!.toString(),
           mainFrame: true,
           frame: frame);
       if (!_current(document)) return;
-      if (response.ticket != null) {
-        if (_consent != null) return;
-        final consent = Completer<bool>();
-        _consent = consent;
-        setState(() {
-          _confirmation = response;
-          _approveSelected = false;
-        });
-        _hostPanel(true);
-        final approved = await consent.future
-            .timeout(const Duration(seconds: 29), onTimeout: () => false);
-        if (!_current(document)) return;
-        _answer(false);
-        response = await api.confirmWebOperation(
-            handle: document.handle,
-            origin: origin.toString(),
-            ticket: response.ticket!,
-            approved: approved);
-      }
-      if (_current(document) && response.frame != null) {
-        await reply.postMessage(webReplyMessage(response.frame!));
+      if (_current(document)) {
+        await reply.postMessage(webReplyMessage(response));
         if (_current(document) &&
-            webStateSubscribed(frame, response.frame!) &&
+            webStateSubscribed(frame, response) &&
             _followingState != document.handle) {
           _followingState = document.handle;
           unawaited(_followState(controller, document));
         }
-        if (_current(document) &&
-            webReadyAcknowledged(frame, response.frame!)) {
+        if (_current(document) && webReadyAcknowledged(frame, response)) {
           _readyTimer?.cancel();
           if (_loading && !_preparingDisplay) {
             _preparingDisplay = true;
@@ -350,48 +301,6 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
         }
       }
     } catch (_) {/* No unqualified reply or internal error reaches the page. */}
-  }
-
-  Future<void> _runBackground(api.WebDocumentDto document) async {
-    var done = false;
-    // The first long wait must be started after Rust has registered the worker.
-    final running = api.runWebBackground(handle: document.handle);
-    Future<void> confirmations() async {
-      var after = '';
-      while (!done && _current(document)) {
-        final response = await api.waitWebBackgroundConfirmation(
-            handle: document.handle, after: after);
-        if (done || !_current(document)) return;
-        if (response == null) {
-          await Future<void>.delayed(const Duration(milliseconds: 100));
-          continue;
-        }
-        after = response.ticket!;
-        final consent = Completer<bool>();
-        _consent = consent;
-        setState(() {
-          _confirmation = response;
-          _approveSelected = false;
-        });
-        _hostPanel(true);
-        final approved = await consent.future
-            .timeout(const Duration(seconds: 29), onTimeout: () => false);
-        if (!_current(document)) return;
-        _answer(false);
-        await api.confirmWebBackground(
-            handle: document.handle, ticket: after, approved: approved);
-      }
-    }
-
-    unawaited(confirmations().catchError((Object _) {}));
-    try {
-      await running;
-      if (_current(document)) widget.onBack();
-    } catch (_) {
-      if (_current(document)) setState(() => _error = _WebLoadError.stopped);
-    } finally {
-      done = true;
-    }
   }
 
   Future<void> _followState(
@@ -480,9 +389,6 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
     _lifetime.invalidate();
     _resources.cancel(this);
     _readyTimer?.cancel();
-    final consent = _consent;
-    _consent = null;
-    if (consent != null && !consent.isCompleted) consent.complete(false);
     // Flutter may initialize the replacement before finalizing the old element.
     // The departing page must not clear the new page's native shortcut channel.
     if (identical(_owner, this)) {
@@ -506,15 +412,17 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
         visible: widget.visible,
         presentation: widget.presentation,
         notice: widget.notice,
-        footer: Row(children: [
-          // Keep progress in Host chrome without covering the native editor.
-          Expanded(
-              child: Text(
-                  _loading && _error == null ? context.l10n.loadingTool : '',
-                  style: AppStyle.caption)),
-          TextButton(
-              onPressed: widget.visible ? _toggleActions : null,
-              child: Text('${context.l10n.toolOptions} · ⌘K')),
+        trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+          if (document != null && _loading && _error == null)
+            Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        semanticsLabel: context.l10n.loadingTool))),
+          AppMoreAction(onPressed: widget.visible ? _toggleActions : null),
         ]),
         child: Stack(fit: StackFit.expand, children: [
           if (_error != null)
@@ -522,7 +430,7 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
                 child: Padding(
                     padding: const EdgeInsets.all(24),
                     child: Text(_errorLabel(context.l10n))))
-          else if (document == null || document.background)
+          else if (document == null)
             const Center(child: CircularProgressIndicator(strokeWidth: 2))
           else
             InAppWebView(
@@ -594,21 +502,8 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
                     setState(() => _error = _WebLoadError.stopped);
                   }
                 }),
-          if (_actions && _confirmation == null)
+          if (_actions)
             WebActionsPanel(selected: _actionIndex, onSelect: _runAction),
-          if (_confirmation case final confirmation?)
-            WebConsentPanel(
-                title: switch (confirmation.consent) {
-                  api.WebConsentKindDto.readClipboard =>
-                    context.l10n.readClipboardText,
-                  api.WebConsentKindDto.writeClipboard =>
-                    context.l10n.copyTextToClipboard,
-                  null => context.l10n.allowThisOperation,
-                },
-                toolTitle: document?.title ?? context.l10n.thisTool,
-                preview: confirmation.preview,
-                allowSelected: _approveSelected,
-                onAnswer: _answer),
         ]));
   }
 }

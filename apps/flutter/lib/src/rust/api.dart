@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `application`, `snapshot_delivery`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
 
@@ -347,7 +347,7 @@ Future<WebDocumentDto> openWebDocument(
 Future<void> closeWebDocument({required String handle}) =>
     RustLib.instance.api.crateApiCloseWebDocument(handle: handle);
 
-Future<WebReplyDto> dispatchWebFrame(
+Future<String> dispatchWebFrame(
         {required String handle,
         required String origin,
         required bool mainFrame,
@@ -355,35 +355,12 @@ Future<WebReplyDto> dispatchWebFrame(
     RustLib.instance.api.crateApiDispatchWebFrame(
         handle: handle, origin: origin, mainFrame: mainFrame, frame: frame);
 
-Future<WebReplyDto> confirmWebOperation(
-        {required String handle,
-        required String origin,
-        required String ticket,
-        required bool approved}) =>
-    RustLib.instance.api.crateApiConfirmWebOperation(
-        handle: handle, origin: origin, ticket: ticket, approved: approved);
-
 Future<Uint8List> webResource({required String handle, required String path}) =>
     RustLib.instance.api.crateApiWebResource(handle: handle, path: path);
 
 /// One bounded latest-state wait, scoped to the Host-issued document handle.
 Future<String?> waitWebState({required String handle, required BigInt after}) =>
     RustLib.instance.api.crateApiWaitWebState(handle: handle, after: after);
-
-Future<String> runWebBackground({required String handle}) =>
-    RustLib.instance.api.crateApiRunWebBackground(handle: handle);
-
-Future<WebReplyDto?> waitWebBackgroundConfirmation(
-        {required String handle, required String after}) =>
-    RustLib.instance.api
-        .crateApiWaitWebBackgroundConfirmation(handle: handle, after: after);
-
-Future<void> confirmWebBackground(
-        {required String handle,
-        required String ticket,
-        required bool approved}) =>
-    RustLib.instance.api.crateApiConfirmWebBackground(
-        handle: handle, ticket: ticket, approved: approved);
 
 class ActionResultDto {
   final int sessionId;
@@ -1656,21 +1633,13 @@ enum SnapshotWaitKindDto {
   ;
 }
 
-enum WebConsentKindDto {
-  readClipboard,
-  writeClipboard,
-  ;
-}
-
 class WebDocumentDto {
-  final bool background;
   final String handle;
   final String origin;
   final String entry;
   final String title;
 
   const WebDocumentDto({
-    required this.background,
     required this.handle,
     required this.origin,
     required this.entry,
@@ -1679,18 +1648,13 @@ class WebDocumentDto {
 
   @override
   int get hashCode =>
-      background.hashCode ^
-      handle.hashCode ^
-      origin.hashCode ^
-      entry.hashCode ^
-      title.hashCode;
+      handle.hashCode ^ origin.hashCode ^ entry.hashCode ^ title.hashCode;
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is WebDocumentDto &&
           runtimeType == other.runtimeType &&
-          background == other.background &&
           handle == other.handle &&
           origin == other.origin &&
           entry == other.entry &&
@@ -1790,34 +1754,6 @@ class WebPluginLaunchDto {
       other is WebPluginLaunchDto &&
           runtimeType == other.runtimeType &&
           invocationId == other.invocationId;
-}
-
-class WebReplyDto {
-  final String? frame;
-  final String? ticket;
-  final WebConsentKindDto? consent;
-  final String? preview;
-
-  const WebReplyDto({
-    this.frame,
-    this.ticket,
-    this.consent,
-    this.preview,
-  });
-
-  @override
-  int get hashCode =>
-      frame.hashCode ^ ticket.hashCode ^ consent.hashCode ^ preview.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is WebReplyDto &&
-          runtimeType == other.runtimeType &&
-          frame == other.frame &&
-          ticket == other.ticket &&
-          consent == other.consent &&
-          preview == other.preview;
 }
 
 class WebReviewDto {

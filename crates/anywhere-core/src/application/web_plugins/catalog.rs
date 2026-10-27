@@ -23,6 +23,7 @@ pub struct WebPackageApproval {
 }
 
 pub(super) struct Registration {
+    pub platform: WebPlatform,
     pub manifest: Arc<WebPluginManifest>,
     pub digest: String,
     pub source_id: String,
@@ -71,6 +72,7 @@ impl WebPluginCatalog {
             entries.insert(
                 manifest.id.clone(),
                 Registration {
+                    platform,
                     manifest: Arc::new(manifest.clone()),
                     digest: package.digest().into(),
                     source_id: approval.source_id,
@@ -137,11 +139,8 @@ impl WebPluginCatalog {
                         .iter()
                         .map(String::as_str)
                         .chain(
-                            (!command.require_input_match
-                                && (command.runtime
-                                    == anywhere_protocol::web_plugin::PluginRuntime::Webview
-                                    || command.accepts.is_empty()))
-                            .then_some(crate::features::tools::ENTRY_CONTEXT),
+                            (!command.needs_context())
+                                .then_some(crate::features::tools::ENTRY_CONTEXT),
                         )
                         .map(|type_id| ContextMatcher {
                             type_id: type_id.into(),

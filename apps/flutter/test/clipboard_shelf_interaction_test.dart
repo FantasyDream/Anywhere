@@ -90,7 +90,6 @@ void main() {
       (tester) async {
     final backend = InteractionHistory();
     await mount(tester, backend);
-    expect(find.byType(AppPageFooter), findsNothing);
     expect(find.text('2 entries'), findsNothing);
     expect(find.byKey(const Key('shelf-preview-toggle')), findsNothing);
     expect(find.text('⌘K'), findsOneWidget);
@@ -129,7 +128,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(session(tester).previewEnabled, isTrue);
     expect(find.byType(ClipboardHistoryList), findsOneWidget);
-    expect(find.byType(AppPageFooter), findsNothing);
     expect(session(tester).focus.hasFocus, isTrue);
     expect(tester.takeException(), isNull);
   });
@@ -138,7 +136,6 @@ void main() {
       (tester) async {
     final backend = InteractionHistory()..rows = [];
     await mount(tester, backend);
-    expect(find.byType(AppPageFooter), findsNothing);
     expect(find.byKey(const Key('selected-row-primary')), findsNothing);
     expect(find.text('⌘K'), findsOneWidget);
     await tester.tap(find.byKey(const Key('shelf-empty-actions')));

@@ -292,12 +292,10 @@
   "backToSearchEsc": "返回搜索 · Esc",
   "cancelEsc": "取消 · Esc",
   "cancelEscapeSelected": "✓ 取消 · Esc",
-  "allowOnce": "✓ 允许一次",
-  "allowOnceAction": "允许一次",
   "webToolsAreUnavailableOnThisPlatform": "此平台暂不支持 Web 工具。",
   "requestedAccess": "请求的权限",
   "noHostPermissions": "未请求宿主权限。",
-  "codeRunsInALocalWebViewNetwork": "代码在本地 WebView 中运行，禁止联网和页面跳转。此限制不等同于操作系统级进程沙箱。",
+  "pluginExecutionBoundary": "插件在本机处理数据，只能调用已批准的宿主能力，不提供任意文件或网络访问。这些限制不等同于操作系统级进程隔离。",
   "thisReplacesTheInstalledCodeClosesIts": "这将替换已安装的代码并关闭其当前页面，保留本地设置。之后可恢复到曾经批准的版本。",
   "approveAndInstall": "批准并安装",
   "installedSearchForTheToolByName": "安装完成，搜索工具名称即可打开。",
@@ -314,8 +312,6 @@
   "openingTool": "正在打开工具…",
   "loadingTool": "正在加载工具…",
   "theToolStoppedReloadItOrReturn": "工具已停止，请重新加载或返回搜索。",
-  "allowThisOperation": "允许此操作？",
-  "thisTool": "此工具",
   "dismissMessage": "关闭提示",
   "returnKey": "回车",
   "folder": "文件夹",
@@ -568,14 +564,6 @@
       }
     }
   },
-  "clipboardConsent": "{tool}请求执行剪贴板操作。授权仅对本次操作有效。",
-  "@clipboardConsent": {
-    "placeholders": {
-      "tool": {
-        "type": "String"
-      }
-    }
-  },
   "quitAnywhere": "退出 Anywhere",
   "edit": "编辑",
   "undo": "撤销",
@@ -600,11 +588,9 @@
   "importPackage": "导入",
   "fileSearchAccessMessage": "请选择允许 Anywhere 搜索的文件夹，授权会保存供以后启动时使用。受保护的系统或应用数据可能仍需在系统设置中启用完全磁盘访问权限。",
   "inspectTrustedPackage": "请选择可信的 .awplugin 包，在安装前检查其内容。",
-  "readClipboardText": "读取剪贴板文本",
-  "copyTextToClipboard": "将文本复制到剪贴板",
   "permissionCurrentApp": "当前应用名称",
-  "permissionReadClipboard": "读取剪贴板文本（每次操作均需确认）",
-  "permissionWriteClipboard": "复制文本（每次操作均需确认）",
+  "permissionReadClipboard": "读取剪贴板文本",
+  "permissionWriteClipboard": "写入剪贴板文本",
   "permissionLocalStorage": "独立本地设置（1 MiB）",
   "launcherStartupFailed": "启动器无法启动",
   "tasksStartupFailed": "无法打开运行中的任务",

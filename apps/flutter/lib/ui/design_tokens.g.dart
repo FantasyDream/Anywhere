@@ -88,7 +88,6 @@ abstract final class DesignTokens {
   static const keycapPaddingX = 5.0;
   static const keycapPaddingY = 3.0;
   static const pageHeaderHeight = 72.0;
-  static const pageFooterHeight = 44.0;
   static const pageToolbarHeight = 36.0;
   static const pageHeadingSize = 21.0;
   static const pageModeSize = 10.0;
@@ -193,7 +192,6 @@ const webDesignTokensCss = r'''
   --aw-keycap-padding-x: 5px;
   --aw-keycap-padding-y: 3px;
   --aw-page-header-height: 72px;
-  --aw-page-footer-height: 44px;
   --aw-page-toolbar-height: 36px;
   --aw-page-heading-size: 21px;
   --aw-page-mode-size: 10px;
@@ -335,7 +333,6 @@ const webControlsCss = r'''
 :where(.aw-pane-body) { flex: 1; min-height: 0; display: flex; margin: 0 var(--aw-space-lg); }
 :where(.aw-editor) { flex: 1; min-height: 0; width: 100%; resize: none; padding: var(--aw-control-padding-x); border: var(--aw-divider-width) solid transparent; border-radius: var(--aw-control-radius); background: var(--aw-action-surface); white-space: pre; tab-size: 2; }
 :where(.aw-editor:focus-visible) { outline: none; border-color: var(--aw-selected-border); box-shadow: inset 0 0 0 calc(var(--aw-field-focus-border-width) - var(--aw-divider-width)) var(--aw-selected-border); }
-:where(.aw-pane-footer) { flex-wrap: wrap; overflow-wrap: anywhere; min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: var(--aw-space-sm); padding: var(--aw-space-sm) var(--aw-space-lg); color: var(--aw-secondary); font-size: var(--aw-caption-size); }
 :where(.aw-button--action) { font-weight: var(--aw-primary-control-weight); }
 :where(.aw-workspace-notice) { margin: var(--aw-space-sm) var(--aw-space-lg); padding: var(--aw-space-sm) var(--aw-space-md); border-radius: var(--aw-result-radius); background: var(--aw-card); color: var(--aw-primary); font-size: var(--aw-caption-size); border: var(--aw-control-border-width) solid var(--aw-warning); overflow-wrap: anywhere; max-height: 100px; flex-shrink: 0; overflow: auto; }
 

@@ -2,8 +2,7 @@
 use super::*;
 use anywhere_core::{
     application::web_plugins::{
-        WebDispatch, WebDocumentBinding, WebMessageSource, WebPackageReview, WebPackageStatus,
-        WebPackageStore,
+        WebDocumentBinding, WebMessageSource, WebPackageReview, WebPackageStatus, WebPackageStore,
     },
     persistence::module_storage::ModuleStorageHost,
 };
@@ -157,9 +156,7 @@ pub(super) async fn open(
         .into_iter()
         .find(|p| p.id == invocation.plugin_id && p.enabled && p.digest == binding.content_digest())
         .context("Web package unavailable")?;
-    let background = app.web_document_is_background(&binding)?;
     let result = WebDocumentDto {
-        background,
         handle: binding.runtime_id().into(),
         origin: binding.origin().into(),
         entry: installed.entry,
@@ -186,49 +183,11 @@ pub(super) async fn dispatch(
     origin: String,
     main_frame: bool,
     frame: String,
-) -> Result<WebReplyDto> {
+) -> Result<String> {
     let binding = document(&handle)?;
-    Ok(reply(
-        application()?
-            .dispatch_web_message(&binding, source(&binding, &origin, main_frame), &frame)
-            .await,
-    ))
-}
-pub(super) async fn confirm(
-    handle: String,
-    origin: String,
-    ticket: String,
-    approved: bool,
-) -> Result<WebReplyDto> {
-    let binding = document(&handle)?;
-    Ok(reply(
-        application()?
-            .confirm_web_operation(&binding, source(&binding, &origin, true), &ticket, approved)
-            .await,
-    ))
-}
-fn reply(dispatch: WebDispatch) -> WebReplyDto {
-    match dispatch {
-        WebDispatch::Reply(frame) => WebReplyDto {
-            frame: Some(frame),
-            ticket: None,
-            consent: None,
-            preview: None,
-        },
-        WebDispatch::Confirmation(c) => WebReplyDto {
-            frame: None,
-            ticket: Some(c.ticket),
-            consent: Some(match c.kind {
-                anywhere_core::application::web_plugins::WebConsentKind::ReadClipboard => {
-                    WebConsentKindDto::ReadClipboard
-                }
-                anywhere_core::application::web_plugins::WebConsentKind::WriteClipboard => {
-                    WebConsentKindDto::WriteClipboard
-                }
-            }),
-            preview: c.preview,
-        },
-    }
+    Ok(application()?
+        .dispatch_web_message(&binding, source(&binding, &origin, main_frame), &frame)
+        .await)
 }
 pub(super) fn resource(handle: String, path: String) -> Result<Vec<u8>> {
     let binding = document(&handle)?;
@@ -246,28 +205,4 @@ pub(super) async fn wait_state(handle: String, after: u64) -> Result<Option<Stri
         .wait_web_state(&binding, after)
         .await
         .map_err(|_| anyhow::anyhow!("Plugin state unavailable"))
-}
-
-pub(super) async fn run_background(handle: String) -> Result<String> {
-    application()?
-        .run_background_command(&document(&handle)?)
-        .await
-}
-pub(super) async fn wait_background_confirmation(
-    handle: String,
-    after: String,
-) -> Result<Option<WebReplyDto>> {
-    Ok(application()?
-        .wait_background_confirmation(&document(&handle)?, &after)
-        .await?
-        .map(|notice| reply(WebDispatch::Confirmation(notice))))
-}
-pub(super) async fn confirm_background(
-    handle: String,
-    ticket: String,
-    approved: bool,
-) -> Result<()> {
-    application()?
-        .confirm_background_operation(&document(&handle)?, &ticket, approved)
-        .await
 }

@@ -266,7 +266,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Enable Recording'), findsNothing);
     expect(find.text('History recording is off'), findsNothing);
-    expect(find.byType(AppPageFooter), findsNothing);
     expect(find.text('2 entries'), findsNothing);
     expect(find.byKey(const Key('selected-row-primary')), findsOneWidget);
     await tester.tap(find.byKey(const Key('selected-row-actions')));
@@ -315,7 +314,6 @@ void main() {
                 builder: (context, _) => session.build(context,
                     onBack: () {}, presentation: 1, visible: true)))));
     await tester.pumpAndSettle();
-    expect(find.byType(AppPageFooter), findsNothing);
     await tester.tap(find.byKey(const Key('history-empty-actions')));
     await tester.pumpAndSettle();
     backend.rows = [item('new')];
@@ -614,7 +612,6 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Copied'), findsOneWidget);
     expect(find.byKey(const Key('clipboard-row-status')), findsOneWidget);
-    expect(find.byType(AppPageFooter), findsNothing);
     expect(find.byType(AppNotice), findsNothing);
     expect(tester.getRect(list), listBefore);
     expect(find.text('Back'), findsNothing);

@@ -1,6 +1,6 @@
 # V0.14：应用历史与动作排序
 
-状态：**开发预览，尚未完成正式发布验收**。源码版本以 [pubspec.yaml](../apps/flutter/pubspec.yaml) 为准。本页只维护现行范围与验证程度，旧方案及 Build 1–15 经过见 [开发记录](archive/v0.14-development-records.md)。
+状态：**开发预览，尚未完成正式发布验收**。源码版本以 [pubspec.yaml](../apps/flutter/pubspec.yaml) 为准。本页只维护现行范围与验证程度，旧方案及 Build 1–23 经过见 [开发记录](archive/v0.14-development-records.md)。
 
 ## 已接入的功能
 
@@ -40,22 +40,20 @@
 
 ## 最新已验证基线
 
-### 插件运行时重构 — Build 21
+### 安装授权后直接复制 — Build 25 / JSON 0.7.1
 
-`codex/plugin-runtime-refactor` 已实现统一 `@anywhere/sdk`、Context/Input 快照与事件、来源 / 实时应用区分，以及按需 QuickJS Context / 后台 Action。复用现有安装批准、Registry、执行资格和剪贴板确认，不为第三方复制 Context / Action 主流程。开发者指南与默认样式继续共用；完整范围见 [实施清单](plugin-runtime-refactor.md)。
+所有第三方插件的剪贴板读写按安装时授予的权限执行，不再逐次弹确认；未声明权限、失效文档和隐式 Context 解析器仍不能越权访问。三个 JSON 复制动作在 Rust 调度的后台运行，成功后关闭 Launcher，不创建 Workspace 或 Flutter 工具页。全量检查通过：Flutter 434、Core 319 / 1 忽略、MVP 195 / 4 忽略、SDK 21、JSON 30；桥接生成、编译及签名打包通过。已启动 Build 25、安装 JSON 0.7.1，实机通过三个复制动作、实际剪贴板粘贴核对、转义输入重新匹配与 Workspace 内直接复制；大整数、重复键、指数及中文保留。详见 [Build 25 记录](benchmarks/direct-clipboard-v0.14-build25-2026-10-27.json)。
 
-Build 21 全量门禁通过：Core 316 项 / 1 项既有忽略，MVP 195 项 / 4 项既有忽略，Flutter 435 项，SDK 21 项，JSON 示例 25 项。后台示例与仓库外独立模板均通过真实编译包的完整链路，剪贴板为合成端口。最后的替换取消补丁另通过 47 项插件专项回归、Clippy 和 Bridge 编译。后台生命周期、权限、伪造类型、超时 / 内存、Unicode 分块、关闭后取消、事件版本以及插件输入变更后页面保留都有回归。
+### 单一 JSON Context — 插件 0.7.0
 
-签名 App、ZIP、SDK tgz 和两个模式的示例已生成；源提交、校验值与检查边界见 [Build 21 记录](benchmarks/plugin-runtime-v0.14-build21-2026-10-27.json)。桌面工具不允许打开终端以配置独立验收环境，本轮未启动独立 GUI 实例；不把合成端到端或原生单元测试当作真实界面 / 权限 / 内存采样通过。没有读取私人应用历史，也没有发布 GitHub Release。
+解析器将普通 / 转义对象或数组统一解码后注册为 `plugin.dev.anywhere.json-workspace.json`，Context 保留 JSON 文本中的数字与重复键，不生成额外转义类型。Workspace 和三个复制动作共同接受该类型；删除 Unescape 入口、工作区菜单操作、路由及文案。Workspace 保留名称搜索空白打开。全量检查通过：Flutter 435、Core 317 / 1 忽略、MVP 195 / 4 忽略、SDK 21、JSON 30。真实插件包回归验证统一类型、原文 token 与候选一致性；本机已更新 0.7.0，并核对转义候选、解码预填、菜单与后台授权预览。详见 [0.7.0 记录](benchmarks/json-context-v0.7.0-2026-10-27.json)。
 
-## 此前已验证基线
+### 插件重构收尾 — JSON 0.6.3
 
-Build 20：Core 307 项通过 / 1 项既有忽略，MVP 195 项通过 / 4 项既有忽略，Flutter 433 项通过；桥接编译、原生、Web、Clippy、架构、规范与生成物检查通过。新增回归覆盖来源配置的完整发布、失败发生时机相同的关闭选择、不同列表行高与逗号输入的草稿一致性。
+删除 JSON 动作中未使用的标题 / 标签元数据，展示仍由 Manifest 和中英资源负责；旧 Context 调研与逐构建过程已归档。规范、架构、生成物、真实插件包和全量检查通过：Flutter 435、Core 317 / 1 忽略、MVP 195 / 4 忽略、SDK 21、JSON 30。主程序仍为已验收的 Build 24；0.6.3 仅清理元数据，未另做原生安装验收，业务路径以以下 0.6.2 记录为准。完整审查及产物校验值见[收尾记录](benchmarks/plugin-closeout-v0.14-2026-10-27.json)。这不替代完整来源矩阵、跨平台或正式发布验收。
 
-本轮落实架构评审的四项建议：来源保存与动作发布由应用层单一入口拥有；SettingsController 统一关闭决策，SettingsEdits 拥有搜索 / 隐藏应用草稿和顺序保存；Launcher 和应用历史复用公共 ObjectActionCoordinator；历史会话独占 rowExtent，页面渲染、翻页与定位不再各写一个常量。目标校验与各页面菜单语义继续留在原有所有者。现行入口见 [架构](architecture.md) 与 [AGENTS.md](../AGENTS.md)。
+### 验收修复 — Build 24 / JSON 0.6.2
 
-Build 20 已打包，签名及归档校验通过。最后的原生设置页打开 / 关闭冒烟验收因 Mac 锁屏待补，当前最后确认运行的是 Build 19；不把 Mock 原生关闭测试当作实机通过。具体范围与校验值见 [Build 20 重构记录](benchmarks/architecture-refactor-v0.14-build20-2026-10-26.json)。
+工作区与后台复制统一绑定插件文档 Context，保留通用使用次数排序；候选副标题隐藏不透明数据载荷，插件安装说明覆盖界面 / 后台两种运行时。真实编译包回归验证唤醒识别、剪贴板过期、原文传入与默认排序。全量检查通过：Flutter 435、Core 317 / 1 忽略、MVP 195 / 4 忽略、SDK 21、JSON 30。App 签名及 ZIP 校验通过。已切换至 Build 24 并安装 JSON 0.6.2，实机通过原文带入、精度保护 / JSONPath、后台压缩与转义复制、取消不写入、去转义，以及更新后的授权说明。IDEA / VS Code 历史列表、方向键 / 翻页、对象菜单与返回查询均通过；合成目录和保留两个根目录的工作区已在 VS Code 实际打开。物理输入唤醒 / 15 秒保留、设置保存失败时序、完整来源矩阵、内存与跨平台未在本轮重新实测。详见 [Build 24 记录](benchmarks/acceptance-fixes-v0.14-build24-2026-10-27.json)。
 
-此前 [Build 19 IDEA 剪贴板修复](benchmarks/idea-clipboard-v0.14-build19-2026-10-26.json)已实机确认长格式采集成功，[Build 18 JSON 命令记录](benchmarks/json-command-availability-v0.14-build18-2026-10-26.json)确认处理动作仅在有匹配内容时显示，[Build 17 默认样式记录](benchmarks/shared-ui-defaults-v0.14-build17-2026-10-26.json)记录普通控件与共享样式验证；这些实现继续包含在本轮完整回归中。
-
-只读实测曾在 Build 13 确认本机 VS Code 新共享存储中的 57 条记录；本轮没有重新读取私人历史。更早的 [Build 16 清理记录](benchmarks/closeout-v0.14-build16-2026-10-26.json)、[Build 15 排序记录](benchmarks/launcher-ranking-v0.14-build15-2026-10-26.json)与 [VS Code 读取记录](benchmarks/application-history-storage-v0.14-build13-2026-10-26.json)保留各自版本的验证边界。本轮未创建 GitHub Release，也未把开发预览写成正式发行。
+逐构建过程归档到 [Build 1–23 记录](archive/v0.14-development-records.md)。

@@ -1,0 +1,72 @@
+{
+  "date": "2026-10-27",
+  "version": "0.14.0+22",
+  "branch": "codex/plugin-runtime-refactor",
+  "source_base_commit": "8a3e757970c1e477979bbc8e8774bb19f92fbb6f",
+  "source_state": "working tree with JSON hybrid migration; not committed at packaging time",
+  "package": "build/Anywhere-0.14-preview-build22-macos-arm64.zip",
+  "sha256": "070d8c008ac4e9c56627d160ea5ba8069bb26dd973307b9b32f2d2cb36efe8f3",
+  "json_plugin": "build/web-examples/dev.anywhere.json-workspace.awplugin",
+  "json_version": "0.6.0",
+  "json_sha256": "a8e3cb63ce5f85037a9e43cdf9281de1636be994a63adc03575e8f703ab8e27e",
+  "sdk_package": "build/plugin-sdk/anywhere-sdk-0.1.0.tgz",
+  "sdk_sha256": "9ace7705cb9606017373c7623ea1a1997b9ced4c8351b44d9c1f0dca3d7398bd",
+  "implemented": [
+    "JSON resolver publishes package-owned document and escaped Context carrying original text",
+    "Three copy commands use QuickJS and the unified SDK without creating a WebView",
+    "Unescape opens the editor; helpers require matching Context and ordinary keyword search offers only Workspace",
+    "UI/background share private indentation through anywhere.storage",
+    "Workspace consumes unified Context events with launch ordering, deduplication and draft protection",
+    "Browser-independent token/UTF-8 processing preserves large integers, exponents, duplicate keys and escapes"
+  ],
+  "checks": {
+    "full_gate": {
+      "command": "scripts/check.sh",
+      "log": "build/json-migration-check.log",
+      "result": "passed"
+    },
+    "core": {
+      "passed": 317,
+      "ignored": 1
+    },
+    "mvp": {
+      "passed": 195,
+      "ignored": 4
+    },
+    "flutter": {
+      "passed": 435
+    },
+    "sdk": {
+      "passed": 21,
+      "skipped": 0
+    },
+    "json_example": {
+      "passed": 30
+    },
+    "json_package_e2e": "Real built package approval -> Context -> Action -> SDK -> QuickJS -> synthetic clipboard confirmation/cancellation; verifies UI routes, shared indent and exact tokens",
+    "bridge_compile": "release build passed",
+    "clippy": "passed",
+    "architecture": "passed",
+    "style": "passed; final format applied",
+    "standalone_templates": "UI and background passed",
+    "package_signature_and_archive": "verified"
+  },
+  "resource_contract": {
+    "background_bundle_bytes": 15849,
+    "recognition_input_bytes": 16384,
+    "recognition_nesting": 128,
+    "escaped_layers": 4,
+    "runtime": "on demand, existing 32 MiB / 250 ms job limits; no idle VM",
+    "rss_or_native_helper_measurement": "not performed; resource caps are not App RSS measurements"
+  },
+  "native_gui": {
+    "status": "blocked",
+    "reason": "Desktop inventory reported the Mac locked. Native UI acceptance and updating the installed plugin were not performed."
+  },
+  "installation": "App and plugin are separate artifacts; run Build 22+ and import JSON 0.6.0 through Settings to review the updated Context grants.",
+  "limitations": [
+    "Background jobs remain in-process workers, not OS process isolation",
+    "No arbitrary filesystem, network or resident background monitor",
+    "No native GUI, physical IME or memory claim for this build; no GitHub Release"
+  ]
+}

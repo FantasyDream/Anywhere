@@ -13,7 +13,7 @@ class WebActionsPanel extends StatelessWidget {
   final ValueChanged<int> onSelect;
   @override
   Widget build(BuildContext context) => Align(
-      alignment: Alignment.bottomRight,
+      alignment: Alignment.topRight,
       child: Container(
           width: 230,
           margin: const EdgeInsets.all(16),
@@ -44,65 +44,4 @@ class WebActionsPanel extends StatelessWidget {
                 const SizedBox(width: 10),
                 Expanded(child: Text(title, style: AppStyle.body)),
               ]))));
-}
-
-class WebConsentPanel extends StatelessWidget {
-  const WebConsentPanel(
-      {super.key,
-      required this.title,
-      required this.toolTitle,
-      required this.allowSelected,
-      required this.onAnswer,
-      this.preview});
-  final String title, toolTitle;
-  final String? preview;
-  final bool allowSelected;
-  final ValueChanged<bool> onAnswer;
-  @override
-  Widget build(BuildContext context) => Positioned.fill(
-      child: ColoredBox(
-          color: Colors.black54,
-          child: Center(
-              child: Container(
-                  width: 420,
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                      color: AppStyle.overlay,
-                      borderRadius:
-                          BorderRadius.circular(DesignTokens.cardRadius),
-                      border: Border.all(
-                          color: AppStyle.controlBorder,
-                          width: DesignTokens.dividerWidth)),
-                  child: SingleChildScrollView(
-                      child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                        Text(title, style: AppStyle.heading),
-                        const SizedBox(height: 12),
-                        Text(context.l10n.clipboardConsent(toolTitle),
-                            style: AppStyle.caption),
-                        if (preview != null) ...[
-                          const SizedBox(height: 12),
-                          Text(preview!,
-                              maxLines: 4, overflow: TextOverflow.ellipsis),
-                        ],
-                        const SizedBox(height: 20),
-                        Wrap(
-                            alignment: WrapAlignment.end,
-                            spacing: 12,
-                            runSpacing: 8,
-                            children: [
-                              TextButton(
-                                  onPressed: () => onAnswer(false),
-                                  child: Text(allowSelected
-                                      ? context.l10n.cancelEsc
-                                      : context.l10n.cancelEscapeSelected)),
-                              FilledButton(
-                                  onPressed: () => onAnswer(true),
-                                  child: Text(allowSelected
-                                      ? context.l10n.allowOnce
-                                      : context.l10n.allowOnceAction)),
-                            ])
-                      ]))))));
 }

@@ -356,7 +356,7 @@ void main() {
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(920, 600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    var back = 0;
+    var back = 0, actions = 0;
     Widget page(bool visible) => MaterialApp(
         theme: AppStyle.theme,
         home: Material(
@@ -365,10 +365,9 @@ void main() {
           subtitle: 'Workspace',
           visible: visible,
           onBack: () => back++,
-          footer: const Row(children: [
-            Expanded(child: Text('Local processing')),
-            Text('Actions · ⌘K')
-          ]),
+          trailing: TextButton(
+              onPressed: visible ? () => actions++ : null,
+              child: const Text('Actions · ⌘K')),
           child: const ColoredBox(
               key: Key('workspace-body'), color: Colors.transparent),
         )));
@@ -376,10 +375,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.getSize(find.byType(AppPageHeader)).height,
         LauncherViewState.inputHeight);
-    expect(tester.getSize(find.byType(AppPageFooter)).height,
-        DesignTokens.pageFooterHeight);
     expect(tester.getSize(find.byKey(const Key('workspace-body'))).height,
-        greaterThan(450));
+        greaterThan(500));
+    expect(tester.getRect(find.text('Actions · ⌘K')).bottom,
+        lessThan(tester.getRect(find.byKey(const Key('workspace-body'))).top));
+    await tester.tap(find.text('Actions · ⌘K'));
+    expect(actions, 1);
     expect(find.text('Back'), findsNothing);
     expect(find.text('esc'), findsOneWidget);
     await tester.tap(find.text('esc'));
@@ -391,5 +392,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('esc'));
     expect(back, 1);
+    await tester.tap(find.text('Actions · ⌘K'));
+    expect(actions, 1);
   });
 }

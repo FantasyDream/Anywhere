@@ -87,6 +87,10 @@
           },
           "type": "array"
         },
+        "requireContext": {
+          "description": "A typed Context is mandatory even when the command title matches a query.",
+          "type": "boolean"
+        },
         "requireInputMatch": {
           "description": "Hide commands that cannot run without recognized content, including keyword search.",
           "type": "boolean"

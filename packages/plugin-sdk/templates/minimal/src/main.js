@@ -13,9 +13,11 @@ const plugin = definePlugin({
 
 input.addEventListener('input', () => {
   edited = true;
+  status.textContent = '';
 });
 document.querySelector('#uppercase').addEventListener('click', () => {
   edited = true;
+  status.textContent = '';
   input.value = input.value.toUpperCase();
   input.focus();
 });

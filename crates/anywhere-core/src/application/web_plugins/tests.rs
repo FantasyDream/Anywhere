@@ -584,12 +584,9 @@ pub(super) async fn rpc_value(
 ) -> serde_json::Value {
     let frame =
         serde_json::json!({"protocol":1,"requestId":id,"method":method,"params":{}}).to_string();
-    let WebDispatch::Reply(reply) = app
+    let reply = app
         .dispatch_web_message(binding, source(binding), &frame)
-        .await
-    else {
-        panic!("unexpected confirmation");
-    };
+        .await;
     let result: serde_json::Value = serde_json::from_str(&reply).unwrap();
     assert!(result.get("error").is_none(), "{result}");
     result["result"]["value"].clone()

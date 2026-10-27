@@ -49,6 +49,19 @@ fn input_required_commands_must_declare_a_matcher() {
     assert!(parsed.commands[0].require_input_match);
 }
 
+#[test]
+fn context_required_commands_need_an_accepted_type_but_no_static_matcher() {
+    let mut value = manifest();
+    let old = parse_manifest(&serde_json::to_vec(&value).unwrap()).unwrap();
+    assert!(!old.commands[0].needs_context());
+    value["commands"][0]["requireContext"] = json!(true);
+    assert!(parse_manifest(&serde_json::to_vec(&value).unwrap()).is_err());
+    value["commands"][0]["accepts"] = json!(["plugin.dev.example.text-pad.document"]);
+    let parsed = parse_manifest(&serde_json::to_vec(&value).unwrap()).unwrap();
+    assert!(parsed.commands[0].needs_context());
+    assert!(parsed.commands[0].input_matchers.is_empty());
+}
+
 fn base() -> Vec<(String, Vec<u8>)> {
     vec![
         (

@@ -84,7 +84,7 @@ class _WebPackagesSectionState extends State<WebPackagesSection> {
                             if (review.permissions.isEmpty)
                               Text(context.l10n.noHostPermissions),
                             const SizedBox(height: 16),
-                            Text(context.l10n.codeRunsInALocalWebViewNetwork,
+                            Text(context.l10n.pluginExecutionBoundary,
                                 style: AppStyle.caption),
                             if (review.updating) ...[
                               const SizedBox(height: 12),

@@ -86,6 +86,9 @@ pub struct WebCommand {
     /// Hide commands that cannot run without recognized content, including keyword search.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub require_input_match: bool,
+    /// A typed Context is mandatory even when the command title matches a query.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub require_context: bool,
     pub entrypoint: String,
     #[serde(default, skip_serializing_if = "PluginRuntime::is_webview")]
     pub runtime: PluginRuntime,
@@ -216,4 +219,12 @@ pub struct PluginResolver {
     pub accepts: Vec<String>,
     pub produces: Vec<String>,
     pub entrypoint: String,
+}
+
+impl WebCommand {
+    pub fn needs_context(&self) -> bool {
+        self.require_context
+            || self.require_input_match
+            || (self.runtime == PluginRuntime::Background && !self.accepts.is_empty())
+    }
 }

@@ -179,6 +179,15 @@ test('zero-setup SDK subscribes once and reconnects without retaining hidden cli
   );
   try {
     assert.equal((await anywhere.context.get()).text, 'first');
+    assert.equal(await anywhere.storage.get('indent'), null);
+    await anywhere.storage.set('indent', 4);
+    await anywhere.storage.remove('indent');
+    assert.deepEqual(
+      env.calls
+        .filter(call => call.method.startsWith('storage.'))
+        .map(call => call.params),
+      [{key: 'indent'}, {key: 'indent', value: 4}, {key: 'indent'}],
+    );
     const received = [];
     const stop = anywhere.context.onChange(input => received.push(input.text));
     await tick();

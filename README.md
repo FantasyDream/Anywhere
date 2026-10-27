@@ -8,7 +8,7 @@
 
 当前为 **V0.14 开发预览**。应用历史、所选对象动作与统一频次排序已接入，完整发布和实机矩阵尚未完成。此前 V0.13 已完成工程检查与该轮常规 macOS 验收；已知 SDK 警告、WebKit GPU 保留及未验收矩阵见 [V0.13 MVP](docs/mvp-v0.13.md)。版本和构建号以 [pubspec.yaml](apps/flutter/pubspec.yaml) 为准；开发构建不等于正式发行。
 
-V0.14 正在 `codex/dev-0.14` 开发[应用历史与动作排序](docs/mvp-v0.14.md)：通用文件读取器 + 官方配置 / JS 转换，共享历史页已接入 18 个来源，覆盖 JetBrains、VS Code 同类编辑器、Sublime Text 和 Obsidian 最近仓库。支持默认路径检测、自定义路径、逐来源 Action 开关与可信用户适配；Obsidian 最近笔记暂缓接入，多实例仍待验证；浏览器历史、书签与 Tab 管理调整为[后续独立功能](docs/browser-feature.md)，不属于 V0.14 收尾前置。
+V0.14 已接入[应用历史与动作排序](docs/mvp-v0.14.md)：通用文件读取器 + 官方配置 / JS 转换，共享历史页已接入 18 个来源，覆盖 JetBrains、VS Code 同类编辑器、Sublime Text 和 Obsidian 最近仓库。支持默认路径检测、自定义路径、逐来源 Action 开关与可信用户适配；Obsidian 最近笔记暂缓接入，多实例仍待验证；浏览器历史、书签与 Tab 管理调整为[后续独立功能](docs/browser-feature.md)，不属于 V0.14 收尾前置。
 
 | 平台 | 状态 |
 |---|---|
@@ -30,7 +30,7 @@ V0.14 正在 `codex/dev-0.14` 开发[应用历史与动作排序](docs/mvp-v0.14
 - **应用历史原型**：每个应用有独立 Action，如“IDEA 最近项目”“VS Code 最近项目与文件”；在对应 Current App 中自动出现，全局搜索也可找到；仅默认开启已安装应用的 Action，自动检测来源文件，设置中可自定义路径或手动开关来源，支持标题 / 路径 / 拼音匹配。接入与限制见[来源指南](docs/application-history-sources.md)。
 - **Web 插件预览**：可信本地包、明确权限、统一主题与 SDK；JSON Workspace 作为普通插件实现。
 
-终端 / PTY、第三方 ContextProvider、插件市场和浏览器历史暂未交付。文件预览以元数据和有界文本为主。
+终端 / PTY、插件进程隔离、插件市场和浏览器历史暂未交付。第三方 Context 目前仅支持按需解析获准输入；文件预览以元数据和有界文本为主。
 
 ## 快速使用
 

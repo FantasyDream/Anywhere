@@ -45,7 +45,7 @@
 | [应用历史设计](application-history.md) | V0.14：IDE / 编辑器 / 笔记最近对象与原应用打开；当前已有 18 个配置化来源 |
 | [独立浏览器规划](browser-feature.md) | 后续单独实现历史、书签与 Tab 管理；尚未实现，版本待定 |
 | [应用历史来源指南](application-history-sources.md) | 内置 / 用户配置、通用读取器、安装默认开关、自定义路径与当前限额 |
-| [第三方 Context 调研](research/third-party-context-providers.md) | 尚未实现的类型注册、隔离和 worker 选型 |
+| [第三方 Context 调研](research/third-party-context-providers.md) | 已落地的派生类型边界、历史调研与后续进程隔离 |
 
 ## 历史与研究
 

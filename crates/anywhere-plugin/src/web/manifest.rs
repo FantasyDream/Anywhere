@@ -168,6 +168,10 @@ pub fn validate_manifest(manifest: &WebPluginManifest) -> Result<()> {
             );
         }
         ensure!(command.accepts.len() <= 16, "too many Web context matchers");
+        ensure!(
+            !command.require_context || !command.accepts.is_empty(),
+            "required Context needs accepted types"
+        );
         unique_types(&command.accepts)?;
         let matchers: BTreeSet<_> = command.input_matchers.iter().collect();
         ensure!(

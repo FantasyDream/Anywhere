@@ -1,0 +1,48 @@
+{
+  "date": "2026-10-27",
+  "branch": "codex/plugin-runtime-refactor",
+  "source_base_commit": "8a3e757970c1e477979bbc8e8774bb19f92fbb6f",
+  "source_state": "working tree; not committed by this closeout",
+  "app": "0.14.0+24; no host runtime code changed after its native acceptance",
+  "changes": [
+    "Removed unused JSON action title/label fields; Manifest and localized resources continue to own visible labels",
+    "Archived the superseded third-party Context proposal and replaced its current entry with actual implementation and remaining isolation boundaries",
+    "Moved Build 16-23 narrative into the existing V0.14 development archive; kept current MVP focused on scope and latest acceptance",
+    "Removed obsolete pending-native claims from the current runtime overview",
+    "Documented main/helper attribution and release-verification limits without force-killing system services"
+  ],
+  "review": {
+    "boundaries": "Context/matching/qualification and capability authority remain in Rust; Flutter owns presentation/focus; JSON business logic stays in the package and uses the shared SDK",
+    "resource_lifecycle": "Reviewed document generation guards, dispose, resource queue cancellation, ready timer and consent cleanup, native panel ownership, and per-job QuickJS runtime; no new gap identified in the reviewed paths",
+    "compatibility": "Retained static input matcher compatibility fixtures and generic requireContext rather than deleting supported installed-package behavior",
+    "repository_hygiene": "No tracked build/target/node_modules trees or log/tmp/bak/DS_Store files matched the final audit"
+  },
+  "checks": {
+    "full_gate": "passed; build/closeout24-final-check.log",
+    "style": "passed; build/closeout24-style.log",
+    "core_passed": 317,
+    "core_ignored": 1,
+    "mvp_passed": 195,
+    "mvp_ignored": 4,
+    "flutter_passed": 435,
+    "sdk_passed": 21,
+    "json_passed": 30,
+    "architecture_core_dependencies": 203,
+    "docs": "88 Markdown files; 674 local links after adding this record; no broken links",
+    "diff_check": "passed"
+  },
+  "json_package": {
+    "version": "0.6.3",
+    "path": "build/web-examples/json-workspace-0.6.3.awplugin",
+    "sha256": "9fa92d7f19ba0ed6ccc68ab0f14848955377d2f591490326ffa3df8c7be99186",
+    "content_digest": "bce2e967c963352d55e42c5cdb10f69381d9f3217fe0adb5b474cd01efe2710f",
+    "inspection": "passed; build/closeout24-json-inspect.log",
+    "real_package_conformance": "passed; build/closeout24-json-conformance.log"
+  },
+  "native_baseline": "acceptance-fixes-v0.14-build24-2026-10-27.json; JSON 0.6.2 business routes, Settings close/discard and history object integration",
+  "limits": [
+    "JSON 0.6.3 metadata cleanup was not separately installed or retested in the native UI",
+    "No fresh memory/GPU helper release benchmark or physical input validation",
+    "Full history-source/platform/release matrix remains outside this scoped closeout"
+  ]
+}

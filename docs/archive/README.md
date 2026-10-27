@@ -4,7 +4,7 @@
 
 ## 版本记录
 
-- [V0.14 方案与 Build 1–15 过程记录](v0.14-development-records.md)：旧设计、功能范围调整与逐构建证据；当前契约另见现行专题指南。
+- [V0.14 方案与 Build 1–23 过程记录](v0.14-development-records.md)：旧设计、功能范围调整与逐构建证据；当前契约另见现行专题指南。
 
 | 文档 | 保留价值 |
 |---|---|
@@ -48,3 +48,5 @@ Review 的问题列表描述审查基线，修复记录描述其后变更；不�
 [基准说明](benchmarks/README.md) 保留长期索引原型与 V2 遍历器的两个 JSON 样本。原型未进入生产，遍历器采样也不包含 Flutter / Spotlight / 原生窗口，不能作为当前整 App RSS。
 
 - [V0.11 架构与收尾 Review（2026-10-20）](reviews/review-v0.11-2026-10-20.md)
+
+- [2026-10-20 第三方 Context 调研](third-party-context-providers-2026-10-20.md)：早期隔离与引擎选型建议，实施状态另见[当前说明](../research/third-party-context-providers.md)。

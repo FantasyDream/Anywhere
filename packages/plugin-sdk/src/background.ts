@@ -99,6 +99,11 @@ export const anywhere: Anywhere = {
       }
     },
   },
+  storage: {
+    get: key => invoke('storage.get', {key}),
+    set: (key, value) => invoke('storage.set', {key, value}),
+    remove: key => invoke('storage.remove', {key}),
+  },
   app: {
     getSource: () => invoke('app.getSource'),
     getFrontmost: () => invoke('app.getFrontmost'),

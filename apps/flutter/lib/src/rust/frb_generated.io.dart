@@ -109,13 +109,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
-  WebConsentKindDto dco_decode_box_autoadd_web_consent_kind_dto(dynamic raw);
-
-  @protected
   WebPluginLaunchDto dco_decode_box_autoadd_web_plugin_launch_dto(dynamic raw);
-
-  @protected
-  WebReplyDto dco_decode_box_autoadd_web_reply_dto(dynamic raw);
 
   @protected
   CandidateDto dco_decode_candidate_dto(dynamic raw);
@@ -317,15 +311,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
 
   @protected
-  WebConsentKindDto? dco_decode_opt_box_autoadd_web_consent_kind_dto(
-      dynamic raw);
-
-  @protected
   WebPluginLaunchDto? dco_decode_opt_box_autoadd_web_plugin_launch_dto(
       dynamic raw);
-
-  @protected
-  WebReplyDto? dco_decode_opt_box_autoadd_web_reply_dto(dynamic raw);
 
   @protected
   Uint8List? dco_decode_opt_list_prim_u_8_strict(dynamic raw);
@@ -376,9 +363,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void dco_decode_unit(dynamic raw);
 
   @protected
-  WebConsentKindDto dco_decode_web_consent_kind_dto(dynamic raw);
-
-  @protected
   WebDocumentDto dco_decode_web_document_dto(dynamic raw);
 
   @protected
@@ -392,9 +376,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   WebPluginLaunchDto dco_decode_web_plugin_launch_dto(dynamic raw);
-
-  @protected
-  WebReplyDto dco_decode_web_reply_dto(dynamic raw);
 
   @protected
   WebReviewDto dco_decode_web_review_dto(dynamic raw);
@@ -505,15 +486,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
-  WebConsentKindDto sse_decode_box_autoadd_web_consent_kind_dto(
-      SseDeserializer deserializer);
-
-  @protected
   WebPluginLaunchDto sse_decode_box_autoadd_web_plugin_launch_dto(
-      SseDeserializer deserializer);
-
-  @protected
-  WebReplyDto sse_decode_box_autoadd_web_reply_dto(
       SseDeserializer deserializer);
 
   @protected
@@ -745,15 +718,7 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
-  WebConsentKindDto? sse_decode_opt_box_autoadd_web_consent_kind_dto(
-      SseDeserializer deserializer);
-
-  @protected
   WebPluginLaunchDto? sse_decode_opt_box_autoadd_web_plugin_launch_dto(
-      SseDeserializer deserializer);
-
-  @protected
-  WebReplyDto? sse_decode_opt_box_autoadd_web_reply_dto(
       SseDeserializer deserializer);
 
   @protected
@@ -811,10 +776,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_decode_unit(SseDeserializer deserializer);
 
   @protected
-  WebConsentKindDto sse_decode_web_consent_kind_dto(
-      SseDeserializer deserializer);
-
-  @protected
   WebDocumentDto sse_decode_web_document_dto(SseDeserializer deserializer);
 
   @protected
@@ -830,9 +791,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   WebPluginLaunchDto sse_decode_web_plugin_launch_dto(
       SseDeserializer deserializer);
-
-  @protected
-  WebReplyDto sse_decode_web_reply_dto(SseDeserializer deserializer);
 
   @protected
   WebReviewDto sse_decode_web_review_dto(SseDeserializer deserializer);
@@ -948,16 +906,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
-  void sse_encode_box_autoadd_web_consent_kind_dto(
-      WebConsentKindDto self, SseSerializer serializer);
-
-  @protected
   void sse_encode_box_autoadd_web_plugin_launch_dto(
       WebPluginLaunchDto self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_box_autoadd_web_reply_dto(
-      WebReplyDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_candidate_dto(CandidateDto self, SseSerializer serializer);
@@ -1194,16 +1144,8 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);
 
   @protected
-  void sse_encode_opt_box_autoadd_web_consent_kind_dto(
-      WebConsentKindDto? self, SseSerializer serializer);
-
-  @protected
   void sse_encode_opt_box_autoadd_web_plugin_launch_dto(
       WebPluginLaunchDto? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_box_autoadd_web_reply_dto(
-      WebReplyDto? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_list_prim_u_8_strict(
@@ -1265,10 +1207,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   void sse_encode_unit(void self, SseSerializer serializer);
 
   @protected
-  void sse_encode_web_consent_kind_dto(
-      WebConsentKindDto self, SseSerializer serializer);
-
-  @protected
   void sse_encode_web_document_dto(
       WebDocumentDto self, SseSerializer serializer);
 
@@ -1286,9 +1224,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_web_plugin_launch_dto(
       WebPluginLaunchDto self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_web_reply_dto(WebReplyDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_web_review_dto(WebReviewDto self, SseSerializer serializer);

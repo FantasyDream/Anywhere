@@ -83,7 +83,7 @@ Current App 聚合当前环境的所有可用动作。顶部的 **Folder、Git�
 
 运行 `python3 scripts/build-web-examples.py` 构建 [JSON Workspace](../plugins/examples/json-workspace/README.md) 与 [Text Pad](../plugins/examples/web-text/README.md)。导入 JSON 包后搜索 `JSON Workspace`：左侧输入停顿后自动格式化，上方默认使用 JavaScript，也可切到 JSONPath 并输入公式，`$` / `this` 自动补入，右侧展示和复制结果；`⌘↵` 立即查询，`⌘⇧C` 复制当前结果。输入 / 输出各最多 1 MiB，不保存正文，只保存缩进偏好。声明宿主 `inputMatchers` 的新版 JSON 包还支持自动识别对象 / 数组：直接输入 JSON 可匹配 Action，选择后带入原文；选中文本和 15 秒内新复制内容沿用自动填入规则。自动识别最多 16 KiB / 128 层，不将普通标量误当成 JSON。
 
-Web 工具复用 Launcher 页框，`⌘K` 打开宿主操作，Esc 返回搜索，隐藏后的输入仍保留 15 秒。剪贴板操作经宿主单次确认。资源来自已批准包，网络、frame、弹窗和导航均受限制；这些策略不等于操作系统进程沙箱。原生 IME / 安全 / Windows 验收边界见 [V0.11 MVP](archive/mvp-v0.11.md) 与 [实施记录](web-plugin-design.md)。原生 JSON 工作区已退役，新工具使用独立的 Web Action ID。
+Web 工具复用 Launcher 页框，`⌘K` 打开宿主操作，Esc 返回搜索，隐藏后的输入仍保留 15 秒。插件安装时批准剪贴板读写权限，运行时不再逐次确认；后台复制动作直接执行，不打开工作区。资源来自已批准包，网络、frame、弹窗和导航均受限制；这些策略不等于操作系统进程沙箱。原生 IME / 安全 / Windows 验收边界见 [V0.11 MVP](archive/mvp-v0.11.md) 与 [实施记录](web-plugin-design.md)。原生 JSON 工作区已退役，新工具使用独立的 Web Action ID。
 
 ## 3. 键盘操作
 

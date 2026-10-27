@@ -11,7 +11,7 @@ async function connect(t) {
   });
   const lines = createInterface({input: child.stdout});
   let receive = () => {},
-    approved = true,
+    hidden,
     ready;
   const started = new Promise((resolve, reject) => {
     ready = resolve;
@@ -31,8 +31,7 @@ async function connect(t) {
     const value = JSON.parse(line);
     if (value.kind === 'ready') ready();
     else if (value.kind === 'reply') receive(value.frame);
-    else if (value.kind === 'confirmation')
-      send({kind: 'confirm', ticket: value.ticket, approved});
+    else if (value.kind === 'hidden') hidden();
   });
   t.after(async () => {
     child.stdin.end();
@@ -53,14 +52,17 @@ async function connect(t) {
         };
       },
     },
-    decline() {
-      approved = false;
+    hide() {
+      return new Promise(resolve => {
+        hidden = resolve;
+        send({kind: 'hide'});
+      });
     },
   };
 }
 const rust = process.env.ANYWHERE_WEB_BRIDGE_TEST_BIN;
 test(
-  'SDK talks to the real Rust broker for invocation, KV and confirmed clipboard access',
+  'SDK talks to the real Rust broker for invocation, KV and grant-checked clipboard access',
   {skip: !rust, timeout: 15000},
   async t => {
     const connection = await connect(t);
@@ -93,13 +95,16 @@ test(
   },
 );
 test(
-  'Host declining consent reaches SDK as a non-retried cancellation',
+  'Hiding the document rejects subsequent SDK clipboard access',
   {skip: !rust, timeout: 10000},
   async t => {
     const connection = await connect(t);
-    connection.decline();
     const client = createHost(connection.transport);
     t.after(() => client.dispose());
-    await assert.rejects(client.clipboard.readText(), {code: 'USER_CANCELLED'});
+    await client.ready();
+    await connection.hide();
+    await assert.rejects(client.clipboard.readText(), {
+      code: 'UNTRUSTED_DOCUMENT',
+    });
   },
 );
