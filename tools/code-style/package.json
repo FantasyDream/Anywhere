@@ -3,9 +3,12 @@
   "private": true,
   "version": "0.1.0",
   "description": "Development-only Google style tools; never shipped with the App or SDK.",
+  "overrides": {
+    "external-editor": {"tmp": "0.2.7"}
+  },
   "devDependencies": {
     "globals": "17.13.0",
     "gts": "7.0.0",
-    "typescript": "5.9.3"
+    "typescript": "6.0.3"
   }
 }

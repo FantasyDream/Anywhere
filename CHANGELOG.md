@@ -4,6 +4,8 @@
 
 ## Unreleased — V0.14 开发预览
 
+- 独立升级分支进一步更新至 Rust 1.99.1 / Flutter 3.47.8（Dart 3.13.7），同步可兼容的 Rust、Dart 和插件工具依赖；适配 SHA-2 / SQLite 新接口并保留旧存储身份，修复开发工具 tmp 已知漏洞。上游固定依赖与未解决的编译期安全扫描告警见[升级记录](docs/archive/reviews/toolchain-upgrades-2026-10-29.md)，尚未重新打包。
+
 - 独立依赖升级分支整合 15 个 Dependabot 更新；同步 FRB 两端运行库和生成代码，修复 SQLite 0.40 的受检整数功能及可失败保护设置，增加桥接版本一致性检查和真实 FFI 回归。升级尚未合入 main 或替换运行程序。
 
 - Build 35 汇总下述 Flutter 与全仓审查的应用侧修复，完成 macOS arm64 本机签名、ZIP 校验并启动；Web 插件 / SDK 有独立包，已安装插件不会随 App 打包自动替换。

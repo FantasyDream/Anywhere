@@ -40,6 +40,12 @@
 
 ## 最新已验证基线
 
+### Rust / Flutter 稳定工具链升级 — 2026-10-29
+
+`codex/dependency-upgrades` 进一步升级至 Rust / Cargo 1.99.1、Flutter 3.47.8 / Dart 3.13.7，并更新可兼容依赖。适配 SHA-2、SQLite 和原子接口，新增回归保护已有插件存储身份。完整 `scripts/check.sh` 通过：Core 322 / 1 忽略、MVP 195 / 4 忽略、Platform 70 / 1 忽略、Flutter 471 / 1 跳过、SDK 25、JSON 30；跳过的真实 FFI 项另行运行通过。四个 npm 树审计无已知漏洞；Rust OSV 查询保留一项上游编译期依赖的版本范围告警，源码核对及通告场景未复现结果见[工具链升级记录](archive/reviews/toolchain-upgrades-2026-10-29.md)。
+
+main 与已打包 Build 35 保持升级前基线，未重新打包、启动或推送。Flutter SDK / FRB 固定的间接依赖没有强行替换；GUI / 物理输入法、进程内存、跨平台原生运行与远端 Actions 未在本轮验收。
+
 ### 独立分支依赖升级 — 2026-10-29
 
 `codex/dependency-upgrades` 从 `main@f1ed6d3` 合入 15 个 Dependabot 分支，包含 Rust、Flutter、插件 SDK、规范工具和 GitHub Actions；修复 SQLite 受检整数转换与可失败保护接口，同步 FRB 两端运行库及生成器至 2.13.0，并新增版本漂移检查。完整 `scripts/check.sh` 通过：Core 321 / 1 忽略、MVP 195 / 4 忽略、Platform 70 / 1 忽略、Flutter 471 / 1 跳过、SDK 25、JSON 30；真实 Rust 动态库构建及独立 Dart FFI 回归 1 项通过，覆盖普通 Flutter 套件跳过的显式动态库测试。范围与证据见[依赖升级记录](archive/reviews/dependency-upgrades-2026-10-29.md)。

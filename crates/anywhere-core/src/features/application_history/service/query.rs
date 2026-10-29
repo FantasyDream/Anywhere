@@ -21,7 +21,7 @@ impl HistoryService {
         let mut state = self.state.lock().unwrap();
         let owner = self
             .owner
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_add(1))
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_add(1))
             .map_err(|_| anyhow::anyhow!("history session exhausted"))?
             + 1;
         self.epoch.fetch_add(1, Ordering::AcqRel);
@@ -92,10 +92,10 @@ impl HistoryService {
                         continue;
                     }
                     let id = format!(
-                        "{}:{}:{:x}",
+                        "{}:{}:{}",
                         source.id,
                         epoch,
-                        Sha256::digest(entry.key.as_bytes())
+                        hex::encode(Sha256::digest(entry.key.as_bytes()))
                     );
                     ranked.push(RankedEntry {
                         matched,

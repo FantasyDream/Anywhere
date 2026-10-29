@@ -25,6 +25,7 @@
 
 ## Review 与重构记录
 
+- [Rust / Flutter 稳定工具链升级（2026-10-29）](reviews/toolchain-upgrades-2026-10-29.md)：Rust 1.99.1 / Flutter 3.47.8、可兼容依赖升级、安全扫描与上游约束；承接同日依赖整合。
 - [依赖升级整合（2026-10-29）](reviews/dependency-upgrades-2026-10-29.md)：15 个升级分支、SQLite / FRB 兼容修复、隔离工具与真实 FFI 验证；升级保留在独立分支。
 - [全仓分层 Review（2026-10-29）](reviews/repo-review-2026-10-29.md)：Core / Application / Features / Persistence / Platform / Bridge / Flutter / Native Host / SDK / 构建与文档的检查范围、五项修复及自动化证据。
 - [V0.12 最终代码与仓库收尾（2026-10-23）](reviews/closeout-v0.12-2026-10-23.md)：目录额度、设置错误、旧接口 / 文案、干净检出、原生 SDK 兼容与 main 集成。

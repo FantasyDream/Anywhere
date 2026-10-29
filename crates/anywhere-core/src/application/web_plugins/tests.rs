@@ -19,6 +19,15 @@ use std::{
 };
 use zip::{write::SimpleFileOptions, ZipWriter};
 
+#[test]
+fn storage_namespace_preserves_existing_keys_after_digest_upgrade() {
+    assert_eq!(
+        storage_namespace("example.plugin", "example.resolver"),
+        "web.c04bdad9625b0272b5b9a40cb17db1a36d460849b88ae0d5b31245cd4d6e1277"
+    );
+    assert_ne!(storage_namespace("ab", "c"), storage_namespace("a", "bc"));
+}
+
 pub(super) fn package(
     permissions: serde_json::Value,
     accepts: serde_json::Value,

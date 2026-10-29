@@ -5,7 +5,7 @@
 ## 环境
 
 - macOS 12 或以上，以及 Apple Command Line Tools。
-- PATH 上的 Rust stable / Cargo。
+- 由 [rust-toolchain.toml](../rust-toolchain.toml) 固定的 Rust stable / Cargo；rustup 会按需安装对应版本及 rustfmt / Clippy。
 - 与 [.flutter-version](../.flutter-version) 一致的 Flutter SDK。
 - Python 3.10+，用于生成与检查脚本。
 - Node.js 22+ / npm，用于 SDK 类型检查与 Rust 互通测试；App 和插件运行时不需要 Node。

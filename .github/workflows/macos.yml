@@ -22,6 +22,7 @@ on:
       - '.swift-format'
       - '.prettierrc.cjs'
       - 'rustfmt.toml'
+      - 'rust-toolchain.toml'
       - '.flutter-version'
       - '.github/workflows/macos.yml'
 
@@ -54,7 +55,7 @@ jobs:
           key: code-style-${{ runner.os }}-${{ runner.arch }}-${{ steps.swift-toolchain.outputs.hash }}-${{ hashFiles('scripts/setup-code-style.sh', 'tools/code-style/swift-package.resolved') }}
       - name: Install isolated code style tools
         run: scripts/setup-code-style.sh
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.99.1
         with:
           components: rustfmt, clippy
       - name: Read Flutter version
@@ -77,8 +78,8 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@1.99.1
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'

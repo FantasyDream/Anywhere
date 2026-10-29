@@ -31,7 +31,7 @@ impl VerifiedAsset {
         self.size
     }
     pub fn sha256(&self) -> String {
-        hex(&self.sha256)
+        hex::encode(self.sha256)
     }
 }
 
@@ -301,14 +301,5 @@ fn content_digest(assets: &BTreeMap<String, VerifiedAsset>) -> String {
         hash.update(info.size.to_le_bytes());
         hash.update(info.sha256);
     }
-    hex(&hash.finalize().into())
-}
-
-fn hex(bytes: &[u8; 32]) -> String {
-    use std::fmt::Write;
-    let mut value = String::with_capacity(64);
-    for byte in bytes {
-        write!(&mut value, "{byte:02x}").expect("writing to String");
-    }
-    value
+    hex::encode(hash.finalize())
 }

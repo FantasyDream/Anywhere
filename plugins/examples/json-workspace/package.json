@@ -11,10 +11,10 @@
     "@anywhere/sdk": "file:../../../packages/plugin-sdk",
     "@nyariv/sandboxjs": "0.9.7",
     "acorn": "8.19.0",
-    "i18next": "26.5.4",
+    "i18next": "26.5.11",
     "jsonc-parser": "3.3.1",
     "jsonpath-js": "0.3.1",
-    "preact": "11.0.1"
+    "preact": "11.1.0"
   },
   "devDependencies": {
     "esbuild": "0.28.2"

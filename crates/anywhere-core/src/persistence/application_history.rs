@@ -96,7 +96,7 @@ fn sqlite(
         types::ValueRef,
         Connection, OpenFlags,
     };
-    let db = Connection::open_with_flags(
+    let mut db = Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
     )?;
@@ -122,11 +122,7 @@ fn sqlite(
     let result = (|| -> Result<Value> {
         let mut statement = db.prepare(query)?;
         ensure!(statement.readonly(), "source query must be read only");
-        let names: Vec<_> = statement
-            .column_names()
-            .into_iter()
-            .map(str::to_owned)
-            .collect();
+        let names: Vec<_> = statement.column_names().map(str::to_owned).collect();
         ensure!(names.len() <= 16, "too many source columns");
         let mut rows = statement.query(rusqlite::params_from_iter(parameters))?;
         let mut output = Vec::new();

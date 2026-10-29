@@ -24,20 +24,15 @@ use anyhow::Result;
 fn storage_namespace(plugin: &str, source: &str) -> String {
     use sha2::{Digest, Sha256};
     format!(
-        "web.{:x}",
-        Sha256::digest(format!("{plugin}\0{source}").as_bytes())
+        "web.{}",
+        hex::encode(Sha256::digest(format!("{plugin}\0{source}").as_bytes()))
     )
 }
 
 fn token() -> Result<String> {
     let mut bytes = [0; 32];
     getrandom::fill(&mut bytes).map_err(|e| anyhow::anyhow!("Web identity unavailable: {e}"))?;
-    use std::fmt::Write;
-    let mut result = String::with_capacity(64);
-    for byte in bytes {
-        write!(&mut result, "{byte:02x}").expect("writing to String");
-    }
-    Ok(result)
+    Ok(hex::encode(bytes))
 }
 
 #[cfg(test)]

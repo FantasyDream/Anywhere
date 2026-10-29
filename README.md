@@ -75,7 +75,7 @@ Rust 负责识别、匹配、排序、执行和资源预算；Flutter 负责呈�
 
 ## 从源码构建
 
-需要 macOS 开发工具、Rust stable、[指定版本的 Flutter](.flutter-version)、Python 3.10+、Node.js 22+ / npm，以及持久本机签名身份。
+需要 macOS 开发工具、[指定版本的 Rust stable](rust-toolchain.toml)、[指定版本的 Flutter](.flutter-version)、Python 3.10+、Node.js 22+ / npm，以及持久本机签名身份。
 
 ```bash
 source scripts/env.sh
