@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Development-only Google style tools; never shipped with the App or SDK.",
   "devDependencies": {
-    "globals": "14.0.0",
+    "globals": "17.13.0",
     "gts": "7.0.0",
     "typescript": "5.9.3"
   }
