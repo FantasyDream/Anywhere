@@ -40,6 +40,12 @@
 
 ## 最新已验证基线
 
+### 独立分支依赖升级 — 2026-10-29
+
+`codex/dependency-upgrades` 从 `main@f1ed6d3` 合入 15 个 Dependabot 分支，包含 Rust、Flutter、插件 SDK、规范工具和 GitHub Actions；修复 SQLite 受检整数转换与可失败保护接口，同步 FRB 两端运行库及生成器至 2.13.0，并新增版本漂移检查。完整 `scripts/check.sh` 通过：Core 321 / 1 忽略、MVP 195 / 4 忽略、Platform 70 / 1 忽略、Flutter 471 / 1 跳过、SDK 25、JSON 30；真实 Rust 动态库构建及独立 Dart FFI 回归 1 项通过，覆盖普通 Flutter 套件跳过的显式动态库测试。范围与证据见[依赖升级记录](archive/reviews/dependency-upgrades-2026-10-29.md)。
+
+升级保留在独立分支，未合入 main、推送远端或重新打包；源码版本仍为 `0.14.0+35`，已打包的 Build 35 对应升级前基线。GUI / 物理输入法、整 App 内存、跨平台原生运行和远端 Actions 未在本轮验收。
+
 ### 当前修复重新打包与启动 — Build 35
 
 `0.14.0+35` / macOS arm64 汇总此前 Flutter 长列表、动作选择器、页面释放及全仓跨层修复，保留 Impeller。本机持久签名、严格签名检查、ZIP 内主程序 / Rust 库 / 版本一致性及 SHA-256 校验通过；正常退出 Build 34 后启动明确路径的 Build 35，已核对实际运行版本。产物与摘要见[打包记录](benchmarks/package-v0.14-build35-2026-10-29.json)。

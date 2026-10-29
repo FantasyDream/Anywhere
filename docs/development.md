@@ -55,12 +55,23 @@ cargo test --workspace --locked
 修改 FRB 公开 API 后重新生成绑定：
 
 ```bash
-cargo install flutter_rust_bridge_codegen --version 2.11.1 --locked
+cargo install flutter_rust_bridge_codegen --version 2.13.0 --locked
 cargo install cargo-expand --locked
 scripts/generate-bridge.sh
 ```
 
 已生成绑定随源码提交，普通构建不需要生成器。键码、文件类型、运行策略修改后使用对应的 `scripts/generate-*.py` 同步生成代码；完整检查包含漂移校验。
+
+FRB 的 Dart / Rust 运行库和两端生成代码必须使用同一版本。`scripts/check-versions.py` 检查四处声明，`scripts/generate-bridge.sh` 在生成前检查 PATH 中生成器版本；可将对应版本安装到项目 `.tools/` 后临时加入 PATH，不必覆盖全局工具。
+
+升级桥接运行库后，可额外构建 `cargo build -p anywhere-bridge-flutter --locked`，在 `apps/flutter` 执行真实动态库验证：
+
+```bash
+flutter --no-version-check test test/bridge_runtime_test.dart \
+  --dart-define=ANYWHERE_BRIDGE_LIBRARY="$PWD/../../target/debug/libanywhere_bridge_flutter.dylib"
+```
+
+以上路径对应默认 Cargo 输出和 macOS；其他平台选择对应动态库。该测试核对真实 FFI 调用，不创建窗口或初始化存储、权限与剪贴板采集；未传库路径的普通 Widget 套件会跳过此项。
 
 桥只导出 App 正在使用的接口。设置目录通过 `extensionStatus` / `refreshFeatures` 读取统一状态，包含内置功能和旧声明式插件；旧插件配置的读取与迁移留在 Rust 设置服务。不要在 Flutter 中重新转换一套旧插件状态，测试也注入同一组 DTO。
 

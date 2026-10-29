@@ -104,8 +104,8 @@ fn sqlite(
     db.set_limit(
         rusqlite::limits::Limit::SQLITE_LIMIT_LENGTH,
         MAX_INPUT as i32,
-    );
-    db.set_limit(rusqlite::limits::Limit::SQLITE_LIMIT_SQL_LENGTH, 64 * 1024);
+    )?;
+    db.set_limit(rusqlite::limits::Limit::SQLITE_LIMIT_SQL_LENGTH, 64 * 1024)?;
     db.pragma_update(None, "query_only", true)?;
     db.pragma_update(None, "cache_size", -2048)?;
     db.pragma_update(None, "mmap_size", 0)?;
@@ -116,9 +116,9 @@ fn sqlite(
             Authorization::Allow
         }
         _ => Authorization::Deny,
-    }));
+    }))?;
     let interrupt = cancelled.clone();
-    db.progress_handler(1000, Some(move || interrupt()));
+    db.progress_handler(1000, Some(move || interrupt()))?;
     let result = (|| -> Result<Value> {
         let mut statement = db.prepare(query)?;
         ensure!(statement.readonly(), "source query must be read only");
@@ -154,6 +154,6 @@ fn sqlite(
         }
         Ok(json!({"rows":output}))
     })();
-    db.progress_handler(0, None::<fn() -> bool>);
+    db.progress_handler(0, None::<fn() -> bool>)?;
     result
 }

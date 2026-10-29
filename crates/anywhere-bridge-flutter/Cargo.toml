@@ -16,7 +16,7 @@ anyhow.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-flutter_rust_bridge = "=2.11.1"
+flutter_rust_bridge = "=2.13.0"
 
 
 [lints.rust]

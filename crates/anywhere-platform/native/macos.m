@@ -239,7 +239,7 @@ static NSInteger clipboard_access_behavior(NSPasteboard *pasteboard) {
     SEL selector = NSSelectorFromString(@"accessBehavior");
     if (![pasteboard respondsToSelector:selector]) return 0;
     NSInteger (*getBehavior)(id, SEL) =
-        (NSInteger(*)(id, SEL))[pasteboard methodForSelector:selector];
+        (NSInteger (*)(id, SEL))[pasteboard methodForSelector:selector];
     return getBehavior(pasteboard, selector);
   }
   return 2;

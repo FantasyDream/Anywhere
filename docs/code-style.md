@@ -28,6 +28,8 @@ python3 scripts/check-code-style.py
 
 开发工具与依赖固定在 `tools/code-style/`，实际安装到被忽略的 `node_modules` / `.tools`，不修改全局包或 Git hooks，也不随 App / SDK 发行。macOS CI 安装同一套工具并检查所有语言；Swift 的完整格式检查在 macOS 执行。
 
+插件 SDK 使用 TypeScript 7 构建；GTS / ESLint 所在的隔离工具目录保留自己的 TypeScript 5.9 编程接口依赖，两处版本独立。背景模板另有独立锁定编译器，SDK 交付仍通过模板解包、类型检查和打包回归验证。
+
 Dart 检查会先解析 Flutter 依赖，再读取包配置进行格式化，确保干净 checkout 与已有工作区使用相同语言版本；不依赖本机残留的 `.dart_tool` 缓存。
 
 ```bash
