@@ -255,7 +255,10 @@ fn expired_history_cannot_be_searched_previewed_or_copied_and_formats_are_delete
     history.poll(&platform, now.load(Ordering::SeqCst)).unwrap();
     let id = history.search("").unwrap()[0].id;
     now.fetch_add(super::policy::DAY_MS, Ordering::SeqCst);
-    assert!(history.detail(id).unwrap().is_none());
+    assert!(history
+        .inspect_payload(id, |_, payload| Ok(payload))
+        .unwrap()
+        .is_none());
     assert!(history.copy(id, &platform).is_err());
     assert!(history.search("").unwrap().is_empty());
     assert!(platform.written.lock().unwrap().is_empty());
@@ -282,13 +285,13 @@ fn expiry_or_policy_change_during_preview_never_publishes_the_old_body() {
         history.poll(&platform, now.load(Ordering::SeqCst)).unwrap();
         let id = history.search("").unwrap()[0].id;
         let result = history
-            .detail_with(id, |item, payload| {
+            .inspect_payload(id, |_item, payload| {
                 if change_policy {
                     history.set_retention_days(7).unwrap();
                 } else {
                     now.fetch_add(super::policy::DAY_MS, Ordering::SeqCst);
                 }
-                super::super::content::preview(item, payload)
+                Ok(payload)
             })
             .unwrap();
         assert!(result.is_none());
@@ -460,7 +463,9 @@ fn disable_or_clear_during_native_read_revokes_the_pending_write() {
         service.poll(&platform, 1).unwrap();
         if disable {
             assert!(service.search("").is_err());
-            assert!(service.detail(1).is_err());
+            assert!(service
+                .inspect_payload(1, |_, payload| Ok(payload))
+                .is_err());
             assert!(service.copy(1, &platform).is_err());
             assert!(service.set_recording(true).is_err());
             service.set_feature_enabled(true, &platform).unwrap();
@@ -494,7 +499,10 @@ fn captured_multiformat_item_restores_long_format_names_and_original_bytes() {
     service.poll(&platform, 1).unwrap();
     let item = service.search("").unwrap().remove(0);
     assert_eq!(item.kind, "image");
-    let preview = service.detail(item.id).unwrap().unwrap();
+    let preview = service
+        .inspect_payload(item.id, |_, payload| Ok(payload))
+        .unwrap()
+        .unwrap();
     assert_eq!(preview.formats.len(), 2);
     service.copy(item.id, &platform).unwrap();
     let written = platform.written.lock().unwrap();
@@ -513,13 +521,13 @@ fn deletion_clear_and_disable_during_preview_revoke_its_result() {
         platform.generation.store(1, Ordering::Relaxed);
         service.poll(&platform, 1).unwrap();
         let id = service.search("").unwrap()[0].id;
-        let result = service.detail_with(id, |item, payload| {
+        let result = service.inspect_payload(id, |_item, payload| {
             match operation {
                 "delete" => service.delete(id).unwrap(),
                 "clear" => service.clear().unwrap(),
                 _ => service.set_feature_enabled(false, &platform).unwrap(),
             }
-            super::super::content::preview(item, payload)
+            Ok(payload)
         });
         if operation == "disable" {
             assert!(result.is_err());
@@ -541,10 +549,10 @@ fn preview_admission_serializes_bodies_without_blocking_policy_or_storage() {
     let (release_tx, release_rx) = std::sync::mpsc::channel();
     let first_service = service.clone();
     let first = std::thread::spawn(move || {
-        first_service.detail_with(id, |item, payload| {
+        first_service.inspect_payload(id, |_item, payload| {
             entered_tx.send(()).unwrap();
             release_rx.recv().unwrap();
-            super::super::content::preview(item, payload)
+            Ok(payload)
         })
     });
     entered_rx.recv().unwrap();
@@ -553,7 +561,8 @@ fn preview_admission_serializes_bodies_without_blocking_policy_or_storage() {
     service.set_recording(false).unwrap();
     service.delete(id).unwrap();
     let second_service = service.clone();
-    let second = std::thread::spawn(move || second_service.detail(id));
+    let second =
+        std::thread::spawn(move || second_service.inspect_payload(id, |_, payload| Ok(payload)));
     release_tx.send(()).unwrap();
     assert!(first.join().unwrap().unwrap().is_none());
     assert!(second.join().unwrap().unwrap().is_none());

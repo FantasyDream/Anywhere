@@ -10,13 +10,13 @@ fi
 APP="$(
   python3 - "$1" <<'PY'
 import pathlib, plistlib, re, sys
+from scripts.macos_app_path import app_path
 
 root = pathlib.Path.cwd()
-app = pathlib.Path(sys.argv[1]).resolve()
 try:
-    app.relative_to(root / 'build')
-except ValueError:
-    sys.exit('Select an app inside this checkout\u2019s build directory.')
+    app = app_path(root, sys.argv[1])
+except (ValueError, OSError, RuntimeError) as error:
+    sys.exit(str(error))
 if app.suffix != '.app' or not app.is_dir():
     sys.exit('The selected app does not exist.')
 source = plistlib.loads((root / 'apps/flutter/macos/Runner/Info.plist').read_bytes())

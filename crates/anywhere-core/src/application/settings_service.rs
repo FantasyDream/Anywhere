@@ -74,6 +74,10 @@ impl SettingsService {
         result
     }
     fn assemble(path: PathBuf, directories: Vec<PathBuf>, app: &Application) -> Result<Self> {
+        app.previews
+            .lock()
+            .map_err(|_| anyhow::anyhow!("preview service unavailable"))?
+            .configure(path.with_file_name("preview-resources"));
         let feature_path = path.with_file_name("features.json");
         ensure!(
             path != feature_path,

@@ -48,7 +48,14 @@ impl SqliteHistoryRepository {
                 let (id, text, time, sequence) = row?;
                 let payload = ClipboardPayload::text(&text);
                 payload.validate()?;
-                insert(&tx, &payload, time, sequence, Some(id))?;
+                insert(
+                    &tx,
+                    &payload,
+                    &fingerprint(&payload),
+                    time,
+                    sequence,
+                    Some(id),
+                )?;
             }
             drop(statement);
             tx.execute_batch("DROP TABLE clipboard_text_v1;")?;
@@ -80,6 +87,7 @@ fn fingerprint(payload: &ClipboardPayload) -> Vec<u8> {
 fn insert(
     tx: &Transaction<'_>,
     payload: &ClipboardPayload,
+    digest: &[u8],
     time: i64,
     sequence: i64,
     id: Option<i64>,
@@ -89,7 +97,7 @@ fn insert(
         + summary.len()
         + search.len()
         + payload.formats.iter().map(|f| f.name.len()).sum::<usize>();
-    tx.execute("INSERT INTO clipboard_items(id,fingerprint,search_text,summary,kind,copied_at_ms,sequence,byte_count,stored_bytes) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)", params![id,fingerprint(payload),search,summary,kind,time,sequence,payload.byte_count(),stored_bytes])?;
+    tx.execute("INSERT INTO clipboard_items(id,fingerprint,search_text,summary,kind,copied_at_ms,sequence,byte_count,stored_bytes) VALUES(?1,?2,?3,?4,?5,?6,?7,?8,?9)", params![id,digest,search,summary,kind,time,sequence,payload.byte_count(),stored_bytes])?;
     let id = id.unwrap_or_else(|| tx.last_insert_rowid());
     for format in &payload.formats {
         tx.execute(
@@ -208,6 +216,9 @@ impl HistoryRepository for SqliteHistoryRepository {
         {
             return Ok(None);
         }
+        // Hash once before taking SQLite's write lock. The original payload is
+        // immutable, so lookup, collision validation and insertion share this digest.
+        let digest = fingerprint(payload);
         let tx = self
             .0
             .transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -219,16 +230,15 @@ impl HistoryRepository for SqliteHistoryRepository {
         let existing: Option<i64> = tx
             .query_row(
                 "SELECT id FROM clipboard_items WHERE fingerprint=?1",
-                [fingerprint(payload)],
+                [digest.as_slice()],
                 |r| r.get(0),
             )
             .optional()?;
         let id = if let Some(id) = existing {
-            let stored =
-                load(&tx, id)?.ok_or_else(|| anyhow::anyhow!("clipboard record unavailable"))?;
-            // Never merge different bodies even if a fingerprint collides or the DB is corrupt.
+            // Compare each SQLite row by borrowing its BLOB. Do not materialize
+            // a second payload (up to 16 MiB) beside the current clipboard.
             ensure!(
-                fingerprint(&stored) == fingerprint(payload) && equivalent(&stored, payload),
+                stored_equivalent(&tx, id, payload)?,
                 "clipboard identity mismatch"
             );
             tx.execute(
@@ -237,7 +247,7 @@ impl HistoryRepository for SqliteHistoryRepository {
             )?;
             id
         } else {
-            insert(&tx, payload, copied_at_ms, sequence, None)?
+            insert(&tx, payload, &digest, copied_at_ms, sequence, None)?
         };
         tx.execute("DELETE FROM clipboard_items WHERE id IN(SELECT id FROM(SELECT id,ROW_NUMBER() OVER(ORDER BY sequence DESC) position,SUM(stored_bytes) OVER(ORDER BY sequence DESC) total FROM clipboard_items) WHERE position>?1 OR total>?2)",params![MAX_ENTRIES,MAX_STORED_BYTES])?;
         tx.commit()?;
@@ -280,8 +290,26 @@ impl HistoryRepository for SqliteHistoryRepository {
         Ok(())
     }
 }
-fn equivalent(a: &ClipboardPayload, b: &ClipboardPayload) -> bool {
-    a.formats.len() == b.formats.len() && a.formats.iter().all(|f| b.formats.contains(f))
+fn stored_equivalent(connection: &Connection, id: i64, payload: &ClipboardPayload) -> Result<bool> {
+    let mut statement =
+        connection.prepare("SELECT name,data FROM clipboard_formats WHERE item_id=?1")?;
+    let mut rows = statement.query([id])?;
+    let mut count = 0;
+    while let Some(row) = rows.next()? {
+        let name = row.get_ref(0)?.as_str()?;
+        let bytes = row.get_ref(1)?.as_blob()?;
+        if !payload
+            .formats
+            .iter()
+            .any(|format| format.name == name && format.data == bytes)
+        {
+            return Ok(false);
+        }
+        count += 1;
+    }
+    // The primary key makes format names unique; equal counts and contents
+    // establish the same identity regardless of format ordering.
+    Ok(count == payload.formats.len())
 }
 fn item(row: &rusqlite::Row<'_>) -> rusqlite::Result<HistoryItem> {
     Ok(HistoryItem {
@@ -466,7 +494,11 @@ mod multiformat_tests {
         assert_eq!(repo.record_payload(&reordered, 3).unwrap(), Some(id));
         assert_eq!(repo.search("").unwrap().len(), 1);
         assert_eq!(repo.search("HELLO rich_text").unwrap()[0].kind, "rich_text");
-        assert!(equivalent(&repo.payload(id).unwrap().unwrap(), &payload));
+        let restored = repo.payload(id).unwrap().unwrap();
+        assert_eq!(restored.formats.len(), payload.formats.len());
+        for format in &payload.formats {
+            assert!(restored.formats.contains(format));
+        }
         let mut changed = payload.clone();
         changed.formats[1].data = b"<i>Hello</i>".to_vec();
         assert_ne!(repo.record_payload(&changed, 4).unwrap(), Some(id));
@@ -557,7 +589,7 @@ mod multiformat_tests {
     #[test]
     fn full_unicode_text_is_stored_without_truncation() {
         let mut repo = memory();
-        let text = "中".repeat(MAX_PREVIEW_BYTES);
+        let text = "中".repeat(64 * 1024);
         let id = repo.record(&text, 1).unwrap().unwrap();
         assert_eq!(
             repo.payload(id).unwrap().unwrap().plain_text(),

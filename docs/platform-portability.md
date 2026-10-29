@@ -70,3 +70,7 @@ Flutter 控件不是 AppKit 控件。原生背景是可选能力，不影响共�
 共享 CI 配置验证目标编译与共享代码回归，不能据此宣称 Windows 窗口、系统权限、菜单、后台进程或安装包已经可用。真实平台接入仍需上方的 Host、系统后端和矩阵。
 
 当前 macOS 工程证据见 [V0.12 MVP](mvp-v0.12.md)，早期迁移检查与包记录见 [历史验收](archive/v0.6-final-acceptance.md)。本页没有新增跨平台 GUI 或系统授权验收。
+
+## 系统预览
+
+文件与剪贴板通过统一 NativePreviewDto 和 anywhere/preview 窗口通道接入。Rust 管理资源资格与生命周期，Flutter 管理选择和键盘，macOS Host 使用 QLPreviewPanel。Windows 预留 capabilities / show / close 及相同事件，可使用独立窗口承载系统 Preview Handler；当前尚无 Windows 适配器，不把缺少能力视为零成本原生支持。快捷键分别为 macOS ⌘Y、Windows 预留 Alt+P，列表浏览时均可使用空格。见 [完整契约](native-preview.md)。

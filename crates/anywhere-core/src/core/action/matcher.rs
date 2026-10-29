@@ -12,6 +12,7 @@ use crate::core::search::candidate_source::{CandidateSource, SearchContext};
 use crate::core::search::query::{MatchLevel, Query, SearchFields};
 use crate::core::session::facts::{context_ownership, Ownership, SessionFacts};
 use anywhere_protocol::*;
+use std::cell::OnceCell;
 
 pub struct ActionMatcher<'a> {
     registry: &'a ActionRegistry,
@@ -97,6 +98,9 @@ impl ActionMatcher<'_> {
                 Ownership::App(app) => Some(app),
                 Ownership::Ambient => None,
             };
+            // The qualifier depends on the context and query, not on each menu.
+            // Compute it only if a title did not directly match.
+            let qualified_query = OnceCell::new();
             for action in self.registry.matching(context) {
                 let group_id = match &context.value {
                     ContextValue::Application { bundle_id, .. }
@@ -136,17 +140,19 @@ impl ActionMatcher<'_> {
                         .matched(query)
                         .is_some_and(|level| level >= MatchLevel::WordPrefix)
                     {
-                        query.clone()
+                        query
                     } else {
-                        match qualified_app_query(query, &context.value) {
+                        match qualified_query
+                            .get_or_init(|| qualified_app_query(query, &context.value))
+                        {
                             Some(query) => query,
                             None => continue,
                         }
                     }
                 } else {
-                    query.clone()
+                    query
                 };
-                let match_level = action.search().matched(&action_query);
+                let match_level = action.search().matched(action_query);
                 if searching
                     && match_level.is_none()
                     && !availability::is_user_object(context)

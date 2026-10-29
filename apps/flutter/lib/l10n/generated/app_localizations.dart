@@ -1529,18 +1529,6 @@ abstract class AppLocalizations {
   /// **'Preview unavailable'**
   String get previewUnavailable;
 
-  /// No description provided for @loadingPreview.
-  ///
-  /// In en, this message translates to:
-  /// **'Loading preview…'**
-  String get loadingPreview;
-
-  /// No description provided for @selectEntryToPreview.
-  ///
-  /// In en, this message translates to:
-  /// **'Select an entry to preview'**
-  String get selectEntryToPreview;
-
   /// No description provided for @noMatchingEntries.
   ///
   /// In en, this message translates to:
@@ -1564,24 +1552,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Manage recording in Settings → Clipboard.'**
   String get manageRecordingInSettingsClipboard;
-
-  /// No description provided for @imagePreviewUnavailable.
-  ///
-  /// In en, this message translates to:
-  /// **'Image preview unavailable'**
-  String get imagePreviewUnavailable;
-
-  /// No description provided for @previewUnavailableTheOriginalImageCanStill.
-  ///
-  /// In en, this message translates to:
-  /// **'Preview unavailable. The original image can still be copied.'**
-  String get previewUnavailableTheOriginalImageCanStill;
-
-  /// No description provided for @previewIsNotAvailableForThisFormat.
-  ///
-  /// In en, this message translates to:
-  /// **'Preview is not available for this format. Copy restores its saved data.'**
-  String get previewIsNotAvailableForThisFormat;
 
   /// No description provided for @theWindowCouldNotBeClosedUse.
   ///
@@ -2825,12 +2795,6 @@ abstract class AppLocalizations {
   /// **'Hide preview'**
   String get hidePreview;
 
-  /// No description provided for @shelfPreviewScrollHint.
-  ///
-  /// In en, this message translates to:
-  /// **'{shortcut} Scroll preview'**
-  String shelfPreviewScrollHint(String shortcut);
-
   /// No description provided for @details.
   ///
   /// In en, this message translates to:
@@ -2866,12 +2830,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Keyboard shortcuts'**
   String get keyboardHelp;
-
-  /// No description provided for @fileInformation.
-  ///
-  /// In en, this message translates to:
-  /// **'File information'**
-  String get fileInformation;
 
   /// No description provided for @historyFeatureDisabled.
   ///
@@ -2914,36 +2872,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clipboard monitoring is unavailable on this platform.'**
   String get historyMonitoringUnavailable;
-
-  /// No description provided for @filePreviewChanged.
-  ///
-  /// In en, this message translates to:
-  /// **'Preview unavailable. Search again if the file has changed.'**
-  String get filePreviewChanged;
-
-  /// No description provided for @filePreviewUnsupported.
-  ///
-  /// In en, this message translates to:
-  /// **'Text preview is unavailable for this file type'**
-  String get filePreviewUnsupported;
-
-  /// No description provided for @filePreviewTruncated.
-  ///
-  /// In en, this message translates to:
-  /// **'Showing the first {size}'**
-  String filePreviewTruncated(String size);
-
-  /// No description provided for @filePreviewEncodingGuessed.
-  ///
-  /// In en, this message translates to:
-  /// **'Encoding guessed as {encoding}'**
-  String filePreviewEncodingGuessed(String encoding);
-
-  /// No description provided for @filePreviewDecoded.
-  ///
-  /// In en, this message translates to:
-  /// **'Decoded as {encoding}'**
-  String filePreviewDecoded(String encoding);
 
   /// No description provided for @shelfReturnFailed.
   ///
@@ -3226,6 +3154,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Read the currently active application'**
   String get permissionFrontmostApp;
+
+  /// No description provided for @webPackageDamaged.
+  ///
+  /// In en, this message translates to:
+  /// **'Package files are unavailable or damaged. Restore an approved version or uninstall and import again.'**
+  String get webPackageDamaged;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

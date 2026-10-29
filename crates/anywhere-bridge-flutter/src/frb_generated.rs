@@ -37,7 +37,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.11.1";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 1860969057;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = -566158940;
 
 // Section: executor
 
@@ -587,41 +587,6 @@ fn wire__crate__api__clipboard_history_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || {
                         let output_ok = crate::api::clipboard_history(api_query)?;
-                        Ok(output_ok)
-                    })(),
-                )
-            }
-        },
-    )
-}
-fn wire__crate__api__clipboard_history_detail_impl(
-    port_: flutter_rust_bridge::for_generated::MessagePort,
-    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
-    rust_vec_len_: i32,
-    data_len_: i32,
-) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
-        flutter_rust_bridge::for_generated::TaskInfo {
-            debug_name: "clipboard_history_detail",
-            port: Some(port_),
-            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
-        },
-        move || {
-            let message = unsafe {
-                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
-                    ptr_,
-                    rust_vec_len_,
-                    data_len_,
-                )
-            };
-            let mut deserializer =
-                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
-            let api_id = <String>::sse_decode(&mut deserializer);
-            deserializer.end();
-            move |context| {
-                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || {
-                        let output_ok = crate::api::clipboard_history_detail(api_id)?;
                         Ok(output_ok)
                     })(),
                 )
@@ -1511,6 +1476,41 @@ fn wire__crate__api__ping_impl(
         },
     )
 }
+fn wire__crate__api__preview_clipboard_entry_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "preview_clipboard_entry",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::preview_clipboard_entry(api_id)?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
 fn wire__crate__api__preview_file_impl(
     port_: flutter_rust_bridge::for_generated::MessagePort,
     ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
@@ -1612,6 +1612,41 @@ fn wire__crate__api__refresh_features_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || {
                         let output_ok = crate::api::refresh_features()?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__release_preview_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "release_preview",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::release_preview(api_id)?;
                         Ok(output_ok)
                     })(),
                 )
@@ -1766,6 +1801,41 @@ fn wire__crate__api__resume_launcher_impl(
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || {
                         let output_ok = crate::api::resume_launcher(api_session_id)?;
+                        Ok(output_ok)
+                    })(),
+                )
+            }
+        },
+    )
+}
+fn wire__crate__api__retain_preview_impl(
+    port_: flutter_rust_bridge::for_generated::MessagePort,
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "retain_preview",
+            port: Some(port_),
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Normal,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_id = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            move |context| {
+                transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
+                    (move || {
+                        let output_ok = crate::api::retain_preview(api_id)?;
                         Ok(output_ok)
                     })(),
                 )
@@ -2971,24 +3041,6 @@ impl SseDecode for crate::api::CandidateUpdateDto {
     }
 }
 
-impl SseDecode for crate::api::ClipboardDetailDto {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_item = <crate::api::ClipboardItemDto>::sse_decode(deserializer);
-        let mut var_text = <String>::sse_decode(deserializer);
-        let mut var_imagePng = <Vec<u8>>::sse_decode(deserializer);
-        let mut var_files = <Vec<String>>::sse_decode(deserializer);
-        let mut var_formats = <Vec<String>>::sse_decode(deserializer);
-        return crate::api::ClipboardDetailDto {
-            item: var_item,
-            text: var_text,
-            image_png: var_imagePng,
-            files: var_files,
-            formats: var_formats,
-        };
-    }
-}
-
 impl SseDecode for crate::api::ClipboardHistoryDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3260,30 +3312,6 @@ impl SseDecode for crate::api::FileObjectKindDto {
             0 => crate::api::FileObjectKindDto::File,
             1 => crate::api::FileObjectKindDto::Directory,
             _ => unreachable!("Invalid variant for FileObjectKindDto: {}", inner),
-        };
-    }
-}
-
-impl SseDecode for crate::api::FilePreviewDto {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        let mut var_path = <String>::sse_decode(deserializer);
-        let mut var_isDirectory = <bool>::sse_decode(deserializer);
-        let mut var_sizeBytes = <u64>::sse_decode(deserializer);
-        let mut var_modifiedMs = <Option<i64>>::sse_decode(deserializer);
-        let mut var_text = <Option<String>>::sse_decode(deserializer);
-        let mut var_truncatedAtBytes = <Option<u32>>::sse_decode(deserializer);
-        let mut var_encoding = <Option<String>>::sse_decode(deserializer);
-        let mut var_encodingGuessed = <bool>::sse_decode(deserializer);
-        return crate::api::FilePreviewDto {
-            path: var_path,
-            is_directory: var_isDirectory,
-            size_bytes: var_sizeBytes,
-            modified_ms: var_modifiedMs,
-            text: var_text,
-            truncated_at_bytes: var_truncatedAtBytes,
-            encoding: var_encoding,
-            encoding_guessed: var_encodingGuessed,
         };
     }
 }
@@ -3651,6 +3679,20 @@ impl SseDecode for Vec<crate::api::WebPermissionDto> {
     }
 }
 
+impl SseDecode for crate::api::NativePreviewDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_id = <String>::sse_decode(deserializer);
+        let mut var_paths = <Vec<String>>::sse_decode(deserializer);
+        let mut var_title = <String>::sse_decode(deserializer);
+        return crate::api::NativePreviewDto {
+            id: var_id,
+            paths: var_paths,
+            title: var_title,
+        };
+    }
+}
+
 impl SseDecode for crate::api::NativeToolDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
@@ -3690,17 +3732,6 @@ impl SseDecode for Option<crate::api::AppHistoryNoticeDto> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::api::AppHistoryNoticeDto>::sse_decode(deserializer));
-        } else {
-            return None;
-        }
-    }
-}
-
-impl SseDecode for Option<crate::api::ClipboardDetailDto> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        if (<bool>::sse_decode(deserializer)) {
-            return Some(<crate::api::ClipboardDetailDto>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -3815,17 +3846,6 @@ impl SseDecode for Option<crate::api::PluginDetailDto> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::api::PluginDetailDto>::sse_decode(deserializer));
-        } else {
-            return None;
-        }
-    }
-}
-
-impl SseDecode for Option<u32> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
-        if (<bool>::sse_decode(deserializer)) {
-            return Some(<u32>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -4071,6 +4091,7 @@ impl SseDecode for crate::api::WebPackageDto {
         let mut var_digest = <String>::sse_decode(deserializer);
         let mut var_permissions = <Vec<crate::api::WebPermissionDto>>::sse_decode(deserializer);
         let mut var_enabled = <bool>::sse_decode(deserializer);
+        let mut var_available = <bool>::sse_decode(deserializer);
         let mut var_rollback = <bool>::sse_decode(deserializer);
         return crate::api::WebPackageDto {
             id: var_id,
@@ -4079,6 +4100,7 @@ impl SseDecode for crate::api::WebPackageDto {
             digest: var_digest,
             permissions: var_permissions,
             enabled: var_enabled,
+            available: var_available,
             rollback: var_rollback,
         };
     }
@@ -4169,70 +4191,72 @@ fn pde_ffi_dispatcher_primary_impl(
         13 => wire__crate__api__choose_activation_input_impl(port, ptr, rust_vec_len, data_len),
         14 => wire__crate__api__clear_clipboard_history_impl(port, ptr, rust_vec_len, data_len),
         15 => wire__crate__api__clipboard_history_impl(port, ptr, rust_vec_len, data_len),
-        16 => wire__crate__api__clipboard_history_detail_impl(port, ptr, rust_vec_len, data_len),
-        17 => wire__crate__api__clipboard_history_status_impl(port, ptr, rust_vec_len, data_len),
-        18 => wire__crate__api__close_web_document_impl(port, ptr, rust_vec_len, data_len),
-        19 => {
+        16 => wire__crate__api__clipboard_history_status_impl(port, ptr, rust_vec_len, data_len),
+        17 => wire__crate__api__close_web_document_impl(port, ptr, rust_vec_len, data_len),
+        18 => {
             wire__crate__api__configure_app_history_source_impl(port, ptr, rust_vec_len, data_len)
         }
-        20 => wire__crate__api__copy_clipboard_entry_impl(port, ptr, rust_vec_len, data_len),
-        21 => wire__crate__api__deactivate_impl(port, ptr, rust_vec_len, data_len),
-        22 => wire__crate__api__delete_clipboard_entry_impl(port, ptr, rust_vec_len, data_len),
-        23 => wire__crate__api__dispatch_web_frame_impl(port, ptr, rust_vec_len, data_len),
-        24 => wire__crate__api__excluded_apps_impl(port, ptr, rust_vec_len, data_len),
-        25 => wire__crate__api__execute_impl(port, ptr, rust_vec_len, data_len),
-        26 => wire__crate__api__execution_session_impl(port, ptr, rust_vec_len, data_len),
-        27 => wire__crate__api__execution_sessions_impl(port, ptr, rust_vec_len, data_len),
-        28 => wire__crate__api__extension_status_impl(port, ptr, rust_vec_len, data_len),
-        29 => wire__crate__api__file_actions_impl(port, ptr, rust_vec_len, data_len),
-        30 => wire__crate__api__freeze_file_results_impl(port, ptr, rust_vec_len, data_len),
-        31 => wire__crate__api__initialize_impl(port, ptr, rust_vec_len, data_len),
-        32 => wire__crate__api__inspect_web_package_impl(port, ptr, rust_vec_len, data_len),
-        33 => wire__crate__api__load_more_files_impl(port, ptr, rust_vec_len, data_len),
-        34 => wire__crate__api__load_more_files_delta_impl(port, ptr, rust_vec_len, data_len),
-        35 => wire__crate__api__object_actions_impl(port, ptr, rust_vec_len, data_len),
-        36 => wire__crate__api__open_app_history_custom_directory_impl(
+        19 => wire__crate__api__copy_clipboard_entry_impl(port, ptr, rust_vec_len, data_len),
+        20 => wire__crate__api__deactivate_impl(port, ptr, rust_vec_len, data_len),
+        21 => wire__crate__api__delete_clipboard_entry_impl(port, ptr, rust_vec_len, data_len),
+        22 => wire__crate__api__dispatch_web_frame_impl(port, ptr, rust_vec_len, data_len),
+        23 => wire__crate__api__excluded_apps_impl(port, ptr, rust_vec_len, data_len),
+        24 => wire__crate__api__execute_impl(port, ptr, rust_vec_len, data_len),
+        25 => wire__crate__api__execution_session_impl(port, ptr, rust_vec_len, data_len),
+        26 => wire__crate__api__execution_sessions_impl(port, ptr, rust_vec_len, data_len),
+        27 => wire__crate__api__extension_status_impl(port, ptr, rust_vec_len, data_len),
+        28 => wire__crate__api__file_actions_impl(port, ptr, rust_vec_len, data_len),
+        29 => wire__crate__api__freeze_file_results_impl(port, ptr, rust_vec_len, data_len),
+        30 => wire__crate__api__initialize_impl(port, ptr, rust_vec_len, data_len),
+        31 => wire__crate__api__inspect_web_package_impl(port, ptr, rust_vec_len, data_len),
+        32 => wire__crate__api__load_more_files_impl(port, ptr, rust_vec_len, data_len),
+        33 => wire__crate__api__load_more_files_delta_impl(port, ptr, rust_vec_len, data_len),
+        34 => wire__crate__api__object_actions_impl(port, ptr, rust_vec_len, data_len),
+        35 => wire__crate__api__open_app_history_custom_directory_impl(
             port,
             ptr,
             rust_vec_len,
             data_len,
         ),
-        37 => wire__crate__api__open_app_history_session_impl(port, ptr, rust_vec_len, data_len),
-        38 => wire__crate__api__open_web_document_impl(port, ptr, rust_vec_len, data_len),
-        39 => wire__crate__api__pause_clipboard_recording_impl(port, ptr, rust_vec_len, data_len),
-        40 => wire__crate__api__ping_impl(port, ptr, rust_vec_len, data_len),
+        36 => wire__crate__api__open_app_history_session_impl(port, ptr, rust_vec_len, data_len),
+        37 => wire__crate__api__open_web_document_impl(port, ptr, rust_vec_len, data_len),
+        38 => wire__crate__api__pause_clipboard_recording_impl(port, ptr, rust_vec_len, data_len),
+        39 => wire__crate__api__ping_impl(port, ptr, rust_vec_len, data_len),
+        40 => wire__crate__api__preview_clipboard_entry_impl(port, ptr, rust_vec_len, data_len),
         41 => wire__crate__api__preview_file_impl(port, ptr, rust_vec_len, data_len),
         43 => wire__crate__api__refresh_features_impl(port, ptr, rust_vec_len, data_len),
-        44 => wire__crate__api__remove_execution_session_impl(port, ptr, rust_vec_len, data_len),
-        45 => wire__crate__api__resolve_action_binding_impl(port, ptr, rust_vec_len, data_len),
-        46 => wire__crate__api__resolve_shortcut_intent_impl(port, ptr, rust_vec_len, data_len),
-        47 => wire__crate__api__resume_launcher_impl(port, ptr, rust_vec_len, data_len),
-        48 => wire__crate__api__revoke_extension_impl(port, ptr, rust_vec_len, data_len),
-        49 => {
+        44 => wire__crate__api__release_preview_impl(port, ptr, rust_vec_len, data_len),
+        45 => wire__crate__api__remove_execution_session_impl(port, ptr, rust_vec_len, data_len),
+        46 => wire__crate__api__resolve_action_binding_impl(port, ptr, rust_vec_len, data_len),
+        47 => wire__crate__api__resolve_shortcut_intent_impl(port, ptr, rust_vec_len, data_len),
+        48 => wire__crate__api__resume_launcher_impl(port, ptr, rust_vec_len, data_len),
+        49 => wire__crate__api__retain_preview_impl(port, ptr, rust_vec_len, data_len),
+        50 => wire__crate__api__revoke_extension_impl(port, ptr, rust_vec_len, data_len),
+        51 => {
             wire__crate__api__set_app_history_action_enabled_impl(port, ptr, rust_vec_len, data_len)
         }
-        50 => wire__crate__api__set_clipboard_recording_impl(port, ptr, rust_vec_len, data_len),
-        51 => wire__crate__api__set_clipboard_retention_impl(port, ptr, rust_vec_len, data_len),
-        52 => wire__crate__api__set_context_sources_impl(port, ptr, rust_vec_len, data_len),
-        53 => wire__crate__api__set_excluded_apps_impl(port, ptr, rust_vec_len, data_len),
-        54 => wire__crate__api__set_extension_enabled_impl(port, ptr, rust_vec_len, data_len),
-        55 => wire__crate__api__set_file_search_impl(port, ptr, rust_vec_len, data_len),
-        56 => wire__crate__api__shortcut_actions_impl(port, ptr, rust_vec_len, data_len),
-        57 => wire__crate__api__shortcut_applications_impl(port, ptr, rust_vec_len, data_len),
-        58 => wire__crate__api__shutdown_execution_sessions_impl(port, ptr, rust_vec_len, data_len),
-        59 => wire__crate__api__stop_execution_session_impl(port, ptr, rust_vec_len, data_len),
-        60 => wire__crate__api__supported_shortcut_actions_impl(port, ptr, rust_vec_len, data_len),
-        61 => wire__crate__api__suspend_launcher_impl(port, ptr, rust_vec_len, data_len),
-        62 => wire__crate__api__update_file_input_impl(port, ptr, rust_vec_len, data_len),
-        63 => wire__crate__api__update_input_impl(port, ptr, rust_vec_len, data_len),
-        64 => wire__crate__api__use_app_history_item_impl(port, ptr, rust_vec_len, data_len),
-        65 => wire__crate__api__wait_action_binding_impl(port, ptr, rust_vec_len, data_len),
-        66 => wire__crate__api__wait_for_snapshot_impl(port, ptr, rust_vec_len, data_len),
-        67 => wire__crate__api__wait_for_snapshot_delta_impl(port, ptr, rust_vec_len, data_len),
-        68 => wire__crate__api__wait_shortcut_intent_impl(port, ptr, rust_vec_len, data_len),
-        69 => wire__crate__api__wait_web_state_impl(port, ptr, rust_vec_len, data_len),
-        70 => wire__crate__api__web_packages_impl(port, ptr, rust_vec_len, data_len),
-        71 => wire__crate__api__web_resource_impl(port, ptr, rust_vec_len, data_len),
+        52 => wire__crate__api__set_clipboard_recording_impl(port, ptr, rust_vec_len, data_len),
+        53 => wire__crate__api__set_clipboard_retention_impl(port, ptr, rust_vec_len, data_len),
+        54 => wire__crate__api__set_context_sources_impl(port, ptr, rust_vec_len, data_len),
+        55 => wire__crate__api__set_excluded_apps_impl(port, ptr, rust_vec_len, data_len),
+        56 => wire__crate__api__set_extension_enabled_impl(port, ptr, rust_vec_len, data_len),
+        57 => wire__crate__api__set_file_search_impl(port, ptr, rust_vec_len, data_len),
+        58 => wire__crate__api__shortcut_actions_impl(port, ptr, rust_vec_len, data_len),
+        59 => wire__crate__api__shortcut_applications_impl(port, ptr, rust_vec_len, data_len),
+        60 => wire__crate__api__shutdown_execution_sessions_impl(port, ptr, rust_vec_len, data_len),
+        61 => wire__crate__api__stop_execution_session_impl(port, ptr, rust_vec_len, data_len),
+        62 => wire__crate__api__supported_shortcut_actions_impl(port, ptr, rust_vec_len, data_len),
+        63 => wire__crate__api__suspend_launcher_impl(port, ptr, rust_vec_len, data_len),
+        64 => wire__crate__api__update_file_input_impl(port, ptr, rust_vec_len, data_len),
+        65 => wire__crate__api__update_input_impl(port, ptr, rust_vec_len, data_len),
+        66 => wire__crate__api__use_app_history_item_impl(port, ptr, rust_vec_len, data_len),
+        67 => wire__crate__api__wait_action_binding_impl(port, ptr, rust_vec_len, data_len),
+        68 => wire__crate__api__wait_for_snapshot_impl(port, ptr, rust_vec_len, data_len),
+        69 => wire__crate__api__wait_for_snapshot_delta_impl(port, ptr, rust_vec_len, data_len),
+        70 => wire__crate__api__wait_shortcut_intent_impl(port, ptr, rust_vec_len, data_len),
+        71 => wire__crate__api__wait_web_state_impl(port, ptr, rust_vec_len, data_len),
+        72 => wire__crate__api__web_packages_impl(port, ptr, rust_vec_len, data_len),
+        73 => wire__crate__api__web_resource_impl(port, ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -4546,30 +4570,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::CandidateUpdateDto>
     for crate::api::CandidateUpdateDto
 {
     fn into_into_dart(self) -> crate::api::CandidateUpdateDto {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::ClipboardDetailDto {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.item.into_into_dart().into_dart(),
-            self.text.into_into_dart().into_dart(),
-            self.image_png.into_into_dart().into_dart(),
-            self.files.into_into_dart().into_dart(),
-            self.formats.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive
-    for crate::api::ClipboardDetailDto
-{
-}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::ClipboardDetailDto>
-    for crate::api::ClipboardDetailDto
-{
-    fn into_into_dart(self) -> crate::api::ClipboardDetailDto {
         self
     }
 }
@@ -4897,28 +4897,6 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::FileObjectKindDto>
     }
 }
 // Codec=Dco (DartCObject based), see doc to use other codecs
-impl flutter_rust_bridge::IntoDart for crate::api::FilePreviewDto {
-    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
-        [
-            self.path.into_into_dart().into_dart(),
-            self.is_directory.into_into_dart().into_dart(),
-            self.size_bytes.into_into_dart().into_dart(),
-            self.modified_ms.into_into_dart().into_dart(),
-            self.text.into_into_dart().into_dart(),
-            self.truncated_at_bytes.into_into_dart().into_dart(),
-            self.encoding.into_into_dart().into_dart(),
-            self.encoding_guessed.into_into_dart().into_dart(),
-        ]
-        .into_dart()
-    }
-}
-impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::FilePreviewDto {}
-impl flutter_rust_bridge::IntoIntoDart<crate::api::FilePreviewDto> for crate::api::FilePreviewDto {
-    fn into_into_dart(self) -> crate::api::FilePreviewDto {
-        self
-    }
-}
-// Codec=Dco (DartCObject based), see doc to use other codecs
 impl flutter_rust_bridge::IntoDart for crate::api::FileSearchEngineDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         match self {
@@ -5037,6 +5015,25 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::LauncherStateDto>
     for crate::api::LauncherStateDto
 {
     fn into_into_dart(self) -> crate::api::LauncherStateDto {
+        self
+    }
+}
+// Codec=Dco (DartCObject based), see doc to use other codecs
+impl flutter_rust_bridge::IntoDart for crate::api::NativePreviewDto {
+    fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
+        [
+            self.id.into_into_dart().into_dart(),
+            self.paths.into_into_dart().into_dart(),
+            self.title.into_into_dart().into_dart(),
+        ]
+        .into_dart()
+    }
+}
+impl flutter_rust_bridge::for_generated::IntoDartExceptPrimitive for crate::api::NativePreviewDto {}
+impl flutter_rust_bridge::IntoIntoDart<crate::api::NativePreviewDto>
+    for crate::api::NativePreviewDto
+{
+    fn into_into_dart(self) -> crate::api::NativePreviewDto {
         self
     }
 }
@@ -5285,6 +5282,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::WebPackageDto {
             self.digest.into_into_dart().into_dart(),
             self.permissions.into_into_dart().into_dart(),
             self.enabled.into_into_dart().into_dart(),
+            self.available.into_into_dart().into_dart(),
             self.rollback.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -5608,17 +5606,6 @@ impl SseEncode for crate::api::CandidateUpdateDto {
     }
 }
 
-impl SseEncode for crate::api::ClipboardDetailDto {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <crate::api::ClipboardItemDto>::sse_encode(self.item, serializer);
-        <String>::sse_encode(self.text, serializer);
-        <Vec<u8>>::sse_encode(self.image_png, serializer);
-        <Vec<String>>::sse_encode(self.files, serializer);
-        <Vec<String>>::sse_encode(self.formats, serializer);
-    }
-}
-
 impl SseEncode for crate::api::ClipboardHistoryDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -5834,20 +5821,6 @@ impl SseEncode for crate::api::FileObjectKindDto {
             },
             serializer,
         );
-    }
-}
-
-impl SseEncode for crate::api::FilePreviewDto {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <String>::sse_encode(self.path, serializer);
-        <bool>::sse_encode(self.is_directory, serializer);
-        <u64>::sse_encode(self.size_bytes, serializer);
-        <Option<i64>>::sse_encode(self.modified_ms, serializer);
-        <Option<String>>::sse_encode(self.text, serializer);
-        <Option<u32>>::sse_encode(self.truncated_at_bytes, serializer);
-        <Option<String>>::sse_encode(self.encoding, serializer);
-        <bool>::sse_encode(self.encoding_guessed, serializer);
     }
 }
 
@@ -6149,6 +6122,15 @@ impl SseEncode for Vec<crate::api::WebPermissionDto> {
     }
 }
 
+impl SseEncode for crate::api::NativePreviewDto {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <String>::sse_encode(self.id, serializer);
+        <Vec<String>>::sse_encode(self.paths, serializer);
+        <String>::sse_encode(self.title, serializer);
+    }
+}
+
 impl SseEncode for crate::api::NativeToolDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
@@ -6183,16 +6165,6 @@ impl SseEncode for Option<crate::api::AppHistoryNoticeDto> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::AppHistoryNoticeDto>::sse_encode(value, serializer);
-        }
-    }
-}
-
-impl SseEncode for Option<crate::api::ClipboardDetailDto> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <bool>::sse_encode(self.is_some(), serializer);
-        if let Some(value) = self {
-            <crate::api::ClipboardDetailDto>::sse_encode(value, serializer);
         }
     }
 }
@@ -6293,16 +6265,6 @@ impl SseEncode for Option<crate::api::PluginDetailDto> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::PluginDetailDto>::sse_encode(value, serializer);
-        }
-    }
-}
-
-impl SseEncode for Option<u32> {
-    // Codec=Sse (Serialization based), see doc to use other codecs
-    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
-        <bool>::sse_encode(self.is_some(), serializer);
-        if let Some(value) = self {
-            <u32>::sse_encode(value, serializer);
         }
     }
 }
@@ -6500,6 +6462,7 @@ impl SseEncode for crate::api::WebPackageDto {
         <String>::sse_encode(self.digest, serializer);
         <Vec<crate::api::WebPermissionDto>>::sse_encode(self.permissions, serializer);
         <bool>::sse_encode(self.enabled, serializer);
+        <bool>::sse_encode(self.available, serializer);
         <bool>::sse_encode(self.rollback, serializer);
     }
 }

@@ -60,16 +60,10 @@ fn convert(item: HistoryItem) -> ClipboardItemDto {
         byte_count: item.byte_count as u32,
     }
 }
-pub(super) fn detail(id: String) -> Result<Option<ClipboardDetailDto>> {
-    Ok(history()?
-        .detail(id.parse()?)?
-        .map(|detail| ClipboardDetailDto {
-            item: convert(detail.item),
-            text: detail.text,
-            image_png: detail.image_png,
-            files: detail.files,
-            formats: detail.formats,
-        }))
+pub(super) fn preview(id: String) -> Result<NativePreviewDto> {
+    Ok(application()?
+        .preview_clipboard(history()?.as_ref(), id.parse()?)?
+        .into())
 }
 pub(super) fn set_recording(enabled: bool) -> Result<()> {
     history()?.request_recording(enabled, application()?.platform())

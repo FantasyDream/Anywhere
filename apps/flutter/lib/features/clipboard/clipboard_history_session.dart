@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../infrastructure/clipboard_history_backend.dart';
+import '../../infrastructure/native_preview.dart';
 import '../../infrastructure/presentation_metrics.dart';
 import '../../l10n/app_language.dart';
 import '../../l10n/clipboard_labels.dart';
 import '../../src/rust/api.dart' as api;
 import '../../tools/tool_page.dart';
+import '../../ui/input_focus.dart';
 import 'clipboard_history_page.dart';
 import 'clipboard_history_presentation.dart';
 
@@ -25,9 +27,7 @@ enum _HistoryNotice {
 class ClipboardHistorySession extends ToolPageSession {
   ClipboardHistorySession(this.backend,
       {this.rowExtent = clipboardHistoryRowHeight,
-      bool previewEnabled = true,
-      this.queryOperation = PresentationOperation.clipboardQuery})
-      : _previewEnabled = previewEnabled {
+      this.queryOperation = PresentationOperation.clipboardQuery}) {
     query.addListener(_queryChanged);
     unawaited(refresh());
   }
@@ -36,19 +36,26 @@ class ClipboardHistorySession extends ToolPageSession {
   final PresentationOperation queryOperation;
   final performance = PresentationMetrics();
   int _queryRevision = 0;
-  bool _previewEnabled;
-  bool get previewEnabled => _previewEnabled;
   final query = TextEditingController();
   final focus = FocusNode(debugLabel: 'clipboard-history-search');
   final scroll = ScrollController();
   List<api.ClipboardItemDto> items = const [];
-  api.ClipboardDetailDto? preview;
+  late final preview = NativePreviewController(
+    onMove: (direction) => unawaited(select(selectedIndex + direction)),
+    onActivate: () => unawaited(copy()),
+    onSearch: () => requestTextInput(focus),
+    onFailure: () {
+      if (disposed) return;
+      _setNotice(
+          _HistoryNotice.previewFailed, 'This entry could not be previewed.');
+      notifyListeners();
+    },
+  )..addListener(notifyListeners);
   bool recording = false, available = false, loading = true, mutating = false;
   String? _notice, status;
   api.ClipboardNoticeDto? _backendNotice;
   _HistoryNotice? _noticeKind;
   String? get notice => _notice;
-  bool get hasNotice => _backendNotice != null || _notice != null;
   set notice(String? value) {
     _notice = value;
     _noticeKind = null;
@@ -72,20 +79,21 @@ class ClipboardHistorySession extends ToolPageSession {
       };
   String? statusFor(AppLocalizations l10n) =>
       status == null ? null : l10n.copiedPaste;
-  int selectedIndex = 0;
-  int _searchEpoch = 0, _detailEpoch = 0;
+  int selectedIndex = -1;
+  int _searchEpoch = 0;
+  Future<void>? _refreshing;
+  bool _refreshQueued = false;
   Timer? _debounce;
-  Future<void>? _previewTask;
   String _lastQuery = '';
   bool _composing = false;
   api.ClipboardItemDto? get selected =>
-      items.isEmpty ? null : items[selectedIndex];
+      selectedIndex < 0 ? null : items[selectedIndex];
   @override
   String get id => 'clipboard.history';
   @override
   String get title => 'Clipboard History';
   @override
-  double get width => 960;
+  double get width => 648;
   @override
   double get height => 600;
 
@@ -99,7 +107,7 @@ class ClipboardHistorySession extends ToolPageSession {
         performance.cancel();
         _debounce?.cancel();
         ++_searchEpoch;
-        ++_detailEpoch;
+        preview.edited();
         loading = false;
         notifyListeners();
       }
@@ -115,18 +123,19 @@ class ClipboardHistorySession extends ToolPageSession {
     _debounce?.cancel();
     // Invalidate both response paths immediately, before the debounce fires.
     ++_searchEpoch;
-    ++_detailEpoch;
+    preview.edited();
     performance.begin(queryOperation,
         generation: 0, revision: ++_queryRevision, presentation: 0);
     items = const [];
-    preview = null;
+    selectedIndex = -1;
+    _syncPreview();
     loading = true;
     notifyListeners();
     _debounce =
         Timer(const Duration(milliseconds: 120), () => unawaited(refresh()));
   }
 
-  /// The result list is usable before its independently decoded preview.
+  /// Measures metadata search only; explicit native previews have a separate lifetime.
   /// Includes debounce, backend matching and bridge time; never composition.
   void measureQueryFrame({
     required bool visible,
@@ -155,12 +164,47 @@ class ClipboardHistorySession extends ToolPageSession {
             current());
   }
 
-  Future<void> refresh({bool background = false}) async {
+  Future<void> refresh({bool background = false}) {
     if (!canInteract ||
         !query.value.composing.isCollapsed ||
         (background && (loading || mutating || _debounce?.isActive == true))) {
-      return;
+      return Future.value();
     }
+    final pending = _refreshing;
+    if (pending != null) {
+      if (!background) {
+        // Revoke the old result immediately; the next read uses the latest query.
+        ++_searchEpoch;
+        _refreshQueued = true;
+        loading = true;
+        notifyListeners();
+      }
+      return pending;
+    }
+    final done = Completer<void>();
+    _refreshing = done.future;
+    unawaited(_drainRefresh(background)
+        .then(done.complete, onError: done.completeError));
+    return done.future;
+  }
+
+  Future<void> _drainRefresh(bool background) async {
+    try {
+      do {
+        _refreshQueued = false;
+        await _readHistory(background: background);
+        background = false;
+      } while (_refreshQueued &&
+          canInteract &&
+          query.value.composing.isCollapsed &&
+          _debounce?.isActive != true);
+    } finally {
+      _refreshQueued = false;
+      _refreshing = null;
+    }
+  }
+
+  Future<void> _readHistory({required bool background}) async {
     final epoch = ++_searchEpoch;
     var changed = false;
     if (!background) {
@@ -191,23 +235,10 @@ class ClipboardHistorySession extends ToolPageSession {
       final selectedId = selected?.id;
       items = List.unmodifiable(result.items);
       final previous = items.indexWhere((item) => item.id == selectedId);
-      selectedIndex = previous < 0 ? 0 : previous;
-      // Row metadata is ready independently of image decoding. Keep both the
-      // loading indicator and copy feedback independent of preview latency.
+      selectedIndex = previous;
+      // Search returns metadata only; preparing a native preview is explicit.
       loading = false;
-      if (!unchanged && preview != null && preview!.item.id == selected?.id) {
-        final cached = preview!;
-        preview = api.ClipboardDetailDto(
-            item: selected!,
-            text: cached.text,
-            imagePng: cached.imagePng,
-            files: cached.files,
-            formats: cached.formats);
-      }
-      if (_previewEnabled &&
-          (preview == null || preview!.item.id != selected?.id)) {
-        await select(selectedIndex);
-      }
+      _syncPreview();
     } catch (_) {
       if (disposed || epoch != _searchEpoch) return;
       performance.cancel();
@@ -254,38 +285,25 @@ class ClipboardHistorySession extends ToolPageSession {
     notifyListeners();
   }
 
-  void setPreviewEnabled(bool enabled) {
-    if (disposed || _previewEnabled == enabled) return;
-    _previewEnabled = enabled;
-    ++_detailEpoch;
-    preview = null;
-    notifyListeners();
-    if (enabled) unawaited(select(selectedIndex));
+  void _syncPreview() {
+    final item = selected;
+    preview.sync(canInteract && !_composing ? item?.id : null,
+        item == null ? null : () => backend.preparePreview(item.id));
+  }
+
+  @override
+  void setVisible(bool visible) {
+    if (!visible) preview.close();
   }
 
   Future<void> select(int index) async {
-    if (!canInteract) return;
-    if (items.isNotEmpty) {
-      final next = index.clamp(0, items.length - 1);
-      if (next == selectedIndex &&
-          (preview?.item.id == items[next].id || _previewTask != null)) {
-        _scrollSelection();
-        return _previewTask;
-      }
-      if (next != selectedIndex) status = null;
-    }
-    ++_detailEpoch;
-    preview = null;
-    if (items.isEmpty) {
-      notifyListeners();
-      return;
-    }
-    selectedIndex = index.clamp(0, items.length - 1);
-    notifyListeners();
+    if (!canInteract || items.isEmpty) return;
+    final next = index.clamp(0, items.length - 1);
+    if (next != selectedIndex) status = null;
+    selectedIndex = next;
+    _syncPreview();
     _scrollSelection();
-    // Only one detail request per presentation. Arrow repeats replace the
-    // desired selection instead of queueing every intermediate image decode.
-    if (_previewEnabled) return _previewTask ??= _drainPreviews();
+    notifyListeners();
   }
 
   void _scrollSelection() {
@@ -301,41 +319,13 @@ class ClipboardHistorySession extends ToolPageSession {
     }
   }
 
-  Future<void> _drainPreviews() async {
-    try {
-      while (
-          canInteract && !_composing && _previewEnabled && items.isNotEmpty) {
-        final epoch = _detailEpoch;
-        final id = selected!.id;
-        try {
-          final detail = await backend.detail(id);
-          if (!canInteract || _composing || !_previewEnabled) return;
-          if (epoch != _detailEpoch || selected?.id != id) continue;
-          preview = detail;
-          if (detail == null) {
-            _setNotice(_HistoryNotice.missing,
-                'This entry is no longer available. Refresh history.');
-          }
-        } catch (_) {
-          if (!canInteract || _composing || !_previewEnabled) return;
-          if (epoch != _detailEpoch || selected?.id != id) continue;
-          _setNotice(_HistoryNotice.previewFailed,
-              'This entry could not be previewed.');
-        }
-        notifyListeners();
-        return;
-      }
-    } finally {
-      _previewTask = null;
-    }
-  }
-
   Future<bool> _change(Future<void> Function() operation,
       {String? success,
       String? failure,
       _HistoryNotice failureKind = _HistoryNotice.operationFailed,
       bool refreshAfter = true}) async {
     if (!canInteract || mutating) return false;
+    preview.close();
     mutating = true;
     status = null;
     notifyListeners();
@@ -425,12 +415,13 @@ class ClipboardHistorySession extends ToolPageSession {
     performance.cancel();
     _debounce?.cancel();
     ++_searchEpoch;
-    ++_detailEpoch;
+    preview.edited();
+    preview.dispose();
     query.dispose();
     focus.dispose();
     scroll.dispose();
     items = const [];
-    preview = null;
+    selectedIndex = -1;
     super.dispose();
   }
 }

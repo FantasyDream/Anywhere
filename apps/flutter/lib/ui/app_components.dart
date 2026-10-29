@@ -217,14 +217,31 @@ class AppRowActions extends StatelessWidget {
     required this.onPrimary,
     this.onActions,
     this.showActionsShortcut = true,
+    this.onPreview,
+    this.previewSpace = false,
   });
   final String primaryLabel;
-  final VoidCallback? onPrimary, onActions;
-  final bool showActionsShortcut;
+  final VoidCallback? onPrimary, onActions, onPreview;
+  final bool showActionsShortcut, previewSpace;
 
   @override
   Widget build(BuildContext context) => ExcludeFocus(
           child: Row(mainAxisSize: MainAxisSize.min, children: [
+        if (onPreview != null)
+          Tooltip(
+              message: context.l10n.shortcutHint(context.l10n.preview,
+                  DesktopEnvironment.current.previewShortcutLabel),
+              child: TextButton(
+                  key: const Key('selected-row-preview'),
+                  onPressed: onPreview,
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(AppIcons.preview,
+                        size: 14, semanticLabel: context.l10n.preview),
+                    if (previewSpace) ...[
+                      const SizedBox(width: 3),
+                      const Text('␣')
+                    ],
+                  ]))),
         if (onActions != null)
           AppMoreAction(
               key: const Key('selected-row-actions'),

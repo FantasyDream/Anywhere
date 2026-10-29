@@ -3,7 +3,6 @@ abstract final class RuntimePolicy {
   static const launcherRetentionMs = 15000;
   static const clipboardPrefillLifetimeMs = 15000;
   static const selectionPrefillGraceMs = 500;
-  static const filePreviewDebounceMs = 120;
   static const maxSearchRoots = 8;
   static const maxSearchExclusions = 32;
   static const maxSearchPathBytes = 4096;
@@ -15,4 +14,5 @@ abstract final class RuntimePolicy {
   static const maxConcurrentSearchSources = 4;
   static const maxSearchSourceRows = 64;
   static const maxShortcutCatalogRequestIds = 2048;
+  static const previewSelectionDebounceMs = 80;
 }

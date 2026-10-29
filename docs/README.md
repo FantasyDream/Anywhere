@@ -24,8 +24,9 @@
 | [默认输入](context-input-navigation.md) | 选中文本、15 秒剪贴板、InputMode 和 Esc |
 | [Launcher 交互](launcher-interaction.md) | Scope、菜单、二级操作、快捷键和隐藏恢复 |
 | [Current App 菜单](current-app-actions.md) | Hidden、定位、重扫、身份和安全降级 |
-| [文件搜索](file-search.md) | 范围、权限、稳定连续结果、固定预览和临时存储 |
+| [文件搜索](file-search.md) | 范围、权限、稳定连续结果、系统预览和临时存储 |
 | [开发动作](developer-actions.md) | Git、项目识别、IDEA 来源和后台进程 |
+| [系统预览](native-preview.md) | 按需窗口、空格输入边界、资源租约与跨平台接口 |
 | [共享 UI](ui-design.md) | 组件、材质、交互信息层级与平台回退 |
 | [性能](performance.md) | 资源预算、取消、测量方法和历史样本边界 |
 | [跨平台](platform-portability.md) | 平台能力、路径、快捷键与未完成的 Windows 接入 |
@@ -35,7 +36,6 @@
 | 文档 | 用途 |
 |---|---|
 | [第三方插件开发](plugin-development.md) | 独立模板、SDK、统一样式、权限、打包与更新 |
-| [插件运行时重构](plugin-runtime-refactor.md) | 统一 SDK、按需 QuickJS、后台 Context / Action 与验收清单 |
 | [Web 插件架构](web-plugin-design.md) | 包身份、能力代理、Context 输入、生命周期和系统边界 |
 | [旧声明式协议](plugin-protocol.md) | v1 / v2 / v3 兼容行为；停止扩展 UI DSL |
 | [V0.13 MVP](mvp-v0.13.md) | 前一阶段的收尾证据、已知 SDK / 资源边界及后续发布检查 |

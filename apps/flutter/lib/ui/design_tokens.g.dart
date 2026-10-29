@@ -97,7 +97,6 @@ abstract final class DesignTokens {
   static const filterSize = 12.0;
   static const filterRadius = 10.0;
   static const filterHeight = 26.0;
-  static const previewFraction = 0.38;
   static const pageTitleGap = 3.0;
   static const contentInputSize = 17.0;
   static const searchCaretWidth = 1.4;
@@ -201,7 +200,6 @@ const webDesignTokensCss = r'''
   --aw-filter-size: 12px;
   --aw-filter-radius: 10px;
   --aw-filter-height: 26px;
-  --aw-preview-fraction: 0.38;
   --aw-page-title-gap: 3px;
   --aw-content-input-size: 17px;
   --aw-search-caret-width: 1.4px;

@@ -267,15 +267,10 @@
   "copyWithReturnHint": "复制 · ↵",
   "deleteEntry": "删除此记录",
   "previewUnavailable": "无法预览",
-  "loadingPreview": "正在加载预览…",
-  "selectEntryToPreview": "选择一条记录以查看预览",
   "noMatchingEntries": "没有匹配的记录",
   "noSavedEntries": "没有历史记录",
   "newlyCopiedItemsWillAppearHereRefresh": "新复制的内容会出现在这里。\n刷新以查看新记录。",
   "manageRecordingInSettingsClipboard": "在“设置 → 剪贴板”中管理记录。",
-  "imagePreviewUnavailable": "无法预览图片",
-  "previewUnavailableTheOriginalImageCanStill": "无法预览，仍可复制原始图片。",
-  "previewIsNotAvailableForThisFormat": "此格式暂不支持预览。复制时会恢复已保存的数据。",
   "theWindowCouldNotBeClosedUse": "无法关闭窗口，请使用窗口关闭按钮。",
   "backToListEsc": "返回列表 · Esc",
   "clipboardAlwaysOnTop": "剪贴板 · 置顶",
@@ -713,21 +708,12 @@
   "shelfDeleteTitle": "删除这条历史记录？",
   "shelfDeleteDescription": "仅删除这条已保存的历史记录。",
   "hidePreview": "收起预览",
-  "shelfPreviewScrollHint": "{shortcut} 滚动预览",
-  "@shelfPreviewScrollHint": {
-    "placeholders": {
-      "shortcut": {
-        "type": "String"
-      }
-    }
-  },
   "details": "详细信息",
   "sourceStatus": "来源状态",
   "searchRules": "搜索规则",
   "searchHelp": "搜索说明",
   "toolOptions": "工具选项",
   "keyboardHelp": "键盘操作",
-  "fileInformation": "文件信息",
   "historyFeatureDisabled": "剪贴板历史已在内置功能中禁用。",
   "historyStorageUnavailable": "剪贴板历史存储不可用。请修复数据文件后重启。",
   "historyAccessRequired": "请在系统设置中允许访问剪贴板，以记录新复制的内容。后台采集不会弹出权限申请。",
@@ -735,32 +721,6 @@
   "historyReadFailed": "无法读取一条剪贴板内容，已有历史仍可使用。",
   "historyCaptureUnavailable": "剪贴板历史采集不可用，已有历史仍可使用。",
   "historyMonitoringUnavailable": "当前平台不支持剪贴板监控。",
-  "filePreviewChanged": "无法预览。如果文件已发生变化，请重新搜索。",
-  "filePreviewUnsupported": "此文件类型不支持文本预览",
-  "filePreviewTruncated": "仅显示前 {size}",
-  "@filePreviewTruncated": {
-    "placeholders": {
-      "size": {
-        "type": "String"
-      }
-    }
-  },
-  "filePreviewEncodingGuessed": "推测编码为 {encoding}",
-  "@filePreviewEncodingGuessed": {
-    "placeholders": {
-      "encoding": {
-        "type": "String"
-      }
-    }
-  },
-  "filePreviewDecoded": "以 {encoding} 解码",
-  "@filePreviewDecoded": {
-    "placeholders": {
-      "encoding": {
-        "type": "String"
-      }
-    }
-  },
   "shelfReturnFailed": "已复制，但未能返回目标应用。请切换到该应用后粘贴。",
   "shelfReturnUnavailable": "已复制，原目标应用已不可用。请切换到需要的应用后粘贴。",
   "historyRecordingPaused": "历史记录已暂停采集，已有历史仍可使用。",
@@ -838,5 +798,6 @@
   "appHistoryOpenAdapters": "打开适配目录",
   "permissionInputRead": "读取启动器搜索内容",
   "permissionInputWrite": "修改启动器搜索内容",
-  "permissionFrontmostApp": "读取实时前台应用"
+  "permissionFrontmostApp": "读取实时前台应用",
+  "webPackageDamaged": "插件文件缺失或损坏。请恢复已批准版本，或卸载后重新导入。"
 }

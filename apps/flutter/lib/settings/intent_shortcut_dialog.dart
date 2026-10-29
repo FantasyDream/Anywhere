@@ -11,6 +11,7 @@ import '../ui/app_icons.dart';
 import '../ui/app_style.dart';
 import 'action_shortcut.dart';
 import 'host_settings.dart';
+import 'shortcut_action_picker.dart';
 import 'shortcut_app_picker.dart';
 import 'shortcut_recorder.dart';
 
@@ -349,38 +350,17 @@ class _RuleDialogState extends State<_RuleDialog> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (_action == null) ...[
-                    TextField(
-                        controller: _search,
-                        autofocus: true,
-                        decoration: InputDecoration(
-                            hintText: context.l10n.findAnAction,
-                            prefixIcon: Icon(AppIcons.search, size: 17),
-                            isDense: true),
-                        onChanged: (_) => setState(() {})),
+                  if (_action == null)
                     Expanded(
-                        child: ListView(children: [
-                      for (final a in widget.actions.where((a) =>
-                          '${a.title} ${a.localizedTitles.values.join(' ')} ${a.contextTypes.join(' ')}'
-                              .toLowerCase()
-                              .contains(_search.text.toLowerCase())))
-                        ListTile(
-                            dense: true,
-                            title: Text(context.localizedLabel(
-                                a.title, a.localizedTitles)),
-                            subtitle: Text(
-                                a.contextTypes
-                                    .map((type) =>
-                                        contextTypeLabel(type, context.l10n))
-                                    .join(' · '),
-                                style: AppStyle.caption),
-                            onTap: () => setState(() {
-                                  _action = a;
+                        child: ShortcutActionPicker(
+                            actions: widget.actions,
+                            query: _search,
+                            onSelected: (action) => setState(() {
+                                  _action = action;
                                   _context = null;
                                   _error = null;
-                                })),
-                    ])),
-                  ] else ...[
+                                })))
+                  else ...[
                     Text(
                         context.localizedLabel(
                             _action!.title, _action!.localizedTitles),

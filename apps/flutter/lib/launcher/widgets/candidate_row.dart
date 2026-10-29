@@ -22,6 +22,8 @@ class CandidateRow extends StatelessWidget {
     this.primaryLabel,
     this.onPrimary,
     this.onActions,
+    this.onPreview,
+    this.previewSpace = false,
     this.onDoubleTap,
     this.fileObject = true,
   });
@@ -32,8 +34,8 @@ class CandidateRow extends StatelessWidget {
   final String? sourceLabel;
   final String? actionShortcut;
   final String? primaryLabel;
-  final VoidCallback? onPrimary, onActions, onDoubleTap;
-  final bool fileObject;
+  final VoidCallback? onPrimary, onActions, onDoubleTap, onPreview;
+  final bool fileObject, previewSpace;
 
   @override
   Widget build(BuildContext context) {
@@ -90,7 +92,9 @@ class CandidateRow extends StatelessWidget {
                         AppRowActions(
                             primaryLabel: primaryLabel!,
                             onPrimary: onPrimary,
-                            onActions: onActions),
+                            onActions: onActions,
+                            onPreview: onPreview,
+                            previewSpace: previewSpace),
                       ],
                     ],
                   ),

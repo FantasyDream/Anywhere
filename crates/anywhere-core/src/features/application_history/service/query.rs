@@ -6,7 +6,7 @@ use crate::{
 };
 use anyhow::{ensure, Result};
 use sha2::{Digest, Sha256};
-use std::sync::atomic::Ordering;
+use std::sync::{atomic::Ordering, Arc};
 
 /// Source recency is separate from the Launcher's action execution frequency.
 struct RankedEntry {
@@ -25,20 +25,20 @@ impl HistoryService {
             .map_err(|_| anyhow::anyhow!("history session exhausted"))?
             + 1;
         self.epoch.fetch_add(1, Ordering::AcqRel);
-        state.items.clear();
+        state.items = Arc::default();
         Ok(owner)
     }
     pub fn cancel_session(&self, owner: u64) {
         let mut state = self.state.lock().unwrap();
         if owner == self.owner.load(Ordering::Acquire) {
             self.epoch.fetch_add(1, Ordering::AcqRel);
-            state.items.clear();
+            state.items = Arc::default();
         }
     }
     pub fn search(&self, owner: u64, text: &str, source_id: &str) -> Result<SearchResult> {
         ensure!(text.len() <= 1024, "history query too large");
         let empty = |notice| SearchResult {
-            items: vec![],
+            items: Arc::default(),
             failed_sources: vec![],
             notice: Some(notice),
         };
@@ -48,7 +48,7 @@ impl HistoryService {
                 return Ok(empty(Notice::Stale));
             }
             let epoch = self.epoch.fetch_add(1, Ordering::AcqRel) + 1;
-            state.items.clear();
+            state.items = Arc::default();
             epoch
         };
         if !self.enabled.load(Ordering::Acquire) {
@@ -116,16 +116,80 @@ impl HistoryService {
                 .then(b.item.entry.last_used_at.cmp(&a.item.entry.last_used_at))
                 .then(a.source_order.cmp(&b.source_order))
         });
-        let items: Vec<_> = ranked.into_iter().map(|entry| entry.item).collect();
+        let items: Arc<[_]> = ranked.into_iter().map(|entry| entry.item).collect();
         let mut state = self.state.lock().unwrap();
         if !current() {
             return Ok(empty(Notice::Stale));
         }
+        // The caller and execution validation share immutable metadata. Revoking
+        // the session drops our reference instead of retaining an empty Vec capacity.
         state.items = items.clone();
         Ok(SearchResult {
             notice: (!failed.is_empty()).then_some(Notice::ReadFailed),
             failed_sources: failed,
             items,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::features::application_history::model::*;
+    use crate::persistence::module_storage::ModuleStorageHost;
+    use std::path::PathBuf;
+
+    struct Source;
+    impl SourceLoader for Source {
+        fn descriptors(&self) -> Vec<SourceDescriptor> {
+            vec![SourceDescriptor {
+                id: "test".into(),
+                title: "Test".into(),
+                file_hint: String::new(),
+                applications: vec!["test.app".into()],
+                built_in: false,
+                action: SourceAction {
+                    title: "History".into(),
+                    localized_titles: Default::default(),
+                    aliases: vec![],
+                },
+            }]
+        }
+        fn detect(&self, _: &str) -> Option<PathBuf> {
+            Some("/synthetic/source".into())
+        }
+        fn read(&self, _: &SourcePreference, _: Cancelled) -> Result<Vec<Entry>> {
+            Ok(vec![Entry {
+                key: "entry".into(),
+                title: "Project".into(),
+                target: Target::Directory {
+                    path: "/synthetic/project".into(),
+                },
+                last_used_at: None,
+            }])
+        }
+    }
+
+    #[test]
+    fn result_shares_metadata_and_cancellation_releases_ownership_without_reviving_execution() {
+        let storage = ModuleStorageHost::memory()
+            .unwrap()
+            .bind("history")
+            .unwrap();
+        let service = HistoryService::new(Ok(storage), Arc::new(Source))
+            .with_installed_applications(["test.app".into()]);
+        let owner = service.open_session().unwrap();
+        let result = service.search(owner, "", "test").unwrap();
+        assert!(Arc::ptr_eq(
+            &result.items,
+            &service.state.lock().unwrap().items
+        ));
+        service.cancel_session(owner);
+        assert!(service.state.lock().unwrap().items.is_empty());
+        assert_eq!(Arc::strong_count(&result.items), 1);
+        assert_eq!(result.items[0].entry.title, "Project");
+        assert!(service
+            .with_validated_item(&result.items[0].id, |_, _| Ok(()))
+            .is_err());
     }
 }

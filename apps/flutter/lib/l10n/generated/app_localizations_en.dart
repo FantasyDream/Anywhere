@@ -734,12 +734,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get previewUnavailable => 'Preview unavailable';
 
   @override
-  String get loadingPreview => 'Loading preview…';
-
-  @override
-  String get selectEntryToPreview => 'Select an entry to preview';
-
-  @override
   String get noMatchingEntries => 'No matching entries';
 
   @override
@@ -750,15 +744,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get manageRecordingInSettingsClipboard => 'Manage recording in Settings → Clipboard.';
-
-  @override
-  String get imagePreviewUnavailable => 'Image preview unavailable';
-
-  @override
-  String get previewUnavailableTheOriginalImageCanStill => 'Preview unavailable. The original image can still be copied.';
-
-  @override
-  String get previewIsNotAvailableForThisFormat => 'Preview is not available for this format. Copy restores its saved data.';
 
   @override
   String get theWindowCouldNotBeClosedUse => 'The window could not be closed. Use the window close button.';
@@ -1470,11 +1455,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get hidePreview => 'Hide preview';
 
   @override
-  String shelfPreviewScrollHint(String shortcut) {
-    return '$shortcut Scroll preview';
-  }
-
-  @override
   String get details => 'Details';
 
   @override
@@ -1491,9 +1471,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get keyboardHelp => 'Keyboard shortcuts';
-
-  @override
-  String get fileInformation => 'File information';
 
   @override
   String get historyFeatureDisabled => 'Clipboard History is disabled in Features.';
@@ -1515,27 +1492,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get historyMonitoringUnavailable => 'Clipboard monitoring is unavailable on this platform.';
-
-  @override
-  String get filePreviewChanged => 'Preview unavailable. Search again if the file has changed.';
-
-  @override
-  String get filePreviewUnsupported => 'Text preview is unavailable for this file type';
-
-  @override
-  String filePreviewTruncated(String size) {
-    return 'Showing the first $size';
-  }
-
-  @override
-  String filePreviewEncodingGuessed(String encoding) {
-    return 'Encoding guessed as $encoding';
-  }
-
-  @override
-  String filePreviewDecoded(String encoding) {
-    return 'Decoded as $encoding';
-  }
 
   @override
   String get shelfReturnFailed => 'Copied. Could not return to the app. Switch to it to paste.';
@@ -1697,4 +1653,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get permissionFrontmostApp => 'Read the currently active application';
+
+  @override
+  String get webPackageDamaged => 'Package files are unavailable or damaged. Restore an approved version or uninstall and import again.';
 }

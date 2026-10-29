@@ -36,6 +36,18 @@ void main() {
     expect(policy.contentType('manifest.json'), 'application/json');
     expect(policy.contentType('dist/main.js'), 'text/javascript');
   });
+  test('accepted passive package fonts and icons have loadable MIME types', () {
+    for (final entry in {
+      'dist/body.ttf': 'font/ttf',
+      'dist/body.otf': 'font/otf',
+      'dist/favicon.ico': 'image/vnd.microsoft.icon',
+    }.entries) {
+      expect(policy.resource('$origin/${entry.key}'), entry.key);
+      expect(policy.contentType(entry.key), entry.value);
+    }
+    expect(policy.contentType('dist/other.html'), isNull);
+    expect(policy.contentType('dist/other.htm'), isNull);
+  });
   test(
       'Host policy precedes hostile markup and denies network/frame/worker/form',
       () {

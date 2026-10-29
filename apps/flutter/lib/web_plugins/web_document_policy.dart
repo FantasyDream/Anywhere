@@ -56,9 +56,12 @@ class WebDocumentPolicy {
       'jpg' || 'jpeg' => 'image/jpeg',
       'webp' => 'image/webp',
       'gif' => 'image/gif',
+      'ico' => 'image/vnd.microsoft.icon',
       'svg' => 'image/svg+xml',
       'woff2' => 'font/woff2',
       'woff' => 'font/woff',
+      'ttf' => 'font/ttf',
+      'otf' => 'font/otf',
       'txt' => 'text/plain',
       _ => null,
     };

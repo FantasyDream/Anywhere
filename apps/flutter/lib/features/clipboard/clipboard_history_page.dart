@@ -11,10 +11,9 @@ import '../../ui/app_components.dart';
 import '../../ui/app_icons.dart';
 import '../../ui/app_style.dart';
 import 'clipboard_history_list.dart';
-import 'clipboard_history_preview.dart';
 import 'clipboard_history_session.dart';
 
-enum _HistoryAction { copy, delete, refresh }
+enum _HistoryAction { copy, preview, delete, refresh }
 
 class ClipboardHistoryPage extends StatefulWidget {
   const ClipboardHistoryPage(
@@ -43,6 +42,7 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
   @override
   void didUpdateWidget(ClipboardHistoryPage old) {
     super.didUpdateWidget(old);
+    if (!widget.visible) session.preview.close();
     if (widget.visible &&
         (!old.visible || old.presentation != widget.presentation)) {
       final presentation = widget.presentation;
@@ -58,6 +58,8 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
     final id = target ?? session.selected?.id;
     if (!active) return;
     switch (action) {
+      case _HistoryAction.preview:
+        session.preview.toggle();
       case _HistoryAction.copy:
         if (id != null) await session.copyItem(id);
       case _HistoryAction.delete:
@@ -72,6 +74,12 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
     if (!active) return KeyEventResult.ignored;
     final key = event.logicalKey;
     final keyboard = HardwareKeyboard.instance;
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (session.preview.handleKey(event, query: session.query.text)) {
+      return KeyEventResult.handled;
+    }
     if (DesktopEnvironment.current.commandPressed &&
         !keyboard.isAltPressed &&
         !keyboard.isShiftPressed &&
@@ -87,6 +95,7 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
     }
     if (key == LogicalKeyboardKey.arrowDown ||
         key == LogicalKeyboardKey.arrowUp) {
+      session.preview.browsing = true;
       unawaited(session.select(session.selectedIndex +
           (key == LogicalKeyboardKey.arrowDown ? 1 : -1)));
       return KeyEventResult.handled;
@@ -101,6 +110,7 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
 
   void _select(ClipboardItemDto item) {
     if (!active) return;
+    session.preview.browsing = true;
     final index = session.items.indexWhere((row) => row.id == item.id);
     if (index < 0) return;
     unawaited(session.select(index));
@@ -109,6 +119,7 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
 
   void _showActions([ClipboardItemDto? item]) {
     if (!active) return;
+    session.preview.close();
     if (item != null) _select(item);
     final target = session.selected?.id;
     // A right-click can move the menu anchor to a newly selected row. Wait for
@@ -144,6 +155,12 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
                     child: Text(context.l10n.copyWithReturnHint)),
                 PopupMenuItem(
                     height: 32,
+                    value: _HistoryAction.preview,
+                    enabled: _menuTarget != null && active,
+                    child: Text(context.l10n.shortcutHint(context.l10n.preview,
+                        DesktopEnvironment.current.previewShortcutLabel))),
+                PopupMenuItem(
+                    height: 32,
                     value: _HistoryAction.delete,
                     enabled: _menuTarget != null && active,
                     child: Text(context.l10n.deleteEntry)),
@@ -169,7 +186,13 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
     return ToolPageShell(
       title: context.l10n.clipboardHistory,
       subtitle: context.l10n.clipboard,
-      onBack: widget.onBack,
+      onBack: () {
+        if (session.preview.isOpen) {
+          session.preview.close();
+        } else {
+          widget.onBack();
+        }
+      },
       editorFocus: session.focus,
       presentation: widget.presentation,
       visible: widget.visible,
@@ -186,6 +209,7 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
                     autofocus: widget.visible,
                     selectAllOnFocus: false,
                     textInputAction: TextInputAction.none,
+                    onTap: session.preview.edited,
                     onEditingComplete: () {},
                     style: AppStyle.pageHeading,
                     cursorColor: AppStyle.primary,
@@ -197,53 +221,31 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
               key: const Key('history-empty-actions'),
               onPressed: active ? _showActions : null)),
       ]),
-      child: LayoutBuilder(builder: (context, constraints) {
-        // Give browsing most of the window; short snippets should not reserve
-        // half the page. Keep a readable preview in narrower history windows.
-        final previewWidth = (constraints.maxWidth * .32).clamp(220.0, 340.0);
-        return Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          Expanded(
-              key: const Key('clipboard-list-pane'),
-              child: session.items.isEmpty
-                  ? _empty()
-                  : ClipboardHistoryList(
-                      items: session.items,
-                      selectedIndex: session.selectedIndex,
-                      scroll: session.scroll,
-                      selectedStatus: session.statusFor(context.l10n) == null
-                          ? null
-                          : context.l10n.copied,
-                      selectedCommands: _actionMenu(AppRowActions(
-                          primaryLabel: context.l10n.copy,
-                          onPrimary: active && session.selected != null
-                              ? () => unawaited(_action(_HistoryAction.copy))
-                              : null,
-                          onActions: active ? _showActions : null)),
-                      onSelect: active ? _select : null,
-                      onActivate: active
-                          ? (item) => unawaited(
-                              _action(_HistoryAction.copy, target: item.id))
-                          : null,
-                      onActions: active ? _showActions : null,
-                    )),
-          const VerticalDivider(width: 1),
-          SizedBox(
-              key: const Key('clipboard-preview-pane'),
-              width: previewWidth,
-              child: session.preview == null
-                  ? Center(
-                      child: Text(
-                          session.items.isEmpty
-                              ? context.l10n.preview
-                              : session.hasNotice
-                                  ? context.l10n.previewUnavailable
-                                  : context.l10n.loadingPreview,
-                          style: AppStyle.caption))
-                  : ClipboardHistoryPreview(
-                      key: ValueKey(session.preview!.item.id),
-                      detail: session.preview!)),
-        ]);
-      }),
+      child: session.items.isEmpty
+          ? _empty()
+          : ClipboardHistoryList(
+              items: session.items,
+              selectedIndex: session.selectedIndex,
+              scroll: session.scroll,
+              selectedStatus: session.statusFor(context.l10n) == null
+                  ? null
+                  : context.l10n.copied,
+              selectedCommands: _actionMenu(AppRowActions(
+                  primaryLabel: context.l10n.copy,
+                  onPreview: active ? session.preview.toggle : null,
+                  previewSpace:
+                      session.preview.browsing || session.query.text.isEmpty,
+                  onPrimary: active && session.selected != null
+                      ? () => unawaited(_action(_HistoryAction.copy))
+                      : null,
+                  onActions: active ? _showActions : null)),
+              onSelect: active ? _select : null,
+              onActivate: active
+                  ? (item) =>
+                      unawaited(_action(_HistoryAction.copy, target: item.id))
+                  : null,
+              onActions: active ? _showActions : null,
+            ),
     );
   }
 

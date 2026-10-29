@@ -31,7 +31,6 @@ class _ClipboardShelfAppState extends State<ClipboardShelfApp> {
   late final session = ClipboardHistorySession(
       widget.backend ?? RustClipboardHistoryBackend(),
       rowExtent: clipboardShelfRowHeight,
-      previewEnabled: false,
       queryOperation: PresentationOperation.shelfQuery);
   Timer? _timer;
   bool _visible = true, _polling = false;
@@ -71,6 +70,7 @@ class _ClipboardShelfAppState extends State<ClipboardShelfApp> {
 
   void _visibility(bool visible) {
     if (!mounted || _visible == visible) return;
+    session.setVisible(visible);
     setState(() => _visible = visible);
     if (visible) unawaited(session.refresh());
   }

@@ -734,12 +734,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get previewUnavailable => '无法预览';
 
   @override
-  String get loadingPreview => '正在加载预览…';
-
-  @override
-  String get selectEntryToPreview => '选择一条记录以查看预览';
-
-  @override
   String get noMatchingEntries => '没有匹配的记录';
 
   @override
@@ -750,15 +744,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get manageRecordingInSettingsClipboard => '在“设置 → 剪贴板”中管理记录。';
-
-  @override
-  String get imagePreviewUnavailable => '无法预览图片';
-
-  @override
-  String get previewUnavailableTheOriginalImageCanStill => '无法预览，仍可复制原始图片。';
-
-  @override
-  String get previewIsNotAvailableForThisFormat => '此格式暂不支持预览。复制时会恢复已保存的数据。';
 
   @override
   String get theWindowCouldNotBeClosedUse => '无法关闭窗口，请使用窗口关闭按钮。';
@@ -1446,11 +1431,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get hidePreview => '收起预览';
 
   @override
-  String shelfPreviewScrollHint(String shortcut) {
-    return '$shortcut 滚动预览';
-  }
-
-  @override
   String get details => '详细信息';
 
   @override
@@ -1467,9 +1447,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get keyboardHelp => '键盘操作';
-
-  @override
-  String get fileInformation => '文件信息';
 
   @override
   String get historyFeatureDisabled => '剪贴板历史已在内置功能中禁用。';
@@ -1491,27 +1468,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get historyMonitoringUnavailable => '当前平台不支持剪贴板监控。';
-
-  @override
-  String get filePreviewChanged => '无法预览。如果文件已发生变化，请重新搜索。';
-
-  @override
-  String get filePreviewUnsupported => '此文件类型不支持文本预览';
-
-  @override
-  String filePreviewTruncated(String size) {
-    return '仅显示前 $size';
-  }
-
-  @override
-  String filePreviewEncodingGuessed(String encoding) {
-    return '推测编码为 $encoding';
-  }
-
-  @override
-  String filePreviewDecoded(String encoding) {
-    return '以 $encoding 解码';
-  }
 
   @override
   String get shelfReturnFailed => '已复制，但未能返回目标应用。请切换到该应用后粘贴。';
@@ -1661,4 +1617,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get permissionFrontmostApp => '读取实时前台应用';
+
+  @override
+  String get webPackageDamaged => '插件文件缺失或损坏。请恢复已批准版本，或卸载后重新导入。';
 }

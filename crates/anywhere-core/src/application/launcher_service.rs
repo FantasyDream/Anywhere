@@ -55,6 +55,7 @@ pub trait LauncherApplication: Send + Sync {
 }
 
 pub struct Application {
+    pub(super) previews: Arc<Mutex<crate::features::preview::PreviewStore>>,
     pub(super) web_rpc_workers: Arc<tokio::sync::Semaphore>,
     pub(super) web_plugins: Arc<Mutex<super::web_plugins::WebPluginService>>,
     pub(super) feature_catalog_installed: std::sync::atomic::AtomicBool,
@@ -116,6 +117,7 @@ impl Application {
             .asynchronous
             .extend(sources);
         Self {
+            previews: Default::default(),
             web_rpc_workers: Arc::new(tokio::sync::Semaphore::new(
                 anywhere_protocol::web_bridge::MAX_RUNNING,
             )),

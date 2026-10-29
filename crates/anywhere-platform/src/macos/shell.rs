@@ -1,7 +1,7 @@
 //! Opening things: URLs, files, directories, a terminal, and Finder reveal.
 use anyhow::{bail, Context, Result};
 use std::{
-    ffi::OsStr,
+    ffi::{OsStr, OsString},
     io::Write,
     path::Path,
     process::{Command, Stdio},
@@ -31,7 +31,43 @@ pub(super) fn open_file_in_application(application: &Path, target: &Path) -> Res
         "history target unavailable"
     );
     let target = target.canonicalize()?;
-    open_in_application(&application, target.as_os_str())
+    let bundle = super::application::bundle_application(&application)?;
+    let args = file_open_arguments(
+        &application,
+        &target,
+        bundle.as_ref().map(|app| app.bundle_id.as_str()),
+    );
+    run(
+        "/usr/bin/open",
+        &args.iter().map(OsString::as_os_str).collect::<Vec<_>>(),
+        None,
+    )
+    .map(|_| ())
+}
+
+fn file_open_arguments(
+    application: &Path,
+    target: &Path,
+    bundle_id: Option<&str>,
+) -> Vec<OsString> {
+    let jetbrains_ide = bundle_id.is_some_and(|id| id.starts_with("com.jetbrains."))
+        && application
+            .join("Contents/Resources/product-info.json")
+            .is_file();
+    if jetbrains_ide {
+        // JetBrains' documented macOS launcher forwards arguments to its IDE
+        // instance. A generic open-document event may not focus an open project.
+        // Keep the explicit installation and target, with no title/name guessing.
+        vec![
+            "-n".into(),
+            "-a".into(),
+            application.into(),
+            "--args".into(),
+            target.into(),
+        ]
+    } else {
+        vec!["-a".into(), application.into(), target.into()]
+    }
 }
 
 pub(super) fn open_url_in_application(application: &Path, value: &str) -> Result<()> {
@@ -155,6 +191,53 @@ mod tests {
     use super::*;
     use crate::macos::MacOsPlatform;
     use crate::Platform;
+
+    #[test]
+    fn jetbrains_projects_use_the_selected_installations_cli_with_literal_paths() {
+        let root = tempfile::tempdir().unwrap();
+        let app = root.path().join("IDE 中文 with spaces.app");
+        let resources = app.join("Contents/Resources");
+        std::fs::create_dir_all(&resources).unwrap();
+        std::fs::write(resources.join("product-info.json"), "{}").unwrap();
+        let target = root.path().join("项目 'quoted' [main] $(literal)");
+        for id in [
+            "com.jetbrains.intellij",
+            "com.jetbrains.intellij.ce",
+            "com.jetbrains.WebStorm-EAP",
+        ] {
+            assert_eq!(
+                file_open_arguments(&app, &target, Some(id)),
+                vec![
+                    OsString::from("-n"),
+                    "-a".into(),
+                    app.clone().into_os_string(),
+                    "--args".into(),
+                    target.clone().into_os_string()
+                ]
+            );
+        }
+        // A renamed non-JetBrains app or an unrelated JetBrains utility must
+        // keep the standard open-document route. Neither path may use a shell.
+        for id in [None, Some("com.microsoft.VSCode")] {
+            assert_eq!(
+                file_open_arguments(&app, &target, id),
+                vec![
+                    OsString::from("-a"),
+                    app.clone().into_os_string(),
+                    target.clone().into_os_string()
+                ]
+            );
+        }
+        std::fs::remove_file(resources.join("product-info.json")).unwrap();
+        assert_eq!(
+            file_open_arguments(&app, &target, Some("com.jetbrains.toolbox")),
+            vec![
+                OsString::from("-a"),
+                app.into_os_string(),
+                target.into_os_string()
+            ]
+        );
+    }
 
     #[test]
     fn platform_rejects_unsafe_urls_and_missing_paths_without_side_effects() {

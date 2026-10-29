@@ -2,7 +2,8 @@
  * No browser globals, Flutter transport, runtime imports or style code are needed.
  */
 import {HostError} from './errors.js';
-import type {Anywhere} from './api.js';
+import type {Anywhere, CallOptions} from './api.js';
+import {limits} from './contract.js';
 import type {Calls, PluginSnapshot, WebInput} from './contract.js';
 export type {Anywhere, Unsubscribe} from './api.js';
 export type {WebInput as Input, JsonValue} from './contract.js';
@@ -12,7 +13,9 @@ declare const __anywhereInvoke: (method: string, params: string) => string;
 async function invoke<T>(
   method: keyof Calls,
   params: unknown = {},
+  options?: CallOptions,
 ): Promise<T> {
+  if (options?.signal?.aborted) throw new HostError('CANCELLED');
   const reply = JSON.parse(__anywhereInvoke(method, JSON.stringify(params)));
   if (reply.error) throw new HostError(reply.error.code);
   return reply.value as T;
@@ -21,6 +24,15 @@ let snapshot: Promise<PluginSnapshot> | undefined;
 const contexts = new Set<(input: WebInput) => void>();
 const inputs = new Set<(text: string) => void>();
 const state = () => (snapshot ??= invoke<PluginSnapshot>('state.get'));
+function notify<T>(listeners: Set<(value: T) => void>, value: T) {
+  for (const listener of listeners) {
+    try {
+      listener(value);
+    } catch {
+      /* A subscriber cannot fail the completed write or interrupt other listeners. */
+    }
+  }
+}
 function subscribe<T>(
   listeners: Set<(value: T) => void>,
   callback: (value: T) => void,
@@ -48,20 +60,20 @@ export const anywhere: Anywhere = {
       if (input === null) throw new HostError('PERMISSION_DENIED');
       return input;
     },
-    set: async text => {
-      await invoke('input.set', {text});
+    set: async (text, options) => {
+      await invoke('input.set', {text}, options);
       snapshot = undefined;
       const next = await state();
-      for (const listener of contexts) listener(next.context);
-      if (next.input !== null)
-        for (const listener of inputs) listener(next.input);
+      notify(contexts, next.context);
+      if (next.input !== null) notify(inputs, next.input);
     },
     onChange: callback =>
       subscribe(inputs, callback, () => anywhere.input.get()),
   },
   clipboard: {
-    readText: () => invoke('clipboard.readText'),
-    writeText: async text => {
+    readText: options => invoke('clipboard.readText', {}, options),
+    writeText: async (text, options) => {
+      if (options?.signal?.aborted) throw new HostError('CANCELLED');
       const size = (character: string) => {
         const code = character.codePointAt(0)!;
         if (code >= 0xd800 && code <= 0xdfff)
@@ -70,29 +82,38 @@ export const anywhere: Anywhere = {
       };
       let bytes = 0;
       for (const character of text) bytes += size(character);
-      if (bytes > 1024 * 1024) throw new HostError('TOO_LARGE');
-      if (bytes < 8192) return invoke('clipboard.writeText', {text});
-      const {ticket} = await invoke<{ticket: string}>('text.begin', {bytes});
+      if (bytes > limits.textBytes) throw new HostError('TOO_LARGE');
+      if (bytes < 8192) return invoke('clipboard.writeText', {text}, options);
+      const {ticket} = await invoke<{ticket: string}>(
+        'text.begin',
+        {bytes},
+        options,
+      );
       try {
         let chunk = '',
           chunkBytes = 0,
           sequence = 0;
         for (const character of text) {
           const bytes = size(character);
-          if (chunkBytes + bytes > 4096) {
-            await invoke('text.chunk', {
-              ticket,
-              sequence: sequence++,
-              text: chunk,
-            });
+          if (chunkBytes + bytes > limits.chunkBytes) {
+            await invoke(
+              'text.chunk',
+              {
+                ticket,
+                sequence: sequence++,
+                text: chunk,
+              },
+              options,
+            );
             chunk = '';
             chunkBytes = 0;
           }
           chunk += character;
           chunkBytes += bytes;
         }
-        if (chunk) await invoke('text.chunk', {ticket, sequence, text: chunk});
-        await invoke('text.commit', {ticket});
+        if (chunk)
+          await invoke('text.chunk', {ticket, sequence, text: chunk}, options);
+        await invoke('text.commit', {ticket}, options);
       } catch (error) {
         await invoke('text.cancel', {ticket}).catch(() => {});
         throw error;
@@ -100,12 +121,12 @@ export const anywhere: Anywhere = {
     },
   },
   storage: {
-    get: key => invoke('storage.get', {key}),
-    set: (key, value) => invoke('storage.set', {key, value}),
-    remove: key => invoke('storage.remove', {key}),
+    get: (key, options) => invoke('storage.get', {key}, options),
+    set: (key, value, options) => invoke('storage.set', {key, value}, options),
+    remove: (key, options) => invoke('storage.remove', {key}, options),
   },
   app: {
-    getSource: () => invoke('app.getSource'),
-    getFrontmost: () => invoke('app.getFrontmost'),
+    getSource: options => invoke('app.getSource', {}, options),
+    getFrontmost: options => invoke('app.getFrontmost', {}, options),
   },
 };

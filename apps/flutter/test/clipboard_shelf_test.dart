@@ -21,6 +21,7 @@ void main() {
   final calls = <String>[];
   setUp(() {
     calls.clear();
+    mockNativePreview();
     DesktopEnvironment.configure(
         const DesktopEnvironment(platform: TargetPlatform.macOS));
     messenger.setMockMethodCallHandler(channel, (call) async {
@@ -119,6 +120,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 150));
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
     final selectedTop = tester.getTopLeft(find.text('Entry 2')).dy;
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
@@ -194,8 +196,10 @@ void main() {
     final session = tester
         .widget<ClipboardShelfPage>(find.byType(ClipboardShelfPage))
         .session;
+    expect(session.selected, isNull);
+    await session.select(0);
     expect(session.selected?.id, '1',
-        reason: 'Initial selection before inserting a new record');
+        reason: 'Explicit selection before inserting a new record');
     backend.rows = [item('new'), ...backend.rows];
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
@@ -215,32 +219,21 @@ void main() {
     await tester.pump(const Duration(seconds: 2));
     expect(tester.takeException(), isNull);
   });
-  test('compact browsing defers payload reads and rejects late closed previews',
-      () async {
+  test('compact browsing and copies never prepare preview resources', () async {
     final backend = History();
-    final response = Completer<ClipboardDetailDto?>();
-    var details = 0;
-    backend.detailOverride = (_) {
-      ++details;
-      return response.future;
+    var reads = 0;
+    backend.detailOverride = (id) async {
+      reads++;
+      return previewDetail(item(id), id);
     };
-    final session =
-        ClipboardHistorySession(backend, rowExtent: 48, previewEnabled: false);
+    final session = ClipboardHistorySession(backend, rowExtent: 48);
     await Future<void>.delayed(Duration.zero);
     await session.select(1);
     await session.refresh(background: true);
-    expect(details, 0);
-    expect(await session.copyItem('missing'), isFalse);
-    expect(await session.copyItem('1'), isTrue);
-    expect(backend.copied, ['1']);
-    expect(details, 0, reason: 'Copying must not wait for preview decoding');
-    session.setPreviewEnabled(true);
-    expect(details, 1);
-    session.setPreviewEnabled(false);
-    response.complete(previewDetail(item('1'), 'late body'));
-    await Future<void>.delayed(Duration.zero);
-    expect(session.preview, isNull);
-    expect(session.previewEnabled, isFalse);
+    expect(await session.copyItem('missing'), false);
+    expect(await session.copyItem('1'), true);
+    expect(reads, 0);
+    expect(session.preview.isOpen, false);
     session.dispose();
   });
 
@@ -257,6 +250,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('clipboard-preview-pane')), findsNothing);
     expect(find.text('⌘2'), findsOneWidget);
+    expect(find.byKey(const Key('selected-row-primary')), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
     expect(find.byKey(const Key('selected-row-primary')), findsOneWidget);
     await tester.enterText(find.byKey(const Key('clipboard-search')), 'Entry');
     await tester.pump(const Duration(milliseconds: 150));
@@ -278,7 +274,7 @@ void main() {
     final page =
         tester.widget<ClipboardShelfPage>(find.byType(ClipboardShelfPage));
     expect(page.session.query.text, 'Entry');
-    expect(page.session.preview, isNull);
+    expect(page.session.preview.isOpen, isFalse);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });
@@ -295,13 +291,15 @@ void main() {
     await tester.enterText(find.byKey(const Key('clipboard-search')), 'Entry');
     await tester.pump(const Duration(milliseconds: 150));
     await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
     await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Preview'));
     await tester.pumpAndSettle();
-    expect(find.text('Full text 1'), findsOneWidget);
+    expect(previewCalls.where((call) => call.method == 'show'), isNotEmpty);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
     expect(find.text('Full text 1'), findsNothing);
@@ -333,7 +331,7 @@ void main() {
     await tester
         .pumpWidget(ClipboardShelfApp(backend: backend, channel: channel));
     await tester.pumpAndSettle();
-    for (var i = 0; i < 30; i++) {
+    for (var i = 0; i < 31; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pump();
     }
@@ -366,8 +364,7 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
     final backend = History();
-    final session =
-        ClipboardHistorySession(backend, rowExtent: 48, previewEnabled: false);
+    final session = ClipboardHistorySession(backend, rowExtent: 48);
     await tester.pumpWidget(MaterialApp(
         theme: AppStyle.theme,
         builder: (context, child) => MediaQuery(
@@ -386,6 +383,7 @@ void main() {
                         visible: true,
                         presentation: 0))))));
     await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();

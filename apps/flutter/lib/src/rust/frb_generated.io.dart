@@ -68,9 +68,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
-  ClipboardDetailDto dco_decode_box_autoadd_clipboard_detail_dto(dynamic raw);
-
-  @protected
   ClipboardNoticeDto dco_decode_box_autoadd_clipboard_notice_dto(dynamic raw);
 
   @protected
@@ -103,9 +100,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   PluginDetailDto dco_decode_box_autoadd_plugin_detail_dto(dynamic raw);
 
   @protected
-  int dco_decode_box_autoadd_u_32(dynamic raw);
-
-  @protected
   BigInt dco_decode_box_autoadd_u_64(dynamic raw);
 
   @protected
@@ -119,9 +113,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CandidateUpdateDto dco_decode_candidate_update_dto(dynamic raw);
-
-  @protected
-  ClipboardDetailDto dco_decode_clipboard_detail_dto(dynamic raw);
 
   @protected
   ClipboardHistoryDto dco_decode_clipboard_history_dto(dynamic raw);
@@ -168,9 +159,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   FileObjectKindDto dco_decode_file_object_kind_dto(dynamic raw);
-
-  @protected
-  FilePreviewDto dco_decode_file_preview_dto(dynamic raw);
 
   @protected
   FileSearchEngineDto dco_decode_file_search_engine_dto(dynamic raw);
@@ -253,6 +241,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<WebPermissionDto> dco_decode_list_web_permission_dto(dynamic raw);
 
   @protected
+  NativePreviewDto dco_decode_native_preview_dto(dynamic raw);
+
+  @protected
   NativeToolDto dco_decode_native_tool_dto(dynamic raw);
 
   @protected
@@ -264,10 +255,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AppHistoryNoticeDto? dco_decode_opt_box_autoadd_app_history_notice_dto(
-      dynamic raw);
-
-  @protected
-  ClipboardDetailDto? dco_decode_opt_box_autoadd_clipboard_detail_dto(
       dynamic raw);
 
   @protected
@@ -303,9 +290,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   PluginDetailDto? dco_decode_opt_box_autoadd_plugin_detail_dto(dynamic raw);
-
-  @protected
-  int? dco_decode_opt_box_autoadd_u_32(dynamic raw);
 
   @protected
   BigInt? dco_decode_opt_box_autoadd_u_64(dynamic raw);
@@ -438,10 +422,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
-  ClipboardDetailDto sse_decode_box_autoadd_clipboard_detail_dto(
-      SseDeserializer deserializer);
-
-  @protected
   ClipboardNoticeDto sse_decode_box_autoadd_clipboard_notice_dto(
       SseDeserializer deserializer);
 
@@ -480,9 +460,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
-  int sse_decode_box_autoadd_u_32(SseDeserializer deserializer);
-
-  @protected
   BigInt sse_decode_box_autoadd_u_64(SseDeserializer deserializer);
 
   @protected
@@ -497,10 +474,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   CandidateUpdateDto sse_decode_candidate_update_dto(
-      SseDeserializer deserializer);
-
-  @protected
-  ClipboardDetailDto sse_decode_clipboard_detail_dto(
       SseDeserializer deserializer);
 
   @protected
@@ -554,9 +527,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   FileObjectKindDto sse_decode_file_object_kind_dto(
       SseDeserializer deserializer);
-
-  @protected
-  FilePreviewDto sse_decode_file_preview_dto(SseDeserializer deserializer);
 
   @protected
   FileSearchEngineDto sse_decode_file_search_engine_dto(
@@ -655,6 +625,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  NativePreviewDto sse_decode_native_preview_dto(SseDeserializer deserializer);
+
+  @protected
   NativeToolDto sse_decode_native_tool_dto(SseDeserializer deserializer);
 
   @protected
@@ -666,10 +639,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AppHistoryNoticeDto? sse_decode_opt_box_autoadd_app_history_notice_dto(
-      SseDeserializer deserializer);
-
-  @protected
-  ClipboardDetailDto? sse_decode_opt_box_autoadd_clipboard_detail_dto(
       SseDeserializer deserializer);
 
   @protected
@@ -710,9 +679,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   PluginDetailDto? sse_decode_opt_box_autoadd_plugin_detail_dto(
       SseDeserializer deserializer);
-
-  @protected
-  int? sse_decode_opt_box_autoadd_u_32(SseDeserializer deserializer);
 
   @protected
   BigInt? sse_decode_opt_box_autoadd_u_64(SseDeserializer deserializer);
@@ -857,10 +823,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       AppHistoryNoticeDto self, SseSerializer serializer);
 
   @protected
-  void sse_encode_box_autoadd_clipboard_detail_dto(
-      ClipboardDetailDto self, SseSerializer serializer);
-
-  @protected
   void sse_encode_box_autoadd_clipboard_notice_dto(
       ClipboardNoticeDto self, SseSerializer serializer);
 
@@ -900,9 +862,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       PluginDetailDto self, SseSerializer serializer);
 
   @protected
-  void sse_encode_box_autoadd_u_32(int self, SseSerializer serializer);
-
-  @protected
   void sse_encode_box_autoadd_u_64(BigInt self, SseSerializer serializer);
 
   @protected
@@ -919,10 +878,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_candidate_update_dto(
       CandidateUpdateDto self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_clipboard_detail_dto(
-      ClipboardDetailDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_clipboard_history_dto(
@@ -977,10 +932,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_file_object_kind_dto(
       FileObjectKindDto self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_file_preview_dto(
-      FilePreviewDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_file_search_engine_dto(
@@ -1081,6 +1032,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       List<WebPermissionDto> self, SseSerializer serializer);
 
   @protected
+  void sse_encode_native_preview_dto(
+      NativePreviewDto self, SseSerializer serializer);
+
+  @protected
   void sse_encode_native_tool_dto(NativeToolDto self, SseSerializer serializer);
 
   @protected
@@ -1093,10 +1048,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_app_history_notice_dto(
       AppHistoryNoticeDto? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_box_autoadd_clipboard_detail_dto(
-      ClipboardDetailDto? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_clipboard_notice_dto(
@@ -1136,9 +1087,6 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_plugin_detail_dto(
       PluginDetailDto? self, SseSerializer serializer);
-
-  @protected
-  void sse_encode_opt_box_autoadd_u_32(int? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_u_64(BigInt? self, SseSerializer serializer);

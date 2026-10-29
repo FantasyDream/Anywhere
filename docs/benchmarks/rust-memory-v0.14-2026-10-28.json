@@ -1,0 +1,98 @@
+{
+  "date": "2026-10-28",
+  "profile": "release",
+  "os": "27.0.1",
+  "arch": "aarch64",
+  "method": "Three alternating process pairs; counts requested Rust GlobalAlloc bytes above each prepared fixture baseline. System allocator is used for both binaries.",
+  "scope": "Synthetic clipboard and history service only. Excludes SQLite/C allocations, allocator overhead, OS, Bridge, Flutter, QuickJS and GPU. Not RSS, physical footprint, or a whole-App leak test.",
+  "baseline": "Dirty workspace immediately before this memory optimization, identified by binary hash; no clean-commit baseline claimed.",
+  "binaries": {
+    "before": "ad591ecf0b83e7577542620e6171486fe369482c0ba64b034cc70ce3b92dd6c3",
+    "after": "70152b04f480da41e7c85a5a567f9e6664b55a52eaa058fbd60f0a8cc049cf4a"
+  },
+  "sources": {
+    "crates/anywhere-core/src/persistence/clipboard.rs": "47c9cf0cf9ba8ac36dfdbfff28c3620c3bff9114abf6bdcd2f92e55d6f19c2b2",
+    "crates/anywhere-core/src/features/application_history/service/query.rs": "b476e95c0c335283f76216abf0b6dc4ffc5bde6ab12c582e35d28bee478d5289",
+    "crates/anywhere-core/src/features/application_history/service.rs": "5d6c4caeb47c8db1dde0b61c4247597a5734adbc9f6bccc16df1b0b0463993c0",
+    "crates/anywhere-core/src/features/application_history/model.rs": "63263c3cbd22a842c1cf6795a9ba2b1eb310bf04e3c7454f2fb3120f10c0a062",
+    "crates/anywhere-core/examples/memory_measure.rs": "08fb7430154667cb604278670b7ad0c72482be768be0deb4a37f8ad296400938"
+  },
+  "summary": {
+    "duplicate_clipboard_peak_extra_bytes": {
+      "before": 16777586,
+      "after": 125
+    },
+    "history_query_peak_extra_bytes": {
+      "before": 3652417,
+      "after": 2536579
+    },
+    "history_result_and_service_live_extra_bytes": {
+      "before": 3652350,
+      "after": 2339920
+    },
+    "history_after_result_drop_and_cancel_extra_bytes": {
+      "before": 163904,
+      "after": 64
+    }
+  },
+  "runs": {
+    "before": [
+      {
+        "clipboard_payload_bytes": 16777216,
+        "duplicate_clipboard_peak_extra_bytes": 16777586,
+        "history_after_result_drop_and_cancel_extra_bytes": 163904,
+        "history_entries": 1024,
+        "history_query_peak_extra_bytes": 3652417,
+        "history_result_and_service_live_extra_bytes": 3652350,
+        "scope": "Requested Rust heap bytes only; excludes SQLite/C allocations, allocator overhead, VM, OS, Bridge, Flutter and GPU. Not RSS or physical footprint."
+      },
+      {
+        "clipboard_payload_bytes": 16777216,
+        "duplicate_clipboard_peak_extra_bytes": 16777586,
+        "history_after_result_drop_and_cancel_extra_bytes": 163904,
+        "history_entries": 1024,
+        "history_query_peak_extra_bytes": 3652417,
+        "history_result_and_service_live_extra_bytes": 3652350,
+        "scope": "Requested Rust heap bytes only; excludes SQLite/C allocations, allocator overhead, VM, OS, Bridge, Flutter and GPU. Not RSS or physical footprint."
+      },
+      {
+        "clipboard_payload_bytes": 16777216,
+        "duplicate_clipboard_peak_extra_bytes": 16777586,
+        "history_after_result_drop_and_cancel_extra_bytes": 163904,
+        "history_entries": 1024,
+        "history_query_peak_extra_bytes": 3652417,
+        "history_result_and_service_live_extra_bytes": 3652350,
+        "scope": "Requested Rust heap bytes only; excludes SQLite/C allocations, allocator overhead, VM, OS, Bridge, Flutter and GPU. Not RSS or physical footprint."
+      }
+    ],
+    "after": [
+      {
+        "clipboard_payload_bytes": 16777216,
+        "duplicate_clipboard_peak_extra_bytes": 125,
+        "history_after_result_drop_and_cancel_extra_bytes": 64,
+        "history_entries": 1024,
+        "history_query_peak_extra_bytes": 2536579,
+        "history_result_and_service_live_extra_bytes": 2339920,
+        "scope": "Requested Rust heap bytes only; excludes SQLite/C allocations, allocator overhead, VM, OS, Bridge, Flutter and GPU. Not RSS or physical footprint."
+      },
+      {
+        "clipboard_payload_bytes": 16777216,
+        "duplicate_clipboard_peak_extra_bytes": 125,
+        "history_after_result_drop_and_cancel_extra_bytes": 64,
+        "history_entries": 1024,
+        "history_query_peak_extra_bytes": 2536579,
+        "history_result_and_service_live_extra_bytes": 2339920,
+        "scope": "Requested Rust heap bytes only; excludes SQLite/C allocations, allocator overhead, VM, OS, Bridge, Flutter and GPU. Not RSS or physical footprint."
+      },
+      {
+        "clipboard_payload_bytes": 16777216,
+        "duplicate_clipboard_peak_extra_bytes": 125,
+        "history_after_result_drop_and_cancel_extra_bytes": 64,
+        "history_entries": 1024,
+        "history_query_peak_extra_bytes": 2536579,
+        "history_result_and_service_live_extra_bytes": 2339920,
+        "scope": "Requested Rust heap bytes only; excludes SQLite/C allocations, allocator overhead, VM, OS, Bridge, Flutter and GPU. Not RSS or physical footprint."
+      }
+    ]
+  }
+}

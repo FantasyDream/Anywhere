@@ -251,7 +251,7 @@ void main() {
     expect(controller.view.searchText, 'settings');
     expect(controller.view.isFileSearch, isTrue);
     expect(controller.files.filter, FileFilter.code);
-    expect(controller.view.hasFilePreview, isTrue);
+    expect(controller.view.width, 648);
     await tester.pump(const Duration(seconds: 1));
     expect(expired, 0, reason: 'old expiry cannot clear resumed state');
     await controller.closeFileSearch();

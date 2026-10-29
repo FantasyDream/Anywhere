@@ -1,14 +1,11 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 import 'package:anywhere/infrastructure/desktop_environment.dart';
-import 'package:anywhere/launcher/file_search_controller.dart';
 import 'package:anywhere/launcher/widgets/candidate_icon.dart';
 import 'package:anywhere/launcher/widgets/candidate_row.dart';
-import 'package:anywhere/launcher/widgets/file_search_components.dart';
 import 'package:anywhere/src/rust/api.dart';
 import 'package:anywhere/ui/app_icons.dart';
 import 'package:anywhere/ui/app_style.dart';
-import 'package:anywhere/ui/file_type_appearance.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -61,27 +58,13 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('row and preview share type appearance without changing actions',
+  testWidgets('result row keeps its type appearance without reading content',
       (tester) async {
-    final files = FileSearchController(null)
-      ..preview = FilePreviewDto(
-          path: '/project/预算.PDF',
-          isDirectory: false,
-          sizeBytes: BigInt.from(42));
-    addTearDown(files.dispose);
     await tester.pumpWidget(MaterialApp(
         theme: AppStyle.theme,
-        home: Column(children: [
-          CandidateRow(
-              candidate: candidate('预算.PDF'), selected: true, onTap: () {}),
-          Expanded(child: FileSearchPreview(files: files)),
-        ])));
-    final icons = tester.widgetList<FileTypeIcon>(find.byType(FileTypeIcon));
-    expect(icons, hasLength(2));
-    expect(
-        icons.map((icon) => icon.appearance).toSet(), {FileTypeAppearance.pdf});
-    expect(find.text('PDF document'), findsOneWidget);
-    expect(tester.takeException(), isNull);
+        home: CandidateRow(
+            candidate: candidate('预算.PDF'), selected: true, onTap: () {})));
+    expect(find.byIcon(AppIcons.pdf), findsOneWidget);
   });
 
   if (captureLauncherUi) {

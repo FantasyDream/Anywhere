@@ -1,5 +1,5 @@
 //! Synthetic, isolated storage baseline. Never reads the user's clipboard or database.
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Context, Result};
 use anywhere_core::{
     features::clipboard::{
         history::{HistoryRepository, MAX_ENTRIES},
@@ -47,11 +47,18 @@ fn main() -> Result<()> {
         }));
     }
     let service = HistoryService::new(Ok(Box::new(repository)));
+    let mut previews = anywhere_core::features::preview::PreviewStore::default();
+    previews.configure(directory.path().join("previews"));
     let start = Instant::now();
     for _ in 0..100 {
-        ensure!(service.detail(selected)?.is_some());
+        let resource = service
+            .inspect_payload(selected, |item, payload| {
+                previews.clipboard(&payload, item.summary)
+            })?
+            .context("fixture disappeared")?;
+        previews.release(&resource.id);
     }
-    let detail_mean_us = start.elapsed().as_micros() / 100;
+    let prepare_preview_mean_us = start.elapsed().as_micros() / 100;
     let mut policy_queries = Vec::new();
     for days in [0, 7] {
         service.set_retention_days(days)?;
@@ -79,7 +86,7 @@ fn main() -> Result<()> {
             "fixture": "1000 synthetic plain-text entries, approximately 8 KiB each",
             "rows": MAX_ENTRIES, "database_bytes": database.metadata()?.len(),
             "summary_utf8_bytes": summary_bytes, "insert_ms": insert_ms,
-            "detail_mean_us": detail_mean_us, "queries": results,
+            "prepare_preview_mean_us": prepare_preview_mean_us, "queries": results,
             "service_policy_queries": policy_queries,
             "scope": "Rust repository queries and service previews; excludes Flutter, bridge and OS clipboard",
         }))?

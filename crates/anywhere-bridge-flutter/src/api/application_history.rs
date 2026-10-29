@@ -64,9 +64,9 @@ pub(super) fn search(session_id: u32, query: String, source: String) -> Result<A
     Ok(AppHistoryDto {
         items: result
             .items
-            .into_iter()
+            .iter()
             .map(|item| {
-                let kind = match item.entry.target {
+                let kind = match &item.entry.target {
                     Target::Directory { .. } => "directory",
                     Target::ObsidianVault { .. } => "directory",
                     Target::File { .. } => "file",
@@ -74,10 +74,10 @@ pub(super) fn search(session_id: u32, query: String, source: String) -> Result<A
                     Target::Remote { .. } => "remote",
                 };
                 AppHistoryItemDto {
-                    id: item.id,
+                    id: item.id.clone(),
                     object_key: format!("{}:{}", item.source_id, item.entry.key),
-                    source_id: item.source_id,
-                    title: item.entry.title,
+                    source_id: item.source_id.clone(),
+                    title: item.entry.title.clone(),
                     value: item.entry.target.text(),
                     kind: kind.into(),
                     can_open: kind != "remote",

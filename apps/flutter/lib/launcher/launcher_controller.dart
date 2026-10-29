@@ -15,6 +15,7 @@ import '../src/rust/api.dart';
 import '../tools/builtin_tool_pages.dart';
 import '../tools/object_action_coordinator.dart';
 import '../tools/tool_page.dart';
+import '../tools/tool_page_stack.dart';
 import 'activation_flow.dart';
 import 'file_search_controller.dart';
 import 'file_workspace_coordinator.dart';
@@ -46,7 +47,7 @@ class LauncherController extends ChangeNotifier {
     ToolPageRegistry? toolPages,
   })  : _backend = backend,
         _window = window,
-        _toolPages =
+        _toolPageRegistry =
             toolPages ?? builtinToolPages(showWindow: window.showToolWindow),
         _nowMillis = nowMillis ?? (() => DateTime.now().millisecondsSinceEpoch),
         settings = SettingsController(
@@ -65,16 +66,16 @@ class LauncherController extends ChangeNotifier {
     files = FileWorkspaceCoordinator(backend.loadFilePreview);
     files.addListener(_filePresentationChanged);
     hostViews.register(HostViewDto.fileSearch, openFileSearch);
-    for (final view in _toolPages.hostViews) {
+    for (final view in _toolPageRegistry.hostViews) {
       hostViews.registerPayload(view, (result) async {
-        final showWindow = _toolPages.windowFor(result);
+        final showWindow = _toolPageRegistry.windowFor(result);
         if (showWindow != null) {
           final generation = _generation;
           await showWindow();
           if (_current(generation)) await dismiss();
           return;
         }
-        final page = _toolPages.open(result);
+        final page = _toolPageRegistry.open(result);
         _pushToolPage(page);
         _message = result.warning;
         _notify();
@@ -183,18 +184,12 @@ class LauncherController extends ChangeNotifier {
   bool _scopeTouched = false;
   String? _selectedId, _message, _output;
   ActionStatusDto? _resultStatus;
-  final ToolPageRegistry _toolPages;
-  ToolPageSession? _page;
-  final List<ToolPageSession> _pageParents = [];
-  ToolPageSession? get _toolPage => _page;
+  final ToolPageRegistry _toolPageRegistry;
+  final _pageStack = ToolPageStack();
+  ToolPageSession? get _toolPage => _pageStack.current;
   set _toolPage(ToolPageSession? value) {
-    if (identical(_page, value)) return;
-    _page?.dispose();
-    for (final parent in _pageParents) {
-      parent.dispose();
-    }
-    _pageParents.clear();
-    _page = value;
+    if (identical(_toolPage, value)) return;
+    _pageStack.replace(value);
     _bindToolPage(value);
   }
 
@@ -202,7 +197,7 @@ class LauncherController extends ChangeNotifier {
     final session = _session, revision = _revision;
     value?.bindInteraction(() =>
         !_disposed &&
-        identical(_page, value) &&
+        identical(_toolPage, value) &&
         _phase == LauncherPhase.ready &&
         _session == session &&
         _revision == revision);
@@ -215,18 +210,7 @@ class LauncherController extends ChangeNotifier {
   }
 
   void _pushToolPage(ToolPageSession value) {
-    // Nested results retain their parent, but must not grow an unbounded cache.
-    if (_pageParents.length >= 4) {
-      value.dispose();
-      throw StateError('Too many nested tool pages');
-    }
-    if (_page == null) {
-      _toolPage = value;
-      return;
-    }
-    _page!.setVisible(false);
-    _pageParents.add(_page!);
-    _page = value;
+    _pageStack.push(value);
     _bindToolPage(value);
   }
 
@@ -328,24 +312,13 @@ class LauncherController extends ChangeNotifier {
 
   void _notify() {
     if (_disposed) return;
-    if (_phase == LauncherPhase.hidden) {
-      notifyListeners();
-      return;
-    }
-    final entries = view.visibleEntries;
-    final parentKey = _objectActionParent;
-    final file = view.isFileSearch && !view.resolving
-        ? parentKey != null
-            ? _snapshot?.candidates
-                .where((c) => 'candidate:${c.id}' == parentKey)
-                .firstOrNull
-            : _bindingChoices == null && entries.isNotEmpty
-                ? entries[view.selectedIndex].candidate
-                : null
-        : null;
-    files.sync(view.isFileSearch ? _session : null, _revision,
-        file?.kind == CandidateKindDto.file ? file : null);
     notifyListeners();
+  }
+
+  void reportNotice(String message) {
+    _message = message;
+    _notify();
+    unawaited(_syncWindow());
   }
 
   bool _current(int generation) =>
@@ -562,7 +535,7 @@ class LauncherController extends ChangeNotifier {
       ++_generation;
       _shortcuts.invalidate();
       _phase = LauncherPhase.hidden;
-      _page?.setVisible(false);
+      _toolPage?.setVisible(false);
       _activation.stopPrefill();
       files.invalidateOperations();
       _objectActions.invalidate();
@@ -672,7 +645,7 @@ class LauncherController extends ChangeNotifier {
         await update(_input, automatic: true);
       }
       _retainedPhase = null;
-      _page?.setVisible(true);
+      _toolPage?.setVisible(true);
       _notify();
       await _syncWindow(show: true);
       unawaited(_follow(generation, session));
@@ -698,7 +671,7 @@ class LauncherController extends ChangeNotifier {
         fileParent = _objectActionParent;
     final overlay = _overlay;
     // A qualified plugin input.set is committed by Rust while its tool stays open.
-    final toolInputChanged = _page != null && state.revision > _revision;
+    final toolInputChanged = _toolPage != null && state.revision > _revision;
     if (toolInputChanged) {
       _input = state.input;
       _requestedRevision = state.revision;
@@ -724,7 +697,7 @@ class LauncherController extends ChangeNotifier {
     }
     settings.recordCaptures(state.contextCaptures);
     _revision = state.revision;
-    if (toolInputChanged) _bindToolPage(_page);
+    if (toolInputChanged) _bindToolPage(_toolPage);
     if (_scopeId != null && !view.scopes.any((scope) => scope.id == _scopeId)) {
       final removed = _scopeId;
       _scopeId = null;
@@ -770,7 +743,8 @@ class LauncherController extends ChangeNotifier {
     if (_userMoved && view.entryCollection.indices[_selectedId] != null) {
       return;
     }
-    _selectedId = entries.isEmpty ? null : entries.first.key;
+    _selectedId =
+        entries.isEmpty || view.hasFileControls ? null : entries.first.key;
     _userMoved = false;
   }
 
@@ -841,7 +815,7 @@ class LauncherController extends ChangeNotifier {
     final session = _session;
     if (session == null || !view.visible) return;
     _navigationMode = null;
-    final retainedTool = automatic ? _page : null;
+    final retainedTool = automatic ? _toolPage : null;
     final revision = ++_revision;
     _requestedRevision = revision;
     if (!automatic) {
@@ -891,14 +865,14 @@ class LauncherController extends ChangeNotifier {
       _apply(state);
       if (revision != _requestedRevision) return;
       _phase = LauncherPhase.ready;
-      if (retainedTool != null) _bindToolPage(_page);
+      if (retainedTool != null) _bindToolPage(_toolPage);
       _notify();
       await _syncWindow();
     } catch (error) {
       if (!_current(generation) || revision != _revision) return;
       _message = '$error';
       _phase = LauncherPhase.ready;
-      if (retainedTool != null) _bindToolPage(_page);
+      if (retainedTool != null) _bindToolPage(_toolPage);
       _notify();
       await _syncWindow();
     }
@@ -1098,9 +1072,7 @@ class LauncherController extends ChangeNotifier {
   }
 
   bool get canShowObjectActions {
-    final entries = view.visibleEntries;
-    final candidate =
-        entries.isEmpty ? null : entries[view.selectedIndex].candidate;
+    final candidate = view.selectedEntry?.candidate;
     return _objectActionTarget == null &&
         candidate != null &&
         candidate.primaryAction &&
@@ -1161,15 +1133,14 @@ class LauncherController extends ChangeNotifier {
 
   Future<void> executeSelected() async {
     final state = _snapshot;
-    final entries = view.visibleEntries;
     if (_phase != LauncherPhase.ready ||
         _toolPage != null ||
         state == null ||
         state.revision != _revision) {
       return;
     }
-    if (entries.isEmpty) return;
-    final entry = entries[view.selectedIndex];
+    final entry = view.selectedEntry;
+    if (entry == null) return;
     if (entry.navigationPath != null) {
       _actionPath = entry.navigationPath;
       _selectedId = null;
@@ -1290,7 +1261,7 @@ class LauncherController extends ChangeNotifier {
           revision != _revision ||
           result.sessionId != state.sessionId ||
           result.revision != revision ||
-          (owner != null && (!identical(_page, owner) || owner.disposed))) {
+          (owner != null && (!identical(_toolPage, owner) || owner.disposed))) {
         return false;
       }
       succeeded = result.status == ActionStatusDto.succeeded;
@@ -1332,7 +1303,9 @@ class LauncherController extends ChangeNotifier {
                 : result.warning ?? result.error;
         _output = result.outputText;
         _resultStatus = result.status;
-        if (_output != null) _pushToolPage(_toolPages.openResult(result));
+        if (_output != null) {
+          _pushToolPage(_toolPageRegistry.openResult(result));
+        }
         _notify();
         await _syncWindow();
       }
@@ -1361,9 +1334,10 @@ class LauncherController extends ChangeNotifier {
       }
       if (direction < 0 && view.selectedIndex == 0) return;
     }
-    _selectedId = entries[
-            (view.selectedIndex + direction + entries.length) % entries.length]
-        .key;
+    final next = view.selectedIndex < 0
+        ? 0
+        : (view.selectedIndex + direction + entries.length) % entries.length;
+    _selectedId = entries[next].key;
     _userMoved = true;
     freezeFileResults();
     _output = null;
@@ -1409,22 +1383,16 @@ class LauncherController extends ChangeNotifier {
 
   void back() {
     if (_output == null && _toolPage == null) return;
-    if (_pageParents.isEmpty) {
-      _toolPage = null;
-    } else {
-      _page?.dispose();
-      _page = _pageParents.removeLast();
-      _page!.setVisible(true);
-    }
+    _pageStack.back();
     _message = null;
     _output = null;
     _resultStatus = null;
     _notify();
-    final parent = _page;
+    final parent = _toolPage;
     unawaited(_syncWindow().then((_) {
       if (!_disposed &&
           parent != null &&
-          identical(_page, parent) &&
+          identical(_toolPage, parent) &&
           view.visible) {
         ++_windowPresentation;
         _notify();

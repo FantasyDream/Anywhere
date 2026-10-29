@@ -122,7 +122,7 @@ fn obsidian_opens_the_exact_registered_vault_in_the_selected_app_and_revalidates
     service
         .configure_mode("obsidian", SourceMode::Custom, source.to_str())
         .unwrap();
-    let row = service.search(0, "", "obsidian").unwrap().items.remove(0);
+    let row = service.search(0, "", "obsidian").unwrap().items[0].clone();
     let platform = OpenRecorder::new(&[("md.obsidian", "/mock/Obsidian.app")]);
     service.use_item(&row.id, false, &platform).unwrap();
     assert_eq!(
@@ -136,7 +136,7 @@ fn obsidian_opens_the_exact_registered_vault_in_the_selected_app_and_revalidates
     write("fedcba9876543210");
     assert!(service.use_item(&row.id, false, &platform).is_err());
     assert_eq!(platform.urls.lock().unwrap().len(), 1);
-    let row = service.search(0, "", "obsidian").unwrap().items.remove(0);
+    let row = service.search(0, "", "obsidian").unwrap().items[0].clone();
     let duplicate = OpenRecorder::new(&[
         ("md.obsidian", "/mock/A.app"),
         ("md.obsidian", "/mock/B.app"),
@@ -191,7 +191,7 @@ fn each_local_kind_dispatches_to_its_source_app_without_using_default_openers() 
     ]);
     for source in ["idea", "vscode"] {
         let rows = service.search(0, "", source).unwrap().items;
-        for item in rows {
+        for item in rows.iter() {
             if matches!(item.entry.target, Target::Remote { .. }) {
                 assert!(service.use_item(&item.id, false, &platform).is_err());
                 service.use_item(&item.id, true, &platform).unwrap();
@@ -229,7 +229,7 @@ fn ambiguous_apps_changed_targets_and_revoked_sources_fail_before_dispatch() {
     service
         .configure_mode("idea", SourceMode::Custom, Some(xml.to_str().unwrap()))
         .unwrap();
-    let row = service.search(0, "", "idea").unwrap().items.remove(0);
+    let row = service.search(0, "", "idea").unwrap().items[0].clone();
     for apps in [
         vec![],
         vec![

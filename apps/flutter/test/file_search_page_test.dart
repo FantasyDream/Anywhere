@@ -6,6 +6,8 @@ import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/launcher/file_search_controller.dart';
 import 'package:anywhere/launcher/launcher_controller.dart';
 import 'package:anywhere/launcher/launcher_screen.dart';
+import 'package:anywhere/launcher/launcher_view_state.dart';
+import 'package:anywhere/launcher/widgets/candidate_row.dart';
 import 'package:anywhere/launcher/widgets/launcher_components.dart';
 import 'package:anywhere/settings/action_shortcut.dart';
 import 'package:anywhere/settings/host_settings.dart';
@@ -18,6 +20,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'launcher_fixtures.dart';
+import 'support/clipboard_fixtures.dart' show mockNativePreview, previewCalls;
 import 'support/launcher_ui_capture.dart';
 
 CandidateDto row(String id, String title, String command,
@@ -49,11 +52,8 @@ final entry = row('search-entry', 'File Search', 'core.files.search');
 final text = row('text-file', 'report.txt', 'core.file.open', file: true);
 final folder =
     row('folder-result', 'report-folder', 'core.directory.open', file: true);
-FilePreviewDto preview(String path, {bool directory = false}) => FilePreviewDto(
-    path: path,
-    isDirectory: directory,
-    sizeBytes: BigInt.from(12),
-    text: directory ? null : 'Preview content');
+NativePreviewDto preview(String path, {bool directory = false}) =>
+    NativePreviewDto(id: path, paths: [path], title: '');
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -64,6 +64,7 @@ void main() {
   setUp(() {
     DesktopEnvironment.configure(
         const DesktopEnvironment(platform: TargetPlatform.macOS));
+    mockNativePreview();
     messenger.setMockMethodCallHandler(channel, (_) async => null);
   });
   tearDown(() {
@@ -253,6 +254,32 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('deep file scrolling builds only rows near the viewport',
+      (tester) async {
+    final controller = await mount(tester,
+        hits: List.generate(
+            10000,
+            (i) =>
+                row('file-$i', 'report-$i.txt', 'core.file.open', file: true)));
+    await openFiles(tester);
+    await controller.update('report');
+    await tester.pumpAndSettle();
+    final previous = debugOnRebuildDirtyWidget;
+    var builds = 0;
+    debugOnRebuildDirtyWidget = (element, builtOnce) {
+      if (element.widget is CandidateRow) ++builds;
+      previous?.call(element, builtOnce);
+    };
+    addTearDown(() => debugOnRebuildDirtyWidget = previous);
+    final list = tester.widget<ListView>(find.byKey(const Key('action-list')));
+    list.controller!.jumpTo(9000 * LauncherViewState.rowHeight);
+    await tester.pumpAndSettle();
+    debugPrint('file_rows_built_for_deep_jump=$builds');
+    expect(builds, lessThan(100));
+    expect(find.text('report-9000.txt'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   Future<void> filterFiles(WidgetTester tester, FileFilter filter) async {
     await tester.ensureVisible(find.byKey(Key('file-filter-${filter.name}')));
     await tester.tap(find.byKey(Key('file-filter-${filter.name}')));
@@ -274,9 +301,11 @@ void main() {
       of: find.byKey(const Key('action-list')), matching: find.text(title));
 
   Future<void> openPreview(WidgetTester tester, {bool capture = false}) async {
-    expect(find.byKey(const Key('file-preview-pane')), findsOneWidget);
+    expect(find.byKey(const Key('file-preview-pane')), findsNothing);
     expect(find.byKey(const Key('file-preview-close')), findsNothing);
     if (capture) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pumpAndSettle();
       await chord(tester, LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.keyK);
       expect(find.byKey(const Key('file-preview-action')), findsNothing);
       await saveLauncherUi(tester, 'files-actions');
@@ -317,7 +346,7 @@ void main() {
       addTearDown(() => PresentationMetrics.reporter = null);
       final pending = <Completer<SnapshotWaitDto>>[];
       final queries = <(String, int, InputModeDto)>[];
-      final previewGate = Completer<FilePreviewDto>();
+      final previewGate = Completer<NativePreviewDto>();
       final c = await mount(tester,
           queries: queries,
           hits: [],
@@ -425,6 +454,7 @@ void main() {
     expect(find.text('Retry'), findsNothing);
     expect(find.textContaining('Operation not permitted'), findsNothing);
     expect(fileRow('report.txt'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(executed, [entry.id, text.id]);
@@ -471,6 +501,7 @@ void main() {
     await chord(tester, LogicalKeyboardKey.controlLeft, LogicalKeyboardKey.tab,
         shift: true);
     expect(c.view.visibleEntries.length, 2);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
@@ -682,6 +713,7 @@ void main() {
     await tester.pumpAndSettle();
     c.move(1);
     c.move(1);
+    c.move(1);
     await tester.pumpAndSettle();
     expect(calls, 1);
     expect(c.view.visibleCandidates.map((f) => f.id), [text.id, folder.id]);
@@ -831,7 +863,7 @@ void main() {
     });
   }
 
-  testWidgets('Scope keys cycle types and Actions preserve the fixed preview',
+  testWidgets('Scope keys cycle types and Actions preserve the file selection',
       (tester) async {
     final executed = <String>[];
     final queries = <(String, int, InputModeDto)>[];
@@ -864,10 +896,12 @@ void main() {
         shift: true);
     expect(c.files.filter, FileFilter.all);
     final filteredRevision = queries.last.$2;
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
 
     await chord(tester, LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.keyK);
     expect(find.byKey(const Key('file-preview-action')), findsNothing);
-    expect(find.text('Preview content'), findsOneWidget);
+    expect(find.text('Preview content'), findsNothing);
     expect(find.text('Copy Path'), findsOneWidget);
     expect(find.byKey(const Key('file-search-controls')), findsNothing);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
@@ -877,12 +911,12 @@ void main() {
     expect(c.files.filter, FileFilter.all); // The action layer has no type bar.
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(c.view.hasFilePreview, isTrue);
-    expect(find.text('Preview content'), findsOneWidget);
+    expect(c.view.isFileSearch, isTrue);
+    expect(find.text('Preview content'), findsNothing);
     expect(c.view.visibleEntries[c.view.selectedIndex].candidate!.id, text.id);
     expect(
         executed, [entry.id]); // Host preview does not execute or record Usage.
-    expect(c.view.hasFilePreview, isTrue);
+    expect(c.view.isFileSearch, isTrue);
     expect(c.view.input, 'report');
     expect(queries.last.$2, filteredRevision);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -947,7 +981,7 @@ void main() {
     await saveLauncherUi(tester, 'files-types');
   });
 
-  testWidgets('file Actions and Back retain the fixed target and parent',
+  testWidgets('file Actions and Back retain the selected target and parent',
       (tester) async {
     final queries = <(String, int, InputModeDto)>[];
     final c = await mount(tester, queries: queries);
@@ -956,17 +990,20 @@ void main() {
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
     final selected = c.view.visibleEntries[c.view.selectedIndex].candidate!.id;
-    expect(c.files.preview!.path, '/project/report-folder');
+    expect(
+        c.view.visibleEntries[c.view.selectedIndex].candidate!.id, folder.id);
     await chord(tester, LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.keyK);
-    expect(find.byKey(const Key('file-preview-pane')), findsOneWidget);
+    expect(find.byKey(const Key('file-preview-pane')), findsNothing);
     expect(find.byKey(const Key('file-preview-action')), findsNothing);
-    expect(c.files.preview!.path, '/project/report-folder');
+    expect(c.view.objectActionTitle, isNotNull);
     await tester.tap(find.byTooltip('Back to results'));
     await tester.pumpAndSettle();
     expect(c.view.visibleEntries[c.view.selectedIndex].candidate!.id, selected);
     expect(c.view.input, 'report');
-    expect(c.view.hasFilePreview, isTrue);
+    expect(c.view.isFileSearch, isTrue);
     await tester.tap(find.byTooltip('Back to results'));
     await tester.pumpAndSettle();
     expect(c.view.isFileSearch, isFalse);
@@ -1349,8 +1386,8 @@ void main() {
     expect(
         tester.widget<TextField>(find.byType(TextField)).style!.fontSize, 21);
     expect(tester.getSize(find.byKey(const Key('launcher-panel'))),
-        const Size(920, 600));
-    expect(find.byKey(const Key('file-preview-pane')), findsOneWidget);
+        const Size(648, 600));
+    expect(find.byKey(const Key('file-preview-pane')), findsNothing);
     await saveLauncherUi(tester, 'files-empty');
 
     await tester.enterText(
@@ -1365,16 +1402,15 @@ void main() {
         tester.getSize(find.byKey(const Key('launcher-panel'))).height;
 
     await openPreview(tester, capture: true);
-    expect(find.text('Preview content'), findsOneWidget);
+    expect(find.text('Preview content'), findsNothing);
     expect(find.text('12 B'), findsNothing);
-    await tester.tap(find.text('File information'));
-    await tester.pumpAndSettle();
-    expect(find.text('12 B'), findsOneWidget);
     await saveLauncherUi(tester, 'files-preview');
     expect(find.byTooltip('Close preview'), findsNothing);
     expect(tester.getSize(find.byKey(const Key('launcher-panel'))).height,
         compactHeight);
     await filterFiles(tester, FileFilter.folders);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
     expect(fileRow('report.txt'), findsNothing);
     expect(
         find.descendant(
@@ -1411,7 +1447,8 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.keyP);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
     await tester.pumpAndSettle();
-    expect(controller.view.hasFilePreview, isTrue);
+    expect(controller.view.isFileSearch, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
     expect(
@@ -1421,12 +1458,12 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await tester.pumpAndSettle();
     await openPreview(tester);
-    expect(find.text('Preview content'), findsOneWidget);
+    expect(find.text('Preview content'), findsNothing);
     await chord(tester, LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.keyK);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(controller.view.hasFilePreview, isTrue);
-    expect(controller.files.preview, isNotNull);
+    expect(controller.view.isFileSearch, isTrue);
+    expect(find.byKey(const Key('selected-row-preview')), findsOneWidget);
     expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
         'report');
     expect(tester.testTextInput.hasAnyClients, isTrue);
@@ -1435,7 +1472,7 @@ void main() {
   });
 
   testWidgets(
-      'empty guidance and preview remain usable with larger desktop text',
+      'single-column guidance and commands remain usable with larger desktop text',
       (tester) async {
     await mount(tester, textScale: 1.35);
     await openFiles(tester);
@@ -1447,7 +1484,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('file-preview-close')), findsNothing);
-    expect(find.byKey(const Key('file-preview-pane')), findsOneWidget);
+    expect(find.byKey(const Key('file-preview-pane')), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
     expect(find.text('Open').hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.tap(find.byKey(const Key('selected-row-actions')));
@@ -1458,52 +1497,34 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('fixed preview adapts to a smaller screen without overflow',
+  testWidgets(
+      'single-column file list adapts to a smaller screen without overflow',
       (tester) async {
     await mount(tester, textScale: 1.35);
     await tester.binding.setSurfaceSize(const Size(640, 480));
     await openFiles(tester);
     await tester.enterText(find.byType(TextField), 'report');
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('file-preview-pane')), findsOneWidget);
+    expect(find.byKey(const Key('file-preview-pane')), findsNothing);
     expect(tester.getSize(find.byKey(const Key('launcher-panel'))),
         const Size(640, 480));
-    expect(find.text('Preview content'), findsOneWidget);
+    expect(find.text('Preview content'), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
     expect(find.text('Open').hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('file window size is stable and restored when leaving the tool',
+  testWidgets('file window stays compact without a reserved preview column',
       (tester) async {
-    final messages = <Map>[];
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      if (call.method == 'show' || call.method == 'resize') {
-        messages.add(call.arguments as Map);
-      }
-      return null;
-    });
     final controller = await mount(tester);
     await openFiles(tester);
-    expect(messages.last['width'], 920);
-    expect(messages.last['height'], 600);
-    expect(find.byKey(const Key('file-preview-pane')), findsOneWidget);
-    final pane = tester.getRect(find.byKey(const Key('file-preview-pane')));
-    await tester.enterText(find.byType(TextField), 'report');
-    await tester.pumpAndSettle();
-    expect(tester.getRect(find.byKey(const Key('file-preview-pane'))), pane);
-    expect(find.byKey(const Key('file-preview-close')), findsNothing);
-    await chord(tester, LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.keyK);
     expect(tester.getSize(find.byKey(const Key('launcher-panel'))),
-        const Size(920, 600));
-    expect(find.byKey(const Key('file-preview-action')), findsNothing);
-    expect(find.byKey(const Key('file-preview-pane')), findsOneWidget);
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-    await tester.pumpAndSettle();
+        const Size(648, 600));
+    expect(find.byKey(const Key('file-preview-pane')), findsNothing);
     await controller.closeFileSearch();
     await tester.pumpAndSettle();
-    expect(messages.last['width'], 648);
     expect(find.byKey(const Key('file-preview-pane')), findsNothing);
-    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Actions and Esc preserve file query then return to parent query',
@@ -1515,6 +1536,8 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'report');
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('selected-row-actions')));
     await tester.pumpAndSettle();
@@ -1587,139 +1610,154 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-      'right preview follows keyboard selection and preserves the file workspace',
+  testWidgets('browsing files never loads content until preview is requested',
       (tester) async {
-    final queries = <(String, int, InputModeDto)>[];
     final loaded = <String>[];
     final hits = List.generate(60,
         (i) => row('file-$i', 'report-$i.txt', 'core.file.open', file: true));
-    final controller = await mount(tester, hits: hits, queries: queries,
-        load: (_, __, id) async {
+    await mount(tester, hits: hits, load: (_, __, id) async {
       loaded.add(id);
-      return FilePreviewDto(
-          path: '/project/$id.txt',
-          isDirectory: false,
-          sizeBytes: BigInt.from(1000),
-          text: List.generate(80, (i) => '$id line $i').join('\n'));
+      return preview('/project/$id.txt');
     });
     await openFiles(tester);
     await tester.enterText(find.byType(TextField), 'report');
     await tester.pumpAndSettle();
     for (var i = 0; i < 35; i++) {
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-      await tester.pumpAndSettle();
+      await tester.pump();
     }
-    final list = tester.widget<ListView>(find.byKey(const Key('action-list')));
-    final offset = list.controller!.offset;
-    expect(offset, greaterThan(1000));
-    final queryCount = queries.length;
-
-    await openPreview(tester);
-    expect(controller.view.selectedIndex, 35);
-    expect(list.controller!.offset, closeTo(offset, .01));
-    expect(loaded.last, 'file-35');
-    expect(find.text('/project/file-35.txt'), findsOneWidget);
-    expect(
-        tester.getTopLeft(find.byKey(const Key('file-preview'))).dx,
-        greaterThan(
-            tester.getTopLeft(find.byKey(const Key('action-list'))).dx));
-
-    final content = find.byKey(const Key('file-preview'));
-    await tester.drag(content, const Offset(0, -350));
     await tester.pumpAndSettle();
-    ScrollPosition previewPosition() => tester
-        .state<ScrollableState>(find
-            .descendant(
-                of: find.byKey(const Key('file-preview')),
-                matching: find.byType(Scrollable))
-            .first)
-        .position;
-    expect(previewPosition().pixels, greaterThan(0));
+    expect(loaded, isEmpty);
+    expect(find.byKey(const Key('file-preview-pane')), findsNothing);
+  });
+
+  testWidgets(
+      'file results wait for selection and first Down previews first row',
+      (tester) async {
+    final executed = <String>[];
+    final c = await mount(tester, executed: executed);
+    await openFiles(tester);
+    await tester.enterText(find.byType(TextField), 'report');
+    await tester.pumpAndSettle();
+    expect(c.view.selectedIndex, -1);
+    expect(c.view.selectedEntry, isNull);
+    expect(find.byKey(const Key('selected-row-preview')), findsNothing);
+    await chord(tester, LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.keyY);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await chord(tester, LogicalKeyboardKey.metaLeft, LogicalKeyboardKey.keyK);
+    expect(executed, [entry.id]);
+    expect(c.view.objectActionTitle, isNull);
+    expect(previewCalls.where((call) => call.method == 'show'), isEmpty);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
-    expect(controller.view.selectedIndex, 36);
-    expect(loaded.last, 'file-36');
-    expect(find.text('/project/file-36.txt'), findsOneWidget);
-    expect(find.text('/project/file-35.txt'), findsNothing);
-    expect(previewPosition().pixels, 0);
-    final input = tester.widget<TextField>(find.byType(TextField)).controller!;
-    // Escape from selectable preview content follows the main input rule:
-    // clear the query, keep the fixed pane, then return to the parent tool.
-    tester
-        .widget<EditableText>(find
-            .descendant(
-                of: find.byKey(const Key('file-preview')),
-                matching: find.byType(EditableText))
-            .last)
-        .focusNode
-        .requestFocus();
-    await tester.pump();
+    expect(c.view.selectedEntry?.candidate?.id, text.id);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+    expect(previewCalls.last.arguments['paths'], ['/project/report.txt']);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(input.text, '');
-    expect(find.byKey(const Key('file-preview-pane')), findsOneWidget);
-    expect(find.byKey(const Key('file-preview')), findsNothing);
-    expect(queries.length, queryCount + 1);
-    expect(tester.testTextInput.hasAnyClients, isTrue);
-    tester.testTextInput.updateEditingValue(const TextEditingValue(
-        text: 'report next', selection: TextSelection.collapsed(offset: 11)));
+    expect(c.view.selectedEntry?.candidate?.id, text.id);
+    expect(c.view.input, 'report');
+
+    await filterFiles(tester, FileFilter.files);
+    expect(c.view.selectedEntry, isNull);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
     await tester.pumpAndSettle();
-    expect(queries.last.$1, 'report next');
+    expect(c.view.selectedEntry?.candidate?.id, text.id);
+    await tester.enterText(find.byType(TextField), 'next');
+    await tester.pumpAndSettle();
+    expect(c.view.selectedEntry, isNull);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets(
-      'clearing query cancels stale preview while the fixed pane remains',
+      'editing closes native preview and a late resource cannot reopen it',
       (tester) async {
-    final pending = Completer<FilePreviewDto>();
-    var requests = 0;
-    final controller = await mount(tester, load: (_, __, id) {
-      requests++;
-      return requests == 1
-          ? pending.future
-          : Future.value(preview('/project/fresh.txt'));
+    final pending = Completer<NativePreviewDto>();
+    var reads = 0;
+    final c = await mount(tester, load: (_, __, id) {
+      reads++;
+      return pending.future;
     });
     await openFiles(tester);
     await tester.enterText(find.byType(TextField), 'report');
-    await tester.pump(const Duration(milliseconds: 130));
-    expect(requests, 1);
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    pending.complete(preview('/project/stale.txt'));
+    expect(reads, 0);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
-    expect(controller.files.preview, isNull);
-    expect(controller.view.input, '');
-    expect(find.byKey(const Key('file-preview-close')), findsNothing);
+    await tester.tap(find.byKey(const Key('selected-row-preview')));
+    await tester.pump();
+    expect(reads, 1);
     await tester.enterText(find.byType(TextField), 'report next');
     await tester.pumpAndSettle();
-    expect(requests, 2);
-    expect(find.text('/project/fresh.txt'), findsOneWidget);
-    expect(find.text('/project/stale.txt'), findsNothing);
+    pending.complete(preview('/stale'));
+    await tester.pumpAndSettle();
+    expect(previewCalls.where((call) => call.method == 'show'), isEmpty);
+    expect(c.view.input, 'report next');
+  });
+
+  testWidgets('clicking search closes preview and disarms the Space shortcut',
+      (tester) async {
+    await mount(tester);
+    await openFiles(tester);
+    await tester.enterText(find.byType(TextField), 'report');
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('selected-row-preview')));
+    await tester.pumpAndSettle();
+    expect(previewCalls.last.method, 'show');
+    await tester.tap(find.byType(TextField));
+    await tester.pumpAndSettle();
+    expect(previewCalls.last.method, 'close');
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+    expect(previewCalls.where((call) => call.method == 'show'), hasLength(1));
+    expect(previewCalls.last.method, 'close');
+  });
+
+  testWidgets('native preview failure uses the existing inline notice',
+      (tester) async {
+    await mount(tester,
+        load: (_, __, ___) async => throw StateError('unavailable'));
+    await openFiles(tester);
+    await tester.enterText(find.byType(TextField), 'report');
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('selected-row-preview')));
+    await tester.pumpAndSettle();
+    expect(find.text('Preview unavailable'), findsOneWidget);
     expect(tester.takeException(), isNull);
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        'report');
   });
 
   testWidgets(
-      'late preview cannot replace a newer selection or survive closing',
+      'native preview follows current file selection and closes with the page',
       (tester) async {
-    final first = Completer<FilePreviewDto>(),
-        second = Completer<FilePreviewDto>();
-    final controller = await mount(tester,
-        load: (_, __, id) => id == text.id ? first.future : second.future);
+    final semantics = tester.ensureSemantics();
+    final c = await mount(tester);
     await openFiles(tester);
     await tester.enterText(find.byType(TextField), 'report');
-    await tester.pump(const Duration(milliseconds: 130));
-    controller.move(1);
-    await tester.pump(const Duration(milliseconds: 130));
-    second.complete(preview('/new', directory: true));
     await tester.pumpAndSettle();
-    first.complete(preview('/old'));
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
-    expect(find.text('/new'), findsOneWidget);
-    expect(find.text('/old'), findsNothing);
-    await controller.closeFileSearch();
+    expect(
+        tester
+            .getSemantics(find.byKey(const Key('selected-row-preview')))
+            .label,
+        contains('Preview'));
+    await tester.tap(find.byKey(const Key('selected-row-preview')));
     await tester.pumpAndSettle();
-    expect(controller.files.preview, isNull);
+    expect(previewCalls.last.method, 'show');
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    expect(previewCalls.last.arguments['paths'], ['/project/report-folder']);
+    await c.closeFileSearch();
+    await tester.pumpAndSettle();
+    expect(previewCalls.last.method, 'close');
+    semantics.dispose();
   });
 }

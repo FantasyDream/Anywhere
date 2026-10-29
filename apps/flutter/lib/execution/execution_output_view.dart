@@ -87,6 +87,7 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
         if (mounted) setState(() => _copied = false);
       });
     } catch (_) {
+      if (!mounted) return;
       widget.onError(context.l10n.outputCouldNotBeCopiedTryAgain);
     }
   }

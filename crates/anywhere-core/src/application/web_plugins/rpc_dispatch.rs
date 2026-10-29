@@ -78,11 +78,16 @@ impl Application {
                 });
             return web.finish_call(binding, &source, &request, result);
         }
-        let permit = tokio::time::timeout_at(
-            request.control.deadline,
-            self.web_rpc_workers.clone().acquire_owned(),
-        )
-        .await;
+        let permit = tokio::select! {
+            _ = request.control.cancelled() => {
+                return self.finish_web_reply(binding, &source, &request,
+                    Err(error(WebErrorCode::Cancelled)));
+            }
+            permit = tokio::time::timeout_at(
+                request.control.deadline,
+                self.web_rpc_workers.clone().acquire_owned(),
+            ) => permit,
+        };
         let permit = match permit {
             Ok(Ok(p)) => p,
             _ => {

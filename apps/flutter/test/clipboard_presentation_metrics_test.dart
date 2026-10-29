@@ -32,14 +32,15 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('history measures the current list frame before preview finishes',
+  testWidgets(
+      'history measures the current list frame without preparing preview',
       (tester) async {
     final backend = History();
     final session = ClipboardHistorySession(backend);
     addTearDown(session.dispose);
     await mount(tester, session);
     final result = Completer<ClipboardHistoryDto>();
-    final preview = Completer<ClipboardDetailDto?>();
+    final preview = Completer<NativePreviewDto>();
     backend.searchOverride = (_) => result.future;
     backend.detailOverride = (_) => preview.future;
     session.query.text = 'private query is not exported';
@@ -51,7 +52,7 @@ void main() {
         recording: false, available: true, items: [item('3')]));
     await tester.pump();
     await tester.pump();
-    expect(session.preview, isNull);
+    expect(session.preview.isOpen, isFalse);
     expect(samples, hasLength(1));
     expect(samples.single['operation'], 'clipboard_query');
     expect(samples.single['rows'], 1);
@@ -89,7 +90,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 120));
     await tester.pump();
     expect(samples, hasLength(1));
-    expect(session.selected?.id, 'new');
+    expect(session.items.single.id, 'new');
+    expect(session.selected, isNull);
     await tester.pumpWidget(const SizedBox());
   });
 

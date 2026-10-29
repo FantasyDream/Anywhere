@@ -192,3 +192,5 @@ mod tests {
         assert!(position("core.url") < position("core.path"));
     }
 }
+
+pub mod preview;

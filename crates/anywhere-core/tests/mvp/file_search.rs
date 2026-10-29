@@ -380,18 +380,13 @@ async fn preview_requires_a_current_file_row_and_never_executes_or_records_usage
             .all(|a| a.kind == CandidateKind::Action && a.id != row));
         let current = app.latest_state(id).unwrap();
         assert_eq!(current.candidate(&row).unwrap().kind, CandidateKind::File);
-        assert_eq!(
-            app.preview_file(id, 1, row.clone())
-                .await
-                .unwrap()
-                .text
-                .as_deref(),
-            Some("hello")
-        );
+        let resource = app.preview_file(id, 1, row.clone()).await.unwrap();
+        assert_eq!(resource.paths, [path.to_string_lossy().into_owned()]);
+        app.release_preview(&resource.id).unwrap();
     }
-    let preview = app.preview_file(id, 1, row.clone()).await.unwrap();
-    assert_eq!(preview.text.as_deref(), Some("hello"));
-    assert_eq!(preview.path, path.to_string_lossy());
+    let resource = app.preview_file(id, 1, row.clone()).await.unwrap();
+    assert_eq!(resource.paths, [path.to_string_lossy().into_owned()]);
+    app.release_preview(&resource.id).unwrap();
     assert!(app.preview_file(id, 1, "forged-file".into()).await.is_err());
     assert!(platform.calls.lock().unwrap().is_empty());
     assert!(history

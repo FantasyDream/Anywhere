@@ -252,3 +252,72 @@ fn reinstall_cannot_silently_reuse_damaged_extracted_assets() {
         b"body"
     );
 }
+
+#[test]
+fn corrupt_disabled_package_is_isolated_and_can_be_removed_after_restart() {
+    let root = tempfile::tempdir().unwrap();
+    let app = app();
+    let location = root.path().join("store");
+    let file = root.path().join("import.awplugin");
+    let mut store = WebPackageStore::open(location.clone(), WebPlatform::Macos, &app).unwrap();
+    let bad = package_named(
+        "dev.example.bad",
+        serde_json::json!([]),
+        serde_json::json!([]),
+        "bad",
+    );
+    let good = package_named(
+        "dev.example.good",
+        serde_json::json!([]),
+        serde_json::json!([]),
+        "good",
+    );
+    for package in [&bad, &good] {
+        archive(package, &file);
+        let review = store.inspect(&file).unwrap();
+        store.approve(&app, &review.token).unwrap();
+    }
+    store.set_enabled(&app, "dev.example.bad", false).unwrap();
+    fs::write(
+        location.join(bad.digest()).join("package.awplugin"),
+        b"corrupt",
+    )
+    .unwrap();
+    drop(store);
+    let mut store = WebPackageStore::open(location, WebPlatform::Macos, &app).unwrap();
+    assert_eq!(store.statuses().iter().filter(|s| s.available).count(), 1);
+    assert!(store.resource(good.digest(), "index.html").is_ok());
+    assert!(store.set_enabled(&app, "dev.example.bad", true).is_err());
+    store.set_enabled(&app, "dev.example.good", false).unwrap();
+    store.uninstall(&app, "dev.example.bad").unwrap();
+    assert_eq!(store.statuses().len(), 1);
+}
+
+#[test]
+fn corrupt_enabled_package_can_be_disabled_or_rolled_back() {
+    let root = tempfile::tempdir().unwrap();
+    let app = app();
+    let location = root.path().join("store");
+    let file = root.path().join("import.awplugin");
+    let mut store = WebPackageStore::open(location.clone(), WebPlatform::Macos, &app).unwrap();
+    let old = package(serde_json::json!([]), serde_json::json!([]), "old");
+    let new = package(serde_json::json!([]), serde_json::json!([]), "new");
+    for package in [&old, &new] {
+        archive(package, &file);
+        let review = store.inspect(&file).unwrap();
+        store.approve(&app, &review.token).unwrap();
+    }
+    fs::write(
+        location.join(new.digest()).join("package.awplugin"),
+        b"corrupt",
+    )
+    .unwrap();
+    drop(store);
+    let mut store = WebPackageStore::open(location, WebPlatform::Macos, &app).unwrap();
+    assert!(!store.statuses()[0].available);
+    assert!(store.resource(new.digest(), "index.html").is_err());
+    store.set_enabled(&app, "dev.example.tool", false).unwrap();
+    store.rollback(&app, "dev.example.tool").unwrap();
+    store.set_enabled(&app, "dev.example.tool", true).unwrap();
+    assert_eq!(store.resource(old.digest(), "index.html").unwrap(), b"old");
+}

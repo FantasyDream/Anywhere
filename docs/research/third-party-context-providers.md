@@ -11,7 +11,7 @@
 - 宿主负责身份、结果限额、取消和发布前的会话 / 目录版本校验。UI 与后台共享 SDK 类型和能力代理，不直接通信。
 - JSON Workspace 已使用自有 Context 及后台复制命令；原生验收范围见 [Build 24](../benchmarks/acceptance-fixes-v0.14-build24-2026-10-27.json)。
 
-公开接口和预算以 [插件开发指南](../plugin-development.md)为准，生命周期和信任边界见 [Web 插件架构](../web-plugin-design.md)，代码地图见 [运行时重构](../plugin-runtime-refactor.md)。
+公开接口和预算以 [插件开发指南](../plugin-development.md)为准，生命周期和信任边界见 [Web 插件架构](../web-plugin-design.md)，代码地图见 [架构](../architecture.md)。
 
 ## 尚未实现
 

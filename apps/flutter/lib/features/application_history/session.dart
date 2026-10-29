@@ -37,7 +37,7 @@ class AppHistorySession extends ToolPageSession {
   Timer? _debounce;
   bool _visible = true, _running = false, _again = false, _composing = false;
   bool _resetSelection = true;
-  Future<void> _cancellation = Future.value();
+  Future<void>? _cancellation;
   AppHistoryItemDto? get selected =>
       items.isEmpty ? null : items[selectedIndex];
   bool get interactive =>
@@ -55,10 +55,12 @@ class AppHistorySession extends ToolPageSession {
   }
 
   void _cancelRead() {
-    // Every earlier cancel must finish before the next read. Awaiting only the
-    // latest Future permits an older native callback to cancel that new read.
-    _cancellation =
-        _cancellation.then((_) => backend.cancel()).catchError((Object _) {});
+    // No read starts until cancellation finishes. All edits during that wait
+    // revoke the same read, so they can share the Future instead of queueing
+    // native calls and closures for every keystroke.
+    _cancellation ??= Future<void>.sync(backend.cancel)
+        .catchError((Object _) {})
+        .whenComplete(() => _cancellation = null);
   }
 
   void _changed() {
@@ -305,6 +307,10 @@ class AppHistorySession extends ToolPageSession {
     query.dispose();
     focus.dispose();
     scroll.dispose();
+    items = const [];
+    objectActions = const [];
+    notice = null;
+    selectedIndex = 0;
     super.dispose();
   }
 }

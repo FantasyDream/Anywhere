@@ -10,7 +10,7 @@ impl Application {
         session_id: SessionId,
         revision: Revision,
         candidate_id: CandidateId,
-    ) -> Result<crate::features::filesystem::preview::FilePreview> {
+    ) -> Result<crate::features::preview::PreviewResource> {
         let epoch = self.resolver.execution_epoch.clone();
         let expected_epoch = epoch.load(Ordering::Acquire);
         let ticket = self.resolver.execution(session_id, revision);
@@ -50,6 +50,7 @@ impl Application {
                 .context("preview target missing")?
                 .clone()
         };
+        let previews = self.previews.clone();
         let permit = tokio::select! {
             permit = tokio::time::timeout(Duration::from_secs(2), self.preview_worker.clone().acquire_owned()) => permit.context("preview is busy")??,
             _ = ticket.superseded() => bail!("preview expired"),
@@ -69,14 +70,68 @@ impl Application {
                 if !is_current() {
                     bail!("preview expired");
                 }
-                let preview = crate::features::filesystem::preview::read(&context)?;
+                crate::features::filesystem::search::validate_target(&context)?;
+                let path = context
+                    .value
+                    .path()
+                    .context("preview target missing")?
+                    .to_path_buf();
                 if !is_current() {
                     bail!("preview expired");
                 }
-                Ok(preview)
+                let mut previews = previews
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("preview service unavailable"))?;
+                let resource = previews.file(path)?;
+                if !is_current() {
+                    previews.release(&resource.id);
+                    bail!("preview expired");
+                }
+                Ok(resource)
             }),
         )
         .await
         .context("preview timed out")??
+    }
+}
+
+impl Application {
+    pub fn preview_clipboard(
+        &self,
+        history: &crate::features::clipboard::service::HistoryService,
+        id: i64,
+    ) -> Result<crate::features::preview::PreviewResource> {
+        let mut prepared = None;
+        let result = history.inspect_payload(id, |item, payload| {
+            let resource = self
+                .previews
+                .lock()
+                .map_err(|_| anyhow::anyhow!("preview service unavailable"))?
+                .clipboard(&payload, item.summary)?;
+            prepared = Some(resource.id.clone());
+            Ok(resource)
+        });
+        match result {
+            Ok(Some(resource)) => Ok(resource),
+            result => {
+                if let Some(id) = prepared {
+                    self.release_preview(&id)?;
+                }
+                result?.context("clipboard entry expired")
+            }
+        }
+    }
+    pub fn retain_preview(&self, id: &str) -> Result<()> {
+        self.previews
+            .lock()
+            .map_err(|_| anyhow::anyhow!("preview service unavailable"))?
+            .retain(id)
+    }
+    pub fn release_preview(&self, id: &str) -> Result<()> {
+        self.previews
+            .lock()
+            .map_err(|_| anyhow::anyhow!("preview service unavailable"))?
+            .release(id);
+        Ok(())
     }
 }

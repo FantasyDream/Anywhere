@@ -1,0 +1,285 @@
+{
+  "date": "2026-10-28",
+  "environment": {
+    "os": "27.0.1",
+    "arch": "aarch64",
+    "profile": "release",
+    "os_cache_cleared": false
+  },
+  "method": "Three paired process runs, alternating order; each fixture 10 warmups + 100 measured samples; summaries use median of per-run percentiles. No concurrent build or test intentionally started during measurement.",
+  "scope": "Rust synthetic matching and isolated SQLite duplicate capture only; excludes native APIs, Bridge, Flutter, GUI latency and process memory.",
+  "baseline": "Current dirty workspace immediately before these two optimizations; baseline is identified by retained binary hash, not a clean Git commit.",
+  "binaries": {
+    "before": "2931bad728b9e4e1ff8ad8810d79c9c4353d2e7bfd3a5a78cb44773db5253e72",
+    "after": "93b3f42c595b99f5069664add4a2640d445192ad45a9776c68ee198980d95012"
+  },
+  "optimized_sources": {
+    "crates/anywhere-core/src/core/action/matcher.rs": "069b2dc69693b962fab0d21a9271f5d2911dd7a97f348c811dd99c5e6ba14726",
+    "crates/anywhere-core/src/persistence/clipboard.rs": "c4d502e1b0b465e54329eeb4e7b4f083562a40f9b0cff1102e6f065e307decd3",
+    "crates/anywhere-core/examples/hot_path_measure.rs": "293c68e2d9ccae2240f3bd7cb6342acd4237668a6c290f48c9676c21c71ec8d0"
+  },
+  "summary": {
+    "duplicate_clipboard": {
+      "before_p50_us": 10708.292,
+      "after_p50_us": 3957.042,
+      "before_p95_us": 10949.417,
+      "after_p95_us": 4317.25,
+      "p50_reduction_percent": 63.05
+    },
+    "example operation": {
+      "before_p50_us": 1328.5,
+      "after_p50_us": 820.917,
+      "before_p95_us": 1361.25,
+      "after_p95_us": 917.666,
+      "p50_reduction_percent": 38.21
+    },
+    "operation": {
+      "before_p50_us": 838.459,
+      "after_p50_us": 769.125,
+      "before_p95_us": 881.834,
+      "after_p95_us": 825.042,
+      "p50_reduction_percent": 8.27
+    },
+    "missing": {
+      "before_p50_us": 437.666,
+      "after_p50_us": 104.375,
+      "before_p95_us": 454.25,
+      "after_p95_us": 110.5,
+      "p50_reduction_percent": 76.15
+    }
+  },
+  "runs": {
+    "before": [
+      {
+        "arch": "aarch64",
+        "clipboard_bytes": 2097152,
+        "duplicate_clipboard": {
+          "p50_us": 10731.875,
+          "p95_us": 10949.417,
+          "samples": 100
+        },
+        "matching": [
+          {
+            "query": "example operation",
+            "timing": {
+              "p50_us": 1337.417,
+              "p95_us": 1648.25,
+              "samples": 100
+            }
+          },
+          {
+            "query": "operation",
+            "timing": {
+              "p50_us": 838.459,
+              "p95_us": 881.834,
+              "samples": 100
+            }
+          },
+          {
+            "query": "missing",
+            "timing": {
+              "p50_us": 440.583,
+              "p95_us": 454.25,
+              "samples": 100
+            }
+          }
+        ],
+        "menu_actions": 1000,
+        "os": "macos",
+        "scope": "Release Rust matcher and isolated SQLite duplicate capture; excludes OS, Bridge, Flutter, GPU and process memory"
+      },
+      {
+        "arch": "aarch64",
+        "clipboard_bytes": 2097152,
+        "duplicate_clipboard": {
+          "p50_us": 10708.292,
+          "p95_us": 10970.75,
+          "samples": 100
+        },
+        "matching": [
+          {
+            "query": "example operation",
+            "timing": {
+              "p50_us": 1328.5,
+              "p95_us": 1361.25,
+              "samples": 100
+            }
+          },
+          {
+            "query": "operation",
+            "timing": {
+              "p50_us": 856.041,
+              "p95_us": 882.75,
+              "samples": 100
+            }
+          },
+          {
+            "query": "missing",
+            "timing": {
+              "p50_us": 437.666,
+              "p95_us": 460.25,
+              "samples": 100
+            }
+          }
+        ],
+        "menu_actions": 1000,
+        "os": "macos",
+        "scope": "Release Rust matcher and isolated SQLite duplicate capture; excludes OS, Bridge, Flutter, GPU and process memory"
+      },
+      {
+        "arch": "aarch64",
+        "clipboard_bytes": 2097152,
+        "duplicate_clipboard": {
+          "p50_us": 10685.291,
+          "p95_us": 10916.917,
+          "samples": 100
+        },
+        "matching": [
+          {
+            "query": "example operation",
+            "timing": {
+              "p50_us": 1305.083,
+              "p95_us": 1346.833,
+              "samples": 100
+            }
+          },
+          {
+            "query": "operation",
+            "timing": {
+              "p50_us": 830.0,
+              "p95_us": 855.834,
+              "samples": 100
+            }
+          },
+          {
+            "query": "missing",
+            "timing": {
+              "p50_us": 423.625,
+              "p95_us": 454.0,
+              "samples": 100
+            }
+          }
+        ],
+        "menu_actions": 1000,
+        "os": "macos",
+        "scope": "Release Rust matcher and isolated SQLite duplicate capture; excludes OS, Bridge, Flutter, GPU and process memory"
+      }
+    ],
+    "after": [
+      {
+        "arch": "aarch64",
+        "clipboard_bytes": 2097152,
+        "duplicate_clipboard": {
+          "p50_us": 3957.042,
+          "p95_us": 6364.375,
+          "samples": 100
+        },
+        "matching": [
+          {
+            "query": "example operation",
+            "timing": {
+              "p50_us": 852.417,
+              "p95_us": 1345.917,
+              "samples": 100
+            }
+          },
+          {
+            "query": "operation",
+            "timing": {
+              "p50_us": 769.125,
+              "p95_us": 825.042,
+              "samples": 100
+            }
+          },
+          {
+            "query": "missing",
+            "timing": {
+              "p50_us": 105.375,
+              "p95_us": 114.666,
+              "samples": 100
+            }
+          }
+        ],
+        "menu_actions": 1000,
+        "os": "macos",
+        "scope": "Release Rust matcher and isolated SQLite duplicate capture; excludes OS, Bridge, Flutter, GPU and process memory"
+      },
+      {
+        "arch": "aarch64",
+        "clipboard_bytes": 2097152,
+        "duplicate_clipboard": {
+          "p50_us": 3952.25,
+          "p95_us": 4144.833,
+          "samples": 100
+        },
+        "matching": [
+          {
+            "query": "example operation",
+            "timing": {
+              "p50_us": 795.209,
+              "p95_us": 886.125,
+              "samples": 100
+            }
+          },
+          {
+            "query": "operation",
+            "timing": {
+              "p50_us": 762.5,
+              "p95_us": 861.5,
+              "samples": 100
+            }
+          },
+          {
+            "query": "missing",
+            "timing": {
+              "p50_us": 102.042,
+              "p95_us": 110.5,
+              "samples": 100
+            }
+          }
+        ],
+        "menu_actions": 1000,
+        "os": "macos",
+        "scope": "Release Rust matcher and isolated SQLite duplicate capture; excludes OS, Bridge, Flutter, GPU and process memory"
+      },
+      {
+        "arch": "aarch64",
+        "clipboard_bytes": 2097152,
+        "duplicate_clipboard": {
+          "p50_us": 3982.166,
+          "p95_us": 4317.25,
+          "samples": 100
+        },
+        "matching": [
+          {
+            "query": "example operation",
+            "timing": {
+              "p50_us": 820.917,
+              "p95_us": 917.666,
+              "samples": 100
+            }
+          },
+          {
+            "query": "operation",
+            "timing": {
+              "p50_us": 786.75,
+              "p95_us": 815.791,
+              "samples": 100
+            }
+          },
+          {
+            "query": "missing",
+            "timing": {
+              "p50_us": 104.375,
+              "p95_us": 107.667,
+              "samples": 100
+            }
+          }
+        ],
+        "menu_actions": 1000,
+        "os": "macos",
+        "scope": "Release Rust matcher and isolated SQLite duplicate capture; excludes OS, Bridge, Flutter, GPU and process memory"
+      }
+    ]
+  }
+}

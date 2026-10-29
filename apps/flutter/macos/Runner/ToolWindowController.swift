@@ -7,6 +7,7 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
   private(set) var window: NSWindow?
   private(set) var controller: FlutterViewController?
   private var channel: FlutterMethodChannel?
+  private var previewHost: NativePreviewHost?
   private var ready = false
   private var localeHost: LocaleHost?
   private let entrypoint: String
@@ -125,6 +126,10 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
         FlutterEngineLifecycle.detach(view)
         return false
       }
+      previewHost = NativePreviewHost(
+        messenger: view.engine.binaryMessenger,
+        owner: { [weak self] in self?.window }
+      )
       FlutterAccessibilityState.shared.synchronizeNewEngine()
       let size = ToolWindowPlacement.preferredSize
       let panel = NSWindow(
@@ -181,7 +186,10 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
   private func publishVisibility() {
     if ready { channel?.invokeMethod("visibility", arguments: isVisible) }
   }
-  func windowDidMiniaturize(_ notification: Notification) { publishVisibility() }
+  func windowDidMiniaturize(_ notification: Notification) {
+    previewHost?.close()
+    publishVisibility()
+  }
   func windowDidDeminiaturize(_ notification: Notification) { publishVisibility() }
   func applicationVisibilityChanged() { publishVisibility() }
 
@@ -197,6 +205,8 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
 
   func windowWillClose(_ notification: Notification) {
     guard notification.object as? NSWindow === window else { return }
+    previewHost?.close()
+    previewHost = nil
     channel?.invokeMethod("visibility", arguments: false)
     channel?.setMethodCallHandler(nil)
     localeHost = nil

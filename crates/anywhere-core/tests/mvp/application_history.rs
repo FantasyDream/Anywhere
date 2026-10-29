@@ -313,7 +313,7 @@ async fn history_objects_reuse_actions_without_leaking_targets_to_usage_or_accep
         .unwrap();
     let state = settled(&app, app.activate().await.unwrap().unwrap().session_id, 0).await;
     let owner = history.open_session().unwrap();
-    let item = history.search(owner, "", "idea").unwrap().items.remove(0);
+    let item = history.search(owner, "", "idea").unwrap().items[0].clone();
     let actions = app
         .history_object_actions(
             history.clone(),
@@ -433,7 +433,7 @@ async fn history_objects_reuse_actions_without_leaking_targets_to_usage_or_accep
     history
         .configure_mode("vscode", SourceMode::Custom, code_source.to_str())
         .unwrap();
-    let file = history.search(owner, "", "vscode").unwrap().items.remove(0);
+    let file = history.search(owner, "", "vscode").unwrap().items[0].clone();
     let actions = app
         .history_object_actions(history.clone(), state.session_id, state.revision, file.id)
         .await

@@ -10,11 +10,26 @@ use std::{
 use tokio::time::{Duration, Instant};
 
 pub(super) struct RequestControl {
-    pub cancelled: AtomicBool,
+    cancelled: AtomicBool,
+    cancellation: tokio::sync::Notify,
     pub running: AtomicBool,
     pub deadline: Instant,
 }
 impl RequestControl {
+    fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Release);
+        self.cancellation.notify_waiters();
+    }
+    pub async fn cancelled(&self) {
+        let notified = self.cancellation.notified();
+        tokio::pin!(notified);
+        // Register before checking the flag so cancellation between the check
+        // and the await cannot be lost, including on a different runtime thread.
+        notified.as_mut().enable();
+        if !self.cancelled.load(Ordering::Acquire) {
+            notified.await;
+        }
+    }
     pub fn check(&self) -> WebResult<()> {
         if self.cancelled.load(Ordering::Acquire) {
             return Err(WebError::new(WebErrorCode::Cancelled));
@@ -69,7 +84,7 @@ pub(super) struct RpcState {
 impl Drop for RpcState {
     fn drop(&mut self) {
         for request in self.pending.values() {
-            request.cancelled.store(true, Ordering::Release);
+            request.cancel();
         }
     }
 }
@@ -96,6 +111,7 @@ impl RpcState {
         self.seen.insert(id.into());
         let control = Arc::new(RequestControl {
             cancelled: AtomicBool::new(false),
+            cancellation: tokio::sync::Notify::new(),
             running: AtomicBool::new(false),
             deadline: Instant::now() + Duration::from_millis(REQUEST_TIMEOUT_MS),
         });
@@ -109,7 +125,7 @@ impl RpcState {
     }
     pub fn cancel(&mut self, id: &str) -> bool {
         if let Some(request) = self.pending.get(id) {
-            request.cancelled.store(true, Ordering::Release);
+            request.cancel();
             return true;
         }
         false

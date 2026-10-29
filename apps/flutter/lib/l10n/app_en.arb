@@ -267,15 +267,10 @@
   "copyWithReturnHint": "Copy · ↵",
   "deleteEntry": "Delete Entry",
   "previewUnavailable": "Preview unavailable",
-  "loadingPreview": "Loading preview…",
-  "selectEntryToPreview": "Select an entry to preview",
   "noMatchingEntries": "No matching entries",
   "noSavedEntries": "No saved entries",
   "newlyCopiedItemsWillAppearHereRefresh": "Newly copied items will appear here.\nRefresh to see new copies.",
   "manageRecordingInSettingsClipboard": "Manage recording in Settings → Clipboard.",
-  "imagePreviewUnavailable": "Image preview unavailable",
-  "previewUnavailableTheOriginalImageCanStill": "Preview unavailable. The original image can still be copied.",
-  "previewIsNotAvailableForThisFormat": "Preview is not available for this format. Copy restores its saved data.",
   "theWindowCouldNotBeClosedUse": "The window could not be closed. Use the window close button.",
   "backToListEsc": "Back to list · Esc",
   "clipboardAlwaysOnTop": "Clipboard · Always on top",
@@ -713,21 +708,12 @@
   "shelfDeleteTitle": "Remove this entry?",
   "shelfDeleteDescription": "Only this saved history entry will be removed.",
   "hidePreview": "Hide preview",
-  "shelfPreviewScrollHint": "{shortcut} Scroll preview",
-  "@shelfPreviewScrollHint": {
-    "placeholders": {
-      "shortcut": {
-        "type": "String"
-      }
-    }
-  },
   "details": "Details",
   "sourceStatus": "Source status",
   "searchRules": "Search rules",
   "searchHelp": "How search works",
   "toolOptions": "Tool options",
   "keyboardHelp": "Keyboard shortcuts",
-  "fileInformation": "File information",
   "historyFeatureDisabled": "Clipboard History is disabled in Features.",
   "historyStorageUnavailable": "Clipboard history storage is unavailable. Restart after repairing the data file.",
   "historyAccessRequired": "Allow clipboard access in system settings to record new copies. Background capture will not prompt.",
@@ -735,32 +721,6 @@
   "historyReadFailed": "A clipboard item could not be read. Existing history is still available.",
   "historyCaptureUnavailable": "Clipboard history capture is unavailable. Existing history is still available.",
   "historyMonitoringUnavailable": "Clipboard monitoring is unavailable on this platform.",
-  "filePreviewChanged": "Preview unavailable. Search again if the file has changed.",
-  "filePreviewUnsupported": "Text preview is unavailable for this file type",
-  "filePreviewTruncated": "Showing the first {size}",
-  "@filePreviewTruncated": {
-    "placeholders": {
-      "size": {
-        "type": "String"
-      }
-    }
-  },
-  "filePreviewEncodingGuessed": "Encoding guessed as {encoding}",
-  "@filePreviewEncodingGuessed": {
-    "placeholders": {
-      "encoding": {
-        "type": "String"
-      }
-    }
-  },
-  "filePreviewDecoded": "Decoded as {encoding}",
-  "@filePreviewDecoded": {
-    "placeholders": {
-      "encoding": {
-        "type": "String"
-      }
-    }
-  },
   "shelfReturnFailed": "Copied. Could not return to the app. Switch to it to paste.",
   "shelfReturnUnavailable": "Copied. The destination app is no longer available. Switch to an app to paste.",
   "historyRecordingPaused": "History recording is paused. Existing history is still available.",
@@ -838,5 +798,6 @@
   "appHistoryOpenAdapters": "Open adapters folder",
   "permissionInputRead": "Read Launcher search text",
   "permissionInputWrite": "Change Launcher search text",
-  "permissionFrontmostApp": "Read the currently active application"
+  "permissionFrontmostApp": "Read the currently active application",
+  "webPackageDamaged": "Package files are unavailable or damaged. Restore an approved version or uninstall and import again."
 }

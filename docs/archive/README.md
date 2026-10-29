@@ -25,6 +25,7 @@
 
 ## Review 与重构记录
 
+- [全仓分层 Review（2026-10-29）](reviews/repo-review-2026-10-29.md)：Core / Application / Features / Persistence / Platform / Bridge / Flutter / Native Host / SDK / 构建与文档的检查范围、五项修复及自动化证据。
 - [V0.12 最终代码与仓库收尾（2026-10-23）](reviews/closeout-v0.12-2026-10-23.md)：目录额度、设置错误、旧接口 / 文案、干净检出、原生 SDK 兼容与 main 集成。
 - [V0.12 文档与实现一致性审查（2026-10-23）](reviews/docs-alignment-v0.12-2026-10-23.md)：自动输入、交互、模块路径、Web SDK、安装 / 撤销与后续能力边界。
 - [V0.11 Build 51 性能与交互收尾](reviews/closeout-v0.11-build51.md)：组词查询、预览复用、复制延迟、设置提示与 JSON 文本复用。

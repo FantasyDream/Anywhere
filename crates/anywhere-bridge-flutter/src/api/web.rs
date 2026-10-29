@@ -72,6 +72,7 @@ fn status(s: WebPackageStatus) -> WebPackageDto {
         digest: s.digest,
         permissions: permissions(&s.permissions),
         enabled: s.enabled,
+        available: s.available,
         rollback: s.rollback,
     }
 }

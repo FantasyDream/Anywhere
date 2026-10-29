@@ -1,0 +1,55 @@
+{
+  "date": "2026-10-28",
+  "app": "0.14.0+27",
+  "branch": "codex/native-preview",
+  "source_base_commit": "215c791",
+  "source_state": "working tree; no commit or push requested for this implementation",
+  "contract": {
+    "layout": "Single-column File Search, Clipboard History and Clipboard Shelf; no fixed content preview",
+    "interaction": "Space toggles after explicit result browsing; text/IME editing keeps Space; Command-Y is the macOS direct shortcut; Escape closes preview before navigation; Command-L returns to search",
+    "authority": "Rust validates file Session/Revision/catalog/settings and clipboard enabled/retention/item identity; native host never grants authority",
+    "resources": "Original files, original image encodings and temporary full text; maximum 4 leases, 256 paths and existing 16 MiB clipboard item budget; no Rust preview decode",
+    "lifecycle": "ID-qualified events, generation-ordered window calls, delayed coalesced selection, stale-result release; native shown retains a lease; unclaimed leases expire after 5 seconds and are pruned on subsequent preparation",
+    "platform": "Shared capabilities/show/close channel and events; macOS QLPreviewPanel only; Windows and Linux renderers are unimplemented"
+  },
+  "checks": {
+    "full_gate": "passed; build/native-preview-build27-check.log",
+    "flutter_passed": 438,
+    "core_passed": 316,
+    "core_ignored": 1,
+    "mvp_passed": 195,
+    "mvp_ignored": 4,
+    "sdk_passed": 21,
+    "json_passed": 30,
+    "bridge": "Regenerated FRB and compiled bridge crate",
+    "native": "Native Host suites and real Flutter/QuickLookUI typecheck passed; this is not live Quick Look focus verification",
+    "regressions": [
+      "Lazy reads and coalesced selection",
+      "Late preparation after close or owner replacement",
+      "Window failures and unsupported platform release",
+      "Resource-qualified native events and shown retention",
+      "No fixed-pane geometry or auto reads",
+      "Clicking search closes preview and disarms Space",
+      "IME composition and original copy/open semantics",
+      "Temporary text/image cleanup and original-file preservation"
+    ]
+  },
+  "native": {
+    "intermediate_build26": "Launched exact Build 26 bundle after quitting Build 25; single-column file list observed",
+    "status": "failed: user confirmed no panel; Build 28 diagnostics confirmed request reached native host but controller was checked before panel presentation",
+    "final_build27": "not yet launched or visually verified",
+    "follow_up": "Build 29 corrected presentation order; live Markdown, text, PDF, image and selection following passed; returning editor focus needed an additional fix"
+  },
+  "artifacts": {
+    "app": "build/Anywhere-0.14-preview-build27.app",
+    "zip": "build/Anywhere-0.14-preview-build27-macos-arm64.zip",
+    "zip_sha256": "2b7943323c6bf186f5a0a1199792d63aa7ab7a8d8e761435dac9df1fdcd2421a",
+    "build": "Persistent signing, codesign verification and ZIP contents verification passed; build/native-preview-build27-package.log"
+  },
+  "limits": [
+    "No physical IME, native panel selection/focus, close-button, PDF/image/multi-file or clipboard native preview acceptance",
+    "No new memory, GPU helper or native handler leak measurement",
+    "No Windows/Linux preview implementation or live validation",
+    "No GitHub Release or push performed"
+  ]
+}

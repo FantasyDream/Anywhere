@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:anywhere/features/clipboard/clipboard_history_session.dart';
 import 'package:anywhere/infrastructure/desktop_environment.dart';
@@ -13,35 +12,59 @@ import 'package:flutter_test/flutter_test.dart';
 import 'support/clipboard_fixtures.dart';
 
 void main() {
-  setUp(() => DesktopEnvironment.configure(
-      const DesktopEnvironment(platform: TargetPlatform.macOS)));
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() {
+    mockNativePreview();
+    DesktopEnvironment.configure(
+        const DesktopEnvironment(platform: TargetPlatform.macOS));
+  });
   tearDown(DesktopEnvironment.reset);
 
-  test('late search and detail responses never replace the current selection',
+  test('clipboard lists do not choose a default or act without a selection',
       () async {
+    final backend = History();
+    var reads = 0;
+    backend.detailOverride = (id) async {
+      reads++;
+      return previewDetail(item(id), id);
+    };
+    final session = ClipboardHistorySession(backend);
+    await Future<void>.delayed(Duration.zero);
+    expect(session.selectedIndex, -1);
+    expect(session.selected, isNull);
+    expect(await session.copy(), isFalse);
+    await session.delete();
+    expect(backend.rows.length, 2);
+    expect(backend.copied, isEmpty);
+    await session.refresh(background: true);
+    expect(session.selected, isNull);
+    await session.select(session.selectedIndex + 1);
+    expect(session.selected?.id, '1');
+    backend.rows = [item('new'), ...backend.rows];
+    await session.refresh(background: true);
+    expect(session.selected?.id, '1');
+    session.query.text = 'changed';
+    expect(session.selected, isNull);
+    session.preview.toggle();
+    expect(reads, 0);
+    session.dispose();
+  });
+
+  test('late search responses never replace the current selection', () async {
     final backend = History();
     final session = ClipboardHistorySession(backend);
     await Future<void>.delayed(Duration.zero);
-    await session.select(1);
-    final first = Completer<ClipboardDetailDto?>();
-    backend.detailOverride = (id) => id == '1'
-        ? first.future
-        : Future.value(previewDetail(item(id), 'Current'));
-    final stale = session.select(0);
-    final current = session.select(1);
-    first.complete(previewDetail(item('1'), 'Stale'));
-    await Future.wait([stale, current]);
-    expect(session.preview!.text, 'Current');
     final oldSearch = Completer<ClipboardHistoryDto>();
     backend.searchOverride = (_) => oldSearch.future;
     final old = session.refresh();
     backend.searchOverride = (_) async => ClipboardHistoryDto(
         recording: false, available: true, items: [item('3')]);
-    await session.refresh();
+    final latest = session.refresh();
     oldSearch.complete(ClipboardHistoryDto(
         recording: false, available: true, items: [item('old')]));
-    await old;
+    await Future.wait([old, latest]);
     expect(session.items.single.id, '3');
+    expect(session.selected, isNull);
     session.dispose();
   });
 
@@ -108,14 +131,15 @@ void main() {
     session.query.value = const TextEditingValue(text: '中');
     await tester.pump(const Duration(milliseconds: 120));
     expect(searches, ['old', '中']);
-    expect(session.selected!.id, 'committed');
+    expect(session.items.single.id, 'committed');
+    expect(session.selected, isNull);
     session.dispose();
   });
 
   testWidgets('composition cancels a debounce and resumes an unchanged commit',
       (tester) async {
     final backend = History();
-    final session = ClipboardHistorySession(backend, previewEnabled: false);
+    final session = ClipboardHistorySession(backend);
     await tester.pump();
     final searches = <String>[];
     backend.searchOverride = (query) async {
@@ -135,50 +159,32 @@ void main() {
     session.dispose();
   });
 
-  test('reselecting a row reuses its preview and its in-flight request',
-      () async {
+  test('browsing and reselecting never prepare preview bodies', () async {
     final backend = History();
+    var reads = 0;
+    backend.detailOverride = (id) async {
+      reads++;
+      return previewDetail(item(id), id);
+    };
     final session = ClipboardHistorySession(backend);
     await Future<void>.delayed(Duration.zero);
-    final cached = session.preview;
-    final response = Completer<ClipboardDetailDto?>();
-    final requests = <String>[];
-    backend.detailOverride = (id) {
-      requests.add(id);
-      return id == '1'
-          ? Future.value(previewDetail(item(id), 'Unnecessary reload'))
-          : response.future;
-    };
-    await session.select(-1); // Arrow Up at the first row.
-    expect(session.preview, same(cached));
-    expect(requests, isEmpty);
-    final first = session.select(1);
-    final repeated = session.select(20); // Arrow Down at the last row.
-    response.complete(previewDetail(item('2'), 'Current'));
-    await Future.wait([first, repeated]);
-    expect(requests, ['2']);
-    expect(session.preview!.text, 'Current');
+    await session.select(1);
+    await session.select(20);
+    await session.refresh();
+    expect(reads, 0);
+    expect(session.selected!.id, '2');
     session.dispose();
   });
 
-  test('copy finishes while preview is pending without querying history again',
-      () async {
+  test('copying does not require preview or requery history', () async {
     final backend = History();
-    final response = Completer<ClipboardDetailDto?>();
-    backend.detailOverride = (_) => response.future;
     final session = ClipboardHistorySession(backend);
     await Future<void>.delayed(Duration.zero);
-    expect(session.loading, isFalse,
-        reason: 'Metadata search is complete; only the preview is loading');
-    backend.searchOverride = (_) async => throw StateError('unrelated refresh');
-    final copied = await session.copy();
-    expect(copied, isTrue);
-    expect(session.notice, isNull);
-    expect(session.status, contains('Copied'));
+    backend.detailOverride = (_) async => throw StateError('must not prepare');
+    backend.searchOverride = (_) async => throw StateError('must not query');
+    await session.select(0);
+    expect(await session.copy(), true);
     expect(backend.copied, ['1']);
-    response.complete(previewDetail(item('1'), 'Ready'));
-    await Future<void>.delayed(Duration.zero);
-    expect(session.preview!.text, 'Ready');
     session.dispose();
   });
 
@@ -197,7 +203,7 @@ void main() {
         items: [item('new'), ...backend.rows]));
     await refresh;
     expect(session.selected!.id, '2');
-    expect(session.preview!.item.id, '2');
+    expect(session.selected!.id, '2');
     session.dispose();
   });
 
@@ -220,31 +226,12 @@ void main() {
     session.dispose();
   });
 
-  test('rapid selections coalesce previews and dispose rejects late responses',
-      () async {
-    final backend = History()..rows = [item('1'), item('2'), item('3')];
+  test('disposing clears metadata without preparing preview bodies', () async {
+    final backend = History();
     final session = ClipboardHistorySession(backend);
     await Future<void>.delayed(Duration.zero);
     await session.select(1);
-    final first = Completer<ClipboardDetailDto?>();
-    final last = Completer<ClipboardDetailDto?>();
-    final requests = <String>[];
-    backend.detailOverride = (id) {
-      requests.add(id);
-      return id == '1' ? first.future : last.future;
-    };
-    final a = session.select(0);
-    final b = session.select(1);
-    final c = session.select(2);
-    expect(requests, ['1']);
-    first.complete(previewDetail(item('1'), 'old'));
-    await Future<void>.delayed(Duration.zero);
-    expect(requests, ['1', '3']);
-    expect(session.preview, isNull);
     session.dispose();
-    last.complete(previewDetail(item('3'), 'late'));
-    await Future.wait([a, b, c]);
-    expect(session.preview, isNull);
     expect(session.items, isEmpty);
   });
 
@@ -267,7 +254,11 @@ void main() {
     expect(find.text('Enable Recording'), findsNothing);
     expect(find.text('History recording is off'), findsNothing);
     expect(find.text('2 entries'), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
     expect(find.byKey(const Key('selected-row-primary')), findsOneWidget);
+    await session.select(0);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('selected-row-actions')));
     await tester.pumpAndSettle();
     expect(find.text('Copy · ↵'), findsOneWidget);
@@ -319,6 +310,9 @@ void main() {
     backend.rows = [item('new')];
     await tester.tap(find.text('Refresh'));
     await tester.pumpAndSettle();
+    expect(session.selected, isNull);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
     expect(session.selected?.id, 'new');
     expect(find.byKey(const Key('history-empty-actions')), findsNothing);
     expect(find.byKey(const Key('selected-row-actions')), findsOneWidget);
@@ -339,6 +333,8 @@ void main() {
                 builder: (context, _) => session.build(context,
                     onBack: () {}, presentation: 1, visible: true)))));
     await tester.pumpAndSettle();
+    await session.select(0);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('selected-row-actions')));
     await tester.pumpAndSettle();
     backend.rows = [item('replacement')];
@@ -347,7 +343,8 @@ void main() {
     await tester.tap(find.text('Delete Entry'));
     await tester.pumpAndSettle();
     expect(backend.rows.single.id, 'replacement');
-    expect(session.notice, contains('no longer available'));
+    expect(session.selected, isNull);
+    expect(find.text('Delete Entry'), findsNothing);
     await tester.pumpWidget(const SizedBox());
     session.dispose();
   });
@@ -451,8 +448,9 @@ void main() {
     await tester.pump(const Duration(milliseconds: 160));
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
-    expect(session.preview!.text, 'Full text 2');
+    expect(session.selected!.id, '2');
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     expect(session.focus.hasFocus, isTrue);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
@@ -475,64 +473,32 @@ void main() {
     await tester.pumpWidget(const SizedBox());
     session.dispose();
   });
-  testWidgets('type icons and bounded image/file previews follow selection',
+  testWidgets('history keeps a single list without a fixed preview pane',
       (tester) async {
-    tester.view.physicalSize = const Size(1000, 700);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final backend = History();
-    final image = ClipboardItemDto(
-        id: 'image',
-        summary: 'Image',
-        kind: 'image',
-        copiedAtMs: 1000,
-        byteCount: 100);
-    final files = ClipboardItemDto(
-        id: 'files',
-        summary: 'two files',
-        kind: 'files',
-        copiedAtMs: 1000,
-        byteCount: 100);
-    backend.rows = [image, files];
-    backend.detailOverride = (id) async => id == 'image'
-        ? ClipboardDetailDto(
-            item: image,
-            text: '',
-            imagePng: base64Decode(
-                'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aT1cAAAAASUVORK5CYII='),
-            files: const [],
-            formats: const [
-                'public.png'
-              ])
-        : ClipboardDetailDto(
-            item: files,
-            text: '',
-            imagePng: Uint8List(0),
-            files: const ['/tmp/a file.txt', '/tmp/中文.png'],
-            formats: const ['File list']);
-    final session = ClipboardHistorySession(backend);
+    mockNativePreview();
+    final session = ClipboardHistorySession(History());
     await tester.pumpWidget(MaterialApp(
         theme: AppStyle.theme,
         home: Scaffold(
-            body: SizedBox(
-                width: 880,
-                height: 560,
-                child: ListenableBuilder(
-                    listenable: session,
-                    builder: (context, _) => session.build(context,
-                        onBack: () {}, presentation: 1, visible: true))))));
+            body: ListenableBuilder(
+                listenable: session,
+                builder: (context, _) => session.build(context,
+                    onBack: () {}, presentation: 0, visible: true)))));
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('clipboard-image-preview')), findsOneWidget);
+    expect(find.byKey(const Key('clipboard-preview-pane')), findsNothing);
+    expect(session.selected, isNull);
+    expect(find.byKey(const Key('selected-row-preview')), findsNothing);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
-    expect(find.byKey(const Key('clipboard-image-preview')), findsNothing);
-    expect(find.text('/tmp/a file.txt'), findsOneWidget);
-    expect(find.text('/tmp/中文.png'), findsOneWidget);
-    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    expect(find.byKey(const Key('selected-row-preview')), findsOneWidget);
+    expect(session.selected?.id, '1');
+    expect(previewCalls.where((call) => call.method == 'show'), isEmpty);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
     await tester.pumpAndSettle();
-    expect(backend.copied, ['files']);
-    expect(tester.takeException(), isNull);
+    expect(previewCalls.last.arguments['paths'], ['/synthetic/1.txt']);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(session.selected?.id, '1');
     await tester.pumpWidget(const SizedBox());
     session.dispose();
   });
@@ -595,17 +561,11 @@ void main() {
     expect(input.bottom, lessThan(header.bottom - 8));
     expect(tester.widget<TextField>(field).decoration!.hintStyle!.fontSize,
         DesignTokens.pageHeadingSize);
-    final list = find.byKey(const Key('clipboard-list-pane'));
-    final preview = find.byKey(const Key('clipboard-preview-pane'));
-    expect(tester.getSize(list).width,
-        greaterThan(tester.getSize(preview).width * 2));
-    expect(
-        tester
-            .getSize(find.byKey(const Key('clipboard-preview-surface')))
-            .height,
-        lessThan(150),
-        reason: 'A short snippet must not create a full-height empty card');
+    final list = find.byType(ListView);
+    expect(find.byKey(const Key('clipboard-preview-pane')), findsNothing);
     final listBefore = tester.getRect(list);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('selected-row-primary')));
     await tester.pump(const Duration(milliseconds: 30));
     expect(session.status, contains('Copied'));
@@ -646,16 +606,10 @@ void main() {
                 builder: (context, _) => session.build(context,
                     onBack: () {}, presentation: 1, visible: true)))));
     await tester.pumpAndSettle();
-    final pane =
-        tester.getRect(find.byKey(const Key('clipboard-preview-pane')));
-    final text = tester.getRect(find.byKey(const Key('clipboard-preview')));
-    expect(text.left, greaterThan(pane.left));
-    expect(text.right, lessThan(pane.right));
-    expect(find.text('1 format'), findsNothing);
-    await tester.tap(find.text('Details'));
+    expect(find.byKey(const Key('clipboard-preview-pane')), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
-    expect(find.text('1 format'), findsOneWidget);
-    expect(find.text('text/plain;charset=utf-8'), findsOneWidget);
+    expect(find.byKey(const Key('selected-row-preview')), findsOneWidget);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();

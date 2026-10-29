@@ -606,6 +606,84 @@ async fn text_timeouts_release_buffers_and_request_bookkeeping_is_bounded() {
     assert_eq!(old.check().err().unwrap().code, WebErrorCode::Cancelled);
 }
 
+#[tokio::test]
+async fn cancelled_queued_requests_release_bookkeeping_without_waiting_for_workers() {
+    for hidden in [false, true] {
+        let port = Arc::new(ClipboardPort::default());
+        let (app, binding) = setup(
+            permissions(),
+            port.clone(),
+            ModuleStorageHost::memory().unwrap(),
+            "queued-cancel",
+        );
+        let held = app
+            .web_rpc_workers
+            .clone()
+            .acquire_many_owned(MAX_RUNNING as u32)
+            .await
+            .unwrap();
+        let queued_app = app.clone();
+        let queued_binding = binding.clone();
+        let mut queued = tokio::spawn(async move {
+            call(
+                &queued_app,
+                &queued_binding,
+                "queued-copy",
+                "clipboard.writeText",
+                json!({"text":"must not copy"}),
+            )
+            .await
+        });
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if app.web_plugins.lock().unwrap().invocations[&binding.invocation_id]
+                    .rpc
+                    .pending
+                    .contains_key("queued-copy")
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .unwrap();
+        if hidden {
+            app.suspend_session(1).await.unwrap();
+        } else {
+            let cancel = reply(
+                call(
+                    &app,
+                    &binding,
+                    "cancel-copy",
+                    "request.cancel",
+                    json!({"request_id":"queued-copy"}),
+                )
+                .await,
+            );
+            assert_eq!(cancel["result"]["value"]["cancelled"], true);
+        }
+        let completed = tokio::time::timeout(Duration::from_secs(1), &mut queued).await;
+        let response = match completed {
+            Ok(response) => response.unwrap(),
+            Err(_) => {
+                drop(held);
+                let _ = queued.await;
+                panic!("queued cancellation waited for a worker (hidden={hidden})");
+            }
+        };
+        assert_eq!(reply(response)["error"]["code"], "CANCELLED");
+        assert!(
+            app.web_plugins.lock().unwrap().invocations[&binding.invocation_id]
+                .rpc
+                .pending
+                .is_empty()
+        );
+        assert!(port.writes.lock().unwrap().is_empty());
+        drop(held);
+    }
+}
+
 #[tokio::test(start_paused = true)]
 async fn idle_documents_eagerly_release_expired_transfers_without_new_requests() {
     let (app, binding) = setup(

@@ -8,7 +8,7 @@ import '../../ui/app_components.dart';
 import '../../ui/app_style.dart';
 import 'clipboard_history_presentation.dart';
 
-/// Metadata-only rows. Full payloads and thumbnails are loaded only on selection.
+/// Metadata-only rows. Content is prepared only by an explicit system preview request.
 class ClipboardHistoryList extends StatelessWidget {
   const ClipboardHistoryList(
       {super.key,

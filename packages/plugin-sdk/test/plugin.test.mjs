@@ -42,6 +42,47 @@ const launch = {
   entrypoint: 'workspace',
 };
 
+test('failed hidden subscriptions are not registered when the page resumes', async () => {
+  const env = environment((call, reply) =>
+    reply(
+      call.method === 'state.subscribe'
+        ? {
+            version: 1,
+            context: {kind: 'empty', reason: 'no_object'},
+            input: 'current',
+          }
+        : call.method === 'invocation.get'
+          ? launch
+          : null,
+    ),
+  );
+  const plugin = definePlugin();
+  let received = 0;
+  try {
+    await plugin.ready;
+    env.visibility(false);
+    for (const kind of ['context', 'input'])
+      for (let i = 0; i < 20; i++)
+        assert.throws(() => plugin.host[kind].onChange(() => received++), {
+          code: 'INACTIVE',
+        });
+    env.visibility(true);
+    await tick();
+    assert.equal(received, 0);
+    assert.equal(
+      env.calls.filter(call => call.method === 'state.subscribe').length,
+      0,
+    );
+    const stop = plugin.host.input.onChange(() => received++);
+    await tick();
+    assert.equal(received, 1);
+    stop();
+  } finally {
+    plugin.dispose();
+    env.close();
+  }
+});
+
 test('automatic launch once, resume preserves drafts and stable host cancels pending operations', async () => {
   let block = false,
     launched = 0,
@@ -204,4 +245,31 @@ test('zero-setup SDK subscribes once and reconnects without retaining hidden cli
     env.close();
   }
   assert.equal(env.listeners.size, 0);
+});
+
+test('default facade forwards already-aborted signals to every side-effect API', async () => {
+  const env = environment((call, reply) => reply(call, null));
+  try {
+    const controller = new AbortController();
+    controller.abort();
+    const options = {signal: controller.signal};
+    for (const operation of [
+      () => anywhere.clipboard.writeText('private', options),
+      () => anywhere.clipboard.readText(options),
+      () => anywhere.storage.set('key', 1, options),
+      () => anywhere.storage.remove('key', options),
+      () => anywhere.storage.get('key', options),
+      () => anywhere.input.set('changed', options),
+      () => anywhere.app.getSource(options),
+      () => anywhere.app.getFrontmost(options),
+    ])
+      await assert.rejects(operation(), {code: 'CANCELLED'});
+    assert.ok(
+      env.calls.every(call =>
+        ['lifecycle.ready', 'invocation.get'].includes(call.method),
+      ),
+    );
+  } finally {
+    env.close();
+  }
 });

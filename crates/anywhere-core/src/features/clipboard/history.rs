@@ -6,7 +6,6 @@ pub const MAX_ENTRIES: usize = 1000;
 pub const MAX_STORED_BYTES: usize = 128 * 1024 * 1024;
 pub const MAX_QUERY_BYTES: usize = 1024;
 pub const SUMMARY_CHARACTERS: usize = 120;
-pub const MAX_PREVIEW_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HistoryItem {
@@ -15,14 +14,6 @@ pub struct HistoryItem {
     pub kind: String,
     pub copied_at_ms: i64,
     pub byte_count: usize,
-}
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HistoryDetail {
-    pub item: HistoryItem,
-    pub text: String,
-    pub image_png: Vec<u8>,
-    pub files: Vec<String>,
-    pub formats: Vec<String>,
 }
 pub trait HistoryRepository: Send {
     fn policy(&self) -> Result<super::policy::HistoryPolicy>;

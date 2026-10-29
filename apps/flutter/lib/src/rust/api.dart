@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `application`, `snapshot_delivery`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `assert_fields_are_eq`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `eq`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `fmt`, `from`, `from`
 
 Future<String> ping() => RustLib.instance.api.crateApiPing();
 
@@ -16,9 +16,6 @@ Future<ClipboardHistoryStatusDto> clipboardHistoryStatus() =>
 
 Future<ClipboardHistoryDto> clipboardHistory({required String query}) =>
     RustLib.instance.api.crateApiClipboardHistory(query: query);
-
-Future<ClipboardDetailDto?> clipboardHistoryDetail({required String id}) =>
-    RustLib.instance.api.crateApiClipboardHistoryDetail(id: id);
 
 Future<void> setClipboardRecording({required bool enabled}) =>
     RustLib.instance.api.crateApiSetClipboardRecording(enabled: enabled);
@@ -278,12 +275,21 @@ Future<void> setContextSources(
         browserCurrentPage: browserCurrentPage,
         clipboard: clipboard);
 
-Future<FilePreviewDto> previewFile(
+Future<NativePreviewDto> previewFile(
         {required int sessionId,
         required int revision,
         required String candidateId}) =>
     RustLib.instance.api.crateApiPreviewFile(
         sessionId: sessionId, revision: revision, candidateId: candidateId);
+
+Future<NativePreviewDto> previewClipboardEntry({required String id}) =>
+    RustLib.instance.api.crateApiPreviewClipboardEntry(id: id);
+
+Future<void> retainPreview({required String id}) =>
+    RustLib.instance.api.crateApiRetainPreview(id: id);
+
+Future<void> releasePreview({required String id}) =>
+    RustLib.instance.api.crateApiReleasePreview(id: id);
 
 /// Recognition runs on the bridge worker; filesystem checks never block Host UI.
 Future<ActivationInputDto?> chooseActivationInput(
@@ -722,41 +728,6 @@ enum CandidateUpdateDto {
   ;
 }
 
-class ClipboardDetailDto {
-  final ClipboardItemDto item;
-  final String text;
-  final Uint8List imagePng;
-  final List<String> files;
-  final List<String> formats;
-
-  const ClipboardDetailDto({
-    required this.item,
-    required this.text,
-    required this.imagePng,
-    required this.files,
-    required this.formats,
-  });
-
-  @override
-  int get hashCode =>
-      item.hashCode ^
-      text.hashCode ^
-      imagePng.hashCode ^
-      files.hashCode ^
-      formats.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is ClipboardDetailDto &&
-          runtimeType == other.runtimeType &&
-          item == other.item &&
-          text == other.text &&
-          imagePng == other.imagePng &&
-          files == other.files &&
-          formats == other.formats;
-}
-
 class ClipboardHistoryDto {
   final bool recording;
   final bool available;
@@ -1170,53 +1141,6 @@ enum FileObjectKindDto {
   ;
 }
 
-class FilePreviewDto {
-  final String path;
-  final bool isDirectory;
-  final BigInt sizeBytes;
-  final PlatformInt64? modifiedMs;
-  final String? text;
-  final int? truncatedAtBytes;
-  final String? encoding;
-  final bool encodingGuessed;
-
-  const FilePreviewDto({
-    required this.path,
-    required this.isDirectory,
-    required this.sizeBytes,
-    this.modifiedMs,
-    this.text,
-    this.truncatedAtBytes,
-    this.encoding,
-    this.encodingGuessed = false,
-  });
-
-  @override
-  int get hashCode =>
-      path.hashCode ^
-      isDirectory.hashCode ^
-      sizeBytes.hashCode ^
-      modifiedMs.hashCode ^
-      text.hashCode ^
-      truncatedAtBytes.hashCode ^
-      encoding.hashCode ^
-      encodingGuessed.hashCode;
-
-  @override
-  bool operator ==(Object other) =>
-      identical(this, other) ||
-      other is FilePreviewDto &&
-          runtimeType == other.runtimeType &&
-          path == other.path &&
-          isDirectory == other.isDirectory &&
-          sizeBytes == other.sizeBytes &&
-          modifiedMs == other.modifiedMs &&
-          text == other.text &&
-          truncatedAtBytes == other.truncatedAtBytes &&
-          encoding == other.encoding &&
-          encodingGuessed == other.encodingGuessed;
-}
-
 enum FileSearchEngineDto {
   systemIndex,
   ripgrep,
@@ -1384,6 +1308,31 @@ class LauncherStateDto {
           contextCaptures == other.contextCaptures &&
           candidates == other.candidates &&
           diagnostics == other.diagnostics;
+}
+
+/// Qualified local resources borrowed by the platform viewer until release.
+class NativePreviewDto {
+  final String id;
+  final List<String> paths;
+  final String title;
+
+  const NativePreviewDto({
+    required this.id,
+    required this.paths,
+    required this.title,
+  });
+
+  @override
+  int get hashCode => id.hashCode ^ paths.hashCode ^ title.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NativePreviewDto &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          paths == other.paths &&
+          title == other.title;
 }
 
 class NativeToolDto {
@@ -1669,6 +1618,7 @@ class WebPackageDto {
   final String digest;
   final List<WebPermissionDto> permissions;
   final bool enabled;
+  final bool available;
   final bool rollback;
 
   const WebPackageDto({
@@ -1678,6 +1628,7 @@ class WebPackageDto {
     required this.digest,
     required this.permissions,
     required this.enabled,
+    required this.available,
     required this.rollback,
   });
 
@@ -1689,6 +1640,7 @@ class WebPackageDto {
       digest.hashCode ^
       permissions.hashCode ^
       enabled.hashCode ^
+      available.hashCode ^
       rollback.hashCode;
 
   @override
@@ -1702,6 +1654,7 @@ class WebPackageDto {
           digest == other.digest &&
           permissions == other.permissions &&
           enabled == other.enabled &&
+          available == other.available &&
           rollback == other.rollback;
 }
 

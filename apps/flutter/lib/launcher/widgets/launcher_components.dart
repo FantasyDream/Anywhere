@@ -15,11 +15,12 @@ class LauncherSearchArea extends StatelessWidget {
       required this.input,
       required this.focus,
       this.onToggleNavigation,
+      this.onEditFocus,
       this.onBack});
   final LauncherViewState state;
   final TextEditingController input;
   final FocusNode focus;
-  final VoidCallback? onToggleNavigation;
+  final VoidCallback? onToggleNavigation, onEditFocus;
   final VoidCallback? onBack;
 
   String _fileRangeLabel(BuildContext context) {
@@ -125,6 +126,7 @@ class LauncherSearchArea extends StatelessWidget {
                   TextField(
                       // Keep the editing connection alive across host view changes.
                       key: const Key('launcher-search-input'),
+                      onTap: onEditFocus,
                       controller: input,
                       focusNode: focus,
                       autofocus: state.visible,

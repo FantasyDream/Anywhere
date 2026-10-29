@@ -2,7 +2,7 @@
 
 插件可以是 Web 界面，也可以是无需界面的后台 JavaScript。你只负责 TypeScript / JavaScript 业务；Anywhere 负责容器、默认样式、权限、Context 调度和资源释放。界面可使用普通 HTML，也可以使用 React、Vue、Svelte。
 
-**当前范围：macOS 本地开发预览。** 统一 SDK / 后台运行时改造位于 `codex/plugin-runtime-refactor`，不代表此前发布包已经支持以下新增 API。SDK 尚未发布到 npm，使用导出的 `.tgz` 安装。开发需要 Node.js 22+ 和 Python 3.10+；插件运行时不需要 Node、Python、Rust 或 Flutter。
+**当前范围：macOS 本地开发预览。** 下述 API 描述当前源码；历史发布包不一定具备这些能力。SDK 尚未发布到 npm，使用导出的 `.tgz` 安装。开发需要 Node.js 22+ 和 Python 3.10+；插件运行时不需要 Node、Python、Rust 或 Flutter。
 
 ## 1. 从模板开始
 
@@ -167,7 +167,7 @@ export async function resolve() {
 
 第三方文本解析器也参与现有的默认输入识别；预填识别单任务采用 75 ms JS 预算，整轮在 150 ms 后不再启动额外识别器，避免大量插件拖慢唤醒。识别之后仍由正常 Context Graph 解析，不把预填探测直接当作执行资格。
 
-QuickJS 每次按需创建，32 MiB 内存、256 KiB 栈、250 ms JS 执行预算，等待宿主 I/O 的时间不计入 JS 预算；每任务最多 128 次宿主调用。脚本包不超过 256 KiB，单次解析最多 16 个 Context，安装目录总计最多 64 个第三方解析器。输出 JSON 不超过 256 KiB。取消、禁用、更新、关闭会使旧任务失效。纯界面包不会启动 QuickJS；后台命令不会创建 WebView。
+QuickJS 每次按需创建，32 MiB 内存、256 KiB 栈、250 ms JS 执行预算，等待宿主 I/O 的时间不计入 JS 预算；每任务最多 128 次业务宿主调用，文本分块传输不占业务次数，但包含分块在内总计最多 1024 次宿主调用。脚本包不超过 256 KiB，单次解析最多 16 个 Context，安装目录总计最多 64 个第三方解析器。输出 JSON 不超过 256 KiB。取消、禁用、更新、关闭会使旧任务失效。纯界面包不会启动 QuickJS；后台命令不会创建 WebView。
 
 混合示例：[JSON Workspace](../plugins/examples/json-workspace/README.md) 使用后台解析 / 复制和 Web 编辑器，共享私有缩进设置。自动解析器仍是只读环境，不能写设置或剪贴板。完整后台示例：[JSON Summary 后台插件](../plugins/examples/background-context/README.md)；界面示例：[Text Pad](../plugins/examples/web-text/README.md)。当前后台执行仍在主程序的受限 worker 中，并非操作系统进程隔离；不要把 JS 引擎限制视为完整 OS 沙箱。
 
@@ -183,6 +183,8 @@ QuickJS 每次按需创建，32 MiB 内存、256 KiB 栈、250 ms JS 执行预�
 - 保留 Esc 和 ⌘K 给 Host；局部快捷键不要拦截输入法组合输入。
 
 隐藏后页面最多保留 15 秒，未完成宿主请求会失效。`definePlugin` 自动取消待处理请求，恢复时重新就绪并保留文稿；插件无需监听可见性或重复读取输入。`onDispose` 可用于释放业务自己的计时器等资源。
+
+隐藏期间新注册 Context / Input 订阅会抛出 `INACTIVE`，失败订阅不会在恢复后被补注册。前台与后台 SDK 都隔离每个订阅回调的异常，其他监听器继续收到更新；回调异常不会把已经完成的输入修改报告为失败。
 
 超过保留时间、返回或重载后，页面可能重新创建。Storage 适合保存偏好，不要默认持久化用户正文。
 
@@ -201,6 +203,8 @@ python3 node_modules/@anywhere/sdk/tools/package.py . \
 
 入口和图标必须包含在所选资源中；不支持符号链接。打包器不执行安装或授权，完整校验由 Anywhere 导入时完成。
 
+页面可按相对路径加载包内图片和 WOFF / WOFF2 / TTF / OTF 字体，ICO 可作为页面图片资源；Manifest 的工具图标仍只接受 PNG。资源需先通过包校验和当前文档身份检查，页面仍只有一个 `.html` 入口，不能通过附加 HTML 文档或字体资源扩大能力。
+
 | 问题 | 检查方式 |
 |---|---|
 | 浏览器里显示 `HOST_UNAVAILABLE` | 宿主 API 需在 Anywhere 中验证；普通浏览器只适合预览网页 |
@@ -211,7 +215,7 @@ python3 node_modules/@anywhere/sdk/tools/package.py . \
 | `TOO_LARGE` | 单次文本上限 1 MiB；控制帧上限 64 KiB，文本分块由 SDK 处理；Storage 只存小型设置 |
 | 修改后仍是旧页面 | 重新 build → pack → Import；仅 Reload 不会更新安装内容 |
 
-Storage 合计最多 1 MiB / 256 个键，单值最多 64 KiB，实际请求还受控制帧限制。业务操作应捕获错误；可通过 `{signal: abortController.signal}` 主动取消。
+Storage 合计最多 1 MiB / 256 个键，单值最多 64 KiB，实际请求还受控制帧限制。业务操作应捕获错误；默认 `anywhere` API 和 `definePlugin` 门面均转发 `{signal: abortController.signal}`。Web 调用支持排队 / 在途取消；有限后台任务在每次宿主调用前检查信号，宿主侧取消仍由任务与文档生命周期控制，已完成的副作用不回滚。
 
 ## 维护者：导出 SDK
 

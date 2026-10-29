@@ -74,8 +74,8 @@ export function definePlugin(options: PluginOptions = {}) {
             ),
       stop: undefined as (() => void) | undefined,
     };
-    subscriptions.add(item);
     item.stop = item.bind();
+    subscriptions.add(item);
     return () => {
       item.stop?.();
       subscriptions.delete(item);

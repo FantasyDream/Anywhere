@@ -11,7 +11,6 @@ import '../../ui/app_components.dart';
 import '../../ui/app_icons.dart';
 import '../../ui/app_style.dart';
 import 'clipboard_history_list.dart';
-import 'clipboard_history_preview.dart';
 import 'clipboard_history_session.dart';
 import 'clipboard_shelf_controls.dart';
 
@@ -35,13 +34,10 @@ class ClipboardShelfPage extends StatefulWidget {
 }
 
 class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
-  final _previewScroll = ScrollController(keepScrollOffset: false);
   bool _actions = false, _confirmDelete = false;
   int _actionIndex = 0;
+  double _listOffset = 0;
   ClipboardItemDto? _actionTarget, _deleteTarget;
-  (String?, double)? _previewOrigin;
-  int _previewLayoutEpoch = 0;
-  double _lastListOffset = 0;
   ClipboardHistorySession get session => widget.session;
   bool get active =>
       widget.visible &&
@@ -58,16 +54,11 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
   void didUpdateWidget(ClipboardShelfPage old) {
     super.didUpdateWidget(old);
     if (old.presentation != widget.presentation || !widget.visible) {
+      session.preview.close();
       _actions = false;
       _actionTarget = _deleteTarget = null;
       _confirmDelete = false;
     }
-  }
-
-  @override
-  void dispose() {
-    _previewScroll.dispose();
-    super.dispose();
   }
 
   void _focusSearch({bool selectAll = false}) {
@@ -87,7 +78,8 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
         _confirmDelete = false;
         _actions = false;
       });
-    } else if (session.previewEnabled) {
+      _restoreList();
+    } else if (session.preview.isOpen) {
       _togglePreview();
     } else if (session.query.text.isNotEmpty) {
       session.query.clear();
@@ -97,9 +89,24 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
     _focusSearch();
   }
 
+  void _restoreList() {
+    final selected = session.selected?.id;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted &&
+          active &&
+          !_actions &&
+          selected == session.selected?.id &&
+          session.scroll.hasClients) {
+        session.scroll.jumpTo(
+            _listOffset.clamp(0, session.scroll.position.maxScrollExtent));
+      }
+    });
+  }
+
   void _select(ClipboardItemDto item) {
     if (!active) return;
     final index = session.items.indexWhere((row) => row.id == item.id);
+    session.preview.browsing = true;
     if (index >= 0) unawaited(session.select(index));
     _focusSearch();
   }
@@ -115,38 +122,14 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
   }
 
   void _togglePreview() {
-    if (!active || (!session.previewEnabled && session.selected == null)) {
-      return;
-    }
-    final closing = session.previewEnabled;
-    final origin = _previewOrigin;
-    if (!closing) {
-      _previewOrigin = (
-        session.selected?.id,
-        session.scroll.hasClients ? session.scroll.offset : _lastListOffset
-      );
-    }
-    final epoch = ++_previewLayoutEpoch;
-    session.setPreviewEnabled(!closing);
-    // Resizing the list must keep its selected row in view, without changing it.
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !active || epoch != _previewLayoutEpoch) return;
-      if (closing &&
-          origin != null &&
-          origin.$1 == session.selected?.id &&
-          session.scroll.hasClients) {
-        session.scroll.jumpTo(
-            origin.$2.clamp(0, session.scroll.position.maxScrollExtent));
-      }
-      unawaited(session.select(session.selectedIndex));
-    });
-    _focusSearch();
+    if (active) session.preview.toggle();
   }
 
   void _toggleActions([ClipboardItemDto? item]) {
     if (!active) return;
+    session.preview.close();
     if (item != null) _select(item);
-    if (session.scroll.hasClients) _lastListOffset = session.scroll.offset;
+    if (session.scroll.hasClients) _listOffset = session.scroll.offset;
     setState(() {
       _actions = !_actions;
       _actionTarget = _actions ? session.selected : null;
@@ -163,6 +146,7 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
       _actions = false;
       _actionTarget = null;
     });
+    _restoreList();
     switch (action) {
       case ShelfAction.copy:
         await _copy(item: target);
@@ -282,14 +266,15 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
       }
       return KeyEventResult.handled;
     }
+    if (session.preview.handleKey(event, query: session.query.text)) {
+      return KeyEventResult.handled;
+    }
     if (command && !keyboard.isAltPressed && !keyboard.isShiftPressed) {
       if (event is KeyRepeatEvent) return KeyEventResult.handled;
       if (key == LogicalKeyboardKey.keyF) {
         _focusSearch(selectAll: true);
       } else if (key == LogicalKeyboardKey.keyK) {
         _toggleActions();
-      } else if (key == LogicalKeyboardKey.keyY) {
-        _togglePreview();
       } else if (key == LogicalKeyboardKey.keyR) {
         unawaited(session.refresh());
       } else if (enter) {
@@ -317,30 +302,6 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
       }
       return KeyEventResult.handled;
     }
-    if (keyboard.isAltPressed &&
-        !keyboard.isControlPressed &&
-        !keyboard.isMetaPressed &&
-        !keyboard.isShiftPressed &&
-        session.previewEnabled &&
-        [
-          LogicalKeyboardKey.arrowUp,
-          LogicalKeyboardKey.arrowDown,
-          LogicalKeyboardKey.pageUp,
-          LogicalKeyboardKey.pageDown
-        ].contains(key)) {
-      if (_previewScroll.hasClients) {
-        final forward = key == LogicalKeyboardKey.arrowDown ||
-            key == LogicalKeyboardKey.pageDown;
-        final distance = key == LogicalKeyboardKey.pageUp ||
-                key == LogicalKeyboardKey.pageDown
-            ? _previewScroll.position.viewportDimension * .8
-            : 40.0;
-        _previewScroll.jumpTo(
-            (_previewScroll.offset + (forward ? distance : -distance))
-                .clamp(0, _previewScroll.position.maxScrollExtent));
-      }
-      return KeyEventResult.handled;
-    }
     if (!plain) return KeyEventResult.ignored;
     if ([
       LogicalKeyboardKey.arrowDown,
@@ -357,24 +318,13 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
               .floor()
               .clamp(1, 100)
           : 1;
+      session.preview.browsing = true;
       unawaited(
           session.select(session.selectedIndex + (forward ? count : -count)));
       return KeyEventResult.handled;
     }
     if (enter) {
       if (event is KeyDownEvent) unawaited(_copy());
-      return KeyEventResult.handled;
-    }
-    if (session.query.text.isEmpty &&
-        (key == LogicalKeyboardKey.space ||
-            key == LogicalKeyboardKey.arrowRight ||
-            key == LogicalKeyboardKey.arrowLeft)) {
-      if (event is KeyDownEvent &&
-          (key == LogicalKeyboardKey.space ||
-              session.previewEnabled ==
-                  (key == LogicalKeyboardKey.arrowLeft))) {
-        _togglePreview();
-      }
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -396,7 +346,7 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
     final labels = [
       context.l10n.copy,
       context.l10n.shelfCopyAndReturn,
-      session.previewEnabled ? context.l10n.hidePreview : context.l10n.preview,
+      session.preview.isOpen ? context.l10n.hidePreview : context.l10n.preview,
       context.l10n.deleteEntry,
       context.l10n.refresh
     ];
@@ -407,7 +357,7 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
       onBack: _back,
       escapeHint: _actions || _deleteTarget != null
           ? context.l10n.cancelEsc
-          : session.previewEnabled
+          : session.preview.isOpen
               ? context.l10n.backToListEsc
               : session.query.text.isNotEmpty
                   ? context.l10n.shortcutHint(context.l10n.clearSearch, 'Esc')
@@ -431,6 +381,7 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
               Expanded(
                   child: TextField(
                       key: const Key('clipboard-search'),
+                      onTap: session.preview.edited,
                       controller: session.query,
                       focusNode: session.focus,
                       autofocus: widget.visible,
@@ -497,7 +448,7 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
                   shortcuts: [
                     '↵',
                     command('↵'),
-                    command('Y'),
+                    DesktopEnvironment.current.previewShortcutLabel,
                     DesktopEnvironment.current.commandShiftLabel('⌫'),
                     command('R')
                   ],
@@ -506,101 +457,46 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
                   selected: _actionIndex,
                   onInvoke: (index) =>
                       unawaited(_runAction(ShelfAction.values[index])))
-              : LayoutBuilder(
-                  builder: (context, constraints) => Column(children: [
-                        Expanded(
-                            child: session.items.isEmpty
-                                ? Center(
-                                    child: Padding(
-                                        padding: const EdgeInsets.all(16),
-                                        child: Text(
-                                            session.loading
-                                                ? context.l10n.searching
-                                                : session.query.text.isNotEmpty
-                                                    ? context
-                                                        .l10n.noMatchingEntries
-                                                    : context.l10n
-                                                        .noSavedEntriesManageRecordingInSettings,
-                                            textAlign: TextAlign.center,
-                                            style: AppStyle.caption)))
-                                : ClipboardHistoryList(
-                                    items: session.items,
-                                    selectedIndex: session.selectedIndex,
-                                    scroll: session.scroll,
-                                    compact: true,
-                                    selectedStatus: session.status == null
-                                        ? null
-                                        : context.l10n.copied,
-                                    selectedCommands: AppRowActions(
-                                        primaryLabel: context.l10n.copy,
-                                        onPrimary: active && selected != null
-                                            ? () =>
-                                                unawaited(_copy(item: selected))
-                                            : null,
-                                        onActions: active && selected != null
-                                            ? () => _toggleActions(selected)
-                                            : null),
-                                    onSelect: active ? _select : null,
-                                    onActivate: active
-                                        ? (item) => unawaited(_copy(item: item))
-                                        : null,
-                                    onActions: active ? _toggleActions : null)),
-                        if (session.previewEnabled) ...[
-                          const Divider(height: 1),
-                          SizedBox(
-                              height:
-                                  (constraints.maxHeight * .42).clamp(60, 200),
-                              child: Column(children: [
-                                Padding(
-                                    padding: const EdgeInsets.only(
-                                        left: 12, right: 4),
-                                    child: Row(children: [
-                                      Expanded(
-                                          child: Tooltip(
-                                              message: context.l10n
-                                                  .shelfPreviewScrollHint(
-                                                      DesktopEnvironment.current
-                                                          .altLabel('↑↓')),
-                                              child: Text(context.l10n.preview,
-                                                  maxLines: 1,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
-                                                  style: AppStyle.caption))),
-                                      ExcludeFocus(
-                                          child: IconButton(
-                                              iconSize: 14,
-                                              visualDensity:
-                                                  VisualDensity.compact,
-                                              tooltip: context.l10n.hidePreview,
-                                              onPressed: active
-                                                  ? _togglePreview
-                                                  : null,
-                                              icon:
-                                                  const Icon(AppIcons.close))),
-                                    ])),
-                                Expanded(
-                                    child: session.preview == null
-                                        ? Center(
-                                            child: Text(
-                                                session.selected == null &&
-                                                        !session.loading
-                                                    ? context.l10n
-                                                        .selectEntryToPreview
-                                                    : !session.hasNotice
-                                                        ? context
-                                                            .l10n.loadingPreview
-                                                        : context.l10n
-                                                            .previewUnavailable,
-                                                style: AppStyle.caption))
-                                        : ClipboardHistoryPreview(
-                                            key: ValueKey(
-                                                session.preview!.item.id),
-                                            detail: session.preview!,
-                                            compact: true,
-                                            scrollController: _previewScroll)),
-                              ])),
-                        ],
-                      ])),
+              : Column(children: [
+                  Expanded(
+                      child: session.items.isEmpty
+                          ? Center(
+                              child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Text(
+                                      session.loading
+                                          ? context.l10n.searching
+                                          : session.query.text.isNotEmpty
+                                              ? context.l10n.noMatchingEntries
+                                              : context.l10n
+                                                  .noSavedEntriesManageRecordingInSettings,
+                                      textAlign: TextAlign.center,
+                                      style: AppStyle.caption)))
+                          : ClipboardHistoryList(
+                              items: session.items,
+                              selectedIndex: session.selectedIndex,
+                              scroll: session.scroll,
+                              compact: true,
+                              selectedStatus: session.status == null
+                                  ? null
+                                  : context.l10n.copied,
+                              selectedCommands: AppRowActions(
+                                  previewSpace: session.preview.browsing ||
+                                      session.query.text.isEmpty,
+                                  onPreview: active ? _togglePreview : null,
+                                  primaryLabel: context.l10n.copy,
+                                  onPrimary: active && selected != null
+                                      ? () => unawaited(_copy(item: selected))
+                                      : null,
+                                  onActions: active && selected != null
+                                      ? () => _toggleActions(selected)
+                                      : null),
+                              onSelect: active ? _select : null,
+                              onActivate: active
+                                  ? (item) => unawaited(_copy(item: item))
+                                  : null,
+                              onActions: active ? _toggleActions : null)),
+                ]),
     );
   }
 }

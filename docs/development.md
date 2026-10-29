@@ -38,6 +38,8 @@ scripts/package-macos.sh build/Anywhere-dev.app
 
 打包生成 App 对应的 ZIP 和 SHA-256 文件，并检查版本与签名一致性。
 
+构建与打包共用 `scripts/macos_app_path.py` 校验实际输出位置：目标必须在本 checkout 的 `build/` 内，拒绝越界的 `..`、逃逸的父目录链接及作为目标的符号链接。构建开始前和清理旧 Bundle 前各复验一次，避免只凭字符串前缀决定删除位置。路径边界回归已接入完整检查。
+
 ## 检查与生成
 
 首次开发先运行 `scripts/setup-code-style.sh` 安装隔离工具；格式与检查方式见[代码规范](code-style.md)。App 构建本身不需要这些规范工具。
@@ -89,6 +91,7 @@ SDK 类型、测试和独立模板需要 Node.js 22+ / npm；这些检查不安�
 - 文档检查器：`python3 -m unittest discover -s scripts/tests -p test_docs.py`。
 - Flutter：在 `apps/flutter` 执行 `flutter analyze`、`flutter test`。
 - 原生：`scripts/check-macos-menu.sh` 和 `scripts/check-macos-host.sh`；依赖 macOS SDK 及 Flutter macOS 引擎资源，首次可运行 `flutter precache --macos`。
+- 系统预览实机回归：`scripts/check-macos-preview-live.sh`，需要可交互桌面，会短暂激活独立测试窗口；覆盖文本输入竞争、快速重开与关闭后恢复，详见[系统预览](native-preview.md)。
 - 性能：[测量方法](performance.md)。不要把编译器、单个 worker 或 RSS 的一次快照当作整 App 性能承诺。
 
 先完成代码、自动化与构建，最后做 GUI。真实中文候选、物理组合键、跨应用焦点与 VoiceOver 须单独记录；模拟组合键不稳定时，不据此修改生产按键语义。

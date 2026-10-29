@@ -1,6 +1,51 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+test('background subscriber failures do not reject a completed input write or skip other listeners', async () => {
+  let text = 'initial',
+    writes = 0;
+  globalThis.__anywhereInvoke = (method, raw) => {
+    if (method === 'input.set') {
+      text = JSON.parse(raw).text;
+      writes++;
+    }
+    return JSON.stringify({
+      value:
+        method === 'state.get'
+          ? {
+              version: writes + 1,
+              context: {kind: 'text', source: 'user_input', text},
+              input: text,
+            }
+          : null,
+    });
+  };
+  const {anywhere} = await import('../dist/background.js?listener-isolation');
+  const contexts = [],
+    inputs = [];
+  const stops = [
+    anywhere.context.onChange(value => {
+      if (value.text === 'updated')
+        throw new Error('broken context subscriber');
+    }),
+    anywhere.context.onChange(value => contexts.push(value.text)),
+    anywhere.input.onChange(value => {
+      if (value === 'updated') throw new Error('broken input subscriber');
+    }),
+    anywhere.input.onChange(value => inputs.push(value)),
+  ];
+  try {
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await anywhere.input.set('updated');
+    assert.equal(writes, 1);
+    assert.deepEqual(contexts, ['initial', 'updated']);
+    assert.deepEqual(inputs, ['initial', 'updated']);
+  } finally {
+    for (const stop of stops) stop();
+    delete globalThis.__anywhereInvoke;
+  }
+});
+
 test('background adapter uses the same typed API without browser globals', async () => {
   const calls = [];
   globalThis.__anywhereInvoke = (method, params) => {
@@ -52,6 +97,38 @@ test('background adapter uses the same typed API without browser globals', async
       key: 'indent',
       value: 2,
     });
+  } finally {
+    delete globalThis.__anywhereInvoke;
+  }
+});
+
+test('background text transport commits a full MiB and respects pre-cancellation', async () => {
+  const {anywhere} = await import('../dist/background.js');
+  let bytes = 0,
+    committed = false,
+    calls = 0;
+  globalThis.__anywhereInvoke = (method, raw) => {
+    calls++;
+    const params = JSON.parse(raw);
+    if (method === 'text.begin')
+      return JSON.stringify({value: {ticket: 'ticket'}});
+    if (method === 'text.chunk') bytes += Buffer.byteLength(params.text);
+    if (method === 'text.commit') committed = true;
+    return JSON.stringify({value: null});
+  };
+  try {
+    await anywhere.clipboard.writeText('中🚀'.repeat(149796) + 'test');
+    assert.equal(bytes, 1048576);
+    assert.equal(committed, true);
+    assert.ok(calls < 1024);
+    const before = calls;
+    const controller = new AbortController();
+    controller.abort();
+    await assert.rejects(
+      anywhere.clipboard.writeText('no', {signal: controller.signal}),
+      {code: 'CANCELLED'},
+    );
+    assert.equal(calls, before);
   } finally {
     delete globalThis.__anywhereInvoke;
   }

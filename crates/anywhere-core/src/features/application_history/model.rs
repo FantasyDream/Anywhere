@@ -143,7 +143,7 @@ pub enum Notice {
     Stale,
 }
 pub struct SearchResult {
-    pub items: Vec<Item>,
+    pub items: std::sync::Arc<[Item]>,
     pub failed_sources: Vec<String>,
     pub notice: Option<Notice>,
 }

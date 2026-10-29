@@ -18,7 +18,7 @@ use std::sync::{
 struct State {
     configurations: Vec<SourceConfiguration>,
     sources: Vec<SourcePreference>,
-    items: Vec<Item>,
+    items: Arc<[Item]>,
 }
 pub struct HistoryService {
     storage: Result<Arc<dyn ExtensionStorage>, String>,
@@ -43,7 +43,7 @@ impl HistoryService {
             state: Mutex::new(State {
                 configurations: vec![],
                 sources: vec![],
-                items: vec![],
+                items: Default::default(),
             }),
             worker: Mutex::new(()),
             configuration: Mutex::new(()),
@@ -116,7 +116,7 @@ impl HistoryService {
             self.epoch.fetch_add(1, Ordering::AcqRel);
             state.configurations = configurations;
             state.sources = sources;
-            state.items.clear();
+            state.items = Arc::default();
         }
     }
     pub fn sources(&self) -> Vec<SourceStatus> {
@@ -271,6 +271,6 @@ impl HistoryService {
     pub fn cancel(&self) {
         let mut state = self.state.lock().unwrap();
         self.epoch.fetch_add(1, Ordering::AcqRel);
-        state.items.clear();
+        state.items = Arc::default();
     }
 }

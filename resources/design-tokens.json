@@ -262,10 +262,6 @@
       "value": 26,
       "unit": "px"
     },
-    "previewFraction": {
-      "value": 0.38,
-      "unit": "number"
-    },
     "pageTitleGap": {
       "value": 3,
       "unit": "px"

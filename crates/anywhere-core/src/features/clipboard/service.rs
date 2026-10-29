@@ -273,43 +273,36 @@ impl HistoryService {
         state.expire((self.clock)())?;
         state.repository()?.search(query)
     }
-    pub fn detail(&self, id: i64) -> Result<Option<HistoryDetail>> {
-        self.detail_with(id, super::content::preview)
-    }
-    fn detail_with(
+    /// Explicit native preview only; preserve payload bytes and recheck deletion/policy after preparation.
+    pub fn inspect_payload<T>(
         &self,
         id: i64,
-        render: impl FnOnce(
-            HistoryItem,
-            anywhere_platform::clipboard::ClipboardPayload,
-        ) -> HistoryDetail,
-    ) -> Result<Option<HistoryDetail>> {
-        // Acquire before loading a body. Decoding never holds the policy/storage
-        // lock, so capture, pause, deletion and configuration stay responsive.
+        render: impl FnOnce(HistoryItem, anywhere_platform::clipboard::ClipboardPayload) -> Result<T>,
+    ) -> Result<Option<T>> {
         let _preview = self
             .preview
             .lock()
             .map_err(|_| anyhow::anyhow!("clipboard preview unavailable"))?;
-        let (epoch, detail) = {
+        let (epoch, value) = {
             let mut state = self.state()?;
             state.require_enabled()?;
             state.expire((self.clock)())?;
-            let repository = state.repository()?;
-            let Some(item) = repository.item(id)? else {
+            let epoch = state.epoch;
+            let repo = state.repository()?;
+            let Some(item) = repo.item(id)? else {
                 return Ok(None);
             };
-            let detail = repository.payload(id)?.map(|payload| (item, payload));
-            (state.epoch, detail)
+            (epoch, repo.payload(id)?.map(|payload| (item, payload)))
         };
-        let detail = detail.map(|(item, payload)| render(item, payload));
+        let value = value
+            .map(|(item, payload)| render(item, payload))
+            .transpose()?;
         let mut state = self.state()?;
         state.require_enabled()?;
         state.expire((self.clock)())?;
-        // A different window may delete or quota-evict the selected record while
-        // its image is decoding. Never publish an orphaned preview.
         Ok(
             if state.epoch == epoch && state.repository()?.item(id)?.is_some() {
-                detail
+                value
             } else {
                 None
             },

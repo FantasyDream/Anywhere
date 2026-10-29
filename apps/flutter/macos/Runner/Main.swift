@@ -20,6 +20,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   var controller: FlutterViewController!
   private var localeHost: LocaleHost?
   private var localeObservers: [NSObjectProtocol] = []
+  private var previewHost: NativePreviewHost?
   private var webToolsChannel: FlutterMethodChannel?
   private var webToolsActive = false
   private var webToolsHostPanelVisible = false
@@ -222,6 +223,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     log([
       "event": "window_material", "backend": glass.usesLiquidGlass ? "liquidGlass" : "visualEffect",
     ])
+    previewHost = NativePreviewHost(
+      messenger: controller.engine.binaryMessenger,
+      owner: { [weak self] in self?.window }
+    )
     channel = FlutterMethodChannel(
       name: "anywhere/window",
       binaryMessenger: controller.engine.binaryMessenger
@@ -605,6 +610,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   }
 
   func hideLauncherWindow() {
+    previewHost?.close()
     NativeWebView.exposeAccessibility(in: window.contentView ?? controller.view, enabled: false)
     launcherWindows.hideLauncherWindow()
   }
@@ -621,7 +627,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
   func windowDidResignKey(_ notification: Notification) {
     if notification.object as? NSWindow === settingsWindow { shortcutRecorder.cancel() }
-    if notification.object as? NSWindow === window { dismissForFocusLoss() }
+    if notification.object as? NSWindow === window {
+      DispatchQueue.main.async { [weak self] in
+        guard let self, !self.window.isKeyWindow, self.previewHost?.containsKeyWindow != true else {
+          return
+        }
+        self.dismissForFocusLoss()
+      }
+    }
   }
   func applicationDidResignActive(_ notification: Notification) {
     shortcutRecorder.cancel()

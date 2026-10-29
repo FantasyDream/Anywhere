@@ -14,6 +14,7 @@ import 'host_settings.dart';
 import 'intent_shortcut_dialog.dart';
 import 'settings_components.dart';
 import 'settings_controller.dart';
+import 'shortcut_action_picker.dart';
 import 'shortcut_recorder.dart';
 
 /// Uses the settings page's existing save queue and close protection.
@@ -290,13 +291,6 @@ class _ShortcutDialogState extends State<_ShortcutDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final query = _search.text.toLowerCase();
-    final actions = widget.options
-        .where((a) =>
-            '${a.title} ${a.contextTypes.map(contextTypeLabel).join(' ')} ${a.contextTypes.join(' ')}'
-                .toLowerCase()
-                .contains(query))
-        .toList();
     return AlertDialog(
       scrollable: _action != null,
       title: Text(context.l10n.actionShortcut),
@@ -310,43 +304,27 @@ class _ShortcutDialogState extends State<_ShortcutDialog> {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (_action == null) ...[
-                      TextField(
-                          controller: _search,
-                          autofocus: true,
-                          decoration: InputDecoration(
-                              hintText: context.l10n.findAnAction,
-                              prefixIcon: Icon(AppIcons.search, size: 17),
-                              isDense: true),
-                          onChanged: (_) => setState(() {})),
-                      const SizedBox(height: 8),
+                    if (_action == null)
                       Expanded(
-                          child: ListView(children: [
-                        for (final action in actions)
-                          ListTile(
-                              dense: true,
-                              title: Text(action.title),
-                              subtitle: Text(
-                                  action.contextTypes
-                                      .map(contextTypeLabel)
-                                      .join(' · '),
-                                  style: AppStyle.caption),
-                              onTap: () {
+                          child: ShortcutActionPicker(
+                              actions: widget.options,
+                              query: _search,
+                              onSelected: (action) {
                                 setState(() {
                                   _action = action;
                                   _binding = null;
                                 });
                                 _focus.requestFocus();
-                              }),
-                      ])),
-                    ] else ...[
+                              }))
+                    else ...[
                       Text(
                           context.localizedLabel(
                               _action!.title, _action!.localizedTitles),
                           style: const TextStyle(fontWeight: FontWeight.w600)),
                       Text(
                           _action!.contextTypes
-                              .map(contextTypeLabel)
+                              .map((type) =>
+                                  contextTypeLabel(type, context.l10n))
                               .join(' · '),
                           style: const TextStyle(
                               fontSize: 11, color: AppStyle.muted)),

@@ -18,9 +18,8 @@ export interface HostTransport {
   send(frame: string): void | Promise<void>;
   subscribe(receive: (frame: string) => void): () => void;
 }
-export interface CallOptions {
-  signal?: AbortSignal;
-}
+import type {CallOptions} from './api.js';
+export type {CallOptions} from './api.js';
 import {HostError} from './errors.js';
 export {HostError} from './errors.js';
 

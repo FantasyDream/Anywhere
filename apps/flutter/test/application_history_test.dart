@@ -748,6 +748,78 @@ void main() {
     session.dispose();
   });
 
+  testWidgets(
+      'typing during a slow cancellation shares one pending cancellation',
+      (tester) async {
+    final cancel = Completer<void>();
+    final backend = HistoryBackend()..cancelOverride = () => cancel.future;
+    final session = AppHistorySession(backend,
+        sourceId: 'idea', title: 'IDEA Recent Projects');
+    await tester.pump();
+    for (var i = 0; i < 50; i++) {
+      session.query.text = 'query-$i';
+      await tester.pump();
+    }
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(backend.calls, ['idea:']);
+    cancel.complete();
+    await tester.pump();
+    expect(backend.calls, ['idea:', 'idea:query-49']);
+    debugPrint('history_cancel_requests count=${backend.cancelled}');
+    expect(backend.cancelled, 1);
+    session.query.text = 'next';
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(backend.cancelled, 2,
+        reason: 'a newly started read still needs its own cancellation');
+    expect(backend.calls.last, 'idea:next');
+    session.dispose();
+  });
+
+  testWidgets('disposed history releases rows while an old read is blocked',
+      (tester) async {
+    final pending = Completer<AppHistoryDto>();
+    final backend = HistoryBackend()
+      ..searchOverride = (_, __) async => AppHistoryDto(
+          items: List.generate(4096, (i) => item('$i')),
+          failedSources: const []);
+    final session = AppHistorySession(backend,
+        sourceId: 'idea', title: 'IDEA Recent Projects');
+    await tester.pump();
+    expect(session.items.length, 4096);
+    backend.searchOverride = (_, __) => pending.future;
+    final refresh = session.refresh();
+    await tester.pump();
+    session.dispose();
+    expect(session.items, isEmpty);
+    expect(session.objectActions, isEmpty);
+    pending.complete(
+        AppHistoryDto(items: [item('late')], failedSources: const []));
+    await refresh;
+    expect(session.items, isEmpty);
+  });
+
+  testWidgets('a failed cancellation does not poison the next query',
+      (tester) async {
+    final cancel = Completer<void>();
+    final backend = HistoryBackend()..cancelOverride = () => cancel.future;
+    final session = AppHistorySession(backend,
+        sourceId: 'idea', title: 'IDEA Recent Projects');
+    await tester.pump();
+    session.query.text = 'first';
+    session.query.text = 'latest';
+    await tester.pump(const Duration(milliseconds: 150));
+    cancel.completeError(StateError('synthetic cancellation failure'));
+    await tester.pump();
+    expect(backend.calls.last, 'idea:latest');
+    expect(session.failed, isFalse);
+    backend.cancelOverride = () async {};
+    session.query.text = 'recovered';
+    await tester.pump(const Duration(milliseconds: 150));
+    expect(backend.calls.last, 'idea:recovered');
+    expect(backend.cancelled, 2);
+    session.dispose();
+  });
+
   testWidgets('all pending cancellations finish before the next read',
       (tester) async {
     final firstCancel = Completer<void>();

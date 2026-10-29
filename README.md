@@ -23,14 +23,14 @@ V0.14 已接入[应用历史与动作排序](docs/mvp-v0.14.md)：通用文件�
 
 - **应用与动作搜索**：启动或切回应用，搜索当前应用的可用菜单，通过 Scope 筛选领域动作。
 - **Context 动作**：读取 Finder 选中项 / 目录、选中文本、浏览器当前 URL 和近期剪贴板；支持路径、URL 与项目类型识别。
-- **文件搜索**：Spotlight 快速结果加完整文件名遍历，支持隐藏文件、类型过滤、稳定追加与固定右侧预览，不建立长期全盘索引。
+- **文件搜索**：Spotlight 快速结果加完整文件名遍历，支持隐藏文件、类型过滤、稳定追加与按需系统预览，不建立长期全盘索引。
 - **剪贴板历史**：本机保存和检索文本、图片、文件列表及可读取格式；另有支持连续复制的常驻悬浮窗。采集默认关闭。
 - **开发工具**：Git 常用动作、Maven / Gradle / Node / Cargo 与 Spring Boot 动作，长任务可返回查看输出与停止。
 - **快捷键与语言**：自定义 Action / 全局 / Context 快捷键，支持简体中文、English、全拼与首字母搜索。
 - **应用历史原型**：每个应用有独立 Action，如“IDEA 最近项目”“VS Code 最近项目与文件”；在对应 Current App 中自动出现，全局搜索也可找到；仅默认开启已安装应用的 Action，自动检测来源文件，设置中可自定义路径或手动开关来源，支持标题 / 路径 / 拼音匹配。接入与限制见[来源指南](docs/application-history-sources.md)。
 - **Web 插件预览**：可信本地包、明确权限、统一主题与 SDK；JSON Workspace 作为普通插件实现。
 
-终端 / PTY、插件进程隔离、插件市场和浏览器历史暂未交付。第三方 Context 目前仅支持按需解析获准输入；文件预览以元数据和有界文本为主。
+终端 / PTY、插件进程隔离、插件市场和浏览器历史暂未交付。第三方 Context 目前仅支持按需解析获准输入；文件及剪贴板预览使用按需 macOS Quick Look 窗口；其他平台的原生预览尚未实现。
 
 ## 快速使用
 
@@ -71,7 +71,7 @@ flowchart TD
 
 Rust 负责识别、匹配、排序、执行和资源预算；Flutter 负责呈现与交互；系统差异留在平台适配层。第一方模块编译期自动注册，第三方插件通过独立包与统一 TypeScript SDK 接入：WebView 运行界面，按需 QuickJS 运行后台 Context / Action，权限与生命周期统一由 Rust 管理。
 
-代码定位先看 [AGENTS.md](AGENTS.md)。详见[架构与代码地图](docs/architecture.md)、[Context 模型](docs/context-model.md)与[插件开发指南](docs/plugin-development.md)与[运行时实施清单](docs/plugin-runtime-refactor.md)。
+代码定位先看 [AGENTS.md](AGENTS.md)。详见[架构与代码地图](docs/architecture.md)、[Context 模型](docs/context-model.md)及[插件开发指南](docs/plugin-development.md)。
 
 ## 从源码构建
 

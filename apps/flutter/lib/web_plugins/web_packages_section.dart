@@ -199,12 +199,17 @@ class _WebPackagesSectionState extends State<WebPackagesSection> {
             AppDisclosure(
                 key: ValueKey('web-package-${package.id}'),
                 title: package.name,
+                initiallyExpanded: !package.available,
+                subtitle: !package.available
+                    ? Text(context.l10n.webPackageDamaged,
+                        style: AppStyle.caption)
+                    : null,
                 leading: const Icon(AppIcons.plugin,
                     size: 18, color: AppStyle.secondary),
                 trailing: AppToggle(
                     label: context.l10n.enableFeature(package.name),
                     value: package.enabled,
-                    onChanged: _busy
+                    onChanged: _busy || (!package.available && !package.enabled)
                         ? null
                         : (enabled) =>
                             _change(package, enabled ? 'enable' : 'disable')),

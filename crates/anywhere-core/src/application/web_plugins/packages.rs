@@ -20,6 +20,7 @@ pub struct WebPackageStatus {
     pub digest: String,
     pub entry: String,
     pub enabled: bool,
+    pub available: bool,
     pub permissions: Vec<WebPermission>,
     pub rollback: bool,
 }
@@ -150,6 +151,17 @@ impl WebPackageStore {
     fn change(&mut self, app: &Application, next: BTreeMap<String, Receipt>) -> Result<()> {
         // Validation and persistence failures leave the active catalog and document intact.
         let prepared = self.prepare(&next)?;
+        for status in &prepared.statuses {
+            if status.enabled
+                && !status.available
+                && self
+                    .receipts
+                    .get(&status.id)
+                    .is_none_or(|old| !old.enabled || old.digest != status.digest)
+            {
+                anyhow::bail!("Web package is unavailable; restore or uninstall it");
+            }
+        }
         self.repository.save(&next)?;
         if let Err(error) = self.publish(app, prepared) {
             self.repository
@@ -166,19 +178,43 @@ impl WebPackageStore {
         let mut statuses = vec![];
         let mut assets = BTreeMap::new();
         for receipt in receipts.values() {
-            let package = self.repository.package(&receipt.digest)?;
-            ensure!(
-                package.digest() == receipt.digest && package.manifest().id == receipt.id,
-                "installed Web package changed"
-            );
+            let package = self
+                .repository
+                .package(&receipt.digest)
+                .and_then(|package| {
+                    ensure!(
+                        package.digest() == receipt.digest && package.manifest().id == receipt.id,
+                        "installed Web package changed"
+                    );
+                    Ok(package)
+                });
+            let package = match package {
+                Ok(package) => package,
+                Err(_) => {
+                    // Receipts remain manageable even when the optional code is unreadable.
+                    statuses.push(WebPackageStatus {
+                        id: receipt.id.clone(),
+                        name: receipt.id.clone(),
+                        version: String::new(),
+                        entry: String::new(),
+                        digest: receipt.digest.clone(),
+                        enabled: receipt.enabled,
+                        available: false,
+                        permissions: vec![],
+                        rollback: receipt.previous.is_some(),
+                    });
+                    continue;
+                }
+            };
             let m = package.manifest();
             statuses.push(WebPackageStatus {
                 id: m.id.clone(),
                 name: m.name.clone(),
                 version: m.version.clone(),
-                digest: receipt.digest.clone(),
                 entry: m.entry.clone(),
+                digest: receipt.digest.clone(),
                 enabled: receipt.enabled,
+                available: true,
                 permissions: m.permissions.clone(),
                 rollback: receipt.previous.is_some(),
             });

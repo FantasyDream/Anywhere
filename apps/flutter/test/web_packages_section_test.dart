@@ -2,19 +2,23 @@ import 'dart:async';
 
 import 'package:anywhere/infrastructure/web_package_backend.dart';
 import 'package:anywhere/src/rust/api.dart';
+import 'package:anywhere/ui/app_components.dart';
 import 'package:anywhere/ui/app_style.dart';
 import 'package:anywhere/web_plugins/web_packages_section.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-WebPackageDto package(String name, {bool enabled = true}) => WebPackageDto(
-    id: 'dev.example.tool',
-    name: name,
-    version: '1.0.0',
-    digest: 'digest',
-    permissions: [],
-    enabled: enabled,
-    rollback: false);
+WebPackageDto package(String name,
+        {bool enabled = true, bool available = true}) =>
+    WebPackageDto(
+        available: available,
+        id: 'dev.example.tool',
+        name: name,
+        version: '1.0.0',
+        digest: 'digest',
+        permissions: [],
+        enabled: enabled,
+        rollback: false);
 
 class Backend extends WebPackageBackend {
   final initial = Completer<List<WebPackageDto>>();
@@ -61,6 +65,19 @@ Widget page(Backend backend) => MaterialApp(
         body: SingleChildScrollView(
             child: WebPackagesSection(backend: backend))));
 void main() {
+  testWidgets('damaged package exposes recovery and cannot be enabled',
+      (tester) async {
+    final backend = Backend();
+    backend.initial
+        .complete([package('Damaged', enabled: false, available: false)]);
+    await tester.pumpWidget(page(backend));
+    await tester.pumpAndSettle();
+    expect(
+        find.textContaining('Package files are unavailable'), findsOneWidget);
+    expect(find.text('Uninstall'), findsOneWidget);
+    expect(tester.widget<AppToggle>(find.byType(AppToggle)).onChanged, isNull);
+  });
+
   testWidgets(
       'long plugin names keep enable and uninstall reachable in narrow settings',
       (tester) async {

@@ -31,13 +31,7 @@ pub struct ClipboardItemDto {
     pub copied_at_ms: i64,
     pub byte_count: u32,
 }
-pub struct ClipboardDetailDto {
-    pub item: ClipboardItemDto,
-    pub text: String,
-    pub image_png: Vec<u8>,
-    pub files: Vec<String>,
-    pub formats: Vec<String>,
-}
+
 pub enum ClipboardNoticeDto {
     FeatureDisabled,
     StorageUnavailable,
@@ -70,9 +64,7 @@ pub fn clipboard_history_status() -> Result<ClipboardHistoryStatusDto> {
 pub fn clipboard_history(query: String) -> Result<ClipboardHistoryDto> {
     clipboard::search(query)
 }
-pub fn clipboard_history_detail(id: String) -> Result<Option<ClipboardDetailDto>> {
-    clipboard::detail(id)
-}
+
 pub fn set_clipboard_recording(enabled: bool) -> Result<()> {
     clipboard::set_recording(enabled)
 }
@@ -732,26 +724,37 @@ pub struct PluginKeyValueDto {
     pub value: String,
 }
 
+/// Qualified local resources borrowed by the platform viewer until release.
 #[derive(Clone, Debug)]
-#[flutter_rust_bridge::frb]
-pub struct FilePreviewDto {
-    pub path: String,
-    pub is_directory: bool,
-    pub size_bytes: u64,
-    pub modified_ms: Option<i64>,
-    pub text: Option<String>,
-    pub truncated_at_bytes: Option<u32>,
-    pub encoding: Option<String>,
-    #[frb(default = "false")]
-    pub encoding_guessed: bool,
+pub struct NativePreviewDto {
+    pub id: String,
+    pub paths: Vec<String>,
+    pub title: String,
 }
-
+impl From<anywhere_core::features::preview::PreviewResource> for NativePreviewDto {
+    fn from(value: anywhere_core::features::preview::PreviewResource) -> Self {
+        Self {
+            id: value.id,
+            paths: value.paths,
+            title: value.title,
+        }
+    }
+}
 pub async fn preview_file(
     session_id: u32,
     revision: u32,
     candidate_id: String,
-) -> Result<FilePreviewDto> {
+) -> Result<NativePreviewDto> {
     files::preview_file(session_id, revision, candidate_id).await
+}
+pub fn preview_clipboard_entry(id: String) -> Result<NativePreviewDto> {
+    clipboard::preview(id)
+}
+pub fn retain_preview(id: String) -> Result<()> {
+    application()?.retain_preview(&id)
+}
+pub fn release_preview(id: String) -> Result<()> {
+    application()?.release_preview(&id)
 }
 
 #[derive(Clone, Debug)]
@@ -929,6 +932,7 @@ pub struct WebPackageDto {
     pub digest: String,
     pub permissions: Vec<WebPermissionDto>,
     pub enabled: bool,
+    pub available: bool,
     pub rollback: bool,
 }
 #[derive(Clone, Debug)]

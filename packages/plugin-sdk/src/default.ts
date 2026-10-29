@@ -18,20 +18,20 @@ export const anywhere: Anywhere = {
   },
   input: {
     get: () => current().input.get(),
-    set: text => current().input.set(text),
+    set: (text, options) => current().input.set(text, options),
     onChange: callback => current().input.onChange(callback),
   },
   clipboard: {
-    readText: () => current().clipboard.readText(),
-    writeText: text => current().clipboard.writeText(text),
+    readText: options => current().clipboard.readText(options),
+    writeText: (text, options) => current().clipboard.writeText(text, options),
   },
   storage: {
-    get: key => current().storage.get(key),
-    set: (key, value) => current().storage.set(key, value),
-    remove: key => current().storage.remove(key),
+    get: (key, options) => current().storage.get(key, options),
+    set: (key, value, options) => current().storage.set(key, value, options),
+    remove: (key, options) => current().storage.remove(key, options),
   },
   app: {
-    getSource: () => current().app.getSource(),
-    getFrontmost: () => current().app.getFrontmost(),
+    getSource: options => current().app.getSource(options),
+    getFrontmost: options => current().app.getFrontmost(options),
   },
 };

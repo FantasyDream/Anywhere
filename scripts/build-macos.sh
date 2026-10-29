@@ -2,6 +2,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT="$PWD"
+APP="$(python3 scripts/macos_app_path.py "${ANYWHERE_APP_OUTPUT:-$ROOT/build/Anywhere.app}")"
 source scripts/env.sh
 python3 scripts/check-flutter.py
 python3 scripts/check-versions.py
@@ -42,13 +43,9 @@ cargo build --locked --release -p anywhere-bridge-flutter
     -dTargetPlatform=darwin -dDarwinArchs="$ARCH" -dBuildMode=release \
     -dTargetFile=lib/main.dart release_macos_bundle_flutter_assets
 )
-APP="${ANYWHERE_APP_OUTPUT:-$ROOT/build/Anywhere.app}"
-if [[ "$APP" != "$ROOT"/build/*.app ]]; then
-  echo 'ANYWHERE_APP_OUTPUT must be an .app path inside build/.' >&2
-  exit 1
-fi
 # Rebuild from scratch: the bundle is assembled by copying, so a file removed from the
 # sources would otherwise linger and keep shipping (a deleted plugin did exactly that).
+APP="$(python3 scripts/macos_app_path.py "$APP")"
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Frameworks" "$APP/Contents/Resources"
 # No bundled plugins: the app must not install a web search the user did not ask for.

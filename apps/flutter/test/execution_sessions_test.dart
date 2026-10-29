@@ -42,6 +42,31 @@ void main() {
   tearDown(DesktopEnvironment.reset);
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  testWidgets('late output copy failure does not use an unmounted page',
+      (tester) async {
+    final pending = Completer<void>();
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') await pending.future;
+      return null;
+    });
+    addTearDown(() =>
+        messenger.setMockMethodCallHandler(SystemChannels.platform, null));
+    var errors = 0;
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: ExecutionOutputView(
+                detail: detail('a'), onError: (_) => errors++))));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Copy output'));
+    await tester.pumpWidget(const SizedBox());
+    pending.completeError(PlatformException(code: 'copy_failed'));
+    await tester.pump();
+    expect(errors, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   test('unchanged polls retain output and do not rebuild the task window',
       () async {
     var outputReads = 0;
