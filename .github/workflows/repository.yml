@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Validate documentation and repository files
         run: |
           python3 -m unittest discover -s scripts/tests -p test_npm_sources.py
