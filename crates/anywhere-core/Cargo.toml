@@ -23,7 +23,7 @@ unicode-normalization = "0.1"
 unicode-casefold = "0.2"
 pinyin = { version = "=0.11.0", default-features = false, features = ["plain", "heteronym"] }
 sha2 = "0.10"
-rusqlite = { version = "0.32", features = ["bundled", "hooks", "limits"] }
+rusqlite = { version = "0.40", features = ["bundled", "hooks", "limits"] }
 getrandom = "0.4"
 rquickjs = { version = "=0.14.0", default-features = false, features = ["std"] }
 
