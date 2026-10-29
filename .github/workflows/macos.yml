@@ -48,7 +48,7 @@ jobs:
       - name: Identify Swift toolchain
         id: swift-toolchain
         run: echo "hash=$(swift --version | shasum -a 256 | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: .tools/code-style/swift-format
           key: code-style-${{ runner.os }}-${{ runner.arch }}-${{ steps.swift-toolchain.outputs.hash }}-${{ hashFiles('scripts/setup-code-style.sh', 'tools/code-style/swift-package.resolved') }}
