@@ -40,6 +40,12 @@
 
 ## 最新已验证基线
 
+### PR 原生测试的 Swift 兼容修复 — 2026-11-02
+
+[PR #20](https://github.com/FantasyDream/Anywhere/pull/20) 首轮远端文档、Linux 和 Windows 检查通过；macOS 在预览测试的 `weak let` 声明处编译失败。较早 Swift 要求弱引用使用 `var`，本机 Swift 6.4 又将未修改的弱 `var` 报为警告，现行检查将警告视为错误。
+
+释放观察改为弱捕获闭包，仍在清除强引用后断言 Host 已释放；不改变生产代码、降低警告要求或删除测试。Swift 规范、原生 Host 及完整 `scripts/check.sh` 在本机通过，测试数量与下述提交前基线相同；远端结果以 PR 检查为准。此前打包的新程序不受这项测试源码修复影响。
+
 ### 提交前复查与 beta 构建实测 — 2026-11-02
 
 复查当前未提交的 Flutter 交互 / 设置、Rust 历史查询 / 项目动作、插件生命周期 / SDK 状态同步、依赖及验证文档。发现 CI 直接引用不存在的 `dtolnay/rust-toolchain@1.100.0-beta.7` 分支；按该 Action 的官方用法改为 `@master` 配合 `toolchain: 1.100.0-beta.7`，同步 macOS 检查、打包及共享平台检查。其余已审查调用链未发现新的提交阻塞问题；不代表全仓逐行或所有运行环境均已验证。

@@ -69,7 +69,7 @@ struct NativePreviewHostTests {
     let originalResponder = window.nextResponder
     let messenger = PreviewMessenger()
     var host: NativePreviewHost? = NativePreviewHost(messenger: messenger, owner: { window })
-    weak let releasedHost = host
+    let hostWasReleased = { [weak host] in host == nil }
     let directory = FileManager.default.temporaryDirectory
       .appendingPathComponent("anywhere-preview-test-\(UUID().uuidString)", isDirectory: true)
     try! FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -120,7 +120,7 @@ struct NativePreviewHostTests {
       }
       // Check after AppKit's event autorelease pool has drained as well.
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-        assert(releasedHost == nil, "Hidden Quick Look must not retain the host or engine")
+        assert(hostWasReleased(), "Hidden Quick Look must not retain the host or engine")
         window.orderOut(nil)
         try! FileManager.default.removeItem(at: directory)
         print(
