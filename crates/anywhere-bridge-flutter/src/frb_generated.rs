@@ -173,7 +173,7 @@ fn wire__crate__api__app_history_search_impl(
     rust_vec_len_: i32,
     data_len_: i32,
 ) {
-    FLUTTER_RUST_BRIDGE_HANDLER.wrap_normal::<flutter_rust_bridge::for_generated::SseCodec, _, _>(
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_async::<flutter_rust_bridge::for_generated::SseCodec, _, _, _>(
         flutter_rust_bridge::for_generated::TaskInfo {
             debug_name: "app_history_search",
             port: Some(port_),
@@ -193,13 +193,15 @@ fn wire__crate__api__app_history_search_impl(
             let api_query = <String>::sse_decode(&mut deserializer);
             let api_source = <String>::sse_decode(&mut deserializer);
             deserializer.end();
-            move |context| {
+            move |context| async move {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
-                    (move || {
+                    (move || async move {
                         let output_ok =
-                            crate::api::app_history_search(api_session_id, api_query, api_source)?;
+                            crate::api::app_history_search(api_session_id, api_query, api_source)
+                                .await?;
                         std::result::Result::Ok(output_ok)
-                    })(),
+                    })()
+                    .await,
                 )
             }
         },
@@ -434,11 +436,12 @@ fn wire__crate__api__cancel_web_review_impl(
             };
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_token = <String>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || {
-                        let output_ok = crate::api::cancel_web_review()?;
+                        let output_ok = crate::api::cancel_web_review(api_token)?;
                         std::result::Result::Ok(output_ok)
                     })(),
                 )
@@ -584,11 +587,12 @@ fn wire__crate__api__clipboard_history_impl(
             let mut deserializer =
                 flutter_rust_bridge::for_generated::SseDeserializer::new(message);
             let api_query = <String>::sse_decode(&mut deserializer);
+            let api_after = <Option<String>>::sse_decode(&mut deserializer);
             deserializer.end();
             move |context| {
                 transform_result_sse::<_, flutter_rust_bridge::for_generated::anyhow::Error>(
                     (move || {
-                        let output_ok = crate::api::clipboard_history(api_query)?;
+                        let output_ok = crate::api::clipboard_history(api_query, api_after)?;
                         std::result::Result::Ok(output_ok)
                     })(),
                 )
@@ -3046,11 +3050,13 @@ impl SseDecode for crate::api::CandidateUpdateDto {
 impl SseDecode for crate::api::ClipboardHistoryDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_revision = <Option<String>>::sse_decode(deserializer);
         let mut var_recording = <bool>::sse_decode(deserializer);
         let mut var_available = <bool>::sse_decode(deserializer);
         let mut var_notice = <Option<crate::api::ClipboardNoticeDto>>::sse_decode(deserializer);
         let mut var_items = <Vec<crate::api::ClipboardItemDto>>::sse_decode(deserializer);
         return crate::api::ClipboardHistoryDto {
+            revision: var_revision,
             recording: var_recording,
             available: var_available,
             notice: var_notice,
@@ -3734,6 +3740,17 @@ impl SseDecode for Option<crate::api::AppHistoryNoticeDto> {
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
         if (<bool>::sse_decode(deserializer)) {
             return Some(<crate::api::AppHistoryNoticeDto>::sse_decode(deserializer));
+        } else {
+            return None;
+        }
+    }
+}
+
+impl SseDecode for Option<crate::api::ClipboardHistoryDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        if (<bool>::sse_decode(deserializer)) {
+            return Some(<crate::api::ClipboardHistoryDto>::sse_decode(deserializer));
         } else {
             return None;
         }
@@ -4579,6 +4596,7 @@ impl flutter_rust_bridge::IntoIntoDart<crate::api::CandidateUpdateDto>
 impl flutter_rust_bridge::IntoDart for crate::api::ClipboardHistoryDto {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
+            self.revision.into_into_dart().into_dart(),
             self.recording.into_into_dart().into_dart(),
             self.available.into_into_dart().into_dart(),
             self.notice.into_into_dart().into_dart(),
@@ -5611,6 +5629,7 @@ impl SseEncode for crate::api::CandidateUpdateDto {
 impl SseEncode for crate::api::ClipboardHistoryDto {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <Option<String>>::sse_encode(self.revision, serializer);
         <bool>::sse_encode(self.recording, serializer);
         <bool>::sse_encode(self.available, serializer);
         <Option<crate::api::ClipboardNoticeDto>>::sse_encode(self.notice, serializer);
@@ -6167,6 +6186,16 @@ impl SseEncode for Option<crate::api::AppHistoryNoticeDto> {
         <bool>::sse_encode(self.is_some(), serializer);
         if let Some(value) = self {
             <crate::api::AppHistoryNoticeDto>::sse_encode(value, serializer);
+        }
+    }
+}
+
+impl SseEncode for Option<crate::api::ClipboardHistoryDto> {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <bool>::sse_encode(self.is_some(), serializer);
+        if let Some(value) = self {
+            <crate::api::ClipboardHistoryDto>::sse_encode(value, serializer);
         }
     }
 }

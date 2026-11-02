@@ -24,20 +24,18 @@ pub(super) fn status() -> Result<ClipboardHistoryStatusDto> {
         notice: status.notice.map(notice),
     })
 }
-pub(super) fn search(query: String) -> Result<ClipboardHistoryDto> {
-    let history = history()?;
-    let status = history.status()?;
-    let items = if status.available {
-        history.search(&query)?
-    } else {
-        vec![]
+pub(super) fn search(query: String, after: Option<String>) -> Result<Option<ClipboardHistoryDto>> {
+    let Some(snapshot) = history()?.snapshot(&query, after.as_deref())? else {
+        return Ok(None);
     };
-    Ok(ClipboardHistoryDto {
+    let status = snapshot.status;
+    Ok(Some(ClipboardHistoryDto {
+        revision: Some(snapshot.revision),
         recording: status.recording,
         available: status.available,
         notice: status.notice.map(notice),
-        items: items.into_iter().map(convert).collect(),
-    })
+        items: snapshot.items.into_iter().map(convert).collect(),
+    }))
 }
 fn notice(value: HistoryNotice) -> ClipboardNoticeDto {
     match value {

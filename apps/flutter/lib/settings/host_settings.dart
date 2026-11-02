@@ -251,8 +251,6 @@ String formatHotkey(int keyCode, int modifiers) {
   return buffer.toString();
 }
 
-int? shortcutKeyCode(LogicalKeyboardKey key) => shortcutLogicalKeyCodes[key];
-
 /// USB HID keyboard usages preserve physical positions across OS and layouts.
 int? shortcutEventKeyCode(KeyEvent event) =>
     shortcutPhysicalKeyCodes[event.physicalKey];

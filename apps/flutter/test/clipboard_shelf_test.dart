@@ -81,7 +81,7 @@ void main() {
     };
     final session = ClipboardHistorySession(backend);
     await Future<void>.delayed(Duration.zero);
-    await session.select(1);
+    session.select(1);
     final previousDetails = details;
     var notifications = 0;
     session.addListener(() => ++notifications);
@@ -197,7 +197,7 @@ void main() {
         .widget<ClipboardShelfPage>(find.byType(ClipboardShelfPage))
         .session;
     expect(session.selected, isNull);
-    await session.select(0);
+    session.select(0);
     expect(session.selected?.id, '1',
         reason: 'Explicit selection before inserting a new record');
     backend.rows = [item('new'), ...backend.rows];
@@ -228,7 +228,7 @@ void main() {
     };
     final session = ClipboardHistorySession(backend, rowExtent: 48);
     await Future<void>.delayed(Duration.zero);
-    await session.select(1);
+    session.select(1);
     await session.refresh(background: true);
     expect(await session.copyItem('missing'), false);
     expect(await session.copyItem('1'), true);

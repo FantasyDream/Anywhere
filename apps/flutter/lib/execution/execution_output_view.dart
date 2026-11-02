@@ -50,8 +50,8 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
   void didUpdateWidget(ExecutionOutputView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_following &&
-        (oldWidget.detail.stdout != widget.detail.stdout ||
-            oldWidget.detail.stderr != widget.detail.stderr)) {
+        (_diagnostics ? oldWidget.detail.stderr : oldWidget.detail.stdout) !=
+            _text) {
       _toLatest();
     }
   }

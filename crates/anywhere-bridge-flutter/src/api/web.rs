@@ -117,8 +117,8 @@ pub(super) fn inspect(path: String) -> Result<WebReviewDto> {
         updating,
     })
 }
-pub(super) fn cancel_review() -> Result<()> {
-    store()?.cancel_review();
+pub(super) fn cancel_review(token: String) -> Result<()> {
+    store()?.cancel_review(&token);
     Ok(())
 }
 pub(super) fn approve(token: String) -> Result<Vec<WebPackageDto>> {

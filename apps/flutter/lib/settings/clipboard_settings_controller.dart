@@ -47,8 +47,7 @@ class ClipboardSettingsController extends ChangeNotifier {
     }
   }
 
-  Future<bool> waitForPending() async =>
-      await (_pending ?? Future.value(!_operationFailed));
+  Future<bool> waitForPending() => _pending ?? Future.value(!_operationFailed);
   Future<bool> load() => _run();
   Future<bool> setRecording(bool enabled) =>
       _run(() => backend.setRecording(enabled));
@@ -59,25 +58,22 @@ class ClipboardSettingsController extends ChangeNotifier {
   Future<bool> _run([Future<void> Function()? change]) {
     if (_disposed) return Future.value(false);
     if (change == null && _pending != null) return _pending!;
-    final previous = _pending;
-    // Publish the pending operation before notifying listeners: a close callback
-    // or another observer must wait for this write and its readback too.
-    final completion = Completer<bool>();
-    final future = completion.future;
-    _pending = future;
-    busy = true;
-    notifyListeners();
-    unawaited(() async {
-      await previous;
+    final previous = _pending ?? Future.value(true);
+    late final Future<bool> next;
+    next = previous.then((_) async {
       final result = _disposed ? false : await _apply(change);
-      if (identical(_pending, future)) {
+      if (identical(_pending, next)) {
         _pending = null;
         busy = false;
       }
       if (!_disposed) notifyListeners();
-      completion.complete(result);
-    }());
-    return future;
+      return result;
+    });
+    // Close callbacks triggered by busy must also wait for this write's readback.
+    _pending = next;
+    busy = true;
+    notifyListeners();
+    return next;
   }
 
   Future<bool> _apply(Future<void> Function()? change) async {

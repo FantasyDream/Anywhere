@@ -43,6 +43,7 @@ pub enum ClipboardNoticeDto {
     Paused,
 }
 pub struct ClipboardHistoryDto {
+    pub revision: Option<String>,
     pub recording: bool,
     pub available: bool,
     pub notice: Option<ClipboardNoticeDto>,
@@ -61,8 +62,11 @@ pub struct ClipboardHistoryStatusDto {
 pub fn clipboard_history_status() -> Result<ClipboardHistoryStatusDto> {
     clipboard::status()
 }
-pub fn clipboard_history(query: String) -> Result<ClipboardHistoryDto> {
-    clipboard::search(query)
+pub fn clipboard_history(
+    query: String,
+    after: Option<String>,
+) -> Result<Option<ClipboardHistoryDto>> {
+    clipboard::search(query, after)
 }
 
 pub fn set_clipboard_recording(enabled: bool) -> Result<()> {
@@ -137,8 +141,12 @@ pub fn configure_app_history_source(
 ) -> Result<()> {
     application_history::configure(id, path, mode)
 }
-pub fn app_history_search(session_id: u32, query: String, source: String) -> Result<AppHistoryDto> {
-    application_history::search(session_id, query, source)
+pub async fn app_history_search(
+    session_id: u32,
+    query: String,
+    source: String,
+) -> Result<AppHistoryDto> {
+    application_history::search(session_id, query, source).await
 }
 pub fn open_app_history_session() -> Result<u32> {
     application_history::open()
@@ -974,8 +982,8 @@ pub fn web_packages() -> Result<Vec<WebPackageDto>> {
 pub fn inspect_web_package(path: String) -> Result<WebReviewDto> {
     web::inspect(path)
 }
-pub fn cancel_web_review() -> Result<()> {
-    web::cancel_review()
+pub fn cancel_web_review(token: String) -> Result<()> {
+    web::cancel_review(token)
 }
 pub async fn approve_web_package(token: String) -> Result<Vec<WebPackageDto>> {
     web::approve(token)

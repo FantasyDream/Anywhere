@@ -20,6 +20,101 @@ void main() {
   });
   tearDown(DesktopEnvironment.reset);
 
+  testWidgets('Space previews a pointer-selected clipboard history item',
+      (tester) async {
+    final backend = History();
+    final session = ClipboardHistorySession(backend);
+    addTearDown(() async {
+      await tester.pumpWidget(const SizedBox());
+      session.dispose();
+    });
+    await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme,
+        home: Scaffold(
+            body: ListenableBuilder(
+                listenable: session,
+                builder: (context, _) => session.build(context,
+                    onBack: () {}, presentation: 1, visible: true)))));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Entry');
+    await tester.pump(const Duration(milliseconds: 150));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Entry 2'));
+    await tester.pumpAndSettle();
+    expect(session.selected?.id, '2');
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+    expect(session.preview.isOpen, isTrue);
+    expect(previewCalls.last.arguments['paths'], ['/synthetic/2.txt']);
+    expect(session.focus.hasFocus, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(backend.copied, ['2']);
+    expect(session.query.text, 'Entry');
+  }, variant: TargetPlatformVariant.desktop());
+
+  testWidgets('main clipboard held Enter admits only one copy', (tester) async {
+    final backend = History();
+    final session = ClipboardHistorySession(backend);
+    await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme,
+        home: Scaffold(
+            body: ListenableBuilder(
+                listenable: session,
+                builder: (context, _) => session.build(context,
+                    onBack: () {}, presentation: 1, visible: true)))));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    await tester.sendKeyRepeatEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    await tester.sendKeyRepeatEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    final count = backend.copied.length;
+    await tester.pumpWidget(const SizedBox());
+    session.dispose();
+    expect(count, 1);
+  });
+
+  testWidgets(
+      'conditional polls keep query revisions separate and recover from a failed poll',
+      (tester) async {
+    final backend = History();
+    final afters = <String?>[];
+    var fail = false;
+    backend.conditionalSearchOverride = (query, after) async {
+      afters.add(after);
+      if (fail) throw StateError('temporary read failure');
+      if (after == 'revision:$query') return null;
+      return ClipboardHistoryDto(
+          revision: 'revision:$query',
+          recording: false,
+          available: true,
+          items: [item(query)]);
+    };
+    final session = ClipboardHistorySession(backend);
+    await tester.pump();
+    await session.refresh(background: true);
+    expect(afters, [null, 'revision:']);
+    session.query.text = 'next';
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(afters.last, isNull);
+    expect(session.items.single.id, 'next');
+    await session.refresh(background: true);
+    expect(afters.last, 'revision:next');
+    fail = true;
+    await session.refresh(background: true);
+    expect(session.notice, isNotNull);
+    fail = false;
+    await session.refresh(background: true);
+    expect(afters.last, isNull);
+    expect(session.notice, isNull);
+    session.dispose();
+  });
+
   test('clipboard lists do not choose a default or act without a selection',
       () async {
     final backend = History();
@@ -38,7 +133,7 @@ void main() {
     expect(backend.copied, isEmpty);
     await session.refresh(background: true);
     expect(session.selected, isNull);
-    await session.select(session.selectedIndex + 1);
+    session.select(session.selectedIndex + 1);
     expect(session.selected?.id, '1');
     backend.rows = [item('new'), ...backend.rows];
     await session.refresh(background: true);
@@ -74,7 +169,7 @@ void main() {
     final backend = History();
     final session = ClipboardHistorySession(backend);
     await Future<void>.delayed(Duration.zero);
-    await session.select(1);
+    session.select(1);
     backend.rows = [item('new'), ...backend.rows];
     await session.refresh();
     expect(session.selected!.id, '2');
@@ -92,7 +187,7 @@ void main() {
   test('caret-only changes preserve results, preview and selection', () async {
     final session = ClipboardHistorySession(History());
     await Future<void>.delayed(Duration.zero);
-    await session.select(1);
+    session.select(1);
     final preview = session.preview;
     session.query.selection = const TextSelection.collapsed(offset: 0);
     expect(session.items.length, 2);
@@ -168,8 +263,8 @@ void main() {
     };
     final session = ClipboardHistorySession(backend);
     await Future<void>.delayed(Duration.zero);
-    await session.select(1);
-    await session.select(20);
+    session.select(1);
+    session.select(20);
     await session.refresh();
     expect(reads, 0);
     expect(session.selected!.id, '2');
@@ -182,7 +277,7 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     backend.detailOverride = (_) async => throw StateError('must not prepare');
     backend.searchOverride = (_) async => throw StateError('must not query');
-    await session.select(0);
+    session.select(0);
     expect(await session.copy(), true);
     expect(backend.copied, ['1']);
     session.dispose();
@@ -196,13 +291,12 @@ void main() {
     final response = Completer<ClipboardHistoryDto>();
     backend.searchOverride = (_) => response.future;
     final refresh = session.refresh(background: true);
-    await session.select(1);
+    session.select(1);
     response.complete(ClipboardHistoryDto(
         recording: false,
         available: true,
         items: [item('new'), ...backend.rows]));
     await refresh;
-    expect(session.selected!.id, '2');
     expect(session.selected!.id, '2');
     session.dispose();
   });
@@ -212,7 +306,7 @@ void main() {
     final backend = History();
     final session = ClipboardHistorySession(backend);
     await Future<void>.delayed(Duration.zero);
-    await session.select(1);
+    session.select(1);
     final preview = session.preview;
     backend.searchOverride = (_) async => throw StateError('unavailable');
     await session.refresh(background: true);
@@ -230,7 +324,7 @@ void main() {
     final backend = History();
     final session = ClipboardHistorySession(backend);
     await Future<void>.delayed(Duration.zero);
-    await session.select(1);
+    session.select(1);
     session.dispose();
     expect(session.items, isEmpty);
   });
@@ -257,7 +351,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('selected-row-primary')), findsOneWidget);
-    await session.select(0);
+    session.select(0);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('selected-row-actions')));
     await tester.pumpAndSettle();
@@ -333,7 +427,7 @@ void main() {
                 builder: (context, _) => session.build(context,
                     onBack: () {}, presentation: 1, visible: true)))));
     await tester.pumpAndSettle();
-    await session.select(0);
+    session.select(0);
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('selected-row-actions')));
     await tester.pumpAndSettle();
@@ -406,7 +500,7 @@ void main() {
         find.byKey(const Key('clipboard-search')), 'saved query');
     await tester.pump(const Duration(milliseconds: 160));
     await tester.pumpAndSettle();
-    await session.select(1);
+    session.select(1);
     await tester.pumpWidget(frame(2, false));
     await tester.pumpWidget(frame(3, true));
     await tester.pumpAndSettle();

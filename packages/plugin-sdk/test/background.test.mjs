@@ -1,6 +1,115 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+test('an unobserved input write invalidates the cache without spending a read', async () => {
+  let text = 'initial',
+    reads = 0,
+    writes = 0;
+  globalThis.__anywhereInvoke = (method, raw) => {
+    if (method === 'input.set') {
+      text = JSON.parse(raw).text;
+      writes++;
+    }
+    if (method === 'state.get') reads++;
+    return JSON.stringify({
+      value:
+        method === 'state.get'
+          ? {
+              version: writes + 1,
+              context: {kind: 'text', source: 'user_input', text},
+              input: text,
+            }
+          : null,
+    });
+  };
+  try {
+    const {anywhere} = await import('../dist/background.js?lazy-readback');
+    assert.equal(await anywhere.input.get(), 'initial');
+    await anywhere.input.set('updated');
+    assert.equal(writes, 1);
+    assert.equal(reads, 1);
+    assert.equal(await anywhere.input.get(), 'updated');
+    assert.equal(reads, 2);
+  } finally {
+    delete globalThis.__anywhereInvoke;
+  }
+});
+
+for (const code of ['HOST_FAILURE', 'QUOTA_EXCEEDED']) {
+  test(`failed background readback (${code}) preserves the write and allows a later read`, async () => {
+    let text = 'initial',
+      reads = 0,
+      writes = 0;
+    globalThis.__anywhereInvoke = (method, raw) => {
+      if (method === 'input.set') {
+        text = JSON.parse(raw).text;
+        writes++;
+      }
+      if (method === 'state.get' && ++reads === 2)
+        return JSON.stringify({error: {code}});
+      return JSON.stringify({
+        value:
+          method === 'state.get'
+            ? {
+                version: writes + 1,
+                context: {kind: 'text', source: 'user_input', text},
+                input: text,
+              }
+            : null,
+      });
+    };
+    const {anywhere} = await import(`../dist/background.js?readback-${code}`);
+    const contexts = [],
+      inputs = [];
+    const stops = [
+      anywhere.context.onChange(value => contexts.push(value.text)),
+      anywhere.input.onChange(value => inputs.push(value)),
+    ];
+    try {
+      await new Promise(resolve => setTimeout(resolve, 0));
+      await anywhere.input.set('updated');
+      assert.equal(writes, 1);
+      assert.equal(reads, 2);
+      assert.deepEqual(contexts, ['initial']);
+      assert.deepEqual(inputs, ['initial']);
+      assert.equal(await anywhere.input.get(), 'updated');
+      assert.equal(reads, 3);
+      assert.equal((await anywhere.context.get()).text, 'updated');
+      assert.equal(reads, 3);
+    } finally {
+      for (const stop of stops) stop();
+      delete globalThis.__anywhereInvoke;
+    }
+  });
+}
+
+test('a rejected background input write still rejects and leaves the cached state intact', async () => {
+  let reads = 0;
+  globalThis.__anywhereInvoke = method => {
+    if (method === 'input.set')
+      return JSON.stringify({error: {code: 'PERMISSION_DENIED'}});
+    reads++;
+    return JSON.stringify({
+      value: {
+        version: 1,
+        context: {kind: 'text', source: 'user_input', text: 'initial'},
+        input: 'initial',
+      },
+    });
+  };
+  try {
+    const {anywhere} = await import('../dist/background.js?rejected-write');
+    assert.equal(await anywhere.input.get(), 'initial');
+    await assert.rejects(anywhere.input.set('denied'), {
+      code: 'PERMISSION_DENIED',
+    });
+    assert.equal(await anywhere.input.get(), 'initial');
+    assert.equal(reads, 1);
+  } finally {
+    delete globalThis.__anywhereInvoke;
+  }
+});
+
 test('background subscriber failures do not reject a completed input write or skip other listeners', async () => {
   let text = 'initial',
     writes = 0;
@@ -128,6 +237,12 @@ test('background text transport commits a full MiB and respects pre-cancellation
       anywhere.clipboard.writeText('no', {signal: controller.signal}),
       {code: 'CANCELLED'},
     );
+    assert.equal(calls, before);
+    for (const text of ['\ud800', '\udc00', 'valid\ud800tail']) {
+      await assert.rejects(anywhere.clipboard.writeText(text), {
+        code: 'INVALID_REQUEST',
+      });
+    }
     assert.equal(calls, before);
   } finally {
     delete globalThis.__anywhereInvoke;

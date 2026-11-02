@@ -23,8 +23,8 @@ pub(super) fn transform(
     })));
     let context =
         Context::full(&runtime).map_err(|_| anyhow::anyhow!("script context unavailable"))?;
-    let output = context
-        .with(|ctx| -> rquickjs::Result<String> {
+    let entries: Vec<Entry> = context
+        .with(|ctx| -> Result<Vec<Entry>> {
             let helpers = rquickjs::Object::new(ctx.clone())?;
             helpers.set(
                 "localPath",
@@ -44,14 +44,17 @@ pub(super) fn transform(
             let transform: Function = module.get("transform")?;
             let bridge: Function =
                 ctx.eval("(transform, input) => JSON.stringify(transform(JSON.parse(input)))")?;
-            bridge.call((transform, input))
+            let output: rquickjs::String = bridge.call((transform, input))?;
+            // Borrow the VM's UTF-8 storage. Enforce the byte limit before
+            // allocating Rust strings or deserializing the entry collection.
+            let output = output.to_cstring()?;
+            ensure!(
+                output.len() <= MAX_OUTPUT && !cancelled(),
+                "transform cancelled or output too large"
+            );
+            Ok(serde_json::from_str(output.as_str())?)
         })
         .map_err(|_| anyhow::anyhow!("source transform failed or exceeded its budget"))?;
-    ensure!(
-        output.len() <= MAX_OUTPUT && !cancelled(),
-        "transform cancelled or output too large"
-    );
-    let entries: Vec<Entry> = serde_json::from_str(&output)?;
     ensure!(entries.len() <= MAX_ENTRIES, "too many history entries");
     let mut keys = std::collections::BTreeSet::new();
     for entry in &entries {

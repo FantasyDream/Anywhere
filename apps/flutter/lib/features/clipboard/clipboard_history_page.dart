@@ -96,13 +96,13 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
     if (key == LogicalKeyboardKey.arrowDown ||
         key == LogicalKeyboardKey.arrowUp) {
       session.preview.browsing = true;
-      unawaited(session.select(session.selectedIndex +
-          (key == LogicalKeyboardKey.arrowDown ? 1 : -1)));
+      session.select(session.selectedIndex +
+          (key == LogicalKeyboardKey.arrowDown ? 1 : -1));
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.numpadEnter) {
-      unawaited(_action(_HistoryAction.copy));
+      if (event is KeyDownEvent) unawaited(_action(_HistoryAction.copy));
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
@@ -113,7 +113,7 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
     session.preview.browsing = true;
     final index = session.items.indexWhere((row) => row.id == item.id);
     if (index < 0) return;
-    unawaited(session.select(index));
+    session.select(index);
     session.focus.requestFocus();
   }
 

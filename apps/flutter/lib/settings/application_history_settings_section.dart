@@ -18,22 +18,15 @@ class AppHistorySettingsSection extends StatefulWidget {
 }
 
 class _AppHistorySettingsSectionState extends State<AppHistorySettingsSection> {
-  late final TextEditingController _filter;
+  TextEditingController get _filter => widget.controller.filterQuery;
   @override
   void initState() {
     super.initState();
-    _filter = TextEditingController(text: widget.controller.filter);
     // The settings controller also notifies the parent screen. Start loading
     // after mounting so that notification cannot rebuild an ancestor mid-build.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) unawaited(widget.controller.load());
     });
-  }
-
-  @override
-  void dispose() {
-    _filter.dispose();
-    super.dispose();
   }
 
   void _clearFilter() {

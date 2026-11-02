@@ -46,7 +46,7 @@ impl HistoryService {
         };
         let _worker = self
             .worker
-            .try_lock()
+            .try_acquire()
             .map_err(|_| anyhow::anyhow!("history reader busy"))?;
         let cancelled = self.cancellation(epoch);
         let fresh = self.loader.read(&source, cancelled.clone())?;

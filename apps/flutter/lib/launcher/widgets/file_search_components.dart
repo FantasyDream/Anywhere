@@ -17,9 +17,6 @@ class FileSearchControls extends StatelessWidget {
   final VoidCallback onSelect;
   final bool enabled;
 
-  String _typeLabel(BuildContext context, FileFilter type) =>
-      type.labelFor(context.l10n);
-
   @override
   Widget build(BuildContext context) => SizedBox(
       key: const Key('file-search-controls'),
@@ -31,7 +28,7 @@ class FileSearchControls extends StatelessWidget {
           enabled: enabled,
           options: [
             for (final type in FileFilter.values)
-              LauncherFilterOption(type.name, _typeLabel(context, type),
+              LauncherFilterOption(type.name, type.labelFor(context.l10n),
                   context.l10n.searchThisFileType),
           ],
           onSelect: (id) {

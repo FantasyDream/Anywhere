@@ -6,7 +6,7 @@
 
 | 语言 | 规范与工具 | 项目配置 |
 |---|---|---|
-| Rust | [Google Rust](https://google.github.io/styleguide/rustguide.html)、稳定版 rustfmt / Clippy | `rustfmt.toml`；100 列，保留现有资源与并发模型，不套用 Chromium 专属限制 |
+| Rust | [Google Rust](https://google.github.io/styleguide/rustguide.html)、锁定工具链的 rustfmt / Clippy | `rustfmt.toml`；100 列，保留现有资源与并发模型，不套用 Chromium 专属限制 |
 | Dart / Flutter | [Effective Dart](https://dart.dev/effective-dart/style)、SDK formatter、flutter_lints | `analysis_options.yaml`；导入排序、优先单引号；格式版本跟随锁定的 Flutter SDK |
 | TypeScript / JavaScript | [Google GTS](https://github.com/google/gts) 的 ESLint / Prettier 配置 | `tools/code-style/eslint.config.mjs`；SDK 类型感知检查，浏览器与构建 / 测试环境分开 |
 | JSX | GTS 的 Prettier 样式，类型 / 业务由构建与测试验证 | `.prettierrc.cjs`；当前 JSX 仅检查排版，不声称覆盖 GTS 的全部语义规则 |

@@ -1,7 +1,7 @@
 import '../src/rust/api.dart' as api;
 
 abstract interface class ClipboardHistoryBackend {
-  Future<api.ClipboardHistoryDto> search(String query);
+  Future<api.ClipboardHistoryDto?> search(String query, {String? after});
   Future<api.NativePreviewDto> preparePreview(String id);
   Future<void> copy(String id);
   Future<void> delete(String id);
@@ -9,8 +9,8 @@ abstract interface class ClipboardHistoryBackend {
 
 class RustClipboardHistoryBackend implements ClipboardHistoryBackend {
   @override
-  Future<api.ClipboardHistoryDto> search(String query) =>
-      api.clipboardHistory(query: query);
+  Future<api.ClipboardHistoryDto?> search(String query, {String? after}) =>
+      api.clipboardHistory(query: query, after: after);
   @override
   Future<api.NativePreviewDto> preparePreview(String id) =>
       api.previewClipboardEntry(id: id);

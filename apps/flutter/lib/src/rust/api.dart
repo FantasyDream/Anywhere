@@ -14,8 +14,9 @@ Future<String> ping() => RustLib.instance.api.crateApiPing();
 Future<ClipboardHistoryStatusDto> clipboardHistoryStatus() =>
     RustLib.instance.api.crateApiClipboardHistoryStatus();
 
-Future<ClipboardHistoryDto> clipboardHistory({required String query}) =>
-    RustLib.instance.api.crateApiClipboardHistory(query: query);
+Future<ClipboardHistoryDto?> clipboardHistory(
+        {required String query, String? after}) =>
+    RustLib.instance.api.crateApiClipboardHistory(query: query, after: after);
 
 Future<void> setClipboardRecording({required bool enabled}) =>
     RustLib.instance.api.crateApiSetClipboardRecording(enabled: enabled);
@@ -335,8 +336,8 @@ Future<List<WebPackageDto>> webPackages() =>
 Future<WebReviewDto> inspectWebPackage({required String path}) =>
     RustLib.instance.api.crateApiInspectWebPackage(path: path);
 
-Future<void> cancelWebReview() =>
-    RustLib.instance.api.crateApiCancelWebReview();
+Future<void> cancelWebReview({required String token}) =>
+    RustLib.instance.api.crateApiCancelWebReview(token: token);
 
 Future<List<WebPackageDto>> approveWebPackage({required String token}) =>
     RustLib.instance.api.crateApiApproveWebPackage(token: token);
@@ -729,12 +730,14 @@ enum CandidateUpdateDto {
 }
 
 class ClipboardHistoryDto {
+  final String? revision;
   final bool recording;
   final bool available;
   final ClipboardNoticeDto? notice;
   final List<ClipboardItemDto> items;
 
   const ClipboardHistoryDto({
+    this.revision,
     required this.recording,
     required this.available,
     this.notice,
@@ -743,6 +746,7 @@ class ClipboardHistoryDto {
 
   @override
   int get hashCode =>
+      revision.hashCode ^
       recording.hashCode ^
       available.hashCode ^
       notice.hashCode ^
@@ -753,6 +757,7 @@ class ClipboardHistoryDto {
       identical(this, other) ||
       other is ClipboardHistoryDto &&
           runtimeType == other.runtimeType &&
+          revision == other.revision &&
           recording == other.recording &&
           available == other.available &&
           notice == other.notice &&

@@ -11,7 +11,7 @@ class WebPackageBackend {
       api.inspectWebPackage(path: path);
   Future<List<api.WebPackageDto>> approve(String token) =>
       api.approveWebPackage(token: token);
-  Future<void> cancelReview() => api.cancelWebReview();
+  Future<void> cancelReview(String token) => api.cancelWebReview(token: token);
   Future<List<api.WebPackageDto>> change(String id, String operation) =>
       api.changeWebPackage(id: id, operation: operation);
 }

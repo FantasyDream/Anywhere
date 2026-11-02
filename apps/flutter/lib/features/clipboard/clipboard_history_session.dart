@@ -41,7 +41,7 @@ class ClipboardHistorySession extends ToolPageSession {
   final scroll = ScrollController();
   List<api.ClipboardItemDto> items = const [];
   late final preview = NativePreviewController(
-    onMove: (direction) => unawaited(select(selectedIndex + direction)),
+    onMove: (direction) => select(selectedIndex + direction),
     onActivate: () => unawaited(copy()),
     onSearch: () => requestTextInput(focus),
     onFailure: () {
@@ -79,8 +79,13 @@ class ClipboardHistorySession extends ToolPageSession {
       };
   String? statusFor(AppLocalizations l10n) =>
       status == null ? null : l10n.copiedPaste;
+  bool get _canReuseHistory =>
+      _notice == null ||
+      _noticeKind == _HistoryNotice.returnFailed ||
+      _noticeKind == _HistoryNotice.returnUnavailable;
   int selectedIndex = -1;
   int _searchEpoch = 0;
+  String? _historyRevision, _historyQuery;
   Future<void>? _refreshing;
   bool _refreshQueued = false;
   Timer? _debounce;
@@ -212,16 +217,21 @@ class ClipboardHistorySession extends ToolPageSession {
       notifyListeners();
     }
     try {
-      final result = await backend.search(query.text);
+      final text = query.text;
+      final result = await backend.search(text,
+          after: background && _historyQuery == text && _canReuseHistory
+              ? _historyRevision
+              : null);
       if (disposed || epoch != _searchEpoch) return;
+      if (result == null) return;
+      _historyRevision = result.revision;
+      _historyQuery = text;
       final unchanged = _sameItems(result.items);
       if (background &&
           unchanged &&
           recording == result.recording &&
           available == result.available &&
-          (_notice == null ||
-              _noticeKind == _HistoryNotice.returnFailed ||
-              _noticeKind == _HistoryNotice.returnUnavailable) &&
+          _canReuseHistory &&
           _backendNotice == result.notice) {
         return;
       }
@@ -234,8 +244,7 @@ class ClipboardHistorySession extends ToolPageSession {
       // A selection made while the search was running takes precedence.
       final selectedId = selected?.id;
       items = List.unmodifiable(result.items);
-      final previous = items.indexWhere((item) => item.id == selectedId);
-      selectedIndex = previous;
+      selectedIndex = items.indexWhere((item) => item.id == selectedId);
       // Search returns metadata only; preparing a native preview is explicit.
       loading = false;
       _syncPreview();
@@ -296,7 +305,7 @@ class ClipboardHistorySession extends ToolPageSession {
     if (!visible) preview.close();
   }
 
-  Future<void> select(int index) async {
+  void select(int index) {
     if (!canInteract || items.isEmpty) return;
     final next = index.clamp(0, items.length - 1);
     if (next != selectedIndex) status = null;
@@ -370,13 +379,11 @@ class ClipboardHistorySession extends ToolPageSession {
     return false;
   }
 
-  /// Explicit activation copies by identity. Do not wait for image preview I/O
-  /// before restoring the payload; select updates the target synchronously.
   Future<bool> copyItem(String id) async {
     if (!canInteract || mutating) return false;
     final index = items.indexWhere((item) => item.id == id);
     if (index < 0) return false;
-    unawaited(select(index));
+    select(index);
     return copy();
   }
 

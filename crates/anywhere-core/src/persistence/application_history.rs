@@ -4,7 +4,7 @@ pub(crate) mod packages;
 use crate::features::application_history::model::{Cancelled, MAX_INPUT};
 use anyhow::{bail, ensure, Result};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::Value;
 use std::{fs::File, io::Read, path::Path};
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -77,7 +77,11 @@ pub(crate) fn read(path: &Path, reader: &Reader, cancelled: Cancelled) -> Result
                     .filter(|n| n.is_element())
                     .map(|n| node(n, depth + 1, count, cancelled))
                     .collect::<Result<_>>()?;
-                Ok(json!({"name":n.tag_name().name(),"attributes":attributes,"children":children}))
+                Ok(Value::Object(serde_json::Map::from_iter([
+                    ("name".into(), Value::String(n.tag_name().name().into())),
+                    ("attributes".into(), Value::Object(attributes)),
+                    ("children".into(), Value::Array(children)),
+                ])))
             }
             node(document.root_element(), 0, &mut 0, cancelled.as_ref())
         }
@@ -136,7 +140,7 @@ fn sqlite(
             for (i, name) in names.iter().enumerate() {
                 let value = match row.get_ref(i)? {
                     ValueRef::Null => Value::Null,
-                    ValueRef::Integer(n) => json!(n),
+                    ValueRef::Integer(n) => Value::from(n),
                     ValueRef::Text(text) | ValueRef::Blob(text) => {
                         bytes += text.len();
                         ensure!(bytes <= MAX_INPUT, "source too large");
@@ -148,7 +152,10 @@ fn sqlite(
             }
             output.push(Value::Object(item));
         }
-        Ok(json!({"rows":output}))
+        Ok(Value::Object(serde_json::Map::from_iter([(
+            "rows".into(),
+            Value::Array(output),
+        )])))
     })();
     db.progress_handler(0, None::<fn() -> bool>)?;
     result

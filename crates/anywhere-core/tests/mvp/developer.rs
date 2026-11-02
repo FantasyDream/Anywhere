@@ -498,6 +498,11 @@ async fn cargo_workspace_run_targets_and_actual_test_failures_use_sessions() {
         .unwrap();
         std::fs::write(path.join("src/main.rs"), format!("fn main() {{ println!(\"RUN-{package}\"); }}\n#[test] fn answer() {{ assert_eq!(42,42); }}\n")).unwrap();
     }
+    let gated_manifest = root.join("one/Cargo.toml");
+    let manifest = std::fs::read_to_string(&gated_manifest).unwrap();
+    std::fs::write(&gated_manifest, format!("{manifest}\n[features]\ncli=[]\nextra=[]\n[[bin]]\nname='feature-tool'\npath='src/bin/feature-tool.rs'\nrequired-features=['cli','extra']\n")).unwrap();
+    std::fs::create_dir(root.join("one/src/bin")).unwrap();
+    std::fs::write(root.join("one/src/bin/feature-tool.rs"), "#[cfg(all(feature=\"cli\",feature=\"extra\"))]\nfn main() { println!(\"RUN-FEATURES\"); }\n").unwrap();
     let app = app(Arc::new(TestPlatform::new(root.clone(), true)));
     let activation = app.activate().await.unwrap().unwrap();
     let state = settled(&app, activation.session_id, 0).await;
@@ -517,6 +522,20 @@ async fn cargo_workspace_run_targets_and_actual_test_failures_use_sessions() {
         );
         assert!(task.stdout.contains(&format!("RUN-{package}")));
     }
+    let candidate = state
+        .context_candidates
+        .iter()
+        .find(|c| c.title == "Cargo Run · one / feature-tool")
+        .unwrap();
+    let result = execute_action(&app, &state, candidate.command_id.as_deref().unwrap()).await;
+    let task = completed_task(&app, result.execution_session_id.as_deref().unwrap()).await;
+    assert_eq!(
+        task.summary.status,
+        ExecutionSessionStatus::Succeeded,
+        "{}",
+        task.stderr
+    );
+    assert!(task.stdout.contains("RUN-FEATURES"));
     let result = execute_action(&app, &state, "developer.cargo.test").await;
     assert_eq!(
         completed_task(&app, result.execution_session_id.as_deref().unwrap())

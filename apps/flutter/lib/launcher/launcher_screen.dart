@@ -623,12 +623,19 @@ class _LauncherScreenState extends State<LauncherScreen> {
         _view.input.isEmpty &&
         _view.browsing) {
       _controller.backMenu();
-    } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowDown ||
+        event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      final keyboard = HardwareKeyboard.instance;
+      if (keyboard.isShiftPressed ||
+          keyboard.isMetaPressed ||
+          keyboard.isControlPressed ||
+          keyboard.isAltPressed) {
+        _preview.edited();
+        return KeyEventResult.ignored;
+      }
       _preview.browsing = true;
-      _controller.move(1);
-    } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-      _preview.browsing = true;
-      _controller.move(-1);
+      _controller
+          .move(event.logicalKey == LogicalKeyboardKey.arrowDown ? 1 : -1);
     } else if (event.logicalKey == LogicalKeyboardKey.enter ||
         event.logicalKey == LogicalKeyboardKey.numpadEnter) {
       _preview.close();
@@ -822,7 +829,8 @@ class _LauncherScreenState extends State<LauncherScreen> {
                             detail: view.isContent
                                 ? context.l10n.globalSearch
                                 : null),
-                      Expanded(child: _resultsBody(view)),
+                      Expanded(
+                          child: TextFieldTapRegion(child: _resultsBody(view))),
                     ],
                   ]))),
         ));

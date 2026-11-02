@@ -154,6 +154,130 @@ fn timed_service() -> (tempfile::TempDir, Arc<HistoryService>, Arc<AtomicI64>) {
 }
 
 #[test]
+fn conditional_snapshots_cover_capture_dedup_delete_clear_query_and_policy() {
+    let (_directory, history, _now) = timed_service();
+    let platform = Clipboard::default();
+    let mut snapshot = history.snapshot("", None).unwrap().unwrap();
+    assert!(history
+        .snapshot("", Some(&snapshot.revision))
+        .unwrap()
+        .is_none());
+    history.request_recording(true, &platform).unwrap();
+    snapshot = history
+        .snapshot("", Some(&snapshot.revision))
+        .unwrap()
+        .unwrap();
+    assert!(snapshot.status.recording);
+    for generation in 1..=2 {
+        platform.generation.store(generation, Ordering::SeqCst);
+        history.poll(&platform, 1_000_000 + generation).unwrap();
+        snapshot = history
+            .snapshot("", Some(&snapshot.revision))
+            .unwrap()
+            .unwrap();
+        assert_eq!(snapshot.items.len(), generation as usize);
+    }
+    // A duplicate payload changes its recency even though the row count stays fixed.
+    let duplicate = Clipboard {
+        generation: AtomicI64::new(3),
+        payload: Some(anywhere_platform::clipboard::ClipboardPayload::text(
+            "generation 1",
+        )),
+        ..Default::default()
+    };
+    history.poll(&duplicate, 1_000_003).unwrap();
+    snapshot = history
+        .snapshot("", Some(&snapshot.revision))
+        .unwrap()
+        .unwrap();
+    assert_eq!(snapshot.items.len(), 2);
+    assert_eq!(snapshot.items[0].summary, "generation 1");
+    history.delete(snapshot.items[0].id).unwrap();
+    snapshot = history
+        .snapshot("", Some(&snapshot.revision))
+        .unwrap()
+        .unwrap();
+    assert_eq!(snapshot.items.len(), 1);
+    assert!(history
+        .snapshot("missing", Some(&snapshot.revision))
+        .unwrap()
+        .unwrap()
+        .items
+        .is_empty());
+    history.pause(5, &platform).unwrap();
+    snapshot = history
+        .snapshot("", Some(&snapshot.revision))
+        .unwrap()
+        .unwrap();
+    assert_eq!(snapshot.status.notice, Some(HistoryNotice::Paused));
+    history.clear().unwrap();
+    snapshot = history
+        .snapshot("", Some(&snapshot.revision))
+        .unwrap()
+        .unwrap();
+    assert!(snapshot.items.is_empty());
+    history.set_feature_enabled(false, &platform).unwrap();
+    snapshot = history
+        .snapshot("", Some(&snapshot.revision))
+        .unwrap()
+        .unwrap();
+    assert!(!snapshot.status.available);
+    assert_eq!(snapshot.status.notice, Some(HistoryNotice::FeatureDisabled));
+    history.set_feature_enabled(true, &platform).unwrap();
+    assert!(
+        history
+            .snapshot("", Some(&snapshot.revision))
+            .unwrap()
+            .unwrap()
+            .status
+            .available
+    );
+}
+
+#[test]
+fn conditional_snapshots_still_expire_rows_and_publish_notice_and_resume_changes() {
+    let (_directory, history, now) = timed_service();
+    let platform = Clipboard::default();
+    history.request_recording(true, &platform).unwrap();
+    platform.generation.store(1, Ordering::SeqCst);
+    history.poll(&platform, now.load(Ordering::SeqCst)).unwrap();
+    history.set_retention_days(1).unwrap();
+    let snapshot = history.snapshot("", None).unwrap().unwrap();
+    assert_eq!(snapshot.items.len(), 1);
+    now.fetch_add(86_400_001, Ordering::SeqCst);
+    let expired = history
+        .snapshot("", Some(&snapshot.revision))
+        .unwrap()
+        .unwrap();
+    assert!(expired.items.is_empty());
+    assert!(history
+        .snapshot("", Some(&expired.revision))
+        .unwrap()
+        .is_none());
+    let denied = Clipboard {
+        generation: AtomicI64::new(2),
+        read_error: Some(ContextReadError::PermissionDenied),
+        ..Default::default()
+    };
+    history.poll(&denied, now.load(Ordering::SeqCst)).unwrap();
+    let denied = history
+        .snapshot("", Some(&expired.revision))
+        .unwrap()
+        .unwrap();
+    assert_eq!(denied.status.notice, Some(HistoryNotice::AccessRequired));
+    history.pause(5, &platform).unwrap();
+    let paused = history.snapshot("", None).unwrap().unwrap();
+    now.fetch_add(300_001, Ordering::SeqCst);
+    history.maintain(&platform).unwrap();
+    let resumed = history
+        .snapshot("", Some(&paused.revision))
+        .unwrap()
+        .unwrap();
+    assert!(resumed.status.recording);
+    assert!(resumed.status.notice.is_none());
+}
+
+#[test]
 fn background_resume_needs_no_open_window_and_drop_releases_the_worker() {
     let (_directory, history, now) = timed_service();
     let platform = Arc::new(Clipboard::default());
@@ -185,6 +309,14 @@ fn background_resume_needs_no_open_window_and_drop_releases_the_worker() {
         );
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
+}
+
+#[test]
+fn query_limits_are_enforced_at_both_service_entries() {
+    let (_directory, history, _now) = timed_service();
+    let query = "q".repeat(MAX_QUERY_BYTES + 1);
+    assert!(history.search(&query).is_err());
+    assert!(history.snapshot(&query, None).is_err());
 }
 
 #[test]

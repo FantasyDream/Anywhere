@@ -85,7 +85,7 @@ class CandidateRow extends StatelessWidget {
                         const SizedBox(width: 8),
                         Tooltip(
                             message: context.l10n.anywhereActionShortcut,
-                            child: _shortcut(actionShortcut!)),
+                            child: AppKeycap(actionShortcut!)),
                       ],
                       if (selected && !disabled && primaryLabel != null) ...[
                         const SizedBox(width: 6),
@@ -167,6 +167,4 @@ class CandidateRow extends StatelessWidget {
 
   bool _isBundleId(String value) =>
       RegExp(r'^[A-Za-z][A-Za-z0-9-]*(\.[A-Za-z0-9-]+){2,}$').hasMatch(value);
-
-  Widget _shortcut(String shortcut) => AppKeycap(shortcut);
 }

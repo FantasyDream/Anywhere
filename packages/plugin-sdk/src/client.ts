@@ -50,6 +50,11 @@ export function createHost(transport: HostTransport) {
     disposed = false;
   let snapshot: PluginSnapshot | undefined;
   let reading: Promise<PluginSnapshot> | undefined;
+  let targetVersion = 0,
+    refresh = 0,
+    refreshed = 0,
+    subscribed = false;
+  let cancelStateRetry: (() => void) | undefined;
   const contextListeners = new Set<
     (context: PluginSnapshot['context']) => void
   >();
@@ -78,16 +83,52 @@ export function createHost(transport: HostTransport) {
         }
       }
   }
-  function state(): Promise<PluginSnapshot> {
-    if (snapshot) return Promise.resolve(snapshot);
-    return (reading ??= invoke<'state.subscribe', PluginSnapshot>(
-      'state.subscribe',
-      {},
-    )
-      .then(value => {
+  function fresh() {
+    return (
+      snapshot !== undefined &&
+      snapshot.version >= targetVersion &&
+      refreshed === refresh
+    );
+  }
+  async function readState(): Promise<PluginSnapshot> {
+    const deadline = Date.now() + limits.timeoutMs;
+    while (!fresh()) {
+      if (disposed) throw new HostError('INACTIVE');
+      if (Date.now() >= deadline) throw new HostError('TIMEOUT');
+      const revision = refresh;
+      try {
+        const value = await invoke<
+          'state.subscribe' | 'state.get',
+          PluginSnapshot
+        >(subscribed ? 'state.get' : 'state.subscribe', {});
+        subscribed = true;
         accept(value);
-        return snapshot!;
-      })
+        refreshed = revision;
+      } catch (error) {
+        if (!(error instanceof HostError) || error.code !== 'BUSY') throw error;
+        // Another bounded transfer may own the document. Retry only reads;
+        // the client lifetime owns both the delay and the active request.
+        await new Promise<void>((resolve, reject) => {
+          const timer = setTimeout(() => {
+            cancelStateRetry = undefined;
+            resolve();
+          }, 50);
+          cancelStateRetry = () => {
+            clearTimeout(timer);
+            cancelStateRetry = undefined;
+            reject(new HostError('INACTIVE'));
+          };
+          if (disposed) cancelStateRetry();
+        });
+      }
+    }
+    return snapshot!;
+  }
+  function state(): Promise<PluginSnapshot> {
+    if (disposed) return Promise.reject(new HostError('INACTIVE'));
+    if (fresh()) return Promise.resolve(snapshot!);
+    return (reading ??= Promise.resolve()
+      .then(readState)
       .finally(() => {
         reading = undefined;
       }));
@@ -157,9 +198,8 @@ export function createHost(transport: HostTransport) {
       if (object(message.state))
         accept(message.state as unknown as PluginSnapshot);
       else if (!snapshot || message.version > snapshot.version) {
-        void invoke<'state.get', PluginSnapshot>('state.get', {})
-          .then(accept)
-          .catch(() => {});
+        targetVersion = Math.max(targetVersion, message.version);
+        void state().catch(() => {});
       }
       return;
     }
@@ -281,8 +321,8 @@ export function createHost(transport: HostTransport) {
     if (decoder.decode(bytes) !== text) throw new HostError('INVALID_REQUEST');
     // Reserve framing overhead so escaped text automatically takes the chunk path.
     if (
-      encoder.encode(JSON.stringify({text})).length + 256 <=
-      limits.frameBytes
+      bytes.length + 256 <= limits.frameBytes &&
+      encoder.encode(JSON.stringify({text})).length + 256 <= limits.frameBytes
     ) {
       return invoke('clipboard.writeText', {text}, options, limits.timeoutMs);
     }
@@ -348,8 +388,12 @@ export function createHost(transport: HostTransport) {
         if (value === null) throw new HostError('PERMISSION_DENIED');
         return value;
       },
-      set: (text: string, options?: CallOptions) =>
-        invoke<'input.set', void>('input.set', {text}, options),
+      set: async (text: string, options?: CallOptions) => {
+        await invoke<'input.set', void>('input.set', {text}, options);
+        // A successful write precedes its pushed event. Fence any read already
+        // in flight without turning a later read failure into a failed write.
+        ++refresh;
+      },
       onChange(callback: (input: string) => void) {
         let delivered: number | undefined;
         const receive = (input: string) => {
@@ -409,6 +453,7 @@ export function createHost(transport: HostTransport) {
     dispose() {
       if (disposed) return;
       disposed = true;
+      cancelStateRetry?.();
       unsubscribe();
       contextListeners.clear();
       inputListeners.clear();

@@ -213,12 +213,40 @@ fn runaway_scripts_are_interrupted_and_the_next_runtime_still_works() {
 }
 
 #[test]
+fn scripts_borrow_utf8_output_and_reject_oversized_results() {
+    let entries = script::transform(
+        "export function transform() { return [{key:'项目',title:'项目 🚀',target:{kind:'directory',path:'/tmp/项目'}}]; }",
+        &json!({}), Arc::new(|| false),
+    ).unwrap();
+    assert_eq!(entries[0].title, "项目 🚀");
+    assert!(script::transform(
+        "export function transform() { return 'x'.repeat(8 * 1024 * 1024); }",
+        &json!({}),
+        Arc::new(|| false),
+    )
+    .is_err());
+}
+
+#[test]
 fn generic_readers_reject_writes_external_tables_unknown_xml_and_oversize_files() {
     use crate::persistence::application_history::{read, Reader};
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("db");
     let db = rusqlite::Connection::open(&path).unwrap();
     db.execute_batch("CREATE TABLE permitted(value TEXT); CREATE TABLE secret(value TEXT); INSERT INTO permitted VALUES ('kept')").unwrap();
+    assert_eq!(
+        read(
+            &path,
+            &Reader::Sqlite {
+                query: "SELECT value FROM permitted".into(),
+                parameters: vec![],
+                tables: vec!["permitted".into()],
+            },
+            Arc::new(|| false),
+        )
+        .unwrap(),
+        json!({"rows": [{"value": "kept"}]})
+    );
     for query in [
         "DELETE FROM permitted",
         "SELECT * FROM secret",
@@ -251,6 +279,10 @@ fn generic_readers_reject_writes_external_tables_unknown_xml_and_oversize_files(
     assert!(read(&document, &Reader::Json, Arc::new(|| false)).is_err());
     let xml = temp.path().join("empty.xml");
     std::fs::write(&xml, "<unrelated />").unwrap();
+    assert_eq!(
+        read(&xml, &Reader::Xml, Arc::new(|| false)).unwrap(),
+        json!({"name": "unrelated", "attributes": {}, "children": []})
+    );
     assert!(SourceCatalog::bundled_with_config_directory(None)
         .unwrap()
         .read(

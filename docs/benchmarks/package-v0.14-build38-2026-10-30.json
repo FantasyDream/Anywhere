@@ -1,0 +1,50 @@
+{
+  "date": "2026-10-30",
+  "version": "0.14.0+38",
+  "platform": "macOS arm64",
+  "branch": "codex/dependency-upgrades",
+  "source_commit": "c98a8e759975a1065cc93300a4f02b3ec68b5a38",
+  "source_state": "Existing uncommitted review repairs plus the file-result tap-region focus fix and desktop widget regression; no commit or push.",
+  "source_record": "Code patch captured before compilation under ignored build/ and re-read byte-identically after build and launch.",
+  "worktree_code_patch_sha256": "670dbbac3a689ed0f074138bfd7244b7800f02e1e4d0bfcc3c74da79101972f2",
+  "impeller": true,
+  "signing": "Anywhere Local Code Signing; strict verification passed; designated requirement matches Build 37; not notarized",
+  "app": "build/Anywhere-0.14-preview-build38.app",
+  "archive": "build/Anywhere-0.14-preview-build38-macos-arm64.zip",
+  "archive_bytes": 17655798,
+  "archive_sha256": "e143b80db757b781bf4378bef3223e29485c2b35bb0fe7e56cc3617257ee333f",
+  "checks": {
+    "regression_before": "build/preview-space-regression-before.log; selected second settings.xml fixture but Space requested no preview",
+    "affected": "build/preview-space-affected.log; 55 passed, including macOS, Windows and Linux pointer-selection variants",
+    "engineering_gate": "build/preview-space-full-check.log; exit 0; Core 332 passed / 1 ignored, MVP 195 / 4 ignored, Platform 70 / 1 ignored, Flutter 493 / 1 skipped, SDK 33, JSON 30",
+    "build_log": "build/build38-build.log; exit 0",
+    "package_log": "build/build38-package.log; exit 0; archive content and checksum verified",
+    "startup": {
+      "previous_instances": [
+        {
+          "active": false,
+          "build": "37",
+          "bundle": "/Users/luckincoffee/Documents/Github/Anywhere/build/Anywhere-0.14-preview-build37.app",
+          "executable": "/Users/luckincoffee/Documents/Github/Anywhere/build/Anywhere-0.14-preview-build37.app/Contents/MacOS/Anywhere",
+          "finished_launching": true,
+          "pid": 85031,
+          "version": "0.14.0"
+        }
+      ],
+      "previous_exit": "Graceful termination accepted and empty process inventory confirmed before launch",
+      "running": {
+        "active": true,
+        "build": "38",
+        "bundle": "/Users/luckincoffee/Documents/Github/Anywhere/build/Anywhere-0.14-preview-build38.app",
+        "executable": "/Users/luckincoffee/Documents/Github/Anywhere/build/Anywhere-0.14-preview-build38.app/Contents/MacOS/Anywhere",
+        "finished_launching": true,
+        "pid": 94332,
+        "version": "0.14.0"
+      }
+    }
+  },
+  "limits": [
+    "No completed GUI, physical IME or preview-format acceptance for Build 38 in this run",
+    "No whole-App memory measurements, remote CI, public release or notarization"
+  ]
+}

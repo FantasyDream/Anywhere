@@ -90,13 +90,63 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('Space previews a pointer-selected clipboard shelf item',
+      (tester) async {
+    final backend = InteractionHistory();
+    await mount(tester, backend);
+    await tester.enterText(search, 'Entry');
+    await tester.pump(const Duration(milliseconds: 150));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Entry 2'));
+    await tester.pumpAndSettle();
+    final owner = session(tester);
+    expect(owner.selected?.id, '2');
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+    expect(owner.preview.isOpen, isTrue);
+    expect(previewCalls.last.arguments['paths'], ['/synthetic/2.txt']);
+    expect(owner.focus.hasFocus, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(backend.copied, ['2']);
+    expect(owner.query.text, 'Entry');
+  }, variant: TargetPlatformVariant.desktop());
+
+  testWidgets(
+      'idle shelf polls revisions without allocating another thousand rows',
+      (tester) async {
+    final backend = History();
+    var polls = 0, generated = 0;
+    backend.conditionalSearchOverride = (query, after) async {
+      polls++;
+      if (after == 'stable') return null;
+      final rows = List.generate(1000, (i) => item('$i'));
+      generated += rows.length;
+      return ClipboardHistoryDto(
+          revision: 'stable', recording: false, available: true, items: rows);
+    };
+    await tester
+        .pumpWidget(ClipboardShelfApp(backend: backend, channel: channel));
+    await tester.pumpAndSettle();
+    final original = session(tester).items;
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+    }
+    expect(polls, 21);
+    expect(generated, 1000);
+    expect(session(tester).items, same(original));
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('Escape closes preview without moving the scrolled selection',
       (tester) async {
     final backend = InteractionHistory()
       ..rows = List.generate(50, (i) => item('$i'));
     await mount(tester, backend);
     final owner = session(tester);
-    await owner.select(30);
+    owner.select(30);
     await tester.pumpAndSettle();
     final offset = owner.scroll.offset;
     expect(offset, greaterThan(0));

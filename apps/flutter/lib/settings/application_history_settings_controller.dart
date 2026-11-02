@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 
 import '../infrastructure/application_history_backend.dart';
 import '../src/rust/api.dart';
@@ -11,7 +11,8 @@ class AppHistorySettingsController extends ChangeNotifier {
   bool loaded = false, busy = false, failed = false, _disposed = false;
   String? failedSource;
   String customDirectory = '';
-  String filter = '';
+  final filterQuery = TextEditingController();
+  String get filter => filterQuery.text;
   bool enabledOnly = false;
   final Map<String, String> _drafts = {};
   bool get hasDrafts => _drafts.isNotEmpty;
@@ -26,7 +27,11 @@ class AppHistorySettingsController extends ChangeNotifier {
   }
 
   void setFilter(String value, {bool? onlyEnabled}) {
-    filter = value;
+    if (filterQuery.text != value) {
+      filterQuery.value = TextEditingValue(
+          text: value,
+          selection: TextSelection.collapsed(offset: value.length));
+    }
     enabledOnly = onlyEnabled ?? enabledOnly;
     notifyListeners();
   }
@@ -80,8 +85,7 @@ class AppHistorySettingsController extends ChangeNotifier {
       _run(change: () => backend.setActionEnabled(id, enabled), source: id);
   Future<bool> openCustomDirectory() =>
       _run(change: backend.openCustomDirectory, changesCatalog: false);
-  Future<bool> waitForPending() async =>
-      await (_pending ?? Future.value(!failed));
+  Future<bool> waitForPending() => _pending ?? Future.value(!failed);
   Future<bool> _run(
       {Future<void> Function()? change,
       String? source,
@@ -139,6 +143,7 @@ class AppHistorySettingsController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    filterQuery.dispose();
     super.dispose();
   }
 }

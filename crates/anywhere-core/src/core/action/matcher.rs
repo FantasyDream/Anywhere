@@ -136,10 +136,7 @@ impl ActionMatcher<'_> {
                 {
                     // A command such as Finder's "Find" must keep its direct title match
                     // even when the same token is also a prefix of the application name.
-                    if SearchFields::new(&action.title, &[], &[])
-                        .matched(query)
-                        .is_some_and(|level| level >= MatchLevel::WordPrefix)
-                    {
+                    if action.title_matches_word_prefix(query) {
                         query
                     } else {
                         match qualified_query

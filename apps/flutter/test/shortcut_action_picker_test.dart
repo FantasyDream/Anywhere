@@ -19,6 +19,37 @@ class CountedAction extends ShortcutActionDto {
 }
 
 void main() {
+  testWidgets('editing or clearing a search reveals the first matching action',
+      (tester) async {
+    final query = TextEditingController();
+    addTearDown(query.dispose);
+    final actions = List.generate(
+        120,
+        (index) => ShortcutActionDto(
+            actionId: '$index',
+            title: '${index < 60 ? 'First' : 'Second'} action $index',
+            contextTypes: const []));
+    await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme,
+        home: Scaffold(
+            body: SizedBox(
+                height: 300,
+                child: ShortcutActionPicker(
+                    actions: actions, query: query, onSelected: (_) {})))));
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(ListView), const Offset(0, -1500));
+    await tester.pumpAndSettle();
+    expect(find.text('First action 0').hitTestable(), findsNothing);
+    query.text = 'Second';
+    await tester.pumpAndSettle();
+    expect(find.text('Second action 60').hitTestable(), findsOneWidget);
+    await tester.drag(find.byType(ListView), const Offset(0, -1000));
+    await tester.pumpAndSettle();
+    query.clear();
+    await tester.pumpAndSettle();
+    expect(find.text('First action 0').hitTestable(), findsOneWidget);
+  });
+
   testWidgets(
       'caret and parent rebuilds reuse matches; catalog replacement does not',
       (tester) async {

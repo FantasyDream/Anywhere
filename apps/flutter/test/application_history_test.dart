@@ -157,6 +157,85 @@ void main() {
       const DesktopEnvironment(platform: TargetPlatform.macOS)));
   tearDown(DesktopEnvironment.reset);
 
+  for (final fail in [false, true]) {
+    testWidgets(
+        'history respects a newer debounce after a slow ${fail ? 'failed' : 'successful'} read',
+        (tester) async {
+      final backend = HistoryBackend();
+      final first = Completer<AppHistoryDto>();
+      backend.searchOverride = (_, __) => first.future;
+      final session =
+          AppHistorySession(backend, sourceId: 'idea', title: 'History');
+      addTearDown(session.dispose);
+      await tester.pump();
+      session.query.text = 'a';
+      await tester.pump(const Duration(milliseconds: 120));
+      session.query.text = 'ab';
+      backend.searchOverride = (_, __) async =>
+          AppHistoryDto(items: [item('new')], failedSources: []);
+      await tester.pump(const Duration(milliseconds: 20));
+      if (fail) {
+        first.completeError(StateError('old source read failed'));
+      } else {
+        first.complete(AppHistoryDto(items: [item('old')], failedSources: []));
+      }
+      await tester.pump();
+      expect(backend.calls, ['idea:']);
+      expect(session.loading, isTrue);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(backend.calls, ['idea:', 'idea:ab']);
+      expect(session.items.single.id, 'new');
+      expect(session.loading, isFalse);
+      expect(session.failed, isFalse);
+    });
+  }
+
+  testWidgets(
+      'history keeps waiting for one service read beyond the old retry window',
+      (tester) async {
+    final backend = HistoryBackend();
+    final result = Completer<AppHistoryDto>();
+    backend.searchOverride = (_, __) => result.future;
+    final session =
+        AppHistorySession(backend, sourceId: 'idea', title: 'History');
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    expect(session.loading, isTrue);
+    expect(backend.calls.length, 1);
+    result.complete(
+        AppHistoryDto(items: [item('ready')], failedSources: const []));
+    await tester.pump();
+    expect(session.items.single.id, 'ready');
+    expect(session.loading, isFalse);
+    session.dispose();
+  });
+
+  testWidgets('application history held Enter admits only one open',
+      (tester) async {
+    final backend = HistoryBackend();
+    final session =
+        AppHistorySession(backend, sourceId: 'idea', title: 'History');
+    await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme,
+        home: Scaffold(
+            body: ListenableBuilder(
+                listenable: session,
+                builder: (context, _) => session.build(context,
+                    onBack: () {}, presentation: 1, visible: true)))));
+    await tester.pumpAndSettle();
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    await tester.sendKeyRepeatEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    await tester.sendKeyRepeatEvent(LogicalKeyboardKey.enter);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    final count = backend.used.length;
+    await tester.pumpWidget(const SizedBox());
+    session.dispose();
+    expect(count, 1);
+  });
+
   test(
       'saving drafts retains newer edits and does not refresh the catalog for a folder',
       () async {
@@ -297,6 +376,45 @@ void main() {
     expect(find.byKey(const Key('history-path-idea')), findsOneWidget);
     expect(settings.appHistory.hasDrafts, isTrue);
     expect(settings.appHistory.failedSource, 'idea');
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets(
+      'failed close updates the filter in an already visible history settings page',
+      (tester) async {
+    final backend = Preferences()..fail = true;
+    final settings = SettingsController(
+        window:
+            WindowHost(const MethodChannel('unused/history-visible-failure')),
+        appHistoryBackend: backend,
+        readExtensions: () => []);
+    settings.appHistory.onCatalogChanged = () async {};
+    addTearDown(settings.dispose);
+    await settings.appHistory.load();
+    settings.appHistory
+        .editPath(settings.appHistory.sources.first, '/bad/path.xml');
+    await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme,
+        home: Scaffold(
+            body: SettingsScreen(
+                controller: settings, onClose: settings.prepareClose))));
+    await tester.tap(find.byKey(const ValueKey('settings-app_history')));
+    await tester.pumpAndSettle();
+    final filter = find.byKey(const Key('history-source-filter'));
+    await tester.enterText(filter, 'IntelliJ');
+    await tester.pumpAndSettle();
+    final closing = settings.prepareClose();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save changes'));
+    await tester.pumpAndSettle();
+    expect(await closing, isFalse);
+    expect(settings.appHistory.filter, 'idea');
+    expect(tester.widget<TextField>(filter).controller!.text, 'idea');
+    expect(tester.widget<TextField>(filter).controller!.selection,
+        const TextSelection.collapsed(offset: 4));
+    expect(find.byKey(const Key('history-path-idea')), findsOneWidget);
+    expect(settings.appHistory.hasDrafts, isTrue);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

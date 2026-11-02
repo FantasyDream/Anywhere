@@ -24,6 +24,7 @@ class ShortcutActionPicker extends StatefulWidget {
 }
 
 class _ShortcutActionPickerState extends State<ShortcutActionPicker> {
+  final _scroll = ScrollController();
   List<ShortcutActionDto> _matches = const [];
   String? _matchedQuery;
   String? _matchedLocale;
@@ -70,11 +71,13 @@ class _ShortcutActionPickerState extends State<ShortcutActionPicker> {
                 '${action.contextTypes.join(' ')}';
             return text.toLowerCase().contains(needle);
           }).toList();
+    if (_scroll.hasClients) _scroll.jumpTo(0);
   }
 
   @override
   void dispose() {
     widget.query.removeListener(_queryChanged);
+    _scroll.dispose();
     super.dispose();
   }
 
@@ -90,6 +93,7 @@ class _ShortcutActionPickerState extends State<ShortcutActionPicker> {
         const SizedBox(height: 8),
         Expanded(
             child: ListView.builder(
+                controller: _scroll,
                 itemCount: _matches.length,
                 itemBuilder: (context, index) {
                   final action = _matches[index];

@@ -25,6 +25,11 @@
 
 ## Review 与重构记录
 
+- [生命周期与错误语义复查（2026-10-30）](reviews/lifecycle-followup-review-2026-10-30.md)：旧页面取消新插件审批、后台 SDK 成功写入误报失败、全局命令查询的重复分配；三项已在升级分支工作区修复，保留初始复现与后续验证。
+
+- [跨层正确性与资源审查（2026-10-30）](reviews/cross-layer-review-2026-10-30.md)：设置目录并发、后台输出分配、取消导入后的列表恢复、查询防抖与插件契约一致性；五项问题已在升级分支工作区修复，保留复现与后续验证。
+
+- [升级后资源与设计审查（2026-10-29）](reviews/resource-design-review-2026-10-29.md)：SDK 状态一致性、历史查询恢复、长按重复操作、输出分配与空闲轮询；六项已在升级分支工作区修复，含修复前复现与后续验证。
 - [Rust / Flutter 稳定工具链升级（2026-10-29）](reviews/toolchain-upgrades-2026-10-29.md)：Rust 1.99.1 / Flutter 3.47.8、可兼容依赖升级、安全扫描与上游约束；承接同日依赖整合。
 - [依赖升级整合（2026-10-29）](reviews/dependency-upgrades-2026-10-29.md)：15 个升级分支、SQLite / FRB 兼容修复、隔离工具与真实 FFI 验证；升级保留在独立分支。
 - [全仓分层 Review（2026-10-29）](reviews/repo-review-2026-10-29.md)：Core / Application / Features / Persistence / Platform / Bridge / Flutter / Native Host / SDK / 构建与文档的检查范围、五项修复及自动化证据。

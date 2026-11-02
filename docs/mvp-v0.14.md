@@ -40,17 +40,138 @@
 
 ## 最新已验证基线
 
+### 提交前复查与 beta 构建实测 — 2026-11-02
+
+复查当前未提交的 Flutter 交互 / 设置、Rust 历史查询 / 项目动作、插件生命周期 / SDK 状态同步、依赖及验证文档。发现 CI 直接引用不存在的 `dtolnay/rust-toolchain@1.100.0-beta.7` 分支；按该 Action 的官方用法改为 `@master` 配合 `toolchain: 1.100.0-beta.7`，同步 macOS 检查、打包及共享平台检查。其余已审查调用链未发现新的提交阻塞问题；不代表全仓逐行或所有运行环境均已验证。
+
+本次重新运行完整 `scripts/check.sh`，exit 0：Core **332 / 1 忽略**、MVP **195 / 4 忽略**、Platform **70 / 1 忽略**、Flutter **504 / 1 跳过**、SDK **34**、JSON **30**；规范、Clippy、架构、生成一致性、原生自动回归与文档检查通过。日志保留于本机临时目录的 `anywhere-precommit-check-20261102.log`，不随源码交付。此结果使用 Rust / Cargo `1.100.0-beta.7`；不能替代目标 stable 或远端 CI 验证。
+
+此前本轮依赖升级后的 `0.14.0+38` / macOS arm64 包为 `build/Anywhere-rust-beta-deps-test.app`，区别于 2026-10-30 的同构建号旧包；ZIP SHA-256 为 `8ccba9b140df3f78659a4b838180f32d91d99525a94a45c1d3a122ed8146f6d6`，持久本机签名与归档校验通过，保留 Impeller。该包内 Release Rust 动态库的独立 Flutter FFI 回归 **1 项通过**；普通 Widget 套件中的 opt-in 跳过项仍单独记为跳过。
+
+2026-11-02 已通过系统启动上述新版，使用现有配置实测全局搜索 / 文件搜索、方向键选择后空格打开项目 README 系统预览、Esc 关闭并保留查询与选择、眼睛按钮重开、更多操作按钮、文件夹类型过滤、设置打开 / 切页 / 关闭及隐藏后全局快捷键唤起。未复现预览闪退；临时空数据下取消目录授权也正确保持文件搜索停用。实测只覆盖这些场景，不包含剪贴板预览、物理输入法、长时间内存、完整格式矩阵或 Windows / Linux 运行。CI 修复和本节文档不改变运行包的应用代码；本轮无远端 CI、公证或公开发行验收，分支仍为 `codex/dependency-upgrades`。
+
+### 剪贴板焦点、修饰方向键与 SDK 文本编码修复 — 2026-10-31 工作区
+
+剪贴板历史和悬浮窗共用的结果列表加入 TextFieldTapRegion，点击选择不再被输入框的点击外部处理撤销焦点。Launcher 只用无修饰键的上下方向键移动候选；带 Shift / Command / Control / Alt 时交回输入框，并退出空格预览浏览状态，避免编辑查询后空格仍打开预览。
+
+新增 9 项桌面平台回归在旧实现上全部失败，修复后均通过，相关 Flutter 测试共 108 项通过；覆盖选中第二条剪贴板记录后空格预览、Enter 复制、保留查询，以及修饰方向键不移动候选、不启用空格预览。SDK 补上原始 UTF-8 小于单帧上限、JSON 转义后超限仍正确分块的用例。
+
+SDK 写入先用已有 UTF-8 字节长度排除必然分块的文本，再为可能直接发送的小文本检查 JSON 帧大小。调用实际 SDK 写入 1 MiB ASCII，完整内容和 256 个分块保持一致；减少一次 1,048,587 字节的完整 UTF-8 编码及对应 JSON 字符串构造。临时探针只观察 TextEncoder 的输入 / 输出大小，不代表 JS 峰值堆或整 App RSS；前后结果保留于被忽略的 `build/review-fixes-20261031-sdk-before.json` / `-after.json`。
+
+完整 `scripts/check.sh` exit 0：Core 332 / 1 忽略、MVP 195 / 4 忽略、Platform 70 / 1 忽略、Flutter 502 / 1 跳过、SDK 34、JSON 30；规范、Clippy、架构、生成一致性、原生自动回归、Rust SDK 互通与文档检查通过。完整日志为被忽略的 `build/review-fixes-20261031-full-check.log`。
+
+未重新打包或进行本轮 GUI / 物理输入法验收；已有 Build 38 不包含这些源码改动，Web 插件也需要使用更新 SDK 独立构建。工作区未提交 / 推送。
+
+### 文件结果点击后空格预览修复 — Build 38
+
+桌面端点击文件结果时，TextField 默认的点击外部处理会撤销搜索框焦点，导致选中行的眼睛按钮可用、空格却不能请求预览。文件结果区加入现有 TextFieldTapRegion，使点击选择保留键盘焦点；不改预览资源、原生窗口或空格输入边界。
+
+新增真实 Launcher 页面回归：非空 `settings.xml` 查询、点击第二个同名结果、空格请求该项预览且查询不变。在旧实现上未请求预览，修复后 macOS / Windows / Linux 平台变体及相关测试共 55 项通过。完整 `scripts/check.sh` exit 0：Core 332 / 1 忽略、MVP 195 / 4 忽略、Platform 70 / 1 忽略、Flutter 493 / 1 跳过、SDK 33、JSON 30；规范、Clippy、架构、生成一致性、原生自动回归与文档检查通过。
+
+`0.14.0+38` / macOS arm64 已重新编译，保留 Impeller；持久签名、与 Build 37 的签名身份一致性、ZIP 内容及 SHA-256 校验通过。正常退出 Build 37 后确认唯一运行实例为 Build 38。源码指纹和启动记录见[打包记录](benchmarks/package-v0.14-build38-2026-10-30.json)。本次未完成 Build 38 的额外 GUI / 物理输入法验收；仍为未提交工作区，无推送、分支合并或公开发布。
+
+### 重新打包并启动 — Build 37
+
+`0.14.0+37` / macOS arm64 汇总下述已验证的主程序修复与优化，仍保留 Impeller。沿用最近完整工程检查：Core 332 / 1 忽略、MVP 195 / 4 忽略、Platform 70 / 1 忽略、Flutter 490 / 1 跳过、SDK 33、JSON 30；检查后仅更新 Flutter / 原生构建号，再重新编译 Release App 与 Rust Bridge。
+
+持久本机签名、严格签名检查、ZIP 内容与 SHA-256 校验通过，签名要求与 Build 36 相同。正常退出 Build 36 后启动明确路径的新包，已确认唯一运行实例为 Build 37。版本、源码工作区指纹、包摘要与启动记录见[打包记录](benchmarks/package-v0.14-build37-2026-10-30.json)。
+
+仍位于 `codex/dependency-upgrades`，源码修复尚未提交 / 推送或合入 main；已安装 Web 插件不会随 App 打包更新。此次确认启动身份，未新增 GUI / 物理输入法、预览格式、整 App 内存或远端 CI 验收；本机开发签名不等于公证发行。
+
+### 历史设置与读取器内存修复 — 2026-10-30 工作区
+
+修复历史设置已显示时，保存并关闭失败后筛选框仍保留旧查询、列表却按失败来源筛选的问题。筛选编辑控件改由 AppHistorySettingsController 持有，页面不再保存第二份文本；新 Widget 回归在旧实现上失败，修复后包含草稿 / 关闭流程的相关 Flutter 50 项通过。
+
+XML 节点与 SQLite 结果表直接移动已构造的 JSON 值，不再通过 `json!` 对子树 / 整表重复序列化；输入、取消与只读预算不变。以实际读取器对合成文件测量：XML 为 20 层、1,000 个条目，每条含 256 字节 ASCII 属性值；SQLite 为 1,000 行，含整数、256 字节文本与 null 列。序列化输出分别为 324,809 / 292,900 字节，优化前后完整 SHA-256 一致。
+
+| 夹具 | 累计申请字节：前 → 后 | 峰值存活增量（字节）：前 → 后 |
+|---|---|---|
+| XML | 36,012,564 → 3,376,944 | 3,946,635 → 2,347,280 |
+| SQLite | 1,902,634 → 968,690 | 1,869,627 → 935,683 |
+
+统计沿用现有 Rust 堆测量方式，单独运行一个测试、预热后统计读取及 JSON 构造；不含 SQLite / C 堆、分配器开销、VM、脚本转换、Flutter 或 GPU，不是 RSS / physical footprint。临时测量入口已移除；原始日志与摘要保留于被忽略的 `build/review-round6-reader-*.log` / `.json`。
+
+历史读取 / 转换回归 42 项通过；完整 `scripts/check.sh` exit 0：Core 332 / 1 忽略、MVP 195 / 4 忽略、Platform 70 / 1 忽略、Flutter 490 / 1 跳过、SDK 33、JSON 30；规范、Clippy、架构、生成一致性、原生自动回归与文档检查通过。完整日志为被忽略的 `build/review-round6-full-check.log`。
+
+仍在 `codex/dependency-upgrades` 工作区，未提交 / 推送或重新打包，Build 36 未更新；Bridge API 未变，未单独重复 opt-in FFI。本轮未新增原生 GUI、整 App 内存、远端 CI 或跨平台运行验收。
+
+### 插件消息与快捷键解析简化 — 2026-10-30 工作区
+
+就绪与状态订阅回执合并为一个类型化判断，普通 RPC 不再为呈现逻辑重复解码回复正文；UTF-8 编码结果直接交给二进制消息，不再复制整帧字节。移除连续重复的同步页面检查与外层分支，保留每个异步发布点的当前页面检查、消息大小限制和原回执语义；未增加缓存、状态或协议。
+
+直接调用实际旧 / 新生产函数，使用含 48,000 字节 ASCII 正文的普通回复，每轮 1,000 次、同机 Flutter test Debug 五轮耗时中位数为 118.469 ms → 45.818 ms。测量包括回执分类与二进制消息构造，不包含原生通道、WebKit、SDK 客户端、渲染或整进程内存；不能作为整 App 的性能 / RSS 结论。临时测量入口已移除，原始日志与汇总保留于被忽略的 `build/review-round4-transport-*.log` / `.json`。
+
+多规则快捷键在同一会话锁内仅展开一次动作目录，普通绑定与规则解析复用同一候选筛选实现；使用既有候选 ID 索引定位 Context，原地保留匹配项。Flutter 添加规则按钮和 Rust 入口校验统一使用现有生成策略中的规则上限。64 个 Node 脚本、两条同时匹配规则的合成项目中，直接调用实际旧 / 新服务入口，每轮 200 次、Cargo test Debug 五轮耗时中位数为 95.748 ms → 57.761 ms；同样保留歧义选择且不执行动作。该测量不包含 Context 捕获、原生按键、动作执行或整进程内存。临时测量入口已移除，日志和汇总保留于被忽略的 `build/review-round5-shortcut-*.log` / `.json`。
+
+相关 Flutter 消息、页面生命周期、资源准入与外观回归 24 项、快捷键 Rust 12 项 / Flutter 36 项通过；最新完整 `scripts/check.sh` exit 0：Core 332 / 1 忽略、MVP 195 / 4 忽略、Platform 70 / 1 忽略、Flutter 489 / 1 跳过、SDK 33、JSON 30；规范、Clippy、架构、生成一致性、原生自动回归与文档检查通过。最新完整日志为被忽略的 `build/review-round5-full-check.log`。
+
+仍在 `codex/dependency-upgrades` 工作区，未提交 / 推送或重新打包，Build 36 未更新；Bridge API 未变，未单独重复 opt-in FFI。本轮未新增原生 GUI、整 App 内存、远端 CI 或跨平台运行验收。
+
+### 任务输出与动作选择修复 — 2026-10-30 工作区
+
+修复动作选择器滚动后修改 / 清空查询时首条结果不可见、任务搜索组词时 Esc 清空查询，以及未显示的输出流变化引起当前输出区滚动。新增两条真实 Widget 回归并扩展既有输出跟随测试，三种情况在修复前分别失败，修复后相关 Flutter 20 项通过。预览标识改用已有 hex 编码器，移除逐字节创建临时字符串的循环；原资源租约与文件生命周期 4 项测试通过。
+
+完整 `scripts/check.sh` exit 0：Core 332 / 1 忽略、MVP 195 / 4 忽略、Platform 70 / 1 忽略、Flutter 489 / 1 跳过、SDK 33、JSON 30；规范、Clippy、架构、生成一致性、原生自动回归与文档检查通过。证据保留于被忽略的 `build/review-next-*.log`。交互契约维护于 [UI 设计](ui-design.md)。
+
+修复仍在 `codex/dependency-upgrades` 工作区，未提交 / 推送或重新打包，Build 36 未更新；未改变 Bridge API，未单独重复 opt-in FFI。本轮未新增原生 GUI / 物理输入法、整 App 内存、远端 CI 或跨平台运行验收。
+
+### 按代码简化约定清理 — 2026-10-30 工作区
+
+清理开发项目内部重复的字段 / 数量 / 能力标记校验与版本层，包管理器从清单入口起保持为枚举；Cargo 动作只保存目标标识，执行时读取当前清单。删除旧 Node 标志、未使用的 UI 工具函数和纯转发封装；标准原子操作与 hex 解码替代手写循环，精简过时注释。剪贴板请求约束收敛到服务入口，数据库读回仍验证存储数据；后台 SDK 只在文本入口检查非法 UTF-16，分块阶段使用已确认的数据。
+
+Flutter 审批测试只记录页面发出的调用，不再复制审批状态与 token 规则；这些规则继续由真实 Rust Store 测试覆盖。查询边界测试使用真实 SQLite 服务。专项 Flutter 80 项与剪贴板页面 44 项通过，Rust 剪贴板 44 项 / 开发模块 10 项、真实项目命令 8 项 / 4 忽略、动态身份注册 1 项及后台 SDK 7 项通过。
+
+续审将 Flutter 剪贴板行选择改为同步调用，移除调用方的等待与异步转发；设置保存队列直接串接操作结果，保留通知监听者前公布队尾的顺序。设置入口校验移到保存主流程下方，删除被后续状态读取覆盖的前置读取和一层转发函数；草稿归属注释与当前实现一致。剪贴板完整内容比较仍保留，用于后台刷新时维持复制反馈；未新增状态或防御分支。现有真实页面 / 控制器专项回归 126 项通过，续审源码与测试（含注释）净减少 17 行。
+
+最新完整 `scripts/check.sh` exit 0：Core 332 / 1 忽略、MVP 195 / 4 忽略、Platform 70 / 1 忽略、Flutter 487 / 1 跳过、SDK 33、JSON 30；规范、Clippy、架构、生成一致性、原生自动回归与文档检查通过。首轮源码与测试（含注释）相对清理前净减少 131 行；证据保留于被忽略的 `build/eight-rules-*.log` 与续审 `build/logic-simplify-*.log`。未改变 Bridge API，未单独重复 opt-in FFI。
+
+清理仍在 `codex/dependency-upgrades` 工作区，未提交 / 推送或重新打包，Build 36 未更新。本轮未新增原生 GUI / 物理输入法、整 App 内存、远端 CI 或跨平台运行验收。
+
+### 应用选择与 Cargo Run 修复 — 2026-10-30 工作区
+
+应用选择框搜索 / 清空查询后同步滚动位置，保证键盘选中项可见；Cargo Run 传递目标清单的 `required-features`，入口解析后按类型沿现有元数据流传递；项目动作编码复用已有 hex 实现。新增两条真实 Widget 回归在旧实现上均失败，修复后通过；现有真实 Cargo 工作区回归增加需要两个非默认 feature 的目标，旧实现实际运行失败，修复后运行成功，原普通目标、Cargo Test 成败与目标删除检查继续通过。行为契约见[开发项目动作](developer-actions.md)。
+
+完整 `scripts/check.sh` exit 0：Core 331 / 1 忽略、MVP 195 / 4 忽略、Platform 70 / 1 忽略、Flutter 487 / 1 跳过、SDK 33、JSON 30；规范、Clippy、原生自动回归、架构、生成一致性与文档检查通过。专项 Flutter 15 项、开发模块 Rust 10 项及真实 Cargo 回归通过。本轮未改变 Bridge API，未单独重复 opt-in FFI；Bridge crate 随全量检查编译。
+
+沿用同一 35 字节字符串编码 1,000 次的夹具，生产编码器由 39,000 次分配 / 520,000 字节累计申请降至 1,000 次 / 70,000 字节；这是局部 Rust 分配统计，不是整 App RSS 或存活堆降幅。原始证据保留于被忽略的 `build/practical-fixes-*.log`。
+
+修复仍在 `codex/dependency-upgrades` 工作区，未提交 / 推送、重新打包或替换 Build 36。本轮未新增原生 GUI / 物理输入法、整 App 内存、远端 CI 或跨平台运行验收。
+
+### 生命周期与搜索分配修复 — 2026-10-30 工作区
+
+插件审批取消携带对应 token，旧页面清理不再取消新审批；后台 SDK 区分写入结果与读回错误，失败读取不缓存，无订阅者时不额外读回；直接标题匹配复用注册字段并保持应用限定词语义。完整 `scripts/check.sh` 通过：Core 331 / 1 忽略、MVP 195 / 4 忽略、Platform 70 / 1 忽略、Flutter 485 / 1 跳过、SDK 33、JSON 30；Bridge API 已重新生成并编译，真实动态库 Dart FFI 另行 1 项通过。受控回归与合成分配对照见[修复记录](archive/reviews/lifecycle-followup-review-2026-10-30.md#后续修复与验证2026-10-30)。
+
+本轮未提交 / 推送、重新打包或替换 Build 36；已安装插件需使用更新后的 SDK 重新构建并导入。GUI / 物理输入法、整 App 内存、远端 CI 与跨平台运行未新增验收。
+
+### 跨层审查问题修复 — 2026-10-30 工作区
+
+修复设置目录并发造成的开关状态回退、取消插件导入后列表丢失、历史查询绕过防抖，以及后台 QuickJS 超限输出的大块 Rust 副本；统一插件自动识别的文档契约。完整 `scripts/check.sh` 通过：Core 329 / 1 忽略、MVP 195 / 4 忽略、Platform 70 / 1 忽略、Flutter 483 / 1 跳过、SDK 29、JSON 30。相关 Flutter 77 项及后台 Runtime 4 项通过，受控时序与分配复测见[修复记录](archive/reviews/cross-layer-review-2026-10-30.md#后续修复与验证2026-10-30)。
+
+本轮 API 未变，Bridge 随完整门禁编译，未单独重复 opt-in FFI；尚未提交 / 推送、重新打包或替换 Build 36。GUI / 物理输入法、整 App 内存、跨平台运行和远端 Actions 未新增验收。
+
+### 升级后审查问题修复 — 2026-10-29 工作区
+
+修复 SDK 大状态同步及写后读取、主历史页面长按 Enter 重复执行、应用历史读取槽等待、转换输出提前限额，以及剪贴板空闲全表轮询。完整 `scripts/check.sh` 通过：Core 328 / 1 忽略、MVP 195 / 4 忽略、Platform 70 / 1 忽略、Flutter 476 / 1 跳过、SDK 29、JSON 30；Bridge 已重新生成并编译，真实 FFI 1 项独立通过。复现对应关系及合成资源计数见[修复记录](archive/reviews/resource-design-review-2026-10-29.md#后续修复与验证2026-10-29)。
+
+本轮尚未重新打包、替换运行中的 Build 36 或提交 / 推送；修复仍在独立升级分支。上述自动验证不含新增 GUI / 物理输入法、整 App 内存、跨平台运行或远端 Actions 验收。
+
+### 升级工具链与依赖后重新打包、启动 — Build 36
+
+`0.14.0+36` / macOS arm64 包含升级分支 `c98a8e7` 的工具链与依赖修复，使用 Rust 1.99.1、Flutter 3.47.8 / Dart 3.13.7，保留 Impeller。持久本机签名、严格签名检查、ZIP 内容 / SHA-256 和包内 arm64 Flutter 引擎 UUID 核对通过；正常退出 Build 35 后启动明确路径的新包，已确认实际运行版本为 Build 36。产物、来源与校验值见[打包记录](benchmarks/package-v0.14-build36-2026-10-29.json)。
+
+沿用下节完整工程检查与真实 FFI 结果；本轮只更新构建号并重新编译 App / Rust Bridge。启动身份确认不包含 GUI / 物理输入法、预览格式矩阵或进程内存验收。升级仍保留在 `codex/dependency-upgrades`，未合入 main 或推送；已安装的 Web 插件不会随 App 更新，上游编译期安全扫描告警仍按升级记录保留。
+
 ### Rust / Flutter 稳定工具链升级 — 2026-10-29
 
 `codex/dependency-upgrades` 进一步升级至 Rust / Cargo 1.99.1、Flutter 3.47.8 / Dart 3.13.7，并更新可兼容依赖。适配 SHA-2、SQLite 和原子接口，新增回归保护已有插件存储身份。完整 `scripts/check.sh` 通过：Core 322 / 1 忽略、MVP 195 / 4 忽略、Platform 70 / 1 忽略、Flutter 471 / 1 跳过、SDK 25、JSON 30；跳过的真实 FFI 项另行运行通过。四个 npm 树审计无已知漏洞；Rust OSV 查询保留一项上游编译期依赖的版本范围告警，源码核对及通告场景未复现结果见[工具链升级记录](archive/reviews/toolchain-upgrades-2026-10-29.md)。
 
-main 与已打包 Build 35 保持升级前基线，未重新打包、启动或推送。Flutter SDK / FRB 固定的间接依赖没有强行替换；GUI / 物理输入法、进程内存、跨平台原生运行与远端 Actions 未在本轮验收。
+升级验证结束时，main 与已打包 Build 35 保持升级前基线，尚未重新打包、启动或推送；升级随后收录于 Build 36。Flutter SDK / FRB 固定的间接依赖没有强行替换；GUI / 物理输入法、进程内存、跨平台原生运行与远端 Actions 未在该轮验收。
 
 ### 独立分支依赖升级 — 2026-10-29
 
 `codex/dependency-upgrades` 从 `main@f1ed6d3` 合入 15 个 Dependabot 分支，包含 Rust、Flutter、插件 SDK、规范工具和 GitHub Actions；修复 SQLite 受检整数转换与可失败保护接口，同步 FRB 两端运行库及生成器至 2.13.0，并新增版本漂移检查。完整 `scripts/check.sh` 通过：Core 321 / 1 忽略、MVP 195 / 4 忽略、Platform 70 / 1 忽略、Flutter 471 / 1 跳过、SDK 25、JSON 30；真实 Rust 动态库构建及独立 Dart FFI 回归 1 项通过，覆盖普通 Flutter 套件跳过的显式动态库测试。范围与证据见[依赖升级记录](archive/reviews/dependency-upgrades-2026-10-29.md)。
 
-升级保留在独立分支，未合入 main、推送远端或重新打包；源码版本仍为 `0.14.0+35`，已打包的 Build 35 对应升级前基线。GUI / 物理输入法、整 App 内存、跨平台原生运行和远端 Actions 未在本轮验收。
+该轮结束时升级保留在独立分支，未合入 main、推送远端或重新打包；源码版本仍为 `0.14.0+35`，当时已打包的 Build 35 对应升级前基线，后续升级及打包见上节。GUI / 物理输入法、整 App 内存、跨平台原生运行和远端 Actions 未在该轮验收。
 
 ### 当前修复重新打包与启动 — Build 35
 

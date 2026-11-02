@@ -91,8 +91,15 @@ impl WebPackageStore {
         self.pending = Some(Pending { token, package });
         Ok(review)
     }
-    pub fn cancel_review(&mut self) {
-        self.pending = None;
+    pub fn cancel_review(&mut self, token: &str) {
+        // A late page cleanup must not retire another import's review.
+        if self
+            .pending
+            .as_ref()
+            .is_some_and(|pending| pending.token == token)
+        {
+            self.pending = None;
+        }
     }
     pub fn approve(&mut self, app: &Application, token: &str) -> Result<()> {
         ensure!(

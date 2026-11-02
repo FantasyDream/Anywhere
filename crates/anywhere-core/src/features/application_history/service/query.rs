@@ -2,7 +2,7 @@
 use super::HistoryService;
 use crate::{
     core::search::query::{MatchLevel, Query, SearchFields},
-    features::application_history::model::{Item, Notice, SearchResult},
+    features::application_history::model::{Item, Notice, SearchResult, SourcePreference},
 };
 use anyhow::{ensure, Result};
 use sha2::{Digest, Sha256};
@@ -15,6 +15,22 @@ struct RankedEntry {
     item: Item,
 }
 
+struct Read {
+    epoch: u64,
+    source: SourcePreference,
+}
+enum Prepared {
+    Read(Read),
+    Complete(SearchResult),
+}
+fn empty(notice: Notice) -> SearchResult {
+    SearchResult {
+        items: Arc::default(),
+        failed_sources: vec![],
+        notice: Some(notice),
+    }
+}
+
 impl HistoryService {
     pub fn open_session(&self) -> Result<u64> {
         self.refresh()?;
@@ -24,52 +40,90 @@ impl HistoryService {
             .try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_add(1))
             .map_err(|_| anyhow::anyhow!("history session exhausted"))?
             + 1;
-        self.epoch.fetch_add(1, Ordering::AcqRel);
+        self.advance_epoch();
         state.items = Arc::default();
         Ok(owner)
     }
     pub fn cancel_session(&self, owner: u64) {
         let mut state = self.state.lock().unwrap();
         if owner == self.owner.load(Ordering::Acquire) {
-            self.epoch.fetch_add(1, Ordering::AcqRel);
+            self.advance_epoch();
             state.items = Arc::default();
         }
     }
+    /// Standalone synchronous readers fail fast when a physical read is active.
     pub fn search(&self, owner: u64, text: &str, source_id: &str) -> Result<SearchResult> {
-        ensure!(text.len() <= 1024, "history query too large");
-        let empty = |notice| SearchResult {
-            items: Arc::default(),
-            failed_sources: vec![],
-            notice: Some(notice),
+        let read = match self.prepare_search(owner, text, source_id)? {
+            Prepared::Read(read) => read,
+            Prepared::Complete(result) => return Ok(result),
         };
-        let epoch = {
-            let mut state = self.state.lock().unwrap();
-            if owner != self.owner.load(Ordering::Acquire) {
-                return Ok(empty(Notice::Stale));
-            }
-            let epoch = self.epoch.fetch_add(1, Ordering::AcqRel) + 1;
-            state.items = Arc::default();
-            epoch
+        let Ok(_worker) = self.worker.try_acquire() else {
+            return Ok(empty(Notice::Busy));
         };
-        if !self.enabled.load(Ordering::Acquire) {
-            return Ok(empty(Notice::Disabled));
+        self.read_search(read, text)
+    }
+
+    /// Interactive queries wait for the cancelled reader to relinquish its slot.
+    /// A superseded waiter exits immediately; it never starts another source read.
+    pub async fn search_wait(
+        self: &Arc<Self>,
+        owner: u64,
+        text: String,
+        source_id: String,
+    ) -> Result<SearchResult> {
+        let read = match self.prepare_search(owner, &text, &source_id)? {
+            Prepared::Read(read) => read,
+            Prepared::Complete(result) => return Ok(result),
+        };
+        let changed = self.query_changed.notified();
+        tokio::pin!(changed);
+        changed.as_mut().enable();
+        if (self.cancellation(read.epoch))() {
+            return Ok(empty(Notice::Stale));
         }
-        // Each query names one source. An absent source must never revive the
-        // removed cross-application route or read every enabled history file.
-        let source = self
-            .state
-            .lock()
-            .unwrap()
+        let permit = tokio::select! {
+            _ = changed => return Ok(empty(Notice::Stale)),
+            result = tokio::time::timeout(std::time::Duration::from_secs(5), self.worker.clone().acquire_owned()) => {
+                match result {
+                    Ok(Ok(permit)) => permit,
+                    _ => return Ok(empty(Notice::Busy)),
+                }
+            }
+        };
+        let service = self.clone();
+        tokio::task::spawn_blocking(move || {
+            // Retain physical admission even when the async caller goes away.
+            let _permit = permit;
+            service.read_search(read, &text)
+        })
+        .await?
+    }
+
+    fn prepare_search(&self, owner: u64, text: &str, source_id: &str) -> Result<Prepared> {
+        ensure!(text.len() <= 1024, "history query too large");
+        let mut state = self.state.lock().unwrap();
+        if owner != self.owner.load(Ordering::Acquire) {
+            return Ok(Prepared::Complete(empty(Notice::Stale)));
+        }
+        let epoch = self.advance_epoch();
+        state.items = Arc::default();
+        if !self.enabled.load(Ordering::Acquire) {
+            return Ok(Prepared::Complete(empty(Notice::Disabled)));
+        }
+        // Each query names one source; never fall back to reading every source.
+        let Some(source) = state
             .sources
             .iter()
             .find(|source| source.id == source_id)
-            .cloned();
-        let Some(source) = source else {
-            return Ok(empty(Notice::Unconfigured));
+            .cloned()
+        else {
+            return Ok(Prepared::Complete(empty(Notice::Unconfigured)));
         };
-        let Ok(_worker) = self.worker.try_lock() else {
-            return Ok(empty(Notice::Busy));
-        };
+        Ok(Prepared::Read(Read { epoch, source }))
+    }
+
+    fn read_search(&self, read: Read, text: &str) -> Result<SearchResult> {
+        let Read { epoch, source } = read;
         let cancelled = self.cancellation(epoch);
         let current = || !cancelled();
         if !current() {
@@ -168,6 +222,91 @@ mod tests {
                 last_used_at: None,
             }])
         }
+    }
+
+    fn service() -> Arc<HistoryService> {
+        let storage = ModuleStorageHost::memory()
+            .unwrap()
+            .bind("history")
+            .unwrap();
+        Arc::new(
+            HistoryService::new(Ok(storage), Arc::new(Source))
+                .with_installed_applications(["test.app".into()]),
+        )
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn interactive_read_waits_past_the_old_ui_retry_window() {
+        let service = service();
+        let owner = service.open_session().unwrap();
+        let old_reader = service.worker.clone().acquire_owned().await.unwrap();
+        let task = {
+            let service = service.clone();
+            tokio::spawn(async move {
+                service
+                    .search_wait(owner, "".into(), "test".into())
+                    .await
+                    .unwrap()
+            })
+        };
+        tokio::task::yield_now().await;
+        tokio::time::advance(std::time::Duration::from_secs(1)).await;
+        assert!(!task.is_finished());
+        drop(old_reader);
+        let result = task.await.unwrap();
+        assert!(result.notice.is_none());
+        assert_eq!(result.items[0].entry.title, "Project");
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn newer_query_and_session_cancellation_revoke_waiters_before_admission() {
+        let service = service();
+        let owner = service.open_session().unwrap();
+        let old_reader = service.worker.clone().acquire_owned().await.unwrap();
+        let first = {
+            let service = service.clone();
+            tokio::spawn(async move {
+                service
+                    .search_wait(owner, "old".into(), "test".into())
+                    .await
+                    .unwrap()
+            })
+        };
+        tokio::task::yield_now().await;
+        let latest = {
+            let service = service.clone();
+            tokio::spawn(async move {
+                service
+                    .search_wait(owner, "".into(), "test".into())
+                    .await
+                    .unwrap()
+            })
+        };
+        tokio::task::yield_now().await;
+        assert_eq!(first.await.unwrap().notice, Some(Notice::Stale));
+        assert!(!latest.is_finished());
+        service.cancel_session(owner);
+        assert_eq!(latest.await.unwrap().notice, Some(Notice::Stale));
+        drop(old_reader);
+        assert!(service.state.lock().unwrap().items.is_empty());
+        assert!(service
+            .search_wait(owner, "".into(), "test".into())
+            .await
+            .unwrap()
+            .notice
+            .is_none());
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn interactive_admission_has_a_finite_budget() {
+        let service = service();
+        let owner = service.open_session().unwrap();
+        let _old_reader = service.worker.clone().acquire_owned().await.unwrap();
+        let result = service
+            .search_wait(owner, "".into(), "test".into())
+            .await
+            .unwrap();
+        assert_eq!(result.notice, Some(Notice::Busy));
     }
 
     #[test]

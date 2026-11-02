@@ -1,27 +1,39 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
 const webFrameBytes = 64 * 1024;
 
-/// Presentation only: dismiss loading after the Rust broker accepted ready.
-/// A page's request alone never proves that its document is authorized / ready.
-bool webReadyAcknowledged(String request, String response) {
+enum WebAcknowledgement { ready, stateSubscribed }
+
+/// Presentation changes require a matching accepted broker reply. Ordinary RPC
+/// replies are forwarded without decoding their potentially large result here.
+WebAcknowledgement? webAcknowledgement(String request, String response) {
   try {
     final sent = jsonDecode(request);
+    if (sent is! Map || sent['requestId'] is! String) return null;
+    final acknowledgement = switch (sent['method']) {
+      'lifecycle.ready' => WebAcknowledgement.ready,
+      'state.subscribe' => WebAcknowledgement.stateSubscribed,
+      _ => null,
+    };
+    if (acknowledgement == null) return null;
     final received = jsonDecode(response);
-    return sent is Map &&
-        sent['method'] == 'lifecycle.ready' &&
-        sent['requestId'] is String &&
-        received is Map &&
-        received['requestId'] == sent['requestId'] &&
-        !received.containsKey('error') &&
-        received['result'] is Map &&
-        (received['result'] as Map).length == 1 &&
-        (received['result'] as Map).containsKey('value') &&
-        received['result']['value'] == null;
+    if (received is! Map ||
+        received['requestId'] != sent['requestId'] ||
+        received.containsKey('error') ||
+        received['result'] is! Map) {
+      return null;
+    }
+    final result = received['result'] as Map;
+    if (acknowledgement == WebAcknowledgement.ready &&
+        (result.length != 1 ||
+            !result.containsKey('value') ||
+            result['value'] != null)) {
+      return null;
+    }
+    return acknowledgement;
   } on FormatException {
-    return false;
+    return null;
   }
 }
 
@@ -36,22 +48,5 @@ WebMessage webReplyMessage(String frame) {
   if (bytes.length > webFrameBytes) {
     throw ArgumentError('Web reply exceeds the frame limit');
   }
-  return WebMessage(
-      data: Uint8List.fromList(bytes), type: WebMessageType.ARRAY_BUFFER);
-}
-
-/// Start the native state wait only after a qualified SDK subscription was accepted.
-bool webStateSubscribed(String request, String response) {
-  try {
-    final sent = jsonDecode(request), received = jsonDecode(response);
-    return sent is Map &&
-        sent['method'] == 'state.subscribe' &&
-        sent['requestId'] is String &&
-        received is Map &&
-        received['requestId'] == sent['requestId'] &&
-        !received.containsKey('error') &&
-        received['result'] is Map;
-  } on FormatException {
-    return false;
-  }
+  return WebMessage(data: bytes, type: WebMessageType.ARRAY_BUFFER);
 }

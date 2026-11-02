@@ -68,6 +68,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  ClipboardHistoryDto dco_decode_box_autoadd_clipboard_history_dto(dynamic raw);
+
+  @protected
   ClipboardNoticeDto dco_decode_box_autoadd_clipboard_notice_dto(dynamic raw);
 
   @protected
@@ -258,6 +261,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       dynamic raw);
 
   @protected
+  ClipboardHistoryDto? dco_decode_opt_box_autoadd_clipboard_history_dto(
+      dynamic raw);
+
+  @protected
   ClipboardNoticeDto? dco_decode_opt_box_autoadd_clipboard_notice_dto(
       dynamic raw);
 
@@ -419,6 +426,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
 
   @protected
   AppHistoryNoticeDto sse_decode_box_autoadd_app_history_notice_dto(
+      SseDeserializer deserializer);
+
+  @protected
+  ClipboardHistoryDto sse_decode_box_autoadd_clipboard_history_dto(
       SseDeserializer deserializer);
 
   @protected
@@ -642,6 +653,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
       SseDeserializer deserializer);
 
   @protected
+  ClipboardHistoryDto? sse_decode_opt_box_autoadd_clipboard_history_dto(
+      SseDeserializer deserializer);
+
+  @protected
   ClipboardNoticeDto? sse_decode_opt_box_autoadd_clipboard_notice_dto(
       SseDeserializer deserializer);
 
@@ -821,6 +836,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_box_autoadd_app_history_notice_dto(
       AppHistoryNoticeDto self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_box_autoadd_clipboard_history_dto(
+      ClipboardHistoryDto self, SseSerializer serializer);
 
   @protected
   void sse_encode_box_autoadd_clipboard_notice_dto(
@@ -1048,6 +1067,10 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   @protected
   void sse_encode_opt_box_autoadd_app_history_notice_dto(
       AppHistoryNoticeDto? self, SseSerializer serializer);
+
+  @protected
+  void sse_encode_opt_box_autoadd_clipboard_history_dto(
+      ClipboardHistoryDto? self, SseSerializer serializer);
 
   @protected
   void sse_encode_opt_box_autoadd_clipboard_notice_dto(

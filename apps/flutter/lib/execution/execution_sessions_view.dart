@@ -106,6 +106,7 @@ class ExecutionSessionsViewState extends State<ExecutionSessionsView> {
   }
 
   void _hideOrClear() {
+    if (!_search.value.composing.isCollapsed) return;
     if (controller.filter.isNotEmpty) {
       controller.setFilter('');
       _listFocus.requestFocus();

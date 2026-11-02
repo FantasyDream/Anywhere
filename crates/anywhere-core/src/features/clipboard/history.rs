@@ -15,7 +15,10 @@ pub struct HistoryItem {
     pub copied_at_ms: i64,
     pub byte_count: usize,
 }
+/// Receives service-validated requests; stored data is validated when read.
 pub trait HistoryRepository: Send {
+    /// Changes to rows, ordering or preferences, without materializing items.
+    fn revision(&self) -> u64;
     fn policy(&self) -> Result<super::policy::HistoryPolicy>;
     fn set_policy(&mut self, policy: super::policy::HistoryPolicy) -> Result<()>;
     fn expire(&mut self, cutoff_ms: i64) -> Result<()>;

@@ -45,6 +45,35 @@ fn import_approves_exact_snapshot_persists_and_serves_only_verified_assets() {
 }
 
 #[test]
+fn review_cancellation_only_retires_the_matching_token() {
+    let root = tempfile::tempdir().unwrap();
+    let app = app();
+    let path = root.path().join("import.awplugin");
+    archive(
+        &package(serde_json::json!([]), serde_json::json!([]), "body"),
+        &path,
+    );
+    let mut store =
+        WebPackageStore::open(root.path().join("store"), WebPlatform::Macos, &app).unwrap();
+    let old = store.inspect(&path).unwrap();
+    let current = store.inspect(&path).unwrap();
+    assert_ne!(old.token, current.token);
+    store.cancel_review(&old.token);
+    store.cancel_review("unknown");
+    assert!(store.approve(&app, &old.token).is_err());
+    store.approve(&app, &current.token).unwrap();
+    assert_eq!(store.statuses().len(), 1);
+
+    let cancelled = store.inspect(&path).unwrap();
+    store.cancel_review(&cancelled.token);
+    store.cancel_review(&cancelled.token);
+    assert!(store.approve(&app, &cancelled.token).is_err());
+    let next = store.inspect(&path).unwrap();
+    store.cancel_review(&cancelled.token);
+    store.approve(&app, &next.token).unwrap();
+}
+
+#[test]
 fn a_failed_new_inspection_releases_the_previous_review() {
     let root = tempfile::tempdir().unwrap();
     let app = app();

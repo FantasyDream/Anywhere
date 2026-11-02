@@ -107,7 +107,7 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
     if (!active) return;
     final index = session.items.indexWhere((row) => row.id == item.id);
     session.preview.browsing = true;
-    if (index >= 0) unawaited(session.select(index));
+    if (index >= 0) session.select(index);
     _focusSearch();
   }
 
@@ -281,8 +281,8 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
         unawaited(_copy(returnToTarget: true));
       } else if (key == LogicalKeyboardKey.arrowUp ||
           key == LogicalKeyboardKey.arrowDown) {
-        unawaited(session.select(
-            key == LogicalKeyboardKey.arrowUp ? 0 : session.items.length - 1));
+        session.select(
+            key == LogicalKeyboardKey.arrowUp ? 0 : session.items.length - 1);
       } else {
         final index = const [
           LogicalKeyboardKey.digit1,
@@ -319,8 +319,7 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
               .clamp(1, 100)
           : 1;
       session.preview.browsing = true;
-      unawaited(
-          session.select(session.selectedIndex + (forward ? count : -count)));
+      session.select(session.selectedIndex + (forward ? count : -count));
       return KeyEventResult.handled;
     }
     if (enter) {

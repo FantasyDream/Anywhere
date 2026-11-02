@@ -59,8 +59,14 @@ pub(super) fn cancel(session_id: u32) -> Result<()> {
     service()?.cancel_session(u64::from(session_id));
     Ok(())
 }
-pub(super) fn search(session_id: u32, query: String, source: String) -> Result<AppHistoryDto> {
-    let result = service()?.search(u64::from(session_id), &query, &source)?;
+pub(super) async fn search(
+    session_id: u32,
+    query: String,
+    source: String,
+) -> Result<AppHistoryDto> {
+    let result = service()?
+        .search_wait(u64::from(session_id), query, source)
+        .await?;
     Ok(AppHistoryDto {
         items: result
             .items

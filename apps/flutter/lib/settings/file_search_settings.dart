@@ -7,7 +7,7 @@ import '../ui/app_icons.dart';
 import '../ui/app_style.dart';
 import 'settings_components.dart';
 
-/// Draft fields are owned by SettingsScreen so its close/save decision includes them.
+/// Draft fields belong to SettingsEdits so tab changes preserve unsaved paths.
 class FileSearchSettings extends StatelessWidget {
   const FileSearchSettings(
       {super.key,

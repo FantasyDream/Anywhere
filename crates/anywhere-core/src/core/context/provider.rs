@@ -8,19 +8,9 @@ use anyhow::Result;
 use anywhere_protocol::{ContextTypeId, ProviderId};
 use async_trait::async_trait;
 
-/// The performance metrics V0.2 must record.
-///
-/// The spec names seven metrics; this module lists the exact name each one appears under in
-/// the log, so the contract is stated once and a test asserts every one of them is emitted.
-/// Most are tracing *fields*; `context_resolution_total` is a log *message* name, because it
-/// marks a completion rather than carrying a duration.
-///
-/// `first_snapshot_duration` is the `first_snapshot_duration_us` field of the first
-/// `snapshot_committed` line of a revision (`snapshot_seq == 1`).
-///
-/// The emission sites spell these names inline: `tracing` requires literal field names, so a
-/// site cannot reference a const. The test in `tests/mvp.rs` is what keeps the two ends
-/// honest.
+/// Tracing sites use literal names; MVP tests verify they match this contract.
+/// `context_resolution_total` is an event name, while `first_snapshot_duration`
+/// maps to `first_snapshot_duration_us` on the first committed snapshot of a revision.
 pub mod metrics {
     pub const PROVIDER_DURATION: &str = "provider_duration";
     pub const CONTEXT_RESOLUTION_TOTAL: &str = "context_resolution_total";

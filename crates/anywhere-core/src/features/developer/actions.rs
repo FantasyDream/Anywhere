@@ -1,5 +1,5 @@
-//! Fixed first-party commands. Project scripts are executed by npm, never interpolated here.
-use super::provider::{script_property, ProjectKind};
+//! Fixed first-party commands; declared scripts use the dynamic action factory.
+use super::provider::ProjectKind;
 use crate::core::{
     action::{
         availability::AvailabilityRule,
@@ -176,10 +176,6 @@ fn spec(id: &'static str, command: &'static ProjectCommand, home: bool) -> Actio
                     "maven"
                 }
             ),
-        }
-    } else if matches!(command.kind, ProjectKind::Node) {
-        AvailabilityRule::RequireContextProperty {
-            key: script_property(command.operation),
         }
     } else {
         AvailabilityRule::Enabled

@@ -56,6 +56,64 @@ void main() {
   });
   tearDown(() => messenger.setMockMethodCallHandler(channel, null));
 
+  for (final fail in [false, true]) {
+    test(
+        'source reconciliation shares feature admission after ${fail ? 'failure' : 'success'}',
+        () async {
+      final mutation = Completer<List<ExtensionStatusDto>>();
+      final reconciliation = Completer<List<ExtensionStatusDto>>();
+      final reading = Completer<void>();
+      var writes = 0, reads = 0;
+      final c = SettingsController(
+          window: WindowHost(channel),
+          readExtensions: () {
+            reads++;
+            reading.complete();
+            return reconciliation.future;
+          },
+          enableExtension: (_, enabled) => ++writes == 1
+              ? mutation.future
+              : Future.value([extension(firstParty: true, enabled: enabled)]));
+      addTearDown(() {
+        c.dispose();
+        if (!mutation.isCompleted) mutation.complete([]);
+        if (!reconciliation.isCompleted) reconciliation.complete([]);
+      });
+      final first = c.setExtensionEnabled(extension(firstParty: true), false);
+      final queued = c.appHistory.onCatalogChanged!();
+      await Future<void>.delayed(Duration.zero);
+      expect(c.updatingFeatures, isTrue);
+      expect(reads, 0,
+          reason: 'source status must wait for the older mutation reply');
+      await c.setExtensionEnabled(
+          extension(firstParty: true, enabled: false), true);
+      expect(writes, 1);
+      if (fail) {
+        mutation.completeError(StateError('response failed after commit'));
+      } else {
+        mutation.complete([extension(firstParty: true, enabled: false)]);
+      }
+      await first;
+      await reading.future;
+      expect(c.updatingFeatures, isTrue,
+          reason: 'the queued reconciliation still owns admission');
+      var closed = false;
+      final closing = c.prepareClose().then((result) => closed = result);
+      await Future<void>.delayed(Duration.zero);
+      expect(closed, isFalse);
+      reconciliation.complete([extension(firstParty: true, enabled: false)]);
+      await queued;
+      await closing;
+      expect(closed, isTrue);
+      expect(c.updatingFeatures, isFalse);
+      expect(c.extensions.single.enabled, isFalse);
+      await c.setExtensionEnabled(
+          extension(firstParty: true, enabled: false), true);
+      expect(writes, 2);
+      expect(c.extensions.single.enabled, isTrue);
+    });
+  }
+
   test(
       'committed reload with failed response releases obsolete chords and can recover',
       () async {

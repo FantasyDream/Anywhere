@@ -1672,6 +1672,67 @@ void main() {
   });
 
   testWidgets(
+      'Space previews a pointer-selected file while the desktop search field has focus',
+      (tester) async {
+    final loaded = <String>[];
+    final first =
+        row('downloads-settings', 'settings.xml', 'core.file.open', file: true);
+    final second =
+        row('m2-settings', 'settings.xml', 'core.file.open', file: true);
+    final c =
+        await mount(tester, hits: [first, second], load: (_, __, id) async {
+      loaded.add(id);
+      return preview('/project/$id.xml');
+    });
+    await openFiles(tester);
+    await tester.enterText(find.byType(TextField), 'settings.xml');
+    await tester.pumpAndSettle();
+    await tester.tap(fileRow('settings.xml').at(1));
+    await tester.pumpAndSettle();
+    expect(c.view.selectedEntry?.candidate?.id, second.id);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+    expect(loaded, [second.id]);
+    expect(previewCalls.last.method, 'show');
+    expect(c.view.input, 'settings.xml');
+    expect(tester.widget<TextField>(find.byType(TextField)).focusNode!.hasFocus,
+        true);
+  }, variant: TargetPlatformVariant.desktop());
+
+  testWidgets(
+      'modified arrows edit the query without browsing or arming Space preview',
+      (tester) async {
+    final c = await mount(tester);
+    await openFiles(tester);
+    await tester.enterText(find.byType(TextField), 'report');
+    await tester.pumpAndSettle();
+    for (final modifier in [
+      LogicalKeyboardKey.shiftLeft,
+      LogicalKeyboardKey.metaLeft,
+      LogicalKeyboardKey.controlLeft,
+      LogicalKeyboardKey.altLeft,
+    ]) {
+      for (final arrow in [
+        LogicalKeyboardKey.arrowUp,
+        LogicalKeyboardKey.arrowDown,
+      ]) {
+        await chord(tester, modifier, arrow);
+        expect(c.view.selectedIndex, -1);
+      }
+    }
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    expect(c.view.selectedEntry?.candidate?.id, text.id);
+    await chord(
+        tester, LogicalKeyboardKey.shiftLeft, LogicalKeyboardKey.arrowDown);
+    expect(c.view.selectedEntry?.candidate?.id, text.id);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+    expect(previewCalls.where((call) => call.method == 'show'), isEmpty);
+    expect(c.view.input, 'report');
+  }, variant: TargetPlatformVariant.desktop());
+
+  testWidgets(
       'editing closes native preview and a late resource cannot reopen it',
       (tester) async {
     final pending = Completer<NativePreviewDto>();

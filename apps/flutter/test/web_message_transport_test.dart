@@ -10,41 +10,42 @@ void main() {
       () {
     const request = '{"requestId":"s1","method":"state.subscribe"}';
     expect(
-        webStateSubscribed(request, '{"requestId":"s1","result":{"value":{}}}'),
-        isTrue);
+        webAcknowledgement(request, '{"requestId":"s1","result":{"value":{}}}'),
+        WebAcknowledgement.stateSubscribed);
     expect(
-        webStateSubscribed(request, '{"requestId":"s2","result":{"value":{}}}'),
-        isFalse);
+        webAcknowledgement(request, '{"requestId":"s2","result":{"value":{}}}'),
+        isNull);
     expect(
-        webStateSubscribed(
+        webAcknowledgement(
             request, '{"requestId":"s1","error":{"code":"INACTIVE"}}'),
-        isFalse);
+        isNull);
     expect(
-        webStateSubscribed('{"requestId":"s1","method":"state.get"}',
+        webAcknowledgement('{"requestId":"s1","method":"state.get"}',
             '{"requestId":"s1","result":{"value":{}}}'),
-        isFalse);
+        isNull);
   });
 
   test('loading ends only on the matching broker ready acknowledgement', () {
     const request = '{"requestId":"r1","method":"lifecycle.ready"}';
     expect(
-        webReadyAcknowledged(
+        webAcknowledgement(
             request, '{"requestId":"r1","result":{"value":null}}'),
-        isTrue);
+        WebAcknowledgement.ready);
     for (final response in [
       '{"requestId":"r2","result":{"value":null}}',
       '{"requestId":"r1","error":{"code":"INACTIVE"}}',
       '{"requestId":"r1","result":{"value":null},"error":null}',
       '{"requestId":"r1","result":{"transfer":{}}}',
       '{"requestId":"r1","result":{}}',
+      '{"requestId":"r1","result":{"value":null,"extra":true}}',
       'invalid',
     ]) {
-      expect(webReadyAcknowledged(request, response), isFalse);
+      expect(webAcknowledgement(request, response), isNull);
     }
     expect(
-        webReadyAcknowledged('{"requestId":"r1","method":"storage.get"}',
+        webAcknowledgement('{"requestId":"r1","method":"storage.get"}',
             '{"requestId":"r1","result":{"value":null}}'),
-        isFalse);
+        isNull);
   });
   test('native reply uses binary data and preserves escaped JSON and Unicode',
       () {

@@ -3,6 +3,7 @@ use super::history::*;
 use super::policy::{self, HistoryPolicy};
 use anyhow::{ensure, Context, Result};
 use anywhere_platform::{ContextReadError, Platform};
+use sha2::{Digest, Sha256};
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Debug)]
@@ -12,6 +13,11 @@ pub struct HistoryStatus {
     pub policy: HistoryPolicy,
     pub available: bool,
     pub notice: Option<HistoryNotice>,
+}
+pub struct HistorySnapshot {
+    pub revision: String,
+    pub status: HistoryStatus,
+    pub items: Vec<HistoryItem>,
 }
 /// Policy facts only; each presentation chooses its own localized wording.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -103,22 +109,37 @@ impl HistoryService {
         if state.repository.is_ok() {
             state.expire((self.clock)())?;
         }
-        let available = state.feature_enabled && state.repository.is_ok();
-        Ok(HistoryStatus {
-            recording: available && state.recording && state.policy.paused_until_ms.is_none(),
-            recording_enabled: state.recording,
-            policy: state.policy,
-            available,
-            notice: if !state.feature_enabled {
-                Some(HistoryNotice::FeatureDisabled)
-            } else if state.repository.is_err() {
-                Some(HistoryNotice::StorageUnavailable)
-            } else {
-                state
-                    .notice
-                    .or_else(|| state.policy.paused_until_ms.map(|_| HistoryNotice::Paused))
-            },
-        })
+        Ok(state.status())
+    }
+    /// One atomic view of status and metadata. Unchanged polls stop before SQL
+    /// row loading, DTO conversion and bridge transport; expiry still runs.
+    pub fn snapshot(&self, query: &str, after: Option<&str>) -> Result<Option<HistorySnapshot>> {
+        ensure!(query.len() <= MAX_QUERY_BYTES, "clipboard query too large");
+        let mut state = self.state()?;
+        if state.repository.is_ok() {
+            state.expire((self.clock)())?;
+        }
+        let status = state.status();
+        let changes = state.repository.as_ref().map_or(0, |repo| repo.revision());
+        let revision = format!(
+            "{}:{changes}:{:?}:{}",
+            state.epoch,
+            status.notice,
+            hex::encode(Sha256::digest(query.as_bytes()))
+        );
+        if after == Some(revision.as_str()) {
+            return Ok(None);
+        }
+        let items = if status.available {
+            state.repository()?.search(query)?
+        } else {
+            vec![]
+        };
+        Ok(Some(HistorySnapshot {
+            revision,
+            status,
+            items,
+        }))
     }
     /// Settings-only aggregate; regular history searches need no storage-usage scan.
     pub fn usage(&self) -> Result<(u32, u32)> {
@@ -268,6 +289,7 @@ impl HistoryService {
         std::time::Duration::from_millis(next.saturating_sub(now).clamp(1_000, 60_000) as u64)
     }
     pub fn search(&self, query: &str) -> Result<Vec<HistoryItem>> {
+        ensure!(query.len() <= MAX_QUERY_BYTES, "clipboard query too large");
         let mut state = self.state()?;
         state.require_enabled()?;
         state.expire((self.clock)())?;
@@ -466,6 +488,23 @@ impl HistoryService {
     }
 }
 impl State {
+    fn status(&self) -> HistoryStatus {
+        let available = self.feature_enabled && self.repository.is_ok();
+        HistoryStatus {
+            recording: available && self.recording && self.policy.paused_until_ms.is_none(),
+            recording_enabled: self.recording,
+            policy: self.policy,
+            available,
+            notice: if !self.feature_enabled {
+                Some(HistoryNotice::FeatureDisabled)
+            } else if self.repository.is_err() {
+                Some(HistoryNotice::StorageUnavailable)
+            } else {
+                self.notice
+                    .or_else(|| self.policy.paused_until_ms.map(|_| HistoryNotice::Paused))
+            },
+        }
+    }
     fn expire(&mut self, now_ms: i64) -> Result<()> {
         if let Some(cutoff) = self.policy.cutoff(now_ms) {
             self.repository()?.expire(cutoff)?;

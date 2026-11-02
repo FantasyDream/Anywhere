@@ -3,7 +3,7 @@ use super::bundle::ActionBundle;
 use super::group::{label_for, ActionGroup, GroupMeta};
 use super::handler::ActionHandlerRef;
 use crate::core::context::ResolvedContext;
-use crate::core::search::query::SearchFields;
+use crate::core::search::query::{Query, SearchFields};
 use anyhow::{bail, Result};
 use anywhere_protocol::*;
 use std::collections::{BTreeMap, BTreeSet};
@@ -95,6 +95,9 @@ pub struct ActionDescriptor {
     pub menu_path: Vec<String>,
     pub primary_action: bool,
     search: SearchFields,
+    // Usually the display title is already the first cached search name. Only
+    // retain a separate normalized title when it differs (or the title is empty).
+    display_title_search: Option<String>,
     contributor: Option<std::sync::Arc<str>>,
 }
 
@@ -110,6 +113,8 @@ impl ActionDescriptor {
             .as_deref()
             .unwrap_or(definition.title.as_str());
         let search = SearchFields::new(primary, &definition.aliases, &definition.keywords);
+        let display_title_search = (primary != definition.title || definition.title.is_empty())
+            .then(|| definition.title.to_lowercase());
         Self {
             id: definition.id,
             title: definition.title,
@@ -128,6 +133,7 @@ impl ActionDescriptor {
             menu_path: definition.menu_path,
             primary_action: definition.primary_action,
             search,
+            display_title_search,
             contributor: None,
         }
     }
@@ -139,6 +145,15 @@ impl ActionDescriptor {
 
     pub fn search(&self) -> &SearchFields {
         &self.search
+    }
+
+    pub(crate) fn title_matches_word_prefix(&self, query: &Query) -> bool {
+        let title = self
+            .display_title_search
+            .as_deref()
+            .or_else(|| self.search.names().first().map(String::as_str))
+            .unwrap_or_default();
+        SearchFields::name_matches_word_prefix(title, query)
     }
 
     pub fn matches(&self, context: &ResolvedContext) -> bool {
@@ -541,10 +556,6 @@ mod tests {
     use crate::features::git::actions::is_git_action;
     use crate::features::recognized_contexts;
 
-    fn seed(input: &str) -> Vec<ResolvedContext> {
-        recognized_contexts(input)
-    }
-
     fn json_context() -> ResolvedContext {
         ResolvedContext::new(
             JSON_DOCUMENT,
@@ -552,6 +563,68 @@ mod tests {
             ContextSource::UserInput,
             "legacy-fixture",
         )
+    }
+
+    #[test]
+    fn direct_title_matching_excludes_alternate_fields_and_preserves_literal_tiers() {
+        use crate::core::search::query::MatchLevel;
+        for (title, search_title) in [
+            ("Find", None),
+            ("Find", Some("Finder Command")),
+            ("Find", Some("")),
+            ("", None),
+            ("...", None),
+            ("打开文件…", None),
+            ("İnfo", None),
+        ] {
+            let action = ActionDescriptor::from_definition(ActionDefinition {
+                id: "test.title".into(),
+                title: title.into(),
+                localized_titles: BTreeMap::from([("zh".into(), "查找".into())]),
+                subtitle: None,
+                shortcut: None,
+                accepts: vec![ContextMatcher {
+                    type_id: APPLICATION.into(),
+                }],
+                executor: ActionExecutor::Declarative(DeclarativeAction::Copy { text: "".into() }),
+                availability: AvailabilityRule::Enabled,
+                base_priority: 0,
+                icon: "".into(),
+                group_id: "test".into(),
+                aliases: vec!["Alias".into()],
+                keywords: vec!["Keyword".into()],
+                owning_app: Some("test.app".into()),
+                menu_path: vec![],
+                primary_action: false,
+                search_title: search_title.map(str::to_owned),
+            });
+            let title_only = SearchFields::new(title, &[], &[]);
+            for input in [
+                "",
+                "Fi",
+                "find",
+                "ind",
+                "finder",
+                "finder command",
+                "alias",
+                "keyword",
+                "查找",
+                "chazhao",
+                "打开",
+                "dk",
+                "...",
+                "İnfo",
+            ] {
+                let query = Query::parse(input);
+                assert_eq!(
+                    action.title_matches_word_prefix(&query),
+                    title_only
+                        .matched(&query)
+                        .is_some_and(|level| level >= MatchLevel::WordPrefix),
+                    "title={title:?}, search_title={search_title:?}, query={input:?}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -596,7 +669,7 @@ mod tests {
     fn exact_type_match_and_builtin_command_count() {
         let registry = crate::application::builtin_registry();
         assert_eq!(registry.commands().count(), 30);
-        let url = seed("https://github.com")
+        let url = recognized_contexts("https://github.com")
             .into_iter()
             .find(|c| c.type_id == URL)
             .unwrap();

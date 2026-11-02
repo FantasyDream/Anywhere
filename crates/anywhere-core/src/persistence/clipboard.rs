@@ -135,6 +135,9 @@ fn load(connection: &Connection, id: i64) -> Result<Option<ClipboardPayload>> {
     Ok(Some(payload))
 }
 impl HistoryRepository for SqliteHistoryRepository {
+    fn revision(&self) -> u64 {
+        self.0.total_changes()
+    }
     fn policy(&self) -> Result<HistoryPolicy> {
         let policy = self.0.query_row(
             "SELECT paused_until_ms,retention_days FROM clipboard_policy WHERE id=1",
@@ -150,7 +153,6 @@ impl HistoryRepository for SqliteHistoryRepository {
         Ok(policy)
     }
     fn set_policy(&mut self, policy: HistoryPolicy) -> Result<()> {
-        policy.validate()?;
         self.0.execute(
             "UPDATE clipboard_policy SET paused_until_ms=?1,retention_days=?2 WHERE id=1",
             params![policy.paused_until_ms, policy.retention_days],
@@ -254,10 +256,6 @@ impl HistoryRepository for SqliteHistoryRepository {
         Ok(Some(id))
     }
     fn search(&self, query: &str) -> Result<Vec<HistoryItem>> {
-        ensure!(
-            query.len() <= MAX_QUERY_BYTES,
-            "clipboard query is too long"
-        );
         let normalized = query.to_lowercase();
         let tokens: Vec<_> = normalized.split_whitespace().collect();
         let mut sql = format!(
@@ -356,7 +354,7 @@ mod tests {
         );
     }
     #[test]
-    fn entry_count_bytes_and_query_limits_are_enforced() {
+    fn entry_count_and_byte_limits_are_enforced() {
         let mut repo = memory();
         for input in [
             "".to_string(),
@@ -372,7 +370,6 @@ mod tests {
         let rows = repo.search("").unwrap();
         assert_eq!(rows.len(), MAX_ENTRIES);
         assert_eq!(rows.last().unwrap().summary, "entry-5");
-        assert!(repo.search(&"q".repeat(MAX_QUERY_BYTES + 1)).is_err());
         repo.clear().unwrap();
         for i in 0..12 {
             repo.record(&format!("{i:03}{}", "x".repeat(MAX_ENTRY_BYTES / 2 - 3)), i)

@@ -122,7 +122,7 @@ pub(super) fn run_with_budget(
         current: current.clone(),
     };
     let output = context
-        .with(|ctx| -> rquickjs::Result<String> {
+        .with(|ctx| -> Result<Value> {
             let host = Function::new(ctx.clone(), move |method: String, params: String| {
                 adapter.dispatch(method, params)
             })?;
@@ -135,14 +135,18 @@ pub(super) fn run_with_budget(
              .then(value => JSON.stringify(value ?? null))",
             )?;
             let promise: Promise = call.call((handler, input))?;
-            promise.finish::<String>()
+            let output = promise.finish::<rquickjs::String>()?.to_cstring()?;
+            // Check the VM-owned UTF-8 buffer before Rust allocates the result,
+            // including for oversized strings returned by automatic resolvers.
+            ensure!(
+                current() && output.len() <= MAX_OUTPUT,
+                "background output expired or exceeds budget"
+            );
+            Ok(serde_json::from_str(output.as_str())?)
         })
         .map_err(|_| anyhow::anyhow!("background script failed or exceeded its budget"))?;
-    ensure!(
-        current() && output.len() <= MAX_OUTPUT,
-        "background output expired or exceeds budget"
-    );
-    Ok(serde_json::from_str(&output)?)
+    ensure!(current(), "background output expired");
+    Ok(output)
 }
 
 #[cfg(test)]
@@ -177,6 +181,30 @@ mod tests {
         });
         let result = run("export async function parse() { const result = JSON.parse(__anywhereInvoke('context.get','{}')); return [result.value.text]; }", "parse", &Value::Null, invoke, Arc::new(|| true)).unwrap();
         assert_eq!(result, json!(["hello"]));
+    }
+    #[test]
+    fn output_budget_counts_utf8_json_bytes_before_deserialization() {
+        let evaluate = |expression: &str| {
+            run(
+                &format!("export async function parse() {{ return {expression}; }}"),
+                "parse",
+                &Value::Null,
+                no_host(),
+                Arc::new(|| true),
+            )
+        };
+        // Quotes are part of the serialized byte limit too.
+        let exact = evaluate(&format!("'x'.repeat({})", MAX_OUTPUT - 2)).unwrap();
+        assert_eq!(exact.as_str().unwrap().len(), MAX_OUTPUT - 2);
+        assert!(evaluate(&format!("'x'.repeat({})", MAX_OUTPUT - 1)).is_err());
+        let unicode = evaluate(&format!("'中'.repeat({})", (MAX_OUTPUT - 2) / 3)).unwrap();
+        assert_eq!(
+            unicode.as_str().unwrap().chars().count(),
+            (MAX_OUTPUT - 2) / 3
+        );
+        assert!(evaluate(&format!("'中'.repeat({})", (MAX_OUTPUT - 2) / 3 + 1)).is_err());
+        assert!(evaluate("'x'.repeat(8 * 1024 * 1024)").is_err());
+        assert_eq!(evaluate("null").unwrap(), Value::Null);
     }
     #[test]
     fn loops_allocations_unknown_exports_and_missing_runtime_apis_are_bounded() {

@@ -142,10 +142,7 @@ impl PreviewStore {
             .collect::<Result<Vec<_>>>()?;
         let mut token = [0u8; 16];
         getrandom::fill(&mut token).map_err(|_| anyhow::anyhow!("preview token unavailable"))?;
-        let id = token
-            .iter()
-            .map(|byte| format!("{byte:02x}"))
-            .collect::<String>();
+        let id = hex::encode(token);
         let resource = PreviewResource {
             id: id.clone(),
             paths,

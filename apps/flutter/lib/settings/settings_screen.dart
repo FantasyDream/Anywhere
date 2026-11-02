@@ -290,7 +290,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<Widget> _pageContent() {
     return switch (_page) {
       'shortcuts' => [
-          _card(
+          AppCard(
             child: Column(
               children: [
                 _hotkeyRow(context.l10n.currentApp, _settings.currentAppLabel,
@@ -324,7 +324,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SizedBox(height: DesktopEnvironment.current.titleBarInset),
         ],
       'general' => [
-          _card(
+          AppCard(
               child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Row(children: [
@@ -366,7 +366,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ]))),
           const SizedBox(height: 12),
-          _card(
+          AppCard(
               child: SettingsToggleRow(
                   title: context.l10n.openAtLogin,
                   description: context.l10n.openAtLoginDescription,
@@ -376,10 +376,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       (current) => current.copyWith(launchAtLogin: value)))),
         ],
       'context' => [
-          _section(context.l10n.contextSources, AppIcons.context),
+          AppSectionHeading(context.l10n.contextSources,
+              icon: AppIcons.context),
           Text(context.l10n.contextDescription, style: AppStyle.caption),
           const SizedBox(height: 10),
-          _card(
+          AppCard(
               child: Column(children: [
             SettingsToggleRow(
                 title: DesktopEnvironment.current.usesMetaCommand
@@ -445,7 +446,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ])),
         ],
       'search' => [
-          _card(
+          AppCard(
               child: FileSearchSettings(
                   enabled: _settings.fileSearchEnabled,
                   includeHidden: _settings.fileSearchIncludeHidden,
@@ -470,7 +471,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               fileSearchExcludedNames: _controller.edits.exclusionValues),
                           fileSearch: true))),
           const SizedBox(height: 14),
-          _card(
+          AppCard(
             child: AppDisclosure(
               key: const Key('hidden-apps-disclosure'),
               title: context.l10n.hiddenApps,
@@ -545,11 +546,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _ => const [],
     };
   }
-
-  Widget _section(String title, IconData icon) =>
-      AppSectionHeading(title, icon: icon);
-
-  Widget _card({required Widget child}) => AppCard(child: child);
 
   Widget _hotkeyRow(String label, String value, String id) {
     final recording = _recording == id;

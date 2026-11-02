@@ -23,6 +23,41 @@ void main() {
     const ShortcutApplicationDto(bundleId: 'com.apple.finder', title: 'Finder'),
     const ShortcutApplicationDto(bundleId: 'missing.app', title: 'Saved app'),
   ];
+  for (final query in ['App', '']) {
+    testWidgets('searching "$query" after scrolling shows the selected app',
+        (tester) async {
+      ShortcutApplicationChoice? result;
+      await tester.pumpWidget(MaterialApp(
+          theme: AppStyle.theme,
+          home: Builder(
+              builder: (context) => TextButton(
+                  onPressed: () async {
+                    result = await showDialog<ShortcutApplicationChoice>(
+                        context: context,
+                        builder: (_) => ShortcutAppPicker(applications: apps));
+                  },
+                  child: const Text('Choose')))));
+      await tester.tap(find.text('Choose'));
+      await tester.pumpAndSettle();
+      if (query.isEmpty) {
+        await tester.enterText(find.byType(TextField), 'App');
+        await tester.pumpAndSettle();
+      }
+      await tester.drag(find.byType(ListView), const Offset(0, -3500));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), query);
+      await tester.pumpAndSettle();
+      final chosen = query.isEmpty ? 'any-app' : 'example.app.0';
+      final selected = find.byKey(ValueKey(chosen));
+      expect(selected.hitTestable(), findsOneWidget);
+      expect(tester.widget<ListTile>(selected).selected, isTrue);
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+      expect(result, isNotNull);
+      expect(result!.app?.bundleId, query.isEmpty ? null : 'example.app.0');
+    });
+  }
+
   testWidgets('submitting before the next frame uses the latest query matches',
       (tester) async {
     ShortcutApplicationChoice? result;

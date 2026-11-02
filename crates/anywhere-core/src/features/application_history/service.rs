@@ -25,7 +25,8 @@ pub struct HistoryService {
     loader: Arc<dyn SourceLoader>,
     installed_applications: std::collections::BTreeSet<String>,
     state: Mutex<State>,
-    worker: Mutex<()>,
+    worker: Arc<tokio::sync::Semaphore>,
+    query_changed: tokio::sync::Notify,
     configuration: Mutex<()>,
     epoch: Arc<AtomicU64>,
     owner: AtomicU64,
@@ -45,7 +46,8 @@ impl HistoryService {
                 sources: vec![],
                 items: Default::default(),
             }),
-            worker: Mutex::new(()),
+            worker: Arc::new(tokio::sync::Semaphore::new(1)),
+            query_changed: tokio::sync::Notify::new(),
             configuration: Mutex::new(()),
             epoch: Arc::new(AtomicU64::new(1)),
             owner: AtomicU64::new(0),
@@ -113,7 +115,7 @@ impl HistoryService {
             .collect::<Vec<_>>();
         let mut state = self.state.lock().unwrap();
         if state.configurations != configurations || state.sources != sources {
-            self.epoch.fetch_add(1, Ordering::AcqRel);
+            self.advance_epoch();
             state.configurations = configurations;
             state.sources = sources;
             state.items = Arc::default();
@@ -268,9 +270,14 @@ impl HistoryService {
             epoch.load(Ordering::Acquire) != expected || !enabled.load(Ordering::Acquire)
         })
     }
+    fn advance_epoch(&self) -> u64 {
+        let epoch = self.epoch.fetch_add(1, Ordering::AcqRel) + 1;
+        self.query_changed.notify_waiters();
+        epoch
+    }
     pub fn cancel(&self) {
         let mut state = self.state.lock().unwrap();
-        self.epoch.fetch_add(1, Ordering::AcqRel);
+        self.advance_epoch();
         state.items = Arc::default();
     }
 }

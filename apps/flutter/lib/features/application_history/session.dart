@@ -127,18 +127,7 @@ class AppHistorySession extends ToolPageSession {
       try {
         await _cancellation;
         if (!interactive || revision != _revision) continue;
-        var result = await backend.search(text, sourceId);
-        for (var attempt = 0;
-            attempt < 4 &&
-                result.notice == AppHistoryNoticeDto.busy &&
-                interactive &&
-                revision == _revision;
-            attempt++) {
-          await Future<void>.delayed(const Duration(milliseconds: 80));
-          if (interactive && revision == _revision) {
-            result = await backend.search(text, sourceId);
-          }
-        }
+        final result = await backend.search(text, sourceId);
         if (!interactive || revision != _revision) continue;
         final previous = _resetSelection ? null : selected?.objectKey;
         items = List.unmodifiable(result.items);
@@ -153,7 +142,7 @@ class AppHistorySession extends ToolPageSession {
           items = const [];
         }
       }
-    } while (_again && interactive);
+    } while (_again && interactive && _debounce?.isActive != true);
     _running = false;
     if (!disposed) {
       loading = _debounce?.isActive == true;

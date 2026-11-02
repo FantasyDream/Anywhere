@@ -107,7 +107,7 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiCancelAppHistory({required int sessionId});
 
-  Future<void> crateApiCancelWebReview();
+  Future<void> crateApiCancelWebReview({required String token});
 
   Future<List<WebPackageDto>> crateApiChangeWebPackage(
       {required String id, required String operation});
@@ -121,7 +121,8 @@ abstract class RustLibApi extends BaseApi {
 
   Future<void> crateApiClearClipboardHistory();
 
-  Future<ClipboardHistoryDto> crateApiClipboardHistory({required String query});
+  Future<ClipboardHistoryDto?> crateApiClipboardHistory(
+      {required String query, String? after});
 
   Future<ClipboardHistoryStatusDto> crateApiClipboardHistoryStatus();
 
@@ -572,10 +573,11 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<void> crateApiCancelWebReview() {
+  Future<void> crateApiCancelWebReview({required String token}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
+        sse_encode_String(token, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
             funcId: 11, port: port_);
       },
@@ -584,14 +586,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         decodeErrorData: sse_decode_AnyhowException,
       ),
       constMeta: kCrateApiCancelWebReviewConstMeta,
-      argValues: [],
+      argValues: [token],
       apiImpl: this,
     ));
   }
 
   TaskConstMeta get kCrateApiCancelWebReviewConstMeta => const TaskConstMeta(
         debugName: "cancel_web_review",
-        argNames: [],
+        argNames: ["token"],
       );
 
   @override
@@ -691,28 +693,29 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<ClipboardHistoryDto> crateApiClipboardHistory(
-      {required String query}) {
+  Future<ClipboardHistoryDto?> crateApiClipboardHistory(
+      {required String query, String? after}) {
     return handler.executeNormal(NormalTask(
       callFfi: (port_) {
         final serializer = SseSerializer(generalizedFrbRustBinding);
         sse_encode_String(query, serializer);
+        sse_encode_opt_String(after, serializer);
         pdeCallFfi(generalizedFrbRustBinding, serializer,
             funcId: 15, port: port_);
       },
       codec: SseCodec(
-        decodeSuccessData: sse_decode_clipboard_history_dto,
+        decodeSuccessData: sse_decode_opt_box_autoadd_clipboard_history_dto,
         decodeErrorData: sse_decode_AnyhowException,
       ),
       constMeta: kCrateApiClipboardHistoryConstMeta,
-      argValues: [query],
+      argValues: [query, after],
       apiImpl: this,
     ));
   }
 
   TaskConstMeta get kCrateApiClipboardHistoryConstMeta => const TaskConstMeta(
         debugName: "clipboard_history",
-        argNames: ["query"],
+        argNames: ["query", "after"],
       );
 
   @override
@@ -2418,6 +2421,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ClipboardHistoryDto dco_decode_box_autoadd_clipboard_history_dto(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return dco_decode_clipboard_history_dto(raw);
+  }
+
+  @protected
   ClipboardNoticeDto dco_decode_box_autoadd_clipboard_notice_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return dco_decode_clipboard_notice_dto(raw);
@@ -2538,13 +2548,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ClipboardHistoryDto dco_decode_clipboard_history_dto(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 4)
-      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    if (arr.length != 5)
+      throw Exception('unexpected arr length: expect 5 but see ${arr.length}');
     return ClipboardHistoryDto(
-      recording: dco_decode_bool(arr[0]),
-      available: dco_decode_bool(arr[1]),
-      notice: dco_decode_opt_box_autoadd_clipboard_notice_dto(arr[2]),
-      items: dco_decode_list_clipboard_item_dto(arr[3]),
+      revision: dco_decode_opt_String(arr[0]),
+      recording: dco_decode_bool(arr[1]),
+      available: dco_decode_bool(arr[2]),
+      notice: dco_decode_opt_box_autoadd_clipboard_notice_dto(arr[3]),
+      items: dco_decode_list_clipboard_item_dto(arr[4]),
     );
   }
 
@@ -2964,6 +2975,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     return raw == null
         ? null
         : dco_decode_box_autoadd_app_history_notice_dto(raw);
+  }
+
+  @protected
+  ClipboardHistoryDto? dco_decode_opt_box_autoadd_clipboard_history_dto(
+      dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return raw == null
+        ? null
+        : dco_decode_box_autoadd_clipboard_history_dto(raw);
   }
 
   @protected
@@ -3473,6 +3493,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ClipboardHistoryDto sse_decode_box_autoadd_clipboard_history_dto(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    return (sse_decode_clipboard_history_dto(deserializer));
+  }
+
+  @protected
   ClipboardNoticeDto sse_decode_box_autoadd_clipboard_notice_dto(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -3621,12 +3648,14 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   ClipboardHistoryDto sse_decode_clipboard_history_dto(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_revision = sse_decode_opt_String(deserializer);
     var var_recording = sse_decode_bool(deserializer);
     var var_available = sse_decode_bool(deserializer);
     var var_notice =
         sse_decode_opt_box_autoadd_clipboard_notice_dto(deserializer);
     var var_items = sse_decode_list_clipboard_item_dto(deserializer);
     return ClipboardHistoryDto(
+        revision: var_revision,
         recording: var_recording,
         available: var_available,
         notice: var_notice,
@@ -4236,6 +4265,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  ClipboardHistoryDto? sse_decode_opt_box_autoadd_clipboard_history_dto(
+      SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    if (sse_decode_bool(deserializer)) {
+      return (sse_decode_box_autoadd_clipboard_history_dto(deserializer));
+    } else {
+      return null;
+    }
+  }
+
+  @protected
   ClipboardNoticeDto? sse_decode_opt_box_autoadd_clipboard_notice_dto(
       SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -4755,6 +4796,13 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_box_autoadd_clipboard_history_dto(
+      ClipboardHistoryDto self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_clipboard_history_dto(self, serializer);
+  }
+
+  @protected
   void sse_encode_box_autoadd_clipboard_notice_dto(
       ClipboardNoticeDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
@@ -4880,6 +4928,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   void sse_encode_clipboard_history_dto(
       ClipboardHistoryDto self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_opt_String(self.revision, serializer);
     sse_encode_bool(self.recording, serializer);
     sse_encode_bool(self.available, serializer);
     sse_encode_opt_box_autoadd_clipboard_notice_dto(self.notice, serializer);
@@ -5331,6 +5380,17 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_bool(self != null, serializer);
     if (self != null) {
       sse_encode_box_autoadd_app_history_notice_dto(self, serializer);
+    }
+  }
+
+  @protected
+  void sse_encode_opt_box_autoadd_clipboard_history_dto(
+      ClipboardHistoryDto? self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    sse_encode_bool(self != null, serializer);
+    if (self != null) {
+      sse_encode_box_autoadd_clipboard_history_dto(self, serializer);
     }
   }
 

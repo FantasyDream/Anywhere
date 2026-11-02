@@ -1,0 +1,68 @@
+{
+  "date": "2026-10-30",
+  "version": "0.14.0+37",
+  "platform": "macOS arm64",
+  "branch": "codex/dependency-upgrades",
+  "source_commit": "c98a8e759975a1065cc93300a4f02b3ec68b5a38",
+  "source_state": "Validated uncommitted review repairs on the dependency-upgrades branch, plus Flutter/native build number 37. Application sources did not change after the engineering gate except for the build-number metadata.",
+  "worktree_code_patch_sha256": "de6f810aa692be9a327e1f687f3ef00adcfd56dbeb6e641bc5414279677d38a9",
+  "toolchain": {
+    "rust": "1.99.1",
+    "cargo": "1.99.1",
+    "flutter": "3.47.8",
+    "dart": "3.13.7",
+    "flutter_rust_bridge": "2.13.0"
+  },
+  "impeller": true,
+  "engine_arm64_uuid": "4C4C448D-5555-3144-A188-ECD6F84D3B0C",
+  "signing": "Anywhere Local Code Signing; local development identity, not notarized",
+  "app": "build/Anywhere-0.14-preview-build37.app",
+  "archive": "build/Anywhere-0.14-preview-build37-macos-arm64.zip",
+  "archive_bytes": 17655858,
+  "archive_sha256": "039d57affc50964d7f07048e0e904b8a7d6df7ccb74c3b6f451a7308e51c46b2",
+  "bundle_sha256": {
+    "Contents/Info.plist": "4d87903884fba30a1bab4ad2fca1bc10fe8cbd356d1555b61ade516bee91a75f",
+    "Contents/MacOS/Anywhere": "604f6a91a9329ef6bf414d6385c622d6c217fa87e0484567062bdcab63f79a6a",
+    "Contents/Frameworks/libanywhere_bridge_flutter.dylib": "5c0982bca0d7cdccfca492fe01d9516f0a48e1948f23a9cc0c1c2b36f1bea4b0",
+    "Contents/Frameworks/App.framework/App": "bc22f34c6167adc6c27cd0c1534884d58d907bb7b8318161ac4d8d3013e493aa",
+    "Contents/Frameworks/FlutterMacOS.framework/Versions/A/FlutterMacOS": "594bfdab29d5b62b9440b5d91bf41bd33a8942882e79bca8523351169a9a7558"
+  },
+  "checks": {
+    "engineering_gate": "build/review-round6-full-check.log; exit 0 before the build-number-only change; Core 332 passed / 1 ignored, MVP 195 passed / 4 ignored, Platform 70 passed / 1 ignored, Flutter 490 passed / 1 skipped, SDK 33, JSON 30",
+    "ffi": "Bridge crate compiled by the engineering gate and Release build; no separate opt-in FFI test in this packaging turn",
+    "version_check": "Rust 0.14.0, Flutter/native 0.14.0+37, FRB Dart/Rust/generated 2.13.0",
+    "build_log": "build/build37-build.log; exit 0",
+    "package_log": "build/build37-package.log; exit 0",
+    "signature": "codesign --verify --deep --strict passed; designated requirement matches Build 36",
+    "archive": "Main executable, Info.plist and Rust bridge archive bytes match the bundle; ZIP SHA-256 checksum file verified",
+    "startup": {
+      "previous_instances": [
+        {
+          "active": false,
+          "build": "36",
+          "bundle": "build/Anywhere-0.14-preview-build36.app",
+          "finished_launching": true,
+          "pid": 13153,
+          "version": "0.14.0"
+        }
+      ],
+      "previous_exit": "Graceful termination accepted; process exit confirmed before new launch",
+      "running": {
+        "active": true,
+        "build": "37",
+        "bundle": "build/Anywhere-0.14-preview-build37.app",
+        "finished_launching": true,
+        "pid": 85031,
+        "version": "0.14.0"
+      }
+    },
+    "source_record": "Post-build code patch captured under ignored build/ and re-read byte-identically. No application code was edited during compilation; the engineering gate preceded only the build-number metadata change."
+  },
+  "plugin_boundary": "App packaging does not update installed Web plugins. Updated SDK clients/examples require independent rebuild and import.",
+  "limits": [
+    "Startup identity confirmed only; no new manual GUI, physical IME or preview-format acceptance",
+    "No whole-App memory or frame-time measurements",
+    "No remote CI, public release or notarization",
+    "Working tree remains uncommitted; no branch merge or push performed"
+  ]
+}

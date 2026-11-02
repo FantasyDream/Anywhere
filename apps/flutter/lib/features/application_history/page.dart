@@ -68,7 +68,7 @@ class _AppHistoryPageState extends State<AppHistoryPage> {
     }
     if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.numpadEnter) {
-      unawaited(session.useSelection());
+      if (event is KeyDownEvent) unawaited(session.useSelection());
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;

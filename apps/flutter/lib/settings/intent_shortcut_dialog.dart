@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../infrastructure/runtime_policy.dart';
 import '../l10n/app_language.dart';
 import '../l10n/localized_label.dart';
 import '../src/rust/api.dart';
@@ -255,7 +256,8 @@ class _IntentShortcutDialogState extends State<IntentShortcutDialog> {
                           Align(
                               alignment: Alignment.centerLeft,
                               child: OutlinedButton.icon(
-                                  onPressed: _rules.length >= 16
+                                  onPressed: _rules.length >=
+                                          RuntimePolicy.maxShortcutRoutes
                                       ? null
                                       : () => _editRule(),
                                   icon: const Icon(AppIcons.add, size: 16),

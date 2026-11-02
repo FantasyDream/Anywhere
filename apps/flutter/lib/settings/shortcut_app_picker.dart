@@ -125,6 +125,7 @@ class _ShortcutAppPickerState extends State<ShortcutAppPicker> {
                                 _matches.isEmpty || _matchedQuery!.isEmpty
                                     ? 0
                                     : 1;
+                            _scroll.jumpTo(0);
                           }),
                       onSubmitted: (_) => _choose(
                           _selected == 0 ? null : _matches[_selected - 1])),

@@ -23,7 +23,15 @@ async function invoke<T>(
 let snapshot: Promise<PluginSnapshot> | undefined;
 const contexts = new Set<(input: WebInput) => void>();
 const inputs = new Set<(text: string) => void>();
-const state = () => (snapshot ??= invoke<PluginSnapshot>('state.get'));
+function state() {
+  if (snapshot) return snapshot;
+  const reading = invoke<PluginSnapshot>('state.get');
+  snapshot = reading;
+  void reading.catch(() => {
+    if (snapshot === reading) snapshot = undefined;
+  });
+  return reading;
+}
 function notify<T>(listeners: Set<(value: T) => void>, value: T) {
   for (const listener of listeners) {
     try {
@@ -63,9 +71,14 @@ export const anywhere: Anywhere = {
     set: async (text, options) => {
       await invoke('input.set', {text}, options);
       snapshot = undefined;
-      const next = await state();
-      notify(contexts, next.context);
-      if (next.input !== null) notify(inputs, next.input);
+      if (!contexts.size && !inputs.size) return;
+      try {
+        const next = await state();
+        notify(contexts, next.context);
+        if (next.input !== null) notify(inputs, next.input);
+      } catch {
+        // Readback cannot fail an acknowledged write. A later getter can retry.
+      }
     },
     onChange: callback =>
       subscribe(inputs, callback, () => anywhere.input.get()),
@@ -74,14 +87,15 @@ export const anywhere: Anywhere = {
     readText: options => invoke('clipboard.readText', {}, options),
     writeText: async (text, options) => {
       if (options?.signal?.aborted) throw new HostError('CANCELLED');
-      const size = (character: string) => {
+      const size = (code: number) =>
+        code <= 0x7f ? 1 : code <= 0x7ff ? 2 : code <= 0xffff ? 3 : 4;
+      let bytes = 0;
+      for (const character of text) {
         const code = character.codePointAt(0)!;
         if (code >= 0xd800 && code <= 0xdfff)
           throw new HostError('INVALID_REQUEST');
-        return code <= 0x7f ? 1 : code <= 0x7ff ? 2 : code <= 0xffff ? 3 : 4;
-      };
-      let bytes = 0;
-      for (const character of text) bytes += size(character);
+        bytes += size(code);
+      }
       if (bytes > limits.textBytes) throw new HostError('TOO_LARGE');
       if (bytes < 8192) return invoke('clipboard.writeText', {text}, options);
       const {ticket} = await invoke<{ticket: string}>(
@@ -94,7 +108,7 @@ export const anywhere: Anywhere = {
           chunkBytes = 0,
           sequence = 0;
         for (const character of text) {
-          const bytes = size(character);
+          const bytes = size(character.codePointAt(0)!);
           if (chunkBytes + bytes > limits.chunkBytes) {
             await invoke(
               'text.chunk',

@@ -32,12 +32,17 @@ class History implements ClipboardHistoryBackend {
   bool enabled = false;
   final copied = <String>[];
   Future<ClipboardHistoryDto> Function(String)? searchOverride;
+  Future<ClipboardHistoryDto?> Function(String, String?)?
+      conditionalSearchOverride;
   Future<NativePreviewDto> Function(String)? detailOverride;
   @override
-  Future<ClipboardHistoryDto> search(String query) async => searchOverride !=
-          null
-      ? searchOverride!(query)
-      : ClipboardHistoryDto(recording: enabled, available: true, items: rows);
+  Future<ClipboardHistoryDto?> search(String query, {String? after}) async =>
+      conditionalSearchOverride != null
+          ? conditionalSearchOverride!(query, after)
+          : searchOverride != null
+              ? searchOverride!(query)
+              : ClipboardHistoryDto(
+                  recording: enabled, available: true, items: rows);
   @override
   Future<NativePreviewDto> preparePreview(String id) async =>
       detailOverride != null

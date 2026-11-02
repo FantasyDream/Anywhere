@@ -76,7 +76,7 @@ class SettingsController extends ChangeNotifier {
                 clipboard: s.captureClipboard)) {
     clipboard.addListener(_notify);
     appHistory.addListener(_notify);
-    appHistory.onCatalogChanged = () => _updateExtensions(() async {
+    appHistory.onCatalogChanged = () => _queueExtensionOperation(() async {
           final statuses = await _readExtensions();
           if (!_disposed) _extensions = statuses;
         });
@@ -112,9 +112,8 @@ class SettingsController extends ChangeNotifier {
       ? 'Some action shortcuts are paused. Reopen Settings to try again, or choose a different key combination.'
       : 'Action shortcuts could not be refreshed. Reopen Settings to try again.';
   int _loadEpoch = 0;
-  bool _updatingFeatures = false;
   Future<void>? _extensionOperation;
-  bool get updatingFeatures => _updatingFeatures;
+  bool get updatingFeatures => _extensionOperation != null;
   Set<String> _supportedShortcutActions = const {};
   bool shortcutSupported(String id) =>
       _readSupportedShortcutActions == null ||
@@ -402,29 +401,7 @@ class SettingsController extends ChangeNotifier {
   }
 
   Future<bool> _save(HostSettings next) async {
-    if (_disposed) return false;
-    if (next.fileSearchError != null) {
-      _reportLocalizedError((labels) => next.fileSearchErrorFor(labels)!);
-      return false;
-    }
-    if (next.actionShortcutVersion != 4) {
-      _reportLocalizedError((labels) => labels.unsupportedShortcutSettings);
-      return false;
-    }
-    if (next.actionShortcuts.length > RuntimePolicy.maxActionShortcuts) {
-      _reportLocalizedError((labels) =>
-          labels.maxActionShortcuts(RuntimePolicy.maxActionShortcuts));
-      return false;
-    }
-    final ids = <String>{};
-    for (final binding in next.actionShortcuts) {
-      final error = binding.validate(next);
-      if (error != null || !ids.add(binding.actionId)) {
-        _reportLocalizedError((labels) =>
-            binding.validate(next, labels) ?? labels.oneShortcutPerAction);
-        return false;
-      }
-    }
+    if (_disposed || !_validateSettings(next)) return false;
     List<String>? supported;
     try {
       supported =
@@ -450,13 +427,7 @@ class SettingsController extends ChangeNotifier {
       _current = error == null ? next : previous;
     }
     if (_disposed) return false;
-    try {
-      final status = await _window.readSettingsStatus();
-      if (_disposed) return false;
-      _warning = status;
-    } catch (_) {}
     final failures = <String>[if (error != null && error.isNotEmpty) error];
-    if (_disposed) return false;
     try {
       await _applyExcludedApps(current.excludedApps);
     } catch (error) {
@@ -496,6 +467,32 @@ class SettingsController extends ChangeNotifier {
         : failures.join('\n');
     _notify();
     return failures.isEmpty;
+  }
+
+  bool _validateSettings(HostSettings next) {
+    if (next.fileSearchError != null) {
+      _reportLocalizedError((labels) => next.fileSearchErrorFor(labels)!);
+      return false;
+    }
+    if (next.actionShortcutVersion != 4) {
+      _reportLocalizedError((labels) => labels.unsupportedShortcutSettings);
+      return false;
+    }
+    if (next.actionShortcuts.length > RuntimePolicy.maxActionShortcuts) {
+      _reportLocalizedError((labels) =>
+          labels.maxActionShortcuts(RuntimePolicy.maxActionShortcuts));
+      return false;
+    }
+    final ids = <String>{};
+    for (final binding in next.actionShortcuts) {
+      final error = binding.validate(next);
+      if (error != null || !ids.add(binding.actionId)) {
+        _reportLocalizedError((labels) =>
+            binding.validate(next, labels) ?? labels.oneShortcutPerAction);
+        return false;
+      }
+    }
+    return true;
   }
 
   Future<void> authorizeFileSearch() async {
@@ -547,24 +544,38 @@ class SettingsController extends ChangeNotifier {
       _changeExtensions(() => _removeExtensionGrant(extension.key));
 
   Future<void> _changeExtensions(
-          Future<List<ExtensionStatusDto>> Function() change) =>
-      _runExtensionOperation(() async {
-        final statuses = await change();
-        if (!_disposed) _extensions = statuses;
-      });
-
-  Future<void> _runExtensionOperation(Future<void> Function() operation) {
-    if (_updatingFeatures || _disposed || _closing != null) {
+      Future<List<ExtensionStatusDto>> Function() change) {
+    if (updatingFeatures || _disposed || _closing != null) {
       return Future.value();
     }
-    final pending = _updateExtensions(operation);
+    return _queueExtensionOperation(() async {
+      final statuses = await change();
+      if (!_disposed) _extensions = statuses;
+    });
+  }
+
+  /// Source writes may finish during another catalog operation. Reconcile them
+  /// through the same queue, including while close is draining existing writes.
+  Future<void> _queueExtensionOperation(Future<void> Function() operation) {
+    if (_disposed) return Future.value();
+    ++_loadEpoch;
+    final previous = _extensionOperation ?? Future<void>.value();
+    late final Future<void> pending;
+    pending = previous.then((_) async {
+      if (!_disposed) await _updateExtensions(operation);
+    }).whenComplete(() {
+      if (identical(_extensionOperation, pending)) {
+        _extensionOperation = null;
+        _notify();
+      }
+    });
     _extensionOperation = pending;
+    _notify();
     return pending;
   }
 
   Future<void> _updateExtensions(Future<void> Function() operation) async {
     ++_loadEpoch;
-    _updatingFeatures = true;
     _statusMessage = null;
     _notify();
     try {
@@ -594,7 +605,6 @@ class SettingsController extends ChangeNotifier {
       // The backend can commit before its response/status read fails. Always
       // reconcile eligibility; the sync itself unregisters uncertain chords.
       await _syncShortcutCatalog();
-      _updatingFeatures = false;
       _notify();
     }
   }

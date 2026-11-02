@@ -184,7 +184,8 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
   Future<void> _open({bool resume = false}) async {
     final generation = _lifetime.invalidate();
     _resources.cancel(this);
-    final previous = _document;
+    if (!resume) unawaited(_lifetime.closeCurrent());
+    final previous = resume ? _document : null;
     _readyTimer?.cancel();
     try {
       final document = await api.openWebDocument(
@@ -278,25 +279,24 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
           mainFrame: true,
           frame: frame);
       if (!_current(document)) return;
-      if (_current(document)) {
-        await reply.postMessage(webReplyMessage(response));
-        if (_current(document) &&
-            webStateSubscribed(frame, response) &&
-            _followingState != document.handle) {
-          _followingState = document.handle;
-          unawaited(_followState(controller, document));
-        }
-        if (_current(document) && webReadyAcknowledged(frame, response)) {
-          _readyTimer?.cancel();
-          if (_loading && !_preparingDisplay) {
-            _preparingDisplay = true;
-            await _applyWebAppearance(controller);
-            if (_current(document) && sharesWebView(_web, controller)) {
-              // Keep the live WebKit surface. Taking a snapshot here can leave
-              // transparent remote layers blank until a later Host interaction.
-              setState(() => _loading = false);
-              _restoreEditorFocus();
-            }
+      await reply.postMessage(webReplyMessage(response));
+      if (!_current(document)) return;
+      final acknowledgement = webAcknowledgement(frame, response);
+      if (acknowledgement == WebAcknowledgement.stateSubscribed &&
+          _followingState != document.handle) {
+        _followingState = document.handle;
+        unawaited(_followState(controller, document));
+      }
+      if (acknowledgement == WebAcknowledgement.ready) {
+        _readyTimer?.cancel();
+        if (_loading && !_preparingDisplay) {
+          _preparingDisplay = true;
+          await _applyWebAppearance(controller);
+          if (_current(document) && sharesWebView(_web, controller)) {
+            // Keep the live WebKit surface. Taking a snapshot here can leave
+            // transparent remote layers blank until a later Host interaction.
+            setState(() => _loading = false);
+            _restoreEditorFocus();
           }
         }
       }
@@ -496,9 +496,7 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
                     _readyTimer?.cancel();
                     _web = null;
                     _active(false);
-                    unawaited(api
-                        .closeWebDocument(handle: document.handle)
-                        .catchError((Object _) {}));
+                    unawaited(_lifetime.closeCurrent());
                     setState(() => _error = _WebLoadError.stopped);
                   }
                 }),
