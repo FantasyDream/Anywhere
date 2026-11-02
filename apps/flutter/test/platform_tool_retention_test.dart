@@ -77,7 +77,6 @@ void main() {
         title: 'Open tool',
         menuPath: [],
         contextKeys: [],
-        homeEligible: true,
         primaryAction: true,
         iconKey: 'file',
         score: 100,

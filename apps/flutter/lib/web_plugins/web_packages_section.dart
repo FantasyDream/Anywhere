@@ -46,17 +46,18 @@ class _WebPackagesSectionState extends State<WebPackagesSection> {
 
   Future<void> _install() async {
     if (_busy) return;
-    ++_generation; // An initial refresh must not overwrite a completed mutation.
-    var inspected = false;
+    final backend = widget.backend;
+    String? reviewToken;
+    var installing = false;
     setState(() {
       _busy = true;
       _notice = null;
     });
     try {
-      final chosen = await widget.backend.choose();
+      final chosen = await backend.choose();
       if (chosen == null || chosen.trim().isEmpty || !mounted) return;
-      final review = await widget.backend.inspect(chosen.trim());
-      inspected = true;
+      final review = await backend.inspect(chosen.trim());
+      reviewToken = review.token;
       if (!mounted) return;
       final approved = await showDialog<bool>(
           context: context,
@@ -84,7 +85,7 @@ class _WebPackagesSectionState extends State<WebPackagesSection> {
                             if (review.permissions.isEmpty)
                               Text(context.l10n.noHostPermissions),
                             const SizedBox(height: 16),
-                            Text(context.l10n.codeRunsInALocalWebViewNetwork,
+                            Text(context.l10n.pluginExecutionBoundary,
                                 style: AppStyle.caption),
                             if (review.updating) ...[
                               const SizedBox(height: 12),
@@ -106,7 +107,11 @@ class _WebPackagesSectionState extends State<WebPackagesSection> {
                         child: Text(context.l10n.approveAndInstall))
                   ]));
       if (approved == true && mounted) {
-        final packages = await widget.backend.approve(review.token);
+        // Picking or declining a package does not invalidate the initial list.
+        // Only a submitted mutation can make that older snapshot obsolete.
+        ++_generation;
+        installing = true;
+        final packages = await backend.approve(review.token);
         if (mounted) {
           setState(() {
             _packages = packages;
@@ -115,15 +120,18 @@ class _WebPackagesSectionState extends State<WebPackagesSection> {
         }
       }
     } catch (_) {
+      // Approval can commit before its response fails. Recover authoritative
+      // rows after an attempted mutation rather than reviving an older list.
+      if (installing && mounted) await _refresh();
       if (mounted) {
         setState(() => _notice = _PackageNotice.installFailed);
       }
     } finally {
-      if (inspected) {
+      if (reviewToken != null) {
         try {
-          await widget.backend.cancelReview();
+          await backend.cancelReview(reviewToken);
         } catch (_) {
-          // An expired review or failed transport must not strand the settings UI.
+          // A failed cleanup transport must not strand the settings UI.
         }
       }
       if (mounted) setState(() => _busy = false);
@@ -199,12 +207,17 @@ class _WebPackagesSectionState extends State<WebPackagesSection> {
             AppDisclosure(
                 key: ValueKey('web-package-${package.id}'),
                 title: package.name,
+                initiallyExpanded: !package.available,
+                subtitle: !package.available
+                    ? Text(context.l10n.webPackageDamaged,
+                        style: AppStyle.caption)
+                    : null,
                 leading: const Icon(AppIcons.plugin,
                     size: 18, color: AppStyle.secondary),
                 trailing: AppToggle(
                     label: context.l10n.enableFeature(package.name),
                     value: package.enabled,
-                    onChanged: _busy
+                    onChanged: _busy || (!package.available && !package.enabled)
                         ? null
                         : (enabled) =>
                             _change(package, enabled ? 'enable' : 'disable')),

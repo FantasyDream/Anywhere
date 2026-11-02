@@ -30,6 +30,14 @@ final class FakeHotKeys: HotKeyBackend {
 @main
 struct HostServicesTests {
   static func main() throws {
+    for path in ["", "relative/path", "/", "/tmp/.."] {
+      do {
+        _ = try SettingsStore.isolatedDirectory(path)
+        assertionFailure("Invalid acceptance directory was accepted")
+      } catch {}
+    }
+    let isolated = try SettingsStore.isolatedDirectory("/tmp/isolated")
+    assert(isolated.path == "/tmp/isolated")
     let recorder = ShortcutRecorder()
     var chords: [[String: Int]?] = []
     recorder.start(id: 1) { chords.append($0) }

@@ -4,7 +4,7 @@ import {dirname, resolve, relative, basename, isAbsolute} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 const sdk = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-async function init(destination) {
+async function init(destination, background = false) {
   const target = resolve(destination),
     inside = relative(sdk, target);
   if (!inside || (!inside.startsWith('..') && !isAbsolute(inside)))
@@ -22,7 +22,11 @@ async function init(destination) {
   }
   await mkdir(target, {recursive: true});
   try {
-    await cp(resolve(sdk, 'templates/minimal'), target, {recursive: true});
+    await cp(
+      resolve(sdk, background ? 'templates/background' : 'templates/minimal'),
+      target,
+      {recursive: true},
+    );
     const vendor = resolve(target, 'vendor/plugin-sdk');
     await mkdir(vendor, {recursive: true});
     for (const entry of [
@@ -40,8 +44,8 @@ async function init(destination) {
       await readFile(resolve(target, 'package.json'), 'utf8'),
     );
     pkg.name = `anywhere-${slug}`;
-    pkg.devDependencies['@anywhere/plugin-sdk'] = 'file:vendor/plugin-sdk';
-    pkg.scripts.pack = `python3 node_modules/@anywhere/plugin-sdk/tools/package.py . --output output/${slug}.awplugin`;
+    pkg.devDependencies['@anywhere/sdk'] = 'file:vendor/plugin-sdk';
+    pkg.scripts.pack = `python3 node_modules/@anywhere/sdk/tools/package.py . --output output/${slug}.awplugin`;
     await writeFile(
       resolve(target, 'package.json'),
       JSON.stringify(pkg, null, 2) + '\n',
@@ -53,7 +57,22 @@ async function init(destination) {
     const manifest = JSON.parse(
       await readFile(resolve(target, 'manifest.json'), 'utf8'),
     );
+    const oldId = manifest.id;
     manifest.id = `dev.example.${slug}`;
+    if (background) {
+      const source = resolve(target, 'src/main.ts');
+      await writeFile(
+        source,
+        (await readFile(source, 'utf8')).replaceAll(oldId, manifest.id),
+      );
+      const updated = JSON.parse(
+        JSON.stringify(manifest).replaceAll(
+          `plugin.${oldId}.`,
+          `plugin.${manifest.id}.`,
+        ),
+      );
+      Object.assign(manifest, updated);
+    }
     manifest.name = manifest.commands[0].title = slug
       .split('-')
       .map(word => word[0].toUpperCase() + word.slice(1))
@@ -67,15 +86,20 @@ async function init(destination) {
     throw error;
   }
   process.stdout.write(
-    `Created ${target}\n\ncd ${destination}\nnpm install --ignore-scripts\nnpm run build\nnpm run pack\n\nEdit src/main.js for business logic. Host styling and lifecycle are automatic.\n`,
+    `Created ${target}\n\ncd ${destination}\nnpm install --ignore-scripts\nnpm run build\nnpm run pack\n\nEdit src/main.${background ? 'ts' : 'js'} for business logic. Host styling and lifecycle are automatic.\n`,
   );
 }
 
 try {
   const [command, destination, ...extra] = process.argv.slice(2);
-  if (command !== 'init' || !destination || extra.length)
-    throw new Error('Usage: anywhere-plugin init my-tool');
-  await init(destination);
+  if (
+    command !== 'init' ||
+    !destination ||
+    extra.length > 1 ||
+    (extra.length === 1 && extra[0] !== '--background')
+  )
+    throw new Error('Usage: anywhere-plugin init my-tool [--background]');
+  await init(destination, extra[0] === '--background');
 } catch (error) {
   process.stderr.write(`${error.message}\n`);
   process.exitCode = 1;

@@ -1,0 +1,80 @@
+{
+  "app_version": "0.13.0+4",
+  "before_count": 1000,
+  "expected_after_expiry": 350,
+  "tests": [
+    {
+      "check": "real_startup_expiry_and_format_cascade",
+      "passed": true,
+      "items": 350,
+      "formats": 350
+    },
+    {
+      "check": "real_restart_preserves_pause_deadline",
+      "passed": true,
+      "remaining_ms": 92990,
+      "items": 350
+    },
+    {
+      "check": "extend_retention_does_not_restore_expired_entries",
+      "passed": true,
+      "items": 350,
+      "retention_days": 30
+    },
+    {
+      "check": "five_minute_pause_expires_in_real_process_and_visible_settings",
+      "passed": true,
+      "clock_changed": false,
+      "rows_after_expiry": 350
+    },
+    {
+      "check": "recording_disabled_after_temporary_acceptance",
+      "passed": true
+    }
+  ],
+  "pause_deadline_ms": 1792758188449,
+  "pause_started_recording_enabled": true,
+  "source_parent": "18b1798",
+  "date": "2026-10-23",
+  "binary_sha256": "69faa72eaa78c6da4bd8399a6cb0c3c5eea737faf94a6602148df1fcc2a3bf3a",
+  "fixture": {
+    "initial_entries": 1000,
+    "approximate_text_bytes_per_item": 8000,
+    "kind": "synthetic text only",
+    "expiry_policy_at_startup_days": 7,
+    "remaining_after_expiry": 350,
+    "retention_after_ui_extension_days": 30,
+    "real_personal_history_used_as_fixture": false
+  },
+  "automation_limitations": [
+    "After normal Quit, a desktop state read relaunched a default instance without the acceptance environment. That instance was stopped; subsequent restart used the explicit isolated directory. No test settings or clipboard writes were made in that default instance.",
+    "File search was authorized only for the generated synthetic files directory, but saving its draft and query acceptance were interrupted by another screen lock.",
+    "No clipboard_query or shelf_query runtime sample was collected in this run. The routes passed widget/native transport tests; runtime performance remains pending."
+  ],
+  "setup_resource_observation": {
+    "scope": "Mixed Settings and native authorization UI; not a same-state or long-term leak test",
+    "elapsed_seconds": 900.09,
+    "samples": 91,
+    "main_rss_first_bytes": 59801600,
+    "main_rss_min_bytes": 25460736,
+    "main_rss_max_bytes": 88670208,
+    "main_rss_last_bytes": 32063488,
+    "initial_footprint_bytes": 74239181,
+    "final_footprint_bytes": 77384909,
+    "descendants_observed": false,
+    "web_plugin_opened": false
+  },
+  "pending": [
+    "file search settings draft save and first-frame query baseline",
+    "history/shelf query first-frame samples and repeated open/close resource comparisons",
+    "full Web/XPC helper attribution and release",
+    "same-state long-duration stability"
+  ],
+  "personal_database_metadata_check": {
+    "schema_version": 3,
+    "read_only": true,
+    "content_read": false,
+    "pre_run_version_known": false,
+    "note": "The default instance may run its normal migration. No pre-run version was captured; do not claim the schema was unchanged or that this run definitely migrated it. Older apps cannot read schema 3."
+  }
+}

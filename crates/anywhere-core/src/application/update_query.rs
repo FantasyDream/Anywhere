@@ -8,6 +8,13 @@ use anywhere_protocol::*;
 use std::time::Instant;
 use tracing::Instrument;
 
+pub(super) struct QueryOptions {
+    pub scope: Option<GroupId>,
+    pub mode: InputMode,
+    pub filter: FileSearchFilter,
+    pub authorize: Option<crate::core::context::engine::ExecutionGuard>,
+}
+
 impl Application {
     pub async fn update_scoped_input(
         &self,
@@ -38,9 +45,12 @@ impl Application {
             session_id,
             input,
             revision,
-            selected_scope,
-            input_mode,
-            FileSearchFilter::All,
+            QueryOptions {
+                scope: selected_scope,
+                mode: input_mode,
+                filter: FileSearchFilter::All,
+                authorize: None,
+            },
         )
         .await
     }
@@ -56,22 +66,29 @@ impl Application {
             session_id,
             input,
             revision,
-            None,
-            InputMode::FileSearch,
-            filter,
+            QueryOptions {
+                scope: None,
+                mode: InputMode::FileSearch,
+                filter,
+                authorize: None,
+            },
         )
         .await
     }
 
-    async fn update_input_request(
+    pub(super) async fn update_input_request(
         &self,
         session_id: SessionId,
         input: String,
         revision: Revision,
-        selected_scope: Option<GroupId>,
-        input_mode: InputMode,
-        filter: FileSearchFilter,
+        options: QueryOptions,
     ) -> Result<Option<LauncherState>> {
+        let QueryOptions {
+            scope: selected_scope,
+            mode: input_mode,
+            filter,
+            authorize,
+        } = options;
         if input.len() > MAX_INPUT_BYTES {
             bail!("input exceeds 1 MiB");
         }
@@ -83,6 +100,9 @@ impl Application {
                 || self.resolver.is_abandoned()
             {
                 return Ok(None);
+            }
+            if authorize.as_ref().is_some_and(|allowed| !allowed()) {
+                bail!("query authority expired");
             }
             self.file_search_source.clear();
             session.file_filter = filter;

@@ -73,6 +73,33 @@ abstract final class AppStyle {
       fontWeight: DesignTokens.primaryControlWeight,
       color: primary);
 
+  static final pageHeading =
+      body.copyWith(fontSize: DesignTokens.pageHeadingSize);
+  static final pageMode = caption.copyWith(
+      fontSize: DesignTokens.pageModeSize,
+      fontWeight: DesignTokens.pageModeWeight);
+  static final contentInput =
+      body.copyWith(fontSize: DesignTokens.contentInputSize);
+  static TextStyle get code => body.copyWith(
+      fontFamily: DesktopEnvironment.current.monoFontFamily,
+      fontFamilyFallback: const ['monospace'],
+      fontSize: DesignTokens.previewCodeSize,
+      height: DesignTokens.previewCodeLineHeight);
+
+  /// Search headers are the deliberate borderless variant of default form fields.
+  static InputDecoration searchDecoration(String hint,
+          {TextStyle? style, bool collapsed = true}) =>
+      InputDecoration(
+          hintText: hint,
+          hintStyle: (style ?? pageHeading).copyWith(color: muted),
+          filled: false,
+          isDense: true,
+          isCollapsed: collapsed,
+          contentPadding: EdgeInsets.zero,
+          border: InputBorder.none,
+          enabledBorder: InputBorder.none,
+          focusedBorder: InputBorder.none);
+
   static ShapeBorder get panelShape => RoundedRectangleBorder(
       borderRadius: BorderRadius.circular(radius),
       side: const BorderSide(color: divider, width: DesignTokens.dividerWidth));
@@ -114,6 +141,41 @@ abstract final class AppStyle {
               states.contains(WidgetState.disabled) ? divider : controlBorder,
           width: DesignTokens.controlBorderWidth);
     });
+    final controlText = TextStyle(
+        fontSize: DesignTokens.controlFontSize,
+        fontWeight: DesignTokens.controlWeight,
+        fontFamily: DesktopEnvironment.current.fontFamily);
+    final control = TextButton.styleFrom(
+            foregroundColor: primary,
+            disabledForegroundColor:
+                primary.withValues(alpha: DesignTokens.disabledOpacity),
+            minimumSize: const Size(0, DesignTokens.controlHeight),
+            padding: const EdgeInsets.symmetric(
+                horizontal: DesignTokens.controlPaddingX,
+                vertical: DesignTokens.controlPaddingY),
+            textStyle: controlText,
+            shape: shape)
+        .copyWith(overlayColor: buttonOverlay);
+    final outlinedControl = control.copyWith(
+        backgroundColor: const WidgetStatePropertyAll(Colors.transparent),
+        side: buttonSide);
+    final primaryControl = outlinedControl.copyWith(
+        backgroundColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.disabled)
+                ? Colors.transparent
+                : primaryButtonSurface),
+        foregroundColor: WidgetStateProperty.resolveWith((states) =>
+            states.contains(WidgetState.disabled)
+                ? primary.withValues(alpha: DesignTokens.disabledOpacity)
+                : Colors.white),
+        textStyle: WidgetStatePropertyAll(controlText.copyWith(
+            fontWeight: DesignTokens.primaryControlWeight)));
+    final menu = MenuStyle(
+        backgroundColor: const WidgetStatePropertyAll(menuSurface),
+        surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
+        shape: WidgetStatePropertyAll(shape),
+        side: const WidgetStatePropertyAll(BorderSide(
+            color: controlBorder, width: DesignTokens.dividerWidth)));
     final base = ThemeData(
       fontFamily: DesktopEnvironment.current.fontFamily,
       brightness: Brightness.dark,
@@ -124,6 +186,8 @@ abstract final class AppStyle {
           primaryContrastingColor: Colors.white),
       scaffoldBackgroundColor: Colors.transparent,
       canvasColor: overlay,
+      iconTheme:
+          const IconThemeData(color: secondary, size: DesignTokens.iconSize),
       splashFactory: NoSplash.splashFactory,
       hoverColor: hover,
       focusColor: buttonSelection,
@@ -139,21 +203,22 @@ abstract final class AppStyle {
           outlineVariant: divider,
           error: danger),
     );
+    final textTheme = base.textTheme
+        .copyWith(
+            bodyLarge: body,
+            bodyMedium: body,
+            bodySmall: caption,
+            titleLarge: heading,
+            headlineSmall: pageHeading,
+            titleMedium: body.copyWith(fontWeight: DesignTokens.headingWeight),
+            titleSmall: caption.copyWith(
+                fontWeight: DesignTokens.headingWeight, color: primary),
+            labelLarge: body.copyWith(fontSize: DesignTokens.labelSize),
+            labelMedium: caption.copyWith(color: secondary),
+            labelSmall: caption.copyWith(fontSize: 10))
+        .apply(fontFamily: DesktopEnvironment.current.fontFamily);
     return base.copyWith(
-      textTheme: base.textTheme
-          .copyWith(
-              bodyLarge: body,
-              bodyMedium: body,
-              bodySmall: caption,
-              titleLarge: heading,
-              titleMedium:
-                  body.copyWith(fontWeight: DesignTokens.headingWeight),
-              titleSmall: caption.copyWith(
-                  fontWeight: DesignTokens.headingWeight, color: primary),
-              labelLarge: body.copyWith(fontSize: DesignTokens.labelSize),
-              labelMedium: caption.copyWith(color: secondary),
-              labelSmall: caption.copyWith(fontSize: 10))
-          .apply(fontFamily: DesktopEnvironment.current.fontFamily),
+      textTheme: textTheme,
       materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
       visualDensity: VisualDensity.standard,
       dividerTheme: const DividerThemeData(
@@ -192,62 +257,43 @@ abstract final class AppStyle {
           selectionColor: DesignTokens.textSelection,
           selectionHandleColor: accent),
       textButtonTheme: TextButtonThemeData(
-          style: TextButton.styleFrom(
-                  foregroundColor: primary,
-                  disabledForegroundColor:
-                      primary.withValues(alpha: DesignTokens.disabledOpacity),
-                  minimumSize: const Size(0, DesignTokens.controlHeight),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: DesignTokens.controlPaddingX,
-                      vertical: DesignTokens.controlPaddingY),
-                  textStyle: TextStyle(
-                      fontSize: DesignTokens.controlFontSize,
-                      fontWeight: DesignTokens.controlWeight,
-                      fontFamily: DesktopEnvironment.current.fontFamily),
-                  shape: shape)
-              .copyWith(
-                  overlayColor: buttonOverlay,
-                  side: WidgetStateProperty.resolveWith((states) =>
-                      states.contains(WidgetState.focused)
-                          ? const BorderSide(
-                              color: selectedBorder,
-                              width: DesignTokens.focusBorderWidth)
-                          : BorderSide.none))),
-      outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(
-                  foregroundColor: primary,
-                  disabledForegroundColor:
-                      primary.withValues(alpha: DesignTokens.disabledOpacity),
-                  backgroundColor: Colors.transparent,
-                  minimumSize: const Size(0, DesignTokens.controlHeight),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: DesignTokens.controlPaddingX,
-                      vertical: DesignTokens.controlPaddingY),
-                  side: const BorderSide(
-                      color: border, width: DesignTokens.fieldBorderWidth),
-                  textStyle: TextStyle(
-                      fontSize: DesignTokens.controlFontSize,
-                      fontWeight: DesignTokens.controlWeight,
-                      fontFamily: DesktopEnvironment.current.fontFamily),
-                  shape: shape)
-              .copyWith(overlayColor: buttonOverlay, side: buttonSide)),
-      filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(
-                  backgroundColor: primaryButtonSurface,
-                  disabledBackgroundColor: Colors.transparent,
-                  foregroundColor: Colors.white,
-                  disabledForegroundColor:
-                      primary.withValues(alpha: DesignTokens.disabledOpacity),
-                  minimumSize: const Size(0, DesignTokens.controlHeight),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: DesignTokens.controlPaddingX,
-                      vertical: DesignTokens.controlPaddingY),
-                  textStyle: TextStyle(
-                      fontSize: DesignTokens.controlFontSize,
-                      fontWeight: DesignTokens.primaryControlWeight,
-                      fontFamily: DesktopEnvironment.current.fontFamily),
-                  shape: shape)
-              .copyWith(overlayColor: buttonOverlay, side: buttonSide)),
+          style: control.copyWith(
+              side: WidgetStateProperty.resolveWith((states) =>
+                  states.contains(WidgetState.focused)
+                      ? const BorderSide(
+                          color: selectedBorder,
+                          width: DesignTokens.focusBorderWidth)
+                      : BorderSide.none))),
+      outlinedButtonTheme: OutlinedButtonThemeData(style: outlinedControl),
+      filledButtonTheme: FilledButtonThemeData(style: primaryControl),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+          style: primaryControl.copyWith(
+              elevation: const WidgetStatePropertyAll(0),
+              surfaceTintColor:
+                  const WidgetStatePropertyAll(Colors.transparent),
+              shadowColor: const WidgetStatePropertyAll(Colors.transparent))),
+      cardTheme: CardThemeData(
+          color: card,
+          elevation: 0,
+          surfaceTintColor: Colors.transparent,
+          margin: EdgeInsets.zero,
+          clipBehavior: Clip.antiAlias,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(cardRadius),
+              side: const BorderSide(
+                  color: divider, width: DesignTokens.dividerWidth))),
+      appBarTheme: AppBarThemeData(
+          backgroundColor: Colors.transparent,
+          foregroundColor: primary,
+          elevation: 0,
+          scrolledUnderElevation: 0,
+          surfaceTintColor: Colors.transparent,
+          centerTitle: false,
+          toolbarHeight: DesignTokens.pageHeaderHeight,
+          titleTextStyle: textTheme.headlineSmall),
+      menuTheme: MenuThemeData(style: menu),
+      dropdownMenuTheme: DropdownMenuThemeData(
+          textStyle: textTheme.bodyMedium, menuStyle: menu),
       iconButtonTheme: IconButtonThemeData(
           style: IconButton.styleFrom(
                   foregroundColor: secondary,
@@ -274,9 +320,9 @@ abstract final class AppStyle {
               borderRadius: BorderRadius.circular(DesignTokens.cardRadius),
               side: const BorderSide(
                   color: divider, width: DesignTokens.dividerWidth)),
-          titleTextStyle: heading,
-          contentTextStyle: body.copyWith(
-              fontSize: DesignTokens.labelSize, color: secondary)),
+          titleTextStyle: textTheme.titleLarge,
+          contentTextStyle: textTheme.bodyMedium!
+              .copyWith(fontSize: DesignTokens.labelSize, color: secondary)),
       listTileTheme: const ListTileThemeData(
           textColor: primary,
           iconColor: secondary,

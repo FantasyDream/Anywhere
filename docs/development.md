@@ -1,9 +1,11 @@
 # 开发与构建
 
+首次定位代码先读 [AGENTS.md](../AGENTS.md)；它给出模块入口和改动边界，详细契约从 [文档导航](README.md)进入。
+
 ## 环境
 
 - macOS 12 或以上，以及 Apple Command Line Tools。
-- PATH 上的 Rust stable / Cargo。
+- 由 [rust-toolchain.toml](../rust-toolchain.toml) 固定的 Rust / Cargo beta 预发布版本；rustup 会按需安装对应版本及 rustfmt / Clippy。发布稳定版本前仍需用目标 stable 工具链重新跑完整检查。
 - 与 [.flutter-version](../.flutter-version) 一致的 Flutter SDK。
 - Python 3.10+，用于生成与检查脚本。
 - Node.js 22+ / npm，用于 SDK 类型检查与 Rust 互通测试；App 和插件运行时不需要 Node。
@@ -36,6 +38,8 @@ scripts/package-macos.sh build/Anywhere-dev.app
 
 打包生成 App 对应的 ZIP 和 SHA-256 文件，并检查版本与签名一致性。
 
+构建与打包共用 `scripts/macos_app_path.py` 校验实际输出位置：目标必须在本 checkout 的 `build/` 内，拒绝越界的 `..`、逃逸的父目录链接及作为目标的符号链接。构建开始前和清理旧 Bundle 前各复验一次，避免只凭字符串前缀决定删除位置。路径边界回归已接入完整检查。
+
 ## 检查与生成
 
 首次开发先运行 `scripts/setup-code-style.sh` 安装隔离工具；格式与检查方式见[代码规范](code-style.md)。App 构建本身不需要这些规范工具。
@@ -51,12 +55,23 @@ cargo test --workspace --locked
 修改 FRB 公开 API 后重新生成绑定：
 
 ```bash
-cargo install flutter_rust_bridge_codegen --version 2.11.1 --locked
+cargo install flutter_rust_bridge_codegen --version 2.13.0 --locked
 cargo install cargo-expand --locked
 scripts/generate-bridge.sh
 ```
 
 已生成绑定随源码提交，普通构建不需要生成器。键码、文件类型、运行策略修改后使用对应的 `scripts/generate-*.py` 同步生成代码；完整检查包含漂移校验。
+
+FRB 的 Dart / Rust 运行库和两端生成代码必须使用同一版本。`scripts/check-versions.py` 检查四处声明，`scripts/generate-bridge.sh` 在生成前检查 PATH 中生成器版本；可将对应版本安装到项目 `.tools/` 后临时加入 PATH，不必覆盖全局工具。
+
+升级桥接运行库后，可额外构建 `cargo build -p anywhere-bridge-flutter --locked`，在 `apps/flutter` 执行真实动态库验证：
+
+```bash
+flutter --no-version-check test test/bridge_runtime_test.dart \
+  --dart-define=ANYWHERE_BRIDGE_LIBRARY="$PWD/../../target/debug/libanywhere_bridge_flutter.dylib"
+```
+
+以上路径对应默认 Cargo 输出和 macOS；其他平台选择对应动态库。该测试核对真实 FFI 调用，不创建窗口或初始化存储、权限与剪贴板采集；未传库路径的普通 Widget 套件会跳过此项。
 
 桥只导出 App 正在使用的接口。设置目录通过 `extensionStatus` / `refreshFeatures` 读取统一状态，包含内置功能和旧声明式插件；旧插件配置的读取与迁移留在 Rust 设置服务。不要在 Flutter 中重新转换一套旧插件状态，测试也注入同一组 DTO。
 
@@ -87,9 +102,40 @@ SDK 类型、测试和独立模板需要 Node.js 22+ / npm；这些检查不安�
 - 文档检查器：`python3 -m unittest discover -s scripts/tests -p test_docs.py`。
 - Flutter：在 `apps/flutter` 执行 `flutter analyze`、`flutter test`。
 - 原生：`scripts/check-macos-menu.sh` 和 `scripts/check-macos-host.sh`；依赖 macOS SDK 及 Flutter macOS 引擎资源，首次可运行 `flutter precache --macos`。
+- 系统预览实机回归：`scripts/check-macos-preview-live.sh`，需要可交互桌面，会短暂激活独立测试窗口；覆盖文本输入竞争、快速重开与关闭后恢复，详见[系统预览](native-preview.md)。
 - 性能：[测量方法](performance.md)。不要把编译器、单个 worker 或 RSS 的一次快照当作整 App 性能承诺。
 
 先完成代码、自动化与构建，最后做 GUI。真实中文候选、物理组合键、跨应用焦点与 VoiceOver 须单独记录；模拟组合键不稳定时，不据此修改生产按键语义。
+
+### 独立实机测量（macOS）
+
+验收实例可显式指定 `ANYWHERE_DATA_DIRECTORY`：必须是绝对路径，不能是根目录或包含 `..`。路径错误或创建失败时退出，不回退到个人数据。该模式不修改系统登录启动项；空目录下历史采集仍默认关闭，文件授权、日志与设置也使用独立目录。
+
+```bash
+mkdir -p build/acceptance-v0.13
+ANYWHERE_DATA_DIRECTORY="$PWD/build/acceptance-v0.13" ANYWHERE_PROFILE_UI=1 \
+  build/Anywhere-0.13-preview-build11.app/Contents/MacOS/Anywhere
+```
+
+`ANYWHERE_PROFILE_UI=1` 仅为本机显式诊断：记录操作类别、耗时与结果条数，不记录查询、路径、Context 或剪贴板正文；默认不创建测量任务或上传数据。Launcher / 文件查询测量从提交的输入开始，经过 Rust / Bridge，到匹配当前版本的 Flutter 帧结束；激活还等待原生窗口显示确认，取第一份 ready 快照，不等待迟到 Context。Build 11 起，文件查询等待首批可见结果，或已确认结束的空结果，不把输入确认后的加载占位帧计为结果，不等待完整遍历或预览。Clipboard History / Shelf 的内部查询分别记录为 clipboard_query / shelf_query，包含原有的 120ms 防抖，取可用列表首帧，不等待预览解码；后台刷新与输入法组合态不计入。每个独立 Flutter engine 通过自己的 Host 通道显式启用，工具窗不可见或退出时撤销在途计时。不包含输入法候选选择时间、GPU raster 或显示器实际呈现延迟。
+
+确认验收实例 PID 后，在另一终端采集；示例 PID 需替换为实际值：
+
+```bash
+python3 scripts/measure-desktop.py --pid 12345 \
+  --log build/acceptance-v0.13/launcher.log \
+  --output build/desktop-measurement.json --duration 300 --interval 5 --footprint
+```
+
+采集器仅输出数值汇总：按操作报告实际样本数、p50 / p95 / 最大值，另记主进程与其子进程 RSS、首尾 Physical footprint。样本有上限，隐藏窗口、非法记录和超额样本单独计数；子进程归属只根据 PID 关系，不能冒充完整的 XPC helper 归属。两类内存指标不要混算；隐藏 / 显示、Settings / Shelf 生命周期和长时间趋势应分别记录。原始日志留在被忽略的 `build/`，不要直接提交含真实运行信息的日志。
+
+macOS 可额外传入 `--webkit-helpers`：从目标 PID 自己的 XPC 服务域读取 WebKit 实例，再复核每个实例的运行状态和 PID，分别记录 GPU / WebContent / Networking 的 RSS。默认关闭；不按进程名或 `launchd` 父进程猜测归属，不保存服务域中的环境变量或端口。每个系统查询最多等待 2 秒，最多检查 8 个实例；权限不足、格式不符、目标消失或 PID 不一致记为 `null`，不当作零进程。仅在已确认的服务域中无运行实例时返回空列表，不代表所有 AppKit / 系统 XPC 已退出，也不提供强制结束 helper 的能力。
+
+Physical footprint 使用的系统检查可能因权限或系统状态停滞，每次检查最多等待 15 秒；工具缺失、失败或超时记为 `null`，继续保留 RSS 和界面计时。缺失值不表示零内存，也不能据此判断资源已释放。
+
+桌面工具在正常退出后读取 App 状态可能通过 Launch Services 重新启动默认实例，且不会继承终端环境。验收中退出后应使用只读进程检查确认结束；重启必须再次显式传入独立数据目录，再绑定现有实例，避免自动重启触碰个人目录。
+
+验收优先沿用产品默认快捷键：全局搜索 ⌘Space，当前应用 ⌥⌘Space；若发生本机冲突，先使用现有菜单入口，不让用户操作临时的多修饰键组合。验证隐藏恢复前，先选择要验的搜索模式再输入查询，恢复时使用同一模式，并核对原生失焦 / 显示事件；只读其他窗口的 AX 树不代表真实焦点已经切换。
 
 完整检查会下载 lock 文件中依赖及固定摘要的原生依赖，需要网络；本地首次构建也可能耗时较长。CI 的 macOS 工作流运行完整门禁；Linux / Windows 工作流验证共享代码，不打包原生 App。仓库文档有独立的轻量工作流。
 

@@ -1,0 +1,78 @@
+{
+  "date": "2026-10-27",
+  "version": "0.14.0+24",
+  "source_base_commit": "8a3e757970c1e477979bbc8e8774bb19f92fbb6f",
+  "source_state": "working tree, not committed at packaging time",
+  "app": "build/Anywhere-0.14-preview-build24.app",
+  "archive": "build/Anywhere-0.14-preview-build24-macos-arm64.zip",
+  "archive_sha256": "0c1fe7d769c314eea54934b61723fb70493a67254e4e1ea0e932bc02aab4dd24",
+  "json_package": {
+    "version": "0.6.2",
+    "path": "build/web-examples/json-workspace-0.6.2.awplugin",
+    "sha256": "9723d42f03c6f68bafba256bee28868f0b02f893cec3030f0b33fcc458151a11",
+    "content_digest": "c79c693dbbda30c7584848172b9b727d7ded956078f741229bb42dec5aff11dd"
+  },
+  "fixes": [
+    "Workspace and copy commands consume the same package-owned document Context; usage sorting remains unchanged",
+    "Opaque extension payloads are not rendered as candidate subtitle text",
+    "Package review description covers both UI and background jobs and explicitly distinguishes capability limits from OS process isolation"
+  ],
+  "checks": {
+    "full_gate": {
+      "result": "passed",
+      "command": "scripts/check.sh",
+      "log": "build/acceptance24-final-check.log",
+      "core_passed": 317,
+      "core_ignored": 1,
+      "mvp_passed": 195,
+      "mvp_ignored": 4,
+      "flutter_passed": 435,
+      "sdk_passed": 21,
+      "json_passed": 30
+    },
+    "json_package_conformance": {
+      "result": "passed",
+      "log": "build/acceptance24-conformance.log",
+      "scope": "real compiled package; synthetic clipboard/storage; fresh clipboard recognition and expiry, original text prefill, fresh action order, exact tokens, UI/background routes, saved indent, consent/cancel"
+    },
+    "package_inspection": "passed; build/acceptance24-package-inspect.log",
+    "release_bridge_compile_signing_archive": "passed; build/acceptance24-build.log"
+  },
+  "native_acceptance": {
+    "status": "passed for the scoped native matrix below; not a full release/platform certification",
+    "running_app": "Build 24, process path verified read-only; prior Build 23 exited through the application menu",
+    "installed_json_plugin": "0.6.2; content digest verified in native package review, installed through Settings",
+    "passed": [
+      "Package review displays the updated UI/background execution boundary and no clipboard.readText permission; update completes without extra grants",
+      "Recognized JSON offers Workspace and three copy actions; candidate subtitles no longer show serialized Context envelopes; existing copy usage can still rank ahead of Workspace",
+      "Opening Workspace from recognized JSON preloads the original text, retaining duplicate keys, large integer and exponent tokens",
+      "JavaScript refuses unsafe numeric conversion; switching to JSONPath and querying .s returns the Chinese string",
+      "Headless minify opens only Host consent; Cancel returns to the prior candidates, retry and Allow once writes exact original tokens, verified with native clipboard paste into a Web formula field",
+      "Headless escaped copy writes a JSON-encoded string; native paste matches Unescape, whose editor restores and formats the decoded original",
+      "Cancelling formatted copy leaves the previous escaped clipboard unchanged, verified by native paste into the main input",
+      "IDEA and VS Code history lists load; IDEA supports Down, PageDown/PageUp with selection following the rows and does not bind Command-K",
+      "IDEA synthetic entry object menu reuses native actions; Esc closes the menu and preserves the query and selected entry",
+      "VS Code synthetic directory opens in the actual Code window with the expected Explorer root",
+      "Multi-root .code-workspace object menu offers File actions, not Directory actions; opening it creates the actual named Workspace with both roots visible"
+    ],
+    "earlier_refactor_coverage": "Build 23 native Settings Done/Command-W close decisions, Continue editing and Discard; automated save/failure/publication ordering regressions remain in the full gate",
+    "screenshots": [
+      "build/ui-v0.14-build24/json-recognized-jsonpath.png",
+      "build/ui-v0.14-build24/history-retained-query.png",
+      "build/ui-v0.14-build24/vscode-multi-root.png"
+    ],
+    "data_handling": "Opened only the pre-existing synthetic history targets for execution tests. Quit Code afterward (it was not running before the test). Restored the previously known synthetic clipboard text 3 and cleared the Launcher query. No personal settings changed.",
+    "not_exercised": [
+      "Fresh OS clipboard/selected-text wake-up prefill and 15-second hidden retention with physical input: covered by automated tests and prior observations, not newly certified through this GUI tool",
+      "Every SDK method on the real OS; API, permission and event matrix is additionally covered by synthetic conformance tests",
+      "All 18 history sources/versions and real project execution",
+      "Settings Save failure timing with real disk errors",
+      "Physical IME, VoiceOver, Windows/Linux, memory and GPU helper release"
+    ],
+    "previous_observations": "native-acceptance-v0.14-build23-2026-10-27.json"
+  },
+  "limitations": [
+    "Only the listed native matrix passed; unexercised scenarios are recorded separately",
+    "No GitHub release or commit made in this acceptance turn"
+  ]
+}

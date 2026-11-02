@@ -1,0 +1,134 @@
+{
+  "database_bytes": 16556032,
+  "detail_mean_us": 22,
+  "fixture": "1000 synthetic plain-text entries, approximately 8 KiB each",
+  "insert_ms": 1615,
+  "queries": [
+    {
+      "matches": 1000,
+      "max_us": 5529,
+      "p50_us": 1275,
+      "p95_us": 3730,
+      "query": "",
+      "samples": 50
+    },
+    {
+      "matches": 1000,
+      "max_us": 6011,
+      "p50_us": 1895,
+      "p95_us": 4013,
+      "query": "entry",
+      "samples": 50
+    },
+    {
+      "matches": 1000,
+      "max_us": 4849,
+      "p50_us": 1758,
+      "p95_us": 2928,
+      "query": "中文 rust",
+      "samples": 50
+    },
+    {
+      "matches": 1,
+      "max_us": 8896,
+      "p50_us": 5587,
+      "p95_us": 7928,
+      "query": "entry-0999",
+      "samples": 50
+    },
+    {
+      "matches": 0,
+      "max_us": 7417,
+      "p50_us": 5283,
+      "p95_us": 6404,
+      "query": "no-such-entry",
+      "samples": 50
+    }
+  ],
+  "rows": 1000,
+  "scope": "Rust repository queries and service previews; excludes Flutter, bridge and OS clipboard",
+  "service_policy_queries": [
+    {
+      "matches": 1000,
+      "p50_us": 1165,
+      "p95_us": 1460,
+      "query": "",
+      "retention_days": 0,
+      "samples": 50
+    },
+    {
+      "matches": 1000,
+      "p50_us": 1650,
+      "p95_us": 2040,
+      "query": "中文 rust",
+      "retention_days": 0,
+      "samples": 50
+    },
+    {
+      "matches": 1,
+      "p50_us": 5344,
+      "p95_us": 13112,
+      "query": "entry-0999",
+      "retention_days": 0,
+      "samples": 50
+    },
+    {
+      "matches": 0,
+      "p50_us": 5424,
+      "p95_us": 16904,
+      "query": "no-such-entry",
+      "retention_days": 0,
+      "samples": 50
+    },
+    {
+      "matches": 1000,
+      "p50_us": 1998,
+      "p95_us": 7002,
+      "query": "",
+      "retention_days": 7,
+      "samples": 50
+    },
+    {
+      "matches": 1000,
+      "p50_us": 2418,
+      "p95_us": 6474,
+      "query": "中文 rust",
+      "retention_days": 7,
+      "samples": 50
+    },
+    {
+      "matches": 1,
+      "p50_us": 5756,
+      "p95_us": 21874,
+      "query": "entry-0999",
+      "retention_days": 7,
+      "samples": 50
+    },
+    {
+      "matches": 0,
+      "p50_us": 5659,
+      "p95_us": 24647,
+      "query": "no-such-entry",
+      "retention_days": 7,
+      "samples": 50
+    }
+  ],
+  "summary_utf8_bytes": 124000,
+  "environment": {
+    "date": "2026-10-23",
+    "app_version": "0.13.0+1",
+    "os": "27.0.1",
+    "architecture": "arm64",
+    "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)",
+    "cpu": "Apple M5",
+    "source_sha256": {
+      "crates/anywhere-core/examples/clipboard_history_measure.rs": "9a32fda77df4702305583e6a270d04ca02c947b9e6f34d61fcee86f2f3e696c6",
+      "crates/anywhere-core/src/features/clipboard/service.rs": "7191f6b8c5ba337a5c827425575ed1ae131cea998dedaa0b9ceb54a0f667c9a4",
+      "crates/anywhere-core/src/features/clipboard/history.rs": "df0227bc9a5050c0a1b5ca751742e685541a4aca301a2c0dcf29d45aa3ff2226",
+      "crates/anywhere-core/src/features/clipboard/policy.rs": "aa5c58179eac6791851dea60a91c26d7319f824b2153719e4628744cadf0f52a",
+      "crates/anywhere-core/src/persistence/clipboard.rs": "7cef9cd73a6cac5fa17e5a3dce3f5fcf14eb7ecf3237c376bdc105273f83ebd2"
+    }
+  },
+  "process_max_rss_bytes": 11370496,
+  "limitations": "One release process; synthetic temporary database; no OS cache flush; no concurrent repository builds/tests during sampling. Excludes platform clipboard, maintenance worker, bridge, Flutter, helper processes and end-to-end GUI latency. Not a comparison against V0.12."
+}

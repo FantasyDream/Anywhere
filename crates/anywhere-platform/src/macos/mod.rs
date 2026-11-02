@@ -144,6 +144,12 @@ impl Platform for MacOsPlatform {
     fn open_url(&self, value: &str) -> Result<()> {
         shell::open_url(value)
     }
+    fn open_file_in_application(&self, application: &Path, target: &Path) -> Result<()> {
+        shell::open_file_in_application(application, target)
+    }
+    fn open_url_in_application(&self, application: &Path, url: &str) -> Result<()> {
+        shell::open_url_in_application(application, url)
+    }
     fn open_file(&self, path: &Path) -> Result<()> {
         shell::open_file(path)
     }

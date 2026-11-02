@@ -1,0 +1,83 @@
+{
+  "date": "2026-10-25",
+  "source_base_commit": "0b777eb",
+  "build_from_working_tree": true,
+  "production_changes": [
+    "App-owned non-menu entries receive project-equivalent context weight on empty-query Home only",
+    "History entry base priority uses the existing score ceiling of 50",
+    "Package version 0.14.0+4"
+  ],
+  "package_version": "0.14.0+4",
+  "zip_sha256": "b4f6f3a371b4a937442dc89f95630a64072c2d6d9099d25f5362251360f9285e",
+  "scope": "Synthetic local IDEA and VS Code source-application opening",
+  "checks": {
+    "scripts_check_sh": "passed",
+    "core_unit_passed": 276,
+    "core_unit_existing_ignored": 1,
+    "mvp_integration_passed": 190,
+    "mvp_integration_existing_ignored": 4,
+    "flutter_passed": 407,
+    "home_regression_without_fix": "failed as expected: own history entry outside first five eligible candidates",
+    "home_regression_with_fix": "passed for IDEA and VS Code with Git and Rust project contexts",
+    "persistent_signing_and_strict_package_verification": "passed"
+  },
+  "native_ui": {
+    "status": "passed for scoped local targets",
+    "fixture_directory": "build/acceptance-v0.14-open-verification",
+    "cases": [
+      {
+        "case": "IDEA local project",
+        "trigger": "Explicit global action, then row Open button",
+        "evidence": "IDEA window title and Project tree identify the synthetic project directory"
+      },
+      {
+        "case": "VS Code local folder",
+        "trigger": "Explicit global action, then row Open button",
+        "evidence": "Code window title and Explorer README path identify the synthetic folder"
+      },
+      {
+        "case": "VS Code multi-root workspace",
+        "trigger": "Current App action, Down, Return",
+        "evidence": "Code identifies Workspace and Explorer contains both expected root folders"
+      },
+      {
+        "case": "VS Code regular file",
+        "trigger": "Current App action, Down twice, Return",
+        "evidence": "Code editor shows matching file URL, tab, full path and synthetic body"
+      },
+      {
+        "case": "IDEA Current App Home with project actions",
+        "evidence": "IDEA Recent Projects visible alongside Git, Folder and Rust actions without a query"
+      },
+      {
+        "case": "VS Code Current App Home",
+        "evidence": "Own source-specific history action visible without a query"
+      }
+    ],
+    "screenshots": "Local ignored build/ui-v0.14-opening/; not committed or uploaded",
+    "earlier_attempt": "Build 3 VS Code attempt had no confirmed target window; tool hung and reported lock. User reported missing folder window. Retried successfully with Build 4; original attempt is not counted as passed.",
+    "cleanup": "Synthetic project/workspace windows closed via their window controls; Anywhere exited via app menu and no Build 3 or Build 4 test process remained",
+    "cleanup_observation": "Immediately returning to Launcher after closing the IDEA project showed a partial-action-loading notice. Fresh menu discovery was not retested; broad menu-loading acceptance is outside this opening check."
+  },
+  "data_boundaries": {
+    "private_history_read": false,
+    "clipboard_recording_enabled": false,
+    "selected_text_capture_enabled": false,
+    "browser_page_capture_enabled": false,
+    "finder_selection_capture_enabled": false,
+    "current_project_directory_detection": "Existing production path used to validate Home competition",
+    "new_permissions_granted": false,
+    "renderer": "Impeller"
+  },
+  "not_validated": [
+    "Physical keyboard combinations and real Chinese IME",
+    "Post-exit memory measurements",
+    "Windows runtime",
+    "Multiple installations and exact Profile or Vault routing"
+  ],
+  "not_implemented": [
+    "Browser history",
+    "Browser bookmarks",
+    "Remote target opening"
+  ]
+}

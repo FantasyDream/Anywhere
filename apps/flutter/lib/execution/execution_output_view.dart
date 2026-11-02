@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../infrastructure/desktop_environment.dart';
 import '../l10n/app_language.dart';
 import '../src/rust/api.dart';
 import '../ui/app_icons.dart';
@@ -51,8 +50,8 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
   void didUpdateWidget(ExecutionOutputView oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_following &&
-        (oldWidget.detail.stdout != widget.detail.stdout ||
-            oldWidget.detail.stderr != widget.detail.stderr)) {
+        (_diagnostics ? oldWidget.detail.stderr : oldWidget.detail.stdout) !=
+            _text) {
       _toLatest();
     }
   }
@@ -88,6 +87,7 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
         if (mounted) setState(() => _copied = false);
       });
     } catch (_) {
+      if (!mounted) return;
       widget.onError(context.l10n.outputCouldNotBeCopiedTryAgain);
     }
   }
@@ -149,12 +149,7 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
                                     : context.l10n.noStandardOutput)
                             : _text,
                         key: const Key('task-output-text'),
-                        style: TextStyle(
-                            fontFamily:
-                                DesktopEnvironment.current.monoFontFamily,
-                            fontFamilyFallback: const ['monospace'],
-                            fontSize: DesignTokens.previewCodeSize,
-                            height: DesignTokens.previewCodeLineHeight,
+                        style: AppStyle.code.copyWith(
                             color: _diagnostics
                                 ? AppStyle.warning
                                 : AppStyle.primary)),

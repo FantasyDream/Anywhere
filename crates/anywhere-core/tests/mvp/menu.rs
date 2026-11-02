@@ -32,6 +32,39 @@ async fn wait_for_title(app: &Application, session: SessionId, title: &str) -> L
 }
 
 #[tokio::test]
+async fn a_cold_menu_home_prefers_basic_edit_commands_over_settings_and_execute() {
+    for basic in [
+        ["Copy", "Paste", "Cut", "Select All", "Find"],
+        ["复制", "粘贴", "剪切", "全选", "查找"],
+    ] {
+        let directory = tempfile::tempdir().unwrap();
+        let platform = Arc::new(TestPlatform::new(directory.path().into(), false));
+        let mut items: Vec<_> = basic
+            .iter()
+            .map(|title| sample_menu(title, &["Edit", title], true))
+            .collect();
+        for title in ["Service Settings", "Shortcut Settings", "Execute All"] {
+            items.push(sample_menu(title, &["Tools", title], true));
+        }
+        with_menus(&platform, items);
+        let app = app(platform);
+        let first = app.activate().await.unwrap().unwrap();
+        wait_for_title(&app, first.session_id, "Execute All").await;
+        let state = settled(&app, first.session_id, first.revision).await;
+        let top: Vec<_> = state.context_candidates.iter().take(5).collect();
+        assert_eq!(top.len(), 5);
+        assert!(top.iter().all(|row| basic.contains(&row.title.as_str())));
+        for row in &state.context_candidates {
+            if ["Service Settings", "Shortcut Settings", "Execute All"]
+                .contains(&row.title.as_str())
+            {
+                assert!(row.score < top.last().unwrap().score);
+            }
+        }
+    }
+}
+
+#[tokio::test]
 async fn menu_actions_belong_to_application_context_without_a_menu_root() {
     let platform = Arc::new(TestPlatform::new(
         tempfile::tempdir().unwrap().path().into(),
@@ -56,7 +89,6 @@ async fn menu_actions_belong_to_application_context_without_a_menu_root() {
         .unwrap();
     assert_eq!(action.group_id, "app.test.editor");
     assert_eq!(action.owning_app.as_deref(), Some("test.editor"));
-    assert!(action.home_eligible);
     assert_eq!(action.section_label.as_deref(), Some("Editor"));
     assert!(state.context_summary.iter().any(
         |context| context.type_id == APPLICATION && action.context_keys.contains(&context.key)
@@ -819,7 +851,6 @@ async fn sqlite_menu_history_is_quarantined_across_identity_transitions_and_reop
             .iter()
             .find(|c| c.title == current.title)
             .unwrap();
-        assert!(!candidate.home_eligible, "legacy usage promoted {scenario}");
         let score = candidate.score;
         assert!(app
             .execute(state.session_id, state.revision, candidate.id.clone())
@@ -859,7 +890,6 @@ async fn sqlite_menu_history_is_quarantined_across_identity_transitions_and_reop
             .find(|c| c.title == current.title)
             .unwrap();
         assert_eq!(candidate.score, score, "legacy usage affected {scenario}");
-        assert!(!candidate.home_eligible);
         app.deactivate(state.session_id).unwrap();
     }
 }

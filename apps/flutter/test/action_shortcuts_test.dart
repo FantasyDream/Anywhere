@@ -16,6 +16,20 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'launcher_fixtures.dart';
 
+class CountedShortcutAction extends ShortcutActionDto {
+  CountedShortcutAction(int index)
+      : super(
+            actionId: 'synthetic.action.$index',
+            title: 'Synthetic action $index',
+            contextTypes: const ['core.directory']);
+  static int titleReads = 0;
+  @override
+  String get title {
+    ++titleReads;
+    return super.title;
+  }
+}
+
 const binding = ActionShortcut(
     actionId: 'core.directory.terminal',
     title: 'Open Terminal Here',
@@ -29,7 +43,6 @@ CandidateDto row(String id) => CandidateDto(
     kind: CandidateKindDto.action,
     contextKeys: [],
     menuPath: [],
-    homeEligible: true,
     primaryAction: false,
     iconKey: 'terminal',
     score: 1,
@@ -92,6 +105,7 @@ void main() {
       {HostViewDto? hostView,
       Future<BindingResolutionDto> Function(int, int, String)? wait,
       Future<void> Function()? shutdown,
+      List<ShortcutActionDto>? actions,
       Future<BindingResolutionDto> Function(int, int, List<ShortcutRouteDto>)?
           intent,
       Future<BindingResolutionDto> Function(int, int, List<ShortcutRouteDto>)?
@@ -138,10 +152,13 @@ void main() {
                   ShortcutApplicationDto(
                       bundleId: 'com.apple.finder', title: 'Finder')
                 ],
-            shortcutActions: () async => const [
+            shortcutActions: () async =>
+                actions ??
+                const [
                   ShortcutActionDto(
                       actionId: 'core.directory.terminal',
                       title: 'Open Terminal Here',
+                      localizedTitles: {'zh': '打开终端'},
                       contextTypes: ['core.directory']),
                   ShortcutActionDto(
                       actionId: 'core.files.search',
@@ -176,7 +193,6 @@ void main() {
         kind: CandidateKindDto.action,
         contextKeys: [],
         menuPath: [],
-        homeEligible: false,
         primaryAction: false,
         iconKey: 'search',
         score: 1,
@@ -603,6 +619,59 @@ void main() {
     expect(calls, 1);
     expect(executions, ['current']);
   });
+
+  for (final intent in [false, true]) {
+    testWidgets(
+        'shortcut action list searches translated titles (intent=$intent)',
+        (tester) async {
+      stored = HostSettings.defaults;
+      final c = await controller((_, __, ___) async => []);
+      await tester.pumpWidget(MaterialApp(
+          theme: AppStyle.theme, home: LauncherScreen(controller: c)));
+      await c.openSettings();
+      await tester.pumpAndSettle();
+      final add = intent ? 'Add context shortcut' : 'Add action shortcut';
+      await tester.scrollUntilVisible(find.text(add), 180);
+      await tester.tap(find.text(add));
+      await tester.pumpAndSettle();
+      if (intent) {
+        await tester.tap(find.text('Add rule'));
+        await tester.pumpAndSettle();
+      }
+      await tester.enterText(
+          find.widgetWithText(TextField, 'Find an action…'), '打开终端');
+      await tester.pumpAndSettle();
+      expect(
+          find.widgetWithText(ListTile, 'Open Terminal Here'), findsOneWidget);
+      expect(find.widgetWithText(ListTile, 'File Search'), findsNothing);
+    });
+
+    testWidgets(
+        'shortcut action list creates only visible rows (intent=$intent)',
+        (tester) async {
+      stored = HostSettings.defaults;
+      final actions = List.generate(2000, CountedShortcutAction.new);
+      final c = await controller((_, __, ___) async => [], actions: actions);
+      await tester.pumpWidget(MaterialApp(
+          theme: AppStyle.theme, home: LauncherScreen(controller: c)));
+      await c.openSettings();
+      await tester.pumpAndSettle();
+      final add = intent ? 'Add context shortcut' : 'Add action shortcut';
+      await tester.scrollUntilVisible(find.text(add), 180);
+      CountedShortcutAction.titleReads = 0;
+      await tester.tap(find.text(add));
+      await tester.pumpAndSettle();
+      if (intent) {
+        CountedShortcutAction.titleReads = 0;
+        await tester.tap(find.text('Add rule'));
+      }
+      await tester.pumpAndSettle();
+      final reads = CountedShortcutAction.titleReads;
+      debugPrint('shortcut_action_title_reads intent=$intent count=$reads');
+      expect(reads, lessThan(100));
+      expect(find.text('Synthetic action 0'), findsOneWidget);
+    });
+  }
 
   testWidgets(
       'settings assigns File Search normally and keeps its capability out of context conditions',

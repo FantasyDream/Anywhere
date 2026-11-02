@@ -74,6 +74,10 @@ impl SettingsService {
         result
     }
     fn assemble(path: PathBuf, directories: Vec<PathBuf>, app: &Application) -> Result<Self> {
+        app.previews
+            .lock()
+            .map_err(|_| anyhow::anyhow!("preview service unavailable"))?
+            .configure(path.with_file_name("preview-resources"));
         let feature_path = path.with_file_name("features.json");
         ensure!(
             path != feature_path,
@@ -92,6 +96,26 @@ impl SettingsService {
             .map_err(|_| "clipboard history storage unavailable".into()),
         ));
         services.bind_clipboard(clipboard.clone());
+        let history_storage = storage.as_ref().map_err(Clone::clone).and_then(|host| {
+            host.bind("application_history")
+                .map_err(|_| "history preferences unavailable".into())
+        });
+        services.bind_application_history(Arc::new(
+            crate::features::application_history::service::HistoryService::new(
+                history_storage,
+                crate::application::application_history::SourceCatalog::with_user_directory(
+                    &path.with_file_name("application-history-sources"),
+                )?,
+            )
+            .with_installed_applications(
+                app.platform
+                    .installed_applications()
+                    .applications
+                    .into_iter()
+                    .filter(|app| app.path.is_some())
+                    .map(|app| app.bundle_id),
+            ),
+        ));
         let mut catalog = BuiltinCatalog::assemble(&mut services)?;
         let legacy = LegacyPluginSettings::open(path, directories, &mut catalog.registry)?;
         let native = FeatureSettings::open(
@@ -137,7 +161,64 @@ impl SettingsService {
     pub fn clipboard(&self) -> Arc<crate::features::clipboard::service::HistoryService> {
         self.services.clipboard()
     }
+    pub fn application_history(
+        &self,
+    ) -> Result<Arc<crate::features::application_history::service::HistoryService>> {
+        self.services.application_history()
+    }
+    pub fn application_history_directory(&self) -> PathBuf {
+        self.storage_path
+            .with_file_name("application-history-sources")
+    }
+    /// A successful configuration change includes publication and revokes old targets.
+    pub fn configure_application_history(
+        &mut self,
+        app: &Application,
+        id: &str,
+        mode: crate::features::application_history::model::SourceMode,
+        path: Option<&str>,
+    ) -> Result<()> {
+        self.application_history()?.configure_mode(id, mode, path)?;
+        self.publish_application_history(app)
+    }
+    pub fn set_application_history_action_enabled(
+        &mut self,
+        app: &Application,
+        id: &str,
+        enabled: bool,
+    ) -> Result<()> {
+        self.application_history()?
+            .set_action_enabled(id, enabled)?;
+        self.publish_application_history(app)
+    }
+    fn publish_application_history(&mut self, app: &Application) -> Result<()> {
+        self.refresh_application_history();
+        self.publish(
+            app,
+            self.native.policy.clone(),
+            &self.legacy.preferences,
+            || Ok(()),
+        )
+    }
+    fn refresh_application_history(&mut self) {
+        match self
+            .services
+            .application_history()
+            .and_then(|service| service.refresh())
+        {
+            Ok(()) => {
+                self.data_errors.remove("application_history");
+            }
+            Err(_) => {
+                self.data_errors.insert(
+                    "application_history".into(),
+                    "Application history preferences unavailable".into(),
+                );
+            }
+        }
+    }
     fn refresh_business_data(&mut self) {
+        self.refresh_application_history();
         if self.native.policy.is_enabled("saved_directories") {
             if let Ok(host) = &self.storage {
                 if let Err(e) = host.reopen() {
@@ -249,14 +330,22 @@ impl SettingsService {
             }
         }
         let clipboard_enabled = policy.is_enabled("clipboard");
+        let history_enabled = policy.is_enabled("application_history")
+            && !self.data_errors.contains_key("application_history");
+        let mut registry = self.catalog.registry.clone();
+        let hidden = self.services.application_history()?.disabled_action_ids();
+        registry.retain_actions(|action| !hidden.contains(&action.id));
         app.publish_selected_catalog(
-            self.catalog.registry.clone(),
+            registry,
             self.catalog.providers.clone(),
             self.catalog.sources.clone(),
             policy,
             excluded,
             persist,
         )?;
+        self.services
+            .application_history()?
+            .set_enabled(history_enabled);
         self.services
             .clipboard()
             .set_feature_enabled(clipboard_enabled, app.platform.as_ref())

@@ -54,7 +54,7 @@ int32_t anywhere_install_flutter_surface_guard(void) {
         !hasType(take, UINT_MAX, @encode(id)) || !hasType(take, 2, @encode(CGSize)) ||
         !hasType(size, UINT_MAX, @encode(CGSize)))
       return;
-    originalTakeSurface = (id(*)(id, SEL, CGSize))method_getImplementation(take);
+    originalTakeSurface = (id (*)(id, SEL, CGSize))method_getImplementation(take);
     method_setImplementation(take, (IMP)takeMatchingSurface);
     installed = 1;
   });

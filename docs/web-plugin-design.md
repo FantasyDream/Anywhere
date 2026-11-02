@@ -1,17 +1,19 @@
 # 第三方 Web 插件：架构与实施方案
 
-当前实现：V0.12 开发预览；最后核对：2026-10-23。第三方采用 WebView，第一方为静态内置模块；JSON 已作为普通 Web 包接入。本文说明架构与设计边界，实际 Manifest / SDK 用法以[开发指南](plugin-development.md)和生成的协议为准；逐构建证据见[历史实施记录](archive/web-plugin-development-records.md)。Terminal 延后，Windows 与完整发行矩阵尚未交付。标为“后续”或“验收要求”的内容不代表已有实现。
+现行 Web 插件架构；文档整理：2026-10-25。第三方采用 WebView，第一方为静态内置模块；JSON 已作为普通 Web 包接入。本文说明架构与设计边界，实际 Manifest / SDK 用法以[开发指南](plugin-development.md)和生成的协议为准；逐构建证据见[历史实施记录](archive/web-plugin-development-records.md)。Terminal 延后，Windows 与完整发行矩阵尚未交付。标为“后续”或“验收要求”的内容不代表已有实现。
+
+本文维护当前架构边界；SDK 用法与运行时额度见[开发指南](plugin-development.md)，历史 Web UI 阶段见[实施归档](archive/web-plugin-development-records.md)。
 
 ## 1. 结论与范围
 
-确定采用：**本地 Web 包 + flutter_inappwebview + 版本化 TypeScript SDK + Rust 能力代理**。通过 WebPluginSurface 封装库依赖；关键接口缺口才补薄原生适配。不引入 QuickJS、Node 或独立 Wasm 运行时，也不将第三方 UI 改回宿主 DSL。
+确定采用：**本地 Web 包 + flutter_inappwebview + 版本化 TypeScript SDK + Rust 能力代理**。通过 WebPluginSurface 封装库依赖；关键接口缺口才补薄原生适配。界面命令使用 WebView，有限后台命令与 Context 解析器按需创建 QuickJS；两者使用同一 Rust 能力代理。用户运行插件无需 Node，也没有独立 Wasm 运行时。
 
 - React / Vue / Svelte / 原生 JS 均可；用户安装的是构建好的静态资源，无须安装 Node，不在安装时运行 npm 或脚本。
 - Manifest 描述身份、命令入口、Context 匹配和权限；HTML / CSS / JS 决定页面。不继续设计 List / Form / Table UI DSL。
-- 入口继续进入 Action → Candidate → Ranking → 快捷键 → 执行资格链；用户执行入口后才创建 WebView。
+- 入口继续进入 Action → Candidate → Ranking → 快捷键 → 执行资格链；界面命令执行后才创建 WebView，后台命令在 Rust 完成，不创建页面。
 - 插件在页面中处理自己的交互和计算；宿主业务、系统访问、权限与持久存储通过少量明确的 SDK API 完成。
 - 本地工具页、安装启停、Context 输入、复制、隔离存储、主题 / 键盘桥和更新批准已进入 macOS 开发预览。原生交互与安全发行矩阵仍需验收；联网、文件正文访问等尚未开放。
-- 后台插件、第三方搜索源 / ContextProvider、任意进程、PTY、Marketplace、远程网页插件不进入首版。
+- 第三方 Context 解析器仅产生包命名空间中的数据，不获得原生文件权限。常驻后台进程、第三方搜索源、任意进程、PTY、Marketplace 和远程网页插件尚未交付。
 
 “所有扩展都需要统一 Runtime”不再成立。内置模块与外部 Web 插件只共享稳定的产品模型和宿主服务，装配及生命周期各自管理。
 
@@ -155,9 +157,9 @@ example.awplugin                 ZIP 容器，扩展名只用于识别
 这不是 UI 描述。命令的 `entrypoint` 只是交给同一个页面的路由参数；不执行 Manifest 中的代码，也不允许远程 HTML 入口。JSON 示例使用通用 Web 工具框架，不恢复已撤下的原生 JSON Provider。
 
 - Manifest schema、SDK API、包 SemVer、App 版本分开。未知能力 / 不支持的 API 主版本拒绝激活，未知字段严格拒绝；当前没有任意扩展字段容器。协议可描述 Windows 平台，但现有可运行模板只声明 macOS。
-- 命令可在全局按名称搜索；`accepts` 决定有对象时是否提供该命令，不要求每个入口都必须有 Context。无对象进入空工作区，不能把搜索关键词偷偷当作选中文本。
+- 默认命令可在全局按名称搜索；`accepts` 决定有对象时是否提供该命令，不要求每个入口都必须有 Context。无对象进入空工作区，不能把搜索关键词偷偷当作选中文本。
 - 最多 32 个命令 / 包；标题、关键词、图标尺寸与字节长度有上限；不允许插件设置任意基础 Ranking 权重。
-- 可选 `inputMatchers` 由宿主识别输入格式，支持 `json` 与 `json_escaped`：严格对象 / 数组，最大 16 KiB 原文 / 解码后 128 层；转义输入最多 4 层，可省略外层引号。拒绝标量、注释与不完整内容。要求 `accepts` 和已批准 `context.read` 均包含 `core.text`。同一输入与同类规则的识别结果在一次匹配内复用；不构造文档树、不执行 JS、不启动 WebView、不写入正文。Invocation 保留原文，具体解码、格式化与校验由插件执行；关键词打开工作区不受自动识别限制。
+- 可选 `inputMatchers` 由宿主识别输入格式，支持 `json` 与 `json_escaped`：严格对象 / 数组，最大 16 KiB 原文 / 解码后 128 层；转义输入最多 4 层，可省略外层引号。拒绝标量、注释与不完整内容。要求 `accepts` 和已批准 `context.read` 均包含 `core.text`。同一输入与同类规则的识别结果在一次匹配内复用；不构造文档树、不执行 JS、不启动 WebView、不写入正文。Invocation 保留原文，具体解码、格式化与校验由插件执行；默认关键词打开工作区不受自动识别限制。声明 `requireInputMatch: true` 的命令必须提供匹配器，不注册无对象入口；即使命中名称，也仅在匹配到有效内容时显示，执行前复验。
 
 ### 5.2 三种身份必须分开
 
@@ -199,14 +201,16 @@ example.awplugin                 ZIP 容器，扩展名只用于识别
 
 来源或功能策略变更也要失效对应的 Context 访问资格。撤销能阻止后续宿主调用，不能撤回已经交付给 JS 的字节；因此必须先最小投影，再交付数据，而不是先给全量环境再隐藏控件。
 
-现有“选中文本 / 15 秒新复制内容无法识别则不进入内容页”的规则保持；已启用 Web 命令声明的宿主 `inputMatchers` 也参与资格判断。匹配仅生成候选，用户执行命令后才交付原文，停用 / 卸载 / 撤销立即移除识别资格。第三方 JS 不加入自动输入识别器。
+现有“选中文本 / 15 秒新复制内容无法识别则不进入内容页”的规则保持。Web 命令声明的 `inputMatchers` 由宿主直接判断格式，不执行 JS；匹配只生成候选，用户明确执行命令后才交付其 Invocation。
+
+已批准且启用的第三方文本解析器也参与默认输入识别：它会在显式命令执行前按需运行受限 QuickJS，只读取获准的 Context / Input / 应用投影，不得改输入、读写剪贴板或执行其他副作用。预填探测与正常 Context Graph 解析分别运行，探测结果不能直接授权动作执行。预算与接口维护在[插件开发指南](plugin-development.md#后台-context-与-action)；停用 / 卸载 / 撤销会移除对应识别资格。
 
 ## 7. SDK 与消息协议
 
 ### 7.1 最小 SDK
 
 ```js
-import {definePlugin} from '@anywhere/plugin-sdk';
+import {definePlugin} from '@anywhere/sdk';
 
 // 页面渲染后连接；SDK 处理 ready、输入交付和隐藏后的重新绑定。
 const input = document.querySelector('textarea');
@@ -224,7 +228,7 @@ const plugin = definePlugin({
 
 `lifecycle.onVisibility` 提供显示事件；`environment.language` / `onLanguageChange` 提供语言状态。主题与背景由 Host 自动注入，当前没有 `host.theme.subscribe`、`navigation.back` 或 `actions.set`。返回 / 重载 / 工具选项由 Host 提供，业务操作由页面自己实现，不注册到 Host Actions 面板。
 
-当前应用返回 Invocation 绑定快照；主动读取剪贴板返回请求时的内容，采用 `clipboard.readText` 独立批准，并由宿主明确的“读取剪贴板”操作产生一次性读取资格，不能把 JS 自称的 click 当用户手势。无后台监控、轮询或历史查询。自动填入的 15 秒时效不限制主动读取；隐藏后交互资格仍立即撤销。图片 / 文件等多格式读取另通过格式描述及有界 ResourceHandle 扩展，不一次跨桥复制完整载荷。
+当前应用返回 Invocation 绑定快照；主动读取剪贴板返回请求时的内容，采用 `clipboard.readText` 安装权限批准，每次调用仍核对当前文档或显式后台任务的执行资格，不逐次弹出确认。无后台监控、轮询或历史查询。自动填入的 15 秒时效不限制主动读取；隐藏后交互资格仍立即撤销。图片 / 文件等多格式读取另通过格式描述及有界 ResourceHandle 扩展，不一次跨桥复制完整载荷。
 
 后续独立增加：HTTP(S) 打开、用户选择文件和受限读写、Host HTTP、Secrets、二进制 / 流。没有 `invoke(anyMethod)`、完整 Platform 对象、Rust 任意方法名或 `shell.exec`。
 
@@ -239,7 +243,7 @@ const plugin = definePlugin({
 | 单个 JSON 控制帧 | 64 KiB，编码后检查；限嵌套深度与字段数 |
 | 每实例进行中的请求 | 8；等待队列最多 16；超出返回 `BUSY` |
 | 单文档请求 ID | 最多 4,096 个，避免无限保留去重记录 |
-| 普通调用超时 | 5 秒；Host 确认最多 30 秒；初始化 ready 最多 10 秒 |
+| 普通调用超时 | 5 秒；初始化 ready 最多 10 秒 |
 | 复制文本 / 初始文本对象 | 1 MiB；超过单帧走有界分块，同一实例最多 1 个组装对象 |
 | 分块传输 | 每块原始 UTF-8 ≤ 4 KiB、编码后 ≤ 32 KiB；先申请 ticket，序号 / 总长复验；结果 JSON 编码后 ≤ 2 MiB；5 秒过期，每秒主动清理，隐藏立即释放 |
 | 插件 KV | 值合计 1 MiB，单键值 JSON ≤ 64 KiB，最多 256 个键；还受帧限制，一次事务提交 |
@@ -247,6 +251,8 @@ const plugin = definePlugin({
 分块只服务有明确消费者的文本输入 / 复制，不提前实现通用高吞吐流框架。未来 Terminal 的二进制流控是独立协议，不逐字符走本控制通道。
 
 所有大小是字节而非 JS 字符数。重复 requestId / 迟到响应 / 未知方法 / 旧版本返回正常错误；取消中止排队和未产生副作用的工作，不能声称撤销已完成的复制。副作用不因超时自动重试；存储更新使用 SQLite 事务，请求 ID 重复校验不等于跨重连的 exactly-once 保证，当前没有独立 operationId 接口。传入网页的数据通过结构化消息发送，不拼接到 evaluateJavaScript 源码。
+
+等待 Rust worker 的请求同时等待取消通知，显式取消或文档隐藏时立即退出排队并清理请求记录；已经开始的同步 I/O 仍持有真实并发名额直到返回。取消状态和等待通知共同使用，取消先于等待也不会丢失。SDK 仅在注册成功后保留订阅，隐藏期间失败的订阅不会在恢复时生效；前台与后台订阅分别隔离监听器异常，回调失败不改变已成功的输入写入结果。
 
 ### 7.3 资格检查顺序
 
@@ -272,8 +278,8 @@ Usage 记录稳定入口命令，不保存 Context 正文。当前实现于有�
 |---|---|---|
 | 当前调用的文本 / URL | 支持 | 仅交付给当前命令的声明类型 |
 | 唤醒前当前应用 | 支持 | `context.currentApp`，仅应用 ID / 名称等批准字段，不默认给 AX 树或窗口标题 |
-| 主动读取纯文本剪贴板 | 支持 | `clipboard.readText`，宿主明确操作触发的一次读取；不包含历史 |
-| 写纯文本剪贴板 | 支持 | 当前页明确复制；不允许后台读取 / 轮询 |
+| 主动读取纯文本剪贴板 | 支持 | `clipboard.readText`，安装时批准后直接读取当前文本；不包含历史 |
+| 写纯文本剪贴板 | 支持 | `clipboard.writeText`，安装时批准后直接写入；显式后台命令同样可用，不提供常驻后台监听 |
 | 隔离 KV | 支持 | 本插件来源身份 + pluginId 的固定 namespace |
 | 打开 HTTP(S) URL | 后续小阶段 | 用户主动打开；域名和完整 URL 可审查；拒绝自定义 scheme |
 | 文件读写 | 后续小阶段 | OS 选取 / Context Handle + 单资源权限；无全盘通配 |
@@ -373,6 +379,7 @@ WebView2 官方说明渲染进程可能被多个实例共享，关闭控件也�
 
 新安装、启停和已批准更新无需重启 App；这就是本阶段需要的第三方动态装载。不再扫描并热重建所有内置模块。
 
+- 待批准记录由 Rust Store 持有，取消必须携带本次 inspect 的 review token；仅匹配当前记录时才清空，过期 / 重复取消为无操作。Flutter 即使已卸载页面，也只能清理该导入流程的 token，不能撤销新页面的审批；批准继续核对精确 token 与已捕获内容。
 - 包资源先 staging，准备完整 Catalog 后以临时文件写入、flush / sync、原子替换收据文件，再发布目录。发布失败尝试恢复旧收据；启动从收据验证已安装内容。当前没有独立 journal，不将文件替换和内存发布称为跨层 ACID 事务，也不宣称断电矩阵已经通过。
 - 同一次 Catalog 发布包含全部命令与权限，不先加入半个包；验证或保存失败保持旧目录与文档。恢复旧收据本身失败时返回错误，需要按实际磁盘状态恢复。
 - 真实 Catalog 发布会立即撤销旧 Invocation，包括更新、回滚、启停和卸载；未编辑完成的页面也不能继续旧调用。当前没有“更新已就绪、返回后再替换”模式，更新前应自行保存内容。重复写入相同启用值是幂等操作，不触发目录替换。
@@ -398,7 +405,7 @@ WebView2 官方说明渲染进程可能被多个实例共享，关闭控件也�
 - 第三方存储 namespace 绑定安装来源和稳定 ID，不允许 JS 自传 namespace；限制由 Host 设置。普通 KV 不保存 Secrets；当前卸载删除该安装来源的 KV，独立重置数据入口留待后续。
 - 浏览器 Cookie / localStorage 不作为稳定 SDK 持久化契约。使用非持久 store / profile，跨次数据走 Host KV，避免开发和生产、插件之间共享浏览器状态。
 - Storage I/O 在有界 worker 上；资源转发跨页面共享 2 个读取槽 / 16 个等候名额，超限拒绝，不因重载放大缓冲。安装 / 启动验证在设置服务锁内串行执行，不进入查询或原生主线程；尚未支持并发安装；原生主线程只处理视图和小消息。Worker 实际退出前不提前释放 admission。
-- 查询热路径没有 JS 执行与 WebView 创建；首次打开延迟、ready、桥延迟、销毁和失败有阶段事件。事件不记录 Context 正文、复制内容或完整请求参数。
+- 查询不创建 WebView；启用的第三方 Context 解析器可按需执行有预算的 QuickJS，预填识别同样受单任务与整轮预算约束。首次打开延迟、ready、桥延迟、销毁和失败有阶段事件。事件不记录 Context 正文、复制内容或完整请求参数。
 - 内存必须同时测主 App、WebContent / WebView2、GPU / Network helper；区分冷启动、活跃、隐藏 15 秒内、销毁后和反复打开。不能把 App RSS 小当作总内存小。
 - 控制帧 / 缓冲 / 队列可以设硬额度；Web 页面 JS 堆与浏览器进程内存没有统一的、公开可用的逐插件硬上限。以惰性创建、实例数限制、销毁和故障恢复控制，不承诺严格隔离的堆配额。
 
@@ -407,4 +414,6 @@ WebView2 官方说明渲染进程可能被多个实例共享，关闭控件也�
 
 ## 实施与验收
 
-P1–P6 已进入 macOS 本地开发预览。安装批准、更新 / 回滚、SDK、JSON 工具与运行时的版本证据见[实施归档](archive/web-plugin-development-records.md)及[V0.11 验收](archive/mvp-v0.11.md)。当前阶段状态与未验收项见[V0.12 MVP](mvp-v0.12.md)。早期独立 P0 探针已从源码移除，日常开发与回归使用正式宿主、SDK 和 Web 示例。
+P1–P6 已进入 macOS 本地开发预览。安装批准、更新 / 回滚、SDK、JSON 工具与运行时的版本证据见[实施归档](archive/web-plugin-development-records.md)及[V0.11 验收](archive/mvp-v0.11.md)。当前阶段状态与未验收项见[V0.14 MVP](mvp-v0.14.md)。早期独立 P0 探针已从源码移除，日常开发与回归使用正式宿主、SDK 和 Web 示例。
+
+安装归档缺失、损坏或身份不符时，仅隔离该包并保留收据状态；设置仍可禁用、卸载或恢复已批准版本，健康包继续加载。损坏包不能重新启用；修复原内容须卸载后重新导入批准，或回滚到完整的已批准归档。

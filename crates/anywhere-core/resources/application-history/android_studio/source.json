@@ -1,0 +1,27 @@
+{
+  "schema": 1,
+  "id": "android_studio",
+  "extends": "idea",
+  "title": "Android Studio",
+  "applications": [
+    "com.google.android.studio"
+  ],
+  "config_paths": [
+    "Google/AndroidStudio*/options/recentProjects.xml"
+  ],
+  "action": {
+    "title": "Android Studio Recent Projects",
+    "localized_titles": {
+      "zh": "Android Studio 最近项目"
+    },
+    "aliases": [
+      "android studio recent",
+      "recent projects",
+      "recent history",
+      "最近项目",
+      "历史记录",
+      "app history",
+      "应用历史"
+    ]
+  }
+}

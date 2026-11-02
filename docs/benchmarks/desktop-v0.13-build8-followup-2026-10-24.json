@@ -1,0 +1,149 @@
+{
+  "date": "2026-10-24",
+  "timezone": "Asia/Shanghai",
+  "app_version": "0.13.0+8",
+  "application_source_commit": "02658b8",
+  "binary_sha256": "246cb388ebb26db066371dd9e958607a58dc2fbe912ea04323268f126abc865d",
+  "fixture": {
+    "isolated_directory": true,
+    "synthetic_history_items": 50,
+    "recording": false,
+    "personal_history_used": false,
+    "external_context_sources": false
+  },
+  "file_search_settings": {
+    "edited_and_saved_through_ui": true,
+    "original_synthetic_root_restored_through_ui": true,
+    "saved_settings_read_back": true,
+    "subsequent_synthetic_file_query_and_preview": "passed",
+    "personal_scope_expanded": false
+  },
+  "menu_hide_resume": {
+    "cycles": 20,
+    "all_queries_retained": true,
+    "max_automation_round_trip_ms": 765,
+    "separate_short_resume_seconds": 0.883,
+    "expired_resume_observed_seconds": 49.264,
+    "expired_workspace_cleared": true,
+    "resources": [
+      {
+        "stage": "before_20_menu_hide_resume_cycles",
+        "main_rss_bytes": 54902784,
+        "descendants": []
+      },
+      {
+        "stage": "after_20_menu_hide_resume_cycles",
+        "main_rss_bytes": 53805056,
+        "descendants": []
+      }
+    ],
+    "physical_mouse_focus_loss_verified": true,
+    "limits": "Native menu toggles hide the workspace; the desktop observation then reactivates the app. This exercises the menu hide/resume path, not physical focus loss or hardware shortcuts. Automation round trips do not measure physical display latency. Two RSS snapshots do not prove long-term stability.",
+    "physical_mouse_confirmation": {
+      "source": "explicit user feedback",
+      "shortcut": "Command+Space",
+      "resume_within_5_seconds_kept_query": true,
+      "resume_after_20_seconds_cleared_query": true,
+      "native_focus_loss_to_wake_request_ms": {
+        "short": 1264,
+        "expired": 25815
+      },
+      "native_window_height_after_wake": {
+        "short": 193,
+        "expired": 72
+      },
+      "native_ax_trusted_during_manual_check": true
+    }
+  },
+  "web_tool": {
+    "package": "dev.example.text-pad",
+    "package_source": "repository example",
+    "host_permissions": [],
+    "normal_review_and_install_ui": "passed",
+    "rendered_text_input_and_character_count": 18,
+    "escape_return_kept_query": true,
+    "resources": [
+      {
+        "stage": "before_web_open",
+        "main_rss_bytes": 46874624,
+        "descendants": [],
+        "footprint_bytes": null
+      },
+      {
+        "stage": "web_open_and_18_characters",
+        "main_rss_bytes": 57360384,
+        "descendants": [],
+        "footprint_bytes": null
+      },
+      {
+        "stage": "after_web_escape_main_query_kept",
+        "main_rss_bytes": 72712192,
+        "descendants": [],
+        "footprint_bytes": null
+      }
+    ],
+    "system_process_delta_unattributed": {
+      "new_webkit_names": [
+        "com.apple.WebKit.GPU",
+        "com.apple.WebKit.WebContent",
+        "com.apple.WebKit.Networking"
+      ],
+      "remaining_names_in_post_exit_snapshot": [
+        "com.apple.WebKit.GPU"
+      ],
+      "responsible_app_confirmed": false,
+      "call_stack_sampling": "timed out for all three helper candidates"
+    },
+    "web_controls_exposed_in_ax_tree": false,
+    "limits": "Input and output were visually verified. The native AX tree contained the Flutter shell but did not expose the Web editor; full VoiceOver operation remains unverified. System PID differences alone do not establish helper ownership or complete reclamation."
+  },
+  "sdk_teardown_probe": {
+    "scope": "Separate diagnostic process using the same Release Flutter framework; full Host bootstrap was not configured.",
+    "cold_close_warning_observed": false,
+    "entrypoint": "executionSessionsMain",
+    "started_engine_close_warning_observed": true,
+    "warning": "Communicating on a dead channel.",
+    "observed_inside": "FlutterTextInputPlugin.dealloc",
+    "trace_markers": [
+      "ENTER FlutterTextInputPlugin.dealloc",
+      "SDK warning and captured call stack",
+      "LEAVE FlutterTextInputPlugin.dealloc"
+    ],
+    "instrumentation": "Only the diagnostic process wrapped SDK warning logging and the input plugin deallocator; both original implementations were called. Published binaries and product cleanup behavior were not changed.",
+    "all_45_app_warnings_attributed": false
+  },
+  "measurement_fix": {
+    "system_footprint_timeout_seconds": 15,
+    "failure_or_timeout_value": null,
+    "diagnostic_script_tests_passed": 5,
+    "all_python_script_tests_passed": 22,
+    "python_google_style": "passed",
+    "followup_flutter_tests_passed": 12,
+    "live_cli": {
+      "elapsed_seconds": 2.47,
+      "return_code": 0,
+      "initial_footprint_bytes": 73819750,
+      "final_footprint_bytes": 73819750,
+      "rss_samples": 1
+    }
+  },
+  "pending": [
+    "Longer same-state resource trend and confirmed complete XPC helper attribution.",
+    "Real running-task survival after closing its window; the offline fixture was compiled but GUI startup was blocked by screen lock.",
+    "Full VoiceOver interaction and current-build physical IME matrix."
+  ],
+  "final_database_snapshot": {
+    "items": 50,
+    "formats": 50,
+    "recording": 0
+  },
+  "hidden_idle_sampling_attempt": {
+    "duration_seconds": 302.35,
+    "rss_samples": 31,
+    "same_hidden_state_confirmed": false,
+    "presentation_changes": 6,
+    "initial_footprint_bytes": 73819750,
+    "final_footprint_bytes": 86402662,
+    "limits": "The user performed the physical focus-loss acceptance during this capture. Do not count the mixed run as a constant-state hidden-memory baseline."
+  }
+}

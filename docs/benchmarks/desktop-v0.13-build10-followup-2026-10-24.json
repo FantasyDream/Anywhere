@@ -1,0 +1,338 @@
+{
+  "date": "2026-10-24",
+  "timezone": "Asia/Shanghai",
+  "recorded_at_utc": "2026-10-24T09:48:37.657685+00:00",
+  "app_version": "0.13.0+10",
+  "app_source_commit": "e5f51978d32a0ba03816ca9eb0221cc792c8fb8a",
+  "binary_sha256": "e712527a307909066a02f955547e4e81b0747830e474cd003ffd939fcb69a862",
+  "zip_sha256": "fdbc87212b8417242d2b60d3fec317ba7a52fde3fdad92785ba420c624caa817",
+  "diagnostic_source_sha256": "6f2965bd1d81c3d75cfeb71a1964bddbf82532bb6e49ea7a2dd4c4ba103cca78",
+  "checks": {
+    "full_rust_passed": 577,
+    "existing_rust_ignored": 6,
+    "full_flutter_passed": 398,
+    "desktop_measurement_tests_passed": 13,
+    "style_native_architecture_clippy_web_sdk_examples": "passed",
+    "diagnostic_format_guard_rechecked_after_full_gate": true,
+    "app_binary_changed_this_followup": false,
+    "all_python_script_tests_passed": 30
+  },
+  "fixture": {
+    "isolated_directory": true,
+    "synthetic_items": 50,
+    "formats": 50,
+    "recording": 0,
+    "retention_days": 30
+  },
+  "ui": {
+    "package": "repository Text Pad example, already installed in the isolated fixture",
+    "host_permissions": [],
+    "document_loads": 4,
+    "global_action_opens": 3,
+    "reloads": 1,
+    "first_loaded_snapshot": "Flutter chrome only; Web controls appeared after focusing and typing in the editor",
+    "later_loaded_documents_exposed_without_mouse": true,
+    "native_ax_editor_label": "Text Pad",
+    "mouse_input_characters": 17,
+    "keyboard_tab_to_editor_and_input_characters": [
+      14,
+      12
+    ],
+    "command_k_opens_host_options": true,
+    "web_nodes_absent_while_host_options_open": true,
+    "escape_restores_web_nodes_and_input": true,
+    "reload_from_options_keyboard": true,
+    "escape_returns_to_query_and_removes_web_nodes": true,
+    "retained_query_verified_by_screenshot": true,
+    "voiceover_used": false,
+    "no_app_source_patch_needed_after_followup": true
+  },
+  "final_class_counts": {
+    "FlutterEngine": 1,
+    "FlutterViewController": 1,
+    "WindowMaterialController": 1,
+    "native_plugin_webview": 0,
+    "WKWebViewConfiguration": 0,
+    "WKProcessPool": 1
+  },
+  "verified_webkit_ownership": {
+    "method": "Target process XPC domain creator and nonzero identity, followed by each UUID instance job running state and matching PID",
+    "main_pid": 41072,
+    "confirmed_jobs": [
+      {
+        "service": "com.apple.WebKit.GPU.4E6CECAB-66EB-47D9-B7CC-8137160CD148",
+        "listed_pid": 73069,
+        "job_pid": 73069,
+        "state": "running",
+        "exit_code": 0
+      },
+      {
+        "service": "com.apple.WebKit.WebContent.B330B874-45FC-4E9E-BE17-AF723740BF26",
+        "listed_pid": 73070,
+        "job_pid": 73070,
+        "state": "running",
+        "exit_code": 0
+      },
+      {
+        "service": "com.apple.WebKit.Networking.E9A99FFB-28FF-4F6D-930E-61AFCCFC5110",
+        "listed_pid": 73071,
+        "job_pid": 73071,
+        "state": "running",
+        "exit_code": 0
+      }
+    ],
+    "administrator_permission_requested": false,
+    "helpers_forcibly_terminated": false
+  },
+  "open_process_footprints_bytes": [
+    {
+      "name": "Anywhere",
+      "pid": 41072,
+      "footprint": 75318544
+    },
+    {
+      "name": "com.apple.WebKit.WebContent",
+      "pid": 73070,
+      "footprint": 22643528
+    },
+    {
+      "name": "com.apple.WebKit.GPU",
+      "pid": 73069,
+      "footprint": 8684168
+    },
+    {
+      "name": "com.apple.WebKit.Networking",
+      "pid": 73071,
+      "footprint": 5358096
+    }
+  ],
+  "post_exit_watch": {
+    "recorded_at_utc": "2026-10-24T07:24:07.156546+00:00",
+    "verified_xpc_source": "build/v0.13-build10-open-web-services.json",
+    "samples": [
+      {
+        "elapsed_seconds_after_probe_start": 0.01,
+        "alive": [
+          {
+            "pid": 41072,
+            "rss_bytes": 43171840,
+            "name": "Anywhere"
+          },
+          {
+            "pid": 73069,
+            "rss_bytes": 6340608,
+            "name": "com.apple.WebKit.GPU"
+          }
+        ]
+      },
+      {
+        "elapsed_seconds_after_probe_start": 5.03,
+        "alive": [
+          {
+            "pid": 41072,
+            "rss_bytes": 43515904,
+            "name": "Anywhere"
+          },
+          {
+            "pid": 73069,
+            "rss_bytes": 6340608,
+            "name": "com.apple.WebKit.GPU"
+          }
+        ]
+      },
+      {
+        "elapsed_seconds_after_probe_start": 10.04,
+        "alive": [
+          {
+            "pid": 41072,
+            "rss_bytes": 43089920,
+            "name": "Anywhere"
+          },
+          {
+            "pid": 73069,
+            "rss_bytes": 6340608,
+            "name": "com.apple.WebKit.GPU"
+          }
+        ]
+      },
+      {
+        "elapsed_seconds_after_probe_start": 15.06,
+        "alive": [
+          {
+            "pid": 41072,
+            "rss_bytes": 43040768,
+            "name": "Anywhere"
+          },
+          {
+            "pid": 73069,
+            "rss_bytes": 5963776,
+            "name": "com.apple.WebKit.GPU"
+          }
+        ]
+      },
+      {
+        "elapsed_seconds_after_probe_start": 20.08,
+        "alive": [
+          {
+            "pid": 41072,
+            "rss_bytes": 44040192,
+            "name": "Anywhere"
+          },
+          {
+            "pid": 73069,
+            "rss_bytes": 5963776,
+            "name": "com.apple.WebKit.GPU"
+          }
+        ]
+      },
+      {
+        "elapsed_seconds_after_probe_start": 25.1,
+        "alive": [
+          {
+            "pid": 41072,
+            "rss_bytes": 42745856,
+            "name": "Anywhere"
+          },
+          {
+            "pid": 73069,
+            "rss_bytes": 5996544,
+            "name": "com.apple.WebKit.GPU"
+          }
+        ]
+      },
+      {
+        "elapsed_seconds_after_probe_start": 30.12,
+        "alive": [
+          {
+            "pid": 41072,
+            "rss_bytes": 42549248,
+            "name": "Anywhere"
+          },
+          {
+            "pid": 73069,
+            "rss_bytes": 5996544,
+            "name": "com.apple.WebKit.GPU"
+          }
+        ]
+      },
+      {
+        "elapsed_seconds_after_probe_start": 35.14,
+        "alive": [
+          {
+            "pid": 41072,
+            "rss_bytes": 42041344,
+            "name": "Anywhere"
+          },
+          {
+            "pid": 73069,
+            "rss_bytes": 5980160,
+            "name": "com.apple.WebKit.GPU"
+          }
+        ]
+      },
+      {
+        "elapsed_seconds_after_probe_start": 40.17,
+        "alive": [
+          {
+            "pid": 41072,
+            "rss_bytes": 44220416,
+            "name": "Anywhere"
+          },
+          {
+            "pid": 73069,
+            "rss_bytes": 5980160,
+            "name": "com.apple.WebKit.GPU"
+          }
+        ]
+      },
+      {
+        "elapsed_seconds_after_probe_start": 45.18,
+        "alive": [
+          {
+            "pid": 41072,
+            "rss_bytes": 43499520,
+            "name": "Anywhere"
+          },
+          {
+            "pid": 73069,
+            "rss_bytes": 5980160,
+            "name": "com.apple.WebKit.GPU"
+          }
+        ]
+      },
+      {
+        "elapsed_seconds_after_probe_start": 50.2,
+        "alive": [
+          {
+            "pid": 41072,
+            "rss_bytes": 42139648,
+            "name": "Anywhere"
+          },
+          {
+            "pid": 73069,
+            "rss_bytes": 5980160,
+            "name": "com.apple.WebKit.GPU"
+          }
+        ]
+      },
+      {
+        "elapsed_seconds_after_probe_start": 55.21,
+        "alive": [
+          {
+            "pid": 41072,
+            "rss_bytes": 40632320,
+            "name": "Anywhere"
+          },
+          {
+            "pid": 73069,
+            "rss_bytes": 5996544,
+            "name": "com.apple.WebKit.GPU"
+          }
+        ]
+      },
+      {
+        "elapsed_seconds_after_probe_start": 60.01,
+        "alive": [
+          {
+            "pid": 41072,
+            "rss_bytes": 40894464,
+            "name": "Anywhere"
+          },
+          {
+            "pid": 73069,
+            "rss_bytes": 5980160,
+            "name": "com.apple.WebKit.GPU"
+          }
+        ]
+      }
+    ],
+    "matching_service_lines_after": [
+      "73069      - \tcom.apple.WebKit.GPU.4E6CECAB-66EB-47D9-B7CC-8137160CD148"
+    ],
+    "limits": "Probe starts after GUI exit is observed; elapsed values are not precise page-exit latency. No helper was killed."
+  },
+  "diagnostic_contract": {
+    "opt_in_argument": "--webkit-helpers",
+    "per_query_timeout_seconds": 2,
+    "max_instances": 8,
+    "unknown_result": null,
+    "no_verified_active_instances_result": [],
+    "stores_environment_or_endpoints": false,
+    "supports_force_termination": false
+  },
+  "runtime_log_observations": {
+    "invalid_engine_handle_messages": 0,
+    "sdk_dead_channel_messages": 0,
+    "native_spellserver_timeout_messages": 2
+  },
+  "limits": [
+    "AX tree inspection and automated keyboard input do not substitute for a complete VoiceOver or physical IME acceptance run.",
+    "The first loaded document did not expose Web controls in its first snapshot. It became accessible after focus; subsequent documents were accessible after loading without a mouse. No guarantee of synchronous first-frame AX readiness is made.",
+    "The GPU helper remained alive through the 60-second post-exit probe. WebContent and Networking were absent from its first sample onward. No claim that all WebKit processes exit immediately is made.",
+    "The pinned native WebView library keeps WKProcessPoolManager.sharedProcessPool as a static value; one WKProcessPool remains after exit. This is evidence of retained pooling, not proof of the sole cause of the GPU lifetime.",
+    "This is one isolated example with three verified WebKit services. It does not cover all plugins, AppKit XPC services, or long-term leaks.",
+    "Physical footprints are individual process observations and are not summed into an application total or used as an old/new optimization comparison.",
+    "The desktop locked again after these Web checks. The attempted menu-hide action failed, so later state is not claimed to be a fixed hidden-window benchmark.",
+    "V0.13 remains unsealed pending the remaining acceptance scope; V0.14 has not started."
+  ]
+}

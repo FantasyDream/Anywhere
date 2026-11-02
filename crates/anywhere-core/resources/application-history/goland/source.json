@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "id": "goland",
+  "extends": "idea",
+  "title": "GoLand",
+  "applications": [
+    "com.jetbrains.goland",
+    "com.jetbrains.goland-EAP"
+  ],
+  "config_paths": [
+    "JetBrains/GoLand*/options/recentProjects.xml"
+  ],
+  "action": {
+    "title": "GoLand Recent Projects",
+    "localized_titles": {
+      "zh": "GoLand 最近项目"
+    },
+    "aliases": [
+      "goland recent",
+      "recent projects",
+      "recent history",
+      "最近项目",
+      "历史记录",
+      "app history",
+      "应用历史"
+    ]
+  }
+}

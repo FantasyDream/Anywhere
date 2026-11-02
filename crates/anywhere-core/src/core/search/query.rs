@@ -131,6 +131,12 @@ impl SearchFields {
         &self.metadata
     }
 
+    /// A normalized title alone, without aliases, metadata or pinyin fallback.
+    pub(crate) fn name_matches_word_prefix(name: &str, query: &Query) -> bool {
+        !query.is_empty()
+            && field_match(name, query, false).is_some_and(|level| level >= MatchLevel::WordPrefix)
+    }
+
     /// The best match level across all fields, or `None` when some token is missing.
     pub fn matched(&self, query: &Query) -> Option<MatchLevel> {
         if query.is_empty() {

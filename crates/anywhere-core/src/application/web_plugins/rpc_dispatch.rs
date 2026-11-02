@@ -1,12 +1,12 @@
-//! Scheduling, cancellation and trusted Host confirmation around the capability planner.
+//! Bounded scheduling and cancellation around the capability planner.
 use super::{
     broker::{error, Plan, Source},
-    rpc_state::{ClipboardOperation, RequestTicket},
+    rpc_state::RequestTicket,
     transfer::failure,
-    WebConfirmation, WebDispatch, WebDocumentBinding, WebMessageSource,
+    WebDocumentBinding, WebMessageSource,
 };
 use crate::{application::Application, persistence::module_storage::ModuleStorageHost};
-use anywhere_protocol::{web_bridge::*, web_plugin::WebPermission};
+use anywhere_protocol::web_bridge::*;
 use serde_json::{json, Value};
 
 impl Application {
@@ -39,7 +39,7 @@ impl Application {
         binding: &WebDocumentBinding,
         source: WebMessageSource<'_>,
         raw: &str,
-    ) -> WebDispatch {
+    ) -> String {
         let source = Source::new(source);
         let admission = (|| {
             let mut web = self
@@ -48,37 +48,24 @@ impl Application {
                 .map_err(|_| error(WebErrorCode::HostFailure))?;
             web.rpc(binding, source.get())?;
             let parsed = anywhere_plugin::web::wire::parse(raw)?;
-            let confirmation = matches!(
-                parsed.call,
-                WebCall::ClipboardRead {}
-                    | WebCall::ClipboardWrite { .. }
-                    | WebCall::TextCommit { .. }
-            );
             let queued = !matches!(parsed.call, WebCall::Cancel { .. });
-            let request =
-                web.rpc(binding, source.get())?
-                    .admit(&parsed.id, confirmation, queued)?;
+            let request = web.rpc(binding, source.get())?.admit(&parsed.id, queued)?;
             Ok::<_, WebError>((request, parsed.call))
         })();
         let (request, call) = match admission {
             Ok(v) => v,
             Err(e) => {
-                return WebDispatch::Reply(failure(
+                return failure(
                     anywhere_plugin::web::wire::request_id_hint(raw).as_deref(),
                     e,
-                ))
+                )
             }
         };
         // Cancellation is never queued behind the operation it is meant to cancel.
         if matches!(call, WebCall::Cancel { .. }) {
             let mut web = match self.web_plugins.lock() {
                 Ok(web) => web,
-                Err(_) => {
-                    return WebDispatch::Reply(failure(
-                        Some(&request.id),
-                        error(WebErrorCode::HostFailure),
-                    ))
-                }
+                Err(_) => return failure(Some(&request.id), error(WebErrorCode::HostFailure)),
             };
             let result = web
                 .prepare_call(binding, &source, &request, call)
@@ -89,13 +76,18 @@ impl Application {
                         Err(error(WebErrorCode::HostFailure))
                     }
                 });
-            return WebDispatch::Reply(web.finish_call(binding, &source, &request, result));
+            return web.finish_call(binding, &source, &request, result);
         }
-        let permit = tokio::time::timeout_at(
-            request.control.deadline,
-            self.web_rpc_workers.clone().acquire_owned(),
-        )
-        .await;
+        let permit = tokio::select! {
+            _ = request.control.cancelled() => {
+                return self.finish_web_reply(binding, &source, &request,
+                    Err(error(WebErrorCode::Cancelled)));
+            }
+            permit = tokio::time::timeout_at(
+                request.control.deadline,
+                self.web_rpc_workers.clone().acquire_owned(),
+            ) => permit,
+        };
         let permit = match permit {
             Ok(Ok(p)) => p,
             _ => {
@@ -113,6 +105,7 @@ impl Application {
             .store(true, std::sync::atomic::Ordering::Release);
         let web = self.web_plugins.clone();
         let history = self.resolver.history.clone();
+        let platform = self.platform.clone();
         let worker_binding = binding.clone();
         let worker_source = source.clone();
         let worker_request = request.clone();
@@ -125,7 +118,36 @@ impl Application {
             worker_request.control.check()?;
             let value = match plan {
                 Plan::Value(value) => value,
-                Plan::Confirmation(confirmation) => return Ok(Work::Confirmation(confirmation)),
+                Plan::Snapshot | Plan::Context | Plan::Input | Plan::SetInput(_) => {
+                    return Ok(Work::Host(plan))
+                }
+                Plan::FrontmostApp => {
+                    let app = platform
+                        .frontmost_application()
+                        .map_err(|_| error(WebErrorCode::HostFailure))?;
+                    json!(app.map(|app| anywhere_protocol::web_plugin::WebCurrentApp {
+                        id: app.bundle_id,
+                        name: app.name
+                    }))
+                }
+                Plan::ReadClipboard => {
+                    let text = platform
+                        .clipboard_text()
+                        .map_err(|_| error(WebErrorCode::HostFailure))?;
+                    if text
+                        .as_ref()
+                        .is_some_and(|text| text.len() > MAX_TEXT_BYTES)
+                    {
+                        return Err(error(WebErrorCode::TooLarge));
+                    }
+                    json!(text)
+                }
+                Plan::WriteClipboard(text) => {
+                    platform
+                        .copy_text(&text)
+                        .map_err(|_| error(WebErrorCode::HostFailure))?;
+                    Value::Null
+                }
                 Plan::Ready => {
                     let usage = web
                         .lock()
@@ -175,31 +197,23 @@ impl Application {
         });
         let result = tokio::time::timeout_at(request.control.deadline, worker).await;
         match result {
-            Ok(Ok(Ok(Work::Confirmation(confirmation)))) => {
-                request
-                    .control
-                    .running
-                    .store(false, std::sync::atomic::Ordering::Release);
-                let active = request.control.check().and_then(|_| {
-                    let mut web = self
-                        .web_plugins
-                        .lock()
-                        .map_err(|_| error(WebErrorCode::HostFailure))?;
-                    if web
-                        .rpc(binding, source.get())?
-                        .confirmation
-                        .as_ref()
-                        .is_some_and(|c| c.id == confirmation.ticket)
-                    {
-                        Ok(())
-                    } else {
-                        Err(error(WebErrorCode::Inactive))
+            Ok(Ok(Ok(Work::Host(plan)))) => {
+                let result = match plan {
+                    Plan::SetInput(text) => {
+                        self.set_web_input(binding, source.get(), text, &request.control)
+                            .await
                     }
-                });
-                if let Err(e) = active {
-                    return self.finish_web_reply(binding, &source, &request, Err(e));
-                }
-                WebDispatch::Confirmation(confirmation)
+                    _ => self.web_snapshot(binding, source.get()).and_then(|state| {
+                        match plan {
+                            Plan::Snapshot => serde_json::to_value(state),
+                            Plan::Context => serde_json::to_value(state.context),
+                            Plan::Input => serde_json::to_value(state.input),
+                            _ => unreachable!("Host state plan"),
+                        }
+                        .map_err(|_| error(WebErrorCode::HostFailure))
+                    }),
+                };
+                self.finish_web_reply(binding, &source, &request, result)
             }
             Ok(Ok(Ok(Work::Value(value)))) => {
                 self.finish_web_reply(binding, &source, &request, Ok(value))
@@ -225,111 +239,14 @@ impl Application {
         source: &Source,
         request: &RequestTicket,
         result: WebResult<Value>,
-    ) -> WebDispatch {
+    ) -> String {
         match self.web_plugins.lock() {
-            Ok(mut web) => WebDispatch::Reply(web.finish_call(binding, source, request, result)),
-            Err(_) => {
-                WebDispatch::Reply(failure(Some(&request.id), error(WebErrorCode::HostFailure)))
-            }
+            Ok(mut web) => web.finish_call(binding, source, request, result),
+            Err(_) => failure(Some(&request.id), error(WebErrorCode::HostFailure)),
         }
-    }
-    /// Trusted Host confirmation only. No WebCall can invoke this method or forge its ticket.
-    pub async fn confirm_web_operation(
-        &self,
-        binding: &WebDocumentBinding,
-        source: WebMessageSource<'_>,
-        ticket: &str,
-        approved: bool,
-    ) -> WebDispatch {
-        let source = Source::new(source);
-        let pending = (|| {
-            let mut web = self
-                .web_plugins
-                .lock()
-                .map_err(|_| error(WebErrorCode::HostFailure))?;
-            let rpc = web.rpc(binding, source.get())?;
-            if !rpc.confirmation.as_ref().is_some_and(|c| c.id == ticket) {
-                return Err(error(WebErrorCode::Expired));
-            }
-            rpc.confirmation
-                .take()
-                .ok_or_else(|| error(WebErrorCode::Expired))
-        })();
-        let confirmation = match pending {
-            Ok(v) => v,
-            Err(e) => return WebDispatch::Reply(failure(None, e)),
-        };
-        if !approved {
-            return self.finish_web_reply(
-                binding,
-                &source,
-                &confirmation.request,
-                Err(error(WebErrorCode::UserCancelled)),
-            );
-        }
-        let request = confirmation.request;
-        let permit = match tokio::time::timeout_at(
-            request.control.deadline,
-            self.web_rpc_workers.clone().acquire_owned(),
-        )
-        .await
-        {
-            Ok(Ok(p)) => p,
-            _ => {
-                return self.finish_web_reply(
-                    binding,
-                    &source,
-                    &request,
-                    Err(error(WebErrorCode::Timeout)),
-                )
-            }
-        };
-        let platform = self.platform.clone();
-        request
-            .control
-            .running
-            .store(true, std::sync::atomic::Ordering::Release);
-        let web = self.web_plugins.clone();
-        let worker_binding = binding.clone();
-        let worker_source = source.clone();
-        let worker_request = request.clone();
-        let worker = tokio::task::spawn_blocking(move || {
-            let _permit = permit;
-            let permission = match &confirmation.operation {
-                ClipboardOperation::Read => WebPermission::ClipboardReadText {},
-                ClipboardOperation::Write(_) => WebPermission::ClipboardWriteText {},
-            };
-            web.lock()
-                .map_err(|_| error(WebErrorCode::HostFailure))?
-                .require(&worker_binding, worker_source.get(), permission)?;
-            worker_request.control.check()?;
-            match confirmation.operation {
-                ClipboardOperation::Read => {
-                    let text = platform
-                        .clipboard_text()
-                        .map_err(|_| error(WebErrorCode::HostFailure))?;
-                    if text.as_ref().is_some_and(|s| s.len() > MAX_TEXT_BYTES) {
-                        return Err(error(WebErrorCode::TooLarge));
-                    }
-                    Ok(json!(text))
-                }
-                ClipboardOperation::Write(text) => {
-                    platform
-                        .copy_text(&text)
-                        .map_err(|_| error(WebErrorCode::HostFailure))?;
-                    Ok(Value::Null)
-                }
-            }
-        });
-        let result = match tokio::time::timeout_at(request.control.deadline, worker).await {
-            Ok(Ok(value)) => value,
-            Ok(Err(_)) => Err(error(WebErrorCode::HostFailure)),
-            Err(_) => Err(error(WebErrorCode::Timeout)),
-        };
-        self.finish_web_reply(binding, &source, &request, result)
     }
 }
 enum Work {
+    Host(Plan),
     Value(Value),
-    Confirmation(WebConfirmation),
 }

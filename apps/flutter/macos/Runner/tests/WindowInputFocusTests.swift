@@ -45,6 +45,14 @@ struct WindowInputFocusTests {
       launcher.orderOut(nil)
       WindowInputFocus.restore(in: launcher, content: wrapper)
       assert(launcher.firstResponder === editor)
+
+      let nativeEditor = NSTextView(frame: frame)
+      wrapper.addSubview(nativeEditor)
+      assert(launcher.makeFirstResponder(nativeEditor))
+      assert(WindowInputFocus.focusKeyboardReceiver(in: launcher, content: wrapper))
+      assert(launcher.firstResponder === surface)
+      nativeEditor.removeFromSuperview()
+      assert(launcher.makeFirstResponder(editor))
     }
 
     // Switching pages removes the old text input view while Flutter's new

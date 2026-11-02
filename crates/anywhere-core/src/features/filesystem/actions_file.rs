@@ -69,7 +69,6 @@ pub fn bundle() -> ActionBundle {
                 icon: "copy-selection",
                 aliases: &["copy paths", "selection"],
                 keywords: &["files", "finder", "json"],
-                home_eligible: true,
                 primary_action: false,
             },
             ActionSpec {
@@ -83,7 +82,6 @@ pub fn bundle() -> ActionBundle {
                 icon: "file-open",
                 aliases: &["open", "edit"],
                 keywords: &["document"],
-                home_eligible: true,
                 primary_action: true,
             },
             ActionSpec {
@@ -97,7 +95,6 @@ pub fn bundle() -> ActionBundle {
                 icon: "file-reveal",
                 aliases: &["reveal", "finder", "show"],
                 keywords: &["document"],
-                home_eligible: true,
                 primary_action: false,
             },
         ],

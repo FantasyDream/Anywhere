@@ -1,0 +1,83 @@
+{
+  "date": "2026-10-29",
+  "source_state": "Existing uncommitted workspace; before and after this Flutter-only review. Not repackaged.",
+  "base_commit": "215c79190752aea2c9b605d9f047de8a59c7dabb",
+  "flutter_version": "3.47.4",
+  "method": "Deterministic Widget/Dart fixtures; counts of DTO title reads, backend cancellation calls and rows referenced by disposed page fields. Not wall-clock, heap or process-memory measurement.",
+  "measurements": [
+    {
+      "scenario": "2000 actions, open direct shortcut chooser once with empty query",
+      "metric": "DTO title reads including filtering and row creation",
+      "before": 4000,
+      "after": 15
+    },
+    {
+      "scenario": "2000 actions, open context-rule action chooser once with empty query",
+      "metric": "DTO title reads including filtering and row creation",
+      "before": 4000,
+      "after": 13
+    },
+    {
+      "scenario": "50 query edits while the first native cancellation is blocked, then release it",
+      "metric": "Total backend cancellation requests before the next edit",
+      "before": 50,
+      "after": 1
+    },
+    {
+      "scenario": "4096 application-history rows, dispose while an older read remains blocked",
+      "metric": "Result rows still referenced by page.items after disposal",
+      "before": 4096,
+      "after": 0
+    }
+  ],
+  "bugs_reproduced_before_fix": [
+    "Direct action chooser excludes localized titles from matching, so searching its supplied Chinese title returns no row",
+    "Application-history page retains its full result list after disposal while a pending Future holds the session"
+  ],
+  "regression_scope": [
+    "Both shortcut dialogs search translated action titles and lazily create visible rows",
+    "Caret and ordinary parent rebuilds reuse matches; catalog replacement uses current action identities",
+    "Locale changes update context matching and display labels",
+    "Cancellation sharing still waits before a new read; a later read receives a new cancellation",
+    "Failed cancellation allows queries to recover",
+    "Disposed history cannot publish late rows and drops its earlier result references"
+  ],
+  "checks": {
+    "targeted": "58 tests passed",
+    "analysis": "No issues found",
+    "full_gate": "scripts/check.sh passed; exit code 0",
+    "flutter_passed": 470,
+    "flutter_added_regressions": 9,
+    "core_passed": 320,
+    "core_ignored": 1,
+    "mvp_passed": 195,
+    "mvp_ignored": 4,
+    "platform_passed": 70,
+    "platform_ignored": 1
+  },
+  "raw_logs": [
+    "build/flutter-review-oct29-before.log",
+    "build/flutter-action-search-oct29-before.log",
+    "build/flutter-review-oct29-targeted-final.log",
+    "build/flutter-review-oct29-analyze.log",
+    "build/flutter-review-oct29-full-check.log"
+  ],
+  "baseline_note": "The initial combined run had an incorrect search-field finder; the separate corrected Chinese-search run reproduces the direct chooser bug and passes the context-rule control. Performance and cancellation failures in the combined run use the correct fixtures.",
+  "after_source_sha256": {
+    "apps/flutter/lib/settings/shortcut_action_picker.dart": "7a17cf5fa40227b9c569beaee37684b9d9b6c043979fa19cabc232ecd8d8d2fd",
+    "apps/flutter/lib/settings/action_shortcuts_section.dart": "c346fea5bb82cbbc70a07994d5af5585063d43c59a670a0079e58cc018b01f0f",
+    "apps/flutter/lib/settings/intent_shortcut_dialog.dart": "ab34ceccd113002dc2ff86bb2569d97aae818847ebafc7938f7727acaed18e4c",
+    "apps/flutter/lib/features/application_history/session.dart": "701e017f1b51716a33f3ec032eaddbe342902f710f5fb26bd75ae4d738ae20be"
+  },
+  "limits": [
+    "Title-read counts depend on the default test viewport; they are not fixed product limits",
+    "Nonempty action queries still scan the catalogue; no permanent search-text index is added",
+    "Rows referenced by other operations or backends may survive page disposal",
+    "No app build/package or running app replacement",
+    "No native GUI, physical IME, frame timing, Dart heap/GC or RSS measurement",
+    "Impeller and native preview behavior unchanged"
+  ],
+  "code_findings": [
+    "The direct action chooser uses original titles and default-English context labels regardless of UI locale"
+  ]
+}

@@ -4,12 +4,10 @@ use anywhere_protocol::{web_plugin::*, *};
 use serde_json::json;
 
 fn json_package() -> anywhere_plugin::web::VerifiedWebPackage {
-    // Use the shipped example declaration so removal of its matcher/permissions
-    // breaks the same tests that exercise the framework, not just a fixture.
-    let mut manifest: serde_json::Value = serde_json::from_str(include_str!(
-        "../../../../../plugins/examples/json-workspace/manifest.json"
-    ))
-    .unwrap();
+    // Existing installed UI-only packages must keep working after the hybrid migration.
+    // The current built package is exercised by web_sdk_conformance --json.
+    let mut manifest: serde_json::Value =
+        serde_json::from_str(include_str!("fixtures/json-v0.5.4.json")).unwrap();
     manifest["entry"] = json!("index.html");
     package_manifest(manifest, "<p>synthetic</p>")
 }
@@ -19,7 +17,47 @@ fn raw(text: &str, source: ContextSource) -> ResolvedContext {
 }
 
 #[test]
-fn typing_json_offers_copy_actions_and_invocation_keeps_exact_text() {
+fn context_only_web_commands_cannot_be_offered_or_executed_without_their_object() {
+    let kind = "plugin.dev.example.tool.document";
+    let package = package_manifest(
+        json!({
+            "schemaVersion":1, "id":"dev.example.tool", "name":"Example", "version":"1.0.0",
+            "apiVersion":"1", "platforms":["macos"], "entry":"index.html",
+            "permissions":[{"name":"context.read", "types":[kind]}],
+            "commands":[{"id":"open", "title":"Unescape", "entrypoint":"workspace",
+                         "accepts":[kind], "requireContext":true}]
+        }),
+        "<p>synthetic</p>",
+    );
+    let (mut service, registry) = service(&package);
+    let command = reference(&registry);
+    let input = ResolvedContext::new(
+        kind,
+        ContextValue::Extension("{}".into()),
+        ContextSource::UserInput,
+        "test.extension",
+    );
+    assert!(offers(&registry, "Unescape", &[], None).is_empty());
+    let found = offers(&registry, "", std::slice::from_ref(&input), None);
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].presentation.subtitle.as_deref(), Some("Example"));
+    for context in [
+        raw("Unescape", ContextSource::UserInput),
+        ResolvedContext::new(
+            crate::features::tools::ENTRY_CONTEXT,
+            ContextValue::Text("".into()),
+            ContextSource::ForegroundApplication,
+            "core.launcher",
+        ),
+    ] {
+        assert!(offers(&registry, "Unescape", std::slice::from_ref(&context), None).is_empty());
+        assert!(service.start(&command, &context, None, "").is_err());
+    }
+    start(&mut service, &command, &input);
+}
+
+#[test]
+fn legacy_typing_json_offers_copy_actions_and_invocation_keeps_exact_text() {
     let package = json_package();
     let (mut service, registry) = service(&package);
     let text = " \n{\"n\":123456789012345678901,\"n\":1e9999,\"text\":\"中文\\n\"}\t";
@@ -65,7 +103,7 @@ fn typing_json_offers_copy_actions_and_invocation_keeps_exact_text() {
 }
 
 #[test]
-fn unrecognized_text_is_not_suggested_but_keywords_still_open_an_empty_workspace() {
+fn legacy_unrecognized_text_is_not_suggested_but_keywords_still_open_an_empty_workspace() {
     let package = json_package();
     let (_, registry) = service(&package);
     for text in [
@@ -92,16 +130,15 @@ fn unrecognized_text_is_not_suggested_but_keywords_still_open_an_empty_workspace
         )
         .is_empty());
     }
-    for keyword in ["json", "format", "格式化"] {
+    for keyword in ["json", "JSON", "format", "格式化"] {
         let results = offers(
             &registry,
             keyword,
             &[raw(keyword, ContextSource::UserInput)],
             None,
         );
-        assert!(results
-            .iter()
-            .any(|offer| offer.presentation.title == "JSON Workspace"));
+        assert_eq!(results.len(), 1, "keyword: {keyword}");
+        assert_eq!(results[0].presentation.title, "JSON Workspace");
         assert!(
             results
                 .iter()
@@ -117,6 +154,73 @@ fn unrecognized_text_is_not_suggested_but_keywords_still_open_an_empty_workspace
     assert!(offers(&registry, "unrelated", &[selected], None).is_empty());
 }
 
+#[test]
+fn legacy_json_helpers_require_matching_content_even_with_keywords_or_shortcuts() {
+    let (_, registry) = service(&json_package());
+    for source in [ContextSource::SelectedText, ContextSource::Clipboard] {
+        for text in ["ordinary text", "{broken}", "123"] {
+            let input = raw(text, source);
+            let results = offers(&registry, "json", std::slice::from_ref(&input), None);
+            assert_eq!(results.len(), 1);
+            assert_eq!(results[0].presentation.title, "JSON Workspace");
+            for keyword in ["copy", "minify", "escape", "unescape", "复制"] {
+                assert!(offers(&registry, keyword, std::slice::from_ref(&input), None).is_empty());
+            }
+        }
+        assert_eq!(offers(&registry, "", &[raw("[]", source)], None).len(), 4);
+        let escaped = serde_json::to_string("[]").unwrap();
+        assert_eq!(
+            offers(&registry, "", &[raw(&escaped, source)], None).len(),
+            5
+        );
+    }
+    let facts = crate::core::session::facts::SessionFacts::default();
+    let search = crate::core::search::engine::ActionSearch::new(
+        &registry,
+        &|_, _| Default::default(),
+        &facts,
+        1000,
+        |_| 0,
+    );
+    let bindings = crate::features::tools::EntrySource { search: &search }.binding_offers(&[]);
+    assert_eq!(bindings.len(), 1);
+    assert_eq!(bindings[0].presentation.title, "JSON Workspace");
+}
+
+#[test]
+fn legacy_json_helpers_reject_unmatched_execution_without_starting_a_webview() {
+    let (mut service, registry) = service(&json_package());
+    let workspace = ResolvedContext::new(
+        crate::features::tools::ENTRY_CONTEXT,
+        ContextValue::Text("".into()),
+        ContextSource::ForegroundApplication,
+        "core.launcher",
+    );
+    for id in ["copy-format", "copy-minify", "copy-escaped", "unescape"] {
+        let action = registry
+            .get(&format!("web:dev.anywhere.json-workspace:{id}"))
+            .unwrap();
+        let crate::core::action::descriptor::ActionExecutor::WebCommand(command) = &action.executor
+        else {
+            panic!("expected Web command");
+        };
+        for input in [
+            workspace.clone(),
+            raw("json", ContextSource::UserInput),
+            raw("{broken}", ContextSource::SelectedText),
+            raw("ordinary text", ContextSource::Clipboard),
+        ] {
+            assert!(service.start(command, &input, None, "").is_err(), "{id}");
+        }
+        if id == "unescape" {
+            assert!(service
+                .start(command, &raw("{}", ContextSource::SelectedText), None, "")
+                .is_err());
+        }
+    }
+    assert!(service.invocations.is_empty());
+}
+
 fn capture(source: ContextSource, text: &str, age: u64) -> ContextCapturePresentation {
     ContextCapturePresentation {
         source,
@@ -128,7 +232,8 @@ fn capture(source: ContextSource, text: &str, age: u64) -> ContextCapturePresent
 }
 
 #[tokio::test]
-async fn activation_uses_enabled_catalog_and_keeps_selection_priority_and_clipboard_expiry() {
+async fn legacy_activation_uses_enabled_catalog_and_keeps_selection_priority_and_clipboard_expiry()
+{
     let app = app();
     let package = json_package();
     let copied = capture(ContextSource::Clipboard, "{\"copied\":1}", 0);
@@ -167,7 +272,7 @@ async fn activation_uses_enabled_catalog_and_keeps_selection_priority_and_clipbo
 }
 
 #[test]
-fn persisted_disable_and_reenable_control_recognition_after_reopen() {
+fn legacy_persisted_disable_and_reenable_control_recognition_after_reopen() {
     use crate::application::web_plugins::WebPackageStore;
     let temp = tempfile::tempdir().unwrap();
     let app = app();
@@ -193,12 +298,24 @@ fn persisted_disable_and_reenable_control_recognition_after_reopen() {
 }
 
 #[tokio::test]
-async fn launcher_search_and_content_mode_execute_the_committed_json_candidate() {
+async fn legacy_launcher_search_and_content_mode_execute_the_committed_json_candidate() {
     use crate::application::LauncherApplication;
     let app = app();
     app.publish_web_catalog(catalog(&json_package())).unwrap();
     let session = app.begin_activation().unwrap();
-    for (revision, mode) in [(1, InputMode::Search), (2, InputMode::Content)] {
+    let keyword = app
+        .update_context_input(session, "JSON".into(), 1, None, InputMode::Search)
+        .await
+        .unwrap()
+        .unwrap();
+    let commands: Vec<_> = keyword
+        .candidates
+        .iter()
+        .filter_map(|candidate| candidate.command_id.as_deref())
+        .filter(|id| id.starts_with("web:dev.anywhere.json-workspace:"))
+        .collect();
+    assert_eq!(commands, ["web:dev.anywhere.json-workspace:open"]);
+    for (revision, mode) in [(2, InputMode::Search), (3, InputMode::Content)] {
         let input = " {\"numbers\":[1,2,3]} ";
         let state = app
             .update_context_input(session, input.into(), revision, None, mode)
@@ -241,7 +358,7 @@ async fn launcher_search_and_content_mode_execute_the_committed_json_candidate()
 }
 
 #[tokio::test]
-async fn escaped_json_actions_keep_the_exact_invocation_and_route_each_entrypoint() {
+async fn legacy_escaped_json_actions_keep_the_exact_invocation_and_route_each_entrypoint() {
     use crate::application::LauncherApplication;
     let app = app();
     app.publish_web_catalog(catalog(&json_package())).unwrap();

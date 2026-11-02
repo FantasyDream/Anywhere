@@ -1,0 +1,93 @@
+{
+  "date": "2026-10-24",
+  "timezone": "Asia/Shanghai",
+  "app_version": "0.13.0+7",
+  "source_base_commit": "cfe2f07",
+  "source_sha256": {
+    "apps/flutter/lib/infrastructure/tool_window_lifecycle.dart": "d02e421ca47de7fae79a0f36601c7d77e79f40bb0bc935635424a4198defe443",
+    "apps/flutter/test/tool_window_lifecycle_test.dart": "ba3c2d3ec78b3b433d2a9f27bf8bbc0737b6e4c6aa3f1523c4fb3ecf019d4a83",
+    "apps/flutter/macos/Runner/FlutterWindowCloseCoordinator.swift": "ef6628219c42fbd9bd09b7e16fdb25c7d39792d73ef0ef96dfd459f0a775e4ac",
+    "apps/flutter/macos/Runner/FlutterEngineLifecycle.swift": "e5e395322295f8ddee019da52326243416720a4c11bdcda85da0d7c2849c258f"
+  },
+  "binary_sha256": "8432f991d940af790520e87fd29951462020f6983f8db79e64e2897403ce608e",
+  "fixture": {
+    "isolated_directory": true,
+    "history_items": 350,
+    "approximate_text_bytes_per_item": 8000,
+    "kind": "synthetic text only",
+    "recording": false,
+    "external_context_sources": false,
+    "personal_history_used": false
+  },
+  "previous_build6_single_close": {
+    "flutter_engine": 1,
+    "flutter_view_controller": 1,
+    "flutter_vsync_waiter": 1,
+    "window_material_controller": 1,
+    "invalid_engine_handle_messages": 1,
+    "full_repeated_cycle_test": false
+  },
+  "change": "Unmount the dedicated view on an ordinary Flutter frame without runApp scheduling a synthetic warm-up frame. The native close handshake and explicit detach remain unchanged.",
+  "checks": {
+    "verified_create_close_batches": [
+      5,
+      5,
+      5,
+      5
+    ],
+    "verified_cycles": 20,
+    "controls_exposed_on_every_verified_cycle": true,
+    "main_restored_on_every_verified_cycle": true,
+    "invalid_engine_handle_messages": 1,
+    "impeller_start_lines_including_main_and_preliminary_cycles": 31,
+    "crash_observed": false,
+    "second_20_cycle_batch": "Blocked by automatic screen lock before its first cycle."
+  },
+  "resource_snapshots": [
+    {
+      "stage": "before_40_shelf_cycles",
+      "main_rss_bytes": 69992448,
+      "descendants": [],
+      "footprint_bytes": 115448218,
+      "seconds_since_baseline": 0.0
+    },
+    {
+      "stage": "after_20_verified_shelf_cycles",
+      "main_rss_bytes": 66093056,
+      "descendants": [],
+      "footprint_bytes": 80425779,
+      "seconds_since_baseline": 376.17
+    }
+  ],
+  "post_close_class_counts": {
+    "flutter_engine": 1,
+    "flutter_view_controller": 1,
+    "flutter_vsync_waiter": 1,
+    "window_material_controller": 1,
+    "tool": "macOS heap --noContent"
+  },
+  "automated_gate": {
+    "flutter_tests_passed": 398,
+    "flutter_analyze": "no issues",
+    "dedicated_close_tests_passed": 3,
+    "native_rust_full_gate": "Build 6: Rust 576 passed, 6 existing ignored; native/style/SDK/architecture passed. Native and Rust behavior unchanged in Build 7.",
+    "package": "Persistent signature and package content checks passed."
+  },
+  "final_isolated_database": {
+    "recording": 0,
+    "items": 350,
+    "formats": 350
+  },
+  "remaining": [
+    "A rare invalid-handle VSync warning remains; object release does not prove all queued SDK callbacks are cancelled.",
+    "The second 20-cycle batch, task window GUI close, same-state long-duration resources and complete Web/XPC helper attribution remain unverified.",
+    "GUI retention shortening with immediate deletion and real assistive-technology usability remain pending."
+  ],
+  "limits": [
+    "The initial longer automation call timed out. Its partial cycles are not included in the 20 fully verified cycles. Engine start and warning totals include all preliminary operations.",
+    "Resource snapshots include the preliminary cycles and automation timeout, not exactly 20 total engine lifetimes. RSS and footprint are distinct, compression-sensitive observations, not a controlled speed or memory improvement claim.",
+    "Screen lock happened after the final class count. No sleep, lock, permission, renderer or system-clock settings were changed.",
+    "No Web plugin was opened. Empty descendants only describes PID ancestry and does not account for unparented XPC helpers.",
+    "The fixed SDK contains delayed synthesized VSync callbacks without a cancellation guard; this is consistent with the remaining warning, but the specific runtime baton was not traced. No private runtime patch was added to suppress it."
+  ]
+}

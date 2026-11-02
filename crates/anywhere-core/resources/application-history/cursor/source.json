@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "id": "cursor",
+  "extends": "vscode",
+  "title": "Cursor",
+  "applications": [
+    "com.todesktop.230313mzl4w4u92"
+  ],
+  "config_paths": [
+    "Cursor/User/globalStorage/state.vscdb"
+  ],
+  "action": {
+    "title": "Cursor Recent Projects and Files",
+    "localized_titles": {
+      "zh": "Cursor 最近项目与文件"
+    },
+    "aliases": [
+      "cursor recent",
+      "recent files",
+      "最近文件",
+      "recent projects",
+      "recent history",
+      "最近项目",
+      "历史记录",
+      "app history",
+      "应用历史"
+    ]
+  }
+}

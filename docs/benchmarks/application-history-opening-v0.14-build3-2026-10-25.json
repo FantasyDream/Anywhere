@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-25",
+  "production_source_commit": "3cb6b00",
+  "package_version": "0.14.0+3",
+  "scope": "Existing local IDEA and VS Code source-application opening only",
+  "test_kind": "Production HistoryService with recording Platform; no OS application or clipboard side effects",
+  "passed_dispatch_cases": [
+    "IDEA directory -> IDEA bundle path",
+    "VS Code directory -> VS Code bundle path",
+    "VS Code regular file -> VS Code bundle path",
+    "VS Code workspace file -> VS Code bundle path",
+    "Unicode and whitespace paths preserved",
+    "Remote URI is copy-only",
+    "Missing and ambiguous installations rejected",
+    "Changed source target, changed filesystem kind and disabled source rejected"
+  ],
+  "checks": {
+    "history_core_tests_passed": 14,
+    "history_launcher_integration_passed": 1,
+    "core_clippy_all_targets": "passed",
+    "rustfmt": "passed",
+    "architecture": "passed"
+  },
+  "installed_app_metadata": [
+    {
+      "id": "com.jetbrains.intellij",
+      "version": "2026.2.3"
+    },
+    {
+      "id": "com.microsoft.VSCode",
+      "version": "1.143.0"
+    }
+  ],
+  "native_ui": {
+    "status": "blocked",
+    "first_target": "IntelliJ IDEA",
+    "reason": "Computer-use tool reported Mac locked; manual unlock requested",
+    "actual_target_windows_confirmed": false
+  },
+  "synthetic_fixtures": {
+    "idea_project": 1,
+    "vscode_folder": 1,
+    "vscode_multi_root_workspace": 1,
+    "vscode_text_file": 1,
+    "private_history_read": false,
+    "capture_enabled": false
+  },
+  "not_implemented": [
+    "Browser history",
+    "Browser bookmarks",
+    "Remote target opening",
+    "Exact browser Profile or Obsidian Vault routing"
+  ]
+}

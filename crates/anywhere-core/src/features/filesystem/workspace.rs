@@ -40,7 +40,6 @@ pub fn bundle() -> ActionBundle {
             icon: "file-search",
             aliases: &["files", "文件搜索", "搜索文件"],
             keywords: &[],
-            home_eligible: false,
             primary_action: false,
         }],
     }

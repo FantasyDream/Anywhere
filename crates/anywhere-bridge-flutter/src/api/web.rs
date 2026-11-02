@@ -2,8 +2,7 @@
 use super::*;
 use anywhere_core::{
     application::web_plugins::{
-        WebDispatch, WebDocumentBinding, WebMessageSource, WebPackageReview, WebPackageStatus,
-        WebPackageStore,
+        WebDocumentBinding, WebMessageSource, WebPackageReview, WebPackageStatus, WebPackageStore,
     },
     persistence::module_storage::ModuleStorageHost,
 };
@@ -73,6 +72,7 @@ fn status(s: WebPackageStatus) -> WebPackageDto {
         digest: s.digest,
         permissions: permissions(&s.permissions),
         enabled: s.enabled,
+        available: s.available,
         rollback: s.rollback,
     }
 }
@@ -86,6 +86,9 @@ fn permissions(p: &[anywhere_protocol::web_plugin::WebPermission]) -> Vec<WebPer
                 ClipboardReadText {} => WebPermissionKindDto::ClipboardReadText,
                 ClipboardWriteText {} => WebPermissionKindDto::ClipboardWriteText,
                 LocalStorage {} => WebPermissionKindDto::LocalStorage,
+                InputRead {} => WebPermissionKindDto::InputRead,
+                InputWrite {} => WebPermissionKindDto::InputWrite,
+                FrontmostApp {} => WebPermissionKindDto::FrontmostApp,
             },
             context_types: match permission {
                 ContextRead { types } => types.clone(),
@@ -114,8 +117,8 @@ pub(super) fn inspect(path: String) -> Result<WebReviewDto> {
         updating,
     })
 }
-pub(super) fn cancel_review() -> Result<()> {
-    store()?.cancel_review();
+pub(super) fn cancel_review(token: String) -> Result<()> {
+    store()?.cancel_review(&token);
     Ok(())
 }
 pub(super) fn approve(token: String) -> Result<Vec<WebPackageDto>> {
@@ -181,49 +184,11 @@ pub(super) async fn dispatch(
     origin: String,
     main_frame: bool,
     frame: String,
-) -> Result<WebReplyDto> {
+) -> Result<String> {
     let binding = document(&handle)?;
-    Ok(reply(
-        application()?
-            .dispatch_web_message(&binding, source(&binding, &origin, main_frame), &frame)
-            .await,
-    ))
-}
-pub(super) async fn confirm(
-    handle: String,
-    origin: String,
-    ticket: String,
-    approved: bool,
-) -> Result<WebReplyDto> {
-    let binding = document(&handle)?;
-    Ok(reply(
-        application()?
-            .confirm_web_operation(&binding, source(&binding, &origin, true), &ticket, approved)
-            .await,
-    ))
-}
-fn reply(dispatch: WebDispatch) -> WebReplyDto {
-    match dispatch {
-        WebDispatch::Reply(frame) => WebReplyDto {
-            frame: Some(frame),
-            ticket: None,
-            consent: None,
-            preview: None,
-        },
-        WebDispatch::Confirmation(c) => WebReplyDto {
-            frame: None,
-            ticket: Some(c.ticket),
-            consent: Some(match c.kind {
-                anywhere_core::application::web_plugins::WebConsentKind::ReadClipboard => {
-                    WebConsentKindDto::ReadClipboard
-                }
-                anywhere_core::application::web_plugins::WebConsentKind::WriteClipboard => {
-                    WebConsentKindDto::WriteClipboard
-                }
-            }),
-            preview: c.preview,
-        },
-    }
+    Ok(application()?
+        .dispatch_web_message(&binding, source(&binding, &origin, main_frame), &frame)
+        .await)
 }
 pub(super) fn resource(handle: String, path: String) -> Result<Vec<u8>> {
     let binding = document(&handle)?;
@@ -233,4 +198,12 @@ pub(super) fn resource(handle: String, path: String) -> Result<Vec<u8>> {
     let bytes = file.read()?;
     app.validate_web_document(&binding, source(&binding, binding.origin(), true))?;
     Ok(bytes)
+}
+
+pub(super) async fn wait_state(handle: String, after: u64) -> Result<Option<String>> {
+    let binding = document(&handle)?;
+    application()?
+        .wait_web_state(&binding, after)
+        .await
+        .map_err(|_| anyhow::anyhow!("Plugin state unavailable"))
 }

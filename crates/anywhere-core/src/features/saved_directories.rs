@@ -105,7 +105,6 @@ fn definition(id: &str, title: &str, accepts: &str, handler: DirectoryAction) ->
         keywords: vec!["directory".into(), "save".into()],
         owning_app: None,
         menu_path: vec![],
-        home_eligible: false,
         primary_action: false,
         search_title: None,
     }

@@ -1,0 +1,29 @@
+{
+  "schema": 1,
+  "id": "vscode_insiders",
+  "extends": "vscode",
+  "title": "VS Code Insiders",
+  "applications": [
+    "com.microsoft.VSCodeInsiders"
+  ],
+  "config_paths": [
+    "Code - Insiders/User/globalStorage/state.vscdb"
+  ],
+  "action": {
+    "title": "VS Code Insiders Recent Projects and Files",
+    "localized_titles": {
+      "zh": "VS Code Insiders 最近项目与文件"
+    },
+    "aliases": [
+      "vs code insiders recent",
+      "recent files",
+      "最近文件",
+      "recent projects",
+      "recent history",
+      "最近项目",
+      "历史记录",
+      "app history",
+      "应用历史"
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "id": "datagrip",
+  "extends": "idea",
+  "title": "DataGrip",
+  "applications": [
+    "com.jetbrains.datagrip",
+    "com.jetbrains.datagrip-EAP"
+  ],
+  "config_paths": [
+    "JetBrains/DataGrip*/options/recentProjects.xml"
+  ],
+  "action": {
+    "title": "DataGrip Recent Projects",
+    "localized_titles": {
+      "zh": "DataGrip 最近项目"
+    },
+    "aliases": [
+      "datagrip recent",
+      "recent projects",
+      "recent history",
+      "最近项目",
+      "历史记录",
+      "app history",
+      "应用历史"
+    ]
+  }
+}

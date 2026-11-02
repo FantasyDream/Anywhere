@@ -1,0 +1,30 @@
+{
+  "schema": 1,
+  "id": "pycharm",
+  "extends": "idea",
+  "title": "PyCharm",
+  "applications": [
+    "com.jetbrains.pycharm",
+    "com.jetbrains.pycharm.ce",
+    "com.jetbrains.pycharm-EAP"
+  ],
+  "config_paths": [
+    "JetBrains/PyCharm*/options/recentProjects.xml",
+    "JetBrains/PyCharmCE*/options/recentProjects.xml"
+  ],
+  "action": {
+    "title": "PyCharm Recent Projects",
+    "localized_titles": {
+      "zh": "PyCharm 最近项目"
+    },
+    "aliases": [
+      "pycharm recent",
+      "recent projects",
+      "recent history",
+      "最近项目",
+      "历史记录",
+      "app history",
+      "应用历史"
+    ]
+  }
+}

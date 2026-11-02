@@ -18,6 +18,7 @@ extension ExtensionPresentation on ExtensionStatusDto {
       ? AppIcons.plugin
       : switch (id) {
           'clipboard' => AppIcons.history,
+          'application_history' => AppIcons.history,
           'saved_directories' => AppIcons.folderOpen,
           'git' => AppIcons.git,
           'url' => AppIcons.link,
@@ -54,6 +55,7 @@ extension ExtensionPresentation on ExtensionStatusDto {
       ? name
       : switch (id) {
           'clipboard' => l10n.clipboardHistory,
+          'application_history' => l10n.appHistory,
           'saved_directories' => l10n.savedDirectories,
           _ => name,
         };

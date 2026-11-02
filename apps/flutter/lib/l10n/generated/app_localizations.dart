@@ -569,11 +569,11 @@ abstract class AppLocalizations {
   /// **'Some changes were not saved'**
   String get changesNotSaved;
 
-  /// No description provided for @searchDrafts.
+  /// No description provided for @settingsDrafts.
   ///
   /// In en, this message translates to:
-  /// **'Search settings have unapplied changes.'**
-  String get searchDrafts;
+  /// **'Some settings have unsaved changes.'**
+  String get settingsDrafts;
 
   /// No description provided for @settingsSaveFailed.
   ///
@@ -1529,18 +1529,6 @@ abstract class AppLocalizations {
   /// **'Preview unavailable'**
   String get previewUnavailable;
 
-  /// No description provided for @loadingPreview.
-  ///
-  /// In en, this message translates to:
-  /// **'Loading preview…'**
-  String get loadingPreview;
-
-  /// No description provided for @selectEntryToPreview.
-  ///
-  /// In en, this message translates to:
-  /// **'Select an entry to preview'**
-  String get selectEntryToPreview;
-
   /// No description provided for @noMatchingEntries.
   ///
   /// In en, this message translates to:
@@ -1564,24 +1552,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Manage recording in Settings → Clipboard.'**
   String get manageRecordingInSettingsClipboard;
-
-  /// No description provided for @imagePreviewUnavailable.
-  ///
-  /// In en, this message translates to:
-  /// **'Image preview unavailable'**
-  String get imagePreviewUnavailable;
-
-  /// No description provided for @previewUnavailableTheOriginalImageCanStill.
-  ///
-  /// In en, this message translates to:
-  /// **'Preview unavailable. The original image can still be copied.'**
-  String get previewUnavailableTheOriginalImageCanStill;
-
-  /// No description provided for @previewIsNotAvailableForThisFormat.
-  ///
-  /// In en, this message translates to:
-  /// **'Preview is not available for this format. Copy restores its saved data.'**
-  String get previewIsNotAvailableForThisFormat;
 
   /// No description provided for @theWindowCouldNotBeClosedUse.
   ///
@@ -1679,18 +1649,6 @@ abstract class AppLocalizations {
   /// **'✓ Cancel · Esc'**
   String get cancelEscapeSelected;
 
-  /// No description provided for @allowOnce.
-  ///
-  /// In en, this message translates to:
-  /// **'✓ Allow once'**
-  String get allowOnce;
-
-  /// No description provided for @allowOnceAction.
-  ///
-  /// In en, this message translates to:
-  /// **'Allow once'**
-  String get allowOnceAction;
-
   /// No description provided for @webToolsAreUnavailableOnThisPlatform.
   ///
   /// In en, this message translates to:
@@ -1709,11 +1667,11 @@ abstract class AppLocalizations {
   /// **'No Host permissions.'**
   String get noHostPermissions;
 
-  /// No description provided for @codeRunsInALocalWebViewNetwork.
+  /// No description provided for @pluginExecutionBoundary.
   ///
   /// In en, this message translates to:
-  /// **'Code runs in a local WebView. Network access and navigation are blocked. This is not an OS process sandbox.'**
-  String get codeRunsInALocalWebViewNetwork;
+  /// **'Plugins process data locally and can call only approved host capabilities. Arbitrary filesystem and network access are unavailable. These restrictions are not OS process isolation.'**
+  String get pluginExecutionBoundary;
 
   /// No description provided for @thisReplacesTheInstalledCodeClosesIts.
   ///
@@ -1810,18 +1768,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The tool stopped. Reload it or return to search.'**
   String get theToolStoppedReloadItOrReturn;
-
-  /// No description provided for @allowThisOperation.
-  ///
-  /// In en, this message translates to:
-  /// **'Allow this operation?'**
-  String get allowThisOperation;
-
-  /// No description provided for @thisTool.
-  ///
-  /// In en, this message translates to:
-  /// **'This tool'**
-  String get thisTool;
 
   /// No description provided for @dismissMessage.
   ///
@@ -2417,12 +2363,6 @@ abstract class AppLocalizations {
   /// **'{count} restricted locations skipped'**
   String restrictedLocationsSkipped(String count);
 
-  /// No description provided for @clipboardConsent.
-  ///
-  /// In en, this message translates to:
-  /// **'{tool} is requesting a clipboard operation. Approval applies once.'**
-  String clipboardConsent(String tool);
-
   /// No description provided for @quitAnywhere.
   ///
   /// In en, this message translates to:
@@ -2567,18 +2507,6 @@ abstract class AppLocalizations {
   /// **'Choose a trusted .awplugin package to inspect before installing.'**
   String get inspectTrustedPackage;
 
-  /// No description provided for @readClipboardText.
-  ///
-  /// In en, this message translates to:
-  /// **'Read clipboard text'**
-  String get readClipboardText;
-
-  /// No description provided for @copyTextToClipboard.
-  ///
-  /// In en, this message translates to:
-  /// **'Copy text to clipboard'**
-  String get copyTextToClipboard;
-
   /// No description provided for @permissionCurrentApp.
   ///
   /// In en, this message translates to:
@@ -2588,13 +2516,13 @@ abstract class AppLocalizations {
   /// No description provided for @permissionReadClipboard.
   ///
   /// In en, this message translates to:
-  /// **'Read clipboard text (confirmed per operation)'**
+  /// **'Read clipboard text'**
   String get permissionReadClipboard;
 
   /// No description provided for @permissionWriteClipboard.
   ///
   /// In en, this message translates to:
-  /// **'Copy text (confirmed per operation)'**
+  /// **'Write clipboard text'**
   String get permissionWriteClipboard;
 
   /// No description provided for @permissionLocalStorage.
@@ -2867,12 +2795,6 @@ abstract class AppLocalizations {
   /// **'Hide preview'**
   String get hidePreview;
 
-  /// No description provided for @shelfPreviewScrollHint.
-  ///
-  /// In en, this message translates to:
-  /// **'{shortcut} Scroll preview'**
-  String shelfPreviewScrollHint(String shortcut);
-
   /// No description provided for @details.
   ///
   /// In en, this message translates to:
@@ -2908,12 +2830,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Keyboard shortcuts'**
   String get keyboardHelp;
-
-  /// No description provided for @fileInformation.
-  ///
-  /// In en, this message translates to:
-  /// **'File information'**
-  String get fileInformation;
 
   /// No description provided for @historyFeatureDisabled.
   ///
@@ -2957,36 +2873,6 @@ abstract class AppLocalizations {
   /// **'Clipboard monitoring is unavailable on this platform.'**
   String get historyMonitoringUnavailable;
 
-  /// No description provided for @filePreviewChanged.
-  ///
-  /// In en, this message translates to:
-  /// **'Preview unavailable. Search again if the file has changed.'**
-  String get filePreviewChanged;
-
-  /// No description provided for @filePreviewUnsupported.
-  ///
-  /// In en, this message translates to:
-  /// **'Text preview is unavailable for this file type'**
-  String get filePreviewUnsupported;
-
-  /// No description provided for @filePreviewTruncated.
-  ///
-  /// In en, this message translates to:
-  /// **'Showing the first {size}'**
-  String filePreviewTruncated(String size);
-
-  /// No description provided for @filePreviewEncodingGuessed.
-  ///
-  /// In en, this message translates to:
-  /// **'Encoding guessed as {encoding}'**
-  String filePreviewEncodingGuessed(String encoding);
-
-  /// No description provided for @filePreviewDecoded.
-  ///
-  /// In en, this message translates to:
-  /// **'Decoded as {encoding}'**
-  String filePreviewDecoded(String encoding);
-
   /// No description provided for @shelfReturnFailed.
   ///
   /// In en, this message translates to:
@@ -2998,6 +2884,282 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Copied. The destination app is no longer available. Switch to an app to paste.'**
   String get shelfReturnUnavailable;
+
+  /// No description provided for @historyRecordingPaused.
+  ///
+  /// In en, this message translates to:
+  /// **'History recording is paused. Existing history is still available.'**
+  String get historyRecordingPaused;
+
+  /// No description provided for @pauseHistoryRecording.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause without clearing saved history'**
+  String get pauseHistoryRecording;
+
+  /// No description provided for @historyPausedUntil.
+  ///
+  /// In en, this message translates to:
+  /// **'Paused until {time}'**
+  String historyPausedUntil(String time);
+
+  /// No description provided for @resumeRecording.
+  ///
+  /// In en, this message translates to:
+  /// **'Resume'**
+  String get resumeRecording;
+
+  /// No description provided for @pauseFor.
+  ///
+  /// In en, this message translates to:
+  /// **'Pause…'**
+  String get pauseFor;
+
+  /// No description provided for @pauseMinutes.
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} minutes'**
+  String pauseMinutes(int minutes);
+
+  /// No description provided for @keepHistoryFor.
+  ///
+  /// In en, this message translates to:
+  /// **'Keep history for'**
+  String get keepHistoryFor;
+
+  /// No description provided for @untilStorageLimit.
+  ///
+  /// In en, this message translates to:
+  /// **'Until storage limit'**
+  String get untilStorageLimit;
+
+  /// No description provided for @retentionDays.
+  ///
+  /// In en, this message translates to:
+  /// **'{days, plural, =1{1 day} other{{days} days}}'**
+  String retentionDays(int days);
+
+  /// No description provided for @changeHistoryRetention.
+  ///
+  /// In en, this message translates to:
+  /// **'Change history retention?'**
+  String get changeHistoryRetention;
+
+  /// No description provided for @historyRetentionWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Entries older than the selected period will be permanently deleted now. Extending the period later cannot restore them.'**
+  String get historyRetentionWarning;
+
+  /// No description provided for @historyStorageUsage.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 entry} other{{count} entries}} · {mib} MiB stored'**
+  String historyStorageUsage(int count, String mib);
+
+  /// No description provided for @historyStorageExplanation.
+  ///
+  /// In en, this message translates to:
+  /// **'Stored only on this Mac, without encryption. Up to 1,000 entries / 128 MiB of logical data; database file size may differ. Expiry deletes all saved formats, not the system clipboard or original files.'**
+  String get historyStorageExplanation;
+
+  /// No description provided for @appHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'App History'**
+  String get appHistory;
+
+  /// No description provided for @appHistorySearch.
+  ///
+  /// In en, this message translates to:
+  /// **'Search recent projects and files…'**
+  String get appHistorySearch;
+
+  /// No description provided for @appHistoryFilterSources.
+  ///
+  /// In en, this message translates to:
+  /// **'Filter apps…'**
+  String get appHistoryFilterSources;
+
+  /// No description provided for @appHistoryAllSources.
+  ///
+  /// In en, this message translates to:
+  /// **'All sources'**
+  String get appHistoryAllSources;
+
+  /// No description provided for @appHistoryShowAllSources.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear filters and show all sources'**
+  String get appHistoryShowAllSources;
+
+  /// No description provided for @appHistoryRevertPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Revert edits'**
+  String get appHistoryRevertPath;
+
+  /// No description provided for @appHistoryUnsavedPath.
+  ///
+  /// In en, this message translates to:
+  /// **'Unsaved path'**
+  String get appHistoryUnsavedPath;
+
+  /// No description provided for @appHistorySources.
+  ///
+  /// In en, this message translates to:
+  /// **'History sources'**
+  String get appHistorySources;
+
+  /// No description provided for @appHistorySourceDescription.
+  ///
+  /// In en, this message translates to:
+  /// **'Actions default to on for installed apps and off for apps not found. Your switches take priority. History is read only when you use its action.'**
+  String get appHistorySourceDescription;
+
+  /// No description provided for @appHistorySourcePath.
+  ///
+  /// In en, this message translates to:
+  /// **'History metadata file path'**
+  String get appHistorySourcePath;
+
+  /// No description provided for @appHistoryUnconfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'No history file is available. Check automatic detection or set a custom path in Settings → App History.'**
+  String get appHistoryUnconfigured;
+
+  /// No description provided for @appHistoryReadFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Some sources could not be read. Check their files in Settings → App History.'**
+  String get appHistoryReadFailed;
+
+  /// No description provided for @appHistoryBusy.
+  ///
+  /// In en, this message translates to:
+  /// **'A previous history operation is finishing. Refresh to try again.'**
+  String get appHistoryBusy;
+
+  /// No description provided for @appHistoryExpired.
+  ///
+  /// In en, this message translates to:
+  /// **'This history page has expired. Go back and reopen the action.'**
+  String get appHistoryExpired;
+
+  /// No description provided for @appHistoryDisabled.
+  ///
+  /// In en, this message translates to:
+  /// **'App History is disabled. Enable it in Settings → Features.'**
+  String get appHistoryDisabled;
+
+  /// No description provided for @appHistoryOperationFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'The history operation could not be completed. Refresh the list and try again.'**
+  String get appHistoryOperationFailed;
+
+  /// No description provided for @appHistorySettingsFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'History sources could not be loaded or saved. Check the file path and try again.'**
+  String get appHistorySettingsFailed;
+
+  /// No description provided for @appHistoryCopyTarget.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy path or URI'**
+  String get appHistoryCopyTarget;
+
+  /// No description provided for @appHistoryAutomatic.
+  ///
+  /// In en, this message translates to:
+  /// **'Using an automatically detected file'**
+  String get appHistoryAutomatic;
+
+  /// No description provided for @appHistoryCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Using your custom file path'**
+  String get appHistoryCustom;
+
+  /// No description provided for @appHistorySourceOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Source turned off'**
+  String get appHistorySourceOff;
+
+  /// No description provided for @appHistoryNotDetected.
+  ///
+  /// In en, this message translates to:
+  /// **'No file found automatically. You can set a custom path.'**
+  String get appHistoryNotDetected;
+
+  /// No description provided for @appHistoryUseAutomatic.
+  ///
+  /// In en, this message translates to:
+  /// **'Use automatic detection'**
+  String get appHistoryUseAutomatic;
+
+  /// No description provided for @appHistoryDetectAgain.
+  ///
+  /// In en, this message translates to:
+  /// **'Detect again'**
+  String get appHistoryDetectAgain;
+
+  /// No description provided for @appHistorySaveCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Save custom path'**
+  String get appHistorySaveCustom;
+
+  /// No description provided for @appHistoryActionEnabled.
+  ///
+  /// In en, this message translates to:
+  /// **'Show action'**
+  String get appHistoryActionEnabled;
+
+  /// No description provided for @appHistoryCustomAdapters.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom adapters'**
+  String get appHistoryCustomAdapters;
+
+  /// No description provided for @appHistoryCustomAdaptersHelp.
+  ///
+  /// In en, this message translates to:
+  /// **'Place source.json and transform.js in a subfolder here, then restart Anywhere. Matching IDs override built-ins. Import only trusted local configuration; transforms run when you use their action.'**
+  String get appHistoryCustomAdaptersHelp;
+
+  /// No description provided for @appHistoryOpenAdapters.
+  ///
+  /// In en, this message translates to:
+  /// **'Open adapters folder'**
+  String get appHistoryOpenAdapters;
+
+  /// No description provided for @permissionInputRead.
+  ///
+  /// In en, this message translates to:
+  /// **'Read Launcher search text'**
+  String get permissionInputRead;
+
+  /// No description provided for @permissionInputWrite.
+  ///
+  /// In en, this message translates to:
+  /// **'Change Launcher search text'**
+  String get permissionInputWrite;
+
+  /// No description provided for @permissionFrontmostApp.
+  ///
+  /// In en, this message translates to:
+  /// **'Read the currently active application'**
+  String get permissionFrontmostApp;
+
+  /// No description provided for @webPackageDamaged.
+  ///
+  /// In en, this message translates to:
+  /// **'Package files are unavailable or damaged. Restore an approved version or uninstall and import again.'**
+  String get webPackageDamaged;
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

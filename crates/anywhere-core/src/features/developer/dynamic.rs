@@ -56,11 +56,7 @@ impl crate::core::action::bundle::ContextActionFactory for DeveloperActions {
         let mut definitions = BTreeMap::new();
         let mut diagnostics = Vec::new();
         for context in contexts {
-            let crate::core::context::ContextValue::Project {
-                directory,
-                properties,
-                ..
-            } = &context.value
+            let crate::core::context::ContextValue::Project { properties, .. } = &context.value
             else {
                 continue;
             };
@@ -75,20 +71,21 @@ impl crate::core::action::bundle::ContextActionFactory for DeveloperActions {
                         continue;
                     }
                 };
-                let manager = metadata.manager.as_str().to_owned();
+                let manager = metadata.manager;
+                let name = manager.as_str();
                 let scripts = metadata.scripts;
                 for script in scripts {
-                    let id = super::node::action_id(&manager, &script);
+                    let id = super::node::action_id(name, &script);
                     let title = match script.as_str() {
-                        "build" => format!("{manager} Build"),
-                        "test" => format!("{manager} Test"),
-                        "dev" => format!("{manager} Dev"),
-                        "start" => format!("{manager} Start"),
-                        "lint" => format!("{manager} Lint"),
-                        _ => format!("{manager} Run · {script}"),
+                        "build" => format!("{name} Build"),
+                        "test" => format!("{name} Test"),
+                        "dev" => format!("{name} Dev"),
+                        "start" => format!("{name} Start"),
+                        "lint" => format!("{name} Lint"),
+                        _ => format!("{name} Run · {script}"),
                     };
                     let handler = Script {
-                        manager: manager.clone(),
+                        manager,
                         name: script.clone(),
                         title: title.clone(),
                     };
@@ -97,9 +94,9 @@ impl crate::core::action::bundle::ContextActionFactory for DeveloperActions {
                             (id, title),
                             anywhere_protocol::PROJECT_NODE,
                             (groups::NODE, super::actions::command_icon(&script)),
-                            super::node::capability(&manager, &script),
+                            super::node::capability(name, &script),
                             handler,
-                            vec![script.clone(), manager.clone(), "run".into()],
+                            vec![script.clone(), name.into(), "run".into()],
                             script == "build",
                         )
                     });
@@ -124,19 +121,15 @@ impl crate::core::action::bundle::ContextActionFactory for DeveloperActions {
                 for entry in metadata.targets {
                     let key = entry.key();
                     let id = key.replacen("rust.run.", "developer.cargo.run.", 1);
-                    let target = super::rust::RunTarget {
-                        package: entry.package,
-                        binary: entry.binary,
-                        manifest: directory.join(entry.manifest),
-                    };
-                    let title = format!("Cargo Run · {} / {}", target.package, target.binary);
+                    let title = format!("Cargo Run · {} / {}", entry.package, entry.binary);
                     let aliases = vec![
-                        target.package.clone(),
-                        target.binary.clone(),
+                        entry.package.clone(),
+                        entry.binary.clone(),
                         "cargo run".into(),
                     ];
                     let handler = CargoRun {
-                        target,
+                        package: entry.package,
+                        binary: entry.binary,
                         title: title.clone(),
                     };
                     definitions.entry(id.clone()).or_insert_with(|| {
@@ -161,18 +154,10 @@ impl crate::core::action::bundle::ContextActionFactory for DeveloperActions {
 }
 
 fn decode_identity(encoded: &str) -> Option<String> {
-    if encoded.is_empty() || encoded.len() > 2048 || !encoded.len().is_multiple_of(2) {
+    if encoded.is_empty() || encoded.len() > 2048 {
         return None;
     }
-    let bytes = (0..encoded.len())
-        .step_by(2)
-        .map(|i| {
-            let pair = encoded.as_bytes().get(i..i + 2)?;
-            let pair = std::str::from_utf8(pair).ok()?;
-            u8::from_str_radix(pair, 16).ok()
-        })
-        .collect::<Option<Vec<_>>>()?;
-    let value = String::from_utf8(bytes).ok()?;
+    let value = String::from_utf8(hex::decode(encoded).ok()?).ok()?;
     (super::metadata::encoded(&value) == encoded).then_some(value)
 }
 
@@ -183,7 +168,7 @@ fn dynamic_definition(
     capability: String,
     handler: impl ActionHandler + 'static,
     aliases: Vec<String>,
-    home: bool,
+    preferred: bool,
 ) -> crate::core::action::descriptor::ActionDefinition {
     use crate::core::action::{
         descriptor::{ActionDefinition, ActionExecutor},
@@ -200,21 +185,20 @@ fn dynamic_definition(
         }],
         executor: ActionExecutor::Native(ActionHandlerRef::owned(handler)),
         availability: AvailabilityRule::RequireContextProperty { key: capability },
-        base_priority: if home { 30 } else { 20 },
+        base_priority: if preferred { 30 } else { 20 },
         icon: icon.into(),
         group_id: group.into(),
         aliases,
         keywords: vec!["project".into()],
         owning_app: None,
         menu_path: Vec::new(),
-        home_eligible: home,
         primary_action: false,
         search_title: None,
     }
 }
 
 struct Script {
-    manager: String,
+    manager: super::node::PackageManager,
     name: String,
     title: String,
 }
@@ -233,10 +217,11 @@ impl ActionHandler for Script {
         if project.manager != self.manager || !project.scripts.contains(&self.name) {
             bail!("script or package manager changed; reopen the Launcher");
         }
-        let (program, mut arguments) = if let Some(program) = find_executable(&self.manager) {
+        let manager = self.manager.as_str();
+        let (program, mut arguments) = if let Some(program) = find_executable(manager) {
             (program, vec![])
-        } else if self.manager != "npm" {
-            (tool("corepack")?, vec![self.manager.clone()])
+        } else if self.manager != super::node::PackageManager::Npm {
+            (tool("corepack")?, vec![manager.into()])
         } else {
             (tool("npm")?, vec![])
         };
@@ -261,7 +246,8 @@ impl ActionHandler for Script {
     }
 }
 struct CargoRun {
-    target: super::rust::RunTarget,
+    package: String,
+    binary: String,
     title: String,
 }
 impl ActionHandler for CargoRun {
@@ -277,10 +263,22 @@ impl ActionHandler for CargoRun {
             .canonicalize()?;
         let target = super::rust::targets(&directory)?
             .into_iter()
-            .find(|target| {
-                target.package == self.target.package && target.binary == self.target.binary
-            })
+            .find(|target| target.package == self.package && target.binary == self.binary)
             .context("Cargo target changed; reopen the Launcher")?;
+        let mut arguments = vec![
+            "run".into(),
+            "--color".into(),
+            "never".into(),
+            "--manifest-path".into(),
+            target.manifest.to_string_lossy().into_owned(),
+            "--package".into(),
+            self.package.clone(),
+            "--bin".into(),
+            self.binary.clone(),
+        ];
+        if !target.required_features.is_empty() {
+            arguments.extend(["--features".into(), target.required_features.join(",")]);
+        }
         Ok(ExecutionOutput::process(
             crate::features::host_services::for_feature(
                 super::descriptor(super::provider::ProjectKind::Rust),
@@ -289,17 +287,7 @@ impl ActionHandler for CargoRun {
             .process_request(ProcessRequest {
                 title: self.title.clone(),
                 program: tool("cargo")?,
-                arguments: vec![
-                    "run".into(),
-                    "--color".into(),
-                    "never".into(),
-                    "--manifest-path".into(),
-                    target.manifest.to_string_lossy().into_owned(),
-                    "--package".into(),
-                    self.target.package.clone(),
-                    "--bin".into(),
-                    self.target.binary.clone(),
-                ],
+                arguments,
                 directory,
                 environment: BTreeMap::from([("NO_COLOR".into(), "1".into())]),
             })?,
@@ -310,6 +298,7 @@ impl ActionHandler for CargoRun {
 #[cfg(test)]
 mod tests {
     use super::super::metadata::{CargoMetadata, NodeMetadata, CARGO_METADATA, NODE_METADATA};
+    use super::super::node::PackageManager;
     use super::*;
     use crate::core::action::bundle::ContextActionFactory;
     use crate::core::context::{ContextSource, ContextValue};
@@ -330,16 +319,17 @@ mod tests {
     #[test]
     fn malformed_node_metadata_is_diagnosed_instead_of_becoming_an_empty_project() {
         let mut valid = BTreeMap::new();
-        NodeMetadata::new("npm", vec!["build".into()])
-            .unwrap()
-            .write(&mut valid)
-            .unwrap();
+        NodeMetadata {
+            manager: PackageManager::Npm,
+            scripts: vec!["build".into()],
+        }
+        .write(&mut valid)
+        .unwrap();
         let good = valid[NODE_METADATA].clone();
         for bad in [
             "{private-secret".to_owned(),
             "{}".into(),
             good.replace("npm", "bun"),
-            good.replace("\"version\":1", "\"version\":2"),
         ] {
             let mut properties = valid.clone();
             properties.insert(NODE_METADATA.into(), bad);
@@ -362,18 +352,23 @@ mod tests {
     #[test]
     fn empty_capabilities_are_valid_and_target_read_failure_is_explicit() {
         let mut properties = BTreeMap::new();
-        NodeMetadata::new("npm", vec![])
-            .unwrap()
-            .write(&mut properties)
-            .unwrap();
+        NodeMetadata {
+            manager: PackageManager::Npm,
+            scripts: vec![],
+        }
+        .write(&mut properties)
+        .unwrap();
         let empty =
             DeveloperActions.actions(&[context(anywhere_protocol::PROJECT_NODE, properties)]);
         assert!(empty.actions.is_empty() && empty.diagnostics.is_empty());
         for failed in [false, true] {
             let mut properties = BTreeMap::new();
-            CargoMetadata::new(vec![], failed)
-                .write(&mut properties)
-                .unwrap();
+            CargoMetadata {
+                targets: vec![],
+                discovery_failed: failed,
+            }
+            .write(&mut properties)
+            .unwrap();
             let empty =
                 DeveloperActions.actions(&[context(anywhere_protocol::PROJECT_RUST, properties)]);
             assert!(empty.actions.is_empty());
@@ -381,28 +376,13 @@ mod tests {
         }
     }
     #[test]
-    fn invalid_cargo_metadata_and_missing_capabilities_are_diagnosed() {
-        for raw in [
-            "bad",
-            "{}",
-            r#"{"version":2,"targets":[],"discovery_failed":false}"#,
-            r#"{"version":1,"targets":[{"package":"x","binary":"x","manifest":"../Cargo.toml"}],"discovery_failed":false}"#,
-        ] {
+    fn cargo_metadata_decode_errors_are_diagnosed() {
+        for raw in ["bad", "{}", r#"{"targets":false,"discovery_failed":false}"#] {
             let properties = BTreeMap::from([(CARGO_METADATA.into(), raw.into())]);
             let expanded =
                 DeveloperActions.actions(&[context(anywhere_protocol::PROJECT_RUST, properties)]);
             assert!(expanded.actions.is_empty());
             assert_eq!(expanded.diagnostics.len(), 1);
         }
-        let mut properties = BTreeMap::new();
-        NodeMetadata::new("npm", vec!["build".into()])
-            .unwrap()
-            .write(&mut properties)
-            .unwrap();
-        properties.remove(&super::super::node::capability("npm", "build"));
-        let expanded =
-            DeveloperActions.actions(&[context(anywhere_protocol::PROJECT_NODE, properties)]);
-        assert!(expanded.actions.is_empty());
-        assert_eq!(expanded.diagnostics.len(), 1);
     }
 }

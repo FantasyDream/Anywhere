@@ -1,0 +1,56 @@
+{
+  "date": "2026-10-26",
+  "version": "0.14.0+19",
+  "source_base_commit": "fd1e70d5be100c899394bf01906bb1bfd9bf6f5f",
+  "working_tree_changes": true,
+  "issue": "IDEA copied text was rejected because a readable 261-byte dynamic format name exceeded the 256-byte validator limit",
+  "reproduction": {
+    "declared_formats": 16,
+    "long_name_bytes": 261,
+    "long_format_data_bytes": 306,
+    "old_reader_result": "invalid clipboard format",
+    "clipboard_body_exported": false
+  },
+  "fix": {
+    "format_name_limit_bytes": 4096,
+    "invalid_optional_names": "skip before native format reads",
+    "sensitive_markers": "still skip the entire item",
+    "payload_limit_bytes": 16777216,
+    "format_count_limit": 64
+  },
+  "automated": {
+    "full_gate": "scripts/check.sh",
+    "log": "build/v0.14-idea19-check.log",
+    "exit_code": 0,
+    "core_passed": 307,
+    "core_ignored_existing": 1,
+    "mvp_passed": 195,
+    "mvp_ignored_existing": 4,
+    "flutter_passed": 429,
+    "focused_platform_clipboard_passed": 12,
+    "focused_core_clipboard_passed": 19,
+    "native_web_clippy_architecture_style_generated_checks": "passed"
+  },
+  "native": {
+    "build19_started": true,
+    "old_build18_exited": true,
+    "same_IDEA_identifier_appeared_in_filtered_shelf": true,
+    "kind": "rich_text",
+    "read_warning_present": false,
+    "readonly_saved_metadata": {
+      "matching_items": 1,
+      "saved_formats": 11,
+      "max_format_name_bytes": 261
+    },
+    "private_source_code_and_history_bodies_exported": false,
+    "physical_keyboard_ime_and_memory": "not revalidated"
+  },
+  "package": {
+    "app": "build/Anywhere-0.14-preview-build19.app",
+    "zip": "build/Anywhere-0.14-preview-build19-macos-arm64.zip",
+    "sha256": "bf1eb4b560823f6ebf69d3e9f9bffe0ef5fb29cfc414439e0883f9498b67d252",
+    "persistent_signature_and_archive_checks": "passed",
+    "impeller": true,
+    "release_published": false
+  }
+}

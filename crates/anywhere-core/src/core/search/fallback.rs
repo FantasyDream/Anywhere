@@ -77,6 +77,8 @@ impl TextFallbackSource<'_> {
                 }
                 let level = action.search().matched(query);
                 Some(Candidate {
+                    guard: None,
+                    usage: Default::default(),
                     presentation: CandidatePresentation {
                         localized_titles: action.localized_titles.clone(),
                         shortcut: None,
@@ -99,7 +101,6 @@ impl TextFallbackSource<'_> {
                         context_keys: Vec::new(),
                         execution_context_id: None,
                         execution_target_label: None,
-                        home_eligible: action.home_eligible,
                         primary_action: action.primary_action,
                         section_label: Some(self.registry.label(&action.group_id)),
                     },

@@ -34,6 +34,7 @@ pub struct ActivationCapture {
 pub struct SessionResolution {
     pub search_candidates: Vec<Candidate>,
     pub object_actions: Vec<Candidate>,
+    pub object_action_epoch: Arc<std::sync::atomic::AtomicU64>,
     pub source_candidates: BTreeMap<String, Vec<Candidate>>,
     pub search_sources: Vec<SearchSourcePresentation>,
     pub file_search: Option<FileSearchProgress>,
@@ -96,6 +97,9 @@ impl LauncherSession {
     }
 
     pub fn begin_revision(&mut self, revision: Revision, input: String) {
+        self.resolution
+            .object_action_epoch
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
         self.resolution.search_candidates.clear();
         self.resolution.object_actions.clear();
         self.resolution.source_candidates.clear();

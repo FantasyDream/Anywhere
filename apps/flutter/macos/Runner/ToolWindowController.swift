@@ -7,20 +7,29 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
   private(set) var window: NSWindow?
   private(set) var controller: FlutterViewController?
   private var channel: FlutterMethodChannel?
+  private var previewHost: NativePreviewHost?
   private var ready = false
   private var localeHost: LocaleHost?
   private let entrypoint: String
   private let channelName: String
   private let title: () -> String
+  private let onPerformanceEvent: ([String: Any]) -> Void
   private var localeObservers: [NSObjectProtocol] = []
   private var activationObserver: NSObjectProtocol?
   private var destination: NSRunningApplication?
   private let focusReturner = ApplicationFocusReturner()
+  private let closeCoordinator = FlutterWindowCloseCoordinator()
 
-  init(entrypoint: String, channelName: String, title: @autoclosure @escaping () -> String) {
+  init(
+    entrypoint: String,
+    channelName: String,
+    title: @autoclosure @escaping () -> String,
+    onPerformanceEvent: @escaping ([String: Any]) -> Void = { _ in }
+  ) {
     self.entrypoint = entrypoint
     self.channelName = channelName
     self.title = title
+    self.onPerformanceEvent = onPerformanceEvent
     super.init()
     rememberDestination(NSWorkspace.shared.frontmostApplication)
     activationObserver = NSWorkspace.shared.notificationCenter.addObserver(
@@ -62,6 +71,7 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
   }
 
   func show() -> Bool {
+    if closeCoordinator.openAfterClose({ [weak self] in _ = self?.show() }) { return true }
     rememberDestination(NSWorkspace.shared.frontmostApplication)
     let pointer = NSEvent.mouseLocation
     let screen =
@@ -80,7 +90,16 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
           return
         }
         switch call.method {
-        case "paths": reply(["library": HostRuntime.libraryPath])
+        case "paths":
+          reply([
+            "library": HostRuntime.libraryPath,
+            "profileUi": PresentationDiagnostics.enabled ? "1" : "0",
+          ])
+        case "performanceSample":
+          if let event = PresentationDiagnostics.event(call.arguments, visible: self.isVisible) {
+            self.onPerformanceEvent(event)
+          }
+          reply(nil)
         case "capabilities": reply(HostRuntime.capabilities)
         case "ready":
           self.ready = true
@@ -104,8 +123,14 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
       guard view.engine.run(withEntrypoint: entrypoint) else {
         transport.setMethodCallHandler(nil)
         localeHost = nil
+        FlutterEngineLifecycle.detach(view)
         return false
       }
+      previewHost = NativePreviewHost(
+        messenger: view.engine.binaryMessenger,
+        owner: { [weak self] in self?.window }
+      )
+      FlutterAccessibilityState.shared.synchronizeNewEngine()
       let size = ToolWindowPlacement.preferredSize
       let panel = NSWindow(
         contentRect: NSRect(origin: .zero, size: size),
@@ -161,19 +186,37 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
   private func publishVisibility() {
     if ready { channel?.invokeMethod("visibility", arguments: isVisible) }
   }
-  func windowDidMiniaturize(_ notification: Notification) { publishVisibility() }
+  func windowDidMiniaturize(_ notification: Notification) {
+    previewHost?.close()
+    publishVisibility()
+  }
   func windowDidDeminiaturize(_ notification: Notification) { publishVisibility() }
   func applicationVisibilityChanged() { publishVisibility() }
 
+  func windowShouldClose(_ sender: NSWindow) -> Bool {
+    guard sender === window, ready, let channel else { return true }
+    return closeCoordinator.shouldClose(
+      prepare: { finish in
+        channel.invokeMethod("prepareToClose", arguments: nil) { _ in finish() }
+      },
+      close: { [weak sender] in sender?.performClose(nil) }
+    )
+  }
+
   func windowWillClose(_ notification: Notification) {
     guard notification.object as? NSWindow === window else { return }
+    previewHost?.close()
+    previewHost = nil
     channel?.invokeMethod("visibility", arguments: false)
     channel?.setMethodCallHandler(nil)
+    localeHost = nil
+    (window?.contentViewController as? WindowMaterialController)?.detachContent()
+    FlutterEngineLifecycle.detach(controller)
     window?.contentViewController = nil
     window = nil
-    localeHost = nil
     controller = nil
     channel = nil
     ready = false
+    closeCoordinator.didClose()
   }
 }

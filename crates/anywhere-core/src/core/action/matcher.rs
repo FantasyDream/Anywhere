@@ -12,6 +12,7 @@ use crate::core::search::candidate_source::{CandidateSource, SearchContext};
 use crate::core::search::query::{MatchLevel, Query, SearchFields};
 use crate::core::session::facts::{context_ownership, Ownership, SessionFacts};
 use anywhere_protocol::*;
+use std::cell::OnceCell;
 
 pub struct ActionMatcher<'a> {
     registry: &'a ActionRegistry,
@@ -97,6 +98,9 @@ impl ActionMatcher<'_> {
                 Ownership::App(app) => Some(app),
                 Ownership::Ambient => None,
             };
+            // The qualifier depends on the context and query, not on each menu.
+            // Compute it only if a title did not directly match.
+            let qualified_query = OnceCell::new();
             for action in self.registry.matching(context) {
                 let group_id = match &context.value {
                     ContextValue::Application { bundle_id, .. }
@@ -119,34 +123,33 @@ impl ActionMatcher<'_> {
                         }
                         _ => false,
                     };
-                if matches!(
-                    action.executor,
-                    super::descriptor::ActionExecutor::WebCommand(_)
-                ) && context.source == ContextSource::UserInput
-                    && context.type_id == TEXT
-                    && !content_match
-                {
-                    continue;
+                if let super::descriptor::ActionExecutor::WebCommand(command) = &action.executor {
+                    if !content_match
+                        && (command.require_input_match
+                            || (context.source == ContextSource::UserInput
+                                && context.type_id == TEXT))
+                    {
+                        continue;
+                    }
                 }
                 let action_query = if searching && scope_id.is_none() && action.owning_app.is_some()
                 {
                     // A command such as Finder's "Find" must keep its direct title match
                     // even when the same token is also a prefix of the application name.
-                    if SearchFields::new(&action.title, &[], &[])
-                        .matched(query)
-                        .is_some_and(|level| level >= MatchLevel::WordPrefix)
-                    {
-                        query.clone()
+                    if action.title_matches_word_prefix(query) {
+                        query
                     } else {
-                        match qualified_app_query(query, &context.value) {
+                        match qualified_query
+                            .get_or_init(|| qualified_app_query(query, &context.value))
+                        {
                             Some(query) => query,
                             None => continue,
                         }
                     }
                 } else {
-                    query.clone()
+                    query
                 };
-                let match_level = action.search().matched(&action_query);
+                let match_level = action.search().matched(action_query);
                 if searching
                     && match_level.is_none()
                     && !availability::is_user_object(context)
@@ -154,7 +157,7 @@ impl ActionMatcher<'_> {
                 {
                     continue;
                 }
-                // Declared content matchers narrow automatic suggestions. An explicit
+                // Optional content matchers narrow automatic suggestions. An explicit
                 // keyword still opens the tool for editing invalid/incomplete input.
                 if let super::descriptor::ActionExecutor::WebCommand(command) = &action.executor {
                     if context.type_id == TEXT
@@ -175,7 +178,7 @@ impl ActionMatcher<'_> {
                 } else {
                     Default::default()
                 };
-                let mut score = score::score(
+                let score = score::score(
                     match_level,
                     searching,
                     context.source,
@@ -184,10 +187,9 @@ impl ActionMatcher<'_> {
                     stats,
                     self.now,
                 );
-                if !searching {
-                    score += home_bonus(context);
-                }
                 candidates.push(Candidate {
+                    guard: None,
+                    usage: stats,
                     presentation: CandidatePresentation {
                         localized_titles: action.localized_titles.clone(),
                         id: action_execution_candidate_id(action, context),
@@ -205,15 +207,17 @@ impl ActionMatcher<'_> {
                         availability,
                         command_id: Some(action.id.clone()),
                         bundle_id: None,
-                        owning_app: owned_by.clone().or_else(|| action.owning_app.clone()),
+                        owning_app: if context.type_id == LAUNCHER_ENTRY_CONTEXT {
+                            action.owning_app.clone().or_else(|| owned_by.clone())
+                        } else {
+                            owned_by.clone().or_else(|| action.owning_app.clone())
+                        },
                         menu_path: action.menu_path.clone(),
                         context_keys: vec![crate::core::context::navigation::root_key(
                             context, contexts,
                         )],
                         execution_context_id: Some(context.id.clone()),
                         execution_target_label: Some(context.display_detail()),
-                        home_eligible: action.home_eligible
-                            || (!action.menu_path.is_empty() && stats.execute_count > 0),
                         primary_action: action.primary_action,
                         section_label: Some(match &context.value {
                             ContextValue::Application { name, .. }
@@ -239,20 +243,13 @@ impl ActionMatcher<'_> {
 ///
 /// There is deliberately no per-group term here: Git actions only ever accept a
 /// `git.repository` context, so a rule keyed on a directory could never apply.
-fn home_bonus(context: &ResolvedContext) -> f32 {
-    match context.source {
-        ContextSource::FinderSelection => 240.0,
-        ContextSource::SelectedText => 220.0,
-        ContextSource::BrowserCurrentPage => 210.0,
-        ContextSource::ApplicationContext | ContextSource::ForegroundApplication => 200.0,
-        ContextSource::Clipboard => 80.0,
-        ContextSource::UserInput => 0.0,
-    }
-}
-
 fn subtitle(action: &ActionDescriptor, context: &ResolvedContext) -> String {
     if !action.menu_path.is_empty() {
         return action.menu_path.join(" › ");
+    }
+    // Extension values are opaque plugin payloads, not human-readable labels.
+    if matches!(&context.value, ContextValue::Extension(_)) {
+        return action.subtitle.clone().unwrap_or_default();
     }
     let detail = context.display_detail();
     match &action.subtitle {

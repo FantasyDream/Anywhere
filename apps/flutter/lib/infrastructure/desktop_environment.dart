@@ -74,8 +74,8 @@ class DesktopEnvironment {
   SingleActivator command(LogicalKeyboardKey key, {bool alt = false}) =>
       SingleActivator(key,
           meta: usesMetaCommand, control: !usesMetaCommand, alt: alt);
+  String get previewShortcutLabel => usesMetaCommand ? '⌘Y' : 'Alt+P';
   String commandShiftLabel(String key) =>
       commandLabel('${modifierLabels[shortcutShiftKey]}$key');
   String commandLabel(String key) => '${usesMetaCommand ? '⌘' : 'Ctrl+'}$key';
-  String altLabel(String key) => '${modifierLabels[shortcutAltKey]}$key';
 }

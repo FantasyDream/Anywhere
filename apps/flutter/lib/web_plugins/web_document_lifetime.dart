@@ -20,7 +20,14 @@ class WebDocumentLifetime {
       await _close(document);
       return false;
     }
+    final previous = _document;
     _document = document;
+    if (previous != null && previous.handle != document.handle) {
+      // Resume creates a new opaque runtime binding. The old binding may
+      // already be revoked by the broker, but releasing it here keeps the
+      // Flutter lifetime correct when a host implementation retains it.
+      await _close(previous);
+    }
     return true;
   }
 
@@ -32,11 +39,16 @@ class WebDocumentLifetime {
     }
   }
 
-  Future<void> dispose() async {
-    _disposed = true;
-    invalidate();
+  /// Detach and close the current binding exactly once before replacing it.
+  Future<void> closeCurrent() async {
     final document = _document;
     _document = null;
     if (document != null) await _close(document);
+  }
+
+  Future<void> dispose() async {
+    _disposed = true;
+    invalidate();
+    await closeCurrent();
   }
 }

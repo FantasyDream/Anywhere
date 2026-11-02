@@ -42,6 +42,31 @@ void main() {
   tearDown(DesktopEnvironment.reset);
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  testWidgets('late output copy failure does not use an unmounted page',
+      (tester) async {
+    final pending = Completer<void>();
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+      if (call.method == 'Clipboard.setData') await pending.future;
+      return null;
+    });
+    addTearDown(() =>
+        messenger.setMockMethodCallHandler(SystemChannels.platform, null));
+    var errors = 0;
+    await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+            body: ExecutionOutputView(
+                detail: detail('a'), onError: (_) => errors++))));
+    await tester.pump();
+    await tester.tap(find.byTooltip('Copy output'));
+    await tester.pumpWidget(const SizedBox());
+    pending.completeError(PlatformException(code: 'copy_failed'));
+    await tester.pump();
+    expect(errors, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   test('unchanged polls retain output and do not rebuild the task window',
       () async {
     var outputReads = 0;
@@ -508,13 +533,15 @@ void main() {
       'live output follows the tail but preserves the reader position until Latest',
       (tester) async {
     final text = List.generate(80, (i) => 'Line $i').join('\n');
-    Widget view(String output) => MaterialApp(
+    Widget view(String output, {String diagnostics = ''}) => MaterialApp(
         home: Scaffold(
             body: SizedBox(
                 height: 220,
                 child: ExecutionOutputView(
                     detail: ExecutionSessionDetailDto(
-                        summary: summary('a'), stdout: output, stderr: ''),
+                        summary: summary('a'),
+                        stdout: output,
+                        stderr: diagnostics),
                     onError: (_) {}))));
     await tester.pumpWidget(view(text));
     await tester.pump();
@@ -523,6 +550,13 @@ void main() {
             find.byKey(const Key('task-output-scroll')))
         .controller!;
     expect(scroll().position.extentAfter, 0);
+    scroll().jumpTo(scroll().position.maxScrollExtent - 12);
+    await tester.pump();
+    final nearBottom = scroll().offset;
+    await tester.pumpWidget(view(text, diagnostics: 'Background diagnostics'));
+    await tester.pump();
+    expect(scroll().offset, nearBottom,
+        reason: 'Output in a hidden stream must not move the reader');
     await tester.drag(
         find.byKey(const Key('task-output-scroll')), const Offset(0, 220));
     await tester.pump();
@@ -546,6 +580,48 @@ void main() {
         formatExecutionCommand(['/tmp/tool path', 'run', "it's a \$(literal)"]),
         "'/tmp/tool path' run 'it'\"'\"'s a \$(literal)'");
   });
+  testWidgets('Escape does not clear task search during composition',
+      (tester) async {
+    final controller = ExecutionSessionsController(ExecutionSessionsBackend(
+        list: () async => [summary('a')], detail: (id) async => detail(id)));
+    addTearDown(controller.dispose);
+    var hidden = 0;
+    controller.setVisible(true);
+    await tester.pumpWidget(MaterialApp(
+        theme: AppStyle.theme,
+        home: ListenableBuilder(
+            listenable: controller,
+            builder: (_, __) => ExecutionSessionsView(
+                controller: controller,
+                onOpenLauncher: () async {},
+                onHide: () async => hidden++))));
+    await tester.pump();
+    final search = find.byKey(const Key('task-search'));
+    await tester.showKeyboard(search);
+    tester.testTextInput.updateEditingValue(const TextEditingValue(
+        text: 'zhong',
+        selection: TextSelection.collapsed(offset: 5),
+        composing: TextRange(start: 0, end: 5)));
+    await tester.pump();
+    expect(controller.filter, 'zhong');
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(controller.filter, 'zhong');
+    expect(hidden, 0);
+    tester.testTextInput.updateEditingValue(const TextEditingValue(
+        text: '中', selection: TextSelection.collapsed(offset: 1)));
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(controller.filter, isEmpty);
+    expect(hidden, 0);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(hidden, 1);
+    controller.setVisible(false);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets(
       'failed tasks open diagnostics and Copy uses only the selected stream',
       (tester) async {

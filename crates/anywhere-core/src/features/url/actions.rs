@@ -56,7 +56,6 @@ pub fn bundle() -> ActionBundle {
                 icon: "globe",
                 aliases: &["browser", "open"],
                 keywords: &["link"],
-                home_eligible: true,
                 primary_action: true,
             },
             ActionSpec {
@@ -70,7 +69,6 @@ pub fn bundle() -> ActionBundle {
                 icon: "copy-url",
                 aliases: &["copy", "link", "clipboard"],
                 keywords: &["url"],
-                home_eligible: true,
                 primary_action: false,
             },
         ],

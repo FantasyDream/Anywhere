@@ -148,7 +148,7 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
         set.ranking_us += offers.ranking_us;
         offers.candidates
     };
-    let mut host_actions = workspace.binding_offers();
+    let mut host_actions = workspace.binding_offers(&context_candidates);
     let mut result_actions: Vec<_> = object_actions
         .iter()
         .filter_map(|candidate| {

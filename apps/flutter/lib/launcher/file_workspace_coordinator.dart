@@ -4,7 +4,7 @@ import 'launcher_backend.dart';
 import 'launcher_navigation.dart';
 import 'launcher_session_coordinator.dart';
 
-/// Owns tool state and asynchronous object/load requests. The Launcher controls
+/// Owns file filters and incremental result requests. The Launcher controls
 /// navigation and presentation; Rust controls which objects and actions exist.
 class FileWorkspaceCoordinator extends FileSearchController {
   FileWorkspaceCoordinator(super.load);
@@ -71,5 +71,12 @@ class FileWorkspaceCoordinator extends FileSearchController {
   void reset() {
     invalidateOperations();
     super.reset();
+  }
+
+  @override
+  void dispose() {
+    invalidateOperations();
+    returnLocation = null;
+    super.dispose();
   }
 }

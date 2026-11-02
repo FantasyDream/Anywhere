@@ -1,0 +1,63 @@
+{
+  "date": "2026-10-29",
+  "version": "0.14.0+36",
+  "platform": "macOS arm64",
+  "branch": "codex/dependency-upgrades",
+  "source_commit": "c98a8e759975a1065cc93300a4f02b3ec68b5a38",
+  "source_state": "Validated toolchain/dependency upgrade commit plus Flutter/native build number 36. No application behavior changed after the engineering gate.",
+  "toolchain": {
+    "rust": "1.99.1",
+    "cargo": "1.99.1",
+    "flutter": "3.47.8",
+    "dart": "3.13.7",
+    "flutter_rust_bridge": "2.13.0"
+  },
+  "impeller": true,
+  "signing": "Anywhere Local Code Signing; local development identity, not notarized",
+  "app": "build/Anywhere-0.14-preview-build36.app",
+  "archive": "build/Anywhere-0.14-preview-build36-macos-arm64.zip",
+  "archive_bytes": 17647077,
+  "archive_sha256": "f419f8cef7d3708e6a0856bc5342a09d230d93cb582ccc39b472b69e8ed2bd69",
+  "bundle_sha256": {
+    "Contents/Info.plist": "6941330e6108a47b155d6c0fd6ec376faf16125373b7c19f2488715af8147b15",
+    "Contents/MacOS/Anywhere": "6655c4522453fff395257a34780a4036d0917c3ac5a44e9728c63f68456dd168",
+    "Contents/Frameworks/libanywhere_bridge_flutter.dylib": "bd6df1a6e8c7ddad8e070391ff31c3d0a55949749b860fdc41c77d1bb7b4ccea",
+    "Contents/Frameworks/App.framework/App": "68de3d789f9ad7c3f95f3cf8ac2e3084bb4aedc9e956ebf36d4b216aeb2428b3",
+    "Contents/Frameworks/FlutterMacOS.framework/Versions/A/FlutterMacOS": "4225071d88bbe0f059fd97e73341361c9ac439de8a97ae9c9576a11a77478c5d"
+  },
+  "checks": {
+    "engineering_gate": "build/latest-full-check.log; exit 0 on upgrade source before the build-number-only change; Core 322 passed / 1 ignored, MVP 195 passed / 4 ignored, Platform 70 passed / 1 ignored, Flutter 471 passed / 1 skipped, SDK 25, JSON 30",
+    "ffi": "build/latest-bridge-runtime-test.log; explicit real Rust dynamic library call passed separately from the skipped opt-in Flutter test",
+    "version_check": "Rust 0.14.0, Flutter/native 0.14.0+36, FRB Dart/Rust/generated 2.13.0",
+    "build_log": "build/build36-build.log; exit 0",
+    "package_log": "build/build36-package.log; exit 0",
+    "signature": "codesign --verify --deep --strict passed; persistent signing identity",
+    "archive": "Main executable, Info.plist and Rust bridge archive bytes match the bundle; ZIP checksum file verified",
+    "engine": "Packaged arm64 Mach-O UUID 4C4C448D-5555-3144-A188-ECD6F84D3B0C matches Flutter 3.47.8 SDK release engine for arm64; the SDK also contains an unused x86_64 slice",
+    "startup": {
+      "previous_instances": [
+        {
+          "build": "35",
+          "bundle": "/Users/luckincoffee/Documents/Github/Anywhere/build/Anywhere-0.14-preview-build35.app",
+          "pid": 33732,
+          "version": "0.14.0"
+        }
+      ],
+      "previous_exit": "Graceful termination accepted and process exit confirmed",
+      "running": {
+        "build": "36",
+        "bundle": "/Users/luckincoffee/Documents/Github/Anywhere/build/Anywhere-0.14-preview-build36.app",
+        "pid": 13153,
+        "version": "0.14.0"
+      }
+    }
+  },
+  "build_warnings": "Existing upstream WebView Swift warnings; the linker reports -ld_classic is ignored. Build and strict signature verification succeeded.",
+  "plugin_boundary": "App packaging does not update installed web plugins; new SDK/example packages require independent import.",
+  "limits": [
+    "Startup identity only; no new GUI / physical IME / preview-format matrix",
+    "No process memory or frame-time measurements",
+    "No remote CI, public release or notarization",
+    "Upstream build-time dependency OSV version-range alert remains documented in toolchain-upgrades-2026-10-29.md"
+  ]
+}

@@ -18,6 +18,7 @@ struct Clipboard {
     on_read: Option<Box<dyn Fn() + Send + Sync>>,
     on_access: Option<Box<dyn Fn() -> Result<()> + Send + Sync>>,
     read_error: Option<ContextReadError>,
+    generation_error: bool,
 }
 impl Platform for Clipboard {
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
@@ -53,6 +54,9 @@ impl Platform for Clipboard {
         Ok(())
     }
     fn clipboard_generation(&self) -> Result<i64> {
+        if self.generation_error {
+            return Err(ContextReadError::Unavailable.into());
+        }
         Ok(self.generation.load(Ordering::Relaxed))
     }
     fn request_clipboard_history_access(&self) -> Result<()> {
@@ -78,6 +82,24 @@ impl Platform for Clipboard {
         })))
     }
 }
+
+#[test]
+fn failed_resume_metadata_does_not_block_startup_or_import_old_content() {
+    let (_directory, history, now) = timed_service();
+    history
+        .request_recording(true, &Clipboard::default())
+        .unwrap();
+    history.pause(5, &Clipboard::default()).unwrap();
+    now.fetch_add(300_000, Ordering::SeqCst);
+    let platform = Arc::new(Clipboard {
+        generation_error: true,
+        ..Default::default()
+    });
+    history.start(platform.clone()).unwrap();
+    assert!(history.status().unwrap().available);
+    assert!(!history.status().unwrap().recording);
+    assert_eq!(platform.reads.load(Ordering::Relaxed), 0);
+}
 fn service() -> (tempfile::TempDir, Arc<HistoryService>) {
     let directory = tempfile::tempdir().unwrap();
     let repository = crate::persistence::clipboard::SqliteHistoryRepository::open(
@@ -88,6 +110,342 @@ fn service() -> (tempfile::TempDir, Arc<HistoryService>) {
         directory,
         Arc::new(HistoryService::new(Ok(Box::new(repository)))),
     )
+}
+
+#[test]
+fn disabled_feature_reports_capture_inactive_without_losing_recording_preference() {
+    let (_directory, history) = service();
+    let platform = Clipboard::default();
+    history.request_recording(true, &platform).unwrap();
+    assert!(history.status().unwrap().recording);
+
+    history.set_feature_enabled(false, &platform).unwrap();
+    let disabled = history.status().unwrap();
+    assert!(!disabled.available && !disabled.recording);
+    assert!(disabled.recording_enabled);
+    platform.generation.store(1, Ordering::Relaxed);
+    history.poll(&platform, 1).unwrap();
+    assert_eq!(platform.reads.load(Ordering::Relaxed), 0);
+
+    history.set_feature_enabled(true, &platform).unwrap();
+    let enabled = history.status().unwrap();
+    assert!(enabled.available && enabled.recording && enabled.recording_enabled);
+    history.poll(&platform, 2).unwrap();
+    assert!(history.search("").unwrap().is_empty());
+    platform.generation.store(2, Ordering::Relaxed);
+    history.poll(&platform, 3).unwrap();
+    assert_eq!(platform.reads.load(Ordering::Relaxed), 1);
+    assert_eq!(history.search("").unwrap().len(), 1);
+}
+
+fn timed_service() -> (tempfile::TempDir, Arc<HistoryService>, Arc<AtomicI64>) {
+    let directory = tempfile::tempdir().unwrap();
+    let repository = crate::persistence::clipboard::SqliteHistoryRepository::open(
+        &directory.path().join("clipboard.sqlite3"),
+    )
+    .unwrap();
+    let now = Arc::new(AtomicI64::new(10 * super::policy::DAY_MS));
+    let clock = now.clone();
+    let service = Arc::new(HistoryService::with_clock(
+        Ok(Box::new(repository)),
+        Arc::new(move || clock.load(Ordering::SeqCst)),
+    ));
+    (directory, service, now)
+}
+
+#[test]
+fn conditional_snapshots_cover_capture_dedup_delete_clear_query_and_policy() {
+    let (_directory, history, _now) = timed_service();
+    let platform = Clipboard::default();
+    let mut snapshot = history.snapshot("", None).unwrap().unwrap();
+    assert!(history
+        .snapshot("", Some(&snapshot.revision))
+        .unwrap()
+        .is_none());
+    history.request_recording(true, &platform).unwrap();
+    snapshot = history
+        .snapshot("", Some(&snapshot.revision))
+        .unwrap()
+        .unwrap();
+    assert!(snapshot.status.recording);
+    for generation in 1..=2 {
+        platform.generation.store(generation, Ordering::SeqCst);
+        history.poll(&platform, 1_000_000 + generation).unwrap();
+        snapshot = history
+            .snapshot("", Some(&snapshot.revision))
+            .unwrap()
+            .unwrap();
+        assert_eq!(snapshot.items.len(), generation as usize);
+    }
+    // A duplicate payload changes its recency even though the row count stays fixed.
+    let duplicate = Clipboard {
+        generation: AtomicI64::new(3),
+        payload: Some(anywhere_platform::clipboard::ClipboardPayload::text(
+            "generation 1",
+        )),
+        ..Default::default()
+    };
+    history.poll(&duplicate, 1_000_003).unwrap();
+    snapshot = history
+        .snapshot("", Some(&snapshot.revision))
+        .unwrap()
+        .unwrap();
+    assert_eq!(snapshot.items.len(), 2);
+    assert_eq!(snapshot.items[0].summary, "generation 1");
+    history.delete(snapshot.items[0].id).unwrap();
+    snapshot = history
+        .snapshot("", Some(&snapshot.revision))
+        .unwrap()
+        .unwrap();
+    assert_eq!(snapshot.items.len(), 1);
+    assert!(history
+        .snapshot("missing", Some(&snapshot.revision))
+        .unwrap()
+        .unwrap()
+        .items
+        .is_empty());
+    history.pause(5, &platform).unwrap();
+    snapshot = history
+        .snapshot("", Some(&snapshot.revision))
+        .unwrap()
+        .unwrap();
+    assert_eq!(snapshot.status.notice, Some(HistoryNotice::Paused));
+    history.clear().unwrap();
+    snapshot = history
+        .snapshot("", Some(&snapshot.revision))
+        .unwrap()
+        .unwrap();
+    assert!(snapshot.items.is_empty());
+    history.set_feature_enabled(false, &platform).unwrap();
+    snapshot = history
+        .snapshot("", Some(&snapshot.revision))
+        .unwrap()
+        .unwrap();
+    assert!(!snapshot.status.available);
+    assert_eq!(snapshot.status.notice, Some(HistoryNotice::FeatureDisabled));
+    history.set_feature_enabled(true, &platform).unwrap();
+    assert!(
+        history
+            .snapshot("", Some(&snapshot.revision))
+            .unwrap()
+            .unwrap()
+            .status
+            .available
+    );
+}
+
+#[test]
+fn conditional_snapshots_still_expire_rows_and_publish_notice_and_resume_changes() {
+    let (_directory, history, now) = timed_service();
+    let platform = Clipboard::default();
+    history.request_recording(true, &platform).unwrap();
+    platform.generation.store(1, Ordering::SeqCst);
+    history.poll(&platform, now.load(Ordering::SeqCst)).unwrap();
+    history.set_retention_days(1).unwrap();
+    let snapshot = history.snapshot("", None).unwrap().unwrap();
+    assert_eq!(snapshot.items.len(), 1);
+    now.fetch_add(86_400_001, Ordering::SeqCst);
+    let expired = history
+        .snapshot("", Some(&snapshot.revision))
+        .unwrap()
+        .unwrap();
+    assert!(expired.items.is_empty());
+    assert!(history
+        .snapshot("", Some(&expired.revision))
+        .unwrap()
+        .is_none());
+    let denied = Clipboard {
+        generation: AtomicI64::new(2),
+        read_error: Some(ContextReadError::PermissionDenied),
+        ..Default::default()
+    };
+    history.poll(&denied, now.load(Ordering::SeqCst)).unwrap();
+    let denied = history
+        .snapshot("", Some(&expired.revision))
+        .unwrap()
+        .unwrap();
+    assert_eq!(denied.status.notice, Some(HistoryNotice::AccessRequired));
+    history.pause(5, &platform).unwrap();
+    let paused = history.snapshot("", None).unwrap().unwrap();
+    now.fetch_add(300_001, Ordering::SeqCst);
+    history.maintain(&platform).unwrap();
+    let resumed = history
+        .snapshot("", Some(&paused.revision))
+        .unwrap()
+        .unwrap();
+    assert!(resumed.status.recording);
+    assert!(resumed.status.notice.is_none());
+}
+
+#[test]
+fn background_resume_needs_no_open_window_and_drop_releases_the_worker() {
+    let (_directory, history, now) = timed_service();
+    let platform = Arc::new(Clipboard::default());
+    history.request_recording(true, platform.as_ref()).unwrap();
+    history.pause(5, platform.as_ref()).unwrap();
+    history.start(platform.clone()).unwrap();
+    now.fetch_add(300_000, Ordering::SeqCst);
+    // The injected wall clock advanced without waiting five real minutes.
+    history.wake_maintenance();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !history.status().unwrap().recording {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "background resume did not run"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(platform.reads.load(Ordering::Relaxed), 0);
+    let weak = Arc::downgrade(&history);
+    let platform_weak = Arc::downgrade(&platform);
+    drop(platform);
+    drop(history);
+    assert!(weak.upgrade().is_none());
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while platform_weak.upgrade().is_some() {
+        assert!(
+            std::time::Instant::now() < deadline,
+            "worker retained the platform"
+        );
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+}
+
+#[test]
+fn query_limits_are_enforced_at_both_service_entries() {
+    let (_directory, history, _now) = timed_service();
+    let query = "q".repeat(MAX_QUERY_BYTES + 1);
+    assert!(history.search(&query).is_err());
+    assert!(history.snapshot(&query, None).is_err());
+}
+
+#[test]
+fn timed_pause_survives_restart_and_resumes_without_importing_paused_copies() {
+    let (directory, history, now) = timed_service();
+    let platform = Clipboard::default();
+    history.request_recording(true, &platform).unwrap();
+    history.pause(5, &platform).unwrap();
+    let deadline = now.load(Ordering::SeqCst) + 300_000;
+    let status = history.status().unwrap();
+    assert!(status.recording_enabled && !status.recording);
+    assert_eq!(status.policy.paused_until_ms, Some(deadline));
+    drop(history);
+    let repository = crate::persistence::clipboard::SqliteHistoryRepository::open(
+        &directory.path().join("clipboard.sqlite3"),
+    )
+    .unwrap();
+    let clock = now.clone();
+    let history = HistoryService::with_clock(
+        Ok(Box::new(repository)),
+        Arc::new(move || clock.load(Ordering::SeqCst)),
+    );
+    platform.generation.store(1, Ordering::Relaxed);
+    history.poll(&platform, deadline - 1).unwrap();
+    assert_eq!(platform.reads.load(Ordering::Relaxed), 0);
+    now.store(deadline, Ordering::SeqCst);
+    history.maintain(&platform).unwrap();
+    history.poll(&platform, deadline).unwrap();
+    assert!(history.status().unwrap().recording);
+    assert_eq!(platform.reads.load(Ordering::Relaxed), 0);
+    platform.generation.store(2, Ordering::Relaxed);
+    history.poll(&platform, deadline + 1).unwrap();
+    assert_eq!(history.search("").unwrap()[0].summary, "generation 2");
+}
+
+#[test]
+fn pause_revokes_a_late_native_read_and_explicit_resume_excludes_existing_content() {
+    let (_directory, history, now) = timed_service();
+    let target = history.clone();
+    let platform = Clipboard {
+        on_read: Some(Box::new(move || {
+            target.pause(15, &Clipboard::default()).unwrap()
+        })),
+        ..Default::default()
+    };
+    history.request_recording(true, &platform).unwrap();
+    platform.generation.store(1, Ordering::Relaxed);
+    history.poll(&platform, now.load(Ordering::SeqCst)).unwrap();
+    assert!(history.search("").unwrap().is_empty());
+    history.pause(0, &platform).unwrap();
+    history.poll(&platform, now.load(Ordering::SeqCst)).unwrap();
+    assert_eq!(platform.reads.load(Ordering::Relaxed), 1);
+    history.pause(60, &platform).unwrap();
+    history.request_recording(false, &platform).unwrap();
+    assert!(history.status().unwrap().policy.paused_until_ms.is_none());
+    now.fetch_add(3_600_000, Ordering::SeqCst);
+    history.maintain(&platform).unwrap();
+    assert!(!history.status().unwrap().recording_enabled);
+}
+
+#[test]
+fn expired_history_cannot_be_searched_previewed_or_copied_and_formats_are_deleted() {
+    let (directory, history, now) = timed_service();
+    let platform = Clipboard::default();
+    history.request_recording(true, &platform).unwrap();
+    history.set_retention_days(1).unwrap();
+    platform.generation.store(1, Ordering::Relaxed);
+    history.poll(&platform, now.load(Ordering::SeqCst)).unwrap();
+    let id = history.search("").unwrap()[0].id;
+    now.fetch_add(super::policy::DAY_MS, Ordering::SeqCst);
+    assert!(history
+        .inspect_payload(id, |_, payload| Ok(payload))
+        .unwrap()
+        .is_none());
+    assert!(history.copy(id, &platform).is_err());
+    assert!(history.search("").unwrap().is_empty());
+    assert!(platform.written.lock().unwrap().is_empty());
+    assert_eq!(history.usage().unwrap(), (0, 0));
+    let connection =
+        rusqlite::Connection::open(directory.path().join("clipboard.sqlite3")).unwrap();
+    assert_eq!(
+        connection
+            .query_row("SELECT COUNT(*) FROM clipboard_formats", [], |r| r
+                .get::<_, usize>(0))
+            .unwrap(),
+        0
+    );
+}
+
+#[test]
+fn expiry_or_policy_change_during_preview_never_publishes_the_old_body() {
+    for change_policy in [false, true] {
+        let (_directory, history, now) = timed_service();
+        let platform = Clipboard::default();
+        history.request_recording(true, &platform).unwrap();
+        history.set_retention_days(1).unwrap();
+        platform.generation.store(1, Ordering::Relaxed);
+        history.poll(&platform, now.load(Ordering::SeqCst)).unwrap();
+        let id = history.search("").unwrap()[0].id;
+        let result = history
+            .inspect_payload(id, |_item, payload| {
+                if change_policy {
+                    history.set_retention_days(7).unwrap();
+                } else {
+                    now.fetch_add(super::policy::DAY_MS, Ordering::SeqCst);
+                }
+                Ok(payload)
+            })
+            .unwrap();
+        assert!(result.is_none());
+    }
+}
+
+#[test]
+fn shortening_retention_is_immediate_and_expanding_it_does_not_restore_deleted_entries() {
+    let (_directory, history, now) = timed_service();
+    let platform = Clipboard::default();
+    history.request_recording(true, &platform).unwrap();
+    platform.generation.store(1, Ordering::Relaxed);
+    history.poll(&platform, now.load(Ordering::SeqCst)).unwrap();
+    now.fetch_add(2 * super::policy::DAY_MS, Ordering::SeqCst);
+    assert_eq!(history.search("").unwrap().len(), 1);
+    history.set_retention_days(1).unwrap();
+    assert!(history.search("").unwrap().is_empty());
+    history.set_retention_days(0).unwrap();
+    assert!(history.search("").unwrap().is_empty());
+    assert!(history.pause(2, &platform).is_err());
+    assert!(history.set_retention_days(u32::MAX).is_err());
+    assert_eq!(history.status().unwrap().policy.retention_days, 0);
 }
 #[test]
 fn status_exposes_policy_facts_for_disabled_storage_permission_and_capture_failures() {
@@ -237,7 +595,9 @@ fn disable_or_clear_during_native_read_revokes_the_pending_write() {
         service.poll(&platform, 1).unwrap();
         if disable {
             assert!(service.search("").is_err());
-            assert!(service.detail(1).is_err());
+            assert!(service
+                .inspect_payload(1, |_, payload| Ok(payload))
+                .is_err());
             assert!(service.copy(1, &platform).is_err());
             assert!(service.set_recording(true).is_err());
             service.set_feature_enabled(true, &platform).unwrap();
@@ -247,7 +607,7 @@ fn disable_or_clear_during_native_read_revokes_the_pending_write() {
 }
 
 #[test]
-fn captured_multiformat_item_restores_all_original_formats() {
+fn captured_multiformat_item_restores_long_format_names_and_original_bytes() {
     use anywhere_platform::clipboard::{ClipboardFormat, ClipboardPayload};
     let (_directory, service) = service();
     let payload = ClipboardPayload {
@@ -257,7 +617,7 @@ fn captured_multiformat_item_restores_all_original_formats() {
                 data: vec![137, 80, 78, 71],
             },
             ClipboardFormat {
-                name: "com.example.binary".into(),
+                name: format!("dyn.{}", "a".repeat(257)),
                 data: vec![0, 255, 1],
             },
         ],
@@ -271,7 +631,10 @@ fn captured_multiformat_item_restores_all_original_formats() {
     service.poll(&platform, 1).unwrap();
     let item = service.search("").unwrap().remove(0);
     assert_eq!(item.kind, "image");
-    let preview = service.detail(item.id).unwrap().unwrap();
+    let preview = service
+        .inspect_payload(item.id, |_, payload| Ok(payload))
+        .unwrap()
+        .unwrap();
     assert_eq!(preview.formats.len(), 2);
     service.copy(item.id, &platform).unwrap();
     let written = platform.written.lock().unwrap();
@@ -290,13 +653,13 @@ fn deletion_clear_and_disable_during_preview_revoke_its_result() {
         platform.generation.store(1, Ordering::Relaxed);
         service.poll(&platform, 1).unwrap();
         let id = service.search("").unwrap()[0].id;
-        let result = service.detail_with(id, |item, payload| {
+        let result = service.inspect_payload(id, |_item, payload| {
             match operation {
                 "delete" => service.delete(id).unwrap(),
                 "clear" => service.clear().unwrap(),
                 _ => service.set_feature_enabled(false, &platform).unwrap(),
             }
-            super::super::content::preview(item, payload)
+            Ok(payload)
         });
         if operation == "disable" {
             assert!(result.is_err());
@@ -318,10 +681,10 @@ fn preview_admission_serializes_bodies_without_blocking_policy_or_storage() {
     let (release_tx, release_rx) = std::sync::mpsc::channel();
     let first_service = service.clone();
     let first = std::thread::spawn(move || {
-        first_service.detail_with(id, |item, payload| {
+        first_service.inspect_payload(id, |_item, payload| {
             entered_tx.send(()).unwrap();
             release_rx.recv().unwrap();
-            super::super::content::preview(item, payload)
+            Ok(payload)
         })
     });
     entered_rx.recv().unwrap();
@@ -330,7 +693,8 @@ fn preview_admission_serializes_bodies_without_blocking_policy_or_storage() {
     service.set_recording(false).unwrap();
     service.delete(id).unwrap();
     let second_service = service.clone();
-    let second = std::thread::spawn(move || second_service.detail(id));
+    let second =
+        std::thread::spawn(move || second_service.inspect_payload(id, |_, payload| Ok(payload)));
     release_tx.send(()).unwrap();
     assert!(first.join().unwrap().unwrap().is_none());
     assert!(second.join().unwrap().unwrap().is_none());

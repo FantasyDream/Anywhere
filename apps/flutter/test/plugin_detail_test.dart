@@ -34,7 +34,6 @@ const row = CandidateDto(
     title: 'Inspect Context',
     menuPath: [],
     contextKeys: [],
-    homeEligible: true,
     primaryAction: true,
     iconKey: 'file',
     score: 100,

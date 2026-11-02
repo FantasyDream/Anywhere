@@ -1,0 +1,58 @@
+{
+  "date": "2026-10-27",
+  "app": "0.14.0+24",
+  "plugin": "0.7.0",
+  "source_base_commit": "8a3e757970c1e477979bbc8e8774bb19f92fbb6f",
+  "source_state": "working tree, not committed by this change",
+  "contract": {
+    "context_type": "plugin.dev.anywhere.json-workspace.json",
+    "value": "{text: decoded valid JSON text}; no conversion of document numbers to JS Number",
+    "resolver_input": "authorized core.text",
+    "resolver_output": "one normalized JSON Context for plain, quoted, bare-escaped or nested-escaped objects/arrays",
+    "commands": [
+      "open",
+      "copy-format",
+      "copy-minify",
+      "copy-escaped"
+    ],
+    "removed": "Unescape command, UI operation, translations, launch route and escaped Context type",
+    "empty_workspace": "Name search still opens Workspace without an object; all four commands accept the same JSON type for content execution"
+  },
+  "checks": {
+    "full_gate": "passed; build/json-context-0.7-check.log",
+    "core_passed": 317,
+    "core_ignored": 1,
+    "mvp_passed": 195,
+    "mvp_ignored": 4,
+    "flutter_passed": 435,
+    "sdk_passed": 21,
+    "json_passed": 30,
+    "real_package_conformance": "passed in full gate; quoted, bare and nested input reach the same four actions, normalized payload and token-preserving copies",
+    "unit_coverage": "one Context for up to four escaping layers, invalid/oversized inputs, exact tokens, rejection of removed action, unified accepts/produces, storage and consent, launch ordering and draft protection"
+  },
+  "package": {
+    "path": "build/web-examples/json-workspace-0.7.0.awplugin",
+    "sha256": "fb626c1ea740f3717216e62133cfdc02350bd5103d4f81410b078d2f6aafbf22",
+    "content_digest": "81ecd1870018a03778c0519dc775f88efced498cea2dfeaf56ddbc3657342805",
+    "inspection": "passed; build/json-context-0.7-inspect.log"
+  },
+  "native": {
+    "installed": true,
+    "update": "approved 0.7.0 through Settings after reviewing core.text + the single .json type, clipboard.writeText and private storage",
+    "observed": [
+      "Escaped input offers exactly Workspace and three copy commands; Unescape absent",
+      "Workspace preloads decoded JSON with duplicate keys, large integer and exponent tokens preserved",
+      "Workspace JSON menu has three copy operations, indentation and Clear; Unescape absent",
+      "Background minify reaches Host consent directly, preview contains decoded JSON, no editor created"
+    ],
+    "clipboard": "No new write was approved in this smoke test. The user changed focus before the planned Cancel click; the next observation showed Current App without a consent panel. Cancellation semantics also passed automated conformance.",
+    "screenshots": [
+      "build/ui-json-0.7.0/normalized-actions.png",
+      "build/ui-json-0.7.0/workspace-menu.png"
+    ]
+  },
+  "limits": [
+    "No new physical IME, memory/GPU-helper or cross-platform measurement",
+    "Older installed packages keep their own declarations until updated; legacy Host compatibility fixtures were intentionally retained"
+  ]
+}

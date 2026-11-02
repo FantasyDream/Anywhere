@@ -1,6 +1,6 @@
 # 文档导航
 
-当前开发：**V0.12 中英国际化与拼音检索**。最后整理：2026-10-23。先从[项目首页](../README.md)了解功能和平台状态。
+当前源码为 **V0.14 开发预览**，已接入应用历史、所选对象动作与统一频次排序；完整发布和实机矩阵尚未完成；此前 V0.13 已完成工程检查与该轮常规 macOS 验收，均不等于正式发行。最后整理：2026-10-27。先从[项目首页](../README.md)了解功能和平台状态。
 
 ## 使用与参与
 
@@ -18,13 +18,15 @@
 
 | 文档 | 用途 |
 |---|---|
+| [仓库阅读入口](../AGENTS.md) | AI / 开发者的代码地图、稳定边界与验证入口 |
 | [架构](architecture.md) | Rust / Flutter / Host 分工、静态模块、快照、取消与执行 |
 | [Context 模型](context-model.md) | 类型、来源、Provider 图、等价与身份 |
 | [默认输入](context-input-navigation.md) | 选中文本、15 秒剪贴板、InputMode 和 Esc |
 | [Launcher 交互](launcher-interaction.md) | Scope、菜单、二级操作、快捷键和隐藏恢复 |
 | [Current App 菜单](current-app-actions.md) | Hidden、定位、重扫、身份和安全降级 |
-| [文件搜索](file-search.md) | 范围、权限、稳定连续结果、固定预览和临时存储 |
+| [文件搜索](file-search.md) | 范围、权限、稳定连续结果、系统预览和临时存储 |
 | [开发动作](developer-actions.md) | Git、项目识别、IDEA 来源和后台进程 |
+| [系统预览](native-preview.md) | 按需窗口、空格输入边界、资源租约与跨平台接口 |
 | [共享 UI](ui-design.md) | 组件、材质、交互信息层级与平台回退 |
 | [性能](performance.md) | 资源预算、取消、测量方法和历史样本边界 |
 | [跨平台](platform-portability.md) | 平台能力、路径、快捷键与未完成的 Windows 接入 |
@@ -36,10 +38,14 @@
 | [第三方插件开发](plugin-development.md) | 独立模板、SDK、统一样式、权限、打包与更新 |
 | [Web 插件架构](web-plugin-design.md) | 包身份、能力代理、Context 输入、生命周期和系统边界 |
 | [旧声明式协议](plugin-protocol.md) | v1 / v2 / v3 兼容行为；停止扩展 UI DSL |
-| [V0.12 MVP](mvp-v0.12.md) | 当前范围、工程 / 实机验收及未完成项 |
+| [V0.13 MVP](mvp-v0.13.md) | 前一阶段的收尾证据、已知 SDK / 资源边界及后续发布检查 |
+| [V0.14 范围与验收](mvp-v0.14.md) | 已接入功能、未交付 / 未验收范围、代码入口与最新验证基线 |
+| [V0.12 MVP](mvp-v0.12.md) | 上一阶段工程与真实键盘验收基线 |
 | [路线图](roadmap.md) | 后续功能、依赖与 1.0 门槛 |
-| [应用历史与收藏设计](application-history.md) | V0.14 计划：跨应用最近对象 / 书签、统一搜索与原应用打开；尚未实现 |
-| [第三方 Context 调研](research/third-party-context-providers.md) | 尚未实现的类型注册、隔离和 worker 选型 |
+| [应用历史设计](application-history.md) | V0.14：IDE / 编辑器 / 笔记最近对象与原应用打开；当前已有 18 个配置化来源 |
+| [独立浏览器规划](browser-feature.md) | 后续单独实现历史、书签与 Tab 管理；尚未实现，版本待定 |
+| [应用历史来源指南](application-history-sources.md) | 内置 / 用户配置、通用读取器、安装默认开关、自定义路径与当前限额 |
+| [第三方 Context 调研](research/third-party-context-providers.md) | 已落地的派生类型边界、历史调研与后续进程隔离 |
 
 ## 历史与研究
 

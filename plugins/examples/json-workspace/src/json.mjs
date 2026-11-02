@@ -1,3 +1,4 @@
+import {utf8Length} from './text.mjs';
 import {
   createScanner,
   visit,
@@ -5,7 +6,6 @@ import {
   printParseErrorCode,
 } from 'jsonc-parser';
 export const MAX_BYTES = 1024 * 1024;
-const encoder = new TextEncoder();
 export class JsonToolError extends Error {
   constructor(message, offset = 0, text = '') {
     const before = text.slice(0, offset).split('\n');
@@ -19,7 +19,7 @@ export class JsonToolError extends Error {
 }
 export function validate(text, {maxNodes = Infinity} = {}) {
   if (!text.trim()) throw new JsonToolError('Enter JSON to begin');
-  if (encoder.encode(text).length > MAX_BYTES)
+  if (utf8Length(text) > MAX_BYTES)
     throw new JsonToolError('Input exceeds 1 MiB');
   const scanner = createScanner(text, true);
   let depth = 0;
@@ -85,7 +85,7 @@ export function transform(text, mode = 'format', spaces = 2) {
     depth = 0,
     previous = SyntaxKind.EOF;
   const append = value => {
-    bytes += encoder.encode(value).length;
+    bytes += utf8Length(value);
     if (bytes > MAX_BYTES)
       throw new JsonToolError('Formatted output exceeds 1 MiB');
     parts.push(value);

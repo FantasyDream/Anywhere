@@ -49,4 +49,31 @@ void main() {
     await lifetime.dispose();
     expect(lifetime.document, isNull);
   });
+  test('replacing a binding closes the old document once', () async {
+    final closed = <String>[];
+    final lifetime = WebDocumentLifetime(close: (id) async => closed.add(id));
+    final ticket = lifetime.invalidate();
+    expect(await lifetime.accept(document('old'), ticket, interactive: true),
+        isTrue);
+    lifetime.invalidate();
+    await lifetime.closeCurrent();
+    expect(lifetime.document, isNull);
+    expect(closed, ['old']);
+    await lifetime.dispose();
+    expect(closed, ['old']);
+  });
+  test('accepting a new runtime closes a replaced binding', () async {
+    final closed = <String>[];
+    final lifetime = WebDocumentLifetime(close: (id) async => closed.add(id));
+    final first = lifetime.invalidate();
+    expect(await lifetime.accept(document('old'), first, interactive: true),
+        isTrue);
+    final second = lifetime.invalidate();
+    expect(await lifetime.accept(document('new'), second, interactive: true),
+        isTrue);
+    expect(lifetime.document?.handle, 'new');
+    expect(closed, ['old']);
+    await lifetime.dispose();
+    expect(closed, ['old', 'new']);
+  });
 }

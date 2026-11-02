@@ -4,31 +4,38 @@ mod registration_0 {
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/",
-        "src/features/clipboard/registration.rs"
+        "src/features/application_history/registration.rs"
     ));
 }
 mod registration_1 {
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/",
-        "src/features/developer/registration.rs"
+        "src/features/clipboard/registration.rs"
     ));
 }
 mod registration_2 {
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/",
-        "src/features/git/registration.rs"
+        "src/features/developer/registration.rs"
     ));
 }
 mod registration_3 {
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/",
-        "src/features/saved_directories/registration.rs"
+        "src/features/git/registration.rs"
     ));
 }
 mod registration_4 {
+    include!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/",
+        "src/features/saved_directories/registration.rs"
+    ));
+}
+mod registration_5 {
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/",
@@ -41,4 +48,5 @@ const BUILTIN_FEATURE_GROUPS: &[&[BuiltinFeatureRegistration]] = &[
     registration_2::REGISTRATIONS,
     registration_3::REGISTRATIONS,
     registration_4::REGISTRATIONS,
+    registration_5::REGISTRATIONS,
 ];

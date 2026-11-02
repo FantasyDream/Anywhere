@@ -23,10 +23,13 @@ pub struct WebPackageApproval {
 }
 
 pub(super) struct Registration {
+    pub platform: WebPlatform,
     pub manifest: Arc<WebPluginManifest>,
     pub digest: String,
     pub source_id: String,
     pub token: String,
+    pub background_file: Option<crate::persistence::web_packages::WebResourceFile>,
+    pub active: Arc<std::sync::atomic::AtomicBool>,
 }
 
 #[derive(Default)]
@@ -69,13 +72,25 @@ impl WebPluginCatalog {
             entries.insert(
                 manifest.id.clone(),
                 Registration {
+                    platform,
                     manifest: Arc::new(manifest.clone()),
                     digest: package.digest().into(),
                     source_id: approval.source_id,
                     token: super::token()?,
+                    background_file: None,
+                    active: Arc::new(std::sync::atomic::AtomicBool::new(true)),
                 },
             );
         }
+        ensure!(
+            entries
+                .values()
+                .filter_map(|entry| entry.manifest.background.as_ref())
+                .map(|background| background.resolvers.len())
+                .sum::<usize>()
+                <= 64,
+            "too many background Context resolvers"
+        );
         Ok(Self { entries })
     }
 
@@ -89,6 +104,14 @@ impl WebPluginCatalog {
             next.entries.keys().all(|id| !self.entries.contains_key(id)),
             "duplicate Web package id"
         );
+        let resolvers: usize = self
+            .entries
+            .values()
+            .chain(next.entries.values())
+            .filter_map(|entry| entry.manifest.background.as_ref())
+            .map(|background| background.resolvers.len())
+            .sum();
+        ensure!(resolvers <= 64, "too many background Context resolvers");
         self.entries.extend(next.entries);
         Ok(())
     }
@@ -103,6 +126,7 @@ impl WebPluginCatalog {
                     command_id: command.id.clone(),
                     registration: entry.token.clone(),
                     input_matchers: command.input_matchers.clone().into(),
+                    require_input_match: command.require_input_match,
                 };
                 let action = ActionDefinition {
                     localized_titles: Default::default(),
@@ -114,7 +138,10 @@ impl WebPluginCatalog {
                         .accepts
                         .iter()
                         .map(String::as_str)
-                        .chain(std::iter::once(crate::features::tools::ENTRY_CONTEXT))
+                        .chain(
+                            (!command.needs_context())
+                                .then_some(crate::features::tools::ENTRY_CONTEXT),
+                        )
                         .map(|type_id| ContextMatcher {
                             type_id: type_id.into(),
                         })
@@ -131,7 +158,6 @@ impl WebPluginCatalog {
                     keywords: command.keywords.clone(),
                     owning_app: None,
                     menu_path: vec![],
-                    home_eligible: false,
                     primary_action: false,
                     search_title: None,
                 };

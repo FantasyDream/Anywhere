@@ -44,20 +44,11 @@ pub(super) async fn preview_file(
     session_id: u32,
     revision: u32,
     candidate_id: String,
-) -> Result<FilePreviewDto> {
-    let p = application()?
+) -> Result<NativePreviewDto> {
+    Ok(application()?
         .preview_file(session_id, revision, candidate_id)
-        .await?;
-    Ok(FilePreviewDto {
-        path: p.path,
-        is_directory: p.is_directory,
-        size_bytes: p.size_bytes,
-        modified_ms: p.modified_ms,
-        text: p.text,
-        truncated_at_bytes: p.truncated_at_bytes,
-        encoding: p.encoding,
-        encoding_guessed: p.encoding_guessed,
-    })
+        .await?
+        .into())
 }
 
 pub(super) async fn load_more_files_delta(

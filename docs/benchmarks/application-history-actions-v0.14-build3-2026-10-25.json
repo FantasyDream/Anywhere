@@ -1,0 +1,45 @@
+{
+  "date": "2026-10-25",
+  "source_commit": "3cb6b00c82e719cfe8f99a012b194dd26f2fea63",
+  "version": "0.14.0+3",
+  "zip": "Anywhere-0.14-preview-build3-macos-arm64.zip",
+  "zip_sha256": "19813073c8d0e1dccafbe0e2e3c8bab83448a9c43e2f3793eb2bf0f2efe19dda",
+  "package_validation": "Persistent signing, deep/strict signature, version and archive verification passed",
+  "engineering": {
+    "gate": "scripts/check.sh passed",
+    "core_unit_passed": 274,
+    "core_unit_ignored": 1,
+    "mvp_integration_passed": 190,
+    "mvp_integration_ignored": 4,
+    "flutter_passed": 407
+  },
+  "new_scenarios": [
+    "Each source registers a stable app-specific Action and shortcut",
+    "IDEA and IDEA CE Context match only the IDEA history Action",
+    "VS Code Context matches only the VS Code history Action",
+    "Unrelated application has no history Action on its home",
+    "Existing Current App Scope is reused without a History Scope",
+    "Explicit global search and shortcut reach a fixed source",
+    "Contextual and empty entry do not produce duplicate shortcut targets",
+    "Feature disable revokes retained entries",
+    "An unconfigured source cannot fall back to another enabled source",
+    "Shared page receives fixed source and localized title"
+  ],
+  "native_ui": {
+    "status": "blocked",
+    "reason": "Mac locked before the first Build 3 UI observation",
+    "process_cleanup": "Verified exact isolated test process path, then SIGTERM"
+  },
+  "synthetic_sources": {
+    "idea": 500,
+    "vscode": 500
+  },
+  "private_history_used": false,
+  "context_capture_enabled": false,
+  "clipboard_recording_enabled": false,
+  "remaining": [
+    "Build 3 native UI acceptance",
+    "Real application source format and actual target opening matrix",
+    "Browser and Obsidian sources, discovery and multiple installations/profiles"
+  ]
+}

@@ -1,0 +1,90 @@
+{
+  "date": "2026-10-26",
+  "version": "0.14.0+18",
+  "source_base_commit": "fd1e70d5be100c899394bf01906bb1bfd9bf6f5f",
+  "working_tree_changes": true,
+  "scope": "Require matching content for JSON processing commands; keep standalone Workspace",
+  "implementation": [
+    "Added optional Manifest requireInputMatch flag; defaults false for existing packages",
+    "Validation rejects required matching without inputMatchers",
+    "Required commands have no empty workspace target; matching content is required even when keywords match",
+    "Execution rechecks the installed declaration and actual text before creating an invocation",
+    "JSON 0.5.3 enables the flag for copy-format, copy-minify, copy-escaped and unescape; unescape only matches escaped JSON",
+    "No JSON-specific visibility policy added to Flutter or the Web UI"
+  ],
+  "automated": {
+    "full_gate": "scripts/check.sh",
+    "log": "build/v0.14-json18-check.log",
+    "exit_code": 0,
+    "core": {
+      "passed": 307,
+      "ignored_existing": 1
+    },
+    "mvp": {
+      "passed": 195,
+      "ignored_existing": 4
+    },
+    "flutter_passed": 429,
+    "native_web_clippy_architecture_style_generated_checks": "passed",
+    "focused_input_tests_passed": 8,
+    "regressions": [
+      "Normal and uppercase JSON keyword search only returns Workspace",
+      "Invalid selected/clipboard text cannot reveal helpers through keywords",
+      "Plain JSON offers Workspace plus three copy helpers; encoded JSON also offers unescape",
+      "Empty shortcut targets exclude content-required helpers",
+      "Invalid direct execution creates no Web invocation",
+      "Real Launcher snapshot preserves recognized input through execution"
+    ]
+  },
+  "package": {
+    "app": "build/Anywhere-0.14-preview-build18.app",
+    "zip": "build/Anywhere-0.14-preview-build18-macos-arm64.zip",
+    "sha256": "9546bab33140ffb53d92946c89c7ee1260567148a603fda441605fa991dd9f0b",
+    "persistent_signature_and_archive_checks": "passed",
+    "impeller": true,
+    "release_published": false
+  },
+  "json_plugin": {
+    "version": "0.5.3",
+    "archive": "build/web-examples/dev.anywhere.json-workspace.awplugin",
+    "archive_sha256": "c9f47b33b0a7096d4b20bf6edafb37d1ab9fbceae5435790b25163dd61b43618",
+    "reviewed_content_digest": "90389cb2f59683bc610c23875feb66bff99fbaab307bad03dde2e1fe91b31b04",
+    "local_update_through_settings": "completed",
+    "permissions": "unchanged; no new capability requested",
+    "local_preferences": "preserved by package update"
+  },
+  "native": {
+    "old_build17_exited": true,
+    "keyword_JSON": [
+      "JSON Workspace"
+    ],
+    "plain_JSON": [
+      "JSON Workspace",
+      "Copy Formatted JSON",
+      "Copy Minified JSON",
+      "Copy Escaped JSON"
+    ],
+    "escaped_JSON": [
+      "JSON Workspace",
+      "Copy Formatted JSON",
+      "Copy Minified JSON",
+      "Copy Escaped JSON",
+      "Unescape JSON"
+    ],
+    "invalid_JSON_helpers": 0,
+    "fixture": "Synthetic {\"a\":1}, its JSON string encoding, and {broken}",
+    "input_method": "JSON punctuation supplied by paste after simulated printable-key entry dropped punctuation; physical keyboard not revalidated",
+    "copy_commands_executed": false,
+    "screenshots": [
+      "build/ui-json18/keyword-json.png",
+      "build/ui-json18/plain-json.png",
+      "build/ui-json18/escaped-json.png"
+    ],
+    "scope": "Candidate visibility and package update; no full native input or memory acceptance"
+  },
+  "git": {
+    "branch": "codex/dev-0.14",
+    "committed": false,
+    "next_branch_created": false
+  }
+}

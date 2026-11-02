@@ -161,7 +161,6 @@ pub(super) fn candidate_dto(candidate: protocol::CandidatePresentation) -> Candi
         context_keys: candidate.context_keys,
         execution_context_id: candidate.execution_context_id,
         execution_target_label: candidate.execution_target_label,
-        home_eligible: candidate.home_eligible,
         primary_action: candidate.primary_action,
         section_label: candidate.section_label,
         subtitle: candidate.subtitle,

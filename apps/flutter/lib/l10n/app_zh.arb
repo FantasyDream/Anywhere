@@ -79,7 +79,7 @@
   "saveChanges": "保存修改",
   "saveBeforeClose": "关闭前保存修改？",
   "changesNotSaved": "部分修改尚未保存",
-  "searchDrafts": "搜索设置存在尚未应用的修改。",
+  "settingsDrafts": "部分设置存在尚未保存的修改。",
   "settingsSaveFailed": "设置保存失败，请重试。",
   "shortcutHelp": "选择快捷键，再按下新的按键组合。按 Esc 取消。",
   "workspace": "工作区",
@@ -267,15 +267,10 @@
   "copyWithReturnHint": "复制 · ↵",
   "deleteEntry": "删除此记录",
   "previewUnavailable": "无法预览",
-  "loadingPreview": "正在加载预览…",
-  "selectEntryToPreview": "选择一条记录以查看预览",
   "noMatchingEntries": "没有匹配的记录",
   "noSavedEntries": "没有历史记录",
   "newlyCopiedItemsWillAppearHereRefresh": "新复制的内容会出现在这里。\n刷新以查看新记录。",
   "manageRecordingInSettingsClipboard": "在“设置 → 剪贴板”中管理记录。",
-  "imagePreviewUnavailable": "无法预览图片",
-  "previewUnavailableTheOriginalImageCanStill": "无法预览，仍可复制原始图片。",
-  "previewIsNotAvailableForThisFormat": "此格式暂不支持预览。复制时会恢复已保存的数据。",
   "theWindowCouldNotBeClosedUse": "无法关闭窗口，请使用窗口关闭按钮。",
   "backToListEsc": "返回列表 · Esc",
   "clipboardAlwaysOnTop": "剪贴板 · 置顶",
@@ -292,12 +287,10 @@
   "backToSearchEsc": "返回搜索 · Esc",
   "cancelEsc": "取消 · Esc",
   "cancelEscapeSelected": "✓ 取消 · Esc",
-  "allowOnce": "✓ 允许一次",
-  "allowOnceAction": "允许一次",
   "webToolsAreUnavailableOnThisPlatform": "此平台暂不支持 Web 工具。",
   "requestedAccess": "请求的权限",
   "noHostPermissions": "未请求宿主权限。",
-  "codeRunsInALocalWebViewNetwork": "代码在本地 WebView 中运行，禁止联网和页面跳转。此限制不等同于操作系统级进程沙箱。",
+  "pluginExecutionBoundary": "插件在本机处理数据，只能调用已批准的宿主能力，不提供任意文件或网络访问。这些限制不等同于操作系统级进程隔离。",
   "thisReplacesTheInstalledCodeClosesIts": "这将替换已安装的代码并关闭其当前页面，保留本地设置。之后可恢复到曾经批准的版本。",
   "approveAndInstall": "批准并安装",
   "installedSearchForTheToolByName": "安装完成，搜索工具名称即可打开。",
@@ -314,8 +307,6 @@
   "openingTool": "正在打开工具…",
   "loadingTool": "正在加载工具…",
   "theToolStoppedReloadItOrReturn": "工具已停止，请重新加载或返回搜索。",
-  "allowThisOperation": "允许此操作？",
-  "thisTool": "此工具",
   "dismissMessage": "关闭提示",
   "returnKey": "回车",
   "folder": "文件夹",
@@ -568,14 +559,6 @@
       }
     }
   },
-  "clipboardConsent": "{tool}请求执行剪贴板操作。授权仅对本次操作有效。",
-  "@clipboardConsent": {
-    "placeholders": {
-      "tool": {
-        "type": "String"
-      }
-    }
-  },
   "quitAnywhere": "退出 Anywhere",
   "edit": "编辑",
   "undo": "撤销",
@@ -600,11 +583,9 @@
   "importPackage": "导入",
   "fileSearchAccessMessage": "请选择允许 Anywhere 搜索的文件夹，授权会保存供以后启动时使用。受保护的系统或应用数据可能仍需在系统设置中启用完全磁盘访问权限。",
   "inspectTrustedPackage": "请选择可信的 .awplugin 包，在安装前检查其内容。",
-  "readClipboardText": "读取剪贴板文本",
-  "copyTextToClipboard": "将文本复制到剪贴板",
   "permissionCurrentApp": "当前应用名称",
-  "permissionReadClipboard": "读取剪贴板文本（每次操作均需确认）",
-  "permissionWriteClipboard": "复制文本（每次操作均需确认）",
+  "permissionReadClipboard": "读取剪贴板文本",
+  "permissionWriteClipboard": "写入剪贴板文本",
   "permissionLocalStorage": "独立本地设置（1 MiB）",
   "launcherStartupFailed": "启动器无法启动",
   "tasksStartupFailed": "无法打开运行中的任务",
@@ -727,21 +708,12 @@
   "shelfDeleteTitle": "删除这条历史记录？",
   "shelfDeleteDescription": "仅删除这条已保存的历史记录。",
   "hidePreview": "收起预览",
-  "shelfPreviewScrollHint": "{shortcut} 滚动预览",
-  "@shelfPreviewScrollHint": {
-    "placeholders": {
-      "shortcut": {
-        "type": "String"
-      }
-    }
-  },
   "details": "详细信息",
   "sourceStatus": "来源状态",
   "searchRules": "搜索规则",
   "searchHelp": "搜索说明",
   "toolOptions": "工具选项",
   "keyboardHelp": "键盘操作",
-  "fileInformation": "文件信息",
   "historyFeatureDisabled": "剪贴板历史已在内置功能中禁用。",
   "historyStorageUnavailable": "剪贴板历史存储不可用。请修复数据文件后重启。",
   "historyAccessRequired": "请在系统设置中允许访问剪贴板，以记录新复制的内容。后台采集不会弹出权限申请。",
@@ -749,32 +721,83 @@
   "historyReadFailed": "无法读取一条剪贴板内容，已有历史仍可使用。",
   "historyCaptureUnavailable": "剪贴板历史采集不可用，已有历史仍可使用。",
   "historyMonitoringUnavailable": "当前平台不支持剪贴板监控。",
-  "filePreviewChanged": "无法预览。如果文件已发生变化，请重新搜索。",
-  "filePreviewUnsupported": "此文件类型不支持文本预览",
-  "filePreviewTruncated": "仅显示前 {size}",
-  "@filePreviewTruncated": {
-    "placeholders": {
-      "size": {
-        "type": "String"
-      }
-    }
-  },
-  "filePreviewEncodingGuessed": "推测编码为 {encoding}",
-  "@filePreviewEncodingGuessed": {
-    "placeholders": {
-      "encoding": {
-        "type": "String"
-      }
-    }
-  },
-  "filePreviewDecoded": "以 {encoding} 解码",
-  "@filePreviewDecoded": {
-    "placeholders": {
-      "encoding": {
-        "type": "String"
-      }
-    }
-  },
   "shelfReturnFailed": "已复制，但未能返回目标应用。请切换到该应用后粘贴。",
-  "shelfReturnUnavailable": "已复制，原目标应用已不可用。请切换到需要的应用后粘贴。"
+  "shelfReturnUnavailable": "已复制，原目标应用已不可用。请切换到需要的应用后粘贴。",
+  "historyRecordingPaused": "历史记录已暂停采集，已有历史仍可使用。",
+  "pauseHistoryRecording": "暂时停止采集，保留已有历史",
+  "historyPausedUntil": "暂停至 {time}",
+  "resumeRecording": "恢复记录",
+  "pauseFor": "暂停…",
+  "pauseMinutes": "{minutes} 分钟",
+  "keepHistoryFor": "历史保留时间",
+  "untilStorageLimit": "直到达到容量上限",
+  "retentionDays": "{days} 天",
+  "changeHistoryRetention": "更改历史保留时间？",
+  "historyRetentionWarning": "超过所选期限的历史将立即永久删除。之后延长保留时间也无法恢复。",
+  "historyStorageUsage": "已保存 {count} 条 · {mib} MiB",
+  "historyStorageExplanation": "仅保存在本机，未加密。最多 1,000 条 / 128 MiB 逻辑数据，数据库文件大小可能不同。过期会删除全部已存格式，不影响系统剪贴板和原始文件。",
+  "@historyPausedUntil": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "@pauseMinutes": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "@retentionDays": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "@historyStorageUsage": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "mib": {
+        "type": "String"
+      }
+    }
+  },
+  "appHistory": "应用历史",
+  "appHistorySearch": "搜索最近项目和文件…",
+  "appHistoryFilterSources": "筛选应用…",
+  "appHistoryAllSources": "全部来源",
+  "appHistoryShowAllSources": "清除筛选并显示全部来源",
+  "appHistoryRevertPath": "还原编辑",
+  "appHistoryUnsavedPath": "路径未保存",
+  "appHistorySources": "历史来源",
+  "appHistorySourceDescription": "默认仅开启已安装应用的 Action，手动开关优先。可自定义历史文件路径，使用对应 Action 时才读取历史内容。",
+  "appHistorySourcePath": "历史元数据文件路径",
+  "appHistoryUnconfigured": "暂无可用的历史文件，请在「设置 → 应用历史」中重新检测或指定自定义路径。",
+  "appHistoryReadFailed": "部分来源暂时无法读取，请在「设置 → 应用历史」中检查所选文件。",
+  "appHistoryBusy": "正在结束上一次历史操作，请稍后刷新重试。",
+  "appHistoryExpired": "此历史页面已过期，请返回并重新打开相应操作。",
+  "appHistoryDisabled": "应用历史已停用，可在「设置 → 功能」中启用。",
+  "appHistoryOperationFailed": "历史操作未完成，请刷新列表后重试。",
+  "appHistorySettingsFailed": "无法读取或保存历史来源，请检查文件路径后重试。",
+  "appHistoryCopyTarget": "复制路径或 URI",
+  "appHistoryAutomatic": "正在使用自动检测的文件",
+  "appHistoryCustom": "正在使用自定义路径",
+  "appHistorySourceOff": "来源已关闭",
+  "appHistoryNotDetected": "未自动找到文件，可填写自定义路径。",
+  "appHistoryUseAutomatic": "使用自动检测",
+  "appHistoryDetectAgain": "重新检测",
+  "appHistorySaveCustom": "保存自定义路径",
+  "appHistoryActionEnabled": "显示 Action",
+  "appHistoryCustomAdapters": "自定义适配",
+  "appHistoryCustomAdaptersHelp": "在下列目录的子文件夹中放入 source.json 和 transform.js，重启后生效。同 ID 配置覆盖内置适配。请只放入可信的本机配置；使用对应 Action 时才运行转换。",
+  "appHistoryOpenAdapters": "打开适配目录",
+  "permissionInputRead": "读取启动器搜索内容",
+  "permissionInputWrite": "修改启动器搜索内容",
+  "permissionFrontmostApp": "读取实时前台应用",
+  "webPackageDamaged": "插件文件缺失或损坏。请恢复已批准版本，或卸载后重新导入。"
 }

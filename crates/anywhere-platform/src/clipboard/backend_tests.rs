@@ -212,3 +212,67 @@ fn macos_plain_text_aliases_do_not_create_another_identity_after_restore() {
     assert_eq!(payload.formats.len(), 2);
     assert!(payload.formats.iter().any(|f| f.name == "public.rtf"));
 }
+
+#[test]
+fn idea_dynamic_formats_preserve_text_and_rich_representations() {
+    // IDEA advertised a readable 261-byte dynamic UTI for its Java transfer data.
+    let dynamic_name = format!("dyn.{}", "a".repeat(257));
+    assert_eq!(dynamic_name.len(), 261);
+    let board = Board {
+        formats: vec![
+            (
+                "public.utf8-plain-text".into(),
+                b"selectedIdentifier".to_vec(),
+            ),
+            ("public.html".into(), b"<b>selectedIdentifier</b>".to_vec()),
+            (dynamic_name.clone(), vec![1, 2, 3]),
+        ],
+        text: Some("selectedIdentifier".into()),
+        ..Default::default()
+    };
+    let payload = collect(&board, |_, _| Ok(true), || Ok(()))
+        .unwrap()
+        .unwrap();
+    assert_eq!(payload.plain_text(), Some("selectedIdentifier"));
+    assert_eq!(payload.formats.len(), 3);
+    assert!(payload.formats.iter().any(|f| f.name == dynamic_name));
+    payload.validate().unwrap();
+}
+
+#[test]
+fn invalid_optional_format_names_do_not_discard_readable_text() {
+    let board = Board {
+        formats: vec![
+            ("public.utf8-plain-text".into(), b"text".to_vec()),
+            ("x".repeat(MAX_FORMAT_NAME_BYTES + 1), vec![1]),
+            ("".into(), vec![2]),
+            ("invalid\0format".into(), vec![3]),
+        ],
+        text: Some("text".into()),
+        ..Default::default()
+    };
+    let payload = collect(
+        &board,
+        |name, _| {
+            assert_eq!(name, "public.utf8-plain-text");
+            Ok(true)
+        },
+        || Ok(()),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(payload, ClipboardPayload::text("text"));
+    for name in [
+        "x".repeat(MAX_FORMAT_NAME_BYTES + 1),
+        "invalid\0format".into(),
+    ] {
+        assert!(ClipboardPayload {
+            formats: vec![ClipboardFormat {
+                name,
+                data: vec![1]
+            }]
+        }
+        .validate()
+        .is_err());
+    }
+}

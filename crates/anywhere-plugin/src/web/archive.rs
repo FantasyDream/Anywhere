@@ -31,7 +31,7 @@ impl VerifiedAsset {
         self.size
     }
     pub fn sha256(&self) -> String {
-        hex(&self.sha256)
+        hex::encode(self.sha256)
     }
 }
 
@@ -128,9 +128,18 @@ impl VerifiedWebPackage {
         let manifest_bytes = read_bytes(&mut zip, manifest_info, MAX_MANIFEST_BYTES as u64)?;
         let manifest = manifest::parse_manifest(&manifest_bytes)?;
         ensure!(
-            assets.contains_key(&manifest.entry),
+            manifest.entry.is_empty() || assets.contains_key(&manifest.entry),
             "missing Web entry resource"
         );
+        if let Some(background) = &manifest.background {
+            let asset = assets
+                .get(&background.entry)
+                .context("missing background entry resource")?;
+            ensure!(
+                asset.size <= 256 * 1024,
+                "background bundle exceeds 256 KiB"
+            );
+        }
         if let Some(icon) = &manifest.icon {
             let info = assets.get(icon).context("missing Web icon resource")?;
             ensure!(info.size <= icon::MAX_BYTES, "Web icon exceeds 256 KiB");
@@ -292,14 +301,5 @@ fn content_digest(assets: &BTreeMap<String, VerifiedAsset>) -> String {
         hash.update(info.size.to_le_bytes());
         hash.update(info.sha256);
     }
-    hex(&hash.finalize().into())
-}
-
-fn hex(bytes: &[u8; 32]) -> String {
-    use std::fmt::Write;
-    let mut value = String::with_capacity(64);
-    for byte in bytes {
-        write!(&mut value, "{byte:02x}").expect("writing to String");
-    }
-    value
+    hex::encode(hash.finalize())
 }

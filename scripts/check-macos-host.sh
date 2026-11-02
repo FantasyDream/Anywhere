@@ -27,6 +27,35 @@ xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/mac
   apps/flutter/macos/Runner/tests/HostServicesTests.swift \
   -o "$host_test_directory/host-test"
 "$host_test_directory/host-test"
+# All engines share the same opt-in, content-free diagnostics contract.
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  apps/flutter/macos/Runner/PresentationDiagnostics.swift \
+  apps/flutter/macos/Runner/tests/PresentationDiagnosticsTests.swift \
+  -o "$host_test_directory/presentation-diagnostics-test"
+"$host_test_directory/presentation-diagnostics-test"
+# Lazy engines must inherit the last accessibility request and detach explicitly.
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  apps/flutter/macos/Runner/FlutterAccessibilityState.swift \
+  apps/flutter/macos/Runner/tests/FlutterAccessibilityStateTests.swift \
+  -o "$host_test_directory/flutter-accessibility-test"
+"$host_test_directory/flutter-accessibility-test"
+flutter_framework_directory="$(dirname "$(dirname "$flutter_framework")")"
+xcrun swiftc -typecheck -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  -F "$flutter_framework_directory" -framework FlutterMacOS -framework QuickLookUI \
+  apps/flutter/macos/Runner/WindowInputFocus.swift apps/flutter/macos/Runner/NativePreviewHost.swift \
+  apps/flutter/macos/Runner/tests/NativePreviewHostTests.swift
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  -F "$flutter_framework_directory" -framework FlutterMacOS \
+  -Xlinker -rpath -Xlinker "$flutter_framework_directory" \
+  apps/flutter/macos/Runner/FlutterEngineLifecycle.swift \
+  apps/flutter/macos/Runner/tests/FlutterEngineLifecycleTests.swift \
+  -o "$host_test_directory/flutter-engine-lifecycle-test"
+"$host_test_directory/flutter-engine-lifecycle-test"
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  apps/flutter/macos/Runner/FlutterWindowCloseCoordinator.swift \
+  apps/flutter/macos/Runner/tests/FlutterWindowCloseCoordinatorTests.swift \
+  -o "$host_test_directory/flutter-window-close-test"
+"$host_test_directory/flutter-window-close-test"
 # Search scope authorization is separate from query-time filesystem traversal.
 xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   apps/flutter/macos/Runner/FileSearchAccess.swift \
@@ -36,7 +65,13 @@ xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/mac
   -o "$host_test_directory/file-access-test"
 "$host_test_directory/file-access-test"
 # Native material ownership and resizing must survive the shared-engine window move.
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  apps/flutter/macos/Runner/NativeAccessibilityContainer.swift \
+  apps/flutter/macos/Runner/tests/NativeAccessibilityContainerTests.swift \
+  -o "$host_test_directory/native-accessibility-test"
+"$host_test_directory/native-accessibility-test"
 xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  apps/flutter/macos/Runner/NativeAccessibilityContainer.swift \
   apps/flutter/macos/Runner/WindowMaterial.swift \
   apps/flutter/macos/Runner/tests/WindowMaterialTests.swift \
   -o "$host_test_directory/material-test"
@@ -47,6 +82,7 @@ xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/mac
   -o "$host_test_directory/input-focus-test"
 "$host_test_directory/input-focus-test"
 xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  apps/flutter/macos/Runner/NativeAccessibilityContainer.swift \
   apps/flutter/macos/Runner/WindowMaterial.swift \
   apps/flutter/macos/Runner/WindowInputFocus.swift \
   apps/flutter/macos/Runner/LauncherWindowCoordinator.swift \
@@ -61,6 +97,8 @@ xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/mac
 
 # Web canvas compatibility stays in the native adapter, with an opaque fallback.
 xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  apps/flutter/macos/Runner/NativeAccessibilityContainer.swift \
+  apps/flutter/macos/Runner/NativeWebView.swift \
   apps/flutter/macos/Runner/NativeWebEditing.swift \
   apps/flutter/macos/Runner/NativeWebAppearance.swift \
   apps/flutter/macos/Runner/tests/NativeWebEditingTests.swift \

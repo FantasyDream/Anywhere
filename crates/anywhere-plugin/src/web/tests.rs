@@ -17,6 +17,7 @@ fn manifest() -> Value {
 fn input_matchers_are_optional_bounded_and_require_the_reviewed_text_projection() {
     let old = parse_manifest(&serde_json::to_vec(&manifest()).unwrap()).unwrap();
     assert!(old.commands[0].input_matchers.is_empty());
+    assert!(!old.commands[0].require_input_match);
     let mut value = manifest();
     value["commands"][0]["inputMatchers"] = json!(["json"]);
     assert!(parse_manifest(&serde_json::to_vec(&value).unwrap()).is_err());
@@ -34,6 +35,31 @@ fn input_matchers_are_optional_bounded_and_require_the_reviewed_text_projection(
         value["commands"][0]["inputMatchers"] = invalid;
         assert!(parse_manifest(&serde_json::to_vec(&value).unwrap()).is_err());
     }
+}
+
+#[test]
+fn input_required_commands_must_declare_a_matcher() {
+    let mut value = manifest();
+    value["commands"][0]["requireInputMatch"] = json!(true);
+    assert!(parse_manifest(&serde_json::to_vec(&value).unwrap()).is_err());
+    value["commands"][0]["inputMatchers"] = json!(["json"]);
+    value["commands"][0]["accepts"] = json!(["core.text"]);
+    value["permissions"] = json!([{"name":"context.read","types":["core.text"]}]);
+    let parsed = parse_manifest(&serde_json::to_vec(&value).unwrap()).unwrap();
+    assert!(parsed.commands[0].require_input_match);
+}
+
+#[test]
+fn context_required_commands_need_an_accepted_type_but_no_static_matcher() {
+    let mut value = manifest();
+    let old = parse_manifest(&serde_json::to_vec(&value).unwrap()).unwrap();
+    assert!(!old.commands[0].needs_context());
+    value["commands"][0]["requireContext"] = json!(true);
+    assert!(parse_manifest(&serde_json::to_vec(&value).unwrap()).is_err());
+    value["commands"][0]["accepts"] = json!(["plugin.dev.example.text-pad.document"]);
+    let parsed = parse_manifest(&serde_json::to_vec(&value).unwrap()).unwrap();
+    assert!(parsed.commands[0].needs_context());
+    assert!(parsed.commands[0].input_matchers.is_empty());
 }
 
 fn base() -> Vec<(String, Vec<u8>)> {
@@ -552,4 +578,28 @@ fn rejects_link_extra_fields_without_interpreting_them() {
     let size = u32::from_le_bytes(bytes[end + 12..end + 16].try_into().unwrap()) + 4;
     bytes[end + 12..end + 16].copy_from_slice(&size.to_le_bytes());
     assert!(VerifiedWebPackage::read(Cursor::new(bytes)).is_err());
+}
+
+#[test]
+fn background_manifests_validate_export_names_owned_types_and_input_grants() {
+    let mut value = manifest();
+    value.as_object_mut().unwrap().remove("entry");
+    value["background"] = json!({"entry":"dist/background.mjs","resolvers":[{"id":"parse","accepts":["core.text"],"produces":["plugin.dev.example.text-pad.value"],"entrypoint":"parseContext"}]});
+    value["commands"][0]["runtime"] = json!("background");
+    value["commands"][0]["entrypoint"] = json!("copyValue");
+    value["permissions"] = json!([{"name":"context.read","types":["core.text"]}]);
+    assert!(parse_manifest(&serde_json::to_vec(&value).unwrap()).is_ok());
+    for export in ["1copy", "object.copy", "copy-value", ""] {
+        let mut bad = value.clone();
+        bad["commands"][0]["entrypoint"] = json!(export);
+        assert!(parse_manifest(&serde_json::to_vec(&bad).unwrap()).is_err());
+    }
+    let mut bad = value.clone();
+    bad["background"]["resolvers"][0]["produces"] = json!(["core.file"]);
+    assert!(parse_manifest(&serde_json::to_vec(&bad).unwrap()).is_err());
+    let mut bad = value.clone();
+    bad["permissions"] = json!([]);
+    assert!(parse_manifest(&serde_json::to_vec(&bad).unwrap()).is_err());
+    value["commands"] = json!([]);
+    assert!(parse_manifest(&serde_json::to_vec(&value).unwrap()).is_ok());
 }

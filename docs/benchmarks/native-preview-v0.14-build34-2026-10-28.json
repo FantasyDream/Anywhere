@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-28",
+  "app": "0.14.0+34",
+  "source_state": "working tree; not committed or pushed",
+  "defects": [
+    "Build 33 logged repeated preview_control_unavailable errors; the main process remained running",
+    "A native NSTextView claimed Quick Look before the preview host in the responder chain",
+    "Quick Look's asynchronous close could dismiss a preview opened immediately afterwards"
+  ],
+  "fixes": [
+    "Temporarily route list keys through the Flutter content receiver instead of the competing native text editor",
+    "Restore the original editor only while it still belongs to the owning window",
+    "Hide programmatically closed previews synchronously and reconnect the data source when the shared controller is reused",
+    "Use a retained panel controller with a weak host reference so the hidden panel cannot keep the host and Flutter channel alive"
+  ],
+  "checks": {
+    "full_gate": "scripts/check.sh passed; build/preview-build34-check.log",
+    "flutter_passed": 452,
+    "core_passed": 320,
+    "core_ignored": 1,
+    "mvp_passed": 195,
+    "mvp_ignored": 4,
+    "platform_passed": 70,
+    "platform_ignored": 1,
+    "native_live": "scripts/check-macos-preview-live.sh passed; text editor competition, immediate reopen, replacement, system close, input restoration and host release",
+    "package": "Persistent signature, deep/strict verification, archive contents and SHA-256 passed"
+  },
+  "native_app": {
+    "identity": "Only Build 34 running; exact bundle path verified",
+    "observed": [
+      "File Search opens docs/native-preview.md in Quick Look and keeps the panel visible",
+      "File preview can close and reopen; the system close button preserves the query and selection",
+      "Typing after the file preview system close appends to the existing query without clicking the editor",
+      "Clipboard History opens an existing synthetic text record and can close and reopen its preview",
+      "Typing after closing Clipboard History preview appends to the existing query without clicking the editor",
+      "The independent Clipboard Shelf opens the same synthetic text record in Quick Look",
+      "Typing after closing Shelf preview appends to the existing query without clicking the editor",
+      "Shelf closes normally and the main app remains running",
+      "No preview_control_unavailable entries observed for the new process after these checks"
+    ],
+    "privacy": "Used repository documentation and an existing synthetic clipboard record; did not change recording settings, grants or personal history"
+  },
+  "artifacts": {
+    "app": "build/Anywhere-0.14-preview-build34.app",
+    "zip": "build/Anywhere-0.14-preview-build34-macos-arm64.zip",
+    "zip_sha256": "1fe5c69a3154d32a135a4ff95edd70c2956bbd3b3e8e36f69871fc75526d5e00"
+  },
+  "limits": [
+    "Physical IME and the full image, PDF, media, rich text and multi-file matrix were not reverified",
+    "Host release regression is not a measurement of process memory or all system helper lifetimes",
+    "Windows/Linux native preview remains unimplemented",
+    "No GitHub push or Release performed"
+  ]
+}

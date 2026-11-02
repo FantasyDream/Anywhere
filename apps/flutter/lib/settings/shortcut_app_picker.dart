@@ -29,18 +29,41 @@ class _ShortcutAppPickerState extends State<ShortcutAppPicker> {
   final _search = TextEditingController();
   final _scroll = ScrollController();
   int _selected = 0;
+  String? _matchedQuery;
+  late List<ShortcutApplicationDto> _matches;
+
+  @override
+  void initState() {
+    super.initState();
+    _filterApplications();
+  }
+
+  @override
+  void didUpdateWidget(ShortcutAppPicker oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (identical(oldWidget.applications, widget.applications)) return;
+    final selectedId = _selected == 0 ? null : _matches[_selected - 1].bundleId;
+    _matchedQuery = null;
+    _filterApplications();
+    final index = _matches.indexWhere((app) => app.bundleId == selectedId);
+    _selected = index < 0 ? 0 : index + 1;
+  }
 
   double get _rowHeight =>
       max(44, MediaQuery.textScalerOf(context).scale(30) + 12);
 
-  List<ShortcutApplicationDto> get _matches {
+  void _filterApplications() {
     final query = _search.text.trim().toLowerCase();
-    return widget.applications
-        .where((app) =>
+    if (_matchedQuery == query) return;
+    _matchedQuery = query;
+    // Navigation and focus changes reuse the matches. Empty search shares the
+    // catalogue instead of copying all entries on every arrow-key rebuild.
+    _matches = query.isEmpty
+        ? widget.applications
+        : List.unmodifiable(widget.applications.where((app) =>
             '${app.title} ${app.localizedTitles.values.join(' ')} ${app.bundleId}'
                 .toLowerCase()
-                .contains(query))
-        .toList();
+                .contains(query)));
   }
 
   @override
@@ -54,7 +77,13 @@ class _ShortcutAppPickerState extends State<ShortcutAppPicker> {
       Navigator.pop(context, ShortcutApplicationChoice(app));
 
   KeyEventResult _key(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+    final keyboard = HardwareKeyboard.instance;
+    if ((event is! KeyDownEvent && event is! KeyRepeatEvent) ||
+        !_search.value.composing.isCollapsed ||
+        keyboard.isMetaPressed ||
+        keyboard.isControlPressed ||
+        keyboard.isAltPressed ||
+        keyboard.isShiftPressed) {
       return KeyEventResult.ignored;
     }
     final direction = event.logicalKey == LogicalKeyboardKey.arrowDown
@@ -90,12 +119,16 @@ class _ShortcutAppPickerState extends State<ShortcutAppPicker> {
                           hintText: context.l10n.findAnApp,
                           prefixIcon: Icon(AppIcons.search, size: 17),
                           isDense: true),
-                      onChanged: (_) => setState(() => _selected =
-                          _matches.isEmpty || _search.text.trim().isEmpty
-                              ? 0
-                              : 1),
+                      onChanged: (_) => setState(() {
+                            _filterApplications();
+                            _selected =
+                                _matches.isEmpty || _matchedQuery!.isEmpty
+                                    ? 0
+                                    : 1;
+                            _scroll.jumpTo(0);
+                          }),
                       onSubmitted: (_) => _choose(
-                          _selected == 0 ? null : matches[_selected - 1])),
+                          _selected == 0 ? null : _matches[_selected - 1])),
                   const SizedBox(height: 8),
                   Expanded(
                       child: ListView.builder(

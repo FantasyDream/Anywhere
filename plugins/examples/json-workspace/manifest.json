@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "dev.anywhere.json-workspace",
   "name": "JSON Workspace",
-  "version": "0.5.2",
+  "version": "0.7.1",
   "apiVersion": "1",
   "platforms": [
     "macos"
@@ -12,11 +12,9 @@
     {
       "name": "context.read",
       "types": [
-        "core.text"
+        "core.text",
+        "plugin.dev.anywhere.json-workspace.json"
       ]
-    },
-    {
-      "name": "clipboard.readText"
     },
     {
       "name": "clipboard.writeText"
@@ -39,11 +37,7 @@
         "查询"
       ],
       "accepts": [
-        "core.text"
-      ],
-      "inputMatchers": [
-        "json",
-        "json_escaped"
+        "plugin.dev.anywhere.json-workspace.json"
       ],
       "entrypoint": "workspace"
     },
@@ -57,13 +51,11 @@
         "复制格式化JSON"
       ],
       "accepts": [
-        "core.text"
+        "plugin.dev.anywhere.json-workspace.json"
       ],
-      "inputMatchers": [
-        "json",
-        "json_escaped"
-      ],
-      "entrypoint": "copy-format"
+      "entrypoint": "copyFormatted",
+      "requireContext": true,
+      "runtime": "background"
     },
     {
       "id": "copy-minify",
@@ -76,13 +68,11 @@
         "复制压缩JSON"
       ],
       "accepts": [
-        "core.text"
+        "plugin.dev.anywhere.json-workspace.json"
       ],
-      "inputMatchers": [
-        "json",
-        "json_escaped"
-      ],
-      "entrypoint": "copy-minify"
+      "entrypoint": "copyMinified",
+      "requireContext": true,
+      "runtime": "background"
     },
     {
       "id": "copy-escaped",
@@ -94,31 +84,26 @@
         "复制转义JSON"
       ],
       "accepts": [
-        "core.text"
+        "plugin.dev.anywhere.json-workspace.json"
       ],
-      "inputMatchers": [
-        "json",
-        "json_escaped"
-      ],
-      "entrypoint": "copy-escaped"
-    },
-    {
-      "id": "unescape",
-      "title": "Unescape JSON",
-      "keywords": [
-        "json",
-        "unescape",
-        "decode",
-        "去除转义",
-        "去转义"
-      ],
-      "accepts": [
-        "core.text"
-      ],
-      "inputMatchers": [
-        "json_escaped"
-      ],
-      "entrypoint": "unescape"
+      "entrypoint": "copyEscaped",
+      "requireContext": true,
+      "runtime": "background"
     }
-  ]
+  ],
+  "background": {
+    "entry": "dist/background.js",
+    "resolvers": [
+      {
+        "id": "json-document",
+        "accepts": [
+          "core.text"
+        ],
+        "produces": [
+          "plugin.dev.anywhere.json-workspace.json"
+        ],
+        "entrypoint": "resolve"
+      }
+    ]
+  }
 }

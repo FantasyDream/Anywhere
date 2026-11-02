@@ -1,0 +1,67 @@
+{
+  "date": "2026-10-26",
+  "version": "0.14.0+20",
+  "source_base_commit": "fd1e70d5be100c899394bf01906bb1bfd9bf6f5f",
+  "working_tree_changes": true,
+  "review": {
+    "file": "architecture-review-20261026-182046.html",
+    "sha256": "9445b65f8c05841fe4250873b4b2c7002e3edb7cae7cf94e2920a933820eeed5",
+    "scope": "All four in-process recommendations; not a full repository audit"
+  },
+  "changes": [
+    {
+      "id": 1,
+      "result": "Application SettingsService owns source mutation, History invalidation and ActionRegistry publication. Bridge calls one use case; production-seam tests cover search, bindings, stale execution and rejected configuration."
+    },
+    {
+      "id": 2,
+      "result": "SettingsController owns one close decision. SettingsEdits owns search/exclusion drafts and queued writes. Screen only presents the choice. Pending and already-finished failures follow the same prompt; save completion preserves newer edits."
+    },
+    {
+      "id": 3,
+      "result": "Moved ObjectActionCoordinator to shared tools; Launcher and AppHistorySession share request ordering and stale results. Target guards and menu presentation remain local."
+    },
+    {
+      "id": 4,
+      "result": "AppHistorySession owns rowExtent; Page rendering, page navigation and reveal use it. Tests render 52px and 80px rows."
+    }
+  ],
+  "additional_consistency_fix": "Hidden-app draft comparison and persistence use one comma/newline parser, avoiding phantom unsaved drafts after successful save.",
+  "automated": {
+    "full_gate": "scripts/check.sh",
+    "log": "build/v0.14-refactor20-check-final.log",
+    "exit_code": 0,
+    "core": {
+      "passed": 307,
+      "ignored_existing": 1
+    },
+    "mvp": {
+      "passed": 195,
+      "ignored_existing": 4
+    },
+    "flutter_passed": 433,
+    "bridge_compile": "passed",
+    "native_web_clippy_architecture_style_generated_checks": "passed",
+    "focused_settings_and_history": "passed",
+    "native_close_mock_regressions": "passed; includes pending failure timing, duplicate close requests, save/discard/cancel and edits during save"
+  },
+  "package": {
+    "app": "build/Anywhere-0.14-preview-build20.app",
+    "zip": "build/Anywhere-0.14-preview-build20-macos-arm64.zip",
+    "sha256": "2a8ae0f2880518d70e7eb8fe34fce94ad569092e37cdaffcb998c686d90f7634",
+    "persistent_signature_and_archive_checks": "passed",
+    "impeller": true,
+    "release_published": false
+  },
+  "native": {
+    "build20_launched": false,
+    "latest_observed_running_build": 19,
+    "settings_open_close_smoke": "pending: Mac locked",
+    "physical_ime_full_application_matrix_and_memory": "not revalidated"
+  },
+  "git": {
+    "branch": "codex/dev-0.14",
+    "committed": false,
+    "next_branch_created": false
+  }
+}

@@ -13,7 +13,6 @@ CandidateDto app(String id) => CandidateDto(
     score: 0,
     availability: AvailabilityDto.enabled,
     contextKeys: const [],
-    homeEligible: true,
     primaryAction: false,
     menuPath: const [],
     iconKey: 'application');

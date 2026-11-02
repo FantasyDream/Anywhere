@@ -1,3 +1,4 @@
+import '../features/application_history/registration.dart';
 import '../features/clipboard/registration.dart';
 import '../web_plugins/web_tool_session.dart';
 import 'detail_tool.dart';
@@ -10,6 +11,7 @@ ToolPageRegistry builtinToolPages(
       ...detailPages,
       ...webToolPages,
       ...clipboardPages,
+      ...applicationHistoryPages,
     ], windows: [
       ...clipboardWindows(showWindow),
     ]);

@@ -1,0 +1,79 @@
+{
+  "date": "2026-10-28",
+  "source_state": "Existing uncommitted workspace; before and after this Flutter-only review. Not repackaged.",
+  "base_commit": "215c79190752aea2c9b605d9f047de8a59c7dabb",
+  "method": "Identical deterministic Widget/Dart fixtures, instrumenting row builds, DTO title reads and file-index key identity. Counts are not wall-clock or process-memory measurements.",
+  "measurements": [
+    {
+      "scenario": "10000 file rows, jump to row 9000",
+      "metric": "CandidateRow builds after jump",
+      "before": 9000,
+      "after": 19
+    },
+    {
+      "scenario": "2000 application catalogue, empty query, two Down keys",
+      "metric": "Application title reads after initial render",
+      "before": 8027,
+      "after": 27
+    },
+    {
+      "scenario": "50000 file candidate IDs, file:0 through file:49999",
+      "metric": "File index keys sharing the original candidate ID String",
+      "before": 0,
+      "after": 50000
+    },
+    {
+      "scenario": "Same file index",
+      "metric": "Additional persisted key text, UTF-16 code units",
+      "before": 988890,
+      "after": 0
+    }
+  ],
+  "bugs_reproduced_before_fix": [
+    "File load completion and failure notify a disposed FileWorkspaceCoordinator",
+    "Output copy failure after page removal reads the unmounted State context",
+    "Application picker handles Down during input-method composition",
+    "Input followed immediately by submit before the next frame chooses example.app.0 instead of the requested com.apple.finder"
+  ],
+  "regression_scope": [
+    "Long file list viewport builds and selected file position",
+    "File load success and failure after disposal",
+    "Application search result reuse, IME candidate navigation and immediate submit",
+    "Catalogue reorder preserves selected identity; removing it safely falls back to Any app",
+    "Copy failure after page removal does not report to a dead page"
+  ],
+  "checks": {
+    "targeted": "79 tests passed, then the final 7 application-picker tests passed including catalogue replacement",
+    "full_gate": "scripts/check.sh passed; exit code 0",
+    "flutter_passed": 461,
+    "flutter_added_regressions": 9,
+    "core_passed": 320,
+    "core_ignored": 1,
+    "mvp_passed": 195,
+    "mvp_ignored": 4,
+    "platform_passed": 70,
+    "platform_ignored": 1,
+    "analysis": "No issues found"
+  },
+  "raw_logs": [
+    "build/flutter-review-regressions-before.log",
+    "build/flutter-index-memory-before.log",
+    "build/flutter-picker-submit-before.log",
+    "build/flutter-review-targeted.log",
+    "build/flutter-picker-final.log",
+    "build/flutter-review-full-check.log"
+  ],
+  "after_source_sha256": {
+    "apps/flutter/lib/launcher/launcher_screen.dart": "f77d86f4aaeb87e9625aab4e347cd72031c63d7aab8612eeca1d5e731829dc45",
+    "apps/flutter/lib/launcher/launcher_view_state.dart": "3b75ff56d6d88bf85abd67f28108744e5a121bf0539184f4bd8aea0156d273e7",
+    "apps/flutter/lib/launcher/file_workspace_coordinator.dart": "bc9ac630e6ee5ebc6668856031574f4c32e61cba9c712b7dd1bdc368c011d812",
+    "apps/flutter/lib/settings/shortcut_app_picker.dart": "9e3374ea3a7b215351a5af53a5827023c9cf6219f1604a890cdd0cd54c5639d2",
+    "apps/flutter/lib/execution/execution_output_view.dart": "050b5c11b47bd6868c60c32c8c1a706ba107c748d4f3815e0e959e3af7d224ca"
+  },
+  "limits": [
+    "No app package built or running app replaced for this review",
+    "No physical IME, native GUI, frame timing, Dart heap/GC or process RSS measurement",
+    "File index maps and original candidate data still grow with loaded results",
+    "Impeller and native preview behaviour unchanged"
+  ]
+}

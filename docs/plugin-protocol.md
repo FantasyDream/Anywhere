@@ -102,4 +102,4 @@ TOML 命令注册身份为 `<plugin.id>.<command.id>`。标识使用合法的小
 
 收藏目录最多 100 项 / 64 KiB，普通查询始终找目录；对象 Actions 的首项保持默认打开操作，移除通过明确选择 Forget Saved Directory；`forget` / `remove` / `unpin` 不被解析为隐式删除指令。
 
-旧协议迁移与当时发布门槛见 [V0.9 记录](archive/mvp-v0.9.md)，当前整体状态见 [V0.12 MVP](mvp-v0.12.md)。历史 v1 / 版本迁移验收保存在 [归档](archive/README.md)。
+旧协议迁移与当时发布门槛见 [V0.9 记录](archive/mvp-v0.9.md)，当前整体状态见 [V0.14 技术方案](mvp-v0.14.md)。历史 v1 / 版本迁移验收保存在 [归档](archive/README.md)。

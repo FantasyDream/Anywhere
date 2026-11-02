@@ -15,12 +15,15 @@ final class LauncherWindow: NSWindow {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMenuItemValidation {
+  private let accessibilityState = FlutterAccessibilityState.shared
   var window: LauncherWindow!
   var controller: FlutterViewController!
   private var localeHost: LocaleHost?
   private var localeObservers: [NSObjectProtocol] = []
+  private var previewHost: NativePreviewHost?
   private var webToolsChannel: FlutterMethodChannel?
   private var webToolsActive = false
+  private var webToolsHostPanelVisible = false
   private let webPackagePicker = WebPackagePicker()
   var glass: WindowMaterial!
   var materialController: WindowMaterialController!
@@ -66,7 +69,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   lazy var clipboardWindow = ToolWindowController(
     entrypoint: "clipboardShelfMain",
     channelName: "anywhere/clipboard-shelf",
-    title: "Anywhere · \(NativeLocalization.text(.clipboardShelf))"
+    title: "Anywhere · \(NativeLocalization.text(.clipboardShelf))",
+    onPerformanceEvent: { [weak self] event in self?.log(event) }
   )
   var tasksWindow: NSWindow? { taskWindows.tasksWindow }
   var tasksChannel: FlutterMethodChannel? { taskWindows.tasksChannel }
@@ -134,21 +138,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
       binaryMessenger: controller.engine.binaryMessenger
     )
     webToolsChannel?.setMethodCallHandler { [weak self] call, reply in
-      if call.method == "focusHost", let self, self.webToolsActive,
-        NSApp.keyWindow === self.window
-      {
-        self.window.makeFirstResponder(nil)
-        WindowInputFocus.restore(in: self.window, content: self.controller.view)
+      if call.method == "focusHost", let self, self.webToolsActive {
+        self.webToolsHostPanelVisible = true
+        self.updateWebAccessibility()
+        if NSApp.keyWindow === self.window {
+          self.window.makeFirstResponder(nil)
+          WindowInputFocus.restore(in: self.window, content: self.controller.view)
+        }
         reply(nil)
-      } else if call.method == "focusWeb", let self, self.webToolsActive,
-        NSApp.keyWindow === self.window
-      {
-        NativeWebEditing.focus(
-          in: self.window,
-          content: self.window.contentView ?? self.controller.view
-        )
+      } else if call.method == "focusWeb", let self, self.webToolsActive {
+        self.webToolsHostPanelVisible = false
+        self.updateWebAccessibility()
+        if NSApp.keyWindow === self.window {
+          NativeWebEditing.focus(
+            in: self.window,
+            content: self.window.contentView ?? self.controller.view
+          )
+        }
         reply(nil)
       } else if call.method == "configureWebAppearance", let self, self.webToolsActive {
+        self.updateWebAccessibility()
         let transparent = NativeWebAppearance.configure(
           in: self.window.contentView ?? self.controller.view
         )
@@ -159,6 +168,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         reply(transparent)
       } else if call.method == "active", let active = call.arguments as? Bool {
         self?.webToolsActive = active
+        if !active {
+          self?.webToolsHostPanelVisible = false
+          self?.updateWebAccessibility()
+        }
         // Background dragging otherwise steals WebKit mouse-up/click events.
         self?.window.isMovableByWindowBackground = !active
         reply(nil)
@@ -210,6 +223,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     log([
       "event": "window_material", "backend": glass.usesLiquidGlass ? "liquidGlass" : "visualEffect",
     ])
+    previewHost = NativePreviewHost(
+      messenger: controller.engine.binaryMessenger,
+      owner: { [weak self] in self?.window }
+    )
     channel = FlutterMethodChannel(
       name: "anywhere/window",
       binaryMessenger: controller.engine.binaryMessenger
@@ -270,7 +287,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
           "captureSelectedText": self.stored.captureSelectedText == false ? "0" : "1",
           "captureBrowserCurrentPage": self.stored.captureBrowserCurrentPage == false ? "0" : "1",
           "captureClipboard": self.stored.captureClipboard == false ? "0" : "1",
+          "profileUi": PresentationDiagnostics.enabled ? "1" : "0",
         ])
+      case "performanceSample":
+        if let event = PresentationDiagnostics.event(
+          call.arguments,
+          visible: self.window.isVisible
+        ) {
+          self.log(event)
+        }
+        reply(nil)
       case "settings":
         if let enabled = self.loginItemIsEnabled() {
           self.stored.launchAtLogin = enabled
@@ -565,6 +591,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     if !controller.engine.run(withEntrypoint: nil) {
       log(["event": "flutter_engine_start_failed"])
       NSApp.terminate(nil)
+    } else {
+      accessibilityState.synchronizeNewEngine()
     }
   }
 
@@ -574,7 +602,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   func resizeWindow(_ height: Double, width: Double = 648) {
     launcherWindows.resizeWindow(height, width: width)
   }
-  func hideLauncherWindow() { launcherWindows.hideLauncherWindow() }
+  private func updateWebAccessibility() {
+    NativeWebView.exposeAccessibility(
+      in: window.contentView ?? controller.view,
+      enabled: webToolsActive && !webToolsHostPanelVisible
+    )
+  }
+
+  func hideLauncherWindow() {
+    previewHost?.close()
+    NativeWebView.exposeAccessibility(in: window.contentView ?? controller.view, enabled: false)
+    launcherWindows.hideLauncherWindow()
+  }
 
   func dismissForFocusLoss() {
     if settingsOpen || terminationPending { return }
@@ -588,7 +627,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
 
   func windowDidResignKey(_ notification: Notification) {
     if notification.object as? NSWindow === settingsWindow { shortcutRecorder.cancel() }
-    if notification.object as? NSWindow === window { dismissForFocusLoss() }
+    if notification.object as? NSWindow === window {
+      DispatchQueue.main.async { [weak self] in
+        guard let self, !self.window.isKeyWindow, self.previewHost?.containsKeyWindow != true else {
+          return
+        }
+        self.dismissForFocusLoss()
+      }
+    }
   }
   func applicationDidResignActive(_ notification: Notification) {
     shortcutRecorder.cancel()
@@ -702,6 +748,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   }
 
   func applyLoginItem() -> String? {
+    if ProcessInfo.processInfo.environment["ANYWHERE_DATA_DIRECTORY"] != nil { return nil }
     let want = stored.launchAtLogin
     if #available(macOS 13.0, *) {
       let service = SMAppService.mainApp
@@ -749,6 +796,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   }
 
   func loginItemIsEnabled() -> Bool? {
+    if ProcessInfo.processInfo.environment["ANYWHERE_DATA_DIRECTORY"] != nil {
+      return stored.launchAtLogin
+    }
     if #available(macOS 13.0, *) {
       return SMAppService.mainApp.status == .enabled
     }

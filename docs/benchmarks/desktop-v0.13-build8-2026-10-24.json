@@ -1,0 +1,104 @@
+{
+  "date": "2026-10-24",
+  "timezone": "Asia/Shanghai",
+  "app_version": "0.13.0+8",
+  "source_commit": "02658b8",
+  "binary_sha256": "246cb388ebb26db066371dd9e958607a58dc2fbe912ea04323268f126abc865d",
+  "fixture": {
+    "isolated_directory": true,
+    "items": 50,
+    "formats": 50,
+    "recording": false,
+    "external_context_sources": false,
+    "personal_history_used": false
+  },
+  "checks": {
+    "shelf_create_close_batches": [
+      20,
+      20
+    ],
+    "same_process_and_fixture": true,
+    "shelf_controls_exposed_every_cycle": true,
+    "main_available_after_every_cycle": true,
+    "task_create_close_cycles": 5,
+    "task_controls_exposed_every_cycle": true,
+    "settings_return_after_task_close": true,
+    "invalid_engine_handle_messages": 0,
+    "dead_channel_messages": 45,
+    "impeller_start_lines": 46,
+    "crash_observed": false
+  },
+  "class_counts": {
+    "after_20_shelf_cycles": {
+      "flutter_engine": 1,
+      "flutter_view_controller": 1,
+      "flutter_vsync_waiter": 1,
+      "window_material_controller": 1
+    },
+    "after_5_task_cycles": {
+      "flutter_engine": 1,
+      "flutter_view_controller": 1,
+      "flutter_vsync_waiter": 1,
+      "window_material_controller": 1
+    },
+    "after_40_shelf_and_5_task_cycles": {
+      "flutter_engine": 1,
+      "flutter_view_controller": 1,
+      "flutter_vsync_waiter": 1,
+      "window_material_controller": 1
+    },
+    "tool": "macOS heap --noContent"
+  },
+  "resource_snapshots": [
+    {
+      "stage": "before_tool_cycles",
+      "main_rss_bytes": 57606144,
+      "descendants": [],
+      "footprint_bytes": 113036493,
+      "seconds_since_baseline": 0.0
+    },
+    {
+      "stage": "after_20_shelf_cycles",
+      "main_rss_bytes": 70434816,
+      "descendants": [],
+      "footprint_bytes": 119118234,
+      "seconds_since_baseline": 93.02
+    },
+    {
+      "stage": "after_40_shelf_and_5_task_cycles",
+      "main_rss_bytes": 72728576,
+      "descendants": [],
+      "footprint_bytes": 127506842,
+      "seconds_since_baseline": 291.61
+    }
+  ],
+  "automated_gate": {
+    "rust_passed": 576,
+    "existing_rust_ignored": 6,
+    "flutter_passed": 398,
+    "native_style_architecture_clippy_sdk_examples": "passed",
+    "package_signature_and_contents": "passed"
+  },
+  "physical_hide_resume": "Not completed. No original-window focus-loss events confirmed the automated attempts. The isolated instance was restarted with product defaults (Universal Command+Space; Current App Option+Command+Space); physical input remains unverified.",
+  "final_database_snapshot": {
+    "items": 50,
+    "formats": 50,
+    "recording": 0,
+    "retention_days": 30
+  },
+  "limits": [
+    "The sampled control counts show no accumulated closed tool controllers in this run. They do not prove every transient allocation, graphics cache or SDK callback has been reclaimed.",
+    "No invalid-handle warning in this run is not proof that an intermittent SDK race cannot recur. SDK dead-channel messages were still observed and were not suppressed.",
+    "Task windows had no running processes. Widget coverage checks that closing the view does not invoke stop, but this run did not exercise actual task survival.",
+    "RSS and footprint are separate compression-sensitive snapshots, not a controlled old/new improvement or long-duration stability proof.",
+    "No Web plugin was opened. PID-ancestry descendants were empty, while unrelated WebKit XPC helpers existed. vmmap summary did not report their responsible app; launchctl procinfo required root, which was not requested. Complete XPC attribution remains unverified.",
+    "No permission, sleep, screen-lock, system-clock or renderer settings were changed. Clipboard history recording remained off."
+  ],
+  "acceptance_shortcuts_restored": {
+    "universal": "Command+Space",
+    "current_app": "Option+Command+Space",
+    "personal_or_system_settings_changed": false,
+    "isolated_app_restarted": true,
+    "registration_failure_logged": false
+  }
+}

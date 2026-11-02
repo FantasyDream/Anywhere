@@ -1,30 +1,24 @@
+import {jsonInputText} from './input.mjs';
+import {utf8Length} from './text.mjs';
 import {validate, transform, MAX_BYTES, JsonToolError} from './json.mjs';
 
-const encoder = new TextEncoder();
 export const JSON_ACTIONS = [
   {
     id: 'copy-format',
-    title: 'Copy Formatted JSON',
-    label: 'Copy formatted',
     icon: 'format',
   },
   {
     id: 'copy-minify',
-    title: 'Copy Minified JSON',
-    label: 'Copy minified',
     icon: 'minify',
   },
   {
     id: 'copy-escaped',
-    title: 'Copy Escaped JSON',
-    label: 'Copy escaped',
     icon: 'escape',
   },
-  {id: 'unescape', title: 'Unescape JSON', label: 'Unescape', icon: 'unescape'},
 ];
 
 function bounded(text) {
-  if (encoder.encode(text).length > MAX_BYTES)
+  if (utf8Length(text) > MAX_BYTES)
     throw new JsonToolError('JSON text exceeds 1 MiB');
   return text;
 }
@@ -69,26 +63,14 @@ export function decodeDocument(text) {
 export function prepareJsonAction(text, id, spaces = 2) {
   if (!JSON_ACTIONS.some(action => action.id === id))
     throw new JsonToolError('Unknown JSON action');
-  if (id === 'unescape') {
-    // Containers support up to four layers. Explicit unescape also supports one
-    // layer around a scalar, so escape/unescape round-trips every JSON root type.
-    const document = decodeDocumentOrNull(text);
-    const decoded = document?.escaped
-      ? document.text
-      : decodeLayer(bounded(text));
-    validate(decoded);
-    return {text: decoded, copy: false, message: 'unescaped'};
-  }
-  const source = decodeDocument(text).text;
   let result = transform(
-    source,
+    text,
     id === 'copy-format' ? 'format' : 'minify',
     spaces,
   );
   if (id === 'copy-escaped') result = bounded(JSON.stringify(result));
   return {
     text: result,
-    copy: true,
     message: {
       'copy-format': 'copiedFormat',
       'copy-minify': 'copiedMinify',
@@ -96,32 +78,12 @@ export function prepareJsonAction(text, id, spaces = 2) {
     }[id],
   };
 }
-function decodeDocumentOrNull(text) {
-  try {
-    return decodeDocument(text);
-  } catch {
-    return null;
-  }
-}
-
-/** The same ordinary Web page serves Workspace and all four launcher commands.
- * No input means open the editor, never implicitly read the clipboard.
- */
-export function prepareJsonLaunch(invocation, spaces = 2) {
-  if (invocation.input.kind !== 'text') return null;
-  const source = invocation.input.text;
-  if (invocation.entrypoint === 'workspace') {
-    const document = decodeDocument(source);
-    return {
-      input: document.text,
-      clipboard: null,
-      message: document.escaped ? 'decoded' : null,
-    };
-  }
-  const result = prepareJsonAction(source, invocation.entrypoint, spaces);
-  return {
-    input: result.copy ? decodeDocument(source).text : result.text,
-    clipboard: result.copy ? result.text : null,
-    message: result.message,
-  };
+/** The sole UI route consumes normalized Context; native paste also accepts escaping. */
+export function prepareJsonLaunch(invocation) {
+  const source = jsonInputText(invocation.input);
+  if (source === null) return null;
+  if (invocation.entrypoint !== 'workspace')
+    throw new JsonToolError('Unknown workspace route');
+  const document = decodeDocument(source);
+  return {input: document.text, message: document.escaped ? 'decoded' : null};
 }

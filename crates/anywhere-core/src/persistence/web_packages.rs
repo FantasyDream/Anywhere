@@ -34,8 +34,7 @@ impl WebResourceFile {
     pub fn read(&self) -> Result<Vec<u8>> {
         let bytes = read_regular(&self.path, self.size)?;
         ensure!(
-            bytes.len() as u64 == self.size
-                && format!("{:x}", Sha256::digest(&bytes)) == self.sha256,
+            bytes.len() as u64 == self.size && hex::encode(Sha256::digest(&bytes)) == self.sha256,
             "Web resource changed"
         );
         Ok(bytes)

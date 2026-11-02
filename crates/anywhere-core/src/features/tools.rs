@@ -18,8 +18,19 @@ pub struct EntrySource<'a, 'b> {
 }
 impl EntrySource<'_, '_> {
     /// Shortcut execution must remain available independently of visible search.
-    pub fn binding_offers(&self) -> Vec<Candidate> {
-        self.offers(&Query::parse(""))
+    pub fn binding_offers(&self, contextual: &[Candidate]) -> Vec<Candidate> {
+        let mut entries = self.offers(&Query::parse(""));
+        // The same command already has a more specific captured target. This
+        // follows visible search deduplication and avoids a false shortcut choice.
+        entries.retain(|entry| {
+            !contextual.iter().any(|offer| {
+                offer.presentation.command_id == entry.presentation.command_id
+                    && offer
+                        .context()
+                        .is_some_and(|context| context.type_id != ENTRY_CONTEXT)
+            })
+        });
+        entries
     }
 
     fn offers(&self, query: &Query) -> Vec<Candidate> {

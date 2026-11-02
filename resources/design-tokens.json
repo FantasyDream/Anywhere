@@ -226,10 +226,6 @@
       "value": 72,
       "unit": "px"
     },
-    "pageFooterHeight": {
-      "value": 44,
-      "unit": "px"
-    },
     "pageToolbarHeight": {
       "value": 36,
       "unit": "px"
@@ -266,9 +262,17 @@
       "value": 26,
       "unit": "px"
     },
-    "previewFraction": {
-      "value": 0.38,
-      "unit": "number"
+    "pageTitleGap": {
+      "value": 3,
+      "unit": "px"
+    },
+    "contentInputSize": {
+      "value": 17,
+      "unit": "px"
+    },
+    "searchCaretWidth": {
+      "value": 1.4,
+      "unit": "px"
     }
   },
   "fonts": {

@@ -6,28 +6,31 @@
 
 ## 项目状态
 
-当前为 **V0.12 开发预览**：中英国际化、拼音检索，以及交互与性能打磨。版本和构建号以 [pubspec.yaml](apps/flutter/pubspec.yaml) 为准；开发构建不等于正式发行。
+当前为 **V0.14 开发预览**。应用历史、所选对象动作与统一频次排序已接入，完整发布和实机矩阵尚未完成。此前 V0.13 已完成工程检查与该轮常规 macOS 验收；已知 SDK 警告、WebKit GPU 保留及未验收矩阵见 [V0.13 MVP](docs/mvp-v0.13.md)。版本和构建号以 [pubspec.yaml](apps/flutter/pubspec.yaml) 为准；开发构建不等于正式发行。
+
+V0.14 已接入[应用历史与动作排序](docs/mvp-v0.14.md)：通用文件读取器 + 官方配置 / JS 转换，共享历史页已接入 18 个来源，覆盖 JetBrains、VS Code 同类编辑器、Sublime Text 和 Obsidian 最近仓库。支持默认路径检测、自定义路径、逐来源 Action 开关与可信用户适配；Obsidian 最近笔记暂缓接入，多实例仍待验证；浏览器历史、书签与 Tab 管理调整为[后续独立功能](docs/browser-feature.md)，不属于 V0.14 收尾前置。
 
 | 平台 | 状态 |
 |---|---|
 | macOS 12+ | 主要开发和验证平台；从源码构建本机架构的 App |
 | Windows / Linux | 部分共享代码有编译与测试检查，尚未交付可用 App |
 
-本地开发包使用持久本机签名；公开分发所需的签名、公证、安装升级和完整辅助功能矩阵仍需验收。具体证据见 [V0.12 MVP](docs/mvp-v0.12.md)。
+本地开发包使用持久本机签名，手动 GitHub 打包使用独立 CI 开发签名；公开分发所需的签名、公证、安装升级和完整辅助功能矩阵仍需验收。当前进度见 [V0.14 技术方案](docs/mvp-v0.14.md)，此前验收见 [V0.13 MVP](docs/mvp-v0.13.md)。
 
-**下载提示：** GitHub 的 [`latest` 历史预览](https://github.com/FantasyDream/Anywhere/releases/tag/latest) 是 2026-09-18 的 V0.3 开发包，不包含本页介绍的 V0.12 功能，也不代表当前 Windows 支持状态。当前版本请按下文从源码构建；新版预览尚未上传 Release。
+**下载提示：** GitHub 的 [`latest` 历史预览](https://github.com/FantasyDream/Anywhere/releases/tag/latest) 是 2026-09-18 的 V0.3 开发包，不包含本页介绍的后续功能，也不代表当前 Windows 支持状态。当前版本请按下文从源码构建；新版预览尚未上传 Release。
 
 ## 能做什么
 
 - **应用与动作搜索**：启动或切回应用，搜索当前应用的可用菜单，通过 Scope 筛选领域动作。
 - **Context 动作**：读取 Finder 选中项 / 目录、选中文本、浏览器当前 URL 和近期剪贴板；支持路径、URL 与项目类型识别。
-- **文件搜索**：Spotlight 快速结果加完整文件名遍历，支持隐藏文件、类型过滤、稳定追加与固定右侧预览，不建立长期全盘索引。
+- **文件搜索**：Spotlight 快速结果加完整文件名遍历，支持隐藏文件、类型过滤、稳定追加与按需系统预览，不建立长期全盘索引。
 - **剪贴板历史**：本机保存和检索文本、图片、文件列表及可读取格式；另有支持连续复制的常驻悬浮窗。采集默认关闭。
 - **开发工具**：Git 常用动作、Maven / Gradle / Node / Cargo 与 Spring Boot 动作，长任务可返回查看输出与停止。
 - **快捷键与语言**：自定义 Action / 全局 / Context 快捷键，支持简体中文、English、全拼与首字母搜索。
+- **应用历史原型**：每个应用有独立 Action，如“IDEA 最近项目”“VS Code 最近项目与文件”；在对应 Current App 中自动出现，全局搜索也可找到；仅默认开启已安装应用的 Action，自动检测来源文件，设置中可自定义路径或手动开关来源，支持标题 / 路径 / 拼音匹配。接入与限制见[来源指南](docs/application-history-sources.md)。
 - **Web 插件预览**：可信本地包、明确权限、统一主题与 SDK；JSON Workspace 作为普通插件实现。
 
-终端 / PTY、第三方 ContextProvider、插件市场和浏览器历史暂未交付。文件预览以元数据和有界文本为主。
+终端 / PTY、插件进程隔离、插件市场和浏览器历史暂未交付。第三方 Context 目前仅支持按需解析获准输入；文件及剪贴板预览使用按需 macOS Quick Look 窗口；其他平台的原生预览尚未实现。
 
 ## 快速使用
 
@@ -36,10 +39,10 @@
 | 按键 | 操作 |
 |---|---|
 | `⌘⌥Space` | 当前应用：展示当前环境可用的动作 |
-| `⌘⌥⇧Space` | 全局搜索：查找应用与动作 |
+| `⌘Space` | 全局搜索：查找应用与动作 |
 | `↑` / `↓`、`Enter` | 选择、执行 |
 | `Tab` / `Shift+Tab` | 前后切换 Scope；文件页切类型，兼容 Ctrl 组合 |
-| `⌘K` | 选中对象的更多操作 |
+| `⌘K` | 支持此快捷键的页面中查看更多操作；应用历史使用右键或行内入口 |
 | `Esc` | 清空查询、返回上一层，最后隐藏窗口 |
 
 例如，输入“文件搜索”或 `wjss` 进入文件页；在 Git 项目目录唤醒后执行 Git Status 或 Copy Branch Name。选中文本 / 新复制内容仅在能识别具体 Context，或被已批准且启用的 Web 工具命令匹配时自动填入；剪贴板有效期为 15 秒。输入法组词期间不抢分类切换键。
@@ -61,17 +64,18 @@ flowchart TD
     Application --> Persistence[SQLite / 配置存储]
     Application --> Platform[系统能力适配器]
     Features --> Platform
-    Web[Web 插件 + TypeScript SDK] --> Broker[Rust 能力代理]
+    Web[Web UI + TypeScript SDK] --> Broker[Rust 能力代理]
+    Background[按需 QuickJS 后台插件 + 同一 SDK] --> Broker
     Broker --> Application
 ```
 
-Rust 负责识别、匹配、排序、执行和资源预算；Flutter 负责呈现与交互；系统差异留在平台适配层。第一方模块编译期自动注册，第三方 Web 插件通过独立包和受限能力接入。
+Rust 负责识别、匹配、排序、执行和资源预算；Flutter 负责呈现与交互；系统差异留在平台适配层。第一方模块编译期自动注册，第三方插件通过独立包与统一 TypeScript SDK 接入：WebView 运行界面，按需 QuickJS 运行后台 Context / Action，权限与生命周期统一由 Rust 管理。
 
-详见[架构与代码地图](docs/architecture.md)、[Context 模型](docs/context-model.md)与[Web 插件设计](docs/web-plugin-design.md)。
+代码定位先看 [AGENTS.md](AGENTS.md)。详见[架构与代码地图](docs/architecture.md)、[Context 模型](docs/context-model.md)及[插件开发指南](docs/plugin-development.md)。
 
 ## 从源码构建
 
-需要 macOS 开发工具、Rust stable、[指定版本的 Flutter](.flutter-version)、Python 3.10+、Node.js 22+ / npm，以及持久本机签名身份。
+需要 macOS 开发工具、[指定版本的 Rust/Cargo beta 预发布工具链](rust-toolchain.toml)、[指定版本的 Flutter](.flutter-version)、Python 3.10+、Node.js 22+ / npm，以及持久本机签名身份。发布稳定版本前，请再用目标 stable 工具链复查完整检查。
 
 ```bash
 source scripts/env.sh

@@ -97,14 +97,13 @@ pub fn descriptors(
                 } else {
                     AvailabilityRule::Hidden
                 },
-                base_priority: if recommend(&leaf) { 20 } else { 0 },
+                base_priority: default_priority(&leaf),
                 icon: "menu".into(),
                 group_id: groups::for_app(&app.bundle_id),
                 aliases,
                 keywords,
                 owning_app: Some(app.bundle_id.clone()),
                 menu_path: parents,
-                home_eligible: recommend(&leaf),
                 primary_action: false,
                 search_title: Some(search_title),
             }
@@ -150,30 +149,38 @@ pub fn action_id(bundle_id: &str, identity: &[String]) -> String {
     format!("app.{bundle_id}.{hash:016x}")
 }
 
-/// Small generic home heuristic while unverified menu usage is quarantined.
-fn recommend(title: &str) -> bool {
+/// Cold-start defaults only; verified usage determines empty-list order.
+fn default_priority(title: &str) -> i32 {
     let title = title.to_lowercase();
-    [
-        "toggle",
-        "terminal",
-        "command palette",
-        "format",
-        "new window",
-        "save",
-        "find",
-        "undo",
-        "redo",
-        "copy",
-        "paste",
-        "新建",
-        "保存",
-        "查找",
-        "复制",
-        "粘贴",
-        "终端",
-    ]
-    .iter()
-    .any(|word| title.contains(word))
+    // Exact labels avoid promoting "Execute" or "Shortcut Settings" merely
+    // because they contain the letters in "cut".
+    if matches!(title.trim(), "cut" | "select all" | "剪切" | "全选")
+        || [
+            "toggle",
+            "terminal",
+            "command palette",
+            "format",
+            "new window",
+            "save",
+            "find",
+            "undo",
+            "redo",
+            "copy",
+            "paste",
+            "新建",
+            "保存",
+            "查找",
+            "复制",
+            "粘贴",
+            "终端",
+        ]
+        .iter()
+        .any(|word| title.contains(word))
+    {
+        20
+    } else {
+        0
+    }
 }
 
 #[cfg(test)]

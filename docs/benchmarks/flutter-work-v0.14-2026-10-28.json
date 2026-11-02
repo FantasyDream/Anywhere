@@ -1,0 +1,29 @@
+{
+  "date": "2026-10-28",
+  "scope": "Flutter test runner only; deterministic property-access and controlled backend-call counts. Not frame timings, Dart heap profiling, RSS or native GUI evidence.",
+  "baseline": "Preceding Flutter implementation in the same dirty workspace; baseline regression failed with the recorded actual counts. No clean commit baseline claimed.",
+  "file_fixture": {
+    "initial_rows": 50000,
+    "single_row_appends": 10,
+    "availability_reads_before": 500055,
+    "availability_reads_after": 855
+  },
+  "clipboard_fixture": {
+    "refresh_calls": 6,
+    "blocked_first_read": true,
+    "peak_in_flight_before": 6,
+    "peak_in_flight_after": 1,
+    "total_backend_calls_before": 6,
+    "total_backend_calls_after": 2
+  },
+  "regressions": [
+    "cached chunk visibility still filters hidden rows",
+    "queued reads respect newest query debounce",
+    "late responses cannot replace the current query"
+  ],
+  "source_sha256": {
+    "apps/flutter/lib/launcher/launcher_view_state.dart": "13ace7f97092cc7c703882d07b2477962bf8e13f96d13e1c0d70a10ddc219368",
+    "apps/flutter/lib/features/clipboard/clipboard_history_session.dart": "771091c551b744205ae5545393a4524c14064ced7489c5321533544f08207c31",
+    "apps/flutter/test/flutter_hot_paths_test.dart": "55d938f7a59c3703975f4245c8f22c3573d821d64f8b6af58091d036cc722029"
+  }
+}

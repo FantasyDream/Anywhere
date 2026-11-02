@@ -1,0 +1,72 @@
+{
+  "date": "2026-10-27",
+  "version": "0.14.0+21",
+  "branch": "codex/plugin-runtime-refactor",
+  "source_commit": "813e97e4b8d0d0b30f8bb2254b68028222a22103",
+  "package": "build/Anywhere-0.14-preview-build21-macos-arm64.zip",
+  "sha256": "7702972c3e82fa116efe3b57ef591b673e84cf1fb8ffc3cf1171a2a248455781",
+  "sdk_package": "build/plugin-sdk/anywhere-sdk-0.1.0.tgz",
+  "sdk_sha256": "9510ac0767cb7e9fc80d1a3d549fb4ded952c16036c6d9af000cfd4285865bed",
+  "implemented": [
+    "Unified TypeScript SDK with WebView and background build adapters",
+    "Permission-filtered Context/Input snapshots, latest-value events and cancellation",
+    "Frozen source application and live frontmost application APIs",
+    "Manifest-declared, package-owned Context providers in the existing graph",
+    "On-demand bounded QuickJS jobs and headless Actions through the existing consent broker",
+    "Standalone UI/background templates and a TypeScript JSON Summary example"
+  ],
+  "checks": {
+    "full_gate": {
+      "command": "scripts/check.sh",
+      "log": "build/plugin-runtime-final-check.log",
+      "result": "passed"
+    },
+    "core": {
+      "passed": 316,
+      "ignored": 1
+    },
+    "mvp": {
+      "passed": 195,
+      "ignored": 4
+    },
+    "flutter": {
+      "passed": 435
+    },
+    "sdk": {
+      "passed": 21,
+      "skipped": 0
+    },
+    "json_example": {
+      "passed": 25
+    },
+    "last_cancellation_regression": {
+      "passed": 47,
+      "log": "build/plugin-core-test.log"
+    },
+    "bridge_compile": "passed",
+    "clippy": "passed",
+    "architecture": "passed",
+    "standalone_templates": "UI and background templates built outside the checkout",
+    "background_e2e": "Approved package -> Context -> Action -> compiled TypeScript SDK -> QuickJS -> synthetic clipboard consent and copy",
+    "package_signature_and_archive": "verified"
+  },
+  "resource_contract": {
+    "runtime_memory_limit_bytes": 33554432,
+    "stack_limit_bytes": 262144,
+    "job_js_budget_ms": 250,
+    "prefill_js_budget_ms": 75,
+    "host_calls_per_job": 128,
+    "idle_runtime": "none for UI-only packages; finite background jobs drop their VM",
+    "rss_or_native_helper_measurement": "not performed; limits are not measured App RSS"
+  },
+  "native_gui": {
+    "status": "not_run",
+    "reason": "The desktop tool refused Terminal access; an isolated GUI launch requiring environment variables was not started. No private clipboard/history acceptance was attempted."
+  },
+  "limitations": [
+    "macOS development preview; Windows Web hosting not accepted",
+    "Background jobs are in-process workers, not OS process isolation",
+    "No persistent background daemon, arbitrary filesystem, network, Shell or Secrets API",
+    "No GitHub Release or notarization; no claim of native UI acceptance"
+  ]
+}

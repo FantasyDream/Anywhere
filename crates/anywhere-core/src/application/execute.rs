@@ -167,6 +167,7 @@ impl Application {
                     bail!("menu discovery expired; choose a current action");
                 }
             }
+            candidate.validate()?;
             let mut output = match &candidate.target {
                 crate::core::search::candidate::CandidateTarget::Action { action, context } => {
                     if crate::features::filesystem::search::is_search_target(&candidate) {
@@ -190,6 +191,7 @@ impl Application {
                 } => crate::features::applications::launch::execute(path, platform.as_ref())?,
             };
             if let Some(command) = output.web_command.take() {
+                candidate.validate()?;
                 // Mint the invocation under the same lock used by hide/activation/catalog
                 // publication. A queued worker cannot recreate a ticket after revocation.
                 let session = session_for_execution
@@ -224,6 +226,7 @@ impl Application {
                 {
                     bail!("action expired before the task started");
                 }
+                candidate.validate()?;
                 Some(executions.start(request)?)
             } else {
                 None
@@ -253,6 +256,18 @@ impl Application {
             Ok::<_, anyhow::Error>((output, history_result, execution_session_id))
         })
         .await?;
+        let result = async {
+            let (mut output, history_result, execution_session_id) = result?;
+            if self
+                .run_headless_web_action(output.view.as_ref(), session_id, revision)
+                .await?
+            {
+                output.view = None;
+                output.close_window = true;
+            }
+            Ok::<_, anyhow::Error>((output, history_result, execution_session_id))
+        }
+        .await;
         match result {
             Ok((output, history_result, execution_session_id)) => {
                 let (warning, close_window) = match history_result {

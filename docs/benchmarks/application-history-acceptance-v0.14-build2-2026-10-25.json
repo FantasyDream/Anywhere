@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-25",
+  "source_commit": "0427269ab79647ada0a3ae5acef1589a2b5f1766",
+  "version": "0.14.0+2",
+  "app": "Anywhere-0.14-preview-build2.app",
+  "zip": "Anywhere-0.14-preview-build2-macos-arm64.zip",
+  "zip_sha256": "d03b021a60b91f43ec0324b3f7a8b0c52142c470da77c15ed0abcefc17e10835",
+  "private_history_used": false,
+  "synthetic_sources": {
+    "idea": 500,
+    "vscode": 500
+  },
+  "context_capture_enabled": false,
+  "clipboard_recording_enabled": false,
+  "native_ui_passed": [
+    "Action search and Return entry",
+    "Pasted Chinese query",
+    "Path query with a single VS Code result",
+    "Tab source cycling",
+    "Arrow selection",
+    "Changed query and source select a visible first row",
+    "Settings source disable, re-enable, save and readback",
+    "Settings close"
+  ],
+  "prior_build1_only": [
+    "Pinyin query",
+    "More actions menu, arrow selection and Return refresh"
+  ],
+  "not_verified": [
+    "Physical Chinese IME",
+    "Physical Command+K",
+    "Real application source format matrix",
+    "Actual opening in the source application",
+    "Normal quit and post-quit memory"
+  ],
+  "engineering": {
+    "full_gate": "scripts/check.sh passed",
+    "flutter_passed": 406,
+    "core_unit_passed": 272,
+    "core_unit_ignored": 1,
+    "mvp_integration_passed": 189,
+    "mvp_integration_ignored": 4
+  },
+  "shutdown": "Mac locked before menu quit; exact isolated test process path verified then SIGTERM used",
+  "screenshots": "Local ignored build/ui-v0.14-build2; not committed",
+  "scope": "H1 bounded small-source prototype; browsers, Obsidian, source discovery, multiple profiles/installations, streaming browser history and object Context actions remain planned"
+}

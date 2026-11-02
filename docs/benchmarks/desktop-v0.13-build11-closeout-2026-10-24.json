@@ -1,0 +1,661 @@
+{
+  "date": "2026-10-24",
+  "timezone": "Asia/Shanghai",
+  "recorded_at_utc": "2026-10-24T15:06:03.116575+00:00",
+  "app_version": "0.13.0+11",
+  "app_source_commit": "0f0f026ee1e85a54d0cff0ad205d73eb75170054",
+  "binary_sha256": "5f78b91261677aba7abbb7bc7932cd3f609cdef3e0168841bd904958e1d6eb8f",
+  "zip_sha256": "e14286755200a0911d41b744c80137c0f013f24abc0eba24ead2163476cf074c",
+  "environment": "Same Apple M5 / macOS 27.0.1 arm64 host; Flutter 3.47.4 Release with Impeller retained; macOS WebView 1.1.2.",
+  "status": "V0.13 engineering and this round of ordinary macOS preview acceptance closed; not a formal distribution release.",
+  "checks": {
+    "product_source_changed_this_followup": false,
+    "app_and_zip_hashes_unchanged": true,
+    "persistent_signature_reverified": true,
+    "full_gate_reused_from_same_build": {
+      "rust_passed": 577,
+      "existing_rust_ignored": 6,
+      "flutter_passed": 400,
+      "python_passed": 30,
+      "style_native_architecture_clippy_web_sdk_examples": "passed"
+    },
+    "full_gate_rerun_this_docs_only_followup": false
+  },
+  "fixture": {
+    "isolated_directory": true,
+    "personal_history_used": false,
+    "recording": 0,
+    "synthetic_items": 50,
+    "formats": 50,
+    "retention_days": 30,
+    "automatic_context_sources_enabled": false,
+    "final_values_unchanged": true
+  },
+  "sdk_warning_attribution": {
+    "process": "isolated full App, separate from ordinary resource measurement",
+    "temporary_diagnostic_source_sha256": "25c6d487503f293534f625444a02984b608b1779c33505f319a9dcf62b5d0a84",
+    "release_app_or_sdk_files_modified": false,
+    "temporary_runtime_wrappers": "Gate to the isolated Anywhere process; wrap FlutterLogger.logWarning and FlutterTextInputPlugin.dealloc, forwarding each original invocation once. Runtime signature guards precede installation.",
+    "completed_window_cycles": {
+      "clipboard_shelf": 3,
+      "running_tasks": 3
+    },
+    "real_running_task_survival_tested_here": false,
+    "cleanup_begin_count": 6,
+    "cleanup_end_count": 6,
+    "traced_dead_channel_count": 6,
+    "forwarded_original_dead_channel_count": 6,
+    "all_traced_warnings_within_original_input_dealloc_on_main_thread": true,
+    "collection_boundary": "Counts read after normal exit flushed stderr; original SDK warnings were on stdout. Intermediate buffered counts were not used.",
+    "supporting_pinned_sdk_source": "FlutterTextInputPlugin.mm dealloc calls [_channel setMethodCallHandler:nil]; FlutterBinaryMessengerRelay warns when the parent messenger is unavailable.",
+    "invalid_engine_handle_messages": 1,
+    "invalid_engine_handle_attributed_to_input_cleanup": false,
+    "final_classes": {
+      "FlutterEngine": 1,
+      "FlutterViewController": 1,
+      "FlutterVSyncWaiter": 1,
+      "WindowMaterialController": 1,
+      "WKWebViewConfiguration": 0,
+      "WKProcessPool": 0,
+      "native_plugin_webview": 0
+    },
+    "normal_exit_code": 0,
+    "limits": [
+      "Diagnostic wrappers and stack collection may affect timing; no performance comparison uses this process.",
+      "This attributes six warnings from the current experiment; it does not retroactively attribute all 45 historical Build 8 warnings.",
+      "Attribution and bounded object counts do not fix the SDK warnings or prove all delayed callbacks are revoked."
+    ]
+  },
+  "ordinary_web_acceptance": {
+    "diagnostic_injection_environment_explicitly_unset": true,
+    "package": "Already-installed repository Text Pad example; zero host permissions",
+    "document_loads": 5,
+    "first_open": 1,
+    "reloads": 4,
+    "each_document_input_verified": true,
+    "native_command_k_opens_host_options": true,
+    "keyboard_reload_from_host_options": true,
+    "escape_returns_to_search_and_removes_editor": true,
+    "first_web_nodes": "Asynchronous; first inspected snapshot had no editor, keyboard focus and typing exposed it. Not a synchronous first-frame or VoiceOver claim.",
+    "snapshots_during_document_loading": [
+      {
+        "document": 1,
+        "verified_input_characters": 6,
+        "resource_snapshot": {
+          "elapsed_seconds": 0.05,
+          "main_rss_bytes": 58064896,
+          "descendants": [],
+          "webkit_helpers": [
+            {
+              "pid": 63286,
+              "name": "com.apple.WebKit.Networking",
+              "rss_bytes": 5996544
+            },
+            {
+              "pid": 63284,
+              "name": "com.apple.WebKit.WebContent",
+              "rss_bytes": 15826944
+            },
+            {
+              "pid": 63283,
+              "name": "com.apple.WebKit.GPU",
+              "rss_bytes": 15056896
+            }
+          ]
+        }
+      },
+      {
+        "document": 2,
+        "verified_input_characters": 6,
+        "resource_snapshot": {
+          "elapsed_seconds": 0.08,
+          "main_rss_bytes": 51904512,
+          "descendants": [],
+          "webkit_helpers": [
+            {
+              "pid": 64069,
+              "name": "com.apple.WebKit.WebContent",
+              "rss_bytes": 22609920
+            },
+            {
+              "pid": 63286,
+              "name": "com.apple.WebKit.Networking",
+              "rss_bytes": 5455872
+            },
+            {
+              "pid": 63283,
+              "name": "com.apple.WebKit.GPU",
+              "rss_bytes": 7241728
+            }
+          ]
+        }
+      },
+      {
+        "document": 3,
+        "verified_input_characters": 6,
+        "resource_snapshot": {
+          "elapsed_seconds": 0.05,
+          "main_rss_bytes": 49184768,
+          "descendants": [],
+          "webkit_helpers": [
+            {
+              "pid": 64598,
+              "name": "com.apple.WebKit.WebContent",
+              "rss_bytes": 22970368
+            },
+            {
+              "pid": 63286,
+              "name": "com.apple.WebKit.Networking",
+              "rss_bytes": 5488640
+            },
+            {
+              "pid": 63283,
+              "name": "com.apple.WebKit.GPU",
+              "rss_bytes": 7208960
+            }
+          ]
+        }
+      },
+      {
+        "document": 4,
+        "verified_input_characters": 6,
+        "resource_snapshot": {
+          "elapsed_seconds": 0.05,
+          "main_rss_bytes": 61292544,
+          "descendants": [],
+          "webkit_helpers": [
+            {
+              "pid": 64854,
+              "name": "com.apple.WebKit.WebContent",
+              "rss_bytes": 35078144
+            },
+            {
+              "pid": 63286,
+              "name": "com.apple.WebKit.Networking",
+              "rss_bytes": 6782976
+            },
+            {
+              "pid": 63283,
+              "name": "com.apple.WebKit.GPU",
+              "rss_bytes": 8404992
+            }
+          ]
+        }
+      },
+      {
+        "document": 5,
+        "verified_input_characters": 6,
+        "resource_snapshot": {
+          "elapsed_seconds": 0.06,
+          "main_rss_bytes": 51937280,
+          "descendants": [],
+          "webkit_helpers": [
+            {
+              "pid": 65090,
+              "name": "com.apple.WebKit.WebContent",
+              "rss_bytes": 25542656
+            },
+            {
+              "pid": 63286,
+              "name": "com.apple.WebKit.Networking",
+              "rss_bytes": 4833280
+            },
+            {
+              "pid": 63283,
+              "name": "com.apple.WebKit.GPU",
+              "rss_bytes": 11026432
+            }
+          ]
+        }
+      }
+    ],
+    "classes_after_fifth_load": {
+      "FlutterEngine": 1,
+      "FlutterViewController": 1,
+      "FlutterVSyncWaiter": 1,
+      "WindowMaterialController": 1,
+      "WKWebViewConfiguration": 2,
+      "WKProcessPool": 1,
+      "native_plugin_webview": 1
+    },
+    "first_post_exit_resources": {
+      "elapsed_seconds": 0.05,
+      "main_rss_bytes": 56459264,
+      "descendants": [],
+      "webkit_helpers": [
+        {
+          "pid": 63283,
+          "name": "com.apple.WebKit.GPU",
+          "rss_bytes": 11730944
+        }
+      ]
+    },
+    "classes_after_web_exit": {
+      "FlutterEngine": 1,
+      "FlutterViewController": 1,
+      "FlutterVSyncWaiter": 1,
+      "WindowMaterialController": 1,
+      "WKWebViewConfiguration": 0,
+      "WKProcessPool": 1,
+      "native_plugin_webview": 0
+    },
+    "classes_after_hidden_sample": {
+      "FlutterEngine": 1,
+      "FlutterViewController": 1,
+      "FlutterVSyncWaiter": 1,
+      "WindowMaterialController": 1,
+      "WKWebViewConfiguration": 0,
+      "WKProcessPool": 1,
+      "native_plugin_webview": 0
+    },
+    "normal_app_exit_code_after_measurements": 0
+  },
+  "fixed_hidden_after_web_exit": {
+    "sampling_started_at_utc": "2026-10-24T11:53:37.069166+00:00",
+    "exit_code": 0,
+    "retention_wait_seconds": 20,
+    "presentation_events_during_sampling": [],
+    "web_documents_loaded_before_exit": 5,
+    "diagnostic_library_active": false,
+    "ui_inspection_during_sampling": false,
+    "sample_count": 31,
+    "last_sample_elapsed_seconds": 300.07,
+    "initial_physical_footprint_bytes": 71827456,
+    "final_physical_footprint_bytes": 71722598,
+    "rss_first_bytes": 36913152,
+    "rss_last_bytes": 22478848,
+    "rss_min_bytes": 22478848,
+    "rss_max_bytes": 36913152,
+    "only_verified_gpu_helper_in_all_samples": true,
+    "unknown_inventory_samples": 0,
+    "descendants_empty_in_all_samples": true,
+    "resources": [
+      {
+        "elapsed_seconds": 1.97,
+        "main_rss_bytes": 36913152,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5767168
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 12.03,
+        "main_rss_bytes": 30670848,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5767168
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 22.09,
+        "main_rss_bytes": 30441472,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5767168
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 32.15,
+        "main_rss_bytes": 29982720,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5783552
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 42.21,
+        "main_rss_bytes": 29982720,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5783552
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 52.27,
+        "main_rss_bytes": 29999104,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5783552
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 62.34,
+        "main_rss_bytes": 29966336,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5767168
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 72.44,
+        "main_rss_bytes": 29835264,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5586944
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 82.5,
+        "main_rss_bytes": 25526272,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5783552
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 92.57,
+        "main_rss_bytes": 25526272,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5783552
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 102.63,
+        "main_rss_bytes": 25001984,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5767168
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 112.69,
+        "main_rss_bytes": 25018368,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5767168
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 122.75,
+        "main_rss_bytes": 23330816,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5750784
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 132.81,
+        "main_rss_bytes": 23478272,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5767168
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 142.89,
+        "main_rss_bytes": 23478272,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5767168
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 152.95,
+        "main_rss_bytes": 22560768,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5750784
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 163.0,
+        "main_rss_bytes": 22577152,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5750784
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 173.07,
+        "main_rss_bytes": 22577152,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5750784
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 183.13,
+        "main_rss_bytes": 24248320,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5734400
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 193.2,
+        "main_rss_bytes": 25378816,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5734400
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 203.26,
+        "main_rss_bytes": 22839296,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5734400
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 213.32,
+        "main_rss_bytes": 23379968,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5750784
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 223.39,
+        "main_rss_bytes": 26460160,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5750784
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 233.45,
+        "main_rss_bytes": 26066944,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5750784
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 243.51,
+        "main_rss_bytes": 23805952,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5750784
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 253.57,
+        "main_rss_bytes": 23920640,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5750784
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 263.63,
+        "main_rss_bytes": 23232512,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5734400
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 273.69,
+        "main_rss_bytes": 22970368,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5750784
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 283.75,
+        "main_rss_bytes": 23052288,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5750784
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 293.86,
+        "main_rss_bytes": 22528000,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5750784
+          }
+        ]
+      },
+      {
+        "elapsed_seconds": 300.07,
+        "main_rss_bytes": 22478848,
+        "descendants": [],
+        "webkit_helpers": [
+          {
+            "pid": 63283,
+            "name": "com.apple.WebKit.GPU",
+            "rss_bytes": 5750784
+          }
+        ]
+      }
+    ]
+  },
+  "voiceover": {
+    "performed": false,
+    "reason": "User explicitly excluded VoiceOver this round.",
+    "system_switches_changed": false
+  },
+  "remaining_release_boundaries": [
+    "GPU helper remained throughout the five-minute hidden interval. The shared process pool is retained in the pinned WebView library; this is not proof of the sole cause of GPU lifetime. No helper was force-terminated.",
+    "Only one zero-host-permission Web example and five documents were measured. Additional plugins, long-term trends and background workloads are not certified.",
+    "Footprint endpoints and RSS are distinct. Compression and other host activity were uncontrolled; this is not an old/new memory optimization comparison.",
+    "No UI inspection or builds/full tests ran during the fixed hidden sample. Final heap inspection and normal App quit occurred afterwards.",
+    "The diagnostic process still reported one invalid VSync engine handle. No SDK warning suppression or private cleanup patch was shipped.",
+    "Complete hardware shortcut/IME, first/partial permissions, source integrations, VoiceOver and distribution matrices remain separate release work. Earlier build evidence is not a current pass.",
+    "V0.14 application history has not started in this followup."
+  ]
+}

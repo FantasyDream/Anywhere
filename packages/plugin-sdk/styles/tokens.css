@@ -86,7 +86,6 @@
   --aw-keycap-padding-x: 5px;
   --aw-keycap-padding-y: 3px;
   --aw-page-header-height: 72px;
-  --aw-page-footer-height: 44px;
   --aw-page-toolbar-height: 36px;
   --aw-page-heading-size: 21px;
   --aw-page-mode-size: 10px;
@@ -96,7 +95,9 @@
   --aw-filter-size: 12px;
   --aw-filter-radius: 10px;
   --aw-filter-height: 26px;
-  --aw-preview-fraction: 0.38;
+  --aw-page-title-gap: 3px;
+  --aw-content-input-size: 17px;
+  --aw-search-caret-width: 1.4px;
   --aw-font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --aw-font-mono: Menlo, Consolas, monospace;
   --aw-text: var(--aw-primary);

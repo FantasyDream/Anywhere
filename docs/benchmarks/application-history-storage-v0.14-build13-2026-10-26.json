@@ -1,0 +1,73 @@
+{
+  "date": "2026-10-26",
+  "version": "0.14.0+13",
+  "source_base_commit": "fd1e70d5be100c899394bf01906bb1bfd9bf6f5f",
+  "working_tree_changes": true,
+  "changes": [
+    "Remove Cmd+K binding and hints from application history; retain Enter, row menu and right-click",
+    "Detect VS Code shared storage via bounded generic home_paths before legacy config_paths",
+    "Keep custom paths authoritative and distinguish missing recent key from explicit empty history"
+  ],
+  "live_source_probe": {
+    "application": "VS Code",
+    "application_version": "1.143.1",
+    "reader": "SourceCatalog::bundled detect and read, real bounded SQLite and QuickJS path",
+    "shared_storage_selected": true,
+    "entries": 57,
+    "elapsed_ms": 8,
+    "private_values_exported": false,
+    "source_modified": false,
+    "log": "build/v0.14-history13-source-probe.log",
+    "temporary_probe_source_removed": true
+  },
+  "automated": {
+    "command": "scripts/check.sh",
+    "exit_code": 0,
+    "log": "build/v0.14-history13-check-final.log",
+    "core": {
+      "passed": 304,
+      "ignored_existing": 1
+    },
+    "mvp": {
+      "passed": 194,
+      "ignored_existing": 4
+    },
+    "flutter_passed": 427,
+    "native_web_architecture_style_generated_checks": "passed"
+  },
+  "regressions": [
+    "Prefer migrated storage even when the legacy DB has a newer mtime",
+    "Legacy fallback when shared storage is absent; explicit roots never inspect personal Home",
+    "Manual path is never silently replaced",
+    "Bound both discovery groups together and reject traversal; explicit overrides do not inherit unrelated locations",
+    "Missing key is a source error; entries=[] is a valid empty history",
+    "Cmd+K does not open history actions; row menu still opens and executes; stale requests stay rejected"
+  ],
+  "obsidian": {
+    "installed_version": "1.14.4",
+    "recent_files_implemented": false,
+    "existing_behavior": "Recent vaults only",
+    "evidence": "Official plugin getLastOpenFiles API and installed workspace serialization retain recent file names",
+    "remaining_boundary": "Explicit vault/config directory association, custom config dirs and safe note routing are not implemented; recent files deferred under the user optional requirement"
+  },
+  "package": {
+    "app": "build/Anywhere-0.14-preview-build13.app",
+    "zip": "build/Anywhere-0.14-preview-build13-macos-arm64.zip",
+    "sha256": "0dedd6fa2d64cb1a787eb024a2e4ddf5ad6ae778a495de8ac62c4a6ef1cd0b8d",
+    "persistent_signature_and_archive_checks": "passed",
+    "impeller": true,
+    "release_published": false
+  },
+  "native_acceptance": {
+    "old_build12_exited": true,
+    "only_build13_process_confirmed": true,
+    "build13_started": true,
+    "history_page_interaction_verified": false,
+    "limitation": "Native menu or simulated hotkey did not present the launcher through CUA; hidden launcher screenshot unavailable. This does not establish a physical keyboard failure. No private row titles or targets exported."
+  },
+  "git": {
+    "branch": "codex/dev-0.14",
+    "committed": false,
+    "next_branch_created": false
+  }
+}

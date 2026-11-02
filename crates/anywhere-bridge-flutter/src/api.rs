@@ -1,3 +1,4 @@
+mod application_history;
 mod clipboard;
 mod conversions;
 mod web;
@@ -30,13 +31,7 @@ pub struct ClipboardItemDto {
     pub copied_at_ms: i64,
     pub byte_count: u32,
 }
-pub struct ClipboardDetailDto {
-    pub item: ClipboardItemDto,
-    pub text: String,
-    pub image_png: Vec<u8>,
-    pub files: Vec<String>,
-    pub formats: Vec<String>,
-}
+
 pub enum ClipboardNoticeDto {
     FeatureDisabled,
     StorageUnavailable,
@@ -45,8 +40,10 @@ pub enum ClipboardNoticeDto {
     ReadFailed,
     CaptureUnavailable,
     MonitoringUnavailable,
+    Paused,
 }
 pub struct ClipboardHistoryDto {
+    pub revision: Option<String>,
     pub recording: bool,
     pub available: bool,
     pub notice: Option<ClipboardNoticeDto>,
@@ -54,20 +51,32 @@ pub struct ClipboardHistoryDto {
 }
 pub struct ClipboardHistoryStatusDto {
     pub recording: bool,
+    pub recording_enabled: bool,
+    pub paused_until_ms: Option<i64>,
+    pub retention_days: u32,
+    pub stored_entries: u32,
+    pub stored_bytes: u32,
     pub available: bool,
     pub notice: Option<ClipboardNoticeDto>,
 }
 pub fn clipboard_history_status() -> Result<ClipboardHistoryStatusDto> {
     clipboard::status()
 }
-pub fn clipboard_history(query: String) -> Result<ClipboardHistoryDto> {
-    clipboard::search(query)
+pub fn clipboard_history(
+    query: String,
+    after: Option<String>,
+) -> Result<Option<ClipboardHistoryDto>> {
+    clipboard::search(query, after)
 }
-pub fn clipboard_history_detail(id: String) -> Result<Option<ClipboardDetailDto>> {
-    clipboard::detail(id)
-}
+
 pub fn set_clipboard_recording(enabled: bool) -> Result<()> {
     clipboard::set_recording(enabled)
+}
+pub fn pause_clipboard_recording(minutes: u32) -> Result<()> {
+    clipboard::pause(minutes)
+}
+pub fn set_clipboard_retention(days: u32) -> Result<()> {
+    clipboard::set_retention(days)
 }
 pub fn copy_clipboard_entry(id: String) -> Result<()> {
     clipboard::copy(id)
@@ -77,6 +86,83 @@ pub fn delete_clipboard_entry(id: String) -> Result<()> {
 }
 pub fn clear_clipboard_history() -> Result<()> {
     clipboard::clear()
+}
+
+pub struct AppHistorySourceDto {
+    pub id: String,
+    pub title: String,
+    pub file_hint: String,
+    pub path: String,
+    pub mode: AppHistorySourceModeDto,
+    pub action_enabled: bool,
+}
+pub enum AppHistorySourceModeDto {
+    Automatic,
+    Custom,
+    Disabled,
+}
+pub struct AppHistoryItemDto {
+    pub id: String,
+    pub object_key: String,
+    pub source_id: String,
+    pub title: String,
+    pub value: String,
+    pub kind: String,
+    pub can_open: bool,
+}
+pub enum AppHistoryNoticeDto {
+    Disabled,
+    Unconfigured,
+    ReadFailed,
+    Busy,
+    Stale,
+}
+pub struct AppHistoryDto {
+    pub items: Vec<AppHistoryItemDto>,
+    pub failed_sources: Vec<String>,
+    pub notice: Option<AppHistoryNoticeDto>,
+}
+pub fn app_history_sources() -> Result<Vec<AppHistorySourceDto>> {
+    application_history::sources()
+}
+pub fn set_app_history_action_enabled(id: String, enabled: bool) -> Result<()> {
+    application_history::set_action_enabled(id, enabled)
+}
+pub fn app_history_custom_directory() -> Result<String> {
+    application_history::custom_directory(false)
+}
+pub fn open_app_history_custom_directory() -> Result<()> {
+    application_history::custom_directory(true).map(|_| ())
+}
+pub fn configure_app_history_source(
+    id: String,
+    path: String,
+    mode: AppHistorySourceModeDto,
+) -> Result<()> {
+    application_history::configure(id, path, mode)
+}
+pub async fn app_history_search(
+    session_id: u32,
+    query: String,
+    source: String,
+) -> Result<AppHistoryDto> {
+    application_history::search(session_id, query, source).await
+}
+pub fn open_app_history_session() -> Result<u32> {
+    application_history::open()
+}
+pub fn cancel_app_history(session_id: u32) -> Result<()> {
+    application_history::cancel(session_id)
+}
+pub fn use_app_history_item(id: String, copy: bool) -> Result<()> {
+    application_history::use_item(id, copy)
+}
+pub async fn app_history_object_actions(
+    session_id: u32,
+    revision: u32,
+    id: String,
+) -> Result<Vec<CandidateDto>> {
+    application_history::object_actions(session_id, revision, id).await
 }
 
 #[flutter_rust_bridge::frb]
@@ -537,7 +623,6 @@ pub struct CandidateDto {
     pub context_keys: Vec<String>,
     pub execution_context_id: Option<String>,
     pub execution_target_label: Option<String>,
-    pub home_eligible: bool,
     pub primary_action: bool,
     pub section_label: Option<String>,
     pub subtitle: Option<String>,
@@ -647,26 +732,37 @@ pub struct PluginKeyValueDto {
     pub value: String,
 }
 
+/// Qualified local resources borrowed by the platform viewer until release.
 #[derive(Clone, Debug)]
-#[flutter_rust_bridge::frb]
-pub struct FilePreviewDto {
-    pub path: String,
-    pub is_directory: bool,
-    pub size_bytes: u64,
-    pub modified_ms: Option<i64>,
-    pub text: Option<String>,
-    pub truncated_at_bytes: Option<u32>,
-    pub encoding: Option<String>,
-    #[frb(default = "false")]
-    pub encoding_guessed: bool,
+pub struct NativePreviewDto {
+    pub id: String,
+    pub paths: Vec<String>,
+    pub title: String,
 }
-
+impl From<anywhere_core::features::preview::PreviewResource> for NativePreviewDto {
+    fn from(value: anywhere_core::features::preview::PreviewResource) -> Self {
+        Self {
+            id: value.id,
+            paths: value.paths,
+            title: value.title,
+        }
+    }
+}
 pub async fn preview_file(
     session_id: u32,
     revision: u32,
     candidate_id: String,
-) -> Result<FilePreviewDto> {
+) -> Result<NativePreviewDto> {
     files::preview_file(session_id, revision, candidate_id).await
+}
+pub fn preview_clipboard_entry(id: String) -> Result<NativePreviewDto> {
+    clipboard::preview(id)
+}
+pub fn retain_preview(id: String) -> Result<()> {
+    application()?.retain_preview(&id)
+}
+pub fn release_preview(id: String) -> Result<()> {
+    application()?.release_preview(&id)
 }
 
 #[derive(Clone, Debug)]
@@ -769,7 +865,6 @@ mod delivery_tests {
             context_keys: vec![],
             execution_context_id: None,
             execution_target_label: None,
-            home_eligible: false,
             primary_action: true,
             section_label: None,
         }
@@ -845,6 +940,7 @@ pub struct WebPackageDto {
     pub digest: String,
     pub permissions: Vec<WebPermissionDto>,
     pub enabled: bool,
+    pub available: bool,
     pub rollback: bool,
 }
 #[derive(Clone, Debug)]
@@ -876,18 +972,9 @@ pub enum WebPermissionKindDto {
     ClipboardReadText,
     ClipboardWriteText,
     LocalStorage,
-}
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum WebConsentKindDto {
-    ReadClipboard,
-    WriteClipboard,
-}
-#[derive(Clone, Debug)]
-pub struct WebReplyDto {
-    pub frame: Option<String>,
-    pub ticket: Option<String>,
-    pub consent: Option<WebConsentKindDto>,
-    pub preview: Option<String>,
+    InputRead,
+    InputWrite,
+    FrontmostApp,
 }
 pub fn web_packages() -> Result<Vec<WebPackageDto>> {
     web::statuses()
@@ -895,13 +982,13 @@ pub fn web_packages() -> Result<Vec<WebPackageDto>> {
 pub fn inspect_web_package(path: String) -> Result<WebReviewDto> {
     web::inspect(path)
 }
-pub fn cancel_web_review() -> Result<()> {
-    web::cancel_review()
+pub fn cancel_web_review(token: String) -> Result<()> {
+    web::cancel_review(token)
 }
-pub fn approve_web_package(token: String) -> Result<Vec<WebPackageDto>> {
+pub async fn approve_web_package(token: String) -> Result<Vec<WebPackageDto>> {
     web::approve(token)
 }
-pub fn change_web_package(id: String, operation: String) -> Result<Vec<WebPackageDto>> {
+pub async fn change_web_package(id: String, operation: String) -> Result<Vec<WebPackageDto>> {
     web::change(id, operation)
 }
 pub async fn open_web_document(
@@ -918,17 +1005,14 @@ pub async fn dispatch_web_frame(
     origin: String,
     main_frame: bool,
     frame: String,
-) -> Result<WebReplyDto> {
+) -> Result<String> {
     web::dispatch(handle, origin, main_frame, frame).await
-}
-pub async fn confirm_web_operation(
-    handle: String,
-    origin: String,
-    ticket: String,
-    approved: bool,
-) -> Result<WebReplyDto> {
-    web::confirm(handle, origin, ticket, approved).await
 }
 pub fn web_resource(handle: String, path: String) -> Result<Vec<u8>> {
     web::resource(handle, path)
+}
+
+/// One bounded latest-state wait, scoped to the Host-issued document handle.
+pub async fn wait_web_state(handle: String, after: u64) -> Result<Option<String>> {
+    web::wait_state(handle, after).await
 }

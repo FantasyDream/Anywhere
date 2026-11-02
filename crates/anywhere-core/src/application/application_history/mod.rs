@@ -1,0 +1,293 @@
+//! Catalog and orchestration for bundled and trusted local history adapters.
+//! `definition` validates packages, Persistence reads bounded files, `script`
+//! transforms plain data, and HistoryService owns query/execution lifetimes.
+#[cfg(test)]
+mod adapters_tests;
+#[cfg(test)]
+mod catalog_tests;
+mod definition;
+#[cfg(test)]
+mod discovery_tests;
+#[cfg(test)]
+mod installation_tests;
+#[cfg(test)]
+mod open_tests;
+mod script;
+#[cfg(test)]
+mod tests;
+
+use crate::features::application_history::model::*;
+use anyhow::{ensure, Result};
+use serde::{Deserialize, Serialize};
+use std::{
+    collections::BTreeSet,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+
+include!(concat!(env!("OUT_DIR"), "/history_sources.rs"));
+
+#[cfg(test)]
+fn installed_service(
+    storage: Result<Arc<dyn crate::core::storage::ExtensionStorage>, String>,
+    loader: Arc<dyn SourceLoader>,
+) -> crate::features::application_history::service::HistoryService {
+    // Existing parser/lifecycle fixtures simulate their declared apps as installed.
+    // Installation-policy tests deliberately supply their own smaller snapshots.
+    let apps: Vec<_> = loader
+        .descriptors()
+        .into_iter()
+        .flat_map(|s| s.applications)
+        .collect();
+    crate::features::application_history::service::HistoryService::new(storage, loader)
+        .with_installed_applications(apps)
+}
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct Manifest {
+    schema: u32,
+    id: String,
+    title: String,
+    file_hint: String,
+    #[serde(default)]
+    config_paths: Vec<String>,
+    #[serde(default)]
+    home_paths: Vec<String>,
+    applications: Vec<String>,
+    action: SourceAction,
+    reader: crate::persistence::application_history::Reader,
+}
+struct Package {
+    manifest: Manifest,
+    script: String,
+    built_in: bool,
+}
+pub struct SourceCatalog {
+    packages: Vec<Package>,
+    config_directory: Option<std::path::PathBuf>,
+    home_directory: Option<std::path::PathBuf>,
+    configuration_error: Option<String>,
+}
+impl SourceCatalog {
+    /// Explicit root keeps fixtures isolated from personal application data.
+    pub fn bundled_with_config_directory(
+        config_directory: Option<std::path::PathBuf>,
+    ) -> Result<Arc<Self>> {
+        Ok(Arc::new(Self::load_bundled(config_directory, None)?))
+    }
+    /// Explicit roots keep detection tests isolated from personal application data.
+    #[cfg(test)]
+    fn bundled_with_roots(
+        config_directory: Option<std::path::PathBuf>,
+        home_directory: Option<std::path::PathBuf>,
+    ) -> Result<Arc<Self>> {
+        Ok(Arc::new(Self::load_bundled(
+            config_directory,
+            home_directory,
+        )?))
+    }
+    pub fn with_user_directory(directory: &std::path::Path) -> Result<Arc<Self>> {
+        let mut catalog = Self::load_bundled(
+            anywhere_platform::paths::configuration_directory(),
+            anywhere_platform::paths::home_directory(),
+        )?;
+        catalog.load_user_directory(directory);
+        Ok(Arc::new(catalog))
+    }
+    #[cfg(test)]
+    fn with_directories(
+        config_directory: Option<std::path::PathBuf>,
+        directory: &std::path::Path,
+    ) -> Result<Arc<Self>> {
+        let mut catalog = Self::load_bundled(config_directory, None)?;
+        catalog.load_user_directory(directory);
+        Ok(Arc::new(catalog))
+    }
+    fn load_user_directory(&mut self, directory: &std::path::Path) {
+        if self.load_users(directory).is_err() {
+            self.configuration_error = Some("Custom history adapters are invalid. Repair their source.json / transform.js files and restart.".into());
+        }
+    }
+    fn load_bundled(
+        config_directory: Option<std::path::PathBuf>,
+        home_directory: Option<std::path::PathBuf>,
+    ) -> Result<Self> {
+        let mut packages: Vec<Package> = Vec::new();
+        let mut pending: Vec<_> = BUNDLED_HISTORY_SOURCES
+            .iter()
+            .map(|(manifest, script)| {
+                Ok((
+                    serde_json::from_str::<serde_json::Value>(manifest)?,
+                    *script,
+                ))
+            })
+            .collect::<Result<_>>()?;
+        while !pending.is_empty() {
+            let previous = pending.len();
+            let mut deferred = Vec::new();
+            for (value, script) in pending {
+                if value
+                    .get("extends")
+                    .and_then(|v| v.as_str())
+                    .is_some_and(|base| !packages.iter().any(|p| p.manifest.id == base))
+                {
+                    deferred.push((value, script));
+                    continue;
+                }
+                let mut package = definition::resolve(value, script.map(str::to_owned), &packages)?;
+                ensure!(
+                    !packages
+                        .iter()
+                        .any(|p| p.manifest.id == package.manifest.id),
+                    "duplicate bundled source"
+                );
+                package.built_in = true;
+                packages.push(package);
+            }
+            ensure!(
+                deferred.len() < previous,
+                "unknown or cyclic bundled source template"
+            );
+            pending = deferred;
+        }
+        ensure!(packages.len() <= 32, "too many bundled sources");
+        packages.sort_by(|a, b| a.manifest.id.cmp(&b.manifest.id));
+        Ok(Self {
+            packages,
+            config_directory,
+            home_directory,
+            configuration_error: None,
+        })
+    }
+    fn load_users(&mut self, directory: &std::path::Path) -> Result<()> {
+        let files = crate::persistence::application_history::packages::read(directory)?;
+        let mut users = Vec::new();
+        let mut ids = BTreeSet::new();
+        for file in files {
+            let package = definition::resolve(
+                serde_json::from_str(&file.manifest)?,
+                file.script,
+                &self.packages,
+            )?;
+            ensure!(
+                ids.insert(package.manifest.id.clone()),
+                "duplicate user source"
+            );
+            users.push(package);
+        }
+        ensure!(
+            self.packages
+                .iter()
+                .filter(|p| !ids.contains(&p.manifest.id))
+                .count()
+                + users.len()
+                <= 32,
+            "too many sources"
+        );
+        self.packages.retain(|p| !ids.contains(&p.manifest.id));
+        self.packages.extend(users);
+        Ok(())
+    }
+}
+fn validate_manifest(manifest: &Manifest) -> Result<()> {
+    ensure!(
+        manifest.schema == 1
+            && crate::features::descriptor::valid_id(&manifest.id)
+            && manifest.id.len() <= 64,
+        "invalid source identity"
+    );
+    ensure!(
+        !manifest.title.trim().is_empty()
+            && manifest.title.len() <= 256
+            && !manifest.action.title.trim().is_empty()
+            && manifest.action.title.len() <= 256
+            && manifest.file_hint.len() <= 256,
+        "invalid source title"
+    );
+    ensure!(
+        !manifest.applications.is_empty()
+            && manifest.applications.len() <= 32
+            && manifest
+                .applications
+                .iter()
+                .all(|id| !id.is_empty() && id.len() <= 256 && !id.chars().any(char::is_control)),
+        "invalid application identities"
+    );
+    ensure!(
+        manifest.action.aliases.len() <= 32
+            && manifest.action.aliases.iter().all(|v| v.len() <= 256)
+            && manifest.action.localized_titles.len() <= 16
+            && manifest
+                .action
+                .localized_titles
+                .iter()
+                .all(|(k, v)| k.len() <= 32 && !v.trim().is_empty() && v.len() <= 256),
+        "invalid source search metadata"
+    );
+    ensure!(
+        manifest.config_paths.len() + manifest.home_paths.len() <= 8,
+        "too many source discovery patterns"
+    );
+    crate::persistence::application_history::discovery::validate(&manifest.home_paths)?;
+    crate::persistence::application_history::discovery::validate(&manifest.config_paths)
+}
+impl SourceLoader for SourceCatalog {
+    fn configuration_error(&self) -> Option<&str> {
+        self.configuration_error.as_deref()
+    }
+    fn detect(&self, id: &str) -> Option<std::path::PathBuf> {
+        let package = self.packages.iter().find(|p| p.manifest.id == id)?;
+        // Migrated home storage is authoritative even if the old profile DB was
+        // modified later by unrelated settings. Do not compare their mtimes.
+        self.home_directory
+            .as_deref()
+            .and_then(|root| {
+                crate::persistence::application_history::discovery::detect(
+                    root,
+                    &package.manifest.home_paths,
+                )
+            })
+            .or_else(|| {
+                self.config_directory.as_deref().and_then(|root| {
+                    crate::persistence::application_history::discovery::detect(
+                        root,
+                        &package.manifest.config_paths,
+                    )
+                })
+            })
+    }
+    fn descriptors(&self) -> Vec<SourceDescriptor> {
+        self.packages
+            .iter()
+            .map(|p| SourceDescriptor {
+                built_in: p.built_in,
+                id: p.manifest.id.clone(),
+                title: p.manifest.title.clone(),
+                file_hint: p.manifest.file_hint.clone(),
+                applications: p.manifest.applications.clone(),
+                action: p.manifest.action.clone(),
+            })
+            .collect()
+    }
+    fn read(&self, source: &SourcePreference, cancelled: Cancelled) -> Result<Vec<Entry>> {
+        ensure!(
+            self.configuration_error.is_none(),
+            "custom history adapters unavailable"
+        );
+        let package = self
+            .packages
+            .iter()
+            .find(|p| p.manifest.id == source.id)
+            .ok_or_else(|| anyhow::anyhow!("unknown history source"))?;
+        let started = Instant::now();
+        let cancelled: Cancelled =
+            Arc::new(move || cancelled() || started.elapsed() > Duration::from_secs(5));
+        let input = crate::persistence::application_history::read(
+            &source.path,
+            &package.manifest.reader,
+            cancelled.clone(),
+        )?;
+        script::transform(&package.script, &input, cancelled)
+    }
+}

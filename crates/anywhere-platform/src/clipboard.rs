@@ -6,6 +6,12 @@ pub const TEXT: &str = "text/plain;charset=utf-8";
 pub const FILES: &str = "application/x-anywhere-file-list+json";
 pub const MAX_PAYLOAD_BYTES: usize = 16 * 1024 * 1024;
 pub const MAX_FORMATS: usize = 64;
+// Dynamic macOS UTIs encode application data flavors and can exceed 256 bytes.
+pub const MAX_FORMAT_NAME_BYTES: usize = 4096;
+
+fn valid_format_name(name: &str) -> bool {
+    !name.is_empty() && name.len() <= MAX_FORMAT_NAME_BYTES && !name.contains('\0')
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ClipboardFormat {
@@ -33,10 +39,7 @@ impl ClipboardPayload {
         let mut names = std::collections::BTreeSet::new();
         let mut total = 0usize;
         for format in &self.formats {
-            ensure!(
-                !format.name.is_empty() && format.name.len() <= 256 && !format.name.contains('\0'),
-                "invalid clipboard format"
-            );
+            ensure!(valid_format_name(&format.name), "invalid clipboard format");
             ensure!(names.insert(&format.name), "duplicate clipboard format");
             ensure!(
                 !sensitive_format(&format.name),

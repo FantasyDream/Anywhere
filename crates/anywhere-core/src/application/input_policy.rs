@@ -91,6 +91,7 @@ impl super::Application {
                     .load(std::sync::atomic::Ordering::Acquire)
                     == version
         };
+        let started = std::time::Instant::now();
         let result = choose_activation_input(
             captures,
             now_ms,
@@ -98,12 +99,16 @@ impl super::Application {
             clipboard_enabled,
             allow_pending_selection,
             |text| {
+                if current() && actions.recognizes_web_input(text) {
+                    return true;
+                }
                 let recognized = rules.iter().any(|rule| {
                     current()
+                        && started.elapsed() < std::time::Duration::from_millis(150)
                         && (rule.recognize)(text)
                             .is_some_and(|context| context.type_id != anywhere_protocol::TEXT)
                 });
-                recognized || (current() && actions.recognizes_web_input(text))
+                recognized
             },
         );
         current().then_some(result).flatten()
@@ -303,9 +308,9 @@ mod tests {
             .unwrap()
             .register_input_recognizer(
                 InputRecognizer {
-                    id: "custom.rule",
+                    id: "custom.rule".into(),
                     priority: 0,
-                    recognize: custom,
+                    recognize: std::sync::Arc::new(custom),
                 },
                 None,
             )
@@ -368,9 +373,9 @@ mod tests {
             .unwrap()
             .register_input_recognizer(
                 InputRecognizer {
-                    id: "custom.rule",
+                    id: "custom.rule".into(),
                     priority: -1,
-                    recognize: slow,
+                    recognize: Arc::new(slow),
                 },
                 Some("url"),
             )

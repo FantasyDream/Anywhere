@@ -37,7 +37,6 @@ CandidateDto withRoots(CandidateDto candidate, List<ContextDto> roots) =>
       }.toList(),
       executionContextId: candidate.executionContextId,
       executionTargetLabel: candidate.executionTargetLabel,
-      homeEligible: candidate.homeEligible,
       primaryAction: candidate.primaryAction,
       sectionLabel: candidate.sectionLabel,
       subtitle: candidate.subtitle,

@@ -161,36 +161,50 @@ class AppPageHeader extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 20), child: child));
 }
 
-class AppPageFooter extends StatelessWidget {
-  const AppPageFooter({super.key, required this.child});
+/// The same title hierarchy for static tool titles and searchable pages.
+class AppPageTitle extends StatelessWidget {
+  const AppPageTitle({super.key, this.label, required this.child});
+  final String? label;
   final Widget child;
+
   @override
-  Widget build(BuildContext context) => SizedBox(
-      height: DesignTokens.pageFooterHeight,
-      child: Column(children: [
-        const Divider(height: 1),
-        Expanded(
-            child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 3, 24, 10),
-                child: child)),
-      ]));
+  Widget build(BuildContext context) => Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (label != null) ...[
+              Text(label!,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppStyle.pageMode),
+              const SizedBox(height: DesignTokens.pageTitleGap),
+            ],
+            DefaultTextStyle.merge(style: AppStyle.pageHeading, child: child),
+          ]);
 }
 
-/// More commands expose their shortcut without requiring a hover or a footer.
+/// Show a shortcut hint only on pages that bind it; the menu remains discoverable.
 class AppMoreAction extends StatelessWidget {
-  const AppMoreAction({super.key, required this.onPressed});
+  const AppMoreAction(
+      {super.key, required this.onPressed, this.showShortcut = true});
   final VoidCallback? onPressed;
+  final bool showShortcut;
 
   @override
   Widget build(BuildContext context) => Tooltip(
-      message: context.l10n.shortcutHint(
-          context.l10n.actions, DesktopEnvironment.current.commandLabel('K')),
+      message: showShortcut
+          ? context.l10n.shortcutHint(context.l10n.actions,
+              DesktopEnvironment.current.commandLabel('K'))
+          : context.l10n.actions,
       child: TextButton(
           onPressed: onPressed,
           child: Row(mainAxisSize: MainAxisSize.min, children: [
             const Icon(AppIcons.more, size: 14),
-            const SizedBox(width: 4),
-            Text(DesktopEnvironment.current.commandLabel('K')),
+            if (showShortcut) ...[
+              const SizedBox(width: 4),
+              Text(DesktopEnvironment.current.commandLabel('K')),
+            ],
           ])));
 }
 
@@ -202,16 +216,37 @@ class AppRowActions extends StatelessWidget {
     required this.primaryLabel,
     required this.onPrimary,
     this.onActions,
+    this.showActionsShortcut = true,
+    this.onPreview,
+    this.previewSpace = false,
   });
   final String primaryLabel;
-  final VoidCallback? onPrimary, onActions;
+  final VoidCallback? onPrimary, onActions, onPreview;
+  final bool showActionsShortcut, previewSpace;
 
   @override
   Widget build(BuildContext context) => ExcludeFocus(
           child: Row(mainAxisSize: MainAxisSize.min, children: [
+        if (onPreview != null)
+          Tooltip(
+              message: context.l10n.shortcutHint(context.l10n.preview,
+                  DesktopEnvironment.current.previewShortcutLabel),
+              child: TextButton(
+                  key: const Key('selected-row-preview'),
+                  onPressed: onPreview,
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Icon(AppIcons.preview,
+                        size: 14, semanticLabel: context.l10n.preview),
+                    if (previewSpace) ...[
+                      const SizedBox(width: 3),
+                      const Text('␣')
+                    ],
+                  ]))),
         if (onActions != null)
           AppMoreAction(
-              key: const Key('selected-row-actions'), onPressed: onActions),
+              key: const Key('selected-row-actions'),
+              onPressed: onActions,
+              showShortcut: showActionsShortcut),
         Tooltip(
             message: context.l10n.shortcutHint(primaryLabel, '↵'),
             child: TextButton(
@@ -314,13 +349,7 @@ class AppCard extends StatelessWidget {
   const AppCard({super.key, required this.child});
   final Widget child;
   @override
-  Widget build(BuildContext context) => Material(
-      color: AppStyle.card,
-      shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppStyle.cardRadius),
-          side: const BorderSide(color: AppStyle.divider, width: .8)),
-      clipBehavior: Clip.antiAlias,
-      child: child);
+  Widget build(BuildContext context) => Card(child: child);
 }
 
 class AppIconPlate extends StatelessWidget {

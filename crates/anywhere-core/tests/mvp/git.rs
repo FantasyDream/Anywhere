@@ -27,11 +27,14 @@ async fn git_shortcuts_search_and_copy_actions_use_the_repository_root_and_recor
     );
     let initial = settled(&app, app.activate().await.unwrap().unwrap().session_id, 0).await;
     assert_eq!(platform.git_calls.load(Ordering::Relaxed), 0);
-    assert!(initial
-        .context_candidates
-        .iter()
-        .filter(|c| NEW_ACTIONS.contains(&c.command_id.as_deref().unwrap_or("")))
-        .all(|c| !c.home_eligible));
+    assert_eq!(
+        initial
+            .context_candidates
+            .iter()
+            .filter(|c| NEW_ACTIONS.contains(&c.command_id.as_deref().unwrap_or("")))
+            .count(),
+        NEW_ACTIONS.len()
+    );
     let searched = app
         .update_scoped_input(
             initial.session_id,

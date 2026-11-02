@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-28",
+  "app": "0.14.0+31",
+  "branch": "codex/native-preview",
+  "source_state": "working tree; includes the previously validated native-preview changes; not committed or pushed",
+  "problem": "Generic macOS open-document delivery did not switch to an already-open JetBrains project window",
+  "change": {
+    "owner": "anywhere-platform macOS shell adapter; existing Platform and HistoryService contracts unchanged",
+    "detection": "Actual selected bundle ID begins com.jetbrains. and the bundle has Contents/Resources/product-info.json",
+    "dispatch": "/usr/bin/open -n -a <canonical selected installation> --args <canonical validated target>",
+    "authority": "History source, item freshness, target kind, cancellation and unique installed application checks remain unchanged; no arbitrary commands in source scripts",
+    "other_apps": "Standard open-document delivery retained; Obsidian URL handling unchanged",
+    "arguments": "Direct process arguments only; no shell interpolation, PATH launcher guessing or window-title matching"
+  },
+  "references": [
+    "https://www.jetbrains.com/help/idea/working-with-the-ide-features-from-command-line.html",
+    "https://www.jetbrains.com/help/idea/opening-files-from-command-line.html"
+  ],
+  "checks": {
+    "full_gate": "passed; build/idea-open-build31-check.log",
+    "targeted": "2 macOS shell tests passed; literal Chinese/space/quote/bracket/dollar paths, selected installation, IDEA/community/EAP, generic app and missing marker routing",
+    "platform_passed": 70,
+    "platform_ignored": 1,
+    "core_passed": 316,
+    "core_ignored": 1,
+    "mvp_passed": 195,
+    "mvp_ignored": 4,
+    "flutter_passed": 439,
+    "sdk_passed": 21,
+    "json_passed": 30,
+    "bridge": "Compiled via full check and signed package; no public API change or binding regeneration required"
+  },
+  "native": {
+    "idea_version": "2026.2.3",
+    "setup": "IDEA Window menu confirmed two target projects were already open while a different project was the active window",
+    "result": "Two successive History page opens selected the correct existing project window; full directory paths verified through native window titles",
+    "extra_processes": "The observed IDEA executable PID set was unchanged after the first request; not a memory measurement",
+    "privacy": "Project source contents were not edited or committed; detailed path observations remain in ignored build/idea-open-build31-observations.json",
+    "source_app": "Build 30 exited normally; exact Build 31 bundle launched"
+  },
+  "artifacts": {
+    "app": "build/Anywhere-0.14-preview-build31.app",
+    "zip": "build/Anywhere-0.14-preview-build31-macos-arm64.zip",
+    "zip_sha256": "d4994f2cc29f2c7657c51413a10bf64c04ab83da07c0b52d209e589293ff7533",
+    "verification": "Persistent signing, codesign and ZIP contents verification passed; build/idea-open-build31-package.log"
+  },
+  "limits": [
+    "Other JetBrains products, cold start, custom IDE config directories, multiple installations/profiles and remote targets not live-verified",
+    "IDE owns the actual window/project activation policy; no promise to restore a specific editor layout",
+    "Physical IME and full native-preview format matrix retain their previous unverified boundaries",
+    "No GitHub push or Release performed"
+  ]
+}

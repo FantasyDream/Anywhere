@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -12,6 +11,7 @@ import '../ui/app_icons.dart';
 import '../ui/app_style.dart';
 import 'action_shortcut.dart';
 import 'action_shortcuts_section.dart';
+import 'application_history_settings_section.dart';
 import 'clipboard_settings_section.dart';
 import 'features_section.dart';
 import 'file_search_settings.dart';
@@ -31,12 +31,13 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  late final TextEditingController _excluded, _fileRoots, _fileExclusions;
+  TextEditingController get _excluded => _controller.edits.excluded;
+  TextEditingController get _fileRoots => _controller.edits.roots;
+  TextEditingController get _fileExclusions => _controller.edits.exclusions;
   String? _recording;
   final _recorder = ShortcutRecorder();
-  Future<bool>? _pending;
-  bool _saving = false, _closing = false;
-  bool _shortcutEditing = false;
+  bool get _saving => _controller.edits.busy;
+  bool get _closing => _controller.closing;
   String _page = 'shortcuts';
 
   SettingsController get _controller => widget.controller;
@@ -50,13 +51,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void initState() {
     super.initState();
-    _excluded = TextEditingController(text: _settings.excludedApps.join('\n'));
-    _fileRoots =
-        TextEditingController(text: _settings.fileSearchRoots.join('\n'));
-    _fileExclusions = TextEditingController(
-        text: _settings.fileSearchExcludedNames.join('\n'));
+    _controller.openEditing();
     _controller.addListener(_onSettings);
-    _controller.beforeClose = _prepareClose;
+    _controller.confirmClose = _confirmClose;
+    _controller.revealHistoryFailure = _revealHistoryFailure;
   }
 
   void _onSettings() {
@@ -65,136 +63,52 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   @override
   void dispose() {
-    if (_controller.beforeClose == _prepareClose) {
-      _controller.beforeClose = null;
+    _controller.clipboard.setVisible(false);
+    if (_controller.confirmClose == _confirmClose) {
+      _controller.confirmClose = null;
+      _controller.revealHistoryFailure = null;
     }
     _controller.removeListener(_onSettings);
     _recorder.cancel();
-    _excluded.dispose();
-    _fileRoots.dispose();
-    _fileExclusions.dispose();
+    _controller.setShortcutEditing(false);
     super.dispose();
   }
 
-  Future<bool> _save(
-    HostSettings Function(HostSettings current) update, {
-    bool excluded = false,
-    bool fileSearch = false,
-  }) {
-    // Save the draft the user submitted, and keep any newer edits made while a
-    // previous save or Host response is pending.
-    final submittedApps = _excluded.text;
-    final submittedRoots = _fileRoots.text;
-    final submittedExclusions = _fileExclusions.text;
-    Future<bool> run() async {
-      try {
-        var next = update(_controller.current);
-        if (excluded) {
-          next = next.copyWith(excludedApps: _parseLines(submittedApps));
-        }
-        if (fileSearch) {
-          next = next.copyWith(
-              fileSearchRoots: _parseLines(submittedRoots),
-              fileSearchExcludedNames: _parseLines(submittedExclusions));
-        }
-        final saved = await _controller.save(next);
-        if (excluded && saved && mounted && _excluded.text == submittedApps) {
-          _excluded.text = _controller.current.excludedApps.join('\n');
-        }
-        if (fileSearch && saved && mounted) {
-          if (_fileRoots.text == submittedRoots) {
-            _fileRoots.text = _settings.fileSearchRoots.join('\n');
-          }
-          if (_fileExclusions.text == submittedExclusions) {
-            _fileExclusions.text = _settings.fileSearchExcludedNames.join('\n');
-          }
-        }
-        return saved;
-      } catch (_) {
-        if (!mounted) return false;
-        _controller.reportError(context.l10n.settingsSaveFailed);
-        return false;
-      }
-    }
-
-    final previous = _pending ?? Future<bool>.value(true);
-    final next = previous.then((_) => run());
-    _pending = next;
-    setState(() => _saving = true);
-    unawaited(next.then((_) {
-      if (mounted && _pending == next) setState(() => _saving = false);
-    }));
-    return next;
+  Future<SettingsCloseChoice> _confirmClose(bool dirty) async {
+    if (!mounted) return SettingsCloseChoice.cancel;
+    return await showDialog<SettingsCloseChoice>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            title: Text(dirty
+                ? context.l10n.saveBeforeClose
+                : context.l10n.changesNotSaved),
+            content: Text(dirty
+                ? context.l10n.settingsDrafts
+                : (_controller.statusMessageFor(context.l10n) ??
+                    context.l10n.settingsCouldNotBeSavedYouCan)),
+            actions: [
+              TextButton(
+                  onPressed: () =>
+                      Navigator.pop(context, SettingsCloseChoice.cancel),
+                  child: Text(context.l10n.keepEditing)),
+              TextButton(
+                  onPressed: () =>
+                      Navigator.pop(context, SettingsCloseChoice.discard),
+                  child: Text(context.l10n.closeWithoutSaving)),
+              if (dirty)
+                FilledButton(
+                    onPressed: () =>
+                        Navigator.pop(context, SettingsCloseChoice.save),
+                    child: Text(context.l10n.saveChanges)),
+            ],
+          ),
+        ) ??
+        SettingsCloseChoice.cancel;
   }
 
-  List<String> _lines(TextEditingController field) => _parseLines(field.text);
-  List<String> _parseLines(String text) => text
-      .split('\n')
-      .map((s) => s.trim())
-      .where((s) => s.isNotEmpty)
-      .toSet()
-      .toList();
-
-  bool get _hasSearchDrafts =>
-      !listEquals(_excludedIds(), _settings.excludedApps) ||
-      !listEquals(_lines(_fileRoots), _settings.fileSearchRoots) ||
-      !listEquals(_lines(_fileExclusions), _settings.fileSearchExcludedNames);
-
-  Future<bool> _prepareClose() async {
-    if (!mounted) return false;
-    if (_shortcutEditing) {
-      _controller
-          .reportError(context.l10n.finishOrCancelEditingTheActionShortcut);
-      return false;
-    }
-    setState(() => _closing = true);
-    try {
-      final saved = await (_pending ?? Future<bool>.value(true));
-      if (!mounted) return false;
-      final dirty = _hasSearchDrafts;
-      if (!dirty && saved) return true;
-      final choice = await showDialog<String>(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          title: Text(dirty
-              ? context.l10n.saveBeforeClose
-              : context.l10n.changesNotSaved),
-          content: Text(dirty
-              ? context.l10n.searchDrafts
-              : (_controller.statusMessageFor(context.l10n) ??
-                  context.l10n.settingsCouldNotBeSavedYouCan)),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(context, 'cancel'),
-                child: Text(context.l10n.keepEditing)),
-            TextButton(
-                onPressed: () => Navigator.pop(context, 'discard'),
-                child: Text(context.l10n.closeWithoutSaving)),
-            if (dirty)
-              FilledButton(
-                  onPressed: () => Navigator.pop(context, 'save'),
-                  child: Text(context.l10n.saveChanges)),
-          ],
-        ),
-      );
-      if (choice == 'discard') return true;
-      if (choice != 'save') return false;
-      final applied = await _save(
-          (current) => current.copyWith(
-              excludedApps: _excludedIds(),
-              fileSearchRoots: _lines(_fileRoots),
-              fileSearchExcludedNames: _lines(_fileExclusions)),
-          excluded: true,
-          fileSearch: true);
-      if (applied && mounted && _hasSearchDrafts) {
-        _controller.reportError(context.l10n.newEditsWereMadeWhileSavingSave);
-        return false;
-      }
-      return applied;
-    } finally {
-      if (mounted) setState(() => _closing = false);
-    }
+  void _revealHistoryFailure() {
+    if (mounted) _selectPage('app_history');
   }
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
@@ -222,7 +136,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (modifiers == 0) return false;
     final universal = _recording == 'universal';
     setState(() => _recording = null);
-    _save((current) => universal
+    _controller.saveEdit((current) => universal
         ? current.copyWith(
             universalKeyCode: code,
             universalModifiers: modifiers,
@@ -233,11 +147,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ));
     return true;
   }
-
-  List<String> _excludedIds() => [
-        for (final line in _excluded.text.split(RegExp(r'[\n,]')))
-          if (line.trim().isNotEmpty) line.trim(),
-      ];
 
   Widget? _sourceStatus(ContextSourceDto source,
       {bool includeHealthy = false}) {
@@ -277,6 +186,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     ('context', AppIcons.context),
     ('search', AppIcons.search),
     ('clipboard', AppIcons.clipboard),
+    ('app_history', AppIcons.history),
     ('plugins', AppIcons.features),
   ];
 
@@ -286,12 +196,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         'context' => context.l10n.context,
         'search' => context.l10n.search,
         'clipboard' => context.l10n.clipboard,
+        'app_history' => context.l10n.appHistory,
         _ => context.l10n.features,
       };
 
   void _selectPage(String id) {
     if (_page == id) return;
-    if (id == 'clipboard') unawaited(_controller.clipboard.load());
+    _controller.clipboard.setVisible(id == 'clipboard');
     _recorder.cancel();
     setState(() {
       _page = id;
@@ -379,7 +290,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   List<Widget> _pageContent() {
     return switch (_page) {
       'shortcuts' => [
-          _card(
+          AppCard(
             child: Column(
               children: [
                 _hotkeyRow(context.l10n.currentApp, _settings.currentAppLabel,
@@ -403,17 +314,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onEditingChanged: (editing) {
                 if (mounted) {
                   if (editing) _recorder.cancel();
+                  _controller.setShortcutEditing(editing);
                   setState(() {
-                    _shortcutEditing = editing;
                     if (editing) _recording = null;
                   });
                 }
               },
-              save: (update) => _save(update)),
+              save: (update) => _controller.saveEdit(update)),
           SizedBox(height: DesktopEnvironment.current.titleBarInset),
         ],
       'general' => [
-          _card(
+          AppCard(
               child: Padding(
                   padding: const EdgeInsets.all(12),
                   child: Row(children: [
@@ -448,27 +359,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           ? null
                           : (language) {
                               if (language != null) {
-                                _save((current) =>
+                                _controller.saveEdit((current) =>
                                     current.copyWith(uiLanguage: language));
                               }
                             },
                     ),
                   ]))),
           const SizedBox(height: 12),
-          _card(
+          AppCard(
               child: SettingsToggleRow(
                   title: context.l10n.openAtLogin,
                   description: context.l10n.openAtLoginDescription,
                   icon: AppIcons.power,
                   value: _settings.launchAtLogin,
-                  onChanged: (value) => _save(
+                  onChanged: (value) => _controller.saveEdit(
                       (current) => current.copyWith(launchAtLogin: value)))),
         ],
       'context' => [
-          _section(context.l10n.contextSources, AppIcons.context),
+          AppSectionHeading(context.l10n.contextSources,
+              icon: AppIcons.context),
           Text(context.l10n.contextDescription, style: AppStyle.caption),
           const SizedBox(height: 10),
-          _card(
+          AppCard(
               child: Column(children: [
             SettingsToggleRow(
                 title: DesktopEnvironment.current.usesMetaCommand
@@ -478,7 +390,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: AppIcons.folder,
                 value: _settings.captureFinderSelection,
                 status: _sourceStatus(ContextSourceDto.finderSelection),
-                onChanged: (value) => _save((current) =>
+                onChanged: (value) => _controller.saveEdit((current) =>
                     current.copyWith(captureFinderSelection: value))),
             const Divider(),
             SettingsToggleRow(
@@ -487,7 +399,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: AppIcons.quote,
                 value: _settings.captureSelectedText,
                 status: _sourceStatus(ContextSourceDto.selectedText),
-                onChanged: (value) => _save(
+                onChanged: (value) => _controller.saveEdit(
                     (current) => current.copyWith(captureSelectedText: value))),
             const Divider(),
             SettingsToggleRow(
@@ -498,7 +410,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: AppIcons.globe,
                 value: _settings.captureBrowserCurrentPage,
                 status: _sourceStatus(ContextSourceDto.browserCurrentPage),
-                onChanged: (value) => _save((current) =>
+                onChanged: (value) => _controller.saveEdit((current) =>
                     current.copyWith(captureBrowserCurrentPage: value))),
           ])),
           const SizedBox(height: 8),
@@ -534,11 +446,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ])),
         ],
       'search' => [
-          _card(
+          AppCard(
               child: FileSearchSettings(
                   enabled: _settings.fileSearchEnabled,
                   includeHidden: _settings.fileSearchIncludeHidden,
-                  onHidden: (value) => _save((current) =>
+                  onHidden: (value) => _controller.saveEdit((current) =>
                       current.copyWith(fileSearchIncludeHidden: value)),
                   roots: _fileRoots,
                   exclusions: _fileExclusions,
@@ -549,17 +461,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       : _controller.authorizeFileSearch,
                   onDiskAccess: () =>
                       _controller.openPrivacySettings('fullDiskAccess'),
-                  onToggle: (value) => _save(
+                  onToggle: (value) => _controller.saveEdit(
                       (current) => current.copyWith(fileSearchEnabled: value)),
                   onSave: _saving
                       ? null
-                      : () => _save(
+                      : () => _controller.saveEdit(
                           (current) => current.copyWith(
-                              fileSearchRoots: _lines(_fileRoots),
-                              fileSearchExcludedNames: _lines(_fileExclusions)),
+                              fileSearchRoots: _controller.edits.rootValues,
+                              fileSearchExcludedNames: _controller.edits.exclusionValues),
                           fileSearch: true))),
           const SizedBox(height: 14),
-          _card(
+          AppCard(
             child: AppDisclosure(
               key: const Key('hidden-apps-disclosure'),
               title: context.l10n.hiddenApps,
@@ -588,14 +500,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           borderRadius:
                               BorderRadius.circular(AppStyle.controlRadius)),
                     ),
-                    onSubmitted: (_) => _save(
-                      (current) =>
-                          current.copyWith(excludedApps: _excludedIds()),
+                    onSubmitted: (_) => _controller.saveEdit(
+                      (current) => current.copyWith(
+                          excludedApps: _controller.edits.excludedIds),
                       excluded: true,
                     ),
-                    onEditingComplete: () => _save(
-                      (current) =>
-                          current.copyWith(excludedApps: _excludedIds()),
+                    onEditingComplete: () => _controller.saveEdit(
+                      (current) => current.copyWith(
+                          excludedApps: _controller.edits.excludedIds),
                       excluded: true,
                     ),
                   ),
@@ -603,9 +515,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   Align(
                     alignment: Alignment.centerRight,
                     child: FilledButton(
-                      onPressed: () => _save(
-                        (current) =>
-                            current.copyWith(excludedApps: _excludedIds()),
+                      onPressed: () => _controller.saveEdit(
+                        (current) => current.copyWith(
+                            excludedApps: _controller.edits.excludedIds),
                         excluded: true,
                       ),
                       child: Text(context.l10n.saveApps),
@@ -624,18 +536,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
               autoFillStatus: _sourceStatus(ContextSourceDto.clipboard),
               onAutoFill: _saving || _controller.clipboard.busy
                   ? null
-                  : (value) => _save(
+                  : (value) => _controller.saveEdit(
                       (current) => current.copyWith(captureClipboard: value)))
+        ],
+      'app_history' => [
+          AppHistorySettingsSection(controller: _controller.appHistory)
         ],
       'plugins' => [FeaturesSection(controller: _controller)],
       _ => const [],
     };
   }
-
-  Widget _section(String title, IconData icon) =>
-      AppSectionHeading(title, icon: icon);
-
-  Widget _card({required Widget child}) => AppCard(child: child);
 
   Widget _hotkeyRow(String label, String value, String id) {
     final recording = _recording == id;

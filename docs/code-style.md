@@ -6,7 +6,7 @@
 
 | 语言 | 规范与工具 | 项目配置 |
 |---|---|---|
-| Rust | [Google Rust](https://google.github.io/styleguide/rustguide.html)、稳定版 rustfmt / Clippy | `rustfmt.toml`；100 列，保留现有资源与并发模型，不套用 Chromium 专属限制 |
+| Rust | [Google Rust](https://google.github.io/styleguide/rustguide.html)、锁定工具链的 rustfmt / Clippy | `rustfmt.toml`；100 列，保留现有资源与并发模型，不套用 Chromium 专属限制 |
 | Dart / Flutter | [Effective Dart](https://dart.dev/effective-dart/style)、SDK formatter、flutter_lints | `analysis_options.yaml`；导入排序、优先单引号；格式版本跟随锁定的 Flutter SDK |
 | TypeScript / JavaScript | [Google GTS](https://github.com/google/gts) 的 ESLint / Prettier 配置 | `tools/code-style/eslint.config.mjs`；SDK 类型感知检查，浏览器与构建 / 测试环境分开 |
 | JSX | GTS 的 Prettier 样式，类型 / 业务由构建与测试验证 | `.prettierrc.cjs`；当前 JSX 仅检查排版，不声称覆盖 GTS 的全部语义规则 |
@@ -27,6 +27,8 @@ python3 scripts/check-code-style.py
 ```
 
 开发工具与依赖固定在 `tools/code-style/`，实际安装到被忽略的 `node_modules` / `.tools`，不修改全局包或 Git hooks，也不随 App / SDK 发行。macOS CI 安装同一套工具并检查所有语言；Swift 的完整格式检查在 macOS 执行。
+
+插件 SDK 和后台模板使用 TypeScript 7 构建；GTS / ESLint 所在的隔离工具目录使用其支持的 TypeScript 6.0 编程接口依赖，两处版本独立。SDK 交付通过模板解包、类型检查和打包回归验证。
 
 Dart 检查会先解析 Flutter 依赖，再读取包配置进行格式化，确保干净 checkout 与已有工作区使用相同语言版本；不依赖本机残留的 `.dart_tool` 缓存。
 

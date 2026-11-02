@@ -2,7 +2,7 @@ import AppKit
 
 /// Hosts content inside the native effect rather than overlaying sibling views.
 /// One material per window keeps Flutter's engine and responder chain intact.
-final class WindowMaterial: NSView {
+final class WindowMaterial: NativeAccessibilityContainer {
   private let effect: NSView
   let usesLiquidGlass: Bool
   var maskImage: NSImage? {
@@ -48,6 +48,18 @@ final class WindowMaterial: NSView {
 
   required init?(coder: NSCoder) { fatalError("Use init(frame:content:cornerRadius:)") }
 
+  func detachContent(_ content: NSView) {
+    setEmbeddedAccessibilityChild(nil)
+    #if compiler(>=6.2)
+      if #available(macOS 26.0, *), let glass = effect as? NSGlassEffectView,
+        glass.contentView === content
+      {
+        glass.contentView = nil
+      }
+    #endif
+    content.removeFromSuperview()
+  }
+
   private static func fallback(frame: NSRect, content: NSView) -> NSVisualEffectView {
     let material = NSVisualEffectView(frame: frame)
     material.material = .hudWindow
@@ -83,4 +95,19 @@ final class WindowMaterialController: NSViewController {
     view = material
   }
   required init?(coder: NSCoder) { fatalError("Use init(contentController:frame:cornerRadius:)") }
+
+  /// Dedicated tool windows detach native input and containment before stopping
+  /// their engine. Moving Launcher / Settings keeps the content attached instead.
+  func detachContent() {
+    for child in children {
+      let content = child.view
+      if let window = content.window, let responder = window.firstResponder as? NSView,
+        responder === content || responder.isDescendant(of: content)
+      {
+        window.makeFirstResponder(nil)
+      }
+      material.detachContent(content)
+      child.removeFromParent()
+    }
+  }
 }

@@ -3,7 +3,6 @@ enum RuntimePolicy {
     static let launcherRetentionMs = 15000
     static let clipboardPrefillLifetimeMs = 15000
     static let selectionPrefillGraceMs = 500
-    static let filePreviewDebounceMs = 120
     static let maxSearchRoots = 8
     static let maxSearchExclusions = 32
     static let maxSearchPathBytes = 4096
@@ -15,4 +14,5 @@ enum RuntimePolicy {
     static let maxConcurrentSearchSources = 4
     static let maxSearchSourceRows = 64
     static let maxShortcutCatalogRequestIds = 2048
+    static let previewSelectionDebounceMs = 80
 }

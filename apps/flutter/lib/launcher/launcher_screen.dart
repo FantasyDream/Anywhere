@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 
 import '../infrastructure/desktop_environment.dart';
 import '../infrastructure/desktop_image_cache.dart';
+import '../infrastructure/native_preview.dart';
 import '../infrastructure/window_host.dart';
 import '../l10n/app_language.dart';
 import '../settings/settings_components.dart';
@@ -14,6 +15,7 @@ import '../src/rust/api.dart';
 import '../ui/app_components.dart';
 import '../ui/app_icons.dart';
 import '../ui/app_style.dart';
+import '../ui/input_focus.dart';
 import 'activation_prefill.dart';
 import 'file_search_controller.dart' show FileFilter, LoadFilePreview;
 import 'launcher_controller.dart';
@@ -212,8 +214,12 @@ class _LauncherScreenState extends State<LauncherScreen> {
 
   void _onInput() {
     final value = _input.value;
-    if (!value.composing.isCollapsed) return;
+    if (!value.composing.isCollapsed) {
+      _preview.edited();
+      return;
+    }
     if (value.text == _submitted) return;
+    _preview.edited();
     _submitted = value.text;
     _controller.update(value.text);
   }
@@ -394,13 +400,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
               _view.phase != LauncherPhase.settings &&
               _view.toolPage == null &&
               _view.inputMode == mode) {
-            final editor =
-                _focus.context?.findAncestorStateOfType<EditableTextState>();
-            if (editor != null) {
-              editor.requestKeyboard();
-            } else {
-              _focus.requestFocus();
-            }
+            requestTextInput(_focus);
           }
         });
       }
@@ -412,9 +412,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
         _moreRequestedFor = null;
         _scroll.jumpTo(0);
       }
-      final entries = _view.visibleEntries;
-      final selection =
-          entries.isEmpty ? null : entries[_view.selectedIndex].key;
+      final selection = _view.selectedEntry?.key;
       // Progress-only batches must not scroll a mouse user back to the selected row.
       if (!restoreToolScroll &&
           !restoreFilePosition &&
@@ -440,6 +438,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
     _displayedScope = _view.scopeId;
     _displayedPath = _view.actionPath?.join(' / ');
     _reportIconViewport();
+    _syncPreview();
     setState(() {});
     if (releaseIdleResources && !WidgetsBinding.instance.framesEnabled) {
       // Hidden desktop engines can stop vsync. Flush this one expired subtree
@@ -453,15 +452,58 @@ class _LauncherScreenState extends State<LauncherScreen> {
     _controller.removeListener(_refresh);
     _input.removeListener(_onInput);
     _scroll.removeListener(_reportIconViewport);
+    _preview.dispose();
     _input.dispose();
     _focus.dispose();
     _scroll.dispose();
     super.dispose();
   }
 
+  late final _preview = NativePreviewController(
+    onMove: (direction) {
+      _controller.move(direction);
+    },
+    onActivate: () => _controller.executeSelected(),
+    onSearch: () => requestTextInput(_focus),
+    onFailure: () {
+      if (mounted) {
+        _controller.reportNotice(context.l10n.previewUnavailable);
+      }
+    },
+  )..addListener(() {
+      if (mounted) setState(() {});
+    });
+  void _syncPreview() {
+    final view = _view;
+    final state = view.snapshot;
+    final candidate = view.selectedEntry?.candidate;
+    final load = _controller.files.loadPreview;
+    final available = view.visible &&
+        view.toolPage == null &&
+        view.isFileSearch &&
+        view.objectActionTitle == null &&
+        !view.navigationOpen &&
+        !view.resolving &&
+        candidate?.kind == CandidateKindDto.file &&
+        state != null &&
+        load != null;
+    _preview.sync(
+        available
+            ? '${state.sessionId}:${state.revision}:${candidate!.id}'
+            : null,
+        available
+            ? () => load(state.sessionId, state.revision, candidate!.id)
+            : null);
+  }
+
   void _ensureSelectedVisible() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_view.visible || !_scroll.hasClients) return;
+      if (!mounted ||
+          !_view.visible ||
+          !_scroll.hasClients ||
+          _view.selectedEntry == null) {
+        return;
+      }
       final top = _view.selectedTop;
       final bottom = top + LauncherViewState.rowHeight;
       if (top < _scroll.offset) _scroll.jumpTo(top);
@@ -494,6 +536,13 @@ class _LauncherScreenState extends State<LauncherScreen> {
     _controller.backMenu();
     _focus.requestFocus();
   }
+
+  bool get viewCanPreview =>
+      _view.isFileSearch &&
+      !_view.resolving &&
+      !_view.executing &&
+      _view.objectActionTitle == null &&
+      !_view.navigationOpen;
 
   KeyEventResult _onKey(FocusNode node, KeyEvent event) {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
@@ -552,6 +601,9 @@ class _LauncherScreenState extends State<LauncherScreen> {
       return KeyEventResult.ignored;
     }
     final command = DesktopEnvironment.current.commandPressed;
+    if (viewCanPreview && _preview.handleKey(event, query: _input.text)) {
+      return KeyEventResult.handled;
+    }
     if (event.logicalKey == LogicalKeyboardKey.escape) {
       _controller.escape();
     } else if (command &&
@@ -565,19 +617,28 @@ class _LauncherScreenState extends State<LauncherScreen> {
       _controller.browseMenus();
     } else if (event.logicalKey == LogicalKeyboardKey.arrowRight &&
         _view.input.isEmpty &&
-        _view.visibleEntries.isNotEmpty &&
-        _view.visibleEntries[_view.selectedIndex].navigationPath != null) {
+        _view.selectedEntry?.navigationPath != null) {
       _controller.executeSelected();
     } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft &&
         _view.input.isEmpty &&
         _view.browsing) {
       _controller.backMenu();
-    } else if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
-      _controller.move(1);
-    } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
-      _controller.move(-1);
+    } else if (event.logicalKey == LogicalKeyboardKey.arrowDown ||
+        event.logicalKey == LogicalKeyboardKey.arrowUp) {
+      final keyboard = HardwareKeyboard.instance;
+      if (keyboard.isShiftPressed ||
+          keyboard.isMetaPressed ||
+          keyboard.isControlPressed ||
+          keyboard.isAltPressed) {
+        _preview.edited();
+        return KeyEventResult.ignored;
+      }
+      _preview.browsing = true;
+      _controller
+          .move(event.logicalKey == LogicalKeyboardKey.arrowDown ? 1 : -1);
     } else if (event.logicalKey == LogicalKeyboardKey.enter ||
         event.logicalKey == LogicalKeyboardKey.numpadEnter) {
+      _preview.close();
       _controller.executeSelected();
     } else {
       return KeyEventResult.ignored;
@@ -587,6 +648,34 @@ class _LauncherScreenState extends State<LauncherScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final owner = _controller;
+    final view = _view;
+    final snapshot = view.snapshot;
+    if (owner.performance.pending &&
+        view.phase == LauncherPhase.ready &&
+        snapshot != null &&
+        view.canMeasureQueryFrame &&
+        view.toolPage == null &&
+        view.output == null) {
+      owner.performance.ready(
+        generation: view.generation,
+        revision: snapshot.revision,
+        presentation: owner.windowPresentation,
+        rows: view.visibleEntries.length,
+        afterFrame: (callback) =>
+            WidgetsBinding.instance.addPostFrameCallback((_) => callback()),
+        current: () =>
+            mounted &&
+            identical(_controller, owner) &&
+            _view.generation == view.generation &&
+            _view.phase == LauncherPhase.ready &&
+            _view.inputMode == view.inputMode &&
+            _view.toolPage == null &&
+            _view.output == null &&
+            _view.canMeasureQueryFrame &&
+            _view.snapshot?.revision == snapshot.revision,
+      );
+    }
     final platformPage = _view.toolPage?.embedsPlatformView == true;
     final settings = _view.phase == LauncherPhase.settings;
     // Settings reuses this engine. Keep the retained native page mounted but
@@ -677,6 +766,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
                   onKeyEvent: _onKey,
                   child: Column(children: [
                     LauncherSearchArea(
+                        onEditFocus: _preview.edited,
                         key: ValueKey((_controller, _searchEditorEpoch)),
                         state: view,
                         input: _input,
@@ -740,23 +830,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
                                 ? context.l10n.globalSearch
                                 : null),
                       Expanded(
-                          child: LayoutBuilder(
-                              builder: (context, constraints) => Row(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.stretch,
-                                      children: [
-                                        Expanded(child: _resultsBody(view)),
-                                        if (view.hasFilePreview) ...[
-                                          const VerticalDivider(width: 1),
-                                          SizedBox(
-                                              width: (constraints.maxWidth *
-                                                      DesignTokens
-                                                          .previewFraction)
-                                                  .clamp(220.0, 360.0),
-                                              child: FileSearchPreview(
-                                                  files: _controller.files)),
-                                        ],
-                                      ]))),
+                          child: TextFieldTapRegion(child: _resultsBody(view))),
                     ],
                   ]))),
         ));
@@ -832,11 +906,10 @@ class _LauncherScreenState extends State<LauncherScreen> {
             child: ListView.builder(
                 key: const Key('action-list'),
                 controller: _scroll,
+                itemExtent: LauncherViewState.rowHeight,
                 padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
                 itemCount: entries.length,
-                itemBuilder: (_, index) => SizedBox(
-                    height: LauncherViewState.rowHeight,
-                    child: _entryRow(entries[index], index)))));
+                itemBuilder: (_, index) => _entryRow(entries[index], index))));
   }
 
   void _loadMoreNearEnd({bool userGesture = false}) {
@@ -913,6 +986,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
   void _selectPointerResult(int index) {
     // Pointer-down selects before double-click recognition, but must not queue
     // a scroll-to-selection that would undo the following drag or wheel scroll.
+    _preview.browsing = true;
     _pointerSelection = true;
     try {
       _controller.selectResult(index);
@@ -938,6 +1012,12 @@ class _LauncherScreenState extends State<LauncherScreen> {
               : candidate.commandId == 'core.files.search'
                   ? context.l10n.search
                   : context.l10n.run,
+          previewSpace: _preview.browsing || _input.text.isEmpty,
+          onPreview: selected &&
+                  viewCanPreview &&
+                  candidate.kind == CandidateKindDto.file
+              ? _preview.toggle
+              : null,
           onPrimary: !_view.resolving && !_view.executing
               ? () => _controller.selectAndExecute(candidate.id)
               : null,

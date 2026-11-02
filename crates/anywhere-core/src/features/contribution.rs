@@ -34,8 +34,8 @@ impl FeatureContribution {
     ) -> Self {
         self.input_recognizers
             .push(crate::core::context::input_recognizer::InputRecognizer {
-                id,
-                recognize,
+                id: id.into(),
+                recognize: std::sync::Arc::new(recognize),
                 priority: self
                     .providers
                     .iter()

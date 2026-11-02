@@ -14,12 +14,10 @@ const source =
 test('copy modes preserve source tokens and escaping round-trips without evaluating JSON', () => {
   const pretty = prepareJsonAction(source, 'copy-format', 4);
   assert.equal(pretty.text, transform(source, 'format', 4));
-  assert.equal(pretty.copy, true);
   assert.equal(prepareJsonAction(pretty.text, 'copy-minify').text, source);
   const escaped = prepareJsonAction(source, 'copy-escaped');
   assert.equal(JSON.parse(escaped.text), source);
-  assert.equal(prepareJsonAction(escaped.text, 'unescape').text, source);
-  assert.equal(prepareJsonAction(escaped.text, 'unescape').copy, false);
+  assert.equal(decodeDocument(escaped.text).text, source);
   assert.equal(prepareJsonAction(source, 'copy-minify').text, source);
 });
 
@@ -32,7 +30,10 @@ test('quoted, bare and nested escaped objects/arrays decode; normal string value
       text: source,
       escaped: true,
     });
-    assert.equal(prepareJsonAction(encoded, 'copy-minify').text, source);
+    assert.equal(
+      prepareJsonAction(decodeDocument(encoded).text, 'copy-minify').text,
+      source,
+    );
   }
   assert.deepEqual(decodeDocument(source), {text: source, escaped: false});
   assert.deepEqual(decodeDocument(JSON.stringify('[true,null,"中文"]')), {
@@ -42,15 +43,12 @@ test('quoted, bare and nested escaped objects/arrays decode; normal string value
   assert.equal(decodeDocument(JSON.stringify(encoded)).escaped, false); // fifth layer stays a JSON string
 });
 
-test('explicit escape/unescape also round-trips scalar roots without changing ordinary scalars on open', () => {
+test('copy escaping supports scalar roots without reinterpreting ordinary scalars', () => {
   for (const text of ['null', 'true', '1e+30', '"hello"', '"\\u0041"']) {
     assert.equal(decodeDocument(text).text, text);
     assert.equal(
-      prepareJsonAction(
-        prepareJsonAction(text, 'copy-escaped').text,
-        'unescape',
-      ).text,
-      text,
+      JSON.parse(prepareJsonAction(text, 'copy-escaped').text),
+      transform(text, 'minify'),
     );
   }
 });
@@ -61,11 +59,11 @@ test('invalid input, inner JSON, action names and oversized output fail without 
     '{bad}',
     String.raw`{\"n\":1,}`,
     String.raw`{\"n\":\x41}`,
-    '"hello"',
   ]) {
-    assert.throws(() => prepareJsonAction(text, 'unescape'));
+    assert.throws(() => prepareJsonAction(text, 'copy-minify'));
   }
-  assert.throws(() => prepareJsonAction('{}', 'unknown'));
+  for (const id of ['unknown', 'unescape'])
+    assert.throws(() => prepareJsonAction('{}', id), /Unknown JSON action/);
   assert.throws(
     () => prepareJsonAction('x'.repeat(MAX_BYTES + 1), 'copy-format'),
     /1 MiB/,
@@ -86,18 +84,9 @@ test('launcher routes reuse the same actions, preserve input and never read clip
   };
   assert.deepEqual(prepareJsonLaunch(invocation), {
     input: source,
-    clipboard: null,
     message: 'decoded',
   });
   for (const action of JSON_ACTIONS) {
-    const result = prepareJsonLaunch({...invocation, entrypoint: action.id});
-    assert.equal(result.input, source);
-    assert.equal(
-      result.clipboard,
-      action.id === 'unescape'
-        ? null
-        : prepareJsonAction(source, action.id).text,
-    );
     assert.equal(
       prepareJsonLaunch({
         input: {kind: 'empty', reason: 'no_object'},
@@ -106,16 +95,39 @@ test('launcher routes reuse the same actions, preserve input and never read clip
       null,
     );
   }
+  for (const id of ['copy-format', 'copy-minify', 'copy-escaped', 'unescape'])
+    assert.throws(
+      () => prepareJsonLaunch({...invocation, entrypoint: id}),
+      /Unknown workspace/,
+    );
   const manifest = JSON.parse(
     readFileSync(new URL('../manifest.json', import.meta.url)),
   );
+  assert.ok(
+    !manifest.permissions.some(
+      permission => permission.name === 'clipboard.readText',
+    ),
+    'native editor paste must not require background clipboard access',
+  );
+  assert.deepEqual(
+    manifest.commands.map(command => command.id),
+    ['open', ...JSON_ACTIONS.map(action => action.id)],
+  );
+  const open = manifest.commands.find(command => command.id === 'open');
+  assert.deepEqual(open.accepts, ['plugin.dev.anywhere.json-workspace.json']);
+  assert.equal(open.inputMatchers, undefined);
+  assert.deepEqual(manifest.background.resolvers[0].produces, open.accepts);
+  assert.deepEqual(manifest.permissions[0].types, [
+    'core.text',
+    ...open.accepts,
+  ]);
+  for (const command of manifest.commands)
+    assert.deepEqual(command.accepts, open.accepts);
+
   for (const action of JSON_ACTIONS) {
     const command = manifest.commands.find(command => command.id === action.id);
-    assert.equal(command.entrypoint, action.id);
-    assert.ok(command.inputMatchers.includes('json_escaped'));
+    assert.equal(command.requireContext, true);
+    assert.equal(command.inputMatchers, undefined);
+    assert.equal(command.runtime, 'background');
   }
-  assert.deepEqual(
-    manifest.commands.find(command => command.id === 'unescape').inputMatchers,
-    ['json_escaped'],
-  );
 });

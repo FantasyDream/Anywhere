@@ -45,7 +45,7 @@ class HostSettings {
     currentAppKeyCode: spaceKey,
     currentAppModifiers: metaKey | altKey,
     universalKeyCode: spaceKey,
-    universalModifiers: metaKey | altKey | shiftKey,
+    universalModifiers: metaKey,
     launchAtLogin: false,
     excludedApps: [],
     captureFinderSelection: true,
@@ -250,8 +250,6 @@ String formatHotkey(int keyCode, int modifiers) {
   buffer.write(shortcutKeyNames[keyCode] ?? 'Key');
   return buffer.toString();
 }
-
-int? shortcutKeyCode(LogicalKeyboardKey key) => shortcutLogicalKeyCodes[key];
 
 /// USB HID keyboard usages preserve physical positions across OS and layouts.
 int? shortcutEventKeyCode(KeyEvent event) =>

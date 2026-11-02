@@ -1,0 +1,96 @@
+{
+  "date": "2026-10-24",
+  "timezone": "Asia/Shanghai",
+  "app_version": "0.13.0+7",
+  "source_commit": "2d8101b",
+  "binary_sha256": "8432f991d940af790520e87fd29951462020f6983f8db79e64e2897403ce608e",
+  "fixture": {
+    "isolated_directory": true,
+    "initial_items": 350,
+    "after_gui_retention_items": 50,
+    "recording": false,
+    "personal_history_used": false,
+    "external_context_sources": false
+  },
+  "checks": {
+    "task_window_create_close_cycles": 5,
+    "task_view_and_native_close_button_exposed": true,
+    "task_window_fixture": "No tasks running; actual process survival was not exercised.",
+    "shelf_create_close_cycles": 20,
+    "shelf_query_and_fixture_exposed_each_cycle": true,
+    "main_available_after_each_cycle": true,
+    "retention_cancel_kept_350_items": true,
+    "retention_shortening_with_user_confirmation": {
+      "items": 50,
+      "formats": 50,
+      "policy": [
+        null,
+        1
+      ],
+      "recording": 0,
+      "orphan_formats": 0,
+      "after_extend_to_30_days": {
+        "items": 50,
+        "formats": 50,
+        "retention_days": 30
+      }
+    },
+    "invalid_engine_handle_messages": 0,
+    "dead_channel_messages": 25,
+    "impeller_engine_start_lines": 26,
+    "crash_observed": false
+  },
+  "class_counts": {
+    "after_5_task_cycles": {
+      "flutter_engine": 1,
+      "flutter_view_controller": 1,
+      "flutter_vsync_waiter": 1,
+      "window_material_controller": 1
+    },
+    "after_20_shelf_cycles_and_later_idle": {
+      "flutter_engine": 1,
+      "flutter_view_controller": 2,
+      "flutter_vsync_waiter": 1,
+      "window_material_controller": 1
+    },
+    "tool": "macOS heap --noContent",
+    "additional_controller_reference": "Reference-tree probe identified a main-dispatch-queue reference. It did not identify the exact callback or prove why it remained."
+  },
+  "resource_snapshots": [
+    {
+      "stage": "after_5_tasks_cycles_settings_dialog_open",
+      "main_rss_bytes": 50429952,
+      "descendants": [],
+      "footprint_bytes": 84934656,
+      "seconds_since_baseline": 0.0
+    },
+    {
+      "stage": "before_20_shelf_cycles_50_items",
+      "main_rss_bytes": 70025216,
+      "descendants": [],
+      "footprint_bytes": 128765133,
+      "seconds_since_baseline": 221.47
+    },
+    {
+      "stage": "after_20_shelf_cycles_50_items",
+      "main_rss_bytes": 113344512,
+      "descendants": [],
+      "footprint_bytes": 149212365,
+      "seconds_since_baseline": 617.83
+    }
+  ],
+  "followup": {
+    "build": "0.13.0+8",
+    "change": "Detach native content, the responder and controller containment before shutting down a dedicated engine, explicitly clearing Liquid Glass content ownership.",
+    "runtime_status": "Not yet tested."
+  },
+  "limits": [
+    "The two 20-cycle Build 7 runs used 350 and 50 synthetic items respectively; they are not an equal-fixture performance comparison or 40 cycles in one process.",
+    "One extra controller remained at the end of the second run. Successful close navigation and one engine are not proof of complete view release.",
+    "No invalid-handle message occurred in this second process; the earlier run recorded one. This does not establish that the intermittent SDK warning was fixed.",
+    "The short/long hide attempts initially only read another app AX tree and did not produce focus-loss events. They are excluded from retention acceptance. A later real coordinate click produced focus loss, but screen lock blocked the reopen check.",
+    "Snapshots include different page/data states and long automation gaps. They do not prove long-term stability, a memory improvement or a fixed upper bound.",
+    "No Web plugin was opened; empty descendants describes PID ancestry only, not complete XPC/GPU-helper release. Raw references and logs stay in ignored build/.",
+    "No screen-lock, sleep, system-clock, renderer or permission settings were changed."
+  ]
+}

@@ -41,6 +41,7 @@ void main() {
 
   setUp(() {
     calls.clear();
+    mockNativePreview();
     AppLanguage.current.apply('en');
     DesktopEnvironment.configure(
         const DesktopEnvironment(platform: TargetPlatform.macOS));
@@ -59,6 +60,10 @@ void main() {
     DesktopEnvironment.reset();
   });
 
+  ClipboardHistorySession session(WidgetTester tester) => tester
+      .widget<ClipboardShelfPage>(find.byType(ClipboardShelfPage))
+      .session;
+
   Future<void> mount(WidgetTester tester, History backend) async {
     tester.view.physicalSize = const Size(420, 560);
     tester.view.devicePixelRatio = 1;
@@ -69,12 +74,11 @@ void main() {
         channel: channel,
         refreshInterval: const Duration(hours: 1)));
     await tester.pumpAndSettle();
+    expect(session(tester).selected, isNull);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
     addTearDown(() async => tester.pumpWidget(const SizedBox()));
   }
-
-  ClipboardHistorySession session(WidgetTester tester) => tester
-      .widget<ClipboardShelfPage>(find.byType(ClipboardShelfPage))
-      .session;
 
   Future<void> command(WidgetTester tester, LogicalKeyboardKey key,
       {bool shift = false}) async {
@@ -86,11 +90,80 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  testWidgets('Space previews a pointer-selected clipboard shelf item',
+      (tester) async {
+    final backend = InteractionHistory();
+    await mount(tester, backend);
+    await tester.enterText(search, 'Entry');
+    await tester.pump(const Duration(milliseconds: 150));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Entry 2'));
+    await tester.pumpAndSettle();
+    final owner = session(tester);
+    expect(owner.selected?.id, '2');
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pumpAndSettle();
+    expect(owner.preview.isOpen, isTrue);
+    expect(previewCalls.last.arguments['paths'], ['/synthetic/2.txt']);
+    expect(owner.focus.hasFocus, isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(backend.copied, ['2']);
+    expect(owner.query.text, 'Entry');
+  }, variant: TargetPlatformVariant.desktop());
+
+  testWidgets(
+      'idle shelf polls revisions without allocating another thousand rows',
+      (tester) async {
+    final backend = History();
+    var polls = 0, generated = 0;
+    backend.conditionalSearchOverride = (query, after) async {
+      polls++;
+      if (after == 'stable') return null;
+      final rows = List.generate(1000, (i) => item('$i'));
+      generated += rows.length;
+      return ClipboardHistoryDto(
+          revision: 'stable', recording: false, available: true, items: rows);
+    };
+    await tester
+        .pumpWidget(ClipboardShelfApp(backend: backend, channel: channel));
+    await tester.pumpAndSettle();
+    final original = session(tester).items;
+    for (var i = 0; i < 20; i++) {
+      await tester.pump(const Duration(seconds: 1));
+      await tester.pump();
+    }
+    expect(polls, 21);
+    expect(generated, 1000);
+    expect(session(tester).items, same(original));
+    await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('Escape closes preview without moving the scrolled selection',
+      (tester) async {
+    final backend = InteractionHistory()
+      ..rows = List.generate(50, (i) => item('$i'));
+    await mount(tester, backend);
+    final owner = session(tester);
+    owner.select(30);
+    await tester.pumpAndSettle();
+    final offset = owner.scroll.offset;
+    expect(offset, greaterThan(0));
+    owner.preview.toggle();
+    await tester.pumpAndSettle();
+    expect(owner.preview.isOpen, true);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(owner.preview.isOpen, false);
+    expect(owner.selectedIndex, 30);
+    expect(owner.scroll.offset, offset);
+  });
+
   testWidgets('shelf commands and copy feedback stay in the selected row',
       (tester) async {
     final backend = InteractionHistory();
     await mount(tester, backend);
-    expect(find.byType(AppPageFooter), findsNothing);
     expect(find.text('2 entries'), findsNothing);
     expect(find.byKey(const Key('shelf-preview-toggle')), findsNothing);
     expect(find.text('⌘K'), findsOneWidget);
@@ -127,9 +200,8 @@ void main() {
     expect(backend.copied, isEmpty);
     await tester.tap(find.text('Preview'));
     await tester.pumpAndSettle();
-    expect(session(tester).previewEnabled, isTrue);
+    expect(session(tester).preview.isOpen, isTrue);
     expect(find.byType(ClipboardHistoryList), findsOneWidget);
-    expect(find.byType(AppPageFooter), findsNothing);
     expect(session(tester).focus.hasFocus, isTrue);
     expect(tester.takeException(), isNull);
   });
@@ -138,7 +210,6 @@ void main() {
       (tester) async {
     final backend = InteractionHistory()..rows = [];
     await mount(tester, backend);
-    expect(find.byType(AppPageFooter), findsNothing);
     expect(find.byKey(const Key('selected-row-primary')), findsNothing);
     expect(find.text('⌘K'), findsOneWidget);
     await tester.tap(find.byKey(const Key('shelf-empty-actions')));
@@ -297,47 +368,22 @@ void main() {
     expect(backend.copied, ['1']);
   });
 
-  testWidgets(
-      'inline preview follows selection while list stays keyboard usable',
+  testWidgets('native preview follows selection without changing list geometry',
       (tester) async {
     final backend = InteractionHistory();
-    backend.detailOverride = (id) async =>
-        previewDetail(item(id), List.filled(70, 'body $id').join('\n'));
     await mount(tester, backend);
+    final before = tester.getRect(find.byType(ClipboardHistoryList));
     await command(tester, LogicalKeyboardKey.keyY);
-    expect(find.byType(ClipboardHistoryList), findsOneWidget);
-    expect(session(tester).preview?.item.id, '1');
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
-    await tester.sendKeyEvent(LogicalKeyboardKey.pageDown);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
-    await tester.pumpAndSettle();
-    final previewScroll = tester.widget<SingleChildScrollView>(find
-        .ancestor(
-            of: find.byKey(const Key('clipboard-preview')),
-            matching: find.byType(SingleChildScrollView))
-        .first);
-    expect(previewScroll.controller!.offset, greaterThan(0));
-    expect(session(tester).selected?.id, '1');
+    expect(session(tester).preview.isOpen, isTrue);
+    expect(previewCalls.last.arguments['paths'], ['/synthetic/1.txt']);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
-    expect(session(tester).preview?.item.id, '2');
-    await tester.enterText(search, 'Entry ');
-    await tester.pump(const Duration(milliseconds: 150));
-    await tester.pumpAndSettle();
-    await command(tester, LogicalKeyboardKey.keyF);
-    expect(session(tester).focus.hasFocus, isTrue);
-    expect(session(tester).query.selection,
-        const TextSelection(baseOffset: 0, extentOffset: 6));
+    expect(previewCalls.last.arguments['paths'], ['/synthetic/2.txt']);
+    expect(tester.getRect(find.byType(ClipboardHistoryList)), before);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(session(tester).previewEnabled, isFalse);
-    expect(session(tester).query.text, 'Entry ');
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-    await tester.pumpAndSettle();
-    expect(session(tester).query.text, isEmpty);
-    expect(calls, isNot(contains('close')));
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-    expect(calls.last, 'close');
+    expect(session(tester).preview.isOpen, isFalse);
+    expect(session(tester).selected?.id, '2');
   });
 
   testWidgets('deletion defaults to Cancel and confirms the original identity',
@@ -401,11 +447,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 150));
     await tester.pumpAndSettle();
     expect(find.text('No matching entries'), findsOneWidget);
-    expect(find.text('Select an entry to preview'), findsOneWidget);
+    expect(session(tester).preview.isOpen, isFalse);
     expect(find.text('Loading preview…'), findsNothing);
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(session(tester).query.text, 'missing');
+    expect(session(tester).query.text, isEmpty);
     expect(find.text('Select an entry to preview'), findsNothing);
   });
 
@@ -448,8 +494,7 @@ void main() {
       tester.view.devicePixelRatio = 1;
       addTearDown(tester.view.resetPhysicalSize);
       addTearDown(tester.view.resetDevicePixelRatio);
-      final state = ClipboardHistorySession(History(),
-          rowExtent: 48, previewEnabled: false);
+      final state = ClipboardHistorySession(History(), rowExtent: 48);
       await tester.pumpWidget(LocalizedApp(
           theme: AppStyle.theme,
           builder: (context, child) => MediaQuery(
@@ -467,6 +512,9 @@ void main() {
                           presentation: 0,
                           onClose: () {},
                           onReturnToTarget: () async {}))))));
+      await tester.pumpAndSettle();
+      expect(state.selected, isNull);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
       await tester.pumpAndSettle();
       await command(tester, LogicalKeyboardKey.keyY);
       expect(tester.takeException(), isNull);

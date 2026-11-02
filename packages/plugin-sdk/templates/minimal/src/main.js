@@ -1,4 +1,4 @@
-import {definePlugin} from '@anywhere/plugin-sdk';
+import {definePlugin} from '@anywhere/sdk';
 
 const input = document.querySelector('#input');
 const status = document.querySelector('#status');
@@ -13,9 +13,11 @@ const plugin = definePlugin({
 
 input.addEventListener('input', () => {
   edited = true;
+  status.textContent = '';
 });
 document.querySelector('#uppercase').addEventListener('click', () => {
   edited = true;
+  status.textContent = '';
   input.value = input.value.toUpperCase();
   input.focus();
 });

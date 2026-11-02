@@ -55,7 +55,7 @@ pub fn non_query_terms(
 
 /// Context relevance differs between Context Home and an explicit query.
 ///
-/// Home: the ambient object leads, so context dominates usage.
+/// Empty lists use exact usage counts and timestamps first; this score only breaks ties.
 /// Search: the query dominates, so context only breaks ties.
 pub fn context_relevance(source: ContextSource, searching: bool, semantic: i32) -> i32 {
     let base = match source {
@@ -74,7 +74,8 @@ pub fn context_relevance(source: ContextSource, searching: bool, semantic: i32) 
     }
 }
 
-/// `frequency` and `recency` are bounded so repeated use cannot dominate context.
+/// Query-score usage is bounded so repeated use cannot dominate a textual match.
+/// Empty-list ordering compares the original counts and timestamps separately.
 pub fn usage_terms(execute_count: u32, last_executed_at: i64, now: i64) -> (i32, i32) {
     let frequency = execute_count.min(FREQUENCY_CAP) as i32 * FREQUENCY_WEIGHT;
     let age = now.saturating_sub(last_executed_at).max(0);
@@ -92,6 +93,8 @@ pub fn usage_terms(execute_count: u32, last_executed_at: i64, now: i64) -> (i32,
     (frequency, recency)
 }
 
+/// Query relevance and cold-start tie-breaking, not the full empty-list order.
+/// Empty lists compare exact usage separately in `compare_empty_query_candidates`.
 pub fn score(
     match_level: Option<MatchLevel>,
     searching: bool,
@@ -200,10 +203,10 @@ mod tests {
         assert_eq!(saturated, NON_QUERY_TERM_CEILING);
     }
 
-    /// The reported defect: seven uses of `Copy Path` lost to one use of
-    /// `Git Status`, because `base_priority` outweighed the whole frequency term.
+    /// Within one keyword-match tier, usage still has a bounded score weight.
+    /// Empty action lists use the separate exact-count comparator instead.
     #[test]
-    fn repeated_use_outranks_a_higher_base_priority_default() {
+    fn usage_can_outweigh_default_priority_within_the_same_query_tier() {
         let now = 1_000_000;
         let usage = |count: u32| UsageStats {
             execute_count: count,
@@ -211,8 +214,8 @@ mod tests {
             last_executed_at: now,
         };
         let git_status_once = score(
-            None,
-            false,
+            Some(MatchLevel::WordPrefix),
+            true,
             ContextSource::ApplicationContext,
             90,
             50,
@@ -220,8 +223,8 @@ mod tests {
             now,
         );
         let copy_path_seven = score(
-            None,
-            false,
+            Some(MatchLevel::WordPrefix),
+            true,
             ContextSource::ApplicationContext,
             90,
             20,
@@ -234,10 +237,10 @@ mod tests {
              default ({git_status_once})"
         );
 
-        // The default still wins while the habit has not formed.
+        // Equal histories fall back to the default within this query tier.
         let copy_path_once = score(
-            None,
-            false,
+            Some(MatchLevel::WordPrefix),
+            true,
             ContextSource::ApplicationContext,
             90,
             20,

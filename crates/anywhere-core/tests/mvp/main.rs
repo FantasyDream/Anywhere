@@ -1,3 +1,4 @@
+mod application_history;
 mod context_sources;
 mod developer;
 mod extension_lifecycle;

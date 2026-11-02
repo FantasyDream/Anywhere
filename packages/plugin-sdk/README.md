@@ -1,15 +1,37 @@
-# @anywhere/plugin-sdk（开发中）
+# @anywhere/sdk（开发中）
 
-浏览器侧的最小 Web 插件 SDK，运行时无 npm 依赖，不启动 Node。已接入 macOS 本地 WebView、Host 确认 UI 与安装入口，也连接 Rust 合成测试宿主。当前仍是本地开发预览，完整安全 / 跨平台验收尚未完成。
+WebView / 按需后台任务共用的最小插件 SDK，运行时无 npm 依赖，不启动 Node。已接入 macOS 本地 WebView、Host 确认 UI 与安装入口，也连接 Rust 合成测试宿主。当前仍是本地开发预览，完整安全 / 跨平台验收尚未完成。
 
 **第一次开发插件：** 阅读仓库中的 [第三方插件开发指南](https://github.com/FantasyDream/Anywhere/blob/main/docs/plugin-development.md)。SDK `.tgz` 自带 `templates/minimal/` 和 `tools/package.py`，可在独立目录使用；当前没有公开 npm 发布版。
 
-导出包包含 `dist/`、类型、公共 CSS、模板、打包工具、本说明和 MIT 许可证。业务通过 `@anywhere/plugin-sdk` / `@anywhere/plugin-sdk/styles/controls.css` 标准导入，不引用仓库源文件。模板的 `npm run build` 构建网页，`npm run pack` 生成 `.awplugin`；`vendor/` 中保留 SDK 包后，不再依赖原仓库位置。
+导出包包含 `dist/`、类型、公共 CSS、模板、打包工具、本说明和 MIT 许可证。业务通过 `@anywhere/sdk` / `@anywhere/sdk/styles/controls.css` 标准导入，不引用仓库源文件。模板的 `npm run build` 构建网页，`npm run pack` 生成 `.awplugin`；`vendor/` 中保留 SDK 包后，不再依赖原仓库位置。
+
+## 统一业务 API
+
+```ts
+import {anywhere} from '@anywhere/sdk';
+const context = await anywhere.context.get();
+const input = await anywhere.input.get();
+await anywhere.input.set('hello');
+const stop = anywhere.context.onChange(context => { /* update business UI */ });
+stop();
+await anywhere.clipboard.readText();
+await anywhere.clipboard.writeText('hello');
+await anywhere.storage.set('indent', 2);  // storage.local，同一插件的 UI / 后台命令共享
+const indent = await anywhere.storage.get<number>('indent');
+await anywhere.app.getSource();     // 唤醒前冻结的来源应用
+await anywhere.app.getFrontmost();  // 实时前台应用
+```
+
+接口使用 Promise，事件订阅返回取消函数。`context.read`、`input.read`、`input.write`、`context.currentApp`、`app.frontmost`、剪贴板及 `storage.local` 权限由 Rust 校验，插件不能指定宿主身份。Context/Input 初始化快照后按变化推送，不自行轮询。只使用这些 API 时不需要启动代码；需要启动输入和自定义错误处理时继续使用 `definePlugin`，它也返回 `anywhere`。
+
+创建后台模板时在 `init my-tool` 后添加 `--background`。模板把 TypeScript 构建为单个 ES module，并设置 `anywhere-background` 导出条件，同样导入 `@anywhere/sdk`。后台解析器仅返回自身 `plugin.<插件 id>.*` Context，自动解析无副作用；显式后台 Action 沿用宿主确认。没有常驻后台监听，订阅仅属于这次有限调用。WebView 与 QuickJS 不直接通信。
+
 
 ## 默认入口：只写业务
 
 ```sh
-npm exec --package=/绝对路径/anywhere-plugin-sdk-0.1.0.tgz -- anywhere-plugin init my-tool
+npm exec --package=/绝对路径/anywhere-sdk-0.1.0.tgz -- anywhere-plugin init my-tool
 cd my-tool
 npm install --ignore-scripts
 npm run build
@@ -19,7 +41,7 @@ npm run pack
 创建器复制独立 SDK 快照到 `vendor/plugin-sdk/`，生成普通 HTML / JS 项目并拒绝覆盖现有目录；不依赖原仓库，不要求安装 Flutter / Rust。
 
 ```js
-import {definePlugin} from '@anywhere/plugin-sdk';
+import {definePlugin} from '@anywhere/sdk';
 const plugin = definePlugin({
   onLaunch({input}) { /* 只处理本次输入；不在恢复后重复执行 */ },
   // onError(error) 可选：缺省使用共享样式的错误提示。
@@ -59,16 +81,18 @@ scripts/check-web-sdk.sh
 
 命令可在 Manifest 声明 `"accepts": ["core.text"], "inputMatchers": ["json"]`，并申请 `context.read` 的 `core.text` 类型。宿主在用户输入、选中文本或 15 秒内的新剪贴板内容中识别严格 JSON 对象 / 数组，匹配时只展示 Action；执行后通过 `host.invocation.get()` 传入原文。插件无需写识别代码，匹配期间不创建 WebView、不执行 JS。
 
-`json` 自动识别上限 16 KiB、128 层；不匹配标量、注释、尾随逗号或不完整 JSON。超限 / 无匹配时保持原唤醒规则，仍可搜索插件名称打开后手动输入。匹配结果仅在当前识别过程复用，不保存正文。未声明匹配器的包保持原行为；插件停用、卸载或撤销后停止自动匹配。普通搜索关键词仍不会当作插件输入。
+`json` 自动识别上限 16 KiB、128 层；不匹配标量、注释、尾随逗号或不完整 JSON。超限 / 无匹配时保持原唤醒规则；默认仍可搜索插件名称打开空工作区后手动输入。匹配结果仅在当前识别过程复用，不保存正文。未声明匹配器的包保持原行为；插件停用、卸载或撤销后停止自动匹配。普通搜索关键词仍不会当作插件输入。
 
 匹配器是宿主提供的有限格式规则，不接受插件 JS、正则或自定义 DSL；以后新增格式沿用同一声明入口。修改 Manifest 后需重新构建、导入并核对批准新的包摘要，宿主不会修改已批准安装内容。
 
 也可声明 `json_escaped`。它匹配带 / 不带外层引号的转义 JSON 容器，最多解开 4 层；编码原文仍受 16 KiB、解码容器受 128 层限制。它不匹配普通字符串 / 标量或已是正常 JSON 的对象，Invocation 保留编码原文。解码、格式化、复制仍由业务插件处理，Host 识别不执行插件代码。
 
+必须有匹配内容才能使用的命令可声明 `"requireInputMatch": true`（默认为 `false`），且必须设置 `inputMatchers`。此类命令不会提供无对象的名称搜索或快捷键入口；捕获内容不匹配时隐藏，执行前再次验证。JSON 示例的三个复制命令使用 `json` / `json_escaped`，去转义命令仅使用 `json_escaped`；Workspace 仍可独立打开。
+
 ### 原始 API（进阶集成，自行管理生命周期）
 
 ```ts
-import { host } from '@anywhere/plugin-sdk';
+import { host } from '@anywhere/sdk';
 
 // 页面先渲染，只有第一次有效 ready 记录一次入口 Usage。
 await host.ready();
@@ -83,7 +107,7 @@ const clipboard = await host.clipboard.readText();
 
 - `context.read` 只允许本次调用中声明的类型，不包含完整 Context Graph；文件只给显示名称与不透明句柄。
 - `context.currentApp` 是唤醒前冻结的 ID / 名称，需要单独批准。
-- 剪贴板读写分别需要对应权限，还需要 Host 对本次操作的确认。网页不能用 `approved`、`userGesture` 或自报 pluginId 获得资格。SDK Promise 等待 Host 的最终响应，不会自动重试副作用。
+- 剪贴板读写分别需要安装时批准对应权限；Build 25+ 不再逐次确认。网页不能用 `approved`、`userGesture` 或自报 pluginId 获得资格。SDK Promise 等待 Host 的最终响应，不会自动重试副作用。
 - `storage.local` 只能使用当前插件及来源绑定的键空间，不接受 namespace。值是 JSON；`get` 返回值或 `null`。
 - 支持 `AbortSignal`。隐藏、重载、返回、撤销时 Host 负责撤销 Rust 文档资格并释放旧客户端；`createHost(transport)` 提供的实例也有 `dispose()`。
 - 没有通用 `invoke`、Shell、后台监控、历史剪贴板、任意文件或网络 API。
@@ -96,7 +120,7 @@ const clipboard = await host.clipboard.readText();
 cargo run -p anywhere-protocol --features web-schema --example generate_web_sdk_contract --locked
 ```
 
-帧 ≤ 64 KiB；8 个进行中请求、16 个排队请求；单文档最多 4,096 个请求 ID。普通调用 5 秒，Host 确认最多 30 秒；首次 ready 最多 10 秒。取消或超时无法撤回已经开始的 OS I/O，错误不承诺可以安全重试。
+帧 ≤ 64 KiB；8 个进行中请求、16 个排队请求；单文档最多 4,096 个请求 ID。普通调用 5 秒；首次 ready 最多 10 秒。取消或超时无法撤回已经开始的 OS I/O，错误不承诺可以安全重试。
 
 复制文本原始 UTF-8 ≤ 1 MiB；大文本每块 ≤ 4 KiB 原始字节，编码后 ≤ 32 KiB。结果 JSON 采用单个下载缓冲，编码后总量 ≤ 2 MiB，超过返回 `TOO_LARGE`，不静默截断。缓冲 5 秒过期，后台每秒清理；隐藏 / 销毁立即释放。SDK 按 UTF-8 边界切分，保留中文、表情和 BOM。
 
@@ -135,11 +159,11 @@ Flutter 与 Web 的设计参数来自同一份 [`resources/design-tokens.json`](
 SDK 也提供相同 CSS 的导出，供独立浏览器预览使用，不要求前端框架。生产页不必重复导入：
 
 ```js
-import '@anywhere/plugin-sdk/styles/controls.css';
+import '@anywhere/sdk/styles/controls.css';
 ```
 
 ```html
-<main class="aw-ui">
+<main class="aw-tool">
   <nav class="aw-toolbar">
     <div class="aw-actions">
       <button class="aw-button--primary">Run</button>
@@ -151,11 +175,24 @@ import '@anywhere/plugin-sdk/styles/controls.css';
 </main>
 ```
 
+生产插件的普通 HTML 默认继承主题，不需要导入样式，也不需要 `aw-ui` 包装。`button`、`input`、`select`、`textarea`、标题、链接、`hr` 和 `pre` / `code` 已有默认样式。页面 CSS 只负责布局或确实需要的局部例外。
+
 按钮、输入框、下拉框、键帽、卡片、焦点 / 悬停 / 禁用状态均使用 Host 的 `--aw-*` 参数。JSON Workspace 和无框架 Text Pad 都使用这份 CSS；各自 CSS 只处理工具布局。公共卡片内的编辑器自动继承单层表面，无需业务 CSS 再写透明背景。支持时页面保持透明，玻璃由原生窗口提供，不添加第二层模糊；不支持时使用同一套深色回退。
 
-编辑 / 查询工具可直接使用 `aw-workspace` → `aw-workspace-toolbar` / `aw-workspace-panes`，以及 `aw-pane`、`aw-pane-header`、`aw-pane-body`、`aw-editor`、`aw-pane-footer`。这些类提供与 File Search 一致的轻量工具栏、左宽右窄分栏、分隔线、代码字体 / 背景及留白；`aw-tabs` / `aw-tab` 的选中状态用 `aria-pressed` 表达。标题、返回、Esc 和宿主 Actions 仍由 Host 负责，不在插件里再绘制。
+编辑 / 查询工具可直接使用 `aw-workspace` → `aw-workspace-toolbar` / `aw-workspace-panes`，以及 `aw-pane`、`aw-pane-header`、`aw-pane-body`、`aw-editor`。这些类提供与 File Search 一致的轻量工具栏、左宽右窄分栏、分隔线、代码字体 / 背景及留白；`aw-tabs` / `aw-tab` 的选中状态用 `aria-pressed` 表达。标题、返回、Esc 和宿主 Actions 仍由 Host 负责，工具选项在页头，不在插件里再绘制。工作区不设固定页脚；主要操作放在工具栏或对应编辑区标题，反馈就近显示。
 
 `styles/tokens.css` 仅供独立浏览器预览使用，生产插件不要复制固定颜色覆盖 Host。插件仍可以自定义局部组件 CSS；根画布由 Host 统一管理，局部控件仍不要求第三方页面像素级一致。
+
+固定前缀输入使用共享组合控件，无需另外编写边框、字体或焦点样式：
+
+```html
+<div class="aw-input-group">
+  <span class="aw-input-prefix aw-code">this</span>
+  <input class="aw-code" aria-label="Expression" placeholder=".users.length">
+</div>
+```
+
+无效输入在组合容器上设置 `data-invalid="true"`，普通 UI 文字不加 `aw-code`；代码内容才使用等宽字体。类名只决定呈现，输入处理由插件业务负责。
 
 常用图标无需导入库或编写 SVG：
 

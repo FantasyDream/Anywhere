@@ -22,19 +22,13 @@ Color clipboardKindTint(String kind) => switch (kind) {
       'binary' => DesignTokens.iconNeutral,
       _ => DesignTokens.iconNeutral,
     };
-String clipboardKindLabel(String kind, [AppLocalizations? l10n]) =>
-    switch (kind) {
-      'image' => l10n?.image ?? 'Image',
-      'files' => l10n?.files ?? 'Files',
-      'rich_text' => l10n?.richText ?? 'Rich text',
-      'binary' => l10n?.data ?? 'Data',
-      _ => l10n?.text ?? 'Text',
+String clipboardKindLabel(String kind, AppLocalizations l10n) => switch (kind) {
+      'image' => l10n.image,
+      'files' => l10n.files,
+      'rich_text' => l10n.richText,
+      'binary' => l10n.data,
+      _ => l10n.text,
     };
-String clipboardDataSize(int bytes) => bytes >= 1024 * 1024
-    ? '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB'
-    : bytes >= 1024
-        ? '${(bytes / 1024).toStringAsFixed(1)} KB'
-        : '$bytes B';
 String clipboardCopyDate(BuildContext context, int milliseconds,
     {bool compact = false}) {
   final date = DateTime.fromMillisecondsSinceEpoch(milliseconds);
@@ -43,6 +37,3 @@ String clipboardCopyDate(BuildContext context, int milliseconds,
   if (compact && DateUtils.isSameDay(date, DateTime.now())) return time;
   return '${localizations.formatShortDate(date)} · $time';
 }
-
-String clipboardFileName(String path) =>
-    path.substring(path.lastIndexOf(RegExp(r'[/\\]')) + 1);

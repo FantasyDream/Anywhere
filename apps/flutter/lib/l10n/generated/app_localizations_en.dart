@@ -246,7 +246,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get changesNotSaved => 'Some changes were not saved';
 
   @override
-  String get searchDrafts => 'Search settings have unapplied changes.';
+  String get settingsDrafts => 'Some settings have unsaved changes.';
 
   @override
   String get settingsSaveFailed => 'Settings could not be saved. Try again.';
@@ -734,12 +734,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get previewUnavailable => 'Preview unavailable';
 
   @override
-  String get loadingPreview => 'Loading preview…';
-
-  @override
-  String get selectEntryToPreview => 'Select an entry to preview';
-
-  @override
   String get noMatchingEntries => 'No matching entries';
 
   @override
@@ -750,15 +744,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get manageRecordingInSettingsClipboard => 'Manage recording in Settings → Clipboard.';
-
-  @override
-  String get imagePreviewUnavailable => 'Image preview unavailable';
-
-  @override
-  String get previewUnavailableTheOriginalImageCanStill => 'Preview unavailable. The original image can still be copied.';
-
-  @override
-  String get previewIsNotAvailableForThisFormat => 'Preview is not available for this format. Copy restores its saved data.';
 
   @override
   String get theWindowCouldNotBeClosedUse => 'The window could not be closed. Use the window close button.';
@@ -809,12 +794,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cancelEscapeSelected => '✓ Cancel · Esc';
 
   @override
-  String get allowOnce => '✓ Allow once';
-
-  @override
-  String get allowOnceAction => 'Allow once';
-
-  @override
   String get webToolsAreUnavailableOnThisPlatform => 'Web tools are unavailable on this platform.';
 
   @override
@@ -824,7 +803,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get noHostPermissions => 'No Host permissions.';
 
   @override
-  String get codeRunsInALocalWebViewNetwork => 'Code runs in a local WebView. Network access and navigation are blocked. This is not an OS process sandbox.';
+  String get pluginExecutionBoundary => 'Plugins process data locally and can call only approved host capabilities. Arbitrary filesystem and network access are unavailable. These restrictions are not OS process isolation.';
 
   @override
   String get thisReplacesTheInstalledCodeClosesIts => 'This replaces the installed code, closes its active page, and keeps its local settings. A previously approved version can be restored.';
@@ -873,12 +852,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get theToolStoppedReloadItOrReturn => 'The tool stopped. Reload it or return to search.';
-
-  @override
-  String get allowThisOperation => 'Allow this operation?';
-
-  @override
-  String get thisTool => 'This tool';
 
   @override
   String get dismissMessage => 'Dismiss message';
@@ -1238,11 +1211,6 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String clipboardConsent(String tool) {
-    return '$tool is requesting a clipboard operation. Approval applies once.';
-  }
-
-  @override
   String get quitAnywhere => 'Quit Anywhere';
 
   @override
@@ -1315,19 +1283,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get inspectTrustedPackage => 'Choose a trusted .awplugin package to inspect before installing.';
 
   @override
-  String get readClipboardText => 'Read clipboard text';
-
-  @override
-  String get copyTextToClipboard => 'Copy text to clipboard';
-
-  @override
   String get permissionCurrentApp => 'Current application name';
 
   @override
-  String get permissionReadClipboard => 'Read clipboard text (confirmed per operation)';
+  String get permissionReadClipboard => 'Read clipboard text';
 
   @override
-  String get permissionWriteClipboard => 'Copy text (confirmed per operation)';
+  String get permissionWriteClipboard => 'Write clipboard text';
 
   @override
   String get permissionLocalStorage => 'Private local settings (1 MiB)';
@@ -1493,11 +1455,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get hidePreview => 'Hide preview';
 
   @override
-  String shelfPreviewScrollHint(String shortcut) {
-    return '$shortcut Scroll preview';
-  }
-
-  @override
   String get details => 'Details';
 
   @override
@@ -1514,9 +1471,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get keyboardHelp => 'Keyboard shortcuts';
-
-  @override
-  String get fileInformation => 'File information';
 
   @override
   String get historyFeatureDisabled => 'Clipboard History is disabled in Features.';
@@ -1540,29 +1494,166 @@ class AppLocalizationsEn extends AppLocalizations {
   String get historyMonitoringUnavailable => 'Clipboard monitoring is unavailable on this platform.';
 
   @override
-  String get filePreviewChanged => 'Preview unavailable. Search again if the file has changed.';
-
-  @override
-  String get filePreviewUnsupported => 'Text preview is unavailable for this file type';
-
-  @override
-  String filePreviewTruncated(String size) {
-    return 'Showing the first $size';
-  }
-
-  @override
-  String filePreviewEncodingGuessed(String encoding) {
-    return 'Encoding guessed as $encoding';
-  }
-
-  @override
-  String filePreviewDecoded(String encoding) {
-    return 'Decoded as $encoding';
-  }
-
-  @override
   String get shelfReturnFailed => 'Copied. Could not return to the app. Switch to it to paste.';
 
   @override
   String get shelfReturnUnavailable => 'Copied. The destination app is no longer available. Switch to an app to paste.';
+
+  @override
+  String get historyRecordingPaused => 'History recording is paused. Existing history is still available.';
+
+  @override
+  String get pauseHistoryRecording => 'Pause without clearing saved history';
+
+  @override
+  String historyPausedUntil(String time) {
+    return 'Paused until $time';
+  }
+
+  @override
+  String get resumeRecording => 'Resume';
+
+  @override
+  String get pauseFor => 'Pause…';
+
+  @override
+  String pauseMinutes(int minutes) {
+    return '$minutes minutes';
+  }
+
+  @override
+  String get keepHistoryFor => 'Keep history for';
+
+  @override
+  String get untilStorageLimit => 'Until storage limit';
+
+  @override
+  String retentionDays(int days) {
+    String _temp0 = intl.Intl.pluralLogic(
+      days,
+      locale: localeName,
+      other: '$days days',
+      one: '1 day',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get changeHistoryRetention => 'Change history retention?';
+
+  @override
+  String get historyRetentionWarning => 'Entries older than the selected period will be permanently deleted now. Extending the period later cannot restore them.';
+
+  @override
+  String historyStorageUsage(int count, String mib) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count entries',
+      one: '1 entry',
+    );
+    return '$_temp0 · $mib MiB stored';
+  }
+
+  @override
+  String get historyStorageExplanation => 'Stored only on this Mac, without encryption. Up to 1,000 entries / 128 MiB of logical data; database file size may differ. Expiry deletes all saved formats, not the system clipboard or original files.';
+
+  @override
+  String get appHistory => 'App History';
+
+  @override
+  String get appHistorySearch => 'Search recent projects and files…';
+
+  @override
+  String get appHistoryFilterSources => 'Filter apps…';
+
+  @override
+  String get appHistoryAllSources => 'All sources';
+
+  @override
+  String get appHistoryShowAllSources => 'Clear filters and show all sources';
+
+  @override
+  String get appHistoryRevertPath => 'Revert edits';
+
+  @override
+  String get appHistoryUnsavedPath => 'Unsaved path';
+
+  @override
+  String get appHistorySources => 'History sources';
+
+  @override
+  String get appHistorySourceDescription => 'Actions default to on for installed apps and off for apps not found. Your switches take priority. History is read only when you use its action.';
+
+  @override
+  String get appHistorySourcePath => 'History metadata file path';
+
+  @override
+  String get appHistoryUnconfigured => 'No history file is available. Check automatic detection or set a custom path in Settings → App History.';
+
+  @override
+  String get appHistoryReadFailed => 'Some sources could not be read. Check their files in Settings → App History.';
+
+  @override
+  String get appHistoryBusy => 'A previous history operation is finishing. Refresh to try again.';
+
+  @override
+  String get appHistoryExpired => 'This history page has expired. Go back and reopen the action.';
+
+  @override
+  String get appHistoryDisabled => 'App History is disabled. Enable it in Settings → Features.';
+
+  @override
+  String get appHistoryOperationFailed => 'The history operation could not be completed. Refresh the list and try again.';
+
+  @override
+  String get appHistorySettingsFailed => 'History sources could not be loaded or saved. Check the file path and try again.';
+
+  @override
+  String get appHistoryCopyTarget => 'Copy path or URI';
+
+  @override
+  String get appHistoryAutomatic => 'Using an automatically detected file';
+
+  @override
+  String get appHistoryCustom => 'Using your custom file path';
+
+  @override
+  String get appHistorySourceOff => 'Source turned off';
+
+  @override
+  String get appHistoryNotDetected => 'No file found automatically. You can set a custom path.';
+
+  @override
+  String get appHistoryUseAutomatic => 'Use automatic detection';
+
+  @override
+  String get appHistoryDetectAgain => 'Detect again';
+
+  @override
+  String get appHistorySaveCustom => 'Save custom path';
+
+  @override
+  String get appHistoryActionEnabled => 'Show action';
+
+  @override
+  String get appHistoryCustomAdapters => 'Custom adapters';
+
+  @override
+  String get appHistoryCustomAdaptersHelp => 'Place source.json and transform.js in a subfolder here, then restart Anywhere. Matching IDs override built-ins. Import only trusted local configuration; transforms run when you use their action.';
+
+  @override
+  String get appHistoryOpenAdapters => 'Open adapters folder';
+
+  @override
+  String get permissionInputRead => 'Read Launcher search text';
+
+  @override
+  String get permissionInputWrite => 'Change Launcher search text';
+
+  @override
+  String get permissionFrontmostApp => 'Read the currently active application';
+
+  @override
+  String get webPackageDamaged => 'Package files are unavailable or damaged. Restore an approved version or uninstall and import again.';
 }

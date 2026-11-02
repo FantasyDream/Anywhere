@@ -5,13 +5,8 @@ import WebKit
 /// Flutter's accessibility editor or change the ordinary native-tool edit path.
 enum NativeWebEditing {
   static func focus(in window: NSWindow, content: NSView) {
-    if let web = content as? WKWebView {
-      window.makeFirstResponder(web)
-      return
-    }
-    for child in content.subviews {
-      focus(in: window, content: child)
-    }
+    guard let web = NativeWebView.unique(in: content), web.window === window else { return }
+    window.makeFirstResponder(web)
   }
   static func perform(_ command: String, in window: NSWindow) -> Bool {
     guard var view = window.firstResponder as? NSView else { return false }

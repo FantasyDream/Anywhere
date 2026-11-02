@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "id": "phpstorm",
+  "extends": "idea",
+  "title": "PhpStorm",
+  "applications": [
+    "com.jetbrains.PhpStorm",
+    "com.jetbrains.PhpStorm-EAP"
+  ],
+  "config_paths": [
+    "JetBrains/PhpStorm*/options/recentProjects.xml"
+  ],
+  "action": {
+    "title": "PhpStorm Recent Projects",
+    "localized_titles": {
+      "zh": "PhpStorm 最近项目"
+    },
+    "aliases": [
+      "phpstorm recent",
+      "recent projects",
+      "recent history",
+      "最近项目",
+      "历史记录",
+      "app history",
+      "应用历史"
+    ]
+  }
+}

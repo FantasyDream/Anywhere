@@ -19,6 +19,15 @@ use std::{
 };
 use zip::{write::SimpleFileOptions, ZipWriter};
 
+#[test]
+fn storage_namespace_preserves_existing_keys_after_digest_upgrade() {
+    assert_eq!(
+        storage_namespace("example.plugin", "example.resolver"),
+        "web.c04bdad9625b0272b5b9a40cb17db1a36d460849b88ae0d5b31245cd4d6e1277"
+    );
+    assert_ne!(storage_namespace("ab", "c"), storage_namespace("a", "bc"));
+}
+
 pub(super) fn package(
     permissions: serde_json::Value,
     accepts: serde_json::Value,
@@ -172,7 +181,6 @@ fn normal_search_never_exports_keywords_or_unmatched_text_fallbacks() {
     let global = offers(&registry, "scratchpad", &[raw], None);
     assert_eq!(global.len(), 1);
     assert_eq!(global[0].context().unwrap().type_id, ENTRY_CONTEXT);
-    assert!(!global[0].presentation.home_eligible);
     assert_eq!(
         registry
             .persistent_binding("web:dev.example.tool:open")
@@ -386,7 +394,6 @@ fn source_replacement_and_registration_collision_fail_without_partial_publicatio
         keywords: vec![],
         owning_app: None,
         menu_path: vec![],
-        home_eligible: false,
         primary_action: false,
         search_title: None,
     };
@@ -516,9 +523,11 @@ fn current_app_aggregates_context_commands_and_global_tools_do_not_create_scopes
     assert_eq!(results.candidates.len(), 1);
     assert_eq!(results.candidates[0].context().unwrap().type_id, DIRECTORY);
     assert!(offers(&registry, "", &[], None).is_empty());
-    let shortcuts = crate::features::tools::EntrySource { search: &search }.binding_offers();
+    let entry = crate::features::tools::EntrySource { search: &search };
+    let shortcuts = entry.binding_offers(&[]);
     assert_eq!(shortcuts.len(), 1);
     assert_eq!(shortcuts[0].context().unwrap().type_id, ENTRY_CONTEXT);
+    assert!(entry.binding_offers(&results.candidates).is_empty());
 }
 
 #[tokio::test]
@@ -584,12 +593,9 @@ pub(super) async fn rpc_value(
 ) -> serde_json::Value {
     let frame =
         serde_json::json!({"protocol":1,"requestId":id,"method":method,"params":{}}).to_string();
-    let WebDispatch::Reply(reply) = app
+    let reply = app
         .dispatch_web_message(binding, source(binding), &frame)
-        .await
-    else {
-        panic!("unexpected confirmation");
-    };
+        .await;
     let result: serde_json::Value = serde_json::from_str(&reply).unwrap();
     assert!(result.get("error").is_none(), "{result}");
     result["result"]["value"].clone()

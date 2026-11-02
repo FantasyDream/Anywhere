@@ -10,7 +10,26 @@ final class SettingsStore {
     current = StoredSettings.load(from: fileURL)
   }
   func save() -> String? { current.save(to: fileURL) }
+  /// Explicit local acceptance runs must never fall back to personal data.
+  static func isolatedDirectory(_ path: String) throws -> URL {
+    let url = URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
+    guard path.hasPrefix("/"), !path.split(separator: "/").contains(".."),
+      url.resolvingSymlinksInPath().path != "/"
+    else {
+      throw NSError(domain: "Anywhere.Runtime", code: 1)
+    }
+    return url
+  }
   static func supportDirectory() -> URL {
+    if let override = ProcessInfo.processInfo.environment["ANYWHERE_DATA_DIRECTORY"] {
+      do {
+        let directory = try isolatedDirectory(override)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        return directory
+      } catch {
+        fatalError("Cannot prepare the explicitly requested Anywhere data directory.")
+      }
+    }
     let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
     let current = base.appendingPathComponent("Anywhere", isDirectory: true)
     if !FileManager.default.fileExists(atPath: current.path) {
@@ -56,7 +75,7 @@ struct StoredSettings: Codable {
       currentAppKeyCode: UInt32(kVK_Space),
       currentAppModifiers: UInt32(cmdKey | optionKey),
       universalKeyCode: UInt32(kVK_Space),
-      universalModifiers: UInt32(cmdKey | optionKey | shiftKey),
+      universalModifiers: UInt32(cmdKey),
       launchAtLogin: false,
       excludedApps: [],
       captureFinderSelection: nil,

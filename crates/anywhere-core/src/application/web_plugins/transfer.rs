@@ -41,7 +41,7 @@ pub(super) fn failure(id: Option<&str>, error: WebError) -> String {
 impl RpcState {
     pub fn begin_text(&mut self, bytes: usize) -> WebResult<Value> {
         self.prune();
-        if self.transfer.is_some() || self.confirmation.is_some() {
+        if self.transfer.is_some() {
             return Err(WebError::new(WebErrorCode::Busy));
         }
         if bytes > MAX_TEXT_BYTES {
@@ -138,7 +138,7 @@ impl RpcState {
             ));
         }
         self.prune();
-        if self.transfer.is_some() || self.confirmation.is_some() {
+        if self.transfer.is_some() {
             return Err(WebError::new(WebErrorCode::Busy));
         }
         let id = super::token().map_err(|_| WebError::new(WebErrorCode::HostFailure))?;

@@ -1,0 +1,84 @@
+{
+  "date": "2026-10-26",
+  "version": "0.14.0+15",
+  "source_base_commit": "fd1e70d5be100c899394bf01906bb1bfd9bf6f5f",
+  "working_tree_changes": true,
+  "policy": {
+    "empty_action_order": [
+      "exact execute_count descending",
+      "last_executed_at descending when count > 0",
+      "existing context/default-priority score descending",
+      "stable business id and candidate id"
+    ],
+    "usage_key": "captured source app + stable action id + context type; unchanged",
+    "home": "same order as action scopes, visible prefix only: 5 with Browse Menus, otherwise 7",
+    "manual_home_whitelist": false,
+    "extra_home_bonus": false,
+    "query_search": "text relevance still wins; query usage terms remain bounded",
+    "menu_usage": "persistent reads and writes remain quarantined for unverified menu identities"
+  },
+  "implementation": [
+    "Core caches existing usage stats on the in-memory Candidate; no new per-query database calls",
+    "Removed home_eligible/homeEligible from actions, protocol, Bridge and Flutter; regenerated FRB bindings",
+    "No change to file-search prefix stability, application history list ordering or menu tree navigation",
+    "Cold menu defaults include exact English/Chinese Cut and Select All without matching Execute or Shortcut Settings substrings"
+  ],
+  "automated": {
+    "full_gate": "scripts/check.sh",
+    "exit_code": 0,
+    "log": "build/v0.14-ranking15-check.log",
+    "core": {
+      "passed": 305,
+      "ignored_existing": 1
+    },
+    "mvp": {
+      "passed": 195,
+      "ignored_existing": 4
+    },
+    "flutter_passed": 428,
+    "native_web_architecture_style_generated_checks": "passed",
+    "extra_test_refinement": {
+      "purpose": "Same count: newer lower-default-priority Git Log must beat older higher-default-priority Git Status",
+      "exit_code": 0,
+      "log": "build/v0.14-ranking15-recency-regression.log",
+      "production_changed_after_full_gate": false
+    }
+  },
+  "regressions": [
+    "Counts above the old 20-use cap and f32 exact range remain distinct",
+    "Frequency beats recency, and recency beats default priority when counts tie",
+    "Current App and Git preserve relative order",
+    "Cold start uses stable context/default priorities",
+    "Keywords still outrank frequency",
+    "Flutter takes the ranked prefix without re-sorting by score or excluding run targets",
+    "Cold English/Chinese menu lists prefer available basic edit commands over settings and Execute All",
+    "Existing menu identity/legacy-usage quarantine and blocked-clipboard usage publication still pass"
+  ],
+  "native": {
+    "build14_started": true,
+    "build14_cold_observation": "AX showed a low-frequency settings item ahead of Cut, prompting the final default adjustment",
+    "build14_exited": true,
+    "build15_started": true,
+    "only_final_build_process_confirmed": true,
+    "build15_launcher_candidates_visible": true,
+    "source_application": "Feishu",
+    "private_menu_titles_in_record": false,
+    "external_app_actions_executed": false,
+    "git_scope_frequency_comparison_verified_natively": false,
+    "cold_default_limit": "Basic edit command availability changed with captured focus; exact final cold-default behavior is covered by synthetic real-session integration tests"
+  },
+  "package": {
+    "app": "build/Anywhere-0.14-preview-build15.app",
+    "zip": "build/Anywhere-0.14-preview-build15-macos-arm64.zip",
+    "sha256": "f6d00ab0c5ebd7b0cef9b1ba2dec483cd0d5cdcd44467d6d52728fdc17f9ece0",
+    "persistent_signature_and_archive_checks": "passed",
+    "impeller": true,
+    "release_published": false
+  },
+  "memory": "No RSS sampling or claim of measured memory savings",
+  "git": {
+    "branch": "codex/dev-0.14",
+    "committed": false,
+    "next_branch_created": false
+  }
+}

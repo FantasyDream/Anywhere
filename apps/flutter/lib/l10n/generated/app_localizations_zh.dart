@@ -246,7 +246,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get changesNotSaved => '部分修改尚未保存';
 
   @override
-  String get searchDrafts => '搜索设置存在尚未应用的修改。';
+  String get settingsDrafts => '部分设置存在尚未保存的修改。';
 
   @override
   String get settingsSaveFailed => '设置保存失败，请重试。';
@@ -734,12 +734,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get previewUnavailable => '无法预览';
 
   @override
-  String get loadingPreview => '正在加载预览…';
-
-  @override
-  String get selectEntryToPreview => '选择一条记录以查看预览';
-
-  @override
   String get noMatchingEntries => '没有匹配的记录';
 
   @override
@@ -750,15 +744,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get manageRecordingInSettingsClipboard => '在“设置 → 剪贴板”中管理记录。';
-
-  @override
-  String get imagePreviewUnavailable => '无法预览图片';
-
-  @override
-  String get previewUnavailableTheOriginalImageCanStill => '无法预览，仍可复制原始图片。';
-
-  @override
-  String get previewIsNotAvailableForThisFormat => '此格式暂不支持预览。复制时会恢复已保存的数据。';
 
   @override
   String get theWindowCouldNotBeClosedUse => '无法关闭窗口，请使用窗口关闭按钮。';
@@ -809,12 +794,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get cancelEscapeSelected => '✓ 取消 · Esc';
 
   @override
-  String get allowOnce => '✓ 允许一次';
-
-  @override
-  String get allowOnceAction => '允许一次';
-
-  @override
   String get webToolsAreUnavailableOnThisPlatform => '此平台暂不支持 Web 工具。';
 
   @override
@@ -824,7 +803,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get noHostPermissions => '未请求宿主权限。';
 
   @override
-  String get codeRunsInALocalWebViewNetwork => '代码在本地 WebView 中运行，禁止联网和页面跳转。此限制不等同于操作系统级进程沙箱。';
+  String get pluginExecutionBoundary => '插件在本机处理数据，只能调用已批准的宿主能力，不提供任意文件或网络访问。这些限制不等同于操作系统级进程隔离。';
 
   @override
   String get thisReplacesTheInstalledCodeClosesIts => '这将替换已安装的代码并关闭其当前页面，保留本地设置。之后可恢复到曾经批准的版本。';
@@ -873,12 +852,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get theToolStoppedReloadItOrReturn => '工具已停止，请重新加载或返回搜索。';
-
-  @override
-  String get allowThisOperation => '允许此操作？';
-
-  @override
-  String get thisTool => '此工具';
 
   @override
   String get dismissMessage => '关闭提示';
@@ -1220,11 +1193,6 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String clipboardConsent(String tool) {
-    return '$tool请求执行剪贴板操作。授权仅对本次操作有效。';
-  }
-
-  @override
   String get quitAnywhere => '退出 Anywhere';
 
   @override
@@ -1297,19 +1265,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get inspectTrustedPackage => '请选择可信的 .awplugin 包，在安装前检查其内容。';
 
   @override
-  String get readClipboardText => '读取剪贴板文本';
-
-  @override
-  String get copyTextToClipboard => '将文本复制到剪贴板';
-
-  @override
   String get permissionCurrentApp => '当前应用名称';
 
   @override
-  String get permissionReadClipboard => '读取剪贴板文本（每次操作均需确认）';
+  String get permissionReadClipboard => '读取剪贴板文本';
 
   @override
-  String get permissionWriteClipboard => '复制文本（每次操作均需确认）';
+  String get permissionWriteClipboard => '写入剪贴板文本';
 
   @override
   String get permissionLocalStorage => '独立本地设置（1 MiB）';
@@ -1469,11 +1431,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get hidePreview => '收起预览';
 
   @override
-  String shelfPreviewScrollHint(String shortcut) {
-    return '$shortcut 滚动预览';
-  }
-
-  @override
   String get details => '详细信息';
 
   @override
@@ -1490,9 +1447,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get keyboardHelp => '键盘操作';
-
-  @override
-  String get fileInformation => '文件信息';
 
   @override
   String get historyFeatureDisabled => '剪贴板历史已在内置功能中禁用。';
@@ -1516,29 +1470,154 @@ class AppLocalizationsZh extends AppLocalizations {
   String get historyMonitoringUnavailable => '当前平台不支持剪贴板监控。';
 
   @override
-  String get filePreviewChanged => '无法预览。如果文件已发生变化，请重新搜索。';
-
-  @override
-  String get filePreviewUnsupported => '此文件类型不支持文本预览';
-
-  @override
-  String filePreviewTruncated(String size) {
-    return '仅显示前 $size';
-  }
-
-  @override
-  String filePreviewEncodingGuessed(String encoding) {
-    return '推测编码为 $encoding';
-  }
-
-  @override
-  String filePreviewDecoded(String encoding) {
-    return '以 $encoding 解码';
-  }
-
-  @override
   String get shelfReturnFailed => '已复制，但未能返回目标应用。请切换到该应用后粘贴。';
 
   @override
   String get shelfReturnUnavailable => '已复制，原目标应用已不可用。请切换到需要的应用后粘贴。';
+
+  @override
+  String get historyRecordingPaused => '历史记录已暂停采集，已有历史仍可使用。';
+
+  @override
+  String get pauseHistoryRecording => '暂时停止采集，保留已有历史';
+
+  @override
+  String historyPausedUntil(String time) {
+    return '暂停至 $time';
+  }
+
+  @override
+  String get resumeRecording => '恢复记录';
+
+  @override
+  String get pauseFor => '暂停…';
+
+  @override
+  String pauseMinutes(int minutes) {
+    return '$minutes 分钟';
+  }
+
+  @override
+  String get keepHistoryFor => '历史保留时间';
+
+  @override
+  String get untilStorageLimit => '直到达到容量上限';
+
+  @override
+  String retentionDays(int days) {
+    return '$days 天';
+  }
+
+  @override
+  String get changeHistoryRetention => '更改历史保留时间？';
+
+  @override
+  String get historyRetentionWarning => '超过所选期限的历史将立即永久删除。之后延长保留时间也无法恢复。';
+
+  @override
+  String historyStorageUsage(int count, String mib) {
+    return '已保存 $count 条 · $mib MiB';
+  }
+
+  @override
+  String get historyStorageExplanation => '仅保存在本机，未加密。最多 1,000 条 / 128 MiB 逻辑数据，数据库文件大小可能不同。过期会删除全部已存格式，不影响系统剪贴板和原始文件。';
+
+  @override
+  String get appHistory => '应用历史';
+
+  @override
+  String get appHistorySearch => '搜索最近项目和文件…';
+
+  @override
+  String get appHistoryFilterSources => '筛选应用…';
+
+  @override
+  String get appHistoryAllSources => '全部来源';
+
+  @override
+  String get appHistoryShowAllSources => '清除筛选并显示全部来源';
+
+  @override
+  String get appHistoryRevertPath => '还原编辑';
+
+  @override
+  String get appHistoryUnsavedPath => '路径未保存';
+
+  @override
+  String get appHistorySources => '历史来源';
+
+  @override
+  String get appHistorySourceDescription => '默认仅开启已安装应用的 Action，手动开关优先。可自定义历史文件路径，使用对应 Action 时才读取历史内容。';
+
+  @override
+  String get appHistorySourcePath => '历史元数据文件路径';
+
+  @override
+  String get appHistoryUnconfigured => '暂无可用的历史文件，请在「设置 → 应用历史」中重新检测或指定自定义路径。';
+
+  @override
+  String get appHistoryReadFailed => '部分来源暂时无法读取，请在「设置 → 应用历史」中检查所选文件。';
+
+  @override
+  String get appHistoryBusy => '正在结束上一次历史操作，请稍后刷新重试。';
+
+  @override
+  String get appHistoryExpired => '此历史页面已过期，请返回并重新打开相应操作。';
+
+  @override
+  String get appHistoryDisabled => '应用历史已停用，可在「设置 → 功能」中启用。';
+
+  @override
+  String get appHistoryOperationFailed => '历史操作未完成，请刷新列表后重试。';
+
+  @override
+  String get appHistorySettingsFailed => '无法读取或保存历史来源，请检查文件路径后重试。';
+
+  @override
+  String get appHistoryCopyTarget => '复制路径或 URI';
+
+  @override
+  String get appHistoryAutomatic => '正在使用自动检测的文件';
+
+  @override
+  String get appHistoryCustom => '正在使用自定义路径';
+
+  @override
+  String get appHistorySourceOff => '来源已关闭';
+
+  @override
+  String get appHistoryNotDetected => '未自动找到文件，可填写自定义路径。';
+
+  @override
+  String get appHistoryUseAutomatic => '使用自动检测';
+
+  @override
+  String get appHistoryDetectAgain => '重新检测';
+
+  @override
+  String get appHistorySaveCustom => '保存自定义路径';
+
+  @override
+  String get appHistoryActionEnabled => '显示 Action';
+
+  @override
+  String get appHistoryCustomAdapters => '自定义适配';
+
+  @override
+  String get appHistoryCustomAdaptersHelp => '在下列目录的子文件夹中放入 source.json 和 transform.js，重启后生效。同 ID 配置覆盖内置适配。请只放入可信的本机配置；使用对应 Action 时才运行转换。';
+
+  @override
+  String get appHistoryOpenAdapters => '打开适配目录';
+
+  @override
+  String get permissionInputRead => '读取启动器搜索内容';
+
+  @override
+  String get permissionInputWrite => '修改启动器搜索内容';
+
+  @override
+  String get permissionFrontmostApp => '读取实时前台应用';
+
+  @override
+  String get webPackageDamaged => '插件文件缺失或损坏。请恢复已批准版本，或卸载后重新导入。';
 }

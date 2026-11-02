@@ -10,6 +10,7 @@ pub struct RunTarget {
     pub package: String,
     pub binary: String,
     pub manifest: PathBuf,
+    pub required_features: Vec<String>,
 }
 impl RunTarget {
     pub fn key(&self) -> String {
@@ -83,7 +84,7 @@ pub fn targets(root: &Path) -> Result<Vec<RunTarget>> {
             .get("name")
             .and_then(toml::Value::as_str)
             .context("Cargo package name is required")?;
-        let mut bins = BTreeSet::new();
+        let mut bins = BTreeMap::new();
         let mut declared_names = BTreeSet::new();
         let mut declared_paths = BTreeSet::new();
         for bin in manifest
@@ -111,7 +112,14 @@ pub fn targets(root: &Path) -> Result<Vec<RunTarget>> {
                 if let Ok(path) = path.canonicalize() {
                     if path.is_file() {
                         declared_paths.insert(path);
-                        bins.insert(name.to_owned());
+                        let required_features: Vec<String> = bin
+                            .get("required-features")
+                            .cloned()
+                            .map(toml::Value::try_into)
+                            .transpose()
+                            .context("Cargo bin required-features must be a list of strings")?
+                            .unwrap_or_default();
+                        bins.insert(name.to_owned(), required_features);
                     }
                 }
             }
@@ -124,7 +132,7 @@ pub fn targets(root: &Path) -> Result<Vec<RunTarget>> {
                     .canonicalize()
                     .is_ok_and(|p| declared_paths.contains(&p))
             {
-                bins.insert(name.to_owned());
+                bins.insert(name.to_owned(), Vec::new());
             }
             if let Ok(entries) = std::fs::read_dir(directory.join("src/bin")) {
                 for (index, entry) in entries.take(129).enumerate() {
@@ -151,20 +159,23 @@ pub fn targets(root: &Path) -> Result<Vec<RunTarget>> {
                                 .canonicalize()
                                 .is_ok_and(|p| declared_paths.contains(&p))
                         {
-                            bins.insert(target.to_owned());
+                            bins.insert(target.to_owned(), Vec::new());
                         }
                     }
                 }
             }
         }
-        for binary in bins {
-            if name.is_empty() || binary.is_empty() || name.len() > 200 || binary.len() > 200 {
+        for (binary, required_features) in bins {
+            if [name, binary.as_str()].iter().any(|value| {
+                value.is_empty() || value.len() > 200 || value.chars().any(char::is_control)
+            }) {
                 bail!("invalid Cargo target name");
             }
             let target = RunTarget {
                 package: name.into(),
                 binary,
                 manifest: directory.join("Cargo.toml"),
+                required_features,
             };
             if result.insert(target.key(), target).is_some() {
                 bail!("duplicate Cargo package/binary identity");
@@ -198,6 +209,8 @@ mod tests {
             .map(|t| t.binary)
             .collect();
         assert_eq!(found, BTreeSet::from(["renamed".into(), "other".into()]));
+        std::fs::write(root.join("Cargo.toml"), "[package]\nname='sample'\nversion='0.1.0'\n[[bin]]\nname=\"bad\\nname\"\npath='src/main.rs'\n").unwrap();
+        assert!(targets(&root).is_err());
     }
     #[test]
     fn workspace_targets_include_explicit_and_inferred_bins_and_respect_excludes() {

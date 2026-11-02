@@ -6,6 +6,8 @@
 
 同日用户进一步明确：Recent Projects 扩大为跨应用的“应用历史与收藏”，包括浏览器历史 / 书签、IDEA / VS Code 最近项目、Obsidian 最近笔记等。已纳入 V0.14；这取代单独的 Recent Projects 新功能定义，不改变外部报告原文，设计与可行性见[专题](../application-history.md)。
 
+2026-10-25 排期修订：浏览器历史、书签与 Tab 管理移至[独立浏览器阶段](../browser-feature.md)，不再作为 V0.14 完成前置；以下保留原评审与当时取舍，不表示旧排期仍然有效。
+
 ## 1. R01–R10 的处理
 
 | 建议 | 判断 | 采纳方式 |
@@ -32,7 +34,7 @@
 | SQLite 删除保护 | [存储](../../crates/anywhere-core/src/persistence/clipboard.rs) 已开启 `secure_delete=ON` 和 DELETE journal | 仍须说明备份、系统快照、交换区等不在数据库删除承诺内；不能声称磁盘内容绝对不可恢复 |
 | 独立模板和两个插件示例 | [创建器](../../packages/plugin-sdk/tools/create.mjs)、[仓库外构建检查](../../scripts/check-plugin-starter.sh)、[JSON](../../plugins/examples/json-workspace/README.md) 和 [Text Pad](../../plugins/examples/web-text/README.md) 已存在 | 补陌生开发者试用、Mock 与诊断；不以更多示例数量代替易用性验证 |
 | Manifest / schema / 包校验 | [Manifest](../../crates/anywhere-plugin/src/web/manifest.rs)、[归档](../../crates/anywhere-plugin/src/web/archive.rs) 与生成 schema 已实现严格校验 | SDK 本地命令复用同一权威规则，改善报错；避免 TS / Python / Rust 各维护一份合法性规则 |
-| 对象二级 Action | [ObjectActionCoordinator](../../apps/flutter/lib/launcher/object_action_coordinator.dart) 与统一对象操作用例已存在 | 保留交互契约，改进可发现性，不再增加第三种导航 / Scope |
+| 对象二级 Action | [ObjectActionCoordinator](../../apps/flutter/lib/tools/object_action_coordinator.dart) 与统一对象操作用例已存在 | 保留交互契约，改进可发现性，不再增加第三种导航 / Scope |
 | Provider 开始 / 完成计时 | [ContextGraph](../../crates/anywhere-core/src/core/context/engine.rs) 已有阶段事件和耗时 | 增量是采集等待、桥接、首帧与可见结果的关联，不必重复埋点 |
 | PR 检查模板 | [现有模板](../../.github/PULL_REQUEST_TEMPLATE.md) 已要求模块、身份 / 存储 / 权限、检查和未验证项 | 按具体缺口微调，不再建立平行工作流 |
 

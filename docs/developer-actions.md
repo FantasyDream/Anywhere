@@ -44,13 +44,17 @@ Git 使用固定 argv、无 shell / pager / 外部 diff / textconv / fsmonitor�
 
 | 类型 | 识别与动作 |
 |---|---|
-| Rust | Cargo 项目标记；Check / Test；Run 按明确 package / binary 目标生成 |
+| Rust | Cargo 项目标记；Check / Test；Run 按明确 package / binary 目标生成，携带该 bin 声明的 required-features |
 | Maven | pom.xml；Test / Package，优先 mvnw |
 | Gradle | Gradle 标记；Build / Test，优先 gradlew |
 | Node | package.json 声明 scripts；按 packageManager / 锁文件选择 npm、pnpm、yarn |
 | Spring Boot | 项目明确声明插件能力时，提供对应 Maven / Gradle Run |
 
 Provider 只做标记与有界元数据读取，动态 Action 工厂基于已识别 Context 生成明确目标。执行重新检查目录、项目标记、工具和候选资格，不能把未知 shell 文本当作命令。
+
+清单入口完成字段和数量检查后，Node 包管理器保持为枚举。内部快照只携带动作生成所需的包管理器 / 脚本名或 package / binary 标识，不复制执行时会重新读取的路径与 feature 列表。通用 Context 的字符串属性仍需要编解码，但内部元数据解码只还原类型，不重复检查同一批脚本名、数量或能力标记；这份快照不持久化，不单独维护版本字段。
+
+Cargo Run 在执行时重新读取目标清单，将 `required-features` 解析为字符串列表，再以 `--features` 启用这些 feature，保留 Cargo 默认 feature 行为；未声明时使用原有运行参数。
 
 开发任务进入 ExecutionSessionManager。菜单栏 Running Tasks 查看状态、stdout / stderr、退出码、停止；关闭窗口或 Launcher 不停止已启动任务，退出应用会停止任务。当前只有进程会话，没有 PTY、交互式终端或应用重启后任务恢复。
 

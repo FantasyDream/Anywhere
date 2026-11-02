@@ -1,5 +1,5 @@
 //! Synthetic, isolated storage baseline. Never reads the user's clipboard or database.
-use anyhow::{ensure, Result};
+use anyhow::{ensure, Context, Result};
 use anywhere_core::{
     features::clipboard::{
         history::{HistoryRepository, MAX_ENTRIES},
@@ -14,11 +14,12 @@ fn main() -> Result<()> {
     let directory = tempfile::tempdir()?;
     let database = directory.path().join("history.sqlite3");
     let mut repository = SqliteHistoryRepository::open(&database)?;
+    let copied_at = anywhere_core::features::clipboard::policy::now_ms();
     let start = Instant::now();
     for index in 0..MAX_ENTRIES {
         repository.record(
             &format!("entry-{index:04} 中文 rust fixture {}", "x".repeat(7900)),
-            index as i64,
+            copied_at + index as i64,
         )?;
     }
     let insert_ms = start.elapsed().as_millis();
@@ -46,11 +47,36 @@ fn main() -> Result<()> {
         }));
     }
     let service = HistoryService::new(Ok(Box::new(repository)));
+    let mut previews = anywhere_core::features::preview::PreviewStore::default();
+    previews.configure(directory.path().join("previews"));
     let start = Instant::now();
     for _ in 0..100 {
-        ensure!(service.detail(selected)?.is_some());
+        let resource = service
+            .inspect_payload(selected, |item, payload| {
+                previews.clipboard(&payload, item.summary)
+            })?
+            .context("fixture disappeared")?;
+        previews.release(&resource.id);
     }
-    let detail_mean_us = start.elapsed().as_micros() / 100;
+    let prepare_preview_mean_us = start.elapsed().as_micros() / 100;
+    let mut policy_queries = Vec::new();
+    for days in [0, 7] {
+        service.set_retention_days(days)?;
+        for query in ["", "中文 rust", "entry-0999", "no-such-entry"] {
+            let mut samples = Vec::new();
+            let mut matches = 0;
+            for _ in 0..50 {
+                let start = Instant::now();
+                matches = service.search(query)?.len();
+                samples.push(start.elapsed().as_micros());
+            }
+            samples.sort_unstable();
+            policy_queries.push(json!({
+                "retention_days": days, "query": query, "matches": matches,
+                "samples": samples.len(), "p50_us": samples[25], "p95_us": samples[47],
+            }));
+        }
+    }
     drop(service);
     let reopened = SqliteHistoryRepository::open(&database)?;
     ensure!(reopened.search("")?.len() == MAX_ENTRIES);
@@ -60,7 +86,8 @@ fn main() -> Result<()> {
             "fixture": "1000 synthetic plain-text entries, approximately 8 KiB each",
             "rows": MAX_ENTRIES, "database_bytes": database.metadata()?.len(),
             "summary_utf8_bytes": summary_bytes, "insert_ms": insert_ms,
-            "detail_mean_us": detail_mean_us, "queries": results,
+            "prepare_preview_mean_us": prepare_preview_mean_us, "queries": results,
+            "service_policy_queries": policy_queries,
             "scope": "Rust repository queries and service previews; excludes Flutter, bridge and OS clipboard",
         }))?
     );

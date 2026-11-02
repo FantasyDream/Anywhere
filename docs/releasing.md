@@ -42,7 +42,25 @@ shasum -a 256 -c Anywhere-preview-macos-arm64.zip.sha256
 
 记录设备 / 系统、构建、使用的数据范围、真实输入与模拟输入，以及未验证项。只使用脱敏验收内容，先完成单元与构建再进行 UI；不要让 UI 自动化意外执行真实业务动作。
 
+V0.13 开发预览的已知 SDK 边界见 [收尾记录](mvp-v0.13.md#已知边界与后续发布验收)：专用窗口关闭仍可能出现输入组件 dead-channel 警告与 VSync 无效句柄消息；WebView 释放后 GPU helper 可能继续保留。升级 Flutter / WebView 或修改窗口生命周期后应复验循环关闭和 helper 归属，不以对象回到基线或主进程 RSS 代替完整资源检查。更长趋势、首次 / 部分权限、真实硬件输入与完整 VoiceOver 验收在正式发布前单独记录；本轮用户选择跳过旁白，不标记为通过。
+
 ## 4. GitHub 发布
+
+### 手动 GitHub 打包
+
+在 Actions 中手动运行 **macOS checks**，或执行：
+
+```bash
+gh workflow run macos.yml --ref main
+```
+
+PR / push 只执行检查；手动运行在完整检查通过后构建本机架构 App，上传包含 App 的 ZIP、SHA-256 和 `package-provenance.json` 到该次运行的 Artifact，保留 30 天。工作流固定该次运行的源码 SHA，不自动创建或替换 Release。首次验证工作流时可以通过 `--ref` 指定维护者的开发分支，产物元数据明确记录实际来源。
+
+仓库需配置 `ANYWHERE_CI_SIGNING_P12`（加密 PKCS#12 的 Base64）与 `ANYWHERE_CI_SIGNING_PASSWORD` 两项 Actions Secrets。使用独立的 **Anywhere CI Development** 自签开发证书，各次运行复用同一身份，在临时 keychain 中导入并最终清理；不导出或上传本机开发证书，不在 PR 运行中加载签名秘密。证书过期或轮换应显式处理，不在构建中自动创建新身份。
+
+CI 开发签名不等于 Developer ID / 公证。由本机签名包首次切换到 CI 签名包时，macOS 可能要求重新授予权限，之后同一 CI 签名身份继续复用。正式分发继续遵循下方的独立发布检查。
+
+### Release
 
 现存 `latest` 是 2026-09-18 的 V0.3 历史预览，其自动构建说明指向 `dev-0.3`，不能作为当前 V0.12 或 Windows 可用性的证据。首页显式提示该边界；保留旧 tag / 资产，不将其静默替换成新包。下一次上传使用包含发布版本和构建号的不可变 tag，并保留对应源码 commit 与校验文件。
 

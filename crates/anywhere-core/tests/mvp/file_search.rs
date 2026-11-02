@@ -252,7 +252,6 @@ async fn file_search_entry_is_a_real_action_without_context_or_scope_and_support
         .iter()
         .all(|c| c.type_id != "core.launcher"));
     assert!(state.scopes.iter().all(|s| s.id != "tools"));
-    assert!(!entry.home_eligible);
     let output = app.execute(id, 2, entry.id.clone()).await.unwrap();
     assert_eq!(output.view, Some(HostView::FileSearch));
     assert!(!output.close_window && output.output_text.is_none());
@@ -381,18 +380,13 @@ async fn preview_requires_a_current_file_row_and_never_executes_or_records_usage
             .all(|a| a.kind == CandidateKind::Action && a.id != row));
         let current = app.latest_state(id).unwrap();
         assert_eq!(current.candidate(&row).unwrap().kind, CandidateKind::File);
-        assert_eq!(
-            app.preview_file(id, 1, row.clone())
-                .await
-                .unwrap()
-                .text
-                .as_deref(),
-            Some("hello")
-        );
+        let resource = app.preview_file(id, 1, row.clone()).await.unwrap();
+        assert_eq!(resource.paths, [path.to_string_lossy().into_owned()]);
+        app.release_preview(&resource.id).unwrap();
     }
-    let preview = app.preview_file(id, 1, row.clone()).await.unwrap();
-    assert_eq!(preview.text.as_deref(), Some("hello"));
-    assert_eq!(preview.path, path.to_string_lossy());
+    let resource = app.preview_file(id, 1, row.clone()).await.unwrap();
+    assert_eq!(resource.paths, [path.to_string_lossy().into_owned()]);
+    app.release_preview(&resource.id).unwrap();
     assert!(app.preview_file(id, 1, "forged-file".into()).await.is_err());
     assert!(platform.calls.lock().unwrap().is_empty());
     assert!(history
@@ -667,7 +661,7 @@ fn file_results_are_limited_deduplicated_and_ignore_unrelated_names() {
     assert_eq!(candidates.len(), 64);
     assert!(candidates
         .iter()
-        .all(|c| c.presentation.kind == CandidateKind::File && !c.presentation.home_eligible));
+        .all(|c| c.presentation.kind == CandidateKind::File));
     assert_eq!(
         candidates
             .iter()

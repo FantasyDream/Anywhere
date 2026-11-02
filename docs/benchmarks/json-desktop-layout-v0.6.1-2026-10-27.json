@@ -1,0 +1,79 @@
+{
+  "date": "2026-10-27",
+  "plugin": "dev.anywhere.json-workspace",
+  "version": "0.6.1",
+  "requires_host": "V0.14 Build 22 or newer",
+  "app_rebuild_required": false,
+  "source_base_commit": "8a3e757970c1e477979bbc8e8774bb19f92fbb6f",
+  "source_state": "working tree; UI changes are not committed",
+  "package": "build/web-examples/json-workspace-0.6.1.awplugin",
+  "sha256": "de6672760f81926aef11c579028a720723eb17e386cc222de1df8a17eb8b660e",
+  "layout": [
+    "One formula toolbar: mode selector, fixed root, expression, run",
+    "Persistent side-by-side source and result editors, approximately equal width",
+    "Copy result in result header; no bottom control bars",
+    "Source overflow menu holds indent, copy variants, unescape and clear without resizing the editors"
+  ],
+  "interaction": [
+    "Native paste replaces the Paste button; clipboard.readText permission removed",
+    "Whole-document escaped JSON paste decodes; partial paste retains normal text replacement",
+    "Blank launch focuses source; Context launch focuses formula; Command-L focuses formula",
+    "Menu supports native button activation, arrows/Tab, Escape and outside dismissal",
+    "Indent changes and copy variants restore menu-button focus; clear focuses source"
+  ],
+  "checks": {
+    "full_gate": {
+      "command": "scripts/check.sh",
+      "log": "build/json-desktop-final-check.log",
+      "result": "passed"
+    },
+    "json_tests": {
+      "passed": 30,
+      "log": "build/json-desktop-tests.log"
+    },
+    "sdk_tests": {
+      "passed": 21,
+      "skipped": 0
+    },
+    "core": {
+      "passed": 317,
+      "ignored": 1
+    },
+    "flutter": {
+      "passed": 435
+    },
+    "built_package_e2e": {
+      "result": "passed",
+      "log": "build/json-desktop-package.log"
+    },
+    "last_focus_refinement": "JSON tests, style, build, archive inspection and package conformance rerun; indentation/copy focus verified again in browser",
+    "initial_gate_retry": "Unchanged scanner cancellation test once had no PID file at the one-second deadline; isolated rerun and default full gate rerun passed. No unrelated platform changes."
+  },
+  "browser_preview": {
+    "host": "synthetic in-app browser fixture; no system clipboard reads/writes",
+    "languages": [
+      "zh",
+      "en"
+    ],
+    "widths_checked_css_px": [
+      1050,
+      680
+    ],
+    "passed": [
+      "Blank/prefilled focus",
+      "Native full escaped paste",
+      "Partial JSON value replacement",
+      "JavaScript filter/map and JSONPath result",
+      "Result copy feedback",
+      "Arrow/Tab and Escape menu behavior",
+      "4-space indentation persistence and focus restoration",
+      "Copy-minified menu completion and focus"
+    ],
+    "screenshot": "build/json-workspace-desktop-0.6.1.png"
+  },
+  "not_verified": [
+    "Native App install/update and physical keyboard/IME acceptance",
+    "Ctrl-Tab combination was not confirmed by browser automation; native mode select and existing shortcut handler retained"
+  ],
+  "installation": "Import the versioned awplugin in Settings on Build 22+; installed packages do not update with source edits."
+}

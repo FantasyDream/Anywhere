@@ -10,11 +10,26 @@ use std::{
 use tokio::time::{Duration, Instant};
 
 pub(super) struct RequestControl {
-    pub cancelled: AtomicBool,
+    cancelled: AtomicBool,
+    cancellation: tokio::sync::Notify,
     pub running: AtomicBool,
     pub deadline: Instant,
 }
 impl RequestControl {
+    fn cancel(&self) {
+        self.cancelled.store(true, Ordering::Release);
+        self.cancellation.notify_waiters();
+    }
+    pub async fn cancelled(&self) {
+        let notified = self.cancellation.notified();
+        tokio::pin!(notified);
+        // Register before checking the flag so cancellation between the check
+        // and the await cannot be lost, including on a different runtime thread.
+        notified.as_mut().enable();
+        if !self.cancelled.load(Ordering::Acquire) {
+            notified.await;
+        }
+    }
     pub fn check(&self) -> WebResult<()> {
         if self.cancelled.load(Ordering::Acquire) {
             return Err(WebError::new(WebErrorCode::Cancelled));
@@ -30,16 +45,6 @@ pub(super) struct RequestTicket {
     pub id: String,
     pub control: Arc<RequestControl>,
 }
-pub(super) enum ClipboardOperation {
-    Read,
-    Write(String),
-}
-pub(super) struct Confirmation {
-    pub id: String,
-    pub request: RequestTicket,
-    pub operation: ClipboardOperation,
-}
-
 pub(super) enum Transfer {
     Upload {
         id: String,
@@ -75,22 +80,16 @@ pub(super) struct RpcState {
     seen: BTreeSet<String>,
     pub pending: BTreeMap<String, Arc<RequestControl>>,
     pub transfer: Option<Transfer>,
-    pub confirmation: Option<Confirmation>,
 }
 impl Drop for RpcState {
     fn drop(&mut self) {
         for request in self.pending.values() {
-            request.cancelled.store(true, Ordering::Release);
+            request.cancel();
         }
     }
 }
 impl RpcState {
-    pub fn admit(
-        &mut self,
-        id: &str,
-        confirmation: bool,
-        queued: bool,
-    ) -> WebResult<RequestTicket> {
+    pub fn admit(&mut self, id: &str, queued: bool) -> WebResult<RequestTicket> {
         self.prune();
         if self.seen.contains(id) {
             return Err(WebError::new(WebErrorCode::DuplicateRequest));
@@ -110,15 +109,11 @@ impl RpcState {
             return Err(WebError::new(WebErrorCode::Busy));
         }
         self.seen.insert(id.into());
-        let duration = if confirmation {
-            CONFIRM_TIMEOUT_MS
-        } else {
-            REQUEST_TIMEOUT_MS
-        };
         let control = Arc::new(RequestControl {
             cancelled: AtomicBool::new(false),
+            cancellation: tokio::sync::Notify::new(),
             running: AtomicBool::new(false),
-            deadline: Instant::now() + Duration::from_millis(duration),
+            deadline: Instant::now() + Duration::from_millis(REQUEST_TIMEOUT_MS),
         });
         if queued {
             self.pending.insert(id.into(), control.clone());
@@ -130,15 +125,7 @@ impl RpcState {
     }
     pub fn cancel(&mut self, id: &str) -> bool {
         if let Some(request) = self.pending.get(id) {
-            request.cancelled.store(true, Ordering::Release);
-            if self
-                .confirmation
-                .as_ref()
-                .is_some_and(|c| c.request.id == id)
-            {
-                self.confirmation = None;
-                self.pending.remove(id);
-            }
+            request.cancel();
             return true;
         }
         false
@@ -146,15 +133,6 @@ impl RpcState {
     pub fn prune(&mut self) {
         if self.transfer.as_ref().is_some_and(Transfer::expired) {
             self.transfer = None;
-        }
-        if self
-            .confirmation
-            .as_ref()
-            .is_some_and(|c| c.request.control.check().is_err())
-        {
-            if let Some(confirmation) = self.confirmation.take() {
-                self.pending.remove(&confirmation.request.id);
-            }
         }
     }
     pub fn finish(&mut self, ticket: &RequestTicket) {

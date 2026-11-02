@@ -8,14 +8,12 @@ use anywhere_protocol::{
     DIRECTORY, JAVA_SPRING_BOOT, PROJECT_GRADLE, PROJECT_MAVEN, PROJECT_NODE, PROJECT_RUST,
 };
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
 pub const MAX_PACKAGE_BYTES: usize = super::metadata::MAX_MANIFEST_BYTES;
-pub const NODE_SCRIPTS: &[&str] = &["build", "test", "dev", "start", "lint"];
-
 #[derive(Clone, Copy)]
 pub enum ProjectKind {
     Rust,
@@ -144,12 +142,11 @@ fn recognize(path: &Path, kind: ProjectKind) -> Result<Option<ContextValue>> {
     };
     let mut properties = BTreeMap::new();
     if matches!(kind, ProjectKind::Node) {
-        // Only safe presence flags cross the Context boundary, never script bodies.
         let project = super::node::inspect(&directory)?;
-        super::metadata::NodeMetadata::new(
-            &project.manager,
-            project.scripts.into_iter().collect(),
-        )?
+        super::metadata::NodeMetadata {
+            manager: project.manager,
+            scripts: project.scripts.into_iter().collect(),
+        }
         .write(&mut properties)?;
     }
     if matches!(kind, ProjectKind::Rust) {
@@ -160,19 +157,16 @@ fn recognize(path: &Path, kind: ProjectKind) -> Result<Option<ContextValue>> {
         };
         let metadata = targets
             .into_iter()
-            .map(|target| {
-                Ok(super::metadata::CargoTargetMetadata {
-                    package: target.package,
-                    binary: target.binary,
-                    manifest: target
-                        .manifest
-                        .strip_prefix(&directory)?
-                        .to_string_lossy()
-                        .into_owned(),
-                })
+            .map(|target| super::metadata::CargoTargetMetadata {
+                package: target.package,
+                binary: target.binary,
             })
-            .collect::<Result<Vec<_>>>()?;
-        super::metadata::CargoMetadata::new(metadata, failed).write(&mut properties)?;
+            .collect();
+        super::metadata::CargoMetadata {
+            targets: metadata,
+            discovery_failed: failed,
+        }
+        .write(&mut properties)?;
     }
     if matches!(kind, ProjectKind::SpringBoot) {
         let tools = super::spring::build_tools(&directory)?;
@@ -188,14 +182,6 @@ fn recognize(path: &Path, kind: ProjectKind) -> Result<Option<ContextValue>> {
         label: kind.label().into(),
         properties: Arc::new(properties),
     }))
-}
-
-pub fn script_property(script: &str) -> String {
-    format!("node.script.{script}")
-}
-
-pub fn declared_node_scripts(directory: &Path) -> Result<BTreeSet<String>> {
-    Ok(super::node::inspect(directory)?.scripts)
 }
 
 #[cfg(test)]
@@ -218,15 +204,22 @@ mod tests {
         assert_eq!(project_root_for(empty.path(), ProjectKind::Rust), None);
     }
     #[test]
-    fn node_metadata_is_bounded_and_contains_only_declared_common_script_names() {
+    fn node_metadata_is_bounded_and_contains_only_declared_scripts() {
         let dir = tempfile::tempdir().unwrap();
         let manifest = dir.path().join("package.json");
         std::fs::write(&manifest, r#"{"scripts":{"build":"echo private-token", "test":" ", "dev":false, "start":"node server.js", "arbitrary":"echo ignored"}}"#).unwrap();
         let project = recognize(dir.path(), ProjectKind::Node).unwrap().unwrap();
-        assert_eq!(project.property("node.script.build"), Some("true"));
-        assert_eq!(project.property("node.script.test"), None);
-        assert_eq!(project.property("node.script.dev"), None);
-        assert_eq!(project.property("node.script.arbitrary"), Some("true"));
+        for (name, expected) in [
+            ("build", Some("true")),
+            ("test", None),
+            ("dev", None),
+            ("arbitrary", Some("true")),
+        ] {
+            assert_eq!(
+                project.property(&super::super::node::capability("npm", name)),
+                expected
+            );
+        }
         let context = ResolvedContext::new(
             PROJECT_NODE,
             project,
@@ -235,11 +228,11 @@ mod tests {
         );
         assert!(!format!("{:?}", context.descriptor()).contains("private-token"));
         std::fs::write(&manifest, vec![b' '; MAX_PACKAGE_BYTES + 1]).unwrap();
-        assert!(declared_node_scripts(dir.path())
+        assert!(super::super::node::inspect(dir.path())
             .unwrap_err()
             .to_string()
             .contains("256 KiB"));
         std::fs::write(&manifest, "invalid").unwrap();
-        assert!(declared_node_scripts(dir.path()).is_err());
+        assert!(super::super::node::inspect(dir.path()).is_err());
     }
 }

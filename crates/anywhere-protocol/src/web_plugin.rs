@@ -14,10 +14,14 @@ pub struct WebPluginManifest {
     pub version: String,
     pub api_version: String,
     pub platforms: Vec<WebPlatform>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub entry: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub background: Option<PluginBackground>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub icon: Option<String>,
     pub permissions: Vec<WebPermission>,
+    #[serde(default)]
     pub commands: Vec<WebCommand>,
 }
 
@@ -37,6 +41,12 @@ pub enum WebPermission {
     ContextRead { types: Vec<String> },
     #[serde(rename = "context.currentApp")]
     CurrentApp {},
+    #[serde(rename = "input.read")]
+    InputRead {},
+    #[serde(rename = "input.write")]
+    InputWrite {},
+    #[serde(rename = "app.frontmost")]
+    FrontmostApp {},
     #[serde(rename = "clipboard.readText")]
     ClipboardReadText {},
     #[serde(rename = "clipboard.writeText")]
@@ -50,6 +60,9 @@ impl WebPermission {
         match self {
             Self::ContextRead { .. } => "context.read",
             Self::CurrentApp {} => "context.currentApp",
+            Self::InputRead {} => "input.read",
+            Self::InputWrite {} => "input.write",
+            Self::FrontmostApp {} => "app.frontmost",
             Self::ClipboardReadText {} => "clipboard.readText",
             Self::ClipboardWriteText {} => "clipboard.writeText",
             Self::LocalStorage {} => "storage.local",
@@ -70,7 +83,15 @@ pub struct WebCommand {
     /// Host-owned content recognition. No plugin code runs during search or capture.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub input_matchers: Vec<WebInputMatcher>,
+    /// Hide commands that cannot run without recognized content, including keyword search.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub require_input_match: bool,
+    /// A typed Context is mandatory even when the command title matches a query.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub require_context: bool,
     pub entrypoint: String,
+    #[serde(default, skip_serializing_if = "PluginRuntime::is_webview")]
+    pub runtime: PluginRuntime,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -100,6 +121,10 @@ pub enum WebInput {
         #[cfg_attr(feature = "web-schema", schemars(with = "String"))]
         source: crate::ContextSource,
         url: String,
+    },
+    Data {
+        type_id: String,
+        value: serde_json::Value,
     },
     Resources {
         #[cfg_attr(feature = "web-schema", schemars(with = "String"))]
@@ -150,4 +175,56 @@ pub struct WebInvocation {
 pub struct WebCurrentApp {
     pub id: String,
     pub name: String,
+}
+
+/// Latest approved view of Launcher state. Native graph data never crosses this boundary.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "web-schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct PluginSnapshot {
+    pub version: u64,
+    pub context: WebInput,
+    pub input: Option<String>,
+}
+
+/// Code is compiled to one local ES module when building the package.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "web-schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PluginBackground {
+    pub entry: String,
+    #[serde(default)]
+    pub resolvers: Vec<PluginResolver>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "web-schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum PluginRuntime {
+    #[default]
+    Webview,
+    Background,
+}
+impl PluginRuntime {
+    pub fn is_webview(&self) -> bool {
+        *self == Self::Webview
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "web-schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PluginResolver {
+    pub id: String,
+    pub accepts: Vec<String>,
+    pub produces: Vec<String>,
+    pub entrypoint: String,
+}
+
+impl WebCommand {
+    pub fn needs_context(&self) -> bool {
+        self.require_context
+            || self.require_input_match
+            || (self.runtime == PluginRuntime::Background && !self.accepts.is_empty())
+    }
 }

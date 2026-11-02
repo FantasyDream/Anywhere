@@ -8,7 +8,7 @@ import '../../ui/app_components.dart';
 import '../../ui/app_style.dart';
 import 'clipboard_history_presentation.dart';
 
-/// Metadata-only rows. Full payloads and thumbnails are loaded only on selection.
+/// Metadata-only rows. Content is prepared only by an explicit system preview request.
 class ClipboardHistoryList extends StatelessWidget {
   const ClipboardHistoryList(
       {super.key,
@@ -32,68 +32,73 @@ class ClipboardHistoryList extends StatelessWidget {
   final bool compact;
 
   @override
-  Widget build(BuildContext context) => ListView.builder(
-      controller: scroll,
-      itemExtent: compact ? clipboardShelfRowHeight : clipboardHistoryRowHeight,
-      padding: EdgeInsets.zero,
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        final selected = index == selectedIndex;
-        final commands = selected ? selectedCommands : null;
-        final object = GestureDetector(
-            // Only the object recognizes double-clicks. The command buttons
-            // remain immediate and do not join this primary gesture arena.
-            behavior: HitTestBehavior.opaque,
-            onDoubleTap: onActivate == null ? null : () => onActivate!(item),
-            child: Tooltip(
-                message: item.summary,
-                child: Row(children: [
-                  Icon(clipboardKindIcon(item.kind),
-                      size: compact ? 18 : 22,
-                      color: clipboardKindTint(item.kind)),
-                  const SizedBox(width: 12),
-                  Expanded(child: _labels(context, item, selected)),
-                ])));
-        final row = Padding(
-            padding: EdgeInsets.symmetric(
-                horizontal: compact ? 6 : 10, vertical: compact ? 1 : 3),
-            child: AppSelectionSurface(
-                selected: selected,
-                canRequestFocus: !compact,
-                child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
+  Widget build(BuildContext context) => TextFieldTapRegion(
+      child: ListView.builder(
+          controller: scroll,
+          itemExtent:
+              compact ? clipboardShelfRowHeight : clipboardHistoryRowHeight,
+          padding: EdgeInsets.zero,
+          itemCount: items.length,
+          itemBuilder: (context, index) {
+            final item = items[index];
+            final selected = index == selectedIndex;
+            final commands = selected ? selectedCommands : null;
+            final object = GestureDetector(
+                // Only the object recognizes double-clicks. The command buttons
+                // remain immediate and do not join this primary gesture arena.
+                behavior: HitTestBehavior.opaque,
+                onDoubleTap:
+                    onActivate == null ? null : () => onActivate!(item),
+                child: Tooltip(
+                    message: item.summary,
                     child: Row(children: [
-                      Expanded(child: object),
-                      if (commands != null) ...[
-                        const SizedBox(width: 4),
-                        commands,
-                      ] else if (compact && index < 9) ...[
-                        const SizedBox(width: 8),
-                        Text(
-                            DesktopEnvironment.current
-                                .commandLabel('${index + 1}'),
-                            style: AppStyle.caption.copyWith(fontSize: 10)),
-                      ],
-                    ]))));
-        return Listener(
-            // Select before Return or a command, without waiting for a double
-            // click. Dragging and scrolling can select but never copy content.
-            onPointerDown: onSelect == null
-                ? null
-                : (event) {
-                    if (event.buttons == kPrimaryMouseButton) onSelect!(item);
-                  },
-            child: GestureDetector(
-                onSecondaryTap:
-                    onActions == null ? null : () => onActions!(item),
-                child: Semantics(
+                      Icon(clipboardKindIcon(item.kind),
+                          size: compact ? 18 : 22,
+                          color: clipboardKindTint(item.kind)),
+                      const SizedBox(width: 12),
+                      Expanded(child: _labels(context, item, selected)),
+                    ])));
+            final row = Padding(
+                padding: EdgeInsets.symmetric(
+                    horizontal: compact ? 6 : 10, vertical: compact ? 1 : 3),
+                child: AppSelectionSurface(
                     selected: selected,
-                    button: true,
-                    enabled: onSelect != null,
-                    onTap: onSelect == null ? null : () => onSelect!(item),
-                    child: row)));
-      });
+                    canRequestFocus: !compact,
+                    child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        child: Row(children: [
+                          Expanded(child: object),
+                          if (commands != null) ...[
+                            const SizedBox(width: 4),
+                            commands,
+                          ] else if (compact && index < 9) ...[
+                            const SizedBox(width: 8),
+                            Text(
+                                DesktopEnvironment.current
+                                    .commandLabel('${index + 1}'),
+                                style: AppStyle.caption.copyWith(fontSize: 10)),
+                          ],
+                        ]))));
+            return Listener(
+                // Select before Return or a command, without waiting for a double
+                // click. Dragging and scrolling can select but never copy content.
+                onPointerDown: onSelect == null
+                    ? null
+                    : (event) {
+                        if (event.buttons == kPrimaryMouseButton) {
+                          onSelect!(item);
+                        }
+                      },
+                child: GestureDetector(
+                    onSecondaryTap:
+                        onActions == null ? null : () => onActions!(item),
+                    child: Semantics(
+                        selected: selected,
+                        button: true,
+                        enabled: onSelect != null,
+                        onTap: onSelect == null ? null : () => onSelect!(item),
+                        child: row)));
+          }));
 
   Widget _labels(BuildContext context, ClipboardItemDto item, bool selected) =>
       Column(

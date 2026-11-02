@@ -37,18 +37,21 @@ class LauncherEntries {
     indices = EntryIndex.entries(rows);
   }
   LauncherEntries.files(List<CandidateDto> candidates) {
-    // Core has already filtered hidden offers. Protect injected/test snapshots
-    // without copying an ordinary visible list on each append.
-    final visible =
-        candidates.any((c) => c.availability == AvailabilityDto.hidden)
-            ? candidates.where((c) => c.availability != AvailabilityDto.hidden)
-            : candidates;
-    final stable = visible is StableList<CandidateDto>
-        ? visible
-        : StableList<CandidateDto>.from(visible);
+    // Complete chunks are immutable and shared across appends. Cache only their
+    // visibility fact; weak keys allow discarded query chunks to be collected.
+    final source = candidates is StableList<CandidateDto>
+        ? candidates
+        : StableList<CandidateDto>.from(candidates);
+    final hidden = source.chunks.any((chunk) => _hiddenFiles[chunk] ??=
+        chunk.any((c) => c.availability == AvailabilityDto.hidden));
+    final stable = hidden
+        ? StableList<CandidateDto>.from(
+            source.where((c) => c.availability != AvailabilityDto.hidden))
+        : source;
     rows = CandidateRows(stable);
     indices = EntryIndex.files(stable);
   }
+  static final _hiddenFiles = Expando<bool>();
   late final List<LauncherEntry> rows;
   late final EntryIndex indices;
 }
@@ -72,7 +75,8 @@ class CandidateRows extends ListBase<LauncherEntry> {
 
 class EntryIndex {
   EntryIndex.entries(List<LauncherEntry> entries)
-      : chunks = [
+      : _fileIds = false,
+        chunks = [
           (
             0,
             {
@@ -80,20 +84,30 @@ class EntryIndex {
             }
           )
         ];
-  EntryIndex.files(StableList<CandidateDto> candidates) : chunks = [] {
+  EntryIndex.files(StableList<CandidateDto> candidates)
+      : _fileIds = true,
+        chunks = [] {
     var offset = 0;
     for (final chunk in candidates.chunks) {
       final local = _fileKeys[chunk] ??= {
-        for (var i = 0; i < chunk.length; i++) 'candidate:${chunk[i].id}': i,
+        // Reuse the existing ID strings; prefixing every key duplicates all
+        // loaded file identifiers for the lifetime of their chunks.
+        for (var i = 0; i < chunk.length; i++) chunk[i].id: i,
       };
       chunks.add((offset, local));
       offset += chunk.length;
     }
   }
   static final _fileKeys = Expando<Map<String, int>>();
+  final bool _fileIds;
   final List<(int, Map<String, int>)> chunks;
   int? operator [](String? key) {
     if (key == null) return null;
+    if (_fileIds) {
+      const prefix = 'candidate:';
+      if (!key.startsWith(prefix)) return null;
+      key = key.substring(prefix.length);
+    }
     for (final (offset, local) in chunks.reversed) {
       final index = local[key];
       if (index != null) return offset + index;
@@ -138,14 +152,20 @@ class LauncherViewState {
   final LauncherEntries? retainedFileEntries;
   bool get navigationOpen => navigationMode != null;
   static const navigationHeight = 108.0;
-  bool get hasFilePreview => isFileSearch;
-  double get width =>
-      toolPage?.width ??
-      (phase == LauncherPhase.settings || !isFileSearch ? 648 : 920);
+  double get width => toolPage?.width ?? 648;
   bool get hasFileControls =>
       isFileSearch && bindingChoices == null && output == null;
   bool get hasControls => hasScopeBar || hasFileControls;
   bool get isFileSearch => inputMode == InputModeDto.fileSearch;
+  // Input acknowledgement can precede the first asynchronous file-search
+  // batch. Measure a nonempty batch immediately, or a confirmed finished empty
+  // result; a loading placeholder is not a usable list frame.
+  bool get canMeasureQueryFrame =>
+      inputModeReady &&
+      snapshot?.input == input &&
+      (!isFileSearch ||
+          visibleEntries.isNotEmpty ||
+          snapshot?.fileSearch?.finished == true);
   bool get isContent => inputMode == InputModeDto.content;
   String get contentLabel => contentSource == ContextSourceDto.selectedText
       ? 'Selected text'
@@ -328,15 +348,15 @@ class LauncherViewState {
         if (canBrowseMenus) const LauncherEntry.menu([]),
       ];
     }
-    // No applications on Context Home; app menus only contribute a small shortlist.
+    // Rust ranks every applicable action. Home only limits the visible rows;
+    // domain scopes retain the same order without a recommendation whitelist.
     final source = scopeId == null ? scopedCandidates : allActions;
-    final recommended = source
-        .where((candidate) =>
-            candidate.kind == CandidateKindDto.action && candidate.homeEligible)
+    final rankedPrefix = source
+        .where((candidate) => candidate.kind == CandidateKindDto.action)
         // Reserve room for the full-menu entry, including the Scope bar.
         .take(canBrowseMenus ? 5 : maxRows);
     return [
-      for (final candidate in recommended) LauncherEntry.candidate(candidate),
+      for (final candidate in rankedPrefix) LauncherEntry.candidate(candidate),
       if (canBrowseMenus) const LauncherEntry.menu([]),
     ];
   }
@@ -345,9 +365,13 @@ class LauncherViewState {
     for (final entry in visibleEntries)
       if (entry.candidate != null) entry.candidate!,
   ]);
-  int get selectedIndex {
-    return entryCollection.indices[selectedId] ?? 0;
-  }
+  late final int selectedIndex =
+      entryCollection.indices[selectedId] ?? (hasFileControls ? -1 : 0);
+
+  LauncherEntry? get selectedEntry =>
+      selectedIndex < 0 || visibleEntries.isEmpty
+          ? null
+          : visibleEntries[selectedIndex];
 
   double get selectedTop => selectedIndex * rowHeight;
   bool get hasScopeBar =>

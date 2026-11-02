@@ -1,0 +1,33 @@
+{
+  "date": "2026-10-29",
+  "version": "0.14.0+35",
+  "platform": "macOS arm64",
+  "impeller": true,
+  "signing": "Anywhere Local Code Signing; local development identity, not notarized",
+  "source_state": "Existing uncommitted workspace including the Flutter and full-repository review fixes. Only app build numbers changed after the final engineering gate.",
+  "app": "build/Anywhere-0.14-preview-build35.app",
+  "archive": "build/Anywhere-0.14-preview-build35-macos-arm64.zip",
+  "archive_bytes": 17840683,
+  "archive_sha256": "a3df91657298d5062d58904d025d5fd705cdb31b1ef9d2cb50e7592cc7a37270",
+  "bundle_sha256": {
+    "Contents/Info.plist": "fdd7699ab5ab43ddb4169478a3ecfafa545d88e8043593af8200c13dbd08fd64",
+    "Contents/MacOS/Anywhere": "2ab793ccf87e4aecd3afb06bd9b048e886990e10a263ad17d63096e1e0d9f249",
+    "Contents/Frameworks/libanywhere_bridge_flutter.dylib": "1ee1868af5612e1b4b82ca1fe0edb22d8369914a08e523bfc61df0812fb8284f",
+    "Contents/Frameworks/App.framework/App": "712d84b484528fe0e7c3d18a496f50dae48057761c2081775c8581ae47ad7ff2"
+  },
+  "checks": {
+    "engineering_gate": "build/repo-review-full-check.log; exit 0; Flutter 471, Core 321 passed / 1 ignored, MVP 195 passed / 4 ignored, Platform 70 passed / 1 ignored, SDK 25, JSON 30",
+    "version_check": "Rust 0.14.0, Flutter/native 0.14.0+35",
+    "build_log": "build/build35-build.log; exit 0",
+    "package_log": "build/build35-package.log; exit 0",
+    "signature": "codesign --verify --deep --strict passed",
+    "archive": "Packaged main executable, plist and Rust bridge bytes match the bundle; ZIP SHA-256 matches the checksum file",
+    "startup": "Old Build 34 PID 698 exited gracefully; Build 35 PID 33732 observed at the exact new bundle path"
+  },
+  "plugin_boundary": "App packaging does not replace installed web plugins. SDK and example packages were rebuilt during the engineering gate and require independent import to update an installed package.",
+  "limits": [
+    "Startup identity check only; no new native GUI / physical IME / preview format matrix",
+    "No frame timing, Dart heap/GC, RSS or physical footprint measurement",
+    "No remote CI, public release or notarization performed"
+  ]
+}

@@ -8,7 +8,6 @@ import 'package:anywhere/settings/settings_controller.dart';
 import 'package:anywhere/src/rust/api.dart';
 import 'package:anywhere/ui/file_type_appearance.dart';
 import 'package:anywhere/web_plugins/permission_labels.dart';
-import 'package:anywhere/web_plugins/web_host_panels.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -69,7 +68,7 @@ void main() {
         kind: WebPermissionKindDto.contextRead,
         contextTypes: ['core.file', 'vendor.private-type']);
     expect(webPermissionLabel(read, english), contains('Read clipboard text'));
-    expect(webPermissionLabel(read, chinese), contains('每次操作均需确认'));
+    expect(webPermissionLabel(read, chinese), '读取剪贴板文本');
     expect(webPermissionLabel(context, chinese), contains('文件'));
     expect(
         webPermissionLabel(context, chinese), contains('vendor.private-type'));
@@ -131,36 +130,34 @@ void main() {
     }
   });
 
-  testWidgets(
-      'host consent follows a live language switch and retains the external preview',
+  testWidgets('installed clipboard grant labels follow a live language switch',
       (tester) async {
     final language = AppLanguage.current;
     final previous = language.preference;
     addTearDown(() => language.apply(previous));
-    const payload = '{"用户":"Ada"}';
-    final selected = <bool>[];
     language.apply('en');
     await tester.pumpWidget(LocalizedApp(
         home: Builder(
             builder: (context) => Scaffold(
-                    body: Stack(children: [
-                  WebConsentPanel(
-                      title: context.l10n.readClipboardText,
-                      toolTitle: 'Example Tool',
-                      preview: payload,
-                      allowSelected: false,
-                      onAnswer: selected.add),
+                    body: Column(children: [
+                  Text(webPermissionLabel(
+                      const WebPermissionDto(
+                          kind: WebPermissionKindDto.clipboardReadText,
+                          contextTypes: []),
+                      context.l10n)),
+                  Text(webPermissionLabel(
+                      const WebPermissionDto(
+                          kind: WebPermissionKindDto.clipboardWriteText,
+                          contextTypes: []),
+                      context.l10n)),
                 ])))));
     await tester.pumpAndSettle();
     expect(find.text('Read clipboard text'), findsOneWidget);
+    expect(find.text('Write clipboard text'), findsOneWidget);
     language.apply('zh');
     await tester.pumpAndSettle();
     expect(find.text('读取剪贴板文本'), findsOneWidget);
-    expect(find.text(payload), findsOneWidget);
-    expect(find.textContaining('Example Tool'), findsOneWidget);
-    expect(selected, isEmpty,
-        reason: 'language changes cannot approve an operation');
-    await tester.tap(find.text(chinese.allowOnceAction));
-    expect(selected, [true]);
+    expect(find.text('写入剪贴板文本'), findsOneWidget);
+    expect(find.text('Read clipboard text'), findsNothing);
   });
 }

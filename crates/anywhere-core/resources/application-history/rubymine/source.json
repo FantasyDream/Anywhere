@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "id": "rubymine",
+  "extends": "idea",
+  "title": "RubyMine",
+  "applications": [
+    "com.jetbrains.rubymine",
+    "com.jetbrains.rubymine-EAP"
+  ],
+  "config_paths": [
+    "JetBrains/RubyMine*/options/recentProjects.xml"
+  ],
+  "action": {
+    "title": "RubyMine Recent Projects",
+    "localized_titles": {
+      "zh": "RubyMine 最近项目"
+    },
+    "aliases": [
+      "rubymine recent",
+      "recent projects",
+      "recent history",
+      "最近项目",
+      "历史记录",
+      "app history",
+      "应用历史"
+    ]
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "date": "2026-10-25",
+  "source_base_commit": "bcc8f2f",
+  "build_from_working_tree": true,
+  "package_version": "0.14.0+7",
+  "zip_sha256": "c7485a105572b82ed85dbc94f4dba9fc77cb7d0478e9ccb8d5e55b963712450b",
+  "bundled_sources": 18,
+  "new_sources": [
+    "android_studio", "clion", "cursor", "datagrip", "goland", "obsidian",
+    "phpstorm", "pycharm", "rider", "rubymine", "rustrover", "sublime",
+    "vscode_insiders", "vscodium", "webstorm", "windsurf"
+  ],
+  "checks": {
+    "scripts_check_sh": "passed",
+    "core_unit_passed": 293,
+    "core_unit_existing_ignored": 1,
+    "mvp_integration_passed": 192,
+    "mvp_integration_existing_ignored": 4,
+    "flutter_passed": 411,
+    "history_core_targeted_passed": 31,
+    "history_mvp_targeted_passed": 3,
+    "persistent_signing_and_strict_package_verification": "passed"
+  },
+  "coverage": [
+    "All bundled source configuration paths detect synthetic metadata and never choose another product",
+    "Every configured application identity resolves one Current App history route",
+    "Shared bundled and user definition resolver; inherited parser capture at startup",
+    "JetBrains component variants and solution files",
+    "Code-family bounded SQLite reader and remote copy-only targets",
+    "Sublime session history ignores buffers in returned metadata",
+    "Obsidian stable vault IDs, exact app URL dispatch, stale targets and ambiguous apps",
+    "New bundled sources do not inherit schema 1 omissions",
+    "Chinese and English settings filtering retains source editing and switches"
+  ],
+  "native_ui": {
+    "initial_user_version_switch": "Normal app-menu quit of Build 4; Build 6 started with existing user settings and verified by exact process path",
+    "user_settings_reset": false,
+    "build7_status": "blocked before inspection: computer-use tool reported Mac locked",
+    "manual_unlock_requested": true,
+    "fixture": "build/acceptance-v0.14-adapters7",
+    "fixture_prepared": true,
+    "fixture_real_automatic_sources_disabled": true,
+    "build7_ui_success_claimed": false,
+    "build7_became_user_running_version": false,
+    "private_history_read_for_acceptance": false
+  },
+  "reference": {
+    "repository": "https://github.com/LanyuanXiaoyao-Studio/utools-recent-projects",
+    "commit": "83104950dcd915dd110e9bc32a8a985d834e8105",
+    "reviewed": ["src/Applications.ts", "src/parser/ide/JetBrains.ts", "src/parser/editor/Vscode.ts", "src/parser/editor/Sublime.ts", "src/parser/editor/Typora.ts", "src/parser/notes/Obsidian.ts"],
+    "code_copied": false
+  },
+  "limits": [
+    "Automated synthetic validation is not real open acceptance across 18 installed apps",
+    "Obsidian recent vaults only, not recent note aggregation or all-note enumeration",
+    "Browser history/bookmarks, Profile selection and Windows runtime remain pending",
+    "Nonstandard paths and future schemas may require user configuration",
+    "Sublime session files may contain buffers; bounded reads project only history paths and do not persist buffers"
+  ]
+}

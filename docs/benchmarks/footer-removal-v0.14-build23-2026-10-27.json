@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-27",
+  "version": "0.14.0+23",
+  "source_base_commit": "8a3e757970c1e477979bbc8e8774bb19f92fbb6f",
+  "source_state": "working tree, not committed at packaging time",
+  "package": "build/Anywhere-0.14-preview-build23-macos-arm64.zip",
+  "sha256": "c355e87e1d2e29768ac569b6a7b6849a82b6e91475f821028d01d9a6fe9910fc",
+  "changes": [
+    "Removed the fixed footer from ToolPageShell and the Web host",
+    "Moved Web tool options and result-copy controls into the header; options panel opens near the header",
+    "Loading progress remains in the header while a Web document loads",
+    "Removed AppPageFooter, the footer design token, generated definitions and the unused Web footer style",
+    "SDK template feedback and Text Pad counts live in the toolbar; no Ready/footer filler"
+  ],
+  "checks": {
+    "full_gate": {
+      "command": "scripts/check.sh",
+      "result": "passed",
+      "log": "build/footer-final-check.log"
+    },
+    "targeted_flutter": {
+      "passed": 46,
+      "log": "build/footer-flutter-tests.log"
+    },
+    "flutter": {
+      "passed": 435
+    },
+    "core": {
+      "passed": 317,
+      "ignored": 1
+    },
+    "mvp": {
+      "passed": 195,
+      "ignored": 4
+    },
+    "sdk": {
+      "passed": 21,
+      "skipped": 0
+    },
+    "json": {
+      "passed": 30
+    },
+    "bridge_compile": "passed in release build",
+    "package_signature_and_archive": "verified",
+    "frame_regression": "Header actions sit above the expanded content, fit a narrow frame, and cannot execute while hidden"
+  },
+  "native_gui": {
+    "status": "blocked",
+    "reason": "Native app inventory reported the Mac locked."
+  },
+  "installation": "Use Build 23 to remove the Host footer; JSON plugin 0.6.1 has no internal footer."
+}

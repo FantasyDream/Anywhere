@@ -22,6 +22,8 @@ class CandidateRow extends StatelessWidget {
     this.primaryLabel,
     this.onPrimary,
     this.onActions,
+    this.onPreview,
+    this.previewSpace = false,
     this.onDoubleTap,
     this.fileObject = true,
   });
@@ -32,8 +34,8 @@ class CandidateRow extends StatelessWidget {
   final String? sourceLabel;
   final String? actionShortcut;
   final String? primaryLabel;
-  final VoidCallback? onPrimary, onActions, onDoubleTap;
-  final bool fileObject;
+  final VoidCallback? onPrimary, onActions, onDoubleTap, onPreview;
+  final bool fileObject, previewSpace;
 
   @override
   Widget build(BuildContext context) {
@@ -83,14 +85,16 @@ class CandidateRow extends StatelessWidget {
                         const SizedBox(width: 8),
                         Tooltip(
                             message: context.l10n.anywhereActionShortcut,
-                            child: _shortcut(actionShortcut!)),
+                            child: AppKeycap(actionShortcut!)),
                       ],
                       if (selected && !disabled && primaryLabel != null) ...[
                         const SizedBox(width: 6),
                         AppRowActions(
                             primaryLabel: primaryLabel!,
                             onPrimary: onPrimary,
-                            onActions: onActions),
+                            onActions: onActions,
+                            onPreview: onPreview,
+                            previewSpace: previewSpace),
                       ],
                     ],
                   ),
@@ -163,6 +167,4 @@ class CandidateRow extends StatelessWidget {
 
   bool _isBundleId(String value) =>
       RegExp(r'^[A-Za-z][A-Za-z0-9-]*(\.[A-Za-z0-9-]+){2,}$').hasMatch(value);
-
-  Widget _shortcut(String shortcut) => AppKeycap(shortcut);
 }

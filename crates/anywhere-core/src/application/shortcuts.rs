@@ -1,5 +1,6 @@
 //! Binding configuration uses business IDs; invocation resolves current execution rows.
 use super::{session_model::LauncherSession, Application};
+use crate::core::action::descriptor::ActionRegistry;
 use anyhow::{bail, Result};
 use anywhere_protocol::{CandidatePresentation, LauncherState, Revision, SessionId};
 use std::{
@@ -243,24 +244,22 @@ impl Application {
             })
             .collect();
         let mut candidates = BTreeMap::new();
+        let (actions, _) = session
+            .actions
+            .for_contexts(&session.resolution.committed_contexts);
         for route in &selected {
             // Invalid or removed actions fail closed, including in an ambiguous rule set.
-            let offers =
-                self.binding_candidates(session, session_id, revision, &route.action_id)?;
-            let offers: Vec<_> = offers
-                .into_iter()
-                .filter(|offer| {
-                    route.context_type.as_ref().is_none_or(|ty| {
-                        session
-                            .execution
-                            .candidates
-                            .values()
-                            .find(|c| c.presentation.id == offer.id)
-                            .and_then(|c| c.context())
-                            .is_some_and(|ctx| &ctx.type_id == ty)
-                    })
+            let mut offers = binding_offers(session, &actions, &route.action_id)?;
+            offers.retain(|offer| {
+                route.context_type.as_ref().is_none_or(|ty| {
+                    session
+                        .execution
+                        .candidates
+                        .get(offer.id.as_str())
+                        .and_then(|c| c.context())
+                        .is_some_and(|ctx| &ctx.type_id == ty)
                 })
-                .collect();
+            });
             if offers.is_empty() {
                 bail!("The matching shortcut action has no available target of the required context type.");
             }
@@ -304,38 +303,47 @@ impl Application {
         let (actions, _) = session
             .actions
             .for_contexts(&session.resolution.committed_contexts);
-        actions.persistent_binding(action_id)?;
-        let mut candidates: Vec<_> = session
-            .execution
-            .candidates
-            .values()
-            .filter(|c| {
-                c.presentation.command_id.as_deref() == Some(action_id)
-                    && c.presentation.availability.is_executable()
-            })
-            .map(|c| c.presentation.clone())
-            .collect();
-        candidates.sort_by(|a, b| b.score.total_cmp(&a.score).then(a.id.cmp(&b.id)));
-        if candidates.is_empty() {
-            let reason = session.execution.candidates.values().find_map(|c| {
-                (c.presentation.command_id.as_deref() == Some(action_id))
-                    .then(|| c.presentation.availability.reason.clone())
-                    .flatten()
-            });
-            bail!(
-                "{}",
-                reason
-                    .as_deref()
-                    .unwrap_or("This shortcut has no available action for the current context.")
-            );
-        }
-        Ok(candidates)
+        binding_offers(session, &actions, action_id)
     }
 }
 
+fn binding_offers(
+    session: &LauncherSession,
+    actions: &ActionRegistry,
+    action_id: &str,
+) -> Result<Vec<CandidatePresentation>> {
+    actions.persistent_binding(action_id)?;
+    let mut candidates: Vec<_> = session
+        .execution
+        .candidates
+        .values()
+        .filter(|c| {
+            c.presentation.command_id.as_deref() == Some(action_id)
+                && c.presentation.availability.is_executable()
+        })
+        .map(|c| c.presentation.clone())
+        .collect();
+    candidates.sort_by(|a, b| b.score.total_cmp(&a.score).then(a.id.cmp(&b.id)));
+    if candidates.is_empty() {
+        let reason = session.execution.candidates.values().find_map(|c| {
+            (c.presentation.command_id.as_deref() == Some(action_id))
+                .then(|| c.presentation.availability.reason.clone())
+                .flatten()
+        });
+        bail!(
+            "{}",
+            reason
+                .as_deref()
+                .unwrap_or("This shortcut has no available action for the current context.")
+        );
+    }
+    Ok(candidates)
+}
+
 fn validate_routes(routes: &[ShortcutRoute]) -> Result<()> {
-    if routes.is_empty() || routes.len() > 16 {
-        bail!("An intent needs between 1 and 16 rules.");
+    let maximum = anywhere_protocol::policy::MAX_SHORTCUT_ROUTES as usize;
+    if routes.is_empty() || routes.len() > maximum {
+        bail!("An intent needs between 1 and {maximum} rules.");
     }
     let mut conditions = BTreeSet::new();
     for route in routes {
@@ -367,9 +375,7 @@ fn valid_condition(id: &str, max: usize) -> bool {
 }
 
 /// Labels only: no captured values, paths, script body or execution capability.
-pub(super) fn catalog_options(
-    actions: &crate::core::action::descriptor::ActionRegistry,
-) -> Vec<ShortcutAction> {
+pub(super) fn catalog_options(actions: &ActionRegistry) -> Vec<ShortcutAction> {
     let mut options: Vec<_> = actions
         .commands()
         .filter_map(|action| {

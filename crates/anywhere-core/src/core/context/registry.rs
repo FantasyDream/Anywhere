@@ -62,13 +62,13 @@ impl ContextProviderRegistry {
         self.input_recognizers
             .push((recognizer, contributor.map(Into::into)));
         self.input_recognizers
-            .sort_by(|(a, _), (b, _)| b.priority.cmp(&a.priority).then_with(|| a.id.cmp(b.id)));
+            .sort_by(|(a, _), (b, _)| b.priority.cmp(&a.priority).then_with(|| a.id.cmp(&b.id)));
         Ok(())
     }
     pub fn input_recognizers(&self) -> Vec<super::input_recognizer::InputRecognizer> {
         self.input_recognizers
             .iter()
-            .map(|(rule, _)| *rule)
+            .map(|(rule, _)| rule.clone())
             .collect()
     }
 
@@ -157,9 +157,9 @@ mod tests {
     fn input_recognizer_identity_is_unique_and_owner_filter_preserves_foundations() {
         use super::super::input_recognizer::InputRecognizer;
         let rule = |id, priority| InputRecognizer {
-            id,
+            id: String::from(id),
             priority,
-            recognize: |_| None,
+            recognize: Arc::new(|_| None),
         };
         let mut registry = ContextProviderRegistry::default();
         registry
@@ -178,7 +178,7 @@ mod tests {
             registry
                 .input_recognizers()
                 .iter()
-                .map(|r| r.id)
+                .map(|r| r.id.clone())
                 .collect::<Vec<_>>(),
             ["core.json", "core.path"]
         );
@@ -187,7 +187,7 @@ mod tests {
             registry
                 .input_recognizers()
                 .iter()
-                .map(|r| r.id)
+                .map(|r| r.id.clone())
                 .collect::<Vec<_>>(),
             ["core.path"]
         );
