@@ -4,6 +4,8 @@
 
 ## Unreleased — V0.14 开发预览
 
+- Build 39 从 PR #20 合并后的 main 固定验收候选版本，仅更新构建号；本轮不新增功能，工程检查与后续实机验收分别记录。
+
 - 更新兼容的 Rust 锁定依赖、JSON 示例的 i18next / Preact 和开发工具 globals；Flutter SDK 固定的传递依赖与代码检查工具的 TypeScript 版本仍受上游约束。代码检查工具的 minimatch 传递依赖存在上游 moderate 审计告警。
 
 - 固定 Rust / Cargo `1.100.0-beta.7` 预发布工具链，并同步 CI；CI 使用工具链 Action 的标准入口显式指定 beta 版本，避免引用不存在的 Action 分支。完成编译器兼容性检查，保留现有稳定版本兼容边界。
