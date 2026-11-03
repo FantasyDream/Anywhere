@@ -95,7 +95,14 @@ struct NativePreviewHostTests {
           assert(panel.currentPreviewItem?.previewItemURL == file)
           RunLoop.current.run(until: Date().addingTimeInterval(0.35))
           assert(panel.isVisible && host!.ownsPanel)
-          host!.close()
+          if index == 3 {
+            panel.makeKeyAndOrderFront(nil)
+            assert(host!.returnToOwner())
+            assert(window.isKeyWindow)
+            assert(!host!.returnToOwner())
+          } else {
+            host!.close()
+          }
           assert(!panel.isVisible)
           assert(window.firstResponder === editor)
           assert(window.nextResponder === originalResponder)
@@ -106,6 +113,20 @@ struct NativePreviewHostTests {
         messenger.show("updated", generation: 5, path: file.path)
         assert(panel.currentPreviewItem?.previewItemTitle == "updated")
         assert(window.firstResponder === receiver)
+        let wake = NSEvent.keyEvent(
+          with: .keyDown,
+          location: .zero,
+          modifierFlags: .command,
+          timestamp: 0,
+          windowNumber: panel.windowNumber,
+          context: nil,
+          characters: " ",
+          charactersIgnoringModifiers: " ",
+          isARepeat: false,
+          keyCode: 49
+        )!
+        assert(!host!.previewPanel(panel, handle: wake), "Preview must not consume Command Space")
+        assert(panel.isVisible && host!.ownsPanel)
         // The system close button follows Quick Look's own close lifecycle.
         panel.close()
         RunLoop.current.run(until: Date().addingTimeInterval(0.5))
