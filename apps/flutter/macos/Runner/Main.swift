@@ -718,6 +718,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
       default: break
       }
     }
+    if ["currentApp", "universal"].contains(mode), previewHost?.returnToOwner() == true {
+      return
+    }
     activationStart = ProcessInfo.processInfo.systemUptime
     log(["event": "activation_requested", "mode": mode])
     if mode.hasPrefix("action:") {

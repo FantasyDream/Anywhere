@@ -4,6 +4,8 @@
 
 ## Unreleased — V0.14 开发预览
 
+- Build 40 修复快速查看期间唤醒键将所属搜索窗口再次隐藏、预览拦截带修饰键的普通按键；保留原查询与空格预览规则。
+
 - Build 39 从 PR #20 合并后的 main 固定验收候选版本，仅更新构建号；本轮不新增功能，工程检查与后续实机验收分别记录。
 
 - 更新兼容的 Rust 锁定依赖、JSON 示例的 i18next / Preact 和开发工具 globals；Flutter SDK 固定的传递依赖与代码检查工具的 TypeScript 版本仍受上游约束。代码检查工具的 minimatch 传递依赖存在上游 moderate 审计告警。

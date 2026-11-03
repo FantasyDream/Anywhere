@@ -45,6 +45,13 @@ xcrun swiftc -typecheck -warnings-as-errors -target "$(uname -m)-apple-macos12.0
   apps/flutter/macos/Runner/WindowInputFocus.swift apps/flutter/macos/Runner/NativePreviewHost.swift \
   apps/flutter/macos/Runner/tests/NativePreviewHostTests.swift
 xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  -F "$flutter_framework_directory" -framework FlutterMacOS -framework QuickLookUI \
+  -Xlinker -rpath -Xlinker "$flutter_framework_directory" \
+  apps/flutter/macos/Runner/WindowInputFocus.swift apps/flutter/macos/Runner/NativePreviewHost.swift \
+  apps/flutter/macos/Runner/tests/NativePreviewKeysTests.swift \
+  -o "$host_test_directory/preview-keys-test"
+"$host_test_directory/preview-keys-test"
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   -F "$flutter_framework_directory" -framework FlutterMacOS \
   -Xlinker -rpath -Xlinker "$flutter_framework_directory" \
   apps/flutter/macos/Runner/FlutterEngineLifecycle.swift \

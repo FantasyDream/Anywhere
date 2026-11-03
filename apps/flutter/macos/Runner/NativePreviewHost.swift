@@ -202,6 +202,15 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     )
     return false
   }
+  /// A wake key returns from preview instead of toggling its visible owner off.
+  func returnToOwner() -> Bool {
+    guard ownsPanel, let window = attachedWindow, window.isVisible else { return false }
+    NSApp.activate(ignoringOtherApps: true)
+    window.makeKeyAndOrderFront(nil)
+    close()
+    return true
+  }
+
   func close() {
     guard ownsPanel else { return }
     if QLPreviewPanel.sharedPreviewPanelExists(), let panel = QLPreviewPanel.shared() {
@@ -257,19 +266,25 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
   func previewPanel(_ panel: QLPreviewPanel!, handle event: NSEvent!) -> Bool {
     route(event)
   }
+  static func action(for event: NSEvent) -> String? {
+    guard event.type == .keyDown else { return nil }
+    let flags = event.modifierFlags.intersection([.command, .option, .control, .shift])
+    if flags == .command {
+      if event.keyCode == 37 { return "search" }
+      if event.keyCode == 16 { return "close" }
+    }
+    guard flags.isEmpty else { return nil }
+    switch event.keyCode {
+    case 53, 49: return "close"
+    case 125: return "next"
+    case 126: return "previous"
+    case 36, 76: return "activate"
+    default: return nil
+    }
+  }
   private func route(_ event: NSEvent) -> Bool {
     guard ownsPanel, event.type == .keyDown, let id = resourceID else { return false }
-    let command = event.modifierFlags.contains(.command)
-    let action: String
-    switch event.keyCode {
-    case 53, 49: action = "close"
-    case 125: action = "next"
-    case 126: action = "previous"
-    case 36, 76: action = "activate"
-    case 37 where command: action = "search"
-    case 16 where command: action = "close"
-    default: return false
-    }
+    guard let action = Self.action(for: event) else { return false }
     if action == "close" {
       close()
     } else {
