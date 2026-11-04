@@ -44,6 +44,7 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
   private var closeObserver: NSObjectProtocol?
   private var resignObserver: NSObjectProtocol?
   private var keyObserver: NSObjectProtocol?
+  private var visibilityObservation: NSKeyValueObservation?
 
   init(messenger: FlutterBinaryMessenger, owner: @escaping () -> NSWindow?) {
     self.owner = owner
@@ -87,7 +88,7 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
       case "close":
         if let sequence = args["generation"] as? Int, sequence > self.generation {
           self.generation = sequence
-          self.close()
+          self.close(restoreFocus: false)
         }
         reply(nil)
       default: reply(FlutterMethodNotImplemented)
@@ -126,7 +127,7 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
       forName: NSApplication.didResignActiveNotification,
       object: nil,
       queue: .main
-    ) { [weak self] _ in self?.close() }
+    ) { [weak self] _ in self?.close(restoreFocus: false) }
     keyObserver = NotificationCenter.default.addObserver(
       forName: NSWindow.didBecomeKeyNotification,
       object: nil,
@@ -135,7 +136,7 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
       guard let self, self.ownsPanel, let window = notification.object as? NSWindow,
         window !== self.attachedWindow, !self.contains(window)
       else { return }
-      self.close()
+      self.close(restoreFocus: false)
     }
   }
   deinit {
@@ -160,7 +161,7 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     return false
   }
   private func show(id: String, paths: [String], title: String, window: NSWindow) -> Bool {
-    if Self.current !== self { Self.current?.close() }
+    if Self.current !== self { Self.current?.close(restoreFocus: false) }
     if attachedWindow !== window {
       detach()
       previousResponder = window.nextResponder
@@ -172,6 +173,14 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     resourceID = id
     items = paths.map { Item(path: $0, title: paths.count == 1 ? title : "") }
     guard let panel = QLPreviewPanel.shared() else { return false }
+    if visibilityObservation == nil {
+      visibilityObservation = panel.observe(\.isVisible, options: [.new]) { panel, change in
+        guard change.newValue == true, Self.current == nil else { return }
+        // Quick Look can finish showing a document after its lease ended.
+        // Never let that late presentation outlive the owning session.
+        panel.order(.out, relativeTo: 0)
+      }
+    }
     if let input = window.firstResponder,
       input.responds(to: #selector(NSObject.acceptsPreviewPanelControl(_:))),
       input.acceptsPreviewPanelControl(panel), let content = window.contentView
@@ -202,30 +211,52 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     )
     return false
   }
-  /// A wake key returns from preview instead of toggling its visible owner off.
+  /// A wake key clears stale preview state before normal activation when hidden.
   func returnToOwner() -> Bool {
-    guard ownsPanel, let window = attachedWindow, window.isVisible else { return false }
+    guard ownsPanel || (Self.current == nil && Self.visiblePanel != nil) else { return false }
+    guard let window = attachedWindow ?? owner(), window.isVisible else {
+      close(restoreFocus: false)
+      return false
+    }
     NSApp.activate(ignoringOtherApps: true)
     window.makeKeyAndOrderFront(nil)
     close()
     return true
   }
 
-  func close() {
-    guard ownsPanel else { return }
+  private static var visiblePanel: QLPreviewPanel? {
+    guard QLPreviewPanel.sharedPreviewPanelExists(), let panel = QLPreviewPanel.shared(),
+      panel.isVisible
+    else { return nil }
+    return panel
+  }
+
+  func close(restoreFocus: Bool = true) {
+    // A renderer can leave the shared panel visible after its document has
+    // detached. Clean it only when no other engine owns a newer preview.
+    guard ownsPanel else {
+      if Self.current == nil, let panel = Self.visiblePanel {
+        panel.order(.out, relativeTo: 0)
+        panel.dataSource = nil
+        panel.delegate = nil
+      }
+      return
+    }
     if QLPreviewPanel.sharedPreviewPanelExists(), let panel = QLPreviewPanel.shared() {
       if panel.isInFullScreenMode { panel.exitFullScreenMode(options: nil) }
-      // QLPreviewPanel.orderOut/close animate asynchronously: their late close
-      // can dismiss a replacement shown in the meantime. Hide synchronously.
+      // Hide synchronously so a late close cannot dismiss a replacement.
       panel.order(.out, relativeTo: 0)
     }
-    finish()
+    finish(restoreFocus: restoreFocus)
   }
-  private func finish() {
+  private func finish(restoreFocus: Bool = true) {
     guard let id = resourceID else { return }
     let window = attachedWindow
-    let restoreFocus = NSApp.isActive && (containsKeyWindow || window?.isKeyWindow == true)
+    let restoreFocus =
+      restoreFocus && NSApp.isActive
+      && (containsKeyWindow || window?.isKeyWindow == true)
     resourceID = nil
+    items.removeAll()
     if Self.current === self {
       if let panel = QLPreviewPanel.shared(),
         panel.currentController as AnyObject? === panelController
@@ -235,15 +266,15 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
       }
       Self.current = nil
     }
-    items.removeAll()
     detach()
-    // Refresh when possible; the retained controller has only a weak host link.
-    if QLPreviewPanel.sharedPreviewPanelExists() { QLPreviewPanel.shared()?.updateController() }
-    if restoreFocus, let window {
-      window.makeKeyAndOrderFront(nil)
+    if let window, window.isVisible {
+      if QLPreviewPanel.sharedPreviewPanelExists() { QLPreviewPanel.shared()?.updateController() }
+      if restoreFocus { window.makeKeyAndOrderFront(nil) }
+      // Hidden owners restore their input through the normal wake path. Giving
+      // their editor Quick Look control here can resurrect a detached panel.
       if let input = previousInput as? NSView, input.window === window {
         window.makeFirstResponder(input)
-      } else if let content = window.contentView {
+      } else if restoreFocus, let content = window.contentView {
         WindowInputFocus.restore(in: window, content: content)
       }
     }

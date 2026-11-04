@@ -187,7 +187,7 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
     if ready { channel?.invokeMethod("visibility", arguments: isVisible) }
   }
   func windowDidMiniaturize(_ notification: Notification) {
-    previewHost?.close()
+    previewHost?.close(restoreFocus: false)
     publishVisibility()
   }
   func windowDidDeminiaturize(_ notification: Notification) { publishVisibility() }
@@ -205,7 +205,7 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
 
   func windowWillClose(_ notification: Notification) {
     guard notification.object as? NSWindow === window else { return }
-    previewHost?.close()
+    previewHost?.close(restoreFocus: false)
     previewHost = nil
     channel?.invokeMethod("visibility", arguments: false)
     channel?.setMethodCallHandler(nil)

@@ -610,7 +610,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   }
 
   func hideLauncherWindow() {
-    previewHost?.close()
+    previewHost?.close(restoreFocus: false)
     NativeWebView.exposeAccessibility(in: window.contentView ?? controller.view, enabled: false)
     launcherWindows.hideLauncherWindow()
   }
@@ -718,8 +718,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
       default: break
       }
     }
-    if ["currentApp", "universal"].contains(mode), previewHost?.returnToOwner() == true {
-      return
+    if ["currentApp", "universal"].contains(mode) {
+      if presentedGeneration == nil {
+        previewHost?.close(restoreFocus: false)
+      } else if previewHost?.returnToOwner() == true {
+        return
+      }
     }
     activationStart = ProcessInfo.processInfo.systemUptime
     log(["event": "activation_requested", "mode": mode])

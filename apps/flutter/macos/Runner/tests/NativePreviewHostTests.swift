@@ -101,7 +101,7 @@ struct NativePreviewHostTests {
             assert(window.isKeyWindow)
             assert(!host!.returnToOwner())
           } else {
-            host!.close()
+            host!.close(restoreFocus: index != 2)
           }
           assert(!panel.isVisible)
           assert(window.firstResponder === editor)
@@ -137,6 +137,24 @@ struct NativePreviewHostTests {
         assert(panel.isVisible)
         host!.close()
         assert(messenger.events.filter { $0.method == "closed" }.count == 5)
+        messenger.show("hidden-owner", generation: 7, path: file.path)
+        panel.makeKeyAndOrderFront(nil)
+        window.orderOut(nil)
+        assert(!window.isVisible && panel.isVisible)
+        assert(!host!.returnToOwner())
+        assert(!panel.isVisible, "Wake must clear preview even when its owner is hidden")
+        assert(!window.isVisible, "Clearing an expired preview must not revive its hidden owner")
+        window.makeKeyAndOrderFront(nil)
+        window.makeFirstResponder(editor)
+        messenger.show("lifecycle-hide", generation: 8, path: file.path)
+        panel.makeKeyAndOrderFront(nil)
+        window.orderOut(nil)
+        host!.close(restoreFocus: false)
+        RunLoop.current.run(until: Date().addingTimeInterval(16))
+        assert(
+          !panel.isVisible && !window.isVisible,
+          "Hidden previews must stay closed past retention"
+        )
         host = nil
       }
       // Check after AppKit's event autorelease pool has drained as well.
@@ -145,7 +163,7 @@ struct NativePreviewHostTests {
         window.orderOut(nil)
         try! FileManager.default.removeItem(at: directory)
         print(
-          "Native preview live: text input, immediate reopen, update, native close and host release passed"
+          "Native preview live: text input, immediate reopen, update, native close, retention and host release passed"
         )
         app.terminate(nil)
       }
