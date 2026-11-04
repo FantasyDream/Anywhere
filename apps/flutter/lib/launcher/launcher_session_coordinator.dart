@@ -1,6 +1,7 @@
 import 'dart:async';
 import '../infrastructure/runtime_policy.dart';
 import '../src/rust/api.dart';
+import 'launcher_backend.dart';
 import 'stable_list.dart';
 
 /// Request identity and retained-session lifetime. This service has no Scope,
@@ -10,6 +11,7 @@ class LauncherSessionCoordinator {
   final int Function() nowMillis;
   int _generation = 0, _revision = 0, _requestedRevision = 0;
   int? _session;
+  LauncherStateDto? _snapshot;
   int? _hiddenAt;
   Object? _capturePolicy;
   Future<void>? _suspension;
@@ -21,6 +23,7 @@ class LauncherSessionCoordinator {
   int get revision => _revision;
   int get requestedRevision => _requestedRevision;
   int? get session => _session;
+  LauncherStateDto? get snapshot => _snapshot;
   int? get hiddenAt => _hiddenAt;
   Future<void>? get suspension => _suspension;
 
@@ -43,15 +46,16 @@ class LauncherSessionCoordinator {
 
   void clearSession() {
     _session = null;
+    clearSnapshot();
+  }
+
+  void clearSnapshot() {
+    _snapshot = null;
   }
 
   void acceptRevision(int value) {
     _revision = value;
     _requestedRevision = value;
-  }
-
-  void recordRevision(int value) {
-    _revision = value;
   }
 
   int beginRevision() {
@@ -60,8 +64,66 @@ class LauncherSessionCoordinator {
     return next;
   }
 
-  void requestRevision(int value) {
-    _requestedRevision = value;
+  /// Commit only a newer snapshot from the active session and requested input.
+  /// A tool may advance input in Rust without a local update request.
+  bool acceptSnapshot(LauncherStateDto state, {bool followInput = false}) {
+    if (state.sessionId != _session || state.revision < _requestedRevision) {
+      return false;
+    }
+    final held = _snapshot;
+    if (held != null &&
+        (state.revision < held.revision ||
+            (state.revision == held.revision &&
+                state.snapshotSeq <= held.snapshotSeq))) {
+      return false;
+    }
+    if (followInput && state.revision > _revision) {
+      _requestedRevision = state.revision;
+    }
+    _snapshot = state;
+    _revision = state.revision;
+    return true;
+  }
+
+  /// Follow one generation, merging deltas against the latest committed list.
+  /// The owner supplies visibility and publishes UI changes after acceptance.
+  Future<void> follow(
+      {required LauncherBackend backend,
+      required int generation,
+      required int session,
+      required bool Function() visible,
+      required Future<void> Function(LauncherStateDto) publish}) async {
+    final wait = backend.waitForSnapshot;
+    final waitDelta = backend.waitForSnapshotDelta;
+    if (wait == null && waitDelta == null) return;
+    bool active() => current(generation) && _session == session && visible();
+    var cursor = _snapshot == null ? 0 : snapshotCursor(_snapshot!);
+    while (active()) {
+      final baseCount = _snapshot?.candidates.length ?? 0;
+      final notice = waitDelta == null
+          ? await wait!(session, cursor)
+          : await waitDelta(
+              session, cursor, _snapshot?.candidateListVersion ?? 0, baseCount);
+      if (!active()) return;
+      if (notice.kind == SnapshotWaitKindDto.timedOut) continue;
+      if (notice.kind != SnapshotWaitKindDto.updated) return;
+      final packet = notice.state;
+      if (packet == null || packet.sessionId != session) return;
+      final heldCursor =
+          _snapshot == null ? cursor : snapshotCursor(_snapshot!);
+      final nextCursor = snapshotCursor(packet);
+      if (nextCursor <= heldCursor) {
+        cursor = heldCursor;
+        continue;
+      }
+      final next = materialize(_snapshot, notice, baseCount);
+      if (next == null) {
+        cursor = heldCursor;
+        continue;
+      }
+      cursor = nextCursor;
+      await publish(next);
+    }
   }
 
   void retain(Object policy, Future<void> pending, void Function() expire) {

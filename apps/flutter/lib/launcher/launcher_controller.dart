@@ -118,7 +118,7 @@ class LauncherController extends ChangeNotifier {
   late final ApplicationLifecycle lifecycle;
   final ApplicationIconCache icons;
   LauncherPhase _phase = LauncherPhase.hidden;
-  LauncherStateDto? _snapshot;
+  LauncherStateDto? get _snapshot => _sessionFlow.snapshot;
   int? get _session => _sessionFlow.session;
   int get _generation => _sessionFlow.generation;
   int get _revision => _sessionFlow.revision;
@@ -432,7 +432,7 @@ class LauncherController extends ChangeNotifier {
           current: () => _current(generation),
           reconsider: _maybePrefill);
       _actionPath = null;
-      _snapshot = null;
+      _sessionFlow.clearSnapshot();
       settings.recordCaptures(const []);
       _selectedId = null;
       _userMoved = false;
@@ -554,7 +554,6 @@ class LauncherController extends ChangeNotifier {
     _shortcuts.waiting = false;
     _navigationMode = null;
     _sessionFlow.clearSession();
-    _snapshot = null;
     _cachedView = null;
     _viewKey = null;
     _overlay = const LauncherHome();
@@ -652,14 +651,9 @@ class LauncherController extends ChangeNotifier {
   }
 
   void _apply(LauncherStateDto state) {
-    if (state.sessionId != _session || state.revision < _requestedRevision) {
-      return;
-    }
     final held = _snapshot;
-    if (held != null &&
-        (state.revision < held.revision ||
-            (state.revision == held.revision &&
-                state.snapshotSeq <= held.snapshotSeq))) {
+    final toolInputChanged = _toolPage != null && state.revision > _revision;
+    if (!_sessionFlow.acceptSnapshot(state, followInput: _toolPage != null)) {
       return;
     }
     final fileTarget = _objectActionTarget,
@@ -667,12 +661,9 @@ class LauncherController extends ChangeNotifier {
         fileParent = _objectActionParent;
     final overlay = _overlay;
     // A qualified plugin input.set is committed by Rust while its tool stays open.
-    final toolInputChanged = _toolPage != null && state.revision > _revision;
     if (toolInputChanged) {
       _input = state.input;
-      _sessionFlow.requestRevision(state.revision);
     }
-    _snapshot = state;
     _snapshotInputMode = _activation.mode;
     _overlay = overlay is RootChooser ? overlay : const LauncherHome();
     _shortcuts.invalidate();
@@ -692,7 +683,6 @@ class LauncherController extends ChangeNotifier {
       }
     }
     settings.recordCaptures(state.contextCaptures);
-    _sessionFlow.recordRevision(state.revision);
     if (toolInputChanged) _bindToolPage(_toolPage);
     if (_scopeId != null && !view.scopes.any((scope) => scope.id == _scopeId)) {
       final removed = _scopeId;
@@ -765,40 +755,17 @@ class LauncherController extends ChangeNotifier {
   }
 
   Future<void> _follow(int generation, int session) async {
-    final wait = _backend.waitForSnapshot;
-    final waitDelta = _backend.waitForSnapshotDelta;
-    if (wait == null && waitDelta == null) return;
-    var cursor = _snapshot == null ? 0 : snapshotCursor(_snapshot!);
     try {
-      while (_current(generation) && view.visible) {
-        final baseCount = _snapshot?.candidates.length ?? 0;
-        final notice = waitDelta == null
-            ? await wait!(session, cursor)
-            : await waitDelta(session, cursor,
-                _snapshot?.candidateListVersion ?? 0, baseCount);
-        if (!_current(generation) || !view.visible) return;
-        if (notice.kind == SnapshotWaitKindDto.timedOut) continue;
-        if (notice.kind != SnapshotWaitKindDto.updated) return;
-        final packet = notice.state;
-        if (packet == null || packet.sessionId != session) return;
-        final heldCursor =
-            _snapshot == null ? cursor : snapshotCursor(_snapshot!);
-        final nextCursor = snapshotCursor(packet);
-        if (nextCursor <= heldCursor) {
-          cursor = heldCursor;
-          continue;
-        }
-        final next = LauncherSessionCoordinator.materialize(
-            _snapshot, notice, baseCount);
-        if (next == null) {
-          cursor = heldCursor;
-          continue;
-        }
-        cursor = nextCursor;
-        _apply(next);
-        _notify();
-        await _syncWindow();
-      }
+      await _sessionFlow.follow(
+          backend: _backend,
+          generation: generation,
+          session: session,
+          visible: () => !_disposed && view.visible,
+          publish: (state) async {
+            _apply(state);
+            _notify();
+            await _syncWindow();
+          });
     } catch (error) {
       if (!_current(generation)) return;
       _message = 'Live updates stopped: $error';
