@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../../l10n/app_language.dart';
 import '../../ui/app_style.dart';
 import '../file_search_controller.dart';
-import '../launcher_view_state.dart';
+import '../launcher_layout.dart';
 import 'launcher_components.dart';
 
 /// The file page uses the same filter chips and cycle keys as Scope.
@@ -20,7 +20,7 @@ class FileSearchControls extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
       key: const Key('file-search-controls'),
-      height: LauncherViewState.scopeHeight,
+      height: LauncherLayout.scopeHeight,
       child: LauncherFilterBar(
           key: const Key('file-type-filters'),
           keyPrefix: 'file-filter',

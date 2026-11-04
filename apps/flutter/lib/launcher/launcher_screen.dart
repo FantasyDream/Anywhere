@@ -19,6 +19,7 @@ import '../ui/input_focus.dart';
 import 'activation_prefill.dart';
 import 'file_search_controller.dart' show FileFilter, LoadFilePreview;
 import 'launcher_controller.dart';
+import 'launcher_layout.dart';
 import 'launcher_presentation.dart';
 import 'launcher_view_state.dart';
 import 'widgets/candidate_row.dart';
@@ -231,9 +232,9 @@ class _LauncherScreenState extends State<LauncherScreen> {
     var first = 0;
     var last = LauncherViewState.maxRows;
     if (_scroll.hasClients) {
-      first = (_scroll.offset / LauncherViewState.rowHeight).floor();
+      first = (_scroll.offset / LauncherLayout.rowHeight).floor();
       final visible =
-          (_scroll.position.viewportDimension / LauncherViewState.rowHeight)
+          (_scroll.position.viewportDimension / LauncherLayout.rowHeight)
               .ceil();
       last = first + visible;
     }
@@ -506,7 +507,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
         return;
       }
       final top = _view.selectedTop;
-      final bottom = top + LauncherViewState.rowHeight;
+      final bottom = top + LauncherLayout.rowHeight;
       if (top < _scroll.offset) _scroll.jumpTo(top);
       if (bottom > _scroll.offset + _scroll.position.viewportDimension) {
         _scroll.jumpTo(
@@ -906,7 +907,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
             child: ListView.builder(
                 key: const Key('action-list'),
                 controller: _scroll,
-                itemExtent: LauncherViewState.rowHeight,
+                itemExtent: LauncherLayout.rowHeight,
                 padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
                 itemCount: entries.length,
                 itemBuilder: (_, index) => _entryRow(entries[index], index))));
@@ -917,7 +918,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
         !_scroll.hasClients ||
         !_view.hasFileControls ||
         !_controller.canLoadMoreFiles ||
-        _scroll.position.extentAfter > LauncherViewState.rowHeight * 3) {
+        _scroll.position.extentAfter > LauncherLayout.rowHeight * 3) {
       return;
     }
     final token = (_view.snapshot?.revision, _view.snapshot?.snapshotSeq);

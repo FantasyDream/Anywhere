@@ -5,6 +5,7 @@ import '../../src/rust/api.dart';
 import '../../ui/app_components.dart';
 import '../../ui/app_icons.dart';
 import '../../ui/app_style.dart';
+import '../launcher_layout.dart';
 import '../launcher_presentation.dart';
 import '../launcher_view_state.dart';
 
@@ -168,7 +169,7 @@ class LauncherRootNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
       key: const Key('launcher-mode-chooser'),
-      height: LauncherViewState.navigationHeight,
+      height: LauncherLayout.navigationHeight,
       child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           child: Column(children: [
@@ -316,7 +317,7 @@ class _LauncherFilterBarState extends State<LauncherFilterBar> {
     final ids = widget.options.map((option) => option.id).toSet();
     _keys.removeWhere((id, _) => !ids.contains(id));
     return SizedBox(
-        height: LauncherViewState.scopeHeight,
+        height: LauncherLayout.scopeHeight,
         child: SingleChildScrollView(
             controller: _scroll,
             scrollDirection: Axis.horizontal,
@@ -405,7 +406,7 @@ class LauncherResultHeading extends StatelessWidget {
   final String? detail;
   @override
   Widget build(BuildContext context) => SizedBox(
-      height: LauncherViewState.headerHeight,
+      height: LauncherLayout.headerHeight,
       child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22),
           child: Row(children: [
@@ -486,7 +487,7 @@ class MenuNavigationRow extends StatelessWidget {
               selected: selected,
               onTap: onTap,
               child: SizedBox(
-                  height: LauncherViewState.rowHeight - 4,
+                  height: LauncherLayout.rowHeight - 4,
                   child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       child: Row(children: [

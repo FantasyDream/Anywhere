@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:anywhere/infrastructure/desktop_environment.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/launcher/launcher_controller.dart';
+import 'package:anywhere/launcher/launcher_layout.dart';
 import 'package:anywhere/launcher/launcher_presentation.dart';
 import 'package:anywhere/launcher/launcher_screen.dart';
 import 'package:anywhere/launcher/launcher_view_state.dart';
@@ -292,7 +293,7 @@ void main() {
     expect(find.byKey(const Key('empty-state')), findsNothing);
     final emptyHeight =
         tester.getSize(find.byKey(const Key('launcher-panel'))).height;
-    expect(emptyHeight, LauncherViewState.inputHeight);
+    expect(emptyHeight, LauncherLayout.inputHeight);
     await tester.enterText(find.byType(TextField), '2');
     await tester.pumpAndSettle();
     final twoRows =
@@ -334,13 +335,13 @@ void main() {
     expect(find.text('No actions for this context'), findsNothing);
     expect(find.byKey(const Key('empty-state')), findsNothing);
     expect(tester.getSize(find.byKey(const Key('launcher-panel'))).height,
-        LauncherViewState.inputHeight);
+        LauncherLayout.inputHeight);
     await tester.enterText(find.byType(TextField), 'zzz');
     await tester.pumpAndSettle();
     expect(find.textContaining('zzz'), findsWidgets);
     expect(find.textContaining('match'), findsNothing);
     expect(tester.getSize(find.byKey(const Key('launcher-panel'))).height,
-        LauncherViewState.inputHeight);
+        LauncherLayout.inputHeight);
   });
 
   testWidgets('scope homes stay short and menu queries flatten the entire app',

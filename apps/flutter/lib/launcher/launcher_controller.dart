@@ -21,6 +21,7 @@ import 'file_search_controller.dart';
 import 'file_workspace_coordinator.dart';
 import 'host_view_navigator.dart';
 import 'launcher_backend.dart';
+import 'launcher_layout.dart';
 import 'launcher_navigation.dart';
 import 'launcher_session_coordinator.dart';
 import 'launcher_view_state.dart';

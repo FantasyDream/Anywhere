@@ -7,7 +7,7 @@ import '../../l10n/localized_label.dart';
 import '../../src/rust/api.dart';
 import '../../ui/app_components.dart';
 import '../../ui/app_style.dart';
-import '../launcher_view_state.dart';
+import '../launcher_layout.dart';
 import 'candidate_icon.dart';
 
 class CandidateRow extends StatelessWidget {
@@ -60,7 +60,7 @@ class CandidateRow extends StatelessWidget {
             child: AppSelectionSurface(
               selected: selected,
               child: SizedBox(
-                height: LauncherViewState.rowHeight - 4,
+                height: LauncherLayout.rowHeight - 4,
                 child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 10),
                   child: Row(

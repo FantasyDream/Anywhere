@@ -4,7 +4,6 @@ import 'dart:convert';
 import '../settings/host_settings.dart';
 import '../src/rust/api.dart';
 import '../tools/tool_page.dart';
-import '../ui/design_tokens.g.dart';
 import 'context_source_status.dart';
 import 'file_search_controller.dart';
 import 'stable_list.dart';
@@ -149,8 +148,6 @@ class LauncherViewState {
   final InputModeDto? navigationMode;
   final LauncherEntries? retainedFileEntries;
   bool get navigationOpen => navigationMode != null;
-  static const navigationHeight = 108.0;
-  double get width => toolPage?.width ?? 648;
   bool get hasFileControls =>
       isFileSearch && bindingChoices == null && output == null;
   bool get hasControls => hasScopeBar || hasFileControls;
@@ -165,7 +162,6 @@ class LauncherViewState {
           visibleEntries.isNotEmpty ||
           snapshot?.fileSearch?.finished == true);
   bool get isContent => inputMode == InputModeDto.content;
-  double get inputAreaHeight => inputHeight + (isContent ? 24 : 0);
   final String? scopeId;
 
   /// null = scope home, [] = menu root, [View, Appearance] = submenu.
@@ -186,10 +182,6 @@ class LauncherViewState {
       executing;
   bool get resolving => phase == LauncherPhase.resolving;
   bool get executing => phase == LauncherPhase.executing;
-  static const rowHeight = 56.0,
-      inputHeight = DesignTokens.pageHeaderHeight,
-      scopeHeight = DesignTokens.pageToolbarHeight,
-      headerHeight = 24.0;
   static const maxRows = 7;
   List<ScopeDto> get scopes => snapshot?.scopes ?? const [];
   late final ScopeDto? selectedScope = _findSelectedScope();
@@ -331,7 +323,6 @@ class LauncherViewState {
           ? null
           : visibleEntries[selectedIndex];
 
-  double get selectedTop => selectedIndex * rowHeight;
   bool get hasScopeBar =>
       !isFileSearch &&
       !(inputMode == InputModeDto.search &&
@@ -381,24 +372,4 @@ class LauncherViewState {
   // for content, navigation, binding choices and execution results only.
   bool get hasResultHeading =>
       output != null || browsing || isContent || bindingChoices != null;
-  double get previewHeight =>
-      ((output?.split('\n').length ?? 0).clamp(3, 14) * 20.0) + 24;
-  double get height {
-    if (phase == LauncherPhase.settings) return 508;
-    if (toolPage != null) return toolPage!.height;
-    if (isFileSearch) return 600;
-    if (navigationOpen) return inputAreaHeight + 1 + navigationHeight;
-    final body = output != null
-        ? previewHeight
-        : visibleEntries.isEmpty
-            ? 64.0
-            : (visibleEntries.length * rowHeight + 8)
-                .clamp(8, maxRows * rowHeight + 8);
-    return (inputAreaHeight +
-            (hasControls ? scopeHeight : 0) +
-            (hasPanel || hasControls ? 1 : 0) +
-            (hasNotice ? 44 : 0) +
-            (hasPanel ? (hasResultHeading ? headerHeight : 0) + body : 0))
-        .clamp(inputHeight, 520.0);
-  }
 }
