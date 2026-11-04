@@ -23,18 +23,6 @@ class LauncherSearchArea extends StatelessWidget {
   final VoidCallback? onToggleNavigation, onEditFocus;
   final VoidCallback? onBack;
 
-  String _fileRangeLabel(BuildContext context) {
-    final roots = state.snapshot?.fileSearch?.roots ?? const <String>[];
-    if (roots.isEmpty) return context.l10n.fileSearch;
-    if (roots.length > 1) return context.l10n.fileLocations(roots.length);
-    final name = roots.single
-            .split(RegExp(r'[/\\]'))
-            .where((part) => part.isNotEmpty)
-            .lastOrNull ??
-        roots.single;
-    return context.l10n.fileRange(name);
-  }
-
   @override
   Widget build(BuildContext context) => AppPageHeader(
       height: state.inputAreaHeight,
@@ -91,7 +79,8 @@ class LauncherSearchArea extends StatelessWidget {
                         padding: const EdgeInsets.only(bottom: 3),
                         child: Tooltip(
                             message: state.fileRangeDetail,
-                            child: Text(_fileRangeLabel(context),
+                            child: Text(
+                                state.fileRangePresentation.label(context.l10n),
                                 key: const Key('launcher-mode-label'),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,

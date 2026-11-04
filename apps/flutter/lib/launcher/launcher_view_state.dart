@@ -9,6 +9,7 @@ import '../tools/tool_page.dart';
 import '../ui/design_tokens.g.dart';
 import 'context_source_status.dart';
 import 'file_search_controller.dart';
+import 'launcher_presentation.dart';
 import 'stable_list.dart';
 
 enum LauncherPhase { hidden, activating, ready, resolving, executing, settings }
@@ -393,20 +394,9 @@ class LauncherViewState {
       snapshot?.searchSources
           .any((s) => s.state == SearchSourceStateDto.partial) ??
       false;
-  String get fileRangeLabel {
-    final roots = snapshot?.fileSearch?.roots ?? const <String>[];
-    if (roots.isEmpty) return 'File Search';
-    if (roots.length > 1) return 'File Search · ${roots.length} locations';
-    final name = roots.single
-            .split(RegExp(r'[/\\]'))
-            .where((part) => part.isNotEmpty)
-            .lastOrNull ??
-        roots.single;
-    return 'File Search · $name';
-  }
-
-  String get fileRangeDetail =>
-      (snapshot?.fileSearch?.roots ?? const <String>[]).join('\n');
+  late final FileRangePresentation fileRangePresentation =
+      FileRangePresentation(snapshot?.fileSearch?.roots ?? const <String>[]);
+  String get fileRangeDetail => fileRangePresentation.detail;
   String? get searchStatus =>
       searchStatusFor(lookupAppLocalizations(const Locale('en')));
   String? searchStatusFor(AppLocalizations l10n) {
