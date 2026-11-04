@@ -1,4 +1,9 @@
+import 'dart:ui' show Locale;
+
+import 'package:anywhere/l10n/app_language.dart';
 import 'package:anywhere/src/rust/api.dart';
+
+final englishLabels = lookupAppLocalizations(const Locale('en'));
 
 ContextDto contextFixture(
         {required String id,

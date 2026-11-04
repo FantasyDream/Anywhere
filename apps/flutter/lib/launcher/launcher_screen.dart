@@ -19,6 +19,7 @@ import '../ui/input_focus.dart';
 import 'activation_prefill.dart';
 import 'file_search_controller.dart' show FileFilter, LoadFilePreview;
 import 'launcher_controller.dart';
+import 'launcher_presentation.dart';
 import 'launcher_view_state.dart';
 import 'widgets/candidate_row.dart';
 import 'widgets/file_search_components.dart';
@@ -820,8 +821,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
                                       !view.resolving
                                   ? () => _runAndFocus(_controller.retrySearch)
                                   : null),
-                    if (!view.navigationOpen && view.notice != null)
-                      _notice(view),
+                    if (!view.navigationOpen && view.hasNotice) _notice(view),
                     if (!view.navigationOpen && view.hasPanel) ...[
                       if (view.hasResultHeading)
                         LauncherResultHeading(

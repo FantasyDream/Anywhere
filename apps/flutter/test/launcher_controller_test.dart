@@ -4,6 +4,7 @@ import 'package:anywhere/infrastructure/application_icon_cache.dart';
 import 'package:anywhere/infrastructure/desktop_environment.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/launcher/launcher_controller.dart';
+import 'package:anywhere/launcher/launcher_presentation.dart';
 import 'package:anywhere/launcher/launcher_view_state.dart';
 import 'package:anywhere/settings/host_settings.dart';
 import 'package:anywhere/src/rust/api.dart';
@@ -161,7 +162,8 @@ void main() {
     await controller.activate();
     await controller.openPrivacySettings('clipboard');
     expect(controller.view.phase, LauncherPhase.ready);
-    expect(controller.view.notice, contains('could not be opened'));
+    expect(controller.view.noticeFor(englishLabels),
+        contains('could not be opened'));
     expect(controller.view.snapshot, isNotNull);
     controller.dispose();
   });
@@ -539,7 +541,8 @@ void main() {
       await controller.executeSelected();
       expect(messages, contains('showExecutionSessions'));
       if (failToOpen) {
-        expect(controller.view.notice, contains('Task started'));
+        expect(
+            controller.view.noticeFor(englishLabels), contains('Task started'));
         expect(controller.view.visible, isTrue);
       } else {
         expect(controller.view.visible, isFalse);

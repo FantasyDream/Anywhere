@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:anywhere/infrastructure/desktop_environment.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/launcher/launcher_controller.dart';
+import 'package:anywhere/launcher/launcher_presentation.dart';
 import 'package:anywhere/launcher/launcher_screen.dart';
 import 'package:anywhere/launcher/launcher_view_state.dart';
 import 'package:anywhere/settings/settings_screen.dart';
@@ -156,7 +157,7 @@ void main() {
         scopeId: 'node');
     expect(
         node.visibleCandidates.map((c) => c.title), ['pnpm Run · check:types']);
-    expect(node.resultHeading, 'Actions');
+    expect(node.resultHeadingFor(englishLabels), 'Actions');
     final scopedSearch = LauncherViewState(
         phase: LauncherPhase.ready,
         generation: 1,

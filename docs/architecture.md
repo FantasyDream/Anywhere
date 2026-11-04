@@ -101,6 +101,8 @@ resources/                 键码、文件类型、运行策略、设计参数�
 
 Flutter 的 `LauncherSessionCoordinator` 拥有 SessionId、generation、revision 与已接收快照；只有当前会话、满足请求 revision 且顺序更新的快照才能提交。持续订阅也由它管理，等待返回后复验代数、会话与可见性，增量按最新列表的版本和长度合并。`LauncherController` 负责接收后的导航、选择和窗口更新；工具经 Rust 更新输入时，由同一接收入口推进 revision。
 
+`LauncherViewState` 保留 Scope 过滤、菜单结构、行集合与提示是否存在等展示状态；`launcher_presentation.dart` 根据调用方提供的当前语言生成来源标签、搜索进度、提示和结果标题。布局是否预留提示区域由 `hasNotice` 决定，不依赖默认英文文案；文件范围名称与完整路径提示共用同一展示值对象。
+
 隐藏工作区的 15 秒生命周期也由 LauncherSessionCoordinator 管理。Controller 在通知界面隐藏前建立保留信息；重复隐藏保持幂等，异步恢复在挂起 / 恢复等待后重查期限与策略。到期清理先取走该次保留记录，等待后核对 generation / SessionId，避免清理新会话；每次隐藏持有自己的挂起 Future，新旧到期任务各自结束。空根页唤醒仍重新采集当前应用。
 
 

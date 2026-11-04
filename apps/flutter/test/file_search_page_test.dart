@@ -5,6 +5,7 @@ import 'package:anywhere/infrastructure/presentation_metrics.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/launcher/file_search_controller.dart';
 import 'package:anywhere/launcher/launcher_controller.dart';
+import 'package:anywhere/launcher/launcher_presentation.dart';
 import 'package:anywhere/launcher/launcher_screen.dart';
 import 'package:anywhere/launcher/launcher_view_state.dart';
 import 'package:anywhere/launcher/widgets/candidate_row.dart';
@@ -781,7 +782,7 @@ void main() {
     await c.update('report');
     await tester.pumpAndSettle();
     expect(c.view.isFileSearch, true);
-    expect(c.view.notice, isNull);
+    expect(c.view.noticeFor(englishLabels), isNull);
     expect(find.textContaining('Menu discovery timed out'), findsNothing);
     expect(fileRow('report.txt'), findsOneWidget);
     expect(tester.takeException(), isNull);

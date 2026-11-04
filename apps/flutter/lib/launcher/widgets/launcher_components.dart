@@ -5,6 +5,7 @@ import '../../src/rust/api.dart';
 import '../../ui/app_components.dart';
 import '../../ui/app_icons.dart';
 import '../../ui/app_style.dart';
+import '../launcher_presentation.dart';
 import '../launcher_view_state.dart';
 
 /// Search stays visually dominant; captured content identifies its source here.
