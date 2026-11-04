@@ -120,13 +120,9 @@ class LauncherController extends ChangeNotifier {
   LauncherPhase _phase = LauncherPhase.hidden;
   LauncherStateDto? _snapshot;
   int? get _session => _sessionFlow.session;
-  set _session(int? value) => _sessionFlow.session = value;
   int get _generation => _sessionFlow.generation;
-  set _generation(int value) => _sessionFlow.generation = value;
   int get _revision => _sessionFlow.revision;
-  set _revision(int value) => _sessionFlow.revision = value;
   int get _requestedRevision => _sessionFlow.requestedRevision;
-  set _requestedRevision(int value) => _sessionFlow.requestedRevision = value;
   int _windowPresentation = 0;
 
   /// Advances only after Host show completes for the current visible Launcher.
@@ -411,7 +407,7 @@ class LauncherController extends ChangeNotifier {
         return;
       }
     }
-    final generation = ++_generation;
+    final generation = _sessionFlow.beginGeneration();
     performance.begin(PresentationOperation.activation,
         generation: generation, presentation: _windowPresentation + 1);
     _phase = LauncherPhase.activating;
@@ -421,7 +417,7 @@ class LauncherController extends ChangeNotifier {
       // Synchronous reservation closes the gap where a hidden host had no session
       // identity to cancel while foreground capture was still running.
       final session = _backend.beginActivation();
-      _session = session;
+      _sessionFlow.attachSession(session);
       final state = await _backend.activate(session,
           promptAccessibility: false,
           capturedEnvironment: globalBinding != null);
@@ -442,7 +438,7 @@ class LauncherController extends ChangeNotifier {
       _userMoved = false;
       _scopeTouched = false;
       _scopeId = null;
-      _revision = _requestedRevision = state.revision;
+      _sessionFlow.acceptRevision(state.revision);
       _message = settings.warning.isEmpty ? null : settings.warning;
       _output = null;
       _toolPage = null;
@@ -532,7 +528,7 @@ class LauncherController extends ChangeNotifier {
         _backend.resume != null) {
       final generation = _generation, session = _session!;
       _retainedPhase = _phase;
-      ++_generation;
+      _sessionFlow.invalidateGeneration();
       _shortcuts.invalidate();
       _phase = LauncherPhase.hidden;
       _toolPage?.setVisible(false);
@@ -554,10 +550,10 @@ class LauncherController extends ChangeNotifier {
     }
     final generation = _generation;
     final session = _session;
-    ++_generation;
+    _sessionFlow.invalidateGeneration();
     _shortcuts.waiting = false;
     _navigationMode = null;
-    _session = null;
+    _sessionFlow.clearSession();
     _snapshot = null;
     _cachedView = null;
     _viewKey = null;
@@ -620,7 +616,7 @@ class LauncherController extends ChangeNotifier {
       return false;
     }
     _sessionFlow.cancelDeadline();
-    final generation = ++_generation;
+    final generation = _sessionFlow.beginGeneration();
     try {
       await _sessionFlow.suspension;
       if (!_current(generation) ||
@@ -674,7 +670,7 @@ class LauncherController extends ChangeNotifier {
     final toolInputChanged = _toolPage != null && state.revision > _revision;
     if (toolInputChanged) {
       _input = state.input;
-      _requestedRevision = state.revision;
+      _sessionFlow.requestRevision(state.revision);
     }
     _snapshot = state;
     _snapshotInputMode = _activation.mode;
@@ -696,7 +692,7 @@ class LauncherController extends ChangeNotifier {
       }
     }
     settings.recordCaptures(state.contextCaptures);
-    _revision = state.revision;
+    _sessionFlow.recordRevision(state.revision);
     if (toolInputChanged) _bindToolPage(_toolPage);
     if (_scopeId != null && !view.scopes.any((scope) => scope.id == _scopeId)) {
       final removed = _scopeId;
@@ -816,8 +812,7 @@ class LauncherController extends ChangeNotifier {
     if (session == null || !view.visible) return;
     _navigationMode = null;
     final retainedTool = automatic ? _toolPage : null;
-    final revision = ++_revision;
-    _requestedRevision = revision;
+    final revision = _sessionFlow.beginRevision();
     if (!automatic) {
       performance.begin(
           _activation.mode == InputModeDto.fileSearch
@@ -1416,7 +1411,7 @@ class LauncherController extends ChangeNotifier {
       return;
     }
     if (_phase != LauncherPhase.hidden) await dismiss();
-    final generation = ++_generation;
+    final generation = _sessionFlow.beginGeneration();
     _phase = LauncherPhase.settings;
     try {
       await settings.load(catalog: true);
@@ -1460,7 +1455,7 @@ class LauncherController extends ChangeNotifier {
     }
     if (hasRetainedState) {
       _phase = LauncherPhase.hidden;
-      ++_generation;
+      _sessionFlow.invalidateGeneration();
       _notify();
       await _window.hide(generation);
     } else {
@@ -1678,7 +1673,7 @@ class LauncherController extends ChangeNotifier {
     _disposed = true;
     _cachedView = null;
     _viewKey = null;
-    ++_generation;
+    _sessionFlow.invalidateGeneration();
     final session = _session;
     if (session != null) {
       unawaited(_backend.deactivate(session).catchError((Object _) {}));

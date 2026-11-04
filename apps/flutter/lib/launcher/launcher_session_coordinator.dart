@@ -8,25 +8,66 @@ import 'stable_list.dart';
 class LauncherSessionCoordinator {
   LauncherSessionCoordinator(this.nowMillis);
   final int Function() nowMillis;
-  int generation = 0, revision = 0, requestedRevision = 0;
-  int? session;
-  int? hiddenAt;
-  Object? capturePolicy;
-  Future<void>? suspension;
+  int _generation = 0, _revision = 0, _requestedRevision = 0;
+  int? _session;
+  int? _hiddenAt;
+  Object? _capturePolicy;
+  Future<void>? _suspension;
   Timer? _deadline;
   Future<bool>? _restoring;
   static const retention =
       Duration(milliseconds: RuntimePolicy.launcherRetentionMs);
-  bool current(int value) => value == generation;
-  bool get retained => hiddenAt != null;
+  int get generation => _generation;
+  int get revision => _revision;
+  int get requestedRevision => _requestedRevision;
+  int? get session => _session;
+  int? get hiddenAt => _hiddenAt;
+  Future<void>? get suspension => _suspension;
+
+  bool current(int value) => value == _generation;
+  bool get retained => _hiddenAt != null;
   bool canResume(Object policy) =>
-      hiddenAt != null &&
-      capturePolicy == policy &&
-      nowMillis() - hiddenAt! < retention.inMilliseconds;
+      _hiddenAt != null &&
+      _capturePolicy == policy &&
+      nowMillis() - _hiddenAt! < retention.inMilliseconds;
+
+  int beginGeneration() => ++_generation;
+
+  void invalidateGeneration() {
+    ++_generation;
+  }
+
+  void attachSession(int value) {
+    _session = value;
+  }
+
+  void clearSession() {
+    _session = null;
+  }
+
+  void acceptRevision(int value) {
+    _revision = value;
+    _requestedRevision = value;
+  }
+
+  void recordRevision(int value) {
+    _revision = value;
+  }
+
+  int beginRevision() {
+    final next = ++_revision;
+    _requestedRevision = next;
+    return next;
+  }
+
+  void requestRevision(int value) {
+    _requestedRevision = value;
+  }
+
   void retain(Object policy, Future<void> pending, void Function() expire) {
-    hiddenAt = nowMillis();
-    capturePolicy = policy;
-    suspension = pending;
+    _hiddenAt = nowMillis();
+    _capturePolicy = policy;
+    _suspension = pending;
     _deadline?.cancel();
     _deadline = Timer(retention, expire);
   }
@@ -38,10 +79,10 @@ class LauncherSessionCoordinator {
 
   Future<void>? clearRetention() {
     cancelDeadline();
-    hiddenAt = null;
-    capturePolicy = null;
-    final pending = suspension;
-    suspension = null;
+    _hiddenAt = null;
+    _capturePolicy = null;
+    final pending = _suspension;
+    _suspension = null;
     return pending;
   }
 
@@ -49,7 +90,7 @@ class LauncherSessionCoordinator {
       _restoring ??= run().whenComplete(() => _restoring = null);
   void dispose() {
     cancelDeadline();
-    ++generation;
+    invalidateGeneration();
   }
 
   /// The transport supplies replacements, stable-list tails, or metadata only.
