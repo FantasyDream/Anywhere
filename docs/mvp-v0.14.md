@@ -46,6 +46,8 @@
 
 修改前真实系统按钮回归失败，修改后通过立即重开、按钮处理器恢复、XML 渲染后关闭、加载中关闭、隐藏 16 秒和 Host 释放。完整 `scripts/check.sh` exit 0，Flutter 514 项通过 / 1 项跳过，Rust Core 332 项通过 / 1 项忽略，其余工作区、原生 Host、Clippy、SDK、架构、规范及生成物检查通过；随后仅同步 Flutter / Native 构建号至 43。旧现场的长时间不可关闭状态尚未在受控环境完整重现，不能把关闭竞态回归当作所有 XML / 系统扩展路径已验收。
 
+`7724530` 已构建为 `Anywhere-0.14-preview-build43.app`（0.14.0+43 / arm64 / Impeller），本机持久签名、ZIP 内容和 SHA-256 校验通过。独立数据目录与合成 XML 实测通过系统按钮关闭、立即空格重开、HTML 内容获得焦点后 Esc 关闭及继续编辑查询；日志中 AXTree、Flutter ERROR 和 frame-time clamping 均为 0。隔离实例正常退出，随后已按明确路径启动日常 Build 43，核对唯一运行进程；旧 Build 42 已退出。源码、归档摘要、旧现场采样和本轮证据保留在被忽略的 `build/Anywhere-0.14-preview-build43.provenance.json` 与 `build/acceptance-preview-build43/`。未新增物理输入法、完整 VoiceOver、格式 / 内存 / 跨平台或远端 CI 验收。
+
 ### Tooltip 语义树更新修复 — 2026-11-05
 
 已在真实 CandidateRow / AppRowActions 组合中稳定复现上一轮 AXTree 错误：依次显示多个 Tooltip 时，相邻浮层锚点被固定 Flutter 3.47.8 合并，增量更新包含无法从根节点到达的节点。共享 `AppTooltip` 为每个显式提示建立独立语义容器，Launcher、工具、设置与任务页面统一使用；保留提示、标签与语义按钮操作。实现与升级复验边界见[架构](architecture.md#固定-flutter-版本的表面缓存保护)。
