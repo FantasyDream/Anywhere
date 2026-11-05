@@ -170,6 +170,19 @@ void main() {
     await tester.pumpWidget(LocalizedApp(
         theme: AppStyle.theme, home: LauncherScreen(controller: controller)));
     await controller.activate(mode: WakeMode.universal);
+    await tester.pump();
+    final navigation = _subtree(
+            tester.getSemantics(find.byKey(const Key('launcher-navigation'))))
+        .firstWhere((node) =>
+            node.getSemanticsData().hasAction(ui.SemanticsAction.tap));
+    expect(navigation.getSemanticsData().label,
+        contains('Global Search / Current App'));
+    navigation.owner!.performAction(navigation.id, ui.SemanticsAction.tap);
+    await tester.pump();
+    expect(controller.view.navigationOpen, isTrue);
+    navigation.owner!.performAction(navigation.id, ui.SemanticsAction.tap);
+    await tester.pump();
+    expect(controller.view.navigationOpen, isFalse);
     for (final seconds in [14, 16, 16]) {
       await controller.update('synthetic');
       await tester.pump();

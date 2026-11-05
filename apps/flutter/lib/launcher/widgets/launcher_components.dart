@@ -35,12 +35,12 @@ class LauncherSearchArea extends StatelessWidget {
               onPressed: onBack,
               icon: const Icon(AppIcons.back, size: 20))
         else if (!state.isContent && onToggleNavigation != null)
-          Semantics(
-              button: true,
-              expanded: state.navigationOpen,
-              label: context.l10n.navigationModes,
-              child: AppTooltip(
-                  message: context.l10n.navigationModes,
+          AppTooltip(
+              message: context.l10n.navigationModes,
+              child: Semantics(
+                  button: true,
+                  expanded: state.navigationOpen,
+                  label: context.l10n.navigationModes,
                   child: InkWell(
                       key: const Key('launcher-navigation'),
                       borderRadius:

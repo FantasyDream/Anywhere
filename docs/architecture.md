@@ -251,7 +251,7 @@ macOS Host 在启动引擎前安装 `NativeFlutterSurfaceGuard`：对 Flutter �
 
 `FlutterAccessibilityState` 只在 macOS Host 缓存已经收到的 AppKit 辅助功能启用 / 禁用通知，新建引擎后重放，避免懒加载窗口错过请求。没有已观察状态时不执行，不强制开启语义树，不增加系统权限。通知名称沿用固定 Flutter SDK 的实现契约，并非新的跨平台业务协议；升级 SDK 时须复核 `FlutterEngine.mm` 的通知处理和晚建窗口的实际 AX 树，不能只依赖适配器自身测试。
 
-应用显式创建的 Tooltip 使用 `ui/app_components.dart` 中的 `AppTooltip`，为每个浮层锚点建立独立的语义容器。固定 Flutter 3.47.8 会在列表等合并语义的布局中丢失相邻 Tooltip 的不同 traversal parent 标识，浮层显示后提交无法从根节点到达的节点，导致原生 AXTree 拒绝后续更新；相关上游问题见 [Flutter #182444](https://github.com/flutter/flutter/issues/182444)。此处使用公开 `Semantics(container: true)` 隔离锚点，保留原有 Tooltip、标签和按钮动作，不修改 SDK 或关闭辅助功能。`launcher_semantics_lifecycle_test.dart` 重放实际序列化增量的根可达性，覆盖相邻提示、悬停、语言切换与 Launcher 保留 / 过期恢复；升级 Flutter 后按这些回归及真实桌面树复验是否仍需要适配。
+应用显式创建的 Tooltip 使用 `ui/app_components.dart` 中的 `AppTooltip`，为每个浮层锚点建立独立的语义容器。固定 Flutter 3.47.8 会在列表等合并语义的布局中丢失相邻 Tooltip 的不同 traversal parent 标识，浮层显示后提交无法从根节点到达的节点，导致原生 AXTree 拒绝后续更新；相关上游问题见 [Flutter #182444](https://github.com/flutter/flutter/issues/182444)。此处使用公开 `Semantics(container: true)` 隔离锚点，保留原有 Tooltip、标签和按钮动作，不修改 SDK 或关闭辅助功能。导航按钮的标签、展开状态与点击手势放在同一提示边界内，避免标签与可执行节点分离。`launcher_semantics_lifecycle_test.dart` 重放实际序列化增量的根可达性，覆盖相邻提示、悬停、语言切换、语义导航与 Launcher 保留 / 过期恢复；升级 Flutter 后按这些回归及真实桌面树复验是否仍需要适配。
 
 固定 Flutter 3.47 的 `FlutterViewWrapper.accessibilityChildren` 只返回渲染视图，macOS 语义桥没有连接嵌入的 WebKit 控件。Host 的 `NativeAccessibilityContainer` 通过公开 AppKit 接口补充这一子树：原有 Flutter 节点每次动态读取，嵌入视图及原父节点仅弱引用；关闭、隐藏、弹出 Host 操作面板或移动共享窗口时撤销连接并恢复父节点。`NativeWebView` 统一发现窗口内唯一的 WebView；新旧视图重叠时不猜测，不向其中任意一个转移焦点或暴露节点。适配不改 SDK、不轮询、不要求插件编写无障碍桥接代码；升级 Flutter 后须复核是否仍有必要，真实辅助技术的验收范围单独记录。
 
