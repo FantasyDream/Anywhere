@@ -194,7 +194,7 @@ class _ToolPageShellState extends State<ToolPageShell> {
                   widget.trailing!,
                   const SizedBox(width: 8),
                 ],
-                Tooltip(
+                AppTooltip(
                     message: widget.escapeHint ??
                         (widget.detached
                             ? context.l10n.closeEsc

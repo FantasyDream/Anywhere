@@ -161,7 +161,7 @@ class _ActionShortcutsSectionState extends State<ActionShortcutsSection> {
                                   style: TextStyle(
                                       fontSize: 11, color: AppStyle.muted)),
                           ])),
-                      Tooltip(
+                      AppTooltip(
                           message:
                               context.l10n.editActionShortcut(binding.title),
                           child: OutlinedButton.icon(

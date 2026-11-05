@@ -361,7 +361,7 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
               : session.query.text.isNotEmpty
                   ? context.l10n.shortcutHint(context.l10n.clearSearch, 'Esc')
                   : context.l10n.closeEsc,
-      leading: Tooltip(
+      leading: AppTooltip(
           message: context.l10n.shelfSelectHint,
           child: const Icon(AppIcons.shelf,
               size: 20, color: DesignTokens.iconAmber)),

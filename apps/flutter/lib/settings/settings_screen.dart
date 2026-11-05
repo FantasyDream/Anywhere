@@ -154,7 +154,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         .firstWhere((item) => item.source == source)
         .withLocalizations(context.l10n);
     if (!includeHealthy && status.attention == 0) return null;
-    return Tooltip(
+    return AppTooltip(
       message: status.detail,
       child: Row(children: [
         Icon(

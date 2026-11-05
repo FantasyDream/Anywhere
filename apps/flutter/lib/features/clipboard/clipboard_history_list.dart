@@ -49,7 +49,7 @@ class ClipboardHistoryList extends StatelessWidget {
                 behavior: HitTestBehavior.opaque,
                 onDoubleTap:
                     onActivate == null ? null : () => onActivate!(item),
-                child: Tooltip(
+                child: AppTooltip(
                     message: item.summary,
                     child: Row(children: [
                       Icon(clipboardKindIcon(item.kind),

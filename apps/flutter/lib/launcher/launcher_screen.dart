@@ -967,7 +967,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
       height: 44,
       child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-          child: Tooltip(
+          child: AppTooltip(
               message: view.isFileSearch &&
                       view.searchPartial &&
                       (view.snapshot?.fileSearch?.issueExamples.isNotEmpty ??

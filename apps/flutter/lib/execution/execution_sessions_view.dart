@@ -396,7 +396,7 @@ class _TaskRow extends StatelessWidget {
                     child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                      Tooltip(
+                      AppTooltip(
                           message: session.title,
                           child: Text(session.title,
                               maxLines: 1,
@@ -406,7 +406,7 @@ class _TaskRow extends StatelessWidget {
                                   fontWeight: FontWeight.w500,
                                   color: AppStyle.primary))),
                       const SizedBox(height: 4),
-                      Tooltip(
+                      AppTooltip(
                           message: session.directory,
                           child: Text(project,
                               maxLines: 1,
@@ -482,7 +482,7 @@ class _TaskDetail extends StatelessWidget {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Expanded(
-                                        child: Tooltip(
+                                        child: AppTooltip(
                                             message: summary.title,
                                             child: Text(summary.title,
                                                 maxLines: 2,
@@ -495,7 +495,7 @@ class _TaskDetail extends StatelessWidget {
                                                     color: AppStyle.primary)))),
                                     const SizedBox(width: 16),
                                     if (active)
-                                      Tooltip(
+                                      AppTooltip(
                                           message: context.l10n.shortcutHint(
                                               context.l10n.stop,
                                               DesktopEnvironment.current
@@ -582,7 +582,7 @@ class _TaskDetail extends StatelessWidget {
                                           style: _label),
                                   ]),
                               const SizedBox(height: 10),
-                              Tooltip(
+                              AppTooltip(
                                   message: summary.directory,
                                   child: Text(summary.directory,
                                       maxLines: 1,

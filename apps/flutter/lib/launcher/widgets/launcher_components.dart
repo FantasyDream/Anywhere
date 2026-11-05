@@ -39,7 +39,7 @@ class LauncherSearchArea extends StatelessWidget {
               button: true,
               expanded: state.navigationOpen,
               label: context.l10n.navigationModes,
-              child: Tooltip(
+              child: AppTooltip(
                   message: context.l10n.navigationModes,
                   child: InkWell(
                       key: const Key('launcher-navigation'),
@@ -79,7 +79,7 @@ class LauncherSearchArea extends StatelessWidget {
                   if (state.isFileSearch)
                     Padding(
                         padding: const EdgeInsets.only(bottom: 3),
-                        child: Tooltip(
+                        child: AppTooltip(
                             message: state.fileRangeDetail,
                             child: Text(
                                 state.fileRangePresentation.label(context.l10n),
@@ -395,7 +395,9 @@ class LauncherFilterButton extends StatelessWidget {
                                   ? AppStyle.primary
                                   : AppStyle.secondary))
                     ]))))));
-    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
+    return tooltip == null
+        ? button
+        : AppTooltip(message: tooltip!, child: button);
   }
 }
 
@@ -456,7 +458,7 @@ class LauncherEmptyState extends StatelessWidget {
                         AppStyle.body.copyWith(fontWeight: FontWeight.w500))),
             const SizedBox(height: 5),
             Flexible(
-                child: Tooltip(
+                child: AppTooltip(
                     message: detail,
                     child: Text(detail,
                         textAlign: TextAlign.center,

@@ -184,6 +184,18 @@ class AppPageTitle extends StatelessWidget {
           ]);
 }
 
+/// Keep each tooltip portal anchored to a separate accessibility node.
+/// Flutter 3.47 can merge sibling portal anchors and publish orphaned nodes.
+class AppTooltip extends StatelessWidget {
+  const AppTooltip({super.key, required this.message, required this.child});
+  final String message;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+      container: true, child: Tooltip(message: message, child: child));
+}
+
 /// Show a shortcut hint only on pages that bind it; the menu remains discoverable.
 class AppMoreAction extends StatelessWidget {
   const AppMoreAction(
@@ -192,7 +204,7 @@ class AppMoreAction extends StatelessWidget {
   final bool showShortcut;
 
   @override
-  Widget build(BuildContext context) => Tooltip(
+  Widget build(BuildContext context) => AppTooltip(
       message: showShortcut
           ? context.l10n.shortcutHint(context.l10n.actions,
               DesktopEnvironment.current.commandLabel('K'))
@@ -228,7 +240,7 @@ class AppRowActions extends StatelessWidget {
   Widget build(BuildContext context) => ExcludeFocus(
           child: Row(mainAxisSize: MainAxisSize.min, children: [
         if (onPreview != null)
-          Tooltip(
+          AppTooltip(
               message: context.l10n.shortcutHint(context.l10n.preview,
                   DesktopEnvironment.current.previewShortcutLabel),
               child: TextButton(
@@ -247,7 +259,7 @@ class AppRowActions extends StatelessWidget {
               key: const Key('selected-row-actions'),
               onPressed: onActions,
               showShortcut: showActionsShortcut),
-        Tooltip(
+        AppTooltip(
             message: context.l10n.shortcutHint(primaryLabel, '↵'),
             child: TextButton(
                 key: const Key('selected-row-primary'),

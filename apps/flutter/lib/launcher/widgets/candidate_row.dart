@@ -83,7 +83,7 @@ class CandidateRow extends StatelessWidget {
                               ]))),
                       if (actionShortcut != null) ...[
                         const SizedBox(width: 8),
-                        Tooltip(
+                        AppTooltip(
                             message: context.l10n.anywhereActionShortcut,
                             child: AppKeycap(actionShortcut!)),
                       ],
@@ -114,7 +114,7 @@ class CandidateRow extends StatelessWidget {
         _title(disabled, title),
         if (subtitle != null) ...[
           const SizedBox(height: 2),
-          Tooltip(
+          AppTooltip(
               message: subtitle,
               child: Text(
                 subtitle,
