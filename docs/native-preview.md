@@ -55,6 +55,6 @@ Windows 后续可使用系统 `IPreviewHandler` 承载在独立窗口中，显�
 
 原生响应链及控制权遵循 Apple 的 [QLPreviewPanel](https://developer.apple.com/documentation/quicklookui/qlpreviewpanel) 契约。原生文本编辑器也会接管 Quick Look，因此展示前暂时将键盘交给 Flutter 内容接收视图，关闭时恢复仍属于原窗口的编辑器。面板先展示再检查控制权，取得控制权后才更新数据源；重复展示时重新连接数据源，不能假设系统会再次调用接管回调。
 
-主动关闭使用同步隐藏，避免 Quick Look 的延迟关闭动画打断下一次展示；系统关闭按钮仍沿用原生关闭事件。系统可能保留隐藏面板的控制器，因此响应链控制器只弱引用宿主，避免保留已关闭窗口的通道与 Flutter 引擎。
+主动关闭使用同步隐藏，避免 Quick Look 的延迟关闭动画打断下一次展示。系统关闭按钮在 Host 持有预览期间，通过公开 AppKit target/action 接入同一同步收尾路径；Quick Look 自身的按钮动作会绕过普通 `windowShouldClose` 并异步结束，不能只等 `willClose` 通知后再撤销旧状态。结束或移交 Host 时恢复原按钮处理器，按钮与原目标均不额外强持有。系统可能保留隐藏面板的控制器，因此响应链控制器只弱引用宿主，避免保留已关闭窗口的通道与 Flutter 引擎。
 
-`scripts/check-macos-host.sh` 编译原生预览与回归源码，`scripts/check-macos-preview-live.sh` 在可交互桌面中运行独立窗口回归：文本输入竞争、立即关闭重开、对象更新、系统关闭、输入恢复与宿主释放。后者会短暂激活测试窗口，须显式运行，不包含在普通工程检查中。
+`scripts/check-macos-host.sh` 编译原生预览与回归源码，`scripts/check-macos-preview-live.sh` 在可交互桌面中运行独立窗口回归：文本输入竞争、立即关闭重开、对象更新、真实系统关闭按钮、XML 渲染后及加载中关闭、输入恢复与宿主释放。系统按钮用例不在关闭后额外等待动画，确保立即重开不会与旧关闭动作交错。后者会短暂激活测试窗口，须显式运行，不包含在普通工程检查中。

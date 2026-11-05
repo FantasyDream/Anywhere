@@ -45,6 +45,9 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
   private var resignObserver: NSObjectProtocol?
   private var keyObserver: NSObjectProtocol?
   private var visibilityObservation: NSKeyValueObservation?
+  private weak var closeButton: NSButton?
+  private weak var previousCloseTarget: AnyObject?
+  private var previousCloseAction: Selector?
 
   init(messenger: FlutterBinaryMessenger, owner: @escaping () -> NSWindow?) {
     self.owner = owner
@@ -140,6 +143,7 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     }
   }
   deinit {
+    restoreCloseButton()
     channel.setMethodCallHandler(nil)
     if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
     if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
@@ -201,6 +205,7 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
       panel.delegate = self
       panel.reloadData()
       panel.currentPreviewItemIndex = 0
+      bindCloseButton(in: panel)
       // Keep search/list keyboard navigation in the owning window by default.
       panel.level = .floating
       channel.invokeMethod("shown", arguments: ["id": id])
@@ -229,6 +234,37 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
       panel.isVisible
     else { return nil }
     return panel
+  }
+
+  private func bindCloseButton(in panel: QLPreviewPanel) {
+    guard let button = panel.standardWindowButton(.closeButton), button.target !== self else {
+      return
+    }
+    restoreCloseButton()
+    closeButton = button
+    previousCloseTarget = button.target
+    previousCloseAction = button.action
+    // Quick Look's button bypasses windowShouldClose and animates asynchronously.
+    // Use the same synchronous close as Escape before another preview can open.
+    button.target = self
+    button.action = #selector(closeFromButton(_:))
+  }
+
+  @objc private func closeFromButton(_ sender: NSButton) {
+    guard sender === closeButton else { return }
+    close()
+  }
+
+  private func restoreCloseButton() {
+    if let button = closeButton, button.action == #selector(closeFromButton(_:)),
+      button.target == nil || button.target === self
+    {
+      button.target = previousCloseTarget
+      button.action = previousCloseAction
+    }
+    closeButton = nil
+    previousCloseTarget = nil
+    previousCloseAction = nil
   }
 
   func close(restoreFocus: Bool = true) {
@@ -282,6 +318,7 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     channel.invokeMethod("closed", arguments: ["id": id, "restoreFocus": restoreFocus])
   }
   private func detach() {
+    restoreCloseButton()
     if let window = attachedWindow, window.nextResponder === panelController {
       window.nextResponder = previousResponder
     }

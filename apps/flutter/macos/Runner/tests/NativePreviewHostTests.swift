@@ -75,6 +75,15 @@ struct NativePreviewHostTests {
     try! FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     let file = directory.appendingPathComponent("preview.txt")
     try! "Synthetic preview regression".write(to: file, atomically: true, encoding: .utf8)
+    let xml = directory.appendingPathComponent("settings.xml")
+    let xmlRows = (0..<350).map { "<!-- Synthetic XML preview row \($0) -->" }.joined(
+      separator: "\n"
+    )
+    try! "<?xml version=\"1.0\"?>\n<settings>\n\(xmlRows)\n</settings>\n".write(
+      to: xml,
+      atomically: true,
+      encoding: .utf8
+    )
 
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
       app.activate(ignoringOtherApps: true)
@@ -128,16 +137,36 @@ struct NativePreviewHostTests {
         assert(!host!.previewPanel(panel, handle: wake), "Preview must not consume Command Space")
         assert(panel.isVisible && host!.ownsPanel)
         // The system close button follows Quick Look's own close lifecycle.
-        panel.close()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        let closeButton = panel.standardWindowButton(.closeButton)!
+        closeButton.performClick(nil)
         assert(!host!.ownsPanel && !panel.isVisible)
+        assert(closeButton.target !== host, "Closing must restore the system button target")
         assert(window.firstResponder === editor)
+        // A user can reopen before Quick Look finishes its native close animation.
         messenger.show("after-native-close", generation: 6, path: file.path)
         RunLoop.current.run(until: Date().addingTimeInterval(0.35))
         assert(panel.isVisible)
         host!.close()
         assert(messenger.events.filter { $0.method == "closed" }.count == 5)
-        messenger.show("hidden-owner", generation: 7, path: file.path)
+        messenger.show("xml-native-close", generation: 7, path: xml.path)
+        RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+        panel.makeKeyAndOrderFront(nil)
+        assert(panel.isVisible && host!.ownsPanel)
+        panel.standardWindowButton(.closeButton)!.performClick(nil)
+        RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        assert(
+          !panel.isVisible && !host!.ownsPanel,
+          "XML preview must close through its system action"
+        )
+        assert(window.firstResponder === editor)
+        messenger.show("xml-loading-close", generation: 8, path: xml.path)
+        host!.close(restoreFocus: false)
+        RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+        assert(
+          !panel.isVisible && !host!.ownsPanel,
+          "A late XML renderer must not reopen a closed preview"
+        )
+        messenger.show("hidden-owner", generation: 9, path: file.path)
         panel.makeKeyAndOrderFront(nil)
         window.orderOut(nil)
         assert(!window.isVisible && panel.isVisible)
@@ -146,7 +175,7 @@ struct NativePreviewHostTests {
         assert(!window.isVisible, "Clearing an expired preview must not revive its hidden owner")
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(editor)
-        messenger.show("lifecycle-hide", generation: 8, path: file.path)
+        messenger.show("lifecycle-hide", generation: 10, path: xml.path)
         panel.makeKeyAndOrderFront(nil)
         window.orderOut(nil)
         host!.close(restoreFocus: false)
@@ -163,7 +192,7 @@ struct NativePreviewHostTests {
         window.orderOut(nil)
         try! FileManager.default.removeItem(at: directory)
         print(
-          "Native preview live: text input, immediate reopen, update, native close, retention and host release passed"
+          "Native preview live: text input, immediate reopen, update, native close, XML close/loading, retention and host release passed"
         )
         app.terminate(nil)
       }
