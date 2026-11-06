@@ -57,7 +57,8 @@ private final class PreviewMessenger: NSObject, FlutterBinaryMessenger {
 }
 
 private final class PreviewKeyboardReceiver: NSView {
-  override var acceptsFirstResponder: Bool { true }
+  // FlutterView rejects automatic focus while its text input plugin is active.
+  override var acceptsFirstResponder: Bool { !(window?.firstResponder is NSTextView) }
 }
 
 @main
@@ -116,13 +117,18 @@ struct NativePreviewHostTests {
       }
       verify(app.isActive && window.isKeyWindow, "Live preview test requires an active desktop")
       autoreleasepool {
+        verify(!QLPreviewPanel.sharedPreviewPanelExists(), "Cold start must not prewarm Quick Look")
+        messenger.show("cold-preview", generation: 1, path: xml.path)
         guard let panel = QLPreviewPanel.shared() else { fail("Quick Look panel is unavailable") }
+        RunLoop.current.run(until: Date().addingTimeInterval(1.5))
+        verify(panel.isVisible && host!.ownsPanel, "The first preview must open without prewarming")
+        host!.close()
         // NSTextView is a competing Quick Look controller, including Flutter's
         // native editor. The host must keep it from claiming our list preview.
         verify(editor.acceptsPreviewPanelControl(panel))
         for index in 1...3 {
           verify(window.firstResponder === editor)
-          messenger.show("preview-\(index)", generation: index, path: file.path)
+          messenger.show("preview-\(index)", generation: index + 1, path: file.path)
           verify(window.firstResponder === receiver)
           verify(panel.dataSource === host)
           verify(panel.currentPreviewItem?.previewItemURL == file)
@@ -144,8 +150,8 @@ struct NativePreviewHostTests {
           verify(panel.dataSource == nil && panel.delegate == nil)
           // Deliberately reopen immediately: no delay may hide a late close.
         }
-        messenger.show("replacement", generation: 4, path: file.path)
-        messenger.show("updated", generation: 5, path: file.path)
+        messenger.show("replacement", generation: 5, path: file.path)
+        messenger.show("updated", generation: 6, path: file.path)
         verify(panel.currentPreviewItem?.previewItemTitle == "updated")
         verify(window.firstResponder === receiver)
         let wake = NSEvent.keyEvent(
@@ -171,15 +177,15 @@ struct NativePreviewHostTests {
         verify(closeButton.target !== host, "Closing must restore the system button target")
         verify(window.firstResponder === editor)
         // A user can reopen before Quick Look finishes its native close animation.
-        messenger.show("after-native-close", generation: 6, path: file.path)
+        messenger.show("after-native-close", generation: 7, path: file.path)
         RunLoop.current.run(until: Date().addingTimeInterval(0.35))
         verify(
           panel.isVisible,
           "Reopened preview disappeared: active=\(app.isActive), key=\(window.isKeyWindow), owned=\(host!.ownsPanel)"
         )
         host!.close()
-        verify(messenger.events.filter { $0.method == "closed" }.count == 5)
-        messenger.show("xml-native-close", generation: 7, path: xml.path)
+        verify(messenger.events.filter { $0.method == "closed" }.count == 6)
+        messenger.show("xml-native-close", generation: 8, path: xml.path)
         RunLoop.current.run(until: Date().addingTimeInterval(1.5))
         panel.makeKeyAndOrderFront(nil)
         verify(panel.isVisible && host!.ownsPanel)
@@ -193,14 +199,14 @@ struct NativePreviewHostTests {
           "XML preview must close through its system action"
         )
         verify(window.firstResponder === editor)
-        messenger.show("xml-loading-close", generation: 8, path: xml.path)
+        messenger.show("xml-loading-close", generation: 9, path: xml.path)
         host!.close(restoreFocus: false)
         RunLoop.current.run(until: Date().addingTimeInterval(1.5))
         verify(
           !panel.isVisible && !host!.ownsPanel,
           "A late XML renderer must not reopen a closed preview"
         )
-        messenger.show("renderer-hide", generation: 9, path: xml.path)
+        messenger.show("renderer-hide", generation: 10, path: xml.path)
         RunLoop.current.run(until: Date().addingTimeInterval(0.35))
         let beforeHide = messenger.events.filter { $0.method == "closed" }.count
         panel.order(.out, relativeTo: 0)
@@ -212,16 +218,16 @@ struct NativePreviewHostTests {
         verify(window.firstResponder === editor)
         panel.close()
         verify(messenger.events.filter { $0.method == "closed" }.count == beforeHide + 1)
-        messenger.show("transition-hide", generation: 10, path: xml.path)
+        messenger.show("transition-hide", generation: 11, path: xml.path)
         panel.order(.out, relativeTo: 0)
-        messenger.show("after-transition-hide", generation: 11, path: xml.path)
+        messenger.show("after-transition-hide", generation: 12, path: xml.path)
         RunLoop.current.run(until: Date().addingTimeInterval(0.35))
         verify(
           host!.ownsPanel && panel.isVisible,
           "An old hide callback must not close the reopened preview"
         )
         host!.close()
-        messenger.show("hidden-owner", generation: 12, path: file.path)
+        messenger.show("hidden-owner", generation: 13, path: file.path)
         panel.makeKeyAndOrderFront(nil)
         window.orderOut(nil)
         verify(!window.isVisible && panel.isVisible)
@@ -230,7 +236,7 @@ struct NativePreviewHostTests {
         verify(!window.isVisible, "Clearing an expired preview must not revive its hidden owner")
         window.makeKeyAndOrderFront(nil)
         window.makeFirstResponder(editor)
-        messenger.show("lifecycle-hide", generation: 13, path: xml.path)
+        messenger.show("lifecycle-hide", generation: 14, path: xml.path)
         panel.makeKeyAndOrderFront(nil)
         app.hide(nil)
         window.orderOut(nil)

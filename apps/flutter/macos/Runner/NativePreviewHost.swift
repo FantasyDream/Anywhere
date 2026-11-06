@@ -66,12 +66,21 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
       case "capabilities":
         reply(["supported": true])
       case "show":
+        self.trace(
+          "request",
+          [
+            "active": NSApp.isActive,
+            "ownerVisible": self.owner()?.isVisible == true,
+            "incomingGeneration": args["generation"] as? Int ?? -1,
+          ]
+        )
         guard let sequence = args["generation"] as? Int, sequence > self.generation,
           let id = args["id"] as? String,
           let paths = args["paths"] as? [String], !paths.isEmpty, paths.count <= 256,
           paths.allSatisfy({ $0.hasPrefix("/") }),
           let window = self.owner(), window.isVisible, NSApp.isActive
         else {
+          self.trace("rejected")
           reply(
             FlutterError(code: "preview_expired", message: "Preview is unavailable.", details: nil)
           )
@@ -79,6 +88,7 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
         }
         self.generation = sequence
         if self.show(id: id, paths: paths, title: args["title"] as? String ?? "", window: window) {
+          self.trace("shown")
           reply(nil)
         } else {
           self.close()
@@ -153,6 +163,15 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     if let keyObserver { NotificationCenter.default.removeObserver(keyObserver) }
   }
   var ownsPanel: Bool { Self.current === self && resourceID != nil }
+  private func trace(_ stage: String, _ fields: [String: Any] = [:]) {
+    var record = fields
+    record["event"] = "native_preview_\(stage)"
+    record["timestamp"] = ISO8601DateFormatter().string(from: Date())
+    record["generation"] = generation
+    record["owned"] = ownsPanel
+    guard let data = try? JSONSerialization.data(withJSONObject: record) else { return }
+    fputs(String(decoding: data, as: UTF8.self) + "\n", stderr)
+  }
   var containsKeyWindow: Bool {
     contains(NSApp.keyWindow)
   }
@@ -181,6 +200,13 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     resourceID = id
     items = paths.map { Item(path: $0, title: paths.count == 1 ? title : "") }
     guard let panel = QLPreviewPanel.shared() else { return false }
+    trace(
+      "panel",
+      [
+        "key": window.isKeyWindow,
+        "responder": window.firstResponder.map { NSStringFromClass(type(of: $0)) } ?? "none",
+      ]
+    )
     // The Host closes on deactivation. AppKit must not independently hide and
     // later restore a panel whose resource lease has already ended.
     panel.hidesOnDeactivate = false
@@ -218,6 +244,15 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     // presented. Asking for the controller before presentation can return nil.
     panel.orderFront(nil)
     panel.updateController()
+    trace(
+      "control",
+      [
+        "visible": panel.isVisible,
+        "controller": panel.currentController.map { String(reflecting: type(of: $0)) } ?? "none",
+        "keyboardResponder": window.firstResponder.map { NSStringFromClass(type(of: $0)) }
+          ?? "none",
+      ]
+    )
     if panel.currentController as AnyObject? === panelController {
       // A hidden shared panel can keep the controller but discard its data
       // source. Restore both even when beginPreviewPanelControl is not repeated.
@@ -319,6 +354,7 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
   }
   private func finish(restoreFocus: Bool = true) {
     guard let id = resourceID else { return }
+    trace("finish", ["restoreFocus": restoreFocus])
     let window = attachedWindow
     let restoreFocus =
       restoreFocus && NSApp.isActive
