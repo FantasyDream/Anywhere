@@ -50,6 +50,8 @@
 
 `FeatureCatalogCoordinator` 接管功能状态和变更队列，关闭设置等待队列排空。新增受控回归在拆分前复现“关闭已等待旧任务、来源协调随后排队”时提前关闭，修正后通过；失败后继续协调、权限撤销与恢复、迟到状态和销毁路径保持通过。相关设置及应用历史用例 83 项通过，完整 `scripts/check.sh` exit 0：Flutter 524 项通过 / 1 项跳过，其余门禁通过。关闭选择继续由 Controller 统一处理，不另建平行规则；本项未打包或新增 GUI 验收。
 
+随后从干净提交 `ddb4478` 构建独立的 `Anywhere-0.14-settings-ddb4478.app`（0.14.0+46 / arm64 / Impeller），本机持久签名、ZIP 内容和 SHA-256 校验通过。在独立数据目录中，桌面冒烟通过语言保存并重开、搜索草稿取消关闭后保留、保存目录后搜索生效、Git 关闭再恢复、快捷键候选加载与取消，以及合成 XML 的空格 / 眼睛预览、Esc / 系统按钮关闭与输入恢复。AXTree 错误、frame-time clamping 和 Flutter ERROR 均为 0；隔离实例正常退出，日常 Build 46 保持运行。产物来源与证据保留在被忽略的 `build/Anywhere-0.14-settings-ddb4478.provenance.json` 和 `build/acceptance-settings-ddb4478/`。该提交的 [macOS 检查](https://github.com/FantasyDream/Anywhere/actions/runs/42201003642)、[Linux / Windows 共享检查](https://github.com/FantasyDream/Anywhere/actions/runs/42201003641)及[文档检查](https://github.com/FantasyDream/Anywhere/actions/runs/42201003631)通过；自动打包仅显式 dispatch 执行，本轮未触发。此项为自动化冒烟，未新增物理输入法、VoiceOver、全部格式或内存验收。
+
 ### 展示失败反馈的消息顺序回归
 
 原生展示失败先发送 `closed`、后返回请求错误时，旧 Flutter 关闭处理会推进代次，导致错误提示被丢弃。现在 `closed` 携带明确的 `show_failed` 原因；当前请求提示一次，普通关闭、主动取消与旧请求保持原有失效规则，旧选择失败也不会撤销排队中的新选择。平台协议见[系统预览](native-preview.md)。
