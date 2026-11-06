@@ -21,6 +21,7 @@ import 'file_search_controller.dart';
 import 'file_workspace_coordinator.dart';
 import 'host_view_navigator.dart';
 import 'launcher_backend.dart';
+import 'launcher_layout.dart';
 import 'launcher_navigation.dart';
 import 'launcher_session_coordinator.dart';
 import 'launcher_view_state.dart';
@@ -118,15 +119,11 @@ class LauncherController extends ChangeNotifier {
   late final ApplicationLifecycle lifecycle;
   final ApplicationIconCache icons;
   LauncherPhase _phase = LauncherPhase.hidden;
-  LauncherStateDto? _snapshot;
+  LauncherStateDto? get _snapshot => _sessionFlow.snapshot;
   int? get _session => _sessionFlow.session;
-  set _session(int? value) => _sessionFlow.session = value;
   int get _generation => _sessionFlow.generation;
-  set _generation(int value) => _sessionFlow.generation = value;
   int get _revision => _sessionFlow.revision;
-  set _revision(int value) => _sessionFlow.revision = value;
   int get _requestedRevision => _sessionFlow.requestedRevision;
-  set _requestedRevision(int value) => _sessionFlow.requestedRevision = value;
   int _windowPresentation = 0;
 
   /// Advances only after Host show completes for the current visible Launcher.
@@ -411,7 +408,7 @@ class LauncherController extends ChangeNotifier {
         return;
       }
     }
-    final generation = ++_generation;
+    final generation = _sessionFlow.beginGeneration();
     performance.begin(PresentationOperation.activation,
         generation: generation, presentation: _windowPresentation + 1);
     _phase = LauncherPhase.activating;
@@ -421,7 +418,7 @@ class LauncherController extends ChangeNotifier {
       // Synchronous reservation closes the gap where a hidden host had no session
       // identity to cancel while foreground capture was still running.
       final session = _backend.beginActivation();
-      _session = session;
+      _sessionFlow.attachSession(session);
       final state = await _backend.activate(session,
           promptAccessibility: false,
           capturedEnvironment: globalBinding != null);
@@ -436,13 +433,13 @@ class LauncherController extends ChangeNotifier {
           current: () => _current(generation),
           reconsider: _maybePrefill);
       _actionPath = null;
-      _snapshot = null;
+      _sessionFlow.clearSnapshot();
       settings.recordCaptures(const []);
       _selectedId = null;
       _userMoved = false;
       _scopeTouched = false;
       _scopeId = null;
-      _revision = _requestedRevision = state.revision;
+      _sessionFlow.acceptRevision(state.revision);
       _message = settings.warning.isEmpty ? null : settings.warning;
       _output = null;
       _toolPage = null;
@@ -532,7 +529,7 @@ class LauncherController extends ChangeNotifier {
         _backend.resume != null) {
       final generation = _generation, session = _session!;
       _retainedPhase = _phase;
-      ++_generation;
+      _sessionFlow.invalidateGeneration();
       _shortcuts.invalidate();
       _phase = LauncherPhase.hidden;
       _toolPage?.setVisible(false);
@@ -554,11 +551,10 @@ class LauncherController extends ChangeNotifier {
     }
     final generation = _generation;
     final session = _session;
-    ++_generation;
+    _sessionFlow.invalidateGeneration();
     _shortcuts.waiting = false;
     _navigationMode = null;
-    _session = null;
-    _snapshot = null;
+    _sessionFlow.clearSession();
     _cachedView = null;
     _viewKey = null;
     _overlay = const LauncherHome();
@@ -620,7 +616,7 @@ class LauncherController extends ChangeNotifier {
       return false;
     }
     _sessionFlow.cancelDeadline();
-    final generation = ++_generation;
+    final generation = _sessionFlow.beginGeneration();
     try {
       await _sessionFlow.suspension;
       if (!_current(generation) ||
@@ -656,14 +652,9 @@ class LauncherController extends ChangeNotifier {
   }
 
   void _apply(LauncherStateDto state) {
-    if (state.sessionId != _session || state.revision < _requestedRevision) {
-      return;
-    }
     final held = _snapshot;
-    if (held != null &&
-        (state.revision < held.revision ||
-            (state.revision == held.revision &&
-                state.snapshotSeq <= held.snapshotSeq))) {
+    final toolInputChanged = _toolPage != null && state.revision > _revision;
+    if (!_sessionFlow.acceptSnapshot(state, followInput: _toolPage != null)) {
       return;
     }
     final fileTarget = _objectActionTarget,
@@ -671,12 +662,9 @@ class LauncherController extends ChangeNotifier {
         fileParent = _objectActionParent;
     final overlay = _overlay;
     // A qualified plugin input.set is committed by Rust while its tool stays open.
-    final toolInputChanged = _toolPage != null && state.revision > _revision;
     if (toolInputChanged) {
       _input = state.input;
-      _requestedRevision = state.revision;
     }
-    _snapshot = state;
     _snapshotInputMode = _activation.mode;
     _overlay = overlay is RootChooser ? overlay : const LauncherHome();
     _shortcuts.invalidate();
@@ -696,7 +684,6 @@ class LauncherController extends ChangeNotifier {
       }
     }
     settings.recordCaptures(state.contextCaptures);
-    _revision = state.revision;
     if (toolInputChanged) _bindToolPage(_toolPage);
     if (_scopeId != null && !view.scopes.any((scope) => scope.id == _scopeId)) {
       final removed = _scopeId;
@@ -769,40 +756,17 @@ class LauncherController extends ChangeNotifier {
   }
 
   Future<void> _follow(int generation, int session) async {
-    final wait = _backend.waitForSnapshot;
-    final waitDelta = _backend.waitForSnapshotDelta;
-    if (wait == null && waitDelta == null) return;
-    var cursor = _snapshot == null ? 0 : snapshotCursor(_snapshot!);
     try {
-      while (_current(generation) && view.visible) {
-        final baseCount = _snapshot?.candidates.length ?? 0;
-        final notice = waitDelta == null
-            ? await wait!(session, cursor)
-            : await waitDelta(session, cursor,
-                _snapshot?.candidateListVersion ?? 0, baseCount);
-        if (!_current(generation) || !view.visible) return;
-        if (notice.kind == SnapshotWaitKindDto.timedOut) continue;
-        if (notice.kind != SnapshotWaitKindDto.updated) return;
-        final packet = notice.state;
-        if (packet == null || packet.sessionId != session) return;
-        final heldCursor =
-            _snapshot == null ? cursor : snapshotCursor(_snapshot!);
-        final nextCursor = snapshotCursor(packet);
-        if (nextCursor <= heldCursor) {
-          cursor = heldCursor;
-          continue;
-        }
-        final next = LauncherSessionCoordinator.materialize(
-            _snapshot, notice, baseCount);
-        if (next == null) {
-          cursor = heldCursor;
-          continue;
-        }
-        cursor = nextCursor;
-        _apply(next);
-        _notify();
-        await _syncWindow();
-      }
+      await _sessionFlow.follow(
+          backend: _backend,
+          generation: generation,
+          session: session,
+          visible: () => !_disposed && view.visible,
+          publish: (state) async {
+            _apply(state);
+            _notify();
+            await _syncWindow();
+          });
     } catch (error) {
       if (!_current(generation)) return;
       _message = 'Live updates stopped: $error';
@@ -816,8 +780,7 @@ class LauncherController extends ChangeNotifier {
     if (session == null || !view.visible) return;
     _navigationMode = null;
     final retainedTool = automatic ? _toolPage : null;
-    final revision = ++_revision;
-    _requestedRevision = revision;
+    final revision = _sessionFlow.beginRevision();
     if (!automatic) {
       performance.begin(
           _activation.mode == InputModeDto.fileSearch
@@ -1416,7 +1379,7 @@ class LauncherController extends ChangeNotifier {
       return;
     }
     if (_phase != LauncherPhase.hidden) await dismiss();
-    final generation = ++_generation;
+    final generation = _sessionFlow.beginGeneration();
     _phase = LauncherPhase.settings;
     try {
       await settings.load(catalog: true);
@@ -1460,7 +1423,7 @@ class LauncherController extends ChangeNotifier {
     }
     if (hasRetainedState) {
       _phase = LauncherPhase.hidden;
-      ++_generation;
+      _sessionFlow.invalidateGeneration();
       _notify();
       await _window.hide(generation);
     } else {
@@ -1678,7 +1641,7 @@ class LauncherController extends ChangeNotifier {
     _disposed = true;
     _cachedView = null;
     _viewKey = null;
-    ++_generation;
+    _sessionFlow.invalidateGeneration();
     final session = _session;
     if (session != null) {
       unawaited(_backend.deactivate(session).catchError((Object _) {}));

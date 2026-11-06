@@ -6,10 +6,19 @@ enum WindowInputFocus {
   /// NSTextView also offers Quick Look and precedes the window in the responder
   /// chain. Route list keys through the content receiver while our preview owns it.
   static func focusKeyboardReceiver(in window: NSWindow, content: NSView) -> Bool {
-    guard content.window === window,
-      let receiver = acceptingView(in: content, excludingTextViews: true)
-    else { return false }
-    return window.makeFirstResponder(receiver)
+    guard content.window === window else { return false }
+    let previous = window.firstResponder
+    // FlutterView declines automatic focus while TextInputPlugin is the first
+    // responder. End that temporary ownership before asking which view accepts
+    // keyboard input; accessibility must not determine whether preview can open.
+    guard window.makeFirstResponder(nil) else { return false }
+    if let receiver = acceptingView(in: content, excludingTextViews: true),
+      window.makeFirstResponder(receiver)
+    {
+      return true
+    }
+    window.makeFirstResponder(previous)
+    return false
   }
 
   static func restore(in window: NSWindow, content: NSView) {

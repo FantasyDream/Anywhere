@@ -1,4 +1,5 @@
 import 'package:anywhere/launcher/context_source_status.dart';
+import 'package:anywhere/launcher/launcher_presentation.dart';
 import 'package:anywhere/launcher/launcher_view_state.dart';
 import 'package:anywhere/src/rust/api.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -32,7 +33,7 @@ void main() {
           generation: 1,
           inputMode: mode,
           snapshot: snapshot);
-      expect(view.notice, isNull);
+      expect(view.noticeFor(englishLabels), isNull);
       expect(view.noticeSettingsPane, isNull);
       final failedExecution = LauncherViewState(
           phase: LauncherPhase.ready,
@@ -40,7 +41,8 @@ void main() {
           inputMode: mode,
           snapshot: snapshot,
           message: 'Copy failed. Try again.');
-      expect(failedExecution.notice, 'Copy failed. Try again.');
+      expect(
+          failedExecution.noticeFor(englishLabels), 'Copy failed. Try again.');
     }
   });
 
@@ -57,8 +59,10 @@ void main() {
             contextComplete: true,
             candidates: const [],
             diagnostics: ['platform.current_directory: transport failed']));
-    expect(view.notice, contains('other actions are still available'));
-    expect(view.notice, isNot(contains('platform.current_directory')));
+    expect(view.noticeFor(englishLabels),
+        contains('other actions are still available'));
+    expect(view.noticeFor(englishLabels),
+        isNot(contains('platform.current_directory')));
   });
 
   test(
@@ -110,7 +114,7 @@ void main() {
               diagnostics: [
                 'Menu discovery timed out; Current App menus were not updated.'
               ]));
-      expect(view.notice, contains('access this browser'));
+      expect(view.noticeFor(englishLabels), contains('access this browser'));
       expect(view.noticeSettingsPane, 'automation');
     }
   });
@@ -135,7 +139,7 @@ void main() {
               candidates: const [],
               contextCaptures: [item],
               diagnostics: const []));
-      expect(view.notice, isNull);
+      expect(view.noticeFor(englishLabels), isNull);
       expect(view.noticeSettingsPane, isNull);
       expect(ContextSourceStatus(source, item).statusText, 'Read failed');
     }
@@ -158,7 +162,8 @@ void main() {
             diagnostics: [
               'Menu discovery timed out; Current App menus were not updated.'
             ]));
-    expect(view.notice, contains('Some actions could not be loaded'));
+    expect(view.noticeFor(englishLabels),
+        contains('Some actions could not be loaded'));
   });
   test(
       'recoverable capture errors describe the next step without pretending permission was denied',

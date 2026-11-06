@@ -45,6 +45,11 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
   private var resignObserver: NSObjectProtocol?
   private var keyObserver: NSObjectProtocol?
   private var visibilityObservation: NSKeyValueObservation?
+  private weak var closeButton: NSButton?
+  private weak var previousCloseTarget: AnyObject?
+  private var previousCloseAction: Selector?
+  private var closingPanel = false
+  private var presentingPanel = false
 
   init(messenger: FlutterBinaryMessenger, owner: @escaping () -> NSWindow?) {
     self.owner = owner
@@ -61,12 +66,21 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
       case "capabilities":
         reply(["supported": true])
       case "show":
+        self.trace(
+          "request",
+          [
+            "active": NSApp.isActive,
+            "ownerVisible": self.owner()?.isVisible == true,
+            "incomingGeneration": args["generation"] as? Int ?? -1,
+          ]
+        )
         guard let sequence = args["generation"] as? Int, sequence > self.generation,
           let id = args["id"] as? String,
           let paths = args["paths"] as? [String], !paths.isEmpty, paths.count <= 256,
           paths.allSatisfy({ $0.hasPrefix("/") }),
           let window = self.owner(), window.isVisible, NSApp.isActive
         else {
+          self.trace("rejected")
           reply(
             FlutterError(code: "preview_expired", message: "Preview is unavailable.", details: nil)
           )
@@ -74,6 +88,7 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
         }
         self.generation = sequence
         if self.show(id: id, paths: paths, title: args["title"] as? String ?? "", window: window) {
+          self.trace("shown")
           reply(nil)
         } else {
           self.close()
@@ -140,6 +155,7 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     }
   }
   deinit {
+    restoreCloseButton()
     channel.setMethodCallHandler(nil)
     if let keyMonitor { NSEvent.removeMonitor(keyMonitor) }
     if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
@@ -147,6 +163,15 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     if let keyObserver { NotificationCenter.default.removeObserver(keyObserver) }
   }
   var ownsPanel: Bool { Self.current === self && resourceID != nil }
+  private func trace(_ stage: String, _ fields: [String: Any] = [:]) {
+    var record = fields
+    record["event"] = "native_preview_\(stage)"
+    record["timestamp"] = ISO8601DateFormatter().string(from: Date())
+    record["generation"] = generation
+    record["owned"] = ownsPanel
+    guard let data = try? JSONSerialization.data(withJSONObject: record) else { return }
+    fputs(String(decoding: data, as: UTF8.self) + "\n", stderr)
+  }
   var containsKeyWindow: Bool {
     contains(NSApp.keyWindow)
   }
@@ -161,6 +186,8 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     return false
   }
   private func show(id: String, paths: [String], title: String, window: NSWindow) -> Bool {
+    presentingPanel = true
+    defer { presentingPanel = false }
     if Self.current !== self { Self.current?.close(restoreFocus: false) }
     if attachedWindow !== window {
       detach()
@@ -173,12 +200,35 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     resourceID = id
     items = paths.map { Item(path: $0, title: paths.count == 1 ? title : "") }
     guard let panel = QLPreviewPanel.shared() else { return false }
+    trace(
+      "panel",
+      [
+        "key": window.isKeyWindow,
+        "responder": window.firstResponder.map { NSStringFromClass(type(of: $0)) } ?? "none",
+      ]
+    )
+    // The Host closes on deactivation. AppKit must not independently hide and
+    // later restore a panel whose resource lease has already ended.
+    panel.hidesOnDeactivate = false
     if visibilityObservation == nil {
-      visibilityObservation = panel.observe(\.isVisible, options: [.new]) { panel, change in
-        guard change.newValue == true, Self.current == nil else { return }
-        // Quick Look can finish showing a document after its lease ended.
-        // Never let that late presentation outlive the owning session.
-        panel.order(.out, relativeTo: 0)
+      visibilityObservation = panel.observe(\.isVisible, options: [.new]) {
+        [weak self] panel, change in
+        if change.newValue == true, Self.current == nil {
+          panel.order(.out, relativeTo: 0)
+        } else if change.newValue == false {
+          guard let self, self.ownsPanel, !self.closingPanel else { return }
+          let expectedID = self.resourceID
+          let expectedGeneration = self.generation
+          // Recheck after controller transitions; an old hide must not close a
+          // replacement, and native order-out does not necessarily send willClose.
+          DispatchQueue.main.async { [weak self, weak panel] in
+            guard let self, let panel, self.ownsPanel, !self.closingPanel,
+              !self.presentingPanel, !panel.isVisible, self.resourceID == expectedID,
+              self.generation == expectedGeneration
+            else { return }
+            self.finish()
+          }
+        }
       }
     }
     if let input = window.firstResponder,
@@ -194,6 +244,15 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     // presented. Asking for the controller before presentation can return nil.
     panel.orderFront(nil)
     panel.updateController()
+    trace(
+      "control",
+      [
+        "visible": panel.isVisible,
+        "controller": panel.currentController.map { String(reflecting: type(of: $0)) } ?? "none",
+        "keyboardResponder": window.firstResponder.map { NSStringFromClass(type(of: $0)) }
+          ?? "none",
+      ]
+    )
     if panel.currentController as AnyObject? === panelController {
       // A hidden shared panel can keep the controller but discard its data
       // source. Restore both even when beginPreviewPanelControl is not repeated.
@@ -201,6 +260,7 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
       panel.delegate = self
       panel.reloadData()
       panel.currentPreviewItemIndex = 0
+      bindCloseButton(in: panel)
       // Keep search/list keyboard navigation in the owning window by default.
       panel.level = .floating
       channel.invokeMethod("shown", arguments: ["id": id])
@@ -231,15 +291,58 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     return panel
   }
 
+  @discardableResult static func dismissUnownedPanel() -> Bool {
+    guard current == nil, QLPreviewPanel.sharedPreviewPanelExists(),
+      let panel = QLPreviewPanel.shared()
+    else { return false }
+    // AppKit can restore an ordered panel when the application unhides, even
+    // after its lease ended while the app was hidden.
+    let wasVisible = panel.isVisible
+    panel.order(.out, relativeTo: 0)
+    panel.dataSource = nil
+    panel.delegate = nil
+    return wasVisible
+  }
+
+  private func bindCloseButton(in panel: QLPreviewPanel) {
+    guard let button = panel.standardWindowButton(.closeButton), button.target !== self else {
+      return
+    }
+    restoreCloseButton()
+    closeButton = button
+    previousCloseTarget = button.target
+    previousCloseAction = button.action
+    // Quick Look's button bypasses windowShouldClose and animates asynchronously.
+    // Use the same synchronous close as Escape before another preview can open.
+    button.target = self
+    button.action = #selector(closeFromButton(_:))
+  }
+
+  @objc private func closeFromButton(_ sender: NSButton) {
+    guard sender === closeButton else { return }
+    close()
+  }
+
+  private func restoreCloseButton() {
+    if let button = closeButton, button.action == #selector(closeFromButton(_:)),
+      button.target == nil || button.target === self
+    {
+      button.target = previousCloseTarget
+      button.action = previousCloseAction
+    }
+    closeButton = nil
+    previousCloseTarget = nil
+    previousCloseAction = nil
+  }
+
   func close(restoreFocus: Bool = true) {
+    guard !closingPanel else { return }
+    closingPanel = true
+    defer { closingPanel = false }
     // A renderer can leave the shared panel visible after its document has
     // detached. Clean it only when no other engine owns a newer preview.
     guard ownsPanel else {
-      if Self.current == nil, let panel = Self.visiblePanel {
-        panel.order(.out, relativeTo: 0)
-        panel.dataSource = nil
-        panel.delegate = nil
-      }
+      Self.dismissUnownedPanel()
       return
     }
     if QLPreviewPanel.sharedPreviewPanelExists(), let panel = QLPreviewPanel.shared() {
@@ -251,6 +354,7 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
   }
   private func finish(restoreFocus: Bool = true) {
     guard let id = resourceID else { return }
+    trace("finish", ["restoreFocus": restoreFocus])
     let window = attachedWindow
     let restoreFocus =
       restoreFocus && NSApp.isActive
@@ -282,6 +386,7 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     channel.invokeMethod("closed", arguments: ["id": id, "restoreFocus": restoreFocus])
   }
   private func detach() {
+    restoreCloseButton()
     if let window = attachedWindow, window.nextResponder === panelController {
       window.nextResponder = previousResponder
     }

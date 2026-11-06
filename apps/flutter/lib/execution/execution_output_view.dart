@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../l10n/app_language.dart';
 import '../src/rust/api.dart';
+import '../ui/app_components.dart';
 import '../ui/app_icons.dart';
 import '../ui/app_style.dart';
 import 'execution_sessions_controller.dart';
@@ -175,7 +176,7 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
           icon: icon,
           color: _following ? AppStyle.muted : AppStyle.accent);
     }
-    return Tooltip(
+    return AppTooltip(
         message: message,
         child: TextButton.icon(
             key: const Key('follow-output'),

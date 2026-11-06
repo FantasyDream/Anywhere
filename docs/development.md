@@ -103,7 +103,10 @@ SDK 类型、测试和独立模板需要 Node.js 22+ / npm；这些检查不安�
 - Flutter：在 `apps/flutter` 执行 `flutter analyze`、`flutter test`。
 - 原生：`scripts/check-macos-menu.sh` 和 `scripts/check-macos-host.sh`；依赖 macOS SDK 及 Flutter macOS 引擎资源，首次可运行 `flutter precache --macos`。
 - 系统预览实机回归：`scripts/check-macos-preview-live.sh`，需要可交互桌面，会短暂激活独立测试窗口；覆盖文本输入竞争、快速重开与关闭后恢复，详见[系统预览](native-preview.md)。
+
 - 性能：[测量方法](performance.md)。不要把编译器、单个 worker 或 RSS 的一次快照当作整 App 性能承诺。
+
+独立实窗程序 `PreviewTests` 的用例失败会在终端记录检查位置并以非零状态退出；不依赖断言崩溃和系统崩溃弹窗报告结果。测试调度保留主队列异步回调的执行机会，并对应用激活设置有限等待；未取得前台或 key window 时仍记为失败，不能算作实机通过。
 
 先完成代码、自动化与构建，最后做 GUI。真实中文候选、物理组合键、跨应用焦点与 VoiceOver 须单独记录；模拟组合键不稳定时，不据此修改生产按键语义。
 

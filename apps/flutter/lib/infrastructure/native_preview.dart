@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
@@ -37,6 +39,21 @@ class NativePreviewController extends ChangeNotifier {
   bool _preparing = false, _queued = false;
   bool _open = false, _disposed = false;
   bool get isOpen => _open;
+  // Keep request stages available in the Host's stderr log in release builds.
+  // Never record queries, paths, document content or raw exception messages.
+  void _trace(String stage, [Map<String, Object?> fields = const {}]) {
+    try {
+      stderr.writeln(jsonEncode({
+        'event': 'preview_$stage',
+        'timestamp': DateTime.now().toUtc().toIso8601String(),
+        'epoch': _epoch,
+        'open': _open,
+        'preparing': _preparing,
+        ...fields
+      }));
+    } catch (_) {/* Diagnostics must not change the preview lifecycle. */}
+  }
+
   // Search focus remains intact. Only an explicit list navigation arms Space.
   bool _browsing = false;
   bool get browsing => _browsing;
@@ -129,6 +146,7 @@ class NativePreviewController extends ChangeNotifier {
   }
 
   void toggle() {
+    _trace('toggle', {'available': _prepare != null, 'browsing': browsing});
     if (_open) {
       close();
       return;
@@ -147,14 +165,18 @@ class NativePreviewController extends ChangeNotifier {
       switch (call.method) {
         case 'shown':
           try {
+            owner._trace('retain');
             await owner._retain(owner._resource!.id);
-          } catch (_) {
+            owner._trace('retained');
+          } catch (error) {
+            owner._trace('retain_failed', {'error': '${error.runtimeType}'});
             if (identical(_owner, owner) && owner._resource?.id == args['id']) {
               owner.close();
               owner.onFailure();
             }
           }
         case 'closed':
+          owner._trace('native_closed');
           owner.close();
           if (args['restoreFocus'] == true) owner.onSearch();
         case 'next':
@@ -193,26 +215,38 @@ class NativePreviewController extends ChangeNotifier {
     api.NativePreviewDto? next;
     api.NativePreviewDto? previous;
     var adopted = false;
+    var stage = 'capabilities';
     try {
+      _trace('request');
       final capabilities =
           await channel.invokeMapMethod<String, Object?>('capabilities');
       if (_disposed || !_open || epoch != _epoch) return;
       if (capabilities?['supported'] != true) throw UnsupportedError('preview');
+      stage = 'prepare';
       next = await prepare();
+      _trace('prepared', {'current': !_disposed && _open && epoch == _epoch});
       if (_disposed || !_open || epoch != _epoch) return;
       previous = _resource;
       _resource = next;
       _resourceEpoch = epoch;
       adopted = true;
+      stage = 'show';
       await channel.invokeMethod<void>('show', {
         'id': next.id,
         'paths': next.paths,
         'title': next.title,
         'generation': ++_sequence,
       });
+      _trace(
+          'show_returned', {'current': !_disposed && _open && epoch == _epoch});
       if (_disposed || !_open || epoch != _epoch) return;
       next = null; // The active controller now owns the lease.
-    } catch (_) {
+    } catch (error) {
+      _trace('failed', {
+        'stage': stage,
+        'error':
+            error is PlatformException ? error.code : '${error.runtimeType}'
+      });
       if (!_disposed && _open && epoch == _epoch) {
         close();
         onFailure();
@@ -234,6 +268,7 @@ class NativePreviewController extends ChangeNotifier {
   }
 
   void close() {
+    if (_open) _trace('close');
     ++_epoch;
     _timer?.cancel();
     _queued = false;

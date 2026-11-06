@@ -1,12 +1,9 @@
 import 'dart:collection';
 import 'dart:convert';
-import 'dart:ui' show Locale;
 
-import '../l10n/app_language.dart';
 import '../settings/host_settings.dart';
 import '../src/rust/api.dart';
 import '../tools/tool_page.dart';
-import '../ui/design_tokens.g.dart';
 import 'context_source_status.dart';
 import 'file_search_controller.dart';
 import 'stable_list.dart';
@@ -151,8 +148,6 @@ class LauncherViewState {
   final InputModeDto? navigationMode;
   final LauncherEntries? retainedFileEntries;
   bool get navigationOpen => navigationMode != null;
-  static const navigationHeight = 108.0;
-  double get width => toolPage?.width ?? 648;
   bool get hasFileControls =>
       isFileSearch && bindingChoices == null && output == null;
   bool get hasControls => hasScopeBar || hasFileControls;
@@ -167,10 +162,6 @@ class LauncherViewState {
           visibleEntries.isNotEmpty ||
           snapshot?.fileSearch?.finished == true);
   bool get isContent => inputMode == InputModeDto.content;
-  String get contentLabel => contentSource == ContextSourceDto.selectedText
-      ? 'Selected text'
-      : 'Recent clipboard';
-  double get inputAreaHeight => inputHeight + (isContent ? 24 : 0);
   final String? scopeId;
 
   /// null = scope home, [] = menu root, [View, Appearance] = submenu.
@@ -191,10 +182,6 @@ class LauncherViewState {
       executing;
   bool get resolving => phase == LauncherPhase.resolving;
   bool get executing => phase == LauncherPhase.executing;
-  static const rowHeight = 56.0,
-      inputHeight = DesignTokens.pageHeaderHeight,
-      scopeHeight = DesignTokens.pageToolbarHeight,
-      headerHeight = 24.0;
   static const maxRows = 7;
   List<ScopeDto> get scopes => snapshot?.scopes ?? const [];
   late final ScopeDto? selectedScope = _findSelectedScope();
@@ -232,43 +219,6 @@ class LauncherViewState {
     for (final candidate in snapshot?.candidates ?? const <CandidateDto>[])
       if (candidate.availability != AvailabilityDto.hidden) candidate,
   ]);
-
-  /// Show the source of the execution target, rather than inferring it from a
-  /// title or subtitle. Identical targets can have several merged context roots.
-  String? sourceLabelFor(CandidateDto candidate, [AppLocalizations? labels]) {
-    final l10n = labels ?? lookupAppLocalizations(const Locale('en'));
-    if (candidate.kind == CandidateKindDto.file) {
-      return isFileSearch || objectActionTitle != null ? null : 'Files';
-    }
-    if (candidate.kind != CandidateKindDto.action) return null;
-    if (isMenu(candidate)) {
-      return scopeId == null ? candidate.sectionLabel : null;
-    }
-    final contexts = snapshot?.contexts ?? const <ContextDto>[];
-    ContextDto? target;
-    for (final context in contexts) {
-      if (context.id == candidate.executionContextId) {
-        target = context;
-        break;
-      }
-    }
-    if (target == null) {
-      for (final context in contexts) {
-        if (candidate.contextKeys.contains(context.key)) {
-          target = context;
-          break;
-        }
-      }
-    }
-    return switch (target?.source) {
-      ContextSourceDto.browserCurrentPage => l10n.currentPage,
-      ContextSourceDto.clipboard => l10n.clipboard,
-      ContextSourceDto.selectedText => l10n.selectedText,
-      ContextSourceDto.finderSelection => l10n.selectedFiles,
-      ContextSourceDto.userInput => l10n.input,
-      _ => null,
-    };
-  }
 
   bool _hasPrefix(List<String> path, List<String> prefix) {
     if (path.length < prefix.length) return false;
@@ -373,7 +323,6 @@ class LauncherViewState {
           ? null
           : visibleEntries[selectedIndex];
 
-  double get selectedTop => selectedIndex * rowHeight;
   bool get hasScopeBar =>
       !isFileSearch &&
       !(inputMode == InputModeDto.search &&
@@ -393,46 +342,6 @@ class LauncherViewState {
       snapshot?.searchSources
           .any((s) => s.state == SearchSourceStateDto.partial) ??
       false;
-  String get fileRangeLabel {
-    final roots = snapshot?.fileSearch?.roots ?? const <String>[];
-    if (roots.isEmpty) return 'File Search';
-    if (roots.length > 1) return 'File Search · ${roots.length} locations';
-    final name = roots.single
-            .split(RegExp(r'[/\\]'))
-            .where((part) => part.isNotEmpty)
-            .lastOrNull ??
-        roots.single;
-    return 'File Search · $name';
-  }
-
-  String get fileRangeDetail =>
-      (snapshot?.fileSearch?.roots ?? const <String>[]).join('\n');
-  String? get searchStatus =>
-      searchStatusFor(lookupAppLocalizations(const Locale('en')));
-  String? searchStatusFor(AppLocalizations l10n) {
-    final progress = isFileSearch && bindingChoices == null && output == null
-        ? snapshot?.fileSearch
-        : null;
-    if (progress != null) {
-      final count = l10n.fileFoundCount(progress.confirmedMatches.toInt());
-      if (searchPartial) {
-        return '$count · ${l10n.partialResults} · ${l10n.searchIssues(progress.issueCount.toInt())}';
-      }
-      if (!progress.finished) return '$count · ${l10n.searching}';
-      if (progress.inaccessibleCount > BigInt.zero) {
-        return '$count · ${l10n.restrictedLocationsSkipped('${progress.inaccessibleCount}')}';
-      }
-      return '$count · ${l10n.searchComplete}';
-    }
-    return searchLoading
-        ? l10n.searchingFiles
-        : searchUnavailable
-            ? isFileSearch
-                ? l10n.fileSearchUnavailable
-                : l10n.fileSearchOtherResults
-            : null;
-  }
-
   bool get hasPanel =>
       output != null ||
       (snapshot?.searchSources.isNotEmpty ?? false) ||
@@ -440,24 +349,13 @@ class LauncherViewState {
       scopeId != null ||
       isContent ||
       isFileSearch;
-  String get emptyMessage =>
-      input.isNotEmpty ? 'No matching actions' : 'No actions available';
-  String? get notice => noticeFor(lookupAppLocalizations(const Locale('en')));
-  String? noticeFor(AppLocalizations l10n) {
-    if (message != null) return message;
-    if (isFileSearch) {
-      if (!searchPartial) return null;
-      final count = snapshot?.fileSearch?.issueCount ?? BigInt.zero;
-      return count > BigInt.zero
-          ? l10n.fileSearchIssueNotice(count.toInt())
-          : l10n.fileSearchIncomplete;
-    }
-    if (inputMode != InputModeDto.environment) return null;
-    return captureNotice?.withLocalizations(l10n).detail ??
-        ((snapshot?.diagnostics.isNotEmpty ?? false)
-            ? l10n.actionsLoadIncomplete
-            : null);
-  }
+  bool get hasNotice =>
+      message != null ||
+      (isFileSearch
+          ? searchPartial
+          : inputMode == InputModeDto.environment &&
+              (captureNotice != null ||
+                  (snapshot?.diagnostics.isNotEmpty ?? false)));
 
   ContextSourceStatus? get captureNotice =>
       inputMode != InputModeDto.environment
@@ -470,63 +368,8 @@ class LauncherViewState {
   String? get noticeSettingsPane =>
       message == null ? captureNotice?.settingsPane : null;
 
-  String get searchHint => isFileSearch
-      ? 'Search files and folders…'
-      : isContent
-          ? 'Edit captured content…'
-          : selectedScope == null
-              ? 'Search apps and actions…'
-              : 'Search ${selectedScope!.label} actions…';
-  String get resultHeading =>
-      resultHeadingFor(lookupAppLocalizations(const Locale('en')));
-  String resultHeadingFor(AppLocalizations l10n) => output != null
-      ? (resultStatus == ActionStatusDto.failed ? l10n.failed : l10n.succeeded)
-      : bindingChoices != null
-          ? objectActionTitle ?? l10n.chooseTarget
-          : isContent
-              ? l10n.contentActions
-              : input.trim().isNotEmpty
-                  ? l10n.results
-                  : browsing
-                      ? [l10n.menus, ...actionPath!].join(' › ')
-                      : selectedScope != null &&
-                              selectedScope!.isCurrentApp != true
-                          ? l10n.actions
-                          : l10n.suggested;
   // App and query are already visible in the input and Scope bar. Keep headings
   // for content, navigation, binding choices and execution results only.
   bool get hasResultHeading =>
       output != null || browsing || isContent || bindingChoices != null;
-  double get previewHeight =>
-      ((output?.split('\n').length ?? 0).clamp(3, 14) * 20.0) + 24;
-  double get height {
-    if (phase == LauncherPhase.settings) return 508;
-    if (toolPage != null) return toolPage!.height;
-    if (isFileSearch) return 600;
-    if (navigationOpen) return inputAreaHeight + 1 + navigationHeight;
-    final body = output != null
-        ? previewHeight
-        : visibleEntries.isEmpty
-            ? 64.0
-            : (visibleEntries.length * rowHeight + 8)
-                .clamp(8, maxRows * rowHeight + 8);
-    return (inputAreaHeight +
-            (hasControls ? scopeHeight : 0) +
-            (hasPanel || hasControls ? 1 : 0) +
-            (notice == null ? 0 : 44) +
-            (hasPanel ? (hasResultHeading ? headerHeight : 0) + body : 0))
-        .clamp(inputHeight, 520.0);
-  }
-}
-
-/// Stable scope IDs, never translated labels, choose built-in category names.
-String localizedScopeLabel(ScopeDto scope, AppLocalizations l10n) {
-  if (scope.isCurrentApp) return scope.label;
-  return switch (scope.id) {
-    'folder' => l10n.folder,
-    'file' => l10n.file,
-    'web' => l10n.web,
-    'tools' => l10n.tools,
-    _ => scope.label,
-  };
 }

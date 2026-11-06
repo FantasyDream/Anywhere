@@ -1,3 +1,4 @@
+import 'package:anywhere/launcher/launcher_presentation.dart';
 import 'package:anywhere/launcher/launcher_view_state.dart';
 import 'package:anywhere/settings/host_settings.dart';
 import 'package:anywhere/src/rust/api.dart';
@@ -51,10 +52,13 @@ void main() {
             candidates: [],
             diagnostics: []));
     expect(view(SearchSourceStateDto.loading).hasPanel, true);
-    expect(view(SearchSourceStateDto.loading).searchStatus, 'Searching files…');
-    expect(view(SearchSourceStateDto.ready).searchStatus, isNull);
+    expect(view(SearchSourceStateDto.loading).searchStatusFor(englishLabels),
+        'Searching files…');
+    expect(view(SearchSourceStateDto.ready).searchStatusFor(englishLabels),
+        isNull);
     expect(view(SearchSourceStateDto.ready).hasPanel, true);
-    expect(view(SearchSourceStateDto.unavailable).searchStatus,
+    expect(
+        view(SearchSourceStateDto.unavailable).searchStatusFor(englishLabels),
         contains('Other results are still usable'));
   });
 }

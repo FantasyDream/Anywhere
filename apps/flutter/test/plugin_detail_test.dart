@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/launcher/host_view_navigator.dart';
 import 'package:anywhere/launcher/launcher_controller.dart';
+import 'package:anywhere/launcher/launcher_presentation.dart';
 import 'package:anywhere/launcher/launcher_screen.dart';
 import 'package:anywhere/plugins/plugin_detail_page.dart';
 import 'package:anywhere/src/rust/api.dart';
@@ -145,7 +146,7 @@ void main() {
     expect(host.view.pluginDetail, isNull);
     expect(host.view.input, 'query');
     expect(host.view.executing, isFalse);
-    expect(host.view.notice, contains('missing plugin UI'));
+    expect(host.view.noticeFor(englishLabels), contains('missing plugin UI'));
   });
 
   testWidgets('completed views keep follow-up warnings visible',

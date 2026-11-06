@@ -5,6 +5,8 @@ import '../../src/rust/api.dart';
 import '../../ui/app_components.dart';
 import '../../ui/app_icons.dart';
 import '../../ui/app_style.dart';
+import '../launcher_layout.dart';
+import '../launcher_presentation.dart';
 import '../launcher_view_state.dart';
 
 /// Search stays visually dominant; captured content identifies its source here.
@@ -23,18 +25,6 @@ class LauncherSearchArea extends StatelessWidget {
   final VoidCallback? onToggleNavigation, onEditFocus;
   final VoidCallback? onBack;
 
-  String _fileRangeLabel(BuildContext context) {
-    final roots = state.snapshot?.fileSearch?.roots ?? const <String>[];
-    if (roots.isEmpty) return context.l10n.fileSearch;
-    if (roots.length > 1) return context.l10n.fileLocations(roots.length);
-    final name = roots.single
-            .split(RegExp(r'[/\\]'))
-            .where((part) => part.isNotEmpty)
-            .lastOrNull ??
-        roots.single;
-    return context.l10n.fileRange(name);
-  }
-
   @override
   Widget build(BuildContext context) => AppPageHeader(
       height: state.inputAreaHeight,
@@ -45,12 +35,12 @@ class LauncherSearchArea extends StatelessWidget {
               onPressed: onBack,
               icon: const Icon(AppIcons.back, size: 20))
         else if (!state.isContent && onToggleNavigation != null)
-          Semantics(
-              button: true,
-              expanded: state.navigationOpen,
-              label: context.l10n.navigationModes,
-              child: Tooltip(
-                  message: context.l10n.navigationModes,
+          AppTooltip(
+              message: context.l10n.navigationModes,
+              child: Semantics(
+                  button: true,
+                  expanded: state.navigationOpen,
+                  label: context.l10n.navigationModes,
                   child: InkWell(
                       key: const Key('launcher-navigation'),
                       borderRadius:
@@ -89,9 +79,10 @@ class LauncherSearchArea extends StatelessWidget {
                   if (state.isFileSearch)
                     Padding(
                         padding: const EdgeInsets.only(bottom: 3),
-                        child: Tooltip(
+                        child: AppTooltip(
                             message: state.fileRangeDetail,
-                            child: Text(_fileRangeLabel(context),
+                            child: Text(
+                                state.fileRangePresentation.label(context.l10n),
                                 key: const Key('launcher-mode-label'),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -178,7 +169,7 @@ class LauncherRootNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) => SizedBox(
       key: const Key('launcher-mode-chooser'),
-      height: LauncherViewState.navigationHeight,
+      height: LauncherLayout.navigationHeight,
       child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
           child: Column(children: [
@@ -326,7 +317,7 @@ class _LauncherFilterBarState extends State<LauncherFilterBar> {
     final ids = widget.options.map((option) => option.id).toSet();
     _keys.removeWhere((id, _) => !ids.contains(id));
     return SizedBox(
-        height: LauncherViewState.scopeHeight,
+        height: LauncherLayout.scopeHeight,
         child: SingleChildScrollView(
             controller: _scroll,
             scrollDirection: Axis.horizontal,
@@ -404,7 +395,9 @@ class LauncherFilterButton extends StatelessWidget {
                                   ? AppStyle.primary
                                   : AppStyle.secondary))
                     ]))))));
-    return tooltip == null ? button : Tooltip(message: tooltip!, child: button);
+    return tooltip == null
+        ? button
+        : AppTooltip(message: tooltip!, child: button);
   }
 }
 
@@ -415,7 +408,7 @@ class LauncherResultHeading extends StatelessWidget {
   final String? detail;
   @override
   Widget build(BuildContext context) => SizedBox(
-      height: LauncherViewState.headerHeight,
+      height: LauncherLayout.headerHeight,
       child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 22),
           child: Row(children: [
@@ -465,7 +458,7 @@ class LauncherEmptyState extends StatelessWidget {
                         AppStyle.body.copyWith(fontWeight: FontWeight.w500))),
             const SizedBox(height: 5),
             Flexible(
-                child: Tooltip(
+                child: AppTooltip(
                     message: detail,
                     child: Text(detail,
                         textAlign: TextAlign.center,
@@ -496,7 +489,7 @@ class MenuNavigationRow extends StatelessWidget {
               selected: selected,
               onTap: onTap,
               child: SizedBox(
-                  height: LauncherViewState.rowHeight - 4,
+                  height: LauncherLayout.rowHeight - 4,
                   child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 10),
                       child: Row(children: [

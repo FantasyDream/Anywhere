@@ -1,7 +1,8 @@
 import AppKit
 
 final class KeyboardReceiver: NSView {
-  override var acceptsFirstResponder: Bool { true }
+  // Match FlutterView's dynamic refusal while TextInputPlugin is first responder.
+  override var acceptsFirstResponder: Bool { !(window?.firstResponder is NSTextView) }
 }
 
 @main
@@ -49,6 +50,7 @@ struct WindowInputFocusTests {
       let nativeEditor = NSTextView(frame: frame)
       wrapper.addSubview(nativeEditor)
       assert(launcher.makeFirstResponder(nativeEditor))
+      assert(!surface.acceptsFirstResponder)
       assert(WindowInputFocus.focusKeyboardReceiver(in: launcher, content: wrapper))
       assert(launcher.firstResponder === surface)
       nativeEditor.removeFromSuperview()
@@ -81,6 +83,11 @@ struct WindowInputFocusTests {
     let before = settings.firstResponder
     WindowInputFocus.restore(in: settings, content: empty)
     assert(settings.firstResponder === before)
+    let loneEditor = NSTextView(frame: frame)
+    empty.addSubview(loneEditor)
+    assert(settings.makeFirstResponder(loneEditor))
+    assert(!WindowInputFocus.focusKeyboardReceiver(in: settings, content: empty))
+    assert(settings.firstResponder === loneEditor, "Failed preview focus must restore the editor")
     print(
       "Window input focus: wrapper regression, editor removal, active editor, repeated wake and window move passed"
     )

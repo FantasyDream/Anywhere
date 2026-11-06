@@ -99,7 +99,11 @@ resources/                 键码、文件类型、运行策略、设计参数�
 
 执行仅接受当前已提交凭据，排队 worker 开始副作用前再次验证；进程计划生成后、spawn 前也检查版本。副作用成功后仍记 Usage，即使窗口已隐藏。菜单另有 discovery token，不能把可重扫的菜单 ActionId 当作永久身份；见 [菜单安全契约](current-app-actions.md)。
 
-隐藏工作区的 15 秒生命周期由 LauncherSessionCoordinator 管理。Controller 在通知界面隐藏前建立保留信息；重复隐藏保持幂等，异步恢复在挂起 / 恢复等待后重查期限与策略。到期清理先取走该次保留记录，等待后核对 generation / SessionId，避免清理新会话；每次隐藏持有自己的挂起 Future，新旧到期任务各自结束。空根页唤醒仍重新采集当前应用。
+Flutter 的 `LauncherSessionCoordinator` 拥有 SessionId、generation、revision 与已接收快照；只有当前会话、满足请求 revision 且顺序更新的快照才能提交。持续订阅也由它管理，等待返回后复验代数、会话与可见性，增量按最新列表的版本和长度合并。`LauncherController` 负责接收后的导航、选择和窗口更新；工具经 Rust 更新输入时，由同一接收入口推进 revision。
+
+`LauncherViewState` 保留 Scope 过滤、菜单结构、行集合与提示是否存在等展示状态；`launcher_presentation.dart` 根据调用方提供的当前语言生成来源标签、搜索进度、提示和结果标题。布局是否预留提示区域由 `hasNotice` 决定，不依赖默认英文文案；文件范围名称与完整路径提示共用同一展示值对象。`launcher_layout.dart` 统一窗口尺寸、行高与选中项坐标，供 Controller 的 Host 尺寸同步及 Widget / 滚动定位使用；状态对象不保存像素布局规则。
+
+隐藏工作区的 15 秒生命周期也由 LauncherSessionCoordinator 管理。Controller 在通知界面隐藏前建立保留信息；重复隐藏保持幂等，异步恢复在挂起 / 恢复等待后重查期限与策略。到期清理先取走该次保留记录，等待后核对 generation / SessionId，避免清理新会话；每次隐藏持有自己的挂起 Future，新旧到期任务各自结束。空根页唤醒仍重新采集当前应用。
 
 
 隐藏撤销待执行资格。已有操作保留 15 秒，恢复使用新 epoch；空白首页按本次入口新建 Session。已启动进程由 ExecutionSessionManager 持有，不随查询或窗口隐藏终止；应用退出会结束任务。交互详见 [Launcher 契约](launcher-interaction.md)。
@@ -246,6 +250,8 @@ macOS Host 在启动引擎前安装 `NativeFlutterSurfaceGuard`：对 Flutter �
 独立悬浮窗 / 任务窗通过 `FlutterWindowCloseCoordinator` 发起关闭握手，工具 isolate 用通用 `prepareToolWindowToClose` 卸载页面并完成普通帧，清理编辑器、语义节点和视图轮询后再回复。卸载用公开的 `attachRootWidget` / `wrapWithDefaultView`，避免 `runApp` 另行安排预热帧。Host 清除消息处理器，用 `WindowMaterialController.detachContent` 解除输入响应、清空原生效果容器的内容引用并移除子控制器，随后通过 `FlutterEngineLifecycle` 显式解绑专用引擎，再释放窗口；失败启动直接清理。共享 Launcher / Settings 的视图移动不调用内容拆卸。重复关闭合并，旧回复受代数隔离，重新打开排队到清理结束；2 秒无响应则回退关闭。使用公开接口，不销毁共享引擎，不停止 Rust 持有的任务。原生解绑测试不启动 Dart 或绘制，AppKit 回归覆盖内容 / 输入拆卸和共享视图移动；Widget 覆盖卸载、无新增预热帧及轮询。实际对象释放和 SDK 消息的边界见[性能记录](performance.md#build-7-普通帧卸载补验2026-10-24)。
 
 `FlutterAccessibilityState` 只在 macOS Host 缓存已经收到的 AppKit 辅助功能启用 / 禁用通知，新建引擎后重放，避免懒加载窗口错过请求。没有已观察状态时不执行，不强制开启语义树，不增加系统权限。通知名称沿用固定 Flutter SDK 的实现契约，并非新的跨平台业务协议；升级 SDK 时须复核 `FlutterEngine.mm` 的通知处理和晚建窗口的实际 AX 树，不能只依赖适配器自身测试。
+
+应用显式创建的 Tooltip 使用 `ui/app_components.dart` 中的 `AppTooltip`，为每个浮层锚点建立独立的语义容器。固定 Flutter 3.47.8 会在列表等合并语义的布局中丢失相邻 Tooltip 的不同 traversal parent 标识，浮层显示后提交无法从根节点到达的节点，导致原生 AXTree 拒绝后续更新；相关上游问题见 [Flutter #182444](https://github.com/flutter/flutter/issues/182444)。此处使用公开 `Semantics(container: true)` 隔离锚点，保留原有 Tooltip、标签和按钮动作，不修改 SDK 或关闭辅助功能。导航按钮的标签、展开状态与点击手势放在同一提示边界内，避免标签与可执行节点分离。`launcher_semantics_lifecycle_test.dart` 重放实际序列化增量的根可达性，覆盖相邻提示、悬停、语言切换、语义导航与 Launcher 保留 / 过期恢复；升级 Flutter 后按这些回归及真实桌面树复验是否仍需要适配。
 
 固定 Flutter 3.47 的 `FlutterViewWrapper.accessibilityChildren` 只返回渲染视图，macOS 语义桥没有连接嵌入的 WebKit 控件。Host 的 `NativeAccessibilityContainer` 通过公开 AppKit 接口补充这一子树：原有 Flutter 节点每次动态读取，嵌入视图及原父节点仅弱引用；关闭、隐藏、弹出 Host 操作面板或移动共享窗口时撤销连接并恢复父节点。`NativeWebView` 统一发现窗口内唯一的 WebView；新旧视图重叠时不猜测，不向其中任意一个转移焦点或暴露节点。适配不改 SDK、不轮询、不要求插件编写无障碍桥接代码；升级 Flutter 后须复核是否仍有必要，真实辅助技术的验收范围单独记录。
 
