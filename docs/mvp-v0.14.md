@@ -46,7 +46,7 @@ Build 45 的用户先操作日志捕获连续失败：资源准备完成，原�
 
 现先暂时结束 first responder，再查找内容接收视图，失败时恢复原输入。新增动态拒绝焦点的受控回归在旧逻辑上首次打开失败，修复后通过；保留未预热共享面板、快速重开、输入恢复和过期检查。完整 `scripts/check.sh` exit 0：Flutter 515 项通过 / 1 项跳过，Rust Core 332 项通过 / 1 项忽略，其余工作区、原生 Host、Clippy、SDK、架构、规范与生成物检查通过。
 
-源码 `1638c2f` 已构建为 Build 46（0.14.0+46 / arm64 / Impeller），持久本机签名、ZIP 内容与 SHA-256 校验通过。Build 45 已正常退出，唯一日常 Build 46 进程已启动；启动后未读取该进程的辅助功能界面或预先打开预览，用户先操作的验证仍待确认。源码、归档与失败 / 对照 / 回归证据保留在被忽略的 `build/Anywhere-0.14-preview-build46.provenance.json`、`build/acceptance-preview-build45/` 和 `build/acceptance-preview-build46/`。未将工程通过标记为全部实机验收完成。
+源码 `1638c2f` 已构建为 Build 46（0.14.0+46 / arm64 / Impeller），持久本机签名、ZIP 内容与 SHA-256 校验通过。Build 45 已正常退出，唯一日常 Build 46 进程已启动；启动后未读取该进程的辅助功能界面或预先打开预览。用户先操作并确认“能打开，过期唤醒也正常”；日志首次接管时键盘接收者为 `FlutterView`、面板可见，后续连续展示与资源保留成功，外部失焦约 38 秒后唤醒回到高度 72 的空白首页。源码、归档与失败 / 对照 / 回归证据保留在被忽略的 `build/Anywhere-0.14-preview-build46.provenance.json`、`build/acceptance-preview-build45/` 和 `build/acceptance-preview-build46/`。该确认覆盖此次文件预览与过期流程，未扩展为全部格式、输入法、VoiceOver、内存、跨平台或远端 CI 验收。
 
 ### 首次预览失败的继续诊断 — Build 45
 
