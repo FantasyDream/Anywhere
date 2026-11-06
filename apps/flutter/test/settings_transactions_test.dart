@@ -158,4 +158,88 @@ void main() {
     settings.dispose();
     messenger.setMockMethodCallHandler(channel, null);
   });
+
+  test('a queued save revokes authorization before its native write starts',
+      () async {
+    const channel = MethodChannel('settings/queued-authorization');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    var host = HostSettings.defaults, writes = 0, authorizations = 0;
+    final release = Completer<void>(), started = Completer<void>();
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'settings') return host.toMap();
+      if (call.method == 'settingsStatus') return <String, Object?>{};
+      if (call.method == 'saveSettings') {
+        if (++writes == 1) {
+          started.complete();
+          await release.future;
+        }
+        host = HostSettings.fromMap(call.arguments as Map);
+      }
+      return null;
+    });
+    final settings = SettingsController(
+        window: WindowHost(channel),
+        applyExcludedApps: (_) async {},
+        applyContextSources: (_) async {},
+        applyFileSearch: (_) async {},
+        authorizeFileSearch: (_) async {
+          authorizations++;
+        },
+        readExtensions: () => []);
+    addTearDown(settings.dispose);
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    final first = settings.save(host.copyWith(fileSearchRoots: ['/first']));
+    await started.future;
+    final approval = settings.authorizeFileSearch();
+    final second = settings.save(host.copyWith(fileSearchRoots: ['/second']));
+    expect(writes, 1);
+    release.complete();
+    expect(await first, isTrue);
+    expect(await second, isTrue);
+    await approval;
+    expect(authorizations, 0);
+    expect(settings.authorizingFiles, isFalse);
+    expect(settings.current.fileSearchRoots, ['/second']);
+  });
+
+  test('dispose prevents queued writes and late readback publication',
+      () async {
+    const channel = MethodChannel('settings/disposed-save');
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    final release = Completer<void>(), started = Completer<void>();
+    var writes = 0, reads = 0;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'settings') {
+        reads++;
+        return HostSettings.defaults.toMap();
+      }
+      if (call.method == 'saveSettings') {
+        writes++;
+        started.complete();
+        await release.future;
+      }
+      return null;
+    });
+    final settings = SettingsController(
+        window: WindowHost(channel),
+        applyExcludedApps: (_) async {},
+        applyContextSources: (_) async {},
+        applyFileSearch: (_) async {},
+        readExtensions: () => []);
+    addTearDown(() => messenger.setMockMethodCallHandler(channel, null));
+    final original = settings.current;
+    final first = settings.save(original.copyWith(fileSearchRoots: ['/first']));
+    await started.future;
+    final second =
+        settings.save(original.copyWith(fileSearchRoots: ['/second']));
+    settings.dispose();
+    release.complete();
+    expect(await first, isFalse);
+    expect(await second, isFalse);
+    expect(writes, 1);
+    expect(reads, 0);
+    expect(settings.current, same(original));
+  });
 }

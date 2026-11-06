@@ -17,6 +17,7 @@ import 'application_history_settings_controller.dart';
 import 'clipboard_settings_controller.dart';
 import 'host_settings.dart';
 import 'settings_edits.dart';
+import 'settings_save_coordinator.dart';
 
 enum SettingsCloseChoice { save, discard, cancel }
 
@@ -47,8 +48,6 @@ class SettingsController extends ChangeNotifier {
         clipboard = ClipboardSettingsController(
             clipboardBackend ?? RustClipboardPreferencesBackend()),
         _window = window,
-        _warning = startupMessage,
-        _fileSearchInitializationFailed = fileSearchInitializationFailed,
         _readExtensions = readExtensions ?? extensionStatus,
         _refreshFeatures = refreshFeatures ?? extensions_api.refreshFeatures,
         _enableExtension = enableExtension ??
@@ -61,19 +60,23 @@ class SettingsController extends ChangeNotifier {
             ((key) => extensions_api.revokeExtension(key: key)),
         _readShortcutActions = readShortcutActions,
         _readSupportedShortcutActions = readSupportedShortcutActions,
-        _readShortcutApplications = readShortcutApplications,
-        _applyExcludedApps =
+        _readShortcutApplications = readShortcutApplications {
+    _saves = SettingsSaveCoordinator(
+        window: window,
+        startupMessage: startupMessage,
+        fileSearchInitializationFailed: fileSearchInitializationFailed,
+        applyExcludedApps:
             applyExcludedApps ?? ((ids) => setExcludedApps(bundleIds: ids)),
-        _applyFileSearch = applyFileSearch ?? FileSearchAccess.apply,
-        _authorizeFileSearch = authorizeFileSearch ??
+        applyFileSearch: applyFileSearch ?? FileSearchAccess.apply,
+        authorizeFileSearch: authorizeFileSearch ??
             (applyFileSearch ??
                 ((s) => FileSearchAccess.apply(s, force: true))),
-        _applyContextSources = applyContextSources ??
+        applyContextSources: applyContextSources ??
             ((s) => setContextSources(
                 finderSelection: s.captureFinderSelection,
                 selectedText: s.captureSelectedText,
                 browserCurrentPage: s.captureBrowserCurrentPage,
-                clipboard: s.captureClipboard)) {
+                clipboard: s.captureClipboard)));
     clipboard.addListener(_notify);
     appHistory.addListener(_notify);
     appHistory.onCatalogChanged = () => _queueExtensionOperation(() async {
@@ -85,12 +88,7 @@ class SettingsController extends ChangeNotifier {
   final ClipboardSettingsController clipboard;
   final AppHistorySettingsController appHistory;
   final DesktopHost _window;
-  final ApplyExcludedApps _applyExcludedApps;
-  final Future<void> Function(HostSettings) _applyContextSources;
-  final Future<void> Function(HostSettings) _applyFileSearch;
-  final Future<void> Function(HostSettings) _authorizeFileSearch;
-  int _searchConfiguration = 0;
-  Future<void> _saveQueue = Future.value();
+  late final SettingsSaveCoordinator _saves;
   final FutureOr<List<ExtensionStatusDto>> Function() _readExtensions;
   final Future<List<ExtensionStatusDto>> Function(String, bool)
       _enableExtension;
@@ -111,7 +109,6 @@ class SettingsController extends ChangeNotifier {
           error.code == 'shortcuts'
       ? 'Some action shortcuts are paused. Reopen Settings to try again, or choose a different key combination.'
       : 'Action shortcuts could not be refreshed. Reopen Settings to try again.';
-  int _loadEpoch = 0;
   Future<void>? _extensionOperation;
   bool get updatingFeatures => _extensionOperation != null;
   Set<String> _supportedShortcutActions = const {};
@@ -125,16 +122,13 @@ class SettingsController extends ChangeNotifier {
       _shortcutApplications;
   List<ShortcutActionDto> _shortcutActions = const [];
   List<ShortcutActionDto> get shortcutActions => _shortcutActions;
-  HostSettings _current = HostSettings.defaults;
-  HostSettings get current => _current;
-  String _warning;
-  bool _fileSearchInitializationFailed;
-  bool get fileSearchNeedsRecovery => _fileSearchInitializationFailed;
+  HostSettings get current => _saves.current;
+  bool get fileSearchNeedsRecovery => _saves.fileSearchNeedsRecovery;
   static const fileSearchRecoveryMessage =
       'File search is disabled because its saved settings could not be applied. Review Search settings.';
   String get warning => [
-        _warning,
-        if (_fileSearchInitializationFailed) fileSearchRecoveryMessage,
+        _saves.warning,
+        if (fileSearchNeedsRecovery) fileSearchRecoveryMessage,
       ].where((s) => s.isNotEmpty).join('\n');
   String? _statusText;
   String Function(AppLocalizations)? _localizedStatus;
@@ -201,45 +195,40 @@ class SettingsController extends ChangeNotifier {
   }
 
   Future<void> load({bool catalog = false}) async {
-    final epoch = ++_loadEpoch;
-    final next = await _window.readSettings();
-    if (_disposed || epoch != _loadEpoch) return;
-    final previousWarning = warning;
-    var nextWarning = _warning;
-    try {
-      nextWarning = await _window.readSettingsStatus();
-    } catch (_) {}
-    if (_disposed || epoch != _loadEpoch) return;
-    _current = next;
-    _warning = nextWarning;
-    if (next.fileSearchError != null) _fileSearchInitializationFailed = true;
+    final read = await _saves.load();
+    if (_disposed || read == null) return;
+    final epoch = read.revision;
+    final previousWarning = [
+      read.warning,
+      if (read.recovery) fileSearchRecoveryMessage,
+    ].where((s) => s.isNotEmpty).join('\n');
     if (warning.isNotEmpty || _statusMessage == previousWarning) {
       _statusMessage = warning.isEmpty ? null : warning;
     }
-    if (next.actionShortcutVersion != 4) {
+    if (current.actionShortcutVersion != 4) {
       _setLocalizedStatus((labels) => labels.shortcutsSavedByNewerVersion);
     }
     if (catalog) {
       try {
         final statuses = await _readExtensions();
-        if (_disposed || epoch != _loadEpoch) return;
+        if (_disposed || epoch != _saves.loadRevision) return;
         _extensions = statuses;
       } catch (error) {
-        if (_disposed || epoch != _loadEpoch) return;
+        if (_disposed || epoch != _saves.loadRevision) return;
         _setLocalizedStatus((labels) => labels.extensionsLoadFailed('$error'));
       }
     }
     if (catalog && _readShortcutActions != null) {
       final actions = await _readShortcutActions();
-      if (_disposed || epoch != _loadEpoch) return;
+      if (_disposed || epoch != _saves.loadRevision) return;
       _shortcutActions = actions;
     }
     if (catalog && _readShortcutApplications != null) {
       final apps = await _readShortcutApplications();
-      if (_disposed || epoch != _loadEpoch) return;
+      if (_disposed || epoch != _saves.loadRevision) return;
       _shortcutApplications = apps;
     }
-    if (_disposed || epoch != _loadEpoch) return;
+    if (_disposed || epoch != _saves.loadRevision) return;
     await _syncShortcutCatalog();
     _notify();
   }
@@ -272,7 +261,8 @@ class SettingsController extends ChangeNotifier {
         _supportedShortcutActions = Set.unmodifiable(supported);
         await _window.syncActionShortcutCatalog(snapshot, supported);
         final previousWarning = warning;
-        _warning = await _window.readSettingsStatus();
+        await _saves.refreshStatus();
+        if (_disposed) return;
         if (warning.isNotEmpty ||
             _statusMessage == previousWarning ||
             (previousError != null && _statusMessage == previousError)) {
@@ -390,15 +380,7 @@ class SettingsController extends ChangeNotifier {
     return historyApplied;
   }
 
-  Future<bool> save(HostSettings next) {
-    // Invalidate authorization/readback immediately, even while an earlier save
-    // is still applying. Serialization belongs to this service, not its Widget.
-    ++_searchConfiguration;
-    ++_loadEpoch;
-    final result = _saveQueue.then((_) => _save(next));
-    _saveQueue = result.then<void>((_) {}, onError: (Object _) {});
-    return result;
-  }
+  Future<bool> save(HostSettings next) => _saves.save(() => _save(next));
 
   Future<bool> _save(HostSettings next) async {
     if (_disposed || !_validateSettings(next)) return false;
@@ -414,51 +396,8 @@ class SettingsController extends ChangeNotifier {
       return false;
     }
     if (_disposed) return false;
-    final previous = _current;
-    final error =
-        await _window.writeSettings(next, supportedActionIds: supported);
-    if (_disposed) return false;
-    try {
-      final readback = await _window.readSettings();
-      if (_disposed) return false;
-      _current = readback;
-    } catch (_) {
-      // Never publish a rejected binding when the authoritative readback fails.
-      _current = error == null ? next : previous;
-    }
-    if (_disposed) return false;
-    final failures = <String>[if (error != null && error.isNotEmpty) error];
-    try {
-      await _applyExcludedApps(current.excludedApps);
-    } catch (error) {
-      failures.add('$error');
-    }
-    if (_disposed) return false;
-    try {
-      await _applyContextSources(current);
-    } catch (error) {
-      failures.add('$error');
-    }
-    if (_disposed) return false;
-    try {
-      await _applyFileSearch(current);
-      if (_disposed) return false;
-      final readback = await _window.readSettings();
-      if (_disposed) return false;
-      _current = readback;
-      _fileSearchInitializationFailed = false;
-    } catch (_) {
-      _fileSearchInitializationFailed = true;
-      failures
-          .add('File search settings could not be applied. Try saving again.');
-    }
-    if (_disposed) return false;
-    try {
-      final status = await _window.readSettingsStatus();
-      if (_disposed) return false;
-      _warning = status;
-    } catch (_) {}
-    if (_disposed) return false;
+    final failures = await _saves.apply(next, supportedActionIds: supported);
+    if (_disposed || failures == null) return false;
     await _syncShortcutCatalog();
     if (_disposed) return false;
     if (_catalogSyncError != null) failures.add(_catalogSyncError!);
@@ -496,39 +435,26 @@ class SettingsController extends ChangeNotifier {
   }
 
   Future<void> authorizeFileSearch() async {
-    if (_authorizingFiles || _disposed) return;
-    _authorizingFiles = true;
+    if (authorizingFiles || _disposed) return;
+    final pending = _saves.authorize();
     _notify();
-    final configuration = _searchConfiguration;
     try {
-      bool currentRequest() =>
-          !_disposed && configuration == _searchConfiguration;
-      await _saveQueue;
-      if (!currentRequest()) return;
-      await _authorizeFileSearch(current);
-      if (!currentRequest()) return;
-      final next = await _window.readSettings();
-      if (!currentRequest()) return;
-      final warning = await _window.readSettingsStatus();
-      if (!currentRequest()) return;
-      _current = next;
-      _fileSearchInitializationFailed = false;
-      _warning = warning;
-      _statusMessage = warning.isEmpty ? null : warning;
-    } on SearchAccessSuperseded {
-      // A save owns the newer configuration and its status.
-    } catch (_) {
-      if (_disposed || configuration != _searchConfiguration) return;
-      _fileSearchInitializationFailed = true;
-      _setLocalizedStatus((labels) => labels.directoryAccessFailed);
+      final outcome = await pending;
+      if (_disposed) return;
+      switch (outcome) {
+        case SettingsAuthorizationOutcome.applied:
+          _statusMessage = warning.isEmpty ? null : warning;
+        case SettingsAuthorizationOutcome.failed:
+          _setLocalizedStatus((labels) => labels.directoryAccessFailed);
+        case SettingsAuthorizationOutcome.superseded:
+          break;
+      }
     } finally {
-      _authorizingFiles = false;
       _notify();
     }
   }
 
-  bool _authorizingFiles = false;
-  bool get authorizingFiles => _authorizingFiles;
+  bool get authorizingFiles => _saves.authorizingFiles;
 
   Future<void> refreshFeatureData() => _changeExtensions(_refreshFeatures);
 
@@ -558,7 +484,7 @@ class SettingsController extends ChangeNotifier {
   /// through the same queue, including while close is draining existing writes.
   Future<void> _queueExtensionOperation(Future<void> Function() operation) {
     if (_disposed) return Future.value();
-    ++_loadEpoch;
+    _saves.invalidateReads();
     final previous = _extensionOperation ?? Future<void>.value();
     late final Future<void> pending;
     pending = previous.then((_) async {
@@ -575,13 +501,13 @@ class SettingsController extends ChangeNotifier {
   }
 
   Future<void> _updateExtensions(Future<void> Function() operation) async {
-    ++_loadEpoch;
+    _saves.invalidateReads();
     _statusMessage = null;
     _notify();
     try {
       await operation();
       if (_disposed) return;
-      ++_loadEpoch;
+      _saves.invalidateReads();
     } catch (error) {
       if (!_disposed) {
         _setLocalizedStatus(
@@ -622,6 +548,7 @@ class SettingsController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _saves.dispose();
     _edits?.removeListener(_notify);
     _edits?.dispose();
     clipboard.removeListener(_notify);
