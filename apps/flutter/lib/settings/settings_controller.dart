@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:ui' show Locale;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 
 import '../infrastructure/application_history_backend.dart';
 import '../infrastructure/clipboard_preferences_backend.dart';
@@ -18,6 +17,7 @@ import 'clipboard_settings_controller.dart';
 import 'host_settings.dart';
 import 'settings_edits.dart';
 import 'settings_save_coordinator.dart';
+import 'shortcut_catalog_coordinator.dart';
 
 enum SettingsCloseChoice { save, discard, cancel }
 
@@ -57,10 +57,7 @@ class SettingsController extends ChangeNotifier {
             ((key, token) =>
                 extensions_api.approveExtension(key: key, token: token)),
         _removeExtensionGrant = removeExtensionGrant ??
-            ((key) => extensions_api.revokeExtension(key: key)),
-        _readShortcutActions = readShortcutActions,
-        _readSupportedShortcutActions = readSupportedShortcutActions,
-        _readShortcutApplications = readShortcutApplications {
+            ((key) => extensions_api.revokeExtension(key: key)) {
     _saves = SettingsSaveCoordinator(
         window: window,
         startupMessage: startupMessage,
@@ -77,6 +74,13 @@ class SettingsController extends ChangeNotifier {
                 selectedText: s.captureSelectedText,
                 browserCurrentPage: s.captureBrowserCurrentPage,
                 clipboard: s.captureClipboard)));
+    _shortcuts = ShortcutCatalogCoordinator(
+        window: window,
+        readSettings: () => current,
+        onRegistered: _shortcutCatalogRegistered,
+        readActions: readShortcutActions,
+        readSupportedActions: readSupportedShortcutActions,
+        readApplications: readShortcutApplications);
     clipboard.addListener(_notify);
     appHistory.addListener(_notify);
     appHistory.onCatalogChanged = () => _queueExtensionOperation(() async {
@@ -89,6 +93,7 @@ class SettingsController extends ChangeNotifier {
   final AppHistorySettingsController appHistory;
   final DesktopHost _window;
   late final SettingsSaveCoordinator _saves;
+  late final ShortcutCatalogCoordinator _shortcuts;
   final FutureOr<List<ExtensionStatusDto>> Function() _readExtensions;
   final Future<List<ExtensionStatusDto>> Function(String, bool)
       _enableExtension;
@@ -98,30 +103,19 @@ class SettingsController extends ChangeNotifier {
   List<ExtensionStatusDto> _extensions = const [];
   List<ExtensionStatusDto> get extensions => _extensions;
   final Future<List<ExtensionStatusDto>> Function() _refreshFeatures;
-  final Future<List<ShortcutActionDto>> Function()? _readShortcutActions;
-  final Future<List<String>> Function(List<String>)?
-      _readSupportedShortcutActions;
-  Future<void> _catalogQueue = Future.value();
-  String? _catalogSyncError;
-  bool _catalogRegistrationFailed = false;
-
-  String _shortcutCatalogFailure(Object error) => error is PlatformException &&
-          error.code == 'shortcuts'
+  String _shortcutFailureMessage(ShortcutCatalogFailure failure) => failure ==
+          ShortcutCatalogFailure.registration
       ? 'Some action shortcuts are paused. Reopen Settings to try again, or choose a different key combination.'
       : 'Action shortcuts could not be refreshed. Reopen Settings to try again.';
+  String? get _catalogSyncError => _shortcuts.failure == null
+      ? null
+      : _shortcutFailureMessage(_shortcuts.failure!);
   Future<void>? _extensionOperation;
   bool get updatingFeatures => _extensionOperation != null;
-  Set<String> _supportedShortcutActions = const {};
-  bool shortcutSupported(String id) =>
-      _readSupportedShortcutActions == null ||
-      _supportedShortcutActions.contains(id);
-  final Future<List<ShortcutApplicationDto>> Function()?
-      _readShortcutApplications;
-  List<ShortcutApplicationDto> _shortcutApplications = const [];
+  bool shortcutSupported(String id) => _shortcuts.supports(id);
   List<ShortcutApplicationDto> get shortcutApplications =>
-      _shortcutApplications;
-  List<ShortcutActionDto> _shortcutActions = const [];
-  List<ShortcutActionDto> get shortcutActions => _shortcutActions;
+      _shortcuts.applications;
+  List<ShortcutActionDto> get shortcutActions => _shortcuts.actions;
   HostSettings get current => _saves.current;
   bool get fileSearchNeedsRecovery => _saves.fileSearchNeedsRecovery;
   static const fileSearchRecoveryMessage =
@@ -153,7 +147,7 @@ class SettingsController extends ChangeNotifier {
   String? shortcutCatalogMessageFor(AppLocalizations labels) =>
       _catalogSyncError == null
           ? null
-          : _catalogRegistrationFailed
+          : _shortcuts.failure == ShortcutCatalogFailure.registration
               ? labels.shortcutsPausedHelp
               : labels.shortcutsRefreshFailed;
   String? _shortcutRestoreError;
@@ -218,71 +212,31 @@ class SettingsController extends ChangeNotifier {
         _setLocalizedStatus((labels) => labels.extensionsLoadFailed('$error'));
       }
     }
-    if (catalog && _readShortcutActions != null) {
-      final actions = await _readShortcutActions();
-      if (_disposed || epoch != _saves.loadRevision) return;
-      _shortcutActions = actions;
-    }
-    if (catalog && _readShortcutApplications != null) {
-      final apps = await _readShortcutApplications();
-      if (_disposed || epoch != _saves.loadRevision) return;
-      _shortcutApplications = apps;
+    if (catalog) {
+      await _shortcuts.loadPickers(() => epoch == _saves.loadRevision);
     }
     if (_disposed || epoch != _saves.loadRevision) return;
     await _syncShortcutCatalog();
     _notify();
   }
 
-  List<String> _bindingActionIds(HostSettings settings) => <String>{
-        for (final binding in settings.actionShortcuts)
-          if (binding.isIntent)
-            ...binding.routes.map((r) => r.actionId)
-          else
-            binding.actionId,
-      }.toList();
+  Future<void> _syncShortcutCatalog() async {
+    await _shortcuts.synchronize();
+    if (_shortcuts.failure != null) _notify();
+  }
 
-  /// Serialize catalog reads and Host writes; each operation reads current settings
-  /// when it starts. Native checks the configuration snapshot again before applying.
-  Future<void> _syncShortcutCatalog() {
-    final reader = _readSupportedShortcutActions;
-    if (reader == null || _disposed) return Future.value();
-    final next = _catalogQueue.then((_) async {
-      if (_disposed || current.actionShortcutVersion != 4) return;
-      final previousError = _catalogSyncError;
-      _catalogSyncError = null;
-      _catalogRegistrationFailed = false;
-      final snapshot = current;
-      final ids = _bindingActionIds(snapshot);
-      try {
-        final supported = await reader(ids);
-        if (_disposed) return;
-        // A concurrent save must not publish eligibility for its predecessor.
-        if (!identical(snapshot, current)) return;
-        _supportedShortcutActions = Set.unmodifiable(supported);
-        await _window.syncActionShortcutCatalog(snapshot, supported);
-        final previousWarning = warning;
-        await _saves.refreshStatus();
-        if (_disposed) return;
-        if (warning.isNotEmpty ||
-            _statusMessage == previousWarning ||
-            (previousError != null && _statusMessage == previousError)) {
-          _statusMessage = warning.isEmpty ? null : warning;
-        }
-      } catch (error) {
-        if (_disposed || !identical(snapshot, current)) return;
-        _catalogSyncError = _shortcutCatalogFailure(error);
-        _catalogRegistrationFailed =
-            error is PlatformException && error.code == 'shortcuts';
-        _supportedShortcutActions = const {};
-        // An uncertain catalog must not keep a revoked action's system chord alive.
-        try {
-          await _window.syncActionShortcutCatalog(snapshot, const []);
-        } catch (_) {}
-        _notify();
-      }
-    });
-    _catalogQueue = next;
-    return next;
+  Future<void> _shortcutCatalogRegistered(
+      HostSettings snapshot, ShortcutCatalogFailure? previousFailure) async {
+    final previousWarning = warning;
+    bool isCurrent() => identical(snapshot, current);
+    await _saves.refreshStatus(isCurrent: isCurrent);
+    if (_disposed || !isCurrent()) return;
+    if (warning.isNotEmpty ||
+        _statusMessage == previousWarning ||
+        (previousFailure != null &&
+            _statusMessage == _shortcutFailureMessage(previousFailure))) {
+      _statusMessage = warning.isEmpty ? null : warning;
+    }
   }
 
   void recordCaptures(List<ContextCaptureDto> captures) {
@@ -386,13 +340,12 @@ class SettingsController extends ChangeNotifier {
     if (_disposed || !_validateSettings(next)) return false;
     List<String>? supported;
     try {
-      supported =
-          await _readSupportedShortcutActions?.call(_bindingActionIds(next));
+      supported = await _shortcuts.supportedActionsFor(next);
     } catch (error) {
       if (_disposed) return false;
       await _syncShortcutCatalog();
       if (_disposed) return false;
-      reportError(_shortcutCatalogFailure(error));
+      reportError(_shortcutFailureMessage(ShortcutCatalogFailure.from(error)));
       return false;
     }
     if (_disposed) return false;
@@ -514,13 +467,11 @@ class SettingsController extends ChangeNotifier {
             (labels) => labels.extensionsUpdateFailed('$error'));
       }
     } finally {
-      if (!_disposed && _readShortcutActions != null) {
+      if (!_disposed) {
         try {
-          final actions = await _readShortcutActions();
-          if (!_disposed) _shortcutActions = actions;
+          await _shortcuts.refreshActions();
         } catch (error) {
           if (!_disposed) {
-            _shortcutActions = const [];
             if (_statusMessage == null) {
               _setLocalizedStatus(
                   (labels) => labels.shortcutLoadFailed('$error'));
@@ -549,6 +500,7 @@ class SettingsController extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     _saves.dispose();
+    _shortcuts.dispose();
     _edits?.removeListener(_notify);
     _edits?.dispose();
     clipboard.removeListener(_notify);

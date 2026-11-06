@@ -123,9 +123,9 @@ class SettingsSaveCoordinator {
     return _disposed ? null : failures;
   }
 
-  Future<void> refreshStatus() async {
+  Future<void> refreshStatus({bool Function()? isCurrent}) async {
     final warning = await _window.readSettingsStatus();
-    if (!_disposed) _warning = warning;
+    if (!_disposed && (isCurrent?.call() ?? true)) _warning = warning;
   }
 
   Future<SettingsAuthorizationOutcome> authorize() async {
