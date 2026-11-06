@@ -14,6 +14,7 @@ import '../src/rust/api.dart' as extensions_api;
 import '../src/rust/api.dart';
 import 'application_history_settings_controller.dart';
 import 'clipboard_settings_controller.dart';
+import 'feature_catalog_coordinator.dart';
 import 'host_settings.dart';
 import 'settings_edits.dart';
 import 'settings_save_coordinator.dart';
@@ -47,17 +48,7 @@ class SettingsController extends ChangeNotifier {
             appHistoryBackend ?? RustAppHistoryPreferencesBackend()),
         clipboard = ClipboardSettingsController(
             clipboardBackend ?? RustClipboardPreferencesBackend()),
-        _window = window,
-        _readExtensions = readExtensions ?? extensionStatus,
-        _refreshFeatures = refreshFeatures ?? extensions_api.refreshFeatures,
-        _enableExtension = enableExtension ??
-            ((key, enabled) =>
-                extensions_api.setExtensionEnabled(key: key, enabled: enabled)),
-        _grantExtension = grantExtension ??
-            ((key, token) =>
-                extensions_api.approveExtension(key: key, token: token)),
-        _removeExtensionGrant = removeExtensionGrant ??
-            ((key) => extensions_api.revokeExtension(key: key)) {
+        _window = window {
     _saves = SettingsSaveCoordinator(
         window: window,
         startupMessage: startupMessage,
@@ -81,12 +72,26 @@ class SettingsController extends ChangeNotifier {
         readActions: readShortcutActions,
         readSupportedActions: readSupportedShortcutActions,
         readApplications: readShortcutApplications);
+    _features = FeatureCatalogCoordinator(
+        read: readExtensions ?? extensionStatus,
+        refresh: refreshFeatures ?? extensions_api.refreshFeatures,
+        enable: enableExtension ??
+            ((key, enabled) =>
+                extensions_api.setExtensionEnabled(key: key, enabled: enabled)),
+        approve: grantExtension ??
+            ((key, token) =>
+                extensions_api.approveExtension(key: key, token: token)),
+        revoke: removeExtensionGrant ??
+            ((key) => extensions_api.revokeExtension(key: key)),
+        invalidateReads: _saves.invalidateReads,
+        onStarting: _featureUpdateStarted,
+        onFailure: (error) => _setLocalizedStatus(
+            (labels) => labels.extensionsUpdateFailed('$error')),
+        reconcileShortcuts: _reconcileFeatureShortcuts,
+        onChanged: _notify);
     clipboard.addListener(_notify);
     appHistory.addListener(_notify);
-    appHistory.onCatalogChanged = () => _queueExtensionOperation(() async {
-          final statuses = await _readExtensions();
-          if (!_disposed) _extensions = statuses;
-        });
+    appHistory.onCatalogChanged = _features.reconcileSource;
   }
 
   final ClipboardSettingsController clipboard;
@@ -94,15 +99,8 @@ class SettingsController extends ChangeNotifier {
   final DesktopHost _window;
   late final SettingsSaveCoordinator _saves;
   late final ShortcutCatalogCoordinator _shortcuts;
-  final FutureOr<List<ExtensionStatusDto>> Function() _readExtensions;
-  final Future<List<ExtensionStatusDto>> Function(String, bool)
-      _enableExtension;
-  final Future<List<ExtensionStatusDto>> Function(String, String)
-      _grantExtension;
-  final Future<List<ExtensionStatusDto>> Function(String) _removeExtensionGrant;
-  List<ExtensionStatusDto> _extensions = const [];
-  List<ExtensionStatusDto> get extensions => _extensions;
-  final Future<List<ExtensionStatusDto>> Function() _refreshFeatures;
+  late final FeatureCatalogCoordinator _features;
+  List<ExtensionStatusDto> get extensions => _features.statuses;
   String _shortcutFailureMessage(ShortcutCatalogFailure failure) => failure ==
           ShortcutCatalogFailure.registration
       ? 'Some action shortcuts are paused. Reopen Settings to try again, or choose a different key combination.'
@@ -110,8 +108,7 @@ class SettingsController extends ChangeNotifier {
   String? get _catalogSyncError => _shortcuts.failure == null
       ? null
       : _shortcutFailureMessage(_shortcuts.failure!);
-  Future<void>? _extensionOperation;
-  bool get updatingFeatures => _extensionOperation != null;
+  bool get updatingFeatures => _features.busy;
   bool shortcutSupported(String id) => _shortcuts.supports(id);
   List<ShortcutApplicationDto> get shortcutApplications =>
       _shortcuts.applications;
@@ -204,9 +201,8 @@ class SettingsController extends ChangeNotifier {
     }
     if (catalog) {
       try {
-        final statuses = await _readExtensions();
+        await _features.load(() => epoch == _saves.loadRevision);
         if (_disposed || epoch != _saves.loadRevision) return;
-        _extensions = statuses;
       } catch (error) {
         if (_disposed || epoch != _saves.loadRevision) return;
         _setLocalizedStatus((labels) => labels.extensionsLoadFailed('$error'));
@@ -301,7 +297,7 @@ class SettingsController extends ChangeNotifier {
       _edits?.waitForPending() ?? Future.value(true),
     ]);
     // A source write can start catalog reconciliation while these queues drain.
-    await _extensionOperation;
+    await _features.waitForPending();
     if (_disposed) return false;
     if (!results[0]) {
       _reportLocalizedError((labels) => labels.appHistorySettingsFailed);
@@ -409,81 +405,39 @@ class SettingsController extends ChangeNotifier {
 
   bool get authorizingFiles => _saves.authorizingFiles;
 
-  Future<void> refreshFeatureData() => _changeExtensions(_refreshFeatures);
+  Future<void> refreshFeatureData() => _changeFeatures(_features.refresh);
 
   Future<void> setExtensionEnabled(
           ExtensionStatusDto extension, bool enabled) =>
-      _changeExtensions(() => _enableExtension(extension.key, enabled));
+      _changeFeatures(() => _features.enable(extension, enabled));
 
   Future<void> approveExtension(ExtensionStatusDto extension) =>
-      _changeExtensions(
-          () => _grantExtension(extension.key, extension.approvalToken));
+      _changeFeatures(() => _features.approve(extension));
 
   Future<void> revokeExtension(ExtensionStatusDto extension) =>
-      _changeExtensions(() => _removeExtensionGrant(extension.key));
+      _changeFeatures(() => _features.revoke(extension));
 
-  Future<void> _changeExtensions(
-      Future<List<ExtensionStatusDto>> Function() change) {
-    if (updatingFeatures || _disposed || _closing != null) {
+  Future<void> _changeFeatures(Future<void> Function() change) {
+    if (_disposed || closing) {
       return Future.value();
     }
-    return _queueExtensionOperation(() async {
-      final statuses = await change();
-      if (!_disposed) _extensions = statuses;
-    });
+    return change();
   }
 
-  /// Source writes may finish during another catalog operation. Reconcile them
-  /// through the same queue, including while close is draining existing writes.
-  Future<void> _queueExtensionOperation(Future<void> Function() operation) {
-    if (_disposed) return Future.value();
-    _saves.invalidateReads();
-    final previous = _extensionOperation ?? Future<void>.value();
-    late final Future<void> pending;
-    pending = previous.then((_) async {
-      if (!_disposed) await _updateExtensions(operation);
-    }).whenComplete(() {
-      if (identical(_extensionOperation, pending)) {
-        _extensionOperation = null;
-        _notify();
-      }
-    });
-    _extensionOperation = pending;
-    _notify();
-    return pending;
-  }
-
-  Future<void> _updateExtensions(Future<void> Function() operation) async {
-    _saves.invalidateReads();
+  void _featureUpdateStarted() {
     _statusMessage = null;
     _notify();
+  }
+
+  Future<void> _reconcileFeatureShortcuts() async {
     try {
-      await operation();
-      if (_disposed) return;
-      _saves.invalidateReads();
+      await _shortcuts.refreshActions();
     } catch (error) {
-      if (!_disposed) {
-        _setLocalizedStatus(
-            (labels) => labels.extensionsUpdateFailed('$error'));
+      if (!_disposed && _statusMessage == null) {
+        _setLocalizedStatus((labels) => labels.shortcutLoadFailed('$error'));
       }
-    } finally {
-      if (!_disposed) {
-        try {
-          await _shortcuts.refreshActions();
-        } catch (error) {
-          if (!_disposed) {
-            if (_statusMessage == null) {
-              _setLocalizedStatus(
-                  (labels) => labels.shortcutLoadFailed('$error'));
-            }
-          }
-        }
-      }
-      // The backend can commit before its response/status read fails. Always
-      // reconcile eligibility; the sync itself unregisters uncertain chords.
-      await _syncShortcutCatalog();
-      _notify();
     }
+    await _syncShortcutCatalog();
   }
 
   Future<bool> openPrivacySettings(String pane) async {
@@ -501,6 +455,7 @@ class SettingsController extends ChangeNotifier {
     _disposed = true;
     _saves.dispose();
     _shortcuts.dispose();
+    _features.dispose();
     _edits?.removeListener(_notify);
     _edits?.dispose();
     clipboard.removeListener(_notify);

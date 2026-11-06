@@ -141,6 +141,40 @@ void main() {
     expect(c.statusMessage, isNull);
   });
 
+  test('close drains source reconciliation enqueued while already waiting',
+      () async {
+    final mutation = Completer<List<ExtensionStatusDto>>();
+    final reconciliation = Completer<List<ExtensionStatusDto>>();
+    final reading = Completer<void>();
+    final c = SettingsController(
+        window: WindowHost(channel),
+        readExtensions: () {
+          reading.complete();
+          return reconciliation.future;
+        },
+        enableExtension: (_, __) => mutation.future);
+    addTearDown(() {
+      c.dispose();
+      if (!mutation.isCompleted) mutation.complete([]);
+      if (!reconciliation.isCompleted) reconciliation.complete([]);
+    });
+    final first = c.setExtensionEnabled(extension(firstParty: true), false);
+    var closed = false;
+    final closing = c.prepareClose().then((result) => closed = result);
+    await Future<void>.delayed(Duration.zero);
+    final queued = c.appHistory.onCatalogChanged!();
+    mutation.complete([extension(firstParty: true, enabled: false)]);
+    await reading.future;
+    await Future<void>.delayed(Duration.zero);
+    expect(closed, isFalse,
+        reason: 'close must follow the queue tail added while it was waiting');
+    reconciliation.complete([extension(firstParty: true, enabled: false)]);
+    await first;
+    await queued;
+    expect(await closing, isTrue);
+    expect(c.updatingFeatures, isFalse);
+  });
+
   test('approve and revoke refresh picker and native hotkey eligibility',
       () async {
     var current = extension();

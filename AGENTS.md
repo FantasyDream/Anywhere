@@ -43,6 +43,9 @@ it into another UI framework.
   See [the source guide](docs/application-history-sources.md).
 - Settings close decisions live in `settings/settings_controller.dart`; search drafts
   and queued edits in `settings/settings_edits.dart`. The Screen only renders choices.
+  Authoritative Host saves and file authorization live in `settings/settings_save_coordinator.dart`;
+  shortcut registration and feature mutation queues in `settings/shortcut_catalog_coordinator.dart`
+  and `settings/feature_catalog_coordinator.dart`.
   Shared object-action request ordering lives in `tools/object_action_coordinator.dart`;
   sessions retain target validation and their own menu presentation.
 - A new first-party capability should contribute through its registration,
