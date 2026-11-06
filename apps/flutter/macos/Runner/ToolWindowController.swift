@@ -176,6 +176,7 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
     if let window, let content = controller?.view {
       WindowInputFocus.restore(in: window, content: content)
     }
+    NativePreviewHost.dismissUnownedPanel()
     if ready { channel?.invokeMethod("present", arguments: nil) }
     return true
   }

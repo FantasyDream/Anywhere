@@ -48,6 +48,8 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
   private weak var closeButton: NSButton?
   private weak var previousCloseTarget: AnyObject?
   private var previousCloseAction: Selector?
+  private var closingPanel = false
+  private var presentingPanel = false
 
   init(messenger: FlutterBinaryMessenger, owner: @escaping () -> NSWindow?) {
     self.owner = owner
@@ -165,6 +167,8 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     return false
   }
   private func show(id: String, paths: [String], title: String, window: NSWindow) -> Bool {
+    presentingPanel = true
+    defer { presentingPanel = false }
     if Self.current !== self { Self.current?.close(restoreFocus: false) }
     if attachedWindow !== window {
       detach()
@@ -177,12 +181,28 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     resourceID = id
     items = paths.map { Item(path: $0, title: paths.count == 1 ? title : "") }
     guard let panel = QLPreviewPanel.shared() else { return false }
+    // The Host closes on deactivation. AppKit must not independently hide and
+    // later restore a panel whose resource lease has already ended.
+    panel.hidesOnDeactivate = false
     if visibilityObservation == nil {
-      visibilityObservation = panel.observe(\.isVisible, options: [.new]) { panel, change in
-        guard change.newValue == true, Self.current == nil else { return }
-        // Quick Look can finish showing a document after its lease ended.
-        // Never let that late presentation outlive the owning session.
-        panel.order(.out, relativeTo: 0)
+      visibilityObservation = panel.observe(\.isVisible, options: [.new]) {
+        [weak self] panel, change in
+        if change.newValue == true, Self.current == nil {
+          panel.order(.out, relativeTo: 0)
+        } else if change.newValue == false {
+          guard let self, self.ownsPanel, !self.closingPanel else { return }
+          let expectedID = self.resourceID
+          let expectedGeneration = self.generation
+          // Recheck after controller transitions; an old hide must not close a
+          // replacement, and native order-out does not necessarily send willClose.
+          DispatchQueue.main.async { [weak self, weak panel] in
+            guard let self, let panel, self.ownsPanel, !self.closingPanel,
+              !self.presentingPanel, !panel.isVisible, self.resourceID == expectedID,
+              self.generation == expectedGeneration
+            else { return }
+            self.finish()
+          }
+        }
       }
     }
     if let input = window.firstResponder,
@@ -236,6 +256,19 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     return panel
   }
 
+  @discardableResult static func dismissUnownedPanel() -> Bool {
+    guard current == nil, QLPreviewPanel.sharedPreviewPanelExists(),
+      let panel = QLPreviewPanel.shared()
+    else { return false }
+    // AppKit can restore an ordered panel when the application unhides, even
+    // after its lease ended while the app was hidden.
+    let wasVisible = panel.isVisible
+    panel.order(.out, relativeTo: 0)
+    panel.dataSource = nil
+    panel.delegate = nil
+    return wasVisible
+  }
+
   private func bindCloseButton(in panel: QLPreviewPanel) {
     guard let button = panel.standardWindowButton(.closeButton), button.target !== self else {
       return
@@ -268,14 +301,13 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
   }
 
   func close(restoreFocus: Bool = true) {
+    guard !closingPanel else { return }
+    closingPanel = true
+    defer { closingPanel = false }
     // A renderer can leave the shared panel visible after its document has
     // detached. Clean it only when no other engine owns a newer preview.
     guard ownsPanel else {
-      if Self.current == nil, let panel = Self.visiblePanel {
-        panel.order(.out, relativeTo: 0)
-        panel.dataSource = nil
-        panel.delegate = nil
-      }
+      Self.dismissUnownedPanel()
       return
     }
     if QLPreviewPanel.sharedPreviewPanelExists(), let panel = QLPreviewPanel.shared() {

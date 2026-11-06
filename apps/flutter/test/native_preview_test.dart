@@ -112,6 +112,35 @@ void main() {
     expect(c.isOpen, false);
     c.dispose();
   });
+  testWidgets('native disappearance lets one Space press reopen the selection',
+      (tester) async {
+    final c = controller();
+    var issued = 0;
+    c.sync('file', () async => resource('preview-${++issued}'));
+    c.toggle();
+    await tester.pumpAndSettle();
+    await event('closed', 'preview-1');
+    await tester.pumpAndSettle();
+    expect(c.isOpen, false);
+    expect(released, ['preview-1']);
+    expect(
+        c.handleKey(
+            KeyDownEvent(
+                physicalKey: PhysicalKeyboardKey.space,
+                logicalKey: LogicalKeyboardKey.space,
+                timeStamp: Duration.zero),
+            query: 'settings.xml'),
+        true);
+    await tester.pumpAndSettle();
+    expect(c.isOpen, true);
+    expect(
+        calls
+            .where((call) => call.method == 'show')
+            .map((call) => call.arguments['id']),
+        ['preview-1', 'preview-2']);
+    c.dispose();
+    await tester.pumpAndSettle();
+  });
   testWidgets('late preparation cannot reopen a closed or replacement preview',
       (tester) async {
     final c = controller();

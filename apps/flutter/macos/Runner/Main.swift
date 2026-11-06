@@ -491,6 +491,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
           self.window.makeKeyAndOrderFront(nil)
           WindowInputFocus.restore(in: self.window, content: self.controller.view)
         }
+        if NativePreviewHost.dismissUnownedPanel() {
+          self.log(["event": "unowned_preview_dismissed", "stage": "show"])
+        }
         self.presentedGeneration = generation
         let elapsed = (ProcessInfo.processInfo.systemUptime - self.activationStart) * 1000
         let visibleFrame =
@@ -639,6 +642,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   func applicationDidResignActive(_ notification: Notification) {
     shortcutRecorder.cancel()
     dismissForFocusLoss()
+  }
+
+  func applicationDidBecomeActive(_ notification: Notification) {
+    DispatchQueue.main.async { [weak self] in
+      if NativePreviewHost.dismissUnownedPanel() {
+        self?.log(["event": "unowned_preview_dismissed", "stage": "activation"])
+      }
+    }
   }
 
   @objc func activateCurrentApp() { activate(mode: "currentApp") }
