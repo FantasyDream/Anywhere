@@ -36,12 +36,15 @@ void main() {
   });
   tearDown(DesktopEnvironment.reset);
   Future<void> event(String method, String id,
-      {bool restoreFocus = false}) async {
+      {bool restoreFocus = false, String? reason}) async {
     final done = Completer<void>();
     await messenger.handlePlatformMessage(
         NativePreviewController.channel.name,
-        const StandardMethodCodec().encodeMethodCall(
-            MethodCall(method, {'id': id, 'restoreFocus': restoreFocus})),
+        const StandardMethodCodec().encodeMethodCall(MethodCall(method, {
+          'id': id,
+          'restoreFocus': restoreFocus,
+          if (reason != null) 'reason': reason,
+        })),
         (_) => done.complete());
     await done.future;
   }
@@ -198,6 +201,112 @@ void main() {
     expect(loaded, false);
     expect(unsupported.isOpen, false);
     unsupported.dispose();
+  });
+  testWidgets(
+      'native cleanup before a rejected show reports failure exactly once',
+      (tester) async {
+    final c = controller();
+    addTearDown(c.dispose);
+    messenger.setMockMethodCallHandler(NativePreviewController.channel,
+        (call) async {
+      calls.add(call);
+      if (call.method == 'show') {
+        await event('closed', 'one', reason: 'show_failed');
+        throw PlatformException(code: 'preview_unavailable');
+      }
+      return call.method == 'capabilities' ? {'supported': true} : null;
+    });
+    c.sync('one', () async => resource('one'));
+    c.toggle();
+    await tester.pumpAndSettle();
+    expect(c.isOpen, false);
+    expect(released, ['one']);
+    expect(failures, 1);
+    await event('closed', 'one', reason: 'show_failed');
+    expect(failures, 1);
+  });
+  testWidgets(
+      'a rejected show reply before native cleanup reports failure once',
+      (tester) async {
+    final c = controller();
+    addTearDown(c.dispose);
+    messenger.setMockMethodCallHandler(NativePreviewController.channel,
+        (call) async {
+      if (call.method == 'show') {
+        throw PlatformException(code: 'preview_unavailable');
+      }
+      return call.method == 'capabilities' ? {'supported': true} : null;
+    });
+    c.sync('one', () async => resource('one'));
+    c.toggle();
+    await tester.pumpAndSettle();
+    await event('closed', 'one', reason: 'show_failed');
+    expect(c.isOpen, false);
+    expect(released, ['one']);
+    expect(failures, 1);
+  });
+  testWidgets('old native failure cannot close or report against a replacement',
+      (tester) async {
+    final c = controller();
+    addTearDown(c.dispose);
+    c.sync('one', () async => resource('one'));
+    c.toggle();
+    await tester.pumpAndSettle();
+    c.sync('two', () async => resource('two'));
+    await tester.pump(const Duration(milliseconds: 80));
+    await tester.pumpAndSettle();
+    await event('closed', 'one', reason: 'show_failed');
+    expect(c.isOpen, true);
+    expect(released, ['one']);
+    expect(failures, 0);
+  });
+  testWidgets('user cancellation suppresses a pending show failure',
+      (tester) async {
+    final c = controller();
+    addTearDown(c.dispose);
+    final pending = Completer<void>();
+    messenger.setMockMethodCallHandler(NativePreviewController.channel,
+        (call) async {
+      if (call.method == 'show') await pending.future;
+      return call.method == 'capabilities' ? {'supported': true} : null;
+    });
+    c.sync('one', () async => resource('one'));
+    c.toggle();
+    await tester.pump();
+    c.close();
+    await event('closed', 'one', reason: 'show_failed');
+    pending.completeError(PlatformException(code: 'preview_unavailable'));
+    await tester.pumpAndSettle();
+    expect(c.isOpen, false);
+    expect(released, ['one']);
+    expect(failures, 0);
+  });
+  testWidgets(
+      'failure of an in-flight old selection still shows the queued target',
+      (tester) async {
+    final c = controller();
+    addTearDown(c.dispose);
+    final pending = Completer<void>();
+    messenger.setMockMethodCallHandler(NativePreviewController.channel,
+        (call) async {
+      calls.add(call);
+      if (call.method == 'show' && call.arguments['id'] == 'one') {
+        await pending.future;
+      }
+      return call.method == 'capabilities' ? {'supported': true} : null;
+    });
+    c.sync('one', () async => resource('one'));
+    c.toggle();
+    await tester.pump();
+    c.sync('two', () async => resource('two'));
+    await tester.pump(const Duration(milliseconds: 81));
+    await event('closed', 'one', reason: 'show_failed');
+    pending.completeError(PlatformException(code: 'preview_unavailable'));
+    await tester.pumpAndSettle();
+    expect(c.isOpen, true);
+    expect(calls.last.arguments['id'], 'two');
+    expect(released, ['one']);
+    expect(failures, 0);
   });
   testWidgets(
       'old panel cannot activate a changed selection, even after returning',
