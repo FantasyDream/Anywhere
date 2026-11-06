@@ -177,7 +177,11 @@ class NativePreviewController extends ChangeNotifier {
           }
         case 'closed':
           owner._trace('native_closed');
+          final failed = args['reason'] == 'show_failed';
+          // A rejected old show must not cancel a newer queued selection.
+          if (failed && owner._resourceEpoch != owner._epoch) return;
           owner.close();
+          if (failed) owner.onFailure();
           if (args['restoreFocus'] == true) owner.onSearch();
         case 'next':
           owner.onMove(1);

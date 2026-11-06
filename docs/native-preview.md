@@ -29,7 +29,7 @@ flowchart TD
 
 Rust `preview_file` 校验当前 Session / Revision、候选身份、目录授权策略和文件对象；`preview_clipboard_entry` 通过历史服务校验开关、期限、删除与内容读取。两者返回统一的 `NativePreviewDto`，包含随机资源 ID、本地路径列表和标题。前端不能以任意路径请求 Rust 读取文件；此接口也不暴露给插件 SDK。
 
-平台窗口接口只包含 `capabilities`、`show`、`close`，更新通过同一个 `show` 替换资源，使用递增 generation 拒绝旧请求。事件包括 `shown`、`closed`、`next`、`previous`、`activate`、`search`，均绑定资源 ID；旧窗口事件不操作新对象；确认执行还需匹配准备资源时的选择版本，选择已改变但新预览未就绪时忽略旧面板的确认。`closed` 可附带 `restoreFocus: true`，只在返回所属窗口时重新连接原输入框，切到其他应用时不抢焦点。公共协议不包含 NSPanel、HWND、COM 或 Flutter 像素布局。
+平台窗口接口只包含 `capabilities`、`show`、`close`，更新通过同一个 `show` 替换资源，使用递增 generation 拒绝旧请求。事件包括 `shown`、`closed`、`next`、`previous`、`activate`、`search`，均绑定资源 ID；旧窗口事件不操作新对象；确认执行还需匹配准备资源时的选择版本，选择已改变但新预览未就绪时忽略旧面板的确认。`closed` 可附带 `restoreFocus: true`，只在返回所属窗口时重新连接原输入框，切到其他应用时不抢焦点。展示失败的收尾携带 `reason: show_failed`，普通关闭使用 `dismissed`；未携带原因的旧事件仍视为普通关闭。Flutter 对当前展示失败提示一次，不把主动取消或旧选择失败当作新请求的错误。公共协议不包含 NSPanel、HWND、COM 或 Flutter 像素布局。
 
 Flutter 协调选择、请求版本、窗口事件和关闭。macOS Host 管理响应链、原生面板、内部焦点和系统控件，进程中最多显示一个 Quick Look 面板。Launcher 与悬浮窗通过各自 engine 的同名通道接入，切换窗口时撤销旧所有者。
 
