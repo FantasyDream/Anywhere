@@ -35,7 +35,7 @@ concurrency:
 
 jobs:
   validate:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
@@ -76,7 +76,7 @@ jobs:
     # Signing credentials are available only for an explicit maintainer dispatch.
     if: github.event_name == 'workflow_dispatch'
     needs: validate
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
