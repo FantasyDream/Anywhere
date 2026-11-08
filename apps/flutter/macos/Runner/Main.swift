@@ -106,8 +106,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
       .invokeMethod("perform", arguments: command)
     }
   )
-  let shortcutRecorder = ShortcutRecorder()
-  var shortcutRecordingChannel: FlutterMethodChannel!
+  private var shortcutRecorder: ShortcutRecordingHost!
   var terminationPending = false
   let settingsStore = SettingsStore()
   var stored: StoredSettings {
@@ -231,35 +230,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
       name: "anywhere/window",
       binaryMessenger: controller.engine.binaryMessenger
     )
-    shortcutRecordingChannel = FlutterMethodChannel(
-      name: "anywhere/shortcut-recorder",
-      binaryMessenger: controller.engine.binaryMessenger
-    )
-    shortcutRecordingChannel.setMethodCallHandler { [weak self] call, reply in
-      guard let self, let args = call.arguments as? [String: Any],
-        let id = args["id"] as? Int
-      else {
-        reply(nil)
-        return
-      }
-      switch call.method {
-      case "record":
-        guard self.settingsOpen, NSApp.isActive, NSApp.keyWindow === self.settingsWindow else {
-          reply(
-            FlutterError(
-              code: "recording_unavailable",
-              message: "Open Settings to record a shortcut.",
-              details: nil
-            )
-          )
-          return
-        }
-        self.shortcutRecorder.start(id: id) { reply($0) }
-      case "cancel":
-        self.shortcutRecorder.cancel(id: id)
-        reply(nil)
-      default: reply(FlutterMethodNotImplemented)
-      }
+    shortcutRecorder = ShortcutRecordingHost(messenger: controller.engine.binaryMessenger) {
+      [weak self] in
+      guard let self else { return false }
+      return self.settingsOpen && NSApp.isActive && NSApp.keyWindow === self.settingsWindow
     }
     channel.setMethodCallHandler { [weak self] call, reply in
       guard let self else { return }

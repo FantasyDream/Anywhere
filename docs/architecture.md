@@ -227,6 +227,8 @@ JSON Workspace 是混合插件示例：WebView 负责编辑、校验、token 格
 
 原生 Edit 菜单通过 NativeEditMenu 向当前 key window 对应的 Flutter engine 发送 anywhere/editing 编辑指令；Launcher / Settings 共用 engine，Running Tasks 使用自己的 engine。每个 engine 的 DesktopEditMenu 根据当前 Focus 调用 Flutter Actions，统一处理 Undo / Redo / Cut / Copy / Paste / Select All，文本、选区和撤销历史保存在 Flutter 编辑模型中。没有活动 Flutter 窗口时原生菜单不转发，无焦点 / 未知指令不会修改输入。业务处理继续由 Rust 执行。
 
+`ShortcutRecordingHost` 持有共享引擎的录制通道及 `ShortcutRecorder`。每次开始录制时查询设置窗口资格；替换、取消、失焦和销毁完成对应的待回复请求，迟到取消不能撤销新请求。AppDelegate 仅组装资格回调并转交本地按键与已注册唤醒键；纯按键转换仍在 Recorder，Host 销毁时解除消息处理器。
+
 
 ## Web 插件收尾边界
 

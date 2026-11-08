@@ -40,6 +40,16 @@ xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   -o "$host_test_directory/flutter-accessibility-test"
 "$host_test_directory/flutter-accessibility-test"
 flutter_framework_directory="$(dirname "$(dirname "$flutter_framework")")"
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  -F "$flutter_framework_directory" -framework FlutterMacOS \
+  -Xlinker -rpath -Xlinker "$flutter_framework_directory" \
+  apps/flutter/macos/Runner/HotKeyMap.swift \
+  apps/flutter/macos/Runner/ShortcutRecorder.swift \
+  apps/flutter/macos/Runner/ShortcutRecordingHost.swift \
+  apps/flutter/macos/Runner/tests/HostChannelTestMessenger.swift \
+  apps/flutter/macos/Runner/tests/ShortcutRecordingHostTests.swift \
+  -o "$host_test_directory/shortcut-channel-test"
+"$host_test_directory/shortcut-channel-test"
 xcrun swiftc -typecheck -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   -F "$flutter_framework_directory" -framework FlutterMacOS -framework QuickLookUI \
   apps/flutter/macos/Runner/WindowInputFocus.swift apps/flutter/macos/Runner/NativePreviewHost.swift \
