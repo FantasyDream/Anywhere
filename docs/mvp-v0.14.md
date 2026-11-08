@@ -44,6 +44,8 @@
 
 快捷键录制通道与待回复请求由 `ShortcutRecordingHost` 持有，保留设置窗口资格、本地按键与 Carbon 唤醒键转换、失焦取消和请求 ID 隔离。新增真实 Flutter 编解码边界回归覆盖拒绝录制、替换、迟到取消、重复按键和 Host 销毁后的单次回复及解除通道。原生 Host 回归与完整 `scripts/check.sh` exit 0：Flutter 524 项通过 / 1 项跳过，其余工作区、Clippy、SDK、架构、规范及生成物检查通过。本项尚未新增打包或 GUI 验收。
 
+Web 工具通道、活动与 Host 面板状态迁至 `WebToolsHost`，统一编辑 / 按键转交与辅助功能子树生命周期；保留 Flutter / Web 两种焦点目标、唯一 WebView 规则和组词边界。新增编码通道回归覆盖活动 / 非活动协议、原生画布、有无 WebView、非 key 窗口不抢输入、隐藏撤销与释放恢复；既有 Web 编辑及完整 Host 回归通过。完整 `scripts/check.sh` exit 0：Flutter 524 项通过 / 1 项跳过，其余门禁通过，本项尚未新增打包或 GUI 验收。
+
 ### 设置保存与目录职责拆分
 
 `SettingsSaveCoordinator` 接管 Host 设置、保存队列、权威回读与文件授权失效；Controller 保留草稿、关闭选择和反馈。新保存排队即撤销旧授权，销毁后不再执行后续写入或发布迟到回读。公开设置 API 与原生协议保持一致，状态归属见[架构](architecture.md)。

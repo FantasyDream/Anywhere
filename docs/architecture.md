@@ -229,6 +229,8 @@ JSON Workspace 是混合插件示例：WebView 负责编辑、校验、token 格
 
 `ShortcutRecordingHost` 持有共享引擎的录制通道及 `ShortcutRecorder`。每次开始录制时查询设置窗口资格；替换、取消、失焦和销毁完成对应的待回复请求，迟到取消不能撤销新请求。AppDelegate 仅组装资格回调并转交本地按键与已注册唤醒键；纯按键转换仍在 Recorder，Host 销毁时解除消息处理器。
 
+`WebToolsHost` 持有 Web 工具通道、活动状态及 Host 面板遮挡状态，统一协调原生编辑、按键转交、画布与辅助功能子树。返回 Host 时只在 Flutter 内容中寻找输入接收者；返回 Web 时才在窗口内容中定位唯一 WebView。非 key 窗口不转移焦点，组词时不拦截返回 / Actions；隐藏或销毁时撤销 Web 子树连接，销毁解除通道。AppDelegate 转交事件，不另存活动标志。
+
 
 ## Web 插件收尾边界
 

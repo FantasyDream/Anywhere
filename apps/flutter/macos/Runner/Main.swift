@@ -21,9 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   private var localeHost: LocaleHost?
   private var localeObservers: [NSObjectProtocol] = []
   private var previewHost: NativePreviewHost?
-  private var webToolsChannel: FlutterMethodChannel?
-  private var webToolsActive = false
-  private var webToolsHostPanelVisible = false
+  private var webToolsHost: WebToolsHost!
   private let webPackagePicker = WebPackagePicker()
   var glass: WindowMaterial!
   var materialController: WindowMaterialController!
@@ -94,11 +92,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         return
       }
       guard let destination = self.editingController else { return }
-      if self.webToolsActive, NSApp.keyWindow === self.window,
-        NativeWebEditing.perform(command, in: self.window)
-      {
-        return
-      }
+      if self.webToolsHost?.performEdit(command) == true { return }
       FlutterMethodChannel(
         name: "anywhere/editing",
         binaryMessenger: destination.engine.binaryMessenger
@@ -132,52 +126,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     InAppWebViewFlutterPlugin.register(
       with: controller.registrar(forPlugin: "InAppWebViewFlutterPlugin")
     )
-    webToolsChannel = FlutterMethodChannel(
-      name: "anywhere/web-tools",
-      binaryMessenger: controller.engine.binaryMessenger
-    )
-    webToolsChannel?.setMethodCallHandler { [weak self] call, reply in
-      if call.method == "focusHost", let self, self.webToolsActive {
-        self.webToolsHostPanelVisible = true
-        self.updateWebAccessibility()
-        if NSApp.keyWindow === self.window {
-          self.window.makeFirstResponder(nil)
-          WindowInputFocus.restore(in: self.window, content: self.controller.view)
-        }
-        reply(nil)
-      } else if call.method == "focusWeb", let self, self.webToolsActive {
-        self.webToolsHostPanelVisible = false
-        self.updateWebAccessibility()
-        if NSApp.keyWindow === self.window {
-          NativeWebEditing.focus(
-            in: self.window,
-            content: self.window.contentView ?? self.controller.view
-          )
-        }
-        reply(nil)
-      } else if call.method == "configureWebAppearance", let self, self.webToolsActive {
-        self.updateWebAccessibility()
-        let transparent = NativeWebAppearance.configure(
-          in: self.window.contentView ?? self.controller.view
-        )
-        self.log([
-          "event": "web_canvas_configured", "web_view_found": transparent != nil,
-          "transparent": transparent ?? false,
-        ])
-        reply(transparent)
-      } else if call.method == "active", let active = call.arguments as? Bool {
-        self?.webToolsActive = active
-        if !active {
-          self?.webToolsHostPanelVisible = false
-          self?.updateWebAccessibility()
-        }
-        // Background dragging otherwise steals WebKit mouse-up/click events.
-        self?.window.isMovableByWindowBackground = !active
-        reply(nil)
-      } else {
-        reply(FlutterMethodNotImplemented)
-      }
-    }
     controller.backgroundColor = .clear
     window = LauncherWindow(
       contentRect: NSRect(x: 0, y: 0, width: 648, height: 64),
@@ -225,6 +173,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     previewHost = NativePreviewHost(
       messenger: controller.engine.binaryMessenger,
       owner: { [weak self] in self?.window }
+    )
+    webToolsHost = WebToolsHost(
+      messenger: controller.engine.binaryMessenger,
+      window: window,
+      content: controller.view,
+      log: { [weak self] in self?.log($0) }
     )
     channel = FlutterMethodChannel(
       name: "anywhere/window",
@@ -538,20 +492,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
       {
         return nil
       }
-      if let self, self.webToolsActive, NSApp.isActive,
-        NSApp.keyWindow === self.window, event.window === self.window
-      {
-        let flags = event.modifierFlags.intersection([.command, .option, .control, .shift])
-        let composing = (self.window.firstResponder as? NSTextInputClient)?.hasMarkedText() ?? false
-        if !composing, event.keyCode == 53 {
-          self.webToolsChannel?.invokeMethod("back", arguments: nil)
-          return nil
-        }
-        if !composing, flags == .command, event.keyCode == UInt16(kVK_ANSI_K) {
-          self.webToolsChannel?.invokeMethod("actions", arguments: nil)
-          return nil
-        }
-      }
+      if self?.webToolsHost?.handleKey(event) == true { return nil }
       guard let self, self.tasksReady,
         let tasks = self.tasksWindow, NSApp.keyWindow === tasks,
         event.keyCode == UInt16(kVK_ANSI_Period),
@@ -579,16 +520,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   func resizeWindow(_ height: Double, width: Double = 648) {
     launcherWindows.resizeWindow(height, width: width)
   }
-  private func updateWebAccessibility() {
-    NativeWebView.exposeAccessibility(
-      in: window.contentView ?? controller.view,
-      enabled: webToolsActive && !webToolsHostPanelVisible
-    )
-  }
 
   func hideLauncherWindow() {
     previewHost?.close(restoreFocus: false)
-    NativeWebView.exposeAccessibility(in: window.contentView ?? controller.view, enabled: false)
+    webToolsHost.hideAccessibility()
     launcherWindows.hideLauncherWindow()
   }
 
