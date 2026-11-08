@@ -42,8 +42,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   var loginError: String?
   var currentAppItem: NSMenuItem?
   var universalItem: NSMenuItem?
-  var presentedGeneration: Int?
-  var latestGeneration = 0
   lazy var launcherWindows = LauncherWindowCoordinator(
     window: window,
     controller: controller,
@@ -53,12 +51,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     delegate: self,
     tasksVisible: { [weak self] in
       self?.tasksWindow?.isVisible == true || self?.clipboardWindow.window?.isVisible == true
+    },
+    willShow: { [weak self] settings in
+      self?.hotKeys.setActionShortcutsSuspended(settings)
+    },
+    willHide: { [weak self] in
+      guard let self else { return }
+      self.shortcutRecorder.cancel()
+      self.hotKeys.setActionShortcutsSuspended(false)
+      self.previewHost?.close(restoreFocus: false)
+      self.webToolsHost.hideAccessibility()
     }
   )
-  var settingsOpen: Bool {
-    get { launcherWindows.settingsOpen }
-    set { launcherWindows.settingsOpen = newValue }
-  }
+  var settingsOpen: Bool { launcherWindows.settingsOpen }
   var settingsWindow: NSWindow? { launcherWindows.settingsWindow }
   var launcherGlassMask: NSImage?
   lazy var taskWindows = TasksWindowController(onLauncher: { [weak self] in
@@ -398,31 +403,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         self.activate(mode: "currentApp")
       case "show":
         guard let args = call.arguments as? [String: Any],
-          let generation = args["generation"] as? Int,
-          generation >= self.latestGeneration
+          let generation = args["generation"] as? Int
         else {
           reply(nil)
           return
         }
-        self.latestGeneration = generation
-        self.settingsOpen = args["settings"] as? Bool == true
-        self.hotKeys.setActionShortcutsSuspended(self.settingsOpen)
-        self.glass.isHidden = false
-        NSApp.unhide(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        if self.settingsOpen {
-          self.showSettingsWindow(height: args["height"] as? Double ?? 508)
-        } else {
-          self.restoreLauncherView()
-          self.resizeWindow(args["height"] as? Double ?? 64, width: args["width"] as? Double ?? 648)
-          self.positionWindow()
-          self.window.makeKeyAndOrderFront(nil)
-          WindowInputFocus.restore(in: self.window, content: self.controller.view)
+        let settings = args["settings"] as? Bool == true
+        guard
+          self.launcherWindows.show(
+            generation: generation,
+            settings: settings,
+            height: args["height"] as? Double ?? (settings ? 508 : 64),
+            width: args["width"] as? Double ?? 648
+          )
+        else {
+          reply(nil)
+          return
         }
         if NativePreviewHost.dismissUnownedPanel() {
           self.log(["event": "unowned_preview_dismissed", "stage": "show"])
         }
-        self.presentedGeneration = generation
         let elapsed = (ProcessInfo.processInfo.systemUptime - self.activationStart) * 1000
         let visibleFrame =
           (self.settingsOpen ? self.settingsWindow?.frame : self.window.frame) ?? self.window.frame
@@ -438,23 +438,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
       case "resize":
         if let args = call.arguments as? [String: Any],
           let generation = args["generation"] as? Int,
-          generation == self.presentedGeneration,
           let height = args["height"] as? Double
         {
-          self.resizeWindow(height, width: args["width"] as? Double ?? 648)
+          self.launcherWindows.resize(
+            generation: generation,
+            height: height,
+            width: args["width"] as? Double ?? 648
+          )
         }
         reply(nil)
       case "hide":
         if let args = call.arguments as? [String: Any],
-          let generation = args["generation"] as? Int,
-          generation >= self.latestGeneration
+          let generation = args["generation"] as? Int
         {
-          self.latestGeneration = generation + 1
-          self.presentedGeneration = nil
-          self.settingsOpen = false
-          self.shortcutRecorder.cancel()
-          self.hotKeys.setActionShortcutsSuspended(false)
-          self.hideLauncherWindow()
+          self.launcherWindows.hide(generation: generation)
         }
         reply(nil)
       default: reply(FlutterMethodNotImplemented)
@@ -514,25 +511,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
   }
 
-  func positionWindow() { launcherWindows.positionWindow() }
-  func showSettingsWindow(height: Double) { launcherWindows.showSettingsWindow(height: height) }
-  func restoreLauncherView() { launcherWindows.restoreLauncherView() }
-  func resizeWindow(_ height: Double, width: Double = 648) {
-    launcherWindows.resizeWindow(height, width: width)
-  }
-
-  func hideLauncherWindow() {
-    previewHost?.close(restoreFocus: false)
-    webToolsHost.hideAccessibility()
-    launcherWindows.hideLauncherWindow()
-  }
-
   func dismissForFocusLoss() {
-    if settingsOpen || terminationPending { return }
-    guard let generation = presentedGeneration else { return }
-    presentedGeneration = nil
-    latestGeneration = generation + 1
-    hideLauncherWindow()
+    guard !terminationPending, let generation = launcherWindows.dismissForFocusLoss() else {
+      return
+    }
     log(["event": "launcher_dismissed", "reason": "focus_lost", "generation": generation])
     channel.invokeMethod("dismiss", arguments: ["generation": generation])
   }
@@ -639,7 +621,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
       }
     }
     if ["currentApp", "universal"].contains(mode) {
-      if presentedGeneration == nil {
+      if launcherWindows.presentedGeneration == nil {
         previewHost?.close(restoreFocus: false)
       } else if previewHost?.returnToOwner() == true {
         return

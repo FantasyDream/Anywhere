@@ -9,7 +9,11 @@ final class LauncherWindowCoordinator {
   let launcherGlassMask: NSImage?
   weak var delegate: NSWindowDelegate?
   let tasksVisible: () -> Bool
-  var settingsOpen = false
+  private let willShow: (Bool) -> Void
+  private let willHide: () -> Void
+  private var latestGeneration = 0
+  private(set) var presentedGeneration: Int?
+  private(set) var settingsOpen = false
   private(set) var settingsWindow: NSWindow?
   private var settingsOrigin: NSPoint?
   init(
@@ -19,7 +23,9 @@ final class LauncherWindowCoordinator {
     glass: WindowMaterial,
     mask: NSImage?,
     delegate: NSWindowDelegate,
-    tasksVisible: @escaping () -> Bool
+    tasksVisible: @escaping () -> Bool,
+    willShow: @escaping (Bool) -> Void = { _ in },
+    willHide: @escaping () -> Void = {}
   ) {
     self.window = window
     self.controller = controller
@@ -28,8 +34,62 @@ final class LauncherWindowCoordinator {
     launcherGlassMask = mask
     self.delegate = delegate
     self.tasksVisible = tasksVisible
+    self.willShow = willShow
+    self.willHide = willHide
   }
-  func positionWindow() {
+
+  /// Reject stale requests before changing windows, hotkeys or input ownership.
+  @discardableResult
+  func show(generation: Int, settings: Bool, height: Double, width: Double = 648) -> Bool {
+    guard generation >= latestGeneration else { return false }
+    latestGeneration = generation
+    settingsOpen = settings
+    willShow(settings)
+    glass.isHidden = false
+    NSApp.unhide(nil)
+    NSApp.activate(ignoringOtherApps: true)
+    if settings {
+      showSettingsWindow(height: height)
+    } else {
+      restoreLauncherView()
+      resizeWindow(height, width: width)
+      positionWindow()
+      window.makeKeyAndOrderFront(nil)
+      WindowInputFocus.restore(in: window, content: controller.view)
+    }
+    presentedGeneration = generation
+    return true
+  }
+
+  @discardableResult
+  func resize(generation: Int, height: Double, width: Double = 648) -> Bool {
+    guard generation == presentedGeneration else { return false }
+    resizeWindow(height, width: width)
+    return true
+  }
+
+  @discardableResult
+  func hide(generation: Int) -> Bool {
+    guard generation >= latestGeneration else { return false }
+    dismiss(generation: generation)
+    return true
+  }
+
+  func dismissForFocusLoss() -> Int? {
+    guard !settingsOpen, let generation = presentedGeneration else { return nil }
+    dismiss(generation: generation)
+    return generation
+  }
+
+  private func dismiss(generation: Int) {
+    latestGeneration = generation + 1
+    presentedGeneration = nil
+    settingsOpen = false
+    willHide()
+    hideLauncherWindow()
+  }
+
+  private func positionWindow() {
     let pointer = NSEvent.mouseLocation
     let screen =
       NSScreen.screens.first { NSMouseInRect(pointer, $0.frame, false) } ?? NSScreen.main!
@@ -44,7 +104,7 @@ final class LauncherWindowCoordinator {
 
   // Settings and Launcher share one engine, but have distinct native window lifecycles.
   // Moving the view avoids keeping an extra Impeller engine just for preferences.
-  func showSettingsWindow(height: Double) {
+  private func showSettingsWindow(height: Double) {
     window.orderOut(nil)
     if settingsWindow == nil {
       let panel = NSWindow(
@@ -79,7 +139,7 @@ final class LauncherWindowCoordinator {
     }
   }
 
-  func restoreLauncherView() {
+  private func restoreLauncherView() {
     guard let panel = settingsWindow, panel.contentViewController === host else { return }
     settingsOrigin = panel.frame.origin
     panel.orderOut(nil)
@@ -96,7 +156,7 @@ final class LauncherWindowCoordinator {
     settingsWindow = nil
   }
 
-  func resizeWindow(_ requestedHeight: Double, width requestedWidth: Double = 648) {
+  private func resizeWindow(_ requestedHeight: Double, width requestedWidth: Double = 648) {
     guard requestedWidth.isFinite, requestedHeight.isFinite else { return }
     if settingsOpen, let panel = settingsWindow {
       let screen = panel.screen ?? NSScreen.main!
@@ -123,7 +183,7 @@ final class LauncherWindowCoordinator {
     window.invalidateShadow()
   }
 
-  func hideLauncherWindow() {
+  private func hideLauncherWindow() {
     restoreLauncherView()
     window.orderOut(nil)
     glass.isHidden = true

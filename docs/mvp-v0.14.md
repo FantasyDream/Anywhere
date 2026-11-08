@@ -46,6 +46,8 @@
 
 Web 工具通道、活动与 Host 面板状态迁至 `WebToolsHost`，统一编辑 / 按键转交与辅助功能子树生命周期；保留 Flutter / Web 两种焦点目标、唯一 WebView 规则和组词边界。新增编码通道回归覆盖活动 / 非活动协议、原生画布、有无 WebView、非 key 窗口不抢输入、隐藏撤销与释放恢复；既有 Web 编辑及完整 Host 回归通过。完整 `scripts/check.sh` exit 0：Flutter 524 项通过 / 1 项跳过，其余门禁通过，本项尚未新增打包或 GUI 验收。
 
+窗口展示代次与设置状态收归 `LauncherWindowCoordinator`，AppDelegate 不再写代次、移动共享视图或直接调整窗口尺寸。原生回归通过迟到 show / resize / hide、隐藏抢先返回、失焦幂等与设置失焦豁免、共享内容和空设置窗口释放；被拒请求也不会运行展示钩子。完整 `scripts/check.sh` exit 0：Flutter 524 项通过 / 1 项跳过，其余原生、工作区与规范门禁通过。本项源码检查不替代后续打包和实机流程。
+
 ### 设置保存与目录职责拆分
 
 `SettingsSaveCoordinator` 接管 Host 设置、保存队列、权威回读与文件授权失效；Controller 保留草稿、关闭选择和反馈。新保存排队即撤销旧授权，销毁后不再执行后续写入或发布迟到回读。公开设置 API 与原生协议保持一致，状态归属见[架构](architecture.md)。

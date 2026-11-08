@@ -231,6 +231,8 @@ JSON Workspace 是混合插件示例：WebView 负责编辑、校验、token 格
 
 `WebToolsHost` 持有 Web 工具通道、活动状态及 Host 面板遮挡状态，统一协调原生编辑、按键转交、画布与辅助功能子树。返回 Host 时只在 Flutter 内容中寻找输入接收者；返回 Web 时才在窗口内容中定位唯一 WebView。非 key 窗口不转移焦点，组词时不拦截返回 / Actions；隐藏或销毁时撤销 Web 子树连接，销毁解除通道。AppDelegate 转交事件，不另存活动标志。
 
+`LauncherWindowCoordinator` 同时持有最新请求代次、已展示代次、设置窗口状态及共享视图。show / hide 校验最新代次，resize 只接受已展示代次；隐藏与失焦先撤销展示资格，再运行资源收尾并隐藏窗口。旧请求在任何窗口 / 热键副作用前被拒绝。AppDelegate 只解析通道参数、组装展示前的热键暂停与隐藏前的录制 / 预览 / Web 清理，并记录可见性及通知 Flutter 失焦，不再直接写代次或移动共享视图。
+
 
 ## Web 插件收尾边界
 
