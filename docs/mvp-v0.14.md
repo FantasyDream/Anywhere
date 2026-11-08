@@ -48,6 +48,8 @@ Web 工具通道、活动与 Host 面板状态迁至 `WebToolsHost`，统一编�
 
 窗口展示代次与设置状态收归 `LauncherWindowCoordinator`，AppDelegate 不再写代次、移动共享视图或直接调整窗口尺寸。原生回归通过迟到 show / resize / hide、隐藏抢先返回、失焦幂等与设置失焦豁免、共享内容和空设置窗口释放；被拒请求也不会运行展示钩子。完整 `scripts/check.sh` exit 0：Flutter 524 项通过 / 1 项跳过，其余原生、工作区与规范门禁通过。本项源码检查不替代后续打包和实机流程。
 
+干净提交 `74bd8b6` 已构建为独立的 `Anywhere-0.14-native-host-74bd8b6.app`（0.14.0+46 / arm64 / Impeller），完整 AppDelegate 组合编译、持久本机签名、ZIP 内容及 SHA-256 校验通过。独立预览实窗回归在取得 active / key window 的前置条件处退出，系统会话报告 `CGSSessionScreenIsLocked=1`；本轮未完成 GUI 验收，不以源码与打包通过代替录制、Web 焦点、预览关闭和隐藏过期的桌面实测。日常实例未替换，证据与来源保留在被忽略的 `build/acceptance-native-host-74bd8b6/` 和 `build/Anywhere-0.14-native-host-74bd8b6.provenance.json`。
+
 ### 设置保存与目录职责拆分
 
 `SettingsSaveCoordinator` 接管 Host 设置、保存队列、权威回读与文件授权失效；Controller 保留草稿、关闭选择和反馈。新保存排队即撤销旧授权，销毁后不再执行后续写入或发布迟到回读。公开设置 API 与原生协议保持一致，状态归属见[架构](architecture.md)。
