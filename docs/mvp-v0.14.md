@@ -44,7 +44,11 @@
 
 `SettingsHost` 接管权威设置、保存流程、快捷键目录复验、目录授权入口与状态查询，`LoginItemService` 独立适配系统登录启动；AppDelegate 只读设置并组装服务。现有 MethodChannel 方法和错误回复、部分保存失败的处理、目录 worker / epoch 及独立数据目录隔离保持原契约。实现归属见[架构](architecture.md)。
 
-新增真实 Flutter 编解码边界回归覆盖无效请求无副作用、快捷键拒绝后的回滚与其他偏好落盘、登录失败及状态回读、磁盘失败不分发新语言、旧目录快照拒绝、设置关闭恢复失败与重试、授权被替换后的迟到回复、强制授权及隐私入口。原生 Host 回归与完整 `scripts/check.sh` exit 0：Flutter 524 项通过 / 1 项跳过，Rust Core 332 项通过 / 1 项忽略，其余工作区、Clippy、SDK、架构、规范和生成物门禁通过。Review 已核对迁移前后的请求字段、回复和副作用顺序，未发现新增阻塞问题。本项此时尚未新增打包或 GUI 验收，登录项真实注册与 macOS 12 兼容分支未做实机验证；测试通过不扩展此前的输入法、VoiceOver 或格式矩阵。
+新增真实 Flutter 编解码边界回归覆盖无效请求无副作用、快捷键拒绝后的回滚与其他偏好落盘、登录失败及状态回读、磁盘失败不分发新语言、旧目录快照拒绝、设置关闭恢复失败与重试、授权被替换后的迟到回复、强制授权及隐私入口。原生 Host 回归与完整 `scripts/check.sh` exit 0：Flutter 524 项通过 / 1 项跳过，Rust Core 332 项通过 / 1 项忽略，其余工作区、Clippy、SDK、架构、规范和生成物门禁通过。Review 已核对迁移前后的请求字段、回复和副作用顺序，未发现新增阻塞问题。
+
+干净提交 `d1cb2bc` 已构建为独立的 `Anywhere-0.14-settings-host-d1cb2bc.app`（0.14.0+46 / arm64 / Impeller），完整 AppDelegate 组装、本机持久签名、ZIP 内容和 SHA-256 校验通过。独立数据目录中，语言保存并重开、隔离登录偏好保存与回读、已有合成目录授权恢复、搜索偏好保存，以及动作候选读取 / 录制 / 保存 / 关闭设置的 GUI 冒烟通过；落盘结果已核对。测试实例正常退出，日志 AXTree 错误、Flutter ERROR 与 frame-time clamping 均为 0，未替换日常 App 或编辑个人设置。来源及证据保留在被忽略的 `build/Anywhere-0.14-settings-host-d1cb2bc.provenance.json` 和 `build/acceptance-settings-host-d1cb2bc/`。
+
+本轮合成动作热键落入文本框，自动化 Universal 切换紧接着触发 currentApp 激活；这些操作不记为硬件快捷键或新增预览 / 过期验收，也未据此修改生产按键和窗口语义。登录项真实注册、macOS 12 兼容分支、物理输入法、VoiceOver 与全部格式矩阵仍未新增实机验证，上一轮帧时间诊断仍未定位；本轮日志未出现该消息不代表已修复。
 
 ### Native Host 通道职责拆分
 
