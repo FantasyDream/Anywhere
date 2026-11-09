@@ -26,6 +26,7 @@ mod session_runtime;
 mod snapshot;
 
 mod app_actions;
+mod application_index;
 mod shortcuts;
 pub use shortcuts::{BindingResolution, ShortcutAction, ShortcutApplication, ShortcutRoute};
 
@@ -42,9 +43,6 @@ pub mod web_plugins;
 
 #[cfg(test)]
 mod source_catalog_tests;
-
-#[cfg(test)]
-mod application_index_tests;
 
 #[cfg(test)]
 mod feature_policy_tests;

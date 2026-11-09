@@ -2,7 +2,6 @@
 use crate::{
     application::session_runtime::Resolver, core::action::descriptor::ActionRegistry,
     core::context::engine::ContextGraphRun, core::ranking::usage::UsageRepository,
-    features::applications::index as applications,
 };
 use anyhow::Result;
 use anywhere_platform::{ApplicationInfo, Platform};
@@ -66,9 +65,7 @@ pub struct Application {
     pub(super) startup_diagnostics: Vec<String>,
     pub(super) budget: Duration,
     pub(super) content_grace: Duration,
-    pub(super) catalog_tx: watch::Sender<u64>,
     pub(super) app_actions: crate::features::app_actions::AppActionCatalog,
-    pub(super) excluded_apps: Arc<Mutex<BTreeSet<String>>>,
     pub(super) file_search_policy:
         Arc<std::sync::RwLock<crate::features::filesystem::search::FileSearchPolicy>>,
     pub(super) file_search_source: Arc<crate::features::filesystem::search::FileSearchSource>,
@@ -104,8 +101,7 @@ impl Application {
         budget: Duration,
     ) -> Self {
         platform.start_clipboard_tracking();
-        let (catalog_tx, catalog_rx) = watch::channel(0);
-        let resolver = Resolver::new(registry, history).with_catalog_rx(catalog_rx);
+        let resolver = Resolver::new(registry, history);
         let (source, sources) =
             super::composition::builtin_sources(platform.clone(), resolver.base_registry());
         let file_search_policy = source.policy.clone();
@@ -132,9 +128,7 @@ impl Application {
             startup_diagnostics,
             budget,
             content_grace: DEFAULT_FIRST_CONTENT_GRACE,
-            catalog_tx,
             app_actions: crate::features::app_actions::AppActionCatalog::default(),
-            excluded_apps: Arc::new(Mutex::new(BTreeSet::new())),
             capture_policy: Arc::new(Mutex::new(Default::default())),
         }
     }
@@ -393,24 +387,11 @@ impl Application {
     }
 
     pub fn excluded_apps(&self) -> Vec<String> {
-        self.excluded_apps
-            .lock()
-            .map(|ids| ids.iter().cloned().collect())
-            .unwrap_or_default()
+        self.resolver.application_index.excluded()
     }
 
     pub fn set_excluded_apps(&self, ids: Vec<String>) {
-        let set: BTreeSet<String> = ids.into_iter().filter(|id| !id.trim().is_empty()).collect();
-        if let Ok(mut excluded) = self.excluded_apps.lock() {
-            *excluded = set.clone();
-        }
-        if let Ok(mut slot) = self.resolver.catalog.lock() {
-            slot.catalog = if set.is_empty() {
-                slot.full.clone()
-            } else {
-                Arc::new(slot.full.excluding(&set))
-            };
-        }
+        let _ = self.resolver.application_index.set_excluded(ids);
         if let Ok(session) = self.session() {
             let session_id = session.state.session_id;
             drop(session);
@@ -473,7 +454,7 @@ impl Application {
     /// The first snapshot never waits for this; it exists for callers that want
     /// application search results on the very first query.
     pub async fn catalog_ready(&self) {
-        self.resolver.catalog_ready().await;
+        self.resolver.application_index.ready().await;
     }
 
     /// Signalled whenever the application index is published.
@@ -482,7 +463,7 @@ impl Application {
     /// otherwise match an empty index and no later input would revisit it. The bridge
     /// re-commits the current snapshot when this fires.
     pub fn index_updates(&self) -> watch::Receiver<u64> {
-        self.catalog_tx.subscribe()
+        self.resolver.application_index.updates()
     }
 
     /// Additional product sources use the same matching, sorting and publication path.
@@ -535,53 +516,6 @@ impl Application {
             .map_err(|_| anyhow::anyhow!("session lock poisoned"))
     }
 
-    /// Background application scan; never blocks the first snapshot.
-    ///
-    /// Each activation issues a new scan so an app installed after launch is visible
-    /// the next time the launcher opens. A newer scan discards an older one that
-    /// finishes late.
-    pub(super) fn spawn_catalog_scan(&self) -> u64 {
-        let generation = self
-            .resolver
-            .catalog_issued
-            .fetch_add(1, std::sync::atomic::Ordering::AcqRel)
-            + 1;
-        let platform = self.platform.clone();
-        let catalog = self.resolver.catalog.clone();
-        let excluded = self.excluded_apps.clone();
-        let tx = self.catalog_tx.clone();
-        tokio::spawn(async move {
-            let scanned = applications::scan_async(platform).await;
-            let Ok(mut slot) = catalog.lock() else {
-                return;
-            };
-            if generation < slot.generation {
-                return;
-            }
-            slot.generation = generation;
-            match scanned {
-                applications::ScanStatus::Complete(report) => {
-                    let skipped = report.skipped;
-                    let full = Arc::new(applications::ApplicationCatalog::new(report.applications));
-                    let catalog = match excluded.lock() {
-                        Ok(excluded) if !excluded.is_empty() => Arc::new(full.excluding(&excluded)),
-                        _ => full.clone(),
-                    };
-                    let count = catalog.applications().len();
-                    slot.full = full;
-                    slot.catalog = catalog;
-                    tx.send_replace(generation);
-                    tracing::info!(count, skipped, generation, "app_index_published");
-                }
-                applications::ScanStatus::Failed => {
-                    tx.send_replace(generation);
-                    tracing::error!(generation, "app_index_kept");
-                }
-            }
-        });
-        generation
-    }
-
     /// Re-publish the current snapshot once the activation's application scan finishes.
     ///
     /// The scan starts at activation and takes ~60ms on a real machine, so a search typed
@@ -593,7 +527,7 @@ impl Application {
     /// `snapshot_seq` as "there is more to show now".
     pub(super) fn spawn_index_recompute(&self, session_id: SessionId, generation: u64) {
         let resolver = self.resolver.clone();
-        let mut index = self.catalog_tx.subscribe();
+        let mut index = self.index_updates();
         let mut states = self.state_updates();
         tokio::spawn(async move {
             while *index.borrow_and_update() < generation {

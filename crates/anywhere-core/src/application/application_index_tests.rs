@@ -1,4 +1,5 @@
-use super::{source_catalog_tests::QuietPlatform, Application};
+use super::*;
+use crate::application::{source_catalog_tests::QuietPlatform, Application};
 use crate::{
     core::{
         action::descriptor::ActionRegistry,
@@ -8,7 +9,7 @@ use crate::{
             candidate_source::{CandidateSource, SearchContext},
         },
     },
-    features::applications::index::{ApplicationCatalog, IndexedApplication},
+    features::applications::index::{IndexedApplication, ScanReport},
 };
 use anywhere_protocol::{CandidateKind, InputMode};
 use std::{
@@ -73,16 +74,10 @@ async fn exclusion_changes_reject_prepared_rows_before_the_replacement_snapshot_
     );
     app.register_candidate_source(source.clone());
     let id = app.begin_activation().unwrap();
+    app.resolver
+        .application_index
+        .publish(0, report(&["Index"], 0));
     {
-        let mut catalog = app.resolver.catalog.lock().unwrap();
-        catalog.full = Arc::new(ApplicationCatalog::new(vec![IndexedApplication {
-            bundle_id: "dev.test.index".into(),
-            name: "Index".into(),
-            path: "/synthetic/Index.app".into(),
-            ..Default::default()
-        }
-        .prepared()]));
-        catalog.catalog = catalog.full.clone();
         let mut session = app.session().unwrap();
         session.input_mode = InputMode::Search;
         session.state.input = "Index".into();
@@ -129,4 +124,126 @@ async fn exclusion_changes_reject_prepared_rows_before_the_replacement_snapshot_
         state.candidates
     );
     assert_eq!(app.excluded_apps(), ["dev.test.index"]);
+}
+
+fn report(names: &[&str], skipped: usize) -> ScanStatus {
+    ScanStatus::Complete(ScanReport {
+        applications: names
+            .iter()
+            .map(|name| {
+                IndexedApplication {
+                    bundle_id: format!("dev.test.{}", name.to_lowercase()),
+                    name: (*name).into(),
+                    path: format!("/synthetic/{name}.app"),
+                    ..Default::default()
+                }
+                .prepared()
+            })
+            .collect(),
+        skipped,
+    })
+}
+
+fn names(snapshot: &IndexSnapshot) -> Vec<&str> {
+    snapshot
+        .catalog
+        .applications()
+        .iter()
+        .map(|app| app.name.as_str())
+        .collect()
+}
+
+#[test]
+fn an_older_scan_cannot_replace_a_newer_completed_index() {
+    let index = ApplicationIndex::default();
+    let older = index.issue_scan();
+    let newer = index.issue_scan();
+    index.publish(newer, report(&["New"], 0));
+    let published = index.snapshot().unwrap();
+    index.publish(older, report(&["Old"], 0));
+    assert_eq!(names(&index.snapshot().unwrap()), ["New"]);
+    assert!(index.is_current(&published).unwrap());
+    assert_eq!(*index.updates().borrow(), newer);
+}
+
+#[tokio::test(start_paused = true)]
+async fn readiness_waits_for_the_current_scan_and_failure_keeps_the_previous_index() {
+    let index = ApplicationIndex::default();
+    let first = index.issue_scan();
+    index.publish(first, report(&["Existing"], 0));
+    index.ready().await;
+    let previous = index.snapshot().unwrap();
+    let older = index.issue_scan();
+    let newest = index.issue_scan();
+    let waiting = index.ready();
+    tokio::pin!(waiting);
+    tokio::select! {
+        biased;
+        _ = &mut waiting => panic!("readiness reused an earlier completion"),
+        _ = std::future::ready(()) => {}
+    }
+    index.publish(newest, ScanStatus::Failed);
+    tokio::time::timeout(Duration::from_secs(1), waiting)
+        .await
+        .unwrap();
+    assert_eq!(*index.updates().borrow(), newest);
+    let retained = index.snapshot().unwrap();
+    assert!(Arc::ptr_eq(&previous.catalog, &retained.catalog));
+    assert!(!index.is_current(&previous).unwrap());
+    // Failure also seals its generation against a late successful older scan.
+    index.publish(older, report(&["Obsolete"], 0));
+    assert_eq!(names(&index.snapshot().unwrap()), ["Existing"]);
+    assert!(index.is_current(&retained).unwrap());
+}
+
+#[test]
+fn exclusions_filter_new_scans_without_removing_shortcut_configuration_labels() {
+    let app = Application::new(
+        Arc::new(QuietPlatform),
+        ActionRegistry::default(),
+        Box::<MemoryUsage>::default(),
+        vec![],
+    );
+    let index = &app.resolver.application_index;
+    let first = index.issue_scan();
+    index.publish(first, report(&["Index", "Other"], 0));
+    let original = index.snapshot().unwrap();
+    app.set_excluded_apps(vec![
+        "dev.test.index".into(),
+        "".into(),
+        "  ".into(),
+        "dev.test.index".into(),
+    ]);
+    assert_eq!(app.excluded_apps(), ["dev.test.index"]);
+    assert_eq!(names(&index.snapshot().unwrap()), ["Other"]);
+    assert!(!index.is_current(&original).unwrap());
+    assert_eq!(app.shortcut_applications().unwrap().len(), 2);
+    let pending = index.issue_scan();
+    app.set_excluded_apps(vec!["dev.test.fresh".into()]);
+    index.publish(pending, report(&["Index", "Fresh"], 0));
+    assert_eq!(names(&index.snapshot().unwrap()), ["Index"]);
+    let full = index.full_catalog().unwrap();
+    assert_eq!(full.applications().len(), 2);
+    app.set_excluded_apps(vec![]);
+    let restored = index.snapshot().unwrap();
+    assert!(Arc::ptr_eq(&full, &restored.catalog));
+    assert_eq!(names(&restored), ["Index", "Fresh"]);
+}
+
+#[test]
+fn partial_and_empty_successes_replace_the_index_while_a_pending_scan_keeps_it() {
+    let index = ApplicationIndex::default();
+    let first = index.issue_scan();
+    index.publish(first, report(&["Old"], 0));
+    let previous = index.snapshot().unwrap();
+    let next = index.issue_scan();
+    assert!(index.is_current(&previous).unwrap());
+    index.publish(next, report(&["Readable"], 1));
+    assert!(!index.is_current(&previous).unwrap());
+    assert_eq!(names(&index.snapshot().unwrap()), ["Readable"]);
+    let empty = index.issue_scan();
+    index.publish(empty, report(&[], 0));
+    assert!(index.snapshot().unwrap().catalog.is_empty());
+    assert!(index.full_catalog().unwrap().is_empty());
+    assert_eq!(*index.updates().borrow(), empty);
 }

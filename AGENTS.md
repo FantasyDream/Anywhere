@@ -35,6 +35,9 @@ it into another UI framework.
   `core/search/`. Empty action lists compare usage count, last use, relevance
   and stable IDs. Flutter only filters the chosen scope and limits visible rows.
   Keyword search, file results and source history lists have separate contracts.
+- Installed application index: `application/application_index.rs` owns scan
+  generations, full/filtered catalogs, exclusions and completion notifications;
+  `session_runtime.rs` revalidates its immutable snapshot before publication.
 - Application history: source packages in
   `crates/anywhere-core/resources/application-history/`; catalog and transforms
   in `application/application_history/`; state and authority in
