@@ -48,7 +48,9 @@ Web 工具通道、活动与 Host 面板状态迁至 `WebToolsHost`，统一编�
 
 窗口展示代次与设置状态收归 `LauncherWindowCoordinator`，AppDelegate 不再写代次、移动共享视图或直接调整窗口尺寸。原生回归通过迟到 show / resize / hide、隐藏抢先返回、失焦幂等与设置失焦豁免、共享内容和空设置窗口释放；被拒请求也不会运行展示钩子。完整 `scripts/check.sh` exit 0：Flutter 524 项通过 / 1 项跳过，其余原生、工作区与规范门禁通过。本项源码检查不替代后续打包和实机流程。
 
-干净提交 `74bd8b6` 已构建为独立的 `Anywhere-0.14-native-host-74bd8b6.app`（0.14.0+46 / arm64 / Impeller），完整 AppDelegate 组合编译、持久本机签名、ZIP 内容及 SHA-256 校验通过。独立预览实窗回归在取得 active / key window 的前置条件处退出，系统会话报告 `CGSSessionScreenIsLocked=1`；本轮未完成 GUI 验收，不以源码与打包通过代替录制、Web 焦点、预览关闭和隐藏过期的桌面实测。日常实例未替换，证据与来源保留在被忽略的 `build/acceptance-native-host-74bd8b6/` 和 `build/Anywhere-0.14-native-host-74bd8b6.provenance.json`。
+干净提交 `74bd8b6` 已构建为独立的 `Anywhere-0.14-native-host-74bd8b6.app`（0.14.0+46 / arm64 / Impeller），完整 AppDelegate 组合编译、持久本机签名、ZIP 内容及 SHA-256 校验通过。首次独立预览实窗回归因锁屏未取得 active / key window；用户解锁后重跑 exit 0，覆盖首次输入竞争、立即重开、原生关闭 / 隐藏、XML 加载与关闭、隐藏 16 秒及 Host 释放。
+
+同一测试包在独立数据目录中通过新组合键录制、Esc 取消、已注册组合键再次录制，以及无 Host 权限的合成 Web 工具输入、⌘K 进入 Host、Esc 返回 Web 继续编辑、原生 Undo / Redo 和返回搜索。合成 XML 的空格 / 眼睛预览及系统按钮关闭通过；AXTree、frame-time clamping 与 Flutter ERROR 计数均为 0。自动化跨应用切换与唤醒出现过未失焦或切换搜索模式的情况，不计为同模式过期验收；该项仍待实际点击其他应用、等待至少 16 秒并从测试实例的 Universal Search 菜单唤醒确认，PR 保持草稿。隔离实例的录制键仅用于测试，日常实例与设置未修改。证据与来源保留在被忽略的 `build/acceptance-native-host-74bd8b6/` 和 `build/Anywhere-0.14-native-host-74bd8b6.provenance.json`。本轮仅补充实测证据，未改生产源码，也不扩展为物理输入法、完整 VoiceOver 或全格式验收。
 
 ### 设置保存与目录职责拆分
 
