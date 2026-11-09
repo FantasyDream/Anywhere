@@ -81,6 +81,8 @@ resources/                 键码、文件类型、运行策略、设计参数�
 
 目录采集按 Session 单飞，不能因用户输入改变而再次读取“现在的前台应用”。失效应用身份安全跳过目录；不重试到已经取得焦点的 Launcher 或另一应用。详见 [Context 模型](context-model.md) 和 [默认输入策略](context-input-navigation.md)。
 
+`application/context_capture.rs` 的 `ContextCaptureService` 持有来源策略、冻结应用的 Finder / 选区 / 浏览器读取及迟到结果发布；私有 `context_capture/clipboard.rs` 管理剪贴板请求、复制年龄、SessionFacts 与 Capture 元数据。剪贴板请求在激活补充任务排队前固定策略令牌，worker 开始时和写入时复验；设置锁不再暴露给激活流程。策略更新期间由 Application 回调撤销执行与 Web 凭据，保留策略 → Session → Web 的锁顺序。`activate.rs` 仅将剪贴板 Future 与 Git / Usage 独立刷新汇合，并跟踪补充组完成；慢剪贴板读取不阻塞另两项发布。来源行为见[Context 模型](context-model.md)。
+
 ## 快照、取消与执行资格
 
 | 身份 / 版本 | 区分什么 |

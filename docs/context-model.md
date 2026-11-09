@@ -37,6 +37,8 @@ Project → 对应 Action 或动态动作目标
 
 目录绑定原应用实例，不因输入变更重新读取前台应用。应用身份失效时丢弃目录，不猜测新应用。多选、浏览器、文本、剪贴板分别记录 Empty、Unsupported、PermissionDenied、ApplicationChanged、TimedOut 等安全状态，其他来源继续工作。
 
+来源设置每次更新都会撤销旧采集令牌，即使关闭后立即重开，旧策略下尚未获准写入会话的采集结果也不能恢复资格。令牌在排队前取得，worker 开始读取与结果写入前复验；新激活可使用新策略重新采集。剪贴板事实、复制年龄与 Capture 元数据都受同一策略及 Session 身份约束；超出 Context 上限的正文不能通过 SessionFacts 留下可用副本。
+
 Environment、Content、Search、FileSearch、CapturedEnvironment 的种子选择见 [输入与默认唤醒](context-input-navigation.md)。当前 Environment 不混入剪贴板 / 选中文本正文；内容自填只解析该输入。
 
 ## 文件路径简写

@@ -38,6 +38,10 @@ it into another UI framework.
 - Installed application index: `application/application_index.rs` owns scan
   generations, full/filtered catalogs, exclusions and completion notifications;
   `session_runtime.rs` revalidates its immutable snapshot before publication.
+- Activation Context reads: `application/context_capture.rs` owns source policy,
+  frozen application reads and late capture publication; its `clipboard.rs` owns
+  clipboard requests, age and fact publication. `activate.rs` joins these with Git
+  and Usage refreshes without sharing the capture policy lock.
 - Application history: source packages in
   `crates/anywhere-core/resources/application-history/`; catalog and transforms
   in `application/application_history/`; state and authority in
