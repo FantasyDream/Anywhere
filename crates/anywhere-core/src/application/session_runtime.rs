@@ -509,7 +509,9 @@ impl Resolver {
             let catalog_moved = self
                 .catalog
                 .lock()
-                .map(|slot| slot.generation != catalog_generation)
+                .map(|slot| {
+                    slot.generation != catalog_generation || !Arc::ptr_eq(&slot.catalog, &catalog)
+                })
                 .map_err(|_| anyhow!("catalog lock poisoned"))?;
             if catalog_moved {
                 continue;

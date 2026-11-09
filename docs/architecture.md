@@ -97,6 +97,8 @@ resources/                 键码、文件类型、运行策略、设计参数�
 
 发布采用“锁内复制不可变输入和版本 → 锁外匹配 / 排序 → 锁内复验并发布”。索引、历史和 Registry 共享不可变快照；并发提交改变输入时重新计算，旧 Session / Revision 的结果直接丢弃。
 
+应用索引复验同时比较扫描代次和可见目录的 Arc 身份；排除列表变化即使没有新扫描，也会使已准备的旧目录失效。不能依赖替代快照先完成、推进 SnapshotSeq 来间接保护目录变化。
+
 执行仅接受当前已提交凭据，排队 worker 开始副作用前再次验证；进程计划生成后、spawn 前也检查版本。副作用成功后仍记 Usage，即使窗口已隐藏。菜单另有 discovery token，不能把可重扫的菜单 ActionId 当作永久身份；见 [菜单安全契约](current-app-actions.md)。
 
 Flutter 的 `LauncherSessionCoordinator` 拥有 SessionId、generation、revision 与已接收快照；只有当前会话、满足请求 revision 且顺序更新的快照才能提交。持续订阅也由它管理，等待返回后复验代数、会话与可见性，增量按最新列表的版本和长度合并。`LauncherController` 负责接收后的导航、选择和窗口更新；工具经 Rust 更新输入时，由同一接收入口推进 revision。

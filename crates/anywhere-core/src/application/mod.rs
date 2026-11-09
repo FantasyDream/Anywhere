@@ -44,4 +44,7 @@ pub mod web_plugins;
 mod source_catalog_tests;
 
 #[cfg(test)]
+mod application_index_tests;
+
+#[cfg(test)]
 mod feature_policy_tests;
