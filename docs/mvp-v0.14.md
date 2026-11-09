@@ -50,7 +50,7 @@ Web 工具通道、活动与 Host 面板状态迁至 `WebToolsHost`，统一编�
 
 干净提交 `74bd8b6` 已构建为独立的 `Anywhere-0.14-native-host-74bd8b6.app`（0.14.0+46 / arm64 / Impeller），完整 AppDelegate 组合编译、持久本机签名、ZIP 内容及 SHA-256 校验通过。首次独立预览实窗回归因锁屏未取得 active / key window；用户解锁后重跑 exit 0，覆盖首次输入竞争、立即重开、原生关闭 / 隐藏、XML 加载与关闭、隐藏 16 秒及 Host 释放。
 
-同一测试包在独立数据目录中通过新组合键录制、Esc 取消、已注册组合键再次录制，以及无 Host 权限的合成 Web 工具输入、⌘K 进入 Host、Esc 返回 Web 继续编辑、原生 Undo / Redo 和返回搜索。合成 XML 的空格 / 眼睛预览及系统按钮关闭通过；AXTree、frame-time clamping 与 Flutter ERROR 计数均为 0。自动化未触发失焦或切换搜索模式的轮次不计为过期验收。用户随后按要求实际切换应用、等待至少 16 秒并唤醒，确认“正常：空白首页，无旧预览”；日志记录了真实失焦和预览关闭，约 97.7 秒后的下一份可见记录为新首页（`currentApp`），不将这份日志扩展为 Universal 快捷键硬件事件的独立证明。
+同一测试包在独立数据目录中通过新组合键录制、Esc 取消、已注册组合键再次录制，以及无 Host 权限的合成 Web 工具输入、⌘K 进入 Host、Esc 返回 Web 继续编辑、原生 Undo / Redo 和返回搜索。合成 XML 的空格 / 眼睛预览及系统按钮关闭通过。最终退出后复核日志：AXTree 错误为 0，Flutter ERROR 为 1，对应一条 `Reported frame time is older than the last one; clamping`（时间差约 16.7 ms）。本轮操作未观察到界面失效；这条帧时间诊断的原因和性能影响尚未确认，不记为已修复或零错误运行。自动化未触发失焦或切换搜索模式的轮次不计为过期验收。用户随后按要求实际切换应用、等待至少 16 秒并唤醒，确认“正常：空白首页，无旧预览”；日志记录了真实失焦和预览关闭，约 97.7 秒后的下一份可见记录为新首页（`currentApp`），不将这份日志扩展为 Universal 快捷键硬件事件的独立证明。
 
 隔离实例已正常退出，日常实例与设置未修改；录制键和合成插件仅用于独立测试目录。证据与来源保留在被忽略的 `build/acceptance-native-host-74bd8b6/` 和 `build/Anywhere-0.14-native-host-74bd8b6.provenance.json`。本轮仅补充自动化冒烟与用户操作确认，未改生产源码，也不扩展为完整快捷键事件矩阵、物理输入法、VoiceOver 或全格式验收。
 
