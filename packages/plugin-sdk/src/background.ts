@@ -2,6 +2,7 @@
  * No browser globals, Flutter transport, runtime imports or style code are needed.
  */
 import {HostError} from './errors.js';
+import {inspectText, uploadText} from './text_upload.js';
 import type {Anywhere, CallOptions} from './api.js';
 import {limits} from './contract.js';
 import type {Calls, PluginSnapshot, WebInput} from './contract.js';
@@ -87,51 +88,16 @@ export const anywhere: Anywhere = {
     readText: options => invoke('clipboard.readText', {}, options),
     writeText: async (text, options) => {
       if (options?.signal?.aborted) throw new HostError('CANCELLED');
-      const size = (code: number) =>
-        code <= 0x7f ? 1 : code <= 0x7ff ? 2 : code <= 0xffff ? 3 : 4;
-      let bytes = 0;
-      for (const character of text) {
-        const code = character.codePointAt(0)!;
-        if (code >= 0xd800 && code <= 0xdfff)
-          throw new HostError('INVALID_REQUEST');
-        bytes += size(code);
-      }
+      const {bytes, wellFormed} = inspectText(text);
+      if (!wellFormed) throw new HostError('INVALID_REQUEST');
       if (bytes > limits.textBytes) throw new HostError('TOO_LARGE');
       if (bytes < 8192) return invoke('clipboard.writeText', {text}, options);
-      const {ticket} = await invoke<{ticket: string}>(
-        'text.begin',
-        {bytes},
-        options,
-      );
-      try {
-        let chunk = '',
-          chunkBytes = 0,
-          sequence = 0;
-        for (const character of text) {
-          const bytes = size(character.codePointAt(0)!);
-          if (chunkBytes + bytes > limits.chunkBytes) {
-            await invoke(
-              'text.chunk',
-              {
-                ticket,
-                sequence: sequence++,
-                text: chunk,
-              },
-              options,
-            );
-            chunk = '';
-            chunkBytes = 0;
-          }
-          chunk += character;
-          chunkBytes += bytes;
-        }
-        if (chunk)
-          await invoke('text.chunk', {ticket, sequence, text: chunk}, options);
-        await invoke('text.commit', {ticket}, options);
-      } catch (error) {
-        await invoke('text.cancel', {ticket}).catch(() => {});
-        throw error;
-      }
+      return uploadText(text, bytes, {
+        begin: bytes => invoke('text.begin', {bytes}, options),
+        chunk: params => invoke('text.chunk', params, options),
+        commit: ticket => invoke('text.commit', {ticket}, options),
+        cancel: ticket => invoke('text.cancel', {ticket}),
+      });
     },
   },
   storage: {

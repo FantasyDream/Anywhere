@@ -203,7 +203,7 @@ Web 包继续使用现有安装批准、Action ID、最小 Context 投影和 Rus
 
 Manifest 可声明 `background.resolvers`，由现有 ContextProviderRegistry / ContextGraph 调度；只允许生成 `plugin.<包 id>.*` 数据，使用 `ContextValue::Extension`，与具有原生权限的第一方 Context 隔离。包批准后只保留脚本文件的校验描述符，按需读取并创建 rquickjs VM，不缓存档案或常驻 VM。自动解析不允许副作用；显式后台命令使用同一 Rust broker 和安装权限，直接执行并返回结果，不发布工具页或创建 WebView。JS 引擎与宿主调用分别受预算 / 生命周期控制，当前仍为进程内 worker，进程隔离后续独立实现。
 
-界面与后台共享 TypeScript 类型，构建条件选择不同 Adapter；两种运行时不直接通信。详见 [开发指南](plugin-development.md) 和 [插件架构](web-plugin-design.md)。历史 [Context 调研](research/third-party-context-providers.md) 保留为方案来源，不再代表当前实现状态。
+界面与后台共享 TypeScript 类型，构建条件选择不同 Adapter；两种运行时不直接通信。SDK 的 `text_upload.ts` 统一 UTF-8 字节计数、Unicode 校验、按标量边界惰性分块和 begin / chunk / commit / cancel 事务；不依赖浏览器编码器或预建完整分块数组。Adapter 保留直接写入阈值、验证错误优先级及取消调度：浏览器按 JSON 编码后的帧预算决定分块，失败后异步清理；后台保留 8 KiB 阈值并等待清理。请求排队、快照与下载仍由各自适配器负责。详见 [开发指南](plugin-development.md) 和 [插件架构](web-plugin-design.md)。历史 [Context 调研](research/third-party-context-providers.md) 保留为方案来源，不再代表当前实现状态。
 
 ## 扩展入口与验证
 

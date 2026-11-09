@@ -40,6 +40,14 @@
 
 ## 最新已验证基线
 
+### SDK 文本上传职责收敛
+
+界面与后台 Adapter 共用 UTF-8 校验、惰性分块及上传事务，公开 API、Rust 协议、浏览器排队 / 取消生命周期、后台 8 KiB 直接写入阈值和各自错误优先级保持一致。合成大文本不再先生成完整字节副本或分块数组；实现归属见[架构](architecture.md)。
+
+新增 16 项双适配器回归在迁移前后均通过，覆盖 Unicode 边界、完整 1 MiB、转义后超帧、非法代理项、复合无效输入、预取消、begin / chunk / commit 失败和分块间取消。真实 QuickJS / Rust broker 在 Release 配置、现有 250 ms / 32 MiB 限制下通过五组样例，核对合成剪贴板完整往返及无效输入后继续写入；该回归已接入示例检查。Debug 下完整 MiB 样例在旧、新实现中均触发 250 ms 预算，未修改运行时额度或据此宣称所有后台业务均能处理最大文本。
+
+Review 已核对两种适配器的错误与取消顺序，未发现新增阻塞问题。完整 `scripts/check.sh` exit 0：SDK 50 项、Flutter 524 项通过 / 1 项跳过、Core 332 项通过 / 1 项忽略，其余 Rust 工作区、原生 Host、Clippy、架构、规范、生成物和文档检查通过；SDK `.tgz` 导出及仓库外两种独立模板的类型检查、构建 / 打包与后台互通通过。完整日志为被忽略的 `build/sdk-text-full-check.log`。本项未修改原生 App，也未新增 GUI、物理输入法或内存验收；已安装插件需使用更新 SDK 独立构建后导入。
+
 ### 原生设置与权限职责拆分
 
 `SettingsHost` 接管权威设置、保存流程、快捷键目录复验、目录授权入口与状态查询，`LoginItemService` 独立适配系统登录启动；AppDelegate 只读设置并组装服务。现有 MethodChannel 方法和错误回复、部分保存失败的处理、目录 worker / epoch 及独立数据目录隔离保持原契约。实现归属见[架构](architecture.md)。
