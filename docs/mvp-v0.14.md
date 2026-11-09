@@ -46,7 +46,9 @@
 
 新增三项回归：重复来源拒绝时不持久化且保留旧目录 / 执行资格；同一策略 Arc 下发布目录也拒绝锁外计算中的旧快照；目录定义 / 策略读者在旧执行撤销完成前仍被阻挡。前两项在独立旧源码基线上通过，第三项能拒绝人为提前释放锁的变体。Review 核对所有目录读写入口、版本推进、锁顺序、持久化失败、Web 合并及启动失败重试，未发现剩余新增阻塞问题。
 
-全目标编译、Application 单元回归 140 项及设置生命周期 MVP 16 项通过；完整 `scripts/check.sh` exit 0：Core 343 项通过 / 1 项忽略、MVP 195 项通过 / 4 项忽略、Flutter 524 项通过 / 1 项跳过、SDK 50 项及其余工作区、原生 Host、Clippy、架构、规范、生成物和文档门禁通过。完整日志为被忽略的 `build/feature-catalog-full-check.log`。本项的打包与界面验收尚未执行，不沿用上一项证据。
+全目标编译、Application 单元回归 140 项及设置生命周期 MVP 16 项通过；完整 `scripts/check.sh` exit 0：Core 343 项通过 / 1 项忽略、MVP 195 项通过 / 4 项忽略、Flutter 524 项通过 / 1 项跳过、SDK 50 项及其余工作区、原生 Host、Clippy、架构、规范、生成物和文档门禁通过。完整日志为被忽略的 `build/feature-catalog-full-check.log`。干净提交 `8ad6bf2` 已构建为独立的 `Anywhere-0.14-feature-catalog-8ad6bf2.app`（0.14.0+46 / arm64 / Impeller），持久本机签名、ZIP 内容与 SHA-256 校验通过。核实进程路径与显式隔离目录后，以同一合成 URL 验证初始打开 / 复制候选、关闭 URL 模块后候选消失、重开设置回读关闭状态、重新开启后候选恢复；两次开关都核对隔离 `features.json` 落盘。父级开关点击未生效的操作不计为保存，子按钮产生实际变更；Settings 返回 Current App 后显式切回 Universal Search 才计入搜索验收。未执行候选，未修改个人设置或替换日常 App；实例经菜单正常退出，并以只读进程检查确认。
+
+日志未见 AXTree、Flutter ERROR、frame-time clamping 或 Resize timeout；有 TSM 键盘指示灯诊断 1 条，原因未在本步定位。来源与验证记录位于被忽略的 `build/Anywhere-0.14-feature-catalog-8ad6bf2.provenance.json` 和 `build/acceptance-feature-catalog-8ad6bf2/verification.json`。本项未新增物理快捷键、输入法、VoiceOver、预览、内存、真实 Context 采集或跨平台实机验收。
 
 ### Rust Context 采集状态收拢
 
