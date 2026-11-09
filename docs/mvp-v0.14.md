@@ -44,7 +44,11 @@
 
 `ApplicationIndex` 接管完整 / 可见应用目录、排除偏好、扫描代次及完成通知；`Application` / `Resolver` 不再分别保存这些可变字段。扫描发布与过滤共用一个状态锁，Resolver 持有不可变快照并通过服务复验。首屏不等待扫描、每次激活重扫、失败保留旧目录、快捷键配置可见完整应用及 Session / Revision / epoch 契约保持一致。代码归属见[架构](architecture.md)。
 
-专项 5 项通过：受控旧快照 / 排除变化竞态、旧扫描不能覆盖新完成、新扫描等待与失败通知、过滤变化不删除快捷键配置标签、部分 / 空目录成功与在途快照资格。Review 核对状态所有权、锁顺序、扫描完成通知和首屏 / 迟到重算路径，未发现新增阻塞问题。Core 全目标编译及完整 `scripts/check.sh` exit 0：Core 337 项通过 / 1 项忽略、MVP 195 项通过 / 4 项忽略、Flutter 524 项通过 / 1 项跳过、SDK 50 项及其余原生、Clippy、架构、规范、生成物和文档门禁通过。完整日志为被忽略的 `build/application-index-full-check.log`；本次源码验证不替代打包或 GUI 验收。
+专项 5 项通过：受控旧快照 / 排除变化竞态、旧扫描不能覆盖新完成、新扫描等待与失败通知、过滤变化不删除快捷键配置标签、部分 / 空目录成功与在途快照资格。Review 核对状态所有权、锁顺序、扫描完成通知和首屏 / 迟到重算路径，未发现新增阻塞问题。Core 全目标编译及完整 `scripts/check.sh` exit 0：Core 337 项通过 / 1 项忽略、MVP 195 项通过 / 4 项忽略、Flutter 524 项通过 / 1 项跳过、SDK 50 项及其余原生、Clippy、架构、规范、生成物和文档门禁通过。完整日志为被忽略的 `build/application-index-full-check.log`。
+
+干净提交 `0962d79` 已构建为独立的 `Anywhere-0.14-application-index-0962d79.app`（0.14.0+46 / arm64 / Impeller），持久本机签名、ZIP 内容及 SHA-256 校验通过。显式核实进程隔离目录后，GUI 冒烟通过全局搜索 Calculator、保存 `com.apple.calculator` 后候选消失、重开设置回读、清空排除后候选恢复；两次保存均核对隔离目录落盘。未执行应用候选，未替换日常 App，偏好修改仅在隔离目录执行；测试实例经原生菜单正常退出并用只读进程检查确认。来源与证据保留在被忽略的 `build/Anywhere-0.14-application-index-0962d79.provenance.json` 和 `build/acceptance-application-index-0962d79/verification.json`。
+
+恢复实测时曾出现不带隔离变量的实例，已在修改偏好前退出并显式重启；期间 Current App 激活打断的操作不计为全局搜索验收，部分 AX 文本未跟随可见编辑时以截图和落盘交叉核对。隔离日志 AXTree、Flutter ERROR 和 frame-time clamping 均为 0，另有 IMK mach port、TSM 键盘指示灯及窗口移动诊断各 1 条，原因未在本步定位，不记为零警告运行。本项未新增物理快捷键、输入法、VoiceOver、预览、内存或跨平台实机验收。
 
 ### 应用索引排除变化的发布复验
 
