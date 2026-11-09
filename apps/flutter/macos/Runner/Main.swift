@@ -2,7 +2,6 @@ import AppKit
 import ApplicationServices
 import Carbon
 import FlutterMacOS
-import ServiceManagement
 import flutter_inappwebview_macos
 
 @_silgen_name("anywhere_install_flutter_surface_guard")
@@ -27,7 +26,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   var materialController: WindowMaterialController!
   var channel: FlutterMethodChannel!
   var statusItem: NSStatusItem!
-  lazy var fileSearchAccess = FileSearchAccess()
   lazy var hotKeys = HotKeyService(
     supportedActionIds: [],
     onActivate: { [weak self] mode in self?.activate(mode: mode) },
@@ -35,11 +33,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     log: { [weak self] value in self?.log(value) }
   )
   var activationStart: TimeInterval = 0
-  var hotKeyError: String? {
-    get { hotKeys.lastError }
-    set { hotKeys.lastError = newValue }
-  }
-  var loginError: String?
+  private lazy var settingsHost = SettingsHost(
+    hotKeys: hotKeys,
+    loginItem: LoginItemService(log: { [weak self] in self?.log($0) })
+  )
   var currentAppItem: NSMenuItem?
   var universalItem: NSMenuItem?
   lazy var launcherWindows = LauncherWindowCoordinator(
@@ -107,11 +104,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   )
   private var shortcutRecorder: ShortcutRecordingHost!
   var terminationPending = false
-  let settingsStore = SettingsStore()
-  var stored: StoredSettings {
-    get { settingsStore.current }
-    set { settingsStore.current = newValue }
-  }
+  var stored: StoredSettings { settingsHost.current }
 
   /// Application support directory for this app.
   ///
@@ -196,6 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
     channel.setMethodCallHandler { [weak self] call, reply in
       guard let self else { return }
+      if self.settingsHost.handle(call, reply: reply) { return }
       switch call.method {
       case "chooseWebPackage":
         guard self.settingsOpen, let settings = self.settingsWindow,
@@ -213,8 +207,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
           "library": HostRuntime.libraryPath, "data": data.path,
           "plugins": Bundle.main.resourceURL!.appendingPathComponent("plugins", isDirectory: true)
             .path,
-          "hotkeyError": self.hotKeyError ?? "",
-          "loginError": self.loginError ?? "",
+          "hotkeyError": self.settingsHost.hotKeyError ?? "",
+          "loginError": self.settingsHost.loginError ?? "",
           "excludedApps": self.stored.excludedApps.joined(separator: "\n"),
           "captureFinderSelection": self.stored.captureFinderSelection == false ? "0" : "1",
           "captureSelectedText": self.stored.captureSelectedText == false ? "0" : "1",
@@ -230,102 +224,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
           self.log(event)
         }
         reply(nil)
-      case "settings":
-        if let enabled = self.loginItemIsEnabled() {
-          self.stored.launchAtLogin = enabled
-        }
-        var snapshot = self.stored.asMap()
-        snapshot["fileSearchAccessReady"] = self.fileSearchAccess.ready
-        reply(snapshot)
-      case "syncActionShortcutCatalog":
-        guard let args = call.arguments as? [String: Any],
-          let ids = args["supportedActionIds"] as? [String],
-          ids.count <= RuntimePolicy.maxShortcutCatalogRequestIds,
-          ids.allSatisfy({ !$0.isEmpty && $0.utf8.count <= RuntimePolicy.maxActionIdBytes }),
-          let snapshot = args["settings"] as? [String: Any]
-        else {
-          reply(FlutterError(code: "shortcuts", message: "Invalid shortcut catalog.", details: nil))
-          return
-        }
-        var expected = self.stored
-        guard expected.apply(snapshot) == nil,
-          expected.sameActionShortcutConfiguration(as: self.stored)
-        else {
-          reply(
-            FlutterError(
-              code: "shortcuts",
-              message: "Shortcut configuration changed. Refresh settings and try again.",
-              details: nil
-            )
-          )
-          return
-        }
-        if let error = self.hotKeys.syncActionCatalog(Set(ids)) {
-          reply(FlutterError(code: "shortcuts", message: error, details: nil))
-        } else {
-          reply(nil)
-        }
-      case "prepareFileSearchAccess":
-        guard let args = call.arguments as? [String: Any],
-          let enabled = args["enabled"] as? Bool,
-          let roots = args["roots"] as? [String], roots.count <= RuntimePolicy.maxSearchRoots,
-          roots.allSatisfy({
-            $0.hasPrefix("/") && $0.utf8.count <= RuntimePolicy.maxSearchPathBytes
-          })
-        else {
-          reply(FlutterError(code: "file_access", message: "Invalid search scope.", details: nil))
-          return
-        }
-        self.fileSearchAccess.prepare(
-          enabled: enabled,
-          roots: roots,
-          force: args["force"] as? Bool == true
-        ) { reply($0) }
-      case "settingsStatus":
-        reply([
-          "hotkeyError": self.hotKeyError ?? "",
-          "loginError": self.loginError ?? "",
-          "fileAccessError": self.fileSearchAccess.status,
-        ])
-      case "resumeActionShortcuts":
-        if let error = self.hotKeys.resumeForSettingsClose() {
-          reply(FlutterError(code: "shortcuts", message: error, details: nil))
-        } else {
-          reply(nil)
-        }
-      case "openPrivacySettings":
-        guard let args = call.arguments as? [String: Any],
-          let pane = args["pane"] as? String,
-          ["accessibility", "automation", "clipboard", "fullDiskAccess"].contains(pane)
-        else {
-          reply(FlutterError(code: "privacy", message: "Unknown privacy setting.", details: nil))
-          return
-        }
-        let app = NSWorkspace.shared.urlForApplication(
-          withBundleIdentifier: "com.apple.systempreferences"
-        )
-        let anchor =
-          pane == "accessibility"
-          ? "Privacy_Accessibility"
-          : pane == "fullDiskAccess" ? "Privacy_AllFiles" : "Privacy_Automation"
-        // Clipboard preferences vary by macOS version. Open System Settings
-        // itself rather than guessing an unsupported pane identifier.
-        let link =
-          pane == "clipboard"
-          ? app : URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)")
-        if let link, NSWorkspace.shared.open(link) {
-          reply(nil)
-        } else if let app, NSWorkspace.shared.open(app) {
-          reply(nil)
-        } else {
-          reply(
-            FlutterError(
-              code: "privacy",
-              message: "System Settings could not be opened.",
-              details: nil
-            )
-          )
-        }
       case "showToolWindow":
         let args = call.arguments as? [String: Any]
         guard args?["id"] as? String == "clipboard.shelf" else {
@@ -346,56 +244,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         } else {
           reply(
             FlutterError(code: "tasks", message: "Running Tasks could not start.", details: nil)
-          )
-        }
-      case "saveSettings":
-        guard let args = call.arguments as? [String: Any] else {
-          reply(nil)
-          return
-        }
-        let previous = self.stored
-        var next = previous
-        if let error = next.apply(args) {
-          reply(FlutterError(code: "settings", message: error, details: nil))
-          return
-        }
-        var errors: [String] = []
-        var support: Set<String>? = nil
-        if let raw = args["supportedActionIds"] {
-          guard let ids = raw as? [String], ids.count <= RuntimePolicy.maxShortcutCatalogRequestIds,
-            ids.allSatisfy({ !$0.isEmpty && $0.utf8.count <= RuntimePolicy.maxActionIdBytes })
-          else {
-            reply(
-              FlutterError(code: "settings", message: "Invalid shortcut catalog.", details: nil)
-            )
-            return
-          }
-          support = Set(ids)
-        }
-        let update = self.hotKeys.update(next, previous: previous, supportedActionIds: support)
-        next = update.settings
-        if let error = update.error { errors.append(error) }
-        self.stored = next
-        if next.launchAtLogin != previous.launchAtLogin {
-          let error = self.applyLoginItem()
-          self.loginError = error
-          if let error {
-            errors.append(error)
-            next.launchAtLogin = self.loginItemIsEnabled() ?? previous.launchAtLogin
-          }
-        }
-        self.stored = next
-        if let error = self.settingsStore.save() {
-          self.stored.uiLanguage = previous.uiLanguage
-          errors.append(error)
-        } else {
-          LocaleHost.update(next.uiLanguage)
-        }
-        if errors.isEmpty {
-          reply(nil)
-        } else {
-          reply(
-            FlutterError(code: "settings", message: errors.joined(separator: "\n"), details: nil)
           )
         }
       case "ready":
@@ -498,10 +346,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
       self.stopTask()
       return nil
     }
-    if let error = applyHotKeys(stored) {
-      hotKeyError = error + "; use the menu bar icon or release the shortcut in another app."
-    }
-    loginError = applyLoginItem()
+    settingsHost.start()
     // A hidden view never receives viewWillAppear, which normally starts the engine.
     if !controller.engine.run(withEntrypoint: nil) {
       log(["event": "flutter_engine_start_failed"])
@@ -647,114 +492,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
   }
 
-  func applyHotKeys(_ settings: StoredSettings) -> String? { hotKeys.apply(settings) }
-
   func updateMenuTitles(_ settings: StoredSettings) {
     currentAppItem?.title =
       "\(NativeLocalization.text(.currentApp))  \(settings.shortcutLabel(code: settings.currentAppKeyCode, modifiers: settings.currentAppModifiers))"
     universalItem?.title =
       "\(NativeLocalization.text(.universalSearch))  \(settings.shortcutLabel(code: settings.universalKeyCode, modifiers: settings.universalModifiers))"
-  }
-
-  func applyLoginItem() -> String? {
-    if ProcessInfo.processInfo.environment["ANYWHERE_DATA_DIRECTORY"] != nil { return nil }
-    let want = stored.launchAtLogin
-    if #available(macOS 13.0, *) {
-      let service = SMAppService.mainApp
-      do {
-        if want {
-          if service.status != .enabled { try service.register() }
-        } else if service.status == .enabled {
-          try service.unregister()
-        }
-      } catch {
-        log(["event": "login_item_failed", "error": "\(error)"])
-        stored.launchAtLogin = service.status == .enabled
-        return "Open at login failed: \(error)"
-      }
-      let enabled = service.status == .enabled
-      stored.launchAtLogin = enabled
-      if want && !enabled {
-        return "Open at login was not enabled."
-      }
-      return nil
-    }
-    guard let current = legacyLoginEnabled() else {
-      return "Open at login could not be read."
-    }
-    if want == current {
-      stored.launchAtLogin = want
-      return nil
-    }
-    let path = Bundle.main.bundlePath
-      .replacingOccurrences(of: "\\", with: "\\\\")
-      .replacingOccurrences(of: "\"", with: "\\\"")
-    let script =
-      want
-      ? "tell application \"System Events\" to make login item at end with properties {path:\"\(path)\", hidden:false}"
-      : "tell application \"System Events\" to delete (every login item whose path is \"\(path)\")"
-    let status = runOsascript(script)
-    guard let enabled = legacyLoginEnabled() else {
-      return "Open at login could not be confirmed."
-    }
-    stored.launchAtLogin = enabled
-    if status != 0 || enabled != want {
-      return "Open at login failed."
-    }
-    return nil
-  }
-
-  func loginItemIsEnabled() -> Bool? {
-    if ProcessInfo.processInfo.environment["ANYWHERE_DATA_DIRECTORY"] != nil {
-      return stored.launchAtLogin
-    }
-    if #available(macOS 13.0, *) {
-      return SMAppService.mainApp.status == .enabled
-    }
-    return legacyLoginEnabled()
-  }
-
-  func legacyLoginEnabled() -> Bool? {
-    let path = Bundle.main.bundlePath
-    let output = runOsascriptOutput(
-      """
-      tell application "System Events"
-          if (count of login items) is 0 then return ""
-          set AppleScript's text item delimiters to linefeed
-          return (path of every login item) as text
-      end tell
-      """
-    )
-    if osascriptStatus != 0 { return nil }
-    return output.split(separator: "\n").contains(Substring(path))
-  }
-
-  @discardableResult
-  func runOsascript(_ script: String) -> Int32 {
-    _ = runOsascriptOutput(script)
-    return osascriptStatus
-  }
-
-  private var osascriptStatus: Int32 = 0
-
-  func runOsascriptOutput(_ script: String) -> String {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-    process.arguments = ["-e", script]
-    let pipe = Pipe()
-    process.standardOutput = pipe
-    process.standardError = Pipe()
-    do {
-      try process.run()
-    } catch {
-      osascriptStatus = 1
-      return ""
-    }
-    process.waitUntilExit()
-    osascriptStatus = process.terminationStatus
-    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-    return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-      ?? ""
   }
 
   func installMenu() {

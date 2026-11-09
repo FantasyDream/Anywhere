@@ -43,6 +43,18 @@ flutter_framework_directory="$(dirname "$(dirname "$flutter_framework")")"
 xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   -F "$flutter_framework_directory" -framework FlutterMacOS \
   -Xlinker -rpath -Xlinker "$flutter_framework_directory" \
+  apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift \
+  apps/flutter/macos/Runner/RuntimePolicy.swift apps/flutter/macos/Runner/SettingsStore.swift \
+  apps/flutter/macos/Runner/HotKeyMap.swift apps/flutter/macos/Runner/HotKeyService.swift \
+  apps/flutter/macos/Runner/FileSearchAccess.swift apps/flutter/macos/Runner/LocaleHost.swift \
+  apps/flutter/macos/Runner/LoginItemService.swift apps/flutter/macos/Runner/SettingsHost.swift \
+  apps/flutter/macos/Runner/tests/HostChannelTestMessenger.swift \
+  apps/flutter/macos/Runner/tests/SettingsHostTests.swift \
+  -o "$host_test_directory/settings-host-test"
+"$host_test_directory/settings-host-test"
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  -F "$flutter_framework_directory" -framework FlutterMacOS \
+  -Xlinker -rpath -Xlinker "$flutter_framework_directory" \
   apps/flutter/macos/Runner/HotKeyMap.swift \
   apps/flutter/macos/Runner/ShortcutRecorder.swift \
   apps/flutter/macos/Runner/ShortcutRecordingHost.swift \

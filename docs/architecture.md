@@ -233,6 +233,8 @@ JSON Workspace 是混合插件示例：WebView 负责编辑、校验、token 格
 
 `LauncherWindowCoordinator` 同时持有最新请求代次、已展示代次、设置窗口状态及共享视图。show / hide 校验最新代次，resize 只接受已展示代次；隐藏与失焦先撤销展示资格，再运行资源收尾并隐藏窗口。旧请求在任何窗口 / 热键副作用前被拒绝。AppDelegate 只解析通道参数、组装展示前的热键暂停与隐藏前的录制 / 预览 / Web 清理，并记录可见性及通知 Flutter 失焦，不再直接写代次或移动共享视图。
 
+`SettingsHost` 持有原生权威设置、保存与登录项错误，协调既有 `HotKeyService`、`FileSearchAccess` 和持久化；共享 `anywhere/window` 通道只把设置 / 权限方法转交给它，未知方法继续由原分派器处理。快捷键注册失败恢复旧绑定，其他有效偏好继续保存；语言仅在落盘成功后分发，失败时恢复旧语言。目录请求的 worker、书签和 epoch 仍由 `FileSearchAccess` 独占，设置 Host 不建立第二套授权代数。`LoginItemService` 适配系统登录启动和 macOS 12 兼容路径，不读写设置文件；显式独立数据目录下不访问系统登录项。AppDelegate 只读设置快照以路由唤醒和生成启动信息，不再直接修改存储或保存状态。
+
 
 ## Web 插件收尾边界
 

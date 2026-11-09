@@ -40,6 +40,12 @@
 
 ## 最新已验证基线
 
+### 原生设置与权限职责拆分
+
+`SettingsHost` 接管权威设置、保存流程、快捷键目录复验、目录授权入口与状态查询，`LoginItemService` 独立适配系统登录启动；AppDelegate 只读设置并组装服务。现有 MethodChannel 方法和错误回复、部分保存失败的处理、目录 worker / epoch 及独立数据目录隔离保持原契约。实现归属见[架构](architecture.md)。
+
+新增真实 Flutter 编解码边界回归覆盖无效请求无副作用、快捷键拒绝后的回滚与其他偏好落盘、登录失败及状态回读、磁盘失败不分发新语言、旧目录快照拒绝、设置关闭恢复失败与重试、授权被替换后的迟到回复、强制授权及隐私入口。原生 Host 回归与完整 `scripts/check.sh` exit 0：Flutter 524 项通过 / 1 项跳过，Rust Core 332 项通过 / 1 项忽略，其余工作区、Clippy、SDK、架构、规范和生成物门禁通过。Review 已核对迁移前后的请求字段、回复和副作用顺序，未发现新增阻塞问题。本项此时尚未新增打包或 GUI 验收，登录项真实注册与 macOS 12 兼容分支未做实机验证；测试通过不扩展此前的输入法、VoiceOver 或格式矩阵。
+
 ### Native Host 通道职责拆分
 
 快捷键录制通道与待回复请求由 `ShortcutRecordingHost` 持有，保留设置窗口资格、本地按键与 Carbon 唤醒键转换、失焦取消和请求 ID 隔离。新增真实 Flutter 编解码边界回归覆盖拒绝录制、替换、迟到取消、重复按键和 Host 销毁后的单次回复及解除通道。原生 Host 回归与完整 `scripts/check.sh` exit 0：Flutter 524 项通过 / 1 项跳过，其余工作区、Clippy、SDK、架构、规范及生成物检查通过。本项尚未新增打包或 GUI 验收。
