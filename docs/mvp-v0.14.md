@@ -40,6 +40,14 @@
 
 ## 最新已验证基线
 
+### Rust 功能目录状态收拢
+
+`FeatureCatalog` 接管当前动作 / Provider / 候选来源、功能策略、目录版本与启动装配资格；Resolver 和执行 / 预览 worker 共享同一服务，Application 保留 Session / Web 撤销及发布后的来源清理。持久化成功后才替换贡献，撤销回调在目录锁释放前完成。公开 API、DTO、内置服务单次绑定、Session / Revision / epoch、策略 Arc 身份和退役来源 reset 语义保持一致，代码归属见[架构](architecture.md)。
+
+新增三项回归：重复来源拒绝时不持久化且保留旧目录 / 执行资格；同一策略 Arc 下发布目录也拒绝锁外计算中的旧快照；目录定义 / 策略读者在旧执行撤销完成前仍被阻挡。前两项在独立旧源码基线上通过，第三项能拒绝人为提前释放锁的变体。Review 核对所有目录读写入口、版本推进、锁顺序、持久化失败、Web 合并及启动失败重试，未发现剩余新增阻塞问题。
+
+全目标编译、Application 单元回归 140 项及设置生命周期 MVP 16 项通过；完整 `scripts/check.sh` exit 0：Core 343 项通过 / 1 项忽略、MVP 195 项通过 / 4 项忽略、Flutter 524 项通过 / 1 项跳过、SDK 50 项及其余工作区、原生 Host、Clippy、架构、规范、生成物和文档门禁通过。完整日志为被忽略的 `build/feature-catalog-full-check.log`。本项的打包与界面验收尚未执行，不沿用上一项证据。
+
 ### Rust Context 采集状态收拢
 
 `ContextCaptureService` 接管来源策略与 Finder / 选区 / 浏览器读取、迟到 Capture 发布；剪贴板请求、复制年龄和 SessionFacts 写入收归同一服务。Application 保留设置入口及执行 / Web 凭据撤销，激活仅编排剪贴板、Git 和 Usage 的独立刷新。公开 API、DTO、单次来源读取、输入模式及策略 → Session → Web 锁顺序保持一致，代码归属见[架构](architecture.md)，来源行为见[Context 模型](context-model.md)。

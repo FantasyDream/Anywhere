@@ -178,6 +178,8 @@ Flutter 的 `StableList` 共享 256 条不可变块，索引按块复用，仅�
 
 SettingsService 协调独立 FeatureSettings 与 LegacyPluginSettings，持久化成功后发布贡献选择，推进执行资格并取消旧会话；源码与 Handler / Source 不重新绑定。FeatureServices 持有具体 SavedDirectoriesService；数据 Refresh 更新其 repository / cache，坏 DB 替换后使用同一 service 接入新绑定，不让旧 action 通过脱离当前数据的句柄写入。SQLite IMMEDIATE 事务继续合并最新已提交数据；失败不覆盖坏数据，查询不持有磁盘事务锁。
 
+`application/feature_catalog.rs` 的 `FeatureCatalog` 统一持有当前 ActionRegistry、ProviderRegistry、基础 / 扩展候选来源、功能策略、目录版本和启动装配资格。Resolver 与执行 / 预览 worker 共享该服务，目录版本变更由注册表替换和贡献发布入口推进，调用方不再单独修改计数器。`CatalogSelection` 表达待发布的完整贡献选择；Application 先持有 Session → Web，目录服务再按 Provider → Registry → Source → Policy 顺序加锁，校验并完成持久化后发布。撤销旧 Session / Web 执行资格的回调仍在目录锁释放前完成；之后才重置退役来源。装配资格以 guard 管理，失败可重试，成功后拒绝同进程重新绑定。输入识别与 Web 定义准备可以短暂持有 Provider guard，OS I/O、Provider 执行和匹配继续使用锁外快照。
+
 旧声明式插件仅启动发现 / 注册。新批准或未在启动可读的批准修复需要重启激活，开关和撤销即时过滤已装载定义。Refresh 复验已有定义，不发现新增插件；变更 / 移动后停止旧动作，重启后重新审查。外部来源有明确 plugin:<id> 贡献归属与独立选择，Native 恢复模式不会误关闭其他批准。对应 DTO 暂保留兼容名称，界面使用 Features / Refresh。
 
 设置分为 `FeaturePreferences` / `features.json` 与 `PluginPreferences` / `extensions.json`。首次启动从旧 `first-party:<id>` 禁用键生成新文件，旧键和批准仍保留在旧文件；有效的新文件是原生开关的唯一依据。创建迁移文件禁止覆盖已有目标，多实例启动遇到已创建文件会读取现有内容。有效未知功能 ID 保留，模块重新引入时继续应用其开关。

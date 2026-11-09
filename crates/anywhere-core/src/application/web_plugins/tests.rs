@@ -431,11 +431,7 @@ async fn application_executes_committed_candidate_records_only_ready_and_revokes
             instance_id: Some("private process identity".into()),
         });
         session.execution.revision = Some(0);
-        session.execution.action_catalog_version = Some(
-            app.resolver
-                .action_catalog_version
-                .load(std::sync::atomic::Ordering::Acquire),
-        );
+        session.execution.action_catalog_version = Some(app.resolver.catalog.version());
         session
             .execution
             .candidates

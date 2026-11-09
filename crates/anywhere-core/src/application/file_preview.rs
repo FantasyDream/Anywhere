@@ -19,8 +19,8 @@ impl Application {
             .read()
             .map_err(|_| anyhow::anyhow!("search settings unavailable"))?
             .generation;
-        let catalog = self.resolver.action_catalog_version.clone();
-        let version = catalog.load(Ordering::Acquire);
+        let catalog = self.resolver.catalog.clone();
+        let version = catalog.version();
         let context = {
             let session = self.session()?;
             if session.suspended
@@ -58,7 +58,7 @@ impl Application {
         let is_current = move || {
             ticket.is_current()
                 && epoch.load(Ordering::Acquire) == expected_epoch
-                && catalog.load(Ordering::Acquire) == version
+                && catalog.version() == version
                 && policy
                     .read()
                     .is_ok_and(|p| p.enabled && p.generation == generation)

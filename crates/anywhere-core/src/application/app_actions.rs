@@ -37,10 +37,7 @@ impl Application {
             .then(|| self.app_actions.get(&app, version.as_deref()))
             .flatten();
         let cache_hit = cached.is_some();
-        let catalog_version = self
-            .resolver
-            .action_catalog_version
-            .load(std::sync::atomic::Ordering::Acquire);
+        let catalog_version = self.resolver.catalog.version();
         let base = self.resolver.base_registry();
         let actions = cached.and_then(|items| convert::registry(&base, &app, items).ok());
         {
@@ -48,11 +45,7 @@ impl Application {
                 return;
             };
             if session.state.session_id != session_id
-                || self
-                    .resolver
-                    .action_catalog_version
-                    .load(std::sync::atomic::Ordering::Acquire)
-                    != catalog_version
+                || self.resolver.catalog.version() != catalog_version
             {
                 return;
             }
@@ -211,9 +204,7 @@ impl Application {
                 let visible_action_count = items
                     .as_ref()
                     .map_or(0, |items| items.iter().filter(|item| item.enabled).count());
-                let catalog_version = resolver
-                    .action_catalog_version
-                    .load(std::sync::atomic::Ordering::Acquire);
+                let catalog_version = resolver.catalog.version();
                 let base = resolver.base_registry();
                 let actions = match convert::registry(
                     &base,
@@ -241,10 +232,7 @@ impl Application {
                         return;
                     };
                     if session.state.session_id != session_id
-                        || resolver
-                            .action_catalog_version
-                            .load(std::sync::atomic::Ordering::Acquire)
-                            != catalog_version
+                        || resolver.catalog.version() != catalog_version
                         || session.menu.generation != ticket.generation
                         || !session.menu.trusted
                         || !resolver.is_session_active(session_id)

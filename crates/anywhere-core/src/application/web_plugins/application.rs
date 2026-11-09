@@ -51,8 +51,8 @@ impl Application {
             let registry = web.prepare_registry(&catalog, &self.resolver.base_registry())?;
             let mut providers = self
                 .resolver
-                .providers
-                .lock()
+                .catalog
+                .providers()
                 .map_err(|_| anyhow::anyhow!("providers unavailable"))?;
             let next_providers = catalog.append_providers(
                 &providers,
@@ -81,10 +81,7 @@ impl Application {
             };
             web.replace_catalog(catalog);
             *providers = next_providers;
-            self.resolver.replace_base_registry(registry);
-            self.resolver
-                .action_catalog_version
-                .fetch_add(1, Ordering::AcqRel);
+            self.resolver.catalog.replace_registry(registry);
             self.resolver.execution_epoch.fetch_add(1, Ordering::AcqRel);
             session.actions = self.resolver.base_registry();
             session.execution = Default::default();

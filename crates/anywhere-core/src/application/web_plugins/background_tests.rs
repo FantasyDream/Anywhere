@@ -57,7 +57,13 @@ async fn automatic_resolver_cannot_write_and_outputs_remain_package_owned() {
     let root = tempfile::tempdir().unwrap();
     let package = background_package(code, permissions());
     let mut store = install(&app, root.path(), &package);
-    let providers = app.resolver.providers.lock().unwrap().providers().to_vec();
+    let providers = app
+        .resolver
+        .catalog
+        .providers()
+        .unwrap()
+        .providers()
+        .to_vec();
     let provider = providers
         .iter()
         .find(|p| p.descriptor().id.starts_with("web."))
@@ -91,8 +97,8 @@ async fn automatic_resolver_cannot_write_and_outputs_remain_package_owned() {
         .is_err());
     assert!(!app
         .resolver
-        .providers
-        .lock()
+        .catalog
+        .providers()
         .unwrap()
         .ids()
         .iter()
@@ -107,8 +113,8 @@ async fn undeclared_native_contexts_and_changed_script_bytes_are_rejected() {
     let _store = install(&app, root.path(), &package);
     let provider = app
         .resolver
-        .providers
-        .lock()
+        .catalog
+        .providers()
         .unwrap()
         .providers()
         .iter()

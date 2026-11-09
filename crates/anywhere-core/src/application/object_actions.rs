@@ -41,7 +41,7 @@ impl Application {
                 session.facts(),
                 session.usage.clone(),
                 self.resolver.execution_epoch.load(Ordering::Acquire),
-                self.resolver.action_catalog_version.load(Ordering::Acquire),
+                self.resolver.catalog.version(),
                 session.resolution.inputs_epoch,
             )
         };
@@ -79,7 +79,7 @@ impl Application {
             if session.suspended
                 || !self.resolver.is_current(session_id, revision)
                 || self.resolver.execution_epoch.load(Ordering::Acquire) != epoch
-                || self.resolver.action_catalog_version.load(Ordering::Acquire) != catalog
+                || self.resolver.catalog.version() != catalog
                 || session.resolution.inputs_epoch != inputs
             {
                 bail!("object actions expired");

@@ -116,7 +116,7 @@ impl Application {
                 session.facts(),
                 session.usage.clone(),
                 self.resolver.execution_epoch.load(Ordering::Acquire),
-                self.resolver.action_catalog_version.load(Ordering::Acquire),
+                self.resolver.catalog.version(),
                 session.resolution.inputs_epoch,
                 generation,
                 expected,
@@ -143,8 +143,8 @@ impl Application {
         let mut run = ContextGraph::start(seed.clone().into_iter().collect(), &ticket);
         let providers = self
             .resolver
-            .providers
-            .lock()
+            .catalog
+            .providers()
             .map_err(|_| anyhow::anyhow!("providers unavailable"))?
             .providers()
             .to_vec();
@@ -219,7 +219,7 @@ impl Application {
                 !session.suspended
                     && ticket.is_current()
                     && self.resolver.execution_epoch.load(Ordering::Acquire) == epoch
-                    && self.resolver.action_catalog_version.load(Ordering::Acquire) == catalog
+                    && self.resolver.catalog.version() == catalog
                     && session.resolution.inputs_epoch == inputs,
                 "object actions expired"
             );
