@@ -46,7 +46,11 @@
 
 新增回归覆盖四种来源关后重开仍拒绝旧状态、在途剪贴板拒绝旧正文 / 复制年龄而新激活正常采集，以及排队请求不采用后来的策略。前两项在提取前通过；Review 用第三项抓到初版提取将令牌取得推迟到 worker 的差异，修正为排队前固定请求后通过。正常权限下 Application 单元回归 137 项、Context 来源 MVP 20 项、慢剪贴板独立 Usage 发布 1 项通过；受限环境初跑的 home 路径夹具因权限拒绝失败，正常权限复跑通过。
 
-Review 核对策略封装、排队 / 读取 / 写入时序、事实与 Capture 发布条件、锁顺序和补充组完成语义，未发现剩余新增阻塞问题。完整 `scripts/check.sh` exit 0：Core 340 项通过 / 1 项忽略、MVP 195 项通过 / 4 项忽略、Flutter 524 项通过 / 1 项跳过、SDK 50 项及其余工作区、原生 Host、Clippy、架构、规范、生成物和文档门禁通过。完整日志为被忽略的 `build/context-capture-full-check.log`；打包及 GUI 验收待本轮补充。
+Review 核对策略封装、排队 / 读取 / 写入时序、事实与 Capture 发布条件、锁顺序和补充组完成语义，未发现剩余新增阻塞问题。完整 `scripts/check.sh` exit 0：Core 340 项通过 / 1 项忽略、MVP 195 项通过 / 4 项忽略、Flutter 524 项通过 / 1 项跳过、SDK 50 项及其余工作区、原生 Host、Clippy、架构、规范、生成物和文档门禁通过。完整日志为被忽略的 `build/context-capture-full-check.log`。
+
+干净提交 `ec42746` 已构建为独立的 `Anywhere-0.14-context-capture-ec42746.app`（0.14.0+46 / arm64 / Impeller），持久本机签名、ZIP 内容及 SHA-256 校验通过。核实进程显式使用独立数据目录后，GUI 冒烟确认四种采集关闭时合成 URL 的手动输入仍生成打开 / 复制候选，Context 与 Clipboard 设置显示关闭状态，与隔离设置文件一致；未执行候选或修改个人设置，实例经菜单正常退出并用只读进程检查确认。启动时无关的文件搜索授权已取消；本轮未新增目录授权或真实来源开关 / 采集验收。自动输入遗漏冒号的轮次不计入结果，使用粘贴后核对完整 URL 才计为通过。
+
+隔离日志 AXTree、Flutter ERROR 和 frame-time clamping 均为 0；stdout 有 `Resize timed out` 1 条，另有 IMK mach port、TSM 指示灯及窗口移动诊断各 1 条。本轮后续界面操作通过，但这些诊断的原因尚未定位，不记为零警告运行。来源及证据保留在被忽略的 `build/Anywhere-0.14-context-capture-ec42746.provenance.json` 和 `build/acceptance-context-capture-ec42746/verification.json`；不扩展为物理快捷键、输入法、VoiceOver、预览、内存或跨平台实机验收。
 
 ### Rust 应用索引所有权收拢
 
