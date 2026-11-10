@@ -84,8 +84,8 @@ resources/                 键码、文件类型、运行策略、设计参数�
 | 能力接口 | 职责 | 直接消费者 |
 |---|---|---|
 | `ApplicationCatalog` | 应用目录根、入口识别、目录遍历与单个应用元数据 | 应用索引 |
-| `ApplicationHost` | 前台应用、应用目录、启动、图标与版本 | 目录采集、应用动作及组合编排 |
-| `ContextReader` | 选区、文件管理器和浏览器当前页 | `ContextCaptureService` |
+| `ApplicationHost` | 前台应用、启动、图标与版本 | 应用动作及组合编排 |
+| `ContextReader` | 应用目录、选区、文件管理器和浏览器当前页 | 目录采集与 `ContextCaptureService` |
 | `ClipboardHost` | 剪贴板快照、代数、历史载荷、监听与写入 | Context 采集、Clipboard History 与剪贴板动作 |
 | `FileSearchHost` | 系统索引、带范围选项的搜索与取消 | 文件搜索 |
 | `ResourceOpener` | URL、文件、目录、终端及指定应用打开 | 文件、URL、应用历史等 Action |

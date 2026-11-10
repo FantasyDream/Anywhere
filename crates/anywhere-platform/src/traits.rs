@@ -43,7 +43,6 @@ pub trait ApplicationCatalog: Send + Sync {
 /// Running-application identity, launch, icon, and version capabilities.
 pub trait ApplicationHost: Send + Sync {
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>>;
-    fn application_directory(&self, application: &ApplicationInfo) -> Result<Option<PathBuf>>;
 
     /// Activate a running instance, otherwise launch the canonical bundle path.
     fn launch_application(&self, _path: &str) -> Result<bool> {
@@ -63,6 +62,9 @@ pub trait ApplicationHost: Send + Sync {
 
 /// One-shot reads made for a captured application.
 pub trait ContextReader: Send + Sync {
+    /// Current directory represented by the captured application instance.
+    fn application_directory(&self, application: &ApplicationInfo) -> Result<Option<PathBuf>>;
+
     /// Selected text in the captured app's focused control.
     fn selected_text(&self, _application: &ApplicationInfo) -> Result<Option<String>> {
         Ok(None)

@@ -31,6 +31,8 @@ impl anywhere_platform::ApplicationHost for ClipboardPort {
     fn frontmost_application(&self) -> anyhow::Result<Option<anywhere_platform::ApplicationInfo>> {
         Ok(self.frontmost.clone())
     }
+}
+impl anywhere_platform::ContextReader for ClipboardPort {
     fn application_directory(
         &self,
         _: &anywhere_platform::ApplicationInfo,
@@ -38,7 +40,6 @@ impl anywhere_platform::ApplicationHost for ClipboardPort {
         Ok(None)
     }
 }
-impl anywhere_platform::ContextReader for ClipboardPort {}
 impl anywhere_platform::ClipboardHost for ClipboardPort {
     fn copy_text(&self, text: &str) -> anyhow::Result<()> {
         self.writes.lock().unwrap().push(text.into());

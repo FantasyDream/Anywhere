@@ -53,11 +53,12 @@ impl ApplicationHost for OpenRecorder {
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
         Ok(None)
     }
+}
+impl ContextReader for OpenRecorder {
     fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
         Ok(None)
     }
 }
-impl ContextReader for OpenRecorder {}
 impl ClipboardHost for OpenRecorder {
     fn copy_text(&self, text: &str) -> Result<()> {
         self.copied.lock().unwrap().push(text.into());

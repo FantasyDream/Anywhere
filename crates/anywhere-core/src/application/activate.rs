@@ -301,11 +301,12 @@ mod tests {
         fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
             Ok(None)
         }
+    }
+    impl ContextReader for HeldClipboard {
         fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<std::path::PathBuf>> {
             Ok(None)
         }
     }
-    impl ContextReader for HeldClipboard {}
     impl ClipboardHost for HeldClipboard {
         fn copy_text(&self, _: &str) -> Result<()> {
             Ok(())

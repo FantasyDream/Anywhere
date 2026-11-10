@@ -305,11 +305,12 @@ async fn a_disabled_candidate_cannot_execute() {
         fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
             self.0.frontmost_application()
         }
+    }
+    impl ContextReader for NoGit {
         fn application_directory(&self, app: &ApplicationInfo) -> Result<Option<PathBuf>> {
             self.0.application_directory(app)
         }
     }
-    impl ContextReader for NoGit {}
     impl ClipboardHost for NoGit {
         fn clipboard_text(&self) -> Result<Option<String>> {
             self.0.clipboard_text()

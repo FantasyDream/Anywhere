@@ -112,11 +112,11 @@ impl ApplicationHost for ContextPlatform {
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
         Ok(Some(self.application.clone()))
     }
+}
+impl ContextReader for ContextPlatform {
     fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
         Ok(None)
     }
-}
-impl ContextReader for ContextPlatform {
     fn file_selection_supported(&self, application: &ApplicationInfo) -> bool {
         application.bundle_id == "com.apple.finder" || application.bundle_id == "test.file-manager"
     }

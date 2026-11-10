@@ -27,11 +27,12 @@ impl ApplicationHost for SyntheticPlatform {
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
         Ok(None)
     }
+}
+impl ContextReader for SyntheticPlatform {
     fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
         Ok(None)
     }
 }
-impl ContextReader for SyntheticPlatform {}
 impl ClipboardHost for SyntheticPlatform {
     fn copy_text(&self, text: &str) -> Result<()> {
         *self.0.lock().unwrap() = text.into();

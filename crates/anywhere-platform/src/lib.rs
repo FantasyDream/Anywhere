@@ -269,11 +269,12 @@ mod tests {
             fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
                 Ok(None)
             }
+        }
+        impl ContextReader for Minimal {
             fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
                 Ok(None)
             }
         }
-        impl ContextReader for Minimal {}
         impl ClipboardHost for Minimal {
             fn copy_text(&self, _: &str) -> Result<()> {
                 Ok(())
@@ -395,6 +396,10 @@ mod tests {
         }
 
         impl ContextReader for Forwarding {
+            fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
+                Ok(Some(PathBuf::from("/captured-directory")))
+            }
+
             fn finder_selected_paths(&self, _: &ApplicationInfo) -> Result<Vec<PathBuf>> {
                 Ok(vec![PathBuf::from("/selected")])
             }
@@ -426,6 +431,10 @@ mod tests {
         assert_eq!(
             context.selected_file_paths(&application).unwrap(),
             [PathBuf::from("/selected")]
+        );
+        assert_eq!(
+            context.application_directory(&application).unwrap(),
+            Some(PathBuf::from("/captured-directory"))
         );
 
         let catalog = &forwarding as &dyn ApplicationCatalog;

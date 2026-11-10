@@ -25,11 +25,12 @@ impl ApplicationHost for QuietPlatform {
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
         Ok(None)
     }
+}
+impl ContextReader for QuietPlatform {
     fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
         Ok(None)
     }
 }
-impl ContextReader for QuietPlatform {}
 impl ClipboardHost for QuietPlatform {
     fn copy_text(&self, _: &str) -> Result<()> {
         Ok(())

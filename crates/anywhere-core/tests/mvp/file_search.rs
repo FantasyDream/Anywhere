@@ -1198,11 +1198,12 @@ impl ApplicationHost for SlowIndex {
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
         Ok(None)
     }
+}
+impl ContextReader for SlowIndex {
     fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
         Ok(None)
     }
 }
-impl ContextReader for SlowIndex {}
 impl ClipboardHost for SlowIndex {
     fn copy_text(&self, text: &str) -> Result<()> {
         if !self.allow_copy.load(Ordering::Acquire) {

@@ -185,24 +185,6 @@ impl ApplicationHost for TestPlatform {
             },
         }))
     }
-    fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
-        if !self.finder && self.frontmost_bundle.is_none() {
-            return Ok(None);
-        }
-        self.directory_captures.fetch_add(1, Ordering::Relaxed);
-        let gate = self.gates.lock().unwrap().pop();
-        if let Some(gate) = gate {
-            // Runs on a blocking worker, so a plain std condvar is safe here.
-            gate.wait();
-        }
-        if let Some(delay) = self.capture_delay {
-            std::thread::sleep(delay);
-        }
-        if let Some(error) = *self.directory_error.lock().unwrap() {
-            return Err(anyhow::Error::new(error).context("original directory capture"));
-        }
-        Ok(Some(self.directory.clone()))
-    }
     fn launch_application(&self, path: &str) -> Result<bool> {
         self.launches.fetch_add(1, Ordering::Relaxed);
         self.call("launch", path)?;
@@ -223,7 +205,26 @@ impl ApplicationHost for TestPlatform {
         self.menu_version.lock().unwrap().clone()
     }
 }
-impl ContextReader for TestPlatform {}
+impl ContextReader for TestPlatform {
+    fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
+        if !self.finder && self.frontmost_bundle.is_none() {
+            return Ok(None);
+        }
+        self.directory_captures.fetch_add(1, Ordering::Relaxed);
+        let gate = self.gates.lock().unwrap().pop();
+        if let Some(gate) = gate {
+            // Runs on a blocking worker, so a plain std condvar is safe here.
+            gate.wait();
+        }
+        if let Some(delay) = self.capture_delay {
+            std::thread::sleep(delay);
+        }
+        if let Some(error) = *self.directory_error.lock().unwrap() {
+            return Err(anyhow::Error::new(error).context("original directory capture"));
+        }
+        Ok(Some(self.directory.clone()))
+    }
+}
 impl ClipboardHost for TestPlatform {
     fn clipboard_text(&self) -> Result<Option<String>> {
         if self.clipboard_error {

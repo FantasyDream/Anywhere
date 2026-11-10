@@ -79,13 +79,6 @@ impl ApplicationHost for MacOsPlatform {
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
         application::frontmost_application()
     }
-    fn application_directory(&self, application: &ApplicationInfo) -> Result<Option<PathBuf>> {
-        if application.bundle_id == "com.apple.finder" {
-            finder::application_directory(application)
-        } else {
-            editor::application_directory(application)
-        }
-    }
     fn launch_application(&self, path: &str) -> Result<bool> {
         application::launch_application(path)
     }
@@ -136,6 +129,13 @@ impl ClipboardHost for MacOsPlatform {
 }
 
 impl ContextReader for MacOsPlatform {
+    fn application_directory(&self, application: &ApplicationInfo) -> Result<Option<PathBuf>> {
+        if application.bundle_id == "com.apple.finder" {
+            finder::application_directory(application)
+        } else {
+            editor::application_directory(application)
+        }
+    }
     fn selected_text(&self, application: &ApplicationInfo) -> Result<Option<String>> {
         application::selected_text(application)
     }
