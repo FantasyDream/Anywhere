@@ -70,7 +70,7 @@ pub struct Application {
         Arc<std::sync::RwLock<crate::features::filesystem::search::FileSearchPolicy>>,
     pub(super) file_search_source: Arc<crate::features::filesystem::search::FileSearchSource>,
     pub(super) preview_worker: Arc<tokio::sync::Semaphore>,
-    pub(super) capture_policy: Arc<Mutex<super::context_capture::CapturePolicy>>,
+    pub(super) context_capture: super::context_capture::ContextCaptureService,
 }
 
 impl Application {
@@ -112,6 +112,8 @@ impl Application {
             .base
             .asynchronous
             .extend(sources);
+        let context_capture =
+            super::context_capture::ContextCaptureService::new(platform.clone(), resolver.clone());
         Self {
             previews: Default::default(),
             web_rpc_workers: Arc::new(tokio::sync::Semaphore::new(
@@ -129,7 +131,7 @@ impl Application {
             budget,
             content_grace: DEFAULT_FIRST_CONTENT_GRACE,
             app_actions: crate::features::app_actions::AppActionCatalog::default(),
-            capture_policy: Arc::new(Mutex::new(Default::default())),
+            context_capture,
         }
     }
 
@@ -388,6 +390,28 @@ impl Application {
 
     pub fn excluded_apps(&self) -> Vec<String> {
         self.resolver.application_index.excluded()
+    }
+
+    pub fn set_capture_sources(
+        &self,
+        finder: bool,
+        selected_text: bool,
+        browser_page: bool,
+        clipboard: bool,
+    ) {
+        self.context_capture
+            .set_sources(finder, selected_text, browser_page, clipboard, || {
+                // Policy and execution revocation share the capture -> session lock order.
+                if let Ok(mut session) = self.session() {
+                    self.resolver
+                        .execution_epoch
+                        .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                    session.execution = Default::default();
+                    if let Ok(mut web) = self.web_plugins.lock() {
+                        web.invalidate();
+                    }
+                }
+            });
     }
 
     pub fn set_excluded_apps(&self, ids: Vec<String>) {
