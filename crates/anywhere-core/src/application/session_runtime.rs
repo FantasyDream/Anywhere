@@ -3,7 +3,7 @@
 //! Deliberately separate from the [`Application`](crate::application::launcher_service::Application)
 //! facade so a background completion task can own a clone and publish late context
 //! without borrowing the facade.
-use super::session_model::LauncherSession;
+use super::{application_index::ApplicationIndex, session_model::LauncherSession};
 use crate::{
     core::action::descriptor::ActionRegistry,
     core::context::engine::{stamp, ContextGraph, ContextGraphRun, GraphStep},
@@ -11,7 +11,6 @@ use crate::{
     core::context::registry::ContextProviderRegistry,
     core::context::{ExecutionContext, ResolvedContext},
     core::ranking::usage::UsageRepository,
-    features::applications::index::ApplicationCatalog,
     features::filesystem::provider::DirectoryMemo,
 };
 use anyhow::{anyhow, Result};
@@ -41,21 +40,12 @@ pub struct Resolver {
     pub(super) execution_epoch: Arc<AtomicU64>,
     pub(super) events: broadcast::Sender<LauncherEvent>,
     pub(super) latest_tx: watch::Sender<Option<Arc<LauncherState>>>,
-    pub(super) catalog: Arc<Mutex<CatalogSlot>>,
-    pub(super) catalog_rx: watch::Receiver<u64>,
-    pub(super) catalog_issued: Arc<AtomicU64>,
+    pub(super) application_index: Arc<ApplicationIndex>,
     pub(super) shortcut_catalog: Arc<Mutex<Vec<super::shortcuts::ShortcutAction>>>,
     pub(super) history: Arc<Mutex<Box<dyn UsageRepository>>>,
     directory: Arc<Mutex<Option<Arc<DirectoryMemo>>>>,
 }
 
-/// Published application index. The generation check and the write share this lock.
-pub(super) struct CatalogSlot {
-    pub(super) generation: u64,
-    /// Unfiltered scan. Exclusions are applied into `catalog`.
-    pub(super) full: Arc<ApplicationCatalog>,
-    pub(super) catalog: Arc<ApplicationCatalog>,
-}
 pub struct Resolution {
     pub contexts: Vec<ResolvedContext>,
     pub diagnostics: Vec<String>,
@@ -67,7 +57,6 @@ pub struct Resolution {
 impl Resolver {
     pub fn new(registry: ActionRegistry, history: Box<dyn UsageRepository>) -> Self {
         let (latest_tx, _) = watch::channel(None);
-        let (_, catalog_rx) = watch::channel(0);
         Self {
             registry: Arc::new(Mutex::new(Arc::new(registry))),
             // Registration order does not matter: the registry sorts by priority, then id.
@@ -83,13 +72,7 @@ impl Resolver {
             execution_epoch: Arc::new(AtomicU64::new(0)),
             events: broadcast::channel(256).0,
             latest_tx,
-            catalog: Arc::new(Mutex::new(CatalogSlot {
-                generation: 0,
-                full: Arc::new(ApplicationCatalog::empty()),
-                catalog: Arc::new(ApplicationCatalog::empty()),
-            })),
-            catalog_rx,
-            catalog_issued: Arc::new(AtomicU64::new(0)),
+            application_index: Arc::new(ApplicationIndex::default()),
             shortcut_catalog: Arc::new(Mutex::new(Vec::new())),
             history: Arc::new(Mutex::new(history)),
             directory: Arc::new(Mutex::new(None)),
@@ -108,11 +91,6 @@ impl Resolver {
         if let Ok(mut slot) = self.registry.lock() {
             *slot = Arc::new(registry);
         }
-    }
-
-    pub(super) fn with_catalog_rx(mut self, catalog_rx: watch::Receiver<u64>) -> Self {
-        self.catalog_rx = catalog_rx;
-        self
     }
 
     pub(super) fn set_directory(&self, directory: Option<Arc<DirectoryMemo>>) {
@@ -170,30 +148,6 @@ impl Resolver {
     pub fn is_session_active(&self, session_id: SessionId) -> bool {
         let current = self.current.load(Ordering::Acquire);
         current != 0 && (current >> 32) == u64::from(session_id)
-    }
-
-    /// Wait until the latest issued catalog scan has published.
-    ///
-    /// A receiver that subscribed after an earlier scan would otherwise return
-    /// immediately and miss a scan started by the current activation.
-    pub async fn catalog_ready(&self) {
-        let expected = self.catalog_issued.load(Ordering::Acquire);
-        let mut rx = self.catalog_rx.clone();
-        while *rx.borrow_and_update() < expected {
-            if tokio::time::timeout(Duration::from_secs(10), rx.changed())
-                .await
-                .is_err()
-            {
-                return;
-            }
-        }
-    }
-
-    fn catalog_view(&self) -> Result<(Arc<ApplicationCatalog>, u64)> {
-        self.catalog
-            .lock()
-            .map(|guard| (guard.catalog.clone(), guard.generation))
-            .map_err(|_| anyhow!("catalog lock poisoned"))
     }
 
     /// Revision currently published for the live session, if any.
@@ -463,7 +417,7 @@ impl Resolver {
                     self.feature_policy.snapshot(),
                 )
             };
-            let (catalog, catalog_generation) = self.catalog_view()?;
+            let index = self.application_index.snapshot()?;
             let sources = self
                 .sources
                 .lock()
@@ -481,7 +435,7 @@ impl Resolver {
                 contexts: &contexts,
                 incoming_diagnostics: &diagnostics,
                 prior_diagnostics: &prior_diagnostics,
-                catalog: &catalog,
+                catalog: &index.catalog,
                 sources: &sources,
                 search_candidates: &search_candidates,
                 object_actions: &object_actions,
@@ -506,12 +460,7 @@ impl Resolver {
             {
                 continue;
             }
-            let catalog_moved = self
-                .catalog
-                .lock()
-                .map(|slot| slot.generation != catalog_generation)
-                .map_err(|_| anyhow!("catalog lock poisoned"))?;
-            if catalog_moved {
+            if !self.application_index.is_current(&index)? {
                 continue;
             }
             crate::features::remember_environment(&mut session.resolution.context_cache, &contexts);

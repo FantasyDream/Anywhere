@@ -41,6 +41,7 @@ flowchart TD
 crates/anywhere-core/src/
 ├── core/           模型与算法；context / action / search / ranking / session / execution
 ├── application/    activate、update_query、execute、session_runtime、source_runtime
+│                   application_index（应用索引寿命与过滤）
 ├── features/       applications、filesystem、text、url、git、developer
 │                   saved_directories、clipboard、application_history
 │                   编译期 catalog、FeatureDescriptor、服务绑定与策略
@@ -96,6 +97,10 @@ resources/                 键码、文件类型、运行策略、设计参数�
 空输入动作列表由 Rust 比较内存中的 Usage 原始计数和时间，再比较上下文 / 默认优先级分数及稳定 ID。关键词评分保持有界 Usage 和匹配优先；桥接不暴露首页资格字段，Flutter 只展示排序前缀，详见 [Launcher 交互契约](launcher-interaction.md)。
 
 发布采用“锁内复制不可变输入和版本 → 锁外匹配 / 排序 → 锁内复验并发布”。索引、历史和 Registry 共享不可变快照；并发提交改变输入时重新计算，旧 Session / Revision 的结果直接丢弃。
+
+`application/application_index.rs` 的 `ApplicationIndex` 统一持有已安装应用索引的完整 / 可见目录、排除列表、扫描代次和完成通知，寿命独立于 Launcher Session。扫描在锁外执行，完成后在同一把状态锁内核对代次、应用最新排除偏好并发布；失败保留原目录但结束该代等待，旧扫描不能覆盖更新的成功或失败。快捷键配置读取完整目录，搜索只读可见目录；排除偏好与过滤结果原子更新。
+
+Resolver 只取得不可变索引快照，发布前通过服务同时复验扫描代次和可见目录 Arc 身份；排除列表变化即使没有新扫描，也会使已准备的旧目录失效。不能依赖替代快照先完成、推进 SnapshotSeq 来间接保护目录变化。`Application` 保留对外 Facade 与索引完成后重算会话的协调，不再分别持有扫描通知和过滤状态。
 
 执行仅接受当前已提交凭据，排队 worker 开始副作用前再次验证；进程计划生成后、spawn 前也检查版本。副作用成功后仍记 Usage，即使窗口已隐藏。菜单另有 discovery token，不能把可重扫的菜单 ActionId 当作永久身份；见 [菜单安全契约](current-app-actions.md)。
 

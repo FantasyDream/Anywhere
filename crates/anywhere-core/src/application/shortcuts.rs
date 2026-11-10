@@ -81,10 +81,8 @@ impl Application {
     pub fn shortcut_applications(&self) -> Result<Vec<ShortcutApplication>> {
         let mut apps: BTreeMap<String, ShortcutApplication> = self
             .resolver
-            .catalog
-            .lock()
-            .map_err(|_| anyhow::anyhow!("application catalog lock poisoned"))?
-            .full
+            .application_index
+            .full_catalog()?
             .applications()
             .iter()
             .map(|a| {

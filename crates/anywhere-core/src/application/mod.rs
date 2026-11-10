@@ -26,6 +26,7 @@ mod session_runtime;
 mod snapshot;
 
 mod app_actions;
+mod application_index;
 mod shortcuts;
 pub use shortcuts::{BindingResolution, ShortcutAction, ShortcutApplication, ShortcutRoute};
 

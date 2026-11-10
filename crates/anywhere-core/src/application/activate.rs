@@ -107,7 +107,10 @@ impl Application {
         self.spawn_context_captures(session_id, frontmost.clone());
         self.prepare_app_actions(session_id, frontmost.as_ref(), prompt_accessibility)
             .await;
-        let catalog_generation = self.spawn_catalog_scan();
+        let catalog_generation = self
+            .resolver
+            .application_index
+            .spawn_scan(self.platform.clone());
         let supplemental = self.spawn_supplemental(session_id, source_app);
         let graph_started = Instant::now();
         let execution = self.resolver.execution(session_id, 0);
