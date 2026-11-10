@@ -40,6 +40,14 @@
 
 ## 最新已验证基线
 
+### Rust 文件扫描职责拆分
+
+ScanStore 保留查询寿命、取消和临时工作区；私有 query / scope / record / traversal / progress / pagination 模块分别管理名称匹配、ScanScope 范围配置与索引核验、原始路径记录、磁盘 FIFO 遍历、诊断和结果交付。外部排序保持在 result_store，通过 `committed_boundary()` 读取已 flush 记录上限，进度状态不再直接暴露。公开扫描入口、二进制格式、匹配顺序、兼容游标和连续稳定前缀保持一致，代码归属见[架构](architecture.md)，行为见[文件搜索](file-search.md)。
+
+新增链接改指向后的索引 / 遍历授权复验、完整记录往返及截断尾部拒绝两项回归，在拆分前后均通过。扫描基线 24 项通过 / 1 项忽略，filesystem 单元 26 项通过 / 1 项忽略，文件搜索 MVP 24 项通过。Review 逐项核对 18 个迁移操作体、构造顺序、记录格式、flush 与发布边界、锁与可见性，未发现剩余新增阻塞问题。
+
+初轮完整门禁在架构检查中将独立 Unix 测试夹具当成生产代码；测试文件现显式使用文件级 `cfg(test)`，检查器识别该属性，并新增规则回归，确认测试文件名或代码字符串不能绕过生产检查。6 项架构规则测试通过。最终完整 `scripts/check.sh` exit 0：Core 349 项通过 / 1 项忽略、MVP 195 项通过 / 4 项忽略、Flutter 524 项通过 / 1 项跳过、SDK 50 项及其余工作区、原生 Host、Clippy、架构、规范、生成物和文档检查通过。完整日志为被忽略的 `build/file-scan-full-check.log`。本项打包与 GUI 验收尚未执行。
+
 ### Rust 执行请求职责拆分
 
 `ExecutionRequest` 在阻塞 worker 排队前持有冻结候选、来源身份、注册表与授权版本，并由 `spawn(self)` 消费。私有 worker 管理开始执行、Web 凭据 / 进程任务交接和 Usage 保存；`execute.rs` 保留无界面 Web 驱动、菜单失败恢复与结果映射。请求与共享服务不新建 Session，公开 API、DTO、锁顺序、错误 / 警告边界及独立进程生命周期保持一致，代码归属见[架构](architecture.md)。

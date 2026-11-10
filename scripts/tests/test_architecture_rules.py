@@ -3,10 +3,29 @@ from pathlib import Path
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from architecture_rules import check_core_imports, check_feature_imports, check_persistence_imports
+from architecture_rules import check_core_imports, check_feature_imports, check_persistence_imports, production_source
 
 
 class CoreBoundaries(unittest.TestCase):
+
+    def test_file_level_test_module_is_explicitly_excluded(self):
+        source = '// Native fixture only.\n#![cfg(test)]\nuse std::os::unix::fs;'
+        self.assertEqual(production_source(source), '')
+        check_feature_imports(
+            '#![cfg(test)]\nuse crate::application::Application;',
+            'features/fixture.rs')
+
+    def test_test_filename_or_later_attribute_does_not_hide_production(self):
+        for source in [
+                'use std::os::unix::fs;',
+                'use std::os::unix::fs;\n#[cfg(test)] mod tests {}',
+                'const NOTE: &str = "#![cfg(test)]";\nuse std::os::unix::fs;'
+        ]:
+            with self.subTest(source=source):
+                self.assertIn('std::os::', production_source(source))
+        with self.assertRaises(AssertionError):
+            check_feature_imports('use crate::application::Application;',
+                                  'features/fixture_tests.rs')
 
     def test_persistence_cannot_publish_application_state(self):
         for source in [
