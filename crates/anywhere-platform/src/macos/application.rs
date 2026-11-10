@@ -26,7 +26,7 @@ pub(super) fn installed_applications(roots: &[PathBuf]) -> crate::InstalledAppli
     let mut applications = Vec::new();
     let mut skipped = 0usize;
     for path in crate::catalog::discover(roots, &|path| {
-        crate::Platform::is_application_entry(&super::MacOsPlatform, path)
+        crate::ApplicationCatalog::is_application_entry(&super::MacOsPlatform, path)
     }) {
         match read_bundle(&path) {
             Ok(Some(application)) => applications.push(application),
@@ -274,7 +274,7 @@ pub(super) fn application_icon(path: &str, size: u32) -> Result<Option<Vec<u8>>>
 mod tests {
     use super::*;
     use crate::macos::MacOsPlatform;
-    use crate::Platform;
+    use crate::{ApplicationCatalog, ApplicationHost, MenuHost};
 
     #[test]
     fn incomplete_discovery_never_decodes_partial_items_as_ready() {

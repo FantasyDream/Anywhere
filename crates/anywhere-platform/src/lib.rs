@@ -7,9 +7,14 @@ pub mod paths;
 pub mod private_storage;
 pub mod search_exclusions;
 pub mod search_storage;
-use anyhow::{bail, Result};
+mod traits;
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+pub use traits::{
+    ApplicationCatalog, ApplicationHost, ClipboardHost, ContextReader, FileSearchHost, GitHost,
+    MenuHost, Platform, ResourceOpener,
+};
 #[cfg(any(target_os = "macos", test))]
 pub(crate) mod editor_context;
 pub mod file_search;
@@ -231,224 +236,6 @@ pub enum FileSearchEngine {
     Combined,
 }
 
-pub trait Platform: Send + Sync {
-    fn file_search_supported(&self) -> bool {
-        false
-    }
-
-    /// Read the system index; callers own cancellation and result limits.
-    fn search_files(
-        &self,
-        _query: &str,
-        _limit: usize,
-        _cancelled: &(dyn Fn() -> bool + Sync),
-    ) -> Result<Vec<FileSearchHit>> {
-        bail!("file search is not supported on this platform")
-    }
-    fn search_files_with_options(
-        &self,
-        query: &str,
-        limit: usize,
-        options: &FileSearchOptions,
-        cancelled: &(dyn Fn() -> bool + Sync),
-    ) -> Result<Vec<FileSearchHit>> {
-        // Adapters must not silently ignore a configured search scope.
-        if options.engine == FileSearchEngine::Ripgrep {
-            return file_search::ripgrep(
-                query,
-                limit,
-                options,
-                cancelled,
-                std::time::Duration::from_secs(2),
-            );
-        }
-        if options != &FileSearchOptions::default() {
-            bail!("configured file search is unsupported");
-        }
-        self.search_files(query, limit, cancelled)
-    }
-    /// Ordered application catalog roots for the default directory walk.
-    ///
-    /// Empty means this host has nothing to walk. Ignored by a platform that
-    /// overrides [`Self::installed_applications`].
-    fn application_roots(&self) -> Vec<PathBuf> {
-        Vec::new()
-    }
-
-    /// The adapter decides which entries the shared directory walker treats as applications.
-    fn is_application_entry(&self, _path: &Path) -> bool {
-        false
-    }
-
-    /// Installed applications this host can launch.
-    ///
-    /// This is the swap point for the catalog. The default walks [`Self::application_roots`]
-    /// and identifies each entry with [`Self::bundle_application`]. A later indexer
-    /// (Launch Services, a native database) replaces this method only;
-    /// Core keeps matching, ranking and refresh.
-    ///
-    /// `name` is the title shown to the user and must be the system-language display
-    /// name, not the on-disk file name. Extra lookup names go in `aliases`.
-    fn installed_applications(&self) -> InstalledApplications {
-        catalog::from_roots(self)
-    }
-
-    fn frontmost_application(&self) -> Result<Option<ApplicationInfo>>;
-    fn application_directory(&self, application: &ApplicationInfo) -> Result<Option<PathBuf>>;
-    fn open_url(&self, url: &str) -> Result<()>;
-    fn open_file(&self, path: &Path) -> Result<()>;
-    fn reveal_file(&self, path: &Path) -> Result<()>;
-    fn open_directory(&self, path: &Path) -> Result<()>;
-    fn open_terminal(&self, path: &Path) -> Result<()>;
-    /// Open a local history object in an explicitly selected installed application.
-    fn open_file_in_application(&self, _application: &Path, _target: &Path) -> Result<()> {
-        bail!("opening an object in a specific application is unsupported")
-    }
-    /// Deliver a feature-validated deep link to an explicit application.
-    fn open_url_in_application(&self, _application: &Path, _url: &str) -> Result<()> {
-        bail!("opening a URL in a specific application is unsupported")
-    }
-    fn copy_text(&self, text: &str) -> Result<()>;
-
-    // ---- V0.2 capabilities; unsupported platforms keep their V0.1 behaviour ----
-
-    /// Metadata for one application entry (bundle, executable, or shortcut). `Ok(None)` means "not an application".
-    fn bundle_application(&self, _bundle: &Path) -> Result<Option<BundleApplication>> {
-        Ok(None)
-    }
-
-    /// Activate a running instance, otherwise launch the canonical bundle path.
-    /// Returns whether an application was launched or activated.
-    fn launch_application(&self, _path: &str) -> Result<bool> {
-        bail!("launching applications is not supported on this platform")
-    }
-
-    /// Small PNG for an application icon, lazily requested for visible rows only.
-    fn application_icon(&self, _path: &str, _size: u32) -> Result<Option<Vec<u8>>> {
-        Ok(None)
-    }
-
-    /// Observe generation changes only, without reading or retaining clipboard text.
-    fn start_clipboard_tracking(&self) {}
-
-    /// History polling reads only this generation until it changes.
-    fn clipboard_generation(&self) -> Result<i64> {
-        Err(ContextReadError::Unsupported.into())
-    }
-
-    /// Explicit user request only. May show the OS permission prompt; never records text.
-    fn request_clipboard_history_access(&self) -> Result<()> {
-        Err(ContextReadError::Unsupported.into())
-    }
-
-    /// Read all persistent representations of one generation; never prompt.
-    fn clipboard_history_payload(
-        &self,
-        _generation: i64,
-    ) -> Result<Option<clipboard::ClipboardPayload>> {
-        Err(ContextReadError::Unsupported.into())
-    }
-
-    fn write_clipboard(&self, payload: &clipboard::ClipboardPayload) -> Result<()> {
-        if payload.formats.len() == 1 {
-            if let Some(text) = payload.plain_text() {
-                return self.copy_text(text);
-            }
-        }
-        Err(ContextReadError::Unsupported.into())
-    }
-
-    fn watch_clipboard(
-        &self,
-        _changed: Box<dyn Fn() + Send>,
-    ) -> Result<Box<dyn clipboard::ClipboardWatch>> {
-        Err(ContextReadError::Unsupported.into())
-    }
-
-    fn clipboard_snapshot(&self) -> Result<ClipboardSnapshot> {
-        Ok(ClipboardSnapshot {
-            text: self.clipboard_text()?,
-            age_ms: None,
-        })
-    }
-
-    /// One plain-text clipboard snapshot. `Ok(None)` covers non-text and empty.
-    fn clipboard_text(&self) -> Result<Option<String>> {
-        Ok(None)
-    }
-
-    /// Selected text in the captured app's focused control. Never activates
-    /// another app or reads the clipboard. Empty selection is `Ok(None)`;
-    /// unsupported controls and permission failures return typed errors.
-    fn selected_text(&self, _application: &ApplicationInfo) -> Result<Option<String>> {
-        Ok(None)
-    }
-
-    /// Whether this captured application can supply a file selection.
-    fn file_selection_supported(&self, _application: &ApplicationInfo) -> bool {
-        false
-    }
-
-    /// Selected files/directories, independent of the file manager's identity.
-    fn selected_file_paths(&self, application: &ApplicationInfo) -> Result<Vec<PathBuf>> {
-        self.finder_selected_paths(application)
-    }
-
-    /// Legacy adapter hook retained for callers; new adapters implement selected_file_paths.
-    fn finder_selected_paths(&self, _application: &ApplicationInfo) -> Result<Vec<PathBuf>> {
-        Ok(Vec::new())
-    }
-
-    /// Whether this platform has a current-page adapter for the captured app.
-    fn browser_current_url_supported(&self, _application: &ApplicationInfo) -> bool {
-        false
-    }
-
-    /// URL of the captured browser's current page, when an adapter exists.
-    fn browser_current_url(&self, _application: &ApplicationInfo) -> Result<Option<String>> {
-        Ok(None)
-    }
-
-    /// Whether the read-only Git operations can run at all.
-    fn git_available(&self) -> bool {
-        git::available()
-    }
-
-    /// Run one allowlisted read-only Git operation inside `repository`.
-    fn run_git(&self, repository: &Path, operation: GitOperation) -> Result<GitOutput> {
-        git::run(repository, operation)
-    }
-
-    // ---- V0.3 menu actions; unsupported platforms stay empty ----
-
-    /// Whether this process may read other apps' accessibility trees.
-    ///
-    /// `prompt` asks the OS to show the system permission dialog. Universal launcher
-    /// passes false so a search does not nag.
-    fn accessibility_trusted(&self, _prompt: bool) -> bool {
-        false
-    }
-
-    /// Menu-bar leaves of `application`.
-    fn discover_menu_actions(&self, _application: &ApplicationInfo) -> Result<MenuDiscovery> {
-        Ok(MenuDiscovery::Ready(Vec::new()))
-    }
-
-    /// Activate `application`, relocate the item, and press it. Never panics.
-    fn perform_menu_action(
-        &self,
-        _application: &ApplicationInfo,
-        _locator: &MenuLocator,
-    ) -> Result<()> {
-        bail!("menu actions are not supported on this platform")
-    }
-
-    /// Short version string for cache invalidation. `None` when unknown.
-    fn application_version(&self, _bundle_id: &str) -> Option<String> {
-        None
-    }
-}
-
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]
@@ -464,25 +251,37 @@ pub fn native_platform() -> Result<std::sync::Arc<dyn Platform>> {
     }
     #[cfg(not(target_os = "macos"))]
     {
-        bail!("This build has no native system adapter. Shared Core remains available with an injected Platform.")
+        anyhow::bail!("This build has no native system adapter. Shared Core remains available with an injected Platform.")
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     /// Compile-time guard: the unsupported defaults must exist and stay inactive.
     #[test]
     fn unsupported_defaults_degrade_without_side_effects() {
         struct Minimal;
-        impl Platform for Minimal {
+        impl ApplicationCatalog for Minimal {}
+        impl ApplicationHost for Minimal {
             fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
                 Ok(None)
             }
+        }
+        impl ContextReader for Minimal {
             fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
                 Ok(None)
             }
+        }
+        impl ClipboardHost for Minimal {
+            fn copy_text(&self, _: &str) -> Result<()> {
+                Ok(())
+            }
+        }
+        impl FileSearchHost for Minimal {}
+        impl ResourceOpener for Minimal {
             fn open_url(&self, _: &str) -> Result<()> {
                 Ok(())
             }
@@ -498,10 +297,9 @@ mod tests {
             fn open_terminal(&self, _: &Path) -> Result<()> {
                 Ok(())
             }
-            fn copy_text(&self, _: &str) -> Result<()> {
-                Ok(())
-            }
         }
+        impl MenuHost for Minimal {}
+        impl GitHost for Minimal {}
         let platform = Minimal;
         assert!(platform.installed_applications().is_empty());
         assert!(platform
@@ -550,6 +348,134 @@ mod tests {
             )
             .is_err());
         assert!(platform.application_version("x").is_none());
+    }
+
+    #[test]
+    fn narrow_capabilities_keep_clipboard_context_and_catalog_defaults() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        struct Forwarding {
+            root: PathBuf,
+            copied: AtomicUsize,
+        }
+
+        impl ApplicationCatalog for Forwarding {
+            fn application_roots(&self) -> Vec<PathBuf> {
+                vec![self.root.clone()]
+            }
+
+            fn is_application_entry(&self, path: &Path) -> bool {
+                path.extension().is_some_and(|extension| extension == "app")
+            }
+
+            fn bundle_application(&self, path: &Path) -> Result<Option<BundleApplication>> {
+                Ok(Some(BundleApplication {
+                    bundle_id: "test.forwarding".into(),
+                    name: path
+                        .file_stem()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned(),
+                    localized_names: Default::default(),
+                    aliases: Vec::new(),
+                    path: Some(path.to_string_lossy().into_owned()),
+                    icon: None,
+                }))
+            }
+        }
+
+        impl ClipboardHost for Forwarding {
+            fn copy_text(&self, _: &str) -> Result<()> {
+                self.copied.fetch_add(1, Ordering::SeqCst);
+                Ok(())
+            }
+
+            fn clipboard_text(&self) -> Result<Option<String>> {
+                Ok(Some("forwarded".into()))
+            }
+        }
+
+        impl ContextReader for Forwarding {
+            fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
+                Ok(Some(PathBuf::from("/captured-directory")))
+            }
+
+            fn finder_selected_paths(&self, _: &ApplicationInfo) -> Result<Vec<PathBuf>> {
+                Ok(vec![PathBuf::from("/selected")])
+            }
+        }
+
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path().join("Applications");
+        std::fs::create_dir_all(root.join("Alpha.app/Contents")).unwrap();
+        let forwarding = Forwarding {
+            root,
+            copied: AtomicUsize::new(0),
+        };
+        let clipboard = &forwarding as &dyn ClipboardHost;
+        assert_eq!(
+            clipboard.clipboard_snapshot().unwrap().text.as_deref(),
+            Some("forwarded")
+        );
+        let payload = clipboard::ClipboardPayload::text("copied");
+        clipboard.write_clipboard(&payload).unwrap();
+        assert_eq!(forwarding.copied.load(Ordering::SeqCst), 1);
+
+        let context = &forwarding as &dyn ContextReader;
+        let application = ApplicationInfo {
+            bundle_id: "x".into(),
+            name: "x".into(),
+            pid: 0,
+            instance_id: None,
+        };
+        assert_eq!(
+            context.selected_file_paths(&application).unwrap(),
+            [PathBuf::from("/selected")]
+        );
+        assert_eq!(
+            context.application_directory(&application).unwrap(),
+            Some(PathBuf::from("/captured-directory"))
+        );
+
+        let catalog = &forwarding as &dyn ApplicationCatalog;
+        assert_eq!(catalog.installed_applications().applications.len(), 1);
+    }
+
+    #[test]
+    fn configured_search_scope_is_rejected_by_the_narrow_port() {
+        struct IndexOnly;
+
+        impl FileSearchHost for IndexOnly {
+            fn search_files(
+                &self,
+                _: &str,
+                _: usize,
+                _: &(dyn Fn() -> bool + Sync),
+            ) -> Result<Vec<FileSearchHit>> {
+                Ok(vec![FileSearchHit {
+                    path: PathBuf::from("/indexed"),
+                    is_directory: false,
+                }])
+            }
+        }
+
+        let search = IndexOnly;
+        let search = &search as &dyn FileSearchHost;
+        let cancelled = || false;
+        assert_eq!(
+            search
+                .search_files_with_options("query", 1, &FileSearchOptions::default(), &cancelled)
+                .unwrap()[0]
+                .path,
+            PathBuf::from("/indexed")
+        );
+        let configured = FileSearchOptions {
+            restrict_to_roots: true,
+            ..Default::default()
+        };
+        assert!(search
+            .search_files_with_options("query", 1, &configured, &cancelled)
+            .is_err());
     }
 
     #[test]

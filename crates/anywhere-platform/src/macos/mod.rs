@@ -13,7 +13,9 @@ pub(crate) mod native;
 mod shell;
 
 use crate::{
-    ApplicationInfo, BundleApplication, GitOperation, GitOutput, InstalledApplications, Platform,
+    ApplicationCatalog, ApplicationHost, ApplicationInfo, BundleApplication, ClipboardHost,
+    ContextReader, FileSearchHost, GitHost, GitOperation, GitOutput, InstalledApplications,
+    MenuHost, ResourceOpener,
 };
 use anyhow::{Context, Result};
 use std::{
@@ -26,7 +28,7 @@ pub struct MacOsPlatform;
 
 mod file_search;
 
-impl Platform for MacOsPlatform {
+impl FileSearchHost for MacOsPlatform {
     fn file_search_supported(&self) -> bool {
         true
     }
@@ -48,6 +50,9 @@ impl Platform for MacOsPlatform {
     ) -> Result<Vec<crate::FileSearchHit>> {
         file_search::search_with_options(query, limit, options, cancelled)
     }
+}
+
+impl ApplicationCatalog for MacOsPlatform {
     fn application_roots(&self) -> Vec<PathBuf> {
         let mut roots = Vec::new();
         if let Some(home) = std::env::var_os("HOME") {
@@ -65,19 +70,14 @@ impl Platform for MacOsPlatform {
     fn installed_applications(&self) -> InstalledApplications {
         application::installed_applications(&self.application_roots())
     }
-
-    fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
-        application::frontmost_application()
-    }
-    fn application_directory(&self, application: &ApplicationInfo) -> Result<Option<PathBuf>> {
-        if application.bundle_id == "com.apple.finder" {
-            finder::application_directory(application)
-        } else {
-            editor::application_directory(application)
-        }
-    }
     fn bundle_application(&self, bundle: &Path) -> Result<Option<BundleApplication>> {
         application::bundle_application(bundle)
+    }
+}
+
+impl ApplicationHost for MacOsPlatform {
+    fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
+        application::frontmost_application()
     }
     fn launch_application(&self, path: &str) -> Result<bool> {
         application::launch_application(path)
@@ -85,6 +85,12 @@ impl Platform for MacOsPlatform {
     fn application_icon(&self, path: &str, size: u32) -> Result<Option<Vec<u8>>> {
         application::application_icon(path, size)
     }
+    fn application_version(&self, bundle_id: &str) -> Option<String> {
+        application::application_version(bundle_id)
+    }
+}
+
+impl ClipboardHost for MacOsPlatform {
     fn start_clipboard_tracking(&self) {
         clipboard::start_tracking();
     }
@@ -117,6 +123,19 @@ impl Platform for MacOsPlatform {
     fn clipboard_text(&self) -> Result<Option<String>> {
         clipboard::clipboard_text()
     }
+    fn copy_text(&self, text: &str) -> Result<()> {
+        clipboard::copy_text(text)
+    }
+}
+
+impl ContextReader for MacOsPlatform {
+    fn application_directory(&self, application: &ApplicationInfo) -> Result<Option<PathBuf>> {
+        if application.bundle_id == "com.apple.finder" {
+            finder::application_directory(application)
+        } else {
+            editor::application_directory(application)
+        }
+    }
     fn selected_text(&self, application: &ApplicationInfo) -> Result<Option<String>> {
         application::selected_text(application)
     }
@@ -132,15 +151,18 @@ impl Platform for MacOsPlatform {
     fn browser_current_url(&self, application: &ApplicationInfo) -> Result<Option<String>> {
         browser::current_url(application)
     }
-    fn copy_text(&self, text: &str) -> Result<()> {
-        clipboard::copy_text(text)
-    }
+}
+
+impl GitHost for MacOsPlatform {
     fn git_available(&self) -> bool {
         crate::git::available()
     }
     fn run_git(&self, repository: &Path, operation: GitOperation) -> Result<GitOutput> {
         crate::git::run(repository, operation)
     }
+}
+
+impl ResourceOpener for MacOsPlatform {
     fn open_url(&self, value: &str) -> Result<()> {
         shell::open_url(value)
     }
@@ -162,6 +184,9 @@ impl Platform for MacOsPlatform {
     fn open_terminal(&self, path: &Path) -> Result<()> {
         shell::open_terminal(path)
     }
+}
+
+impl MenuHost for MacOsPlatform {
     fn accessibility_trusted(&self, prompt: bool) -> bool {
         application::accessibility_trusted(prompt)
     }
@@ -174,9 +199,6 @@ impl Platform for MacOsPlatform {
         locator: &crate::MenuLocator,
     ) -> Result<()> {
         application::perform_menu_action(app, locator)
-    }
-    fn application_version(&self, bundle_id: &str) -> Option<String> {
-        application::application_version(bundle_id)
     }
 }
 

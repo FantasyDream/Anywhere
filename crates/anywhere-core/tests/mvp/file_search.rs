@@ -1193,7 +1193,27 @@ struct SlowIndex {
     allow_copy: std::sync::atomic::AtomicBool,
     copied: Mutex<Vec<String>>,
 }
-impl Platform for SlowIndex {
+impl ApplicationCatalog for SlowIndex {}
+impl ApplicationHost for SlowIndex {
+    fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
+        Ok(None)
+    }
+}
+impl ContextReader for SlowIndex {
+    fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
+        Ok(None)
+    }
+}
+impl ClipboardHost for SlowIndex {
+    fn copy_text(&self, text: &str) -> Result<()> {
+        if !self.allow_copy.load(Ordering::Acquire) {
+            bail!("unexpected side effect");
+        }
+        self.copied.lock().unwrap().push(text.to_owned());
+        Ok(())
+    }
+}
+impl FileSearchHost for SlowIndex {
     fn file_search_supported(&self) -> bool {
         true
     }
@@ -1232,12 +1252,8 @@ impl Platform for SlowIndex {
         self.active.fetch_sub(1, Ordering::AcqRel);
         Ok(result)
     }
-    fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
-        Ok(None)
-    }
-    fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
-        Ok(None)
-    }
+}
+impl ResourceOpener for SlowIndex {
     fn open_url(&self, _: &str) -> Result<()> {
         bail!("unexpected side effect")
     }
@@ -1253,14 +1269,9 @@ impl Platform for SlowIndex {
     fn open_terminal(&self, _: &std::path::Path) -> Result<()> {
         bail!("unexpected side effect")
     }
-    fn copy_text(&self, text: &str) -> Result<()> {
-        if !self.allow_copy.load(Ordering::Acquire) {
-            bail!("unexpected side effect");
-        }
-        self.copied.lock().unwrap().push(text.to_owned());
-        Ok(())
-    }
 }
+impl MenuHost for SlowIndex {}
+impl GitHost for SlowIndex {}
 fn slow_index(path: PathBuf) -> Arc<SlowIndex> {
     Arc::new(SlowIndex {
         active: AtomicUsize::new(0),

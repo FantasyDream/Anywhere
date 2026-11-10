@@ -190,7 +190,7 @@ pub(super) fn run(program: &str, args: &[&OsStr], stdin: Option<&str>) -> Result
 mod tests {
     use super::*;
     use crate::macos::MacOsPlatform;
-    use crate::Platform;
+    use crate::ResourceOpener;
 
     #[test]
     fn jetbrains_projects_use_the_selected_installations_cli_with_literal_paths() {

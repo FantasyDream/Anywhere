@@ -9,8 +9,9 @@ pub(crate) use anywhere_core::{
     Application, LauncherApplication,
 };
 pub(crate) use anywhere_platform::{
-    ApplicationInfo, BundleApplication, DiscoveredMenuItem, GitOperation, GitOutput, MenuDiscovery,
-    MenuLocator, Platform,
+    ApplicationCatalog, ApplicationHost, ApplicationInfo, BundleApplication, ClipboardHost,
+    ContextReader, DiscoveredMenuItem, FileSearchHost, GitHost, GitOperation, GitOutput,
+    MenuDiscovery, MenuHost, MenuLocator, Platform, ResourceOpener,
 };
 pub(crate) use anywhere_protocol::*;
 pub(crate) use async_trait::async_trait;
@@ -122,14 +123,35 @@ impl TestPlatform {
     }
 }
 
-impl Platform for TestPlatform {
+impl ApplicationCatalog for TestPlatform {
     fn is_application_entry(&self, path: &Path) -> bool {
         path.extension().is_some_and(|extension| extension == "app")
     }
     fn application_roots(&self) -> Vec<PathBuf> {
         vec![self.directory.clone()]
     }
+    fn bundle_application(&self, bundle: &Path) -> Result<Option<BundleApplication>> {
+        let gate = self.catalog_gate.lock().unwrap().take();
+        if let Some(gate) = gate {
+            gate.wait();
+        }
 
+        let stem = bundle
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        Ok(Some(BundleApplication {
+            localized_names: Default::default(),
+            bundle_id: format!("app.{}.com", stem.replace(' ', "").to_lowercase()),
+            name: stem,
+            aliases: Vec::new(),
+            path: Some(bundle.to_string_lossy().into_owned()),
+            icon: None,
+        }))
+    }
+}
+
+impl ApplicationHost for TestPlatform {
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
         let gate = self.frontmost_gate.lock().unwrap().take();
         if let Some(gate) = gate {
@@ -163,6 +185,27 @@ impl Platform for TestPlatform {
             },
         }))
     }
+    fn launch_application(&self, path: &str) -> Result<bool> {
+        self.launches.fetch_add(1, Ordering::Relaxed);
+        self.call("launch", path)?;
+        Ok(true)
+    }
+    fn application_icon(&self, path: &str, size: u32) -> Result<Option<Vec<u8>>> {
+        // A four-byte PNG header is enough to prove the bytes travel the whole path.
+        if !path.ends_with(".app") {
+            return Ok(None);
+        }
+        assert_eq!(
+            size, 64,
+            "icons are requested at the small presentation size"
+        );
+        Ok(Some(vec![0x89, b'P', b'N', b'G']))
+    }
+    fn application_version(&self, _: &str) -> Option<String> {
+        self.menu_version.lock().unwrap().clone()
+    }
+}
+impl ContextReader for TestPlatform {
     fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
         if !self.finder && self.frontmost_bundle.is_none() {
             return Ok(None);
@@ -181,41 +224,8 @@ impl Platform for TestPlatform {
         }
         Ok(Some(self.directory.clone()))
     }
-    fn bundle_application(&self, bundle: &Path) -> Result<Option<BundleApplication>> {
-        let gate = self.catalog_gate.lock().unwrap().take();
-        if let Some(gate) = gate {
-            gate.wait();
-        }
-
-        let stem = bundle
-            .file_stem()
-            .map(|stem| stem.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        Ok(Some(BundleApplication {
-            localized_names: Default::default(),
-            bundle_id: format!("app.{}.com", stem.replace(' ', "").to_lowercase()),
-            name: stem,
-            aliases: Vec::new(),
-            path: Some(bundle.to_string_lossy().into_owned()),
-            icon: None,
-        }))
-    }
-    fn launch_application(&self, path: &str) -> Result<bool> {
-        self.launches.fetch_add(1, Ordering::Relaxed);
-        self.call("launch", path)?;
-        Ok(true)
-    }
-    fn application_icon(&self, path: &str, size: u32) -> Result<Option<Vec<u8>>> {
-        // A four-byte PNG header is enough to prove the bytes travel the whole path.
-        if !path.ends_with(".app") {
-            return Ok(None);
-        }
-        assert_eq!(
-            size, 64,
-            "icons are requested at the small presentation size"
-        );
-        Ok(Some(vec![0x89, b'P', b'N', b'G']))
-    }
+}
+impl ClipboardHost for TestPlatform {
     fn clipboard_text(&self) -> Result<Option<String>> {
         if self.clipboard_error {
             bail!("read failed");
@@ -228,6 +238,12 @@ impl Platform for TestPlatform {
         }
         Ok(text)
     }
+    fn copy_text(&self, text: &str) -> Result<()> {
+        self.call("copy", text)
+    }
+}
+impl FileSearchHost for TestPlatform {}
+impl GitHost for TestPlatform {
     fn git_available(&self) -> bool {
         if self.git_panics {
             panic!("git probe exploded");
@@ -257,6 +273,8 @@ impl Platform for TestPlatform {
             truncated: false,
         })
     }
+}
+impl ResourceOpener for TestPlatform {
     fn open_url(&self, url: &str) -> Result<()> {
         self.call("url", url)
     }
@@ -272,9 +290,8 @@ impl Platform for TestPlatform {
     fn open_terminal(&self, path: &Path) -> Result<()> {
         self.call("terminal", path.to_str().unwrap())
     }
-    fn copy_text(&self, text: &str) -> Result<()> {
-        self.call("copy", text)
-    }
+}
+impl MenuHost for TestPlatform {
     fn accessibility_trusted(&self, _prompt: bool) -> bool {
         *self.menu_trusted.lock().unwrap()
     }
@@ -318,9 +335,6 @@ impl Platform for TestPlatform {
         }
         self.menu_performs.fetch_add(1, Ordering::Relaxed);
         self.call("menu", &locator.titles.join(">"))
-    }
-    fn application_version(&self, _: &str) -> Option<String> {
-        self.menu_version.lock().unwrap().clone()
     }
 }
 

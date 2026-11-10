@@ -296,22 +296,36 @@ async fn application_icons_are_fetched_on_demand_for_application_candidates() {
 #[tokio::test]
 async fn a_disabled_candidate_cannot_execute() {
     struct NoGit(Arc<TestPlatform>);
-    impl Platform for NoGit {
-        fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
-            self.0.frontmost_application()
-        }
-        fn application_directory(&self, app: &ApplicationInfo) -> Result<Option<PathBuf>> {
-            self.0.application_directory(app)
-        }
+    impl ApplicationCatalog for NoGit {
         fn bundle_application(&self, bundle: &Path) -> Result<Option<BundleApplication>> {
             self.0.bundle_application(bundle)
         }
+    }
+    impl ApplicationHost for NoGit {
+        fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
+            self.0.frontmost_application()
+        }
+    }
+    impl ContextReader for NoGit {
+        fn application_directory(&self, app: &ApplicationInfo) -> Result<Option<PathBuf>> {
+            self.0.application_directory(app)
+        }
+    }
+    impl ClipboardHost for NoGit {
         fn clipboard_text(&self) -> Result<Option<String>> {
             self.0.clipboard_text()
         }
+        fn copy_text(&self, text: &str) -> Result<()> {
+            self.0.copy_text(text)
+        }
+    }
+    impl FileSearchHost for NoGit {}
+    impl GitHost for NoGit {
         fn git_available(&self) -> bool {
             false
         }
+    }
+    impl ResourceOpener for NoGit {
         fn open_url(&self, url: &str) -> Result<()> {
             self.0.open_url(url)
         }
@@ -327,10 +341,8 @@ async fn a_disabled_candidate_cannot_execute() {
         fn open_terminal(&self, path: &Path) -> Result<()> {
             self.0.open_terminal(path)
         }
-        fn copy_text(&self, text: &str) -> Result<()> {
-            self.0.copy_text(text)
-        }
     }
+    impl MenuHost for NoGit {}
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().canonicalize().unwrap();
     std::fs::create_dir(root.join(".git")).unwrap();

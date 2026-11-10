@@ -43,7 +43,7 @@ impl ClipboardCapture {
                     .is_ok_and(|policy| policy.allows(ContextSource::Clipboard, *token))
             })
             .map(|_| {
-                let platform = service.platform.clone();
+                let platform = service.clipboard.clone();
                 tokio::task::spawn_blocking(move || platform.clipboard_snapshot())
             });
         async move {

@@ -4,7 +4,6 @@ use crate::{
     features::descriptor::FeatureDescriptor,
 };
 use anyhow::Result;
-use anywhere_platform::Platform;
 use anywhere_protocol::extension::ExtensionCapability as Capability;
 /// Host-owned approval is independent of metadata authored by a module.
 fn approved(id: &str) -> &'static [Capability] {
@@ -30,10 +29,10 @@ fn approved(id: &str) -> &'static [Capability] {
 pub(crate) fn grant(descriptor: &FeatureDescriptor) -> Result<CapabilityGrant> {
     CapabilityGrant::approve(descriptor.capabilities, approved(descriptor.id))
 }
-pub(crate) fn for_feature<'a>(
+pub(crate) fn for_feature<'a, P: ?Sized>(
     descriptor: &FeatureDescriptor,
-    platform: &'a dyn Platform,
-) -> Result<HostServices<'a>> {
+    platform: &'a P,
+) -> Result<HostServices<'a, P>> {
     let grant = grant(descriptor)?;
     Ok(HostServices::new(platform, &grant))
 }

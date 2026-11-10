@@ -107,10 +107,13 @@ impl ContextPlatform {
     }
 }
 
-impl Platform for ContextPlatform {
+impl ApplicationCatalog for ContextPlatform {}
+impl ApplicationHost for ContextPlatform {
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
         Ok(Some(self.application.clone()))
     }
+}
+impl ContextReader for ContextPlatform {
     fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
         Ok(None)
     }
@@ -148,11 +151,20 @@ impl Platform for ContextPlatform {
             "com.apple.Safari" | "com.google.Chrome" | "com.microsoft.edgemac"
         )
     }
+}
+impl ClipboardHost for ContextPlatform {
     fn clipboard_text(&self) -> Result<Option<String>> {
         self.check_capture(ContextSource::Clipboard)?;
         self.clipboard_reads.fetch_add(1, Ordering::SeqCst);
         Ok(self.clipboard.clone())
     }
+    fn copy_text(&self, text: &str) -> Result<()> {
+        self.copies.lock().unwrap().push(text.into());
+        Ok(())
+    }
+}
+impl FileSearchHost for ContextPlatform {}
+impl ResourceOpener for ContextPlatform {
     fn open_url(&self, url: &str) -> Result<()> {
         self.opened_urls.lock().unwrap().push(url.into());
         Ok(())
@@ -169,11 +181,9 @@ impl Platform for ContextPlatform {
     fn open_terminal(&self, _: &Path) -> Result<()> {
         Ok(())
     }
-    fn copy_text(&self, text: &str) -> Result<()> {
-        self.copies.lock().unwrap().push(text.into());
-        Ok(())
-    }
 }
+impl MenuHost for ContextPlatform {}
+impl GitHost for ContextPlatform {}
 
 #[tokio::test]
 async fn file_selection_uses_adapter_capability_instead_of_finder_identity() {

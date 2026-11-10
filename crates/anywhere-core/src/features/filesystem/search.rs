@@ -10,7 +10,7 @@ use crate::core::{
     },
 };
 use anyhow::Result;
-use anywhere_platform::{FileSearchHit, Platform};
+use anywhere_platform::{FileSearchHit, FileSearchHost};
 use anywhere_protocol::*;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -24,7 +24,7 @@ pub struct FileSearchRequest {
 }
 
 pub struct FileSearchSource {
-    platform: Arc<dyn Platform>,
+    platform: Arc<dyn FileSearchHost>,
     actions: Arc<ActionRegistry>,
     worker: Arc<Semaphore>,
     index_worker: Arc<Semaphore>,
@@ -100,7 +100,7 @@ pub fn validate_target(context: &ResolvedContext) -> Result<()> {
     Ok(())
 }
 impl FileSearchSource {
-    pub fn new(platform: Arc<dyn Platform>, actions: Arc<ActionRegistry>) -> Self {
+    pub fn new(platform: Arc<dyn FileSearchHost>, actions: Arc<ActionRegistry>) -> Self {
         Self {
             platform,
             actions,

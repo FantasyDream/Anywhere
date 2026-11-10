@@ -8,7 +8,7 @@
 use crate::core::context::provider::{ContextProvider, ProviderDescriptor};
 use crate::core::context::{ContextSource, ContextValue, ExecutionContext, ResolvedContext};
 use anyhow::{bail, Context, Result};
-use anywhere_platform::{ApplicationInfo, ContextReadError, Platform};
+use anywhere_platform::{ApplicationInfo, ContextReadError, ContextReader};
 use anywhere_protocol::*;
 use async_trait::async_trait;
 use std::{path::PathBuf, sync::Arc, time::Duration};
@@ -164,7 +164,7 @@ pub struct DirectoryMemo {
 impl DirectoryMemo {
     /// Start the capture immediately. The task is independent of any request, so
     /// early typing cannot lose the directory and no second request can duplicate it.
-    pub fn start(platform: Arc<dyn Platform>, frontmost: ApplicationInfo) -> Arc<Self> {
+    pub fn start(platform: Arc<dyn ContextReader>, frontmost: ApplicationInfo) -> Arc<Self> {
         let (tx, rx) = watch::channel(None);
         let publisher = tx.clone();
         let bundle_id = frontmost.bundle_id.clone();
@@ -241,6 +241,7 @@ const DIRECTORY_TIMEOUT: Duration = Duration::from_secs(30);
 mod tests {
     use super::*;
     use anywhere_protocol::{DIRECTORY, FILE, TEXT};
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     fn types(input: &str) -> Vec<String> {
         crate::features::recognized_contexts(input)
@@ -314,5 +315,38 @@ mod tests {
             );
             assert_eq!(types(&missing), [TEXT]);
         }
+    }
+
+    #[tokio::test]
+    async fn directory_memo_uses_only_context_capability_and_shares_capture() {
+        struct DirectoryOnly {
+            captures: AtomicUsize,
+        }
+
+        impl ContextReader for DirectoryOnly {
+            fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
+                self.captures.fetch_add(1, Ordering::SeqCst);
+                Ok(Some(PathBuf::from("/context-only")))
+            }
+        }
+
+        let platform = Arc::new(DirectoryOnly {
+            captures: AtomicUsize::new(0),
+        });
+        let memo = DirectoryMemo::start(
+            platform.clone(),
+            ApplicationInfo {
+                bundle_id: "test.context-only".into(),
+                name: "Context Only".into(),
+                pid: 7,
+                instance_id: Some("instance".into()),
+            },
+        );
+        let execution = ExecutionContext::detached(1, 0);
+        let (first, second) = tokio::join!(memo.directory(&execution), memo.directory(&execution));
+
+        assert_eq!(first.unwrap(), Some(PathBuf::from("/context-only")));
+        assert_eq!(second.unwrap(), Some(PathBuf::from("/context-only")));
+        assert_eq!(platform.captures.load(Ordering::SeqCst), 1);
     }
 }

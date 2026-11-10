@@ -1,6 +1,6 @@
 # 架构
 
-当前源码为 V0.14 开发预览，完整发布和实机矩阵未完成；最后核对：2026-10-26。使用入口见 [README](../README.md)，专题契约见 [文档导航](README.md)，当前验证程度见 [V0.14 技术方案](mvp-v0.14.md)。
+当前源码为 V0.14 开发预览，完整发布和实机矩阵未完成；最后核对：2026-11-10。使用入口见 [README](../README.md)，专题契约见 [文档导航](README.md)，当前验证程度见 [V0.14 技术方案](mvp-v0.14.md)。
 
 第一方能力是静态内置模块：模块声明 `FeatureDescriptor` 与 `registration.rs`，编译期生成目录，启动时绑定一次服务与贡献；设置刷新独立更新策略和业务数据。没有第一方热加载、目录重建或 `Any` 状态恢复框架。迁移过程仅保留在[历史路线图](archive/feature-module-roadmap.md)。
 
@@ -28,7 +28,7 @@ flowchart TD
 | `anywhere-core/application` | 激活、输入、采集协调、快照、执行、功能策略与装配 | 协调用例，不决定像素或原生窗口外观 |
 | `features` | 应用、文件工具和第一方领域能力 | 用 Provider / Bundle / Source 贡献，不另建 Launcher 流程 |
 | `persistence` | Usage、功能 / 插件偏好、模块存储、剪贴板及 Web 包收据 / 资源 | 数据读写与锁、事务、恢复策略集中管理 |
-| `anywhere-platform` | OS-neutral Trait、上下文采集、系统搜索、资源打开、剪贴板、Git 与进程后端 | 原生调用与系统差异留在适配器 |
+| `anywhere-platform` | 八个对象安全能力接口、上下文采集、系统搜索、资源打开、剪贴板、Git 与进程后端 | 服务依赖所用能力；`Platform` 仅组合，原生调用与系统差异留在适配器 |
 | `anywhere-plugin` | TOML 发现 / 校验、模板与有界 UI 数据；Web 包 / 资源校验 | 不执行包内脚本或决定界面布局 |
 | `anywhere-bridge-flutter` | 初始化、公共 Facade、FRB DTO 定义与转换 | 不复制识别、排序、执行规则 |
 | Flutter / Native Host | 页面、导航、输入、焦点、设置、热键、窗口与授权 | Flutter 不匹配业务动作；Swift 不解析输入或运行项目 Action |
@@ -77,6 +77,40 @@ packages/plugin-sdk/       Web SDK、开发模板与打包工具
 resources/                 键码、文件类型、运行策略、设计参数、语言及 Web schema
 ```
 
+## Platform 能力边界
+
+`anywhere-platform` 用八个对象安全接口描述系统能力：
+
+| 能力接口 | 职责 | 直接消费者 |
+|---|---|---|
+| `ApplicationCatalog` | 应用目录根、入口识别、目录遍历与单个应用元数据 | 应用索引 |
+| `ApplicationHost` | 前台应用、启动、图标与版本 | 应用动作及组合编排 |
+| `ContextReader` | 应用目录、选区、文件管理器和浏览器当前页 | 目录采集与 `ContextCaptureService` |
+| `ClipboardHost` | 剪贴板快照、代数、历史载荷、监听与写入 | Context 采集、Clipboard History 与剪贴板动作 |
+| `FileSearchHost` | 系统索引、带范围选项的搜索与取消 | 文件搜索 |
+| `ResourceOpener` | URL、文件、目录、终端及指定应用打开 | 文件、URL、应用历史等 Action |
+| `MenuHost` | Accessibility 权限、菜单发现与重放 | Current App 菜单 |
+| `GitHost` | 白名单只读 Git 操作 | Git Action 与通用 Host 服务 |
+
+`Platform` 只组合这些接口，并由满足全部能力的类型自动实现。`native_platform()` 仍返回一个 `Arc<dyn Platform>`，Application 与 ActionHandler 继续注入组合端口；需要窄依赖的服务从同一个适配器 `Arc` 转换得到对应能力。`ContextCaptureService` 因此分别持有 `ContextReader` 与 `ClipboardHost`，Context 与剪贴板的策略令牌、迟到发布和取消语义保持共享。`HostServices` 按方法要求能力，并在剪贴板、URL、文件与 Git 操作前保留原有授权检查。
+
+接口默认值、目录遍历、配置搜索范围拒绝、剪贴板文本回退、Finder 兼容钩子和各默认错误保持迁移前行为。未实现的能力显式返回空值、不支持或既有默认实现，不会静默扩大权限。
+
+## Protocol 模型边界
+
+`anywhere-protocol` 根模块只显式重导出既有类型路径，根级模型定义分在六个私有模块：
+
+| 私有模块 | 内容 |
+|---|---|
+| `identifiers` | Session / Revision / Context / Action / Candidate / Process 身份与项目类型常量 |
+| `context` | Context 常量、兼容转换、Descriptor / Presentation / Capture、`InputMode` 与 `ContextMatcher` |
+| `candidate` | Icon、Candidate、可用性、Scope 与 domain 成员判断 |
+| `launcher` | Launcher 状态、搜索来源、文件搜索进度与 Launcher 事件 |
+| `execution` | 执行结果、Host View、进程会话状态、摘要与详情 |
+| `declarative` | 旧 Manifest、Command 与 `DeclarativeAction` 兼容模型 |
+
+`extension`、`policy`、`ui`、`web_bridge` 与 `web_plugin` 保持公开子模块；生成器拥有的 `FileSearchFilter` 继续从根模块显式导出。消费者仍使用 `anywhere_protocol::Type`，本轮不批量改写调用方导入。类型、字段 / 枚举顺序、辅助方法、Serde 标签与默认值、旧插件缺省字段和未知字段处理均保持原契约。
+
 ## 激活与 Context
 
 1. Host 收到唤醒请求，先保留前台应用焦点。
@@ -89,7 +123,7 @@ resources/                 键码、文件类型、运行策略、设计参数�
 
 目录采集按 Session 单飞，不能因用户输入改变而再次读取“现在的前台应用”。失效应用身份安全跳过目录；不重试到已经取得焦点的 Launcher 或另一应用。详见 [Context 模型](context-model.md) 和 [默认输入策略](context-input-navigation.md)。
 
-`application/context_capture.rs` 的 `ContextCaptureService` 持有来源策略、冻结应用的 Finder / 选区 / 浏览器读取及迟到结果发布；私有 `context_capture/clipboard.rs` 管理剪贴板请求、复制年龄、SessionFacts 与 Capture 元数据。剪贴板请求在激活补充任务排队前固定策略令牌，worker 开始时和写入时复验；设置锁不再暴露给激活流程。策略更新期间由 Application 回调撤销执行与 Web 凭据，保留策略 → Session → Web 的锁顺序。`activate.rs` 仅将剪贴板 Future 与 Git / Usage 独立刷新汇合，并跟踪补充组完成；慢剪贴板读取不阻塞另两项发布。来源行为见[Context 模型](context-model.md)。
+`application/context_capture.rs` 的 `ContextCaptureService` 从同一平台适配器取得 `ContextReader` 与 `ClipboardHost`，持有来源策略、冻结应用的 Finder / 选区 / 浏览器读取及迟到结果发布；私有 `context_capture/clipboard.rs` 管理剪贴板请求、复制年龄、SessionFacts 与 Capture 元数据。剪贴板请求在激活补充任务排队前固定策略令牌，worker 开始时和写入时复验；设置锁不再暴露给激活流程。策略更新期间由 Application 回调撤销执行与 Web 凭据，保留策略 → Session → Web 的锁顺序。`activate.rs` 仅将剪贴板 Future 与 Git / Usage 独立刷新汇合，并跟踪补充组完成；慢剪贴板读取不阻塞另两项发布。来源行为见[Context 模型](context-model.md)。
 
 ## 快照、取消与执行资格
 
@@ -233,7 +267,7 @@ Manifest 可声明 `background.resolvers`，由现有 ContextProviderRegistry / 
 - 新来源：CandidateSource / AsyncCandidateSource；沿用 Ranking 和生命周期。
 - 新工具页面：在功能目录贡献 ToolPageRegistration，由 builtin_tool_pages 组合；HostViewNavigator 只协调已注册路由，复用导航与共享 UI。
 - 新应用历史来源：增加配置与合成 fixture；复用读取 / 转换 / 搜索 / 打开契约，不能以脚本生成任意系统命令。
-- 新系统能力：扩展 Platform / DesktopHost，实现各平台适配器。
+- 新系统能力：加入对应的窄能力接口，或扩展组合 `Platform` / `DesktopHost`；各平台适配器按能力实现。
 
 `scripts/check-architecture.py` 检查 Cargo 依赖及 core 模块反向导入；行为由公开 Facade、平台和 Widget 回归覆盖。完整门禁是 `scripts/check.sh`。自动化通过不代替真实键盘、权限、窗口、升级及 Windows 验收；当前记录见 [V0.14 技术方案](mvp-v0.14.md)，此前常规验收见 [V0.13 MVP](mvp-v0.13.md)，真实键盘基线见 [V0.12 MVP](mvp-v0.12.md)，历史 Web 验证见 [V0.11 MVP](archive/mvp-v0.11.md)。
 
