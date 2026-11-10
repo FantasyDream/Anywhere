@@ -165,7 +165,7 @@ async fn atomic_policy_publication_filters_all_contributions_and_revokes_retaine
         .id
         .clone();
     app.suspend_session(initial.session_id).await.unwrap();
-    let old_policy = app.resolver.feature_policy.snapshot();
+    let old_policy = app.resolver.catalog.policy();
     let ticket = app.resolver.execution(initial.session_id, 1);
     let (registry, providers) = super::composition::configured_builtins(&Default::default());
     let mut sources = SourceSet {
@@ -185,7 +185,7 @@ async fn atomic_policy_publication_filters_all_contributions_and_revokes_retaine
             || anyhow::bail!("disk full")
         )
         .is_err());
-    assert!(app.resolver.feature_policy.is_current(&old_policy));
+    assert!(app.resolver.catalog.is_policy_current(&old_policy));
     assert!(ticket.is_current());
     assert!(app.resume_session(initial.session_id).unwrap().is_some());
     app.suspend_session(initial.session_id).await.unwrap();
@@ -193,29 +193,27 @@ async fn atomic_policy_publication_filters_all_contributions_and_revokes_retaine
         Ok(())
     })
     .unwrap();
-    assert!(app.resolver.feature_policy.is_current(&policy));
+    assert!(app.resolver.catalog.is_policy_current(&policy));
     assert!(!ticket.is_current());
     assert!(app.resume_session(initial.session_id).unwrap().is_none());
     assert!(app.execute(initial.session_id, 1, old_row).await.is_err());
     assert!(app
         .resolver
-        .providers
-        .lock()
+        .catalog
+        .providers()
         .unwrap()
         .ids()
         .iter()
         .all(|id| *id != "core.url" && *id != "developer.project.node"));
     {
-        let sources = app.resolver.sources.lock().unwrap();
-        assert_eq!(
-            sources
-                .synchronous()
-                .iter()
-                .map(|s| s.id())
-                .collect::<Vec<_>>(),
-            ["base"]
-        );
-        assert!(sources.asynchronous().is_empty());
+        let sources = app.resolver.catalog.synchronous_sources().unwrap();
+        assert_eq!(sources.iter().map(|s| s.id()).collect::<Vec<_>>(), ["base"]);
+        assert!(app
+            .resolver
+            .catalog
+            .asynchronous_sources()
+            .unwrap()
+            .is_empty());
     }
     // Restoring a captured registry cannot resurrect disabled optional actions/factories.
     app.replace_registry(registry);
@@ -288,7 +286,7 @@ async fn policy_change_cancels_uncooperative_pending_provider_and_rejects_comple
         dropped: dropped.clone(),
     });
     let mut ticket = ExecutionContext::detached(1, 0);
-    ticket.guard = Some(app.resolver.feature_policy.request_guard());
+    ticket.guard = Some(app.resolver.catalog.request_guard());
     let mut run = ContextGraph::start(vec![text()], &ticket);
     let providers: [Arc<dyn ContextProvider>; 1] = [provider.clone()];
     assert!(matches!(run.step(&providers), GraphStep::Pending));
@@ -374,7 +372,7 @@ async fn policy_currency_cancels_pending_stream_and_closes_late_batch_channel() 
     let workers = Arc::new(tokio::sync::Semaphore::new(1));
     let published = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let mut ticket = ExecutionContext::detached(1, 0);
-    ticket.guard = Some(app.resolver.feature_policy.request_guard());
+    ticket.guard = Some(app.resolver.catalog.request_guard());
     super::source_runtime::spawn_source(
         source.clone(),
         AsyncSearchRequest {

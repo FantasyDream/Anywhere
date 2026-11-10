@@ -3,10 +3,7 @@ use super::{session_model::LauncherSession, Application};
 use crate::core::action::descriptor::ActionRegistry;
 use anyhow::{bail, Result};
 use anywhere_protocol::{CandidatePresentation, LauncherState, Revision, SessionId};
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    sync::atomic::Ordering,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone)]
 pub struct ShortcutAction {
@@ -279,8 +276,7 @@ impl Application {
         if !self.resolver.execution(session_id, revision).is_current()
             || session.state.session_id != session_id
             || session.execution.revision != Some(revision)
-            || session.execution.action_catalog_version
-                != Some(self.resolver.action_catalog_version.load(Ordering::Acquire))
+            || session.execution.action_catalog_version != Some(self.resolver.catalog.version())
         {
             bail!("Shortcut context expired. Reopen Anywhere and try again.");
         }

@@ -42,6 +42,9 @@ it into another UI framework.
   frozen application reads and late capture publication; its `clipboard.rs` owns
   clipboard requests, age and fact publication. `activate.rs` joins these with Git
   and Usage refreshes without sharing the capture policy lock.
+- Feature catalog publication: `application/feature_catalog.rs` owns definitions,
+  providers, candidate sources, policy, catalog versions and startup binding claims;
+  Application revokes Session / Web execution under the same publication locks.
 - Application history: source packages in
   `crates/anywhere-core/resources/application-history/`; catalog and transforms
   in `application/application_history/`; state and authority in

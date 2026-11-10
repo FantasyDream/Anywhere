@@ -48,10 +48,7 @@ impl Application {
             // map still holds the previous revision's candidates. They carry the previous
             // context and execution target, so serving them here would execute an action
             // that belongs to an input the user has already replaced.
-            let catalog_version = self
-                .resolver
-                .action_catalog_version
-                .load(std::sync::atomic::Ordering::Acquire);
+            let catalog_version = self.resolver.catalog.version();
             if session.execution.revision != Some(revision)
                 || session.execution.action_catalog_version != Some(catalog_version)
             {
@@ -63,13 +60,13 @@ impl Application {
                 .get(candidate_id.as_str())
                 .cloned()
                 .context("action expired; choose a current action")?;
-            let feature_policy = self.resolver.feature_policy.snapshot();
+            let feature_policy = self.resolver.catalog.policy();
             if let crate::core::search::candidate::CandidateTarget::Action { action, .. } =
                 &candidate.target
             {
                 if action
                     .contributor()
-                    .is_some_and(|id| !self.resolver.feature_policy.allows(id))
+                    .is_some_and(|id| !self.resolver.catalog.allows(id))
                 {
                     bail!("feature is disabled; choose a current action");
                 }
@@ -104,8 +101,7 @@ impl Application {
         let history = self.resolver.history.clone();
         let executions = self.executions.clone();
         let session_for_execution = self.resolver.session.clone();
-        let current_catalog_version = self.resolver.action_catalog_version.clone();
-        let current_feature_policy = self.resolver.feature_policy.clone();
+        let catalog = self.resolver.catalog.clone();
         let guarded_target = candidate.target.execution_token();
         let records_usage = candidate.target.records_usage();
         let web_plugins = self.web_plugins.clone();
@@ -143,10 +139,9 @@ impl Application {
             // can dismiss the launcher in that gap — acting then would open a window, or
             // overwrite the clipboard, for a session that no longer exists.
             if !execution_ticket.is_current()
-                || !current_feature_policy.is_current(&feature_policy)
+                || !catalog.is_policy_current(&feature_policy)
                 || epoch.load(std::sync::atomic::Ordering::Acquire) != execution_epoch
-                || current_catalog_version.load(std::sync::atomic::Ordering::Acquire)
-                    != catalog_version
+                || catalog.version() != catalog_version
             {
                 bail!("action expired before it started");
             }
@@ -199,10 +194,9 @@ impl Application {
                     .map_err(|_| anyhow::anyhow!("session unavailable"))?;
                 if session.suspended
                     || !execution_ticket.is_current()
-                    || !current_feature_policy.is_current(&feature_policy)
+                    || !catalog.is_policy_current(&feature_policy)
                     || epoch.load(std::sync::atomic::Ordering::Acquire) != execution_epoch
-                    || current_catalog_version.load(std::sync::atomic::Ordering::Acquire)
-                        != catalog_version
+                    || catalog.version() != catalog_version
                 {
                     bail!("Web action expired before opening");
                 }
@@ -221,8 +215,7 @@ impl Application {
             let execution_session_id = if let Some(request) = output.process.take() {
                 if !execution_ticket.is_current()
                     || epoch.load(std::sync::atomic::Ordering::Acquire) != execution_epoch
-                    || current_catalog_version.load(std::sync::atomic::Ordering::Acquire)
-                        != catalog_version
+                    || catalog.version() != catalog_version
                 {
                     bail!("action expired before the task started");
                 }

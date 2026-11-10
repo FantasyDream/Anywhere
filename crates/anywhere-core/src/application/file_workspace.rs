@@ -346,21 +346,14 @@ fn commit_file_batch(
         let committed = session.resolution.committed_revision == Some(revision);
         if committed
             && (frozen || append_results)
-            && session.execution.action_catalog_version
-                == Some(
-                    resolver
-                        .action_catalog_version
-                        .load(std::sync::atomic::Ordering::Acquire),
-                )
+            && session.execution.action_catalog_version == Some(resolver.catalog.version())
         {
             if append_results {
                 // Revalidate only the new offers; existing rows retain the same
                 // definition/Revision credentials. Catalog changes take the full path.
                 let registry = session.actions.clone();
                 let facts = session.facts();
-                let catalog = resolver
-                    .action_catalog_version
-                    .load(std::sync::atomic::Ordering::Acquire);
+                let catalog = resolver.catalog.version();
                 let mut rows = session.resolution.search_candidates[prior_rows..].to_vec();
                 super::snapshot::validate_ready_candidates(&mut rows, &registry, &facts);
                 for row in &mut rows {

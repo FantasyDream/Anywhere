@@ -7,7 +7,6 @@ use anyhow::Result;
 use anywhere_platform::{ApplicationInfo, Platform};
 use anywhere_protocol::*;
 use std::{
-    collections::BTreeSet,
     sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
@@ -57,7 +56,6 @@ pub struct Application {
     pub(super) previews: Arc<Mutex<crate::features::preview::PreviewStore>>,
     pub(super) web_rpc_workers: Arc<tokio::sync::Semaphore>,
     pub(super) web_plugins: Arc<Mutex<super::web_plugins::WebPluginService>>,
-    pub(super) feature_catalog_installed: std::sync::atomic::AtomicBool,
     pub(super) executions: Arc<crate::core::execution::ExecutionSessionManager>,
     pub(super) platform: Arc<dyn Platform>,
     /// The engine, shared with the background tasks that publish late results.
@@ -105,13 +103,12 @@ impl Application {
         let (source, sources) =
             super::composition::builtin_sources(platform.clone(), resolver.base_registry());
         let file_search_policy = source.policy.clone();
-        resolver
-            .sources
-            .lock()
-            .expect("sources lock poisoned")
-            .base
-            .asynchronous
-            .extend(sources);
+        for source in sources {
+            resolver
+                .catalog
+                .register_async_source(source)
+                .expect("invalid built-in source");
+        }
         let context_capture =
             super::context_capture::ContextCaptureService::new(platform.clone(), resolver.clone());
         Self {
@@ -120,7 +117,6 @@ impl Application {
                 anywhere_protocol::web_bridge::MAX_RUNNING,
             )),
             web_plugins: Default::default(),
-            feature_catalog_installed: Default::default(),
             executions: Arc::new(Default::default()),
             platform,
             resolver,
@@ -269,10 +265,7 @@ impl Application {
             };
             web.invalidate();
             // Catalog invalidation and session replacement are one publication boundary.
-            self.resolver.replace_base_registry(registry);
-            self.resolver
-                .action_catalog_version
-                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            self.resolver.catalog.replace_registry(registry);
             session.actions = self.resolver.base_registry();
             session.execution = Default::default();
             session.state.session_id
@@ -294,22 +287,20 @@ impl Application {
         persist: impl FnOnce() -> Result<()>,
     ) -> Result<()> {
         self.publish_selected_catalog(
-            registry,
-            providers,
-            sources,
-            policy,
-            BTreeSet::new(),
+            super::feature_catalog::CatalogSelection {
+                registry,
+                providers,
+                sources,
+                policy,
+                excluded: Default::default(),
+            },
             persist,
         )
     }
 
-    pub(crate) fn publish_selected_catalog(
+    pub(super) fn publish_selected_catalog(
         &self,
-        mut registry: ActionRegistry,
-        mut providers: crate::core::context::registry::ContextProviderRegistry,
-        mut sources: crate::core::search::candidate_source::SourceSet,
-        policy: Arc<crate::features::policy::FeaturePolicySnapshot>,
-        excluded: BTreeSet<String>,
+        mut selection: super::feature_catalog::CatalogSelection,
         persist: impl FnOnce() -> Result<()>,
     ) -> Result<()> {
         let mut session = self.session()?;
@@ -317,71 +308,24 @@ impl Application {
             .web_plugins
             .lock()
             .map_err(|_| anyhow::anyhow!("Web service unavailable"))?;
-        registry = web.restore_actions(&registry)?;
-        let mut provider_slot = self
-            .resolver
-            .providers
-            .lock()
-            .map_err(|_| anyhow::anyhow!("providers lock poisoned"))?;
-        let mut registry_slot = self
-            .resolver
-            .registry
-            .lock()
-            .map_err(|_| anyhow::anyhow!("registry lock poisoned"))?;
-        let mut source_slot = self
-            .resolver
-            .sources
-            .lock()
-            .map_err(|_| anyhow::anyhow!("sources lock poisoned"))?;
-        let mut source_ids: BTreeSet<_> = source_slot.base.ids().collect();
-        for id in sources.ids() {
-            anyhow::ensure!(
-                !id.is_empty() && source_ids.insert(id),
-                "duplicate or empty source id: {id}"
-            );
-        }
-        let mut policy_slot = self
-            .resolver
-            .feature_policy
-            .current
-            .write()
-            .map_err(|_| anyhow::anyhow!("feature policy lock poisoned"))?;
-        let mut excluded_slot = self
-            .resolver
-            .feature_policy
-            .excluded
-            .write()
-            .map_err(|_| anyhow::anyhow!("contribution policy lock poisoned"))?;
-        let enabled = |id: &str| policy.allows_contributor(id) && !excluded.contains(id);
-        registry.retain_contributors(enabled);
-        providers = web.restore_providers(
-            &providers,
+        selection.registry = web.restore_actions(&selection.registry)?;
+        selection.providers = web.restore_providers(
+            &selection.providers,
             self.resolver.session.clone(),
             self.platform.clone(),
         )?;
-        providers.retain_contributors(enabled);
-        sources.retain_contributors(enabled);
-        persist()?;
-        web.invalidate();
-        *policy_slot = policy;
-        *excluded_slot = excluded;
-        let retired = std::mem::replace(&mut source_slot.extensions, sources);
-        *provider_slot = providers;
-        *registry_slot = Arc::new(registry);
-        self.resolver
-            .action_catalog_version
-            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
-        self.resolver
-            .execution_epoch
-            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
-        session.actions = registry_slot.clone();
-        session.invalidate_execution();
-        self.resolver.abandon_session();
-        drop(excluded_slot);
-        drop(policy_slot);
-        drop(source_slot);
-        drop(registry_slot);
-        drop(provider_slot);
+        let retired = self
+            .resolver
+            .catalog
+            .publish(selection, persist, |registry| {
+                web.invalidate();
+                self.resolver
+                    .execution_epoch
+                    .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                session.actions = registry;
+                session.invalidate_execution();
+                self.resolver.abandon_session();
+            })?;
         drop(session);
         retired.reset();
         self.file_search_source.clear();
@@ -495,32 +439,14 @@ impl Application {
         &mut self,
         source: crate::core::search::candidate_source::CandidateSourceRef,
     ) {
-        self.resolver
-            .sources
-            .lock()
-            .expect("sources lock poisoned")
-            .base
-            .synchronous
-            .push(source);
+        self.resolver.catalog.register_source(source);
     }
 
     pub fn register_async_candidate_source(
         &mut self,
         source: Arc<dyn crate::core::search::candidate_source::AsyncCandidateSource>,
     ) -> Result<()> {
-        let mut catalog = self
-            .resolver
-            .sources
-            .lock()
-            .map_err(|_| anyhow::anyhow!("sources lock poisoned"))?;
-        if source.id().is_empty()
-            || catalog.asynchronous().iter().any(|s| s.id() == source.id())
-            || catalog.synchronous().iter().any(|s| s.id() == source.id())
-        {
-            anyhow::bail!("duplicate or empty search source id: {}", source.id());
-        }
-        catalog.base.asynchronous.push(source);
-        Ok(())
+        self.resolver.catalog.register_async_source(source)
     }
 
     /// Extra providers are stacked on the built-ins by priority then id.

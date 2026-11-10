@@ -17,10 +17,9 @@ impl Application {
         }
         let sources: Vec<_> = self
             .resolver
-            .sources
-            .lock()
+            .catalog
+            .asynchronous_sources()
             .expect("sources lock poisoned")
-            .asynchronous()
             .into_iter()
             .filter(|s| s.accepts_mode(mode) && s.accepts(input))
             .collect();

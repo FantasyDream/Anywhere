@@ -3,12 +3,14 @@
 //! Deliberately separate from the [`Application`](crate::application::launcher_service::Application)
 //! facade so a background completion task can own a clone and publish late context
 //! without borrowing the facade.
-use super::{application_index::ApplicationIndex, session_model::LauncherSession};
+use super::{
+    application_index::ApplicationIndex, feature_catalog::FeatureCatalog,
+    session_model::LauncherSession,
+};
 use crate::{
     core::action::descriptor::ActionRegistry,
     core::context::engine::{stamp, ContextGraph, ContextGraphRun, GraphStep},
     core::context::provider::ContextProvider,
-    core::context::registry::ContextProviderRegistry,
     core::context::{ExecutionContext, ResolvedContext},
     core::ranking::usage::UsageRepository,
     features::filesystem::provider::DirectoryMemo,
@@ -27,16 +29,10 @@ use tokio::sync::{broadcast, watch};
 /// Cloneable engine shared by the facade and its background completion tasks.
 #[derive(Clone)]
 pub struct Resolver {
-    pub(super) registry: Arc<Mutex<Arc<ActionRegistry>>>,
-    /// Stateless providers; the directory provider is added per revision.
-    pub(super) providers: Arc<Mutex<ContextProviderRegistry>>,
-    pub(super) feature_policy: Arc<crate::features::policy::FeaturePolicy>,
-    pub(super) sources: Arc<Mutex<crate::core::search::candidate_source::SourceCatalog>>,
+    pub(super) catalog: Arc<FeatureCatalog>,
     pub(super) source_workers: Arc<tokio::sync::Semaphore>,
     pub(super) session: Arc<Mutex<LauncherSession>>,
     pub(super) current: Arc<AtomicU64>,
-    /// Definition/authorization lifetime, independent of query and menu discovery.
-    pub(super) action_catalog_version: Arc<AtomicU64>,
     pub(super) execution_epoch: Arc<AtomicU64>,
     pub(super) events: broadcast::Sender<LauncherEvent>,
     pub(super) latest_tx: watch::Sender<Option<Arc<LauncherState>>>,
@@ -58,17 +54,12 @@ impl Resolver {
     pub fn new(registry: ActionRegistry, history: Box<dyn UsageRepository>) -> Self {
         let (latest_tx, _) = watch::channel(None);
         Self {
-            registry: Arc::new(Mutex::new(Arc::new(registry))),
-            // Registration order does not matter: the registry sorts by priority, then id.
-            providers: Arc::new(Mutex::new(super::composition::builtin_providers())),
-            feature_policy: Arc::new(Default::default()),
-            sources: Arc::new(Mutex::new(Default::default())),
+            catalog: Arc::new(FeatureCatalog::new(registry)),
             source_workers: Arc::new(tokio::sync::Semaphore::new(
                 anywhere_protocol::policy::MAX_CONCURRENT_SEARCH_SOURCES as usize,
             )),
             session: Arc::new(Mutex::new(LauncherSession::default())),
             current: Arc::new(AtomicU64::new(0)),
-            action_catalog_version: Arc::new(AtomicU64::new(1)),
             execution_epoch: Arc::new(AtomicU64::new(0)),
             events: broadcast::channel(256).0,
             latest_tx,
@@ -80,17 +71,7 @@ impl Resolver {
     }
 
     pub fn base_registry(&self) -> Arc<ActionRegistry> {
-        self.registry
-            .lock()
-            .map(|slot| slot.clone())
-            .unwrap_or_else(|poisoned| poisoned.into_inner().clone())
-    }
-
-    pub fn replace_base_registry(&self, mut registry: ActionRegistry) {
-        registry.retain_contributors(|id| self.feature_policy.allows(id));
-        if let Ok(mut slot) = self.registry.lock() {
-            *slot = Arc::new(registry);
-        }
+        self.catalog.registry()
     }
 
     pub(super) fn set_directory(&self, directory: Option<Arc<DirectoryMemo>>) {
@@ -125,10 +106,7 @@ impl Resolver {
     }
 
     pub fn register_provider(&mut self, provider: Arc<dyn ContextProvider>) -> Result<()> {
-        self.providers
-            .lock()
-            .map_err(|_| anyhow!("providers lock poisoned"))?
-            .register(provider)
+        self.catalog.register_provider(provider)
     }
 
     pub fn execution(&self, session_id: SessionId, revision: Revision) -> ExecutionContext {
@@ -137,7 +115,7 @@ impl Resolver {
             revision,
             current: self.current.clone(),
             events: self.events.clone(),
-            guard: Some(self.feature_policy.request_guard()),
+            guard: Some(self.catalog.request_guard()),
         }
     }
 
@@ -198,8 +176,8 @@ impl Resolver {
             .ok()
             .and_then(|directory| directory.clone());
         super::composition::session_providers(
-            self.providers
-                .lock()
+            self.catalog
+                .providers()
                 .expect("providers lock poisoned")
                 .clone(),
             directory,
@@ -411,18 +389,14 @@ impl Resolver {
                     session.actions.clone(),
                     session.state.diagnostics.clone(),
                     session.resolution.inputs_epoch,
-                    self.action_catalog_version.load(Ordering::Acquire),
+                    self.catalog.version(),
                     session.resolution.search_candidates.clone(),
                     session.resolution.object_actions.clone(),
-                    self.feature_policy.snapshot(),
+                    self.catalog.policy(),
                 )
             };
             let index = self.application_index.snapshot()?;
-            let sources = self
-                .sources
-                .lock()
-                .map_err(|_| anyhow!("sources lock poisoned"))?
-                .synchronous();
+            let sources = self.catalog.synchronous_sources()?;
             let prepared = super::snapshot::prepare(super::snapshot::SnapshotInput {
                 action_catalog_version,
                 input: &input,
@@ -449,13 +423,13 @@ impl Resolver {
             if session.state.session_id != session_id
                 || session.state.revision != revision
                 || !self.is_current(session_id, revision)
-                || !self.feature_policy.is_current(&feature_policy)
+                || !self.catalog.is_policy_current(&feature_policy)
             {
                 return Ok(None);
             }
             if session.resolution.snapshot_seq != expected_sequence
                 || session.resolution.inputs_epoch != inputs_epoch
-                || self.action_catalog_version.load(Ordering::Acquire) != action_catalog_version
+                || self.catalog.version() != action_catalog_version
                 || !Arc::ptr_eq(&session.actions, &actions)
             {
                 continue;

@@ -55,23 +55,10 @@ pub struct SettingsService {
 }
 impl SettingsService {
     pub fn open(path: PathBuf, directories: Vec<PathBuf>, app: &Application) -> Result<Self> {
-        ensure!(
-            app.feature_catalog_installed
-                .compare_exchange(
-                    false,
-                    true,
-                    std::sync::atomic::Ordering::AcqRel,
-                    std::sync::atomic::Ordering::Acquire
-                )
-                .is_ok(),
-            "feature catalogue already installed; restart instead of rebinding native code"
-        );
-        let result = Self::assemble(path, directories, app);
-        if result.is_err() {
-            app.feature_catalog_installed
-                .store(false, std::sync::atomic::Ordering::Release);
-        }
-        result
+        let installation = app.resolver.catalog.begin_install()?;
+        let settings = Self::assemble(path, directories, app)?;
+        installation.commit();
+        Ok(settings)
     }
     fn assemble(path: PathBuf, directories: Vec<PathBuf>, app: &Application) -> Result<Self> {
         app.previews
@@ -336,11 +323,13 @@ impl SettingsService {
         let hidden = self.services.application_history()?.disabled_action_ids();
         registry.retain_actions(|action| !hidden.contains(&action.id));
         app.publish_selected_catalog(
-            registry,
-            self.catalog.providers.clone(),
-            self.catalog.sources.clone(),
-            policy,
-            excluded,
+            super::feature_catalog::CatalogSelection {
+                registry,
+                providers: self.catalog.providers.clone(),
+                sources: self.catalog.sources.clone(),
+                policy,
+                excluded,
+            },
             persist,
         )?;
         self.services
@@ -389,7 +378,7 @@ mod tests {
             .base_registry()
             .get_shared("saved_directories.save")
             .unwrap();
-        let source = app.resolver.sources.lock().unwrap().extensions.synchronous[0].clone();
+        let source = app.resolver.catalog.synchronous_sources().unwrap()[0].clone();
         settings
             .change(
                 &app,
@@ -429,7 +418,7 @@ mod tests {
         ));
         assert!(Arc::ptr_eq(
             &source,
-            &app.resolver.sources.lock().unwrap().extensions.synchronous[0]
+            &app.resolver.catalog.synchronous_sources().unwrap()[0]
         ));
         assert!(SettingsService::open(path, vec![], &app).is_err());
     }

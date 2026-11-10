@@ -73,23 +73,17 @@ impl super::Application {
     ) -> Option<ActivationInput> {
         let (rules, actions, policy, version) = {
             let _session = self.session().ok()?;
-            let providers = self.resolver.providers.lock().ok()?;
+            let providers = self.resolver.catalog.providers().ok()?;
             (
                 providers.input_recognizers(),
                 self.resolver.base_registry(),
-                self.resolver.feature_policy.snapshot(),
-                self.resolver
-                    .action_catalog_version
-                    .load(std::sync::atomic::Ordering::Acquire),
+                self.resolver.catalog.policy(),
+                self.resolver.catalog.version(),
             )
         };
         let current = || {
-            self.resolver.feature_policy.is_current(&policy)
-                && self
-                    .resolver
-                    .action_catalog_version
-                    .load(std::sync::atomic::Ordering::Acquire)
-                    == version
+            self.resolver.catalog.is_policy_current(&policy)
+                && self.resolver.catalog.version() == version
         };
         let started = std::time::Instant::now();
         let result = choose_activation_input(
@@ -303,8 +297,8 @@ mod tests {
         }
         let app = app();
         app.resolver
-            .providers
-            .lock()
+            .catalog
+            .providers()
             .unwrap()
             .register_input_recognizer(
                 InputRecognizer {
@@ -368,8 +362,8 @@ mod tests {
         )
         .unwrap();
         app.resolver
-            .providers
-            .lock()
+            .catalog
+            .providers()
             .unwrap()
             .register_input_recognizer(
                 InputRecognizer {

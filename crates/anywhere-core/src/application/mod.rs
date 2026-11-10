@@ -16,6 +16,7 @@ pub use launcher_service::{Application, LauncherApplication, SnapshotWait};
 
 pub(crate) mod composition;
 mod context_capture;
+mod feature_catalog;
 mod file_preview;
 mod search_sources;
 pub use crate::features::context_semantic;
