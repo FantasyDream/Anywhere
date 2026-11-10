@@ -1,6 +1,6 @@
+import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/infrastructure/desktop_environment.dart';
 import 'package:anywhere/launcher/widgets/candidate_row.dart';
-import 'package:anywhere/src/rust/api.dart';
 import 'package:anywhere/ui/app_components.dart';
 import 'package:anywhere/ui/app_icons.dart';
 import 'package:anywhere/ui/app_style.dart';

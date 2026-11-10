@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../src/rust/api.dart';
+import '../infrastructure/bridge_api.dart';
 import '../tools/tool_page_shell.dart';
 import '../ui/app_style.dart';
 

@@ -1,5 +1,5 @@
+import '../infrastructure/bridge_api.dart';
 import '../l10n/app_language.dart';
-import '../src/rust/api.dart';
 import 'launcher_view_state.dart';
 
 /// Presentation data for the selected file-search roots.

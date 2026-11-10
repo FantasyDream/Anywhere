@@ -1,7 +1,7 @@
+import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/l10n/app_language.dart';
 import 'package:anywhere/settings/action_shortcut.dart';
 import 'package:anywhere/settings/shortcut_action_picker.dart';
-import 'package:anywhere/src/rust/api.dart';
 import 'package:anywhere/ui/app_style.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

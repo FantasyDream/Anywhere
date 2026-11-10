@@ -1,6 +1,7 @@
 import 'dart:async';
+
+import '../infrastructure/bridge_api.dart';
 import '../infrastructure/runtime_policy.dart';
-import '../src/rust/api.dart';
 import 'activation_prefill.dart';
 
 /// Host presentation of activation input. Eligibility and the 15s clipboard

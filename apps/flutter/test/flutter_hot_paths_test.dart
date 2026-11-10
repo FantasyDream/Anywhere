@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:anywhere/features/clipboard/clipboard_history_session.dart';
+import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/launcher/launcher_view_state.dart';
 import 'package:anywhere/launcher/stable_list.dart';
-import 'package:anywhere/src/rust/api.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 

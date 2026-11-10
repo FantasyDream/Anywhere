@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 
+import '../infrastructure/bridge_api.dart';
 import '../infrastructure/window_host.dart';
-import '../src/rust/api.dart';
 import 'host_settings.dart';
 
 enum ShortcutCatalogFailure {

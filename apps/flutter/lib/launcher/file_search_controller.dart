@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 
-import '../src/rust/api.dart';
+import '../infrastructure/bridge_api.dart';
 import 'file_filter.dart';
 export 'file_filter.dart';
 

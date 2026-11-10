@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import '../../infrastructure/application_history_backend.dart';
-import '../../src/rust/api.dart';
+import '../../infrastructure/bridge_api.dart';
 import '../../tools/tool_page.dart';
 import 'session.dart';
 

@@ -1,13 +1,14 @@
+import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/launcher/launcher_controller.dart';
 import 'package:anywhere/launcher/launcher_screen.dart';
 import 'package:anywhere/settings/settings_screen.dart';
-import 'package:anywhere/src/rust/api.dart';
 import 'package:anywhere/tools/tool_page.dart';
 import 'package:anywhere/ui/app_style.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+
 import 'launcher_fixtures.dart';
 
 class _Editor extends StatefulWidget {

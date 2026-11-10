@@ -5,8 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 
+import '../infrastructure/bridge_api.dart' as api;
 import '../l10n/app_language.dart';
-import '../src/rust/api.dart' as api;
 import '../tools/tool_page_shell.dart';
 import '../ui/app_components.dart';
 import 'web_bootstrap.dart';

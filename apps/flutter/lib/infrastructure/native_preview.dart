@@ -5,7 +5,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
-import '../src/rust/api.dart' as api;
+import 'bridge_api.dart' as api;
 import 'desktop_environment.dart';
 import 'runtime_policy.dart';
 

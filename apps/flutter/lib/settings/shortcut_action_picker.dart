@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../infrastructure/bridge_api.dart';
 import '../l10n/app_language.dart';
 import '../l10n/localized_label.dart';
-import '../src/rust/api.dart';
 import '../ui/app_icons.dart';
 import '../ui/app_style.dart';
 import 'action_shortcut.dart';

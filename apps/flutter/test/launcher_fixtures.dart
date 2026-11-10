@@ -1,7 +1,7 @@
 import 'dart:ui' show Locale;
 
+import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/l10n/app_language.dart';
-import 'package:anywhere/src/rust/api.dart';
 
 final englishLabels = lookupAppLocalizations(const Locale('en'));
 

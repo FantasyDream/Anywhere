@@ -3,10 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../infrastructure/bridge_api.dart';
 import '../infrastructure/desktop_environment.dart';
 import '../l10n/app_language.dart';
 import '../plugins/plugin_detail_page.dart';
-import '../src/rust/api.dart';
 import '../ui/app_style.dart';
 import 'tool_page.dart';
 import 'tool_page_shell.dart';

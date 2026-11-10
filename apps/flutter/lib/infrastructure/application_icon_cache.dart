@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:collection';
 import 'package:flutter/foundation.dart';
-import '../src/rust/api.dart';
+import 'bridge_api.dart';
 
 typedef LoadIcon = Future<Uint8List?> Function(String candidateId);
 

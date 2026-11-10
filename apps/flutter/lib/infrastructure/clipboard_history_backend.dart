@@ -1,4 +1,4 @@
-import '../src/rust/api.dart' as api;
+import 'bridge_api.dart' as api;
 
 abstract interface class ClipboardHistoryBackend {
   Future<api.ClipboardHistoryDto?> search(String query, {String? after});

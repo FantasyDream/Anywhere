@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:anywhere/infrastructure/application_history_backend.dart';
-import 'package:anywhere/src/rust/api.dart';
+import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/src/rust/frb_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
 

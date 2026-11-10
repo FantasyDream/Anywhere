@@ -1,7 +1,7 @@
+import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/launcher/context_source_status.dart';
 import 'package:anywhere/launcher/launcher_presentation.dart';
 import 'package:anywhere/launcher/launcher_view_state.dart';
-import 'package:anywhere/src/rust/api.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'launcher_fixtures.dart';

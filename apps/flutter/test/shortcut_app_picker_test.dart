@@ -1,5 +1,5 @@
+import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/settings/shortcut_app_picker.dart';
-import 'package:anywhere/src/rust/api.dart';
 import 'package:anywhere/ui/app_style.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

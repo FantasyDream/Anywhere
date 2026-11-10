@@ -1,12 +1,12 @@
 import 'dart:ui' as ui;
 
+import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/infrastructure/desktop_environment.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/l10n/app_language.dart';
 import 'package:anywhere/launcher/launcher_controller.dart';
 import 'package:anywhere/launcher/launcher_screen.dart';
 import 'package:anywhere/launcher/widgets/candidate_row.dart';
-import 'package:anywhere/src/rust/api.dart';
 import 'package:anywhere/ui/app_style.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';

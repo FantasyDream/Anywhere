@@ -1,5 +1,5 @@
 import 'dart:async';
-import '../src/rust/api.dart';
+import '../infrastructure/bridge_api.dart';
 
 /// Rust supplies eligibility, priority and expiry. The Host only decides whether
 /// user interaction still permits inserting the recommendation.

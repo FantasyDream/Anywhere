@@ -1,4 +1,4 @@
-import '../src/rust/api.dart';
+import '../infrastructure/bridge_api.dart';
 
 /// Latest-target-only requests shared by files and module-owned objects.
 class ObjectActionCoordinator {

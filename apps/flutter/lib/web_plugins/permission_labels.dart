@@ -1,6 +1,6 @@
+import '../infrastructure/bridge_api.dart';
 import '../l10n/app_language.dart';
 import '../l10n/context_labels.dart';
-import '../src/rust/api.dart';
 
 /// Permission descriptions come from verified types, never package-supplied prose.
 String webPermissionLabel(WebPermissionDto permission, AppLocalizations l10n) =>

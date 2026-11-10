@@ -1,5 +1,5 @@
+import '../../infrastructure/bridge_api.dart';
 import '../../infrastructure/clipboard_history_backend.dart';
-import '../../src/rust/api.dart';
 import '../../tools/tool_page.dart';
 import 'clipboard_history_session.dart';
 

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../src/rust/api.dart';
+import '../infrastructure/bridge_api.dart';
 import '../tools/tool_page.dart';
 import 'web_tool_surface.dart';
 

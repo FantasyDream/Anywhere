@@ -30,7 +30,7 @@ flowchart TD
 | `persistence` | Usage、功能 / 插件偏好、模块存储、剪贴板及 Web 包收据 / 资源 | 数据读写与锁、事务、恢复策略集中管理 |
 | `anywhere-platform` | OS-neutral Trait、上下文采集、系统搜索、资源打开、剪贴板、Git 与进程后端 | 原生调用与系统差异留在适配器 |
 | `anywhere-plugin` | TOML 发现 / 校验、模板与有界 UI 数据；Web 包 / 资源校验 | 不执行包内脚本或决定界面布局 |
-| `anywhere-bridge-flutter` | 初始化、公共 Facade、FRB DTO 转换 | 不复制识别、排序、执行规则 |
+| `anywhere-bridge-flutter` | 初始化、公共 Facade、FRB DTO 定义与转换 | 不复制识别、排序、执行规则 |
 | Flutter / Native Host | 页面、导航、输入、焦点、设置、热键、窗口与授权 | Flutter 不匹配业务动作；Swift 不解析输入或运行项目 Action |
 
 业务调用使用 `flutter_rust_bridge`；窗口、设置、热键与目录授权使用 `DesktopHost` / MethodChannel。系统提供 `paths` 和 `capabilities`，共享界面不猜动态库路径或材质能力。跨平台契约见 [平台接入](platform-portability.md)。
@@ -48,6 +48,13 @@ crates/anywhere-core/src/
 └── persistence/    usage、features、extensions、module_storage、clipboard
                     application_history、web_packages
 
+crates/anywhere-bridge-flutter/src/
+├── api.rs          FRB 入口、初始化与用例编排；保持公开 API 路径
+└── api/
+    ├── dto.rs      Flutter 传输 DTO；通过 api 的重导出维持 Rust 兼容路径
+    ├── conversions.rs  Core / Protocol 到 DTO 的显式转换
+    └── ...         按功能拆分的薄入口适配器
+
 apps/flutter/lib/
 ├── launcher/       Controller、ActivationFlow、导航、Session / FileWorkspace 协调器
 │                   ShortcutCoordinator、HostViewNavigator
@@ -61,6 +68,7 @@ apps/flutter/lib/
 ├── l10n/           中英资源、生成接口、语义状态与名称呈现
 ├── ui/             AppStyle、图标与公共组件
 ├── infrastructure/ DesktopHost、窗口、生命周期、图标缓存与运行策略
+│                   bridge_api.dart（手写 Bridge 导出，隔离生成目录布局）
 └── src/rust/       已生成的绑定
 
 apps/flutter/macos/Runner/  原生窗口、设置存储、热键、授权、材质与任务窗口

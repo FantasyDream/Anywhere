@@ -1,4 +1,4 @@
-import '../src/rust/api.dart';
+import '../infrastructure/bridge_api.dart';
 import 'file_search_controller.dart';
 import 'launcher_backend.dart';
 import 'launcher_navigation.dart';

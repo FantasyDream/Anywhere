@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
-import '../src/rust/api.dart';
+import '../infrastructure/bridge_api.dart';
 import 'execution_snapshot.dart';
 
 bool isTaskActive(ExecutionSessionStatusDto status) =>

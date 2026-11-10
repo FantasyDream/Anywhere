@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/infrastructure/clipboard_preferences_backend.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/l10n/app_language.dart';
@@ -7,7 +8,6 @@ import 'package:anywhere/settings/clipboard_settings_controller.dart';
 import 'package:anywhere/settings/clipboard_settings_section.dart';
 import 'package:anywhere/settings/settings_components.dart';
 import 'package:anywhere/settings/settings_controller.dart';
-import 'package:anywhere/src/rust/api.dart';
 import 'package:anywhere/ui/app_style.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';

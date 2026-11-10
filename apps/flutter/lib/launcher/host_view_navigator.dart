@@ -1,4 +1,4 @@
-import '../src/rust/api.dart';
+import '../infrastructure/bridge_api.dart';
 
 /// Tool adapters register navigation here; adding a host view does not add a
 /// domain-specific execution branch to the Launcher controller.

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/infrastructure/desktop_environment.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
 import 'package:anywhere/launcher/host_view_navigator.dart';
@@ -8,7 +9,6 @@ import 'package:anywhere/launcher/launcher_screen.dart';
 import 'package:anywhere/launcher/launcher_session_coordinator.dart';
 import 'package:anywhere/launcher/launcher_view_state.dart';
 import 'package:anywhere/launcher/stable_list.dart';
-import 'package:anywhere/src/rust/api.dart';
 import 'package:anywhere/tools/object_action_coordinator.dart';
 import 'package:anywhere/ui/app_style.dart';
 import 'package:flutter/material.dart';
