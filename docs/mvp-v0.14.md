@@ -40,6 +40,24 @@
 
 ## 最新已验证基线
 
+### 设置保存与目录职责拆分
+
+`SettingsSaveCoordinator` 接管 Host 设置、保存队列、权威回读与文件授权失效；Controller 保留草稿、关闭选择和反馈。新保存排队即撤销旧授权，销毁后不再执行后续写入或发布迟到回读。公开设置 API 与原生协议保持一致，状态归属见[架构](architecture.md)。
+
+相关设置用例 48 项通过，包括并发保存、部分失败、Host 拒绝绑定、授权读回失效、保存期间的新草稿和关闭决策；新增受控顺序覆盖排队保存撤销授权以及销毁后阻止排队写入。完整 `scripts/check.sh` exit 0：Flutter 522 项通过 / 1 项跳过，其余工作区、原生 Host、Clippy、SDK、架构、规范与生成物检查通过。本项未打包或新增 GUI 验收。
+
+随后由 `ShortcutCatalogCoordinator` 接管目录、资格及原生注册队列；保留 Host 拒绝 / 不确定资格时注销按键与重试恢复。新增回归在拆分前复现旧目录状态覆盖新保存警告，增加快照复验后通过。相关设置用例 49 项通过，完整 `scripts/check.sh` exit 0：Flutter 523 项通过 / 1 项跳过，其余门禁通过；本项未打包或新增 GUI 验收。
+
+`FeatureCatalogCoordinator` 接管功能状态和变更队列，关闭设置等待队列排空。新增受控回归在拆分前复现“关闭已等待旧任务、来源协调随后排队”时提前关闭，修正后通过；失败后继续协调、权限撤销与恢复、迟到状态和销毁路径保持通过。相关设置及应用历史用例 83 项通过，完整 `scripts/check.sh` exit 0：Flutter 524 项通过 / 1 项跳过，其余门禁通过。关闭选择继续由 Controller 统一处理，不另建平行规则；本项未打包或新增 GUI 验收。
+
+随后从干净提交 `ddb4478` 构建独立的 `Anywhere-0.14-settings-ddb4478.app`（0.14.0+46 / arm64 / Impeller），本机持久签名、ZIP 内容和 SHA-256 校验通过。在独立数据目录中，桌面冒烟通过语言保存并重开、搜索草稿取消关闭后保留、保存目录后搜索生效、Git 关闭再恢复、快捷键候选加载与取消，以及合成 XML 的空格 / 眼睛预览、Esc / 系统按钮关闭与输入恢复。AXTree 错误、frame-time clamping 和 Flutter ERROR 均为 0；隔离实例正常退出，日常 Build 46 保持运行。产物来源与证据保留在被忽略的 `build/Anywhere-0.14-settings-ddb4478.provenance.json` 和 `build/acceptance-settings-ddb4478/`。该提交的 [macOS 检查](https://github.com/FantasyDream/Anywhere/actions/runs/42201003642)、[Linux / Windows 共享检查](https://github.com/FantasyDream/Anywhere/actions/runs/42201003641)及[文档检查](https://github.com/FantasyDream/Anywhere/actions/runs/42201003631)通过；自动打包仅显式 dispatch 执行，本轮未触发。此项为自动化冒烟，未新增物理输入法、VoiceOver、全部格式或内存验收。
+
+### 展示失败反馈的消息顺序回归
+
+原生展示失败先发送 `closed`、后返回请求错误时，旧 Flutter 关闭处理会推进代次，导致错误提示被丢弃。现在 `closed` 携带明确的 `show_failed` 原因；当前请求提示一次，普通关闭、主动取消与旧请求保持原有失效规则，旧选择失败也不会撤销排队中的新选择。平台协议见[系统预览](native-preview.md)。
+
+旧实现的受控顺序回归失败，修复后两种消息顺序、重复事件、主动取消、已替换及在途旧选择五项回归通过。相关 Flutter 用例 64 项通过；原生实窗覆盖无法转交键盘时的失败原因、单次关闭与编辑器恢复，既有首次打开、系统按钮、XML、隐藏 16 秒及 Host 释放也通过。完整 `scripts/check.sh` exit 0，Flutter 520 项通过 / 1 项跳过，其余工作区、原生 Host、Clippy、SDK、架构、规范与生成物检查通过。本项没有新增真实输入法或全部格式验收。
+
 ### 预览依赖辅助功能状态的焦点修复 — Build 46
 
 Build 45 的用户先操作日志捕获连续失败：资源准备完成，原生输入是 `FlutterTextInputPlugin`，在焦点转交处返回 `preview_unavailable`，尚未到系统渲染。同一个进程随后经辅助功能读取与操作后能够预览，复现“自动化验证后才能用”的差异。核对固定 Flutter 引擎源码，FlutterView 在输入插件活跃时拒绝自动焦点；旧接收视图扫描依赖此时的 `acceptsFirstResponder`，辅助功能额外创建的原生文本控件掩盖了问题。

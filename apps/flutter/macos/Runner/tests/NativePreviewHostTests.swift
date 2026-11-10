@@ -54,6 +54,32 @@ private final class PreviewMessenger: NSObject, FlutterBinaryMessenger {
     verify(events.last?.method == "shown")
     verify((events.last?.arguments as? [String: Any])?["id"] as? String == id)
   }
+
+  func rejectShow(_ id: String, generation: Int, path: String) {
+    let call = FlutterMethodCall(
+      methodName: "show",
+      arguments: ["generation": generation, "id": id, "paths": [path]]
+    )
+    var replied = false
+    handler?(codec.encode(call)) { reply in
+      verify(
+        reply
+          == self.codec.encodeErrorEnvelope(
+            FlutterError(
+              code: "preview_unavailable",
+              message: "Preview is unavailable.",
+              details: nil
+            )
+          )
+      )
+      replied = true
+    }
+    verify(replied)
+    verify(events.last?.method == "closed")
+    let args = events.last?.arguments as? [String: Any]
+    verify(args?["id"] as? String == id)
+    verify(args?["reason"] as? String == "show_failed")
+  }
 }
 
 private final class PreviewKeyboardReceiver: NSView {
@@ -253,6 +279,13 @@ struct NativePreviewHostTests {
         NativePreviewHost.dismissUnownedPanel()
         RunLoop.current.run(until: Date().addingTimeInterval(0.35))
         verify(!panel.isVisible && !host!.ownsPanel, "Unhide must not restore an expired preview")
+        receiver.removeFromSuperview()
+        window.makeFirstResponder(editor)
+        let beforeFailure = messenger.events.filter { $0.method == "closed" }.count
+        messenger.rejectShow("no-keyboard-receiver", generation: 15, path: file.path)
+        verify(!host!.ownsPanel && !panel.isVisible)
+        verify(window.firstResponder === editor)
+        verify(messenger.events.filter { $0.method == "closed" }.count == beforeFailure + 1)
         host = nil
       }
       // Check after AppKit's event autorelease pool has drained as well.

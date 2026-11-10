@@ -142,7 +142,7 @@ Physical footprint 使用的系统检查可能因权限或系统状态停滞，�
 
 完整检查会下载 lock 文件中依赖及固定摘要的原生依赖，需要网络；本地首次构建也可能耗时较长。CI 的 macOS 工作流运行完整门禁；Linux / Windows 工作流验证共享代码，不打包原生 App。仓库文档有独立的轻量工作流。
 
-CI 在 PR 和 main 更新时运行，避免同一次开发分支推送与 PR 重复计费。npm 锁文件只使用公共 registry；新增依赖时显式使用 `--registry=https://registry.npmjs.org`，不要提交本机 / 公司镜像地址。`scripts/check-npm-sources.py` 在下载依赖前检查该约定；依赖内容仍由 lock 的 integrity 验证。
+CI 在 PR 和 main 更新时运行，避免同一次开发分支推送与 PR 重复计费。macOS 检查与显式打包固定使用 `macos-15` arm64 runner；不使用会随时间切换系统版本的 `macos-latest`。升级 runner 时复查固定 Flutter 引擎、Swift 规范工具和原生 Host 检查，最低产品系统版本仍由 App 的部署目标决定。npm 锁文件只使用公共 registry；新增依赖时显式使用 `--registry=https://registry.npmjs.org`，不要提交本机 / 公司镜像地址。`scripts/check-npm-sources.py` 在下载依赖前检查该约定；依赖内容仍由 lock 的 integrity 验证。
 
 ## 代码入口
 

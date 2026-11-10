@@ -243,4 +243,47 @@ void main() {
     expect(c.updatingFeatures, isFalse);
     expect(c.statusMessage, contains('picker unavailable'));
   });
+
+  test('late catalog status cannot overwrite a newer save warning', () async {
+    final oldStatus = Completer<Map>(), finalStatus = Completer<Map>();
+    final oldStarted = Completer<void>(), savedStatus = Completer<void>();
+    var statuses = 0;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'settings') return stored.toMap();
+      if (call.method == 'saveSettings') {
+        stored = HostSettings.fromMap(call.arguments as Map);
+      }
+      if (call.method == 'settingsStatus') {
+        switch (++statuses) {
+          case 2:
+            oldStarted.complete();
+            return oldStatus.future;
+          case 3:
+            savedStatus.complete();
+            return {'hotkeyError': 'New settings warning'};
+          case 4:
+            return finalStatus.future;
+        }
+        return {};
+      }
+      return null;
+    });
+    final c = controller(supported: (ids) async => ids);
+    addTearDown(c.dispose);
+    final warnings = <String>[];
+    c.addListener(() => warnings.add(c.warning));
+    final loading = c.load();
+    await oldStarted.future;
+    final saving = c.save(stored.copyWith(actionShortcuts: [intent]));
+    await savedStatus.future;
+    await Future<void>.delayed(Duration.zero);
+    expect(c.warning, 'New settings warning');
+    oldStatus.complete({'hotkeyError': 'Obsolete settings warning'});
+    await loading;
+    expect(c.warning, 'New settings warning');
+    expect(warnings, isNot(contains('Obsolete settings warning')));
+    finalStatus.complete({'hotkeyError': 'New settings warning'});
+    expect(await saving, isTrue);
+  });
 }

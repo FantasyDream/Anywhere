@@ -5,6 +5,10 @@ import os
 
 /// One native preview panel for the process; each engine supplies its own owner and events.
 final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPanelDelegate {
+  enum CloseReason: String {
+    case dismissed
+    case showFailed = "show_failed"
+  }
   private static weak var current: NativePreviewHost?
   private static let log = Logger(subsystem: "dev.anywhere", category: "preview")
   private let channel: FlutterMethodChannel
@@ -91,7 +95,7 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
           self.trace("shown")
           reply(nil)
         } else {
-          self.close()
+          self.close(reason: .showFailed)
           reply(
             FlutterError(
               code: "preview_unavailable",
@@ -335,7 +339,7 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
     previousCloseAction = nil
   }
 
-  func close(restoreFocus: Bool = true) {
+  func close(restoreFocus: Bool = true, reason: CloseReason = .dismissed) {
     guard !closingPanel else { return }
     closingPanel = true
     defer { closingPanel = false }
@@ -350,9 +354,9 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
       // Hide synchronously so a late close cannot dismiss a replacement.
       panel.order(.out, relativeTo: 0)
     }
-    finish(restoreFocus: restoreFocus)
+    finish(restoreFocus: restoreFocus, reason: reason)
   }
-  private func finish(restoreFocus: Bool = true) {
+  private func finish(restoreFocus: Bool = true, reason: CloseReason = .dismissed) {
     guard let id = resourceID else { return }
     trace("finish", ["restoreFocus": restoreFocus])
     let window = attachedWindow
@@ -383,7 +387,10 @@ final class NativePreviewHost: NSObject, QLPreviewPanelDataSource, QLPreviewPane
       }
     }
     previousInput = nil
-    channel.invokeMethod("closed", arguments: ["id": id, "restoreFocus": restoreFocus])
+    channel.invokeMethod(
+      "closed",
+      arguments: ["id": id, "restoreFocus": restoreFocus, "reason": reason.rawValue]
+    )
   }
   private func detach() {
     restoreCloseButton()

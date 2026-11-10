@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:ui' show Locale;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
 
 import '../infrastructure/application_history_backend.dart';
 import '../infrastructure/clipboard_preferences_backend.dart';
@@ -15,8 +14,11 @@ import '../src/rust/api.dart' as extensions_api;
 import '../src/rust/api.dart';
 import 'application_history_settings_controller.dart';
 import 'clipboard_settings_controller.dart';
+import 'feature_catalog_coordinator.dart';
 import 'host_settings.dart';
 import 'settings_edits.dart';
+import 'settings_save_coordinator.dart';
+import 'shortcut_catalog_coordinator.dart';
 
 enum SettingsCloseChoice { save, discard, cancel }
 
@@ -46,95 +48,78 @@ class SettingsController extends ChangeNotifier {
             appHistoryBackend ?? RustAppHistoryPreferencesBackend()),
         clipboard = ClipboardSettingsController(
             clipboardBackend ?? RustClipboardPreferencesBackend()),
-        _window = window,
-        _warning = startupMessage,
-        _fileSearchInitializationFailed = fileSearchInitializationFailed,
-        _readExtensions = readExtensions ?? extensionStatus,
-        _refreshFeatures = refreshFeatures ?? extensions_api.refreshFeatures,
-        _enableExtension = enableExtension ??
-            ((key, enabled) =>
-                extensions_api.setExtensionEnabled(key: key, enabled: enabled)),
-        _grantExtension = grantExtension ??
-            ((key, token) =>
-                extensions_api.approveExtension(key: key, token: token)),
-        _removeExtensionGrant = removeExtensionGrant ??
-            ((key) => extensions_api.revokeExtension(key: key)),
-        _readShortcutActions = readShortcutActions,
-        _readSupportedShortcutActions = readSupportedShortcutActions,
-        _readShortcutApplications = readShortcutApplications,
-        _applyExcludedApps =
+        _window = window {
+    _saves = SettingsSaveCoordinator(
+        window: window,
+        startupMessage: startupMessage,
+        fileSearchInitializationFailed: fileSearchInitializationFailed,
+        applyExcludedApps:
             applyExcludedApps ?? ((ids) => setExcludedApps(bundleIds: ids)),
-        _applyFileSearch = applyFileSearch ?? FileSearchAccess.apply,
-        _authorizeFileSearch = authorizeFileSearch ??
+        applyFileSearch: applyFileSearch ?? FileSearchAccess.apply,
+        authorizeFileSearch: authorizeFileSearch ??
             (applyFileSearch ??
                 ((s) => FileSearchAccess.apply(s, force: true))),
-        _applyContextSources = applyContextSources ??
+        applyContextSources: applyContextSources ??
             ((s) => setContextSources(
                 finderSelection: s.captureFinderSelection,
                 selectedText: s.captureSelectedText,
                 browserCurrentPage: s.captureBrowserCurrentPage,
-                clipboard: s.captureClipboard)) {
+                clipboard: s.captureClipboard)));
+    _shortcuts = ShortcutCatalogCoordinator(
+        window: window,
+        readSettings: () => current,
+        onRegistered: _shortcutCatalogRegistered,
+        readActions: readShortcutActions,
+        readSupportedActions: readSupportedShortcutActions,
+        readApplications: readShortcutApplications);
+    _features = FeatureCatalogCoordinator(
+        read: readExtensions ?? extensionStatus,
+        refresh: refreshFeatures ?? extensions_api.refreshFeatures,
+        enable: enableExtension ??
+            ((key, enabled) =>
+                extensions_api.setExtensionEnabled(key: key, enabled: enabled)),
+        approve: grantExtension ??
+            ((key, token) =>
+                extensions_api.approveExtension(key: key, token: token)),
+        revoke: removeExtensionGrant ??
+            ((key) => extensions_api.revokeExtension(key: key)),
+        invalidateReads: _saves.invalidateReads,
+        onStarting: _featureUpdateStarted,
+        onFailure: (error) => _setLocalizedStatus(
+            (labels) => labels.extensionsUpdateFailed('$error')),
+        reconcileShortcuts: _reconcileFeatureShortcuts,
+        onChanged: _notify);
     clipboard.addListener(_notify);
     appHistory.addListener(_notify);
-    appHistory.onCatalogChanged = () => _queueExtensionOperation(() async {
-          final statuses = await _readExtensions();
-          if (!_disposed) _extensions = statuses;
-        });
+    appHistory.onCatalogChanged = _features.reconcileSource;
   }
 
   final ClipboardSettingsController clipboard;
   final AppHistorySettingsController appHistory;
   final DesktopHost _window;
-  final ApplyExcludedApps _applyExcludedApps;
-  final Future<void> Function(HostSettings) _applyContextSources;
-  final Future<void> Function(HostSettings) _applyFileSearch;
-  final Future<void> Function(HostSettings) _authorizeFileSearch;
-  int _searchConfiguration = 0;
-  Future<void> _saveQueue = Future.value();
-  final FutureOr<List<ExtensionStatusDto>> Function() _readExtensions;
-  final Future<List<ExtensionStatusDto>> Function(String, bool)
-      _enableExtension;
-  final Future<List<ExtensionStatusDto>> Function(String, String)
-      _grantExtension;
-  final Future<List<ExtensionStatusDto>> Function(String) _removeExtensionGrant;
-  List<ExtensionStatusDto> _extensions = const [];
-  List<ExtensionStatusDto> get extensions => _extensions;
-  final Future<List<ExtensionStatusDto>> Function() _refreshFeatures;
-  final Future<List<ShortcutActionDto>> Function()? _readShortcutActions;
-  final Future<List<String>> Function(List<String>)?
-      _readSupportedShortcutActions;
-  Future<void> _catalogQueue = Future.value();
-  String? _catalogSyncError;
-  bool _catalogRegistrationFailed = false;
-
-  String _shortcutCatalogFailure(Object error) => error is PlatformException &&
-          error.code == 'shortcuts'
+  late final SettingsSaveCoordinator _saves;
+  late final ShortcutCatalogCoordinator _shortcuts;
+  late final FeatureCatalogCoordinator _features;
+  List<ExtensionStatusDto> get extensions => _features.statuses;
+  String _shortcutFailureMessage(ShortcutCatalogFailure failure) => failure ==
+          ShortcutCatalogFailure.registration
       ? 'Some action shortcuts are paused. Reopen Settings to try again, or choose a different key combination.'
       : 'Action shortcuts could not be refreshed. Reopen Settings to try again.';
-  int _loadEpoch = 0;
-  Future<void>? _extensionOperation;
-  bool get updatingFeatures => _extensionOperation != null;
-  Set<String> _supportedShortcutActions = const {};
-  bool shortcutSupported(String id) =>
-      _readSupportedShortcutActions == null ||
-      _supportedShortcutActions.contains(id);
-  final Future<List<ShortcutApplicationDto>> Function()?
-      _readShortcutApplications;
-  List<ShortcutApplicationDto> _shortcutApplications = const [];
+  String? get _catalogSyncError => _shortcuts.failure == null
+      ? null
+      : _shortcutFailureMessage(_shortcuts.failure!);
+  bool get updatingFeatures => _features.busy;
+  bool shortcutSupported(String id) => _shortcuts.supports(id);
   List<ShortcutApplicationDto> get shortcutApplications =>
-      _shortcutApplications;
-  List<ShortcutActionDto> _shortcutActions = const [];
-  List<ShortcutActionDto> get shortcutActions => _shortcutActions;
-  HostSettings _current = HostSettings.defaults;
-  HostSettings get current => _current;
-  String _warning;
-  bool _fileSearchInitializationFailed;
-  bool get fileSearchNeedsRecovery => _fileSearchInitializationFailed;
+      _shortcuts.applications;
+  List<ShortcutActionDto> get shortcutActions => _shortcuts.actions;
+  HostSettings get current => _saves.current;
+  bool get fileSearchNeedsRecovery => _saves.fileSearchNeedsRecovery;
   static const fileSearchRecoveryMessage =
       'File search is disabled because its saved settings could not be applied. Review Search settings.';
   String get warning => [
-        _warning,
-        if (_fileSearchInitializationFailed) fileSearchRecoveryMessage,
+        _saves.warning,
+        if (fileSearchNeedsRecovery) fileSearchRecoveryMessage,
       ].where((s) => s.isNotEmpty).join('\n');
   String? _statusText;
   String Function(AppLocalizations)? _localizedStatus;
@@ -159,7 +144,7 @@ class SettingsController extends ChangeNotifier {
   String? shortcutCatalogMessageFor(AppLocalizations labels) =>
       _catalogSyncError == null
           ? null
-          : _catalogRegistrationFailed
+          : _shortcuts.failure == ShortcutCatalogFailure.registration
               ? labels.shortcutsPausedHelp
               : labels.shortcutsRefreshFailed;
   String? _shortcutRestoreError;
@@ -201,98 +186,53 @@ class SettingsController extends ChangeNotifier {
   }
 
   Future<void> load({bool catalog = false}) async {
-    final epoch = ++_loadEpoch;
-    final next = await _window.readSettings();
-    if (_disposed || epoch != _loadEpoch) return;
-    final previousWarning = warning;
-    var nextWarning = _warning;
-    try {
-      nextWarning = await _window.readSettingsStatus();
-    } catch (_) {}
-    if (_disposed || epoch != _loadEpoch) return;
-    _current = next;
-    _warning = nextWarning;
-    if (next.fileSearchError != null) _fileSearchInitializationFailed = true;
+    final read = await _saves.load();
+    if (_disposed || read == null) return;
+    final epoch = read.revision;
+    final previousWarning = [
+      read.warning,
+      if (read.recovery) fileSearchRecoveryMessage,
+    ].where((s) => s.isNotEmpty).join('\n');
     if (warning.isNotEmpty || _statusMessage == previousWarning) {
       _statusMessage = warning.isEmpty ? null : warning;
     }
-    if (next.actionShortcutVersion != 4) {
+    if (current.actionShortcutVersion != 4) {
       _setLocalizedStatus((labels) => labels.shortcutsSavedByNewerVersion);
     }
     if (catalog) {
       try {
-        final statuses = await _readExtensions();
-        if (_disposed || epoch != _loadEpoch) return;
-        _extensions = statuses;
+        await _features.load(() => epoch == _saves.loadRevision);
+        if (_disposed || epoch != _saves.loadRevision) return;
       } catch (error) {
-        if (_disposed || epoch != _loadEpoch) return;
+        if (_disposed || epoch != _saves.loadRevision) return;
         _setLocalizedStatus((labels) => labels.extensionsLoadFailed('$error'));
       }
     }
-    if (catalog && _readShortcutActions != null) {
-      final actions = await _readShortcutActions();
-      if (_disposed || epoch != _loadEpoch) return;
-      _shortcutActions = actions;
+    if (catalog) {
+      await _shortcuts.loadPickers(() => epoch == _saves.loadRevision);
     }
-    if (catalog && _readShortcutApplications != null) {
-      final apps = await _readShortcutApplications();
-      if (_disposed || epoch != _loadEpoch) return;
-      _shortcutApplications = apps;
-    }
-    if (_disposed || epoch != _loadEpoch) return;
+    if (_disposed || epoch != _saves.loadRevision) return;
     await _syncShortcutCatalog();
     _notify();
   }
 
-  List<String> _bindingActionIds(HostSettings settings) => <String>{
-        for (final binding in settings.actionShortcuts)
-          if (binding.isIntent)
-            ...binding.routes.map((r) => r.actionId)
-          else
-            binding.actionId,
-      }.toList();
+  Future<void> _syncShortcutCatalog() async {
+    await _shortcuts.synchronize();
+    if (_shortcuts.failure != null) _notify();
+  }
 
-  /// Serialize catalog reads and Host writes; each operation reads current settings
-  /// when it starts. Native checks the configuration snapshot again before applying.
-  Future<void> _syncShortcutCatalog() {
-    final reader = _readSupportedShortcutActions;
-    if (reader == null || _disposed) return Future.value();
-    final next = _catalogQueue.then((_) async {
-      if (_disposed || current.actionShortcutVersion != 4) return;
-      final previousError = _catalogSyncError;
-      _catalogSyncError = null;
-      _catalogRegistrationFailed = false;
-      final snapshot = current;
-      final ids = _bindingActionIds(snapshot);
-      try {
-        final supported = await reader(ids);
-        if (_disposed) return;
-        // A concurrent save must not publish eligibility for its predecessor.
-        if (!identical(snapshot, current)) return;
-        _supportedShortcutActions = Set.unmodifiable(supported);
-        await _window.syncActionShortcutCatalog(snapshot, supported);
-        final previousWarning = warning;
-        _warning = await _window.readSettingsStatus();
-        if (warning.isNotEmpty ||
-            _statusMessage == previousWarning ||
-            (previousError != null && _statusMessage == previousError)) {
-          _statusMessage = warning.isEmpty ? null : warning;
-        }
-      } catch (error) {
-        if (_disposed || !identical(snapshot, current)) return;
-        _catalogSyncError = _shortcutCatalogFailure(error);
-        _catalogRegistrationFailed =
-            error is PlatformException && error.code == 'shortcuts';
-        _supportedShortcutActions = const {};
-        // An uncertain catalog must not keep a revoked action's system chord alive.
-        try {
-          await _window.syncActionShortcutCatalog(snapshot, const []);
-        } catch (_) {}
-        _notify();
-      }
-    });
-    _catalogQueue = next;
-    return next;
+  Future<void> _shortcutCatalogRegistered(
+      HostSettings snapshot, ShortcutCatalogFailure? previousFailure) async {
+    final previousWarning = warning;
+    bool isCurrent() => identical(snapshot, current);
+    await _saves.refreshStatus(isCurrent: isCurrent);
+    if (_disposed || !isCurrent()) return;
+    if (warning.isNotEmpty ||
+        _statusMessage == previousWarning ||
+        (previousFailure != null &&
+            _statusMessage == _shortcutFailureMessage(previousFailure))) {
+      _statusMessage = warning.isEmpty ? null : warning;
+    }
   }
 
   void recordCaptures(List<ContextCaptureDto> captures) {
@@ -357,7 +297,7 @@ class SettingsController extends ChangeNotifier {
       _edits?.waitForPending() ?? Future.value(true),
     ]);
     // A source write can start catalog reconciliation while these queues drain.
-    await _extensionOperation;
+    await _features.waitForPending();
     if (_disposed) return false;
     if (!results[0]) {
       _reportLocalizedError((labels) => labels.appHistorySettingsFailed);
@@ -390,75 +330,23 @@ class SettingsController extends ChangeNotifier {
     return historyApplied;
   }
 
-  Future<bool> save(HostSettings next) {
-    // Invalidate authorization/readback immediately, even while an earlier save
-    // is still applying. Serialization belongs to this service, not its Widget.
-    ++_searchConfiguration;
-    ++_loadEpoch;
-    final result = _saveQueue.then((_) => _save(next));
-    _saveQueue = result.then<void>((_) {}, onError: (Object _) {});
-    return result;
-  }
+  Future<bool> save(HostSettings next) => _saves.save(() => _save(next));
 
   Future<bool> _save(HostSettings next) async {
     if (_disposed || !_validateSettings(next)) return false;
     List<String>? supported;
     try {
-      supported =
-          await _readSupportedShortcutActions?.call(_bindingActionIds(next));
+      supported = await _shortcuts.supportedActionsFor(next);
     } catch (error) {
       if (_disposed) return false;
       await _syncShortcutCatalog();
       if (_disposed) return false;
-      reportError(_shortcutCatalogFailure(error));
+      reportError(_shortcutFailureMessage(ShortcutCatalogFailure.from(error)));
       return false;
     }
     if (_disposed) return false;
-    final previous = _current;
-    final error =
-        await _window.writeSettings(next, supportedActionIds: supported);
-    if (_disposed) return false;
-    try {
-      final readback = await _window.readSettings();
-      if (_disposed) return false;
-      _current = readback;
-    } catch (_) {
-      // Never publish a rejected binding when the authoritative readback fails.
-      _current = error == null ? next : previous;
-    }
-    if (_disposed) return false;
-    final failures = <String>[if (error != null && error.isNotEmpty) error];
-    try {
-      await _applyExcludedApps(current.excludedApps);
-    } catch (error) {
-      failures.add('$error');
-    }
-    if (_disposed) return false;
-    try {
-      await _applyContextSources(current);
-    } catch (error) {
-      failures.add('$error');
-    }
-    if (_disposed) return false;
-    try {
-      await _applyFileSearch(current);
-      if (_disposed) return false;
-      final readback = await _window.readSettings();
-      if (_disposed) return false;
-      _current = readback;
-      _fileSearchInitializationFailed = false;
-    } catch (_) {
-      _fileSearchInitializationFailed = true;
-      failures
-          .add('File search settings could not be applied. Try saving again.');
-    }
-    if (_disposed) return false;
-    try {
-      final status = await _window.readSettingsStatus();
-      if (_disposed) return false;
-      _warning = status;
-    } catch (_) {}
-    if (_disposed) return false;
+    final failures = await _saves.apply(next, supportedActionIds: supported);
+    if (_disposed || failures == null) return false;
     await _syncShortcutCatalog();
     if (_disposed) return false;
     if (_catalogSyncError != null) failures.add(_catalogSyncError!);
@@ -496,117 +384,60 @@ class SettingsController extends ChangeNotifier {
   }
 
   Future<void> authorizeFileSearch() async {
-    if (_authorizingFiles || _disposed) return;
-    _authorizingFiles = true;
+    if (authorizingFiles || _disposed) return;
+    final pending = _saves.authorize();
     _notify();
-    final configuration = _searchConfiguration;
     try {
-      bool currentRequest() =>
-          !_disposed && configuration == _searchConfiguration;
-      await _saveQueue;
-      if (!currentRequest()) return;
-      await _authorizeFileSearch(current);
-      if (!currentRequest()) return;
-      final next = await _window.readSettings();
-      if (!currentRequest()) return;
-      final warning = await _window.readSettingsStatus();
-      if (!currentRequest()) return;
-      _current = next;
-      _fileSearchInitializationFailed = false;
-      _warning = warning;
-      _statusMessage = warning.isEmpty ? null : warning;
-    } on SearchAccessSuperseded {
-      // A save owns the newer configuration and its status.
-    } catch (_) {
-      if (_disposed || configuration != _searchConfiguration) return;
-      _fileSearchInitializationFailed = true;
-      _setLocalizedStatus((labels) => labels.directoryAccessFailed);
+      final outcome = await pending;
+      if (_disposed) return;
+      switch (outcome) {
+        case SettingsAuthorizationOutcome.applied:
+          _statusMessage = warning.isEmpty ? null : warning;
+        case SettingsAuthorizationOutcome.failed:
+          _setLocalizedStatus((labels) => labels.directoryAccessFailed);
+        case SettingsAuthorizationOutcome.superseded:
+          break;
+      }
     } finally {
-      _authorizingFiles = false;
       _notify();
     }
   }
 
-  bool _authorizingFiles = false;
-  bool get authorizingFiles => _authorizingFiles;
+  bool get authorizingFiles => _saves.authorizingFiles;
 
-  Future<void> refreshFeatureData() => _changeExtensions(_refreshFeatures);
+  Future<void> refreshFeatureData() => _changeFeatures(_features.refresh);
 
   Future<void> setExtensionEnabled(
           ExtensionStatusDto extension, bool enabled) =>
-      _changeExtensions(() => _enableExtension(extension.key, enabled));
+      _changeFeatures(() => _features.enable(extension, enabled));
 
   Future<void> approveExtension(ExtensionStatusDto extension) =>
-      _changeExtensions(
-          () => _grantExtension(extension.key, extension.approvalToken));
+      _changeFeatures(() => _features.approve(extension));
 
   Future<void> revokeExtension(ExtensionStatusDto extension) =>
-      _changeExtensions(() => _removeExtensionGrant(extension.key));
+      _changeFeatures(() => _features.revoke(extension));
 
-  Future<void> _changeExtensions(
-      Future<List<ExtensionStatusDto>> Function() change) {
-    if (updatingFeatures || _disposed || _closing != null) {
+  Future<void> _changeFeatures(Future<void> Function() change) {
+    if (_disposed || closing) {
       return Future.value();
     }
-    return _queueExtensionOperation(() async {
-      final statuses = await change();
-      if (!_disposed) _extensions = statuses;
-    });
+    return change();
   }
 
-  /// Source writes may finish during another catalog operation. Reconcile them
-  /// through the same queue, including while close is draining existing writes.
-  Future<void> _queueExtensionOperation(Future<void> Function() operation) {
-    if (_disposed) return Future.value();
-    ++_loadEpoch;
-    final previous = _extensionOperation ?? Future<void>.value();
-    late final Future<void> pending;
-    pending = previous.then((_) async {
-      if (!_disposed) await _updateExtensions(operation);
-    }).whenComplete(() {
-      if (identical(_extensionOperation, pending)) {
-        _extensionOperation = null;
-        _notify();
-      }
-    });
-    _extensionOperation = pending;
-    _notify();
-    return pending;
-  }
-
-  Future<void> _updateExtensions(Future<void> Function() operation) async {
-    ++_loadEpoch;
+  void _featureUpdateStarted() {
     _statusMessage = null;
     _notify();
+  }
+
+  Future<void> _reconcileFeatureShortcuts() async {
     try {
-      await operation();
-      if (_disposed) return;
-      ++_loadEpoch;
+      await _shortcuts.refreshActions();
     } catch (error) {
-      if (!_disposed) {
-        _setLocalizedStatus(
-            (labels) => labels.extensionsUpdateFailed('$error'));
+      if (!_disposed && _statusMessage == null) {
+        _setLocalizedStatus((labels) => labels.shortcutLoadFailed('$error'));
       }
-    } finally {
-      if (!_disposed && _readShortcutActions != null) {
-        try {
-          final actions = await _readShortcutActions();
-          if (!_disposed) _shortcutActions = actions;
-        } catch (error) {
-          if (!_disposed) {
-            _shortcutActions = const [];
-            if (_statusMessage == null) {
-              _setLocalizedStatus(
-                  (labels) => labels.shortcutLoadFailed('$error'));
-            }
-          }
-        }
-      }
-      // The backend can commit before its response/status read fails. Always
-      // reconcile eligibility; the sync itself unregisters uncertain chords.
-      await _syncShortcutCatalog();
-      _notify();
     }
+    await _syncShortcutCatalog();
   }
 
   Future<bool> openPrivacySettings(String pane) async {
@@ -622,6 +453,9 @@ class SettingsController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _saves.dispose();
+    _shortcuts.dispose();
+    _features.dispose();
     _edits?.removeListener(_notify);
     _edits?.dispose();
     clipboard.removeListener(_notify);
