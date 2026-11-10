@@ -48,13 +48,13 @@
 
 Protocol 8 项回归、全目标编译与全 feature 严格 Clippy 通过，Web Manifest schema 和 SDK contract 无漂移。临时副本用锁定的 FRB 2.13.0 重新生成后，5 个 Dart / Rust 绑定文件逐字节一致；同一副本构建真实动态库并完成 FFI 调用。完整 `scripts/check.sh` exit 0：Core 350 / 1 忽略、MVP 195 / 4 忽略、Platform 72 / 1 忽略、Protocol 8、Flutter 524 / 1 跳过、SDK 50，以及 Bridge、Plugin、JSON、Clippy、架构、生成一致性、原生 Host 与文档门禁通过。
 
-最终源码 `dfb94ff` 已从临时干净 checkout 构建为独立的 `Anywhere-0.14-protocol-dfb94ff.app`（0.14.0+46 / arm64 / Impeller），持久本机签名 `Anywhere Local Code Signing` 经宿主权限 `codesign --verify --deep --strict` 通过；归档 `Anywhere-0.14-protocol-dfb94ff-macos-arm64.zip` 内容校验通过，SHA-256 为 `bcf3fbee5b0d6181c32e16ccba1147a42c519f98d4f4fc0041cea56ff8afe477`。该包尚未公证，未发布 Release。
+Protocol 检查点 `dfb94ff` 已从临时干净 checkout 构建为独立的 `Anywhere-0.14-protocol-dfb94ff.app`（0.14.0+46 / arm64 / Impeller），持久本机签名 `Anywhere Local Code Signing` 经宿主权限 `codesign --verify --deep --strict` 通过；归档 `Anywhere-0.14-protocol-dfb94ff-macos-arm64.zip` 内容校验通过，SHA-256 为 `bcf3fbee5b0d6181c32e16ccba1147a42c519f98d4f4fc0041cea56ff8afe477`。该检查点早于后续 `6070e63` 的 `ContextReader` 接口修正，只作为 Protocol 步骤的历史产物，不代表当前最终源码；当前最终包见下节。该包尚未公证，未发布 Release。
 
-隔离 GUI 验收使用最终包的独立副本 `AnywhereProtocolSmoke.app`（临时 Bundle ID `dev.anywhere.protocol-smoke`）和显式 `ANYWHERE_DATA_DIRECTORY`。只读进程检查确认唯一 PID、包路径、环境变量以及 Usage / Clipboard SQLite 均位于隔离目录；日常旧实例 PID `9849` 保持运行且未被关闭。首次尝试曾因通用应用名误绑定该隐藏旧实例并打开其 Clipboard History；发现后立即停止，未复制、删除、执行或修改任何条目，也未授权真实目录，因此该轮不计入验收。随后改用唯一 Bundle ID / 完整包路径重做。
+该历史检查点的隔离 GUI 验收使用独立副本 `AnywhereProtocolSmoke.app`（临时 Bundle ID `dev.anywhere.protocol-smoke`）和显式 `ANYWHERE_DATA_DIRECTORY`。只读进程检查确认唯一 PID、包路径、环境变量以及 Usage / Clipboard SQLite 均位于隔离目录；日常旧实例 PID `9849` 保持运行且未被关闭。首次尝试曾因通用应用名误绑定该隐藏旧实例并打开其 Clipboard History；发现后立即停止，未复制、删除、执行或修改任何条目，也未授权真实目录，因此该轮不计入验收。随后改用唯一 Bundle ID / 完整包路径重做。
 
 重做中，原生授权面板只保存并授权合成 `files/` 目录，隔离 `settings.json` 的 `fileSearchRoots` 仅含该路径，并生成独立 `file-search-access.plist`。全局搜索显示 `/System/Applications/Calculator.app` 候选但未执行；Clipboard History 显示“没有历史记录”，只读 SQLite 的 `clipboard_items` / `clipboard_formats` 均为 0；文件工具搜索 `report` 返回合成顶层 `.txt` 与嵌套 `.json` 共 2 项，范围外 `manifest` 返回 0 项；从工具页返回 Launcher 后原“文件搜索”查询保留。Smoke 实例经应用菜单正常退出，只读进程检查确认其 PID 结束，旧实例 PID `9849` 保持不动。
 
-本轮未完成公证、真实用户目录 / 真实文件打开、物理快捷键 / 输入法、VoiceOver、预览、内存、长时间运行、Windows / Linux GUI 或完整跨平台矩阵验收。
+该历史检查点未完成公证、真实用户目录 / 真实文件打开、物理快捷键 / 输入法、VoiceOver、预览、内存、长时间运行、Windows / Linux GUI 或完整跨平台矩阵验收。
 
 ### Platform 能力接口隔离
 
@@ -64,7 +64,13 @@ Protocol 8 项回归、全目标编译与全 feature 严格 Clippy 通过，Web 
 
 新增默认转发回归覆盖剪贴板快照与写入、Finder 选择回退、目录扫描、搜索范围拒绝、图标与菜单空结果、启动不支持错误及 Git 默认错误；目录采集另以只实现 `ContextReader` 的测试替身覆盖单项能力依赖与并发单飞。现有 Context 来源、Clipboard History、应用索引和文件搜索回归继续覆盖共享适配器状态、回调寿命、采集策略、索引发布、取消、执行排队与授权边界。完整门禁结果为 Core 350 / 1 忽略、MVP 195 / 4 忽略、Platform 72 / 1 忽略、Protocol 8、Flutter 524 / 1 跳过、SDK 50，以及 Bridge、Plugin、JSON、Clippy、架构、生成一致性、原生 Host 与文档门禁通过。
 
-验证工作区使用隔离 `HOME`、独立数据目录与临时 Cargo target；完整 Core 测试在宿主权限下通过，包括沙箱内无法创建的非 UTF-8 文件名回归。macOS 签名包、归档、真实 FFI 与 GUI 冒烟状态在 Protocol 段落的最终构建记录中单独列出，不以自动化测试代替。
+验证工作区使用隔离 `HOME`、独立数据目录与临时 Cargo target；完整 Core 测试在宿主权限下通过，包括沙箱内无法创建的非 UTF-8 文件名回归。最终源码 `6070e63` 已从临时干净 checkout 构建为独立的 `Anywhere-0.14-context-fix-6070e63.app`（0.14.0+46 / arm64 / macOS 12+ / Impeller），持久本机签名 `Anywhere Local Code Signing` 经宿主权限 `codesign --verify --deep --strict` 通过，CDHash 为 `ae565274352dde494f9ddad80b42c9eb5f0968fc`；归档 `Anywhere-0.14-context-fix-6070e63-macos-arm64.zip` 的 SHA-256 校验和 `unzip -t` 均通过，SHA-256 为 `f738f1ba31baf4d9e118bd5a29a28d85e639dff43e1245b37ab6c368288607c1`。该包尚未公证，未发布 Release。包内 arm64 `libanywhere_bridge_flutter.dylib` 通过真实 FFI 总线加载、`ping` 与 Unicode DTO 编解码；测试不初始化存储、权限或剪贴板采集。来源、产物与摘要见被忽略的 `build/Anywhere-0.14-context-fix-6070e63.provenance.json`。
+
+最终包的 GUI 验收使用独立副本 `AnywhereContextSmoke.app`（临时 Bundle ID `dev.anywhere.context-smoke-6070e63`）和显式 `ANYWHERE_DATA_DIRECTORY`。只读进程检查确认可执行路径、环境变量、唯一 PID 与 Usage / Clipboard SQLite 均位于隔离目录；日常 PID `9849` 全程保持运行且未被绑定。首次启动发生在合成目录尚未保存时，产品按默认范围查询了个人主目录索引；该轮立即停止并保留为 `first-attempt-launcher.log`，不计入验收。保存并授权后，隔离 `settings.json` 的 `fileSearchRoots` 和 `file-search-access.plist` 的 bookmark key 都只含本轮合成 `files/` 目录，并以新进程 PID `14345` 重新启动。
+
+最终合并运行中，全局搜索显示 Calculator 候选但未执行；Clipboard History 显示“没有历史记录”，隔离 SQLite 的 `clipboard_items` / `clipboard_formats` 均为 0；文件工具搜索 `report` 返回顶层 `.txt` 与嵌套 `.json` 共 2 项，范围外 `manifest` 返回 0 项；从剪贴板页和文件工具返回 Launcher 后均保留原查询。实例经应用菜单正常退出，只读进程检查确认 PID `14345` 结束、PID `9849` 不变。退出前固化到 `accepted-launcher.log` 的记录中，AXTree、Flutter ERROR、frame-time clamping、resize timeout 和 IMK mach port 诊断均为 0，TSM 指示灯诊断 1 条；启动时出现通用“部分动作未能加载”提示。该隔离实例未授予辅助功能信任，提示关闭后本轮列出的动作均可加载；不据此宣称没有其他动作诊断。证据见被忽略的 `build/acceptance-platform-context-6070e63/verification.json`。
+
+本轮未完成公证、真实用户目录 / 真实文件打开、物理快捷键 / 输入法、VoiceOver、预览、内存、长时间运行、Windows / Linux GUI 或完整跨平台矩阵验收。
 
 ### Bridge DTO 职责收拢
 
