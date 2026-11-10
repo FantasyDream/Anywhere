@@ -46,7 +46,11 @@
 
 补充 Review 发现初版只验证旧绑定可编译，不能保证重新生成后的可用性；已同步两端生成物及 crate 内 DTO 可见性，并迁移调用方导入。逐项对比 49 个类型、73 个公开入口、生成编解码与 108 个调用文件：除模块路径、导入和格式外一致；原有真实 FFI 测试另补合成 Unicode、可空字段、枚举和时间值的 DTO 输入编解码。连续两次重新生成的 5 个文件逐字节相同。Bridge 全目标编译、3 项单元回归和真实动态库 FFI 1 项通过；FFI 不初始化存储、权限或剪贴板采集。
 
-最终完整 `scripts/check.sh` exit 0：Core 349 项通过 / 1 项忽略、MVP 195 项通过 / 4 项忽略、Platform 70 项通过 / 1 项忽略、Flutter 524 项通过 / 1 项跳过、SDK 50 项及其余工作区、原生 Host、严格 Clippy、架构、规范、生成物与文档检查通过。早先 Clippy 拒绝生产入口位于测试模块之后，已将既有测试模块移至 Facade 末尾，未放宽规则。源码 Review 和完整日志分别保留在被忽略的 `build/bridge-dto-review.json` 和 `build/bridge-dto-full-check.log`；本项尚未新增打包或 GUI 验收。
+最终完整 `scripts/check.sh` exit 0：Core 349 项通过 / 1 项忽略、MVP 195 项通过 / 4 项忽略、Platform 70 项通过 / 1 项忽略、Flutter 524 项通过 / 1 项跳过、SDK 50 项及其余工作区、原生 Host、严格 Clippy、架构、规范、生成物与文档检查通过。早先 Clippy 拒绝生产入口位于测试模块之后，已将既有测试模块移至 Facade 末尾，未放宽规则。源码 Review 和完整日志分别保留在被忽略的 `build/bridge-dto-review.json` 和 `build/bridge-dto-full-check.log`。
+
+干净源码提交 `3c0cba7` 已构建独立的 `Anywhere-0.14-bridge-dto-3c0cba7.app`（0.14.0+46 / arm64 / Impeller），持久本机签名、ZIP 关键文件与 SHA-256 校验通过；尚未公证。核实 PID 可执行路径与显式隔离变量后，GUI 冒烟确认全局搜索 Calculator 候选、Clipboard History 动作打开空页，以及返回保留查询；实例经菜单退出并用只读进程检查确认。测试中用户切换焦点与 Current App 激活打断的操作不计入，显式切回全局搜索后的操作才计入；隔离 Usage 中该工具动作计数为 2，不据此宣称仅执行一次。未授予新权限、开启历史采集、打开真实文件或修改个人设置 / 日常 App。
+
+日志 AXTree、Flutter ERROR、frame-time clamping、resize timeout 均为 0；IMK / TSM 原生输入诊断各 1 条，原因未定位。本轮未新增物理键盘 / 输入法、预览、VoiceOver、内存或跨平台 GUI 验收。包来源与实测记录保留在被忽略的 `build/Anywhere-0.14-bridge-dto-3c0cba7.provenance.json` 和 `build/acceptance-bridge-dto-3c0cba7/verification.json`。
 
 ### Rust 文件扫描职责拆分
 
