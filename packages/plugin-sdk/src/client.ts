@@ -21,6 +21,7 @@ export interface HostTransport {
 import type {CallOptions} from './api.js';
 export type {CallOptions} from './api.js';
 import {HostError} from './errors.js';
+import {inspectText, uploadText} from './text_upload.js';
 export {HostError} from './errors.js';
 
 type Body = {value: unknown} | {transfer: {ticket: string; bytes: number}};
@@ -35,7 +36,6 @@ type Job = {
   abort?: () => void;
 };
 const encoder = new TextEncoder();
-const decoder = new TextDecoder('utf-8', {fatal: true, ignoreBOM: true});
 function object(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
@@ -316,37 +316,24 @@ export function createHost(transport: HostTransport) {
     }
   }
   async function writeText(text: string, options?: CallOptions): Promise<void> {
-    const bytes = encoder.encode(text);
-    if (bytes.length > limits.textBytes) throw new HostError('TOO_LARGE');
-    if (decoder.decode(bytes) !== text) throw new HostError('INVALID_REQUEST');
+    const {bytes, wellFormed} = inspectText(text);
+    if (bytes > limits.textBytes) throw new HostError('TOO_LARGE');
+    if (!wellFormed) throw new HostError('INVALID_REQUEST');
     // Reserve framing overhead so escaped text automatically takes the chunk path.
     if (
-      bytes.length + 256 <= limits.frameBytes &&
+      bytes + 256 <= limits.frameBytes &&
       encoder.encode(JSON.stringify({text})).length + 256 <= limits.frameBytes
     ) {
       return invoke('clipboard.writeText', {text}, options, limits.timeoutMs);
     }
-    const {ticket} = await invoke<'text.begin', {ticket: string}>(
-      'text.begin',
-      {bytes: bytes.length},
-      options,
-    );
-    try {
-      for (let offset = 0, sequence = 0; offset < bytes.length; sequence++) {
-        let end = Math.min(offset + limits.chunkBytes, bytes.length);
-        while (end < bytes.length && (bytes[end]! & 0xc0) === 0x80) end--;
-        await invoke(
-          'text.chunk',
-          {ticket, sequence, text: decoder.decode(bytes.subarray(offset, end))},
-          options,
-        );
-        offset = end;
-      }
-      await invoke('text.commit', {ticket}, options);
-    } catch (error) {
-      void raw('text.cancel', {ticket}).catch(() => {});
-      throw error;
-    }
+    return uploadText(text, bytes, {
+      begin: bytes => invoke('text.begin', {bytes}, options),
+      chunk: params => invoke('text.chunk', params, options),
+      commit: ticket => invoke('text.commit', {ticket}, options),
+      cancel: ticket => {
+        void raw('text.cancel', {ticket}).catch(() => {});
+      },
+    });
   }
   return {
     ready: (options?: CallOptions) =>

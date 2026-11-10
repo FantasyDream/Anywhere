@@ -92,7 +92,9 @@ scripts/check-web-sdk.sh
 scripts/check-web-examples.sh
 ```
 
-SDK 类型、测试和独立模板需要 Node.js 22+ / npm；这些检查不安装或批准插件，不读取真实剪贴板。SDK 构建后可在 `packages/plugin-sdk` 执行 `npm pack` 导出。独立插件开发见[指南](plugin-development.md)。
+SDK 类型、测试和独立模板需要 Node.js 22+ / npm；这些检查不修改用户安装目录或读取真实剪贴板。SDK 构建后可在 `packages/plugin-sdk` 执行 `npm pack` 导出。独立插件开发见[指南](plugin-development.md)。
+
+`check-web-examples.sh` 另用 Release 配置运行 SDK 文本上传的真实 QuickJS / Rust broker 回归，覆盖 Unicode 分块、完整 1 MiB、JSON 转义、无效输入及失败后的继续写入；使用合成剪贴板与临时包授权，不触碰用户插件。保留实际 250 ms 执行预算；Debug 的宿主解析开销也会计入任务，不能据其超时推断 Release 的文本字节上限不可达。协议字节上限不保证任意后台业务能在有限预算内完成。
 
 模板检查会在仓库外解压 SDK、创建项目、构建并检查 `.awplugin`，同时核对许可证和导出文档链接。可用 `python3 scripts/check-docs.py --package <解压后的SDK目录>` 单独检查交付文档，避免源码目录中的文件掩盖缺失内容。
 
