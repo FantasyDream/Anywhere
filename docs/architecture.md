@@ -51,7 +51,7 @@ crates/anywhere-core/src/
 crates/anywhere-bridge-flutter/src/
 ├── api.rs          FRB 入口、初始化与用例编排；保持公开 API 路径
 └── api/
-    ├── dto.rs      Flutter 传输 DTO；通过 api 的重导出维持兼容路径
+    ├── dto.rs      Flutter 传输 DTO；通过 api 的重导出维持 Rust 兼容路径
     ├── conversions.rs  Core / Protocol 到 DTO 的显式转换
     └── ...         按功能拆分的薄入口适配器
 
@@ -68,6 +68,7 @@ apps/flutter/lib/
 ├── l10n/           中英资源、生成接口、语义状态与名称呈现
 ├── ui/             AppStyle、图标与公共组件
 ├── infrastructure/ DesktopHost、窗口、生命周期、图标缓存与运行策略
+│                   bridge_api.dart（手写 Bridge 导出，隔离生成目录布局）
 └── src/rust/       已生成的绑定
 
 apps/flutter/macos/Runner/  原生窗口、设置存储、热键、授权、材质与任务窗口

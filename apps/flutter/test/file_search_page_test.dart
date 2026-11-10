@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/infrastructure/desktop_environment.dart';
 import 'package:anywhere/infrastructure/presentation_metrics.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
@@ -12,7 +13,6 @@ import 'package:anywhere/launcher/widgets/candidate_row.dart';
 import 'package:anywhere/launcher/widgets/launcher_components.dart';
 import 'package:anywhere/settings/action_shortcut.dart';
 import 'package:anywhere/settings/host_settings.dart';
-import 'package:anywhere/src/rust/api.dart';
 import 'package:anywhere/ui/app_components.dart';
 import 'package:anywhere/ui/app_icons.dart';
 import 'package:anywhere/ui/app_style.dart';

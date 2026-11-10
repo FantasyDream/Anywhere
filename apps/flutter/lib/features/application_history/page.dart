@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../infrastructure/bridge_api.dart';
 import '../../l10n/app_language.dart';
 import '../../l10n/localized_label.dart';
-import '../../src/rust/api.dart';
 import '../../tools/tool_page_shell.dart';
 import '../../ui/app_components.dart';
 import '../../ui/app_icons.dart';

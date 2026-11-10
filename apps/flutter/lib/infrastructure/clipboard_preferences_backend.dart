@@ -1,4 +1,4 @@
-import '../src/rust/api.dart' as api;
+import 'bridge_api.dart' as api;
 
 /// Settings reads only status. Clipboard bodies and the history list stay out of
 /// preferences, and the usage pages receive no recording or clear operations.

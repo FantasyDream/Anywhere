@@ -1,4 +1,4 @@
-import 'package:anywhere/src/rust/api.dart' as api;
+import 'package:anywhere/infrastructure/bridge_api.dart' as api;
 import 'package:anywhere/src/rust/frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,6 +13,31 @@ void main() {
     await RustLib.init(externalLibrary: ExternalLibrary.open(library));
     try {
       expect(await api.ping(), 'pong');
+      // Exercise moved DTOs through the native codec without initializing the
+      // application. No captures are read; the uninitialized policy offers none.
+      expect(
+        await api.chooseActivationInput(
+          captures: [
+            api.ContextCaptureDto(
+              text: 'https://example.org/合成-🧪',
+              clipboardAgeMs: BigInt.from(12),
+              source: api.ContextSourceDto.clipboard,
+              status: api.ContextCaptureStatusDto.captured,
+              capturedAtMs: 1000,
+            ),
+            const api.ContextCaptureDto(
+              source: api.ContextSourceDto.selectedText,
+              status: api.ContextCaptureStatusDto.permissionDenied,
+              capturedAtMs: 1000,
+            ),
+          ],
+          nowMs: 1010,
+          selectedEnabled: true,
+          clipboardEnabled: true,
+          allowPendingSelection: false,
+        ),
+        isNull,
+      );
     } finally {
       RustLib.dispose();
     }

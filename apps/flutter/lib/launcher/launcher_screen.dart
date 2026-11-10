@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
 
+import '../infrastructure/bridge_api.dart';
 import '../infrastructure/desktop_environment.dart';
 import '../infrastructure/desktop_image_cache.dart';
 import '../infrastructure/native_preview.dart';
@@ -11,7 +12,6 @@ import '../infrastructure/window_host.dart';
 import '../l10n/app_language.dart';
 import '../settings/settings_components.dart';
 import '../settings/settings_screen.dart';
-import '../src/rust/api.dart';
 import '../ui/app_components.dart';
 import '../ui/app_icons.dart';
 import '../ui/app_style.dart';

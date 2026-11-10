@@ -1,8 +1,8 @@
 import 'dart:async';
 
+import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/launcher/launcher_backend.dart';
 import 'package:anywhere/launcher/launcher_session_coordinator.dart';
-import 'package:anywhere/src/rust/api.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'launcher_fixtures.dart';

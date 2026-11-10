@@ -1,4 +1,4 @@
-import '../src/rust/api.dart' show WebDocumentDto;
+import '../infrastructure/bridge_api.dart' show WebDocumentDto;
 
 /// Owns document bindings across async open/reload/hide/dispose. Native view and
 /// widget state stay in the surface; unclaimed late bindings are always closed.

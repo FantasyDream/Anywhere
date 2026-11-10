@@ -1,7 +1,7 @@
 import 'package:flutter/services.dart';
 
 import '../settings/host_settings.dart';
-import '../src/rust/api.dart' as bridge;
+import 'bridge_api.dart' as bridge;
 import 'desktop_environment.dart';
 import 'runtime_policy.dart';
 

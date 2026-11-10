@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import '../src/rust/api.dart';
+import '../infrastructure/bridge_api.dart';
 
 /// Owns feature status and mutation admission, including source reconciliation.
 class FeatureCatalogCoordinator {

@@ -1,4 +1,4 @@
-import '../src/rust/api.dart' as api;
+import 'bridge_api.dart' as api;
 
 abstract interface class AppHistoryQueryBackend {
   Future<api.AppHistoryDto> search(String query, String source);

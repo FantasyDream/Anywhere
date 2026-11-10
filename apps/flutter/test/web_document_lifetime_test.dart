@@ -1,4 +1,4 @@
-import 'package:anywhere/src/rust/api.dart';
+import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/web_plugins/web_document_lifetime.dart';
 import 'package:flutter_test/flutter_test.dart';
 

@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
-import '../../src/rust/api.dart';
+import '../../infrastructure/bridge_api.dart';
 import '../../ui/action_icon_appearance.dart';
 import '../../ui/file_type_appearance.dart';
 import '../../ui/semantic_icon.dart';

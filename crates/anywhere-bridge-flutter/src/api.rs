@@ -1,5 +1,5 @@
 mod application_history;
-mod dto;
+pub(crate) mod dto;
 pub use dto::*;
 mod clipboard;
 mod conversions;

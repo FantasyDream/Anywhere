@@ -52,6 +52,10 @@ it into another UI framework.
 - Feature catalog publication: `application/feature_catalog.rs` owns definitions,
   providers, candidate sources, policy, catalog versions and startup binding claims;
   Application revokes Session / Web execution under the same publication locks.
+- Flutter bridge entry points remain in Rust `api.rs`; DTO definitions live in
+  `api/dto.rs` and are re-exported at the existing Rust API path. Flutter callers
+  import `infrastructure/bridge_api.dart`, which exports the generated functions
+  and DTOs without depending on their generated file layout.
 - Application history: source packages in
   `crates/anywhere-core/resources/application-history/`; catalog and transforms
   in `application/application_history/`; state and authority in

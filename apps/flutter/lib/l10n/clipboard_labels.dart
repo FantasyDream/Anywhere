@@ -1,4 +1,4 @@
-import '../src/rust/api.dart';
+import '../infrastructure/bridge_api.dart';
 import 'app_language.dart';
 
 /// Shared by history, the floating shelf and settings. Rust supplies policy

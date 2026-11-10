@@ -1,9 +1,9 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../../infrastructure/bridge_api.dart';
 import '../../infrastructure/desktop_environment.dart';
 import '../../l10n/app_language.dart';
-import '../../src/rust/api.dart';
 import '../../ui/app_components.dart';
 import '../../ui/app_style.dart';
 import 'clipboard_history_presentation.dart';

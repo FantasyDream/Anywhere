@@ -1,8 +1,8 @@
 import 'dart:convert';
 
+import '../infrastructure/bridge_api.dart';
 import '../settings/action_shortcut.dart';
 import '../settings/host_settings.dart';
-import '../src/rust/api.dart';
 import 'launcher_backend.dart';
 
 class ShortcutOffers {

@@ -2,9 +2,9 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
+import '../../infrastructure/bridge_api.dart';
 import '../../l10n/app_language.dart';
 import '../../l10n/localized_label.dart';
-import '../../src/rust/api.dart';
 import '../../ui/app_components.dart';
 import '../../ui/app_style.dart';
 import '../launcher_layout.dart';

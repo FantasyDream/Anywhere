@@ -1,6 +1,7 @@
 import 'dart:async';
+
+import '../infrastructure/bridge_api.dart';
 import '../infrastructure/runtime_policy.dart';
-import '../src/rust/api.dart';
 import 'launcher_backend.dart';
 import 'stable_list.dart';
 

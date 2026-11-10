@@ -3,10 +3,10 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../infrastructure/bridge_api.dart';
 import '../infrastructure/runtime_policy.dart';
 import '../l10n/app_language.dart';
 import '../l10n/localized_label.dart';
-import '../src/rust/api.dart';
 import '../ui/app_components.dart';
 import '../ui/app_icons.dart';
 import '../ui/app_style.dart';

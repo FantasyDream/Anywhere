@@ -1,4 +1,4 @@
-import '../src/rust/api.dart' as api;
+import 'bridge_api.dart' as api;
 import 'web_package_picker.dart';
 
 /// Trusted settings port. Package approval remains in Rust; widgets own only the

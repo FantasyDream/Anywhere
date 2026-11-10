@@ -1,4 +1,4 @@
-import '../src/rust/api.dart';
+import '../infrastructure/bridge_api.dart';
 
 /// Overlays are mutually exclusive; an object action panel always carries its target
 /// and return selection together with its offers.

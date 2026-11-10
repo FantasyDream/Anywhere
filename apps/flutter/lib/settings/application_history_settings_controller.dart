@@ -1,7 +1,7 @@
 import 'package:flutter/widgets.dart';
 
 import '../infrastructure/application_history_backend.dart';
-import '../src/rust/api.dart';
+import '../infrastructure/bridge_api.dart';
 
 /// Source preferences live beyond a mounted settings tab; closing waits for writes.
 class AppHistorySettingsController extends ChangeNotifier {

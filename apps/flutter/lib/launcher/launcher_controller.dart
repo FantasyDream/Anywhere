@@ -5,13 +5,13 @@ import 'package:flutter/services.dart';
 
 import '../infrastructure/application_icon_cache.dart';
 import '../infrastructure/application_lifecycle.dart';
+import '../infrastructure/bridge_api.dart';
 import '../infrastructure/presentation_metrics.dart';
 import '../infrastructure/runtime_policy.dart';
 import '../infrastructure/window_host.dart';
 import '../settings/action_shortcut.dart';
 import '../settings/host_settings.dart';
 import '../settings/settings_controller.dart';
-import '../src/rust/api.dart';
 import '../tools/builtin_tool_pages.dart';
 import '../tools/object_action_coordinator.dart';
 import '../tools/tool_page.dart';

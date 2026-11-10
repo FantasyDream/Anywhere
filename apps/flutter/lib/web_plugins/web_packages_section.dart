@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../infrastructure/bridge_api.dart' as api;
 import '../infrastructure/web_package_backend.dart';
 import '../l10n/app_language.dart';
-import '../src/rust/api.dart' as api;
 import '../ui/app_components.dart';
 import '../ui/app_icons.dart';
 import '../ui/app_style.dart';

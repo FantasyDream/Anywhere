@@ -42,7 +42,11 @@
 
 ### Bridge DTO 职责收拢
 
-`anywhere-bridge-flutter/src/api.rs` 保留 FRB 入口、初始化和用例编排；手写传输类型集中在 `api/dto.rs`，通过 `api` 的重导出保持既有 `crate::api::...` 路径与生成绑定不变。DTO 仍只负责边界数据和显式转换，不复制 Core 的识别、排序或执行策略。此步只移动定义，不改变公开函数签名、字段、枚举顺序或生成文件。
+`anywhere-bridge-flutter/src/api.rs` 保留 FRB 入口、初始化和用例编排；49 个手写传输类型集中在 `api/dto.rs`，通过 `api` 的重导出保持既有 Rust `crate::api::...` 路径。FRB 2.13.0 重新生成两端绑定后，Dart 类型位于 `api/dto.dart`；Flutter 通过手写 `infrastructure/bridge_api.dart` 统一导出函数和 DTO，调用方只迁移导入路径。公开函数签名、字段、枚举顺序和边界行为保持一致，Core 的识别、排序或执行策略不进入 DTO。
+
+补充 Review 发现初版只验证旧绑定可编译，不能保证重新生成后的可用性；已同步两端生成物及 crate 内 DTO 可见性，并迁移调用方导入。逐项对比 49 个类型、73 个公开入口、生成编解码与 108 个调用文件：除模块路径、导入和格式外一致；原有真实 FFI 测试另补合成 Unicode、可空字段、枚举和时间值的 DTO 输入编解码。连续两次重新生成的 5 个文件逐字节相同。Bridge 全目标编译、3 项单元回归和真实动态库 FFI 1 项通过；FFI 不初始化存储、权限或剪贴板采集。
+
+最终完整 `scripts/check.sh` exit 0：Core 349 项通过 / 1 项忽略、MVP 195 项通过 / 4 项忽略、Platform 70 项通过 / 1 项忽略、Flutter 524 项通过 / 1 项跳过、SDK 50 项及其余工作区、原生 Host、严格 Clippy、架构、规范、生成物与文档检查通过。早先 Clippy 拒绝生产入口位于测试模块之后，已将既有测试模块移至 Facade 末尾，未放宽规则。源码 Review 和完整日志分别保留在被忽略的 `build/bridge-dto-review.json` 和 `build/bridge-dto-full-check.log`；本项尚未新增打包或 GUI 验收。
 
 ### Rust 文件扫描职责拆分
 

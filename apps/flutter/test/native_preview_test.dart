@@ -1,8 +1,8 @@
 import 'dart:async';
 
+import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/infrastructure/desktop_environment.dart';
 import 'package:anywhere/infrastructure/native_preview.dart';
-import 'package:anywhere/src/rust/api.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 

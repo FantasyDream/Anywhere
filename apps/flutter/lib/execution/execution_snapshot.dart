@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import '../src/rust/api.dart';
+import '../infrastructure/bridge_api.dart';
 
 /// Generated bridge DTOs compare command lists by identity. Compare values here
 /// so a fresh bridge allocation does not invalidate an unchanged task snapshot.

@@ -1,8 +1,8 @@
 import 'dart:collection';
 import 'dart:convert';
 
+import '../infrastructure/bridge_api.dart';
 import '../settings/host_settings.dart';
-import '../src/rust/api.dart';
 import '../tools/tool_page.dart';
 import 'context_source_status.dart';
 import 'file_search_controller.dart';

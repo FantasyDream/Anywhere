@@ -3,12 +3,12 @@ import 'dart:ui' show Locale;
 
 import 'package:flutter/services.dart';
 
+import '../infrastructure/bridge_api.dart';
 import '../infrastructure/desktop_environment.dart';
 import '../infrastructure/hotkey_keymap.dart';
 import '../infrastructure/runtime_policy.dart';
 import '../l10n/context_labels.dart';
 import '../l10n/generated/app_localizations.dart';
-import '../src/rust/api.dart';
 import 'host_settings.dart';
 
 export '../l10n/context_labels.dart';

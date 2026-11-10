@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../infrastructure/application_history_backend.dart';
-import '../../src/rust/api.dart';
+import '../../infrastructure/bridge_api.dart';
 import '../../tools/object_action_coordinator.dart';
 import '../../tools/tool_page.dart';
 import 'page.dart';
