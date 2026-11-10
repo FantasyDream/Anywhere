@@ -40,6 +40,10 @@
 
 ## 最新已验证基线
 
+### Bridge DTO 职责收拢
+
+`anywhere-bridge-flutter/src/api.rs` 保留 FRB 入口、初始化和用例编排；手写传输类型集中在 `api/dto.rs`，通过 `api` 的重导出保持既有 `crate::api::...` 路径与生成绑定不变。DTO 仍只负责边界数据和显式转换，不复制 Core 的识别、排序或执行策略。此步只移动定义，不改变公开函数签名、字段、枚举顺序或生成文件。
+
 ### Rust 文件扫描职责拆分
 
 ScanStore 保留查询寿命、取消和临时工作区；私有 query / scope / record / traversal / progress / pagination 模块分别管理名称匹配、ScanScope 范围配置与索引核验、原始路径记录、磁盘 FIFO 遍历、诊断和结果交付。外部排序保持在 result_store，通过 `committed_boundary()` 读取已 flush 记录上限，进度状态不再直接暴露。公开扫描入口、二进制格式、匹配顺序、兼容游标和连续稳定前缀保持一致，代码归属见[架构](architecture.md)，行为见[文件搜索](file-search.md)。
