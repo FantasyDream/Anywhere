@@ -2,7 +2,6 @@ import AppKit
 import ApplicationServices
 import Carbon
 import FlutterMacOS
-import ServiceManagement
 import flutter_inappwebview_macos
 
 @_silgen_name("anywhere_install_flutter_surface_guard")
@@ -21,15 +20,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   private var localeHost: LocaleHost?
   private var localeObservers: [NSObjectProtocol] = []
   private var previewHost: NativePreviewHost?
-  private var webToolsChannel: FlutterMethodChannel?
-  private var webToolsActive = false
-  private var webToolsHostPanelVisible = false
+  private var webToolsHost: WebToolsHost!
   private let webPackagePicker = WebPackagePicker()
   var glass: WindowMaterial!
   var materialController: WindowMaterialController!
   var channel: FlutterMethodChannel!
   var statusItem: NSStatusItem!
-  lazy var fileSearchAccess = FileSearchAccess()
   lazy var hotKeys = HotKeyService(
     supportedActionIds: [],
     onActivate: { [weak self] mode in self?.activate(mode: mode) },
@@ -37,15 +33,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     log: { [weak self] value in self?.log(value) }
   )
   var activationStart: TimeInterval = 0
-  var hotKeyError: String? {
-    get { hotKeys.lastError }
-    set { hotKeys.lastError = newValue }
-  }
-  var loginError: String?
+  private lazy var settingsHost = SettingsHost(
+    hotKeys: hotKeys,
+    loginItem: LoginItemService(log: { [weak self] in self?.log($0) })
+  )
   var currentAppItem: NSMenuItem?
   var universalItem: NSMenuItem?
-  var presentedGeneration: Int?
-  var latestGeneration = 0
   lazy var launcherWindows = LauncherWindowCoordinator(
     window: window,
     controller: controller,
@@ -55,12 +48,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     delegate: self,
     tasksVisible: { [weak self] in
       self?.tasksWindow?.isVisible == true || self?.clipboardWindow.window?.isVisible == true
+    },
+    willShow: { [weak self] settings in
+      self?.hotKeys.setActionShortcutsSuspended(settings)
+    },
+    willHide: { [weak self] in
+      guard let self else { return }
+      self.shortcutRecorder.cancel()
+      self.hotKeys.setActionShortcutsSuspended(false)
+      self.previewHost?.close(restoreFocus: false)
+      self.webToolsHost.hideAccessibility()
     }
   )
-  var settingsOpen: Bool {
-    get { launcherWindows.settingsOpen }
-    set { launcherWindows.settingsOpen = newValue }
-  }
+  var settingsOpen: Bool { launcherWindows.settingsOpen }
   var settingsWindow: NSWindow? { launcherWindows.settingsWindow }
   var launcherGlassMask: NSImage?
   lazy var taskWindows = TasksWindowController(onLauncher: { [weak self] in
@@ -94,11 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
         return
       }
       guard let destination = self.editingController else { return }
-      if self.webToolsActive, NSApp.keyWindow === self.window,
-        NativeWebEditing.perform(command, in: self.window)
-      {
-        return
-      }
+      if self.webToolsHost?.performEdit(command) == true { return }
       FlutterMethodChannel(
         name: "anywhere/editing",
         binaryMessenger: destination.engine.binaryMessenger
@@ -106,14 +102,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
       .invokeMethod("perform", arguments: command)
     }
   )
-  let shortcutRecorder = ShortcutRecorder()
-  var shortcutRecordingChannel: FlutterMethodChannel!
+  private var shortcutRecorder: ShortcutRecordingHost!
   var terminationPending = false
-  let settingsStore = SettingsStore()
-  var stored: StoredSettings {
-    get { settingsStore.current }
-    set { settingsStore.current = newValue }
-  }
+  var stored: StoredSettings { settingsHost.current }
 
   /// Application support directory for this app.
   ///
@@ -133,52 +124,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     InAppWebViewFlutterPlugin.register(
       with: controller.registrar(forPlugin: "InAppWebViewFlutterPlugin")
     )
-    webToolsChannel = FlutterMethodChannel(
-      name: "anywhere/web-tools",
-      binaryMessenger: controller.engine.binaryMessenger
-    )
-    webToolsChannel?.setMethodCallHandler { [weak self] call, reply in
-      if call.method == "focusHost", let self, self.webToolsActive {
-        self.webToolsHostPanelVisible = true
-        self.updateWebAccessibility()
-        if NSApp.keyWindow === self.window {
-          self.window.makeFirstResponder(nil)
-          WindowInputFocus.restore(in: self.window, content: self.controller.view)
-        }
-        reply(nil)
-      } else if call.method == "focusWeb", let self, self.webToolsActive {
-        self.webToolsHostPanelVisible = false
-        self.updateWebAccessibility()
-        if NSApp.keyWindow === self.window {
-          NativeWebEditing.focus(
-            in: self.window,
-            content: self.window.contentView ?? self.controller.view
-          )
-        }
-        reply(nil)
-      } else if call.method == "configureWebAppearance", let self, self.webToolsActive {
-        self.updateWebAccessibility()
-        let transparent = NativeWebAppearance.configure(
-          in: self.window.contentView ?? self.controller.view
-        )
-        self.log([
-          "event": "web_canvas_configured", "web_view_found": transparent != nil,
-          "transparent": transparent ?? false,
-        ])
-        reply(transparent)
-      } else if call.method == "active", let active = call.arguments as? Bool {
-        self?.webToolsActive = active
-        if !active {
-          self?.webToolsHostPanelVisible = false
-          self?.updateWebAccessibility()
-        }
-        // Background dragging otherwise steals WebKit mouse-up/click events.
-        self?.window.isMovableByWindowBackground = !active
-        reply(nil)
-      } else {
-        reply(FlutterMethodNotImplemented)
-      }
-    }
     controller.backgroundColor = .clear
     window = LauncherWindow(
       contentRect: NSRect(x: 0, y: 0, width: 648, height: 64),
@@ -227,42 +172,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
       messenger: controller.engine.binaryMessenger,
       owner: { [weak self] in self?.window }
     )
+    webToolsHost = WebToolsHost(
+      messenger: controller.engine.binaryMessenger,
+      window: window,
+      content: controller.view,
+      log: { [weak self] in self?.log($0) }
+    )
     channel = FlutterMethodChannel(
       name: "anywhere/window",
       binaryMessenger: controller.engine.binaryMessenger
     )
-    shortcutRecordingChannel = FlutterMethodChannel(
-      name: "anywhere/shortcut-recorder",
-      binaryMessenger: controller.engine.binaryMessenger
-    )
-    shortcutRecordingChannel.setMethodCallHandler { [weak self] call, reply in
-      guard let self, let args = call.arguments as? [String: Any],
-        let id = args["id"] as? Int
-      else {
-        reply(nil)
-        return
-      }
-      switch call.method {
-      case "record":
-        guard self.settingsOpen, NSApp.isActive, NSApp.keyWindow === self.settingsWindow else {
-          reply(
-            FlutterError(
-              code: "recording_unavailable",
-              message: "Open Settings to record a shortcut.",
-              details: nil
-            )
-          )
-          return
-        }
-        self.shortcutRecorder.start(id: id) { reply($0) }
-      case "cancel":
-        self.shortcutRecorder.cancel(id: id)
-        reply(nil)
-      default: reply(FlutterMethodNotImplemented)
-      }
+    shortcutRecorder = ShortcutRecordingHost(messenger: controller.engine.binaryMessenger) {
+      [weak self] in
+      guard let self else { return false }
+      return self.settingsOpen && NSApp.isActive && NSApp.keyWindow === self.settingsWindow
     }
     channel.setMethodCallHandler { [weak self] call, reply in
       guard let self else { return }
+      if self.settingsHost.handle(call, reply: reply) { return }
       switch call.method {
       case "chooseWebPackage":
         guard self.settingsOpen, let settings = self.settingsWindow,
@@ -280,8 +207,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
           "library": HostRuntime.libraryPath, "data": data.path,
           "plugins": Bundle.main.resourceURL!.appendingPathComponent("plugins", isDirectory: true)
             .path,
-          "hotkeyError": self.hotKeyError ?? "",
-          "loginError": self.loginError ?? "",
+          "hotkeyError": self.settingsHost.hotKeyError ?? "",
+          "loginError": self.settingsHost.loginError ?? "",
           "excludedApps": self.stored.excludedApps.joined(separator: "\n"),
           "captureFinderSelection": self.stored.captureFinderSelection == false ? "0" : "1",
           "captureSelectedText": self.stored.captureSelectedText == false ? "0" : "1",
@@ -297,102 +224,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
           self.log(event)
         }
         reply(nil)
-      case "settings":
-        if let enabled = self.loginItemIsEnabled() {
-          self.stored.launchAtLogin = enabled
-        }
-        var snapshot = self.stored.asMap()
-        snapshot["fileSearchAccessReady"] = self.fileSearchAccess.ready
-        reply(snapshot)
-      case "syncActionShortcutCatalog":
-        guard let args = call.arguments as? [String: Any],
-          let ids = args["supportedActionIds"] as? [String],
-          ids.count <= RuntimePolicy.maxShortcutCatalogRequestIds,
-          ids.allSatisfy({ !$0.isEmpty && $0.utf8.count <= RuntimePolicy.maxActionIdBytes }),
-          let snapshot = args["settings"] as? [String: Any]
-        else {
-          reply(FlutterError(code: "shortcuts", message: "Invalid shortcut catalog.", details: nil))
-          return
-        }
-        var expected = self.stored
-        guard expected.apply(snapshot) == nil,
-          expected.sameActionShortcutConfiguration(as: self.stored)
-        else {
-          reply(
-            FlutterError(
-              code: "shortcuts",
-              message: "Shortcut configuration changed. Refresh settings and try again.",
-              details: nil
-            )
-          )
-          return
-        }
-        if let error = self.hotKeys.syncActionCatalog(Set(ids)) {
-          reply(FlutterError(code: "shortcuts", message: error, details: nil))
-        } else {
-          reply(nil)
-        }
-      case "prepareFileSearchAccess":
-        guard let args = call.arguments as? [String: Any],
-          let enabled = args["enabled"] as? Bool,
-          let roots = args["roots"] as? [String], roots.count <= RuntimePolicy.maxSearchRoots,
-          roots.allSatisfy({
-            $0.hasPrefix("/") && $0.utf8.count <= RuntimePolicy.maxSearchPathBytes
-          })
-        else {
-          reply(FlutterError(code: "file_access", message: "Invalid search scope.", details: nil))
-          return
-        }
-        self.fileSearchAccess.prepare(
-          enabled: enabled,
-          roots: roots,
-          force: args["force"] as? Bool == true
-        ) { reply($0) }
-      case "settingsStatus":
-        reply([
-          "hotkeyError": self.hotKeyError ?? "",
-          "loginError": self.loginError ?? "",
-          "fileAccessError": self.fileSearchAccess.status,
-        ])
-      case "resumeActionShortcuts":
-        if let error = self.hotKeys.resumeForSettingsClose() {
-          reply(FlutterError(code: "shortcuts", message: error, details: nil))
-        } else {
-          reply(nil)
-        }
-      case "openPrivacySettings":
-        guard let args = call.arguments as? [String: Any],
-          let pane = args["pane"] as? String,
-          ["accessibility", "automation", "clipboard", "fullDiskAccess"].contains(pane)
-        else {
-          reply(FlutterError(code: "privacy", message: "Unknown privacy setting.", details: nil))
-          return
-        }
-        let app = NSWorkspace.shared.urlForApplication(
-          withBundleIdentifier: "com.apple.systempreferences"
-        )
-        let anchor =
-          pane == "accessibility"
-          ? "Privacy_Accessibility"
-          : pane == "fullDiskAccess" ? "Privacy_AllFiles" : "Privacy_Automation"
-        // Clipboard preferences vary by macOS version. Open System Settings
-        // itself rather than guessing an unsupported pane identifier.
-        let link =
-          pane == "clipboard"
-          ? app : URL(string: "x-apple.systempreferences:com.apple.preference.security?\(anchor)")
-        if let link, NSWorkspace.shared.open(link) {
-          reply(nil)
-        } else if let app, NSWorkspace.shared.open(app) {
-          reply(nil)
-        } else {
-          reply(
-            FlutterError(
-              code: "privacy",
-              message: "System Settings could not be opened.",
-              details: nil
-            )
-          )
-        }
       case "showToolWindow":
         let args = call.arguments as? [String: Any]
         guard args?["id"] as? String == "clipboard.shelf" else {
@@ -415,86 +246,31 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
             FlutterError(code: "tasks", message: "Running Tasks could not start.", details: nil)
           )
         }
-      case "saveSettings":
-        guard let args = call.arguments as? [String: Any] else {
-          reply(nil)
-          return
-        }
-        let previous = self.stored
-        var next = previous
-        if let error = next.apply(args) {
-          reply(FlutterError(code: "settings", message: error, details: nil))
-          return
-        }
-        var errors: [String] = []
-        var support: Set<String>? = nil
-        if let raw = args["supportedActionIds"] {
-          guard let ids = raw as? [String], ids.count <= RuntimePolicy.maxShortcutCatalogRequestIds,
-            ids.allSatisfy({ !$0.isEmpty && $0.utf8.count <= RuntimePolicy.maxActionIdBytes })
-          else {
-            reply(
-              FlutterError(code: "settings", message: "Invalid shortcut catalog.", details: nil)
-            )
-            return
-          }
-          support = Set(ids)
-        }
-        let update = self.hotKeys.update(next, previous: previous, supportedActionIds: support)
-        next = update.settings
-        if let error = update.error { errors.append(error) }
-        self.stored = next
-        if next.launchAtLogin != previous.launchAtLogin {
-          let error = self.applyLoginItem()
-          self.loginError = error
-          if let error {
-            errors.append(error)
-            next.launchAtLogin = self.loginItemIsEnabled() ?? previous.launchAtLogin
-          }
-        }
-        self.stored = next
-        if let error = self.settingsStore.save() {
-          self.stored.uiLanguage = previous.uiLanguage
-          errors.append(error)
-        } else {
-          LocaleHost.update(next.uiLanguage)
-        }
-        if errors.isEmpty {
-          reply(nil)
-        } else {
-          reply(
-            FlutterError(code: "settings", message: errors.joined(separator: "\n"), details: nil)
-          )
-        }
       case "ready":
         reply(nil)
         self.activate(mode: "currentApp")
       case "show":
         guard let args = call.arguments as? [String: Any],
-          let generation = args["generation"] as? Int,
-          generation >= self.latestGeneration
+          let generation = args["generation"] as? Int
         else {
           reply(nil)
           return
         }
-        self.latestGeneration = generation
-        self.settingsOpen = args["settings"] as? Bool == true
-        self.hotKeys.setActionShortcutsSuspended(self.settingsOpen)
-        self.glass.isHidden = false
-        NSApp.unhide(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        if self.settingsOpen {
-          self.showSettingsWindow(height: args["height"] as? Double ?? 508)
-        } else {
-          self.restoreLauncherView()
-          self.resizeWindow(args["height"] as? Double ?? 64, width: args["width"] as? Double ?? 648)
-          self.positionWindow()
-          self.window.makeKeyAndOrderFront(nil)
-          WindowInputFocus.restore(in: self.window, content: self.controller.view)
+        let settings = args["settings"] as? Bool == true
+        guard
+          self.launcherWindows.show(
+            generation: generation,
+            settings: settings,
+            height: args["height"] as? Double ?? (settings ? 508 : 64),
+            width: args["width"] as? Double ?? 648
+          )
+        else {
+          reply(nil)
+          return
         }
         if NativePreviewHost.dismissUnownedPanel() {
           self.log(["event": "unowned_preview_dismissed", "stage": "show"])
         }
-        self.presentedGeneration = generation
         let elapsed = (ProcessInfo.processInfo.systemUptime - self.activationStart) * 1000
         let visibleFrame =
           (self.settingsOpen ? self.settingsWindow?.frame : self.window.frame) ?? self.window.frame
@@ -510,23 +286,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
       case "resize":
         if let args = call.arguments as? [String: Any],
           let generation = args["generation"] as? Int,
-          generation == self.presentedGeneration,
           let height = args["height"] as? Double
         {
-          self.resizeWindow(height, width: args["width"] as? Double ?? 648)
+          self.launcherWindows.resize(
+            generation: generation,
+            height: height,
+            width: args["width"] as? Double ?? 648
+          )
         }
         reply(nil)
       case "hide":
         if let args = call.arguments as? [String: Any],
-          let generation = args["generation"] as? Int,
-          generation >= self.latestGeneration
+          let generation = args["generation"] as? Int
         {
-          self.latestGeneration = generation + 1
-          self.presentedGeneration = nil
-          self.settingsOpen = false
-          self.shortcutRecorder.cancel()
-          self.hotKeys.setActionShortcutsSuspended(false)
-          self.hideLauncherWindow()
+          self.launcherWindows.hide(generation: generation)
         }
         reply(nil)
       default: reply(FlutterMethodNotImplemented)
@@ -564,20 +337,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
       {
         return nil
       }
-      if let self, self.webToolsActive, NSApp.isActive,
-        NSApp.keyWindow === self.window, event.window === self.window
-      {
-        let flags = event.modifierFlags.intersection([.command, .option, .control, .shift])
-        let composing = (self.window.firstResponder as? NSTextInputClient)?.hasMarkedText() ?? false
-        if !composing, event.keyCode == 53 {
-          self.webToolsChannel?.invokeMethod("back", arguments: nil)
-          return nil
-        }
-        if !composing, flags == .command, event.keyCode == UInt16(kVK_ANSI_K) {
-          self.webToolsChannel?.invokeMethod("actions", arguments: nil)
-          return nil
-        }
-      }
+      if self?.webToolsHost?.handleKey(event) == true { return nil }
       guard let self, self.tasksReady,
         let tasks = self.tasksWindow, NSApp.keyWindow === tasks,
         event.keyCode == UInt16(kVK_ANSI_Period),
@@ -586,10 +346,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
       self.stopTask()
       return nil
     }
-    if let error = applyHotKeys(stored) {
-      hotKeyError = error + "; use the menu bar icon or release the shortcut in another app."
-    }
-    loginError = applyLoginItem()
+    settingsHost.start()
     // A hidden view never receives viewWillAppear, which normally starts the engine.
     if !controller.engine.run(withEntrypoint: nil) {
       log(["event": "flutter_engine_start_failed"])
@@ -599,31 +356,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
   }
 
-  func positionWindow() { launcherWindows.positionWindow() }
-  func showSettingsWindow(height: Double) { launcherWindows.showSettingsWindow(height: height) }
-  func restoreLauncherView() { launcherWindows.restoreLauncherView() }
-  func resizeWindow(_ height: Double, width: Double = 648) {
-    launcherWindows.resizeWindow(height, width: width)
-  }
-  private func updateWebAccessibility() {
-    NativeWebView.exposeAccessibility(
-      in: window.contentView ?? controller.view,
-      enabled: webToolsActive && !webToolsHostPanelVisible
-    )
-  }
-
-  func hideLauncherWindow() {
-    previewHost?.close(restoreFocus: false)
-    NativeWebView.exposeAccessibility(in: window.contentView ?? controller.view, enabled: false)
-    launcherWindows.hideLauncherWindow()
-  }
-
   func dismissForFocusLoss() {
-    if settingsOpen || terminationPending { return }
-    guard let generation = presentedGeneration else { return }
-    presentedGeneration = nil
-    latestGeneration = generation + 1
-    hideLauncherWindow()
+    guard !terminationPending, let generation = launcherWindows.dismissForFocusLoss() else {
+      return
+    }
     log(["event": "launcher_dismissed", "reason": "focus_lost", "generation": generation])
     channel.invokeMethod("dismiss", arguments: ["generation": generation])
   }
@@ -730,7 +466,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
       }
     }
     if ["currentApp", "universal"].contains(mode) {
-      if presentedGeneration == nil {
+      if launcherWindows.presentedGeneration == nil {
         previewHost?.close(restoreFocus: false)
       } else if previewHost?.returnToOwner() == true {
         return
@@ -756,114 +492,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     }
   }
 
-  func applyHotKeys(_ settings: StoredSettings) -> String? { hotKeys.apply(settings) }
-
   func updateMenuTitles(_ settings: StoredSettings) {
     currentAppItem?.title =
       "\(NativeLocalization.text(.currentApp))  \(settings.shortcutLabel(code: settings.currentAppKeyCode, modifiers: settings.currentAppModifiers))"
     universalItem?.title =
       "\(NativeLocalization.text(.universalSearch))  \(settings.shortcutLabel(code: settings.universalKeyCode, modifiers: settings.universalModifiers))"
-  }
-
-  func applyLoginItem() -> String? {
-    if ProcessInfo.processInfo.environment["ANYWHERE_DATA_DIRECTORY"] != nil { return nil }
-    let want = stored.launchAtLogin
-    if #available(macOS 13.0, *) {
-      let service = SMAppService.mainApp
-      do {
-        if want {
-          if service.status != .enabled { try service.register() }
-        } else if service.status == .enabled {
-          try service.unregister()
-        }
-      } catch {
-        log(["event": "login_item_failed", "error": "\(error)"])
-        stored.launchAtLogin = service.status == .enabled
-        return "Open at login failed: \(error)"
-      }
-      let enabled = service.status == .enabled
-      stored.launchAtLogin = enabled
-      if want && !enabled {
-        return "Open at login was not enabled."
-      }
-      return nil
-    }
-    guard let current = legacyLoginEnabled() else {
-      return "Open at login could not be read."
-    }
-    if want == current {
-      stored.launchAtLogin = want
-      return nil
-    }
-    let path = Bundle.main.bundlePath
-      .replacingOccurrences(of: "\\", with: "\\\\")
-      .replacingOccurrences(of: "\"", with: "\\\"")
-    let script =
-      want
-      ? "tell application \"System Events\" to make login item at end with properties {path:\"\(path)\", hidden:false}"
-      : "tell application \"System Events\" to delete (every login item whose path is \"\(path)\")"
-    let status = runOsascript(script)
-    guard let enabled = legacyLoginEnabled() else {
-      return "Open at login could not be confirmed."
-    }
-    stored.launchAtLogin = enabled
-    if status != 0 || enabled != want {
-      return "Open at login failed."
-    }
-    return nil
-  }
-
-  func loginItemIsEnabled() -> Bool? {
-    if ProcessInfo.processInfo.environment["ANYWHERE_DATA_DIRECTORY"] != nil {
-      return stored.launchAtLogin
-    }
-    if #available(macOS 13.0, *) {
-      return SMAppService.mainApp.status == .enabled
-    }
-    return legacyLoginEnabled()
-  }
-
-  func legacyLoginEnabled() -> Bool? {
-    let path = Bundle.main.bundlePath
-    let output = runOsascriptOutput(
-      """
-      tell application "System Events"
-          if (count of login items) is 0 then return ""
-          set AppleScript's text item delimiters to linefeed
-          return (path of every login item) as text
-      end tell
-      """
-    )
-    if osascriptStatus != 0 { return nil }
-    return output.split(separator: "\n").contains(Substring(path))
-  }
-
-  @discardableResult
-  func runOsascript(_ script: String) -> Int32 {
-    _ = runOsascriptOutput(script)
-    return osascriptStatus
-  }
-
-  private var osascriptStatus: Int32 = 0
-
-  func runOsascriptOutput(_ script: String) -> String {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
-    process.arguments = ["-e", script]
-    let pipe = Pipe()
-    process.standardOutput = pipe
-    process.standardError = Pipe()
-    do {
-      try process.run()
-    } catch {
-      osascriptStatus = 1
-      return ""
-    }
-    process.waitUntilExit()
-    osascriptStatus = process.terminationStatus
-    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-    return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines)
-      ?? ""
   }
 
   func installMenu() {

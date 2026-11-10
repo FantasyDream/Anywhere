@@ -40,6 +40,30 @@
 
 ## 最新已验证基线
 
+### 原生设置与权限职责拆分
+
+`SettingsHost` 接管权威设置、保存流程、快捷键目录复验、目录授权入口与状态查询，`LoginItemService` 独立适配系统登录启动；AppDelegate 只读设置并组装服务。现有 MethodChannel 方法和错误回复、部分保存失败的处理、目录 worker / epoch 及独立数据目录隔离保持原契约。实现归属见[架构](architecture.md)。
+
+新增真实 Flutter 编解码边界回归覆盖无效请求无副作用、快捷键拒绝后的回滚与其他偏好落盘、登录失败及状态回读、磁盘失败不分发新语言、旧目录快照拒绝、设置关闭恢复失败与重试、授权被替换后的迟到回复、强制授权及隐私入口。原生 Host 回归与完整 `scripts/check.sh` exit 0：Flutter 524 项通过 / 1 项跳过，Rust Core 332 项通过 / 1 项忽略，其余工作区、Clippy、SDK、架构、规范和生成物门禁通过。Review 已核对迁移前后的请求字段、回复和副作用顺序，未发现新增阻塞问题。
+
+干净提交 `d1cb2bc` 已构建为独立的 `Anywhere-0.14-settings-host-d1cb2bc.app`（0.14.0+46 / arm64 / Impeller），完整 AppDelegate 组装、本机持久签名、ZIP 内容和 SHA-256 校验通过。独立数据目录中，语言保存并重开、隔离登录偏好保存与回读、已有合成目录授权恢复、搜索偏好保存，以及动作候选读取 / 录制 / 保存 / 关闭设置的 GUI 冒烟通过；落盘结果已核对。测试实例正常退出，日志 AXTree 错误、Flutter ERROR 与 frame-time clamping 均为 0，未替换日常 App 或编辑个人设置。来源及证据保留在被忽略的 `build/Anywhere-0.14-settings-host-d1cb2bc.provenance.json` 和 `build/acceptance-settings-host-d1cb2bc/`。
+
+本轮合成动作热键落入文本框，自动化 Universal 切换紧接着触发 currentApp 激活；这些操作不记为硬件快捷键或新增预览 / 过期验收，也未据此修改生产按键和窗口语义。登录项真实注册、macOS 12 兼容分支、物理输入法、VoiceOver 与全部格式矩阵仍未新增实机验证，上一轮帧时间诊断仍未定位；本轮日志未出现该消息不代表已修复。
+
+### Native Host 通道职责拆分
+
+快捷键录制通道与待回复请求由 `ShortcutRecordingHost` 持有，保留设置窗口资格、本地按键与 Carbon 唤醒键转换、失焦取消和请求 ID 隔离。新增真实 Flutter 编解码边界回归覆盖拒绝录制、替换、迟到取消、重复按键和 Host 销毁后的单次回复及解除通道。原生 Host 回归与完整 `scripts/check.sh` exit 0：Flutter 524 项通过 / 1 项跳过，其余工作区、Clippy、SDK、架构、规范及生成物检查通过。本项尚未新增打包或 GUI 验收。
+
+Web 工具通道、活动与 Host 面板状态迁至 `WebToolsHost`，统一编辑 / 按键转交与辅助功能子树生命周期；保留 Flutter / Web 两种焦点目标、唯一 WebView 规则和组词边界。新增编码通道回归覆盖活动 / 非活动协议、原生画布、有无 WebView、非 key 窗口不抢输入、隐藏撤销与释放恢复；既有 Web 编辑及完整 Host 回归通过。完整 `scripts/check.sh` exit 0：Flutter 524 项通过 / 1 项跳过，其余门禁通过，本项尚未新增打包或 GUI 验收。
+
+窗口展示代次与设置状态收归 `LauncherWindowCoordinator`，AppDelegate 不再写代次、移动共享视图或直接调整窗口尺寸。原生回归通过迟到 show / resize / hide、隐藏抢先返回、失焦幂等与设置失焦豁免、共享内容和空设置窗口释放；被拒请求也不会运行展示钩子。完整 `scripts/check.sh` exit 0：Flutter 524 项通过 / 1 项跳过，其余原生、工作区与规范门禁通过。本项源码检查不替代后续打包和实机流程。
+
+干净提交 `74bd8b6` 已构建为独立的 `Anywhere-0.14-native-host-74bd8b6.app`（0.14.0+46 / arm64 / Impeller），完整 AppDelegate 组合编译、持久本机签名、ZIP 内容及 SHA-256 校验通过。首次独立预览实窗回归因锁屏未取得 active / key window；用户解锁后重跑 exit 0，覆盖首次输入竞争、立即重开、原生关闭 / 隐藏、XML 加载与关闭、隐藏 16 秒及 Host 释放。
+
+同一测试包在独立数据目录中通过新组合键录制、Esc 取消、已注册组合键再次录制，以及无 Host 权限的合成 Web 工具输入、⌘K 进入 Host、Esc 返回 Web 继续编辑、原生 Undo / Redo 和返回搜索。合成 XML 的空格 / 眼睛预览及系统按钮关闭通过。最终退出后复核日志：AXTree 错误为 0，Flutter ERROR 为 1，对应一条 `Reported frame time is older than the last one; clamping`（时间差约 16.7 ms）。本轮操作未观察到界面失效；这条帧时间诊断的原因和性能影响尚未确认，不记为已修复或零错误运行。自动化未触发失焦或切换搜索模式的轮次不计为过期验收。用户随后按要求实际切换应用、等待至少 16 秒并唤醒，确认“正常：空白首页，无旧预览”；日志记录了真实失焦和预览关闭，约 97.7 秒后的下一份可见记录为新首页（`currentApp`），不将这份日志扩展为 Universal 快捷键硬件事件的独立证明。
+
+隔离实例已正常退出，日常实例与设置未修改；录制键和合成插件仅用于独立测试目录。证据与来源保留在被忽略的 `build/acceptance-native-host-74bd8b6/` 和 `build/Anywhere-0.14-native-host-74bd8b6.provenance.json`。本轮仅补充自动化冒烟与用户操作确认，未改生产源码，也不扩展为完整快捷键事件矩阵、物理输入法、VoiceOver 或全格式验收。
+
 ### 设置保存与目录职责拆分
 
 `SettingsSaveCoordinator` 接管 Host 设置、保存队列、权威回读与文件授权失效；Controller 保留草稿、关闭选择和反馈。新保存排队即撤销旧授权，销毁后不再执行后续写入或发布迟到回读。公开设置 API 与原生协议保持一致，状态归属见[架构](architecture.md)。

@@ -227,6 +227,14 @@ JSON Workspace 是混合插件示例：WebView 负责编辑、校验、token 格
 
 原生 Edit 菜单通过 NativeEditMenu 向当前 key window 对应的 Flutter engine 发送 anywhere/editing 编辑指令；Launcher / Settings 共用 engine，Running Tasks 使用自己的 engine。每个 engine 的 DesktopEditMenu 根据当前 Focus 调用 Flutter Actions，统一处理 Undo / Redo / Cut / Copy / Paste / Select All，文本、选区和撤销历史保存在 Flutter 编辑模型中。没有活动 Flutter 窗口时原生菜单不转发，无焦点 / 未知指令不会修改输入。业务处理继续由 Rust 执行。
 
+`ShortcutRecordingHost` 持有共享引擎的录制通道及 `ShortcutRecorder`。每次开始录制时查询设置窗口资格；替换、取消、失焦和销毁完成对应的待回复请求，迟到取消不能撤销新请求。AppDelegate 仅组装资格回调并转交本地按键与已注册唤醒键；纯按键转换仍在 Recorder，Host 销毁时解除消息处理器。
+
+`WebToolsHost` 持有 Web 工具通道、活动状态及 Host 面板遮挡状态，统一协调原生编辑、按键转交、画布与辅助功能子树。返回 Host 时只在 Flutter 内容中寻找输入接收者；返回 Web 时才在窗口内容中定位唯一 WebView。非 key 窗口不转移焦点，组词时不拦截返回 / Actions；隐藏或销毁时撤销 Web 子树连接，销毁解除通道。AppDelegate 转交事件，不另存活动标志。
+
+`LauncherWindowCoordinator` 同时持有最新请求代次、已展示代次、设置窗口状态及共享视图。show / hide 校验最新代次，resize 只接受已展示代次；隐藏与失焦先撤销展示资格，再运行资源收尾并隐藏窗口。旧请求在任何窗口 / 热键副作用前被拒绝。AppDelegate 只解析通道参数、组装展示前的热键暂停与隐藏前的录制 / 预览 / Web 清理，并记录可见性及通知 Flutter 失焦，不再直接写代次或移动共享视图。
+
+`SettingsHost` 持有原生权威设置、保存与登录项错误，协调既有 `HotKeyService`、`FileSearchAccess` 和持久化；共享 `anywhere/window` 通道只把设置 / 权限方法转交给它，未知方法继续由原分派器处理。快捷键注册失败恢复旧绑定，其他有效偏好继续保存；语言仅在落盘成功后分发，失败时恢复旧语言。目录请求的 worker、书签和 epoch 仍由 `FileSearchAccess` 独占，设置 Host 不建立第二套授权代数。`LoginItemService` 适配系统登录启动和 macOS 12 兼容路径，不读写设置文件；显式独立数据目录下不访问系统登录项。AppDelegate 只读设置快照以路由唤醒和生成启动信息，不再直接修改存储或保存状态。
+
 
 ## Web 插件收尾边界
 

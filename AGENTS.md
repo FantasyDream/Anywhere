@@ -48,6 +48,11 @@ it into another UI framework.
   and `settings/feature_catalog_coordinator.dart`.
   Shared object-action request ordering lives in `tools/object_action_coordinator.dart`;
   sessions retain target validation and their own menu presentation.
+- Native recording and Web channel ownership live in `ShortcutRecordingHost.swift`
+  and `WebToolsHost.swift`; Launcher/Settings presentation generations and shared
+  view movement live in `LauncherWindowCoordinator.swift` under `macos/Runner/`.
+  Native settings, save effects and permission dispatch live in `SettingsHost.swift`;
+  OS login-item adaptation lives in `LoginItemService.swift`.
 - A new first-party capability should contribute through its registration,
   registry and tool-page interfaces instead of adding an application-specific
   branch to the Launcher.

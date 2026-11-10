@@ -40,6 +40,28 @@ xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   -o "$host_test_directory/flutter-accessibility-test"
 "$host_test_directory/flutter-accessibility-test"
 flutter_framework_directory="$(dirname "$(dirname "$flutter_framework")")"
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  -F "$flutter_framework_directory" -framework FlutterMacOS \
+  -Xlinker -rpath -Xlinker "$flutter_framework_directory" \
+  apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift \
+  apps/flutter/macos/Runner/RuntimePolicy.swift apps/flutter/macos/Runner/SettingsStore.swift \
+  apps/flutter/macos/Runner/HotKeyMap.swift apps/flutter/macos/Runner/HotKeyService.swift \
+  apps/flutter/macos/Runner/FileSearchAccess.swift apps/flutter/macos/Runner/LocaleHost.swift \
+  apps/flutter/macos/Runner/LoginItemService.swift apps/flutter/macos/Runner/SettingsHost.swift \
+  apps/flutter/macos/Runner/tests/HostChannelTestMessenger.swift \
+  apps/flutter/macos/Runner/tests/SettingsHostTests.swift \
+  -o "$host_test_directory/settings-host-test"
+"$host_test_directory/settings-host-test"
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  -F "$flutter_framework_directory" -framework FlutterMacOS \
+  -Xlinker -rpath -Xlinker "$flutter_framework_directory" \
+  apps/flutter/macos/Runner/HotKeyMap.swift \
+  apps/flutter/macos/Runner/ShortcutRecorder.swift \
+  apps/flutter/macos/Runner/ShortcutRecordingHost.swift \
+  apps/flutter/macos/Runner/tests/HostChannelTestMessenger.swift \
+  apps/flutter/macos/Runner/tests/ShortcutRecordingHostTests.swift \
+  -o "$host_test_directory/shortcut-channel-test"
+"$host_test_directory/shortcut-channel-test"
 xcrun swiftc -typecheck -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   -F "$flutter_framework_directory" -framework FlutterMacOS -framework QuickLookUI \
   apps/flutter/macos/Runner/WindowInputFocus.swift apps/flutter/macos/Runner/NativePreviewHost.swift \
@@ -111,6 +133,19 @@ xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/mac
   apps/flutter/macos/Runner/tests/NativeWebEditingTests.swift \
   -o "$host_test_directory/web-editing-test"
 "$host_test_directory/web-editing-test"
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  -F "$flutter_framework_directory" -framework FlutterMacOS \
+  -Xlinker -rpath -Xlinker "$flutter_framework_directory" \
+  apps/flutter/macos/Runner/NativeAccessibilityContainer.swift \
+  apps/flutter/macos/Runner/NativeWebView.swift \
+  apps/flutter/macos/Runner/NativeWebEditing.swift \
+  apps/flutter/macos/Runner/NativeWebAppearance.swift \
+  apps/flutter/macos/Runner/WindowInputFocus.swift \
+  apps/flutter/macos/Runner/WebToolsHost.swift \
+  apps/flutter/macos/Runner/tests/HostChannelTestMessenger.swift \
+  apps/flutter/macos/Runner/tests/WebToolsHostTests.swift \
+  -o "$host_test_directory/web-channel-test"
+"$host_test_directory/web-channel-test"
 
 # Shelf placement uses visible work areas, including nonzero/negative displays.
 xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
