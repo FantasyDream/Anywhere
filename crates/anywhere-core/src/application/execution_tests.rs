@@ -18,7 +18,7 @@ use anywhere_protocol::*;
 use std::{
     future::Future,
     sync::{
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
         Arc, Condvar, Mutex,
     },
     time::Duration,
@@ -61,8 +61,21 @@ struct Handler {
     calls: Arc<AtomicUsize>,
     gate: Option<Arc<Gate>>,
     process: bool,
+    token: Option<Arc<AtomicU64>>,
+    usage: Option<Arc<AtomicBool>>,
 }
 impl ActionHandler for Handler {
+    fn execution_token(&self) -> Option<u64> {
+        self.token
+            .as_ref()
+            .map(|token| token.load(Ordering::Acquire))
+    }
+    fn records_usage(&self) -> bool {
+        self.usage
+            .as_ref()
+            .is_none_or(|usage| usage.load(Ordering::Acquire))
+    }
+
     fn execute(&self, _: &ResolvedContext, _: &dyn Platform) -> Result<ExecutionOutput> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         if let Some(gate) = &self.gate {
@@ -169,6 +182,8 @@ fn queued_execution_keeps_its_epoch_across_suspend_and_resume() {
             calls: calls.clone(),
             gate: None,
             process: false,
+            token: None,
+            usage: None,
         });
         let gate = Arc::new(Gate::default());
         let blocker = tokio::task::spawn_blocking({
@@ -211,6 +226,8 @@ async fn completed_effect_keeps_usage_when_dismissed_before_handler_returns() {
         calls: calls.clone(),
         gate: Some(gate.clone()),
         process: false,
+        token: None,
+        usage: None,
     });
     let app = Arc::new(app);
     let pending = tokio::spawn({
@@ -237,6 +254,8 @@ async fn process_plan_cannot_start_after_suspend_and_resume() {
         calls: Default::default(),
         gate: Some(gate.clone()),
         process: true,
+        token: None,
+        usage: None,
     });
     let app = Arc::new(app);
     let pending = tokio::spawn({
@@ -257,4 +276,56 @@ async fn process_plan_cannot_start_after_suspend_and_resume() {
     );
     assert!(app.execution_sessions().is_empty());
     assert_eq!(uses(&app), 0);
+}
+
+#[test]
+fn queued_execution_freezes_target_token_and_usage_policy() {
+    let runtime = tokio::runtime::Builder::new_current_thread()
+        .enable_all()
+        .max_blocking_threads(1)
+        .build()
+        .unwrap();
+    runtime.block_on(async {
+        for changing_target in [true, false] {
+            let token = Arc::new(AtomicU64::new(1));
+            let usage = Arc::new(AtomicBool::new(false));
+            let calls = Arc::new(AtomicUsize::new(0));
+            let (app, session, id) = fixture(Handler {
+                calls: calls.clone(),
+                gate: None,
+                process: false,
+                token: changing_target.then_some(token.clone()),
+                usage: Some(usage.clone()),
+            });
+            let gate = Arc::new(Gate::default());
+            let blocker = tokio::task::spawn_blocking({
+                let gate = gate.clone();
+                move || gate.wait()
+            });
+            gate.entered().await;
+            let mut queued = Box::pin(app.execute_use_case(session, 0, id));
+            std::future::poll_fn(|cx| {
+                assert!(queued.as_mut().poll(cx).is_pending());
+                std::task::Poll::Ready(())
+            })
+            .await;
+            token.store(2, Ordering::Release);
+            usage.store(true, Ordering::Release);
+            gate.release();
+            blocker.await.unwrap();
+            let result = queued.await.unwrap();
+            if changing_target {
+                assert_eq!(result.status, ActionStatus::Failed);
+                assert_eq!(calls.load(Ordering::SeqCst), 0);
+            } else {
+                assert!(result.succeeded());
+                assert_eq!(calls.load(Ordering::SeqCst), 1);
+            }
+            assert_eq!(
+                uses(&app),
+                0,
+                "Usage selection belongs to request preparation"
+            );
+        }
+    });
 }

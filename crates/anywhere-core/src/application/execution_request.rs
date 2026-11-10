@@ -41,6 +41,8 @@ pub(super) struct ExecutionRequest {
     execution_ticket: ExecutionContext,
     record_id: BusinessActionId,
     context_type: String,
+    guarded_target: Option<u64>,
+    records_usage: bool,
 }
 
 pub(super) struct ExecutionOutcome {
@@ -139,6 +141,8 @@ impl ExecutionRequest {
         let platform = app.platform.clone();
         let registry = app.resolver.base_registry();
         let executions = app.executions.clone();
+        let guarded_target = candidate.target.execution_token();
+        let records_usage = candidate.target.records_usage();
         let web_plugins = app.web_plugins.clone();
         // Handed to the worker so it can re-check currency when it actually starts running,
         // rather than trusting a check made while the request was still being queued.
@@ -187,6 +191,8 @@ impl ExecutionRequest {
             execution_ticket,
             record_id,
             context_type,
+            guarded_target,
+            records_usage,
         })
     }
 

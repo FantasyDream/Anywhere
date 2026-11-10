@@ -18,8 +18,6 @@ impl ExecutionRequest {
         let catalog = &resolver.catalog;
         let history = &resolver.history;
         let session_for_execution = &resolver.session;
-        let guarded_target = candidate.target.execution_token();
-        let records_usage = candidate.target.records_usage();
         // The opening gate ran when the request arrived; this one runs when the worker
         // actually starts. A blocking worker can wait behind other work, and the user
         // can dismiss the launcher in that gap — acting then would open a window, or
@@ -27,7 +25,7 @@ impl ExecutionRequest {
         if !self.is_current() {
             bail!("action expired before it started");
         }
-        if let Some(token) = guarded_target {
+        if let Some(token) = self.guarded_target {
             let session = session_for_execution
                 .lock()
                 .map_err(|_| anyhow::anyhow!("session lock poisoned"))?;
@@ -114,7 +112,7 @@ impl ExecutionRequest {
         // needs, and report "expired" for an action the user watched succeed. Currency
         // is enforced before the side effect: once when the request arrives, once when
         // the worker starts.
-        let history_result = if records_usage {
+        let history_result = if self.records_usage {
             history
                 .lock()
                 .map_err(|_| anyhow::anyhow!("history lock poisoned"))
