@@ -106,6 +106,8 @@ Resolver 只取得不可变索引快照，发布前通过服务同时复验扫�
 
 执行仅接受当前已提交凭据，排队 worker 开始副作用前再次验证；进程计划生成后、spawn 前也检查版本。副作用成功后仍记 Usage，即使窗口已隐藏。菜单另有 discovery token，不能把可重扫的菜单 ActionId 当作永久身份；见 [菜单安全契约](current-app-actions.md)。
 
+`application/execution_request.rs` 的 `ExecutionRequest` 在排队前固定候选、来源应用、动作注册表、Session / Revision 凭据、执行 epoch、功能策略、文件搜索代次、目标 token 和 Usage 记录策略；共享 Resolver / Host 服务仍使用原实例。请求由 `spawn(self)` 消费，worker 不重新取得授权版本。私有 `execution_request/worker.rs` 负责阻塞派发，开始副作用前复验资格；Web 凭据仍在 Session → Web 锁顺序内建立，进程规划后在 spawn 前另行校验对象与资格。完成的副作用继续保存 Usage，存储错误单独返回，由 `execute.rs` 转成成功附带警告；用例层还保留无界面 Web 驱动、菜单失败重扫与 ActionResult 映射。阻塞任务 JoinError 和执行错误继续走各自的既有返回路径。
+
 Flutter 的 `LauncherSessionCoordinator` 拥有 SessionId、generation、revision 与已接收快照；只有当前会话、满足请求 revision 且顺序更新的快照才能提交。持续订阅也由它管理，等待返回后复验代数、会话与可见性，增量按最新列表的版本和长度合并。`LauncherController` 负责接收后的导航、选择和窗口更新；工具经 Rust 更新输入时，由同一接收入口推进 revision。
 
 `LauncherViewState` 保留 Scope 过滤、菜单结构、行集合与提示是否存在等展示状态；`launcher_presentation.dart` 根据调用方提供的当前语言生成来源标签、搜索进度、提示和结果标题。布局是否预留提示区域由 `hasNotice` 决定，不依赖默认英文文案；文件范围名称与完整路径提示共用同一展示值对象。`launcher_layout.dart` 统一窗口尺寸、行高与选中项坐标，供 Controller 的 Host 尺寸同步及 Widget / 滚动定位使用；状态对象不保存像素布局规则。

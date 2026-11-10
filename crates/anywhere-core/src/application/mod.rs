@@ -16,6 +16,7 @@ pub use launcher_service::{Application, LauncherApplication, SnapshotWait};
 
 pub(crate) mod composition;
 mod context_capture;
+mod execution_request;
 mod feature_catalog;
 mod file_preview;
 mod search_sources;
@@ -47,3 +48,6 @@ mod source_catalog_tests;
 
 #[cfg(test)]
 mod feature_policy_tests;
+
+#[cfg(test)]
+mod execution_tests;
