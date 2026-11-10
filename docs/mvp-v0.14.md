@@ -48,6 +48,14 @@
 
 Protocol 8 项回归、全目标编译与全 feature 严格 Clippy 通过，Web Manifest schema 和 SDK contract 无漂移。临时副本用锁定的 FRB 2.13.0 重新生成后，5 个 Dart / Rust 绑定文件逐字节一致；同一副本构建真实动态库并完成 FFI 调用。完整 `scripts/check.sh` exit 0：Core 350 / 1 忽略、MVP 195 / 4 忽略、Platform 72 / 1 忽略、Protocol 8、Flutter 524 / 1 跳过、SDK 50，以及 Bridge、Plugin、JSON、Clippy、架构、生成一致性、原生 Host 与文档门禁通过。
 
+最终源码 `dfb94ff` 已从临时干净 checkout 构建为独立的 `Anywhere-0.14-protocol-dfb94ff.app`（0.14.0+46 / arm64 / Impeller），持久本机签名 `Anywhere Local Code Signing` 经宿主权限 `codesign --verify --deep --strict` 通过；归档 `Anywhere-0.14-protocol-dfb94ff-macos-arm64.zip` 内容校验通过，SHA-256 为 `bcf3fbee5b0d6181c32e16ccba1147a42c519f98d4f4fc0041cea56ff8afe477`。该包尚未公证，未发布 Release。
+
+隔离 GUI 验收使用最终包的独立副本 `AnywhereProtocolSmoke.app`（临时 Bundle ID `dev.anywhere.protocol-smoke`）和显式 `ANYWHERE_DATA_DIRECTORY`。只读进程检查确认唯一 PID、包路径、环境变量以及 Usage / Clipboard SQLite 均位于隔离目录；日常旧实例 PID `9849` 保持运行且未被关闭。首次尝试曾因通用应用名误绑定该隐藏旧实例并打开其 Clipboard History；发现后立即停止，未复制、删除、执行或修改任何条目，也未授权真实目录，因此该轮不计入验收。随后改用唯一 Bundle ID / 完整包路径重做。
+
+重做中，原生授权面板只保存并授权合成 `files/` 目录，隔离 `settings.json` 的 `fileSearchRoots` 仅含该路径，并生成独立 `file-search-access.plist`。全局搜索显示 `/System/Applications/Calculator.app` 候选但未执行；Clipboard History 显示“没有历史记录”，只读 SQLite 的 `clipboard_items` / `clipboard_formats` 均为 0；文件工具搜索 `report` 返回合成顶层 `.txt` 与嵌套 `.json` 共 2 项，范围外 `manifest` 返回 0 项；从工具页返回 Launcher 后原“文件搜索”查询保留。Smoke 实例经应用菜单正常退出，只读进程检查确认其 PID 结束，旧实例 PID `9849` 保持不动。
+
+本轮未完成公证、真实用户目录 / 真实文件打开、物理快捷键 / 输入法、VoiceOver、预览、内存、长时间运行、Windows / Linux GUI 或完整跨平台矩阵验收。
+
 ### Platform 能力接口隔离
 
 `anywhere-platform` 将原组合 `Platform` 拆为 `ApplicationCatalog`、`ApplicationHost`、`ContextReader`、`ClipboardHost`、`FileSearchHost`、`ResourceOpener`、`MenuHost` 与 `GitHost` 八个对象安全能力接口。`Platform` 只组合能力并由 blanket implementation 自动实现；`native_platform()` 与 Application / ActionHandler 的完整注入路径保持不变。macOS 适配器按能力拆为独立实现，方法签名、默认值、目录遍历、搜索范围拒绝、剪贴板文本回退、Finder 兼容钩子及默认错误保持原行为。
@@ -56,7 +64,7 @@ Protocol 8 项回归、全目标编译与全 feature 严格 Clippy 通过，Web 
 
 新增默认转发回归覆盖剪贴板快照与写入、Finder 选择回退、目录扫描、搜索范围拒绝、图标与菜单空结果、启动不支持错误及 Git 默认错误；现有 Context 来源、Clipboard History、应用索引和文件搜索回归继续覆盖共享适配器状态、回调寿命、采集策略、索引发布、取消、执行排队与授权边界。干净 checkout 的完整 `scripts/check.sh` exit 0：Core 350 / 1 忽略、MVP 195 / 4 忽略、Platform 72 / 1 忽略、Protocol 6、Flutter 524 / 1 跳过、SDK 50，以及 Bridge、Plugin、JSON、Clippy、架构、生成一致性、原生 Host 与文档门禁通过。
 
-验证工作区使用隔离 `HOME`、独立数据目录与临时 Cargo target；完整 Core 测试在宿主权限下通过，包括沙箱内无法创建的非 UTF-8 文件名回归。macOS 签名包、归档、真实 FFI 与 GUI 冒烟状态在后续交付段落单独记录，不以自动化测试代替。
+验证工作区使用隔离 `HOME`、独立数据目录与临时 Cargo target；完整 Core 测试在宿主权限下通过，包括沙箱内无法创建的非 UTF-8 文件名回归。macOS 签名包、归档、真实 FFI 与 GUI 冒烟状态在 Protocol 段落的最终构建记录中单独列出，不以自动化测试代替。
 
 ### Bridge DTO 职责收拢
 
