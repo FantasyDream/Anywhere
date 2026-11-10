@@ -40,6 +40,14 @@
 
 ## 最新已验证基线
 
+### Rust 执行请求职责拆分
+
+`ExecutionRequest` 在阻塞 worker 排队前持有冻结候选、来源身份、注册表与授权版本，并由 `spawn(self)` 消费。私有 worker 管理开始执行、Web 凭据 / 进程任务交接和 Usage 保存；`execute.rs` 保留无界面 Web 驱动、菜单失败恢复与结果映射。请求与共享服务不新建 Session，公开 API、DTO、锁顺序、错误 / 警告边界及独立进程生命周期保持一致，代码归属见[架构](architecture.md)。
+
+新增三项受控回归在重构前后均通过：唯一阻塞线程被占用时固定排队请求，隐藏再恢复后旧动作被拒绝、新请求可执行；规划在途时隐藏恢复，spawn 前拒绝且不记录 Usage；合成副作用已发生但 Handler 尚未返回时取消会话，结果仍成功并记录一次 Usage。人为将 epoch 取得推迟到 worker 的变体被排队回归拒绝。Review 核对获取顺序、候选 / 菜单 / 文件复验、Session → Web、进程规划复验、执行后记录和 JoinError / 动作错误 / 存储警告分流，未发现剩余新增阻塞问题。
+
+全目标编译、严格 Clippy、Application 单元回归 143 项及 MVP 195 项通过；完整 `scripts/check.sh` exit 0：Core 346 项通过 / 1 项忽略、MVP 195 项通过 / 4 项忽略、Flutter 524 项通过 / 1 项跳过、SDK 50 项及其余工作区、原生 Host、架构、规范、生成物和文档检查通过。完整日志为被忽略的 `build/execution-request-full-check.log`。本项打包和界面验证尚未执行，不沿用上一步证据。
+
 ### Rust 功能目录状态收拢
 
 `FeatureCatalog` 接管当前动作 / Provider / 候选来源、功能策略、目录版本与启动装配资格；Resolver 和执行 / 预览 worker 共享同一服务，Application 保留 Session / Web 撤销及发布后的来源清理。持久化成功后才替换贡献，撤销回调在目录锁释放前完成。公开 API、DTO、内置服务单次绑定、Session / Revision / epoch、策略 Arc 身份和退役来源 reset 语义保持一致，代码归属见[架构](architecture.md)。

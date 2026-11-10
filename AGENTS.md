@@ -42,6 +42,9 @@ it into another UI framework.
   frozen application reads and late capture publication; its `clipboard.rs` owns
   clipboard requests, age and fact publication. `activate.rs` joins these with Git
   and Usage refreshes without sharing the capture policy lock.
+- Committed execution requests: `application/execution_request.rs` freezes the target,
+  source and authorization before queueing; its `worker.rs` runs blocking dispatch,
+  Web/process handoff and Usage recording. `execute.rs` maps results and menu recovery.
 - Feature catalog publication: `application/feature_catalog.rs` owns definitions,
   providers, candidate sources, policy, catalog versions and startup binding claims;
   Application revokes Session / Web execution under the same publication locks.
