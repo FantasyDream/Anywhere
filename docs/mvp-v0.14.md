@@ -40,6 +40,14 @@
 
 ## 最新已验证基线
 
+### Protocol 根模型模块化
+
+`anywhere-protocol` 根级定义已分入 `identifiers`、`context`、`candidate`、`launcher`、`execution` 与 `declarative` 六个私有模块，根模块显式重导出原有符号，`ContextMatcher` 留在通用 Context 模型。`extension`、`policy`、`ui`、`web_bridge`、`web_plugin` 和生成的 `FileSearchFilter` 路径保持不变，消费者继续使用 `anywhere_protocol::Type`。模块职责见[架构](architecture.md#protocol-模型边界)。
+
+迁移逐项比较了拆分前根模块的 61 个定义与六个新模块：缺失、额外和不一致均为 0；类型、辅助方法、Serde 属性、字段顺序和枚举顺序原样保留。回归覆盖 `open_url` / `provider_completed` 标签、本地化标题与快捷键、旧状态缺省字段、旧 v0.1 Manifest、默认未知字段忽略、旧声明式未知字段拒绝，以及全部既有根路径的外部 crate 导入。旧插件输入和代表性事件 JSON 在迁移前后均通过。
+
+Protocol 8 项回归、全目标编译与全 feature 严格 Clippy 通过，Web Manifest schema 和 SDK contract 无漂移。临时副本用锁定的 FRB 2.13.0 重新生成后，5 个 Dart / Rust 绑定文件逐字节一致；同一副本构建真实动态库并完成 FFI 调用。完整 `scripts/check.sh` exit 0：Core 350 / 1 忽略、MVP 195 / 4 忽略、Platform 72 / 1 忽略、Protocol 8、Flutter 524 / 1 跳过、SDK 50，以及 Bridge、Plugin、JSON、Clippy、架构、生成一致性、原生 Host 与文档门禁通过。
+
 ### Platform 能力接口隔离
 
 `anywhere-platform` 将原组合 `Platform` 拆为 `ApplicationCatalog`、`ApplicationHost`、`ContextReader`、`ClipboardHost`、`FileSearchHost`、`ResourceOpener`、`MenuHost` 与 `GitHost` 八个对象安全能力接口。`Platform` 只组合能力并由 blanket implementation 自动实现；`native_platform()` 与 Application / ActionHandler 的完整注入路径保持不变。macOS 适配器按能力拆为独立实现，方法签名、默认值、目录遍历、搜索范围拒绝、剪贴板文本回退、Finder 兼容钩子及默认错误保持原行为。

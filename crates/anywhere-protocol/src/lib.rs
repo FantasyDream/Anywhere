@@ -1,540 +1,45 @@
 //! Stable, serializable boundary types. No UI or OS dependencies.
+mod candidate;
+mod context;
+mod declarative;
+mod execution;
 pub mod extension;
+mod identifiers;
+mod launcher;
 pub mod policy;
 pub mod ui;
 pub mod web_bridge;
 pub mod web_plugin;
-/// Host tool execution target; never a captured user object or a UI Scope.
-pub const LAUNCHER_ENTRY_CONTEXT: &str = "core.launcher";
-use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
-pub type SessionId = u32;
-pub type Revision = u32;
-pub type ContextId = String;
-pub type ContextTypeId = String;
-pub type ProviderId = String;
-/// Identity of one action, as the plugin manifest and the DTOs spell it.
-pub type ActionId = String;
-/// Identity of one row in the list: an action *or* an application, with its object.
-pub type CandidateId = String;
-pub type GroupId = String;
-/// Stable semantic identity of a context, independent of snapshot row numbering.
-pub type ContextKey = String;
-/// A process lifetime, independent of Launcher SessionId and query Revision.
-pub type ExecutionSessionId = String;
-pub const PROJECT_RUST: &str = "project.rust";
-pub const PROJECT_MAVEN: &str = "project.maven";
-pub const PROJECT_GRADLE: &str = "project.gradle";
-pub const JAVA_SPRING_BOOT: &str = "java.spring_boot";
-pub const PROJECT_NODE: &str = "project.node";
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ExecutionSessionStatus {
-    Running,
-    Stopping,
-    Succeeded,
-    Failed,
-    Stopped,
-}
-
-impl ExecutionSessionStatus {
-    pub fn is_active(self) -> bool {
-        matches!(self, Self::Running | Self::Stopping)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ExecutionSessionSummary {
-    pub id: ExecutionSessionId,
-    pub title: String,
-    pub directory: String,
-    pub command: Vec<String>,
-    pub status: ExecutionSessionStatus,
-    pub exit_code: Option<i32>,
-    pub started_at_ms: i64,
-    pub finished_at_ms: Option<i64>,
-    /// Advances when either output stream changes, including a full rolling tail.
-    #[serde(default)]
-    pub output_revision: i64,
-    pub output_truncated: bool,
-    pub error: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ExecutionSessionDetail {
-    pub summary: ExecutionSessionSummary,
-    /// Each stream is independently bounded. Cross-stream ordering is not promised.
-    pub stdout: String,
-    pub stderr: String,
-}
-
-pub const TEXT: &str = "core.text";
-pub const URL: &str = "core.url";
-/// Canonical JSON context type introduced in V0.2.
-pub const JSON_DOCUMENT: &str = "json.document";
-/// Legacy V0.1 JSON context type. Normalized to `json.document` at the registry boundary.
-pub const JSON_LEGACY: &str = "core.json";
-pub const FILE: &str = "core.file";
-pub const FILE_SELECTION: &str = "core.file_selection";
-pub const DIRECTORY: &str = "core.directory";
-pub const APPLICATION: &str = "core.application";
-pub const GIT_REPOSITORY: &str = "git.repository";
-
-pub fn is_json_context(type_id: &str) -> bool {
-    type_id == JSON_DOCUMENT || type_id == JSON_LEGACY
-}
-
-/// V0.1 type ids accepted from existing plugins, mapped to their V0.2 canonical name.
-pub fn canonical_context_type(type_id: &str) -> &str {
-    if type_id == JSON_LEGACY {
-        JSON_DOCUMENT
-    } else {
-        type_id
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ContextSource {
-    UserInput,
-    ForegroundApplication,
-    ApplicationContext,
-    FinderSelection,
-    SelectedText,
-    BrowserCurrentPage,
-    Clipboard,
-}
-
-/// Open type identifier + transport value. New types don't change this protocol.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ContextDescriptor {
-    pub id: ContextId,
-    pub type_id: ContextTypeId,
-    pub value: String,
-    #[serde(default)]
-    pub properties: BTreeMap<String, String>,
-    pub source: ContextSource,
-    pub provider_id: ProviderId,
-    pub source_context_id: Option<ContextId>,
-    pub confidence: f32,
-    pub depth: u8,
-    pub session_id: SessionId,
-    pub revision: Revision,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ContextPresentation {
-    pub id: ContextId,
-    pub type_id: ContextTypeId,
-    pub label: String,
-    pub detail: String,
-    pub source: ContextSource,
-    pub key: ContextKey,
-    pub root_key: ContextKey,
-    pub icon_key: String,
-    pub capabilities: Vec<String>,
-    pub candidate_ids: Vec<CandidateId>,
-    pub primary_candidate_id: Option<CandidateId>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ContextCaptureStatus {
-    Captured,
-    Empty,
-    PermissionDenied,
-    Unsupported,
-    ApplicationChanged,
-    TimedOut,
-    TooLarge,
-    TooManyItems,
-    Unavailable,
-    Failed,
-}
-
-/// How a revision obtains Context, independently of Scope filtering.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum InputMode {
-    /// Full activation graph for explicit global action resolution.
-    #[default]
-    CapturedEnvironment,
-    Environment,
-    Content,
-    Search,
-    /// Dedicated file workspace; no captured Context or application candidates.
-    FileSearch,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ContextCapturePresentation {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub text: Option<String>,
-    /// Age of this exact clipboard snapshot at capture, not time of reading it.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub clipboard_age_ms: Option<u64>,
-    pub source: ContextSource,
-    pub status: ContextCaptureStatus,
-    pub captured_at_ms: i64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct IconDescriptor {
-    /// Semantic icon key; the host maps it to a visual glyph.
-    pub key: String,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum FileObjectKind {
-    File,
-    Directory,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct CandidatePresentation {
-    pub id: CandidateId,
-    pub kind: CandidateKind,
-    #[serde(default)]
-    pub is_menu: bool,
-    #[serde(default)]
-    pub file_kind: Option<FileObjectKind>,
-    pub title: String,
-    /// Optional source-supplied labels. The host chooses a language for display only.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub localized_titles: BTreeMap<String, String>,
-    pub subtitle: Option<String>,
-    #[serde(default)]
-    /// Display-only shortcut reported by the source application; never a user binding.
-    pub shortcut: Option<String>,
-    pub icon: IconDescriptor,
-    /// Relevance score. Empty action lists compare usage before this tie-breaker.
-    pub score: f32,
-    pub group_id: GroupId,
-    pub availability: Availability,
-    /// Action command id; `None` for an application launch candidate.
-    pub command_id: Option<ActionId>,
-    /// Bundle identity of an application launch candidate.
-    pub bundle_id: Option<String>,
-    /// App provenance for an action; generic actions can also appear in Current App.
-    pub owning_app: Option<String>,
-    /// Menu ancestors. Empty when the title is the whole label.
-    #[serde(default)]
-    pub menu_path: Vec<String>,
-    /// Context roots that expose this offer. Canonical duplicate targets union membership.
-    #[serde(default)]
-    pub context_keys: Vec<ContextKey>,
-    /// Actual graph node used for execution; may be a capability derived from the root.
-    pub execution_context_id: Option<ContextId>,
-    pub execution_target_label: Option<String>,
-    /// The default operation when Enter is pressed on its context.
-    #[serde(default)]
-    pub primary_action: bool,
-    /// Core-provided visual section within the context action panel.
-    #[serde(default)]
-    pub section_label: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CandidateKind {
-    Application,
-    Action,
-    File,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AvailabilityState {
-    Enabled,
-    Disabled,
-    Hidden,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Availability {
-    pub state: AvailabilityState,
-    pub reason: Option<String>,
-}
-
-impl Availability {
-    pub fn enabled() -> Self {
-        Self {
-            state: AvailabilityState::Enabled,
-            reason: None,
-        }
-    }
-    pub fn hidden() -> Self {
-        Self {
-            state: AvailabilityState::Hidden,
-            reason: None,
-        }
-    }
-    pub fn disabled(reason: impl Into<String>) -> Self {
-        Self {
-            state: AvailabilityState::Disabled,
-            reason: Some(reason.into()),
-        }
-    }
-    pub fn is_visible(&self) -> bool {
-        self.state != AvailabilityState::Hidden
-    }
-    pub fn is_executable(&self) -> bool {
-        self.state == AvailabilityState::Enabled
-    }
-}
-
-/// Query boundary. The current application's entry includes all actions;
-/// other entries filter a domain group independently of Context types.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-#[serde(rename_all = "snake_case")]
-pub enum Scope {
-    #[default]
-    Universal,
-    Group(GroupId),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ScopeEntry {
-    pub id: GroupId,
-    pub label: String,
-    pub is_current_app: bool,
-    #[serde(default)]
-    pub action_ids: Vec<CandidateId>,
-    #[serde(default)]
-    pub menu_ids: Vec<CandidateId>,
-}
-
-impl ScopeEntry {
-    pub fn contains(&self, candidate: &CandidatePresentation) -> bool {
-        candidate.kind == CandidateKind::Action
-            && candidate.availability.is_visible()
-            && (self.is_current_app || candidate.group_id == self.id)
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum SearchSourceState {
-    Loading,
-    Ready,
-    Unavailable,
-    Partial,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SearchSourcePresentation {
-    pub id: String,
-    pub state: SearchSourceState,
-}
+pub use candidate::{
+    Availability, AvailabilityState, CandidateKind, CandidatePresentation, FileObjectKind,
+    IconDescriptor, Scope, ScopeEntry,
+};
+pub use context::{
+    canonical_context_type, is_json_context, ContextCapturePresentation, ContextCaptureStatus,
+    ContextDescriptor, ContextMatcher, ContextPresentation, ContextSource, InputMode, APPLICATION,
+    DIRECTORY, FILE, FILE_SELECTION, GIT_REPOSITORY, JSON_DOCUMENT, JSON_LEGACY,
+    LAUNCHER_ENTRY_CONTEXT, TEXT, URL,
+};
+pub use declarative::{DeclarativeAction, PluginCommand, PluginManifest};
+pub use execution::{
+    ActionResult, ActionStatus, ExecutionSessionDetail, ExecutionSessionStatus,
+    ExecutionSessionSummary, HostView,
+};
+pub use identifiers::{
+    ActionId, CandidateId, ContextId, ContextKey, ContextTypeId, ExecutionSessionId, GroupId,
+    ProviderId, Revision, SessionId, JAVA_SPRING_BOOT, PROJECT_GRADLE, PROJECT_MAVEN, PROJECT_NODE,
+    PROJECT_RUST,
+};
+pub use launcher::{
+    FileSearchProgress, LauncherEvent, LauncherState, SearchSourcePresentation, SearchSourceState,
+};
 
 mod file_filter;
 pub use file_filter::FileSearchFilter;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct FileSearchProgress {
-    pub query_id: u64,
-    #[serde(default)]
-    pub roots: Vec<String>,
-    pub scanned_entries: u64,
-    pub confirmed_matches: u64,
-    pub finished: bool,
-    pub issue_count: u64,
-    #[serde(default)]
-    pub inaccessible_count: u64,
-    pub issue_examples: Vec<String>,
-    pub next_cursor: Option<String>,
-    pub previous_cursor: Option<String>,
-    pub page: u32,
-    pub needs_refresh: bool,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
-pub struct LauncherState {
-    pub session_id: SessionId,
-    pub revision: Revision,
-    /// Monotonic within a session/revision; a higher value always supersedes a lower one.
-    #[serde(default)]
-    pub snapshot_seq: u32,
-    pub input: String,
-    /// True once the context graph for this revision has no pending work.
-    #[serde(default)]
-    pub context_complete: bool,
-    #[serde(default)]
-    pub search_sources: Vec<SearchSourcePresentation>,
-    #[serde(default)]
-    pub file_search: Option<Box<FileSearchProgress>>,
-    #[serde(default)]
-    pub result_actions: Vec<CandidatePresentation>,
-    pub context_summary: Vec<ContextPresentation>,
-    #[serde(default)]
-    pub context_candidates: Vec<CandidatePresentation>,
-    pub preferred_context_key: Option<ContextKey>,
-    #[serde(default)]
-    pub scopes: Vec<ScopeEntry>,
-    pub selected_scope: Option<GroupId>,
-    #[serde(default)]
-    pub context_captures: Vec<ContextCapturePresentation>,
-    pub candidates: std::sync::Arc<Vec<CandidatePresentation>>,
-    /// Stable across append/progress; changes when the object list is replaced.
-    #[serde(default)]
-    pub candidate_list_version: u32,
-    pub diagnostics: Vec<String>,
-}
-
-impl LauncherState {
-    pub fn candidate(&self, id: &str) -> Option<&CandidatePresentation> {
-        self.candidates
-            .iter()
-            .chain(&self.context_candidates)
-            .find(|candidate| candidate.id == id)
-    }
-    /// Missing groups remain empty; they never widen to Universal.
-    pub fn scoped_candidates(&self, scope: &Scope) -> Vec<&CandidatePresentation> {
-        match scope {
-            Scope::Universal => self
-                .candidates
-                .iter()
-                .filter(|candidate| candidate.availability.is_visible())
-                .collect(),
-            Scope::Group(key) => match self.scopes.iter().find(|entry| entry.id == *key) {
-                Some(entry) => self
-                    .context_candidates
-                    .iter()
-                    .filter(|candidate| entry.contains(candidate))
-                    .collect(),
-                None => Vec::new(),
-            },
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ActionStatus {
-    Succeeded,
-    Failed,
-}
-
-/// Host-rendered destinations requested by a successfully executed Action.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum HostView {
-    FileSearch,
-    NativeTool {
-        id: String,
-        input: String,
-    },
-    PluginDetail {
-        detail: ui::DetailView,
-    },
-    /// Opaque Host-issued ticket. Not a resource URL or a page-supplied plugin identity.
-    WebPlugin {
-        invocation_id: String,
-    },
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ActionResult {
-    pub session_id: SessionId,
-    pub revision: Revision,
-    pub status: ActionStatus,
-    /// Present when the action itself failed.
-    pub error: Option<String>,
-    /// Present when the action succeeded but a follow-up step did not.
-    pub warning: Option<String>,
-    pub output_text: Option<String>,
-    #[serde(default)]
-    pub view: Option<HostView>,
-    pub close_window: bool,
-    #[serde(default)]
-    pub execution_session_id: Option<ExecutionSessionId>,
-}
-
-impl ActionResult {
-    pub fn succeeded(&self) -> bool {
-        self.status == ActionStatus::Succeeded
-    }
-
-    pub fn notice(&self) -> &str {
-        self.error
-            .as_deref()
-            .or(self.warning.as_deref())
-            .unwrap_or("")
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ContextMatcher {
-    pub type_id: ContextTypeId,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct PluginManifest {
-    pub protocol_version: u32,
-    pub id: String,
-    pub name: String,
-    #[serde(default)]
-    pub version: Option<String>,
-    #[serde(default)]
-    pub capabilities: Vec<extension::ExtensionCapability>,
-    pub commands: Vec<PluginCommand>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct PluginCommand {
-    pub id: String,
-    pub title: String,
-    pub subtitle: Option<String>,
-    pub accepts: Vec<ContextTypeId>,
-    #[serde(default)]
-    pub base_priority: i32,
-    #[serde(default)]
-    pub group_id: Option<GroupId>,
-    #[serde(default)]
-    pub aliases: Vec<String>,
-    #[serde(default)]
-    pub keywords: Vec<String>,
-    pub action: DeclarativeAction,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
-pub enum DeclarativeAction {
-    OpenUrl { url: String },
-    OpenFile { path: String },
-    Copy { text: String },
-    ExecuteBuiltin { command_id: ActionId },
-    RenderDetail { view: ui::DetailView },
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum LauncherEvent {
-    ContextAdded {
-        context: ContextDescriptor,
-    },
-    ActionsUpdated {
-        state: LauncherState,
-    },
-    ProviderCompleted {
-        session_id: SessionId,
-        revision: Revision,
-        provider_id: ProviderId,
-        source_context_id: ContextId,
-        duration_us: u64,
-    },
-    ProviderFailed {
-        session_id: SessionId,
-        revision: Revision,
-        provider_id: ProviderId,
-        source_context_id: ContextId,
-        duration_us: u64,
-        message: String,
-    },
-}
-
+#[cfg(test)]
+use std::collections::BTreeMap;
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -773,5 +278,99 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
         assert_eq!(ids("app.finder"), ["folder-action", "git-action"]);
         assert_eq!(ids("folder"), ["folder-action"]);
         assert!(ids("app.other").is_empty());
+    }
+
+    #[test]
+    fn representative_json_keeps_tags_defaults_and_labels() {
+        assert_eq!(
+            serde_json::to_value(DeclarativeAction::OpenUrl {
+                url: "https://example.com/search?q=anywhere".into(),
+            })
+            .unwrap(),
+            serde_json::json!({
+                "type": "open_url",
+                "url": "https://example.com/search?q=anywhere",
+            })
+        );
+        assert_eq!(
+            serde_json::to_value(LauncherEvent::ProviderCompleted {
+                session_id: 7,
+                revision: 9,
+                provider_id: "example.provider".into(),
+                source_context_id: "context-1".into(),
+                duration_us: 123,
+            })
+            .unwrap(),
+            serde_json::json!({
+                "type": "provider_completed",
+                "session_id": 7,
+                "revision": 9,
+                "provider_id": "example.provider",
+                "source_context_id": "context-1",
+                "duration_us": 123,
+            })
+        );
+
+        let candidate = CandidatePresentation {
+            id: "candidate-1".into(),
+            kind: CandidateKind::Action,
+            is_menu: false,
+            file_kind: None,
+            title: "Open".into(),
+            localized_titles: BTreeMap::from([("ja".into(), "開く".into())]),
+            subtitle: None,
+            shortcut: Some("⌘K".into()),
+            icon: IconDescriptor { key: "open".into() },
+            score: 1.5,
+            group_id: "open".into(),
+            availability: Availability::enabled(),
+            command_id: Some("core.open".into()),
+            bundle_id: None,
+            owning_app: None,
+            menu_path: Vec::new(),
+            context_keys: Vec::new(),
+            execution_context_id: None,
+            execution_target_label: None,
+            primary_action: false,
+            section_label: Some("Actions".into()),
+        };
+        let encoded = serde_json::to_value(candidate).unwrap();
+        assert_eq!(encoded["localized_titles"]["ja"], "開く");
+        assert_eq!(encoded["shortcut"], "⌘K");
+        assert_eq!(encoded["section_label"], "Actions");
+
+        let old_state = serde_json::json!({
+            "session_id": 7,
+            "revision": 2,
+            "input": "example",
+            "context_summary": [],
+            "preferred_context_key": null,
+            "selected_scope": null,
+            "candidates": [],
+            "diagnostics": [],
+        });
+        let state: LauncherState = serde_json::from_value(old_state.clone()).unwrap();
+        assert_eq!(state.snapshot_seq, 0);
+        assert!(!state.context_complete);
+        assert!(state.search_sources.is_empty());
+        assert!(state.file_search.is_none());
+        assert!(state.result_actions.is_empty());
+        assert!(state.context_candidates.is_empty());
+        assert!(state.scopes.is_empty());
+        assert!(state.context_captures.is_empty());
+        assert_eq!(state.candidate_list_version, 0);
+
+        let mut future_state = old_state;
+        future_state["future_optional_field"] = serde_json::json!(true);
+        assert!(serde_json::from_value::<LauncherState>(future_state).is_ok());
+
+        let manifest_with_unknown_field = r#"
+protocol_version = 1
+id = "legacy"
+name = "Legacy"
+future_required_field = true
+commands = []
+"#;
+        assert!(toml::from_str::<PluginManifest>(manifest_with_unknown_field).is_err());
     }
 }

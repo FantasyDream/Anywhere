@@ -96,6 +96,21 @@ resources/                 键码、文件类型、运行策略、设计参数�
 
 接口默认值、目录遍历、配置搜索范围拒绝、剪贴板文本回退、Finder 兼容钩子和各默认错误保持迁移前行为。未实现的能力显式返回空值、不支持或既有默认实现，不会静默扩大权限。
 
+## Protocol 模型边界
+
+`anywhere-protocol` 根模块只显式重导出既有类型路径，根级模型定义分在六个私有模块：
+
+| 私有模块 | 内容 |
+|---|---|
+| `identifiers` | Session / Revision / Context / Action / Candidate / Process 身份与项目类型常量 |
+| `context` | Context 常量、兼容转换、Descriptor / Presentation / Capture、`InputMode` 与 `ContextMatcher` |
+| `candidate` | Icon、Candidate、可用性、Scope 与 domain 成员判断 |
+| `launcher` | Launcher 状态、搜索来源、文件搜索进度与 Launcher 事件 |
+| `execution` | 执行结果、Host View、进程会话状态、摘要与详情 |
+| `declarative` | 旧 Manifest、Command 与 `DeclarativeAction` 兼容模型 |
+
+`extension`、`policy`、`ui`、`web_bridge` 与 `web_plugin` 保持公开子模块；生成器拥有的 `FileSearchFilter` 继续从根模块显式导出。消费者仍使用 `anywhere_protocol::Type`，本轮不批量改写调用方导入。类型、字段 / 枚举顺序、辅助方法、Serde 标签与默认值、旧插件缺省字段和未知字段处理均保持原契约。
+
 ## 激活与 Context
 
 1. Host 收到唤醒请求，先保留前台应用焦点。
