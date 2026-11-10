@@ -35,6 +35,10 @@ it into another UI framework.
   `core/search/`. Empty action lists compare usage count, last use, relevance
   and stable IDs. Flutter only filters the chosen scope and limits visible rows.
   Keyword search, file results and source history lists have separate contracts.
+- File search scanning: `features/filesystem/scan.rs` owns query lifetime; its
+  `query`, `scope`, `record`, `traversal`, `progress` and `pagination` modules own
+  matching, scope checks, record format, enumeration and result delivery.
+  `result_store.rs` keeps continuous external sorting; see [file-search.md](docs/file-search.md).
 - Installed application index: `application/application_index.rs` owns scan
   generations, full/filtered catalogs, exclusions and completion notifications;
   `session_runtime.rs` revalidates its immutable snapshot before publication.

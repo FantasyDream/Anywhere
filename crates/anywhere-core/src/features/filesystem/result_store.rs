@@ -172,7 +172,7 @@ impl ContinuousResults {
         displayed: &HashSet<PathBuf>,
         cancelled: &(dyn Fn() -> bool + Sync),
     ) -> Result<ScanPage> {
-        let boundary = store.progress.lock().unwrap().boundary;
+        let boundary = store.committed_boundary();
         if self.file.is_none() || boundary != self.boundary {
             let delta = self.sorted_delta(store, boundary, cancelled)?;
             self.file = Some(if let Some(previous) = self.file.take() {
@@ -206,7 +206,7 @@ impl ContinuousResults {
         // during the next read and can only cause a harmless empty final batch.
         let more = read_record(&mut reader)?.is_some();
         let mut progress = store.page_progress(&hits, boundary, 0, more)?;
-        progress.needs_refresh = boundary != store.progress.lock().unwrap().boundary;
+        progress.needs_refresh = boundary != store.committed_boundary();
         Ok(ScanPage { hits, progress })
     }
 }

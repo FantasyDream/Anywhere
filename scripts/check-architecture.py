@@ -2,9 +2,8 @@
 """Check the actual Cargo dependency graph, including renamed/transitive dependencies."""
 import json
 from pathlib import Path
-import re
 import subprocess
-from architecture_rules import check_core_imports, check_feature_imports, check_persistence_imports
+from architecture_rules import check_core_imports, check_feature_imports, check_persistence_imports, production_source
 
 subprocess.check_call([
     'python3', '-m', 'unittest', 'discover', '-s', 'scripts/tests', '-p',
@@ -59,8 +58,7 @@ print('Persistence imports OK: adapters do not call Application')
 
 # Shared product logic cannot select OS adapters or assume a macOS application identity.
 for source in Path('crates/anywhere-core/src').rglob('*.rs'):
-    production = source.read_text().split('#[cfg(test)]', 1)[0]
-    production = re.sub(r'//[^\n]*|/\*.*?\*/', '', production, flags=re.S)
+    production = production_source(source.read_text())
     for token in ['MacOsPlatform', 'com.apple.finder', '/bin/sh', 'std::os::']:
         assert token not in production, (source, token)
 

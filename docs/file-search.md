@@ -50,7 +50,10 @@ Spotlight 返回多少、是否失败都不决定是否遍历。旧 Ripgrep / Co
 | 模块 | 职责 |
 |---|---|
 | `features/filesystem/search.rs` | 快批 / 扫描协调、系统能力、Candidate 与动作绑定 |
-| `features/filesystem/scan.rs` | 名称匹配、过滤、完整遍历、临时记录 |
+| `features/filesystem/scan.rs` | ScanStore 查询寿命、取消、临时工作区及既有扫描入口 |
+| `features/filesystem/scan/query.rs` / `scope.rs` | 名称匹配 / 稳定顺序；ScanScope 持有范围配置、显式路径与索引候选核验 |
+| `features/filesystem/scan/record.rs` / `traversal.rs` | 有界原始路径记录格式；磁盘 FIFO 遍历与 flush 后发布 |
+| `features/filesystem/scan/progress.rs` / `pagination.rs` | 有界诊断、已提交边界；兼容游标与连续批次交付 |
 | `features/filesystem/result_store.rs` | 有界外部排序、未读尾部归并、失败重建 |
 | `application/source_runtime.rs` | 通用异步来源 admission、取消、批次与版本校验 |
 | `application/file_workspace.rs` | 文件配置、进度、冻结与原子稳定追加 |
@@ -62,7 +65,7 @@ Spotlight 返回多少、是否失败都不决定是否遍历。旧 Ripgrep / Co
 
 遍历器一次读取一个目录，把待遍历目录写入磁盘 FIFO；不在内存收集全树，不为每项创建任务。必要属性以外不读正文、图标或项目数据。
 
-命中写入权威二进制记录，flush 后推进可读边界。内部每批 64 项；排序段最多 512 项 / 1 MiB，最多 16 路归并。新增命中仅与未读尾部合并，已经展示的路径去重；失败重建从权威记录恢复，不因推进游标漏项。
+命中写入权威二进制记录，flush 后推进可读边界。`ScanScope` 固定本次查询的范围 / 隐藏 / 排除和显式路径选项；链接的真实目标仍在索引核验和遍历时重新读取，不缓存为永久授权。外部排序通过 `committed_boundary()` 获取已提交记录上限，不直接访问进度内部字段。内部每批 64 项；排序段最多 512 项 / 1 MiB，最多 16 路归并。新增命中仅与未读尾部合并，已经展示的路径去重；失败重建从权威记录恢复，不因推进游标漏项。
 
 查询、类型、范围、来源目录或会话变更撤销旧任务。worker 持有 admission 至真正结束；有界通道避免积压。临时目录使用私有权限和 lease 锁，释放引用后清理，异常退出的无活租约目录在后续准备时回收。
 
@@ -90,6 +93,6 @@ Build 30 移除旧 64 KiB 文本读取、传统编码猜测和固定分栏。Rus
 
 ## 验证边界
 
-回归覆盖重叠根、隐藏目录、gitignore、类型后过滤不漏项、Unicode / 标点 / 拼音、显式路径、链接与权限边界、临时存储失败、取消、稳定前缀、对象执行以及连续加载 / 系统预览返回。最新工程状态见 [V0.12 MVP](mvp-v0.12.md)。
+回归覆盖重叠根、隐藏目录、gitignore、类型后过滤不漏项、Unicode / 标点 / 拼音、显式路径、链接与权限边界、临时存储失败、取消、稳定前缀、对象执行以及连续加载 / 系统预览返回。最新工程状态见 [V0.14 MVP](mvp-v0.14.md)。
 
 历史性能 / GUI 证据保存在 [V0.7 收尾](archive/v0.7-closeout.md)，不能当作后来构建的同机测量。库选型和 Quick Look 调研见 [研究资料](research/README.md)。

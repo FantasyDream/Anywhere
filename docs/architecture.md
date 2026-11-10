@@ -125,6 +125,8 @@ Flutter 的 `LauncherSessionCoordinator` 拥有 SessionId、generation、revisio
 
 Spotlight 返回早期候选，Rust 完整遍历允许范围；查询临时存储保存命中并外部排序，已显示前缀保持稳定。对象二级动作按选中目标延迟生成，复验原执行对象。Host 接收 replacement、append 或 metadata delta，不重新匹配文件。
 
+`features/filesystem/scan.rs` 保留 ScanStore 的查询寿命、取消与临时工作区。私有 `scan/query.rs` 负责名称归一和排序，`scope.rs` 的 ScanScope 持有范围配置并处理显式路径及索引核验；`record.rs` 保持权威记录格式，`traversal.rs` 负责磁盘 FIFO 枚举及 flush 后发布，`progress.rs` / `pagination.rs` 负责诊断、提交边界、兼容游标和连续交付。`result_store.rs` 保留既有外部排序，通过已提交边界接口读取记录，不直接修改扫描进度。路径授权仍按使用时的真实目标复验，公开扫描入口和稳定前缀契约保持一致。
+
 Flutter 的 `StableList` 共享 256 条不可变块，索引按块复用，仅为访问到的候选包装行；Revision 或 list version 改变时拒绝无效尾部。完整契约见 [文件搜索](file-search.md)。系统预览由 `application/file_preview.rs` 复验对象、`features/preview.rs` 管理资源，Flutter 经统一窗口接口调用 macOS Host；旧文本解码与固定分栏已删除，见 [系统预览](native-preview.md)。Platform 的工具查找使用 which 检查绝对候选，仍保留 GUI 工具目录和 wrapper 策略。阶段计划见 [开源复用重构](archive/open-source-refactor-plan.md)。
 
 ## 剪贴板功能模块

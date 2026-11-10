@@ -40,6 +40,16 @@
 
 ## 最新已验证基线
 
+### Rust 文件扫描职责拆分
+
+ScanStore 保留查询寿命、取消和临时工作区；私有 query / scope / record / traversal / progress / pagination 模块分别管理名称匹配、ScanScope 范围配置与索引核验、原始路径记录、磁盘 FIFO 遍历、诊断和结果交付。外部排序保持在 result_store，通过 `committed_boundary()` 读取已 flush 记录上限，进度状态不再直接暴露。公开扫描入口、二进制格式、匹配顺序、兼容游标和连续稳定前缀保持一致，代码归属见[架构](architecture.md)，行为见[文件搜索](file-search.md)。
+
+新增链接改指向后的索引 / 遍历授权复验、完整记录往返及截断尾部拒绝两项回归，在拆分前后均通过。扫描基线 24 项通过 / 1 项忽略，filesystem 单元 26 项通过 / 1 项忽略，文件搜索 MVP 24 项通过。Review 逐项核对 18 个迁移操作体、构造顺序、记录格式、flush 与发布边界、锁与可见性，未发现剩余新增阻塞问题。
+
+初轮完整门禁在架构检查中将独立 Unix 测试夹具当成生产代码；测试文件现显式使用文件级 `cfg(test)`，检查器识别该属性，并新增规则回归，确认测试文件名或代码字符串不能绕过生产检查。6 项架构规则测试通过。最终完整 `scripts/check.sh` exit 0：Core 349 项通过 / 1 项忽略、MVP 195 项通过 / 4 项忽略、Flutter 524 项通过 / 1 项跳过、SDK 50 项及其余工作区、原生 Host、Clippy、架构、规范、生成物和文档检查通过。完整日志为被忽略的 `build/file-scan-full-check.log`。干净提交 `12f12d9` 已构建独立 `Anywhere-0.14-file-scan-12f12d9.app`（0.14.0+46 / arm64 / Impeller），持久本机签名、ZIP 内容及 SHA-256 校验通过。核实进程路径和隔离数据后，仅在原生面板授权本轮合成目录，并核对隔离书签文件只有该路径。文件工具搜索 `report` 显示 183 found / complete，滚动跨过 64 / 128 条边界可达末尾嵌套文件与隐藏文件；PDF 过滤为 2 项、恢复全部为 183 项；显式子目录只显示 10 个子项。范围外的合成 manifest 路径无结果并记录预期的授权范围警告，后续正常查询恢复 183 项；返回正常，实例经菜单退出并用只读进程检查确认。授权面板后曾被用户切换焦点，刷新并显式选择全局搜索后的操作才计入；未打开或预览合成文件，未修改个人设置或替换日常 App。
+
+日志中 AXTree、Flutter ERROR、frame-time clamping、resize timeout 均为 0；范围拒绝为主动测试产生的预期警告，IMK mach port / TSM 指示灯诊断各 1 条，原因未在本步定位。来源和验证记录位于被忽略的 `build/Anywhere-0.14-file-scan-12f12d9.provenance.json`、`build/acceptance-file-scan-12f12d9/verification.json`。本项未新增物理键盘 / 输入法、VoiceOver、预览、内存、真实用户目录、GUI 权限拒绝或跨平台实机验收。
+
 ### Rust 执行请求职责拆分
 
 `ExecutionRequest` 在阻塞 worker 排队前持有冻结候选、来源身份、注册表与授权版本，并由 `spawn(self)` 消费。私有 worker 管理开始执行、Web 凭据 / 进程任务交接和 Usage 保存；`execute.rs` 保留无界面 Web 驱动、菜单失败恢复与结果映射。请求与共享服务不新建 Session，公开 API、DTO、锁顺序、错误 / 警告边界及独立进程生命周期保持一致，代码归属见[架构](architecture.md)。
