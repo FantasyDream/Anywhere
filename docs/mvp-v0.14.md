@@ -40,6 +40,16 @@
 
 ## 最新已验证基线
 
+### Platform 能力接口隔离
+
+`anywhere-platform` 将原组合 `Platform` 拆为 `ApplicationCatalog`、`ApplicationHost`、`ContextReader`、`ClipboardHost`、`FileSearchHost`、`ResourceOpener`、`MenuHost` 与 `GitHost` 八个对象安全能力接口。`Platform` 只组合能力并由 blanket implementation 自动实现；`native_platform()` 与 Application / ActionHandler 的完整注入路径保持不变。macOS 适配器按能力拆为独立实现，方法签名、默认值、目录遍历、搜索范围拒绝、剪贴板文本回退、Finder 兼容钩子及默认错误保持原行为。
+
+应用索引只依赖 `ApplicationCatalog`，文件搜索只依赖 `FileSearchHost`，目录采集只依赖 `ApplicationHost`，Clipboard History 只依赖 `ClipboardHost`。`ContextCaptureService` 分别保存从同一适配器 `Arc` 转换得到的 `ContextReader` 与 `ClipboardHost`，保留共享策略、取消和迟到发布语义；`HostServices` 按每个方法声明所需能力，并在剪贴板、URL、文件与 Git 副作用前保留原授权检查。仓库内测试替身、示例与外部实现均迁移为能力接口。
+
+新增默认转发回归覆盖剪贴板快照与写入、Finder 选择回退、目录扫描、搜索范围拒绝、图标与菜单空结果、启动不支持错误及 Git 默认错误；现有 Context 来源、Clipboard History、应用索引和文件搜索回归继续覆盖共享适配器状态、回调寿命、采集策略、索引发布、取消、执行排队与授权边界。干净 checkout 的完整 `scripts/check.sh` exit 0：Core 350 / 1 忽略、MVP 195 / 4 忽略、Platform 72 / 1 忽略、Protocol 6、Flutter 524 / 1 跳过、SDK 50，以及 Bridge、Plugin、JSON、Clippy、架构、生成一致性、原生 Host 与文档门禁通过。
+
+验证工作区使用隔离 `HOME`、独立数据目录与临时 Cargo target；完整 Core 测试在宿主权限下通过，包括沙箱内无法创建的非 UTF-8 文件名回归。macOS 签名包、归档、真实 FFI 与 GUI 冒烟状态在后续交付段落单独记录，不以自动化测试代替。
+
 ### Bridge DTO 职责收拢
 
 `anywhere-bridge-flutter/src/api.rs` 保留 FRB 入口、初始化和用例编排；49 个手写传输类型集中在 `api/dto.rs`，通过 `api` 的重导出保持既有 Rust `crate::api::...` 路径。FRB 2.13.0 重新生成两端绑定后，Dart 类型位于 `api/dto.dart`；Flutter 通过手写 `infrastructure/bridge_api.dart` 统一导出函数和 DTO，调用方只迁移导入路径。公开函数签名、字段、枚举顺序和边界行为保持一致，Core 的识别、排序或执行策略不进入 DTO。

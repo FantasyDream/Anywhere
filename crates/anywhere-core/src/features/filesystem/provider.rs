@@ -8,7 +8,7 @@
 use crate::core::context::provider::{ContextProvider, ProviderDescriptor};
 use crate::core::context::{ContextSource, ContextValue, ExecutionContext, ResolvedContext};
 use anyhow::{bail, Context, Result};
-use anywhere_platform::{ApplicationInfo, ContextReadError, Platform};
+use anywhere_platform::{ApplicationHost, ApplicationInfo, ContextReadError};
 use anywhere_protocol::*;
 use async_trait::async_trait;
 use std::{path::PathBuf, sync::Arc, time::Duration};
@@ -164,7 +164,7 @@ pub struct DirectoryMemo {
 impl DirectoryMemo {
     /// Start the capture immediately. The task is independent of any request, so
     /// early typing cannot lose the directory and no second request can duplicate it.
-    pub fn start(platform: Arc<dyn Platform>, frontmost: ApplicationInfo) -> Arc<Self> {
+    pub fn start(platform: Arc<dyn ApplicationHost>, frontmost: ApplicationInfo) -> Arc<Self> {
         let (tx, rx) = watch::channel(None);
         let publisher = tx.clone();
         let bundle_id = frontmost.bundle_id.clone();

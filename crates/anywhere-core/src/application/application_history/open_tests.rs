@@ -5,7 +5,10 @@ use crate::{
     persistence::module_storage::ModuleStorageHost,
 };
 use anyhow::{bail, Result};
-use anywhere_platform::{ApplicationInfo, BundleApplication, InstalledApplications, Platform};
+use anywhere_platform::{
+    ApplicationCatalog, ApplicationHost, ApplicationInfo, BundleApplication, ClipboardHost,
+    ContextReader, FileSearchHost, GitHost, InstalledApplications, MenuHost, ResourceOpener,
+};
 use serde_json::json;
 use std::{
     path::{Path, PathBuf},
@@ -38,19 +41,31 @@ impl OpenRecorder {
         }
     }
 }
-impl Platform for OpenRecorder {
+impl ApplicationCatalog for OpenRecorder {
     fn installed_applications(&self) -> InstalledApplications {
         InstalledApplications {
             applications: self.apps.clone(),
             skipped: 0,
         }
     }
+}
+impl ApplicationHost for OpenRecorder {
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
         Ok(None)
     }
     fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
         Ok(None)
     }
+}
+impl ContextReader for OpenRecorder {}
+impl ClipboardHost for OpenRecorder {
+    fn copy_text(&self, text: &str) -> Result<()> {
+        self.copied.lock().unwrap().push(text.into());
+        Ok(())
+    }
+}
+impl FileSearchHost for OpenRecorder {}
+impl ResourceOpener for OpenRecorder {
     fn open_url(&self, _: &str) -> Result<()> {
         bail!("default URL opening must not be used")
     }
@@ -73,10 +88,6 @@ impl Platform for OpenRecorder {
             .push((application.into(), target.into()));
         Ok(())
     }
-    fn copy_text(&self, text: &str) -> Result<()> {
-        self.copied.lock().unwrap().push(text.into());
-        Ok(())
-    }
     fn open_url_in_application(&self, application: &Path, url: &str) -> Result<()> {
         self.urls
             .lock()
@@ -85,6 +96,8 @@ impl Platform for OpenRecorder {
         Ok(())
     }
 }
+impl MenuHost for OpenRecorder {}
+impl GitHost for OpenRecorder {}
 fn service() -> HistoryService {
     let storage = ModuleStorageHost::memory()
         .unwrap()

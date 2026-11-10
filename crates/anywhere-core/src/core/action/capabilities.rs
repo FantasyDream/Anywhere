@@ -1,6 +1,6 @@
 //! Narrow host services shared by declarative v2 and trusted first-party modules.
 use anyhow::{ensure, Result};
-use anywhere_platform::Platform;
+use anywhere_platform::{ClipboardHost, GitHost, ResourceOpener};
 use anywhere_protocol::extension::ExtensionCapability;
 use std::{collections::BTreeSet, path::Path, sync::Arc};
 #[derive(Debug, Clone, Default)]
@@ -29,33 +29,45 @@ impl CapabilityGrant {
         Ok(())
     }
 }
-pub struct HostServices<'a> {
-    platform: &'a dyn Platform,
+pub struct HostServices<'a, P: ?Sized> {
+    platform: &'a P,
     grant: CapabilityGrant,
 }
-impl<'a> HostServices<'a> {
-    pub fn new(platform: &'a dyn Platform, grant: &CapabilityGrant) -> Self {
+impl<'a, P: ?Sized> HostServices<'a, P> {
+    pub fn new(platform: &'a P, grant: &CapabilityGrant) -> Self {
         Self {
             platform,
             grant: grant.clone(),
         }
     }
-    pub fn copy_text(&self, value: &str) -> Result<()> {
+    pub fn copy_text(&self, value: &str) -> Result<()>
+    where
+        P: ClipboardHost,
+    {
         self.grant.require(ExtensionCapability::ClipboardWrite)?;
         self.platform.copy_text(value)
     }
     pub fn write_clipboard(
         &self,
         value: &anywhere_platform::clipboard::ClipboardPayload,
-    ) -> Result<()> {
+    ) -> Result<()>
+    where
+        P: ClipboardHost,
+    {
         self.grant.require(ExtensionCapability::ClipboardWrite)?;
         self.platform.write_clipboard(value)
     }
-    pub fn open_url(&self, value: &str) -> Result<()> {
+    pub fn open_url(&self, value: &str) -> Result<()>
+    where
+        P: ResourceOpener,
+    {
         self.grant.require(ExtensionCapability::OpenUrl)?;
         self.platform.open_url(value)
     }
-    pub fn open_file(&self, path: &Path) -> Result<()> {
+    pub fn open_file(&self, path: &Path) -> Result<()>
+    where
+        P: ResourceOpener,
+    {
         self.grant.require(ExtensionCapability::OpenFile)?;
         self.platform.open_file(path)
     }
@@ -63,7 +75,10 @@ impl<'a> HostServices<'a> {
         &self,
         path: &Path,
         operation: anywhere_platform::GitOperation,
-    ) -> Result<anywhere_platform::GitOutput> {
+    ) -> Result<anywhere_platform::GitOutput>
+    where
+        P: GitHost,
+    {
         self.grant.require(ExtensionCapability::GitRead)?;
         self.platform.run_git(path, operation)
     }

@@ -1,9 +1,9 @@
 //! Installed-application catalog. Deliberately outside the context graph.
 //!
-//! Discovery belongs to [`anywhere_platform::Platform::installed_applications`]. This
+//! Discovery belongs to [`anywhere_platform::ApplicationCatalog::installed_applications`]. This
 //! module turns that list into searchable rows (aliases, dedup) and holds the
 //! in-memory snapshot. The first snapshot never waits for a scan.
-use anywhere_platform::{BundleApplication, Platform};
+use anywhere_platform::{ApplicationCatalog as InstalledApplicationCatalog, BundleApplication};
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
@@ -131,7 +131,7 @@ pub struct ScanReport {
     pub skipped: usize,
 }
 
-pub fn scan(platform: &dyn Platform) -> ScanReport {
+pub fn scan(platform: &dyn InstalledApplicationCatalog) -> ScanReport {
     let found = platform.installed_applications();
     let input = found.applications.len();
     let applications = index_from(found.applications);
@@ -148,7 +148,7 @@ pub enum ScanStatus {
 }
 
 /// Background scan. A failed task is not an empty catalog.
-pub async fn scan_async(platform: Arc<dyn Platform>) -> ScanStatus {
+pub async fn scan_async(platform: Arc<dyn InstalledApplicationCatalog>) -> ScanStatus {
     let started = std::time::Instant::now();
     match tokio::task::spawn_blocking(move || scan(platform.as_ref())).await {
         Ok(report) => {
@@ -207,7 +207,7 @@ impl ApplicationCatalog {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use anywhere_platform::{ApplicationInfo, BundleApplication, GitOperation, GitOutput};
+    use anywhere_platform::BundleApplication;
     use std::path::{Path, PathBuf};
     use std::sync::Mutex;
 
@@ -221,18 +221,12 @@ mod tests {
         aliases: Vec<String>,
         roots: Vec<PathBuf>,
     }
-    impl Platform for FakePlatform {
+    impl InstalledApplicationCatalog for FakePlatform {
         fn is_application_entry(&self, path: &Path) -> bool {
             path.extension().is_some_and(|extension| extension == "app")
         }
         fn application_roots(&self) -> Vec<PathBuf> {
             self.roots.clone()
-        }
-        fn frontmost_application(&self) -> anyhow::Result<Option<ApplicationInfo>> {
-            Ok(None)
-        }
-        fn application_directory(&self, _: &ApplicationInfo) -> anyhow::Result<Option<PathBuf>> {
-            Ok(None)
         }
         fn bundle_application(
             &self,
@@ -254,39 +248,6 @@ mod tests {
                 path: Some(bundle.to_string_lossy().into_owned()),
                 icon: None,
             }))
-        }
-        fn launch_application(&self, _: &str) -> anyhow::Result<bool> {
-            Ok(true)
-        }
-        fn application_icon(&self, _: &str, _: u32) -> anyhow::Result<Option<Vec<u8>>> {
-            Ok(None)
-        }
-        fn clipboard_text(&self) -> anyhow::Result<Option<String>> {
-            Ok(None)
-        }
-        fn git_available(&self) -> bool {
-            false
-        }
-        fn run_git(&self, _: &Path, _: GitOperation) -> anyhow::Result<GitOutput> {
-            anyhow::bail!("git is not supported")
-        }
-        fn open_url(&self, _: &str) -> anyhow::Result<()> {
-            Ok(())
-        }
-        fn open_file(&self, _: &Path) -> anyhow::Result<()> {
-            Ok(())
-        }
-        fn reveal_file(&self, _: &Path) -> anyhow::Result<()> {
-            Ok(())
-        }
-        fn open_directory(&self, _: &Path) -> anyhow::Result<()> {
-            Ok(())
-        }
-        fn open_terminal(&self, _: &Path) -> anyhow::Result<()> {
-            Ok(())
-        }
-        fn copy_text(&self, _: &str) -> anyhow::Result<()> {
-            Ok(())
         }
     }
 

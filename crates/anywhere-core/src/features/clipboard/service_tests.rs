@@ -1,12 +1,9 @@
 use super::*;
 use anyhow::Result;
-use anywhere_platform::{ApplicationInfo, Platform};
-use std::{
-    path::{Path, PathBuf},
-    sync::{
-        atomic::{AtomicI64, AtomicUsize, Ordering},
-        Arc, Mutex,
-    },
+use anywhere_platform::ClipboardHost;
+use std::sync::{
+    atomic::{AtomicI64, AtomicUsize, Ordering},
+    Arc, Mutex,
 };
 
 #[derive(Default)]
@@ -20,28 +17,7 @@ struct Clipboard {
     read_error: Option<ContextReadError>,
     generation_error: bool,
 }
-impl Platform for Clipboard {
-    fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
-        Ok(None)
-    }
-    fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
-        Ok(None)
-    }
-    fn open_url(&self, _: &str) -> Result<()> {
-        unreachable!()
-    }
-    fn open_file(&self, _: &Path) -> Result<()> {
-        unreachable!()
-    }
-    fn reveal_file(&self, _: &Path) -> Result<()> {
-        unreachable!()
-    }
-    fn open_directory(&self, _: &Path) -> Result<()> {
-        unreachable!()
-    }
-    fn open_terminal(&self, _: &Path) -> Result<()> {
-        unreachable!()
-    }
+impl ClipboardHost for Clipboard {
     fn copy_text(&self, _: &str) -> Result<()> {
         self.reads.fetch_add(100, Ordering::Relaxed);
         Ok(())

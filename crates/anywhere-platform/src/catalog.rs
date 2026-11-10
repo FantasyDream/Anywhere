@@ -3,13 +3,13 @@
 //! Default strategy for [`crate::Platform::installed_applications`]: walk known roots
 //! and identify each entry through [`crate::Platform::bundle_application`]. A later
 //! indexer replaces `installed_applications` and does not have to use this walk.
-use crate::{InstalledApplications, Platform};
+use crate::{ApplicationCatalog, InstalledApplications};
 use std::path::{Path, PathBuf};
 
 const MAX_DEPTH: usize = 3;
 const MAX_APPS: usize = 4000;
 
-pub(crate) fn from_roots<P: Platform + ?Sized>(platform: &P) -> InstalledApplications {
+pub(crate) fn from_roots<P: ApplicationCatalog + ?Sized>(platform: &P) -> InstalledApplications {
     let mut applications = Vec::new();
     let mut skipped = 0usize;
     for path in discover(&platform.application_roots(), &|path| {

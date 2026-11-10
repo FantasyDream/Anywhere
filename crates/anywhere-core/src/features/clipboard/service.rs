@@ -2,7 +2,7 @@
 use super::history::*;
 use super::policy::{self, HistoryPolicy};
 use anyhow::{ensure, Context, Result};
-use anywhere_platform::{ContextReadError, Platform};
+use anywhere_platform::{ClipboardHost, ContextReadError};
 use sha2::{Digest, Sha256};
 use std::sync::{Arc, Mutex};
 
@@ -150,7 +150,7 @@ impl HistoryService {
         state.expire((self.clock)())?;
         state.repository()?.usage()
     }
-    pub fn set_feature_enabled(&self, enabled: bool, platform: &dyn Platform) -> Result<()> {
+    pub fn set_feature_enabled(&self, enabled: bool, platform: &dyn ClipboardHost) -> Result<()> {
         let mut state = self.state()?;
         if state.feature_enabled != enabled {
             state.feature_enabled = enabled;
@@ -170,7 +170,7 @@ impl HistoryService {
         state.invalidate();
         Ok(())
     }
-    pub fn request_recording(&self, enabled: bool, platform: &dyn Platform) -> Result<()> {
+    pub fn request_recording(&self, enabled: bool, platform: &dyn ClipboardHost) -> Result<()> {
         if !enabled {
             return self.set_recording(false);
         }
@@ -198,7 +198,7 @@ impl HistoryService {
         Ok(())
     }
     /// A user-requested timed pause. Clearing it establishes a fresh metadata baseline.
-    pub fn pause(&self, minutes: u32, platform: &dyn Platform) -> Result<()> {
+    pub fn pause(&self, minutes: u32, platform: &dyn ClipboardHost) -> Result<()> {
         ensure!(
             matches!(minutes, 0 | 5 | 15 | 60),
             "unsupported pause duration"
@@ -240,7 +240,7 @@ impl HistoryService {
         state.expire((self.clock)())
     }
     /// Uses only metadata while resuming; clipboard contents copied during a pause are discarded.
-    fn maintain(&self, platform: &dyn Platform) -> Result<()> {
+    fn maintain(&self, platform: &dyn ClipboardHost) -> Result<()> {
         let now = (self.clock)();
         let mut state = self.state()?;
         if state.repository.is_err() {
@@ -330,7 +330,7 @@ impl HistoryService {
             },
         )
     }
-    pub fn copy(&self, id: i64, platform: &dyn Platform) -> Result<()> {
+    pub fn copy(&self, id: i64, platform: &dyn ClipboardHost) -> Result<()> {
         let mut state = self.state()?;
         state.require_enabled()?;
         state.expire((self.clock)())?;
@@ -354,7 +354,7 @@ impl HistoryService {
         state.invalidate(); // Revoke a capture already in flight.
         Ok(())
     }
-    pub fn poll(&self, platform: &dyn Platform, now_ms: i64) -> Result<()> {
+    pub fn poll(&self, platform: &dyn ClipboardHost, now_ms: i64) -> Result<()> {
         self.maintain(platform)?;
         let epoch = {
             let state = self.state()?;
@@ -412,7 +412,7 @@ impl HistoryService {
         Ok(())
     }
     /// The clipboard-rs watcher retains only a Weak service; Drop requests shutdown.
-    pub fn start(self: &Arc<Self>, platform: Arc<dyn Platform>) -> Result<()> {
+    pub fn start(self: &Arc<Self>, platform: Arc<dyn ClipboardHost>) -> Result<()> {
         // An optional history policy or pasteboard failure must not stop Launcher startup.
         if self.maintain(platform.as_ref()).is_err() {
             self.state()?.notice = Some(HistoryNotice::CaptureUnavailable);

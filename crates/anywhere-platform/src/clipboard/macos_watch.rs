@@ -1,6 +1,6 @@
 //! Metadata-only polling; exceptions are contained by the native generation query.
 use super::ClipboardWatch;
-use crate::Platform;
+use crate::ClipboardHost;
 use anyhow::Result;
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::time::Duration;

@@ -273,7 +273,10 @@ mod tests {
     use crate::core::action::descriptor::ActionRegistry;
     use crate::core::ranking::usage::MemoryUsage;
     use crate::core::session::facts::CLIPBOARD;
-    use anywhere_platform::{ApplicationInfo, Platform};
+    use anywhere_platform::{
+        ApplicationCatalog, ApplicationHost, ApplicationInfo, ClipboardHost, ContextReader,
+        FileSearchHost, GitHost, MenuHost, ResourceOpener,
+    };
     use std::path::Path;
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::Duration;
@@ -293,28 +296,17 @@ mod tests {
         }
     }
 
-    impl Platform for HeldClipboard {
+    impl ApplicationCatalog for HeldClipboard {}
+    impl ApplicationHost for HeldClipboard {
         fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
             Ok(None)
         }
         fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<std::path::PathBuf>> {
             Ok(None)
         }
-        fn open_url(&self, _: &str) -> Result<()> {
-            Ok(())
-        }
-        fn open_file(&self, _: &Path) -> Result<()> {
-            Ok(())
-        }
-        fn reveal_file(&self, _: &Path) -> Result<()> {
-            Ok(())
-        }
-        fn open_directory(&self, _: &Path) -> Result<()> {
-            Ok(())
-        }
-        fn open_terminal(&self, _: &Path) -> Result<()> {
-            Ok(())
-        }
+    }
+    impl ContextReader for HeldClipboard {}
+    impl ClipboardHost for HeldClipboard {
         fn copy_text(&self, _: &str) -> Result<()> {
             Ok(())
         }
@@ -333,6 +325,26 @@ mod tests {
             })
         }
     }
+    impl FileSearchHost for HeldClipboard {}
+    impl ResourceOpener for HeldClipboard {
+        fn open_url(&self, _: &str) -> Result<()> {
+            Ok(())
+        }
+        fn open_file(&self, _: &Path) -> Result<()> {
+            Ok(())
+        }
+        fn reveal_file(&self, _: &Path) -> Result<()> {
+            Ok(())
+        }
+        fn open_directory(&self, _: &Path) -> Result<()> {
+            Ok(())
+        }
+        fn open_terminal(&self, _: &Path) -> Result<()> {
+            Ok(())
+        }
+    }
+    impl MenuHost for HeldClipboard {}
+    impl GitHost for HeldClipboard {}
 
     #[tokio::test]
     async fn old_clipboard_result_cannot_modify_a_new_session() {

@@ -6,7 +6,10 @@ use crate::core::{
     search::candidate_source::*,
 };
 use anyhow::Result;
-use anywhere_platform::{ApplicationInfo, Platform};
+use anywhere_platform::{
+    ApplicationCatalog, ApplicationHost, ApplicationInfo, ClipboardHost, ContextReader,
+    FileSearchHost, GitHost, MenuHost, ResourceOpener,
+};
 use std::{
     path::{Path, PathBuf},
     sync::{
@@ -17,13 +20,23 @@ use std::{
 };
 
 pub(super) struct QuietPlatform;
-impl Platform for QuietPlatform {
+impl ApplicationCatalog for QuietPlatform {}
+impl ApplicationHost for QuietPlatform {
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
         Ok(None)
     }
     fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
         Ok(None)
     }
+}
+impl ContextReader for QuietPlatform {}
+impl ClipboardHost for QuietPlatform {
+    fn copy_text(&self, _: &str) -> Result<()> {
+        Ok(())
+    }
+}
+impl FileSearchHost for QuietPlatform {}
+impl ResourceOpener for QuietPlatform {
     fn open_url(&self, _: &str) -> Result<()> {
         Ok(())
     }
@@ -39,10 +52,9 @@ impl Platform for QuietPlatform {
     fn open_terminal(&self, _: &Path) -> Result<()> {
         Ok(())
     }
-    fn copy_text(&self, _: &str) -> Result<()> {
-        Ok(())
-    }
 }
+impl MenuHost for QuietPlatform {}
+impl GitHost for QuietPlatform {}
 struct EmptySource(&'static str);
 impl CandidateSource for EmptySource {
     fn id(&self) -> &'static str {

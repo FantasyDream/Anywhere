@@ -6,7 +6,10 @@ use anywhere_core::{
     persistence::module_storage::ModuleStorageHost,
     Application, LauncherApplication,
 };
-use anywhere_platform::{ApplicationInfo, Platform};
+use anywhere_platform::{
+    ApplicationCatalog, ApplicationHost, ApplicationInfo, ClipboardHost, ContextReader,
+    FileSearchHost, GitHost, MenuHost, ResourceOpener,
+};
 use anywhere_protocol::{web_plugin::WebPlatform, HostView};
 use serde_json::{json, Value};
 use std::{
@@ -19,13 +22,17 @@ use std::{
 mod json_workspace;
 
 struct SyntheticPlatform(Mutex<String>);
-impl Platform for SyntheticPlatform {
+impl ApplicationCatalog for SyntheticPlatform {}
+impl ApplicationHost for SyntheticPlatform {
     fn frontmost_application(&self) -> Result<Option<ApplicationInfo>> {
         Ok(None)
     }
     fn application_directory(&self, _: &ApplicationInfo) -> Result<Option<PathBuf>> {
         Ok(None)
     }
+}
+impl ContextReader for SyntheticPlatform {}
+impl ClipboardHost for SyntheticPlatform {
     fn copy_text(&self, text: &str) -> Result<()> {
         *self.0.lock().unwrap() = text.into();
         Ok(())
@@ -33,6 +40,9 @@ impl Platform for SyntheticPlatform {
     fn clipboard_text(&self) -> Result<Option<String>> {
         Ok(Some(self.0.lock().unwrap().clone()))
     }
+}
+impl FileSearchHost for SyntheticPlatform {}
+impl ResourceOpener for SyntheticPlatform {
     fn open_url(&self, _: &str) -> Result<()> {
         anyhow::bail!("not available in conformance harness")
     }
@@ -49,6 +59,8 @@ impl Platform for SyntheticPlatform {
         anyhow::bail!("not available in conformance harness")
     }
 }
+impl MenuHost for SyntheticPlatform {}
+impl GitHost for SyntheticPlatform {}
 fn source(binding: &WebDocumentBinding) -> WebMessageSource<'_> {
     WebMessageSource {
         runtime_id: binding.runtime_id(),

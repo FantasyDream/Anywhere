@@ -26,7 +26,8 @@ struct ClipboardPort {
     fail: bool,
     frontmost: Option<anywhere_platform::ApplicationInfo>,
 }
-impl anywhere_platform::Platform for ClipboardPort {
+impl anywhere_platform::ApplicationCatalog for ClipboardPort {}
+impl anywhere_platform::ApplicationHost for ClipboardPort {
     fn frontmost_application(&self) -> anyhow::Result<Option<anywhere_platform::ApplicationInfo>> {
         Ok(self.frontmost.clone())
     }
@@ -36,6 +37,9 @@ impl anywhere_platform::Platform for ClipboardPort {
     ) -> anyhow::Result<Option<PathBuf>> {
         Ok(None)
     }
+}
+impl anywhere_platform::ContextReader for ClipboardPort {}
+impl anywhere_platform::ClipboardHost for ClipboardPort {
     fn copy_text(&self, text: &str) -> anyhow::Result<()> {
         self.writes.lock().unwrap().push(text.into());
         Ok(())
@@ -47,6 +51,9 @@ impl anywhere_platform::Platform for ClipboardPort {
         }
         Ok(Some(self.text.lock().unwrap().clone()))
     }
+}
+impl anywhere_platform::FileSearchHost for ClipboardPort {}
+impl anywhere_platform::ResourceOpener for ClipboardPort {
     fn open_url(&self, _: &str) -> anyhow::Result<()> {
         anyhow::bail!("unexpected operation")
     }
@@ -63,6 +70,8 @@ impl anywhere_platform::Platform for ClipboardPort {
         anyhow::bail!("unexpected operation")
     }
 }
+impl anywhere_platform::MenuHost for ClipboardPort {}
+impl anywhere_platform::GitHost for ClipboardPort {}
 fn setup(
     permissions: Value,
     port: Arc<ClipboardPort>,

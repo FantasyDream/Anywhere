@@ -9,7 +9,9 @@ use super::{
 };
 use crate::core::context::{CaptureMetadata, ContextValue, ResolvedContext};
 use anyhow::Result;
-use anywhere_platform::{ApplicationInfo, ContextReadError, Platform};
+use anywhere_platform::{
+    ApplicationInfo, ClipboardHost, ContextReadError, ContextReader, Platform,
+};
 use anywhere_protocol::*;
 use std::{
     path::PathBuf,
@@ -32,7 +34,8 @@ const CLIPBOARD: u8 = 8;
 #[derive(Clone)]
 pub(super) struct ContextCaptureService {
     policy: Arc<Mutex<CapturePolicy>>,
-    platform: Arc<dyn Platform>,
+    context_reader: Arc<dyn ContextReader>,
+    clipboard: Arc<dyn ClipboardHost>,
     resolver: Resolver,
 }
 
@@ -91,7 +94,8 @@ impl ContextCaptureService {
     pub fn new(platform: Arc<dyn Platform>, resolver: Resolver) -> Self {
         Self {
             policy: Arc::new(Mutex::new(Default::default())),
-            platform,
+            context_reader: platform.clone(),
+            clipboard: platform,
             resolver,
         }
     }
@@ -119,9 +123,9 @@ impl ContextCaptureService {
         let Some(application) = frontmost else { return };
         let owner = Some(application.bundle_id.clone());
 
-        if self.platform.file_selection_supported(&application) {
+        if self.context_reader.file_selection_supported(&application) {
             if let Some(token) = self.token(ContextSource::FinderSelection) {
-                let platform = self.platform.clone();
+                let platform = self.context_reader.clone();
                 let target = application.clone();
                 self.spawn_capture(
                     token,
@@ -133,9 +137,12 @@ impl ContextCaptureService {
             }
         }
 
-        if self.platform.browser_current_url_supported(&application) {
+        if self
+            .context_reader
+            .browser_current_url_supported(&application)
+        {
             if let Some(token) = self.token(ContextSource::BrowserCurrentPage) {
-                let platform = self.platform.clone();
+                let platform = self.context_reader.clone();
                 let target = application.clone();
                 self.spawn_capture(
                     token,
@@ -155,7 +162,7 @@ impl ContextCaptureService {
         }
 
         if let Some(token) = self.token(ContextSource::SelectedText) {
-            let platform = self.platform.clone();
+            let platform = self.context_reader.clone();
             self.spawn_capture(
                 token,
                 session_id,

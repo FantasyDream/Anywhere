@@ -1,7 +1,7 @@
 //! Installed-application index lifetime, independent of any launcher session.
 use crate::features::applications::index::{self, ApplicationCatalog, ScanStatus};
 use anyhow::{anyhow, Result};
-use anywhere_platform::Platform;
+use anywhere_platform::ApplicationCatalog as ApplicationCatalogHost;
 use std::{
     collections::BTreeSet,
     sync::{
@@ -96,7 +96,7 @@ impl ApplicationIndex {
     }
 
     /// Each activation scans again, without holding index or session locks over OS I/O.
-    pub fn spawn_scan(self: &Arc<Self>, platform: Arc<dyn Platform>) -> u64 {
+    pub fn spawn_scan(self: &Arc<Self>, platform: Arc<dyn ApplicationCatalogHost>) -> u64 {
         let generation = self.issue_scan();
         let index = self.clone();
         tokio::spawn(async move {
