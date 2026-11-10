@@ -46,7 +46,9 @@
 
 前三项受控回归在重构前后均通过：唯一阻塞线程被占用时固定排队请求，隐藏再恢复后旧动作被拒绝、新请求可执行；规划在途时隐藏恢复，spawn 前拒绝且不记录 Usage；合成副作用已发生但 Handler 尚未返回时取消会话，结果仍成功并记录一次 Usage。人为将 epoch 取得推迟到 worker 的变体被排队回归拒绝。补充 Review 抓到初版将目标 token / Usage 策略读取推迟到 worker 的差异，新增第四项排队回归在原执行代码上通过、初版拆分上失败，修正为排队前固定后通过。Review 核对获取顺序、候选 / 菜单 / 文件复验、Session → Web、进程规划复验、执行后记录和 JoinError / 动作错误 / 存储警告分流，未发现剩余新增阻塞问题。
 
-全目标编译、严格 Clippy、Application 单元回归 144 项及 MVP 195 项通过；完整 `scripts/check.sh` exit 0：Core 347 项通过 / 1 项忽略、MVP 195 项通过 / 4 项忽略、Flutter 524 项通过 / 1 项跳过、SDK 50 项及其余工作区、原生 Host、架构、规范、生成物和文档检查通过。完整日志为被忽略的 `build/execution-request-full-check.log`。修正后的最终源码尚待重新打包与界面验证；此前 `b351460` 的包只证明该提交的工具页路径，不作为最终源码证据。
+全目标编译、严格 Clippy、Application 单元回归 144 项及 MVP 195 项通过；完整 `scripts/check.sh` exit 0：Core 347 项通过 / 1 项忽略、MVP 195 项通过 / 4 项忽略、Flutter 524 项通过 / 1 项跳过、SDK 50 项及其余工作区、原生 Host、架构、规范、生成物和文档检查通过。完整日志为被忽略的 `build/execution-request-full-check.log`。干净修正提交 `0596fe5` 已重新构建为独立 `Anywhere-0.14-execution-request-0596fe5.app`（0.14.0+46 / arm64 / Impeller），持久本机签名、ZIP 内容和 SHA-256 校验通过。核实最终 PID 路径及显式隔离目录后，重新通过全局搜索执行 Clipboard History，空工具页正常显示，返回后截图确认保留原查询；只读 SQLite 核对 Usage 从空表变为唯一 `core.clipboard.history` / `core.launcher`、计数 1。未开启记录、写入剪贴板、执行外部 URL / 文件或新授权，未改个人设置 / 替换日常 App；经菜单正常退出并只读确认进程结束。此前 `b351460` 的包已被替代，不作为最终源码证据。
+
+最终验收日志中 AXTree、Flutter ERROR、frame-time clamping、resize timeout 均为 0；原生输入诊断的计数见被忽略的 `build/acceptance-execution-request-0596fe5/verification.json`，原因未在本步定位。包来源记录为 `build/Anywhere-0.14-execution-request-0596fe5.provenance.json`。本项未新增物理键盘 / 输入法、VoiceOver、预览、内存、进程 / Web 实窗或跨平台 GUI 验收。
 
 ### Rust 功能目录状态收拢
 
