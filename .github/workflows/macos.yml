@@ -9,7 +9,7 @@ on:
       - 'Cargo.toml'
       - 'Cargo.lock'
       - 'crates/**'
-      - 'apps/flutter/**'
+      - 'apps/gpui/**'
       - 'plugins/**'
       - 'packages/plugin-sdk/**'
       - 'resources/**'
@@ -23,7 +23,6 @@ on:
       - '.prettierrc.cjs'
       - 'rustfmt.toml'
       - 'rust-toolchain.toml'
-      - '.flutter-version'
       - '.github/workflows/macos.yml'
 
 permissions:
@@ -59,17 +58,7 @@ jobs:
         with:
           toolchain: 1.100.0-beta.7
           components: rustfmt, clippy
-      - name: Read Flutter version
-        id: flutter-version
-        run: echo "version=$(cat .flutter-version)" >> "$GITHUB_OUTPUT"
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ steps.flutter-version.outputs.version }}
-          channel: stable
-          cache: true
-      - name: Prepare macOS engine artifacts for native checks
-        run: flutter --no-version-check precache --macos
-      - name: Check Rust, native menus, architecture and Flutter
+      - name: Check Rust, native adapters, GPUI and plugin SDK
         run: ./scripts/check.sh
 
   package:
@@ -86,14 +75,6 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
-      - name: Read Flutter version
-        id: flutter-version
-        run: echo "version=$(cat .flutter-version)" >> "$GITHUB_OUTPUT"
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ steps.flutter-version.outputs.version }}
-          channel: stable
-          cache: true
       - name: Install dedicated CI signing identity
         env:
           ANYWHERE_CI_SIGNING_P12: ${{ secrets.ANYWHERE_CI_SIGNING_P12 }}
@@ -103,8 +84,8 @@ jobs:
         env:
           ANYWHERE_CODESIGN_IDENTITY: Anywhere CI Development
         run: |
-          package_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' apps/flutter/macos/Runner/Info.plist)
-          package_build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' apps/flutter/macos/Runner/Info.plist)
+          package_version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' apps/gpui/macos/Info.plist)
+          package_build=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' apps/gpui/macos/Info.plist)
           export ANYWHERE_APP_OUTPUT="$PWD/build/Anywhere-$package_version-build$package_build.app"
           scripts/build-macos.sh
           scripts/package-macos.sh "$ANYWHERE_APP_OUTPUT"

@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*"]
+members = ["crates/*", "apps/gpui"]
 resolver = "2"
 
 [workspace.package]

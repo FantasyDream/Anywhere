@@ -70,7 +70,7 @@ impl Application {
             (session.state.session_id, changed)
         };
         // Showing the window calls this too. An already granted permission must not
-        // start a second scan, race the first scan, or block the Flutter UI on version IO.
+        // start a second scan, race the first scan, or block the UI on version IO.
         if changed {
             if trusted {
                 self.refresh_app_actions(session_id, None);

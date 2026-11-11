@@ -6,6 +6,7 @@
 pub mod activate;
 pub mod application_history;
 pub mod execute;
+pub mod frontend_runtime;
 pub mod launcher_service;
 mod legacy_plugins;
 mod native_features;

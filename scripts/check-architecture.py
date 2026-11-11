@@ -28,16 +28,13 @@ def walk(package_id):
     name = packages[package_id]['name']
     assert not any(
         term in name.lower()
-        for term in ['flutter', 'dart', 'webview', 'swiftui', 'winui', 'gtk'
-                    ]), name
+        for term in ['gpui', 'webview', 'swiftui', 'winui', 'gtk']), name
     for dependency in nodes[package_id]['dependencies']:
         walk(dependency)
 
 
 walk(core)
-print(
-    f'Architecture OK: {len(visited)} core dependencies, no UI/Flutter bridge dependency'
-)
+print(f'Architecture OK: {len(visited)} core dependencies, no UI dependency')
 
 # Production modules must not import product composition or feature implementations.
 # The existing Rust convention keeps each inline test module at the end of its file.
@@ -62,16 +59,6 @@ for source in Path('crates/anywhere-core/src').rglob('*.rs'):
     for token in ['MacOsPlatform', 'com.apple.finder', '/bin/sh', 'std::os::']:
         assert token not in production, (source, token)
 
-# UI widgets and startup do not guess native packaging, fonts, or key encodings.
-# Platform presentation policy and read-only legacy migration belong to infrastructure.
-for source in Path('apps/flutter/lib').rglob('*.dart'):
-    if 'src/rust' in str(source) or 'infrastructure' in source.parts:
-        continue
-    for token in [
-            '.AppleSystemUIFont', 'carbonEventKeyCode', 'macOSPhysicalKeyCodes',
-            'Platform.isMacOS', 'Platform.resolvedExecutable', 'Frameworks/'
-    ]:
-        assert token not in source.read_text(), (source, token)
 print(
-    'Platform boundaries OK: shared Core and UI do not select native OS implementations'
+    'Platform boundaries OK: shared Core has no UI or native packaging dependency'
 )

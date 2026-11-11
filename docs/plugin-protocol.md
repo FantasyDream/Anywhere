@@ -16,7 +16,7 @@ URL、Git、Maven、Gradle、Node、Rust、Spring Boot、收藏目录、剪贴�
 
 支持 `~/Library/Application Support/Anywhere/plugins/*.toml` 和 `<plugin>/manifest.toml`。安装或修改后重启 Anywhere，在 Settings → Features 查看启动时检查的定义。Refresh 只刷新设置与数据、复验已有定义，不扫描新插件。
 
-本节 TOML 插件只描述匹配与受限操作，不提供 Flutter Widget，也不运行 Shell、Node、Python、WASM 或任意进程；v3 的受限数据视图由 Flutter Host 渲染。这些限制不代表 Web 插件尚未实现：Web 包在独立 WebView 中运行页面 JS，使用另一套 Manifest 与批准记录，见[开发指南](plugin-development.md)。当前没有 Marketplace。
+本节 TOML 插件只描述匹配与受限操作，不提供第三方 UI 组件，也不运行 Shell、Node、Python、WASM 或任意进程；v3 的受限数据视图由 GPUI 渲染。这些限制不代表 Web 插件尚未实现：Web 包在独立 WebView 中运行页面 JS，使用另一套 Manifest 与批准记录，见[开发指南](plugin-development.md)。当前没有 Marketplace。
 
 ## v2：显式能力批准
 
@@ -57,7 +57,7 @@ v1 / v2 的语义保持不变。UI 插件使用 `protocol_version = 3`、数值�
 - 最多 32 行；标题 / 标签 1..200 bytes；body 64 KiB、单行 value 16 KiB、总文本 128 KiB（模板与展开后分别检查）。超限在进入 Host 前返回正常动作错误；仍保留查询供用户修改。
 - 未知 UI 版本、字段 / 类型、变量和未声明能力拒绝整个插件；即使直接构造 DTO，注册 / 执行也校验与检查能力。
 - 复用现有 Session、Revision、Candidate、能力批准、Usage 与快捷键；批准绑定 UI 定义，修改视图也需要重新批准。撤销 / 设置变更使旧候选、待执行结果与保留会话失效。
-- 纯 Flutter 视图沿用 AppStyle 和 Launcher 材质。`↑↓` / `PageUp` / `PageDown` 滚动，`Esc` / Back 返回原查询和候选选择；不引入裸 Tab 操作。隐藏后按既有 15 秒规则保留。
+- 纯 GPUI 视图沿用设计 tokens 和 Launcher 材质。`↑↓` / `PageUp` / `PageDown` 滚动，`Esc` / Back 返回原查询和候选选择；不引入裸 Tab 操作。隐藏后按既有 15 秒规则保留。
 - Detail 当前只读，文本可选择复制（Host 的普通文本操作）；不提供插件回调、表单提交、Markdown 链接或任意 Widget。
 
 完整示例：[Context Detail](../plugins/examples/context-detail.toml)。它不会自动安装。将文件放到插件目录、重启并批准 `ui.render`，再重启激活后，输入可识别内容或在当前 Context 的插件 Scope 中运行 Inspect Context。
@@ -102,4 +102,4 @@ TOML 命令注册身份为 `<plugin.id>.<command.id>`。标识使用合法的小
 
 收藏目录最多 100 项 / 64 KiB，普通查询始终找目录；对象 Actions 的首项保持默认打开操作，移除通过明确选择 Forget Saved Directory；`forget` / `remove` / `unpin` 不被解析为隐式删除指令。
 
-旧协议迁移与当时发布门槛见 [V0.9 记录](archive/mvp-v0.9.md)，当前整体状态见 [V0.14 技术方案](mvp-v0.14.md)。历史 v1 / 版本迁移验收保存在 [归档](archive/README.md)。
+旧协议迁移与当时发布门槛见 [V0.9 记录](archive/mvp-v0.9.md)，当前整体状态见 [GPUI 技术方案与验收](mvp-gpui.md)。历史 v1 / 版本迁移验收保存在 [归档](archive/README.md)。

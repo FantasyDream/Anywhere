@@ -1,344 +1,185 @@
-# 架构
+# 架构与代码地图
 
-当前源码为 V0.14 开发预览，完整发布和实机矩阵未完成；最后核对：2026-11-10。使用入口见 [README](../README.md)，专题契约见 [文档导航](README.md)，当前验证程度见 [V0.14 技术方案](mvp-v0.14.md)。
+当前源码为 V0.14 macOS 15+ GPUI 开发预览。Rust Core 决定业务语义，GPUI
+呈现并处理输入，AppKit / Quick Look / WebKit 只提供系统适配。最后核对：
+2026-11-11。
 
-第一方能力是静态内置模块：模块声明 `FeatureDescriptor` 与 `registration.rs`，编译期生成目录，启动时绑定一次服务与贡献；设置刷新独立更新策略和业务数据。没有第一方热加载、目录重建或 `Any` 状态恢复框架。迁移过程仅保留在[历史路线图](archive/feature-module-roadmap.md)。
-
-第三方 Web 包通过独立 Manifest、资源验证和能力代理接入，不复用第一方装配寿命。协议位于 `anywhere-protocol`，包验证位于 `anywhere-plugin`，目录 / 调用 / 权限协调位于 `application/web_plugins/`，文件和 KV 适配位于 Persistence；Flutter / Native Host 负责 WebView 呈现。JSON / Text Pad 用普通包验证公共接口，详见 [Web 插件设计](web-plugin-design.md)。
+产品入口是 `apps/gpui/src/app.rs`。当前范围与证据见
+[GPUI 技术方案与验收](mvp-gpui.md)，窗口、焦点和输入契约见
+[GPUI 产品架构](gpui-migration.md)。
 
 ## 分层
 
 ```mermaid
 flowchart TD
-    UI[Flutter 界面 / Controller] --> Bridge[FRB API / DTO]
-    UI --> Host[DesktopHost / 原生 Host]
-    Bridge --> App[Application：装配与用例]
-    App --> Core[core：模型、算法与契约]
-    App --> Modules[内置 Feature 模块]
-    Modules --> Core
-    App --> Persistence[持久化适配]
-    App --> Platform[Platform 系统能力]
-    Modules --> Platform
+    GPUI[GPUI pages / input / windows] --> Runtime[ApplicationRuntime]
+    Runtime --> Application[Application use cases]
+    Application --> Core[Core models and algorithms]
+    Application --> Features[First-party features]
+    Features --> Core
+    Application --> Persistence[SQLite / preferences]
+    Application --> Platform[Platform capabilities]
+    GPUI --> Native[AppKit / Quick Look / WebKit]
+    Web[WebView + TypeScript SDK] --> Broker[Rust capability broker]
+    Background[On-demand QuickJS] --> Broker
+    Broker --> Runtime
 ```
 
 | 层 | 职责 | 约束 |
-|---|---|---|
-| `anywhere-protocol` | Context 类型、展示状态、事件、声明式 / Web Manifest 与 Web RPC | 共享传输模型，不保存 OS 对象 |
-| `anywhere-core/core` | Context Graph、Action、候选、Ranking、SessionFacts、ExecutionSession、Storage 契约 | 不导入 application / 内置 Feature 模块 / persistence，不依赖 Flutter |
-| `anywhere-core/application` | 激活、输入、采集协调、快照、执行、功能策略与装配 | 协调用例，不决定像素或原生窗口外观 |
-| `features` | 应用、文件工具和第一方领域能力 | 用 Provider / Bundle / Source 贡献，不另建 Launcher 流程 |
-| `persistence` | Usage、功能 / 插件偏好、模块存储、剪贴板及 Web 包收据 / 资源 | 数据读写与锁、事务、恢复策略集中管理 |
-| `anywhere-platform` | 八个对象安全能力接口、上下文采集、系统搜索、资源打开、剪贴板、Git 与进程后端 | 服务依赖所用能力；`Platform` 仅组合，原生调用与系统差异留在适配器 |
-| `anywhere-plugin` | TOML 发现 / 校验、模板与有界 UI 数据；Web 包 / 资源校验 | 不执行包内脚本或决定界面布局 |
-| `anywhere-bridge-flutter` | 初始化、公共 Facade、FRB DTO 定义与转换 | 不复制识别、排序、执行规则 |
-| Flutter / Native Host | 页面、导航、输入、焦点、设置、热键、窗口与授权 | Flutter 不匹配业务动作；Swift 不解析输入或运行项目 Action |
-
-业务调用使用 `flutter_rust_bridge`；窗口、设置、热键与目录授权使用 `DesktopHost` / MethodChannel。系统提供 `paths` 和 `capabilities`，共享界面不猜动态库路径或材质能力。跨平台契约见 [平台接入](platform-portability.md)。
+| --- | --- | --- |
+| `anywhere-protocol` | Context、Action、Candidate、Launcher、执行和 Web 协议模型 | 传输模型；不保存 OS 对象 |
+| `anywhere-core/core` | Context Graph、候选、Ranking、SessionFacts、ExecutionSession | 不依赖 application、Feature 或平台实现 |
+| `anywhere-core/application` | 激活、Context 采集、查询、快照、取消、执行和装配 | 协调用例；不决定像素或窗口外观 |
+| `frontend_runtime` | Application、设置、Usage、剪贴板与 Web document 的共同所有权 | 不拥有窗口、IME 或页面导航 |
+| `features` | 应用、文件、文本、URL、Git、Developer、剪贴板与应用历史 | 静态注册；通过贡献接入统一目录 |
+| `persistence` | Usage、设置、历史、剪贴板、模块存储与 Web 包 | 有界读写、事务与损坏恢复 |
+| `anywhere-platform` | 系统目录、前台应用、Context、文件搜索、剪贴板、资源、菜单与 Git | 窄能力接口；OS 差异留在适配器 |
+| `apps/gpui` | 页面、选择、焦点、设置、窗口、状态栏、热键与 Web 文档 | 消费 Core 排序与资格；不复制业务策略 |
+| `packages/plugin-sdk` | Web UI、按需后台任务和权限受限 API | 不直接取得文件或进程权限 |
 
 ## 代码组织
 
 ```text
 crates/anywhere-core/src/
-├── core/           模型与算法；context / action / search / ranking / session / execution
-├── application/    activate、update_query、execute、session_runtime、source_runtime
-│                   application_index（应用索引寿命与过滤）
-├── features/       applications、filesystem、text、url、git、developer
-│                   saved_directories、clipboard、application_history
-│                   编译期 catalog、FeatureDescriptor、服务绑定与策略
-└── persistence/    usage、features、extensions、module_storage、clipboard
-                    application_history、web_packages
+├── core/            Context / Action / Candidate / Search / Ranking / Session
+├── application/     activate, query, snapshot, execution, settings, Web ownership
+│   └── frontend_runtime/  GPUI-facing shared service composition
+├── features/        第一方能力、编译期 catalog 与策略
+└── persistence/     SQLite、配置、剪贴板、应用历史与 Web 包
 
-crates/anywhere-bridge-flutter/src/
-├── api.rs          FRB 入口、初始化与用例编排；保持公开 API 路径
-└── api/
-    ├── dto.rs      Flutter 传输 DTO；通过 api 的重导出维持 Rust 兼容路径
-    ├── conversions.rs  Core / Protocol 到 DTO 的显式转换
-    └── ...         按功能拆分的薄入口适配器
-
-apps/flutter/lib/
-├── launcher/       Controller、ActivationFlow、导航、Session / FileWorkspace 协调器
-│                   ShortcutCoordinator、HostViewNavigator
-├── tools/          静态 ToolPageRegistry、ToolPageSession、共享 ToolPageShell
-│                   ObjectActionCoordinator（共享迟到结果 / 请求顺序）
-│                   ToolPageStack（父页面保留、返回与销毁）
-├── features/       clipboard / application_history 的页面、展示会话与静态注册
-├── plugins/        Legacy Detail / KeyValue 兼容 Body（纯数据）
-├── web_plugins/    Web 页面、包管理、资源池、宿主弹层与生命周期
-├── settings/       设置草稿、保存队列、快捷键与扩展状态
-├── l10n/           中英资源、生成接口、语义状态与名称呈现
-├── ui/             AppStyle、图标与公共组件
-├── infrastructure/ DesktopHost、窗口、生命周期、图标缓存与运行策略
-│                   bridge_api.dart（手写 Bridge 导出，隔离生成目录布局）
-└── src/rust/       已生成的绑定
-
-apps/flutter/macos/Runner/  原生窗口、设置存储、热键、授权、材质与任务窗口
-plugins/examples/          外部 TOML 与 Web 插件示例
-packages/plugin-sdk/       Web SDK、开发模板与打包工具
-resources/                 键码、文件类型、运行策略、设计参数、语言及 Web schema
+apps/gpui/src/
+├── app.rs           产品壳、主窗口、状态栏、热键与独立 Shelf
+├── launcher/        Snapshot gate、页面模型与 GPUI 视图
+├── settings/        设置展示模型
+├── host/            数据路径、运行时、偏好、热键、目录授权与登录项
+├── platform/        AppKit、状态栏、Quick Look 与 WebView 系统边界
+├── tools/           NativeTool 路由领域
+├── l10n/            共享本地化的 Rust 投影
+└── ui/              设计 tokens 投影与 theme
 ```
 
-## Platform 能力边界
+第一方能力在启动时绑定一次；设置或外部数据刷新只更新策略和业务数据，不重建
+模块生命周期。第三方包使用独立安装批准和 SDK。第三方 Context 限定为
+`plugin.<package-id>.*`，脚本输出不能转换为原生文件权限。
 
-`anywhere-platform` 用八个对象安全接口描述系统能力：
+## 启动与依赖
 
-| 能力接口 | 职责 | 直接消费者 |
-|---|---|---|
-| `ApplicationCatalog` | 应用目录根、入口识别、目录遍历与单个应用元数据 | 应用索引 |
-| `ApplicationHost` | 前台应用、启动、图标与版本 | 应用动作及组合编排 |
-| `ContextReader` | 应用目录、选区、文件管理器和浏览器当前页 | 目录采集与 `ContextCaptureService` |
-| `ClipboardHost` | 剪贴板快照、代数、历史载荷、监听与写入 | Context 采集、Clipboard History 与剪贴板动作 |
-| `FileSearchHost` | 系统索引、带范围选项的搜索与取消 | 文件搜索 |
-| `ResourceOpener` | URL、文件、目录、终端及指定应用打开 | 文件、URL、应用历史等 Action |
-| `MenuHost` | Accessibility 权限、菜单发现与重放 | Current App 菜单 |
-| `GitHost` | 白名单只读 Git 操作 | Git Action 与通用 Host 服务 |
+`apps/gpui/src/main.rs` 先验证 macOS 15+，再启动 GPUI application。
+`app.rs` 创建：
 
-`Platform` 只组合这些接口，并由满足全部能力的类型自动实现。`native_platform()` 仍返回一个 `Arc<dyn Platform>`，Application 与 ActionHandler 继续注入组合端口；需要窄依赖的服务从同一个适配器 `Arc` 转换得到对应能力。`ContextCaptureService` 因此分别持有 `ContextReader` 与 `ClipboardHost`，Context 与剪贴板的策略令牌、迟到发布和取消语义保持共享。`HostServices` 按方法要求能力，并在剪贴板、URL、文件与 Git 操作前保留原有授权检查。
+- `LiveLauncher` 与 `ApplicationRuntime`；
+- 主 GPUI 窗口；
+- `NSStatusBar` 状态项；
+- 全局热键控制器；
+- 按需打开的独立 Clipboard Shelf；
+- 窗口关闭、清理和状态栏恢复路径。
 
-接口默认值、目录遍历、配置搜索范围拒绝、剪贴板文本回退、Finder 兼容钩子和各默认错误保持迁移前行为。未实现的能力显式返回空值、不支持或既有默认实现，不会静默扩大权限。
-
-## Protocol 模型边界
-
-`anywhere-protocol` 根模块只显式重导出既有类型路径，根级模型定义分在六个私有模块：
-
-| 私有模块 | 内容 |
-|---|---|
-| `identifiers` | Session / Revision / Context / Action / Candidate / Process 身份与项目类型常量 |
-| `context` | Context 常量、兼容转换、Descriptor / Presentation / Capture、`InputMode` 与 `ContextMatcher` |
-| `candidate` | Icon、Candidate、可用性、Scope 与 domain 成员判断 |
-| `launcher` | Launcher 状态、搜索来源、文件搜索进度与 Launcher 事件 |
-| `execution` | 执行结果、Host View、进程会话状态、摘要与详情 |
-| `declarative` | 旧 Manifest、Command 与 `DeclarativeAction` 兼容模型 |
-
-`extension`、`policy`、`ui`、`web_bridge` 与 `web_plugin` 保持公开子模块；生成器拥有的 `FileSearchFilter` 继续从根模块显式导出。消费者仍使用 `anywhere_protocol::Type`，本轮不批量改写调用方导入。类型、字段 / 枚举顺序、辅助方法、Serde 标签与默认值、旧插件缺省字段和未知字段处理均保持原契约。
+`LiveLauncher` 位于 `apps/gpui/src/host/runtime.rs`，在 blocking runtime 上执行
+Core 服务。同步设置或系统操作不得阻塞渲染线程。产品路径由
+`apps/gpui/src/host/mod.rs` 构造，默认数据目录是
+`~/Library/Application Support/Anywhere`。
 
 ## 激活与 Context
 
-1. Host 收到唤醒请求，先保留前台应用焦点。
-2. Flutter 同步预留 SessionId，再异步激活；首屏尚未返回也可以取消。
-3. Rust 冻结前台应用身份，启动独立的上下文采集、应用目录加载与历史读取。慢速系统调用放在 blocking worker。
-4. InputMode 决定种子：Environment 使用应用环境；Content / Search 只解析显式输入；FileSearch 使用文件工作区；全局动作绑定使用 CapturedEnvironment。
-5. Provider 顺序派生 Context，预算截断后后台继续；来源结果按会话资格补充。
-   自动填入从同一 ProviderRegistry 的轻量规则目录读取当前启用识别器，也检查已启用 / 批准的 Web 命令 inputMatchers；发布锁外识别，返回前复验策略 / catalog，避免过期开关与迟到建议。Web 匹配不启动 JS，也不创建旧 json.document Context。
-6. 提交首份快照后显示窗口，后续通过 snapshot wait / delta 发布更新。
+1. UI 在展示任何窗口前预留 Session。
+2. Rust 冻结当前前台应用身份，启动 Context、应用目录与历史读取。
+3. InputMode 决定初始种子：Environment、Content、Search 或 FileSearch。
+4. Provider 派生 Context；来源读取在 blocking worker 中完成。
+5. 首份快照提交后显示或更新窗口；迟到 Context 以新的
+   `SnapshotSeq` 继续发布。
+6. 查询变化推进 `Revision`，旧结果在发布前按 Session / revision / snapshot
+   游标复验。
 
-目录采集按 Session 单飞，不能因用户输入改变而再次读取“现在的前台应用”。失效应用身份安全跳过目录；不重试到已经取得焦点的 Launcher 或另一应用。详见 [Context 模型](context-model.md) 和 [默认输入策略](context-input-navigation.md)。
+当前应用读取按 Session 单飞。Launcher 或其他已取得焦点的应用不会成为新的
+“来源应用”。缺失某项权限时只移除对应来源，其他动作继续运行。
 
-`application/context_capture.rs` 的 `ContextCaptureService` 从同一平台适配器取得 `ContextReader` 与 `ClipboardHost`，持有来源策略、冻结应用的 Finder / 选区 / 浏览器读取及迟到结果发布；私有 `context_capture/clipboard.rs` 管理剪贴板请求、复制年龄、SessionFacts 与 Capture 元数据。剪贴板请求在激活补充任务排队前固定策略令牌，worker 开始时和写入时复验；设置锁不再暴露给激活流程。策略更新期间由 Application 回调撤销执行与 Web 凭据，保留策略 → Session → Web 的锁顺序。`activate.rs` 仅将剪贴板 Future 与 Git / Usage 独立刷新汇合，并跟踪补充组完成；慢剪贴板读取不阻塞另两项发布。来源行为见[Context 模型](context-model.md)。
-
-## 快照、取消与执行资格
+## 快照、取消与执行
 
 | 身份 / 版本 | 区分什么 |
-|---|---|
-| SessionId | 激活会话 |
-| Revision | 同一会话的输入 / 查询模式变更 |
-| SnapshotSeq | 同一 Revision 的后续补充 |
-| BusinessActionId | 使用记录与可持久配置中的动作 |
-| ExecutionCandidateId | 已提交候选及其具体对象 |
-| Catalog version / Execution epoch | 动作定义变更、隐藏与恢复后的执行资格 |
-| Feature policy snapshot | 内置功能开关 / 恢复资格，请求持有同一 Arc 身份 |
-| Host generation | 原生显示、隐藏与迟到回调 |
-
-空输入动作列表由 Rust 比较内存中的 Usage 原始计数和时间，再比较上下文 / 默认优先级分数及稳定 ID。关键词评分保持有界 Usage 和匹配优先；桥接不暴露首页资格字段，Flutter 只展示排序前缀，详见 [Launcher 交互契约](launcher-interaction.md)。
-
-发布采用“锁内复制不可变输入和版本 → 锁外匹配 / 排序 → 锁内复验并发布”。索引、历史和 Registry 共享不可变快照；并发提交改变输入时重新计算，旧 Session / Revision 的结果直接丢弃。
-
-`application/application_index.rs` 的 `ApplicationIndex` 统一持有已安装应用索引的完整 / 可见目录、排除列表、扫描代次和完成通知，寿命独立于 Launcher Session。扫描在锁外执行，完成后在同一把状态锁内核对代次、应用最新排除偏好并发布；失败保留原目录但结束该代等待，旧扫描不能覆盖更新的成功或失败。快捷键配置读取完整目录，搜索只读可见目录；排除偏好与过滤结果原子更新。
-
-Resolver 只取得不可变索引快照，发布前通过服务同时复验扫描代次和可见目录 Arc 身份；排除列表变化即使没有新扫描，也会使已准备的旧目录失效。不能依赖替代快照先完成、推进 SnapshotSeq 来间接保护目录变化。`Application` 保留对外 Facade 与索引完成后重算会话的协调，不再分别持有扫描通知和过滤状态。
-
-执行仅接受当前已提交凭据，排队 worker 开始副作用前再次验证；进程计划生成后、spawn 前也检查版本。副作用成功后仍记 Usage，即使窗口已隐藏。菜单另有 discovery token，不能把可重扫的菜单 ActionId 当作永久身份；见 [菜单安全契约](current-app-actions.md)。
-
-`application/execution_request.rs` 的 `ExecutionRequest` 在排队前固定候选、来源应用、动作注册表、Session / Revision 凭据、执行 epoch、功能策略、文件搜索代次、目标 token 和 Usage 记录策略；共享 Resolver / Host 服务仍使用原实例。请求由 `spawn(self)` 消费，worker 不重新取得授权版本。私有 `execution_request/worker.rs` 负责阻塞派发，开始副作用前复验资格；Web 凭据仍在 Session → Web 锁顺序内建立，进程规划后在 spawn 前另行校验对象与资格。完成的副作用继续保存 Usage，存储错误单独返回，由 `execute.rs` 转成成功附带警告；用例层还保留无界面 Web 驱动、菜单失败重扫与 ActionResult 映射。阻塞任务 JoinError 和执行错误继续走各自的既有返回路径。
-
-Flutter 的 `LauncherSessionCoordinator` 拥有 SessionId、generation、revision 与已接收快照；只有当前会话、满足请求 revision 且顺序更新的快照才能提交。持续订阅也由它管理，等待返回后复验代数、会话与可见性，增量按最新列表的版本和长度合并。`LauncherController` 负责接收后的导航、选择和窗口更新；工具经 Rust 更新输入时，由同一接收入口推进 revision。
-
-`LauncherViewState` 保留 Scope 过滤、菜单结构、行集合与提示是否存在等展示状态；`launcher_presentation.dart` 根据调用方提供的当前语言生成来源标签、搜索进度、提示和结果标题。布局是否预留提示区域由 `hasNotice` 决定，不依赖默认英文文案；文件范围名称与完整路径提示共用同一展示值对象。`launcher_layout.dart` 统一窗口尺寸、行高与选中项坐标，供 Controller 的 Host 尺寸同步及 Widget / 滚动定位使用；状态对象不保存像素布局规则。
-
-隐藏工作区的 15 秒生命周期也由 LauncherSessionCoordinator 管理。Controller 在通知界面隐藏前建立保留信息；重复隐藏保持幂等，异步恢复在挂起 / 恢复等待后重查期限与策略。到期清理先取走该次保留记录，等待后核对 generation / SessionId，避免清理新会话；每次隐藏持有自己的挂起 Future，新旧到期任务各自结束。空根页唤醒仍重新采集当前应用。
-
-
-隐藏撤销待执行资格。已有操作保留 15 秒，恢复使用新 epoch；空白首页按本次入口新建 Session。已启动进程由 ExecutionSessionManager 持有，不随查询或窗口隐藏终止；应用退出会结束任务。交互详见 [Launcher 契约](launcher-interaction.md)。
-
-## Sources 与文件工作区
-
-`SourceCatalog` 原子持有基础和扩展的 `SourceSet`，同步 / 异步来源具有统一目录寿命。通用 `source_runtime` 负责 admission、取消、批次和迟到结果拒绝；`file_workspace` 负责文件类型、冻结、追加和进度。
-
-普通应用 / Action / 收藏目录共用 Candidate 与公共 Ranking Facts、Usage、时钟。文件工具作为普通 Action 打开，结果有专门的稳定顺序与连续读取，不进入环境 Context Scope。
-
-Spotlight 返回早期候选，Rust 完整遍历允许范围；查询临时存储保存命中并外部排序，已显示前缀保持稳定。对象二级动作按选中目标延迟生成，复验原执行对象。Host 接收 replacement、append 或 metadata delta，不重新匹配文件。
-
-`features/filesystem/scan.rs` 保留 ScanStore 的查询寿命、取消与临时工作区。私有 `scan/query.rs` 负责名称归一和排序，`scope.rs` 的 ScanScope 持有范围配置并处理显式路径及索引核验；`record.rs` 保持权威记录格式，`traversal.rs` 负责磁盘 FIFO 枚举及 flush 后发布，`progress.rs` / `pagination.rs` 负责诊断、提交边界、兼容游标和连续交付。`result_store.rs` 保留既有外部排序，通过已提交边界接口读取记录，不直接修改扫描进度。路径授权仍按使用时的真实目标复验，公开扫描入口和稳定前缀契约保持一致。
-
-Flutter 的 `StableList` 共享 256 条不可变块，索引按块复用，仅为访问到的候选包装行；Revision 或 list version 改变时拒绝无效尾部。完整契约见 [文件搜索](file-search.md)。系统预览由 `application/file_preview.rs` 复验对象、`features/preview.rs` 管理资源，Flutter 经统一窗口接口调用 macOS Host；旧文本解码与固定分栏已删除，见 [系统预览](native-preview.md)。Platform 的工具查找使用 which 检查绝对候选，仍保留 GUI 工具目录和 wrapper 策略。阶段计划见 [开源复用重构](archive/open-source-refactor-plan.md)。
-
-## 剪贴板功能模块
-
-| 位置 | 职责 |
-|---|---|
-| `features/clipboard/{history,service,policy,content}.rs` | 存储契约、采集与执行资格、持久策略、元数据及有界预览 |
-| `persistence/clipboard.rs` | SQLite 事务、迁移、配额、去重和摘要 / 原始数据读取；不生成预览 |
-| `anywhere-platform/clipboard` | clipboard-rs 格式读写；macOS 薄适配提供异常边界、权限、代数轮询与大小检查 |
-| Flutter `features/clipboard/` | 两个界面的静态注册、查询 / 选择 / 焦点、共享列表与预览 |
-| Flutter `infrastructure/clipboard_*_backend.dart` | 类型化 Bridge 适配；使用和配置接口分离 |
-| Flutter `settings/clipboard_*` | 采集、定时暂停、保留期限、存储说明、清空、自动填入配置及异步保存协调 |
-| Native `ToolWindowController` | 悬浮窗置顶、生命周期和返回目标应用焦点 |
-
-剪贴板历史作为编译内 `clipboard` 模块贡献普通 Action，通过 `NativeTool` 路由到统一 `ToolPageRegistry`。`HistoryRepository` 声明存储契约，独立 SQLite 实现负责有界落盘与摘要查询；`HistoryService` 控制开关、采集代数、去重写入和清理期间的 epoch。系统读取在业务锁外完成，写入前复验 epoch。Platform 使用 clipboard-rs 统一格式读写；Windows / Linux 使用库的变化监听，macOS 通过有异常保护的原生 changeCount 每 500 ms 查询代数，退出时立即唤醒停止。Cocoa 异常在平台边界转换为不可用错误，不穿过 Rust 线程边界。格式名最多 4 KiB，兼容 IDEA 等应用的长动态 UTI；不可保存的空、含 NUL 或超长附加格式在原生内容读取前跳过，整个条目仍维持 64 种格式 / 16 MiB 数据上限，敏感标记继续使整条采集跳过。一次复制的多种表示以 SQLite BLOB 保存，指纹去重并复验实际内容；旧纯文本 schema 事务迁移且保留 ID。预览资源仅按需在 Rust 准备并通过租约管理，图片保留原编码，Flutter 不再接收正文或缩略图；原生 Host 渲染系统面板。正文不进入通用 Context / Usage，Host 不持有全部历史正文。Flutter 仅管理查询、选择与按需预览协调，并拒绝过期响应。独立悬浮窗由另一个普通 Action 路由到 `ToolWindowRegistration`，原生 `ToolWindowController` 负责置顶与生命周期，`ApplicationFocusReturner` 负责异步切回并确认目标应用已取得焦点。窗口按需创建独立 Flutter engine，调用共享 Rust Application 的同一 HistoryService，不重新初始化存储或开启采集；主历史页与 ClipboardShelfPage 共用 ClipboardHistorySession、列表和系统预览协调器。窗口关闭销毁其 engine，最小化暂停摘要刷新；Launcher 的 15 秒保留规则不会关闭该窗口。采集开关、清空和唤醒自动填入统一位于 Settings → Clipboard，使用页后端仅暴露查询、预览资源准备、复制和单条删除；独立设置后端通过轻量状态 DTO 读取状态，不查询历史列表。设置关闭等待变更和读回完成。历史格式演进见 [V0.10 MVP](archive/mvp-v0.10.md)，当前交互见 [UI 契约](ui-design.md)。
-
-剪贴板界面通过功能目录内的 `registration.dart` 贡献页面 / 窗口工厂，`builtin_tool_pages.dart` 仅负责组合；Launcher 不判断剪贴板业务 ID。测试夹具位于 `test/support`，测试入口不互相导入。
-
-每个展示会话最多保留一个在途预览准备请求，期间的新选择只保留最新待处理目标；80ms 防抖到期且旧请求结束后才准备该目标。Rust 历史服务在读取正文之前串行准入，准备期间不持有存储 / 策略锁，完成后复验 epoch 与条目是否仍存在。文本在单条 16 MiB 上限内完整写入私有临时文件，图片保留原编码；内容渲染与解码由原生系统预览负责。原生确认事件还需匹配当前选择版本，旧面板不能执行新选中的对象。
-
-`HistoryService.snapshot` 在一次状态锁内完成过期检查、版本比较、状态和元数据查询；版本包含存储写入计数、策略 epoch、提示与查询身份。版本一致时返回无变化，Bridge 不构造条目 DTO；Flutter 仅对当前查询已接收的版本做条件轮询。
-
-后台刷新在提交结果时保留最新选中 ID，增加其他条目不重新解码当前正文。临时查询失败保留已有结果，后续查询成功清除该查询错误；复制成功但切回应用失败的提示不会被无变化轮询冲掉。查询变化、禁用、删除后返回的旧预览不会覆盖当前选择。剪贴板服务提示与文件编码 / 截断信息跨 Bridge 传递类型化事实，Flutter 按当前语言呈现，不在 Rust 拼接界面英文。当前回归与限制见 [V0.12 MVP](mvp-v0.12.md)。
-
-## 应用历史
-
-18 个内置来源和可信用户适配使用同一份 `source.json` / `transform.js` 契约，新增应用不修改主窗口分支或 Scope。来源 Action 经统一 Registry 在所属 Current App 和显式全局搜索中出现；页面固定到调用来源。浏览器历史、书签和 Tab 管理是[后续独立功能](browser-feature.md)，当前未实现。
-
-| 位置 | 职责 |
-|---|---|
-| `application/application_history/` | 装配内置 / 用户配置、模板继承、校验，按需运行有界纯 JS 转换 |
-| `features/application_history/model.rs` | 普通元数据、类型化目标与 SourceLoader 契约 |
-| `features/application_history/service.rs` | 默认安装开关、持久偏好与配置发布；部分修改在存储事务内合并 |
-| `features/application_history/service/query.rs` | 单一读取槽、可取消的异步准入、页面会话、匹配与排序、结果发布 |
-| `application/history_object_actions.rs` | 对单个来源句柄按需解析 Context / Registry 动作，挂接内存执行守卫；不改变冻结 Current App |
-| `features/application_history/service/execution.rs` | 重新读取来源并核对 key / 目标，唯一来源应用分发；歧义或失效时拒绝 |
-| `persistence/application_history/` 与同名 `.rs` | 只读 JSON / XML / SQLite、有界配置读取与默认路径检测；不执行脚本 |
-| Flutter `features/application_history/` | 查询、IME、选择、更多操作与可见性；不解析来源文件或决定打开目标 |
-
-安装信息只在启动收集为默认开关的依据；手动偏好优先，不随其他来源保存而变成手动配置。关闭 Action 保留自定义路径，并同步统一候选和快捷键资格。配置定义在启动加载，修改后需重启；没有常驻 JS、文件监听或全量历史索引。
-
-应用层的 `SettingsService.configure_application_history` / `set_application_history_action_enabled` 一次完成来源保存、History epoch 失效和 ActionRegistry 发布；Bridge 仅做参数 / DTO 转换，不再拼接两步调用。集成测试通过同一入口检查搜索、快捷键与旧候选失效，独立领域服务仍供只读测量器和单元测试使用。
-
-`AppHistorySettingsController` 持有来源筛选文本、编辑控件、路径草稿和保存反馈；筛选框直接使用同一份文本，保存失败后的来源定位同步更新显示条件。切页 / 筛选不销毁草稿，关闭设置复用同一保存决策。保存路径与开启 Action 是独立操作，Rust 在事务内保留有效开关；未提交草稿不写入偏好，也不触发来源正文读取或目录发布。打开适配文件夹不作为配置变更发布。
-
-查询结果与服务的执行校验表共享不可变元数据快照，Bridge 仅在构造传输 DTO 时复制所需字段。取消 / 配置变化丢弃服务持有的快照引用，不保留空列表的大容量；调用方仍持有的旧快照不能恢复执行资格。
-
-页面首次进入时刷新配置，保留期内恢复只重新读取有效数据。取消串行完成后才能开始新读取；操作期间的新输入继续合并。旧页面不会因过期结果自动重新申请会话，首次申请失败可以显式重试。读取预算不等于 OS I/O 可被硬中断；执行 / 复制仍重新读取并复验目标。支持矩阵、限额和降级见[来源指南](application-history-sources.md)。
-
-## 第一方模块与持久化
-
-`BuiltinFeature` 通过 FeatureContribution 提交 Provider / Bundle / Factory，启动时通过 FeatureBindings 接入已绑定的类型化服务动作与来源。BuiltinCatalog 保存编译内目录，不保留重建模块的工厂 / 生命周期；编译期目录构造器只用于启动与测试。第二次装配同一 Application 被拒绝。内部 Trait 不是第三方 Native ABI 或进程沙箱。
-
-SettingsService 协调独立 FeatureSettings 与 LegacyPluginSettings，持久化成功后发布贡献选择，推进执行资格并取消旧会话；源码与 Handler / Source 不重新绑定。FeatureServices 持有具体 SavedDirectoriesService；数据 Refresh 更新其 repository / cache，坏 DB 替换后使用同一 service 接入新绑定，不让旧 action 通过脱离当前数据的句柄写入。SQLite IMMEDIATE 事务继续合并最新已提交数据；失败不覆盖坏数据，查询不持有磁盘事务锁。
-
-`application/feature_catalog.rs` 的 `FeatureCatalog` 统一持有当前 ActionRegistry、ProviderRegistry、基础 / 扩展候选来源、功能策略、目录版本和启动装配资格。Resolver 与执行 / 预览 worker 共享该服务，目录版本变更由注册表替换和贡献发布入口推进，调用方不再单独修改计数器。`CatalogSelection` 表达待发布的完整贡献选择；Application 先持有 Session → Web，目录服务再按 Provider → Registry → Source → Policy 顺序加锁，校验并完成持久化后发布。撤销旧 Session / Web 执行资格的回调仍在目录锁释放前完成；之后才重置退役来源。装配资格以 guard 管理，失败可重试，成功后拒绝同进程重新绑定。输入识别与 Web 定义准备可以短暂持有 Provider guard，OS I/O、Provider 执行和匹配继续使用锁外快照。
-
-旧声明式插件仅启动发现 / 注册。新批准或未在启动可读的批准修复需要重启激活，开关和撤销即时过滤已装载定义。Refresh 复验已有定义，不发现新增插件；变更 / 移动后停止旧动作，重启后重新审查。外部来源有明确 plugin:<id> 贡献归属与独立选择，Native 恢复模式不会误关闭其他批准。对应 DTO 暂保留兼容名称，界面使用 Features / Refresh。
-
-设置分为 `FeaturePreferences` / `features.json` 与 `PluginPreferences` / `extensions.json`。首次启动从旧 `first-party:<id>` 禁用键生成新文件，旧键和批准仍保留在旧文件；有效的新文件是原生开关的唯一依据。创建迁移文件禁止覆盖已有目标，多实例启动遇到已创建文件会读取现有内容。有效未知功能 ID 保留，模块重新引入时继续应用其开关。
-
-FeaturePolicySnapshot 是不可变 Arc，只有内置配置或恢复资格改变时推进 generation；外部批准 / 普通 Refresh 不推进该 generation。注册时显式记录贡献归属，基础文件 / 文本贡献不属于可关闭模块；动态动作继承 Factory 归属，快捷键读取同一有效注册表，配置边界过滤 Provider / Actions / Sources。恢复旧注册表也须经过当前策略过滤。
-
-Application 在会话发布边界安装与 SettingsService 相同的策略 Arc，保存失败保留旧快照 / 候选 / 会话。请求捕获策略身份，Core 的通用 ExecutionGuard 不导入产品策略；快照提交和执行也复验，避免不同 SettingsService 的相同 generation 误当作同一配置。变化取消旧策略下整个会话的异步等待，Graph 不折叠迟到结果、隐藏恢复不继承旧候选。排队的 Git / Developer blocking worker 开始前检查资格；已经开始的 OS I/O 不强制中断，工作者继续负责自己的资源 / admission 清理。已启动执行任务独立运行。自动填入使用同目录的轻量 InputRecognizer；设置更新不重建模块目录。
-
-两类设置分别进入只读恢复，不覆盖损坏或未知 schema 文件；有效内置配置不因外部配置损坏而关闭，外部配置也可在内置配置损坏时单独修改。若新文件尚不存在且旧配置不可读，无法可靠迁移旧开关，内置功能同样只读关闭。基础 Launcher / 设置继续可用。写入前复验对应文件，已损坏、移除或与所读配置不同则拒绝该修改并要求 Refresh；每次操作只写其中一个文件，失败不发布新目录 / 策略。该复验不构成对任意外部编辑器的文件事务锁。
-
-配置操作无论成功还是失败，都重新校验快捷键资格；不确定资格时注销按键。修复后 Refresh 恢复设置 / 数据；未启动装载的外部定义需重启激活。协议见 [扩展与插件](plugin-protocol.md)。
-
-## 原生工具页与旧 UI 协议兼容
-
-外部 v3 Manifest 的 render_detail 使用 Protocol `ui::DetailView`；Plugin 负责 schema、模板与展开后的内容预算，Core 在普通执行 worker 内先检查 ui.render grant 后生成 `HostView::PluginDetail`。原 Session / Revision / catalog 校验与 Usage 路径不另建副本。
-
-Bridge 将内容转成 typed `PluginDetailDto`，不将 UI JSON 塞进 output_text。HostViewNavigator 接收已校验执行结果；静态 ToolPageRegistry 选择具体会话与原生 Body，ToolPageShell 管理共享布局 / 返回 / 焦点。Flutter Legacy Body 只渲染字段和纯文本，不匹配 Context 或重做插值。Launcher 保留底层查询 / Scope / 选中项，返回仅关闭视图；隐藏仍使用统一 15 秒生命周期。未知版本 / 超限在进入 UI 前失败。能力批准绑定完整定义，变更 / 撤销沿设置策略发布失效旧会话。
-
-## Native Tools 与操作
-
-ToolPageRegistry 选择编译内 Flutter 会话，ToolPageShell 统一布局、返回、焦点和 IME。ToolPageHost 仅允许当前页借用当前 Launcher 会话执行普通候选；通用父页栈有四层上限，返回保留父页状态并恢复焦点，退出会释放整栈。历史页不自行实现结果展示或进程启动。`builtin_tool_pages.dart` 组合文本结果 / 旧 Detail、Web 工具适配器、剪贴板页面 / 窗口与应用历史页注册；文件工作区由独立 FileSearch 路由协调。Launcher 不按 JSON / 剪贴板业务 ID 选择页面。NativeTool 保留普通页面 ID / 输入的类型化路由契约，未知或歧义路由拒绝打开；它不是第三方 UI DSL。`features/tools.rs` 的工具 EntrySource 复用普通 Action 搜索，不依赖文件领域。
-
-图标分为语义声明与呈现：功能模块在注册 Action 时声明 `icon` key；Flutter `ActionIconAppearance` 只将 key 映射到图形、色彩及操作角标，不解析动作 ID / 翻译标题或决定执行行为。`AppIcons` 复用随包携带的 Cupertino 字体，`SemanticIcon` 负责透明图形 / 小角标，文件列表与预览共用 `FileTypeIcon`。颜色来自共享设计参数；不读取系统文件图标、不为每个文件创建位图缓存。Web 的常用图标类随 Host CSS 注入，不增加权限、桥接协议或运行期图标依赖。
-
-## 第三方插件的运行边界
-
-Web 包继续使用现有安装批准、Action ID、最小 Context 投影和 Rust 能力代理。`@anywhere/sdk` 提供同一套 Context / Input / 剪贴板 / 来源与实时应用 API，Flutter 负责原生文档身份与消息转发，不做权限决策。Context/Input 通过初始快照和最新值事件传递；页面关闭使订阅与请求失效。
-
-包导入的待批准记录属于 Rust `WebPackageStore`，Flutter 以本次 inspect 返回的 token 批准或取消。取消只清理匹配记录，旧页面的迟到响应不能取消新审批；页面本地 busy / generation 不承担共享审批的所有权校验。
-
-Manifest 可声明 `background.resolvers`，由现有 ContextProviderRegistry / ContextGraph 调度；只允许生成 `plugin.<包 id>.*` 数据，使用 `ContextValue::Extension`，与具有原生权限的第一方 Context 隔离。包批准后只保留脚本文件的校验描述符，按需读取并创建 rquickjs VM，不缓存档案或常驻 VM。自动解析不允许副作用；显式后台命令使用同一 Rust broker 和安装权限，直接执行并返回结果，不发布工具页或创建 WebView。JS 引擎与宿主调用分别受预算 / 生命周期控制，当前仍为进程内 worker，进程隔离后续独立实现。
-
-界面与后台共享 TypeScript 类型，构建条件选择不同 Adapter；两种运行时不直接通信。SDK 的 `text_upload.ts` 统一 UTF-8 字节计数、Unicode 校验、按标量边界惰性分块和 begin / chunk / commit / cancel 事务；不依赖浏览器编码器或预建完整分块数组。Adapter 保留直接写入阈值、验证错误优先级及取消调度：浏览器按 JSON 编码后的帧预算决定分块，失败后异步清理；后台保留 8 KiB 阈值并等待清理。请求排队、快照与下载仍由各自适配器负责。详见 [开发指南](plugin-development.md) 和 [插件架构](web-plugin-design.md)。历史 [Context 调研](research/third-party-context-providers.md) 保留为方案来源，不再代表当前实现状态。
-
-## 扩展入口与验证
-
-- 新 Context：定义类型和值，实现 ContextProvider 并贡献注册。
-- 新 Action：ActionSpec / Handler / Bundle；执行能力与绑定资格显式声明。
-- 新来源：CandidateSource / AsyncCandidateSource；沿用 Ranking 和生命周期。
-- 新工具页面：在功能目录贡献 ToolPageRegistration，由 builtin_tool_pages 组合；HostViewNavigator 只协调已注册路由，复用导航与共享 UI。
-- 新应用历史来源：增加配置与合成 fixture；复用读取 / 转换 / 搜索 / 打开契约，不能以脚本生成任意系统命令。
-- 新系统能力：加入对应的窄能力接口，或扩展组合 `Platform` / `DesktopHost`；各平台适配器按能力实现。
-
-`scripts/check-architecture.py` 检查 Cargo 依赖及 core 模块反向导入；行为由公开 Facade、平台和 Widget 回归覆盖。完整门禁是 `scripts/check.sh`。自动化通过不代替真实键盘、权限、窗口、升级及 Windows 验收；当前记录见 [V0.14 技术方案](mvp-v0.14.md)，此前常规验收见 [V0.13 MVP](mvp-v0.13.md)，真实键盘基线见 [V0.12 MVP](mvp-v0.12.md)，历史 Web 验证见 [V0.11 MVP](archive/mvp-v0.11.md)。
-
-
-### JSON Web 工具与旧身份兼容
-
-JSON Workspace 是混合插件示例：WebView 负责编辑、校验、token 格式化与公式；按需 QuickJS 负责自有 JSON Context 识别和显式复制命令。两个运行时通过统一 SDK 访问 Host，共享私有缩进设置，不直接通信；原始 JSON 以文本传递，避免数字精度损失。Context 依赖命令没有空白搜索入口，剪贴板写入按安装权限执行，不再逐次确认；Host 不提供 JSON 专用业务接口。当前已移除原生工作区、内置 Provider / Actions / 注册入口、Flutter 页面和专用桥接操作；仅供该工具使用的 FeatureOperation / worker 框架同时移除，避免零业务消费者的执行体系常驻 Core。通用页面注册 / Shell、结果导航、会话 / 策略 / 执行 epoch 与既有 worker admission 继续服务现有业务。
-
-`json.document` / `core.json` 的 matcher 归一、ContextValue 数据类型与旧 Usage 迁移保留兼容；旧 `core.json.*` 动作 ID 不分配给其他动作。现有禁用键、快捷键配置和历史不主动删除，但无法找到当前目标的快捷键不会注册 / 执行，旧插件不能委托已退役动作。新的命令为 `web:dev.anywhere.json-workspace:open`，不复用退役动作身份或权限。
-
-### 系统编辑菜单与输入模型
-
-原生 Edit 菜单通过 NativeEditMenu 向当前 key window 对应的 Flutter engine 发送 anywhere/editing 编辑指令；Launcher / Settings 共用 engine，Running Tasks 使用自己的 engine。每个 engine 的 DesktopEditMenu 根据当前 Focus 调用 Flutter Actions，统一处理 Undo / Redo / Cut / Copy / Paste / Select All，文本、选区和撤销历史保存在 Flutter 编辑模型中。没有活动 Flutter 窗口时原生菜单不转发，无焦点 / 未知指令不会修改输入。业务处理继续由 Rust 执行。
-
-`ShortcutRecordingHost` 持有共享引擎的录制通道及 `ShortcutRecorder`。每次开始录制时查询设置窗口资格；替换、取消、失焦和销毁完成对应的待回复请求，迟到取消不能撤销新请求。AppDelegate 仅组装资格回调并转交本地按键与已注册唤醒键；纯按键转换仍在 Recorder，Host 销毁时解除消息处理器。
-
-`WebToolsHost` 持有 Web 工具通道、活动状态及 Host 面板遮挡状态，统一协调原生编辑、按键转交、画布与辅助功能子树。返回 Host 时只在 Flutter 内容中寻找输入接收者；返回 Web 时才在窗口内容中定位唯一 WebView。非 key 窗口不转移焦点，组词时不拦截返回 / Actions；隐藏或销毁时撤销 Web 子树连接，销毁解除通道。AppDelegate 转交事件，不另存活动标志。
-
-`LauncherWindowCoordinator` 同时持有最新请求代次、已展示代次、设置窗口状态及共享视图。show / hide 校验最新代次，resize 只接受已展示代次；隐藏与失焦先撤销展示资格，再运行资源收尾并隐藏窗口。旧请求在任何窗口 / 热键副作用前被拒绝。AppDelegate 只解析通道参数、组装展示前的热键暂停与隐藏前的录制 / 预览 / Web 清理，并记录可见性及通知 Flutter 失焦，不再直接写代次或移动共享视图。
-
-`SettingsHost` 持有原生权威设置、保存与登录项错误，协调既有 `HotKeyService`、`FileSearchAccess` 和持久化；共享 `anywhere/window` 通道只把设置 / 权限方法转交给它，未知方法继续由原分派器处理。快捷键注册失败恢复旧绑定，其他有效偏好继续保存；语言仅在落盘成功后分发，失败时恢复旧语言。目录请求的 worker、书签和 epoch 仍由 `FileSearchAccess` 独占，设置 Host 不建立第二套授权代数。`LoginItemService` 适配系统登录启动和 macOS 12 兼容路径，不读写设置文件；显式独立数据目录下不访问系统登录项。AppDelegate 只读设置快照以路由唤醒和生成启动信息，不再直接修改存储或保存状态。
-
-
-## Web 插件收尾边界
-
-- 包管理协调属于 Application；持久化层不调用 Application，架构门禁阻止该反向依赖。保存失败不重新发布目录，也不撤销正在使用的文档。
-- Bridge 资源端口只获取有界资源描述，释放管理锁后读文件、核对 SHA-256，再复验文档资格；不为每个 JS / CSS 请求复制整个输入。卸载私有 KV 的 SQLite 操作也不持有 Web 文档锁。
-- Flutter `WebDocumentLifetime` 管理异步绑定接收、迟到清理与销毁；`WebToolSurface` 只协调原生视图和交互，Host 弹层在独立展示组件中。来自已替换视图的创建 / 资源 / 消息 / 崩溃回调不能操作新视图；ready 检查返回后复验同一代数。
-- `web_document_policy.dart` 管 HTML / CSP / 资源路径；`web_bootstrap.dart` 只提供消息和可见性传输；`web_view_appearance.dart` 管原生画布适配。SDK 取消 / dispose 同时释放传输待回复名额，Rust 始终保留独立授权与预算检查。
-- Rust `rpc_state.rs` 统一发布请求取消状态及唤醒通知，`rpc_dispatch.rs` 在 worker admission 处同时等待取消；实际 I/O 保留自己的许可到结束。SDK 的前台注册和后台事件通知各自处理回调生命周期，不把订阅错误转成已完成操作的失败。
-- 设置页经 `WebPackageBackend` 使用薄类型化端口；只在提交安装变更时使初始列表失效，取消文件选择或批准仍可接收该初始列表；文件选择期间禁止重入，清理失败不会锁死控件。安装或卸载的响应失败后回读实际安装状态，不把旧列表当作权威结果。
-
-- Flutter 窗口入口统一安装 `AppStyle.theme`，普通页面控件继承默认外观；公共布局在 `ui/app_components.dart`。Web 的普通 HTML 由 Host 自动注入共享样式，两端参数由 `resources/design-tokens.json` 生成，领域与 Rust 层不定义视觉样式。
-- `settings/shortcut_action_picker.dart` 为普通动作快捷键及 Context 规则共用动作选择列表，只负责本地文案、筛选与按需呈现；绑定草稿、录制和保存仍由各自对话框及设置服务管理。
-- 插件作者默认使用 `definePlugin`，SDK 负责连接寿命、首次输入与保留后重绑定；业务模块不感知原生桥与默认样式。创建器只生成标准网页项目，不定义 UI DSL。字体 / 控件 / 画布仍由 Host 呈现层提供，Rust 不处理网页布局。
-
-- Web 首次显示经过 Rust ready 确认与 Host 画布应用；macOS 的 NativeWebAppearance 将私有 drawsBackground 开关限制在有 selector 检查的适配器中，不可用时使用统一不透明回退。当前不创建 WebKit 快照或通过截图刷新页面，也不轮询。迟到结果由 Flutter 文档 / 视图身份守卫丢弃，Rust 不参与绘制。该兼容路径的桌面验收状态见 MVP，不能以原生单元测试替代视觉验证。
-
-### 固定 Flutter 版本的表面缓存保护
-
-macOS Host 在启动引擎前安装 `NativeFlutterSurfaceGuard`：对 Flutter 后备表面的实际尺寸与请求尺寸做校验，不匹配时返回空值让引擎重新分配。该适配仅处理固定 SDK 的缓存缺陷，检查内部选择器 ABI，不修改全局 SDK、渲染器或业务层。实际框架回归随原生门禁运行；升级到包含上游修复的版本后应移除，证据和边界见 [Build 51 收尾](archive/reviews/closeout-v0.11-build51.md)。
-
-独立悬浮窗 / 任务窗通过 `FlutterWindowCloseCoordinator` 发起关闭握手，工具 isolate 用通用 `prepareToolWindowToClose` 卸载页面并完成普通帧，清理编辑器、语义节点和视图轮询后再回复。卸载用公开的 `attachRootWidget` / `wrapWithDefaultView`，避免 `runApp` 另行安排预热帧。Host 清除消息处理器，用 `WindowMaterialController.detachContent` 解除输入响应、清空原生效果容器的内容引用并移除子控制器，随后通过 `FlutterEngineLifecycle` 显式解绑专用引擎，再释放窗口；失败启动直接清理。共享 Launcher / Settings 的视图移动不调用内容拆卸。重复关闭合并，旧回复受代数隔离，重新打开排队到清理结束；2 秒无响应则回退关闭。使用公开接口，不销毁共享引擎，不停止 Rust 持有的任务。原生解绑测试不启动 Dart 或绘制，AppKit 回归覆盖内容 / 输入拆卸和共享视图移动；Widget 覆盖卸载、无新增预热帧及轮询。实际对象释放和 SDK 消息的边界见[性能记录](performance.md#build-7-普通帧卸载补验2026-10-24)。
-
-`FlutterAccessibilityState` 只在 macOS Host 缓存已经收到的 AppKit 辅助功能启用 / 禁用通知，新建引擎后重放，避免懒加载窗口错过请求。没有已观察状态时不执行，不强制开启语义树，不增加系统权限。通知名称沿用固定 Flutter SDK 的实现契约，并非新的跨平台业务协议；升级 SDK 时须复核 `FlutterEngine.mm` 的通知处理和晚建窗口的实际 AX 树，不能只依赖适配器自身测试。
-
-应用显式创建的 Tooltip 使用 `ui/app_components.dart` 中的 `AppTooltip`，为每个浮层锚点建立独立的语义容器。固定 Flutter 3.47.8 会在列表等合并语义的布局中丢失相邻 Tooltip 的不同 traversal parent 标识，浮层显示后提交无法从根节点到达的节点，导致原生 AXTree 拒绝后续更新；相关上游问题见 [Flutter #182444](https://github.com/flutter/flutter/issues/182444)。此处使用公开 `Semantics(container: true)` 隔离锚点，保留原有 Tooltip、标签和按钮动作，不修改 SDK 或关闭辅助功能。导航按钮的标签、展开状态与点击手势放在同一提示边界内，避免标签与可执行节点分离。`launcher_semantics_lifecycle_test.dart` 重放实际序列化增量的根可达性，覆盖相邻提示、悬停、语言切换、语义导航与 Launcher 保留 / 过期恢复；升级 Flutter 后按这些回归及真实桌面树复验是否仍需要适配。
-
-固定 Flutter 3.47 的 `FlutterViewWrapper.accessibilityChildren` 只返回渲染视图，macOS 语义桥没有连接嵌入的 WebKit 控件。Host 的 `NativeAccessibilityContainer` 通过公开 AppKit 接口补充这一子树：原有 Flutter 节点每次动态读取，嵌入视图及原父节点仅弱引用；关闭、隐藏、弹出 Host 操作面板或移动共享窗口时撤销连接并恢复父节点。`NativeWebView` 统一发现窗口内唯一的 WebView；新旧视图重叠时不猜测，不向其中任意一个转移焦点或暴露节点。适配不改 SDK、不轮询、不要求插件编写无障碍桥接代码；升级 Flutter 后须复核是否仍有必要，真实辅助技术的验收范围单独记录。
-
-
-## 语言与名称检索
-
-- Flutter 的 ARB 是宿主界面文案源，官方 gen-l10n 生成类型化访问器。`AppLanguage` 每个 engine 维护自己的呈现偏好，Native `LocaleHost` 分发保存后的偏好；业务 Core 不保存当前 UI 语言。
-- 原生菜单、窗口和权限说明从同一 ARB 生成 Apple `.strings` 与 `NativeText`，通过 Foundation Bundle 读取；语言改变只更新呈现和原生标题，不创建新 engine。
-- 模块通过 `ActionSpec.localized_titles` 或 `ActionDefinition.localized_titles` 声明本动作的翻译。注册时将名称合并到既有 SearchFields，Candidate 与快捷键目录只携带标签元数据。动作 ID、执行资格、排序输入与 Usage 不依赖所选语言。
-- 已安装应用的两种名称在平台扫描时读取并缓存到不可变目录，Host 选择显示名称。拼音匹配属于 Rust 名称搜索，不产生全盘拼音索引或剪贴板全文副本。
-- Web 权限与确认通过类型化 DTO 传递，Host 负责本地化；第三方页面通过 SDK 的语言通知选择包内资源。权限判定不读取显示文案，未知上下文类型和外部诊断保留原始值。
-- 旧插件是否等待重启由 Rust 的实际激活状态明确产生，界面不解析英文说明来判断状态。内置模块名称与控件朗读标签共用本地化映射；技术诊断仅在故障状态显示原文。
-- Rust 工作区版本与 App 的发布版本一致，Flutter / 原生另共享构建号。`scripts/check-versions.py` 在门禁与构建前核对，避免内置功能元数据停留在旧版本；第三方包版本仍独立。
-
-## 设置关闭与列表呈现状态
-
-`SettingsController.prepareClose` 是原生关闭、完成、Esc、切回 Launcher 和退出的统一决策入口：等待来源、剪贴板、搜索设置保存与目录同步，然后处理草稿、失败与保存 / 放弃 / 取消。来源与剪贴板控制器保留失败结果，因此操作恰好结束不会改变关闭决策。`SettingsEdits` 拥有搜索 / 隐藏应用的文本草稿和顺序写入，保存只规范化本次提交且未被再次编辑的字段。`SettingsScreen` 只呈现选择和失败来源，不再有第二个保存队列或关闭规则。
-
-`SettingsSaveCoordinator` 持有 Host 的权威设置回读、保存队列、读取代次、文件授权资格与恢复状态。一次排队保存包含快捷键资格校验、Host 写入 / 回读、能力应用及目录协调；新保存提交时立即使旧授权失效，不能等轮到实际写入后才撤销。Host 拒绝的绑定不作为成功设置发布，应用失败保持可重试状态。Controller 保留草稿、关闭决策和用户反馈，协调器不持有 Widget 或本地化接口；销毁后不启动排队写入或发布迟到回读。
-
-`ShortcutCatalogCoordinator` 持有动作 / 应用选择目录、动作资格、原生注册失败类型与串行注册队列。每项注册开始时读取当前设置，资格返回及原生注册后再次复验同一快照；Host 警告读回也在发布前复验，不能覆盖并发保存的新状态。资格读取不确定时尝试注销对应系统按键，已保存绑定保持不变。Controller 仅把结构化失败映射为页面反馈，并在同一队列项内协调 Host 警告。
-
-剪贴板页面的行选择同步更新身份、滚动与预览目标；读取预览资源、复制、删除仍是独立的异步操作。剪贴板设置直接串接保存与读回的 Future，在通知忙碌状态前公布队尾，关闭逻辑等待同一结果。
-
-`FeatureCatalogCoordinator` 持有功能状态、变更准入与串行队列，处理开关、批准 / 撤销及应用历史变更后的目录协调。忙碌状态由最新队尾 Future 表示；关闭等待期间若来源回调追加协调，继续等待新队尾，直到队列排空。来源回调不会绕过准入另写功能列表；已排队的协调在前一操作失败后仍继续。后端即使在提交后返回错误，也协调快捷键资格；Controller 负责反馈及页面关闭选择，不操作内部队尾。
-
-`tools/ObjectActionCoordinator` 统一 Launcher 与应用历史的请求顺序、失效与迟到响应；各会话仍在发布前复验自己的目标，菜单呈现和回退动作留在各页面。应用历史的 `rowExtent` 由 `AppHistorySession` 拥有，翻页、定位与 Page 的 ListView 使用同一值；不另建通用菜单或列表框架。
+| --- | --- |
+| `SessionId` | 一次激活 |
+| `Revision` | 同一会话的输入或查询模式变化 |
+| `SnapshotSeq` | 同一 revision 的迟到补充 |
+| `BusinessActionId` | Usage 与持久配置中的动作 |
+| `ExecutionCandidateId` | 已提交候选及具体目标 |
+| Catalog version / execution epoch | 定义、开关或权限变化后的执行资格 |
+| Host / preview generation | 窗口、Quick Look 或 Web 文档替换 |
+
+快照流程采用“锁内复制不可变事实 → 锁外匹配 / 排序 → 锁内复验并发布”。
+GPUI 的顺序门禁在 `apps/gpui/src/launcher/snapshot_gate.rs`。
+
+执行请求在排队前冻结候选、来源应用、Session / revision、执行 epoch、功能策略
+与目标 token。worker 在副作用前再次复验。执行成功即使窗口已隐藏仍记录 Usage。
+隐藏窗口立即撤销待执行资格；已经启动的子进程由 ExecutionSession 独立持有。
+
+空动作列表由 Rust 比较 Usage、最近使用、相关性和稳定 ID。关键词、文件和历史
+结果保持各自契约；GPUI 只过滤当前 Scope 并限制可见行。
+
+## 文件与预览
+
+`features/filesystem/scan.rs` 持有查询寿命，子模块分别负责查询、范围、记录、
+遍历、进度和分页；`result_store.rs` 维护连续外部排序。已显示前缀必须稳定，
+查询切换后旧结果不能追加。
+
+系统索引提供早期结果，完整目录遍历补充其余命中。磁盘授权在读取前复验；
+文件、目录、工作区文件和远程 URI 保持不同类型。Quick Look 通过
+`apps/gpui/src/platform/preview.rs` 管理 generation；关闭回调只作用于当前预览，
+完成后恢复当前页面输入焦点。详见[文件搜索](file-search.md)和
+[系统预览](native-preview.md)。
+
+## 剪贴板与应用历史
+
+剪贴板采集默认关闭。启用后，文本、图片、文件列表与可读取格式存入 SQLite；
+查询、去重、配额和原始数据读取由持久化层负责。Clipboard History 是主窗口工具，
+Clipboard Shelf 是独立的置顶 GPUI 窗口，两者复用同一策略与结果模型。
+
+应用历史通过 `source.json` / `transform.js` 读取一个选定外部来源，运行有界纯
+JS 转换并形成普通候选和对象动作。它与 Launcher Usage、剪贴板历史是三类独立
+数据。来源执行前重新读取并核对目标；失效或歧义时拒绝打开。详见
+[应用历史](application-history.md)和[来源指南](application-history-sources.md)。
+
+## 设置与系统适配
+
+设置草稿、已保存值和保存结果分开管理。每个操作在 blocking runtime 中执行，
+成功后才更新已保存快照；失败保留可重试状态。
+
+- 热键：`apps/gpui/src/host/hotkeys.rs`，注册失败恢复旧绑定。
+- 目录：`apps/gpui/src/host/directory_access.rs`，使用安全范围书签。
+- 登录项：`apps/gpui/src/host/login_item.rs`，显式数据目录下不访问系统项。
+- 状态栏与窗口：`apps/gpui/src/platform/mod.rs`。
+- Quick Look：`apps/gpui/src/platform/preview.rs`。
+- Web document：`apps/gpui/src/web_tool.rs` 与 `launcher/view.rs`。
+
+这些适配器的自动化只证明输入输出与清理顺序。物理权限、IME、系统批准与 WebKit
+helper 行为必须按[验收矩阵](mvp-gpui.md#物理桌验矩阵)单独记录。
+
+## Web 插件
+
+安装时 Rust 验证 Manifest、资源、摘要和权限。批准后 WebView 只访问固定 origin
+与已验证资源；页面通过 binary IPC 进入统一 broker。Rust 拥有文档 handle、
+请求资格、预算和取消，GPUI 只挂载视图和转发生命周期事件。
+
+替换文档会推进 generation。旧页面的资源请求、ack、状态事件或关闭回调不能影响
+新文档。Web 包损坏只移除可选 Web 能力，不阻断 Launcher 启动。按需 QuickJS 使用
+同一能力代理，当前仍为进程内执行；进程隔离尚未交付。
+
+## 扩展入口
+
+- 新 Core Context：定义类型与值，注册 Provider，并通过贡献接入策略。
+- 新 Action：定义 ActionSpec / Handler / Bundle，声明执行能力与绑定资格。
+- 新候选来源：实现 CandidateSource / AsyncCandidateSource，复用 Ranking 与寿命。
+- 新页面：使用 typed `HostView::NativeTool` 路由，在 GPUI 页面层映射已知类型；
+  未知或歧义 ID 明确拒绝。
+- 新系统能力：先增加窄 Platform 接口，再由各平台适配器实现。
+- 新第三方能力：优先使用 Web SDK、Manifest 与权限代理；不扩展旧 UI DSL。
+
+## 验证
+
+```sh
+scripts/check-gpui.sh
+scripts/check.sh
+git diff --check
+```
+
+`check-architecture.py` 验证 Cargo 依赖与 Core 反向导入。自动化通过不代替真实
+键盘、权限、窗口、Quick Look、WebView、VoiceOver、资源趋势或跨平台桌面产物。

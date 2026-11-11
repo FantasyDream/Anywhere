@@ -9,7 +9,7 @@
 - 输入经 `context.read` 授权投影，后台解析器只处理获准数据；不开放环境采集、任意文件、网络或进程访问。
 - 使用按需 rquickjs，每项任务独立创建并释放 Runtime；纯 UI 包不启动后台 VM。
 - 宿主负责身份、结果限额、取消和发布前的会话 / 目录版本校验。UI 与后台共享 SDK 类型和能力代理，不直接通信。
-- JSON Workspace 已使用自有 Context 及后台复制命令；原生验收范围见 [Build 24](../benchmarks/acceptance-fixes-v0.14-build24-2026-10-27.json)。
+- JSON Workspace 已使用自有 Context 及后台复制命令；原生验收范围见 [Build 24 历史记录](../archive/v0.14-development-records.md)。
 
 公开接口和预算以 [插件开发指南](../plugin-development.md)为准，生命周期和信任边界见 [Web 插件架构](../web-plugin-design.md)，代码地图见 [架构](../architecture.md)。
 

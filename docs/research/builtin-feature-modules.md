@@ -2,7 +2,11 @@
 
 日期：2026-10-14。方案核对基线 `dev-0.9@e4dbedc`。用户已确认并按 [迁移路线图](../archive/feature-module-roadmap.md) 分阶段实施；当前完成情况见 [MVP](../archive/mvp-v0.9.md)。第一方不实现热加载，热加载只在最后阶段的第三方 WebView 插件中实现。本文替代前一份方案的第一方 Runtime / NativeProcessRuntime 方向。
 
-**历史方案，核对说明更新于 2026-10-23。** 静态内置模块迁移已完成；下文包含当时的拟议目录 / 生成方式，不是当前目录或接口清单。现行实现见[架构](../architecture.md)，当前验收见 [V0.12 MVP](../mvp-v0.12.md)。第三方 Web 本地包已接入，但目录 watch / Vite HMR 尚未实现。
+**历史方案，核对说明更新于 2026-11-11。** 静态内置模块迁移已完成；下文包含
+当时的拟议目录 / 生成方式，不是当前目录或接口清单。现行实现见
+[架构](../architecture.md)，当前验收见
+[GPUI 技术方案与验收](../mvp-gpui.md)。第三方 Web 本地包已接入，但目录 watch /
+Vite HMR 尚未实现。
 
 2026-10-16 的范围变更取消了本文建议的 JSON 原生工具。JSON 后来已作为普通 Web 包实现，因此下文“JSON 业务在 Rust”等原生工具设想不适用于现有 JSON Workspace；见[插件示例](../../plugins/examples/json-workspace/README.md)。其余模块分层决策保留历史依据。
 ## 1. 命名与目标
@@ -17,7 +21,7 @@
 
 ```mermaid
 flowchart TB
-    subgraph UI[Flutter 展示]
+    subgraph UI[GPUI 展示]
         Launcher[Launcher 搜索与导航]
         Shell[统一工具页面容器]
         Views[静态页面注册表]
@@ -26,7 +30,7 @@ flowchart TB
         Shell --> Views
         Views --> Pages
     end
-    Bridge[Bridge 类型化用例接口]
+    Bridge[Shared frontend runtime]
     subgraph App[Application 应用层]
         Composition[启动装配与静态功能目录]
         Policy[功能设置与策略快照]
@@ -71,7 +75,7 @@ flowchart TB
 | Application | 启动装配、用例、配置策略、会话 / 版本协调 | 知道如何组装，不复制具体业务算法 |
 | 功能模块 | 自己的识别、动作、Source、工具业务和类型化服务状态 | 不导入 Application 或持久化实现，不自己抓取另一个前台环境 |
 | 应用服务 | 平台操作、存储接口、任务调度与取消等共享资源 | 用途明确，避免变成到处可取任意对象的服务容器 |
-| Flutter 功能页面 | 输入、局部展示状态、焦点和工具交互 | JSON 处理、Git / 项目逻辑仍在 Rust |
+| GPUI 功能页面 | 输入、局部展示状态、焦点和工具交互 | JSON 处理、Git / 项目逻辑仍在 Rust |
 | 页面容器 | 通用返回、状态、窗口、保留时间与主题 | 不解释外部 UI DSL，不按业务 ID 写分支 |
 | Platform / Persistence | OS 差异及数据库 / 文件适配 | 模块通过窄接口调用，保存 namespace 与事务边界 |
 
@@ -90,9 +94,12 @@ FeatureContribution
   工具页面 ID 与元数据
 ```
 
-描述使用 Rust 类型常量，不再为每个内置模块解析第三方式 TOML 协议、维护独立插件版本或批准令牌。Native 页面仍由编译后的 Dart factory 注册。
+描述使用 Rust 类型常量，不再为每个内置模块解析第三方 TOML 协议、维护独立
+插件版本或批准令牌。Native 页面由编译后的 GPUI typed route 注册。
 
-保留编译期生成目录的自动注册：模块提供固定名称的 contribution 入口，生成器收集、排序并检查冲突，生成 Rust 模块目录和 Dart 页面目录。运行期不扫描模块源码、动态库或配置寻找新功能。新 crate 仍需加入构建依赖。
+保留编译期生成目录的自动注册：模块提供固定名称的 contribution 入口，生成器
+收集、排序并检查冲突，生成 Rust 模块目录。运行期不扫描模块源码、动态库或配置
+寻找新功能。新 crate 仍需加入构建依赖。
 
 Application 创建一次稳定 FeatureCatalog 和所需服务。查询时产生菜单 / npm scripts / Cargo targets 等 Context 动作，属于日常业务结果，不重建 Feature Module。成本高的服务和页面按需创建，缓存有界。
 
@@ -152,10 +159,10 @@ anywhere-core/src/
 │   └── applications / app_actions / text
 └── persistence/       数据适配
 
-apps/flutter/lib/
+apps/gpui/src/
 ├── launcher/          主窗口和导航
-├── tools/             ToolPageShell、静态 ViewRegistry
-├── features/          各原生工具的页面与 Controller
+├── tools/             typed tool route
+├── launcher/          各工具页面与展示状态
 ├── settings/          功能设置；旧第三方入口独立
 ├── ui/                样式、图标与可复用组件
 └── infrastructure/    系统通信和窗口
@@ -165,7 +172,8 @@ apps/flutter/lib/
 
 ## 9. 第一方功能开发范式
 
-新增功能：定义输入与 Context → 实现 Rust 业务服务和贡献 → 必要时提供 Flutter 工具页面 → 编译期自动进入目录 → 补业务和交互测试。
+新增功能：定义输入与 Context → 实现 Rust 业务服务和贡献 → 必要时提供 GPUI
+工具页面 → 编译期自动进入目录 → 补业务和交互测试。
 
 已有 ActionId、ProviderId、ContextType、Scope、快捷键与 Storage namespace 保持稳定。Feature 的显示名称变化不迁移业务身份。Bridge 按功能提供类型化用例，通用 Launcher 不为每个工具新增分支。
 

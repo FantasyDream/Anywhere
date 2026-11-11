@@ -1,4 +1,4 @@
-name: Shared platform checks
+name: Cross-platform compilation
 
 on:
   workflow_dispatch:
@@ -10,13 +10,9 @@ on:
       - 'Cargo.lock'
       - 'rust-toolchain.toml'
       - 'crates/**'
-      - 'apps/flutter/lib/**'
-      - 'apps/flutter/test/**'
-      - 'apps/flutter/pubspec*'
-      - 'apps/flutter/analysis_options.yaml'
+      - 'apps/gpui/**'
       - 'resources/**'
       - 'scripts/**'
-      - '.flutter-version'
       - '.github/workflows/portable.yml'
 
 permissions:
@@ -41,23 +37,21 @@ jobs:
           toolchain: 1.100.0-beta.7
       - name: Verify builtin feature catalogue
         run: cargo run -p anywhere-core --example generate_feature_catalog --locked -- --check
-      - name: Compile shared workspace and test targets
-        run: cargo check --workspace --all-targets --locked
-      - name: Run shared Rust regressions on Linux
+      - name: Compile portable crates and test targets
+        run: >-
+          cargo check
+          -p anywhere-core
+          -p anywhere-platform
+          -p anywhere-plugin
+          -p anywhere-protocol
+          --all-targets
+          --locked
+      - name: Run portable Rust regressions on Linux
         if: runner.os == 'Linux'
-        run: cargo test --workspace --locked
-      - name: Read Flutter version
-        id: flutter-version
-        shell: bash
-        run: echo "version=$(cat .flutter-version)" >> "$GITHUB_OUTPUT"
-      - uses: subosito/flutter-action@v2
-        with:
-          flutter-version: ${{ steps.flutter-version.outputs.version }}
-          channel: stable
-          cache: true
-      - name: Verify shared UI and host protocol
-        working-directory: apps/flutter
-        run: |
-          flutter pub get
-          flutter analyze
-          flutter test
+        run: >-
+          cargo test
+          -p anywhere-core
+          -p anywhere-platform
+          -p anywhere-plugin
+          -p anywhere-protocol
+          --locked

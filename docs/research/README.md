@@ -23,4 +23,4 @@
 
 - [第三方 Context 注册与运行方案](third-party-context-providers.md)：2026-10-20，类型与权限隔离、统一 Graph、QuickJS / Wasm 比较及分步验证；尚未接入。
 
-- [中英国际化与拼音开源选型](i18n-pinyin.md)：Flutter 官方方案、Rust pinyin 与 Web 资源边界。
+- [中英国际化与拼音开源选型](i18n-pinyin.md)：历史选型、Rust pinyin 与当前 typed resource 边界。

@@ -1,6 +1,6 @@
 # 应用历史
 
-当前 V0.14 开发预览已接入 18 个配置化来源，覆盖 JetBrains、VS Code 同类编辑器、Sublime Text 和 Obsidian 最近仓库。工程与实机验证程度以 [V0.14 MVP](mvp-v0.14.md) 为准，不能从“已有适配”推断所有版本和安装方式均已验收。
+当前 V0.14 开发预览已接入 18 个配置化来源，覆盖 JetBrains、VS Code 同类编辑器、Sublime Text 和 Obsidian 最近仓库。工程与实机验证程度以 [V0.14 MVP](mvp-gpui.md) 为准，不能从“已有适配”推断所有版本和安装方式均已验收。
 
 ## 使用方式
 

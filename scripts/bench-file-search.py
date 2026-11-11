@@ -3,7 +3,7 @@
 
 Build: cargo build --release -p anywhere-core --example file_search_measure --locked
 Run on macOS: python3 scripts/bench-file-search.py --output docs/benchmarks/file-search-v2.json
-RSS covers the standalone Rust process, not Spotlight or Flutter.
+RSS covers the standalone Rust process, not Spotlight or GPUI.
 """
 import argparse
 import json
@@ -41,7 +41,7 @@ def main():
         'platform': platform.platform(),
         'probe': 'release Rust walker + continuous results',
         'cache': 'OS caches left untouched; fixtures just created',
-        'excludes': ['Spotlight subprocess', 'Flutter', 'real GUI'],
+        'excludes': ['Spotlight subprocess', 'GPUI', 'real GUI'],
         'baseline': measure(binary, ['--baseline']),
         'cases': []
     }

@@ -12,7 +12,10 @@
 
 生产改动仅在 `core/search/query.rs`：原先收集 ASCII 字母 / 数字到 String 再 `starts_with`，现在通过字节迭代器过滤并按查询需要比较，首次不同即返回。不增加常驻字段缓存，不改变 Query / SearchFields API、Context、Scope、候选身份、frecency、文件搜索或 15 秒恢复规则。
 
-当时实验位于 `core/search/matcher_probe/`，由 `cfg(test)` 隔离；`nucleo-matcher = 0.3.1` 仅为 dev-dependency。`cargo tree --locked -p anywhere-bridge-flutter --edges normal` 验证生产依赖图没有 nucleo。原型中冻结一份旧字段算法用于差异测试，生产只有一个匹配器，无后端设置或重复运行路径。
+当时实验位于 `core/search/matcher_probe/`，由 `cfg(test)` 隔离；
+`nucleo-matcher = 0.3.1` 仅为 dev-dependency。`cargo tree --locked -p
+anywhere-core --edges normal` 验证生产依赖图没有 nucleo。原型中冻结一份旧字段
+算法用于差异测试，生产只有一个匹配器，无后端设置或重复运行路径。
 
 | 对照项 | 内容 |
 |---|---|
@@ -46,7 +49,9 @@ API 核对使用官方 [Matcher 0.3.1](https://docs.rs/nucleo-matcher/0.3.1/nucl
 python3 scripts/bench-matcher.py --output docs/benchmarks/matcher-r3.json
 ```
 
-macOS 27.0.1 / arm64、Release；每个后端每组独立运行 3 个进程，交替顺序。12 组查询各预热 30 次、测量 200 次；匹配时间包含 Query 解析与结果计数，不包含数据准备、Context 解析、授权、构造完整 Candidate、Ranking 排序、Bridge、Flutter 或 GUI。
+macOS 27.0.1 / arm64、Release；每个后端每组独立运行 3 个进程，交替顺序。12
+组查询各预热 30 次、测量 200 次；匹配时间包含 Query 解析与结果计数，不包含
+数据准备、Context 解析、授权、构造完整 Candidate、Ranking 排序或 GUI。
 
 1,000 / 10,000 个应用为合成名称与 alias；2,000 个 Action 字段为真实注册字段的重复采样，不表示软件有 2,000 个不同内置动作。SHA-256 在计时外记录每个匹配行索引与 MatchLevel；legacy / existing / prepared / nucleo 的所有样本候选集合与等级相同。fuzzy 单独记录新增结果，不以更多命中自动判为更好。
 

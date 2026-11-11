@@ -13,7 +13,7 @@ use std::{collections::BTreeMap, time::Duration};
 use tokio::time::Instant;
 
 /// Issued only to trusted Host code. It is not parsed from browser request bodies.
-#[derive(Clone)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WebDocumentBinding {
     pub(super) invocation_id: String,
     runtime_id: String,

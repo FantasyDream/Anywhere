@@ -117,7 +117,7 @@ export function transform(input) {
 
 Obsidian 本轮只列出 `obsidian.json` 登记的仓库，不扫描 Vault 文件树；同名仓库以稳定 ID 区分。[官方 URI 文档](https://obsidian.md/help/uri)支持按仓库 ID 打开。最近笔记、多 Vault 文件聚合延后，不再作为本次收尾的交付条件。官方最近文件 API 属于 Obsidian 插件环境；本机 1.14.4 的工作区元数据虽含最近文件列表，外部读取仍需明确绑定 Vault 和可自定义的配置目录。Sublime 会话文件可能包含编辑缓冲区数据，读取受总量上限约束，转换只提取 `folder_history` / `file_history` / `recent_workspaces`，不展示或保存缓冲区正文。
 
-来源使用合成文件验证解析、检测、应用身份及分发；另有明确版本的 VS Code 本机只读探测，见 [当前验证基线](mvp-v0.14.md#最新已验证基线)。这些证据不等同于已在 18 个真实应用中完成实机打开。自动路径是标准位置，非标准安装、应用版本或格式变化需要自定义路径；未知结构报来源不可用。上游 Typora 适配没有 macOS 支持；浏览器需要批量读取、Profile 路由和更大的来源边界，未借此批次冒充完成。
+来源使用合成文件验证解析、检测、应用身份及分发；另有明确版本的 VS Code 本机只读探测，见 [当前验证基线](mvp-gpui.md#自动化证据)。这些证据不等同于已在 18 个真实应用中完成实机打开。自动路径是标准位置，非标准安装、应用版本或格式变化需要自定义路径；未知结构报来源不可用。上游 Typora 适配没有 macOS 支持；浏览器需要批量读取、Profile 路由和更大的来源边界，未借此批次冒充完成。
 
 配置位置依据 [JetBrains 目录规则](https://www.jetbrains.com/help/idea/directories-used-by-the-ide-to-store-settings-caches-plugins-and-logs.html)、[Android Studio 官方排错资料](https://developer.android.com/studio/troubleshoot)、[Obsidian 全局数据说明](https://obsidian.md/help/data-storage)。Rider 当前使用 `recentSolutions.xml`，见 [JetBrains 支持记录](https://rider-support.jetbrains.com/hc/en-us/community/posts/36380823627922-Rider-on-Windows-seems-to-rely-on-old-versions-of-user-data-in-Appdata-Local)。本机仅核对已安装应用的 bundle 元数据，没有为路径研究读取私人历史正文。
 
@@ -166,7 +166,7 @@ SQLite 配置示例：
 
 对象候选保存内存中的来源句柄、规范路径与操作代数；每次执行前重新读取来源并验证 key / 类型化目标，拒绝已换掉的符号链接目标。计划后台任务后、真正启动进程前再次复验。刷新、来源停用、对象改变或打开另一对象菜单都会使旧资格失效；使用记录仍只记稳定业务 Action ID 与 Context 类型，不保存目标路径。
 
-执行结果使用通用工具页导航。返回保留历史查询和选择，重新读取当前有效条目；隐藏取消读取，最终退出释放会话。工具页最多保留四层父页，超出拒绝继续嵌套，不作为无限结果缓存。当前代码与回归已接入，最终原生验收见 [V0.14 记录](mvp-v0.14.md)。
+执行结果使用通用工具页导航。返回保留历史查询和选择，重新读取当前有效条目；隐藏取消读取，最终退出释放会话。工具页最多保留四层父页，超出拒绝继续嵌套，不作为无限结果缓存。当前代码与回归已接入，最终原生验收见 [GPUI 技术方案与验收](mvp-gpui.md)。
 
 ## 运行和生命周期
 
@@ -174,7 +174,7 @@ SQLite 配置示例：
 
 原型限额为输入 8 MiB、输出 2 MiB、每来源 4,096 条、标题 4 KiB、目标 16 KiB、XML 50,000 节点 / 转换深度 64、JS 堆 32 MiB / 栈 256 KiB / 执行中断预算 250 ms，来源总截止 5 秒。JS 中断不等于所有 OS 文件 I/O 都能硬停止，worker 在实际返回前仍占用唯一读取槽。这些是输入和执行约束，不是整个 App RSS 上限。 输出在 VM 管理的 UTF-8 缓冲区中先核对字节长度，再直接反序列化；不会为了拒绝超限结果而先复制整串到 Rust。
 
-交互查询在 Rust 服务中等待同一个物理读取槽，准入最多等待 5 秒；新查询、会话取消或配置变化会唤醒并撤销旧等待者。已开始的阻塞读取实际结束后才释放名额，执行前复验仍采用忙碌时拒绝的准入方式。Flutter 不再用固定次数轮询读取槽。
+交互查询在 Rust 服务中等待同一个物理读取槽，准入最多等待 5 秒；新查询、会话取消或配置变化会唤醒并撤销旧等待者。已开始的阻塞读取实际结束后才释放名额，执行前复验仍采用忙碌时拒绝的准入方式。GPUI 订阅服务状态，不用固定次数轮询读取槽。
 
 页面查询串行合并最新请求，组合输入期间不搜索；复制 / 打开期间提交的查询在操作结束后继续处理，全部较早取消完成后才开始新读取。会话和查询代数复验阻止旧结果发布；过期页面不自动重新申请会话，迟到取消不能清空新页面。首次申请会话失败后，显式刷新可以重试；关闭期间获得的迟到会话只释放，不继续读取来源。
 
@@ -200,6 +200,6 @@ target/release/examples/application_history_measure
 target/release/examples/application_history_measure --prepare "$PWD/build/history-fixture"
 ```
 
-目标目录必须尚不存在，不覆盖个人设置；准备操作不启动 App 或记录真实剪贴板。性能输出包含 Rust 读取 / JS 转换 / 匹配，排除 Bridge、Flutter、显示和真实输入法；真实界面验收另记。
+目标目录必须尚不存在，不覆盖个人设置；准备操作不启动 App 或记录真实剪贴板。性能输出包含 Rust 读取 / JS 转换 / 匹配，排除 GPUI、显示和真实输入法；真实界面验收另记。
 
 VS Code 1.143.1 的本机只读排查确认：旧数据库无近期记录键，新共享数据库包含 57 条记录（只记录数量，未导出私人条目）。迁移依据上游的 [APPLICATION_SHARED 读写实现](https://github.com/microsoft/vscode/blob/main/src/vs/platform/workspaces/electron-main/workspacesHistoryMainService.ts) 与 [共享存储位置](https://github.com/microsoft/vscode/blob/main/src/vs/platform/environment/common/environmentService.ts)。手动路径继续优先；便携版或 `--shared-data-dir` 使用自定义路径。数据库缺少近期记录键时显示来源不可用，避免将错误文件误报为空列表；`entries: []` 才表示明确的空历史。

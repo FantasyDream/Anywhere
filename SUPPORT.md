@@ -3,7 +3,7 @@
 - 操作、权限、数据位置：[使用指南](docs/usage.md)。
 - 编译、测试、生成与签名：[开发指南](docs/development.md)。
 - 第三方插件：[插件开发指南](docs/plugin-development.md)。
-- 当前限制与计划：[路线图](docs/roadmap.md)、[V0.12 验收范围](docs/mvp-v0.12.md)。
+- 当前限制与计划：[路线图](docs/roadmap.md)、[GPUI 技术方案与验收](docs/mvp-gpui.md)。
 
 仍有问题时，在 [Issues](https://github.com/FantasyDream/Anywhere/issues) 中搜索是否已有记录，再选择缺陷或功能建议模板。提供 App 版本 / 构建号、macOS 版本 / 架构、复现步骤、预期与实际结果。
 

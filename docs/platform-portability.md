@@ -1,76 +1,106 @@
 # 跨平台架构与接入契约
 
-现行专题契约；文档整理：2026-10-23。Windows 尚未交付可用 App。
+当前 macOS 15+ GPUI 产品已交付开发构建；Windows / Linux 仅共享 Rust crates
+参与编译与回归，尚无桌面 App。最后整理：2026-11-11。
 
-目标：共享 Flutter 展示与 Rust 业务；只有必须与操作系统交互的接口使用平台适配器。
+## 共享与系统边界
 
-## 已落地
+| 层 | 共享内容 | 系统边界 |
+| --- | --- | --- |
+| GPUI product | 页面、导航、输入、Scope、选择、设置与工具状态 | 当前 `apps/gpui` 依赖 macOS AppKit / Quick Look / WebKit |
+| Product host | 数据路径、运行时、偏好、热键、目录授权和登录项 | `apps/gpui/src/host/`、`apps/gpui/src/platform/` |
+| Rust Core | Context Graph、Action、候选、搜索、Ranking、Execution | 通过窄能力接口使用 OS |
+| Platform services | 应用、Context、剪贴板、文件搜索、资源、菜单与 Git | 不把应用 ID、Finder 或 shell 规则散布到 Core |
+| Protocol | Context、Candidate、Launcher、执行与 Web Manifest | 不包含 NSView 或其他 UI 对象 |
+| Shortcut schema | HID usage、语义修饰位、动作身份与意图规则 | macOS 使用 Carbon / global-hotkey 适配 |
 
-| 层 | 共享职责 | 系统边界 |
-|---|---|---|
-| Flutter UI | 所有页面、控件、导航、Context 输入、Scope、交互状态 | DesktopEnvironment 提供字体、命令键与背景能力 |
-| Flutter Host port | DesktopHost 窗口/设置契约，RuntimePaths 启动契约 | MethodChannel Host 实现窗口生命周期、焦点、托盘与注册热键 |
-| Rust Core | Context Graph、Action、候选、搜索、Ranking、持久使用记录、Execution Sessions | 经窄能力接口采集 / 执行；不判断 Finder ID 或启动 Unix shell |
-| Rust 共享业务 / 平台服务 | 应用、Context、剪贴板、搜索、资源、菜单与 Git 服务只依赖所用能力接口 | 八个能力接口的实现、进程树/管道后端与 OS 差异 |
-| 快捷键配置 | schema 4 物理 HID usages 与语义修饰位、动作身份与意图规则 | macOS 转换 Carbon；其他系统转换各自注册格式 |
+GPUI 页面不是 AppKit 控件。系统能力缺失时返回明确禁用状态或安全空值，GPUI
+继续渲染主题与其他页面。不得用 OS API 猜测业务授权，也不得让 Core 持有窗口对象。
 
-Flutter 控件不是 AppKit 控件。原生背景是可选能力，不影响共享页面运行；未确认背景能力时不透明显示。Mac 玻璃、Windows 背景材质或无材质可以挂在同一个 Flutter 内容层下。
+## 启动与路径
 
-## 启动协议
+`apps/gpui/src/main.rs` 验证产品系统版本并启动 GPUI application。
+`apps/gpui/src/app.rs` 建立主窗口、状态栏、热键和运行时。
+`apps/gpui/src/host/mod.rs` 解析：
 
-主窗口 Host `paths` 返回字符串映射：
+- 数据目录：默认 `~/Library/Application Support/Anywhere`；
+- 插件目录：默认数据目录下的 `plugins`；
+- 显式覆盖：绝对路径、非根目录、不含 `..`；
+- 显式数据目录：不修改系统登录项。
 
-- `library`：动态库绝对路径，扩展名/目录由打包 Host 决定。
-- `data`、`plugins`：Rust 初始化的绝对目录。
-- 既有来源设置、排除应用和启动状态继续保持原字段。
+路径或运行时初始化失败必须显示可诊断错误，不能猜测其他动态库、数据目录或产品
+身份。仓库没有跨语言运行库加载步骤。
 
-任务窗口与悬浮剪贴板窗口同样支持 `paths`，只需 `library`，Rust Application 仍由主窗口初始化并共用。
+## 系统能力
 
-各窗口的 Host `capabilities` 返回布尔字段：
+`anywhere-platform` 的窄接口继续保持：
 
-- `backdrop`：内容背后确实有系统材质、且用户未要求降低透明度。
-- `shortcutRecording`：支持设置窗口内原生按键录制。
+- 应用目录、入口识别和元数据；
+- 前台应用、启动、图标和版本；
+- 应用目录、选中文本、文件管理器和浏览器 Context；
+- 剪贴板读写、代数与历史载荷；
+- 系统文件索引、范围搜索与取消；
+- URL、文件、目录、终端和指定应用打开；
+- Accessibility 菜单发现与重放；
+- 白名单只读 Git 操作。
 
-未实现方法时回退为不透明背景与 Flutter 按键录制。路径缺失必须停止初始化并展示可诊断错误，不能猜测加载其他动态库。
+能力实现按平台注入。未实现能力显式返回 unsupported、空值或既有安全默认，不
+静默扩大权限。文件、目录、工作区文件和远程 URI 保持不同对象类型。
 
-## 快捷键迁移
+## 快捷键
 
-`actionShortcutVersion=4`：`keyCode` 表示 USB HID keyboard usage，`modifiers` 的位为 Control=1、Alt=2、Shift=4、Meta=8。只支持当前 keymap 声明的键位。
+动作快捷键 schema 4 使用物理 USB HID usage；语义修饰位为
+Control=1、Alt=2、Shift=4、Meta=8。未知版本不执行其中绑定，也不覆盖当前文件。
 
-- 1 → 4：保持 local；丢弃当时不支持的 routes。
-- 2 → 4：保持 global；丢弃当时不支持的 routes。
-- 3 → 4：保留 global、动作 ID、展示元数据、所有意图规则。
-- 物理键不会因当前键盘布局字符变化而改变。
-- Meta 在 Windows 表示 Windows 键；导入时不隐式替换为 Ctrl，避免意外抢占或改变动作意义。
-- 标准页面命令单独使用平台惯例：Command / Ctrl。
-- 未知版本不执行其中的绑定、不覆盖配置；macOS Host 使用安全的默认唤醒键。
-- 当前快捷键导入 / 导出使用 schema 4 的 HID usages 与语义修饰位，不直接输出 Carbon 字段。
+- 迁移时保持 local / global 的原有作用域。
+- 不支持的路由丢弃，不改成其他动作。
+- Meta 在 Windows 表示 Windows 键，不隐式换成 Ctrl。
+- 标准页面命令使用平台惯例的 Command / Ctrl。
+- 注册失败恢复旧绑定；冲突时显示状态并要求重新选择。
 
-## 必须保留的系统实现
+macOS adapter 位于 `apps/gpui/src/host/hotkeys.rs`。共享 schema 可以跨平台使用，
+但其他平台的物理热键注册与冲突矩阵尚未验收。
 
-应用发现、前台身份、文件管理器选中项、选中文字、浏览器地址、剪贴板变化时间、菜单定位/执行、全局热键、窗口焦点与系统权限无法仅靠通用绘制层实现。这些接口已有适配边界；共享 Core 不应新增应用 ID 判断或 OS API。
+## 状态栏、窗口与预览
 
-`bundle_id` / `appBundleId` 目前是兼容字段名，其值视为平台提供的稳定应用标识；不要求其他平台伪造 Apple bundle。`FinderSelection` 也是兼容协议名，来源语义为文件管理器选中项。
+macOS 在 `apps/gpui/src/platform/mod.rs` 使用 `NSStatusItem` 提供恢复入口。
+主窗口关闭执行 Quick Look / Web / 待执行资格清理后隐藏。Clipboard Shelf 使用
+独立 GPUI floating window；Quick Look 在
+`apps/gpui/src/platform/preview.rs` 使用 `QLPreviewPanel`。
 
-## Windows 接入顺序与当前边界
+文件与剪贴板资源由 Rust 校验，GPUI 只管理当前选择和 preview generation。关闭
+回调绑定资源与 generation，旧预览不能影响新目标。Windows 后续需要自己的窗口
+宿主与 Preview Handler，现有 macOS Quick Look 不能作为该工作的实现证据。
 
-本次调整没有提供 Windows App 或宣称系统功能已适配。后续接入：
+## CI 与平台验证
 
-1. 添加 Windows Flutter runner 与 Host；实现 paths/capabilities、窗口/设置/任务生命周期。
-2. Windows Platform 适配器分别实现应用目录、应用启动与元数据、Context、剪贴板、文件搜索、资源打开、菜单与只读 Git 能力；不支持项沿用显式默认结果。
-3. 实现全局热键注册与 HID 映射；继续校验冲突与失败回滚。
-4. 接入选中文件、文本、浏览器、菜单的系统能力；不支持的来源应明确报告，不能虚构成功。
-5. 添加 Windows 进程树与非阻塞输出后端，保持取消、退出、子进程清理语义，再启用开发任务。当前 unsupported 后端在 spawn 前拒绝；工具解析不悄悄执行 .cmd/.bat。
-6. 可选接入系统背景材质；不支持时沿用不透明主题。
+`.github/workflows/portable.yml` 在 Ubuntu / Windows：
 
-`.github/workflows/portable.yml` 增加 Linux/Windows Rust 目标编译和共享 Flutter 检查，Linux 还运行 Rust 回归。它验证共享代码，不代替 Windows 窗口、权限、实际菜单、后台任务或安装包验收。
+```bash
+cargo check \
+  -p anywhere-core \
+  -p anywhere-platform \
+  -p anywhere-plugin \
+  -p anywhere-protocol \
+  --all-targets --locked
+```
 
-## 验证边界
+Linux 还运行相同共享 crates 的测试。macOS workflow 负责 `anywhere-gpui`、
+完整 `scripts/check.sh` 和开发包。共享 crate 通过不能宣称 Windows 窗口、系统
+权限、菜单、登录项、WebView 或安装包已经可用。
 
-共享 CI 配置验证目标编译与共享代码回归，不能据此宣称 Windows 窗口、系统权限、菜单、后台进程或安装包已经可用。真实平台接入仍需上方的 Host、系统后端和矩阵。
+## 后续桌面平台
 
-当前 macOS 工程证据见 [V0.12 MVP](mvp-v0.12.md)，早期迁移检查与包记录见 [历史验收](archive/v0.6-final-acceptance.md)。本页没有新增跨平台 GUI 或系统授权验收。
+新增桌面平台先建立独立产品 host 和最小能力矩阵：
 
-## 系统预览
+1. GPUI / 系统窗口、数据路径、主题、IME、状态栏与应用生命周期；
+2. 全局热键和 HID 映射，含冲突、失败回滚和重新注册；
+3. 应用目录、前台身份、Context、剪贴板和文件搜索；
+4. 资源打开、Accessibility 等价菜单能力与进程树；
+5. Quick Look 等价预览、WebView 与登录项；
+6. 签名、安装包和物理交互矩阵。
 
-文件与剪贴板通过统一 NativePreviewDto 和 anywhere/preview 窗口通道接入。Rust 管理资源资格与生命周期，Flutter 管理选择和键盘，macOS Host 使用 QLPreviewPanel。Windows 预留 capabilities / show / close 及相同事件，可使用独立窗口承载系统 Preview Handler；当前尚无 Windows 适配器，不把缺少能力视为零成本原生支持。快捷键分别为 macOS ⌘Y、Windows 预留 Alt+P，列表浏览时均可使用空格。见 [完整契约](native-preview.md)。
+不支持的来源应在能力层返回明确结果；为赶进度让 Core 猜测平台或虚构成功会破坏
+授权与执行资格。
+
+当前 macOS 证据见 [GPUI 技术方案与验收](mvp-gpui.md)。

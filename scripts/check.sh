@@ -5,8 +5,6 @@ source scripts/env.sh
 python3 scripts/check-code-style.py
 python3 -m unittest discover -s scripts/tests -p test_code_style.py
 python3 -m unittest discover -s scripts/tests -p test_macos_app_path.py
-python3 -m unittest discover -s scripts/tests -p test_desktop_measurement.py
-python3 scripts/check-flutter.py
 python3 scripts/check-versions.py
 python3 -m unittest discover -s scripts/tests -p test_versions.py
 python3 scripts/check-npm-sources.py
@@ -15,7 +13,9 @@ python3 scripts/check-localizations.py
 python3 scripts/generate-native-localizations.py --check
 python3 scripts/generate-design-tokens.py --check
 python3 -m unittest discover -s scripts/tests -p test_design_tokens.py
-python3 scripts/generate-keymap.py --check
+python3 scripts/generate-gpui-localizations.py --check
+python3 -m unittest discover -s scripts/tests -p test_gpui_localizations.py
+plutil -lint apps/gpui/macos/Info.plist apps/gpui/macos/Release.entitlements
 python3 scripts/generate-file-types.py --check
 python3 scripts/generate-runtime-policies.py --check
 cargo run -p anywhere-core --example generate_feature_catalog --locked -- --check
@@ -24,15 +24,9 @@ cargo run -p anywhere-protocol --features web-schema --example generate_web_sdk_
 python3 scripts/check-docs.py
 python3 -m unittest discover -s scripts/tests -p test_docs.py
 scripts/check-macos-menu.sh
-scripts/check-macos-host.sh
+scripts/check-gpui.sh
 cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 scripts/check-web-sdk.sh
 scripts/check-web-examples.sh
 python3 scripts/check-architecture.py
-(
-  cd apps/flutter
-  # The SDK was checked above; keep this gate independent of SDK freshness fetches.
-  flutter --no-version-check analyze
-  flutter --no-version-check test
-)

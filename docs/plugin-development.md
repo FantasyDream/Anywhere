@@ -2,7 +2,7 @@
 
 插件可以是 Web 界面，也可以是无需界面的后台 JavaScript。你只负责 TypeScript / JavaScript 业务；Anywhere 负责容器、默认样式、权限、Context 调度和资源释放。界面可使用普通 HTML，也可以使用 React、Vue、Svelte。
 
-**当前范围：macOS 本地开发预览。** 下述 API 描述当前源码；历史发布包不一定具备这些能力。SDK 尚未发布到 npm，使用导出的 `.tgz` 安装。开发需要 Node.js 22+ 和 Python 3.10+；插件运行时不需要 Node、Python、Rust 或 Flutter。
+**当前范围：macOS 本地开发预览。** 下述 API 描述当前源码；历史发布包不一定具备这些能力。SDK 尚未发布到 npm，使用导出的 `.tgz` 安装。开发需要 Node.js 22+ 和 Python 3.10+；插件运行时不需要 Node、Python 或 Rust。
 
 ## 1. 从模板开始
 

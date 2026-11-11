@@ -98,7 +98,7 @@ fn main() -> Result<()> {
     println!(
         "{}",
         serde_json::to_string_pretty(&json!({
-            "scope":"Release Rust matcher and isolated SQLite duplicate capture; excludes OS, Bridge, Flutter, GPU and process memory",
+            "scope":"Release Rust matcher and isolated SQLite duplicate capture; excludes OS, GPUI, GPU and process memory",
             "os":std::env::consts::OS,"arch":std::env::consts::ARCH,
             "menu_actions":1000,"clipboard_bytes":2*1024*1024,
             "matching":matching,"duplicate_clipboard":duplicate,

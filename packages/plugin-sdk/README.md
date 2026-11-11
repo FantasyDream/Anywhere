@@ -38,7 +38,7 @@ npm run build
 npm run pack
 ```
 
-创建器复制独立 SDK 快照到 `vendor/plugin-sdk/`，生成普通 HTML / JS 项目并拒绝覆盖现有目录；不依赖原仓库，不要求安装 Flutter / Rust。
+创建器复制独立 SDK 快照到 `vendor/plugin-sdk/`，生成普通 HTML / JS 项目并拒绝覆盖现有目录；不依赖原仓库，也不要求安装 Rust 或 GPUI 工具链。
 
 ```js
 import {definePlugin} from '@anywhere/sdk';
@@ -154,7 +154,7 @@ macOS 页面在加载包之前注入默认 transport，业务可直接导入 `ho
 
 ## 统一样式
 
-Flutter 与 Web 的设计参数来自同一份 [`resources/design-tokens.json`](https://github.com/FantasyDream/Anywhere/blob/main/resources/design-tokens.json)。Host 在插件 HTML 之前自动注入默认控件 CSS：普通 button / input / textarea / select / checkbox / radio / label / kbd 均使用共享字体、字号、字重、尺寸、圆角、边界和交互状态，无需插件导入 CSS。当前仅提供与 App 一致的深色外观，没有动态主题订阅 API。
+GPUI 与 Web 的设计参数来自同一份 [`resources/design-tokens.json`](https://github.com/FantasyDream/Anywhere/blob/main/resources/design-tokens.json)。Host 在插件 HTML 之前自动注入默认控件 CSS：普通 button / input / textarea / select / checkbox / radio / label / kbd 均使用共享字体、字号、字重、尺寸、圆角、边界和交互状态，无需插件导入 CSS。当前仅提供与 App 一致的深色外观，没有动态主题订阅 API。
 
 SDK 也提供相同 CSS 的导出，供独立浏览器预览使用，不要求前端框架。生产页不必重复导入：
 
@@ -209,9 +209,9 @@ python3 scripts/generate-design-tokens.py
 python3 scripts/generate-design-tokens.py --check
 ```
 
-通用控件规则只修改 [`resources/web-controls.css`](https://github.com/FantasyDream/Anywhere/blob/main/resources/web-controls.css)，再运行生成脚本；生成的 Dart 与 SDK CSS 不手改。规则使用低优先级选择器，第三方可覆盖局部布局 / 组件；宿主不能保证任意第三方自定义组件与 Flutter 像素一致。`scripts/check.sh` 检查同步与透明度转换，并运行 Flutter / SDK / 示例回归测试。主题只属于呈现层，Rust 继续负责权限、生命周期和调用执行。
+通用控件规则只修改 [`resources/web-controls.css`](https://github.com/FantasyDream/Anywhere/blob/main/resources/web-controls.css)，再运行生成脚本；生成的 SDK CSS 与 GPUI token 投影不手改。规则使用低优先级选择器，第三方可覆盖局部布局 / 组件；宿主不能保证任意第三方自定义组件与 GPUI 像素一致。`scripts/check.sh` 检查同步与透明度转换，并运行 GPUI / SDK / 示例回归测试。主题只属于呈现层，Rust 继续负责权限、生命周期和调用执行。
 
-画布透明度由 Host 的平台适配结果控制，默认使用公共深色底色，防止默认白画布与白字冲突。macOS 的 WebView 库 1.1.2 仅清除 scroll-bounce 的 `underPageBackgroundColor`；当前另以存在性检查保护 WebKit 的 `drawsBackground` SPI，并隔离在 `NativeWebAppearance`，不修改 pub 缓存或 Rust。该兼容路径不是公开 Apple API，后续 SDK / OS 升级必须重新验收；接口不可用时保留可读的深色回退。原生测试覆盖真实 WKWebView 透明开关、焦点与接口缺失分支。
+画布透明度由 GPUI WebView 适配层控制，默认使用公共深色底色，防止默认白画布与白字冲突。Web 文档通过 Rust 校验的自定义协议和固定 bootstrap 注入主题；WebKit API、焦点和关闭时释放必须在真实窗口验收，接口不可用时保留可读的深色回退。
 
 宿主 macOS 回复使用受限 UTF-8 `ArrayBuffer`，在文档传输层还原成 SDK 字符串帧，避免原生字符串插值损坏 JSON 转义。插件的 API 与输入处理代码不变；单帧仍为 64 KiB，非法 UTF-8 / 超限帧不交付。该适配不开放通用二进制或流接口。
 

@@ -5,7 +5,7 @@
 #import "macos_application_names.h"
 #import "macos_process.h"
 
-// Only OS context capture. All window/UI code lives in the Flutter host.
+// Only OS context capture. Window and product UI ownership stays in the GPUI app.
 char *launcher_frontmost_application(void) {
   @autoreleasepool {
     NSRunningApplication *application = NSWorkspace.sharedWorkspace.frontmostApplication;

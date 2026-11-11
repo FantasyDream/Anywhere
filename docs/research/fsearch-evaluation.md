@@ -8,7 +8,7 @@
 
 技术上可以接入，但不建议立即全量替换。
 
-- 经典 C/GTK FSearch：不适合直接嵌入当前 Rust / Flutter Launcher。
+- 经典 C/GTK FSearch：不适合直接嵌入当前 Rust / GPUI Launcher。
 - 其 macOS fork `NomaDamas/fsearch-mac`：CLI 可以接入，但全量内存索引、依赖和维护成本不符合现阶段优先级。
 - 独立 Rust 项目 `noahdunnagan/fsearch`：值得做隔离原型；它有库 / JSON 接口、mmap 名称索引和 FSEvents 更新。但是替换意味着接受长期索引，并需要改造名称查询、范围、结果追加和完整性反馈。
 

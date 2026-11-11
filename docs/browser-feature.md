@@ -38,7 +38,7 @@ flowchart TD
 - **Rust Feature**：对象模型、来源策略、检索、去重边界、执行前复验；静态记录与实时状态分别管理生命周期。
 - **Application**：装配读取器与浏览器接入端口，协调配置、授权、取消和查询提交。
 - **Persistence / Platform**：分别承担静态元数据读取与系统打开 / 实时操作；接入方式在可行性验证后选择，不提前固定协议或增加空框架。
-- **Flutter**：复用工具页、候选行、分类、选择与更多操作；不解析浏览器数据库或承担连接、Profile 与 Tab 身份判断。
+- **GPUI**：复用工具页、候选行、分类、选择与更多操作；不解析浏览器数据库或承担连接、Profile 与 Tab 身份判断。
 
 已有 JSON / SQLite 有界读取和纯转换可作为静态记录适配的起点。真正出现第二个消费者时再提取共享基础设施，不复制一套数据库客户端；当前每来源 4,096 条的小列表限制不能拿来宣称搜完大型浏览历史。纯转换脚本继续没有实时浏览器、文件、网络或进程 Host API。
 
@@ -68,7 +68,7 @@ flowchart TD
 原应用历史计划在 2026-10-23 核对过 Chromium 历史 / 书签内部存储与浏览器扩展 API。它们仅作为后续 B0 的研究起点，实施时需重新核对版本与权限，不能视为外部 App 已可调用或现已完成的能力：
 
 - [原产品研究与 Context 边界](application-history.md)
-- [原 V0.14 分层、读取与资源预算](mvp-v0.14.md)
+- [当前 GPUI 技术方案与验收](mvp-gpui.md)
 - [Chromium 历史存储](https://github.com/chromium/chromium/blob/main/components/history/core/browser/history_database.cc)、[书签存储](https://github.com/chromium/chromium/blob/main/components/bookmarks/browser/bookmark_storage.cc)
 - [Chrome history API](https://developer.chrome.com/docs/extensions/reference/api/history)、[bookmarks API](https://developer.chrome.com/docs/extensions/reference/api/bookmarks)
 

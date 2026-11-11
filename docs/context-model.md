@@ -6,7 +6,7 @@
 
 Core 的 `ResolvedContext` 包含 id、type_id、typed ContextValue、source、provider_id、confidence、depth、source_context_id、capture、session_id 和 revision。
 
-ContextValue 覆盖 Text、URL、保留 raw / parsed 的 JSON、File、FileSelection、Directory、Project、Repository、Application 与 Extension 文本。正文通过共享不可变引用传递；Project 使用明确的目录与安全属性，而非在 Flutter 中拼动态字典。
+ContextValue 覆盖 Text、URL、保留 raw / parsed 的 JSON、File、FileSelection、Directory、Project、Repository、Application 与 Extension 文本。正文通过共享不可变引用传递；Project 使用明确的目录与安全属性，而非在 GPUI 中拼动态字典。
 
 传输层使用字符串类型 ID、值与 properties，不暴露内部 enum 或 AX 对象。来源保留 UserInput、ApplicationContext、FinderSelection、SelectedText、BrowserCurrentPage、Clipboard 等语义，capture 元数据标注所属应用、捕获时间等信息。
 
@@ -61,4 +61,4 @@ Provider 按注册顺序规则逐步处理；图的调用记录绑定 provider�
 
 同 Revision 的迟到结果使用更高 SnapshotSeq，Host 拒绝乱序。执行复验已提交资格及资源，不能根据展示标题或对象在列表中的 index 猜测目标。动态菜单的长期身份限制见 [菜单动作](current-app-actions.md)。
 
-详细装配和快照机制见 [架构](architecture.md)；当前工程验收与待验收矩阵见 [V0.12 MVP](mvp-v0.12.md)。
+详细装配和快照机制见 [架构](architecture.md)；当前工程验收与待验收矩阵见 [GPUI 技术方案与验收](mvp-gpui.md)。

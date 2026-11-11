@@ -7,7 +7,6 @@
 | 语言 | 规范与工具 | 项目配置 |
 |---|---|---|
 | Rust | [Google Rust](https://google.github.io/styleguide/rustguide.html)、锁定工具链的 rustfmt / Clippy | `rustfmt.toml`；100 列，保留现有资源与并发模型，不套用 Chromium 专属限制 |
-| Dart / Flutter | [Effective Dart](https://dart.dev/effective-dart/style)、SDK formatter、flutter_lints | `analysis_options.yaml`；导入排序、优先单引号；格式版本跟随锁定的 Flutter SDK |
 | TypeScript / JavaScript | [Google GTS](https://github.com/google/gts) 的 ESLint / Prettier 配置 | `tools/code-style/eslint.config.mjs`；SDK 类型感知检查，浏览器与构建 / 测试环境分开 |
 | JSX | GTS 的 Prettier 样式，类型 / 业务由构建与测试验证 | `.prettierrc.cjs`；当前 JSX 仅检查排版，不声称覆盖 GTS 的全部语义规则 |
 | Python | [Google Python](https://google.github.io/styleguide/pyguide.html)、[YAPF](https://github.com/google/yapf) Google preset | `.style.yapf`；4 空格 |
@@ -30,24 +29,20 @@ python3 scripts/check-code-style.py
 
 插件 SDK 和后台模板使用 TypeScript 7 构建；GTS / ESLint 所在的隔离工具目录使用其支持的 TypeScript 6.0 编程接口依赖，两处版本独立。SDK 交付通过模板解包、类型检查和打包回归验证。
 
-Dart 检查会先解析 Flutter 依赖，再读取包配置进行格式化，确保干净 checkout 与已有工作区使用相同语言版本；不依赖本机残留的 `.dart_tool` 缓存。
-
 ```bash
 # 应用全部格式化及可自动执行的 lint 修复，然后检查差异与测试。
 python3 scripts/check-code-style.py --fix
 
-# 仅检查某语言；可选 dart / web / python / native / swift / shell / rust。
+# 仅检查某语言；可选 web / python / native / swift / shell / rust。
 python3 scripts/check-code-style.py --language web
 
 # 完整工程检查，也包含代码规范。
 scripts/check.sh
 ```
 
-Dart 新规则可在 `apps/flutter` 执行 `dart fix --apply --code=directives_ordering,prefer_single_quotes`，再格式化。CI 不自动修改提交内容。
-
 ## 生成文件与提交
 
 - 检查覆盖 Git 跟踪和未忽略的新源码。不能因路径含 `dist` 就排除：仓库中的 Web Text 示例包含手写发布入口。
-- FRB、本地化、协议、tokens 等生成文件不手工套用其他语言格式器；修改其源配置并运行生成器，完整检查继续复验漂移。Rust 生成物仍遵循已有 rustfmt 流程。
+- 本地化、协议、tokens 等生成文件不手工套用其他语言格式器；修改其源配置并运行生成器，完整检查继续复验漂移。Rust 生成物仍遵循已有 rustfmt 流程。
 - 规则接入、机械格式迁移、行为修复分开提交。避免在功能 PR 中混入无关文件的全量格式化。
 - 不为通过检查删除回归、放宽权限或关闭整套 lint。平台互操作确需例外时，将原因和适用范围写在最小位置。

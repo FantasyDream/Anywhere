@@ -5,14 +5,10 @@ import vm from 'node:vm';
 import {createHost} from '../dist/index.js';
 
 // Run the actual document-start Host transport, not a second implementation.
-const source = readFileSync(
-  new URL(
-    '../../../apps/flutter/lib/web_plugins/web_bootstrap.dart',
-    import.meta.url,
-  ),
+const bootstrap = readFileSync(
+  new URL('../../../resources/web-bootstrap.js', import.meta.url),
   'utf8',
 );
-const bootstrap = source.match(/const webBootstrap = r'''([\s\S]*?)''';/)[1];
 
 function page() {
   const events = new EventTarget();

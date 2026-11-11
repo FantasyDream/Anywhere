@@ -33,7 +33,7 @@ macOS 授权搜索中，能解析且真实目标位于授权根内的符号链�
 
 取消、失败或无授权先撤销旧来源 / 目标，保持停用，不把空 roots 回退 Home。部分授权只搜索授权子范围；其他 Launcher 功能继续可用。完全磁盘访问只能在系统设置开启，文件夹选择不等于所有后代永远可读。
 
-原生授权用 epoch、串行 worker 和 watchdog，旧面板 / 回调不能覆盖新设置；Dart 保存队列也检查 generation。同步 OS I/O 无法保证立即取消，过期结果完成后释放租约，不提前放开并发。
+原生授权用 epoch、串行 worker 和 watchdog，旧面板 / 回调不能覆盖新设置；设置保存队列也检查 generation。同步 OS I/O 无法保证立即取消，过期结果完成后释放租约，不提前放开并发。
 
 ## 查询流水线
 
@@ -59,7 +59,7 @@ Spotlight 返回多少、是否失败都不决定是否遍历。旧 Ripgrep / Co
 | `application/file_workspace.rs` | 文件配置、进度、冻结与原子稳定追加 |
 | `application/object_actions.rs` | 按选中对象生成二级动作和凭证复验 |
 | Platform `search_storage` / macOS `file_search` | 原始路径编码、私有临时目录与租约、固定 argv 的 mdfind |
-| Flutter FileWorkspace / Session 协调器 | Delta 合并、查询 / 列表版本、返回位置与展示请求 |
+| GPUI File workspace / Session 协调器 | Delta 合并、查询 / 列表版本、返回位置与展示请求 |
 
 ## 资源与生命周期
 
@@ -93,6 +93,6 @@ Build 30 移除旧 64 KiB 文本读取、传统编码猜测和固定分栏。Rus
 
 ## 验证边界
 
-回归覆盖重叠根、隐藏目录、gitignore、类型后过滤不漏项、Unicode / 标点 / 拼音、显式路径、链接与权限边界、临时存储失败、取消、稳定前缀、对象执行以及连续加载 / 系统预览返回。最新工程状态见 [V0.14 MVP](mvp-v0.14.md)。
+回归覆盖重叠根、隐藏目录、gitignore、类型后过滤不漏项、Unicode / 标点 / 拼音、显式路径、链接与权限边界、临时存储失败、取消、稳定前缀、对象执行以及连续加载 / 系统预览返回。最新工程状态见 [GPUI 技术方案与验收](mvp-gpui.md)。
 
 历史性能 / GUI 证据保存在 [V0.7 收尾](archive/v0.7-closeout.md)，不能当作后来构建的同机测量。库选型和 Quick Look 调研见 [研究资料](research/README.md)。
