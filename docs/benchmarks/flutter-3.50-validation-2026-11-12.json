@@ -1,8 +1,10 @@
 {
   "date": "2026-11-12",
   "base_commit": "81c523cdb95031ac00cfcdc25360eefb48f85b21",
-  "branch": "codex/flutter-3-50-memory",
-  "working_tree": "Flutter 3.50 migration, cross-platform appearance port with macOS host, bounded 64-row file-result pages with direction diagnostics, memory diagnostics, Web document reload lifetime repair and WebKit object counts; uncommitted; no GPUI files",
+  "post_merge_validation_date": "2026-11-13",
+  "validated_commit": "25472f0e531361bc2d24f3a8c3fa250de6a3ec72",
+  "branch": "main",
+  "working_tree": "Committed and merged Flutter 3.50 migration, cross-platform appearance port with macOS host, bounded 64-row file-result pages with direction diagnostics, memory diagnostics, Web document reload lifetime repair and WebKit object counts; merged main validated; no GPUI files",
   "app_version": "0.14.0+46",
   "architecture": "arm64",
   "flutter": "3.50.0",
@@ -14,7 +16,7 @@
     "cupertino_ui": "1.1.6"
   },
   "checks": {
-    "scripts/check.sh": "passed",
+    "scripts/check.sh": "passed on merged main at 25472f0e531361bc2d24f3a8c3fa250de6a3ec72",
     "flutter": "544 passed, 1 skipped; skipped native FFI test separately passed with Flutter 3.50.0",
     "core": "351 passed, 1 ignored",
     "mvp": "195 passed, 4 ignored",
@@ -57,14 +59,14 @@
     },
     "file_page_gui": "isolated arm64 Release found 100,000 local files, displayed report-000000.txt in a 64-Candidate window, scrolled to report-000064.txt, returned to report-000063.txt, and restored query, page and selection within 15 seconds; file_query=282780us, footprint samples 122.9-136.2 MiB, full-scan peak 180.1 MiB",
     "file_page_diagnostics": "file_page_next and file_page_previous are separate numeric operations from cursor submission through the replacement list frame; Dart metrics, macOS allow-list, desktop timing aggregation and UI direction tests passed",
-    "scripts/build-macos.sh": "passed",
+    "scripts/build-macos.sh": "passed on merged main at 25472f0e531361bc2d24f3a8c3fa250de6a3ec72",
     "codesign_verify_deep_strict": "passed"
   },
   "bundle_sha256": {
-    "Contents/MacOS/Anywhere": "84fd40e69ad98a1b330fd9b7d6e3fdc9e76bb9f1ed04bb248457c8e464104dc0",
-    "Contents/Frameworks/FlutterMacOS.framework/Versions/A/FlutterMacOS": "e1af8feb6487177dac80de3e62b706b63d55124916cc575bb20d1c66e76f799e",
-    "Contents/Frameworks/App.framework/Versions/A/App": "88d6dccb84168227d1306cc9f3aa5c31bbf2314f54a67be003ec194289c874f5",
-    "Contents/Frameworks/libanywhere_bridge_flutter.dylib": "d4082c54f2f8f0f0923de0647483829c0addca8049f24bffdaf27f2728001614"
+    "Contents/MacOS/Anywhere": "55f958613204fccc11b5696590d84c42de1797a12771784cfc1e4de973fb9ade",
+    "Contents/Frameworks/FlutterMacOS.framework/Versions/A/FlutterMacOS": "950b1db1463541bc679b633bc57361a56a39612547330f9ed56ab5b7f229159e",
+    "Contents/Frameworks/App.framework/Versions/A/App": "2232e6bd50294a0f947bf7ee58975addd0f671e25414d9ef917f8948cfa51ae6",
+    "Contents/Frameworks/libanywhere_bridge_flutter.dylib": "3a624feed9d77ca0484eb8212a4d45186ed4afa99d6facca13be0720288190dc"
   },
   "logs": [
     "build/final-validation/check-after-memory-measurements.log",
