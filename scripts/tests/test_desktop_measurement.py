@@ -203,6 +203,22 @@ class DesktopMeasurementTests(unittest.TestCase):
                          120000)
         self.assertEqual(result['operations']['shelf_query']['p95_us'], 125000)
 
+    def test_file_page_directions_remain_separate(self):
+        events = [
+            json.dumps(
+                dict(event='ui_performance',
+                     operation=operation,
+                     elapsed_us=value,
+                     native_visible=True))
+            for operation, value in [('file_page_next',
+                                      41000), ('file_page_previous', 37000)]
+        ]
+        result = module.timings(events)
+        self.assertEqual(result['operations']['file_page_next']['p50_us'],
+                         41000)
+        self.assertEqual(result['operations']['file_page_previous']['p50_us'],
+                         37000)
+
     def test_footprint_timeout_and_unavailable_tool_leave_measurement_missing(
             self):
         for error in [

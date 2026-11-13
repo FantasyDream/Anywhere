@@ -397,7 +397,7 @@ impl Resolver {
             };
             let index = self.application_index.snapshot()?;
             let sources = self.catalog.synchronous_sources()?;
-            let prepared = super::snapshot::prepare(super::snapshot::SnapshotInput {
+            let mut prepared = super::snapshot::prepare(super::snapshot::SnapshotInput {
                 action_catalog_version,
                 input: &input,
                 input_mode,
@@ -411,7 +411,7 @@ impl Resolver {
                 prior_diagnostics: &prior_diagnostics,
                 catalog: &index.catalog,
                 sources: &sources,
-                search_candidates: &search_candidates,
+                search_candidates: search_candidates.as_slice(),
                 object_actions: &object_actions,
                 now: now(),
             });
@@ -550,18 +550,34 @@ impl Resolver {
                         .ok_or_else(|| anyhow!("candidate list version exhausted"))?;
                 }
             }
-            session.resolution.committed_revision = Some(revision);
-            session.resolution.committed_contexts = contexts;
-            session.state = state.clone();
             session.execution.candidates = prepared
                 .set
                 .candidates
                 .iter()
+                .filter(|candidate| {
+                    !crate::features::filesystem::search::is_search_target(candidate)
+                })
                 .chain(&prepared.context_candidates)
                 .chain(&prepared.result_actions)
                 .chain(&prepared.host_actions)
                 .map(|candidate| (candidate.presentation.id.clone().into(), candidate.clone()))
                 .collect();
+            session.execution.file_candidate_indices.clear();
+            if input_mode == InputMode::FileSearch {
+                // The prepared rows are the validated canonical file set. Move
+                // them into resolution and index execution instead of retaining
+                // another Candidate clone for every file.
+                let file_rows = std::mem::take(&mut prepared.set.candidates);
+                session.execution.file_candidate_indices = file_rows
+                    .iter()
+                    .enumerate()
+                    .map(|(index, candidate)| (candidate.presentation.id.clone().into(), index))
+                    .collect();
+                session.resolution.search_candidates = Arc::new(file_rows);
+            }
+            session.resolution.committed_revision = Some(revision);
+            session.resolution.committed_contexts = contexts;
+            session.state = state.clone();
             session.execution.revision = Some(revision);
             session.execution.action_catalog_version = Some(action_catalog_version);
             // `first_snapshot` marks the snapshot the caller's budget produced; its

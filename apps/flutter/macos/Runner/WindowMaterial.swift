@@ -5,6 +5,8 @@ import AppKit
 final class WindowMaterial: NativeAccessibilityContainer {
   private let effect: NSView
   let usesLiquidGlass: Bool
+  var onEffectiveAppearanceChanged: (() -> Void)?
+  var usesSystemMaterial: Bool { true }
   var maskImage: NSImage? {
     didSet { (effect as? NSVisualEffectView)?.maskImage = maskImage }
   }
@@ -36,7 +38,6 @@ final class WindowMaterial: NativeAccessibilityContainer {
       usesLiquidGlass = false
     #endif
     super.init(frame: frame)
-    appearance = NSAppearance(named: .darkAqua)
     autoresizingMask = [.width, .height]
     effect.frame = bounds
     effect.autoresizingMask = [.width, .height]
@@ -47,6 +48,11 @@ final class WindowMaterial: NativeAccessibilityContainer {
   }
 
   required init?(coder: NSCoder) { fatalError("Use init(frame:content:cornerRadius:)") }
+
+  override func viewDidChangeEffectiveAppearance() {
+    super.viewDidChangeEffectiveAppearance()
+    onEffectiveAppearanceChanged?()
+  }
 
   func detachContent(_ content: NSView) {
     setEmbeddedAccessibilityChild(nil)
@@ -64,7 +70,7 @@ final class WindowMaterial: NativeAccessibilityContainer {
     let material = NSVisualEffectView(frame: frame)
     material.material = .hudWindow
     material.blendingMode = .behindWindow
-    material.state = .active
+    material.state = .followsWindowActiveState
     material.addSubview(content)
     return material
   }

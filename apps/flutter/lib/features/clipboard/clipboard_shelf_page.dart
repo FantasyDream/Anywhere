@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../infrastructure/bridge_api.dart';
 import '../../infrastructure/desktop_environment.dart';
@@ -363,8 +363,7 @@ class _ClipboardShelfPageState extends State<ClipboardShelfPage> {
                   : context.l10n.closeEsc,
       leading: AppTooltip(
           message: context.l10n.shelfSelectHint,
-          child: const Icon(AppIcons.shelf,
-              size: 20, color: DesignTokens.iconAmber)),
+          child: Icon(AppIcons.shelf, size: 20, color: AppStyle.iconAmber)),
       header: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,

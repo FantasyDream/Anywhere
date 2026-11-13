@@ -1,12 +1,14 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'execution/execution_sessions_screen.dart';
 import 'features/clipboard/clipboard_shelf_app.dart';
 import 'infrastructure/bridge_api.dart' as bridge;
+import 'infrastructure/desktop_appearance.dart';
 import 'infrastructure/desktop_environment.dart';
 import 'infrastructure/desktop_image_cache.dart';
+import 'infrastructure/desktop_memory_pressure.dart';
 import 'infrastructure/file_search_access.dart';
 import 'infrastructure/presentation_metrics_transport.dart';
 import 'infrastructure/runtime_paths.dart';
@@ -24,24 +26,34 @@ Future<void> initializeRustLibrary(RuntimePaths paths) async {
   await RustLib.init(externalLibrary: ExternalLibrary.open(paths.library));
 }
 
+Future<void> initializeDesktopAppearance() async {
+  final controller = DesktopAppearanceController();
+  DesktopAppearance.configure(controller);
+  await controller.bind();
+}
+
 /// A second window owns only its view; the app-lifetime Rust Application is shared.
 @pragma('vm:entry-point')
 Future<void> executionSessionsMain() async {
   WidgetsFlutterBinding.ensureInitialized();
   configureDesktopImageCache();
+  DesktopMemoryPressure.current.attach();
   await AppLanguage.current.attach();
+  await initializeDesktopAppearance();
   try {
     const channel = MethodChannel('anywhere/executions');
     final paths = await RuntimePaths.read(channel);
+    configurePresentationMetrics(paths, channel);
     DesktopEnvironment.configure(await DesktopEnvironment.read(channel));
     await initializeRustLibrary(paths);
     runApp(const ExecutionSessionsApp());
   } catch (error) {
     runApp(LocalizedApp(
         debugShowCheckedModeBanner: false,
-        theme: AppStyle.theme,
+        themeBuilder: () => AppStyle.theme,
         builder: AppStyle.windowBuilder,
-        home: AppFailureView(kind: AppFailureKind.tasks, detail: '$error')));
+        homeBuilder: () =>
+            AppFailureView(kind: AppFailureKind.tasks, detail: '$error')));
   }
 }
 
@@ -50,7 +62,9 @@ Future<void> executionSessionsMain() async {
 Future<void> clipboardShelfMain() async {
   WidgetsFlutterBinding.ensureInitialized();
   configureDesktopImageCache();
+  DesktopMemoryPressure.current.attach();
   await AppLanguage.current.attach();
+  await initializeDesktopAppearance();
   try {
     const channel = MethodChannel('anywhere/clipboard-shelf');
     final paths = await RuntimePaths.read(channel);
@@ -61,9 +75,9 @@ Future<void> clipboardShelfMain() async {
   } catch (error) {
     runApp(LocalizedApp(
         debugShowCheckedModeBanner: false,
-        theme: AppStyle.theme,
+        themeBuilder: () => AppStyle.theme,
         builder: AppStyle.windowBuilder,
-        home: AppFailureView(
+        homeBuilder: () => AppFailureView(
             kind: AppFailureKind.clipboardShelf, detail: '$error')));
   }
 }
@@ -72,7 +86,9 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   registerWebPlatform();
   configureDesktopImageCache();
+  DesktopMemoryPressure.current.attach();
   await AppLanguage.current.attach();
+  await initializeDesktopAppearance();
   try {
     final runtime = await RuntimePaths.read(windowChannel);
     configurePresentationMetrics(runtime, windowChannel);
@@ -147,6 +163,8 @@ Future<void> main() async {
                 input: input,
                 revision: revision,
                 filter: filter),
+        filePage: (session, revision, cursor) => bridge.loadFilePage(
+            sessionId: session, revision: revision, cursor: cursor),
         fileMoreDelta: (session, revision, version, count) =>
             bridge.loadMoreFilesDelta(
                 sessionId: session,
@@ -208,9 +226,10 @@ Future<void> main() async {
   } catch (error) {
     runApp(LocalizedApp(
         debugShowCheckedModeBanner: false,
-        theme: AppStyle.theme,
+        themeBuilder: () => AppStyle.theme,
         builder: AppStyle.windowBuilder,
-        home: AppFailureView(kind: AppFailureKind.launcher, detail: '$error')));
+        homeBuilder: () =>
+            AppFailureView(kind: AppFailureKind.launcher, detail: '$error')));
     await windowChannel.invokeMethod<void>('show', {
       'generation': 0,
       'height': 180.0,

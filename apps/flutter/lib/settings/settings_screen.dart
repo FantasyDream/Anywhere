@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../infrastructure/bridge_api.dart';
 import '../infrastructure/desktop_environment.dart';
@@ -168,7 +168,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         const SizedBox(width: 6),
         Expanded(
             child: Text(status.statusText,
-                style: const TextStyle(fontSize: 10, color: AppStyle.muted))),
+                style: TextStyle(fontSize: 10, color: AppStyle.muted))),
         if (status.settingsPane != null)
           TextButton(
             onPressed: () =>
@@ -295,7 +295,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 _hotkeyRow(context.l10n.currentApp, _settings.currentAppLabel,
                     'current'),
-                const Divider(height: 1, color: AppStyle.divider),
+                Divider(height: 1, color: AppStyle.divider),
                 _hotkeyRow(context.l10n.universalSearch,
                     _settings.universalLabel, 'universal'),
               ],
@@ -486,14 +486,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     controller: _excluded,
                     minLines: 3,
                     maxLines: 5,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 12,
                         fontFamily: 'monospace',
                         color: AppStyle.primary),
                     decoration: InputDecoration(
                       isDense: true,
                       hintText: DesktopEnvironment.current.applicationIdHint,
-                      hintStyle: const TextStyle(color: AppStyle.muted),
+                      hintStyle: TextStyle(color: AppStyle.muted),
                       filled: true,
                       fillColor: AppStyle.field,
                       border: OutlineInputBorder(
@@ -557,7 +557,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(fontSize: 13, color: AppStyle.primary),
+              style: TextStyle(fontSize: 13, color: AppStyle.primary),
             ),
           ),
           OutlinedButton(

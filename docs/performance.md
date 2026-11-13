@@ -2,6 +2,10 @@
 
 本页维护资源预算和生命周期策略，历史测量按各章节的原日期 / 构建阅读；文档整理：2026-10-30。预算不是对整 App RSS 或所有机器耗时的保证。
 
+2026-11-12 的 main Flutter SDK 升级、内存构成审查和后续实现路线见
+[Flutter 3.50 与内存调研实施方案](research/flutter-3.50-memory.md)。其中合成 Rust 堆测量、
+桌面进程测量和已实现 / 待实测项分别标注，不将 SDK 升级视为已量化的内存下降。
+
 ## 资源预算
 
 | 资源 | 当前边界 |
@@ -32,14 +36,111 @@
 - 应用所属动作的直接标题判断复用注册时的小写字段；显示标题与搜索标题不同时才单独保存小写显示标题，不在每次查询中构造 SearchFields，也不为这一判断执行拼音回退。别名 / 关键字不会变成直接标题，应用限定词仍按 Context 惰性计算。
 - 文件 metadata-only 更新不重复传整表；合法尾部使用 Delta，Host 共享 256 条分块和键索引，按访问创建行包装。
 - 文件行使用 ListView 的固定行高布局，跳到深处不需要从首行逐个布局；每份不可变 ViewState 只解析一次选择位置。文件索引直接借用候选 ID，不为每个条目再拼接一份带前缀的字符串。
+- 文件搜索会话用 `Arc<Vec<Candidate>>` 共享不可变页面；执行表只对当前页保存
+  “候选 ID → resolution 下标”，不再为每行复制完整 Candidate。下一页 / 上一页用查询绑定的
+  opaque cursor 重读并替换窗口，去重集合只借用当前页 `&Path`，不扫描全部已访问页面。
 - 快捷键应用选择器只在查询或目录变化时筛选；空查询共享原目录，方向键和焦点重建复用匹配列表，避免反复分配搜索文本与结果集合。
 - 两类快捷键共用动作选择器，列表按需创建行；空查询共享目录，匹配列表只随查询、目录或语言变化更新，离开选择阶段后不再保留另一份匹配集合。
 - 多规则快捷键在一次会话解析中共用已展开的动作目录，沿用现有候选 ID 索引查找目标 Context；筛选原地保留匹配项。复用只限本次同步解析，不新增跨会话缓存。
-- 下一文件批次读取未读尾部；只有新增记录需要归并，不反复从头排名已展示结果。
+- 文件翻页从查询临时存储读取目标 cursor 对应窗口；底层归并排序继续维护稳定顺序，
+  Flutter 只保留当前 64 行，不随访问页数累计 DTO 或执行目标。
 - 二级 Actions 仅为当前选中对象构建，不为每个文件常驻一组动作。
 - 剪贴板摘要轮询携带上次成功查询的版本；服务在同一锁内检查过期、存储变更和状态，无变化时不加载条目或构造整表 DTO。采集关闭仍保留轻量轮询，以同步其他窗口的删除 / 清空。查询变化与失败恢复强制完整读取，旧响应不能更新新查询的版本。
 - 任务摘要包含 output revision，无变化不重新读完整输出或通知 UI；详情只读取当前任务，隐藏停止轮询，请求不无限排队。
 - Web 消息转发只解析一次请求元数据，普通 RPC 不为呈现逻辑解码回复正文；就绪 / 状态订阅回执共用一次匹配判断。UTF-8 编码结果直接交给二进制消息，避免再复制整帧字节；消息额度与异步发布检查保持在原入口。
+- Web HTML 仍拒绝无效 UTF-8，但不再先 decode 为整页 String 后再插值 / 编码；校验后一次
+  分配前缀 + 原字节 + 后缀。Rust、Bridge 和 WebKit 各自的读取 / IPC / 渲染副本仍存在。
+- 系统内存压力只清理可重建图标和 ImageCache 非 live 项。活动 Widget、输入法组词、
+  15 秒恢复数据、执行索引和 Web document handle 不因压力事件改变。
+
+## Flutter 3.50 文件结果与压力响应（2026-11-12）
+
+`ANYWHERE_PROFILE_UI=1` 时，主窗口、Shelf 和 Task 的现有 performance sample 增加只含数字的
+候选 / 分块数、执行动作数、图标 retained bytes / pending / active、ImageCache current /
+live / pending、单 engine 数、Web document 数及 DTO 尾部计数。文件下一页和上一页另有
+`file_page_next` / `file_page_previous`，从 cursor 请求提交计到 replacement 列表完成帧；
+不含 cursor、路径或文件名。Native 白名单会丢弃 query、路径、正文和其他字符串；关闭诊断时
+不创建采样计时器。该事件用于归因，不替代 vmmap、Dart heap snapshot 或独立 helper 测量。
+macOS 另对 App 自有 view tree 做只读遍历，记录可达
+`WKWebView`、`WKUserContentController` 和 `WKWebsiteDataStore` 数量；进程池继续由外部
+`heap` 估算，因为对应公开配置 API 在目标 macOS 已弃用。
+
+新增可指定行数的 Rust 夹具：
+
+```bash
+cargo run --release -p anywhere-core --example file_result_memory --locked -- 10000
+cargo run --release -p anywhere-core --example file_result_memory --locked -- 100000
+```
+
+macOS 27.2.1 / arm64、Rust `1.100.0-beta.7`，10,000 与 100,000 个合成文件行，各三个
+全新 Release 进程结果一致：
+
+| 额外存活 / 峰值区域 | Rust 请求字节 |
+|---|---:|
+| 10k 原有整份 Candidate 执行副本 | 6,138,890 |
+| Arc 共享引用 | 0 |
+| 10k 新执行索引 | 629,570 |
+| 100k Candidate 行 | 61,502,494 |
+| 100k presentation 副本 | 53,488,930 |
+| 100k 新执行索引 | 5,314,274 |
+| 10k / 100k 生产 64 行窗口 | 77,946 / 77,946 |
+
+10k 的执行表比较只覆盖已有候选和 presentation 之外的增量。100k 全量驻留时三部分约
+120,305,698 Rust 请求字节；生产 P2 窗口同时构造 64 行 Candidate、presentation 与执行索引，
+三次 Release 均在两个规模上保持 77,946 字节。页间切换通过查询临时文件和 cursor 重读，
+没有简单截断结果。SQLite / C、allocator overhead、临时磁盘、Bridge / Dart DTO、Flutter、
+Metal、OS 和 WebKit 均不计入，因此这不是整 App 内存收益百分比。
+
+真实文件扫描回归已覆盖 131 个 PDF 的 64/64/3 分页、互不重复、上一页精确重读、旧页执行
+撤销和旧 cursor 拒绝。Flutter 回归覆盖下一页选首项、上一页选末项、滚动一次只跨一页，以及
+旧页面请求在销毁后不能恢复 UI。独立 arm64 Release 对 100,000 个本地文件完成
+`000000`→下一页 `000064`→上一页 `000063`，诊断只保留 64 个 Candidate；切出后在 15 秒内
+唤醒仍保留 query、页窗口和选择。该次首帧 `file_query=282780us`，主进程 RSS 样本
+70,064–115,200 KiB，physical footprint 为 122.9–136.2 MiB，完整扫描峰值为 180.1 MiB。
+这些是单次高水位，不是 P2 节省百分比。页级计时通道和方向回归已实现；多进程页读取
+p50 / p95、Dart live heap、云目录和与 preview / Web 同时存在的组合矩阵仍需按第 6 节补测。
+原始日志、样本和限制见
+[100k 分页实机记录](benchmarks/flutter-3.50-file-pages-macos-2026-11-12.json)。
+
+完整环境、源码 / 二进制摘要和限制见
+[文件结果分配记录](benchmarks/file-result-memory-2026-11-12.json)。
+
+同一 Release 3.50 隔离进程完成了按需窗口的当前基线测量。Tasks 打开时 Physical footprint
+从 106.0 MiB 升到 133.1 MiB，Shelf 从 133.9 MiB 升到 158.1 MiB；两者都增加第二套
+Flutter engine、ViewController、VSync、材质和外观对象。关闭后对象均回到一套；Shelf 的
+打开 / 关闭样本回到相同 RSS / footprint，Tasks 留下页驻留高水位。各连续开关五次后没有
+一套以上引擎或材质对象。这个增量不能由资源窗口大小解释，也不证明长期无泄漏；共享 engine
+需要重新承担两个工具的页面状态、任务寿命、输入、AX 和关闭握手，因此当前不采用实验性多视图。
+
+无 Web 文档时 `heap --noContent` 未发现活动 `WKWebView`，主窗口与 Settings 共用一个
+FlutterViewController。用仓库内本地 Text Pad 包开窗后，main footprint 为 111.6 MiB，
+进程外 WebContent / GPU / Networking RSS 约 41.67 / 17.30 / 7.45 MiB。关闭后 main
+footprint 为 104.7 MiB；WebContent、Networking 和主进程 WKWebView 回落，仅保留约
+16.83 MiB GPU helper、共享 process pool 与 user content controller。连续五次开关没有新增
+helper、WKWebView 或 message handler，进程退出也记录了文档控件的 deallocation。
+
+helper RSS 是独立进程指标，不能和 main footprint 直接相加成精确整 App 峰值。该轮只覆盖
+一个本地静态小页面，且页面显示了 `INACTIVE` 提示，因此只用于内存与生命周期判断。后续
+独立矩阵用 JSON Workspace 完成 1,046,501 字节输入、227,502 字节结果和 5 次新 origin
+reload；输入时主进程 RSS 为 102.22–111.25 MiB，进程外 WebContent / GPU / Networking
+RSS 为 262.05–278.19 / 17.83–22.11 / 2.33–4.17 MiB。关闭旧 document 后 WebContent、
+Networking、主进程 WKWebView 和 data store 可回落；仍打开空白 Web 工具时，系统 WebContent
+可保留约 49.1 MiB 页高水位。近限 Text Pad 也记录到约 47.63–47.75 MiB WebContent。
+
+1 MiB 是协议文本额度，不是 WebKit 总成本上限。近限 JSON 还会形成解析树、自动格式化副本、
+DOM 和 JavaScript 引擎数据；插件的大文档设计应结合虚拟化、分块或明确产品上限，不能只降低
+Rust / Dart DTO。`WebDocumentLifetime` 现在先绑定新 epoch 再关闭旧 binding，避免 close 删除
+invocation；5 次 reload 各获得新 origin 且没有 unavailable。插件 SDK 的早期订阅也会等待
+`lifecycle.ready`，避免启动请求并发。Text Pad 该轮的 `INACTIVE` 功能缺口已在 SDK 层修复并
+通过 51 项测试，但最终封装页面的 WebKit 复测仍待桌面解锁。方法、样本与限制见
+[P6 大文档矩阵](benchmarks/flutter-3.50-web-matrix-2026-11-12.json)及
+[窗口内存记录](benchmarks/flutter-3.50-window-memory-2026-11-12.json)。
+
+A4 实机外观矩阵另做了同进程对象对照：Settings 打开时深色 → 浅色 → 深色的前后，
+`FlutterEngine`、`FlutterViewController`、`FlutterVSyncWaiter`、材质、AppearanceHost 和
+MemoryPressureHost 始终各 1 个。该进程 footprint 从启动后的 137.3 MiB 变为 69.9 / 68.8 MiB，
+但这包含页回收和诊断采样影响，不能归因为浅色主题的内存收益。逐项设置和截图见
+[macOS A4 外观验收记录](benchmarks/flutter-3.50-appearance-macos-2026-11-12.json)。
 
 ## 生命周期与取消
 
@@ -63,7 +164,7 @@ Web 请求在 Rust worker 排队期间可被取消通知直接唤醒，清理旧
 
 ## 如何验证
 
-`scripts/check.sh` 覆盖取消、快照竞争、真实图标并发、连续追加、任务有界输出及 UI 生命周期回归。文件基准入口为 `scripts/bench-file-search.py`，Rust 还提供 `measure` / 对应压力 fixture；结果须记录构建、搜索范围、文件量和冷 / 热状态。
+`scripts/check.sh` 覆盖取消、快照竞争、真实图标并发、有界文件分页、任务有界输出及 UI 生命周期回归。文件基准入口为 `scripts/bench-file-search.py`，Rust 还提供 `measure` / 对应压力 fixture；结果须记录构建、搜索范围、文件量和冷 / 热状态。
 
 真实性能需要同一机器测量输入到首屏、追加延迟、帧时间、主 / helper 内存与隐藏后的释放情况。自动化通过、包大小、缓存额度或单个遍历器 RSS 不能替代整 App 测量。
 
@@ -115,7 +216,10 @@ Web 请求在 Rust worker 排队期间可被取消通知直接唤醒，清理旧
 | 首个读取被阻塞时，连续调用 6 次剪贴板 refresh：在途请求 | 6 | 1 |
 | 上述突发刷新最终完成的后端读取总数 | 6 | 2 |
 
-文件列表按不可变分块缓存是否包含隐藏项，缓存使用 Expando 弱键，不因查询废弃而强持有旧分块。首次加载仍检查全部结果，追加只检查新的完整分块或被替换的尾块；注入隐藏候选时仍过滤它们。分块目录和索引本身仍有遍历成本，并不宣称整个列表更新为常数复杂度。
+文件列表在兼容 append 路径中按不可变分块缓存是否包含隐藏项，缓存使用 Expando 弱键，
+不因查询废弃而强持有旧分块。生产 P2 页面窗口只向 Flutter 提交当前 64 行替换快照，旧页由
+Rust cursor 重读，因此不再把全部已访问分块和索引保留到查询结束。底层扫描临时文件、页读取
+和新页构造仍不是零成本；片段级计时和 100k 目录延迟仍待补测。
 
 ClipboardHistorySession 将读取串行化，在途期间只保留一个最新待处理请求；普通后台轮询不能撤销前台查询，查询版本仍在提交前复验。读取完成时若新输入仍在防抖或组词，等待对应输入流程再发起读取，避免提前查询。同一批刷新调用共享完成 Future；有新输入仍在防抖时，由后续输入流程触发查询。旧后端读取不能强制中断，新读取会等待其结束，以避免请求堆积。
 

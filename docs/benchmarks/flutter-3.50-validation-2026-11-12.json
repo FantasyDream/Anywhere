@@ -1,0 +1,90 @@
+{
+  "date": "2026-11-12",
+  "base_commit": "81c523cdb95031ac00cfcdc25360eefb48f85b21",
+  "branch": "codex/flutter-3-50-memory",
+  "working_tree": "Flutter 3.50 migration, cross-platform appearance port with macOS host, bounded 64-row file-result pages with direction diagnostics, memory diagnostics, Web document reload lifetime repair and WebKit object counts; uncommitted; no GPUI files",
+  "app_version": "0.14.0+46",
+  "architecture": "arm64",
+  "flutter": "3.50.0",
+  "framework_revision": "ab2912035e160d9cad6306df307576da6128ebdb",
+  "engine_revision": "371f77202a73e8dff57a8b3bff75bca55c090aee",
+  "dart": "3.14.0",
+  "design_packages": {
+    "material_ui": "1.8.0",
+    "cupertino_ui": "1.1.6"
+  },
+  "checks": {
+    "scripts/check.sh": "passed",
+    "flutter": "544 passed, 1 skipped; skipped native FFI test separately passed with Flutter 3.50.0",
+    "core": "351 passed, 1 ignored",
+    "mvp": "195 passed, 4 ignored",
+    "platform": "72 passed, 1 ignored",
+    "plugin_sdk": "51 passed; includes ready-before-early-subscription ordering and hidden-registration rejection",
+    "json_plugin": "30 passed",
+    "native_surface_guard": "3.50 Release engine reproduces wrong-size reuse without guard; guarded matching/empty/in-use checks passed",
+    "real_bridge_dylib_test": "passed",
+    "appearance": "initial snapshot, capability parsing, live events, refresh, stale revision/source rejection, four palettes, system colors, reduce-motion and Web theme version guards passed",
+    "macos_appearance_host": "snapshot, capability, event, refresh and stale-source guard tests passed",
+    "memory_diagnostics": "default zero work; opt-in numeric candidate, batch, icon, ImageCache, engine, document and DTO-tail counters passed",
+    "native_webkit_diagnostics": "content-free view-tree counts for WKWebView, WKUserContentController and WKWebsiteDataStore passed with warnings-as-errors",
+    "memory_pressure": "warning/critical parsing, malformed-event rejection, ImageCache live-entry preservation and application icon epoch tests passed",
+    "window_memory": "Tasks and Shelf each added one on-demand Flutter engine/material stack while open and returned object counts to one after close; five open/close cycles each showed no object accumulation",
+    "web_document_memory": "the local Text Pad fixture created one WebContent, GPU and Networking helper; close removed WebContent/Networking and main-process WKWebView objects, retained the system GPU/process pool, and five open/close cycles added no helper or handler objects",
+    "web_document_large_matrix": "isolated Release loaded 1,046,501-byte JSON (45,501 nodes, 227,502-byte result) and 999,928 Text Pad characters; five large-document reloads each published a new origin without unavailable; close removed WebContent, Networking, main-process WKWebView and data store while retaining the GPU/process pool",
+    "web_document_reload_lifetime": "the first matrix exposed that closing the old binding before reload removed the whole Core invocation; WebDocumentLifetime now binds the next epoch first, then closes the prior document, and stale generations close late bindings",
+    "plugin_sdk_startup_order": "definePlugin preserves early subscription registration but binds state subscriptions only after lifecycle.ready succeeds; hidden registrations still reject with INACTIVE",
+    "macos_a4_appearance": "real system setting changes passed for dark/light, accent color, increased contrast, reduced transparency, reduced motion and Liquid Glass tone endpoints; Web content/URL survived live theme changes and 15-second hidden recovery; Settings, Shelf and Tasks updated live; the same engine/material object counts remained stable across dark-light-dark; system settings were restored and verified",
+    "file_result_memory": {
+      "rows": 10000,
+      "runs": 3,
+      "legacy_execution_copy_requested_bytes": 6138890,
+      "arc_reference_increment_bytes": 0,
+      "execution_index_requested_bytes": 629570,
+      "bounded_window_rows": 64,
+      "bounded_window_requested_bytes": 77946,
+      "scope": "Rust requested bytes only; not RSS or total application memory"
+    },
+    "file_result_memory_100k": {
+      "rows": 100000,
+      "runs": 3,
+      "candidate_rows_requested_bytes": 61502494,
+      "presentation_rows_requested_bytes": 53488930,
+      "execution_index_requested_bytes": 5314274,
+      "bounded_window_rows": 64,
+      "bounded_window_requested_bytes": 77946,
+      "legacy_execution_copy_replaced_bytes": 61488890,
+      "scope": "Full-state diagnostic is 120,305,698 requested bytes; the production 64-row window is 77,946 bytes. Neither is RSS."
+    },
+    "file_page_gui": "isolated arm64 Release found 100,000 local files, displayed report-000000.txt in a 64-Candidate window, scrolled to report-000064.txt, returned to report-000063.txt, and restored query, page and selection within 15 seconds; file_query=282780us, footprint samples 122.9-136.2 MiB, full-scan peak 180.1 MiB",
+    "file_page_diagnostics": "file_page_next and file_page_previous are separate numeric operations from cursor submission through the replacement list frame; Dart metrics, macOS allow-list, desktop timing aggregation and UI direction tests passed",
+    "scripts/build-macos.sh": "passed",
+    "codesign_verify_deep_strict": "passed"
+  },
+  "bundle_sha256": {
+    "Contents/MacOS/Anywhere": "84fd40e69ad98a1b330fd9b7d6e3fdc9e76bb9f1ed04bb248457c8e464104dc0",
+    "Contents/Frameworks/FlutterMacOS.framework/Versions/A/FlutterMacOS": "e1af8feb6487177dac80de3e62b706b63d55124916cc575bb20d1c66e76f799e",
+    "Contents/Frameworks/App.framework/Versions/A/App": "88d6dccb84168227d1306cc9f3aa5c31bbf2314f54a67be003ec194289c874f5",
+    "Contents/Frameworks/libanywhere_bridge_flutter.dylib": "d4082c54f2f8f0f0923de0647483829c0addca8049f24bffdaf27f2728001614"
+  },
+  "logs": [
+    "build/final-validation/check-after-memory-measurements.log",
+    "build/final-validation/build-macos-after-memory-measurements.log",
+    "build/final-validation/check-p6-p2-fixes-2.log",
+    "build/final-validation/build-p2-metrics.log",
+    "build/acceptance-flutter-350-p2-20261112/launcher.log",
+    "build/acceptance-flutter-350-p2-20261112/vmmap-after-restore.txt",
+    "build/acceptance-flutter-350-p6-matrix2-20261112/json-large-open-fixed-process.json",
+    "build/acceptance-flutter-350-p6-matrix2-20261112/json-after-five-reloads-process.json",
+    "build/acceptance-flutter-350-p6-matrix2-20261112/textpad-large-open-fixed-process.json",
+    "build/acceptance-flutter-350-p6-matrix2-20261112/textpad-large-closed-fixed-process.json"
+  ],
+  "remaining": [
+    "Remote CI/install path not executed.",
+    "macOS A4 core system-setting matrix is recorded. VoiceOver, physical Chinese IME, Quick Look, multiple-display/DPI and quantitative material A/B remain unexecuted.",
+    "P2 production pages are implemented and one 100k GUI run passed first/next/previous/15-second restore with a 64-row diagnostic window. Directional page diagnostics are implemented and tested; the fresh-process p50/p95 run, Dart live heap attribution, cloud storage and combined preview/Web matrices remain pending because macOS locked after preparation.",
+    "P6 loaded near-limit JSON and Text Pad data, completed five new-origin reloads and verified close-time helper/object reclamation. The final plugin SDK subscription-order fix passed 51 tests, but its packaged Text Pad WebKit retest remains pending because macOS locked. Network-resource and long-term helper matrices remain pending.",
+    "Windows A5/A6 remains unavailable because this repository has no apps/flutter/windows runner; only the shared port, fallback semantics and forced-colors Web rules are delivered.",
+    "No matched 3.47.8/3.50 SDK A/B desktop measurement.",
+    "Existing third-party Swift deprecation warnings and ld_classic linker warning remain."
+  ]
+}

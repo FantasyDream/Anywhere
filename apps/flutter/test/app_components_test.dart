@@ -5,8 +5,8 @@ import 'package:anywhere/settings/settings_components.dart';
 import 'package:anywhere/ui/app_components.dart';
 import 'package:anywhere/ui/app_style.dart';
 import 'package:anywhere/web_plugins/web_host_panels.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   testWidgets('ordinary page controls inherit the shared defaults',

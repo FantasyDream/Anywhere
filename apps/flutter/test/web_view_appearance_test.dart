@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:anywhere/infrastructure/desktop_appearance.dart';
 import 'package:anywhere/web_plugins/web_document_theme.dart';
 import 'package:anywhere/web_plugins/web_locale.dart';
 import 'package:anywhere/web_plugins/web_view_appearance.dart';
@@ -15,15 +16,75 @@ class RecordingWebController extends PlatformInAppWebViewController {
   final scripts = <String>[];
   bool disposed = false;
   Completer<void>? evaluation;
+  Future<void>? Function(String source)? gate;
   @override
   Future<dynamic> evaluateJavascript(
       {required String source, ContentWorld? contentWorld}) async {
     if (disposed) throw PlatformException(code: 'disposed');
     scripts.add(source);
+    final gated = gate?.call(source);
+    if (gated != null) await gated;
     await evaluation?.future;
     return null;
   }
 }
+
+class FakeAppearanceHost implements DesktopAppearanceHost {
+  FakeAppearanceHost(this.value);
+
+  DesktopAppearanceSnapshot value;
+  Future<void> Function(DesktopAppearanceSnapshot)? changed;
+
+  @override
+  void listen(Future<void> Function(DesktopAppearanceSnapshot) changed) {
+    this.changed = changed;
+  }
+
+  @override
+  Future<DesktopAppearanceSnapshot?> refresh(
+      DesktopAppearanceSnapshot current) async {
+    return value;
+  }
+
+  @override
+  Future<DesktopAppearanceSnapshot?> watch() async => value;
+
+  Future<void> emit(DesktopAppearanceSnapshot snapshot) async {
+    value = snapshot;
+    await changed?.call(snapshot);
+  }
+
+  @override
+  void dispose() {}
+}
+
+DesktopAppearanceSnapshot modelSnapshot({
+  String source = 'source-1',
+  String token = 'window-1',
+  int revision = 1,
+  AppearanceBrightness brightness = AppearanceBrightness.dark,
+  AppearanceContrast contrast = AppearanceContrast.standard,
+  bool reduceTransparency = false,
+  bool reduceMotion = false,
+  WindowSurfaceMode surface = WindowSurfaceMode.systemManaged,
+}) =>
+    DesktopAppearanceSnapshot(
+      sourceId: source,
+      windowToken: token,
+      revision: revision,
+      brightness: brightness,
+      contrast: contrast,
+      reduceTransparency: reduceTransparency,
+      reduceMotion: reduceMotion,
+      surface: surface,
+      capabilities: const DesktopAppearanceCapabilities(
+          protocolVersion: 1,
+          systemSurface: true,
+          brightness: true,
+          contrast: true,
+          reduceTransparency: true,
+          reduceMotion: true),
+    );
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -104,6 +165,27 @@ void main() {
     await notifyWebLanguage(web, 'en');
   });
 
+  test('canvas script carries complete light contrast and motion state', () {
+    const appearance = DesktopAppearanceSnapshot(
+      sourceId: 'source',
+      windowToken: 'window',
+      revision: 7,
+      brightness: AppearanceBrightness.light,
+      contrast: AppearanceContrast.increased,
+      reduceTransparency: false,
+      reduceMotion: true,
+      surface: WindowSurfaceMode.systemManaged,
+      capabilities: DesktopAppearanceCapabilities(
+          protocolVersion: 1, systemSurface: true),
+    );
+    final script = webCanvasScript(transparent: true, appearance: appearance);
+    expect(script, contains("root.dataset.awAppearance = 'light'"));
+    expect(script, contains("root.dataset.awContrast = 'increased'"));
+    expect(script, contains("root.dataset.awReduceMotion = 'true'"));
+    expect(script, contains("root.style.setProperty('color-scheme', 'light'"));
+    expect(script, contains("'transparent'"));
+  });
+
   test('presentation events tolerate teardown and carry no plugin capability',
       () async {
     await notifyWebPresentation(web, WebPresentationEvent.visibility, false);
@@ -123,7 +205,7 @@ void main() {
     });
     final loaded = InAppWebViewController.fromPlatform(platform: platform);
     await appearance.apply(loaded, isCurrent: () => sharesWebView(web, loaded));
-    expect(platform.scripts, [webCanvasScript(transparent: true)]);
+    expect(platform.scripts, [webCanvasScript(transparent: false)]);
   });
 
   for (final result in [false, null, 'unsupported', 'failed']) {
@@ -164,6 +246,40 @@ void main() {
     pending.complete(true);
     await old;
     expect(platform.scripts, [webCanvasScript(transparent: false)]);
+  });
+
+  test('late JS completion restores the latest native appearance version',
+      () async {
+    messenger.setMockMethodCallHandler(channel, (_) async => true);
+    final host = FakeAppearanceHost(
+        modelSnapshot(revision: 1, brightness: AppearanceBrightness.light));
+    final controller = DesktopAppearanceController(host: host);
+    addTearDown(controller.dispose);
+    await controller.bind();
+    final versioned =
+        WebViewAppearance(native: channel, controller: controller);
+    final first = Completer<void>();
+    final second = Completer<void>();
+    var evaluations = 0;
+    platform.gate = (_) => switch (++evaluations) {
+          1 => first.future,
+          2 => second.future,
+          _ => null,
+        };
+
+    final old = versioned.apply(web, isCurrent: () => true);
+    await Future<void>.delayed(Duration.zero);
+    await host.emit(
+        modelSnapshot(revision: 2, brightness: AppearanceBrightness.dark));
+    final current = versioned.apply(web, isCurrent: () => true);
+    await Future<void>.delayed(Duration.zero);
+    second.complete();
+    await current;
+    first.complete();
+    await old;
+
+    expect(
+        platform.scripts.last, contains("root.dataset.awAppearance = 'dark'"));
   });
 
   test('stale view does not invoke native configuration', () async {

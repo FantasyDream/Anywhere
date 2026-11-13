@@ -10,9 +10,9 @@ import 'package:anywhere/launcher/launcher_view_state.dart';
 import 'package:anywhere/settings/host_settings.dart';
 import 'package:anywhere/settings/settings_components.dart';
 import 'package:anywhere/ui/app_style.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'launcher_fixtures.dart';
 
@@ -94,7 +94,7 @@ class SettingsHarness {
     controller.attach();
     await tester.pumpWidget(MaterialApp(
       locale: locale,
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      localizationsDelegates: LocalizedApp.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       theme: AppStyle.theme,
       builder: (context, child) => MediaQuery(

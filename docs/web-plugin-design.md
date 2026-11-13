@@ -395,6 +395,7 @@ WebView2 官方说明渲染进程可能被多个实例共享，关闭控件也�
 
 - 用户明确导入开发目录，信任的是本次开发工作区中的可变代码，界面持续标注开发模式；不是声称每次 HMR 都有已批准的不可变摘要。
 - 每次全文重载递增 DocumentEpoch，清空旧 pending 请求，再握手；HMR 保留的文档也不能提升已批准能力或动态改变入口元数据。
+- Reload / resume 的 Flutter 生命周期先在原 Invocation 上绑定下一 DocumentEpoch，再关闭旧 binding；若先 close，Core 会移除整个 Invocation，下一 epoch 已无对象可绑。旧视图迟到回调只清理自己的 epoch，不能关闭新文档。SDK 的早期订阅保存取消句柄，但在 `lifecycle.ready` 成功前不发送 `state.subscribe`；隐藏期间的新订阅仍立即返回 `INACTIVE`。
 - localhost dev server 只在开发模式、明确来源 / 端口下开放，默认独立临时 profile，不共享生产 Context 历史、Secrets 或 Cookie。需要额外开发网络策略，不能沿用离线生产安全结论。
 - Manifest 权限 / 命令变化暂停热更新，重新验证和批准。生产包资源变化不按 HMR 处理。
 

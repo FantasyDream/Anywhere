@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../infrastructure/bridge_api.dart' as api;
 import '../infrastructure/web_package_backend.dart';
@@ -212,8 +212,8 @@ class _WebPackagesSectionState extends State<WebPackagesSection> {
                     ? Text(context.l10n.webPackageDamaged,
                         style: AppStyle.caption)
                     : null,
-                leading: const Icon(AppIcons.plugin,
-                    size: 18, color: AppStyle.secondary),
+                leading:
+                    Icon(AppIcons.plugin, size: 18, color: AppStyle.secondary),
                 trailing: AppToggle(
                     label: context.l10n.enableFeature(package.name),
                     value: package.enabled,

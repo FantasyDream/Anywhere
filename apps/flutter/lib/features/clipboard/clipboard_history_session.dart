@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../infrastructure/bridge_api.dart' as api;
 import '../../infrastructure/clipboard_history_backend.dart';
@@ -34,7 +34,7 @@ class ClipboardHistorySession extends ToolPageSession {
   final ClipboardHistoryBackend backend;
   final double rowExtent;
   final PresentationOperation queryOperation;
-  final performance = PresentationMetrics();
+  late final performance = PresentationMetrics(details: _memoryDiagnostics);
   int _queryRevision = 0;
   final query = TextEditingController();
   final focus = FocusNode(debugLabel: 'clipboard-history-search');
@@ -93,6 +93,11 @@ class ClipboardHistorySession extends ToolPageSession {
   bool _composing = false;
   api.ClipboardItemDto? get selected =>
       selectedIndex < 0 ? null : items[selectedIndex];
+
+  Map<String, Object> _memoryDiagnostics() => {
+        'clipboard_item_count': items.length,
+        'native_preview_open': preview.isOpen ? 1 : 0,
+      };
   @override
   String get id => 'clipboard.history';
   @override

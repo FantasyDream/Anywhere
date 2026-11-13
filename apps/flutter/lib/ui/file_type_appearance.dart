@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../l10n/app_language.dart';
 import 'app_icons.dart';
@@ -8,24 +8,24 @@ import 'semantic_icon.dart';
 /// Filename hints for presentation only. Never reads files or determines which
 /// results match a search; Rust remains responsible for filtering and targets.
 enum FileTypeAppearance {
-  folder(AppIcons.folder, DesignTokens.iconBlue),
-  pdf(AppIcons.pdf, DesignTokens.iconCoral, stamp: 'PDF'),
-  document(AppIcons.document, DesignTokens.iconBlue, stamp: 'DOC'),
-  text(AppIcons.text, DesignTokens.iconNeutral, stamp: 'TXT'),
-  spreadsheet(AppIcons.spreadsheet, DesignTokens.iconGreen),
-  presentation(AppIcons.presentation, DesignTokens.iconAmber),
-  image(AppIcons.image, DesignTokens.iconBlue),
-  audio(AppIcons.audio, DesignTokens.iconPink),
-  video(AppIcons.video, DesignTokens.iconPurple),
-  archive(AppIcons.archive, DesignTokens.iconAmber),
-  code(AppIcons.code, DesignTokens.iconPurple),
-  configuration(AppIcons.configuration, DesignTokens.iconAmber),
-  book(AppIcons.book, DesignTokens.iconGreen),
-  font(AppIcons.font, DesignTokens.iconPink),
-  package(AppIcons.package, DesignTokens.iconNeutral),
-  file(AppIcons.file, DesignTokens.iconNeutral);
+  folder(AppIcons.folder, _IconTone.blue),
+  pdf(AppIcons.pdf, _IconTone.coral, stamp: 'PDF'),
+  document(AppIcons.document, _IconTone.blue, stamp: 'DOC'),
+  text(AppIcons.text, _IconTone.neutral, stamp: 'TXT'),
+  spreadsheet(AppIcons.spreadsheet, _IconTone.green),
+  presentation(AppIcons.presentation, _IconTone.amber),
+  image(AppIcons.image, _IconTone.blue),
+  audio(AppIcons.audio, _IconTone.pink),
+  video(AppIcons.video, _IconTone.purple),
+  archive(AppIcons.archive, _IconTone.amber),
+  code(AppIcons.code, _IconTone.purple),
+  configuration(AppIcons.configuration, _IconTone.amber),
+  book(AppIcons.book, _IconTone.green),
+  font(AppIcons.font, _IconTone.pink),
+  package(AppIcons.package, _IconTone.neutral),
+  file(AppIcons.file, _IconTone.neutral);
 
-  const FileTypeAppearance(this.glyph, this.tint, {this.stamp});
+  const FileTypeAppearance(this.glyph, this._tone, {this.stamp});
   String labelFor(AppLocalizations l10n) => switch (this) {
         FileTypeAppearance.folder => l10n.folder,
         FileTypeAppearance.pdf => l10n.pdfDocument,
@@ -46,8 +46,18 @@ enum FileTypeAppearance {
       };
 
   final IconData glyph;
-  final Color tint;
+  final _IconTone _tone;
   final String? stamp;
+
+  Color get tint => switch (_tone) {
+        _IconTone.blue => AppStyle.iconBlue,
+        _IconTone.green => AppStyle.iconGreen,
+        _IconTone.coral => AppStyle.iconCoral,
+        _IconTone.purple => AppStyle.iconPurple,
+        _IconTone.amber => AppStyle.iconAmber,
+        _IconTone.pink => AppStyle.iconPink,
+        _IconTone.neutral => AppStyle.iconNeutral,
+      };
 
   static FileTypeAppearance forName(String basename,
       {bool isDirectory = false}) {
@@ -273,3 +283,5 @@ class FileTypeIcon extends StatelessWidget {
           stamp: appearance.stamp,
           disabled: disabled));
 }
+
+enum _IconTone { blue, green, coral, purple, amber, pink, neutral }

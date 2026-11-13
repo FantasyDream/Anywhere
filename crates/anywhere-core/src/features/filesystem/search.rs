@@ -141,6 +141,31 @@ impl FileSearchSource {
         })
         .await?
     }
+    pub async fn page(
+        &self,
+        query_id: u64,
+        cursor: String,
+        execution: ExecutionContext,
+    ) -> Result<AsyncCandidateBatch> {
+        let store = self
+            .active
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("search expired"))?;
+        if store.query_id != query_id {
+            anyhow::bail!("search expired");
+        }
+        let permit = tokio::select! { p = self.page_worker.clone().acquire_owned() => p?, _ = execution.superseded() => anyhow::bail!("search expired"), };
+        let actions = self.actions.clone();
+        tokio::task::spawn_blocking(move || {
+            let _permit = permit;
+            let cursor = (!cursor.is_empty()).then_some(cursor.as_str());
+            let page = store.page(cursor, &|| !execution.is_current())?;
+            Ok(scan_batch(page, &actions))
+        })
+        .await?
+    }
 }
 
 #[async_trait::async_trait]

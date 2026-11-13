@@ -25,11 +25,24 @@ class DesignTokenTests(unittest.TestCase):
 
     def valid(self):
         return {
-            'schemaVersion': 1,
+            'schemaVersion': 2,
             'appearance': 'dark',
             'colorFormat': 'ARGB',
             'colors': {
                 'primary': '#fff7f8fa'
+            },
+            'variants': {
+                'light': {
+                    'primary': '#ff101010'
+                },
+                'contrast': {
+                    'dark': {
+                        'primary': '#ffffffff'
+                    },
+                    'light': {
+                        'primary': '#ff000000'
+                    }
+                }
             },
             'metrics': {
                 'radius': {
@@ -54,6 +67,9 @@ class DesignTokenTests(unittest.TestCase):
         self.assertIn('FontWeight.w600', dart)
         self.assertIn('--aw-heading-weight: 600;', css)
         self.assertIn('--aw-text: var(--aw-primary);', css)
+        self.assertIn('@media (forced-colors: active)', css)
+        self.assertIn('--aw-primary: CanvasText;', css)
+        self.assertIn('--aw-accent-fill: Highlight;', css)
 
     def test_invalid_units_weights_and_style_injection_are_rejected(self):
         for mutate in [

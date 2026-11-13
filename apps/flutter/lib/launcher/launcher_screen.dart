@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../infrastructure/bridge_api.dart';
 import '../infrastructure/desktop_environment.dart';
@@ -35,6 +35,7 @@ export 'launcher_controller.dart'
         Execute,
         WaitForSnapshot,
         LoadIcon,
+        LoadFilePage,
         snapshotCursor,
         WakeMode,
         parseWakeMode;
@@ -63,6 +64,7 @@ class LauncherApp extends StatefulWidget {
     this.waitBinding,
     this.loadFilePreview,
     this.updateFiles,
+    this.filePage,
     this.fileMore,
     this.fileMoreDelta,
     this.freezeFiles,
@@ -73,6 +75,7 @@ class LauncherApp extends StatefulWidget {
   });
   final Future<LauncherStateDto?> Function(int, String, int, String)?
       updateFiles;
+  final LoadFilePage? filePage;
   final Future<LauncherStateDto?> Function(int, int)? fileMore;
   final Future<SnapshotWaitDto> Function(int, int, int, int)? fileMoreDelta;
   final Future<void> Function(int, int)? freezeFiles;
@@ -143,6 +146,7 @@ class _LauncherAppState extends State<LauncherApp> {
         waitBinding: widget.waitBinding,
         loadFilePreview: widget.loadFilePreview,
         updateFiles: widget.updateFiles,
+        filePage: widget.filePage,
         fileMore: widget.fileMore,
         fileMoreDelta: widget.fileMoreDelta,
         freezeFiles: widget.freezeFiles,
@@ -165,9 +169,9 @@ class _LauncherAppState extends State<LauncherApp> {
   Widget build(BuildContext context) => LocalizedApp(
         debugShowCheckedModeBanner: false,
         title: 'Anywhere',
-        theme: AppStyle.theme,
+        themeBuilder: () => AppStyle.theme,
         builder: AppStyle.windowBuilder,
-        home: LauncherScreen(controller: _controller),
+        homeBuilder: () => LauncherScreen(controller: _controller),
       );
 }
 
@@ -199,10 +203,13 @@ class _LauncherScreenState extends State<LauncherScreen> {
   int? _displayedPresentation;
   int _focusRequest = 0;
   bool _fileScrollRequested = false;
+  bool _fileScrollBackRequested = false;
   bool _pointerSelection = false;
   Object? _moreRequestedFor;
+  Object? _previousPageRequestedFor;
   String? _displayedFileSelection;
   int? _displayedFileIndex;
+  int? _displayedFilePage;
   bool _displayedObjectActions = false;
   (Object, double)? _objectResultsPosition;
 
@@ -369,6 +376,25 @@ class _LauncherScreenState extends State<LauncherScreen> {
       _objectResultsPosition = null;
     }
     _displayedObjectActions = objectActions;
+    final filePage = _view.snapshot?.fileSearch?.page;
+    final pageChanged = filePage != null &&
+        _controller.usesBoundedFilePages &&
+        _displayedFilePage != null &&
+        filePage != _displayedFilePage;
+    if (pageChanged) {
+      final backwards = filePage < _displayedFilePage!;
+      _fileScrollRequested = false;
+      _fileScrollBackRequested = false;
+      _moreRequestedFor = null;
+      _previousPageRequestedFor = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scroll.hasClients) return;
+        _scroll.jumpTo(backwards
+            ? _scroll.position.maxScrollExtent
+            : _scroll.position.minScrollExtent);
+      });
+    }
+    _displayedFilePage = filePage;
     final inputVisible = _view.visible &&
         _view.phase != LauncherPhase.settings &&
         _view.toolPage == null;
@@ -411,7 +437,9 @@ class _LauncherScreenState extends State<LauncherScreen> {
               _view.actionPath?.join(' / ') != _displayedPath) &&
           _scroll.hasClients) {
         _fileScrollRequested = false;
+        _fileScrollBackRequested = false;
         _moreRequestedFor = null;
+        _previousPageRequestedFor = null;
         _scroll.jumpTo(0);
       }
       final selection = _view.selectedEntry?.key;
@@ -885,8 +913,7 @@ class _LauncherScreenState extends State<LauncherScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: Text(message,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      fontSize: 13, color: AppStyle.secondary))));
+                  style: TextStyle(fontSize: 13, color: AppStyle.secondary))));
     }
     // Results use arrow-key selection from the search field, not Tab traversal.
     return ExcludeFocus(
@@ -898,9 +925,15 @@ class _LauncherScreenState extends State<LauncherScreen> {
                 _fileScrollRequested = true;
                 _controller.freezeFileResults();
               }
+              if (notification is UserScrollNotification &&
+                  notification.direction == ScrollDirection.forward) {
+                _fileScrollBackRequested = true;
+                _controller.freezeFileResults();
+              }
               if (notification is ScrollUpdateNotification ||
                   notification is ScrollEndNotification) {
                 _loadMoreNearEnd(userGesture: true);
+                _loadPreviousNearStart(userGesture: true);
               }
               return false;
             },
@@ -925,6 +958,20 @@ class _LauncherScreenState extends State<LauncherScreen> {
     if (!userGesture && _moreRequestedFor == token) return;
     _moreRequestedFor = token;
     unawaited(_controller.loadMoreFiles());
+  }
+
+  void _loadPreviousNearStart({bool userGesture = false}) {
+    if (!_fileScrollBackRequested ||
+        !_scroll.hasClients ||
+        !_view.hasFileControls ||
+        !_controller.canLoadPreviousFilePage ||
+        _scroll.offset > LauncherLayout.rowHeight) {
+      return;
+    }
+    final token = (_view.snapshot?.revision, _view.snapshot?.snapshotSeq);
+    if (!userGesture && _previousPageRequestedFor == token) return;
+    _previousPageRequestedFor = token;
+    unawaited(_controller.loadFilePage(-1));
   }
 
   void _backFiles() {

@@ -1,0 +1,134 @@
+{
+  "date": "2026-11-12",
+  "base_commit": "81c523cdb95031ac00cfcdc25360eefb48f85b21",
+  "app_version": "0.14.0+46",
+  "flutter": "3.50.0",
+  "arch": "arm64",
+  "environment": "macOS 27.2.1 (26B131)",
+  "bundle_hashes": "flutter-3.50-validation-2026-11-12.json",
+  "scenario": "One fresh empty isolated data directory. Initial hidden startup, no first user activation, Web, preview, Shelf or Task window. 20 seconds warmup then 60 seconds requested sampling. No GUI or ready/first-frame verification.",
+  "resources": [
+    {
+      "elapsed_seconds": 1.12,
+      "main_rss_bytes": 115032064,
+      "descendants": [],
+      "webkit_helpers": []
+    },
+    {
+      "elapsed_seconds": 6.17,
+      "main_rss_bytes": 115032064,
+      "descendants": [],
+      "webkit_helpers": []
+    },
+    {
+      "elapsed_seconds": 11.23,
+      "main_rss_bytes": 115032064,
+      "descendants": [],
+      "webkit_helpers": []
+    },
+    {
+      "elapsed_seconds": 16.29,
+      "main_rss_bytes": 115032064,
+      "descendants": [],
+      "webkit_helpers": []
+    },
+    {
+      "elapsed_seconds": 21.35,
+      "main_rss_bytes": 115032064,
+      "descendants": [],
+      "webkit_helpers": []
+    },
+    {
+      "elapsed_seconds": 26.41,
+      "main_rss_bytes": 115032064,
+      "descendants": [],
+      "webkit_helpers": []
+    },
+    {
+      "elapsed_seconds": 31.47,
+      "main_rss_bytes": 115032064,
+      "descendants": [],
+      "webkit_helpers": []
+    },
+    {
+      "elapsed_seconds": 36.53,
+      "main_rss_bytes": 115032064,
+      "descendants": [],
+      "webkit_helpers": []
+    },
+    {
+      "elapsed_seconds": 41.59,
+      "main_rss_bytes": 115032064,
+      "descendants": [],
+      "webkit_helpers": []
+    },
+    {
+      "elapsed_seconds": 46.65,
+      "main_rss_bytes": 115032064,
+      "descendants": [],
+      "webkit_helpers": []
+    },
+    {
+      "elapsed_seconds": 51.71,
+      "main_rss_bytes": 108347392,
+      "descendants": [],
+      "webkit_helpers": []
+    },
+    {
+      "elapsed_seconds": 56.74,
+      "main_rss_bytes": 101318656,
+      "descendants": [],
+      "webkit_helpers": []
+    },
+    {
+      "elapsed_seconds": 60.06,
+      "main_rss_bytes": 100974592,
+      "descendants": [],
+      "webkit_helpers": []
+    }
+  ],
+  "initial_footprint_bytes": 45298483,
+  "final_footprint_bytes": 45298483,
+  "vmmap_footprint_raw": "43.2M",
+  "vmmap_lifetime_peak_footprint_raw": "79.9M",
+  "vmmap_selected_raw": {
+    "malloc_zone_total": {
+      "resident": "17.0M",
+      "swapped": "5984K",
+      "allocated": "14.8M",
+      "fragmentation": "8181K"
+    },
+    "stack": {
+      "virtual": "64.0M",
+      "resident": "752K",
+      "regions": 35
+    },
+    "IOAccelerator_graphics": {
+      "virtual": "5248K",
+      "resident": "1664K",
+      "swapped": "1648K"
+    },
+    "Untagged": {
+      "virtual": "9136K",
+      "resident": "4112K",
+      "swapped": "4400K"
+    }
+  },
+  "heap_exact_class_rows": {
+    "FlutterEngine": 1,
+    "FlutterViewController": 1,
+    "FlutterVSyncWaiter": 1,
+    "WindowMaterialController": 1,
+    "WKWebView": null,
+    "WKProcessPool": null
+  },
+  "termination": "Only this spawned process received SIGTERM after sampling; exit -15 verified. Not a graceful GUI quit acceptance.",
+  "limits": [
+    "Single initial hidden run; not a matched SDK comparison or a post-interaction retained session.",
+    "RSS, footprint, vmmap region residency and malloc allocated bytes have different accounting; do not add them or infer language percentages.",
+    "No UI performance samples collected.",
+    "Other development instances and general host memory pressure not controlled; no builds/full checks started during sampling.",
+    "WebKit empty lists are verified target XPC-domain observations; other system XPC excluded.",
+    "heap exact class null means no matching class row was listed; it is not a complete system resource count."
+  ]
+}

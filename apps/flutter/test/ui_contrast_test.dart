@@ -1,7 +1,7 @@
 import 'package:anywhere/ui/app_style.dart';
 import 'package:anywhere/ui/file_type_appearance.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 double contrast(Color foreground, Color background) {
   final ink = Color.alphaBlend(foreground, background).computeLuminance();
@@ -134,7 +134,7 @@ void main() {
       theme.outlinedButtonTheme.style!,
       theme.filledButtonTheme.style!,
       theme.outlinedButtonTheme.style!.copyWith(
-          backgroundColor: const WidgetStatePropertyAll(AppStyle.actionSurface))
+          backgroundColor: WidgetStatePropertyAll(AppStyle.actionSurface))
     ]) {
       for (final states in <Set<WidgetState>>[
         {},

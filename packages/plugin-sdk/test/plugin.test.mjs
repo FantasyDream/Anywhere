@@ -83,6 +83,42 @@ test('failed hidden subscriptions are not registered when the page resumes', asy
   }
 });
 
+test('early subscriptions bind only after lifecycle ready succeeds', async () => {
+  const methods = [];
+  let completeReady;
+  const env = environment((call, reply) => {
+    methods.push(call.method);
+    if (call.method === 'lifecycle.ready') {
+      completeReady = () => reply(null);
+    } else if (call.method === 'state.subscribe') {
+      reply({
+        version: 1,
+        context: {kind: 'empty', reason: 'no_object'},
+        input: 'current',
+      });
+    } else if (call.method === 'invocation.get') {
+      reply(launch);
+    }
+  });
+  const plugin = definePlugin();
+  const received = [];
+  try {
+    const stop = plugin.host.input.onChange(input => received.push(input));
+    await tick();
+    assert.deepEqual(methods, ['lifecycle.ready']);
+    completeReady();
+    await tick();
+    assert.equal(methods[0], 'lifecycle.ready');
+    assert.ok(methods.includes('state.subscribe'));
+    assert.ok(methods.includes('invocation.get'));
+    assert.deepEqual(received, ['current']);
+    stop();
+  } finally {
+    plugin.dispose();
+    env.close();
+  }
+});
+
 test('automatic launch once, resume preserves drafts and stable host cancels pending operations', async () => {
   let block = false,
     launched = 0,

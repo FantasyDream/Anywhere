@@ -25,6 +25,8 @@ void main() {
     await Future<void>.delayed(Duration.zero);
     expect(cache.entryCount, 1);
     expect(cache.retainedBytes, 4);
+    expect(cache.diagnostics, containsPair('icon_cache_entries', 1));
+    expect(cache.diagnostics, containsPair('icon_cache_bytes', 4));
     expect(cache.bytesFor('a'), isNull);
     expect(cache.bytesFor('b'), hasLength(4));
     cache.clear();

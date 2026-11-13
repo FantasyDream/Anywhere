@@ -2,8 +2,8 @@ import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/l10n/app_language.dart';
 import 'package:anywhere/launcher/widgets/candidate_row.dart';
 import 'package:anywhere/settings/shortcut_app_picker.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   const application = CandidateDto(
@@ -55,7 +55,7 @@ void main() {
       (tester) async {
     await tester.pumpWidget(MaterialApp(
         locale: const Locale('zh'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: LocalizedApp.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
             body: CandidateRow(
@@ -81,7 +81,7 @@ void main() {
       (tester) async {
     await tester.pumpWidget(MaterialApp(
         locale: const Locale('zh'),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: LocalizedApp.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: const Scaffold(
             body: ShortcutAppPicker(applications: [

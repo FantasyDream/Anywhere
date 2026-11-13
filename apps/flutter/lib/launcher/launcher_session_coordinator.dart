@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import '../infrastructure/bridge_api.dart';
+import '../infrastructure/presentation_metrics.dart';
 import '../infrastructure/runtime_policy.dart';
 import 'launcher_backend.dart';
 import 'stable_list.dart';
@@ -122,6 +123,7 @@ class LauncherSessionCoordinator {
         cursor = heldCursor;
         continue;
       }
+      transfer(notice);
       cursor = nextCursor;
       await publish(next);
     }
@@ -195,5 +197,15 @@ class LauncherSessionCoordinator {
         contextCaptures: next.contextCaptures,
         candidates: rows,
         diagnostics: next.diagnostics);
+  }
+
+  static void transfer(SnapshotWaitDto packet) {
+    final kind = switch (packet.candidateUpdate) {
+      CandidateUpdateDto.replace => 1,
+      CandidateUpdateDto.retain => 2,
+      CandidateUpdateDto.append => 3,
+    };
+    PresentationTransferStats.candidate(
+        kind, packet.state?.candidates.length ?? 0);
   }
 }

@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import '../infrastructure/application_icon_cache.dart';
 import '../infrastructure/application_lifecycle.dart';
 import '../infrastructure/bridge_api.dart';
+import '../infrastructure/desktop_image_cache.dart';
+import '../infrastructure/desktop_memory_pressure.dart';
 import '../infrastructure/presentation_metrics.dart';
 import '../infrastructure/runtime_policy.dart';
 import '../infrastructure/window_host.dart';
@@ -26,6 +28,7 @@ import 'launcher_navigation.dart';
 import 'launcher_session_coordinator.dart';
 import 'launcher_view_state.dart';
 import 'shortcut_coordinator.dart';
+import 'stable_list.dart';
 
 export '../infrastructure/application_icon_cache.dart' show LoadIcon;
 export '../settings/settings_controller.dart' show ApplyExcludedApps;
@@ -63,6 +66,7 @@ class LauncherController extends ChangeNotifier {
             readSupportedShortcutActions: backend.supportedShortcutActions,
             readShortcutApplications: backend.shortcutApplications),
         icons = ApplicationIconCache(backend.loadIcon) {
+    DesktopMemoryPressure.current.addListener(_memoryPressureChanged);
     _sessionFlow = LauncherSessionCoordinator(_nowMillis);
     files = FileWorkspaceCoordinator(backend.loadFilePreview);
     files.addListener(_filePresentationChanged);
@@ -111,7 +115,7 @@ class LauncherController extends ChangeNotifier {
   final DesktopHost _window;
   final int Function() _nowMillis;
   final ActivationFlow _activation = ActivationFlow();
-  final performance = PresentationMetrics();
+  late final performance = PresentationMetrics(details: _memoryDiagnostics);
   final ObjectActionCoordinator _objectActions = ObjectActionCoordinator();
   final HostViewNavigator hostViews = HostViewNavigator();
   InputModeDto _snapshotInputMode = InputModeDto.environment;
@@ -213,6 +217,32 @@ class LauncherController extends ChangeNotifier {
 
   bool _userMoved = false, _disposed = false;
   bool get _fileMoreLoading => files.moreLoading;
+
+  void _memoryPressureChanged() {
+    if (_disposed || DesktopMemoryPressure.current.level == null) return;
+    // The icon cache already rejects late loads. The framework keeps live
+    // widgets and clears only unused / pending decoded entries.
+    icons.clear();
+    releaseIdleDesktopImages();
+  }
+
+  Map<String, Object> _memoryDiagnostics() {
+    final snapshot = _snapshot;
+    final candidates = snapshot?.candidates;
+    final chunks = candidates is StableList<CandidateDto>
+        ? candidates.chunks.length
+        : candidates == null || candidates.isEmpty
+            ? 0
+            : 1;
+    return {
+      'candidate_count': candidates?.length ?? 0,
+      'candidate_chunk_count': chunks,
+      'result_action_count': snapshot?.resultActions.length ?? 0,
+      'context_candidate_count': snapshot?.contextCandidates.length ?? 0,
+      'retained_session': hasRetainedState ? 1 : 0,
+      ...icons.diagnostics,
+    };
+  }
 
   Future<bool>? _settingsClosing;
   int _iconFirst = 0;
@@ -973,17 +1003,36 @@ class LauncherController extends ChangeNotifier {
   }
 
   bool get fileMoreLoading => _fileMoreLoading;
-  bool get canLoadMoreFiles =>
+  bool get usesBoundedFilePages => _backend.filePage != null;
+  bool get canLoadNextFilePage =>
+      _backend.filePage != null &&
       view.hasFileControls &&
       _phase == LauncherPhase.ready &&
       !_fileMoreLoading &&
-      (_backend.fileMore != null || _backend.fileMoreDelta != null) &&
       ((_snapshot?.fileSearch?.nextCursor != null) ||
           (_snapshot?.fileSearch?.needsRefresh ?? false));
+  bool get canLoadPreviousFilePage =>
+      _backend.filePage != null &&
+      view.hasFileControls &&
+      _phase == LauncherPhase.ready &&
+      !_fileMoreLoading &&
+      _snapshot?.fileSearch?.previousCursor != null;
+  bool get canLoadMoreFiles =>
+      canLoadNextFilePage ||
+      (view.hasFileControls &&
+          _phase == LauncherPhase.ready &&
+          !_fileMoreLoading &&
+          (_backend.fileMore != null || _backend.fileMoreDelta != null) &&
+          ((_snapshot?.fileSearch?.nextCursor != null) ||
+              (_snapshot?.fileSearch?.needsRefresh ?? false)));
 
-  /// The backend returns the accumulated list and keeps all displayed targets
-  /// executable. Loading never clears selection or resets the scroll position.
+  /// Move to a bounded result page. The new page replaces Rust and Flutter
+  /// candidate windows; old page targets cease to be executable.
   Future<void> loadMoreFiles({bool advanceSelection = false}) async {
+    if (_backend.filePage != null) {
+      await loadFilePage(1, advanceSelection: advanceSelection);
+      return;
+    }
     final session = _session;
     if (session == null || !canLoadMoreFiles) return;
     final generation = _generation, revision = _revision;
@@ -1019,6 +1068,58 @@ class LauncherController extends ChangeNotifier {
     } catch (_) {
       if (_current(generation) && revision == _revision) {
         _message = 'Could not load more files. Scroll or press ↓ to retry.';
+        _notify();
+      }
+    }
+  }
+
+  Future<void> loadFilePage(int direction,
+      {bool advanceSelection = false}) async {
+    final session = _session;
+    if (session == null || direction == 0) return;
+    final progress = _snapshot?.fileSearch;
+    final cursor = direction > 0
+        ? (progress?.nextCursor ?? (progress?.needsRefresh == true ? '' : null))
+        : progress?.previousCursor;
+    if (cursor == null ||
+        !(direction > 0 ? canLoadNextFilePage : canLoadPreviousFilePage)) {
+      return;
+    }
+    final generation = _generation, revision = _revision;
+    freezeFileResults();
+    performance.begin(
+        direction > 0
+            ? PresentationOperation.filePageNext
+            : PresentationOperation.filePagePrevious,
+        generation: generation,
+        revision: revision,
+        presentation: _windowPresentation);
+    _notify();
+    try {
+      final state = await files.loadPage(session, revision, cursor, _backend,
+          () => _current(generation) && revision == _revision && view.visible);
+      if (!_current(generation) ||
+          revision != _revision ||
+          state == null ||
+          !view.visible ||
+          state.sessionId != session ||
+          state.revision != revision) {
+        return;
+      }
+      _apply(state);
+      if (advanceSelection && view.visibleEntries.isNotEmpty) {
+        final index = direction > 0 ? 0 : view.visibleEntries.length - 1;
+        _selectedId = view.visibleEntries[index].key;
+        _userMoved = true;
+      }
+      _message = null;
+      _notify();
+      await _syncWindow();
+    } catch (_) {
+      if (_current(generation) && revision == _revision) {
+        _message = direction > 0
+            ? 'Could not load the next file page. Scroll down or press ↓ to retry.'
+            : 'Could not load the previous file page. Scroll up or press ↑ to retry.';
         _notify();
       }
     }
@@ -1292,10 +1393,19 @@ class LauncherController extends ChangeNotifier {
     if (view.resolving || entries.isEmpty) return;
     if (view.isFileSearch && view.hasFileControls) {
       if (direction > 0 && view.selectedIndex == entries.length - 1) {
-        if (canLoadMoreFiles) unawaited(loadMoreFiles(advanceSelection: true));
+        if (canLoadNextFilePage) {
+          unawaited(loadFilePage(1, advanceSelection: true));
+        } else if (canLoadMoreFiles) {
+          unawaited(loadMoreFiles(advanceSelection: true));
+        }
         return;
       }
-      if (direction < 0 && view.selectedIndex == 0) return;
+      if (direction < 0 && view.selectedIndex == 0) {
+        if (canLoadPreviousFilePage) {
+          unawaited(loadFilePage(-1, advanceSelection: true));
+        }
+        return;
+      }
     }
     final next = view.selectedIndex < 0
         ? 0
@@ -1639,6 +1749,7 @@ class LauncherController extends ChangeNotifier {
     _sessionFlow.dispose();
     _toolPage = null;
     _disposed = true;
+    DesktopMemoryPressure.current.removeListener(_memoryPressureChanged);
     _cachedView = null;
     _viewKey = null;
     _sessionFlow.invalidateGeneration();

@@ -1,17 +1,20 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../infrastructure/bridge_api.dart' as api;
+import '../infrastructure/desktop_appearance.dart';
+import '../infrastructure/presentation_metrics.dart';
 import '../l10n/app_language.dart';
 import '../tools/tool_page_shell.dart';
 import '../ui/app_components.dart';
 import 'web_bootstrap.dart';
 import 'web_document_lifetime.dart';
 import 'web_document_policy.dart';
+import 'web_document_theme.dart';
 import 'web_host_panels.dart';
 import 'web_locale.dart';
 import 'web_message_transport.dart';
@@ -49,6 +52,7 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
       close: (handle) => api.closeWebDocument(handle: handle));
   api.WebDocumentDto? get _document => _lifetime.document;
   InAppWebViewController? _web;
+  late final DesktopAppearanceController _desktopAppearance;
   _WebLoadError? _error;
   String _errorLabel(AppLocalizations l10n) => switch (_error!) {
         _WebLoadError.notReady => l10n.theToolDidNotBecomeReadyGo,
@@ -59,6 +63,7 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
       };
   int _viewKey = 0;
   String _language = 'en';
+  bool _documentRegistered = false;
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -78,6 +83,8 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
   void initState() {
     super.initState();
     _owner = this;
+    _desktopAppearance = DesktopAppearance.current
+      ..addListener(_desktopAppearanceChanged);
     _native.setMethodCallHandler((call) async {
       if (!mounted || !widget.visible) return;
       if (call.method == 'back') {
@@ -87,6 +94,17 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
       }
     });
     unawaited(_open());
+  }
+
+  void _desktopAppearanceChanged() {
+    final controller = _web;
+    if (controller == null ||
+        !mounted ||
+        !widget.visible ||
+        _document == null) {
+      return;
+    }
+    unawaited(_applyWebAppearance(controller));
   }
 
   void _back() {
@@ -184,16 +202,18 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
   Future<void> _open({bool resume = false}) async {
     final generation = _lifetime.invalidate();
     _resources.cancel(this);
-    if (!resume) unawaited(_lifetime.closeCurrent());
     final previous = resume ? _document : null;
     _readyTimer?.cancel();
     try {
-      final document = await api.openWebDocument(
-          invocationId: widget.invocation,
-          resumeHandle: resume ? previous?.handle : null);
-      final accepted = await _lifetime.accept(document, generation,
-          interactive: mounted && identical(_owner, this) && widget.visible);
-      if (!accepted || !mounted || !_lifetime.current(generation)) return;
+      final document = await _lifetime.openAndAccept(
+        generation,
+        () => api.openWebDocument(
+            invocationId: widget.invocation,
+            resumeHandle: resume ? previous?.handle : null),
+        interactive: mounted && identical(_owner, this) && widget.visible,
+      );
+      if (document == null) return;
+      _registerDocument();
       setState(() {
         _error = null;
         if (!resume) {
@@ -335,7 +355,13 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
       // Listener bootstrap must precede the transport at document start.
       await controller.addUserScript(
           userScript: UserScript(
-              source: webLocaleScript(_language) + webBootstrap,
+              source: webLocaleScript(_language) +
+                  webBootstrap +
+                  webCanvasScript(
+                      transparent: DesktopAppearance
+                              .current.snapshot.usesSystemSurface &&
+                          !DesktopAppearance
+                              .current.snapshot.reduceTransparency),
               injectionTime: UserScriptInjectionTime.AT_DOCUMENT_START,
               forMainFrameOnly: true));
       if (_current(document) && sharesWebView(_web, controller)) {
@@ -386,6 +412,8 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
 
   @override
   void dispose() {
+    _unregisterDocument();
+    _desktopAppearance.removeListener(_desktopAppearanceChanged);
     _lifetime.invalidate();
     _resources.cancel(this);
     _readyTimer?.cancel();
@@ -399,6 +427,18 @@ class _WebToolSurfaceState extends State<WebToolSurface> {
     _web = null;
     unawaited(_lifetime.dispose());
     super.dispose();
+  }
+
+  void _registerDocument() {
+    if (_documentRegistered) return;
+    _documentRegistered = true;
+    PresentationDocumentStats.registerWebDocument();
+  }
+
+  void _unregisterDocument() {
+    if (!_documentRegistered) return;
+    _documentRegistered = false;
+    PresentationDocumentStats.releaseWebDocument();
   }
 
   @override

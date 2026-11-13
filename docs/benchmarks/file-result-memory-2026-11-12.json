@@ -1,0 +1,127 @@
+{
+  "date": "2026-11-12",
+  "base_commit": "81c523cdb95031ac00cfcdc25360eefb48f85b21",
+  "product": "Flutter main; no GPUI changes",
+  "environment": {
+    "os": "macOS 27.2.1 (26B131)",
+    "arch": "arm64",
+    "rust": "rustc 1.100.0-beta.7 (fd8e211ae 2026-10-17)"
+  },
+  "commands": [
+    "cargo run --release -p anywhere-core --example file_result_memory --locked -- 10000",
+    "cargo run --release -p anywhere-core --example file_result_memory --locked -- 100000"
+  ],
+  "method": "Three fresh Release processes at each scale. The System allocator wrapper counts requested Rust heap bytes for Candidate rows, copied presentation rows, the previous full execution copy, Arc sharing, the full execution index and the simultaneously retained bounded page window.",
+  "source_sha256": "7aaeb29033255d16066b52aefe033d09ce1130d078c54cbb85464e5288407f83",
+  "binary_sha256": "e6ed4b4bb294d9886133f3575e6ceca75e5f7f3ee50837946c48623d91f0d744",
+  "runs": [
+    {
+      "arc_share_peak_bytes": 0,
+      "bounded_state_live_bytes": 77946,
+      "bounded_state_peak_bytes": 77946,
+      "bounded_window_rows": 64,
+      "candidate_array_copy_live_bytes": 6138890,
+      "candidate_array_copy_peak_bytes": 6138890,
+      "candidate_rows_live_bytes": 6152494,
+      "candidate_rows_peak_bytes": 6205561,
+      "execution_index_live_bytes": 629570,
+      "execution_index_peak_bytes": 629570,
+      "file_rows": 10000,
+      "presentation_rows": 10000,
+      "presentation_rows_live_bytes": 5338930,
+      "presentation_rows_peak_bytes": 5338930
+    },
+    {
+      "arc_share_peak_bytes": 0,
+      "bounded_state_live_bytes": 77946,
+      "bounded_state_peak_bytes": 77946,
+      "bounded_window_rows": 64,
+      "candidate_array_copy_live_bytes": 6138890,
+      "candidate_array_copy_peak_bytes": 6138890,
+      "candidate_rows_live_bytes": 6152494,
+      "candidate_rows_peak_bytes": 6205561,
+      "execution_index_live_bytes": 629570,
+      "execution_index_peak_bytes": 629570,
+      "file_rows": 10000,
+      "presentation_rows": 10000,
+      "presentation_rows_live_bytes": 5338930,
+      "presentation_rows_peak_bytes": 5338930
+    },
+    {
+      "arc_share_peak_bytes": 0,
+      "bounded_state_live_bytes": 77946,
+      "bounded_state_peak_bytes": 77946,
+      "bounded_window_rows": 64,
+      "candidate_array_copy_live_bytes": 6138890,
+      "candidate_array_copy_peak_bytes": 6138890,
+      "candidate_rows_live_bytes": 6152494,
+      "candidate_rows_peak_bytes": 6205561,
+      "execution_index_live_bytes": 629570,
+      "execution_index_peak_bytes": 629570,
+      "file_rows": 10000,
+      "presentation_rows": 10000,
+      "presentation_rows_live_bytes": 5338930,
+      "presentation_rows_peak_bytes": 5338930
+    },
+    {
+      "arc_share_peak_bytes": 0,
+      "bounded_state_live_bytes": 77946,
+      "bounded_state_peak_bytes": 77946,
+      "bounded_window_rows": 64,
+      "candidate_array_copy_live_bytes": 61488890,
+      "candidate_array_copy_peak_bytes": 61488890,
+      "candidate_rows_live_bytes": 61502494,
+      "candidate_rows_peak_bytes": 61555561,
+      "execution_index_live_bytes": 5314274,
+      "execution_index_peak_bytes": 5314274,
+      "file_rows": 100000,
+      "presentation_rows": 100000,
+      "presentation_rows_live_bytes": 53488930,
+      "presentation_rows_peak_bytes": 53488930
+    },
+    {
+      "arc_share_peak_bytes": 0,
+      "bounded_state_live_bytes": 77946,
+      "bounded_state_peak_bytes": 77946,
+      "bounded_window_rows": 64,
+      "candidate_array_copy_live_bytes": 61488890,
+      "candidate_array_copy_peak_bytes": 61488890,
+      "candidate_rows_live_bytes": 61502494,
+      "candidate_rows_peak_bytes": 61555561,
+      "execution_index_live_bytes": 5314274,
+      "execution_index_peak_bytes": 5314274,
+      "file_rows": 100000,
+      "presentation_rows": 100000,
+      "presentation_rows_live_bytes": 53488930,
+      "presentation_rows_peak_bytes": 53488930
+    },
+    {
+      "arc_share_peak_bytes": 0,
+      "bounded_state_live_bytes": 77946,
+      "bounded_state_peak_bytes": 77946,
+      "bounded_window_rows": 64,
+      "candidate_array_copy_live_bytes": 61488890,
+      "candidate_array_copy_peak_bytes": 61488890,
+      "candidate_rows_live_bytes": 61502494,
+      "candidate_rows_peak_bytes": 61555561,
+      "execution_index_live_bytes": 5314274,
+      "execution_index_peak_bytes": 5314274,
+      "file_rows": 100000,
+      "presentation_rows": 100000,
+      "presentation_rows_live_bytes": 53488930,
+      "presentation_rows_peak_bytes": 53488930
+    }
+  ],
+  "trend": {
+    "candidate_rows": "10x rows produced approximately 10x requested bytes when every page is retained",
+    "presentation_rows": "10x rows produced approximately 10x requested bytes when every page is retained",
+    "execution_index": "10x rows produced approximately 8.4x requested bytes when every page is retained",
+    "bounded_window": "The production page state stayed at 77,946 requested bytes for 64 rows at both 10,000 and 100,000 total matches",
+    "domain_note": "The diagnostic full-state model totals 120,305,698 bytes at 100,000 rows. The bounded window stores one 64-row page at 77,946 bytes, a 99.935% reduction for these measured Rust state components. Scan records remain in the platform query workspace on disk and are reread through opaque cursors."
+  },
+  "limitations": [
+    "Requested Rust heap bytes only; excludes allocator overhead, SQLite/C, Bridge, Dart, Flutter, Metal, OS pages and WebKit.",
+    "The bounded number is Rust session state, not whole-App RSS or physical footprint; Dart and Flutter measurements are separate and remain pending.",
+    "Paging latency, temporary disk I/O, rapid navigation, 15-second restore and a 100k-row desktop interaction matrix are not established by this isolated allocator fixture."
+  ]
+}

@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../infrastructure/bridge_api.dart';
 import '../l10n/app_language.dart';
@@ -79,7 +79,9 @@ class _ActionShortcutsSectionState extends State<ActionShortcutsSection> {
       final row = _rowKeys[selected.actionId]?.currentContext;
       if (row != null) {
         Scrollable.ensureVisible(row,
-            alignment: 0.2, duration: const Duration(milliseconds: 120));
+            alignment: 0.2,
+            duration:
+                AppStyle.motionDuration(const Duration(milliseconds: 120)));
       }
     });
   }
@@ -121,19 +123,19 @@ class _ActionShortcutsSectionState extends State<ActionShortcutsSection> {
                             Text(_bindingTitle(context, binding),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 13, color: AppStyle.primary)),
                             Text(
                                 binding.global
                                     ? context.l10n.globalWorksFromOtherApps
                                     : context.l10n.whileAnywhereIsOpen,
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 11, color: AppStyle.muted)),
                             if (binding.isIntent)
                               Text(
                                   context.l10n
                                       .contextRulesCount(binding.routes.length),
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontSize: 11, color: AppStyle.muted)),
                             if (!binding.isIntent &&
                                 !widget.controller
@@ -150,7 +152,7 @@ class _ActionShortcutsSectionState extends State<ActionShortcutsSection> {
                                       ? context
                                           .l10n.actionsUnavailableShortcutPaused
                                       : context.l10n.someRulesAreUnavailable,
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                       fontSize: 11, color: AppStyle.warning)),
                             if (!binding.isIntent &&
                                 widget.controller
@@ -181,8 +183,7 @@ class _ActionShortcutsSectionState extends State<ActionShortcutsSection> {
                                       .where(
                                           (b) => b.actionId != binding.actionId)
                                       .toList())),
-                          icon: const Icon(AppIcons.delete,
-                              color: AppStyle.muted)),
+                          icon: Icon(AppIcons.delete, color: AppStyle.muted)),
                     ])),
               Padding(
                   padding: const EdgeInsets.all(12),
@@ -326,8 +327,8 @@ class _ShortcutDialogState extends State<_ShortcutDialog> {
                               .map((type) =>
                                   contextTypeLabel(type, context.l10n))
                               .join(' · '),
-                          style: const TextStyle(
-                              fontSize: 11, color: AppStyle.muted)),
+                          style:
+                              TextStyle(fontSize: 11, color: AppStyle.muted)),
                       if (_action!.contextTypes.isEmpty)
                         Text(context.l10n.notDetectedInTheLastContextThe,
                             style:
@@ -383,7 +384,7 @@ class _ShortcutDialogState extends State<_ShortcutDialog> {
                         Padding(
                             padding: const EdgeInsets.only(top: 10),
                             child: Text(_error!,
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 12, color: AppStyle.warning))),
                       if (widget.existing == null)
                         TextButton(

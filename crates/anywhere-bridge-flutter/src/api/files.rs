@@ -36,6 +36,17 @@ pub(super) async fn load_more_files(
         .map(Into::into))
 }
 
+pub(super) async fn load_file_page(
+    session_id: u32,
+    revision: u32,
+    cursor: String,
+) -> Result<Option<LauncherStateDto>> {
+    Ok(application()?
+        .load_file_page(session_id, revision, cursor)
+        .await?
+        .map(Into::into))
+}
+
 pub(super) fn freeze_file_results(session_id: u32, revision: u32) -> Result<()> {
     application()?.freeze_file_results(session_id, revision)
 }

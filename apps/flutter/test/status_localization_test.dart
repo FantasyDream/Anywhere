@@ -6,8 +6,8 @@ import 'package:anywhere/l10n/clipboard_labels.dart';
 import 'package:anywhere/settings/clipboard_settings_controller.dart';
 import 'package:anywhere/settings/clipboard_settings_section.dart';
 import 'package:anywhere/ui/app_style.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'support/clipboard_fixtures.dart';
 

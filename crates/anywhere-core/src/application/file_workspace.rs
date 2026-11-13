@@ -99,9 +99,7 @@ impl Application {
             }
             session.resolution.file_search = None;
             session.resolution.file_results_frozen = false;
-            session
-                .resolution
-                .search_candidates
+            std::sync::Arc::make_mut(&mut session.resolution.search_candidates)
                 .retain(|c| !crate::features::filesystem::search::is_search_target(c));
             session
                 .resolution
@@ -111,6 +109,7 @@ impl Application {
                 .execution
                 .candidates
                 .retain(|_, c| !crate::features::filesystem::search::is_search_target(c));
+            session.execution.file_candidate_indices.clear();
             session.note_snapshot_inputs();
             session.state.session_id
         };
@@ -129,43 +128,65 @@ impl Application {
         Ok(())
     }
 
-    /// Append unseen targets from query-local storage without replacing displayed rows.
+    /// Read the page immediately after the current file-search window.
     pub async fn load_more_files(
         &self,
         session_id: SessionId,
         revision: Revision,
+    ) -> Result<Option<LauncherState>> {
+        let cursor = {
+            let session = self.session()?;
+            if !self.resolver.is_current(session_id, revision)
+                || session.input_mode != InputMode::FileSearch
+            {
+                bail!("file search expired");
+            }
+            session
+                .resolution
+                .file_search
+                .as_ref()
+                .and_then(|progress| progress.next_cursor.clone())
+        };
+        let Some(cursor) = cursor else {
+            return Ok(self.latest_state(session_id));
+        };
+        self.load_file_page(session_id, revision, cursor).await
+    }
+
+    /// Replace the retained window with an opaque, query-bound result page.
+    ///
+    /// The scan store remains the source of truth. Only this page becomes part
+    /// of the execution table and Flutter snapshot, so visited pages cannot
+    /// grow session memory without a bound.
+    pub async fn load_file_page(
+        &self,
+        session_id: SessionId,
+        revision: Revision,
+        cursor: String,
     ) -> Result<Option<LauncherState>> {
         let generation = self
             .file_search_policy
             .read()
             .map_err(|_| anyhow::anyhow!("search settings unavailable"))?
             .generation;
-        let (query_id, displayed) = {
-            let mut session = self.session()?;
+        let query_id = {
+            let session = self.session()?;
             if !self.resolver.is_current(session_id, revision)
                 || session.input_mode != InputMode::FileSearch
             {
                 bail!("file search expired");
             }
-            let query_id = session
+            session
                 .resolution
                 .file_search
                 .as_ref()
                 .ok_or_else(|| anyhow::anyhow!("file search not ready"))?
-                .query_id;
-            session.resolution.file_results_frozen = true;
-            let displayed = session
-                .resolution
-                .search_candidates
-                .iter()
-                .filter_map(|candidate| candidate.context()?.value.path().map(PathBuf::from))
-                .collect();
-            (query_id, displayed)
+                .query_id
         };
         let ticket = self.resolver.execution(session_id, revision);
         let batch = self
             .file_search_source
-            .more(query_id, displayed, ticket.clone())
+            .page(query_id, cursor, ticket.clone())
             .await?;
         if !ticket.is_current() {
             return Ok(None);
@@ -178,7 +199,7 @@ impl Application {
             revision,
             SourcePublication {
                 id: "files",
-                append_results: true,
+                kind: FilePublication::Page,
             },
             batch,
         );
@@ -186,9 +207,15 @@ impl Application {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FilePublication {
+    LatestHead,
+    Page,
+}
+
 struct SourcePublication<'a> {
     id: &'a str,
-    append_results: bool,
+    kind: FilePublication,
 }
 
 fn commit_file_batch(
@@ -200,10 +227,7 @@ fn commit_file_batch(
     publication: SourcePublication<'_>,
     mut batch: crate::core::search::candidate_source::AsyncCandidateBatch,
 ) {
-    let SourcePublication {
-        id: source,
-        append_results,
-    } = publication;
+    let SourcePublication { id: source, kind } = publication;
     let mut file_search = batch
         .metadata::<anywhere_protocol::FileSearchProgress>()
         .cloned();
@@ -226,32 +250,31 @@ fn commit_file_batch(
         {
             return;
         }
-        // Appends and their publication share the policy/session lock.
-        // A scan update arriving during disk reading must not undo user navigation.
-        if append_results {
-            if let (Some(old), Some(new)) = (&session.resolution.file_search, &mut file_search) {
-                if old.query_id != new.query_id {
-                    return;
-                }
-                if old.scanned_entries > new.scanned_entries
-                    || old.confirmed_matches > new.confirmed_matches
-                    || (old.finished && !new.finished)
-                {
-                    new.needs_refresh = true;
-                    new.scanned_entries = old.scanned_entries;
-                    new.confirmed_matches = old.confirmed_matches;
-                    new.finished = old.finished;
-                    new.issue_count = old.issue_count;
-                    new.inaccessible_count = old.inaccessible_count;
-                    new.issue_examples = old.issue_examples.clone();
-                    batch.state = if !new.finished {
-                        SearchSourceState::Loading
-                    } else if new.issue_count > 0 {
-                        SearchSourceState::Partial
-                    } else {
-                        SearchSourceState::Ready
-                    };
-                }
+        // Page reads and their publication share the policy/session lock.
+        // A scan progress update arriving during disk reading must not undo
+        // user navigation or claim older coverage.
+        if let (Some(old), Some(new)) = (&session.resolution.file_search, &mut file_search) {
+            if old.query_id != new.query_id {
+                return;
+            }
+            if old.scanned_entries > new.scanned_entries
+                || old.confirmed_matches > new.confirmed_matches
+                || (old.finished && !new.finished)
+            {
+                new.needs_refresh = true;
+                new.scanned_entries = old.scanned_entries;
+                new.confirmed_matches = old.confirmed_matches;
+                new.finished = old.finished;
+                new.issue_count = old.issue_count;
+                new.inaccessible_count = old.inaccessible_count;
+                new.issue_examples = old.issue_examples.clone();
+                batch.state = if !new.finished {
+                    SearchSourceState::Loading
+                } else if new.issue_count > 0 {
+                    SearchSourceState::Partial
+                } else {
+                    SearchSourceState::Ready
+                };
             }
         }
         if batch.state == SearchSourceState::Unavailable && file_search.is_none() {
@@ -266,7 +289,7 @@ fn commit_file_batch(
                 }
                 file_search = Some(progress);
                 batch.state = SearchSourceState::Partial;
-                batch.candidates = session.resolution.search_candidates.clone();
+                batch.candidates = session.resolution.search_candidates.to_vec();
             }
         }
         if let (Some(old), Some(new)) = (&session.resolution.file_search, &file_search) {
@@ -278,23 +301,9 @@ fn commit_file_batch(
             }
         }
         let frozen = session.resolution.file_results_frozen;
-        let prior_rows = session.resolution.search_candidates.len();
-        if append_results {
-            let mut displayed: std::collections::HashSet<_> = session
-                .resolution
-                .search_candidates
-                .iter()
-                .filter_map(|c| c.context()?.value.path().map(PathBuf::from))
-                .collect();
-            session
-                .resolution
-                .search_candidates
-                .extend(batch.candidates.into_iter().filter(|c| {
-                    c.context()
-                        .and_then(|context| context.value.path())
-                        .is_some_and(|path| displayed.insert(path.to_owned()))
-                }));
-        } else if frozen {
+        let committed = session.resolution.committed_revision == Some(revision);
+        let replace_window = kind == FilePublication::Page || !frozen;
+        if !replace_window {
             if let (Some(old), Some(new)) = (&session.resolution.file_search, &mut file_search) {
                 new.next_cursor = old.next_cursor.clone();
                 new.previous_cursor = old.previous_cursor.clone();
@@ -302,30 +311,6 @@ fn commit_file_batch(
                 new.needs_refresh = old.needs_refresh
                     || new.confirmed_matches != old.confirmed_matches
                     || new.finished != old.finished;
-            }
-        } else {
-            // Once visible, rows keep their position for this revision. Initial
-            // batches may improve ranking, but only unseen targets are appended.
-            // Automatic head growth remains bounded; more() reaches all matches.
-            let mut displayed: std::collections::HashSet<_> = session
-                .resolution
-                .search_candidates
-                .iter()
-                .filter_map(|c| c.context()?.value.path().map(PathBuf::from))
-                .collect();
-            for candidate in batch.candidates {
-                if session.resolution.search_candidates.len()
-                    >= crate::features::filesystem::scan::PAGE_SIZE
-                {
-                    break;
-                }
-                if candidate
-                    .context()
-                    .and_then(|c| c.value.path())
-                    .is_some_and(|path| displayed.insert(path.to_owned()))
-                {
-                    session.resolution.search_candidates.push(candidate);
-                }
             }
         }
         if file_search.is_some() {
@@ -339,35 +324,52 @@ fn commit_file_batch(
         {
             s.state = batch.state;
         }
-        if append_results {
-            session.resolution.file_results_frozen = true;
-        }
-        session.note_snapshot_inputs();
-        let committed = session.resolution.committed_revision == Some(revision);
-        if committed
-            && (frozen || append_results)
-            && session.execution.action_catalog_version == Some(resolver.catalog.version())
-        {
-            if append_results {
-                // Revalidate only the new offers; existing rows retain the same
-                // definition/Revision credentials. Catalog changes take the full path.
+        if replace_window {
+            let mut rows = unseen_file_candidates(
+                &[],
+                std::mem::take(&mut batch.candidates),
+                crate::features::filesystem::scan::PAGE_SIZE,
+            );
+            if committed
+                && session.execution.action_catalog_version == Some(resolver.catalog.version())
+            {
                 let registry = session.actions.clone();
                 let facts = session.facts();
                 let catalog = resolver.catalog.version();
-                let mut rows = session.resolution.search_candidates[prior_rows..].to_vec();
                 super::snapshot::validate_ready_candidates(&mut rows, &registry, &facts);
                 for row in &mut rows {
                     if catalog > 1 {
                         row.presentation.id.push_str(&format!(":catalog:{catalog}"));
                     }
                 }
-                std::sync::Arc::make_mut(&mut session.state.candidates)
-                    .extend(rows.iter().map(|c| c.presentation.clone()));
-                session.execution.candidates.extend(
-                    rows.into_iter()
-                        .map(|c| (c.presentation.id.clone().into(), c)),
-                );
             }
+            let rows = std::sync::Arc::new(rows);
+            let presentations = std::sync::Arc::new(
+                rows.iter()
+                    .map(|candidate| candidate.presentation.clone())
+                    .collect::<Vec<_>>(),
+            );
+            let rows_changed = *session.state.candidates != *presentations;
+            session.resolution.search_candidates = rows.clone();
+            session.execution.file_candidate_indices = rows
+                .iter()
+                .enumerate()
+                .map(|(index, candidate)| (candidate.presentation.id.clone().into(), index))
+                .collect();
+            if rows_changed {
+                session.state.candidates = presentations;
+                session.state.candidate_list_version =
+                    session.state.candidate_list_version.saturating_add(1);
+            }
+        }
+        if kind == FilePublication::Page {
+            session.resolution.file_results_frozen = true;
+        }
+        session.note_snapshot_inputs();
+        if committed
+            && (frozen || kind == FilePublication::Page)
+            && session.execution.action_catalog_version == Some(resolver.catalog.version())
+        {
             // Metadata updates retain the immutable rows and execution map.
             session.resolution.snapshot_seq = session.resolution.snapshot_seq.saturating_add(1);
             session.state.snapshot_seq = session.resolution.snapshot_seq;
@@ -471,7 +473,7 @@ impl Application {
                         revision,
                         SourcePublication {
                             id,
-                            append_results: false,
+                            kind: FilePublication::LatestHead,
                         },
                         batch,
                     )
@@ -479,6 +481,41 @@ impl Application {
             );
         }
     }
+}
+
+/// Deduplicate against borrowed paths first. This avoids allocating a PathBuf
+/// copy for every already displayed candidate on each progress publication.
+fn unseen_file_candidates(
+    displayed: &[crate::core::search::candidate::Candidate],
+    incoming: Vec<crate::core::search::candidate::Candidate>,
+    maximum_rows: usize,
+) -> Vec<crate::core::search::candidate::Candidate> {
+    use std::path::Path;
+    let mut paths: std::collections::HashSet<&Path> = displayed
+        .iter()
+        .filter_map(|candidate| candidate.context()?.value.path())
+        .collect();
+    let mut keep = Vec::with_capacity(incoming.len());
+    let mut accepted = 0usize;
+    for candidate in &incoming {
+        if displayed.len() + accepted >= maximum_rows {
+            break;
+        }
+        let unseen = candidate
+            .context()
+            .and_then(|context| context.value.path())
+            .is_some_and(|path| paths.insert(path));
+        keep.push(unseen);
+        if unseen {
+            accepted += 1;
+        }
+    }
+    drop(paths);
+    incoming
+        .into_iter()
+        .zip(keep)
+        .filter_map(|(candidate, keep)| keep.then_some(candidate))
+        .collect()
 }
 
 #[cfg(test)]
@@ -526,7 +563,7 @@ mod progress_tests {
                     0,
                     SourcePublication {
                         id: "files",
-                        append_results: false,
+                        kind: FilePublication::LatestHead,
                     },
                     crate::core::search::candidate_source::AsyncCandidateBatch {
                         update: crate::core::search::candidate_source::BatchUpdate::Replace,

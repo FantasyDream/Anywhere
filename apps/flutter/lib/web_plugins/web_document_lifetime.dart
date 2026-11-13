@@ -46,6 +46,21 @@ class WebDocumentLifetime {
     if (document != null) await _close(document);
   }
 
+  /// Reload/resume binds the next epoch before releasing the prior document.
+  /// Closing first removes the whole Host invocation, so the replacement can no
+  /// longer attach. A newer generation still rejects and closes a late binding.
+  Future<WebDocumentDto?> openAndAccept(
+    int generation,
+    Future<WebDocumentDto> Function() open, {
+    required bool interactive,
+  }) async {
+    if (!current(generation)) return null;
+    final document = await open();
+    return await accept(document, generation, interactive: interactive)
+        ? document
+        : null;
+  }
+
   Future<void> dispose() async {
     _disposed = true;
     invalidate();

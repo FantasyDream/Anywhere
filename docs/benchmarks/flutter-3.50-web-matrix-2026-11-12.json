@@ -1,0 +1,222 @@
+{
+  "date": "2026-11-12",
+  "base_commit": "81c523cdb95031ac00cfcdc25360eefb48f85b21",
+  "branch": "codex/flutter-3-50-memory",
+  "scope": "P6 near-limit local Web documents, repeated reload, cross-plugin replacement, and close-time helper/object reclamation on an isolated macOS Release app",
+  "system": {
+    "name": "macOS",
+    "version": "27.2.1",
+    "build": "26B131",
+    "architecture": "arm64",
+    "machine": "Apple M5",
+    "display": "one online 2560 x 1440 display in a 5120 x 2880 backing mode"
+  },
+  "app": {
+    "version": "0.14.0+46",
+    "flutter": "3.50.0",
+    "framework_revision": "ab2912035e160d9cad6306df307576da6128ebdb",
+    "engine_revision": "371f77202a73e8dff57a8b3bff75bca55c090aee",
+    "isolated_bundle_id": "dev.anywhere.launcher.p6matrix2fixed2.20261112",
+    "isolated_data_directory": true,
+    "tested_external_attributes": true,
+    "sha256": {
+      "Contents/MacOS/Anywhere": "12025fa2904e02c1b2a2f5adfc1ca56451089a1eeb87c6c5bd24e47dbe5c8c41",
+      "Contents/Frameworks/App.framework/Versions/A/App": "4844c7f893f44aa33137ce661d9a1b073ab6e5881ce4823f6874d3c0893e01a6",
+      "Contents/Frameworks/FlutterMacOS.framework/Versions/A/FlutterMacOS": "22bc4cca501dd0958da13c29ee955e49910f5c38cb328eebf43bf26f425cf589",
+      "Contents/Frameworks/libanywhere_bridge_flutter.dylib": "d059a407b0701028456fb0bae4661007d99ba2f4c5c2700ea9a8de2caefbb278"
+    }
+  },
+  "installed_packages": {
+    "dev.anywhere.json-workspace": {
+      "version": "0.7.1",
+      "content_digest": "fbe77e3ba0e52c1f3ed4e89b98c7a97d9dbfb34c02f48994e421f2584baa13ec"
+    },
+    "dev.example.text-pad": {
+      "version": "1.1.1",
+      "content_digest": "f9e91b3ce43454dee23ec8c139652edde673c0bc7fd20e798766fb4b27c038fd",
+      "functional_caveat": "the page and large editor rendered, but the bridge displayed INACTIVE in this run"
+    }
+  },
+  "fixtures": {
+    "json": {
+      "input_bytes": 1046501,
+      "dense_json_bytes": 91001,
+      "trailing_json_whitespace_bytes": 955500,
+      "array_elements": 45500,
+      "parsed_nodes": 45501,
+      "formatted_result_bytes": 227502,
+      "within_product_limits": true
+    },
+    "text_pad": {
+      "characters": 999928,
+      "encoding": "ASCII with explicit start/end sentinels",
+      "editor_limit_materialized": "host text bridge limit is 1 MiB; this fixture measured editor/WebKit cost, not a 1 MiB Host text transfer"
+    }
+  },
+  "large_json_open": {
+    "result": "pass",
+    "observed": "1,046,501 bytes entered; automatic formatting and JavaScript evaluation produced 227,502 bytes from 45,501 JSON nodes",
+    "main_rss_mib": [
+      111.25,
+      102.22,
+      102.53,
+      102.52,
+      102.52
+    ],
+    "physical_footprint_mib": {
+      "initial": 93.5,
+      "final": 93.6,
+      "vmmap_context_peak": 191.0
+    },
+    "web_helpers_rss_mib": {
+      "WebContent": {
+        "min": 262.05,
+        "max": 278.19,
+        "last": 262.05
+      },
+      "GPU": {
+        "min": 17.83,
+        "max": 22.11,
+        "last": 17.83
+      },
+      "Networking": {
+        "min": 2.33,
+        "max": 4.17,
+        "last": 2.33
+      }
+    },
+    "main_process_objects": {
+      "FlutterEngine": 1,
+      "FlutterViewController": 1,
+      "WKWebsiteDataStore": 1,
+      "WKUserContentController": 1,
+      "AppearanceHost": 1,
+      "MemoryPressureHost": 1
+    },
+    "evidence": [
+      "build/acceptance-flutter-350-p6-matrix2-20261112/json-large-open-fixed-process.json",
+      "build/acceptance-flutter-350-p6-matrix2-20261112/json-large-open-fixed-heap.txt",
+      "build/acceptance-flutter-350-p6-matrix2-20261112/json-large-open-fixed-vmmap.txt"
+    ]
+  },
+  "reload_matrix": {
+    "result": "pass after the production lifetime fix",
+    "reloads": 5,
+    "large_payloads_loaded": 5,
+    "new_origin_each_reload": true,
+    "error_after_reload": false,
+    "origins": [
+      "anywhere-plugin://ddc67ca4d0d3037ae9b539303a70eaf69e535c347ae640ddd5ef11fddaf5e3ba.plugin.local/dist/index.html",
+      "anywhere-plugin://30784ae060d061515efae210e9f2703863514e49ccde32cf15cc1f0b0c35d02c.plugin.local/dist/index.html",
+      "anywhere-plugin://8d4ee119cbf947990285cfc52993a778f14269cfe0b27fc0a1646511092c2f80.plugin.local/dist/index.html",
+      "anywhere-plugin://557fe0b5d6b76047009c589f1e2eca9340de6ebd2243e5a3e37a07b04e759419.plugin.local/dist/index.html",
+      "anywhere-plugin://50a1eb8d98c0a7c3a56e24cbf392395160cd0c2466e57b2b64532cce97dbb0f5.plugin.local/dist/index.html"
+    ],
+    "first_failed_attempt": "before the lifetime fix, closeCurrent ran before rebind and removed the whole invocation; the UI showed the tool as unavailable on every reload",
+    "fix": "WebDocumentLifetime.openAndAccept binds the next epoch first, then closes the prior document; a stale generation closes a late binding without replacing the current one",
+    "after_five_reloads_blank": {
+      "main_rss_mib": [
+        117.02,
+        117.02,
+        117.08,
+        117.08,
+        117.06
+      ],
+      "physical_footprint_mib": {
+        "initial": 96.5,
+        "final": 96.6
+      },
+      "web_helpers_rss_mib": {
+        "WebContent": 49.1,
+        "GPU": 23.7,
+        "Networking": 4.81
+      },
+      "interpretation": "one blank Web document remains open; WebContent and GPU retain process high-water memory after the large documents"
+    },
+    "evidence": [
+      "build/acceptance-flutter-350-p6-matrix2-20261112/json-after-five-reloads-process.json",
+      "build/acceptance-flutter-350-p6-matrix2-20261112/json-after-five-reloads-heap.txt"
+    ]
+  },
+  "cross_plugin": {
+    "json_to_text_pad": "pass for closing JSON Workspace, preserving the search scope, and mounting Text Pad; the Text Pad bridge displayed INACTIVE while its DOM editor still accepted the near-1 MiB fixture",
+    "text_pad_large_open": {
+      "main_rss_mib": [
+        89.58,
+        89.13,
+        90.83,
+        90.78,
+        90.80,
+        90.80
+      ],
+      "physical_footprint_mib": {
+        "initial": 88.0,
+        "final": 88.0
+      },
+      "web_helpers_rss_mib": {
+        "WebContent": {
+          "min": 47.63,
+          "max": 47.75
+        },
+        "GPU": {
+          "min": 15.69,
+          "max": 16.23
+        },
+        "Networking": 5.06
+      }
+    },
+    "text_pad_large_close": {
+      "main_rss_mib": [
+        97.52,
+        97.64,
+        97.75,
+        97.92,
+        98.06,
+        91.78
+      ],
+      "physical_footprint_mib": {
+        "initial": 129.8,
+        "final": 124.6,
+        "note": "heap sampling preceded these footprint values and can perturb them"
+      },
+      "helpers_remaining": {
+        "WebContent": 0,
+        "Networking": 0,
+        "GPU": 8.97
+      },
+      "main_process_objects": {
+        "FlutterEngine": 1,
+        "FlutterViewController": 1,
+        "WKWebsiteDataStore": 0,
+        "WKUserContentController": 1
+      },
+      "diagnostics_after_close": {
+        "web_document_count": 0,
+        "native_web_view_count": 0,
+        "native_user_content_controller_count": 0,
+        "native_website_data_store_count": 0,
+        "flutter_engine_count": 1
+      }
+    },
+    "evidence": [
+      "build/acceptance-flutter-350-p6-matrix2-20261112/textpad-large-open-fixed-process.json",
+      "build/acceptance-flutter-350-p6-matrix2-20261112/textpad-large-closed-fixed-process.json",
+      "build/acceptance-flutter-350-p6-matrix2-20261112/textpad-large-closed-fixed-heap.txt",
+      "build/acceptance-flutter-350-p6-matrix2-20261112/data/launcher.log"
+    ]
+  },
+  "sdk_startup_fix": {
+    "problem": "a caller that subscribed immediately after definePlugin could emit state.subscribe concurrently with lifecycle.ready",
+    "change": "definePlugin registers early subscriptions synchronously but binds them only after ready succeeds; hidden registration still throws INACTIVE",
+    "tests": "plugin SDK 51 passed, including early-subscription ordering and hidden-registration rejection",
+    "gui_retest": "pending because macOS locked during the final package update; source and package tests passed, but this is not counted as a completed WebKit functional retest"
+  },
+  "limitations": [
+    "RSS and Physical footprint are separate accounting systems; helper RSS is not added to main footprint as an exact application total.",
+    "The JSON fixture is local, ASCII, single-document, and within the hard 1 MiB/50k-node budgets; large Unicode, nested trees, multiple simultaneous WebViews, remote resources, and network failure are not covered.",
+    "Heap sampling perturbs later footprint samples; high-water values are not a leak proof or a pre/post optimization percentage.",
+    "WebContent memory rises sharply for a near-limit JSON document, showing that Host transfer limits do not cap WebKit parser, text editor, DOM, formatting, and JavaScript-engine copies.",
+    "The Text Pad bridge displayed INACTIVE while its DOM editor remained usable. The SDK startup-order fix was built and unit-tested after this run but still needs a final packaged App/WebKit retest.",
+    "Only one 2560 x 1440 display was attached, so multi-display and display-scale transitions were not exercised."
+  ]
+}

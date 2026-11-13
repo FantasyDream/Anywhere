@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../infrastructure/bridge_api.dart';
 import '../../infrastructure/desktop_environment.dart';
@@ -253,8 +253,7 @@ class _ClipboardHistoryPageState extends State<ClipboardHistoryPage> {
       child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(AppIcons.history,
-                size: 30, color: DesignTokens.iconPurple),
+            Icon(AppIcons.history, size: 30, color: AppStyle.iconPurple),
             const SizedBox(height: 12),
             Text(
                 session.loading

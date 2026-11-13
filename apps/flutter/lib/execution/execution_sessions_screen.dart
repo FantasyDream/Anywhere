@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../infrastructure/tool_window_lifecycle.dart';
 import '../l10n/app_language.dart';
@@ -78,9 +78,9 @@ class _ExecutionSessionsAppState extends State<ExecutionSessionsApp> {
   @override
   Widget build(BuildContext context) => LocalizedApp(
         debugShowCheckedModeBanner: false,
-        theme: AppStyle.theme,
+        themeBuilder: () => AppStyle.theme,
         builder: AppStyle.windowBuilder,
-        home: ListenableBuilder(
+        homeBuilder: () => ListenableBuilder(
           listenable: controller,
           builder: (context, _) => ExecutionSessionsView(
               key: _viewKey,

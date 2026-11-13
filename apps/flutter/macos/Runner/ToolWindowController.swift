@@ -8,7 +8,9 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
   private(set) var controller: FlutterViewController?
   private var channel: FlutterMethodChannel?
   private var previewHost: NativePreviewHost?
+  private var memoryPressureHost: MemoryPressureHost?
   private var ready = false
+  private var appearanceHost: AppearanceHost?
   private var localeHost: LocaleHost?
   private let entrypoint: String
   private let channelName: String
@@ -80,6 +82,9 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
     if window == nil {
       let view = FlutterViewController(project: FlutterDartProject())
       localeHost = LocaleHost(messenger: view.engine.binaryMessenger)
+      memoryPressureHost = MemoryPressureHost(
+        messenger: view.engine.binaryMessenger
+      )
       let transport = FlutterMethodChannel(
         name: channelName,
         binaryMessenger: view.engine.binaryMessenger
@@ -123,6 +128,7 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
       guard view.engine.run(withEntrypoint: entrypoint) else {
         transport.setMethodCallHandler(nil)
         localeHost = nil
+        memoryPressureHost = nil
         FlutterEngineLifecycle.detach(view)
         return false
       }
@@ -141,7 +147,6 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
       panel.title = title()
       panel.titleVisibility = .hidden
       panel.titlebarAppearsTransparent = true
-      panel.appearance = NSAppearance(named: .darkAqua)
       panel.level = .floating
       panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
       panel.backgroundColor = .clear
@@ -150,10 +155,16 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
       panel.isReleasedWhenClosed = false
       panel.delegate = self
       view.backgroundColor = .clear
-      panel.contentViewController = WindowMaterialController(
+      let materialHost = WindowMaterialController(
         contentController: view,
         frame: NSRect(origin: .zero, size: size),
         cornerRadius: 0
+      )
+      panel.contentViewController = materialHost
+      appearanceHost = AppearanceHost(
+        messenger: view.engine.binaryMessenger,
+        window: panel,
+        material: materialHost.material
       )
       panel.setContentSize(size)
       window = panel
@@ -173,6 +184,7 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
       )
     }
     window?.makeKeyAndOrderFront(nil)
+    appearanceHost?.publishIfChanged()
     if let window, let content = controller?.view {
       WindowInputFocus.restore(in: window, content: content)
     }
@@ -192,7 +204,10 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
     publishVisibility()
   }
   func windowDidDeminiaturize(_ notification: Notification) { publishVisibility() }
-  func applicationVisibilityChanged() { publishVisibility() }
+  func applicationVisibilityChanged() {
+    publishVisibility()
+    if isVisible { appearanceHost?.publishIfChanged() }
+  }
 
   func windowShouldClose(_ sender: NSWindow) -> Bool {
     guard sender === window, ready, let channel else { return true }
@@ -211,6 +226,8 @@ final class ToolWindowController: NSObject, NSWindowDelegate {
     channel?.invokeMethod("visibility", arguments: false)
     channel?.setMethodCallHandler(nil)
     localeHost = nil
+    memoryPressureHost = nil
+    appearanceHost = nil
     (window?.contentViewController as? WindowMaterialController)?.detachContent()
     FlutterEngineLifecycle.detach(controller)
     window?.contentViewController = nil

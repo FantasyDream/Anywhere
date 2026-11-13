@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'app_style.dart';
 
 /// Transparent object glyph plus a small operation/type mark. Marks convey
@@ -49,10 +49,10 @@ class SemanticIcon extends StatelessWidget {
                                         fontSize: (size * .25).clamp(7.5, 11),
                                         height: 1.05,
                                         fontWeight: FontWeight.w800,
-                                        color: DesignTokens.iconBadgeInk))
+                                        color: AppStyle.iconBadgeInk))
                                 : Icon(mark,
                                     size: (size * .3).clamp(8, 14),
-                                    color: DesignTokens.iconBadgeInk)))),
+                                    color: AppStyle.iconBadgeInk)))),
             ])));
   }
 }
