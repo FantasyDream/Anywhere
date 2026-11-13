@@ -1,4 +1,4 @@
-import 'package:flutter/cupertino.dart';
+import 'package:cupertino_ui/cupertino_ui.dart';
 
 /// One bundled, platform-independent Cupertino font. Navigation keeps simple
 /// strokes; objects and states use stronger silhouettes at small sizes.

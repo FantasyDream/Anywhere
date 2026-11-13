@@ -1,0 +1,81 @@
+{
+  "date": "2026-11-12",
+  "base_commit": "81c523cdb95031ac00cfcdc25360eefb48f85b21",
+  "branch": "codex/flutter-3-50-memory",
+  "app_version": "0.14.0+46",
+  "architecture": "arm64",
+  "flutter": "3.50.0",
+  "system": {
+    "name": "macOS",
+    "version": "27.2.1",
+    "build": "26B131"
+  },
+  "fixture": {
+    "files": 100000,
+    "directory": "build/p2-gui-fixture/files",
+    "names": "report-000000.txt through report-099999.txt",
+    "data_directory": "build/p2-gui-fixture/data",
+    "search_scope": "the synthetic directory only",
+    "capture_sources": "Finder, selected text, browser page and clipboard disabled"
+  },
+  "result": "pass for the exercised 100k first-page, next-page and previous-page path",
+  "ui_flow": [
+    {
+      "step": "complete search",
+      "observed": "100000 results reported complete; first visible row report-000000.txt"
+    },
+    {
+      "step": "scroll past the first 64-row page",
+      "observed": "window changed to report-000064.txt; no duplication or full-list transfer"
+    },
+    {
+      "step": "Down then Up at the page boundary",
+      "observed": "the previous page was re-read and report-000063.txt became the selected last row"
+    },
+    {
+      "step": "focus TextEdit and wake within 15 seconds",
+      "observed": "report query, 100000-result count, first-page window and report-000063.txt selection were restored"
+    }
+  ],
+  "diagnostics": {
+    "operation": "file_query",
+    "elapsed_us": 282780,
+    "rows": 64,
+    "candidate_count": 64,
+    "candidate_chunk_count": 1,
+    "candidate_transfer_batches": 6,
+    "candidate_transfer_rows_total": 132,
+    "candidate_transfer_rows_last": 64,
+    "candidate_transfer_kind_last": 1,
+    "flutter_engines": 1,
+    "web_documents": 0,
+    "native_web_views": 0
+  },
+  "resources": {
+    "main_rss_kib_samples": [115200, 97040, 70064],
+    "physical_footprint_mib_samples": [130.4, 136.1, 136.2, 122.9],
+    "physical_footprint_peak_mib": 180.1,
+    "flutter_engine_count": 1,
+    "flutter_view_controller_count": 1,
+    "note": "RSS, footprint and peak were sampled after the full synthetic scan and page navigation; vmmap and heap sampling can perturb later footprint values."
+  },
+  "bundle_sha256": {
+    "Contents/MacOS/Anywhere": "fde78b0b1c19ecf5eb2db8598aaacf3a2009b22ba734aad7b15417b3f915e2ba",
+    "Contents/Frameworks/libanywhere_bridge_flutter.dylib": "466e9b64907b549ac6037af0f031fd81aa1fd955f9446b9ef0f20e559eb3dc17"
+  },
+  "evidence": {
+    "launcher_log": "build/acceptance-flutter-350-p2-20261112/launcher.log",
+    "ps": "build/acceptance-flutter-350-p2-20261112/ps.txt",
+    "ps_after_restore": "build/acceptance-flutter-350-p2-20261112/ps-after-restore.txt",
+    "vmmap": "build/acceptance-flutter-350-p2-20261112/vmmap-summary.txt",
+    "vmmap_after_restore": "build/acceptance-flutter-350-p2-20261112/vmmap-after-restore.txt",
+    "heap": "build/acceptance-flutter-350-p2-20261112/heap-no-content.txt"
+  },
+  "limitations": [
+    "One isolated Release run; page-read p50 and p95 are not instrumented.",
+    "The full directory traversal and sorted result store create a temporary peak; current footprint is not total Rust or Dart state.",
+    "The synthetic files are empty and reside on one local APFS directory; cloud storage, permission errors, recycled results and Unicode-heavy paths are not included.",
+    "The run did not combine four page traversals with hide/show, rapid query replacement, preview, a Web document or multiple displays.",
+    "No matched pre-P2 build was run, so whole-App memory savings are not assigned as a percentage."
+  ]
+}

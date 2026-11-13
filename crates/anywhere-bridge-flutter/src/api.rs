@@ -205,6 +205,15 @@ pub async fn load_more_files(session_id: u32, revision: u32) -> Result<Option<La
     files::load_more_files(session_id, revision).await
 }
 
+/// Replace the visible file window with a query-bound page from Rust's store.
+pub async fn load_file_page(
+    session_id: u32,
+    revision: u32,
+    cursor: String,
+) -> Result<Option<LauncherStateDto>> {
+    files::load_file_page(session_id, revision, cursor).await
+}
+
 pub fn freeze_file_results(session_id: u32, revision: u32) -> Result<()> {
     files::freeze_file_results(session_id, revision)
 }

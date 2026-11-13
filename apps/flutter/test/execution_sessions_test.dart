@@ -8,9 +8,9 @@ import 'package:anywhere/execution/execution_sessions_view.dart';
 import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/infrastructure/desktop_environment.dart';
 import 'package:anywhere/ui/app_style.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 ExecutionSessionSummaryDto summary(String id,
         {ExecutionSessionStatusDto status = ExecutionSessionStatusDto.running,

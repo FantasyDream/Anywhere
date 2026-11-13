@@ -8,9 +8,9 @@ Global Search 输入 `files` / File Search / “文件搜索”，执行普通 A
 
 - 非空单字符即可搜索；文件 / 文件夹 / 文档 / PDF / 图片 / 音频 / 视频 / 压缩包 / 代码等类型在计数和保存前过滤。
 - Tab / Shift+Tab 切类型（兼容 Ctrl+Tab / Ctrl+Shift+Tab），↑ / ↓ 选择，Enter 打开，⌘K 打开对象操作。切换保留查询与输入焦点；中文组词期间不切换。
-- 结果是稳定的连续列表，没有分页按钮。已显示前缀不因晚到高分项重排；新查询、类型或范围变更重新取得结果。
-- 滚动或方向键在末尾按需追加；鼠标加载不改变选择与滚动位置。加载失败保留已有结果，可重试。
-- 查询和类型变化后默认不选中候选项；首次方向键选中第一项，再按空格预览。手动选择随结果追加保留。
+- 结果按 64 行有界窗口稳定呈现，没有显式分页按钮。导航后当前页不因晚到高分项重排；新查询、类型或范围变更重新取得首页。
+- 滚动或方向键越过页尾时读取下一页，越过页首时重读上一页；进入下一页选择首项并回到顶部，返回上一页选择末项并落到页尾。一次用户滚动只跨一页，失败保留当前页并可重试。
+- 查询和类型变化后默认不选中候选项；首次方向键选中第一项，再按空格预览。已访问页通过 cursor 可重读，不因 UI 只保留当前窗口而永久丢失。
 - 不保留固定预览区，选中行眼睛按钮或 macOS ⌘Y 打开系统预览；浏览结果后可用空格切换，查询中的空格和输入法保持原义。关闭保留查询和选择，详见 [系统预览](native-preview.md)。
 - 列表保留文件名、路径和类型图标；系统负责预览格式和显示效果，只有明确打开时才准备内容，不为每行生成缩略图。
 - 文件工具请求 920×600，Host 按屏幕约束；返回主页面恢复其宽度 / 高度逻辑。Esc 与父页面规则见 [Launcher 交互](launcher-interaction.md)。
@@ -42,7 +42,7 @@ macOS 授权搜索中，能解析且真实目标位于授权根内的符号链�
    ├─ 有界 Spotlight 快批 → 核验并显示早期候选
    └─ 输入稳定后完整遍历 → 查询临时记录
                               → 外部排序 / 未读尾部归并
-                              → 按批次追加到稳定列表
+                              → 按 cursor 读取 64 行稳定窗口
 ```
 
 Spotlight 返回多少、是否失败都不决定是否遍历。旧 Ripgrep / Combined 枚举和诊断入口只用于兼容，不是生产 UI 的引擎选择。
@@ -53,13 +53,13 @@ Spotlight 返回多少、是否失败都不决定是否遍历。旧 Ripgrep / Co
 | `features/filesystem/scan.rs` | ScanStore 查询寿命、取消、临时工作区及既有扫描入口 |
 | `features/filesystem/scan/query.rs` / `scope.rs` | 名称匹配 / 稳定顺序；ScanScope 持有范围配置、显式路径与索引候选核验 |
 | `features/filesystem/scan/record.rs` / `traversal.rs` | 有界原始路径记录格式；磁盘 FIFO 遍历与 flush 后发布 |
-| `features/filesystem/scan/progress.rs` / `pagination.rs` | 有界诊断、已提交边界；兼容游标与连续批次交付 |
+| `features/filesystem/scan/progress.rs` / `pagination.rs` | 有界诊断、已提交边界、前后页 cursor 与稳定窗口重读 |
 | `features/filesystem/result_store.rs` | 有界外部排序、未读尾部归并、失败重建 |
 | `application/source_runtime.rs` | 通用异步来源 admission、取消、批次与版本校验 |
-| `application/file_workspace.rs` | 文件配置、进度、冻结与原子稳定追加 |
+| `application/file_workspace.rs` | 文件配置、进度、冻结、页面替换和 query-bound cursor 校验 |
 | `application/object_actions.rs` | 按选中对象生成二级动作和凭证复验 |
 | Platform `search_storage` / macOS `file_search` | 原始路径编码、私有临时目录与租约、固定 argv 的 mdfind |
-| Flutter FileWorkspace / Session 协调器 | Delta 合并、查询 / 列表版本、返回位置与展示请求 |
+| Flutter FileWorkspace / Session 协调器 | 页面替换、查询 / 列表版本、跨页选择、滚动还原与旧请求拒绝 |
 
 ## 资源与生命周期
 
@@ -69,7 +69,12 @@ Spotlight 返回多少、是否失败都不决定是否遍历。旧 Ripgrep / Co
 
 查询、类型、范围、来源目录或会话变更撤销旧任务。worker 持有 admission 至真正结束；有界通道避免积压。临时目录使用私有权限和 lease 锁，释放引用后清理，异常退出的无活租约目录在后续准备时回收。
 
-已加载候选和执行表随浏览量增长；Delta / 共享分块减少重复复制，不保证整 App 恒定 RSS。没有生产遍历的 50,000 项或首批满即完成上限。冷扫描和磁盘不足不能承诺固定耗时。
+生产路径只把当前 64 行 Candidate、presentation 和执行索引保留在 Session；上一页 / 下一页从
+查询临时记录按 cursor 重读，因此访问页数不会线性增加 Rust 会话状态。兼容 append 路径的
+Delta / 共享分块仍保留。2026-11-12 的隔离夹具在 10,000 与 100,000 个总命中上测得窗口均为
+77,946 Rust 请求字节；查询临时文件、Bridge / Dart、Flutter、GPU 和整 App footprint 不计入。
+100k 真实目录的翻页延迟和整进程峰值仍需测量。没有生产遍历的 50,000 项或首批满即完成上限。
+冷扫描和磁盘不足不能承诺固定耗时。
 
 ## 临时目录与回收站过滤
 
@@ -93,6 +98,11 @@ Build 30 移除旧 64 KiB 文本读取、传统编码猜测和固定分栏。Rus
 
 ## 验证边界
 
-回归覆盖重叠根、隐藏目录、gitignore、类型后过滤不漏项、Unicode / 标点 / 拼音、显式路径、链接与权限边界、临时存储失败、取消、稳定前缀、对象执行以及连续加载 / 系统预览返回。最新工程状态见 [V0.14 MVP](mvp-v0.14.md)。
+回归覆盖重叠根、隐藏目录、gitignore、类型后过滤不漏项、Unicode / 标点 / 拼音、显式路径、
+链接与权限边界、临时存储失败、取消、稳定首页、对象执行、131 行结果的 64/64/3 前后页重读、
+旧页执行撤销、旧 cursor 拒绝、Flutter 键盘 / 滚动跨页、销毁后的迟到页面响应以及系统预览
+返回。独立 Release 还以 100,000 个本地文件验证了首页 `000000`、下一页 `000064`、上一页
+`000063` 和 15 秒内 query / page / selection 恢复，诊断 Candidate 始终为 64。最新工程状态见
+[V0.14 MVP](mvp-v0.14.md)。
 
 历史性能 / GUI 证据保存在 [V0.7 收尾](archive/v0.7-closeout.md)，不能当作后来构建的同机测量。库选型和 Quick Look 调研见 [研究资料](research/README.md)。

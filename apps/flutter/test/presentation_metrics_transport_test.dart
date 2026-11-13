@@ -11,6 +11,7 @@ void main() {
       TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   tearDown(() {
     PresentationMetrics.reporter = null;
+    PresentationTransferStats.reset();
     messenger.setMockMethodCallHandler(channel, null);
   });
 

@@ -6,9 +6,9 @@ import 'package:anywhere/features/clipboard/clipboard_shelf_page.dart';
 import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/infrastructure/presentation_metrics.dart';
 import 'package:anywhere/ui/app_style.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'support/clipboard_fixtures.dart';
 
@@ -56,8 +56,18 @@ void main() {
     expect(samples, hasLength(1));
     expect(samples.single['operation'], 'clipboard_query');
     expect(samples.single['rows'], 1);
-    expect(samples.single.keys,
-        unorderedEquals(['operation', 'elapsed_us', 'rows']));
+    expect(
+        samples.single.keys,
+        containsAll([
+          'operation',
+          'elapsed_us',
+          'rows',
+          'clipboard_item_count',
+          'native_preview_open',
+          'image_cache_bytes',
+        ]));
+    expect(samples.single['clipboard_item_count'], 1);
+    expect(samples.single['native_preview_open'], 0);
     preview.complete(previewDetail(item('3'), 'private body'));
     await tester.pump();
     await session.refresh(background: true);

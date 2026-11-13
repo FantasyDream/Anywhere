@@ -5,9 +5,9 @@ import 'package:anywhere/execution/execution_sessions_screen.dart';
 import 'package:anywhere/features/clipboard/clipboard_shelf_app.dart';
 import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/infrastructure/tool_window_lifecycle.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'support/clipboard_fixtures.dart';
 

@@ -7,7 +7,9 @@ import 'runtime_paths.dart';
 
 /// Each lazy engine has its own Dart globals and host channel.
 void configurePresentationMetrics(RuntimePaths paths, MethodChannel channel) {
-  PresentationMetrics.reporter = paths.values['profileUi'] == '1'
+  final enabled = paths.values['profileUi'] == '1';
+  PresentationTransferStats.reset();
+  PresentationMetrics.reporter = enabled
       ? (sample) => unawaited(channel
           .invokeMethod<void>('performanceSample', sample)
           .catchError((Object _) {}))

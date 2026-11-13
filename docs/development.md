@@ -13,6 +13,21 @@
 
 构建采用 Flutter assemble、swiftc 和 codesign，生成本机架构的 App，不需要 CocoaPods 或在 Xcode GUI 中打开工程。
 
+Flutter 3.50 使用独立的 `material_ui` / `cupertino_ui` 设计库，版本随 App 的 pubspec / lockfile
+固定。共享 `LocalizedApp.localizationsDelegates` 组合应用文案与对应设计库的中英委托；
+不要在新设计库 Widget 树中使用 gen-l10n 仍生成的旧 SDK 设计委托列表。
+SDK 升级的兼容点和内存研究见[专项方案](research/flutter-3.50-memory.md)。
+
+文件结果执行索引的隔离分配测量：
+
+```bash
+cargo run --release -p anywhere-core --example file_result_memory --locked -- 100000
+```
+
+该夹具只启动 Rust，不加载 Flutter / Bridge / GUI；输出是请求的 Rust 堆字节，不是 RSS。
+系统外观与内存压力 Host 的编译 / 行为检查由 `scripts/check-macos-host.sh` 覆盖；
+`ANYWHERE_PROFILE_UI=1` 才启用 Flutter 的数值诊断样本。
+
 ## 本机构建
 
 在仓库根目录执行：

@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../infrastructure/bridge_api.dart';
 import '../l10n/app_language.dart';
@@ -132,7 +132,7 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
                                     ? AppStyle.success
                                     : AppStyle.primary)),
                       ]))),
-          const Divider(height: 1, color: AppStyle.divider),
+          Divider(height: 1, color: AppStyle.divider),
           Expanded(
               child: Scrollbar(
                   controller: _scroll,
@@ -217,7 +217,7 @@ class _ExecutionOutputViewState extends State<ExecutionOutputView> {
               Container(
                   width: 5,
                   height: 5,
-                  decoration: const BoxDecoration(
+                  decoration: BoxDecoration(
                       color: AppStyle.warning, shape: BoxShape.circle)),
             ],
           ])));

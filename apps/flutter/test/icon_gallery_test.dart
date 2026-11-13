@@ -8,9 +8,9 @@ import 'package:anywhere/ui/app_icons.dart';
 import 'package:anywhere/ui/app_style.dart';
 import 'package:anywhere/ui/file_type_appearance.dart';
 import 'package:anywhere/ui/semantic_icon.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'support/launcher_ui_capture.dart';
 
@@ -156,7 +156,7 @@ void main() {
                                   style:
                                       AppStyle.heading.copyWith(fontSize: 22)),
                               const SizedBox(height: 8),
-                              const Text(
+                              Text(
                                   '32 px in color · 24 px in grayscale · transparent selection',
                                   style: AppStyle.caption),
                               const SizedBox(height: 24),
@@ -210,7 +210,7 @@ void main() {
                                             index)
                                     ]),
                                   ])),
-                              const Text(
+                              Text(
                                   'Bundled vector glyphs · no file reads, image decode or per-file bitmap cache',
                                   style: AppStyle.caption),
                             ])))))));

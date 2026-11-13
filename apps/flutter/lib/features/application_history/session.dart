@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../infrastructure/application_history_backend.dart';
 import '../../infrastructure/bridge_api.dart';

@@ -116,7 +116,6 @@ final class LauncherWindowCoordinator {
       panel.title = "Anywhere · \(NativeLocalization.text(.settings))"
       panel.titleVisibility = .hidden
       panel.titlebarAppearsTransparent = true
-      panel.appearance = NSAppearance(named: .darkAqua)
       panel.backgroundColor = .clear
       panel.isOpaque = false
       panel.isReleasedWhenClosed = false

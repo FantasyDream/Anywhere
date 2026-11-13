@@ -1,0 +1,155 @@
+{
+  "date": "2026-11-12",
+  "base_commit": "81c523cdb95031ac00cfcdc25360eefb48f85b21",
+  "branch": "codex/flutter-3-50-memory",
+  "flutter": "3.50.0",
+  "architecture": "arm64",
+  "app_version": "0.14.0+46",
+  "bundle_sha256": {
+    "Contents/MacOS/Anywhere": "588b66ef3fe3a25b8fcfa44477db9b96b6a9b982c7985c637b7c66ff7873294b",
+    "Contents/Frameworks/libanywhere_bridge_flutter.dylib": "a5587e09f3b569bf33eda3248e976bbbc6ad0b218ac076d1f8e9d08e443441a3"
+  },
+  "method": {
+    "process": "one Release app process with an empty isolated ANYWHERE_DATA_DIRECTORY",
+    "diagnostics": "ANYWHERE_PROFILE_UI=1",
+    "interaction": "macOS accessibility UI through Computer Use",
+    "metrics": "ps RSS, vmmap -summary Physical footprint, and heap --noContent class counts",
+    "privacy": "clipboard recording remained disabled; no personal history, query, path or clipboard body was written to the evidence"
+  },
+  "tasks": {
+    "open": {
+      "rss_mib": 174.5,
+      "physical_footprint_mib": 133.1,
+      "fluttermacos_engines": 2,
+      "flutter_view_controllers": 2,
+      "flutter_vsync_waiters": 2
+    },
+    "closed_before": {
+      "rss_mib": 158.95,
+      "physical_footprint_mib": 106.0,
+      "fluttermacos_engines": 1,
+      "flutter_view_controllers": 1,
+      "flutter_vsync_waiters": 1
+    },
+    "closed_after": {
+      "rss_mib": 174.06,
+      "physical_footprint_mib": 111.6,
+      "fluttermacos_engines": 1,
+      "flutter_view_controllers": 1,
+      "flutter_vsync_waiters": 1
+    },
+    "five_open_close_cycles": {
+      "rss_mib": 158.52,
+      "physical_footprint_mib": 133.9,
+      "physical_footprint_peak_mib": 245.8,
+      "fluttermacos_engines": 1,
+      "flutter_view_controllers": 1,
+      "flutter_vsync_waiters": 1
+    }
+  },
+  "clipboard_shelf": {
+    "closed_before": {
+      "rss_mib": 156.67,
+      "physical_footprint_mib": 133.9,
+      "fluttermacos_engines": 1,
+      "flutter_view_controllers": 1,
+      "flutter_vsync_waiters": 1
+    },
+    "open": {
+      "rss_mib": 170.12,
+      "physical_footprint_mib": 158.1,
+      "fluttermacos_engines": 2,
+      "flutter_view_controllers": 2,
+      "flutter_vsync_waiters": 2
+    },
+    "closed_after": {
+      "rss_mib": 156.67,
+      "physical_footprint_mib": 133.9,
+      "fluttermacos_engines": 1,
+      "flutter_view_controllers": 1,
+      "flutter_vsync_waiters": 1
+    },
+    "five_open_close_cycles": {
+      "rss_mib": 159.31,
+      "physical_footprint_mib": 135.1,
+      "physical_footprint_peak_mib": 214.9,
+      "fluttermacos_engines": 1,
+      "flutter_view_controllers": 1,
+      "flutter_vsync_waiters": 1
+    }
+  },
+  "web_document": {
+    "fixture": "locally built dev.example.text-pad version 1.1.1 from plugins/examples/web-text",
+    "zero_document": {
+      "main_rss_mib": null,
+      "main_physical_footprint_mib": null,
+      "wk_web_views": 0,
+      "fluttermacos_engines": 1
+    },
+    "first_open": {
+      "main_rss_mib": 163.16,
+      "main_physical_footprint_mib": 108.2,
+      "helpers": {
+        "web_content_rss_mib": 45.11,
+        "gpu_rss_mib": 24.69,
+        "networking_rss_mib": 10.61
+      }
+    },
+    "warm_open": {
+      "main_rss_mib": 150.58,
+      "main_physical_footprint_mib": 111.6,
+      "helpers": {
+        "web_content_rss_mib": 41.67,
+        "gpu_rss_mib": 17.3,
+        "networking_rss_mib": 7.45
+      }
+    },
+    "closed_after_warm_open": {
+      "main_rss_mib": 152.27,
+      "main_physical_footprint_mib": 104.7,
+      "helpers_remaining": {
+        "gpu_rss_mib": 16.83
+      },
+      "wk_web_views": 0,
+      "wk_process_pools": 1,
+      "wk_user_content_controllers": 1
+    },
+    "five_open_close_cycles": {
+      "main_rss_mib": 153.08,
+      "main_physical_footprint_mib": 107.1,
+      "helpers_remaining": {
+        "gpu_rss_mib": 16.69
+      },
+      "wk_web_views": 0,
+      "wk_process_pools": 1,
+      "wk_user_content_controllers": 1
+    },
+    "process_shutdown": "the captured stdout showed InAppWebView, FlutterWebViewController, channel delegate, message listener and WebMessage deallocation for the opened documents",
+    "functional_caveat": "the Text Pad fixture displayed an INACTIVE notice while its page and editor still rendered; the run establishes memory and lifecycle behavior, not a complete Web plugin functional pass"
+  },
+  "observations": [
+    "Opening either independent window added a second FlutterEngine, FlutterViewController and FlutterVSyncWaiter.",
+    "Closing either window returned those class counts to one; five open/close cycles did not leave additional engine or material objects.",
+    "Physical footprint remains affected by page residency, graphics backing stores and process history, so object release does not imply an immediate fixed RSS decrease.",
+    "A pair of Shelf open and closed samples returned both RSS and physical footprint to their pre-open values; Tasks retained a smaller residency high-water mark after close.",
+    "The measured incremental cost does not justify adopting an experimental shared multi-view engine before stable cross-platform APIs exist.",
+    "Opening a Web document created one WebContent, one GPU and one Networking helper; closing it removed WebContent and Networking and cleared WKWebView objects from the main process.",
+    "The WebKit GPU helper and shared process pool remained after close; five cycles did not create additional helpers, WKWebViews or message-handler objects.",
+    "Helper RSS is shown separately and must not be added directly to the main-process footprint as an exact whole-application total."
+  ],
+  "limitations": [
+    "One Release process rather than three fresh processes per scenario.",
+    "The host was not otherwise under controlled memory pressure and background applications were not suspended.",
+    "The samples establish window lifetime and current cost, not a long-term leak bound or total application-memory decomposition.",
+    "No matched Flutter 3.47.8 process was measured.",
+    "Only one small local Web document was measured; large documents, multiple plugins, network resources, repeated reload and long-term helper retention remain unmeasured."
+  ],
+  "raw_logs": [
+    "build/acceptance-flutter-350-a4-20261112/p5-*-ps.txt",
+    "build/acceptance-flutter-350-a4-20261112/p5-*-vmmap.txt",
+    "build/acceptance-flutter-350-a4-20261112/p5-*-heap.txt",
+    "build/acceptance-flutter-350-a4-20261112/p6-zero-web-heap.txt",
+    "build/acceptance-flutter-350-a4-20261112/p6-web-*-process.json",
+    "build/acceptance-flutter-350-a4-20261112/p6-web-*-heap.txt"
+  ]
+}

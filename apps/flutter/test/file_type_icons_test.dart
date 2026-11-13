@@ -7,9 +7,9 @@ import 'package:anywhere/launcher/widgets/candidate_icon.dart';
 import 'package:anywhere/launcher/widgets/candidate_row.dart';
 import 'package:anywhere/ui/app_icons.dart';
 import 'package:anywhere/ui/app_style.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'support/launcher_ui_capture.dart';
 

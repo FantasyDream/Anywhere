@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../infrastructure/bridge_api.dart';
 import '../../l10n/app_language.dart';
@@ -51,12 +51,12 @@ class LauncherSearchArea extends StatelessWidget {
                       child: SizedBox.square(
                           dimension: 36,
                           child: Row(mainAxisSize: MainAxisSize.min, children: [
-                            const Icon(AppIcons.search,
+                            Icon(AppIcons.search,
                                 size: 24, color: AppStyle.primary),
                             const SizedBox(width: 3),
                             RotatedBox(
                                 quarterTurns: state.navigationOpen ? 2 : 0,
-                                child: const Icon(AppIcons.chevronDown,
+                                child: Icon(AppIcons.chevronDown,
                                     size: 9, color: AppStyle.secondary)),
                           ])))))
         else
@@ -110,7 +110,7 @@ class LauncherSearchArea extends StatelessWidget {
                             key: const Key('captured-content-label'),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w500,
                                 color: AppStyle.secondary))),
@@ -149,7 +149,7 @@ class LauncherSearchArea extends StatelessWidget {
                 ])),
         const SizedBox(width: 14),
         if (state.resolving || state.executing)
-          const SizedBox.square(
+          SizedBox.square(
               dimension: 16,
               child: CircularProgressIndicator(
                   strokeWidth: 1.5, color: AppStyle.secondary))
@@ -219,7 +219,7 @@ class LauncherRootNavigation extends StatelessWidget {
                                           style: AppStyle.caption),
                                     ])),
                                 if (state.inputMode == mode)
-                                  const Icon(AppIcons.check,
+                                  Icon(AppIcons.check,
                                       size: 15, color: AppStyle.secondary),
                               ]))))),
             ]
@@ -301,7 +301,9 @@ class _LauncherFilterBarState extends State<LauncherFilterBar> {
       final selected = _keys[widget.selectedId]?.currentContext;
       if (selected != null) {
         Scrollable.ensureVisible(selected,
-            alignment: .5, duration: const Duration(milliseconds: 120));
+            alignment: .5,
+            duration:
+                AppStyle.motionDuration(const Duration(milliseconds: 120)));
       }
     });
   }
@@ -416,7 +418,7 @@ class LauncherResultHeading extends StatelessWidget {
                 child: Text(title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
+                    style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.w500,
                         color: AppStyle.secondary))),
@@ -499,7 +501,7 @@ class MenuNavigationRow extends StatelessWidget {
                             child: Icon(icon,
                                 size: 26,
                                 color: icon == AppIcons.folder
-                                    ? DesignTokens.iconBlue
+                                    ? AppStyle.iconBlue
                                     : AppStyle.secondary)),
                         const SizedBox(width: 14),
                         Expanded(
@@ -516,7 +518,7 @@ class MenuNavigationRow extends StatelessWidget {
                           AppRowActions(
                               primaryLabel: context.l10n.open, onPrimary: onTap)
                         else
-                          const Icon(AppIcons.chevron,
+                          Icon(AppIcons.chevron,
                               size: 14, color: AppStyle.secondary),
                       ]))))));
 }

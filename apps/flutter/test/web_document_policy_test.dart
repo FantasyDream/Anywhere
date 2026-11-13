@@ -92,7 +92,8 @@ void main() {
         webDesignTokensCss,
         contains(
             'background: var(--aw-web-canvas, var(--aw-fallback-surface))'));
-    expect(webDesignTokensCss, isNot(contains('color-scheme:')));
+    expect(webDesignTokensCss, contains('color-scheme: dark'));
+    expect(webDesignTokensCss, contains('color-scheme: light'));
     expect(webBootstrap, isNot(contains('createElement(\'style\')')));
   });
   test('canvas defaults are injected for plain HTML and common framework roots',

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../ui/app_components.dart';
 import '../ui/app_style.dart';
@@ -8,7 +8,7 @@ export '../ui/app_components.dart' show AppToggle;
 /// Desktop-sized controls shared by settings and its sheets. Rows have no
 /// interactive background; hover and focus feedback belong to the control.
 abstract final class SettingsStyle {
-  static const window = AppStyle.window;
+  static Color get window => AppStyle.window;
 
   static ThemeData theme(ThemeData base) => base.copyWith(
       listTileTheme: base.listTileTheme
@@ -51,7 +51,7 @@ class SettingsToggleRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(title,
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w400,
                             color: AppStyle.primary)),

@@ -492,3 +492,34 @@ IDEA 2026.2.3 实机先确认目标项目已经打开、当前为另一个项目
 工作区与后台复制统一绑定插件文档 Context，保留通用使用次数排序；候选副标题隐藏不透明数据载荷，插件安装说明覆盖界面 / 后台两种运行时。真实编译包回归验证唤醒识别、剪贴板过期、原文传入与默认排序。全量检查通过：Flutter 435、Core 317 / 1 忽略、MVP 195 / 4 忽略、SDK 21、JSON 30。App 签名及 ZIP 校验通过。已切换至 Build 24 并安装 JSON 0.6.2，实机通过原文带入、精度保护 / JSONPath、后台压缩与转义复制、取消不写入、去转义，以及更新后的授权说明。IDEA / VS Code 历史列表、方向键 / 翻页、对象菜单与返回查询均通过；合成目录和保留两个根目录的工作区已在 VS Code 实际打开。物理输入唤醒 / 15 秒保留、设置保存失败时序、完整来源矩阵、内存与跨平台未在本轮重新实测。详见 [Build 24 记录](benchmarks/acceptance-fixes-v0.14-build24-2026-10-27.json)。
 
 逐构建过程归档到 [Build 1–23 记录](archive/v0.14-development-records.md)。
+
+## Flutter 3.50 升级分支验证（2026-11-12）
+
+`codex/flutter-3-50-memory` 从 main `81c523c` 创建，保持 Flutter 产品，未引入 GPUI 实验。
+SDK 固定至 3.50.0 / Dart 3.14.0，迁移独立设计库并修复中英本地化委托。
+本分支完整门禁通过，Flutter 544 项通过 / 1 项跳过，真实 FFI 项另行通过；arm64 Release
+构建与深度严格签名检查通过。App 版本仍为 `0.14.0+46`，未作为新 Release 发布。
+详细范围、二进制摘要与未完成的远端 CI / 实机交互矩阵见
+[调研与实施记录](research/flutter-3.50-memory.md#7-本次实现与验证记录)。
+在升级基线上继续实现了显式内存诊断、文件候选共享 / 执行索引、Web HTML 低峰值拼接、
+系统内存压力缓存清理，以及 macOS 实时系统外观 A1–A4 核心矩阵。2026-11-12 已在
+macOS 27.2.1 实机验证了明暗、增强对比、降低透明度、减少动态、强调色、
+Liquid Glass 色调两端、Settings / Shelf / Tasks、Web 状态及 15 秒内外隐藏恢复，
+系统设置已恢复；VoiceOver、物理中文 IME、Quick Look 和多显示器 / DPI 仍待验。仓库没有
+Windows runner，因此共享外观端口、forced-colors 和不透明降级已交付，A5/A6 GUI / DWM
+未交付。文件结果夹具已扩展到 10,000 / 100,000 行；P1 去除整份
+执行副本后，100k 的 Candidate、presentation 与索引仍约 61.50 / 53.49 / 5.31 MB Rust
+请求字节，P2 现改为 64 行 query-bound cursor 窗口，Rust 会话三项合计固定为 77,946
+请求字节；131 行真实扫描的 64/64/3 前后页重读、旧页执行撤销和 Flutter 键盘 / 滚动回归通过。
+独立 arm64 Release 又对 100k 本地文件完成 `000000`→`000064`→上一页 `000063` 和 15 秒内
+query / page / selection 恢复，诊断 Candidate 为 64；页级 next / previous 计时通道与回归
+已加入，Dart heap、多次全新进程的页读取 p50/p95 与云目录仍未测。P5 已确认 Task / Shelf 各自增加一套按需
+engine，关闭后对象回落且
+五次开关无累积，因此保留独立 engine；P6 已用本地 JSON Workspace 和 Text Pad 完成近限大文档、
+五次新 origin reload、跨插件替换与关闭回落。1,046,501 字节 JSON 生成 227,502 字节结果，
+输入时进程外 WebContent / GPU / Networking RSS 约 262.05–278.19 / 17.83–22.11 /
+2.33–4.17 MiB；关闭后 WebContent / Networking、主进程 WKWebView 与 data store 回落，
+系统 GPU / user content controller / 进程池保留。重载暴露的 invocation close/rebind 顺序
+已修复并加回归；SDK 早期订阅也改为等待 ready，51 项通过。Text Pad 当轮仍显示 `INACTIVE`，
+最终 WebKit 功能复测未完成，不能把 SDK 单测代替 GUI 验收。网络资源与长期 helper 矩阵仍待验。
+仍没有 SDK 3.47.8 / 3.50 同场景整 App 收益结论。

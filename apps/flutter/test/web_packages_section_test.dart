@@ -5,8 +5,8 @@ import 'package:anywhere/infrastructure/web_package_backend.dart';
 import 'package:anywhere/ui/app_components.dart';
 import 'package:anywhere/ui/app_style.dart';
 import 'package:anywhere/web_plugins/web_packages_section.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 WebPackageDto package(String name,
         {bool enabled = true, bool available = true}) =>

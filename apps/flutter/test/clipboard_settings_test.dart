@@ -9,9 +9,9 @@ import 'package:anywhere/settings/clipboard_settings_section.dart';
 import 'package:anywhere/settings/settings_components.dart';
 import 'package:anywhere/settings/settings_controller.dart';
 import 'package:anywhere/ui/app_style.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 class Preferences implements ClipboardPreferencesBackend {
   bool recording = false, available = true, fail = false;

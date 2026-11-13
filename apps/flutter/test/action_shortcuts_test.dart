@@ -10,9 +10,9 @@ import 'package:anywhere/settings/action_shortcut.dart';
 import 'package:anywhere/settings/host_settings.dart';
 import 'package:anywhere/ui/app_style.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'launcher_fixtures.dart';
 

@@ -1,7 +1,7 @@
 import 'dart:math';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../infrastructure/bridge_api.dart';
 import '../infrastructure/runtime_policy.dart';
@@ -265,7 +265,7 @@ class _IntentShortcutDialogState extends State<IntentShortcutDialog> {
                         ])),
                         if (_error != null)
                           Text(_error!,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 11, color: AppStyle.warning)),
                         SizedBox(
                             width: double.infinity,
@@ -405,7 +405,7 @@ class _RuleDialogState extends State<_RuleDialog> {
                         key: const ValueKey('rule-context'),
                         icon: const Icon(AppIcons.chevronDown, size: 14),
                         decoration: const InputDecoration(isDense: true),
-                        style: const TextStyle(
+                        style: TextStyle(
                             fontSize: 12, height: 1.2, color: AppStyle.primary),
                         isExpanded: true,
                         initialValue: _context ?? '',
@@ -424,8 +424,8 @@ class _RuleDialogState extends State<_RuleDialog> {
                             })),
                     if (_error != null)
                       Text(_error!,
-                          style: const TextStyle(
-                              fontSize: 11, color: AppStyle.warning)),
+                          style:
+                              TextStyle(fontSize: 11, color: AppStyle.warning)),
                     const SizedBox(height: 10),
                     TextButton(
                         onPressed: () => setState(() {

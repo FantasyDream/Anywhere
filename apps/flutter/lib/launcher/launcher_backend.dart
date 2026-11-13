@@ -20,6 +20,8 @@ typedef Execute = Future<ActionResultDto> Function(
 );
 typedef WaitForSnapshot = Future<SnapshotWaitDto> Function(
     int session, int after);
+typedef LoadFilePage = Future<LauncherStateDto?> Function(
+    int session, int revision, String cursor);
 int snapshotCursor(LauncherStateDto state) =>
     (state.revision << 32) | state.snapshotSeq;
 
@@ -43,6 +45,7 @@ class LauncherBackend {
     this.waitBinding,
     this.loadFilePreview,
     this.updateFiles,
+    this.filePage,
     this.fileMore,
     this.fileMoreDelta,
     this.freezeFiles,
@@ -54,6 +57,7 @@ class LauncherBackend {
 
   final Future<LauncherStateDto?> Function(
       int session, String input, int revision, String filter)? updateFiles;
+  final LoadFilePage? filePage;
   final Future<LauncherStateDto?> Function(int session, int revision)? fileMore;
   final Future<SnapshotWaitDto> Function(int, int, int, int)? fileMoreDelta;
   final Future<void> Function(int session, int revision)? freezeFiles;

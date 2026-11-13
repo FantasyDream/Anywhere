@@ -20,10 +20,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   private var localeHost: LocaleHost?
   private var localeObservers: [NSObjectProtocol] = []
   private var previewHost: NativePreviewHost?
+  private var memoryPressureHost: MemoryPressureHost?
   private var webToolsHost: WebToolsHost!
   private let webPackagePicker = WebPackagePicker()
   var glass: WindowMaterial!
   var materialController: WindowMaterialController!
+  var appearanceHost: AppearanceHost!
   var channel: FlutterMethodChannel!
   var statusItem: NSStatusItem!
   lazy var hotKeys = HotKeyService(
@@ -63,9 +65,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   var settingsOpen: Bool { launcherWindows.settingsOpen }
   var settingsWindow: NSWindow? { launcherWindows.settingsWindow }
   var launcherGlassMask: NSImage?
-  lazy var taskWindows = TasksWindowController(onLauncher: { [weak self] in
-    self?.activate(mode: "universal")
-  })
+  lazy var taskWindows = TasksWindowController(
+    onLauncher: { [weak self] in
+      self?.activate(mode: "universal")
+    },
+    onPerformanceEvent: { [weak self] event in
+      self?.log(event)
+    }
+  )
   lazy var clipboardWindow = ToolWindowController(
     entrypoint: "clipboardShelfMain",
     channelName: "anywhere/clipboard-shelf",
@@ -121,6 +128,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     LocaleHost.update(stored.uiLanguage)
     controller = FlutterViewController(project: FlutterDartProject())
     localeHost = LocaleHost(messenger: controller.engine.binaryMessenger)
+    memoryPressureHost = MemoryPressureHost(
+      messenger: controller.engine.binaryMessenger
+    )
     InAppWebViewFlutterPlugin.register(
       with: controller.registrar(forPlugin: "InAppWebViewFlutterPlugin")
     )
@@ -141,6 +151,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
     )
     glass = materialController.material
     window.contentViewController = materialController
+    appearanceHost = AppearanceHost(
+      messenger: controller.engine.binaryMessenger,
+      window: window,
+      material: glass
+    )
     // Flutter's initial view is 0×0; preserve the requested window size when attaching it.
     window.setFrame(windowFrame, display: false)
     window.delegate = self
@@ -217,8 +232,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
           "profileUi": PresentationDiagnostics.enabled ? "1" : "0",
         ])
       case "performanceSample":
+        var arguments = call.arguments as? [String: Any] ?? [:]
+        arguments.merge(
+          PresentationDiagnostics.nativeSurfaceCounts(
+            in: NSApp.windows.compactMap(\.contentView)
+          ),
+          uniquingKeysWith: { _, measured in measured }
+        )
         if let event = PresentationDiagnostics.event(
-          call.arguments,
+          arguments,
           visible: self.window.isVisible
         ) {
           self.log(event)
@@ -268,6 +290,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
           reply(nil)
           return
         }
+        self.appearanceHost.publishIfChanged()
         if NativePreviewHost.dismissUnownedPanel() {
           self.log(["event": "unowned_preview_dismissed", "stage": "show"])
         }
@@ -381,6 +404,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, NSMe
   }
 
   func applicationDidBecomeActive(_ notification: Notification) {
+    appearanceHost?.publishIfChanged()
     DispatchQueue.main.async { [weak self] in
       if NativePreviewHost.dismissUnownedPanel() {
         self?.log(["event": "unowned_preview_dismissed", "stage": "activation"])

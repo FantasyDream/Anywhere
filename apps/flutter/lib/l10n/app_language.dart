@@ -1,6 +1,9 @@
 import 'dart:async';
-import 'package:flutter/material.dart';
+
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
+
+import '../infrastructure/desktop_appearance.dart';
 import 'generated/app_localizations.dart';
 import 'language_preference.dart';
 
@@ -89,28 +92,51 @@ extension AppLocalizationContext on BuildContext {
 
 /// Shared delegates and live language updates for Launcher and auxiliary engines.
 class LocalizedApp extends StatelessWidget {
+  // Design delegates follow the standalone packages used by the widget tree.
+  // gen-l10n still emits the SDK design delegates in its convenience list.
+  static const localizationsDelegates = <LocalizationsDelegate<dynamic>>[
+    AppLocalizations.delegate,
+    ...GlobalMaterialLocalizations.delegates,
+  ];
   const LocalizedApp(
       {super.key,
-      required this.home,
+      this.home,
+      this.homeBuilder,
       this.title = 'Anywhere',
       this.theme,
+      this.themeBuilder,
       this.builder,
-      this.debugShowCheckedModeBanner = false});
-  final Widget home;
+      this.debugShowCheckedModeBanner = false})
+      : assert(home != null || homeBuilder != null);
+  final Widget? home;
+
+  /// Reconstructs the presentation root for each live locale / appearance
+  /// version. The same controller and widget keys preserve page state.
+  final Widget Function()? homeBuilder;
   final String title;
   final ThemeData? theme;
+  final ThemeData Function()? themeBuilder;
   final TransitionBuilder? builder;
   final bool debugShowCheckedModeBanner;
   @override
   Widget build(BuildContext context) => ListenableBuilder(
-      listenable: AppLanguage.current,
+      listenable:
+          Listenable.merge([AppLanguage.current, DesktopAppearance.current]),
       builder: (context, _) => MaterialApp(
           debugShowCheckedModeBanner: debugShowCheckedModeBanner,
           title: title,
-          theme: theme,
-          builder: builder,
+          theme: themeBuilder?.call() ?? theme,
+          builder: (context, child) {
+            final media = MediaQuery.of(context);
+            final content = MediaQuery(
+                data: media.copyWith(
+                    disableAnimations: media.disableAnimations ||
+                        DesktopAppearance.current.snapshot.reduceMotion),
+                child: child ?? const SizedBox.shrink());
+            return builder?.call(context, content) ?? content;
+          },
           locale: AppLanguage.current.locale,
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          home: home));
+          home: homeBuilder?.call() ?? home!));
 }

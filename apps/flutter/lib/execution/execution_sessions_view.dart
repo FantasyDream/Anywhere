@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../infrastructure/bridge_api.dart';
 import '../infrastructure/desktop_environment.dart';
@@ -13,8 +13,8 @@ import 'execution_command.dart';
 import 'execution_output_view.dart';
 import 'execution_sessions_controller.dart';
 
-const _label = TextStyle(fontSize: 11, color: AppStyle.muted);
-const _body = TextStyle(fontSize: 12, color: AppStyle.secondary);
+final _label = TextStyle(fontSize: 11, color: AppStyle.muted);
+final _body = TextStyle(fontSize: 12, color: AppStyle.secondary);
 TextStyle get _mono => AppStyle.code;
 
 String taskStatus(ExecutionSessionStatusDto status, [AppLocalizations? l10n]) {
@@ -185,7 +185,7 @@ class ExecutionSessionsViewState extends State<ExecutionSessionsView> {
                     padding: const EdgeInsets.fromLTRB(18, 0, 18, 12),
                     child: _Notice(controller.error!,
                         onDismiss: controller.dismissError)),
-              const Divider(height: 1, color: AppStyle.divider),
+              Divider(height: 1, color: AppStyle.divider),
               Expanded(
                   child: controller.sessions.isEmpty
                       ? const Focus(autofocus: true, child: _EmptyTasks())
@@ -193,7 +193,7 @@ class ExecutionSessionsViewState extends State<ExecutionSessionsView> {
                           crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
                               _sidebar(tasks),
-                              const VerticalDivider(
+                              VerticalDivider(
                                   width: 1, color: AppStyle.divider),
                               Expanded(
                                   child: detail == null
@@ -202,7 +202,7 @@ class ExecutionSessionsViewState extends State<ExecutionSessionsView> {
                                               child: Text(
                                                   context.l10n.noMatchingTasks,
                                                   style: _body))
-                                          : const Center(
+                                          : Center(
                                               child: SizedBox.square(
                                                   dimension: 18,
                                                   child:
@@ -216,7 +216,7 @@ class ExecutionSessionsViewState extends State<ExecutionSessionsView> {
                                           actionMenu: _taskActions,
                                           controller: controller)),
                             ])),
-              const Divider(height: 1, color: AppStyle.divider),
+              Divider(height: 1, color: AppStyle.divider),
               Padding(
                   padding:
                       const EdgeInsets.symmetric(horizontal: 18, vertical: 9),
@@ -305,8 +305,8 @@ class ExecutionSessionsViewState extends State<ExecutionSessionsView> {
                 decoration: InputDecoration(
                   hintText: context.l10n.findATask,
                   hintStyle: _label,
-                  prefixIcon: const Icon(AppIcons.search,
-                      size: 16, color: AppStyle.muted),
+                  prefixIcon:
+                      Icon(AppIcons.search, size: 16, color: AppStyle.muted),
                   prefixIconConstraints:
                       const BoxConstraints(minWidth: 30, minHeight: 34),
                   suffixIcon: controller.filter.isEmpty
@@ -327,11 +327,11 @@ class ExecutionSessionsViewState extends State<ExecutionSessionsView> {
                       borderRadius:
                           BorderRadius.circular(AppStyle.controlRadius),
                       borderSide:
-                          const BorderSide(color: AppStyle.border, width: .8)),
+                          BorderSide(color: AppStyle.border, width: .8)),
                   focusedBorder: OutlineInputBorder(
                       borderRadius:
                           BorderRadius.circular(AppStyle.controlRadius),
-                      borderSide: const BorderSide(
+                      borderSide: BorderSide(
                           color: AppStyle.selectedBorder, width: 1.5)),
                 ))),
         Padding(
@@ -401,7 +401,7 @@ class _TaskRow extends StatelessWidget {
                           child: Text(session.title,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
+                              style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
                                   color: AppStyle.primary))),
@@ -487,7 +487,7 @@ class _TaskDetail extends StatelessWidget {
                                             child: Text(summary.title,
                                                 maxLines: 2,
                                                 overflow: TextOverflow.ellipsis,
-                                                style: const TextStyle(
+                                                style: TextStyle(
                                                     fontSize: 16,
                                                     height: 1.35,
                                                     fontWeight: FontWeight.w600,
@@ -519,13 +519,13 @@ class _TaskDetail extends StatelessWidget {
                                                   minimumSize: const Size(0, 24),
                                                   padding: const EdgeInsets.symmetric(horizontal: 10),
                                                   textStyle: _body,
-                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppStyle.controlRadius), side: const BorderSide(color: AppStyle.divider, width: .5))))),
+                                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppStyle.controlRadius), side: BorderSide(color: AppStyle.divider, width: .5))))),
                                     PopupMenuButton<String>(
                                       key: actionMenu,
                                       tooltip: context.l10n.moreActions,
                                       enabled: !controller.busy,
                                       color: AppStyle.card,
-                                      icon: const Icon(AppIcons.more,
+                                      icon: Icon(AppIcons.more,
                                           size: 18, color: AppStyle.secondary),
                                       constraints:
                                           const BoxConstraints(minWidth: 170),

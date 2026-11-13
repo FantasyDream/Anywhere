@@ -29,6 +29,7 @@ xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/mac
 "$host_test_directory/host-test"
 # All engines share the same opt-in, content-free diagnostics contract.
 xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  -framework AppKit -framework WebKit \
   apps/flutter/macos/Runner/PresentationDiagnostics.swift \
   apps/flutter/macos/Runner/tests/PresentationDiagnosticsTests.swift \
   -o "$host_test_directory/presentation-diagnostics-test"
@@ -105,6 +106,19 @@ xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/mac
   apps/flutter/macos/Runner/tests/WindowMaterialTests.swift \
   -o "$host_test_directory/material-test"
 "$host_test_directory/material-test"
+xcrun swiftc -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  -F "$flutter_framework_directory" -framework FlutterMacOS \
+  -Xlinker -rpath -Xlinker "$flutter_framework_directory" \
+  apps/flutter/macos/Runner/NativeAccessibilityContainer.swift \
+  apps/flutter/macos/Runner/WindowMaterial.swift \
+  apps/flutter/macos/Runner/AppearanceHost.swift \
+  apps/flutter/macos/Runner/tests/HostChannelTestMessenger.swift \
+  apps/flutter/macos/Runner/tests/AppearanceHostTests.swift \
+  -o "$host_test_directory/appearance-host-test"
+"$host_test_directory/appearance-host-test"
+xcrun swiftc -typecheck -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
+  -F "$flutter_framework_directory" -framework FlutterMacOS \
+  apps/flutter/macos/Runner/MemoryPressureHost.swift
 xcrun swiftc apps/flutter/macos/Runner/NativeLocalization.swift apps/flutter/macos/Runner/NativeText.g.swift -warnings-as-errors -target "$(uname -m)-apple-macos12.0" \
   apps/flutter/macos/Runner/WindowInputFocus.swift \
   apps/flutter/macos/Runner/tests/WindowInputFocusTests.swift \

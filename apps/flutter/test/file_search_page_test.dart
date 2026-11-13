@@ -16,9 +16,9 @@ import 'package:anywhere/settings/host_settings.dart';
 import 'package:anywhere/ui/app_components.dart';
 import 'package:anywhere/ui/app_icons.dart';
 import 'package:anywhere/ui/app_style.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 import 'launcher_fixtures.dart';
 import 'support/clipboard_fixtures.dart' show mockNativePreview, previewCalls;
@@ -84,6 +84,7 @@ void main() {
       bool failFirst = false,
       bool environmentScope = false,
       FileSearchProgressDto? progress,
+      LoadFilePage? filePage,
       Future<LauncherStateDto?> Function(int, int)? more,
       List<(String, String)>? fileQueries,
       List<(int, int)>? frozen,
@@ -176,6 +177,7 @@ void main() {
             waitForSnapshotDelta: waitDelta,
             fileMoreDelta: moreDelta,
             fileMore: more,
+            filePage: filePage,
             freezeFiles: frozen == null
                 ? null
                 : (session, revision) async {
@@ -519,6 +521,121 @@ void main() {
     expect(
         c.view.visibleEntries[c.view.selectedIndex].candidate?.id, folder.id);
     expect(frozen, isNotEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'bounded page backend replaces the window and restores the previous page',
+      (tester) async {
+    final samples = <Map<String, Object>>[];
+    PresentationMetrics.reporter = samples.add;
+    addTearDown(() => PresentationMetrics.reporter = null);
+    final cursors = <String>[];
+    final third =
+        row('third', 'report-three.pdf', 'core.file.open', file: true);
+    final fourth =
+        row('fourth', 'report-four.pdf', 'core.file.open', file: true);
+    final c = await mount(tester,
+        progress: searchProgress(matches: 4, next: 'page-2'),
+        filePage: (session, revision, cursor) async {
+      cursors.add(cursor);
+      final previousPage = cursor == 'page-1';
+      return launcherSnapshot(
+          sessionId: session,
+          revision: revision,
+          snapshotSeq: cursor == 'page-2' ? 20 : 21,
+          candidateListVersion: cursor == 'page-2' ? 2 : 3,
+          input: 'report',
+          contextComplete: true,
+          candidates: previousPage ? [text, folder] : [third, fourth],
+          diagnostics: [],
+          searchSources: const [
+            SearchSourceDto(id: 'files', state: SearchSourceStateDto.ready)
+          ],
+          fileSearch: previousPage
+              ? searchProgress(matches: 4, next: 'page-2')
+              : searchProgress(
+                  page: 1, matches: 4, next: 'page-3', previous: 'page-1'));
+    });
+    await openFiles(tester);
+    await c.update('report');
+    await tester.pumpAndSettle();
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    expect(cursors, ['page-2']);
+    expect(c.view.visibleCandidates.map((candidate) => candidate.id),
+        [third.id, fourth.id]);
+    expect(c.view.visibleEntries[c.view.selectedIndex].candidate!.id, third.id);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pumpAndSettle();
+    expect(cursors, ['page-2', 'page-1']);
+    expect(c.view.visibleCandidates.map((candidate) => candidate.id),
+        [text.id, folder.id]);
+    expect(
+        samples
+            .where((sample) => sample['operation'] == 'file_page_next')
+            .map((sample) => sample['rows']),
+        [2]);
+    expect(
+        samples
+            .where((sample) => sample['operation'] == 'file_page_previous')
+            .map((sample) => sample['rows']),
+        [2]);
+    expect(
+        c.view.visibleEntries[c.view.selectedIndex].candidate!.id, folder.id);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('scroll crosses one bounded page without chaining page reads',
+      (tester) async {
+    final firstPage = List.generate(64,
+        (i) => row('file-$i', 'report-$i.txt', 'core.file.open', file: true));
+    final secondPage = List.generate(
+        64, (i) => row('next-$i', 'next-$i.txt', 'core.file.open', file: true));
+    final cursors = <String>[];
+    final c = await mount(tester,
+        hits: firstPage, progress: searchProgress(matches: 128, next: 'page-2'),
+        filePage: (session, revision, cursor) async {
+      cursors.add(cursor);
+      final backwards = cursor == 'page-1';
+      return launcherSnapshot(
+          sessionId: session,
+          revision: revision,
+          snapshotSeq: backwards ? 31 : 30,
+          candidateListVersion: backwards ? 3 : 2,
+          input: 'report',
+          contextComplete: true,
+          candidates: backwards ? firstPage : secondPage,
+          diagnostics: [],
+          searchSources: const [
+            SearchSourceDto(id: 'files', state: SearchSourceStateDto.ready)
+          ],
+          fileSearch: backwards
+              ? searchProgress(matches: 128, next: 'page-2')
+              : searchProgress(
+                  page: 1, matches: 128, next: 'page-3', previous: 'page-1'));
+    });
+    await openFiles(tester);
+    await c.update('report');
+    await tester.pumpAndSettle();
+
+    await tester.drag(
+        find.byKey(const Key('action-list')), const Offset(0, -5000));
+    await tester.pumpAndSettle();
+    expect(cursors, ['page-2']);
+    final list = tester.widget<ListView>(find.byKey(const Key('action-list')));
+    expect(list.controller!.offset, lessThan(LauncherLayout.rowHeight));
+
+    await tester.drag(
+        find.byKey(const Key('action-list')), const Offset(0, 5000));
+    await tester.pumpAndSettle();
+    expect(cursors, ['page-2', 'page-1']);
+    expect(list.controller!.offset, greaterThan(LauncherLayout.rowHeight * 8));
+    expect(c.view.visibleCandidates.first.id, 'file-0');
     expect(tester.takeException(), isNull);
   });
 

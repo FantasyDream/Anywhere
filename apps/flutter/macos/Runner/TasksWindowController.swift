@@ -8,10 +8,19 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
   var tasksChannel: FlutterMethodChannel?
   var tasksReady = false
   private var localeHost: LocaleHost?
+  private var memoryPressureHost: MemoryPressureHost?
+  private var appearanceHost: AppearanceHost?
   private let closeCoordinator = FlutterWindowCloseCoordinator()
   var pendingTaskId: String?
   let onLauncher: () -> Void
-  init(onLauncher: @escaping () -> Void) { self.onLauncher = onLauncher }
+  private let onPerformanceEvent: ([String: Any]) -> Void
+  init(
+    onLauncher: @escaping () -> Void,
+    onPerformanceEvent: @escaping ([String: Any]) -> Void = { _ in }
+  ) {
+    self.onLauncher = onLauncher
+    self.onPerformanceEvent = onPerformanceEvent
+  }
   func showTasks(id: String?) -> Bool {
     if closeCoordinator.openAfterClose({ [weak self] in _ = self?.showTasks(id: id) }) {
       return true
@@ -21,6 +30,9 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
     if created {
       let view = FlutterViewController(project: FlutterDartProject())
       localeHost = LocaleHost(messenger: view.engine.binaryMessenger)
+      memoryPressureHost = MemoryPressureHost(
+        messenger: view.engine.binaryMessenger
+      )
       let channel = FlutterMethodChannel(
         name: "anywhere/executions",
         binaryMessenger: view.engine.binaryMessenger
@@ -31,7 +43,18 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
           return
         }
         if call.method == "paths" {
-          reply(["library": HostRuntime.libraryPath])
+          reply([
+            "library": HostRuntime.libraryPath,
+            "profileUi": PresentationDiagnostics.enabled ? "1" : "0",
+          ])
+        } else if call.method == "performanceSample" {
+          if let event = PresentationDiagnostics.event(
+            call.arguments,
+            visible: self.isVisible
+          ) {
+            self.onPerformanceEvent(event)
+          }
+          reply(nil)
         } else if call.method == "capabilities" {
           reply(HostRuntime.capabilities)
         } else if call.method == "ready" {
@@ -50,6 +73,7 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
       guard view.engine.run(withEntrypoint: "executionSessionsMain") else {
         channel.setMethodCallHandler(nil)
         localeHost = nil
+        memoryPressureHost = nil
         FlutterEngineLifecycle.detach(view)
         return false
       }
@@ -63,17 +87,22 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
       panel.title = "Anywhere · \(NativeLocalization.text(.runningTasks))"
       panel.titleVisibility = .hidden
       panel.titlebarAppearsTransparent = true
-      panel.appearance = NSAppearance(named: .darkAqua)
       panel.backgroundColor = .clear
       panel.isOpaque = false
       panel.minSize = NSSize(width: 760, height: 420)
       panel.isReleasedWhenClosed = false
       panel.delegate = self
       view.backgroundColor = .clear
-      panel.contentViewController = WindowMaterialController(
+      let materialHost = WindowMaterialController(
         contentController: view,
         frame: NSRect(x: 0, y: 0, width: 920, height: 600),
         cornerRadius: 0
+      )
+      panel.contentViewController = materialHost
+      appearanceHost = AppearanceHost(
+        messenger: view.engine.binaryMessenger,
+        window: panel,
+        material: materialHost.material
       )
       panel.setContentSize(NSSize(width: 920, height: 600))
       panel.center()
@@ -85,6 +114,7 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
     NSApp.activate(ignoringOtherApps: true)
     if tasksWindow?.isMiniaturized == true { tasksWindow?.deminiaturize(nil) }
     tasksWindow?.makeKeyAndOrderFront(nil)
+    appearanceHost?.publishIfChanged()
     if created, let view = tasksController?.view {
       if let panel = tasksWindow {
         WindowInputFocus.restore(in: panel, content: view)
@@ -95,6 +125,10 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
       if let id { tasksChannel?.invokeMethod("select", arguments: id) }
     }
     return true
+  }
+
+  private var isVisible: Bool {
+    tasksWindow?.isVisible == true && tasksWindow?.isMiniaturized == false && !NSApp.isHidden
   }
 
   func windowShouldClose(_ sender: NSWindow) -> Bool {
@@ -112,6 +146,8 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
     tasksChannel?.invokeMethod("visibility", arguments: false)
     tasksChannel?.setMethodCallHandler(nil)
     localeHost = nil
+    memoryPressureHost = nil
+    appearanceHost = nil
     (tasksWindow?.contentViewController as? WindowMaterialController)?.detachContent()
     FlutterEngineLifecycle.detach(tasksController)
     tasksWindow?.contentViewController = nil
@@ -132,6 +168,7 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
   func windowDidDeminiaturize(_ notification: Notification) {
     if notification.object as? NSWindow === tasksWindow {
       tasksChannel?.invokeMethod("visibility", arguments: true)
+      appearanceHost?.publishIfChanged()
     }
   }
 
@@ -142,6 +179,7 @@ final class TasksWindowController: NSObject, NSWindowDelegate {
   func applicationDidUnhide(_ notification: Notification) {
     if tasksWindow?.isVisible == true && tasksWindow?.isMiniaturized == false {
       tasksChannel?.invokeMethod("visibility", arguments: true)
+      appearanceHost?.publishIfChanged()
     }
   }
 

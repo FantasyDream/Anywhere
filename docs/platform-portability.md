@@ -33,6 +33,14 @@ Flutter 控件不是 AppKit 控件。原生背景是可选能力，不影响共�
 
 未实现方法时回退为不透明背景与 Flutter 按键录制。路径缺失必须停止初始化并展示可诊断错误，不能猜测加载其他动态库。
 
+共享外观端口已按[系统外观与跨平台材质适配方案](research/flutter-3.50-memory.md#8-系统外观与跨平台材质适配)
+分离静态能力、系统偏好和实际窗口表面：每窗口 source / token、revision、完整快照和实时事件
+不经 Rust 业务。Flutter 页面只消费语义明暗、对比度、动态效果、系统色和最终表面状态；
+macOS Liquid Glass / Visual Effect 的选择留在 Host。macOS A1–A4 核心矩阵已接入并通过
+实际系统设置切换；VoiceOver、物理 IME、Quick Look 和多显示器仍待补验。Windows runner
+仍不存在；后续 Host 须用公开 Win32 信号和系统语义色实现同一端口，失败或旧系统维持不透明。
+Web token 已带 `forced-colors` 系统色对，不能把这段共享 CSS 当成 Windows GUI 验收。
+
 ## 快捷键迁移
 
 `actionShortcutVersion=4`：`keyCode` 表示 USB HID keyboard usage，`modifiers` 的位为 Control=1、Alt=2、Shift=4、Meta=8。只支持当前 keymap 声明的键位。
@@ -61,7 +69,8 @@ Flutter 控件不是 AppKit 控件。原生背景是可选能力，不影响共�
 3. 实现全局热键注册与 HID 映射；继续校验冲突与失败回滚。
 4. 接入选中文件、文本、浏览器、菜单的系统能力；不支持的来源应明确报告，不能虚构成功。
 5. 添加 Windows 进程树与非阻塞输出后端，保持取消、退出、子进程清理语义，再启用开发任务。当前 unsupported 后端在 spawn 前拒绝；工具解析不悄悄执行 .cmd/.bat。
-6. 可选接入系统背景材质；不支持时沿用不透明主题。
+6. 接入已存在的共享外观 / 内存压力端口，实现 Win32 主题、对比度 / 动画偏好和窗口事件，
+   再可选接入 DWM 系统背景材质；按方案验证版本门禁、事件、窗口合成与不透明回退。
 
 `.github/workflows/portable.yml` 增加 Linux/Windows Rust 目标编译和共享 Flutter 检查，Linux 还运行 Rust 回归。它验证共享代码，不代替 Windows 窗口、权限、实际菜单、后台任务或安装包验收。
 

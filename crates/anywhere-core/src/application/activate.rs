@@ -544,7 +544,7 @@ mod tests {
             let mut session = app.session().unwrap();
             session.input_mode = InputMode::FileSearch;
             session.state.input = "report".into();
-            session.resolution.search_candidates = rows;
+            session.resolution.search_candidates = std::sync::Arc::new(rows);
             session.resolution.committed_revision = Some(0);
         }
         app.resolver.recompute_current(id).unwrap();

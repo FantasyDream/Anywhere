@@ -1,7 +1,7 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../infrastructure/clipboard_history_backend.dart';
 import '../../infrastructure/presentation_metrics.dart';
@@ -123,9 +123,9 @@ class _ClipboardShelfAppState extends State<ClipboardShelfApp> {
   @override
   Widget build(BuildContext context) => LocalizedApp(
         debugShowCheckedModeBanner: false,
-        theme: AppStyle.theme,
+        themeBuilder: () => AppStyle.theme,
         builder: AppStyle.windowBuilder,
-        home: Scaffold(
+        homeBuilder: () => Scaffold(
             backgroundColor: AppStyle.surface,
             body: SafeArea(
                 child: Padding(

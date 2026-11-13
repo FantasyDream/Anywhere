@@ -8,13 +8,33 @@ import 'package:anywhere/settings/host_settings.dart';
 import 'package:anywhere/settings/settings_controller.dart';
 import 'package:anywhere/ui/file_type_appearance.dart';
 import 'package:anywhere/web_plugins/permission_labels.dart';
-import 'package:flutter/material.dart';
+import 'package:cupertino_ui/cupertino_ui.dart' show CupertinoLocalizations;
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   final english = lookupAppLocalizations(const Locale('en'));
   final chinese = lookupAppLocalizations(const Locale('zh'));
+
+  testWidgets('standalone design delegates follow live language changes',
+      (tester) async {
+    final language = AppLanguage.current;
+    final previous = language.preference;
+    addTearDown(() => language.apply(previous));
+    language.apply('zh');
+    await tester.pumpWidget(LocalizedApp(
+        home: Builder(
+            builder: (context) =>
+                Text('${MaterialLocalizations.of(context).copyButtonLabel}|'
+                    '${CupertinoLocalizations.of(context).copyButtonLabel}'))));
+    await tester.pumpAndSettle();
+    expect(find.text('复制|复制'), findsOneWidget);
+    language.apply('en');
+    await tester.pumpAndSettle();
+    expect(find.text('Copy|Copy'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   test(
       'validation language changes only presentation and preserves native diagnostic data',

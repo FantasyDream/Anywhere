@@ -8,8 +8,8 @@ import re
 import subprocess
 import time
 
-OPERATIONS = ('activation', 'query', 'file_query', 'clipboard_query',
-              'shelf_query')
+OPERATIONS = ('activation', 'query', 'file_query', 'file_page_next',
+              'file_page_previous', 'clipboard_query', 'shelf_query')
 MAX_SAMPLES = 10000
 FOOTPRINT_TIMEOUT_SECONDS = 15
 WEBKIT_INSPECTION_TIMEOUT_SECONDS = 2

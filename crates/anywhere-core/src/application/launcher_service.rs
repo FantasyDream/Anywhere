@@ -634,19 +634,18 @@ impl LauncherApplication for Application {
     /// Never called while building a snapshot: the icon is presentation only and must
     /// not affect ranking, ordering or the time to first snapshot.
     fn application_icon(&self, candidate_id: &str) -> Result<Option<Vec<u8>>> {
-        let path =
-            {
-                let session = self.session()?;
-                session.execution.candidates.get(candidate_id).and_then(
-                    |candidate| match &candidate.target {
-                        crate::core::search::candidate::CandidateTarget::LaunchApplication {
-                            icon_source,
-                            ..
-                        } => Some(icon_source.clone()),
-                        _ => None,
-                    },
-                )
-            };
+        let path = {
+            let session = self.session()?;
+            session
+                .execution_candidate(candidate_id)
+                .and_then(|candidate| match &candidate.target {
+                    crate::core::search::candidate::CandidateTarget::LaunchApplication {
+                        icon_source,
+                        ..
+                    } => Some(icon_source.clone()),
+                    _ => None,
+                })
+        };
         let Some(path) = path else {
             return Ok(None);
         };

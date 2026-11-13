@@ -3,8 +3,8 @@ import 'package:anywhere/l10n/app_language.dart';
 import 'package:anywhere/settings/action_shortcut.dart';
 import 'package:anywhere/settings/shortcut_action_picker.dart';
 import 'package:anywhere/ui/app_style.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 class CountedAction extends ShortcutActionDto {
   CountedAction(int index)
@@ -105,7 +105,7 @@ void main() {
     Widget frame(String language) => MaterialApp(
         theme: AppStyle.theme,
         locale: Locale(language),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: LocalizedApp.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
             body: SizedBox(

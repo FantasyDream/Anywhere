@@ -1,6 +1,14 @@
 /* Shared Host defaults. Low specificity lets tools customize local components. */
 :where(*, *::before, *::after) { box-sizing: border-box; }
 :where(html, body) { margin: 0; height: 100%; }
+:where(html[data-aw-reduce-motion="true"], html[data-aw-reduce-motion="true"] *) {
+  scroll-behavior: auto !important;
+}
+:where(html[data-aw-reduce-motion="true"] *, html[data-aw-reduce-motion="true"] *::before, html[data-aw-reduce-motion="true"] *::after) {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}
 :where(body, .aw-ui) {
   color: var(--aw-text);
   font: var(--aw-body-weight) var(--aw-body-size)/var(--aw-body-line-height) var(--aw-font-ui);
@@ -9,7 +17,7 @@
   -webkit-font-smoothing: auto;
 }
 :where(button, select, input, textarea) {
-  margin: 0; font-family: var(--aw-font-ui); color-scheme: dark;
+  margin: 0; font-family: var(--aw-font-ui); color-scheme: var(--aw-color-scheme, dark);
   letter-spacing: 0; text-transform: none;
   -webkit-appearance: none; appearance: none;
 }
@@ -132,6 +140,22 @@
   :where(.aw-workspace-panes) { grid-template-columns: minmax(0, 1fr); }
   :where(.aw-pane) { min-height: 260px; }
   :where(.aw-pane + .aw-pane) { border-left: 0; border-top: var(--aw-divider-width) solid var(--aw-divider); }
+}
+
+/* Forced-colors pair system ink with system surfaces. Plugins may still opt
+   individual custom artwork out, but ordinary semantic controls stay native. */
+@media (forced-colors: active) {
+  :where(button, select, input, textarea) { forced-color-adjust: auto; }
+  :where(button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible, .aw-disclosure > summary:focus-visible) {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+    box-shadow: none;
+  }
+  :where(button:disabled, select:disabled, input:disabled, textarea:disabled) {
+    color: GrayText;
+    border-color: GrayText;
+    opacity: 1;
+  }
 }
 
 /* Shared icon vocabulary. Keep text labels; icons are decorative and inherit ink. */

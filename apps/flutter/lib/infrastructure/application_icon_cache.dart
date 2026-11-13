@@ -15,6 +15,14 @@ class ApplicationIconCache extends ChangeNotifier {
   int _retainedBytes = 0;
   int get retainedBytes => _retainedBytes;
   int get entryCount => _bytes.length;
+  Map<String, Object> get diagnostics => {
+        'icon_cache_entries': entryCount,
+        'icon_cache_bytes': retainedBytes,
+        'icon_cache_pending': _pending.length,
+        'icon_cache_active': _active,
+        'icon_cache_queued': _queue.length,
+        'icon_cache_failed': _failed.length,
+      };
   static const capacity = 128;
   static const maxInFlight = 4;
   final LoadIcon? _load;

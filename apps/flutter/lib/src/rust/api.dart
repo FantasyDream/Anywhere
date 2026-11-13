@@ -176,6 +176,14 @@ Future<LauncherStateDto?> loadMoreFiles(
     RustLib.instance.api
         .crateApiLoadMoreFiles(sessionId: sessionId, revision: revision);
 
+/// Replace the visible file window with a query-bound page from Rust's store.
+Future<LauncherStateDto?> loadFilePage(
+        {required int sessionId,
+        required int revision,
+        required String cursor}) =>
+    RustLib.instance.api.crateApiLoadFilePage(
+        sessionId: sessionId, revision: revision, cursor: cursor);
+
 Future<void> freezeFileResults(
         {required int sessionId, required int revision}) =>
     RustLib.instance.api

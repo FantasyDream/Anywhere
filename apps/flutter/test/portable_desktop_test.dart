@@ -1,20 +1,26 @@
 import 'package:anywhere/execution/execution_command.dart';
+import 'package:anywhere/infrastructure/desktop_appearance.dart';
 import 'package:anywhere/infrastructure/desktop_environment.dart';
 import 'package:anywhere/infrastructure/runtime_paths.dart';
 import 'package:anywhere/settings/action_shortcut.dart';
 import 'package:anywhere/settings/host_settings.dart';
 import 'package:anywhere/ui/app_style.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   const channel = MethodChannel('test/portable-host');
+  const appearanceChannel = MethodChannel('test/portable-appearance');
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   tearDown(() {
     DesktopEnvironment.reset();
-    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(channel, null);
+    DesktopAppearance.reset();
+    messenger
+      ..setMockMethodCallHandler(channel, null)
+      ..setMockMethodCallHandler(appearanceChannel, null);
   });
 
   test(
@@ -91,11 +97,29 @@ void main() {
   });
 
   testWidgets(
-      'glass backdrop stays transparent and unsupported hosts use the original opaque root',
+      'system surface stays transparent and unsupported hosts use the original opaque root',
       (tester) async {
-    Future<Color> surface(bool backdrop) async {
+    Future<Color> surface(bool systemManaged) async {
       DesktopEnvironment.configure(DesktopEnvironment(
-          platform: TargetPlatform.windows, hasBackdrop: backdrop));
+          platform: TargetPlatform.windows, hasBackdrop: systemManaged));
+      messenger.setMockMethodCallHandler(
+          appearanceChannel,
+          (_) async => {
+                'sourceId': 'portable-source',
+                'windowToken': 'portable-window',
+                'revision': 1,
+                'brightness': 'dark',
+                'contrast': 'standard',
+                'reduceTransparency': false,
+                'reduceMotion': false,
+                'surface': systemManaged ? 'systemManaged' : 'opaque',
+                'capabilities': const {'protocolVersion': 1},
+              });
+      DesktopAppearance.reset();
+      final appearance = DesktopAppearanceController(
+          host: MethodChannelDesktopAppearanceHost(appearanceChannel));
+      DesktopAppearance.configure(appearance);
+      await appearance.bind();
       await tester.pumpWidget(
           MaterialApp(builder: AppStyle.windowBuilder, home: const SizedBox()));
       return tester.widget<ColoredBox>(find.byType(ColoredBox).first).color;

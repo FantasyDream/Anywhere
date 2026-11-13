@@ -68,14 +68,58 @@ class WebDocumentPolicy {
   }
 
   /// Host CSP is first in the parser, regardless of any policy declared by a package.
-  Uint8List protectHtml(List<int> bytes) => utf8.encode(
-      '<!doctype html><html><head><meta charset="utf-8">'
-      '<meta http-equiv="Content-Security-Policy" content="'
-      "default-src 'none'; script-src $origin; style-src $origin 'unsafe-inline'; "
-      "img-src $origin data:; font-src $origin; media-src 'none'; "
-      "connect-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; "
-      "object-src 'none'; base-uri 'none'; form-action 'none'; "
-      "script-src-attr 'none'; upgrade-insecure-requests\">"
-      '<style data-anywhere-theme>$webDocumentThemeCss</style>'
-      '</head>${utf8.decode(bytes)}</html>');
+  Uint8List protectHtml(List<int> bytes) {
+    _validateUtf8(bytes);
+    final prefix = utf8.encode(
+        '<!doctype html><html><head><meta charset="utf-8">'
+        '<meta http-equiv="Content-Security-Policy" content="'
+        "default-src 'none'; script-src $origin; style-src $origin 'unsafe-inline'; "
+        "img-src $origin data:; font-src $origin; media-src 'none'; "
+        "connect-src 'none'; frame-src 'none'; child-src 'none'; worker-src 'none'; "
+        "object-src 'none'; base-uri 'none'; form-action 'none'; "
+        "script-src-attr 'none'; upgrade-insecure-requests\">"
+        '<style data-anywhere-theme>$webDocumentThemeCss</style></head>');
+    final suffix = utf8.encode('</html>');
+    final protected = Uint8List(prefix.length + bytes.length + suffix.length);
+    protected
+      ..setRange(0, prefix.length, prefix)
+      ..setRange(prefix.length, prefix.length + bytes.length, bytes)
+      ..setRange(prefix.length + bytes.length, protected.length, suffix);
+    return protected;
+  }
+}
+
+/// Validate UTF-8 without materializing a JavaScript-sized intermediate String.
+void _validateUtf8(List<int> bytes) {
+  var index = 0;
+  while (index < bytes.length) {
+    final first = bytes[index];
+    if (first >= 0 && first <= 0x7f) {
+      index++;
+      continue;
+    }
+    final length = switch (first) {
+      >= 0xc2 && <= 0xdf => 2,
+      >= 0xe0 && <= 0xef => 3,
+      >= 0xf0 && <= 0xf4 => 4,
+      _ => throw const FormatException('Invalid UTF-8'),
+    };
+    if (index + length > bytes.length) {
+      throw const FormatException('Invalid UTF-8');
+    }
+    for (var offset = 1; offset < length; offset++) {
+      final next = bytes[index + offset];
+      if (next < 0x80 || next > 0xbf) {
+        throw const FormatException('Invalid UTF-8');
+      }
+    }
+    final second = bytes[index + 1];
+    if ((first == 0xe0 && second < 0xa0) ||
+        (first == 0xed && second > 0x9f) ||
+        (first == 0xf0 && second < 0x90) ||
+        (first == 0xf4 && second > 0x8f)) {
+      throw const FormatException('Invalid UTF-8');
+    }
+    index += length;
+  }
 }

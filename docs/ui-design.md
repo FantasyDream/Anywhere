@@ -63,7 +63,17 @@ Flutter `AppStyle` 与 Web 使用同一份 [设计参数](../resources/design-to
 
 ## 背景与可读性
 
-Flutter 负责内容和控件，原生材质在其内容背后。Host `backdrop` 能力明确可用时允许透明底色；否则用不透明回退。共享页面不依赖 AppKit Widget。
+Flutter 负责内容和控件，原生材质在其内容背后。统一 appearance 快照报告系统允许且当前
+窗口实际使用系统材质时，Flutter 内容才透明；减少透明度、旧 Host 或平台失败使用不透明
+语义底色。共享页面不依赖 AppKit Widget。
+
+A1–A3 已在 macOS 接入，A4 的深 / 浅色、增强对比、减少透明度、减少动态、系统强调 / 焦点色、
+Liquid Glass 色调和跨窗口核心矩阵已完成实机切换：外观变化会更新 Material / Cupertino、
+共享 token、图标及 Web 文档，只重建呈现，并保留输入、选择、草稿和 Web handle。详细契约见
+[系统外观与跨平台材质适配方案](research/flutter-3.50-memory.md#8-系统外观与跨平台材质适配)。
+VoiceOver、物理中文 IME、Quick Look、多显示器 / DPI 与材质 A/B 仍须按该节矩阵继续验收。
+Windows 已有平台中立端口和 forced-colors 规则，但尚无 runner / DWM 适配，不能宣称
+Windows 外观已交付。
 
 搜索 / 二级 Actions / 模式选择器保持同一圆角、边界、内边距与文字层级。弹层需在实际窗口范围内渲染，不能把首屏小高度当作足够空间而裁掉菜单；模式选择以 Launcher 内导航层呈现。
 

@@ -49,6 +49,7 @@
 
 ## 历史与研究
 
+- [Flutter 3.50 与内存调研实施方案](research/flutter-3.50-memory.md)：main Flutter 产品的 SDK 升级、内存测量与优化路线，以及系统外观完整适配 / Windows 共享抽象方案。
 - [历史验收、迁移与 Review](archive/README.md)：旧 MVP、已完成迁移、实验和逐构建证据。
 - [研究资料](research/README.md)：外部产品、开源选型与未落地设计。
 

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../infrastructure/desktop_environment.dart';
 import '../l10n/app_language.dart';
@@ -391,7 +391,7 @@ class AppSectionHeading extends StatelessWidget {
         Icon(icon, size: 14, color: AppStyle.secondary),
         const SizedBox(width: 8),
         Text(title,
-            style: const TextStyle(
+            style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: AppStyle.secondary)),
@@ -509,11 +509,10 @@ class AppKeycap extends StatelessWidget {
       child: label == '↵'
           ? Semantics(
               label: context.l10n.returnKey,
-              child: const Icon(AppIcons.enter,
-                  size: 12, color: AppStyle.secondary))
+              child: Icon(AppIcons.enter, size: 12, color: AppStyle.secondary))
           : Text(label,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                   fontSize: DesignTokens.keycapFontSize,
                   height: DesignTokens.keycapLineHeight,
                   fontWeight: DesignTokens.keycapWeight,
@@ -624,7 +623,7 @@ class AppToggle extends StatelessWidget {
                       child: Container(
                           width: 14,
                           height: 14,
-                          decoration: const BoxDecoration(
-                              color: Colors.white,
+                          decoration: BoxDecoration(
+                              color: AppStyle.onAccent,
                               shape: BoxShape.circle)))))));
 }

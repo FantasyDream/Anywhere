@@ -35,6 +35,17 @@ flowchart TD
 
 业务调用使用 `flutter_rust_bridge`；窗口、设置、热键与目录授权使用 `DesktopHost` / MethodChannel。系统提供 `paths` 和 `capabilities`，共享界面不猜动态库路径或材质能力。跨平台契约见 [平台接入](platform-portability.md)。
 
+外观和能力分开表达：`capabilities.backdrop` 仍兼容旧 Host 的能力探测，生产外观使用
+`anywhere/appearance` 的 `DesktopAppearanceSnapshot`。每个窗口 token 绑定一个 native source；
+完整快照带 revision、明暗、对比、减少透明度 / 动态、系统强调 / 焦点色和实际表面。Dart 只负责
+呈现选择，macOS `AppearanceHost` / `WindowMaterial` 负责 AppKit 材质，Windows Host 后续负责
+DWM。旧消息、旧文档的晚回主题和未知协议均有不透明降级。
+
+`anywhere/memory-pressure` 只传 warning / critical 枚举。Dart 清理 ImageCache 非 live 项和
+可重建编码图标；Rust 查询、15 秒会话、执行资格、Web handle 与活动 Widget 不随之销毁。
+`ANYWHERE_PROFILE_UI=1` 时，既有 performance sample 增加只含数字的候选、分块、图标、
+ImageCache、engine / document 和 DTO 尾部计数。
+
 ## 代码组织
 
 ```text
@@ -161,15 +172,15 @@ Flutter 的 `LauncherSessionCoordinator` 拥有 SessionId、generation、revisio
 
 ## Sources 与文件工作区
 
-`SourceCatalog` 原子持有基础和扩展的 `SourceSet`，同步 / 异步来源具有统一目录寿命。通用 `source_runtime` 负责 admission、取消、批次和迟到结果拒绝；`file_workspace` 负责文件类型、冻结、追加和进度。
+`SourceCatalog` 原子持有基础和扩展的 `SourceSet`，同步 / 异步来源具有统一目录寿命。通用 `source_runtime` 负责 admission、取消、批次和迟到结果拒绝；`file_workspace` 负责文件类型、冻结、64 行页面重读和进度。
 
 普通应用 / Action / 收藏目录共用 Candidate 与公共 Ranking Facts、Usage、时钟。文件工具作为普通 Action 打开，结果有专门的稳定顺序与连续读取，不进入环境 Context Scope。
 
-Spotlight 返回早期候选，Rust 完整遍历允许范围；查询临时存储保存命中并外部排序，已显示前缀保持稳定。对象二级动作按选中目标延迟生成，复验原执行对象。Host 接收 replacement、append 或 metadata delta，不重新匹配文件。
+Spotlight 返回早期候选，Rust 完整遍历允许范围；查询临时存储保存命中并外部排序，首个已发布窗口在导航后冻结。对象二级动作按选中目标延迟生成，复验原执行对象。Host 接收当前页 replacement 或 metadata delta，不重新匹配文件；下一页 / 上一页通过 query-bound cursor 重读，Session 与执行表只保留当前页。
 
 `features/filesystem/scan.rs` 保留 ScanStore 的查询寿命、取消与临时工作区。私有 `scan/query.rs` 负责名称归一和排序，`scope.rs` 的 ScanScope 持有范围配置并处理显式路径及索引核验；`record.rs` 保持权威记录格式，`traversal.rs` 负责磁盘 FIFO 枚举及 flush 后发布，`progress.rs` / `pagination.rs` 负责诊断、提交边界、兼容游标和连续交付。`result_store.rs` 保留既有外部排序，通过已提交边界接口读取记录，不直接修改扫描进度。路径授权仍按使用时的真实目标复验，公开扫描入口和稳定前缀契约保持一致。
 
-Flutter 的 `StableList` 共享 256 条不可变块，索引按块复用，仅为访问到的候选包装行；Revision 或 list version 改变时拒绝无效尾部。完整契约见 [文件搜索](file-search.md)。系统预览由 `application/file_preview.rs` 复验对象、`features/preview.rs` 管理资源，Flutter 经统一窗口接口调用 macOS Host；旧文本解码与固定分栏已删除，见 [系统预览](native-preview.md)。Platform 的工具查找使用 which 检查绝对候选，仍保留 GUI 工具目录和 wrapper 策略。阶段计划见 [开源复用重构](archive/open-source-refactor-plan.md)。
+Flutter 生产分页路径每次以完整 64 行页面替换 ViewState，cursor 与 query id、提交边界和排序位置绑定；进入下一页回顶部，返回上一页落页尾，旧 revision / cursor / 页面请求不能更新新状态。兼容 append 路径的 `StableList` 仍共享 256 条不可变块。完整契约见 [文件搜索](file-search.md)。系统预览由 `application/file_preview.rs` 复验对象、`features/preview.rs` 管理资源，Flutter 经统一窗口接口调用 macOS Host；旧文本解码与固定分栏已删除，见 [系统预览](native-preview.md)。Platform 的工具查找使用 which 检查绝对候选，仍保留 GUI 工具目录和 wrapper 策略。阶段计划见 [开源复用重构](archive/open-source-refactor-plan.md)。
 
 ## 剪贴板功能模块
 
@@ -295,7 +306,7 @@ JSON Workspace 是混合插件示例：WebView 负责编辑、校验、token 格
 
 - 包管理协调属于 Application；持久化层不调用 Application，架构门禁阻止该反向依赖。保存失败不重新发布目录，也不撤销正在使用的文档。
 - Bridge 资源端口只获取有界资源描述，释放管理锁后读文件、核对 SHA-256，再复验文档资格；不为每个 JS / CSS 请求复制整个输入。卸载私有 KV 的 SQLite 操作也不持有 Web 文档锁。
-- Flutter `WebDocumentLifetime` 管理异步绑定接收、迟到清理与销毁；`WebToolSurface` 只协调原生视图和交互，Host 弹层在独立展示组件中。来自已替换视图的创建 / 资源 / 消息 / 崩溃回调不能操作新视图；ready 检查返回后复验同一代数。
+- Flutter `WebDocumentLifetime` 管理异步绑定接收、迟到清理与销毁。Reload / resume 先在同一个 invocation 上取得新 epoch，再关闭旧 binding；反过来先 close 会让 Core 删除整个 invocation。`WebToolSurface` 只协调原生视图和交互，Host 弹层在独立展示组件中。来自已替换视图的创建 / 资源 / 消息 / 崩溃回调不能操作新视图；ready 检查返回后复验同一代数。
 - `web_document_policy.dart` 管 HTML / CSP / 资源路径；`web_bootstrap.dart` 只提供消息和可见性传输；`web_view_appearance.dart` 管原生画布适配。SDK 取消 / dispose 同时释放传输待回复名额，Rust 始终保留独立授权与预算检查。
 - Rust `rpc_state.rs` 统一发布请求取消状态及唤醒通知，`rpc_dispatch.rs` 在 worker admission 处同时等待取消；实际 I/O 保留自己的许可到结束。SDK 的前台注册和后台事件通知各自处理回调生命周期，不把订阅错误转成已完成操作的失败。
 - 设置页经 `WebPackageBackend` 使用薄类型化端口；只在提交安装变更时使初始列表失效，取消文件选择或批准仍可接收该初始列表；文件选择期间禁止重入，清理失败不会锁死控件。安装或卸载的响应失败后回读实际安装状态，不把旧列表当作权威结果。
@@ -314,7 +325,7 @@ macOS Host 在启动引擎前安装 `NativeFlutterSurfaceGuard`：对 Flutter �
 
 `FlutterAccessibilityState` 只在 macOS Host 缓存已经收到的 AppKit 辅助功能启用 / 禁用通知，新建引擎后重放，避免懒加载窗口错过请求。没有已观察状态时不执行，不强制开启语义树，不增加系统权限。通知名称沿用固定 Flutter SDK 的实现契约，并非新的跨平台业务协议；升级 SDK 时须复核 `FlutterEngine.mm` 的通知处理和晚建窗口的实际 AX 树，不能只依赖适配器自身测试。
 
-应用显式创建的 Tooltip 使用 `ui/app_components.dart` 中的 `AppTooltip`，为每个浮层锚点建立独立的语义容器。固定 Flutter 3.47.8 会在列表等合并语义的布局中丢失相邻 Tooltip 的不同 traversal parent 标识，浮层显示后提交无法从根节点到达的节点，导致原生 AXTree 拒绝后续更新；相关上游问题见 [Flutter #182444](https://github.com/flutter/flutter/issues/182444)。此处使用公开 `Semantics(container: true)` 隔离锚点，保留原有 Tooltip、标签和按钮动作，不修改 SDK 或关闭辅助功能。导航按钮的标签、展开状态与点击手势放在同一提示边界内，避免标签与可执行节点分离。`launcher_semantics_lifecycle_test.dart` 重放实际序列化增量的根可达性，覆盖相邻提示、悬停、语言切换、语义导航与 Launcher 保留 / 过期恢复；升级 Flutter 后按这些回归及真实桌面树复验是否仍需要适配。
+应用显式创建的 Tooltip 使用 `ui/app_components.dart` 中的 `AppTooltip`，为每个浮层锚点建立独立的语义容器。升级前 Flutter 3.47.8 会在列表等合并语义的布局中丢失相邻 Tooltip 的不同 traversal parent 标识，浮层显示后提交无法从根节点到达的节点，导致原生 AXTree 拒绝后续更新；相关上游问题见 [Flutter #182444](https://github.com/flutter/flutter/issues/182444)。此处使用公开 `Semantics(container: true)` 隔离锚点，保留原有 Tooltip、标签和按钮动作，不修改 SDK 或关闭辅助功能。导航按钮的标签、展开状态与点击手势放在同一提示边界内，避免标签与可执行节点分离。`launcher_semantics_lifecycle_test.dart` 重放实际序列化增量的根可达性，覆盖相邻提示、悬停、语言切换、语义导航与 Launcher 保留 / 过期恢复；升级 Flutter 后按这些回归及真实桌面树复验是否仍需要适配。
 
 固定 Flutter 3.47 的 `FlutterViewWrapper.accessibilityChildren` 只返回渲染视图，macOS 语义桥没有连接嵌入的 WebKit 控件。Host 的 `NativeAccessibilityContainer` 通过公开 AppKit 接口补充这一子树：原有 Flutter 节点每次动态读取，嵌入视图及原父节点仅弱引用；关闭、隐藏、弹出 Host 操作面板或移动共享窗口时撤销连接并恢复父节点。`NativeWebView` 统一发现窗口内唯一的 WebView；新旧视图重叠时不猜测，不向其中任意一个转移焦点或暴露节点。适配不改 SDK、不轮询、不要求插件编写无障碍桥接代码；升级 Flutter 后须复核是否仍有必要，真实辅助技术的验收范围单独记录。
 

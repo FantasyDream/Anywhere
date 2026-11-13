@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 import '../../l10n/app_language.dart';
 import '../../ui/app_icons.dart';
@@ -16,11 +16,11 @@ IconData clipboardKindIcon(String kind) => switch (kind) {
       _ => AppIcons.text,
     };
 Color clipboardKindTint(String kind) => switch (kind) {
-      'image' => DesignTokens.iconBlue,
-      'files' => DesignTokens.iconAmber,
-      'rich_text' => DesignTokens.iconPurple,
-      'binary' => DesignTokens.iconNeutral,
-      _ => DesignTokens.iconNeutral,
+      'image' => AppStyle.iconBlue,
+      'files' => AppStyle.iconAmber,
+      'rich_text' => AppStyle.iconPurple,
+      'binary' => AppStyle.iconNeutral,
+      _ => AppStyle.iconNeutral,
     };
 String clipboardKindLabel(String kind, AppLocalizations l10n) => switch (kind) {
       'image' => l10n.image,

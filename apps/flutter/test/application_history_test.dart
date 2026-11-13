@@ -6,7 +6,7 @@ import 'package:anywhere/infrastructure/application_history_backend.dart';
 import 'package:anywhere/infrastructure/bridge_api.dart';
 import 'package:anywhere/infrastructure/desktop_environment.dart';
 import 'package:anywhere/infrastructure/window_host.dart';
-import 'package:anywhere/l10n/generated/app_localizations.dart';
+import 'package:anywhere/l10n/app_language.dart';
 import 'package:anywhere/settings/application_history_settings_controller.dart';
 import 'package:anywhere/settings/application_history_settings_section.dart';
 import 'package:anywhere/settings/settings_controller.dart';
@@ -14,9 +14,9 @@ import 'package:anywhere/settings/settings_screen.dart';
 import 'package:anywhere/tools/tool_page.dart';
 import 'package:anywhere/ui/app_components.dart';
 import 'package:anywhere/ui/app_style.dart';
-import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
 
 AppHistoryItemDto item(String id,
         {String source = 'idea', bool canOpen = true}) =>
@@ -509,7 +509,7 @@ void main() {
     addTearDown(controller.dispose);
     final bucket = PageStorageBucket();
     Widget page({required bool showHistory}) => MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          localizationsDelegates: LocalizedApp.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
           theme: AppStyle.theme,
           home: Scaffold(
@@ -566,7 +566,7 @@ void main() {
       addTearDown(controller.dispose);
       await tester.pumpWidget(MaterialApp(
         locale: Locale(language),
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        localizationsDelegates: LocalizedApp.localizationsDelegates,
         supportedLocales: AppLocalizations.supportedLocales,
         theme: AppStyle.theme,
         builder: AppStyle.windowBuilder,

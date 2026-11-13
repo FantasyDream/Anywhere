@@ -23,9 +23,7 @@ impl Application {
                 bail!("object actions expired");
             }
             let file = session
-                .execution
-                .candidates
-                .get(candidate_id.as_str())
+                .execution_candidate(candidate_id.as_str())
                 .context("file expired")?
                 .clone();
             if !file.presentation.primary_action || file.context().is_none() {

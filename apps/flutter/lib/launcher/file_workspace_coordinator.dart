@@ -16,6 +16,14 @@ class FileWorkspaceCoordinator extends FileSearchController {
     moreLoading = false;
   }
 
+  Future<LauncherStateDto?> loadPage(int session, int revision, String cursor,
+      LauncherBackend backend, bool Function() current) {
+    final load = backend.filePage;
+    if (load == null) return Future.value();
+    return loadMore(
+        session, revision, (id, rev) => load(id, rev, cursor), current);
+  }
+
   Future<LauncherStateDto?> loadSnapshot(
       int session,
       int revision,
@@ -28,6 +36,7 @@ class FileWorkspaceCoordinator extends FileSearchController {
     return loadMore(session, revision, (id, rev) async {
       if (backend.fileMoreDelta == null) return backend.fileMore!(id, rev);
       final packet = await backend.fileMoreDelta!(id, rev, version, count);
+      LauncherSessionCoordinator.transfer(packet);
       final latest = snapshot();
       if (latest?.sessionId == id &&
           latest?.revision == rev &&
