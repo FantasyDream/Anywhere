@@ -60,14 +60,20 @@ impl LauncherView {
             RuntimeState::Starting | RuntimeState::Failed
         ) {
             self.presented = true;
-            self.notice = Some(match self.runtime_state {
-                RuntimeState::Starting => l10n::starting_anywhere(self.locale),
-                RuntimeState::Failed => self
-                    .notice
-                    .clone()
-                    .unwrap_or_else(|| l10n::launcher_startup_failed(self.locale)),
+            let (message, kind) = match self.runtime_state {
+                RuntimeState::Starting => (
+                    l10n::starting_anywhere(self.locale),
+                    components::NoticeKind::Info,
+                ),
+                RuntimeState::Failed => (
+                    self.notice
+                        .clone()
+                        .unwrap_or_else(|| l10n::launcher_startup_failed(self.locale)),
+                    components::NoticeKind::Error,
+                ),
                 RuntimeState::Preview | RuntimeState::Ready => unreachable!(),
-            });
+            };
+            self.set_notice(message, kind);
             self.resize_window_for_screen(window);
             self.focus_launcher_input(window, cx);
             cx.notify();
@@ -203,10 +209,10 @@ impl LauncherView {
                     self.begin_stream(live.activate_session(session_id, input_mode), cx);
                 }
                 Err(error) => {
-                    self.notice = Some(l10n::could_not_activate_anywhere(
-                        self.locale,
-                        &format!("{error:#}"),
-                    ));
+                    self.set_notice(
+                        l10n::could_not_activate_anywhere(self.locale, &format!("{error:#}")),
+                        components::NoticeKind::Error,
+                    );
                 }
             }
         }
@@ -260,14 +266,20 @@ impl LauncherView {
             self.runtime_state,
             RuntimeState::Starting | RuntimeState::Failed
         ) {
-            self.notice = Some(match self.runtime_state {
-                RuntimeState::Starting => l10n::starting_anywhere(self.locale),
-                RuntimeState::Failed => self
-                    .notice
-                    .clone()
-                    .unwrap_or_else(|| l10n::launcher_startup_failed(self.locale)),
+            let (message, kind) = match self.runtime_state {
+                RuntimeState::Starting => (
+                    l10n::starting_anywhere(self.locale),
+                    components::NoticeKind::Info,
+                ),
+                RuntimeState::Failed => (
+                    self.notice
+                        .clone()
+                        .unwrap_or_else(|| l10n::launcher_startup_failed(self.locale)),
+                    components::NoticeKind::Error,
+                ),
                 RuntimeState::Preview | RuntimeState::Ready => unreachable!(),
-            });
+            };
+            self.set_notice(message, kind);
             cx.notify();
             return;
         }
@@ -288,6 +300,8 @@ impl LauncherView {
         self.request_shortcut_catalog(cx);
         if self.settings.selected == SettingsCategory::ApplicationHistory {
             self.request_app_history_settings_sources(cx);
+        } else if self.settings.selected == SettingsCategory::Clipboard {
+            self.request_clipboard_settings_status(cx);
         }
         let settings_focus_handle = self.settings_focus_handle.clone();
         cx.defer_in(window, move |this, window, cx| {

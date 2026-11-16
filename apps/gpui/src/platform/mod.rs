@@ -3,7 +3,7 @@ mod preview;
 
 pub use material::{
     current_appearance as current_window_appearance, current_mode as current_window_material,
-    uses_increase_contrast, uses_opaque_fallback, WindowAppearance,
+    uses_increase_contrast, uses_opaque_fallback, uses_reduce_motion, WindowAppearance,
 };
 pub use preview::{PreviewHost, PreviewPoll};
 
@@ -424,8 +424,9 @@ static LAUNCHER_RESIZE_GENERATION: std::sync::atomic::AtomicU64 =
 /// `NSWindow::setContentSize` keeps the bottom edge fixed. Repositioning in a
 /// later main-queue turn exposes an intermediate frame whose content has the
 /// new height but the old top anchor. A single `setFrame:display:` avoids that
-/// mismatch. Rapid candidate updates also coalesce to the latest requested
-/// size so stale queued frames cannot win.
+/// mismatch. The native resize also suppresses implicit layer animations and
+/// draws the resized content before presenting the new frame. Rapid candidate
+/// updates coalesce to the latest size so stale queued frames cannot win.
 pub fn resize_main_window_preserving_top(width: f32, height: f32) -> bool {
     #[cfg(target_os = "macos")]
     {
@@ -450,6 +451,21 @@ pub fn resize_main_window_preserving_top(width: f32, height: f32) -> bool {
         let _ = (width, height);
         false
     }
+}
+
+pub(crate) fn constrained_window_extent(
+    visible_width: f32,
+    visible_height: f32,
+    requested_width: f32,
+    requested_height: f32,
+    preferred_inset: f32,
+) -> (f32, f32) {
+    let inset_x = preferred_inset.min(visible_width.max(0.0) / 4.0);
+    let inset_y = preferred_inset.min(visible_height.max(0.0) / 4.0);
+    (
+        requested_width.min((visible_width - inset_x * 2.0).max(1.0)),
+        requested_height.min((visible_height - inset_y * 2.0).max(1.0)),
+    )
 }
 
 pub fn launcher_should_dismiss_for_focus_loss() -> bool {
@@ -695,6 +711,7 @@ mod macos {
         NSNotification, NSNotificationCenter, NSObject, NSObjectProtocol, NSRect, NSSize, NSString,
         NSURL,
     };
+    use objc2_quartz_core::CATransaction;
     use std::{
         cell::{Cell, RefCell},
         ptr::{self, NonNull},
@@ -1493,6 +1510,7 @@ mod macos {
             .or_else(|| window.screen().map(|screen| screen.visibleFrame()))
             .or_else(|| NSScreen::mainScreen(marker).map(|screen| screen.visibleFrame()));
         let visible = visible?;
+        let size = constrained_window_size(visible, size);
         let centered_x = visible.origin.x + (visible.size.width - size.width) * 0.5;
         let max_x = visible.origin.x + (visible.size.width - size.width).max(0.0);
         let anchor_top = if use_pointer {
@@ -1525,6 +1543,20 @@ mod macos {
         Some(NSRect::new(origin, size))
     }
 
+    pub(super) fn constrained_window_size(visible: NSRect, requested: NSSize) -> NSSize {
+        let (width, height) = super::constrained_window_extent(
+            visible.size.width as f32,
+            visible.size.height as f32,
+            requested.width as f32,
+            requested.height as f32,
+            crate::ui::design_tokens::metrics::SPACE_LG,
+        );
+        NSSize {
+            width: f64::from(width),
+            height: f64::from(height),
+        }
+    }
+
     fn position_launcher_window(window: &NSWindow, marker: MainThreadMarker, use_pointer: bool) {
         let Some(frame) = launcher_frame(window, marker, use_pointer, window.frame().size) else {
             return;
@@ -1552,7 +1584,25 @@ mod macos {
         let Some(frame) = launcher_frame(&window, marker, false, size) else {
             return false;
         };
-        window.setFrame_display(frame, window.isVisible());
+        // Input and result updates replace the GPUI scene immediately. Letting
+        // AppKit animate the glass/backing layers would stretch the old Metal
+        // drawable while that scene is being resized. Present geometry and the
+        // freshly drawn content together, without a native resize transition.
+        CATransaction::begin();
+        CATransaction::setDisableActions(true);
+        CATransaction::setAnimationDuration(0.0);
+        let visible = window.isVisible();
+        window.setFrame_display_animate(frame, false, false);
+        if let Some(content) = window.contentView() {
+            content.layoutSubtreeIfNeeded();
+            if visible {
+                content.displayIfNeeded();
+            }
+        }
+        if visible {
+            window.displayIfNeeded();
+        }
+        CATransaction::commit();
         tracing::debug!(
             width = size.width,
             height = size.height,
@@ -2083,6 +2133,22 @@ mod tests {
             let origin_y = launcher_origin_y(visible_bottom, height, anchor_top);
             assert_eq!(origin_y + height, anchor_top);
         }
+    }
+
+    #[test]
+    fn constrained_window_extent_keeps_tool_pages_inside_the_usable_screen() {
+        let inset = crate::ui::design_tokens::metrics::SPACE_LG;
+        assert_eq!(
+            constrained_window_extent(800.0, 600.0, 920.0, 600.0, inset),
+            (800.0 - inset * 2.0, 600.0 - inset * 2.0)
+        );
+        assert_eq!(
+            constrained_window_extent(1_440.0, 875.0, 920.0, 600.0, inset),
+            (920.0, 600.0)
+        );
+        let (width, height) = constrained_window_extent(4.0, 4.0, 920.0, 600.0, inset);
+        assert!(width > 0.0 && width <= 4.0);
+        assert!(height > 0.0 && height <= 4.0);
     }
 
     #[test]

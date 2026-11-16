@@ -153,7 +153,9 @@ v92 真实桌面验收发现四项 UI 缺陷，Build 95 已完成修复并重复
   primary 7.30–9.14:1、secondary 6.03–7.56:1、muted 5.57–6.98:1；语义图标
   最低约 4.47:1。Increase Contrast 将 scrim alpha 提高到约 70%。Build 165
   后续把这一历史黑色遮罩改为与 Flutter 一致的约 63% 中性灰
-  `contentScrim`（`#a0303438`），以减少空态与有结果状态之间的玻璃明暗差。
+  `contentScrim`（`#a0303438`）；Build 167 真机发现窗口高度变化仍会改变原生
+  Glass 整体亮度，因此最终提高为约 93% 中性灰（`#ed303438`），Increase
+  Contrast 为约 95%。
 
 证据目录为
 `build/acceptance-gpui-ui/v95-20261113-190205/`，Build `0.14.0+95`、Bundle ID
@@ -863,7 +865,7 @@ v159 后的 Flutter oracle 抽样又确认两个输入差异：
   两个 `⌘K` 入口的 held repeat 断言；新增
   `command_k_browses_a_menu_when_no_object_actions_exist`。
 
-当前自动门禁为 GPUI 182 passed、workspace 864 passed / 6 ignored / 0 failed；
+当前自动门禁为 GPUI 200 passed、workspace 882 passed / 6 ignored / 0 failed；
 `scripts/check-gpui.sh`、`scripts/check.sh`、Clippy、格式、文档和
 `git diff --check` 通过。
 
@@ -898,6 +900,51 @@ v165 在解锁的真实桌面完成针对性复验：空态与 `ChatGPT` 查询�
 严格签名、隔离数据目录和两个隔离热键已核对；Rust 日志零 ERROR / WARN，
 真实拼音输入触发过一条 macOS `IMKCFRunLoopWakeUpReliable` stderr 提示，但输入
 与候选提交正常。详细证据见该目录的 `VALIDATION.md`。
+
+### 2026-11-16 UI 审查 15 项修复与 Build 167
+
+按 [GPUI UI 审查](archive/reviews/gpui-ui-review-2026-11-16.md) 修复并在
+v166 / v167 隔离包上复核：
+
+- UI01 / UI10：Settings 关闭确认和剪贴板删除确认使用遮罩命中隔离、模态焦点
+  循环与关闭后焦点恢复；普通字符、组合键、指针和 IME 不能到达底页。Clipboard
+  Clear 及缩短期限先显示不可恢复范围，取消不调用运行时，loading 或 stale
+  confirmation 的重复提交被拒绝。
+- TEST01 / UI03 / DEV01：布局测试统一使用真实 viewport；Launcher 的 loading、
+  empty、1 / 5 行、提示出现 / 消失和无 Core preview 过滤都经同一后渲染尺寸
+  收敛入口；新增结果数量与 preview 回归。
+- UI02 / UI04：Notice 高度限制为 44–96 px 并在内部滚动。Scope 用可收缩的左右
+  gutter 居中短组，溢出时 gutter 归零、按钮作为滚动容器直接子项，选中项能滚入
+  视口；新增短组和长组回归。
+- UI05 / UI06：Shelf 页头从 28 px titlebar inset 后开始；480×520 和 360×360
+  真机截图中状态图标、搜索框、可见 Esc 均不进入交通灯区域。可见 Esc 与键盘
+  Esc 共用返回链，真机验证查询、Actions 和删除确认均只关闭当前局部层。
+- UI07 / UI08：Unsupported Tool 输入进入有界纵向滚动并允许长路径换行；放弃
+  语言草稿会在中 / 英双向恢复已保存 locale、模型和 placeholder。v167 真机执行
+  中→英→放弃，Launcher 与 Settings 均恢复中文。
+- UI09 / UI11：Clipboard 设置从冷启动读取真实状态，展示容量上限 / 1 / 7 / 30 /
+  90 天和恢复 / 5 / 15 / 60 分钟；真机完成暂停 5 分钟、显示“已暂停”和立即
+  恢复。状态回包断线会退出 loading 并报错。Tasks 键盘帮助显示 Info，
+  Launcher / Shelf / Tasks 的 Notice 分别保留 Info、Warning、Error、Success
+  语义。
+- UI12 / UI13：macOS Reduce Motion 在启动和辅助功能通知时同步给 GPUI；原生
+  resize 与初始辅助窗口按当前屏幕可用区域约束宽高，Settings 在小 viewport 下
+  使用实际 native 高度并保留内容滚动。自动化与 v167 日志确认状态透传和约束
+  函数；系统 Reduce Motion 切换及 800×600 真实显示器矩阵仍未执行。
+
+v166 真机复验同时发现，上一版约 63% 的 `contentScrim` 在 72 / 473 pt 两种窗口
+高度下仍出现最大约 21 个 RGB 级差；原因是 `NSGlassEffectView` 会随采样面积改变
+整体亮度。v167 将中性灰 veil 提高到约 93%（`#ed303438`），保留 7% 桌面透射和
+原生高光。同一页头区域的空态 / 查询态采样从 `RGB 93/97/100` 对
+`75/79/79` 改善为 `57/60/65` 对 `53/57/59`，差约 4 / 3 / 6 个通道级。
+
+最终候选为
+`build/acceptance-gpui-ui/v167-20261116-153939/Anywhere-GPUI-UI-Alignment-v167.app`
+（`0.14.0+167`，Bundle ID `dev.anywhere.launcher.gpui.uiplanv167`，PID
+`58275`，父 PID `1`），arm64、CDHash `76f55f34...`、可执行文件 SHA-256
+`1d8eedb2...`；严格签名、隔离数据、热键注册和零 Rust ERROR / WARN 已核对。
+Launcher 为 layer 3 且失焦隐藏；Shelf 为 layer 3 且失焦保持；Settings 与
+Running Tasks 为 layer 0，失焦后保持普通窗口行为。VoiceOver 按约定不验证。
 
 ## 已完成的物理验收
 

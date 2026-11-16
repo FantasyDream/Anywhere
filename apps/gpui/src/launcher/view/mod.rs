@@ -111,6 +111,26 @@ enum ShortcutSlot {
     ContextShortcut,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ClipboardSettingsChoice {
+    Retention,
+    Pause,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum ClipboardConfirmation {
+    Clear,
+    SetRetention(u32),
+}
+
+fn clipboard_confirmation_is_submittable(
+    loading: bool,
+    presented: Option<ClipboardConfirmation>,
+    requested: ClipboardConfirmation,
+) -> bool {
+    !loading && presented == Some(requested)
+}
+
 #[derive(Clone, Debug)]
 struct ContextShortcutDraft {
     action_id: String,
@@ -275,6 +295,14 @@ pub struct LauncherView {
     action_shortcut_resolving: Option<String>,
     settings_close_pending: bool,
     settings_exit_intent: Option<SettingsExitIntent>,
+    settings_modal_return_focus: Option<FocusHandle>,
+    settings_keep_editing_focus: FocusHandle,
+    settings_discard_focus: FocusHandle,
+    settings_save_focus: FocusHandle,
+    settings_confirm_cancel_focus: FocusHandle,
+    settings_confirm_accept_focus: FocusHandle,
+    clipboard_settings_choice: Option<ClipboardSettingsChoice>,
+    clipboard_confirmation: Option<ClipboardConfirmation>,
     settings_save_generation: u64,
     parent_workspace: Option<ParentWorkspace>,
     input_mode: InputMode,
@@ -283,6 +311,7 @@ pub struct LauncherView {
     root_navigation_open: bool,
     root_navigation_mode: InputMode,
     scope_scroll: ScrollHandle,
+    notice_scroll: ScrollHandle,
     file_filter_scroll: ScrollHandle,
     result_scroll: ScrollHandle,
     file_search_scroll: ScrollHandle,
@@ -291,12 +320,14 @@ pub struct LauncherView {
     history_scroll: ScrollHandle,
     tasks_scroll: ScrollHandle,
     web_packages_scroll: ScrollHandle,
+    unsupported_tool_scroll: ScrollHandle,
     settings_scrolls: [ScrollHandle; 7],
     settings: SettingsModel,
     settings_focus_handle: FocusHandle,
     screen: Screen,
     locale: Locale,
     notice: Option<String>,
+    notice_kind: components::NoticeKind,
     preview: Option<PreviewHost>,
     preview_busy: bool,
     preview_generation: u64,
@@ -320,7 +351,7 @@ pub struct LauncherView {
 impl LauncherView {
     pub(crate) fn set_startup_error(&mut self, error: String, cx: &mut Context<Self>) {
         self.runtime_state = RuntimeState::Failed;
-        self.notice = Some(error);
+        self.set_notice(error, components::NoticeKind::Error);
         self.model.loading = false;
         cx.notify();
     }
@@ -544,6 +575,7 @@ impl LauncherView {
         self.model.set_locale(locale);
         self.input_placeholder = l10n::search_apps_actions(locale);
         self.notice = settings_error;
+        self.notice_kind = components::NoticeKind::Error;
         self.live = Some(live);
         self.hotkeys = hotkeys;
         self.runtime_state = RuntimeState::Ready;
@@ -683,11 +715,14 @@ impl LauncherView {
                     this.mark_query_user_controlled();
                     let value = this.input.read(cx).value().to_string();
                     this.model.set_query(value);
-                    this.notice = this
-                        .model
-                        .selected_row()
-                        .filter(|row| !row.enabled)
-                        .map(|_| l10n::this_action_unavailable(this.locale));
+                    if this.model.selected_row().is_some_and(|row| !row.enabled) {
+                        this.set_notice(
+                            l10n::this_action_unavailable(this.locale),
+                            components::NoticeKind::Warning,
+                        );
+                    } else {
+                        this.clear_notice();
+                    }
                     this.request_live_update(cx);
                     cx.notify();
                 }
@@ -703,11 +738,14 @@ impl LauncherView {
                     this.mark_query_user_controlled();
                     this.model
                         .set_query(this.content_input.read(cx).value().to_string());
-                    this.notice = this
-                        .model
-                        .selected_row()
-                        .filter(|row| !row.enabled)
-                        .map(|_| l10n::this_action_unavailable(this.locale));
+                    if this.model.selected_row().is_some_and(|row| !row.enabled) {
+                        this.set_notice(
+                            l10n::this_action_unavailable(this.locale),
+                            components::NoticeKind::Warning,
+                        );
+                    } else {
+                        this.clear_notice();
+                    }
                     this.request_live_update(cx);
                     cx.notify();
                 }
@@ -875,7 +913,52 @@ impl LauncherView {
                         cx.stop_propagation();
                         return;
                     }
-                    // Composition belongs to the editor, including Settings Esc/Tab.
+                    let settings_modal_open = this.screen == Screen::Settings
+                        && (this.settings_close_pending || this.clipboard_confirmation.is_some());
+                    if settings_modal_open {
+                        if is_scope_tab_shortcut(event.keystroke.key.as_str(), modifiers) {
+                            this.cycle_settings_modal_focus(
+                                event.keystroke.modifiers.shift,
+                                window,
+                                cx,
+                            );
+                            window.prevent_default();
+                            cx.stop_propagation();
+                            return;
+                        }
+                        if !modifiers.modified && event.keystroke.key.eq_ignore_ascii_case("escape")
+                        {
+                            if this.clipboard_confirmation.is_some() {
+                                this.cancel_clipboard_confirmation(window, cx);
+                            } else {
+                                this.cancel_settings_close_prompt(window, cx);
+                            }
+                            window.prevent_default();
+                            cx.stop_propagation();
+                            return;
+                        }
+                        let focused_modal_control = window.focused(cx).is_some_and(|focused| {
+                            [
+                                &this.settings_keep_editing_focus,
+                                &this.settings_discard_focus,
+                                &this.settings_save_focus,
+                                &this.settings_confirm_cancel_focus,
+                                &this.settings_confirm_accept_focus,
+                            ]
+                            .into_iter()
+                            .any(|handle| handle == &focused)
+                        });
+                        let activates_focused_control = !modifiers.modified
+                            && matches!(event.keystroke.key.as_str(), "enter" | "space" | "return")
+                            && focused_modal_control;
+                        if !activates_focused_control {
+                            window.prevent_default();
+                            cx.stop_propagation();
+                        }
+                        return;
+                    }
+                    // Composition belongs to the editor. An open Settings modal
+                    // is handled above so IME input cannot reach underlying fields.
                     if matches!(
                         event.input_preference,
                         gpui_kit::InputPreference::CharacterInput
@@ -1076,6 +1159,14 @@ impl LauncherView {
             action_shortcut_resolving: None,
             settings_close_pending: false,
             settings_exit_intent: None,
+            settings_modal_return_focus: None,
+            settings_keep_editing_focus: cx.focus_handle(),
+            settings_discard_focus: cx.focus_handle(),
+            settings_save_focus: cx.focus_handle(),
+            settings_confirm_cancel_focus: cx.focus_handle(),
+            settings_confirm_accept_focus: cx.focus_handle(),
+            clipboard_settings_choice: None,
+            clipboard_confirmation: None,
             settings_save_generation: 0,
             parent_workspace: None,
             input_mode: InputMode::Environment,
@@ -1084,6 +1175,7 @@ impl LauncherView {
             root_navigation_open: false,
             root_navigation_mode: InputMode::Environment,
             scope_scroll: ScrollHandle::new(),
+            notice_scroll: ScrollHandle::new(),
             file_filter_scroll: ScrollHandle::new(),
             result_scroll: ScrollHandle::new(),
             file_search_scroll: ScrollHandle::new(),
@@ -1092,12 +1184,14 @@ impl LauncherView {
             history_scroll: ScrollHandle::new(),
             tasks_scroll: ScrollHandle::new(),
             web_packages_scroll: ScrollHandle::new(),
+            unsupported_tool_scroll: ScrollHandle::new(),
             settings_scrolls: std::array::from_fn(|_| ScrollHandle::new()),
             settings,
             settings_focus_handle: cx.focus_handle(),
             screen: Screen::Launcher,
             locale,
             notice: search_access_error,
+            notice_kind: components::NoticeKind::Error,
             preview: None,
             preview_busy: false,
             preview_generation: 0,
@@ -1565,7 +1659,7 @@ impl LauncherView {
                     }
                     LiveEvent::Error(error) => {
                         this.web_surface.error = Some(error.clone());
-                        this.notice = Some(error);
+                        this.set_notice(error, components::NoticeKind::Error);
                     }
                     event => this.apply_auxiliary_event(event, cx),
                 }
@@ -1654,7 +1748,7 @@ impl LauncherView {
         } else {
             0.0
         };
-        let notice_height = if self.notice.is_some() { 44.0 } else { 0.0 };
+        let notice_height = self.launcher_notice_height();
         let heading_height = if self.result_heading().is_some() {
             24.0
         } else {
@@ -1673,6 +1767,46 @@ impl LauncherView {
             + if has_panel { rows_height } else { 0.0 };
         let height = height.clamp(self.launcher_input_height(), 520.0);
         gpui_kit::size(px(LAUNCHER_WIDTH), px(height))
+    }
+
+    fn launcher_notice_height(&self) -> f32 {
+        let Some(notice) = self.notice.as_deref() else {
+            return 0.0;
+        };
+        let characters_per_line = if self.locale == Locale::Zh {
+            42.0
+        } else {
+            78.0
+        };
+        let line_count = (notice.chars().count() as f32 / characters_per_line)
+            .ceil()
+            .clamp(1.0, 6.0);
+        let content_height =
+            line_count * metrics::LABEL_SIZE * 1.2 + metrics::SPACE_MD + metrics::SPACE_SM;
+        content_height.clamp(metrics::NOTICE_MIN_HEIGHT, metrics::NOTICE_MAX_HEIGHT)
+    }
+
+    fn set_notice(&mut self, message: impl Into<String>, kind: components::NoticeKind) {
+        self.notice = Some(message.into());
+        self.notice_kind = kind;
+    }
+
+    fn clear_notice(&mut self) {
+        self.notice = None;
+        self.notice_kind = components::NoticeKind::Warning;
+    }
+
+    fn sync_launcher_window_after_render(&self, window: &Window, cx: &mut Context<Self>) {
+        if !matches!(self.screen, Screen::Launcher | Screen::FileSearch)
+            || self.standalone_shelf
+            || self.standalone_tasks
+        {
+            return;
+        }
+        let size = self.desired_window_size();
+        if window_size_changed(window.bounds().size, size) {
+            self.resize_current_window(cx);
+        }
     }
 
     fn has_scope_bar(&self) -> bool {
@@ -1715,8 +1849,10 @@ impl LauncherView {
 
     fn reveal_selected_scope(&self) {
         if self.has_scope_bar() {
+            // The leading flexible gutter is the scroll container's first
+            // child; scope buttons begin at index one.
             self.scope_scroll
-                .scroll_to_item(self.selected_scope_item_index());
+                .scroll_to_item(self.selected_scope_item_index() + 1);
         }
     }
 
@@ -1900,6 +2036,7 @@ impl LauncherView {
 
     fn request_live_update(&mut self, cx: &mut Context<Self>) {
         let Some(live) = self.live.clone() else {
+            self.resize_current_window(cx);
             return;
         };
         if self.model.object_actions_active {
@@ -1992,7 +2129,7 @@ impl LauncherView {
                     }
                     Some(LiveEvent::Ignored) => {}
                     Some(LiveEvent::Error(error)) => {
-                        this.notice = Some(error);
+                        this.set_notice(error, components::NoticeKind::Error);
                         this.file_search.select_after_load = false;
                     }
                     Some(event) => {
@@ -2020,6 +2157,18 @@ impl LauncherView {
         }
     }
 
+    fn request_clipboard_settings_status(&mut self, cx: &mut Context<Self>) {
+        let Some(live) = self.live.clone() else {
+            return;
+        };
+        self.clipboard.query_generation = self.clipboard.query_generation.wrapping_add(1);
+        let request_id = self.clipboard.query_generation;
+        self.clipboard.loading = true;
+        let receiver = live.clipboard_snapshot(String::new());
+        self.poll_clipboard_search(receiver, request_id, cx);
+        cx.notify();
+    }
+
     fn poll_clipboard_search(
         &mut self,
         mut receiver: Receiver<LiveEvent>,
@@ -2028,6 +2177,19 @@ impl LauncherView {
     ) {
         cx.spawn(async move |this, cx| {
             let Some(event) = receiver.recv().await else {
+                let _ = this.update(cx, |this, cx| {
+                    if request_id != this.clipboard.query_generation {
+                        return;
+                    }
+                    this.clipboard.loading = false;
+                    let message = if this.screen == Screen::Settings {
+                        l10n::clipboard_settings_failed(this.locale)
+                    } else {
+                        l10n::history_operation_failed(this.locale)
+                    };
+                    this.set_notice(message, components::NoticeKind::Error);
+                    cx.notify();
+                });
                 return;
             };
             let _ = this.update(cx, |this, cx| {
@@ -2038,7 +2200,7 @@ impl LauncherView {
                     LiveEvent::Clipboard(snapshot) => this.clipboard.apply(snapshot),
                     LiveEvent::Error(error) => {
                         this.clipboard.loading = false;
-                        this.notice = Some(error);
+                        this.set_notice(error, components::NoticeKind::Error);
                     }
                     event => this.apply_auxiliary_event(event, cx),
                 }
@@ -2059,6 +2221,23 @@ impl LauncherView {
     ) {
         cx.spawn(async move |this, cx| {
             let Some(event) = receiver.recv().await else {
+                let _ = this.update(cx, |this, cx| {
+                    if operation_id != this.clipboard.operation_generation {
+                        return;
+                    }
+                    this.clipboard.loading = false;
+                    let message = match failure {
+                        ClipboardOperationFailure::Copy => l10n::copy_failed(this.locale),
+                        ClipboardOperationFailure::Delete => {
+                            l10n::history_operation_failed(this.locale)
+                        }
+                        ClipboardOperationFailure::Settings => {
+                            l10n::clipboard_settings_failed(this.locale)
+                        }
+                    };
+                    this.set_notice(message, components::NoticeKind::Error);
+                    cx.notify();
+                });
                 return;
             };
             let refresh = this
@@ -2073,19 +2252,25 @@ impl LauncherView {
                             }) {
                                 this.clipboard.copied_item =
                                     success.as_ref().map(|(item_id, _)| *item_id);
-                                this.notice = None;
+                                this.clear_notice();
                                 if return_to_application
                                     && crate::platform::clipboard_shelf_is_key_window()
                                 {
-                                    this.notice = match crate::platform::return_to_previous_application() {
-                                        crate::platform::ApplicationReturnResult::Returned => None,
+                                    match crate::platform::return_to_previous_application() {
+                                        crate::platform::ApplicationReturnResult::Returned => {}
                                         crate::platform::ApplicationReturnResult::Unavailable => {
-                                            Some(l10n::shelf_return_unavailable(this.locale))
+                                            this.set_notice(
+                                                l10n::shelf_return_unavailable(this.locale),
+                                                components::NoticeKind::Warning,
+                                            );
                                         }
                                         crate::platform::ApplicationReturnResult::Failed => {
-                                            Some(l10n::shelf_return_failed(this.locale))
+                                            this.set_notice(
+                                                l10n::shelf_return_failed(this.locale),
+                                                components::NoticeKind::Warning,
+                                            );
                                         }
-                                    };
+                                    }
                                 }
                             }
                             true
@@ -2100,7 +2285,10 @@ impl LauncherView {
                                     l10n::clipboard_settings_failed(this.locale)
                                 }
                             };
-                            this.notice = Some(format!("{message} {error}"));
+                            this.set_notice(
+                                format!("{message} {error}"),
+                                components::NoticeKind::Error,
+                            );
                             false
                         }
                         event => {
@@ -2167,7 +2355,10 @@ impl LauncherView {
                     LiveEvent::Error(error) => {
                         tracing::warn!(%error, "app_history_session_failed");
                         this.app_history.fail();
-                        this.notice = Some(l10n::app_history_operation_failed(this.locale));
+                        this.set_notice(
+                            l10n::app_history_operation_failed(this.locale),
+                            components::NoticeKind::Error,
+                        );
                     }
                     _ => {}
                 }
@@ -2265,12 +2456,19 @@ impl LauncherView {
                     LiveEvent::AppHistory(snapshot) if snapshot.source_id == source_id => {
                         this.app_history.apply(snapshot);
                         this.reveal_result_row(this.app_history.selected);
-                        this.notice = this.app_history.notice_text(this.locale);
+                        if let Some(message) = this.app_history.notice_text(this.locale) {
+                            this.set_notice(message, components::NoticeKind::Warning);
+                        } else {
+                            this.clear_notice();
+                        }
                     }
                     LiveEvent::Error(error) => {
                         tracing::warn!(%error, "app_history_search_failed");
                         this.app_history.fail();
-                        this.notice = Some(l10n::app_history_operation_failed(this.locale));
+                        this.set_notice(
+                            l10n::app_history_operation_failed(this.locale),
+                            components::NoticeKind::Error,
+                        );
                     }
                     LiveEvent::Ignored => {
                         this.app_history.loading = false;
@@ -2561,7 +2759,7 @@ impl LauncherView {
                             }
                             this.settings.saving = false;
                             this.settings.error = Some(message.clone());
-                            this.notice = Some(message);
+                            this.set_notice(message, components::NoticeKind::Error);
                             cx.notify();
                         }
                     })
@@ -2616,7 +2814,7 @@ impl LauncherView {
                         this.settings.saving = false;
                         this.shortcut_catalog_loading = false;
                         this.settings.error = Some(error.clone());
-                        this.notice = Some(error);
+                        this.set_notice(error, components::NoticeKind::Error);
                         cx.notify();
                     })
                     .ok();
@@ -2714,7 +2912,7 @@ impl LauncherView {
                             }
                             this.settings.saving = false;
                             this.settings.error = Some(message.clone());
-                            this.notice = Some(message);
+                            this.set_notice(message, components::NoticeKind::Error);
                             cx.notify();
                         }
                     })
@@ -2770,7 +2968,7 @@ impl LauncherView {
                             this.settings.saving = false;
                             this.shortcut_catalog_loading = false;
                             this.settings.error = Some(error.clone());
-                            this.notice = Some(error);
+                            this.set_notice(error, components::NoticeKind::Error);
                             cx.notify();
                         }
                     })
@@ -2814,7 +3012,11 @@ impl LauncherView {
             }
             LiveEvent::AppHistory(snapshot) => {
                 self.app_history.apply(snapshot);
-                self.notice = self.app_history.notice_text(self.locale);
+                if let Some(message) = self.app_history.notice_text(self.locale) {
+                    self.set_notice(message, components::NoticeKind::Warning);
+                } else {
+                    self.clear_notice();
+                }
             }
             LiveEvent::AppHistoryAction { item_id, copy } => {
                 if copy
@@ -2823,7 +3025,7 @@ impl LauncherView {
                         .selected_item()
                         .is_some_and(|item| item.id == item_id)
                 {
-                    self.notice = Some(l10n::copied(self.locale));
+                    self.set_notice(l10n::copied(self.locale), components::NoticeKind::Success);
                 }
             }
             LiveEvent::AppHistoryObjectActions {
@@ -2837,11 +3039,17 @@ impl LauncherView {
             }
             LiveEvent::AppHistoryObjectActionsFailed { request } => {
                 if self.app_history.fail_object_actions(request) {
-                    self.notice = Some(l10n::app_history_operation_failed(self.locale));
+                    self.set_notice(
+                        l10n::app_history_operation_failed(self.locale),
+                        components::NoticeKind::Error,
+                    );
                 }
             }
             LiveEvent::AppHistoryAdaptersOpened { directory } => {
-                self.notice = Some(l10n::opened_folder(self.locale, &directory));
+                self.set_notice(
+                    l10n::opened_folder(self.locale, &directory),
+                    components::NoticeKind::Success,
+                );
             }
             LiveEvent::ShortcutCatalog(actions) => {
                 self.shortcut_catalog = actions;
@@ -2858,29 +3066,41 @@ impl LauncherView {
                 self.action_shortcut_resolving = None;
                 match candidates.as_slice() {
                     [candidate] => {
-                        self.notice = Some(l10n::running_action(self.locale, &candidate.title));
+                        self.set_notice(
+                            l10n::running_action(self.locale, &candidate.title),
+                            components::NoticeKind::Info,
+                        );
                         if let Some(live) = self.live.clone() {
                             let receiver = live.execute(revision, candidate.candidate_id.clone());
                             self.poll(receiver, self.live_state.generation, cx);
                         }
                     }
                     [] => {
-                        self.notice = Some(l10n::no_matching_actions(self.locale));
+                        self.set_notice(
+                            l10n::no_matching_actions(self.locale),
+                            components::NoticeKind::Warning,
+                        );
                     }
                     _ => {
-                        self.notice = Some(l10n::choose_another_action(self.locale));
+                        self.set_notice(
+                            l10n::choose_another_action(self.locale),
+                            components::NoticeKind::Info,
+                        );
                     }
                 }
             }
             LiveEvent::ActionShortcutFailed { action_id, message } => {
                 if self.action_shortcut_resolving.as_deref() == Some(action_id.as_str()) {
                     self.action_shortcut_resolving = None;
-                    self.notice = Some(l10n::action_failed_with(self.locale, &message));
+                    self.set_notice(
+                        l10n::action_failed_with(self.locale, &message),
+                        components::NoticeKind::Error,
+                    );
                 }
             }
             LiveEvent::Executions(rows) => {
                 self.tasks.apply_rows(rows);
-                self.notice = None;
+                self.clear_notice();
             }
             LiveEvent::ExecutionDetail(detail) => {
                 let request_id = self.tasks.detail_request;
@@ -2956,7 +3176,10 @@ impl LauncherView {
             }
             LiveEvent::DirectoriesAuthorized { roots } => {
                 self.settings_draft.file_search_roots = roots;
-                self.notice = Some(l10n::search_directories_authorized(self.locale));
+                self.set_notice(
+                    l10n::search_directories_authorized(self.locale),
+                    components::NoticeKind::Success,
+                );
             }
             LiveEvent::ApplicationIcon {
                 candidate_id,
@@ -3001,9 +3224,13 @@ impl LauncherView {
         }
         if let (Some(live), Some(row)) = (self.live.clone(), self.model.selected_row().cloned()) {
             if row.enabled {
-                self.notice = Some(l10n::running_action(self.locale, &row.title));
+                self.set_notice(
+                    l10n::running_action(self.locale, &row.title),
+                    components::NoticeKind::Info,
+                );
                 let receiver = live.execute(self.model.revision, row.id);
                 self.poll(receiver, self.live_state.generation, cx);
+                self.resize_current_window(cx);
                 cx.notify();
                 return;
             }
@@ -3013,7 +3240,8 @@ impl LauncherView {
             Some(row) => l10n::action_unavailable_title(self.locale, &row.title),
             None => l10n::no_action_selected(self.locale),
         };
-        self.notice = Some(message);
+        self.set_notice(message, components::NoticeKind::Warning);
+        self.resize_current_window(cx);
         cx.notify();
     }
 
@@ -3021,7 +3249,10 @@ impl LauncherView {
         if self.model.object_actions_active {
             self.model.hide_object_actions();
         }
-        self.notice = Some(action_result_message(result, self.locale));
+        self.set_notice(
+            action_result_message(result, self.locale),
+            action_result_notice_kind(result),
+        );
     }
 
     fn finish_action_result(
@@ -3047,6 +3278,8 @@ impl LauncherView {
         };
         if dismiss {
             self.prepare_hide(cx);
+        } else {
+            self.resize_current_window(cx);
         }
         cx.notify();
         dismiss
@@ -3369,7 +3602,7 @@ impl LauncherView {
         if let (Some(live), Some(item)) = (self.live.clone(), self.app_history.selected_item()) {
             let receiver = live.use_app_history_item(item.id.clone(), false);
             self.poll(receiver, self.live_state.generation, cx);
-            self.notice = Some(l10n::open(self.locale));
+            self.set_notice(l10n::open(self.locale), components::NoticeKind::Info);
             cx.notify();
         }
     }
@@ -3508,7 +3741,7 @@ impl LauncherView {
                     }
                     LiveEvent::Error(error) => {
                         this.tasks.detail = None;
-                        this.notice = Some(error);
+                        this.set_notice(error, components::NoticeKind::Error);
                     }
                     event => this.apply_auxiliary_event(event, cx),
                 }
@@ -3629,7 +3862,10 @@ impl LauncherView {
         match action {
             0 => {
                 cx.write_to_clipboard(ClipboardItem::new_string(detail.row.command.clone()));
-                self.notice = Some(l10n::command_copied(self.locale));
+                self.set_notice(
+                    l10n::command_copied(self.locale),
+                    components::NoticeKind::Success,
+                );
                 cx.notify();
             }
             1 if !detail.row.status.is_active() => self.remove_selected_execution(cx),
@@ -3669,7 +3905,9 @@ impl LauncherView {
                             this.notice = None;
                             cx.notify();
                         }
-                        LiveEvent::Error(error) => this.notice = Some(error),
+                        LiveEvent::Error(error) => {
+                            this.set_notice(error, components::NoticeKind::Error)
+                        }
                         event => this.apply_auxiliary_event(event, cx),
                     }
                     true
@@ -3886,7 +4124,10 @@ impl LauncherView {
                     Err(error) => {
                         let _ = this.update(cx, |this, cx| {
                             this.preview_busy = false;
-                            this.notice = Some(preview_error_message(this.locale, &error));
+                            this.set_notice(
+                                preview_error_message(this.locale, &error),
+                                components::NoticeKind::Error,
+                            );
                             cx.notify();
                         });
                         return;
@@ -3916,12 +4157,18 @@ impl LauncherView {
                                 }
                                 let _ = live.retain_preview(preview.id.clone());
                             }
-                            this.notice = Some(l10n::previewing_title(this.locale, &preview.title));
+                            this.set_notice(
+                                l10n::previewing_title(this.locale, &preview.title),
+                                components::NoticeKind::Info,
+                            );
                             this.start_preview_monitor(generation, cx);
                         }
                         Err(error) => {
                             this.preview_open = false;
-                            this.notice = Some(preview_error_message(this.locale, error));
+                            this.set_notice(
+                                preview_error_message(this.locale, error),
+                                components::NoticeKind::Error,
+                            );
                         }
                     }
                     cx.notify();
@@ -3964,7 +4211,10 @@ impl LauncherView {
         self.settings_draft.file_search_roots = roots.clone();
         set_input_value(&self.file_roots_input, roots.join("\n"), window, cx);
         self.settings.error = None;
-        self.notice = Some(l10n::search_directories_authorized(self.locale));
+        self.set_notice(
+            l10n::search_directories_authorized(self.locale),
+            components::NoticeKind::Success,
+        );
         cx.notify();
     }
 
@@ -4366,7 +4616,7 @@ impl LauncherView {
                     }
                     LiveEvent::Error(error) => {
                         this.model.hide_object_actions();
-                        this.notice = Some(error);
+                        this.set_notice(error, components::NoticeKind::Error);
                     }
                     event => this.apply_auxiliary_event(event, cx),
                 }
@@ -4601,6 +4851,11 @@ impl LauncherView {
                     .items_center()
                     .overflow_x_scroll()
                     .track_scroll(&self.scope_scroll)
+                    // Empty flexible gutters center a short group but collapse
+                    // to zero when the scope buttons overflow. Keeping the
+                    // buttons as direct scroll children also makes
+                    // `scroll_to_item` able to reveal a late selection.
+                    .child(div().min_w(px(0.)).flex_1())
                     .children(self.model.scopes.iter().map(|scope| {
                         self.scope_button(
                             Some(scope.id.clone()),
@@ -4608,6 +4863,7 @@ impl LauncherView {
                             cx,
                         )
                     }))
+                    .child(div().min_w(px(0.)).flex_1())
                     .into_any_element(),
             )
         };
@@ -4879,18 +5135,28 @@ impl LauncherView {
                     }),
             );
         }
-        if let Some(notice) = &self.notice {
+        if let Some(notice) = self.notice.clone() {
+            let notice_height = self.launcher_notice_height();
             root = root.child(
                 div()
-                    .h(px(44.))
+                    .id("launcher-notice")
+                    .test_support()
+                    .h(px(notice_height))
+                    .flex_shrink_0()
                     .px(px(metrics::SPACE_XL))
                     .py(px(4.))
                     .flex()
                     .items_center()
-                    .child(components::notice(
-                        notice.clone(),
-                        components::NoticeKind::Warning,
-                    )),
+                    .child(
+                        div()
+                            .id("launcher-notice-scroll")
+                            .test_support()
+                            .size_full()
+                            .track_scroll(&self.notice_scroll)
+                            .overflow_y_scroll()
+                            .vertical_scrollbar(&self.notice_scroll)
+                            .child(components::notice(notice, self.notice_kind)),
+                    ),
             );
         }
         if has_panel {
@@ -5312,6 +5578,7 @@ impl LauncherView {
 impl Render for LauncherView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync_search_placeholder(window, cx);
+        self.sync_launcher_window_after_render(window, cx);
         let content = match self.screen {
             Screen::Launcher => self.render_launcher(cx),
             Screen::FileSearch => self.render_file_search(cx),
@@ -5431,9 +5698,6 @@ impl Render for LauncherView {
                 ),
                 |element| element.h_full(),
             )
-            .when(self.screen == Screen::Settings, |element| {
-                element.h(px(SETTINGS_HEIGHT))
-            })
     }
 }
 
@@ -5446,6 +5710,23 @@ fn event_handle_matches(view: &LauncherView, handle: &str) -> bool {
         .document
         .as_ref()
         .is_some_and(|document| document.handle == handle)
+}
+
+fn action_result_notice_kind(result: &anywhere_protocol::ActionResult) -> components::NoticeKind {
+    if result.error.is_some() {
+        components::NoticeKind::Error
+    } else if result.warning.is_some() {
+        components::NoticeKind::Warning
+    } else if matches!(
+        result.view,
+        Some(anywhere_protocol::HostView::WebPlugin { .. })
+    ) {
+        components::NoticeKind::Info
+    } else if result.succeeded() {
+        components::NoticeKind::Success
+    } else {
+        components::NoticeKind::Error
+    }
 }
 
 fn accepted_web_acknowledgement(request: &str, response: &str) -> Option<String> {
@@ -5533,6 +5814,48 @@ mod tests {
             })
             .unwrap();
         (window, view)
+    }
+
+    fn sync_test_viewport(
+        cx: &mut TestAppContext,
+        window: AnyWindowHandle,
+        size: gpui_kit::Size<gpui_kit::Pixels>,
+    ) {
+        cx.simulate_window_resize(window, size);
+        cx.run_until_parked();
+        cx.update_window(window, |_, window, cx| {
+            assert_eq!(window.viewport_size(), size);
+            window.render_frame(cx);
+        })
+        .unwrap();
+    }
+
+    fn sync_test_viewport_to_desired(
+        cx: &mut TestAppContext,
+        window: AnyWindowHandle,
+        view: &Entity<LauncherView>,
+    ) {
+        let size = cx.update(|cx| view.read(cx).desired_window_size());
+        sync_test_viewport(cx, window, size);
+    }
+
+    fn render_and_sync_test_viewport(
+        cx: &mut TestAppContext,
+        window: AnyWindowHandle,
+        view: &Entity<LauncherView>,
+    ) {
+        cx.update_window(window, |_, window, cx| window.render_frame(cx))
+            .unwrap();
+        cx.run_until_parked();
+        let desired = cx.update(|cx| view.read(cx).desired_window_size());
+        let bounds = cx
+            .update_window(window, |_, window, _| window.bounds().size)
+            .unwrap();
+        assert_eq!(
+            bounds, desired,
+            "the deferred native resize must follow the rendered state"
+        );
+        sync_test_viewport(cx, window, desired);
     }
 
     fn scoped_state(
@@ -5840,6 +6163,27 @@ mod tests {
         assert!(window_size_changed(
             same,
             gpui_kit::size(px(648.), px(128.))
+        ));
+    }
+
+    #[test]
+    fn clipboard_confirmation_rejects_stale_or_loading_submissions() {
+        let clear = ClipboardConfirmation::Clear;
+        assert!(clipboard_confirmation_is_submittable(
+            false,
+            Some(clear),
+            clear
+        ));
+        assert!(!clipboard_confirmation_is_submittable(
+            true,
+            Some(clear),
+            clear
+        ));
+        assert!(!clipboard_confirmation_is_submittable(false, None, clear));
+        assert!(!clipboard_confirmation_is_submittable(
+            false,
+            Some(ClipboardConfirmation::SetRetention(30)),
+            ClipboardConfirmation::SetRetention(7),
         ));
     }
 
@@ -7066,6 +7410,142 @@ mod tests {
     }
 
     #[gpui_kit::test]
+    fn launcher_resize_converges_for_loading_empty_and_changing_result_counts(
+        cx: &mut TestAppContext,
+    ) {
+        let (window, view) = open_view(cx);
+        cx.update(|cx| {
+            view.update(cx, |view, cx| {
+                view.model.set_query("fixture".to_owned());
+                view.model.rows = (0..5)
+                    .map(|index| file_row(&format!("row-{index}"), "Result"))
+                    .collect();
+                view.model.loading = false;
+                cx.notify();
+            });
+        });
+        render_and_sync_test_viewport(cx, window, &view);
+        assert_eq!(
+            cx.update_window(window, |_, window, _| window.viewport_size().height)
+                .unwrap(),
+            px(360.5)
+        );
+
+        for rows in [1, 5] {
+            cx.update(|cx| {
+                view.update(cx, |view, cx| {
+                    view.model.rows = (0..rows)
+                        .map(|index| file_row(&format!("row-{index}"), "Result"))
+                        .collect();
+                    view.model.selected = 0;
+                    cx.notify();
+                });
+            });
+            render_and_sync_test_viewport(cx, window, &view);
+            let expected = if rows == 1 { 136.5 } else { 360.5 };
+            assert_eq!(
+                cx.update_window(window, |_, window, _| window.viewport_size().height)
+                    .unwrap(),
+                px(expected)
+            );
+        }
+
+        cx.update(|cx| {
+            view.update(cx, |view, cx| {
+                view.model.rows.clear();
+                view.model.loading = true;
+                cx.notify();
+            });
+        });
+        render_and_sync_test_viewport(cx, window, &view);
+        assert_eq!(
+            cx.update_window(window, |_, window, _| window.viewport_size().height)
+                .unwrap(),
+            px(136.5)
+        );
+
+        cx.update(|cx| {
+            view.update(cx, |view, cx| {
+                view.model.loading = false;
+                view.model.set_query(String::new());
+                view.model.rows.clear();
+                view.clear_notice();
+                cx.notify();
+            });
+        });
+        render_and_sync_test_viewport(cx, window, &view);
+        assert_eq!(
+            cx.update_window(window, |_, window, _| window.viewport_size().height)
+                .unwrap(),
+            px(72.)
+        );
+    }
+
+    #[gpui_kit::test]
+    fn preview_query_without_a_runtime_resizes_to_its_local_empty_state(cx: &mut TestAppContext) {
+        let (window, view) = open_view(cx);
+        sync_test_viewport_to_desired(cx, window, &view);
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("launcher-search-input", cx);
+            window.input("no-preview-match-zzzz", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        let (bounds, desired, rows) = cx
+            .update_window(window, |_, window, cx| {
+                window.render_frame(cx);
+                (
+                    window.bounds().size,
+                    view.read(cx).desired_window_size(),
+                    view.read(cx).model.rows.len(),
+                )
+            })
+            .unwrap();
+        assert_eq!(rows, 0);
+        assert_eq!(
+            bounds, desired,
+            "preview filtering must trigger the same native size update"
+        );
+        sync_test_viewport(cx, window, desired);
+        assert_eq!(
+            cx.update_window(window, |_, window, _| window.viewport_size().height)
+                .unwrap(),
+            desired.height
+        );
+    }
+
+    #[gpui_kit::test]
+    fn constrained_settings_viewport_fills_the_native_window_and_keeps_content_inside(
+        cx: &mut TestAppContext,
+    ) {
+        let (window, view) = open_view(cx);
+        cx.update(|cx| {
+            view.update(cx, |view, cx| {
+                view.screen = Screen::Settings;
+                view.settings.selected = SettingsCategory::General;
+                cx.notify();
+            });
+        });
+        let constrained = gpui_kit::size(px(648.), px(480.));
+        sync_test_viewport(cx, window, constrained);
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            let surface = window.find("settings-surface").bounds();
+            assert_eq!(surface.size.height, constrained.height);
+            let content = window.find("settings-content-scroll-general").bounds();
+            assert!(content.bottom() <= constrained.height);
+            assert!(
+                view.read(cx).settings_scrolls[SettingsCategory::General as usize]
+                    .max_offset()
+                    .y
+                    >= px(0.)
+            );
+        })
+        .unwrap();
+    }
+
+    #[gpui_kit::test]
     fn current_app_moves_from_the_header_to_the_scope_bar(cx: &mut TestAppContext) {
         let (window, view) = open_view(cx);
         cx.update_window(window, |_, window, cx| {
@@ -7106,6 +7586,7 @@ mod tests {
         cx: &mut TestAppContext,
     ) {
         let (window, view) = open_view(cx);
+        sync_test_viewport_to_desired(cx, window, &view);
         cx.update_window(window, |_, window, cx| {
             window.render_frame(cx);
             assert_eq!(window.find("launcher-mode-toggle").expanded(), Some(false));
@@ -7113,6 +7594,7 @@ mod tests {
         })
         .unwrap();
         cx.run_until_parked();
+        sync_test_viewport_to_desired(cx, window, &view);
         cx.update_window(window, |_, window, cx| {
             window.render_frame(cx);
             assert!(window.try_find("launcher-mode-chooser").is_some());
@@ -7159,25 +7641,28 @@ mod tests {
     ) {
         let (handle, view) = open_view(cx);
         for locale in [Locale::En, Locale::Zh] {
-            cx.update_window(handle, |_, window, cx| {
+            cx.update(|cx| {
                 view.update(cx, |view, cx| {
                     view.locale = locale;
                     view.root_navigation_open = false;
                     view.model.rows.clear();
                     view.model.scopes.clear();
                     view.model.loading = false;
-                    view.notice = None;
-                    view.resize_window_for_screen(window);
+                    view.clear_notice();
                     cx.notify();
                 });
+            });
+            sync_test_viewport_to_desired(cx, handle, &view);
+            cx.update_window(handle, |_, window, cx| {
                 window.render_frame(cx);
                 window.click("launcher-mode-toggle", cx);
             })
             .unwrap();
             cx.run_until_parked();
+            sync_test_viewport_to_desired(cx, handle, &view);
             cx.update_window(handle, |_, window, cx| {
                 window.render_frame(cx);
-                assert_eq!(window.bounds().size.height, px(180.5));
+                assert_eq!(window.viewport_size().height, px(180.5));
                 let header = window.find("launcher-search-header").bounds();
                 let chooser = window.find("launcher-mode-chooser").bounds();
                 assert!(chooser.top() >= header.bottom());
@@ -7202,7 +7687,7 @@ mod tests {
     #[gpui_kit::test]
     fn long_candidate_text_does_not_compress_rows_or_cover_primary_action(cx: &mut TestAppContext) {
         let (handle, view) = open_view(cx);
-        cx.update_window(handle, |_, window, cx| {
+        cx.update(|cx| {
             view.update(cx, |view, cx| {
                 view.model.rows = (0..20)
                     .map(|i| {
@@ -7216,10 +7701,12 @@ mod tests {
                     .collect();
                 view.model.selected = 0;
                 view.model.loading = false;
-                view.notice = None;
-                view.resize_window_for_screen(window);
+                view.clear_notice();
                 cx.notify();
             });
+        });
+        sync_test_viewport_to_desired(cx, handle, &view);
+        cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             let first = window.find("candidate-0").bounds();
             let second = window.find("candidate-1").bounds();
@@ -7233,11 +7720,16 @@ mod tests {
             assert!(subtitle.right() <= action.left());
             assert!(title.bottom() <= subtitle.top());
             assert!(subtitle.bottom() <= first.bottom());
+        })
+        .unwrap();
+        cx.update(|cx| {
             view.update(cx, |view, cx| {
                 view.screen = Screen::FileSearch;
-                view.resize_window_for_screen(window);
                 cx.notify();
             });
+        });
+        sync_test_viewport_to_desired(cx, handle, &view);
+        cx.update_window(handle, |_, window, cx| {
             window.render_frame(cx);
             let header = window.find("file-search-header").bounds();
             let filters = window.find("file-search-controls").bounds();
@@ -7269,8 +7761,8 @@ mod tests {
                 cx.notify();
             });
         });
+        sync_test_viewport_to_desired(cx, window, &view);
         cx.update_window(window, |_, window, cx| {
-            view.update(cx, |view, _| view.resize_window_for_screen(window));
             window.render_frame(cx);
             let initial_maximum = view.read(cx).file_search_scroll.max_offset().y;
             assert!(
@@ -7329,8 +7821,8 @@ mod tests {
                 cx.notify();
             });
         });
+        sync_test_viewport_to_desired(cx, window, &view);
         cx.update_window(window, |_, window, cx| {
-            view.update(cx, |view, _| view.resize_window_for_screen(window));
             window.render_frame(cx);
             window.simulate_next_frame(cx);
             window.render_frame(cx);
@@ -7658,9 +8150,12 @@ mod tests {
                 view.screen = Screen::ApplicationHistory;
                 view.app_history.set_query("project".to_owned());
                 set_input_value(&view.history_input, "project", window, cx);
-                view.resize_window_for_screen(window);
                 cx.notify();
             });
+        })
+        .unwrap();
+        sync_test_viewport_to_desired(cx, window, &view);
+        cx.update_window(window, |_, window, cx| {
             window.render_frame(cx);
             window.click("page-escape", cx);
         })
@@ -7794,9 +8289,9 @@ mod tests {
                 ));
             });
         });
+        sync_test_viewport_to_desired(cx, window, &view);
         let viewport = cx
             .update_window(window, |_, window, cx| {
-                view.update(cx, |view, _| view.resize_window_for_screen(window));
                 window.render_frame(cx);
                 assert!(window.try_find("history-object-action-0").is_some());
                 assert!(window.try_find("history-object-action-refresh").is_some());
@@ -7867,8 +8362,8 @@ mod tests {
                 ));
             });
         });
+        sync_test_viewport_to_desired(cx, window, &view);
         cx.update_window(window, |_, window, cx| {
-            view.update(cx, |view, _| view.resize_window_for_screen(window));
             window.render_frame(cx);
             assert!(window.try_find("history-object-action-copy").is_some());
             assert!(window.try_find("history-object-action-refresh").is_some());
@@ -7893,8 +8388,8 @@ mod tests {
                 cx.notify();
             });
         });
+        sync_test_viewport_to_desired(cx, window, &view);
         cx.update_window(window, |_, window, cx| {
-            view.update(cx, |view, _| view.resize_window_for_screen(window));
             window.render_frame(cx);
             assert!(window.try_find("app-history-empty-actions").is_some());
             window.click("app-history-empty-actions", cx);
@@ -7936,8 +8431,8 @@ mod tests {
                 cx.notify();
             });
         });
+        sync_test_viewport_to_desired(cx, window, &view);
         cx.update_window(window, |_, window, cx| {
-            view.update(cx, |view, _| view.resize_window_for_screen(window));
             window.render_frame(cx);
             window.click("history-actions-remote", cx);
         })
@@ -8019,8 +8514,8 @@ mod tests {
                 cx.notify();
             });
         });
+        sync_test_viewport_to_desired(cx, window, &view);
         cx.update_window(window, |_, window, cx| {
-            view.update(cx, |view, _| view.resize_window_for_screen(window));
             window.render_frame(cx);
         })
         .unwrap();
@@ -9536,7 +10031,7 @@ mod tests {
     #[gpui_kit::test]
     fn web_package_review_actions_stay_inside_the_window(cx: &mut TestAppContext) {
         let (window, view) = open_view(cx);
-        cx.update_window(window, |_, window, cx| {
+        cx.update_window(window, |_, _window, cx| {
             view.update(cx, |view, cx| {
                 view.screen = Screen::WebPackages;
                 view.web_surface.review = Some(crate::host::WebPackageReview {
@@ -9548,9 +10043,12 @@ mod tests {
                     permissions: vec!["Read Launcher search text".into()],
                     updating: false,
                 });
-                view.resize_window_for_screen(window);
                 cx.notify();
             });
+        })
+        .unwrap();
+        sync_test_viewport_to_desired(cx, window, &view);
+        cx.update_window(window, |_, window, cx| {
             window.render_frame(cx);
             let approve = window.find("approve-web-package").bounds();
             let viewport = window.viewport_size();
@@ -9716,8 +10214,8 @@ mod tests {
                 cx.notify();
             });
         });
+        sync_test_viewport_to_desired(cx, window, &view);
         cx.update_window(window, |_, window, cx| {
-            view.update(cx, |view, _| view.resize_window_for_screen(window));
             window.render_frame(cx);
             assert!(window.try_find("web-tool-actions").is_some());
             window.click("web-tool-actions", cx);
@@ -9782,6 +10280,529 @@ mod tests {
                     .is_some_and(|input| input == &view.clipboard_input));
                 view.screen = Screen::Tasks;
                 assert!(view.active_editor_input().is_none());
+            });
+        });
+    }
+
+    #[gpui_kit::test]
+    fn settings_close_prompt_blocks_pointer_and_traps_focus(cx: &mut TestAppContext) {
+        let (window, view) = open_view(cx);
+        cx.update(|cx| {
+            view.update(cx, |view, cx| {
+                view.screen = Screen::Settings;
+                view.settings.selected = SettingsCategory::General;
+                view.settings_draft.launch_at_login = !view.preferences.launch_at_login;
+                cx.notify();
+            });
+        });
+        sync_test_viewport_to_desired(cx, window, &view);
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            view.update(cx, |view, cx| {
+                view.settings_focus_handle.focus(window, cx);
+                assert!(!view.request_settings_exit(SettingsExitIntent::Close, window, cx));
+            });
+            window.render_frame(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        assert!(cx
+            .update_window(window, |_, window, cx| {
+                view.read(cx).settings_keep_editing_focus.is_focused(window)
+            })
+            .unwrap());
+
+        let before = cx.update(|cx| view.read(cx).settings_draft.launch_at_login);
+        let switch_center = cx
+            .update_window(window, |_, window, _| {
+                window.find("open-at-login").bounds().center()
+            })
+            .unwrap();
+        let mut visual = VisualTestContext::from_window(window, cx);
+        visual.simulate_click(switch_center, gpui_kit::Modifiers::default());
+        visual.run_until_parked();
+        assert_eq!(
+            visual.update(|_, cx| view.read(cx).settings_draft.launch_at_login),
+            before,
+            "the scrim must block pointer interaction with the underlying switch"
+        );
+
+        visual.update(|window, cx| window.press("tab", cx));
+        visual.run_until_parked();
+        visual.update(|window, cx| {
+            let view = view.read(cx);
+            assert!(
+                view.settings_discard_focus.is_focused(window)
+                    || view.settings_save_focus.is_focused(window)
+            );
+            assert!(!view.settings_focus_handle.is_focused(window));
+        });
+
+        visual.update(|window, cx| window.press("x", cx));
+        visual.run_until_parked();
+        visual.update(|_, cx| {
+            let view = view.read(cx);
+            assert!(view.settings_close_pending);
+            assert_eq!(view.settings_draft.launch_at_login, before);
+        });
+
+        visual.update(|window, cx| {
+            view.update(cx, |view, cx| {
+                view.settings_keep_editing_focus.focus(window, cx);
+                cx.notify();
+            });
+        });
+        visual.run_until_parked();
+        visual.update(|window, cx| window.press("space", cx));
+        visual.run_until_parked();
+        visual.update(|window, cx| {
+            let view = view.read(cx);
+            assert!(!view.settings_close_pending);
+            assert_eq!(view.screen, Screen::Settings);
+            assert_eq!(view.settings_draft.launch_at_login, before);
+            assert!(view.settings_focus_handle.is_focused(window));
+        });
+    }
+
+    #[gpui_kit::test]
+    fn launcher_notice_uses_bounded_height_and_never_overlaps_rows(cx: &mut TestAppContext) {
+        let (window, view) = open_view(cx);
+        cx.update(|cx| {
+            view.update(cx, |view, cx| {
+                view.model.set_query("report".to_owned());
+                view.model.rows = vec![file_row("one", "Report.pdf")];
+                view.set_notice(
+                    "A long error detail\n".repeat(32),
+                    components::NoticeKind::Error,
+                );
+                cx.notify();
+            });
+        });
+        sync_test_viewport_to_desired(cx, window, &view);
+        let mut visual = VisualTestContext::from_window(window, cx);
+        visual.update(|window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("launcher-search-header").is_some());
+            assert!(window.try_find("launcher-notice").is_some());
+            assert!(window.try_find("candidate-0").is_some());
+            assert!(window.try_find("launcher-notice-scroll").is_some());
+        });
+        let header = visual.update(|window, _| window.find("launcher-search-header").bounds());
+        let notice = visual.update(|window, _| window.find("launcher-notice").bounds());
+        let result = visual.update(|window, _| window.find("candidate-0").bounds());
+        assert_eq!(notice.size.height, px(metrics::NOTICE_MAX_HEIGHT));
+        assert!(notice.top() >= header.bottom());
+        assert!(result.top() >= notice.bottom());
+    }
+
+    #[gpui_kit::test]
+    fn notice_changes_converge_to_the_latest_window_size(cx: &mut TestAppContext) {
+        let (window, view) = open_view(cx);
+        cx.update(|cx| {
+            view.update(cx, |view, cx| {
+                view.model.set_query("action".to_owned());
+                view.model.rows = vec![file_row("disabled", "Unavailable action")];
+                view.model.rows[0].enabled = false;
+                view.model.selected = 0;
+                cx.notify();
+            });
+        });
+        sync_test_viewport_to_desired(cx, window, &view);
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            view.update(cx, |view, cx| {
+                view.activate_selection(cx);
+                assert_eq!(
+                    view.desired_window_size().height,
+                    px(180.5),
+                    "the one-row failure state must include the notice"
+                );
+            });
+        })
+        .unwrap();
+        sync_test_viewport_to_desired(cx, window, &view);
+        let viewport = cx
+            .update_window(window, |_, window, _| window.viewport_size())
+            .unwrap();
+        assert_eq!(viewport.height, px(180.5));
+        let mut visual = VisualTestContext::from_window(window, cx);
+        visual.update(|window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("candidate-0").is_some());
+        });
+        let result = visual.update(|window, _| window.find("candidate-0").bounds());
+        assert!(result.bottom() <= viewport.height);
+    }
+
+    #[gpui_kit::test]
+    fn scope_bar_centers_short_groups_and_keeps_overflow_reachable(cx: &mut TestAppContext) {
+        let (window, view) = open_view(cx);
+        cx.update(|cx| {
+            view.update(cx, |view, cx| {
+                view.model.scopes = vec![
+                    crate::launcher::LauncherScope {
+                        id: "one".to_owned(),
+                        label: "One".to_owned(),
+                        is_current_app: false,
+                    },
+                    crate::launcher::LauncherScope {
+                        id: "two".to_owned(),
+                        label: "Two".to_owned(),
+                        is_current_app: false,
+                    },
+                ];
+                view.model.set_query("x".to_owned());
+                cx.notify();
+            });
+        });
+        sync_test_viewport_to_desired(cx, window, &view);
+        let mut visual = VisualTestContext::from_window(window, cx);
+        visual.update(|window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("scope-one").is_some());
+            assert!(window.try_find("scope-two").is_some());
+        });
+        let one = visual.update(|window, _| window.find("scope-one").bounds());
+        let two = visual.update(|window, _| window.find("scope-two").bounds());
+        let group_center = (one.left() + two.right()) / 2.0;
+        let viewport_center = visual.update(|window, _| window.viewport_size().width) / 2.0;
+        assert!((group_center - viewport_center).abs() <= px(2.));
+    }
+
+    #[gpui_kit::test]
+    fn scope_bar_overflow_starts_at_the_leading_edge_and_reveals_a_late_selection(
+        cx: &mut TestAppContext,
+    ) {
+        let (window, view) = open_view(cx);
+        cx.update(|cx| {
+            view.update(cx, |view, cx| {
+                view.model.scopes = (0..8)
+                    .map(|index| crate::launcher::LauncherScope {
+                        id: format!("scope-{index}"),
+                        label: format!("A very long scope label {index}"),
+                        is_current_app: false,
+                    })
+                    .collect();
+                view.model.set_query("x".to_owned());
+                view.model.selected_scope = Some("scope-7".to_owned());
+                cx.notify();
+            });
+        });
+        sync_test_viewport_to_desired(cx, window, &view);
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            let maximum = view.read(cx).scope_scroll.max_offset().x;
+            assert!(
+                maximum > px(0.),
+                "an overflowing scope group must expose horizontal scrolling"
+            );
+            let first = window.find("scope-scope-0").bounds();
+            assert!(first.left() >= px(0.));
+            assert!(
+                first.left() < window.viewport_size().width,
+                "the first scope must remain at the reachable leading edge"
+            );
+            view.read(cx).reveal_selected_scope();
+            window.render_frame(cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(window, |_, window, cx| {
+            let last = window.find("scope-scope-7").bounds();
+            let offset = view.read(cx).scope_scroll.offset().x;
+            assert!(
+                last.left() >= px(0.) && last.right() <= window.viewport_size().width,
+                "the selected late scope must be revealed inside the viewport: \
+                 last={last:?}, offset={offset:?}, viewport={:?}",
+                window.viewport_size()
+            );
+            assert!(offset < px(0.));
+        })
+        .unwrap();
+    }
+
+    #[gpui_kit::test]
+    fn shelf_header_respects_traffic_lights_and_escape_shares_keyboard_route(
+        cx: &mut TestAppContext,
+    ) {
+        let (window, view) = open_view(cx);
+        cx.update(|cx| {
+            view.update(cx, |view, cx| {
+                view.screen = Screen::ClipboardShelf;
+                view.standalone_shelf = true;
+                view.clipboard.query = "fixture".to_owned();
+                cx.notify();
+            });
+        });
+        sync_test_viewport(cx, window, gpui_kit::size(px(360.), px(360.)));
+        let mut visual = VisualTestContext::from_window(window, cx);
+        visual.update(|window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("shelf-state-icon").is_some());
+        });
+        let icon = visual.update(|window, _| window.find("shelf-state-icon").bounds());
+        assert!(icon.top() >= px(metrics::TITLE_BAR_INSET));
+        visual.update(|window, cx| {
+            window.click("shelf-escape", cx);
+        });
+        cx.run_until_parked();
+        cx.update(|cx| {
+            let view = view.read(cx);
+            assert_eq!(view.screen, Screen::ClipboardShelf);
+            assert!(view.clipboard.query.is_empty());
+        });
+
+        cx.update(|cx| {
+            view.update(cx, |view, cx| {
+                view.clipboard.actions_open = true;
+                cx.notify();
+            });
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("shelf-escape", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update(|cx| {
+            let view = view.read(cx);
+            assert!(!view.clipboard.actions_open);
+            assert_eq!(view.screen, Screen::ClipboardShelf);
+        });
+
+        cx.update(|cx| {
+            view.update(cx, |view, cx| {
+                view.clipboard.delete_pending = Some(42);
+                cx.notify();
+            });
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("shelf-escape", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update(|cx| {
+            let view = view.read(cx);
+            assert!(view.clipboard.delete_pending.is_none());
+            assert_eq!(view.screen, Screen::ClipboardShelf);
+        });
+    }
+
+    #[gpui_kit::test]
+    fn unsupported_tool_content_scrolls_to_long_input(cx: &mut TestAppContext) {
+        let (window, view) = open_view(cx);
+        cx.update(|cx| {
+            view.update(cx, |view, cx| {
+                view.screen = Screen::UnsupportedTool;
+                view.web_surface.unsupported_tool = Some((
+                    "tool".to_owned(),
+                    (0..60)
+                        .map(|i| format!("line {i}"))
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                ));
+                cx.notify();
+            });
+        });
+        sync_test_viewport_to_desired(cx, window, &view);
+        let mut visual = VisualTestContext::from_window(window, cx);
+        let maximum = visual.update(|_, cx| view.read(cx).unsupported_tool_scroll.max_offset().y);
+        assert!(maximum > px(0.));
+        visual.update(|_, cx| {
+            view.read(cx)
+                .unsupported_tool_scroll
+                .set_offset(gpui_kit::point(px(0.), -maximum));
+        });
+        visual.update(|window, cx| window.render_frame(cx));
+        visual.run_until_parked();
+        visual.update(|window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("unsupported-tool-input-text").is_some());
+        });
+        let input = visual.update(|window, _| window.find("unsupported-tool-input-text").bounds());
+        let viewport_height = visual.update(|window, _| window.viewport_size().height);
+        assert!(input.bottom() <= viewport_height);
+    }
+
+    #[gpui_kit::test]
+    fn discarding_language_draft_restores_the_saved_locale(cx: &mut TestAppContext) {
+        let (window, view) = open_view(cx);
+        cx.update(|cx| {
+            view.update(cx, |view, cx| {
+                view.screen = Screen::Settings;
+                view.settings.selected = SettingsCategory::General;
+                view.preferences.ui_language = UiLanguage::Zh;
+                view.settings_draft.ui_language = UiLanguage::Zh;
+                view.locale = Locale::Zh;
+                view.model.set_locale(Locale::Zh);
+                view.settings_draft.ui_language = UiLanguage::En;
+                view.locale = Locale::En;
+                view.model.set_locale(Locale::En);
+                cx.notify();
+            });
+        });
+        sync_test_viewport_to_desired(cx, window, &view);
+        cx.update_window(window, |_, window, cx| {
+            view.update(cx, |view, cx| view.discard_settings(window, cx));
+        })
+        .unwrap();
+        cx.update(|cx| {
+            let view = view.read(cx);
+            assert_eq!(view.locale, Locale::Zh);
+            assert_eq!(view.settings_draft.ui_language, UiLanguage::Zh);
+            assert_eq!(view.screen, Screen::Launcher);
+        });
+    }
+
+    #[gpui_kit::test]
+    fn clipboard_settings_expose_real_choices_and_confirm_destructive_changes(
+        cx: &mut TestAppContext,
+    ) {
+        let (window, view) = open_view(cx);
+        cx.update(|cx| {
+            view.update(cx, |view, cx| {
+                view.screen = Screen::Settings;
+                view.settings.selected = SettingsCategory::Clipboard;
+                view.clipboard.status = Some(crate::host::ClipboardSnapshot {
+                    recording: true,
+                    recording_enabled: true,
+                    available: true,
+                    paused_until_ms: None,
+                    retention_days: 30,
+                    stored_entries: 0,
+                    stored_bytes: 0,
+                    notice: None,
+                    items: Vec::new(),
+                });
+                cx.notify();
+            });
+        });
+        sync_test_viewport_to_desired(cx, window, &view);
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("clipboard-retention", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("clipboard-retention-90").is_some());
+            window.click("clipboard-retention-1", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update(|cx| {
+            assert_eq!(
+                view.read(cx).clipboard_confirmation,
+                Some(ClipboardConfirmation::SetRetention(1))
+            );
+        });
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            assert!(window.try_find("clipboard-confirm-prompt").is_some());
+            window.click("clipboard-confirm-cancel", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update(|cx| {
+            let view = view.read(cx);
+            assert!(view.clipboard_confirmation.is_none());
+            assert!(!view.clipboard.loading);
+        });
+
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            window.click("clipboard-pause", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update_window(window, |_, window, cx| {
+            window.render_frame(cx);
+            for id in [
+                "clipboard-resume",
+                "clipboard-pause-5",
+                "clipboard-pause-15",
+                "clipboard-pause-60",
+            ] {
+                assert!(window.try_find(id).is_some(), "missing pause choice {id}");
+            }
+            window.click("clipboard-resume", cx);
+        })
+        .unwrap();
+        cx.run_until_parked();
+        cx.update(|cx| {
+            let view = view.read(cx);
+            assert!(view.clipboard_settings_choice.is_none());
+            assert!(view.clipboard_confirmation.is_none());
+        });
+    }
+
+    #[gpui_kit::test]
+    fn closed_clipboard_status_channel_clears_loading_and_reports_an_error(
+        cx: &mut TestAppContext,
+    ) {
+        let (_window, view) = open_view(cx);
+        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+        drop(sender);
+        cx.update(|cx| {
+            view.update(cx, |view, cx| {
+                view.screen = Screen::Settings;
+                view.clipboard.query_generation = 7;
+                view.clipboard.loading = true;
+                view.poll_clipboard_search(receiver, 7, cx);
+            });
+        });
+        cx.run_until_parked();
+        cx.update(|cx| {
+            let view = view.read(cx);
+            assert!(!view.clipboard.loading);
+            assert_eq!(view.notice_kind, components::NoticeKind::Error);
+            assert_eq!(
+                view.notice.as_deref(),
+                Some(l10n::clipboard_settings_failed(Locale::En).as_str())
+            );
+        });
+    }
+
+    #[gpui_kit::test]
+    fn task_notices_keep_success_and_help_semantics(cx: &mut TestAppContext) {
+        let (window, view) = open_view(cx);
+        let row = crate::host::ExecutionRow {
+            id: "task".to_owned(),
+            title: "npm Run · task".to_owned(),
+            directory: "/tmp/project".to_owned(),
+            command: "npm run task".to_owned(),
+            status: anywhere_protocol::ExecutionSessionStatus::Succeeded,
+            output_revision: 1,
+            exit_code: Some(0),
+            started_at_ms: 0,
+            finished_at_ms: Some(1),
+            output_truncated: false,
+            error: None,
+        };
+        cx.update_window(window, |_, _, cx| {
+            view.update(cx, |view, cx| {
+                view.screen = Screen::Tasks;
+                view.standalone_tasks = true;
+                view.apply_tasks_rows(vec![row.clone()], cx);
+                view.tasks.detail = Some(crate::host::ExecutionDetail {
+                    row,
+                    stdout: "ready".to_owned(),
+                    stderr: String::new(),
+                });
+            });
+        })
+        .unwrap();
+        cx.update(|cx| {
+            view.update(cx, |view, cx| {
+                view.execute_task_action(0, cx);
+                assert_eq!(view.notice_kind, components::NoticeKind::Success);
+                view.set_notice(
+                    l10n::task_keyboard_help(Locale::En, "⌘F", "⌘."),
+                    components::NoticeKind::Info,
+                );
+                assert_eq!(view.notice_kind, components::NoticeKind::Info);
             });
         });
     }

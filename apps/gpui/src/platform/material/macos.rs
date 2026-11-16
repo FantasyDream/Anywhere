@@ -106,6 +106,7 @@ fn read_environment(
         },
         reduce_transparency: workspace.accessibilityDisplayShouldReduceTransparency(),
         increase_contrast: workspace.accessibilityDisplayShouldIncreaseContrast(),
+        reduce_motion: workspace.accessibilityDisplayShouldReduceMotion(),
     }
 }
 
@@ -125,6 +126,7 @@ pub(super) fn prepare_window_material() {
         appearance = ?plan.appearance,
         reduce_transparency = environment.reduce_transparency,
         increase_contrast = environment.increase_contrast,
+        reduce_motion = environment.reduce_motion,
         "native_window_material_mode_prepared"
     );
 }
@@ -211,6 +213,7 @@ pub(super) fn install_window_material(window: &NSWindow, corner_radius: f64) -> 
         appearance = ?plan.appearance,
         reduce_transparency = environment.reduce_transparency,
         increase_contrast = environment.increase_contrast,
+        reduce_motion = environment.reduce_motion,
         corner_radius = plan.corner_radius,
         wrapper_class = %wrapper.class().name().to_string_lossy(),
         content_class = %content.class().name().to_string_lossy(),

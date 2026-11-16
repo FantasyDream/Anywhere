@@ -539,7 +539,10 @@ impl LauncherView {
                                         return;
                                     };
                                     cx.write_to_clipboard(ClipboardItem::new_string(output));
-                                    this.notice = Some(l10n::copied(locale));
+                                    this.set_notice(
+                                        l10n::copied(locale),
+                                        components::NoticeKind::Success,
+                                    );
                                     cx.notify();
                                 })),
                         ),
@@ -823,11 +826,12 @@ impl LauncherView {
             })
             .child(toolbar)
             .when_some(self.notice.clone(), |element, notice| {
+                let notice_kind = self.notice_kind;
                 element.child(
                     div()
                         .px(px(18.))
                         .pb(px(12.))
-                        .child(components::notice(notice, components::NoticeKind::Error)),
+                        .child(components::notice(notice, notice_kind)),
                 )
             })
             .child(div().h(px(metrics::DIVIDER_WIDTH)).bg(theme::divider()))
@@ -853,8 +857,10 @@ impl LauncherView {
                             .ghost()
                             .label(l10n::keyboard_help(locale))
                             .on_click(cx.listener(|this, _, _, cx| {
-                                this.notice =
-                                    Some(l10n::task_keyboard_help(this.locale, "⌘F", "⌘."));
+                                this.set_notice(
+                                    l10n::task_keyboard_help(this.locale, "⌘F", "⌘."),
+                                    components::NoticeKind::Info,
+                                );
                                 cx.notify();
                             })),
                     ),

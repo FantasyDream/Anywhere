@@ -16,6 +16,99 @@ impl LauncherView {
             SettingsCategory::Plugins => self.feature_settings(cx),
         };
         let action_picker = self.action_shortcut_picker(cx);
+        let clipboard_confirmation = self.clipboard_confirmation.map(|confirmation| {
+            let (title, description) = match confirmation {
+                ClipboardConfirmation::Clear => (
+                    l10n::clear_clipboard_history(self.locale),
+                    l10n::all_saved_entries_will_be_permanently_removed(self.locale),
+                ),
+                ClipboardConfirmation::SetRetention(days) => (
+                    l10n::change_history_retention(self.locale),
+                    format!(
+                        "{}\n{}",
+                        l10n::history_retention_warning(self.locale),
+                        if days == 0 {
+                            l10n::until_storage_limit(self.locale)
+                        } else {
+                            l10n::retention_days(self.locale, i64::from(days))
+                        }
+                    ),
+                ),
+            };
+            div()
+                .id("clipboard-confirm-prompt")
+                .test_support()
+                .absolute()
+                .inset_0()
+                .flex()
+                .items_center()
+                .justify_center()
+                .bg(theme::modal_scrim())
+                .occlude()
+                .child(
+                    div()
+                        .w(px(440.))
+                        .p(px(20.))
+                        .flex()
+                        .flex_col()
+                        .gap(px(14.))
+                        .rounded(px(14.))
+                        .bg(theme::menu_surface())
+                        .border(px(metrics::DIVIDER_WIDTH))
+                        .border_color(theme::selection_outline())
+                        .child(
+                            div()
+                                .text_size(px(16.))
+                                .font_weight(FontWeight::SEMIBOLD)
+                                .text_color(theme::primary())
+                                .child(title),
+                        )
+                        .child(
+                            div()
+                                .body_text()
+                                .whitespace_normal()
+                                .text_color(theme::secondary())
+                                .child(description),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .justify_end()
+                                .gap(px(metrics::SPACE_SM))
+                                .child(
+                                    Button::new("clipboard-confirm-cancel")
+                                        .ghost()
+                                        .track_focus(&self.settings_confirm_cancel_focus)
+                                        .label(l10n::cancel(self.locale))
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.cancel_clipboard_confirmation(window, cx)
+                                        })),
+                                )
+                                .child(
+                                    Button::new("clipboard-confirm-accept")
+                                        .primary()
+                                        .track_focus(&self.settings_confirm_accept_focus)
+                                        .disabled(self.clipboard.loading)
+                                        .label(
+                                            if matches!(confirmation, ClipboardConfirmation::Clear)
+                                            {
+                                                l10n::clear_history(self.locale)
+                                            } else {
+                                                l10n::save_changes(self.locale)
+                                            },
+                                        )
+                                        .on_click(cx.listener(move |this, _, window, cx| {
+                                            this.confirm_clipboard_confirmation(
+                                                confirmation,
+                                                window,
+                                                cx,
+                                            )
+                                        })),
+                                ),
+                        ),
+                )
+        });
         let close_prompt =
             self.settings_close_pending.then(|| {
                 div()
@@ -27,6 +120,7 @@ impl LauncherView {
                     .items_center()
                     .justify_center()
                     .bg(theme::modal_scrim())
+                    .occlude()
                     .child(
                         div()
                             .w(px(420.))
@@ -72,17 +166,16 @@ impl LauncherView {
                                     .child(
                                         Button::new("keep-editing")
                                             .ghost()
+                                            .track_focus(&self.settings_keep_editing_focus)
                                             .label(l10n::keep_editing(self.locale))
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.settings_close_pending = false;
-                                                this.settings_exit_intent = None;
-                                                this.notice = None;
-                                                cx.notify();
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.cancel_settings_close_prompt(window, cx);
                                             })),
                                     )
                                     .child(
                                         Button::new("discard-settings")
                                             .secondary()
+                                            .track_focus(&self.settings_discard_focus)
                                             .label(l10n::close_without_saving(self.locale))
                                             .disabled(self.settings.saving)
                                             .on_click(cx.listener(|this, _, window, cx| {
@@ -93,6 +186,7 @@ impl LauncherView {
                                         element.child(
                                             Button::new("save-settings-confirm")
                                                 .primary()
+                                                .track_focus(&self.settings_save_focus)
                                                 .label(l10n::save_changes(self.locale))
                                                 .disabled(self.settings.saving)
                                                 .on_click(cx.listener(|this, _, _, cx| {
@@ -206,10 +300,16 @@ impl LauncherView {
                                     this.pending_action_shortcut = None;
                                     this.pending_action_shortcut_value = None;
                                     this.settings.selected = category;
+                                    this.clipboard_settings_choice = None;
+                                    if category != SettingsCategory::Clipboard {
+                                        this.clipboard_confirmation = None;
+                                    }
                                     this.settings_scrolls[category as usize]
                                         .set_offset(gpui_kit::point(px(0.), px(0.)));
                                     if category == SettingsCategory::ApplicationHistory {
                                         this.request_app_history_settings_sources(cx);
+                                    } else if category == SettingsCategory::Clipboard {
+                                        this.request_clipboard_settings_status(cx);
                                     }
                                     let settings_scroll =
                                         this.settings_scrolls[category as usize].clone();
@@ -355,6 +455,9 @@ impl LauncherView {
                     ),
             )
             .when_some(action_picker, |element, picker| element.child(picker))
+            .when_some(clipboard_confirmation, |element, prompt| {
+                element.child(prompt)
+            })
             .when_some(close_prompt, |element, prompt| element.child(prompt))
             .into_any_element()
     }
@@ -787,8 +890,10 @@ impl LauncherView {
                                 .label(l10n::save_context_shortcut(self.locale))
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     match this.commit_context_shortcut_draft(cx) {
-                                        Ok(()) => this.notice = None,
-                                        Err(error) => this.notice = Some(error),
+                                        Ok(()) => this.clear_notice(),
+                                        Err(error) => {
+                                            this.set_notice(error, components::NoticeKind::Warning)
+                                        }
                                     }
                                     cx.notify();
                                 })),
@@ -956,7 +1061,10 @@ impl LauncherView {
                 self.close_action_shortcut_picker(cx);
             }
             Err(_) => {
-                self.notice = Some(l10n::shortcut_recording_failed_try_again(self.locale));
+                self.set_notice(
+                    l10n::shortcut_recording_failed_try_again(self.locale),
+                    components::NoticeKind::Warning,
+                );
                 cx.notify();
             }
         }
@@ -1277,6 +1385,7 @@ impl LauncherView {
                 .items_center()
                 .justify_center()
                 .bg(Into::<gpui_kit::Hsla>::into(gpui_kit::rgba(0x00000066)))
+                .occlude()
                 .child(
                     div()
                         .w(px(420.))
@@ -1556,9 +1665,10 @@ impl LauncherView {
                                     .label(l10n::open_settings(self.locale))
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         if !open_privacy_settings(pane) {
-                                            this.notice = Some(l10n::open_system_settings_failed(
-                                                this.locale,
-                                            ));
+                                            this.set_notice(
+                                                l10n::open_system_settings_failed(this.locale),
+                                                components::NoticeKind::Error,
+                                            );
                                             cx.notify();
                                         }
                                     })),
@@ -1654,8 +1764,9 @@ impl LauncherView {
                                         );
                                         this.update(cx, |this, cx| {
                                             if let Some(live) = this.live.clone() {
-                                                this.notice = Some(
+                                                this.set_notice(
                                                     l10n::preparing_directory_access(this.locale),
+                                                    components::NoticeKind::Info,
                                                 );
                                                 let receiver = live
                                                     .authorize_search_directories(selected, roots);
@@ -1685,8 +1796,10 @@ impl LauncherView {
                                 .label(l10n::full_disk_access(self.locale))
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     if !open_privacy_settings(PrivacySettingsPane::FullDiskAccess) {
-                                        this.notice =
-                                            Some(l10n::open_system_settings_failed(this.locale));
+                                        this.set_notice(
+                                            l10n::open_system_settings_failed(this.locale),
+                                            components::NoticeKind::Error,
+                                        );
                                         cx.notify();
                                     }
                                 })),
@@ -1718,6 +1831,20 @@ impl LauncherView {
 
     fn clipboard_settings(&mut self, cx: &mut Context<Self>) -> Div {
         let status = self.clipboard.status.clone();
+        let retention_label = match status.as_ref().map(|status| status.retention_days) {
+            Some(0) => l10n::until_storage_limit(self.locale),
+            Some(days) => l10n::retention_days(self.locale, i64::from(days)),
+            None => l10n::history_storage(self.locale),
+        };
+        let pause_label = if status
+            .as_ref()
+            .is_some_and(|status| status.paused_until_ms.is_some())
+        {
+            l10n::paused(self.locale)
+        } else {
+            l10n::pause_for(self.locale)
+        };
+        let choice_menu = self.clipboard_settings_choice_menu(cx);
         div()
             .flex()
             .flex_col()
@@ -1759,51 +1886,42 @@ impl LauncherView {
                         .child(
                             Button::new("clipboard-retention")
                                 .secondary()
-                                .label(l10n::retention_days(
-                                    self.locale,
-                                    i64::from(
-                                        status
-                                            .as_ref()
-                                            .map(|status| status.retention_days)
-                                            .unwrap_or(30),
-                                    ),
-                                ))
+                                .disabled(status.is_none() || self.clipboard.loading)
+                                .label(retention_label)
                                 .on_click(cx.listener(|this, _, _, cx| {
-                                    if let Some(live) = this.live.clone() {
-                                        let receiver = live.set_clipboard_retention(
-                                            30,
-                                            this.clipboard.query.clone(),
-                                        );
-                                        this.run_clipboard_command(receiver, cx);
-                                    }
+                                    this.clipboard_settings_choice = Some(
+                                        ClipboardSettingsChoice::Retention,
+                                    );
+                                    cx.notify();
                                 })),
                         )
                         .child(
                             Button::new("clipboard-pause")
                                 .secondary()
-                                .label(l10n::paused(self.locale))
+                                .disabled(status.is_none() || self.clipboard.loading)
+                                .label(pause_label)
                                 .on_click(cx.listener(|this, _, _, cx| {
-                                    if let Some(live) = this.live.clone() {
-                                        let receiver = live
-                                            .set_clipboard_pause(15, this.clipboard.query.clone());
-                                        this.run_clipboard_command(receiver, cx);
-                                    }
+                                    this.clipboard_settings_choice =
+                                        Some(ClipboardSettingsChoice::Pause);
+                                    cx.notify();
                                 })),
                         )
                         .child(
                             Button::new("clipboard-clear-settings")
                                 .secondary()
+                                .disabled(status.is_none() || self.clipboard.loading)
                                 .label(l10n::clear_history(self.locale))
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    if let Some(live) = this.live.clone() {
-                                        let receiver =
-                                            live.clear_clipboard(this.clipboard.query.clone());
-                                        this.run_clipboard_command(receiver, cx);
-                                    }
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.present_clipboard_confirmation(
+                                        ClipboardConfirmation::Clear,
+                                        window,
+                                        cx,
+                                    );
                                 })),
                         ),
                 ),
             ]))
+            .when_some(choice_menu, |element, menu| element.child(menu))
             .child(
                 div()
                     .text_size(px(metrics::CAPTION_SIZE))
@@ -1827,6 +1945,195 @@ impl LauncherView {
                     })),
                 cx,
             )]))
+    }
+
+    fn clipboard_settings_choice_menu(&mut self, cx: &mut Context<Self>) -> Option<AnyElement> {
+        let choice = self.clipboard_settings_choice?;
+        let status = self.clipboard.status.as_ref();
+        let (title, options): (String, Vec<(String, usize, bool)>) = match choice {
+            ClipboardSettingsChoice::Retention => (
+                l10n::keep_history_for(self.locale),
+                [0_u32, 1, 7, 30, 90]
+                    .into_iter()
+                    .map(|days| {
+                        let label = if days == 0 {
+                            l10n::until_storage_limit(self.locale)
+                        } else {
+                            l10n::retention_days(self.locale, i64::from(days))
+                        };
+                        (
+                            label,
+                            days as usize,
+                            status.is_some_and(|status| status.retention_days == days),
+                        )
+                    })
+                    .collect(),
+            ),
+            ClipboardSettingsChoice::Pause => {
+                let paused = status.is_some_and(|status| status.paused_until_ms.is_some());
+                let mut options = vec![(l10n::resume_recording(self.locale), 0, !paused)];
+                options.extend([5_u32, 15, 60].into_iter().map(|minutes| {
+                    (
+                        l10n::pause_minutes(self.locale, i64::from(minutes)),
+                        minutes as usize,
+                        false,
+                    )
+                }));
+                (l10n::pause_history_recording(self.locale), options)
+            }
+        };
+        let choice_id = match choice {
+            ClipboardSettingsChoice::Retention => "retention",
+            ClipboardSettingsChoice::Pause => "pause",
+        };
+        let options = options.into_iter().map(|(label, value, selected)| {
+            let id = match choice {
+                ClipboardSettingsChoice::Retention => {
+                    format!("clipboard-retention-{value}")
+                }
+                ClipboardSettingsChoice::Pause if value == 0 => "clipboard-resume".to_owned(),
+                ClipboardSettingsChoice::Pause => format!("clipboard-pause-{value}"),
+            };
+            Button::new(SharedString::from(id))
+                .when(selected, |button| button.secondary())
+                .when(!selected, |button| button.ghost())
+                .label(label)
+                .on_click(cx.listener(move |this, _, window, cx| match choice {
+                    ClipboardSettingsChoice::Retention => {
+                        this.select_clipboard_retention(value as u32, window, cx)
+                    }
+                    ClipboardSettingsChoice::Pause => this.select_clipboard_pause(value as u32, cx),
+                }))
+        });
+        Some(
+            div()
+                .id(SharedString::from(format!("clipboard-{choice_id}-choices")))
+                .test_support()
+                .p(px(metrics::SPACE_MD))
+                .flex()
+                .flex_col()
+                .gap(px(metrics::SPACE_SM))
+                .rounded(px(metrics::CARD_RADIUS))
+                .bg(theme::field())
+                .child(div().caption_text().text_color(theme::muted()).child(title))
+                .child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap(px(metrics::SPACE_SM))
+                        .children(options),
+                )
+                .into_any_element(),
+        )
+    }
+
+    fn select_clipboard_retention(
+        &mut self,
+        days: u32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(current) = self
+            .clipboard
+            .status
+            .as_ref()
+            .map(|status| status.retention_days)
+        else {
+            return;
+        };
+        self.clipboard_settings_choice = None;
+        if clipboard_retention_removes_entries(current, days) {
+            self.present_clipboard_confirmation(
+                ClipboardConfirmation::SetRetention(days),
+                window,
+                cx,
+            );
+            return;
+        }
+        self.set_clipboard_retention_now(days, cx);
+    }
+
+    fn set_clipboard_retention_now(&mut self, days: u32, cx: &mut Context<Self>) {
+        let Some(live) = self.live.clone() else {
+            return;
+        };
+        let receiver = live.set_clipboard_retention(days, self.clipboard.query.clone());
+        self.run_clipboard_command(receiver, cx);
+    }
+
+    fn select_clipboard_pause(&mut self, minutes: u32, cx: &mut Context<Self>) {
+        self.clipboard_settings_choice = None;
+        let Some(live) = self.live.clone() else {
+            return;
+        };
+        let receiver = live.set_clipboard_pause(minutes, self.clipboard.query.clone());
+        self.run_clipboard_command(receiver, cx);
+        cx.notify();
+    }
+
+    fn present_clipboard_confirmation(
+        &mut self,
+        confirmation: ClipboardConfirmation,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.clipboard.loading {
+            return;
+        }
+        self.settings_close_pending = false;
+        self.settings_exit_intent = None;
+        self.clipboard_settings_choice = None;
+        if self.settings_modal_return_focus.is_none() {
+            self.settings_modal_return_focus = window.focused(cx);
+        }
+        self.clipboard_confirmation = Some(confirmation);
+        let focus = self.settings_confirm_cancel_focus.clone();
+        cx.defer_in(window, move |this, window, cx| {
+            if this.clipboard_confirmation.is_some() {
+                focus.focus(window, cx);
+            }
+        });
+        cx.notify();
+    }
+
+    pub(super) fn cancel_clipboard_confirmation(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.clipboard_confirmation = None;
+        self.restore_settings_modal_focus(window, cx);
+        cx.notify();
+    }
+
+    fn confirm_clipboard_confirmation(
+        &mut self,
+        confirmation: ClipboardConfirmation,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        // A queued click or repeated activation may carry a stale closure after
+        // the first confirmation dismisses the prompt. Only the confirmation
+        // that is still presented may submit a destructive operation.
+        if !clipboard_confirmation_is_submittable(
+            self.clipboard.loading,
+            self.clipboard_confirmation,
+            confirmation,
+        ) {
+            return;
+        }
+        let Some(live) = self.live.clone() else {
+            return;
+        };
+        self.clipboard_confirmation = None;
+        self.restore_settings_modal_focus(window, cx);
+        let query = self.clipboard.query.clone();
+        let receiver = match confirmation {
+            ClipboardConfirmation::Clear => live.clear_clipboard(query),
+            ClipboardConfirmation::SetRetention(days) => live.set_clipboard_retention(days, query),
+        };
+        self.run_clipboard_command(receiver, cx);
+        cx.notify();
     }
 
     fn application_history_settings(&mut self, cx: &mut Context<Self>) -> Div {
@@ -2278,5 +2585,23 @@ impl LauncherView {
                         .text_color(theme::secondary()),
                 ),
         )
+    }
+}
+
+fn clipboard_retention_removes_entries(current_days: u32, next_days: u32) -> bool {
+    next_days != 0 && (current_days == 0 || next_days < current_days)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::clipboard_retention_removes_entries;
+
+    #[test]
+    fn only_shorter_finite_clipboard_retention_requires_deletion_confirmation() {
+        assert!(clipboard_retention_removes_entries(90, 30));
+        assert!(clipboard_retention_removes_entries(0, 1));
+        assert!(!clipboard_retention_removes_entries(30, 90));
+        assert!(!clipboard_retention_removes_entries(30, 0));
+        assert!(!clipboard_retention_removes_entries(30, 30));
     }
 }

@@ -67,6 +67,7 @@ pub(crate) struct WindowMaterialEnvironment {
     pub appearance: WindowAppearance,
     pub reduce_transparency: bool,
     pub increase_contrast: bool,
+    pub reduce_motion: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -75,11 +76,13 @@ pub(crate) struct WindowMaterialPlan {
     pub appearance: WindowAppearance,
     pub corner_radius: f64,
     pub increase_contrast: bool,
+    pub reduce_motion: bool,
 }
 
 static MATERIAL_MODE: AtomicU8 = AtomicU8::new(WindowMaterialMode::Opaque.code());
 static APPEARANCE: AtomicU8 = AtomicU8::new(WindowAppearance::Light.code());
 static INCREASE_CONTRAST: AtomicBool = AtomicBool::new(false);
+static REDUCE_MOTION: AtomicBool = AtomicBool::new(false);
 
 pub fn current_mode() -> WindowMaterialMode {
     WindowMaterialMode::from_code(MATERIAL_MODE.load(Ordering::Acquire))
@@ -95,6 +98,10 @@ pub fn uses_opaque_fallback() -> bool {
 
 pub fn uses_increase_contrast() -> bool {
     INCREASE_CONTRAST.load(Ordering::Acquire)
+}
+
+pub fn uses_reduce_motion() -> bool {
+    REDUCE_MOTION.load(Ordering::Acquire)
 }
 
 fn material_mode(environment: WindowMaterialEnvironment) -> WindowMaterialMode {
@@ -116,6 +123,7 @@ pub(crate) fn plan_window_material(
         appearance: environment.appearance,
         corner_radius,
         increase_contrast: environment.increase_contrast,
+        reduce_motion: environment.reduce_motion,
     }
 }
 
@@ -123,6 +131,7 @@ pub(super) fn remember_material_plan(plan: WindowMaterialPlan) {
     MATERIAL_MODE.store(plan.mode.code(), Ordering::Release);
     APPEARANCE.store(plan.appearance.code(), Ordering::Release);
     INCREASE_CONTRAST.store(plan.increase_contrast, Ordering::Release);
+    REDUCE_MOTION.store(plan.reduce_motion, Ordering::Release);
 }
 
 pub(crate) fn prepare_window_material() {
@@ -137,6 +146,7 @@ pub(crate) fn prepare_window_material() {
             appearance: WindowAppearance::Light,
             corner_radius: 0.0,
             increase_contrast: false,
+            reduce_motion: false,
         });
     }
 }
@@ -174,6 +184,7 @@ mod tests {
             appearance,
             reduce_transparency,
             increase_contrast,
+            reduce_motion: false,
         }
     }
 
@@ -200,7 +211,17 @@ mod tests {
             assert_eq!(plan.mode, WindowMaterialMode::LiquidGlass);
             assert_eq!(plan.appearance, appearance);
             assert!(plan.increase_contrast);
+            assert!(!plan.reduce_motion);
             assert_eq!(plan.corner_radius, 18.0);
         }
+    }
+
+    #[test]
+    fn reduce_motion_is_forwarded_without_changing_the_native_material() {
+        let mut environment = environment(true, WindowAppearance::Dark, false, false);
+        environment.reduce_motion = true;
+        let plan = plan_window_material(environment, 18.0);
+        assert_eq!(plan.mode, WindowMaterialMode::LiquidGlass);
+        assert!(plan.reduce_motion);
     }
 }

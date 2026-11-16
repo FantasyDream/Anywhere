@@ -27,7 +27,7 @@ pub fn menu_surface() -> Hsla {
 }
 
 pub fn content_scrim() -> Hsla {
-    with_contrast(colors::CONTENT_SCRIM, 0xb3)
+    with_contrast(colors::CONTENT_SCRIM, 0xf2)
 }
 
 pub fn modal_scrim() -> Hsla {
@@ -188,7 +188,7 @@ mod tests {
         assert_eq!(glass_surface(), rgba(0x30343800).into());
         assert_eq!(field(), rgba(0x20232a80).into());
         assert_eq!(menu_surface(), rgba(0x2b2e35ff).into());
-        assert_eq!(content_scrim(), rgba(0x303438a0).into());
+        assert_eq!(content_scrim(), rgba(0x303438ed).into());
         assert_eq!(modal_scrim(), rgba(0x000000a8).into());
     }
 }

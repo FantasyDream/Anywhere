@@ -313,6 +313,7 @@ pub fn run(cx: &mut GpuiApp) {
     gpui_kit::init(cx);
     install_component_theme(cx);
     crate::platform::prepare_window_material();
+    cx.set_reduce_motion(crate::platform::uses_reduce_motion());
     cx.set_activation_policy(app_activation_policy());
     let preview = std::env::var_os("ANYWHERE_PREVIEW").is_some();
     let startup_receiver = (!preview).then(start_live_runtime);
@@ -707,16 +708,19 @@ pub fn run(cx: &mut GpuiApp) {
                     tracing::debug!(?key, handled, "tasks_navigation_key_dispatched");
                 }
                 crate::platform::PlatformEvent::AccessibilityDisplayChanged => {
-                    if crate::platform::refresh_all_window_materials() {
-                        let _ = focus_window.update(cx, |_, window, cx| {
+                    let refreshed = crate::platform::refresh_all_window_materials();
+                    let reduce_motion = crate::platform::uses_reduce_motion();
+                    let _ = focus_window.update(cx, |_, window, cx| {
+                        cx.set_reduce_motion(reduce_motion);
+                        if refreshed {
                             focus_shell.update(cx, |shell, cx| {
                                 shell.launcher.update(cx, |launcher, cx| {
                                     launcher.platform_appearance_changed(cx)
                                 });
                             });
                             window.refresh();
-                        });
-                    }
+                        }
+                    });
                 }
             }
         }
@@ -851,14 +855,11 @@ fn launcher_window_bounds(
     window_size: gpui_kit::Size<gpui_kit::Pixels>,
     cx: &GpuiApp,
 ) -> WindowBounds {
+    let window_size = constrained_window_size(window_size, cx);
     let Some(display) = cx.primary_display() else {
         return WindowBounds::centered(window_size, cx);
     };
     let visible = display.visible_bounds();
-    let window_size = size(
-        window_size.width.min(visible.size.width),
-        window_size.height.min(visible.size.height),
-    );
     // gpui-fast-macos 0.1.14 treats WindowBounds Y as the window's bottom
     // edge when creating the native frame. Keep a constant 20% gap below the
     // usable screen top so later resizes do not move that top edge.
@@ -872,13 +873,35 @@ fn launcher_window_bounds(
     WindowBounds::Windowed(Bounds::new(origin, window_size))
 }
 
+fn constrained_window_size(
+    requested: gpui_kit::Size<gpui_kit::Pixels>,
+    cx: &GpuiApp,
+) -> gpui_kit::Size<gpui_kit::Pixels> {
+    let Some(display) = cx.primary_display() else {
+        return requested;
+    };
+    let visible = display.visible_bounds();
+    let (width, height) = crate::platform::constrained_window_extent(
+        visible.size.width.as_f32(),
+        visible.size.height.as_f32(),
+        requested.width.as_f32(),
+        requested.height.as_f32(),
+        metrics::SPACE_LG,
+    );
+    size(px(width), px(height))
+}
+
 fn app_activation_policy() -> ActivationPolicy {
     ActivationPolicy::Accessory
 }
 
 fn shelf_window_options(cx: &mut GpuiApp) -> WindowOptions {
+    let requested = size(px(480.), px(520.));
     WindowOptions {
-        window_bounds: Some(WindowBounds::centered(size(px(480.), px(520.)), cx)),
+        window_bounds: Some(WindowBounds::centered(
+            constrained_window_size(requested, cx),
+            cx,
+        )),
         titlebar: Some(gpui_kit::TitlebarOptions {
             title: Some(CLIPBOARD_SHELF_TITLE.into()),
             appears_transparent: true,
@@ -897,8 +920,12 @@ fn shelf_window_options(cx: &mut GpuiApp) -> WindowOptions {
 }
 
 fn tasks_window_options(cx: &mut GpuiApp) -> WindowOptions {
+    let requested = size(px(920.), px(600.));
     WindowOptions {
-        window_bounds: Some(WindowBounds::centered(size(px(920.), px(600.)), cx)),
+        window_bounds: Some(WindowBounds::centered(
+            constrained_window_size(requested, cx),
+            cx,
+        )),
         titlebar: Some(gpui_kit::TitlebarOptions {
             title: Some(TASKS_WINDOW_TITLE.into()),
             appears_transparent: true,

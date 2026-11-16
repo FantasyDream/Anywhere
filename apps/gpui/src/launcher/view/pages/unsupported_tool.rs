@@ -12,8 +12,7 @@ impl LauncherView {
             .unwrap_or_else(|| ("unknown".to_owned(), String::new()));
         let title = l10n::unsupported_tool(self.locale);
         let description = l10n::unsupported_tool_description(self.locale);
-        let mut content = div()
-            .flex_1()
+        let mut sections = div()
             .flex()
             .flex_col()
             .gap(px(metrics::SPACE_MD))
@@ -40,6 +39,8 @@ impl LauncherView {
                     )
                     .child(
                         div()
+                            .min_w(px(0.))
+                            .whitespace_normal()
                             .font_family(fonts::FONT_MONO)
                             .text_size(px(metrics::CAPTION_SIZE))
                             .text_color(theme::primary())
@@ -47,7 +48,7 @@ impl LauncherView {
                     ),
             );
         if !input.is_empty() {
-            content = content.child(
+            sections = sections.child(
                 div()
                     .rounded(px(metrics::CONTROL_RADIUS))
                     .bg(theme::field())
@@ -63,6 +64,10 @@ impl LauncherView {
                     )
                     .child(
                         div()
+                            .id("unsupported-tool-input-text")
+                            .test_support()
+                            .min_w(px(0.))
+                            .whitespace_normal()
                             .font_family(fonts::FONT_MONO)
                             .text_size(px(metrics::CAPTION_SIZE))
                             .text_color(theme::primary())
@@ -70,6 +75,15 @@ impl LauncherView {
                     ),
             );
         }
+        let content = div()
+            .id("unsupported-tool-scroll")
+            .test_support()
+            .size_full()
+            .min_h(px(0.))
+            .track_scroll(&self.unsupported_tool_scroll)
+            .overflow_y_scroll()
+            .vertical_scrollbar(&self.unsupported_tool_scroll)
+            .child(sections);
         self.render_page_shell(
             SharedString::from(title),
             SharedString::from(l10n::native_destination_unavailable(self.locale)),

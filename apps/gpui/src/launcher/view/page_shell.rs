@@ -119,6 +119,7 @@ impl LauncherView {
             l10n::back(self.locale)
         };
         let notice = self.notice.clone();
+        let notice_kind = self.notice_kind;
         div()
             .size_full()
             .flex()
@@ -178,18 +179,11 @@ impl LauncherView {
                     .bg(theme::divider()),
             )
             .when_some(notice, |element, notice| {
-                let kind = if self.settings.error.as_deref() == Some(notice.as_str()) {
-                    components::NoticeKind::Error
-                } else if notice == l10n::copied(self.locale) {
-                    components::NoticeKind::Success
-                } else {
-                    components::NoticeKind::Warning
-                };
                 element.child(
                     div()
                         .px(px(metrics::SPACE_XXL))
                         .pt(px(metrics::SPACE_MD))
-                        .child(components::notice(notice, kind)),
+                        .child(components::notice(notice, notice_kind)),
                 )
             })
             .child(
@@ -268,7 +262,8 @@ impl LauncherView {
                 this.model.select_scope(scope.clone());
                 this.reveal_selected_scope();
                 this.request_live_update(cx);
-                this.notice = None;
+                this.clear_notice();
+                this.resize_current_window(cx);
                 cx.notify();
             }))
             .child(label)

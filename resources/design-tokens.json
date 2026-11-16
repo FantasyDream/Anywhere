@@ -16,7 +16,7 @@
     "elevated": "#584b505a",
     "sidebar": "#10101218",
     "window": "#00303438",
-    "contentScrim": "#a0303438",
+    "contentScrim": "#ed303438",
     "modalScrim": "#a8000000",
     "sidebarSelection": "#24ffffff",
     "hover": "#08ffffff",
@@ -230,6 +230,14 @@
     },
     "pageToolbarHeight": {
       "value": 36,
+      "unit": "px"
+    },
+    "noticeMinHeight": {
+      "value": 44,
+      "unit": "px"
+    },
+    "noticeMaxHeight": {
+      "value": 96,
       "unit": "px"
     },
     "titleBarInset": {

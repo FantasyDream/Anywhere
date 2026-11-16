@@ -121,6 +121,19 @@ Build 165 根据 v164 真实截图继续修复两处视觉缺陷：空态与输�
 一条 macOS `IMKCFRunLoopWakeUpReliable` stderr 提示，但输入与候选提交正常。
 该轮只关闭这两项视觉缺陷及 Launcher Esc / 失焦复验；v164 的其他待物理项、
 浅色外观和辅助功能矩阵仍按原边界保留。
+
+Build 167 继续完成 [同轮 UI 审查](archive/reviews/gpui-ui-review-2026-11-16.md)
+的 15 项修复。最终门禁为 GPUI 200 passed、workspace 882 passed / 6 ignored /
+0 failed。v166 真机截图暴露约 63% `contentScrim` 在 72 / 473 pt 高度下仍有约
+21 个 RGB 级差，因此 v167 提高到约 93% 中性灰（`#ed303438`，Increase
+Contrast 约 95%），最终同一页头采样差约 3–6 个通道级。最终候选为
+`build/acceptance-gpui-ui/v167-20261116-153939/Anywhere-GPUI-UI-Alignment-v167.app`
+（`0.14.0+167`，Bundle ID `dev.anywhere.launcher.gpui.uiplanv167`，PID
+`58275`，父 PID `1`），arm64、CDHash `76f55f34...`、可执行 SHA-256
+`1d8eedb2...`。Launcher / Shelf 的 layer 3 与失焦契约、Settings / Tasks 的
+layer 0 普通窗口契约已在最终包复验；Reduce Motion 系统切换、800×600 小屏和
+长 Unsupported Tool 正文仍需专门物理矩阵。
+
 原审查日期：2026-11-11；前轮实施复核日期：2026-11-12。
 
 审查对象是 `codex/experiment-gpui-kit` 的 `c00dce4d680fe2e34ee2e179501a6f84c1845798`
@@ -221,7 +234,7 @@ Build 126–129 又修复所有共享长列表的 ScrollHandle、选中项 revea
 - Settings / Tasks 保留应有标题栏和交通灯；返回 Launcher 时恢复无边框；
   Shelf 按独立浮窗契约处理，不将所有窗口强行改成一种 styleMask。
 - 始终使用原生 Regular Glass，tintColor 为 nil。GPUI 主题根画布透明，
-  `LauncherView` 只绘制一层约 63% 中性灰 `contentScrim` 保证白底/彩色桌面
+  `LauncherView` 只绘制一层约 93% 中性灰 `contentScrim` 保证白底/彩色桌面
   可读性，不因空态 / 有结果态切换不同遮罩；
   除此之外无额外描边、渐变或阴影。无边框不等于消除系统应有的细微高光。
 - 外层 host / 双重圆角是否调整，须在窗口样式 A/B 后另做单变量验证；不能同时
@@ -816,13 +829,13 @@ Apple 将 NSGlassEffectView 标为 macOS 26+；集成必须按系统能力选择
 
 | 条件 | 原生材质 | 内容表面 |
 | --- | --- | --- |
-| macOS 26+，普通显示设置 | NSGlassEffectView regular，contentView 承载内容 | GPUI 主题画布透明；`LauncherView` 绘制约 63% 中性灰 `contentScrim`，控件另提供局部表面 |
+| macOS 26+，普通显示设置 | NSGlassEffectView regular，contentView 承载内容 | GPUI 主题画布透明；`LauncherView` 绘制约 93% 中性灰 `contentScrim`，控件另提供局部表面 |
 | macOS 15–25 | NSVisualEffectView HUD，behindWindow / active | 同一套 `contentScrim` 和 tokens |
 | Reduce Transparency 或材质创建失败 | 明确的不透明 fallback | 原 fallbackSurface，仍保持文字、边框与布局 |
 
 Reduce Transparency 是产品的明确回退策略；系统原生玻璃本身也会响应辅助功能
 设置，不应把本方案的不透明策略误写成系统唯一行为。Increase Contrast 加强文字
-与边界，并把约 63% 的 `contentScrim` alpha 提高到约 70%；Reduce Motion 关闭
+与边界，并把约 93% 的 `contentScrim` alpha 提高到约 95%；Reduce Motion 关闭
 额外布局动画，不覆盖用户系统设置。
 
 实施原则：

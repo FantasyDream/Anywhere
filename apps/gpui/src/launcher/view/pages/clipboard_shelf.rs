@@ -426,6 +426,7 @@ impl LauncherView {
             .size_full()
             .flex()
             .flex_col()
+            .pt(px(metrics::TITLE_BAR_INSET))
             .child(
                 div()
                     .h(px(64.))
@@ -436,6 +437,7 @@ impl LauncherView {
                     .child(
                         div()
                             .id("shelf-state-icon")
+                            .test_support()
                             .w(px(26.))
                             .h(px(26.))
                             .flex()
@@ -511,9 +513,12 @@ impl LauncherView {
                     .child(
                         div()
                             .id("shelf-escape")
+                            .test_support()
                             .cursor_pointer()
                             .tooltip(components::text_tooltip(l10n::close_esc(self.locale)))
-                            .on_click(cx.listener(|this, _, window, cx| this.go_back(window, cx)))
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.handle_key("escape", KeyModifiers::default(), window, cx)
+                            }))
                             .child(self.keycap("esc")),
                     ),
             )
@@ -528,7 +533,7 @@ impl LauncherView {
                     div()
                         .px(px(metrics::SPACE_XXL))
                         .pt(px(metrics::SPACE_MD))
-                        .child(components::notice(notice, components::NoticeKind::Warning)),
+                        .child(components::notice(notice, self.notice_kind)),
                 )
             })
             .child(body)

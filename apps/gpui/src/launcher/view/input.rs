@@ -71,7 +71,10 @@ impl LauncherView {
                 return;
             }
             let Some(shortcut) = normalized_shortcut(key, command, control, alt, shift) else {
-                self.notice = Some(l10n::use_command_option_or_control_with_a(self.locale));
+                self.set_notice(
+                    l10n::use_command_option_or_control_with_a(self.locale),
+                    components::NoticeKind::Warning,
+                );
                 cx.notify();
                 return;
             };
@@ -95,13 +98,19 @@ impl LauncherView {
                         .next()
                         .is_some_and(|key| key.len() == 4 && key.starts_with("Key"));
                     if !is_letter {
-                        self.notice = Some(l10n::letter_with_modifier(self.locale));
+                        self.set_notice(
+                            l10n::letter_with_modifier(self.locale),
+                            components::NoticeKind::Warning,
+                        );
                         self.shortcut_recording = Some(ShortcutSlot::Action);
                         cx.notify();
                         return;
                     }
                     if reserved_action_shortcut(&shortcut) {
-                        self.notice = Some(l10n::reserved_editing_shortcut(self.locale));
+                        self.set_notice(
+                            l10n::reserved_editing_shortcut(self.locale),
+                            components::NoticeKind::Warning,
+                        );
                         self.shortcut_recording = Some(ShortcutSlot::Action);
                         cx.notify();
                         return;
@@ -109,7 +118,10 @@ impl LauncherView {
                     if self.pending_action_shortcut.is_some() {
                         self.pending_action_shortcut_value = Some(shortcut);
                     } else {
-                        self.notice = Some(l10n::shortcut_recording_failed_try_again(self.locale));
+                        self.set_notice(
+                            l10n::shortcut_recording_failed_try_again(self.locale),
+                            components::NoticeKind::Warning,
+                        );
                     }
                 }
                 ShortcutSlot::ContextShortcut => {
@@ -118,13 +130,19 @@ impl LauncherView {
                         .next()
                         .is_some_and(|key| key.len() == 4 && key.starts_with("Key"));
                     if !is_letter {
-                        self.notice = Some(l10n::letter_with_modifier(self.locale));
+                        self.set_notice(
+                            l10n::letter_with_modifier(self.locale),
+                            components::NoticeKind::Warning,
+                        );
                         self.shortcut_recording = Some(ShortcutSlot::ContextShortcut);
                         cx.notify();
                         return;
                     }
                     if reserved_action_shortcut(&shortcut) {
-                        self.notice = Some(l10n::reserved_editing_shortcut(self.locale));
+                        self.set_notice(
+                            l10n::reserved_editing_shortcut(self.locale),
+                            components::NoticeKind::Warning,
+                        );
                         self.shortcut_recording = Some(ShortcutSlot::ContextShortcut);
                         cx.notify();
                         return;
@@ -133,7 +151,10 @@ impl LauncherView {
                         draft.shortcut = Some(shortcut);
                         self.notice = None;
                     } else {
-                        self.notice = Some(l10n::shortcut_recording_failed_try_again(self.locale));
+                        self.set_notice(
+                            l10n::shortcut_recording_failed_try_again(self.locale),
+                            components::NoticeKind::Warning,
+                        );
                     }
                 }
             }

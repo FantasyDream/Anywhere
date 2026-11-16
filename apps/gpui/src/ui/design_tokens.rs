@@ -15,7 +15,7 @@ pub mod colors {
     pub const ELEVATED: u32 = 0x584b505a;
     pub const SIDEBAR: u32 = 0x10101218;
     pub const WINDOW: u32 = 0x00303438;
-    pub const CONTENT_SCRIM: u32 = 0xa0303438;
+    pub const CONTENT_SCRIM: u32 = 0xed303438;
     pub const MODAL_SCRIM: u32 = 0xa8000000;
     pub const SIDEBAR_SELECTION: u32 = 0x24ffffff;
     pub const HOVER: u32 = 0x08ffffff;
@@ -94,6 +94,8 @@ pub mod metrics {
     pub const KEYCAP_PADDING_Y: f32 = 3.0;
     pub const PAGE_HEADER_HEIGHT: f32 = 72.0;
     pub const PAGE_TOOLBAR_HEIGHT: f32 = 36.0;
+    pub const NOTICE_MIN_HEIGHT: f32 = 44.0;
+    pub const NOTICE_MAX_HEIGHT: f32 = 96.0;
     pub const TITLE_BAR_INSET: f32 = 28.0;
     pub const PAGE_HEADING_SIZE: f32 = 21.0;
     pub const PAGE_MODE_SIZE: f32 = 10.0;
