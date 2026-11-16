@@ -51,7 +51,9 @@ fn context_only_web_commands_cannot_be_offered_or_executed_without_their_object(
         ),
     ] {
         assert!(offers(&registry, "Unescape", std::slice::from_ref(&context), None).is_empty());
-        assert!(service.start(&command, &context, None, "").is_err());
+        assert!(service
+            .start(&command, &context, context.session_id, None, "")
+            .is_err());
     }
     start(&mut service, &command, &input);
 }
@@ -95,6 +97,7 @@ fn legacy_typing_json_offers_copy_actions_and_invocation_keeps_exact_text() {
         .start(
             command,
             &raw("search term", ContextSource::UserInput),
+            0,
             None,
             ""
         )
@@ -210,11 +213,22 @@ fn legacy_json_helpers_reject_unmatched_execution_without_starting_a_webview() {
             raw("{broken}", ContextSource::SelectedText),
             raw("ordinary text", ContextSource::Clipboard),
         ] {
-            assert!(service.start(command, &input, None, "").is_err(), "{id}");
+            assert!(
+                service
+                    .start(command, &input, input.session_id, None, "")
+                    .is_err(),
+                "{id}"
+            );
         }
         if id == "unescape" {
             assert!(service
-                .start(command, &raw("{}", ContextSource::SelectedText), None, "")
+                .start(
+                    command,
+                    &raw("{}", ContextSource::SelectedText),
+                    0,
+                    None,
+                    ""
+                )
                 .is_err());
         }
     }

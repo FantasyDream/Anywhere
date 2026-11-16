@@ -1145,8 +1145,8 @@ pub fn search_directories(locale: Locale) -> String {
 
 pub fn excluded_directory_names(locale: Locale) -> String {
     match locale {
-        Locale::En => "Exclusions must be directory names, one per line.".to_string(),
-        Locale::Zh => "排除项必须是目录名，每行一个。".to_string(),
+        Locale::En => "Excluded directory names".to_string(),
+        Locale::Zh => "排除的目录名称".to_string(),
     }
 }
 
@@ -3615,6 +3615,13 @@ pub fn app_history_source_path(locale: Locale) -> String {
     }
 }
 
+pub fn app_history_edit_path(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Edit source path".to_string(),
+        Locale::Zh => "编辑来源路径".to_string(),
+    }
+}
+
 pub fn app_history_unconfigured(locale: Locale) -> String {
     match locale {
         Locale::En => "No history file is available. Check automatic detection or set a custom path in Settings → App History.".to_string(),
@@ -3759,6 +3766,14 @@ pub fn app_history_open_adapters(locale: Locale) -> String {
     }
 }
 
+pub fn opened_folder(locale: Locale, path: &str) -> String {
+    let values = &[("path", path.to_string())];
+    match locale {
+        Locale::En => fill("Opened {path}", values),
+        Locale::Zh => fill("已打开 {path}", values),
+    }
+}
+
 pub fn permission_input_read(locale: Locale) -> String {
     match locale {
         Locale::En => "Read Launcher search text".to_string(),
@@ -3787,5 +3802,447 @@ pub fn web_package_damaged(locale: Locale) -> String {
     }
 }
 
+pub fn web_document_failed(locale: Locale, error: &str) -> String {
+    let values = &[("error", error.to_string())];
+    match locale {
+        Locale::En => fill("The Web document could not be opened: {error}", values),
+        Locale::Zh => fill("无法打开 Web 文档：{error}", values),
+    }
+}
+
+pub fn web_view_start_failed(locale: Locale, error: &str) -> String {
+    let values = &[("error", error.to_string())];
+    match locale {
+        Locale::En => fill("The Web view could not start: {error}", values),
+        Locale::Zh => fill("无法启动 Web 视图：{error}", values),
+    }
+}
+
+pub fn web_theme_failed(locale: Locale, error: &str) -> String {
+    let values = &[("error", error.to_string())];
+    match locale {
+        Locale::En => fill("The Web view theme could not be applied: {error}", values),
+        Locale::Zh => fill("无法应用 Web 视图主题：{error}", values),
+    }
+}
+
+pub fn hotkey_state_unavailable(locale: Locale) -> String {
+    match locale {
+        Locale::En => {
+            "Shortcut settings are temporarily unavailable. Reopen the app and try again."
+                .to_string()
+        }
+        Locale::Zh => "快捷键设置暂时不可用，请重新打开应用后重试。".to_string(),
+    }
+}
+
+pub fn load_more(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Load more".to_string(),
+        Locale::Zh => "加载更多".to_string(),
+    }
+}
+
+pub fn standard_output(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Standard output".to_string(),
+        Locale::Zh => "标准输出".to_string(),
+    }
+}
+
+pub fn standard_error(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Standard error".to_string(),
+        Locale::Zh => "标准错误".to_string(),
+    }
+}
+
+pub fn select_task_to_inspect_output(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Select a task to inspect its output".to_string(),
+        Locale::Zh => "选择任务以查看输出".to_string(),
+    }
+}
+
+pub fn search_directories_authorized(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Search directories authorized.".to_string(),
+        Locale::Zh => "搜索目录已授权。".to_string(),
+    }
+}
+
+pub fn native_product_description(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Native GPUI product · macOS 15 or later".to_string(),
+        Locale::Zh => "原生 GPUI 产品 · 最低 macOS 15".to_string(),
+    }
+}
+
+pub fn data_directory(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Data directory".to_string(),
+        Locale::Zh => "数据目录".to_string(),
+    }
+}
+
+pub fn excluded_applications(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Excluded applications".to_string(),
+        Locale::Zh => "排除的应用".to_string(),
+    }
+}
+
+pub fn excluded_applications_help(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Bundle identifiers separated by commas or new lines".to_string(),
+        Locale::Zh => "使用逗号或换行分隔 Bundle ID".to_string(),
+    }
+}
+
+pub fn search_engine(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Search engine".to_string(),
+        Locale::Zh => "搜索引擎".to_string(),
+    }
+}
+
+pub fn search_engine_description(locale: Locale) -> String {
+    match locale {
+        Locale::En => "System Index, Ripgrep, or Combined".to_string(),
+        Locale::Zh => "系统索引、Ripgrep 或组合模式".to_string(),
+    }
+}
+
+pub fn search_engine_system_index(locale: Locale) -> String {
+    match locale {
+        Locale::En => "System Index".to_string(),
+        Locale::Zh => "系统索引".to_string(),
+    }
+}
+
+pub fn search_engine_ripgrep(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Ripgrep".to_string(),
+        Locale::Zh => "Ripgrep".to_string(),
+    }
+}
+
+pub fn search_engine_combined(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Combined".to_string(),
+        Locale::Zh => "组合模式".to_string(),
+    }
+}
+
+pub fn directory_access(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Directory access".to_string(),
+        Locale::Zh => "目录访问权限".to_string(),
+    }
+}
+
+pub fn preparing_directory_access(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Preparing directory access…".to_string(),
+        Locale::Zh => "正在准备目录访问权限…".to_string(),
+    }
+}
+
+pub fn authorized_directories(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Authorized directories".to_string(),
+        Locale::Zh => "已授权目录".to_string(),
+    }
+}
+
+pub fn authorized_directories_help(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Absolute paths separated by commas or new lines".to_string(),
+        Locale::Zh => "使用逗号或换行分隔绝对路径".to_string(),
+    }
+}
+
+pub fn read_only_action_details(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Read-only details provided by the action".to_string(),
+        Locale::Zh => "由操作提供的只读详情".to_string(),
+    }
+}
+
+pub fn unsupported_tool(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Unsupported tool".to_string(),
+        Locale::Zh => "不支持的工具".to_string(),
+    }
+}
+
+pub fn unsupported_tool_description(locale: Locale) -> String {
+    match locale {
+        Locale::En => {
+            "This action requested a native tool that is not registered in the GPUI host."
+                .to_string()
+        }
+        Locale::Zh => "此操作请求了 GPUI 宿主中未注册的原生工具。".to_string(),
+    }
+}
+
+pub fn tool_id(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Tool ID".to_string(),
+        Locale::Zh => "工具 ID".to_string(),
+    }
+}
+
+pub fn input_label(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Input".to_string(),
+        Locale::Zh => "输入".to_string(),
+    }
+}
+
+pub fn native_destination_unavailable(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Native destination unavailable".to_string(),
+        Locale::Zh => "原生目标不可用".to_string(),
+    }
+}
+
+pub fn this_action_unavailable(locale: Locale) -> String {
+    match locale {
+        Locale::En => "This action is unavailable right now".to_string(),
+        Locale::Zh => "此操作暂时不可用".to_string(),
+    }
+}
+
+pub fn running_action(locale: Locale, title: &str) -> String {
+    let values = &[("title", title.to_string())];
+    match locale {
+        Locale::En => fill("Running “{title}”…", values),
+        Locale::Zh => fill("正在执行“{title}”…", values),
+    }
+}
+
+pub fn execution_bridge_pending(locale: Locale, title: &str) -> String {
+    let values = &[("title", title.to_string())];
+    match locale {
+        Locale::En => fill("Execution bridge pending for “{title}”", values),
+        Locale::Zh => fill("“{title}”的执行桥接尚待接入", values),
+    }
+}
+
+pub fn action_unavailable_title(locale: Locale, title: &str) -> String {
+    let values = &[("title", title.to_string())];
+    match locale {
+        Locale::En => fill("“{title}” is unavailable right now", values),
+        Locale::Zh => fill("“{title}”暂时不可用", values),
+    }
+}
+
+pub fn no_action_selected(locale: Locale) -> String {
+    match locale {
+        Locale::En => "No action is selected".to_string(),
+        Locale::Zh => "当前没有选中的操作".to_string(),
+    }
+}
+
+pub fn previewing_title(locale: Locale, title: &str) -> String {
+    let values = &[("title", title.to_string())];
+    match locale {
+        Locale::En => fill("Previewing {title}", values),
+        Locale::Zh => fill("正在预览 {title}", values),
+    }
+}
+
+pub fn preview_runtime_not_attached(locale: Locale) -> String {
+    match locale {
+        Locale::En => {
+            "UI migration preview · the shared Rust runtime is not attached in this window"
+                .to_string()
+        }
+        Locale::Zh => "UI 迁移预览 · 此窗口尚未接入共享 Rust 运行时".to_string(),
+    }
+}
+
+pub fn enable_action(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Enable".to_string(),
+        Locale::Zh => "启用".to_string(),
+    }
+}
+
+pub fn disable_action(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Disable".to_string(),
+        Locale::Zh => "停用".to_string(),
+    }
+}
+
+pub fn new_package(locale: Locale) -> String {
+    match locale {
+        Locale::En => "New package".to_string(),
+        Locale::Zh => "新安装包".to_string(),
+    }
+}
+
+pub fn permissions(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Permissions".to_string(),
+        Locale::Zh => "权限".to_string(),
+    }
+}
+
+pub fn rollback(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Roll back".to_string(),
+        Locale::Zh => "回滚".to_string(),
+    }
+}
+
+pub fn installed_packages_and_permissions(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Installed packages and permissions".to_string(),
+        Locale::Zh => "已安装包与权限".to_string(),
+    }
+}
+
+pub fn web_tool_title(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Web Tool".to_string(),
+        Locale::Zh => "Web 工具".to_string(),
+    }
+}
+
+pub fn preparing_plugin_document(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Preparing the plugin document…".to_string(),
+        Locale::Zh => "正在准备插件文档…".to_string(),
+    }
+}
+
+pub fn return_to_launcher_and_try_again(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Return to the launcher and try again".to_string(),
+        Locale::Zh => "返回启动器后重试".to_string(),
+    }
+}
+
+pub fn starting_anywhere(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Anywhere is still starting…".to_string(),
+        Locale::Zh => "Anywhere 仍在启动中…".to_string(),
+    }
+}
+
+pub fn starting_web_tool(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Starting Web tool…".to_string(),
+        Locale::Zh => "正在启动 Web 工具…".to_string(),
+    }
+}
+
+pub fn waiting_for_host_document(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Waiting for the Host document".to_string(),
+        Locale::Zh => "正在等待宿主文档".to_string(),
+    }
+}
+
+pub fn web_tool_closed_unexpectedly(locale: Locale) -> String {
+    match locale {
+        Locale::En => "The Web tool closed unexpectedly".to_string(),
+        Locale::Zh => "Web 工具意外关闭".to_string(),
+    }
+}
+
+pub fn web_tool_background_failed(locale: Locale) -> String {
+    match locale {
+        Locale::En => "The Web tool could not apply its background".to_string(),
+        Locale::Zh => "Web 工具无法应用背景".to_string(),
+    }
+}
+
+pub fn built_in_feature_description(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Enable this built-in feature".to_string(),
+        Locale::Zh => "启用此内置功能".to_string(),
+    }
+}
+
+pub fn web_tools_settings_description(locale: Locale) -> String {
+    match locale {
+        Locale::En => {
+            "Install, review permissions, update, roll back, or remove packages".to_string()
+        }
+        Locale::Zh => "安装、审查权限、更新、回滚或移除安装包".to_string(),
+    }
+}
+
+pub fn manage_web_tools(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Manage…".to_string(),
+        Locale::Zh => "管理…".to_string(),
+    }
+}
+
+pub fn action_failed_with(locale: Locale, error: &str) -> String {
+    let values = &[("error", error.to_string())];
+    match locale {
+        Locale::En => fill("Action failed: {error}", values),
+        Locale::Zh => fill("操作失败：{error}", values),
+    }
+}
+
+pub fn action_completed_with_warning(locale: Locale, warning: &str) -> String {
+    let values = &[("warning", warning.to_string())];
+    match locale {
+        Locale::En => fill("Action completed with a warning: {warning}", values),
+        Locale::Zh => fill("操作已完成，但出现警告：{warning}", values),
+    }
+}
+
+pub fn opening_web_tool(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Opening the Web tool…".to_string(),
+        Locale::Zh => "正在打开 Web 工具…".to_string(),
+    }
+}
+
+pub fn action_completed(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Action completed".to_string(),
+        Locale::Zh => "操作已完成".to_string(),
+    }
+}
+
+pub fn preview_unavailable_with(locale: Locale, error: &str) -> String {
+    let values = &[("error", error.to_string())];
+    match locale {
+        Locale::En => fill("Preview is unavailable: {error}", values),
+        Locale::Zh => fill("无法预览：{error}", values),
+    }
+}
+
+pub fn could_not_activate_anywhere(locale: Locale, error: &str) -> String {
+    let values = &[("error", error.to_string())];
+    match locale {
+        Locale::En => fill("Could not activate Anywhere: {error}", values),
+        Locale::Zh => fill("无法激活 Anywhere：{error}", values),
+    }
+}
+
+pub fn last_context_capture(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Last context capture".to_string(),
+        Locale::Zh => "上次上下文采集".to_string(),
+    }
+}
+
+pub fn context_sources_not_captured(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Context sources appear here after the next launcher wake.".to_string(),
+        Locale::Zh => "下次唤醒启动器后会在此显示上下文来源状态。".to_string(),
+    }
+}
+
 /// Stable message count for generated-resource verification.
-pub const MESSAGE_COUNT: usize = 511;
+pub const MESSAGE_COUNT: usize = 573;

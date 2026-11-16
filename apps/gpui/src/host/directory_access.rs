@@ -1,6 +1,13 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::{
+    io::{Read as _, Write as _},
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
+};
+
+const MAX_BOOKMARK_FILE_BYTES: usize = 1024 * 1024;
+static BOOKMARK_TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -123,10 +130,13 @@ impl DirectoryAccess {
     }
 
     fn load(&self) -> Result<BookmarkFile> {
-        match std::fs::read(&self.bookmark_file) {
-            Ok(bytes) => {
+        match std::fs::File::open(&self.bookmark_file) {
+            Ok(file) => {
+                let mut bytes = Vec::new();
+                file.take(MAX_BOOKMARK_FILE_BYTES as u64 + 1)
+                    .read_to_end(&mut bytes)?;
                 anyhow::ensure!(
-                    bytes.len() <= 1024 * 1024,
+                    bytes.len() <= MAX_BOOKMARK_FILE_BYTES,
                     "search access file is too large"
                 );
                 let file: BookmarkFile = serde_json::from_slice(&bytes)
@@ -152,14 +162,45 @@ impl DirectoryAccess {
             .parent()
             .context("search access path has no parent")?;
         std::fs::create_dir_all(parent)?;
-        let temporary = self.bookmark_file.with_extension("json.tmp");
-        std::fs::write(&temporary, serde_json::to_vec_pretty(file)?)?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt as _;
-            std::fs::set_permissions(&temporary, std::fs::Permissions::from_mode(0o600))?;
+        let bytes = serde_json::to_vec_pretty(file)?;
+        anyhow::ensure!(
+            bytes.len() <= MAX_BOOKMARK_FILE_BYTES,
+            "search access file is too large"
+        );
+        let file_name = self
+            .bookmark_file
+            .file_name()
+            .and_then(|name| name.to_str())
+            .context("search access path has no file name")?;
+        let sequence = BOOKMARK_TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let temporary = parent.join(format!(
+            ".{file_name}.{}.{}.tmp",
+            std::process::id(),
+            sequence
+        ));
+        let result = (|| {
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt as _;
+                options.mode(0o600);
+            }
+            let mut output = options.open(&temporary)?;
+            output.write_all(&bytes)?;
+            output.sync_all()?;
+            drop(output);
+            std::fs::rename(&temporary, &self.bookmark_file)?;
+            Ok::<(), anyhow::Error>(())
+        })();
+        if result.is_err() {
+            let _ = std::fs::remove_file(&temporary);
         }
-        std::fs::rename(temporary, &self.bookmark_file)?;
+        result?;
+        #[cfg(unix)]
+        if let Ok(directory) = std::fs::File::open(parent) {
+            let _ = directory.sync_all();
+        }
         Ok(())
     }
 
@@ -345,5 +386,43 @@ mod tests {
                 0o600
             );
         }
+    }
+
+    #[test]
+    fn oversized_bookmark_files_are_rejected_before_full_allocation() {
+        let temporary = tempfile::tempdir().unwrap();
+        let path = temporary.path().join("access.json");
+        let file = std::fs::File::create(&path).unwrap();
+        file.set_len(MAX_BOOKMARK_FILE_BYTES as u64 + 1).unwrap();
+        let error = DirectoryAccess::new(path).load().unwrap_err();
+        assert!(error.to_string().contains("too large"));
+    }
+
+    #[test]
+    fn concurrent_bookmark_saves_use_independent_temporary_files() {
+        let temporary = tempfile::tempdir().unwrap();
+        let path = temporary.path().join("access.json");
+        let writers = (0..8)
+            .map(|_| {
+                let path = path.clone();
+                std::thread::spawn(move || {
+                    DirectoryAccess::new(path).save(&BookmarkFile {
+                        version: 1,
+                        bookmarks: Vec::new(),
+                    })
+                })
+            })
+            .collect::<Vec<_>>();
+        for writer in writers {
+            writer.join().unwrap().unwrap();
+        }
+        assert!(path.exists());
+        assert!(std::fs::read_dir(temporary.path())
+            .unwrap()
+            .all(|entry| !entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .ends_with(".tmp")));
     }
 }

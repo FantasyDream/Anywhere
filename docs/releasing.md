@@ -81,7 +81,7 @@ otool -L build/Anywhere-preview.app/Contents/MacOS/Anywhere
 [物理桌验矩阵](mvp-gpui.md#物理桌验矩阵)：
 
 - 中文 IME 中文字符、候选窗、Enter、Esc 与方向键；
-- 状态栏 `A`、全局热键和主窗口隐藏 / 恢复；
+- 菜单栏搜索图标、全局热键和主窗口隐藏 / 恢复；
 - 独立 Clipboard Shelf 的复用、关闭、失焦与置顶；
 - Quick Look 打开、关闭、唤醒与输入焦点恢复；
 - WebView 固定 origin、IPC、ack、替换与 teardown；

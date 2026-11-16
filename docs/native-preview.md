@@ -9,10 +9,17 @@ macOS Quick Look；Windows / Linux 返回明确 unsupported。自动化只覆盖
 - 进入页面或修改查询 / 类型后默认不选中条目。第一次 `↑` / `↓` 或点击选择，
   未选择时 Enter、对象动作和预览不执行。
 - 查询中的 Space 是文字；输入法组合期间不处理预览命令。列表已有选中项且不在
-  组合态时，Space 切换 Quick Look。
-- `⌘Y` 打开预览。行内眼睛按钮走同一路径。连续选择会把预览更新到最新目标。
-- 面板打开后，Space / Esc 关闭预览而不继续清空查询或返回。关闭后焦点回到当前
-  页面的查询编辑器；切到其他应用时不抢回键盘。
+  组合态时，Space 切换 Quick Look。只处理首次 key-down；按住产生的 repeat
+  不反复开关，文本输入路径产生的 repeat 空格也会回滚，不形成第二次请求。
+  Space 只在查询编辑器拥有焦点时归预览；页面按钮聚焦时 Space / Enter 激活
+  按钮，不执行背后的候选预览。
+- `⌘Y` 在文件、Clipboard History 和 Clipboard Shelf 上开关预览。行内眼睛按钮
+  走同一打开路径。连续选择会把预览更新到最新目标；按住 `⌘Y` 只处理首次
+  key-down。
+- 面板打开后，Space / Esc 关闭预览而不继续清空查询或返回；`⌘L` 关闭预览并
+  返回当前查询编辑器。Left / Right / Home / End / Backspace / Delete 或
+  `⌘A` 会先退出浏览态并关闭预览，再继续文本编辑。关闭后焦点回到当前页面的
+  查询编辑器；切到其他应用时不抢回键盘。
 - 隐藏 Launcher、替换页面或应用退出时关闭并释放旧预览。15 秒恢复不重新打开
   预览。
 - Quick Look 仅用于文件和剪贴板对象；Git 输出、插件 Detail 和 Web 工具使用
@@ -62,7 +69,7 @@ Esc 共用同一清理路径。
 | --- | --- |
 | Rust 文件与剪贴板资格 | `crates/anywhere-core/src/application/file_preview.rs`、`features/preview.rs`、Clipboard service |
 | Shared runtime 请求 | `crates/anywhere-core/src/application/frontend_runtime/` |
-| GPUI 页面状态与键盘 | `apps/gpui/src/launcher/view.rs` |
+| GPUI 页面状态与键盘 | `apps/gpui/src/launcher/view/` |
 | Quick Look 平台宿主 | `apps/gpui/src/platform/preview.rs` |
 | 窗口恢复与主循环 | `apps/gpui/src/app.rs`、`apps/gpui/src/platform/mod.rs` |
 

@@ -117,13 +117,14 @@ scripts/check-web-examples.sh
 
 ```bash
 mkdir -p build/acceptance-gpui
-ANYWHERE_DATA_DIRECTORY="$PWD/build/acceptance-gpui" \
+ANYWHERE_DATA_DIR="$PWD/build/acceptance-gpui" \
   ANYWHERE_PREVIEW=1 \
   build/Anywhere.app/Contents/MacOS/Anywhere
 ```
 
-`ANYWHERE_PREVIEW=1` 只建立无 Core 数据的 GPUI 预览壳，用于窗口与视觉检查；
-它不能证明 Launcher、文件、剪贴板、插件或权限路径。
+`ANYWHERE_PREVIEW=1` 只建立无 Core 数据的 GPUI 预览壳并主动显示窗口，用于窗口
+与视觉检查；它不能证明 Launcher、文件、剪贴板、插件或权限路径。普通发布包
+仍从隐藏窗口和 `ActivationPolicy::Accessory` 启动。
 
 真实 IME、跨应用焦点、Quick Look 与 WebView 检查必须在交互桌面执行。
 先记录最小复现序列，再修改生产输入语义；模拟组合键不能替代中文候选与物理

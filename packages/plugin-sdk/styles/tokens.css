@@ -12,7 +12,9 @@
   --aw-field: #20232a80;
   --aw-elevated: #4b505a58;
   --aw-sidebar: #10121810;
-  --aw-window: #303438a0;
+  --aw-window: #30343800;
+  --aw-content-scrim: #303438a0;
+  --aw-modal-scrim: #000000a8;
   --aw-sidebar-selection: #ffffff24;
   --aw-hover: #ffffff08;
   --aw-border: #ffffff38;
@@ -87,6 +89,7 @@
   --aw-keycap-padding-y: 3px;
   --aw-page-header-height: 72px;
   --aw-page-toolbar-height: 36px;
+  --aw-title-bar-inset: 28px;
   --aw-page-heading-size: 21px;
   --aw-page-mode-size: 10px;
   --aw-page-mode-weight: 500;

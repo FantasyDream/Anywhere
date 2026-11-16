@@ -14,6 +14,7 @@ use wry::http::{
 const BOOTSTRAP: &str = include_str!("../../../resources/web-bootstrap.js");
 const WEB_TOKENS_CSS: &str = include_str!("../../../packages/plugin-sdk/styles/tokens.css");
 const WEB_CONTROLS_CSS: &str = include_str!("../../../packages/plugin-sdk/styles/controls.css");
+const HOST_ESCAPE_FRAME: &str = r#"{"method":"host.escape"}"#;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WebDocumentPolicy {
@@ -158,6 +159,10 @@ pub fn bootstrap_script(language: &str) -> String {
     format!("{}\n{BOOTSTRAP}", locale_script(language))
 }
 
+pub(crate) fn is_host_escape_frame(frame: &str) -> bool {
+    frame == HOST_ESCAPE_FRAME
+}
+
 pub fn locale_script(language: &str) -> String {
     let language = if language == "zh" { "zh" } else { "en" };
     format!(
@@ -171,12 +176,8 @@ pub fn locale_script(language: &str) -> String {
 
 pub fn reply_script(frame: &str) -> String {
     let bytes = frame.as_bytes();
-    let values = bytes
-        .iter()
-        .map(u8::to_string)
-        .collect::<Vec<_>>()
-        .join(",");
-    format!("window.anywhereNative.onmessage({{data:new Uint8Array([{values}]).buffer}});")
+    let values = serde_json::to_string(bytes).expect("byte array serialization");
+    format!("window.anywhereNative.onmessage({{data:new Uint8Array({values}).buffer}});")
 }
 
 pub fn state_script(frame: &str) -> String {
@@ -186,6 +187,15 @@ pub fn state_script(frame: &str) -> String {
 
 pub fn visibility_script(visible: bool) -> String {
     format!("window.dispatchEvent(new CustomEvent('anywhere:visibility',{{detail:{visible}}}));")
+}
+
+pub fn canvas_script(transparent: bool) -> String {
+    let value = if transparent {
+        "transparent"
+    } else {
+        "var(--aw-fallback-surface)"
+    };
+    format!("document.documentElement.style.setProperty('--aw-web-canvas','{value}','important');")
 }
 
 pub fn plain_response(status: u16, message: &str) -> Response<Cow<'static, [u8]>> {
@@ -294,5 +304,21 @@ mod tests {
         let script = state_script("{\"event\":\"state.changed\"}");
         assert!(script.contains("\"{\\\"event\\\":\\\"state.changed\\\"}\""));
         assert!(script.contains("anywhere:state"));
+    }
+
+    #[test]
+    fn only_the_exact_host_escape_frame_bypasses_the_broker() {
+        assert!(is_host_escape_frame(r#"{"method":"host.escape"}"#));
+        for rejected in [
+            r#"{ "method": "host.escape" }"#,
+            r#"{"method":"host.escape","requestId":"1"}"#,
+            r#"{"method":"host.close"}"#,
+        ] {
+            assert!(!is_host_escape_frame(rejected), "{rejected}");
+        }
+        let bootstrap = bootstrap_script("en");
+        assert!(bootstrap.contains("event.key !== 'Escape'"));
+        assert!(bootstrap.contains("event.isComposing"));
+        assert!(bootstrap.contains(r#"{"method":"host.escape"}"#));
     }
 }

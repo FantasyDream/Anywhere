@@ -442,7 +442,7 @@ async fn native_policy_change_does_not_stop_an_already_running_process_session()
         })
         .unwrap();
     assert_eq!(
-        app.execution_session(&id).unwrap().summary.status,
+        app.execution_session(&id).unwrap().unwrap().summary.status,
         ExecutionSessionStatus::Running
     );
     app.publish_feature_catalog(
@@ -454,13 +454,14 @@ async fn native_policy_change_does_not_stop_an_already_running_process_session()
     )
     .unwrap();
     assert_eq!(
-        app.execution_session(&id).unwrap().summary.status,
+        app.execution_session(&id).unwrap().unwrap().summary.status,
         ExecutionSessionStatus::Running
     );
     std::fs::write(release, "finish").unwrap();
     tokio::time::timeout(Duration::from_secs(3), async {
         while app
             .execution_session(&id)
+            .unwrap()
             .unwrap()
             .summary
             .status
@@ -471,7 +472,7 @@ async fn native_policy_change_does_not_stop_an_already_running_process_session()
     })
     .await
     .unwrap();
-    let detail = app.execution_session(&id).unwrap();
+    let detail = app.execution_session(&id).unwrap().unwrap();
     assert_eq!(detail.summary.status, ExecutionSessionStatus::Succeeded);
     assert_eq!(detail.summary.exit_code, Some(0));
     assert_eq!(detail.stdout, "completed");

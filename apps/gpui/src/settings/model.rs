@@ -1,4 +1,4 @@
-use crate::l10n::Locale;
+use crate::l10n::{self, Locale};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct FeatureSetting {
@@ -22,11 +22,10 @@ pub enum SettingsCategory {
     Clipboard,
     ApplicationHistory,
     Plugins,
-    Language,
 }
 
 impl SettingsCategory {
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 7] = [
         Self::General,
         Self::Shortcuts,
         Self::Context,
@@ -34,27 +33,29 @@ impl SettingsCategory {
         Self::Clipboard,
         Self::ApplicationHistory,
         Self::Plugins,
-        Self::Language,
     ];
 
-    pub fn label(self, locale: Locale) -> &'static str {
-        match (self, locale) {
-            (Self::General, Locale::En) => "General",
-            (Self::General, Locale::Zh) => "通用",
-            (Self::Shortcuts, Locale::En) => "Shortcuts",
-            (Self::Shortcuts, Locale::Zh) => "快捷键",
-            (Self::Context, Locale::En) => "Context",
-            (Self::Context, Locale::Zh) => "上下文",
-            (Self::Search, Locale::En) => "Search",
-            (Self::Search, Locale::Zh) => "搜索",
-            (Self::Clipboard, Locale::En) => "Clipboard",
-            (Self::Clipboard, Locale::Zh) => "剪贴板",
-            (Self::ApplicationHistory, Locale::En) => "App History",
-            (Self::ApplicationHistory, Locale::Zh) => "应用历史",
-            (Self::Plugins, Locale::En) => "Features",
-            (Self::Plugins, Locale::Zh) => "功能",
-            (Self::Language, Locale::En) => "Language",
-            (Self::Language, Locale::Zh) => "语言",
+    pub fn label(self, locale: Locale) -> String {
+        match self {
+            Self::General => l10n::general(locale),
+            Self::Shortcuts => l10n::shortcuts(locale),
+            Self::Context => l10n::context(locale),
+            Self::Search => l10n::search(locale),
+            Self::Clipboard => l10n::clipboard(locale),
+            Self::ApplicationHistory => l10n::app_history(locale),
+            Self::Plugins => l10n::features(locale),
+        }
+    }
+
+    pub fn id(self) -> &'static str {
+        match self {
+            Self::General => "general",
+            Self::Shortcuts => "shortcuts",
+            Self::Context => "context",
+            Self::Search => "search",
+            Self::Clipboard => "clipboard",
+            Self::ApplicationHistory => "app_history",
+            Self::Plugins => "plugins",
         }
     }
 }
@@ -71,7 +72,7 @@ pub struct SettingsModel {
 impl Default for SettingsModel {
     fn default() -> Self {
         Self {
-            selected: SettingsCategory::General,
+            selected: SettingsCategory::Shortcuts,
             clipboard_recording: false,
             features: Vec::new(),
             saving: false,
@@ -100,5 +101,34 @@ impl SettingsModel {
         if let Some(feature) = self.features.iter_mut().find(|feature| feature.key == key) {
             feature.enabled = enabled;
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn settings_expose_the_original_seven_stable_categories() {
+        assert_eq!(SettingsCategory::ALL.len(), 7);
+        assert_eq!(
+            SettingsCategory::ALL
+                .into_iter()
+                .map(SettingsCategory::id)
+                .collect::<Vec<_>>(),
+            [
+                "general",
+                "shortcuts",
+                "context",
+                "search",
+                "clipboard",
+                "app_history",
+                "plugins",
+            ]
+        );
+        assert_eq!(
+            SettingsModel::default().selected,
+            SettingsCategory::Shortcuts
+        );
     }
 }

@@ -10,7 +10,7 @@ use anywhere_protocol::{LauncherState, Revision, SessionId};
 pub struct SnapshotGate {
     session_id: SessionId,
     minimum_revision: Revision,
-    cursor: u64,
+    cursor: Option<u64>,
 }
 
 impl SnapshotGate {
@@ -18,7 +18,7 @@ impl SnapshotGate {
         Self {
             session_id,
             minimum_revision: 0,
-            cursor: 0,
+            cursor: None,
         }
     }
 
@@ -35,7 +35,7 @@ impl SnapshotGate {
     }
 
     pub fn cursor(&self) -> u64 {
-        self.cursor
+        self.cursor.unwrap_or(0)
     }
 
     pub fn cursor_for(state: &LauncherState) -> u64 {
@@ -46,11 +46,11 @@ impl SnapshotGate {
         let cursor = Self::cursor_for(state);
         if state.session_id != self.session_id
             || state.revision < minimum_revision
-            || cursor <= self.cursor
+            || self.cursor.is_some_and(|current| cursor <= current)
         {
             return false;
         }
-        self.cursor = cursor;
+        self.cursor = Some(cursor);
         true
     }
 }
@@ -77,6 +77,15 @@ mod tests {
         assert!(gate.accept_update(&state(7, 1, 3)));
         assert!(gate.accept_update(&state(7, 2, 0)));
         assert!(!gate.accept_update(&state(7, 1, 9)));
+    }
+
+    #[test]
+    fn accepts_the_initial_zero_cursor_once() {
+        let mut gate = SnapshotGate::new(7);
+        assert_eq!(gate.cursor(), 0);
+        assert!(gate.accept_update(&state(7, 0, 0)));
+        assert_eq!(gate.cursor(), 0);
+        assert!(!gate.accept_update(&state(7, 0, 0)));
     }
 
     #[test]

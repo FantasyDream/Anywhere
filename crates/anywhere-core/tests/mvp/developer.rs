@@ -3,7 +3,7 @@ use super::support::*;
 async fn completed_task(app: &Application, id: &str) -> ExecutionSessionDetail {
     tokio::time::timeout(Duration::from_secs(90), async {
         loop {
-            let detail = app.execution_session(id).unwrap();
+            let detail = app.execution_session(id).unwrap().unwrap();
             if !detail.summary.status.is_active() {
                 return detail;
             }
@@ -68,13 +68,13 @@ async fn cargo_action_uses_the_graph_scope_history_and_independent_execution_lif
     let id = result.execution_session_id.unwrap();
     assert_ne!(id, state.session_id.to_string());
     app.deactivate(state.session_id).unwrap();
-    assert!(!app.execution_sessions().is_empty());
+    assert!(!app.execution_sessions().unwrap().is_empty());
     // A later Launcher activation must neither cancel nor replace the started task.
     let next = app.activate().await.unwrap().unwrap();
     assert_ne!(next.session_id, state.session_id);
     let detail = tokio::time::timeout(Duration::from_secs(20), async {
         loop {
-            let detail = app.execution_session(&id).unwrap();
+            let detail = app.execution_session(&id).unwrap().unwrap();
             if !detail.summary.status.is_active() {
                 break detail;
             }
@@ -98,7 +98,7 @@ async fn cargo_action_uses_the_graph_scope_history_and_independent_execution_lif
         usage[&("developer.cargo.check".into(), PROJECT_RUST.into())].execute_count,
         1
     );
-    app.shutdown_execution_sessions();
+    app.shutdown_execution_sessions().unwrap();
 }
 
 #[tokio::test]
@@ -126,7 +126,7 @@ async fn project_without_manifest_has_no_rust_scope_and_deleted_manifest_cannot_
         .unwrap();
     assert_eq!(result.status, ActionStatus::Failed);
     assert!(result.execution_session_id.is_none());
-    assert!(app.execution_sessions().is_empty());
+    assert!(app.execution_sessions().unwrap().is_empty());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -170,7 +170,7 @@ async fn project_types_are_additive_and_wrappers_use_the_module_working_director
         assert!(state.scopes.iter().any(|entry| entry.id == scope));
     }
     assert!(
-        app.execution_sessions().is_empty(),
+        app.execution_sessions().unwrap().is_empty(),
         "recognition must not execute anything"
     );
     for (command, arguments) in [
@@ -312,7 +312,7 @@ async fn missing_node_scripts_stay_hidden_without_running_tools() {
             .command_id
             .as_deref()
             .is_some_and(|id| id.starts_with("developer.node."))));
-    assert!(app.execution_sessions().is_empty());
+    assert!(app.execution_sessions().unwrap().is_empty());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -455,7 +455,7 @@ async fn dynamic_script_actions_are_searchable_stable_and_revalidate_manager() {
         .candidates
         .iter()
         .any(|candidate| candidate.command_id == action.command_id));
-    assert!(app.execution_sessions().is_empty());
+    assert!(app.execution_sessions().unwrap().is_empty());
     app.deactivate(state.session_id).unwrap();
     std::fs::write(
         root.join("package.json"),
@@ -476,7 +476,7 @@ async fn dynamic_script_actions_are_searchable_stable_and_revalidate_manager() {
     let result = execute_action(&app, &state, action.command_id.as_deref().unwrap()).await;
     assert_eq!(result.status, ActionStatus::Failed);
     assert!(result.execution_session_id.is_none());
-    assert!(app.execution_sessions().is_empty());
+    assert!(app.execution_sessions().unwrap().is_empty());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -664,7 +664,7 @@ async fn all_node_managers_execute_custom_scripts_failures_and_stoppable_service
             let id = result.execution_session_id.unwrap();
             let pid = tokio::time::timeout(Duration::from_secs(60), async {
                 loop {
-                    let task = app.execution_session(&id).unwrap();
+                    let task = app.execution_session(&id).unwrap().unwrap();
                     if let Some(pid) = task.stdout.lines().find_map(|line| {
                         line.strip_prefix("SERVICE-PID:")
                             .and_then(|pid| pid.parse::<u32>().ok())
@@ -753,7 +753,7 @@ async fn real_spring_boot_services_start_and_stop_without_surviving_children() {
         let id = result.execution_session_id.unwrap();
         let pid = tokio::time::timeout(Duration::from_secs(180), async {
             loop {
-                let task = app.execution_session(&id).unwrap();
+                let task = app.execution_session(&id).unwrap().unwrap();
                 if let Some(pid) = task.stdout.lines().find_map(|line| {
                     line.strip_prefix("BOOT-PID:")
                         .and_then(|pid| pid.parse::<u32>().ok())

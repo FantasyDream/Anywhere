@@ -274,7 +274,7 @@ async fn process_plan_cannot_start_after_suspend_and_resume() {
         result.error.as_deref(),
         Some("action expired before the task started")
     );
-    assert!(app.execution_sessions().is_empty());
+    assert!(app.execution_sessions().unwrap().is_empty());
     assert_eq!(uses(&app), 0);
 }
 

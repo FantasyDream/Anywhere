@@ -49,9 +49,9 @@ crates/anywhere-core/src/
 
 apps/gpui/src/
 ├── app.rs           产品壳、主窗口、状态栏、热键与独立 Shelf
-├── launcher/        Snapshot gate、页面模型与 GPUI 视图
+├── launcher/        Snapshot gate、页面模型、图标缓存与 GPUI 视图
 ├── settings/        设置展示模型
-├── host/            数据路径、运行时、偏好、热键、目录授权与登录项
+├── host/            数据路径、运行时分派、快照投影、偏好、热键与目录授权
 ├── platform/        AppKit、状态栏、Quick Look 与 WebView 系统边界
 ├── tools/           NativeTool 路由领域
 ├── l10n/            共享本地化的 Rust 投影
@@ -65,7 +65,9 @@ apps/gpui/src/
 ## 启动与依赖
 
 `apps/gpui/src/main.rs` 先验证 macOS 15+，再启动 GPUI application。
-`app.rs` 创建：
+`app.rs` 先创建隐藏的 Starting 窗口和状态栏壳，随后由独立启动线程打开共享
+runtime；Ready 后才注入缓存设置、偏好和热键。Starting / Failed 状态不能预留
+Session 或执行动作。`app.rs` 最终创建：
 
 - `LiveLauncher` 与 `ApplicationRuntime`；
 - 主 GPUI 窗口；
@@ -74,10 +76,22 @@ apps/gpui/src/
 - 按需打开的独立 Clipboard Shelf；
 - 窗口关闭、清理和状态栏恢复路径。
 
-`LiveLauncher` 位于 `apps/gpui/src/host/runtime.rs`，在 blocking runtime 上执行
-Core 服务。同步设置或系统操作不得阻塞渲染线程。产品路径由
+`LiveLauncher` facade 位于 `apps/gpui/src/host/runtime/mod.rs`，在 blocking
+runtime 上执行 Core 服务；同目录按 Launcher、Actions、Settings、Clipboard、
+Application History、Tasks 和 Web 拆分请求方法。`host/runtime_support.rs`
+负责启动偏好应用、目录恢复和领域快照到 GPUI DTO 的纯投影。同步设置或系统
+操作不得阻塞渲染线程。产品路径由
 `apps/gpui/src/host/mod.rs` 构造，默认数据目录是
 `~/Library/Application Support/Anywhere`。
+
+GPUI 内的 Session / revision / snapshot gate / stream cancellation 由
+`launcher/view/live_state.rs` 持有；File Search、Clipboard、Application History、
+Tasks 的页面工作态由 `launcher/model` 与 `launcher/pages.rs` 的页面模型持有；
+WebView / document / ack 状态由 `launcher/view/web_surface.rs` 持有。根视图负责
+路由和跨页意图；activation / retention 位于 `view/navigation.rs`，按键与 IME
+优先级位于 `view/input.rs`，Settings 草稿 / 保存 / 关闭控制器位于
+`view/settings/controller.rs`。原生通道采用有界 admission；激活、恢复、分页和后续 follow
+统一把完整 Launcher 快照表达为 `Arc<LauncherState>`，单次回复只投递一个结果。
 
 ## 激活与 Context
 
@@ -148,7 +162,7 @@ JS 转换并形成普通候选和对象动作。它与 Launcher Usage、剪贴�
 - 登录项：`apps/gpui/src/host/login_item.rs`，显式数据目录下不访问系统项。
 - 状态栏与窗口：`apps/gpui/src/platform/mod.rs`。
 - Quick Look：`apps/gpui/src/platform/preview.rs`。
-- Web document：`apps/gpui/src/web_tool.rs` 与 `launcher/view.rs`。
+- Web document：`apps/gpui/src/web_tool.rs` 与 `launcher/view/`。
 
 这些适配器的自动化只证明输入输出与清理顺序。物理权限、IME、系统批准与 WebKit
 helper 行为必须按[验收矩阵](mvp-gpui.md#物理桌验矩阵)单独记录。

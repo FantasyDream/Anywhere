@@ -53,6 +53,39 @@ hotkey_to_visible_ms
 物理 IME 候选选择、Quick Look 首帧、WebKit 内容呈现和窗口合成必须单独测量，
 不能从 Rust 或 GPUI 状态测试推断。
 
+### 2026-11-13 合成投影基线
+
+`projection_measure` 使用 10,000 条合成候选，在 Release 构建下预热 10 次并
+采集 100 次。它只测 `LauncherModel::apply_shared` 的展示投影，不读取用户数据，
+也不包含 Core 查询、GPUI 布局 / 栅格化、窗口合成或显示器呈现：
+
+```bash
+cargo run -p anywhere-gpui --example projection_measure --release --locked
+```
+
+本机为 Apple M5、10 核、16 GB，macOS 27.2.1，工具链
+`rustc 1.100.0-beta.7`。同次运行的样本为：
+
+| 场景 | p50 | p95 | max |
+| --- | ---: | ---: | ---: |
+| 共享候选列表，仅元数据变化 | 0.208 µs | 0.25 µs | 3.375 µs |
+| 全新模型的完整可见投影 | 28.625 µs | 31.833 µs | 95.458 µs |
+
+该表用于发现重复投影回归，不是整 App 性能承诺。机器、构建、fixture 或场景
+改变时不得直接比较数值；比较最终实现与基线时还应记录 Core 发布、通道等待、
+GPUI notify / resize 次数和实际首帧证据。
+
+当前通信实现把激活、恢复、输入、分页与 follow 的 Launcher 快照统一为
+`Arc<LauncherState>`，单次请求使用容量 1 的回复通道，Core execution、原生事件
+与 Web IPC 使用有界通知。上述改动解决的是所有权、排队和正确性问题；现在没有
+足够证据把合成投影微秒数换算成用户可见性能提升。
+
+启动测量现在分两段解释：r5 隔离包的初始状态栏到 Ready 状态栏 / 热键替换约为
+105 ms，从材质准备到 Ready 的日志跨度约为 134 ms；首份可执行快照仍由真实
+Session / Core 查询决定。
+这个单次样本不能代表慢磁盘、权限提示或冷 LaunchServices；后续 A/B 必须使用
+同一个阻塞存储 fixture，并同时记录主线程是否被占用、Ready 延迟和首次可用快照。
+
 ## 历史材料
 
 过去的界面 era 样本和逐构建 JSON 位于
@@ -66,6 +99,8 @@ hotkey_to_visible_ms
 
 - 旧 Session / revision / snapshot 不覆盖新状态；
 - 查询切换后旧结果不会继续追加；
+- 激活、恢复、输入、分页和 follow 统一投递共享 `Arc<LauncherState>`，不得重新
+  引入 owned 快照双分支或 host 无界状态队列；
 - 隐藏立即撤销执行资格；
 - Quick Look generation 防止旧关闭回调影响新预览；
 - Web document 替换、teardown 和迟到 IPC 不污染新 handle；

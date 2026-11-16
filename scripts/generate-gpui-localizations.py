@@ -79,6 +79,11 @@ def rust_string(value):
     return json.dumps(value, ensure_ascii=False)
 
 
+def message_count():
+    catalog = json.loads((SOURCE_DIRECTORY / 'app_en.arb').read_text())
+    return len([key for key in catalog if not key.startswith('@')])
+
+
 def render():
     catalogs = {
         locale: json.loads((SOURCE_DIRECTORY / f'app_{locale}.arb').read_text())
@@ -231,8 +236,8 @@ def main():
     else:
         OUTPUT.parent.mkdir(parents=True, exist_ok=True)
         OUTPUT.write_text(value)
-    print(
-        'GPUI localizations OK: 511 messages, en/zh, placeholders and plurals')
+    print(f'GPUI localizations OK: {message_count()} messages, '
+          'en/zh, placeholders and plurals')
     return 0
 
 

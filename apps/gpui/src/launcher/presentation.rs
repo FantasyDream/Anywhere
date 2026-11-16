@@ -1,0 +1,462 @@
+use anywhere_protocol::{
+    ActionResult, CandidateKind, ContextCaptureStatus, ContextSource, FileObjectKind,
+    FileSearchFilter,
+};
+use gpui_kit::{
+    assets::IconName,
+    component::input::{InputEditsEvent, InputState, TextareaState},
+    AppContext, Entity, SharedString, Window,
+};
+
+use crate::{
+    host::{ShortcutCatalogAction, UiLanguage},
+    l10n::{self, Locale},
+    ui::theme,
+};
+
+pub(crate) fn locale_for_language(language: UiLanguage) -> Locale {
+    match language {
+        UiLanguage::En => Locale::En,
+        UiLanguage::Zh => Locale::Zh,
+        UiLanguage::System => sys_locale::get_locale()
+            .and_then(|identifier| {
+                identifier
+                    .split(['-', '_'])
+                    .next()
+                    .map(str::to_ascii_lowercase)
+            })
+            .map(|language| {
+                if language == "zh" {
+                    Locale::Zh
+                } else {
+                    Locale::En
+                }
+            })
+            .unwrap_or(Locale::En),
+    }
+}
+
+pub(crate) fn lines(value: &str) -> Vec<String> {
+    unique_trimmed(value.split('\n'))
+}
+
+pub(crate) fn normalized_shortcut(
+    key: &str,
+    command: bool,
+    control: bool,
+    alt: bool,
+    shift: bool,
+) -> Option<String> {
+    if !command && !control && !alt {
+        return None;
+    }
+    let key = match key {
+        "space" => "Space".to_owned(),
+        "enter" | "return" => "Enter".to_owned(),
+        "escape" => "Escape".to_owned(),
+        "tab" => "Tab".to_owned(),
+        "backspace" => "Backspace".to_owned(),
+        "delete" => "Delete".to_owned(),
+        "up" | "arrowup" => "ArrowUp".to_owned(),
+        "down" | "arrowdown" => "ArrowDown".to_owned(),
+        "left" | "arrowleft" => "ArrowLeft".to_owned(),
+        "right" | "arrowright" => "ArrowRight".to_owned(),
+        value if value.len() == 1 && value.as_bytes()[0].is_ascii_alphabetic() => {
+            format!("Key{}", value.to_ascii_uppercase())
+        }
+        value if value.len() == 1 && value.as_bytes()[0].is_ascii_digit() => {
+            format!("Digit{value}")
+        }
+        value
+            if value.len() >= 2
+                && value.len() <= 3
+                && value.as_bytes()[0].eq_ignore_ascii_case(&b'f')
+                && value[1..].bytes().all(|byte| byte.is_ascii_digit()) =>
+        {
+            format!("F{}", &value[1..])
+        }
+        _ => return None,
+    };
+    let parsed = [
+        (control, "control"),
+        (alt, "alt"),
+        (shift, "shift"),
+        (command, "meta"),
+    ]
+    .into_iter()
+    .filter_map(|(enabled, label)| enabled.then_some(label))
+    .collect::<Vec<_>>();
+    Some(format!("{}+{key}", parsed.join("+")))
+}
+
+pub(crate) fn reserved_action_shortcut(shortcut: &str) -> bool {
+    let mut parts = shortcut.split('+');
+    matches!(parts.next(), Some("meta"))
+        && parts.next().is_some_and(|key| {
+            matches!(
+                key,
+                "KeyA"
+                    | "KeyC"
+                    | "KeyK"
+                    | "KeyM"
+                    | "KeyQ"
+                    | "KeyR"
+                    | "KeyW"
+                    | "KeyX"
+                    | "KeyY"
+                    | "KeyZ"
+            )
+        })
+        && parts.next().is_none()
+}
+
+pub(crate) fn excluded_app_ids(value: &str) -> Vec<String> {
+    unique_trimmed(value.split(['\n', ',']))
+}
+
+pub(crate) fn unique_trimmed<'a>(values: impl IntoIterator<Item = &'a str>) -> Vec<String> {
+    let mut result = Vec::new();
+    for value in values {
+        let value = value.trim();
+        if !value.is_empty() && !result.iter().any(|existing| existing == value) {
+            result.push(value.to_owned());
+        }
+    }
+    result
+}
+
+pub(crate) fn set_input_value<C: AppContext>(
+    input: &Entity<InputState>,
+    value: impl Into<SharedString>,
+    window: &mut Window,
+    cx: &mut C,
+) {
+    let value = value.into();
+    input.update(cx, |input, cx| input.set_value(value, window, cx));
+}
+
+pub(crate) fn set_textarea_value<C: AppContext>(
+    input: &Entity<TextareaState>,
+    value: impl Into<SharedString>,
+    window: &mut Window,
+    cx: &mut C,
+) {
+    let value = value.into();
+    input.update(cx, |input, cx| input.set_value(value, window, cx));
+}
+
+pub(crate) fn file_filter_id(filter: FileSearchFilter) -> &'static str {
+    match filter {
+        FileSearchFilter::All => "all",
+        FileSearchFilter::Files => "files",
+        FileSearchFilter::Folders => "folders",
+        FileSearchFilter::Documents => "documents",
+        FileSearchFilter::Pdf => "pdf",
+        FileSearchFilter::Images => "images",
+        FileSearchFilter::Audio => "audio",
+        FileSearchFilter::Video => "video",
+        FileSearchFilter::Archives => "archives",
+        FileSearchFilter::Code => "code",
+    }
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct RowIconAppearance {
+    pub(crate) glyph: IconName,
+    pub(crate) tint: fn() -> gpui_kit::Hsla,
+    pub(crate) mark: Option<IconName>,
+    pub(crate) stamp: Option<&'static str>,
+}
+
+fn plain_icon(glyph: IconName, tint: fn() -> gpui_kit::Hsla) -> RowIconAppearance {
+    RowIconAppearance {
+        glyph,
+        tint,
+        mark: None,
+        stamp: None,
+    }
+}
+
+fn marked_icon(glyph: IconName, tint: fn() -> gpui_kit::Hsla, mark: IconName) -> RowIconAppearance {
+    RowIconAppearance {
+        glyph,
+        tint,
+        mark: Some(mark),
+        stamp: None,
+    }
+}
+
+fn stamped_icon(
+    glyph: IconName,
+    tint: fn() -> gpui_kit::Hsla,
+    stamp: &'static str,
+) -> RowIconAppearance {
+    RowIconAppearance {
+        glyph,
+        tint,
+        mark: None,
+        stamp: Some(stamp),
+    }
+}
+
+pub(crate) fn file_icon_appearance(name: &str, kind: Option<FileObjectKind>) -> RowIconAppearance {
+    if kind == Some(FileObjectKind::Directory) {
+        return plain_icon(IconName::Folder, theme::icon_blue);
+    }
+
+    let name = name
+        .rsplit(['/', '\\'])
+        .next()
+        .unwrap_or(name)
+        .to_ascii_lowercase();
+    if matches!(
+        name.as_str(),
+        ".env"
+            | ".gitignore"
+            | ".gitattributes"
+            | ".gitmodules"
+            | ".editorconfig"
+            | ".npmrc"
+            | ".nvmrc"
+            | ".prettierrc"
+            | ".eslintrc"
+            | ".bashrc"
+            | ".zshrc"
+            | ".bash_profile"
+            | ".zprofile"
+            | ".profile"
+    ) || name.starts_with(".env.")
+    {
+        return plain_icon(IconName::FileCog, theme::icon_amber);
+    }
+    if matches!(
+        name.as_str(),
+        "dockerfile"
+            | "makefile"
+            | "cmakelists.txt"
+            | "gemfile"
+            | "rakefile"
+            | "procfile"
+            | "justfile"
+    ) {
+        return plain_icon(IconName::FileCode, theme::icon_purple);
+    }
+    if matches!(
+        name.as_str(),
+        "readme" | "license" | "licence" | "changelog" | "authors"
+    ) {
+        return stamped_icon(IconName::Type, theme::icon_neutral, "TXT");
+    }
+
+    let dot = name.rfind('.');
+    let extension = dot
+        .filter(|dot| *dot > 0 && *dot + 1 < name.len())
+        .map(|dot| &name[dot + 1..])
+        .unwrap_or_default();
+    match extension {
+        "pdf" => stamped_icon(IconName::FileText, theme::icon_coral, "PDF"),
+        "doc" | "docx" | "odt" | "rtf" | "pages" => {
+            stamped_icon(IconName::FileText, theme::icon_blue, "DOC")
+        }
+        "txt" | "md" | "markdown" | "log" | "rst" | "tex" => {
+            stamped_icon(IconName::Type, theme::icon_neutral, "TXT")
+        }
+        "xls" | "xlsx" | "ods" | "csv" | "tsv" | "numbers" => {
+            plain_icon(IconName::FileSpreadsheet, theme::icon_green)
+        }
+        "ppt" | "pptx" | "odp" | "key" => plain_icon(IconName::Presentation, theme::icon_amber),
+        "jpg" | "jpeg" | "png" | "gif" | "webp" | "heic" | "heif" | "avif" | "bmp" | "tif"
+        | "tiff" | "svg" | "ico" | "icns" | "psd" | "raw" => {
+            plain_icon(IconName::Image, theme::icon_blue)
+        }
+        "mp3" | "m4a" | "aac" | "wav" | "flac" | "ogg" | "opus" | "aiff" | "aif" | "wma" => {
+            plain_icon(IconName::Music, theme::icon_pink)
+        }
+        "mp4" | "mov" | "mkv" | "avi" | "webm" | "m4v" | "wmv" | "mpeg" | "mpg" => {
+            plain_icon(IconName::FileVideoCamera, theme::icon_purple)
+        }
+        "zip" | "7z" | "rar" | "tar" | "gz" | "bz2" | "xz" | "tgz" | "zst" | "lz" | "lzma"
+        | "tbz2" => plain_icon(IconName::FileArchive, theme::icon_amber),
+        "dmg" | "iso" | "pkg" | "exe" | "dll" | "dylib" | "so" => {
+            plain_icon(IconName::Package, theme::icon_neutral)
+        }
+        "epub" | "mobi" | "azw" | "azw3" => plain_icon(IconName::BookOpen, theme::icon_green),
+        "ttf" | "otf" | "woff" | "woff2" => plain_icon(IconName::Type, theme::icon_pink),
+        "json" | "yaml" | "yml" | "toml" | "xml" | "ini" | "conf" | "cfg" | "properties"
+        | "lock" => plain_icon(IconName::FileCog, theme::icon_amber),
+        "dart" | "swift" | "rs" | "java" | "kt" | "kts" | "js" | "jsx" | "ts" | "tsx" | "py"
+        | "go" | "c" | "h" | "cpp" | "hpp" | "cc" | "cxx" | "hxx" | "cs" | "sh" | "bash"
+        | "zsh" | "ps1" | "bat" | "cmd" | "fish" | "rb" | "php" | "lua" | "sql" | "html"
+        | "htm" | "css" | "scss" | "sass" | "less" | "vue" | "svelte" | "ipynb" | "ex" | "exs"
+        | "erl" | "clj" | "cljs" | "pl" | "pm" | "scala" | "sc" | "groovy" | "r" | "m" | "mm"
+        | "cmake" | "gradle" | "hs" => plain_icon(IconName::FileCode, theme::icon_purple),
+        _ => plain_icon(IconName::File, theme::icon_neutral),
+    }
+}
+
+pub(crate) fn action_icon_appearance(key: &str, kind: CandidateKind) -> RowIconAppearance {
+    match key.to_ascii_lowercase().as_str() {
+        "terminal" => plain_icon(IconName::SquareTerminal, theme::icon_green),
+        "folder" => plain_icon(IconName::Folder, theme::icon_blue),
+        "folder-open" => plain_icon(IconName::FolderOpen, theme::icon_blue),
+        "file" => plain_icon(IconName::File, theme::icon_neutral),
+        "file-open" => marked_icon(IconName::File, theme::icon_blue, IconName::ExternalLink),
+        "file-reveal" => marked_icon(IconName::Folder, theme::icon_blue, IconName::Search),
+        "copy" => plain_icon(IconName::Copy, theme::icon_neutral),
+        "copy-path" => marked_icon(IconName::Folder, theme::icon_blue, IconName::Copy),
+        "copy-selection" => stamped_icon(IconName::Files, theme::icon_purple, "{}"),
+        "copy-url" => marked_icon(IconName::Link, theme::icon_blue, IconName::Copy),
+        "globe" => plain_icon(IconName::Globe, theme::icon_blue),
+        "code" => plain_icon(IconName::Code, theme::icon_purple),
+        "git" | "git-branches" => plain_icon(IconName::GitBranch, theme::icon_coral),
+        "git-status" => plain_icon(IconName::ListChecks, theme::icon_coral),
+        "git-log" => plain_icon(IconName::Clock3, theme::icon_coral),
+        "git-diff" => plain_icon(IconName::Diff, theme::icon_coral),
+        "git-staged" => plain_icon(IconName::ListChecks, theme::icon_green),
+        "copy-branch" => marked_icon(IconName::GitBranch, theme::icon_coral, IconName::Copy),
+        "copy-commit" => marked_icon(
+            IconName::GitCommitHorizontal,
+            theme::icon_coral,
+            IconName::Copy,
+        ),
+        "copy-short-commit" => stamped_icon(IconName::GitCommitHorizontal, theme::icon_coral, "…"),
+        "search" => plain_icon(IconName::Search, theme::icon_neutral),
+        "file-search" => plain_icon(IconName::FileSearch, theme::icon_blue),
+        "clipboard" => plain_icon(IconName::Clipboard, theme::icon_neutral),
+        "clipboard-history" => {
+            marked_icon(IconName::Clipboard, theme::icon_purple, IconName::Clock3)
+        }
+        "clipboard-shelf" => plain_icon(IconName::ClipboardList, theme::icon_amber),
+        "menu" => plain_icon(IconName::Menu, theme::icon_neutral),
+        "app" => plain_icon(IconName::AppWindow, theme::icon_blue),
+        "developer-check" => plain_icon(IconName::FileCheck, theme::icon_green),
+        "developer-test" => plain_icon(IconName::FlaskConical, theme::icon_green),
+        "developer-build" => plain_icon(IconName::Hammer, theme::icon_amber),
+        "developer-package" => plain_icon(IconName::Package, theme::icon_amber),
+        "developer-run" => plain_icon(IconName::Play, theme::icon_green),
+        "developer-script" => plain_icon(IconName::SquareTerminal, theme::icon_purple),
+        _ if kind == CandidateKind::Application => {
+            plain_icon(IconName::AppWindow, theme::icon_blue)
+        }
+        _ => plain_icon(IconName::Command, theme::secondary),
+    }
+}
+
+pub(crate) fn context_capture_status_label(
+    status: ContextCaptureStatus,
+    source: ContextSource,
+    locale: Locale,
+) -> String {
+    match status {
+        ContextCaptureStatus::Captured => l10n::capture_ready(locale),
+        ContextCaptureStatus::Empty => match source {
+            ContextSource::FinderSelection => l10n::no_items_selected(locale),
+            ContextSource::SelectedText => l10n::no_text_selected(locale),
+            ContextSource::BrowserCurrentPage => l10n::no_page_available(locale),
+            ContextSource::Clipboard => l10n::no_text_copied(locale),
+            _ => l10n::capture_not_read(locale),
+        },
+        ContextCaptureStatus::PermissionDenied => l10n::permission_needed(locale),
+        ContextCaptureStatus::Unsupported => l10n::source_unsupported(locale),
+        ContextCaptureStatus::ApplicationChanged => l10n::capture_app_changed(locale),
+        ContextCaptureStatus::TimedOut => l10n::timed_out(locale),
+        ContextCaptureStatus::TooLarge => l10n::content_too_long(locale),
+        ContextCaptureStatus::TooManyItems => l10n::too_many_items(locale),
+        ContextCaptureStatus::Unavailable => l10n::source_unavailable(locale),
+        ContextCaptureStatus::Failed => l10n::read_failed(locale),
+    }
+}
+
+pub(crate) fn context_capture_status_detail(
+    status: ContextCaptureStatus,
+    source: ContextSource,
+    locale: Locale,
+) -> String {
+    match status {
+        ContextCaptureStatus::Captured => l10n::last_context_capture(locale),
+        ContextCaptureStatus::PermissionDenied => match source {
+            ContextSource::FinderSelection => l10n::finder_permission_help(locale),
+            ContextSource::SelectedText => l10n::selected_text_permission_help(locale),
+            ContextSource::BrowserCurrentPage => l10n::browser_permission_help(locale),
+            ContextSource::Clipboard => l10n::clipboard_permission_help(locale),
+            _ => l10n::permission_needed(locale),
+        },
+        ContextCaptureStatus::ApplicationChanged => l10n::app_changed_help(locale),
+        ContextCaptureStatus::TooManyItems => l10n::too_many_items_help(locale),
+        _ => String::new(),
+    }
+}
+
+pub(crate) fn shortcut_action_title(action: &ShortcutCatalogAction, locale: Locale) -> String {
+    let language = match locale {
+        Locale::En => "en",
+        Locale::Zh => "zh",
+    };
+    action
+        .localized_titles
+        .get(language)
+        .cloned()
+        .unwrap_or_else(|| action.title.clone())
+}
+
+pub(crate) fn web_permission_label(permission: &str, locale: Locale) -> String {
+    if let Some(types) = permission.strip_prefix("context.read:") {
+        return l10n::permission_context_read(locale, types);
+    }
+    match permission {
+        "current-app" => l10n::permission_current_app(locale),
+        "clipboard.read-text" => l10n::permission_read_clipboard(locale),
+        "clipboard.write-text" => l10n::permission_write_clipboard(locale),
+        "local-storage" => l10n::permission_local_storage(locale),
+        "input.read" => l10n::permission_input_read(locale),
+        "input.write" => l10n::permission_input_write(locale),
+        "frontmost-app" => l10n::permission_frontmost_app(locale),
+        _ => permission.to_owned(),
+    }
+}
+
+pub(crate) fn action_result_message(result: &ActionResult, locale: Locale) -> String {
+    if let Some(error) = &result.error {
+        return l10n::action_failed_with(locale, error);
+    }
+    if let Some(warning) = &result.warning {
+        return l10n::action_completed_with_warning(locale, warning);
+    }
+    if matches!(
+        result.view,
+        Some(anywhere_protocol::HostView::WebPlugin { .. })
+    ) {
+        return l10n::opening_web_tool(locale);
+    }
+    if let Some(output) = result
+        .output_text
+        .as_deref()
+        .map(str::trim)
+        .filter(|output| !output.is_empty())
+    {
+        return output.chars().take(240).collect();
+    }
+    l10n::action_completed(locale)
+}
+
+pub(crate) fn plain_space_insertion(
+    event: &InputEditsEvent,
+    previous: &str,
+) -> Option<(String, usize)> {
+    let (_, after) = event.edits().last()?;
+    let after = after.to_string();
+    if after.len() != previous.len().checked_add(1)? {
+        return None;
+    }
+    let cursor = after
+        .bytes()
+        .zip(previous.bytes())
+        .position(|(after, previous)| after != previous)
+        .unwrap_or(previous.len());
+    if after.as_bytes().get(cursor) != Some(&b' ')
+        || after.as_bytes().get(cursor + 1..) != previous.as_bytes().get(cursor..)
+    {
+        return None;
+    }
+    Some((previous.to_owned(), cursor))
+}

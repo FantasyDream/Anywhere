@@ -18,10 +18,23 @@ impl Application {
             .web_plugins
             .lock()
             .map_err(|_| error(WebErrorCode::HostFailure))?;
-        let invocation = web
-            .authorize(binding, source)
-            .map_err(|_| error(WebErrorCode::Inactive))?;
+        let invocation = web.authorize(binding, source).map_err(|authorize_error| {
+            tracing::debug!(
+                %authorize_error,
+                session_id = session.state.session_id,
+                suspended = session.suspended,
+                document_epoch = binding.document_epoch(),
+                "web_state_snapshot_authorization_failed"
+            );
+            error(WebErrorCode::Inactive)
+        })?;
         if session.state.session_id != invocation.session_id || session.suspended {
+            tracing::debug!(
+                session_id = session.state.session_id,
+                invocation_session_id = invocation.session_id,
+                suspended = session.suspended,
+                "web_state_snapshot_session_inactive"
+            );
             return Err(error(WebErrorCode::Inactive));
         }
         let launch_revision = invocation.launch_revision;

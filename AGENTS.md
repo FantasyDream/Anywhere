@@ -33,7 +33,7 @@ compatibility code; do not extend it into another UI framework.
   hotkey dispatch, status-item restoration and the independent Clipboard Shelf
   window. The product has one UI implementation and one presentation stack.
 - Launcher navigation, retention and selection:
-  `apps/gpui/src/launcher/model.rs`, `launcher/view.rs`,
+  `apps/gpui/src/launcher/model.rs`, `launcher/view/`,
   `launcher/snapshot_gate.rs`, `application/session_*` and
   [launcher-interaction.md](docs/launcher-interaction.md).
 - Action ranking: `core/action/matcher.rs`, `core/ranking/` and
@@ -67,16 +67,18 @@ compatibility code; do not extend it into another UI framework.
   in `application/application_history/`; state and authority in
   `features/application_history/`; object actions in
   `application/history_object_actions.rs`; UI in
-  `apps/gpui/src/launcher/view.rs` and `host/runtime.rs`. See
+  `apps/gpui/src/launcher/view/` and `host/runtime/`. See
   [the source guide](docs/application-history-sources.md).
 - Settings close decisions, drafts, authorization and native effects live in
-  `apps/gpui/src/launcher/view.rs`, `host/preferences.rs` and
-  `host/runtime.rs`. Hotkey parsing belongs in `host/hotkeys.rs`; login-item
-  reconciliation in `host/login_item.rs`; directory bookmarks in
+  `apps/gpui/src/launcher/view/settings.rs`, `host/preferences.rs` and
+  `host/runtime/`; domain-to-GPUI snapshot projection belongs in
+  `host/runtime_support.rs`. Hotkey parsing belongs in `host/hotkeys.rs`;
+  login-item reconciliation in `host/login_item.rs`; directory bookmarks in
   `host/directory_access.rs`.
 - Native Quick Look ownership lives in `apps/gpui/src/platform/preview.rs`.
   Web document policy and IPC framing live in `apps/gpui/src/web_tool.rs`;
-  GPUI WebView mounting and lifecycle live in `launcher/view.rs`.
+  GPUI WebView mounting and lifecycle live in `launcher/view/` and
+  `launcher/view/pages/`.
 - A new first-party capability should contribute through its registration,
   registry and `HostView::NativeTool` interfaces instead of adding an
   application-specific branch to the Launcher.

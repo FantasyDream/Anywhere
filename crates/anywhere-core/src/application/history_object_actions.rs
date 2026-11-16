@@ -376,7 +376,7 @@ mod tests {
         }
         let result = app.execute_use_case(1, 0, id).await.unwrap();
         assert_eq!(result.status, ActionStatus::Failed);
-        assert!(app.execution_sessions().is_empty());
+        assert!(app.execution_sessions().unwrap().is_empty());
         assert_eq!(guard.calls.load(Ordering::Relaxed), 2);
     }
 }

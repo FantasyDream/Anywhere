@@ -7,7 +7,7 @@ use anyhow::{ensure, Context, Result};
 use anywhere_platform::ApplicationInfo;
 use anywhere_protocol::{
     web_plugin::{WebCurrentApp, WebInvocation, WebPermission, WebPlatform},
-    HostView,
+    HostView, SessionId,
 };
 use std::{collections::BTreeMap, time::Duration};
 use tokio::time::Instant;
@@ -142,6 +142,7 @@ impl WebPluginService {
         &mut self,
         command: &WebCommandRef,
         context: &ResolvedContext,
+        session_id: SessionId,
         app: Option<&ApplicationInfo>,
         source_app: &str,
     ) -> Result<HostView> {
@@ -189,7 +190,7 @@ impl WebPluginService {
         let id = super::token()?;
         let invocation = Invocation {
             command: command.clone(),
-            session_id: context.session_id,
+            session_id,
             launch_revision: context.revision,
             input: WebInvocation {
                 plugin_id: command.plugin_id.clone(),

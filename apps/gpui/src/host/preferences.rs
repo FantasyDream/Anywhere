@@ -1,6 +1,13 @@
 use anyhow::{Context, Result};
-use serde::{Deserialize, Serialize};
-use std::path::Path;
+use serde::{Deserialize, Deserializer, Serialize};
+use std::{
+    io::{Read as _, Write as _},
+    path::Path,
+    sync::atomic::{AtomicU64, Ordering},
+};
+
+static SETTINGS_TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+const MAX_PREFERENCES_BYTES: usize = 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -9,6 +16,31 @@ pub enum UiLanguage {
     System,
     En,
     Zh,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionShortcutRoute {
+    pub action_id: String,
+    pub title: String,
+    #[serde(default)]
+    pub app_bundle_id: Option<String>,
+    #[serde(default)]
+    pub app_name: Option<String>,
+    #[serde(default)]
+    pub context_type: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionShortcutBinding {
+    pub action_id: String,
+    pub title: String,
+    pub shortcut: String,
+    #[serde(default)]
+    pub global: bool,
+    #[serde(default)]
+    pub routes: Vec<ActionShortcutRoute>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -28,6 +60,8 @@ pub struct HostPreferences {
     pub file_search_include_hidden: bool,
     pub file_search_roots: Vec<String>,
     pub file_search_excluded_names: Vec<String>,
+    #[serde(deserialize_with = "deserialize_action_shortcuts")]
+    pub action_shortcuts: Vec<ActionShortcutBinding>,
 }
 
 impl Default for HostPreferences {
@@ -47,15 +81,25 @@ impl Default for HostPreferences {
             file_search_include_hidden: false,
             file_search_roots: Vec::new(),
             file_search_excluded_names: Vec::new(),
+            action_shortcuts: Vec::new(),
         }
     }
 }
 
 impl HostPreferences {
     pub fn load(path: &Path) -> Result<Self> {
-        match std::fs::read(path) {
-            Ok(bytes) => serde_json::from_slice::<Self>(&bytes)
-                .with_context(|| format!("read {}", path.display())),
+        match std::fs::File::open(path) {
+            Ok(file) => {
+                let mut bytes = Vec::new();
+                file.take(MAX_PREFERENCES_BYTES as u64 + 1)
+                    .read_to_end(&mut bytes)?;
+                anyhow::ensure!(
+                    bytes.len() <= MAX_PREFERENCES_BYTES,
+                    "settings exceed {MAX_PREFERENCES_BYTES} bytes"
+                );
+                serde_json::from_slice::<Self>(&bytes)
+                    .with_context(|| format!("read {}", path.display()))
+            }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
             Err(error) => Err(error).with_context(|| format!("read {}", path.display())),
         }
@@ -63,11 +107,46 @@ impl HostPreferences {
 
     pub fn save(&self, path: &Path) -> Result<()> {
         self.validate()?;
+        let bytes = serde_json::to_vec_pretty(self)?;
+        anyhow::ensure!(
+            bytes.len() <= MAX_PREFERENCES_BYTES,
+            "settings exceed {MAX_PREFERENCES_BYTES} bytes"
+        );
         let parent = path.parent().context("settings path has no parent")?;
         std::fs::create_dir_all(parent)?;
-        let temporary = path.with_extension("json.tmp");
-        std::fs::write(&temporary, serde_json::to_vec_pretty(self)?)?;
-        std::fs::rename(&temporary, path)?;
+        let sequence = SETTINGS_TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let file_name = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .context("settings path has no file name")?;
+        let temporary = parent.join(format!(
+            ".{file_name}.{}.{}.tmp",
+            std::process::id(),
+            sequence
+        ));
+        let result = (|| {
+            let mut options = std::fs::OpenOptions::new();
+            options.write(true).create_new(true);
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::OpenOptionsExt as _;
+                options.mode(0o600);
+            }
+            let mut file = options.open(&temporary)?;
+            file.write_all(&bytes)?;
+            file.sync_all()?;
+            drop(file);
+            std::fs::rename(&temporary, path)?;
+            Ok::<(), anyhow::Error>(())
+        })();
+        if result.is_err() {
+            let _ = std::fs::remove_file(&temporary);
+        }
+        result?;
+        #[cfg(unix)]
+        if let Ok(directory) = std::fs::File::open(parent) {
+            let _ = directory.sync_all();
+        }
         Ok(())
     }
 
@@ -108,15 +187,98 @@ impl HostPreferences {
                 "Exclusions must be directory names"
             );
         }
-        for shortcut in [&self.current_app_shortcut, &self.universal_shortcut] {
-            shortcut
-                .parse::<global_hotkey::hotkey::HotKey>()
-                .with_context(|| format!("invalid global shortcut: {shortcut}"))?;
-        }
+        let current_app_hotkey = self
+            .current_app_shortcut
+            .parse::<global_hotkey::hotkey::HotKey>()
+            .with_context(|| format!("invalid global shortcut: {}", self.current_app_shortcut))?;
+        let universal_hotkey = self
+            .universal_shortcut
+            .parse::<global_hotkey::hotkey::HotKey>()
+            .with_context(|| format!("invalid global shortcut: {}", self.universal_shortcut))?;
         anyhow::ensure!(
-            self.current_app_shortcut != self.universal_shortcut,
+            current_app_hotkey != universal_hotkey,
             "Current App and Universal Search shortcuts must differ"
         );
+        anyhow::ensure!(
+            self.action_shortcuts.len() <= anywhere_protocol::policy::MAX_ACTION_SHORTCUTS as usize,
+            "Too many action shortcuts"
+        );
+        let mut action_ids = std::collections::HashSet::new();
+        let mut action_shortcuts = std::collections::HashSet::new();
+        for binding in &self.action_shortcuts {
+            anyhow::ensure!(
+                !binding.action_id.trim().is_empty()
+                    && binding.action_id.len()
+                        <= anywhere_protocol::policy::MAX_ACTION_ID_BYTES as usize,
+                "Invalid action shortcut identity"
+            );
+            anyhow::ensure!(
+                action_ids.insert(binding.action_id.as_str()),
+                "Action shortcuts must use distinct actions"
+            );
+            let hotkey = binding
+                .shortcut
+                .parse::<global_hotkey::hotkey::HotKey>()
+                .with_context(|| format!("invalid action shortcut: {}", binding.shortcut))?;
+            anyhow::ensure!(
+                binding.shortcut.rsplit('+').next().is_some_and(|key| {
+                    key.len() == 4
+                        && key.starts_with("Key")
+                        && key.as_bytes()[3].is_ascii_uppercase()
+                }) && ["control", "alt", "meta"]
+                    .iter()
+                    .any(|modifier| { binding.shortcut.split('+').any(|part| part == *modifier) }),
+                "Action shortcuts must combine a letter with Command, Option, or Control"
+            );
+            anyhow::ensure!(
+                hotkey != current_app_hotkey && hotkey != universal_hotkey,
+                "Action shortcuts must not reuse launcher shortcuts"
+            );
+            anyhow::ensure!(
+                action_shortcuts.insert(hotkey),
+                "Action shortcuts must use distinct key combinations"
+            );
+            anyhow::ensure!(
+                !reserved_action_shortcut(&binding.shortcut),
+                "Action shortcut is reserved for text editing or launcher commands"
+            );
+            let is_intent = binding.action_id.starts_with("intent:");
+            anyhow::ensure!(
+                is_intent == !binding.routes.is_empty(),
+                "Context shortcut identity and rules must agree"
+            );
+            if is_intent {
+                anyhow::ensure!(
+                    !binding.title.trim().is_empty()
+                        && binding.title.len()
+                            <= anywhere_protocol::policy::MAX_ACTION_TITLE_BYTES as usize
+                        && binding.routes.len()
+                            <= anywhere_protocol::policy::MAX_SHORTCUT_ROUTES as usize,
+                    "Invalid context shortcut"
+                );
+                let mut conditions = std::collections::HashSet::new();
+                for route in &binding.routes {
+                    anyhow::ensure!(
+                        valid_shortcut_condition(&route.action_id, 512)
+                            && route.title.len()
+                                <= anywhere_protocol::policy::MAX_ACTION_TITLE_BYTES as usize
+                            && route
+                                .app_bundle_id
+                                .as_deref()
+                                .is_none_or(|value| valid_shortcut_condition(value, 256))
+                            && route
+                                .context_type
+                                .as_deref()
+                                .is_none_or(|value| valid_shortcut_condition(value, 128)),
+                        "Invalid context shortcut rule"
+                    );
+                    anyhow::ensure!(
+                        conditions.insert((&route.app_bundle_id, &route.context_type)),
+                        "Context shortcut rules must use distinct conditions"
+                    );
+                }
+            }
+        }
         Ok(())
     }
 
@@ -127,6 +289,126 @@ impl HostPreferences {
             _ => anywhere_platform::FileSearchEngine::SystemIndex,
         }
     }
+}
+
+fn valid_shortcut_condition(value: &str, maximum: usize) -> bool {
+    !value.is_empty()
+        && value.len() <= maximum
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+}
+
+fn reserved_action_shortcut(shortcut: &str) -> bool {
+    use global_hotkey::hotkey::Code;
+    let Ok(hotkey) = shortcut.parse::<global_hotkey::hotkey::HotKey>() else {
+        return false;
+    };
+    hotkey.mods == global_hotkey::hotkey::Modifiers::META
+        && matches!(
+            hotkey.key,
+            Code::KeyA
+                | Code::KeyC
+                | Code::KeyK
+                | Code::KeyM
+                | Code::KeyQ
+                | Code::KeyR
+                | Code::KeyW
+                | Code::KeyX
+                | Code::KeyY
+                | Code::KeyZ
+        )
+}
+
+fn deserialize_action_shortcuts<'de, D>(
+    deserializer: D,
+) -> Result<Vec<ActionShortcutBinding>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let values = Vec::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(values
+        .into_iter()
+        .filter_map(|value| {
+            let object = value.as_object()?;
+            let action_id = object.get("actionId")?.as_str()?.to_owned();
+            let title = object.get("title")?.as_str()?.to_owned();
+            let shortcut = object
+                .get("shortcut")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned)
+                .or_else(|| legacy_action_shortcut(object))?;
+            (!action_id.is_empty() && !shortcut.is_empty() && !title.is_empty()).then_some(
+                ActionShortcutBinding {
+                    routes: shortcut_routes(object),
+                    action_id,
+                    title,
+                    shortcut,
+                    global: object
+                        .get("global")
+                        .and_then(serde_json::Value::as_bool)
+                        .unwrap_or(false),
+                },
+            )
+        })
+        .collect())
+}
+
+fn shortcut_routes(
+    object: &serde_json::Map<String, serde_json::Value>,
+) -> Vec<ActionShortcutRoute> {
+    let Some(routes) = object.get("routes").and_then(serde_json::Value::as_array) else {
+        return Vec::new();
+    };
+    routes
+        .iter()
+        .filter_map(|value| {
+            let object = value.as_object()?;
+            Some(ActionShortcutRoute {
+                action_id: object.get("actionId")?.as_str()?.to_owned(),
+                title: object.get("title")?.as_str()?.to_owned(),
+                app_bundle_id: object
+                    .get("appBundleId")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned),
+                app_name: object
+                    .get("appName")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned),
+                context_type: object
+                    .get("contextType")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned),
+            })
+        })
+        .collect()
+}
+
+fn legacy_action_shortcut(object: &serde_json::Map<String, serde_json::Value>) -> Option<String> {
+    let key_code = object.get("keyCode")?.as_u64()?;
+    let modifiers = object.get("modifiers")?.as_u64()?;
+    let key = if (4..=29).contains(&key_code) {
+        format!("Key{}", char::from(b'A' + (key_code - 4) as u8))
+    } else {
+        match key_code {
+            40 => "Enter".to_owned(),
+            41 => "Escape".to_owned(),
+            43 => "Tab".to_owned(),
+            44 => "Space".to_owned(),
+            _ => return None,
+        }
+    };
+    let labels = [
+        (modifiers & 1 != 0, "control"),
+        (modifiers & 2 != 0, "alt"),
+        (modifiers & 4 != 0, "shift"),
+        (modifiers & 8 != 0, "meta"),
+    ];
+    let modifiers = labels
+        .into_iter()
+        .filter_map(|(enabled, label)| enabled.then_some(label))
+        .collect::<Vec<_>>();
+    (!modifiers.is_empty()).then(|| format!("{}+{key}", modifiers.join("+")))
 }
 
 #[cfg(test)]
@@ -143,6 +425,16 @@ mod tests {
     }
 
     #[test]
+    fn oversized_preferences_are_rejected_without_reading_the_full_file() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("settings.json");
+        let file = std::fs::File::create(&path).unwrap();
+        file.set_len(MAX_PREFERENCES_BYTES as u64 + 1).unwrap();
+        let error = HostPreferences::load(&path).unwrap_err();
+        assert!(error.to_string().contains("exceed"));
+    }
+
+    #[test]
     fn unsafe_search_scope_is_rejected() {
         let mut preferences = HostPreferences::default();
         preferences.file_search_roots.push("relative".to_owned());
@@ -150,6 +442,132 @@ mod tests {
         preferences.file_search_roots = vec!["/tmp/../scope".to_owned()];
         assert!(preferences.validate().is_ok());
         preferences.file_search_excluded_names = vec!["../cache".to_owned()];
+        assert!(preferences.validate().is_err());
+    }
+
+    #[test]
+    fn concurrent_saves_use_independent_temporary_files() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("settings.json");
+        let mut writers = Vec::new();
+        for index in 0..8 {
+            let path = path.clone();
+            writers.push(std::thread::spawn(move || {
+                let preferences = HostPreferences {
+                    universal_shortcut: format!("meta+control+Key{}", char::from(b'A' + index)),
+                    ..HostPreferences::default()
+                };
+                preferences.save(&path)
+            }));
+        }
+        for writer in writers {
+            writer.join().unwrap().unwrap();
+        }
+        let loaded = HostPreferences::load(&path).unwrap();
+        assert!(loaded.validate().is_ok());
+        assert!(std::fs::read_dir(directory.path())
+            .unwrap()
+            .all(|entry| !entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .ends_with(".tmp")));
+    }
+
+    #[test]
+    fn legacy_action_shortcuts_migrate_and_invalid_entries_are_skipped() {
+        let preferences: HostPreferences = serde_json::from_value(serde_json::json!({
+            "actionShortcuts": [
+                {
+                    "actionId": "core.url.open",
+                    "title": "Open URL",
+                    "keyCode": 14,
+                    "modifiers": 10,
+                    "global": true
+                },
+                {
+                    "actionId": "",
+                    "title": "Broken",
+                    "keyCode": 14,
+                    "modifiers": 8
+                }
+            ]
+        }))
+        .unwrap();
+        assert_eq!(
+            preferences.action_shortcuts,
+            vec![ActionShortcutBinding {
+                action_id: "core.url.open".to_owned(),
+                title: "Open URL".to_owned(),
+                shortcut: "alt+meta+KeyK".to_owned(),
+                global: true,
+                routes: Vec::new(),
+            }]
+        );
+    }
+
+    #[test]
+    fn action_shortcuts_reject_duplicate_chords_and_launcher_conflicts() {
+        let mut preferences = HostPreferences {
+            action_shortcuts: vec![ActionShortcutBinding {
+                action_id: "core.url.open".to_owned(),
+                title: "Open URL".to_owned(),
+                shortcut: "meta+shift+KeyU".to_owned(),
+                global: true,
+                routes: Vec::new(),
+            }],
+            ..HostPreferences::default()
+        };
+        assert!(preferences.validate().is_ok());
+
+        preferences.action_shortcuts.push(ActionShortcutBinding {
+            action_id: "core.files.search".to_owned(),
+            title: "Find files".to_owned(),
+            shortcut: "meta+shift+KeyU".to_owned(),
+            global: true,
+            routes: Vec::new(),
+        });
+        assert!(preferences.validate().is_err());
+
+        preferences.action_shortcuts.truncate(1);
+        preferences.action_shortcuts[0].shortcut = preferences.universal_shortcut.clone();
+        assert!(preferences.validate().is_err());
+    }
+
+    #[test]
+    fn context_shortcuts_migrate_routes_and_require_distinct_conditions() {
+        let mut preferences: HostPreferences = serde_json::from_value(serde_json::json!({
+            "actionShortcuts": [{
+                "actionId": "intent:terminal",
+                "title": "Open terminal",
+                "keyCode": 14,
+                "modifiers": 10,
+                "global": true,
+                "routes": [{
+                    "actionId": "developer.terminal.open",
+                    "title": "Open terminal",
+                    "appBundleId": "com.apple.finder",
+                    "appName": "Finder",
+                    "contextType": "core.file"
+                }]
+            }]
+        }))
+        .unwrap();
+
+        assert_eq!(
+            preferences.action_shortcuts[0].routes,
+            vec![ActionShortcutRoute {
+                action_id: "developer.terminal.open".to_owned(),
+                title: "Open terminal".to_owned(),
+                app_bundle_id: Some("com.apple.finder".to_owned()),
+                app_name: Some("Finder".to_owned()),
+                context_type: Some("core.file".to_owned()),
+            }]
+        );
+        assert!(preferences.validate().is_ok());
+
+        let duplicate = preferences.action_shortcuts[0].routes[0].clone();
+        preferences.action_shortcuts[0].routes.push(duplicate);
         assert!(preferences.validate().is_err());
     }
 }

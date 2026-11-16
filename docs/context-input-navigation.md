@@ -14,9 +14,12 @@
 
 自动填入要求实际识别器产生 URL、真实文件 / 目录等非 Text Context，或已批准且启用的 Web 工具通过声明的 `inputMatchers` 识别文本。仅有普通 Text 不满足自动跳转条件；无效 URL、不存在的路径和未被任何命令识别的文本不会打开内容页。识别失败的选区允许继续尝试有效剪贴板。手动输入和进入内容页面后的编辑仍沿用原图规则。
 
-内容 UI 标明 Selected text 或 Recent clipboard，并提示 Esc 返回 Current App。正文可以编辑；它是待处理对象，不作为动作标题查询。URL、路径等仍走同一 Context Graph、Registry 和 Ranking；只处理当前输入及派生 Context，不混入当前应用、网页、Finder 选择或其他捕获文本。
+内容 UI 标明 Selected text 或 Recent clipboard。正文可以编辑；它是待处理对象，不作为动作标题查询。URL、路径等仍走同一 Context Graph、Registry 和 Ranking；只处理当前输入及派生 Context，不混入当前应用、网页、Finder 选择或其他捕获文本。
 
-Esc 从内容页面清空并返回 Current App，重新解析当前应用环境；再次 Esc 进入完全空白 Global Search；再按 Esc 关闭窗口。菜单浏览、结果页及已有查询的返回逻辑仍保留。显式 Universal 唤醒直接进入空白搜索，绕过自动填入；显式全局动作快捷键独立使用完整采集图。
+内容页第一次 Esc 返回 Current App，并清空内容输入；进入 Current App 后，空白
+根页再次 Esc 切到空白 Global Search，Global 根页最后才隐藏。普通查询先清空，
+菜单、对象 Actions、预览和 Web 内部层仍先退出所属局部层。显式 Universal
+唤醒直接进入空白搜索，绕过自动填入；显式全局动作快捷键独立使用完整采集图。
 
 ## 采集与生命周期
 

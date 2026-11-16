@@ -1,22 +1,25 @@
 mod directory_access;
+mod dto;
 mod hotkeys;
 mod login_item;
 mod preferences;
 mod runtime;
+mod runtime_support;
 
 use anyhow::{Context, Result};
 use std::path::{Component, Path, PathBuf};
 
 use anywhere_core::application::frontend_runtime::RuntimePaths;
 
-pub use hotkeys::{HotKeyAction, HotKeyController};
-pub use login_item::LoginItemState;
-pub use preferences::{HostPreferences, UiLanguage};
-pub use runtime::{
-    AppHistoryItem, AppHistorySnapshot, AppHistorySource, ClipboardItem, ClipboardSnapshot,
-    ExecutionDetail, ExecutionRow, LiveEvent, LiveLauncher, PreviewFile, WebDocument, WebPackage,
-    WebPackageReview,
+pub use dto::{
+    AppHistoryItem, AppHistoryObjectAction, AppHistorySnapshot, AppHistorySource, ClipboardItem,
+    ClipboardSnapshot, ExecutionDetail, ExecutionRow, PreviewFile, ShortcutCandidate,
+    ShortcutCatalogAction, WebDocument, WebPackage, WebPackageReview,
 };
+pub use hotkeys::{effective_shortcuts, HotKeyAction, HotKeyController};
+pub use login_item::LoginItemState;
+pub use preferences::{ActionShortcutBinding, ActionShortcutRoute, HostPreferences, UiLanguage};
+pub use runtime::{LiveEvent, LiveLauncher};
 
 /// Stable product paths owned by the GPUI application.
 #[derive(Clone, Debug, Eq, PartialEq)]

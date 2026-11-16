@@ -777,6 +777,7 @@
   "appHistorySources": "History sources",
   "appHistorySourceDescription": "Actions default to on for installed apps and off for apps not found. Your switches take priority. History is read only when you use its action.",
   "appHistorySourcePath": "History metadata file path",
+  "appHistoryEditPath": "Edit source path",
   "appHistoryUnconfigured": "No history file is available. Check automatic detection or set a custom path in Settings → App History.",
   "appHistoryReadFailed": "Some sources could not be read. Check their files in Settings → App History.",
   "appHistoryBusy": "A previous history operation is finishing. Refresh to try again.",
@@ -796,8 +797,155 @@
   "appHistoryCustomAdapters": "Custom adapters",
   "appHistoryCustomAdaptersHelp": "Place source.json and transform.js in a subfolder here, then restart Anywhere. Matching IDs override built-ins. Import only trusted local configuration; transforms run when you use their action.",
   "appHistoryOpenAdapters": "Open adapters folder",
+  "openedFolder": "Opened {path}",
+  "@openedFolder": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
   "permissionInputRead": "Read Launcher search text",
   "permissionInputWrite": "Change Launcher search text",
   "permissionFrontmostApp": "Read the currently active application",
-  "webPackageDamaged": "Package files are unavailable or damaged. Restore an approved version or uninstall and import again."
+  "webPackageDamaged": "Package files are unavailable or damaged. Restore an approved version or uninstall and import again.",
+  "webDocumentFailed": "The Web document could not be opened: {error}",
+  "@webDocumentFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "webViewStartFailed": "The Web view could not start: {error}",
+  "@webViewStartFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "webThemeFailed": "The Web view theme could not be applied: {error}",
+  "@webThemeFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "hotkeyStateUnavailable": "Shortcut settings are temporarily unavailable. Reopen the app and try again.",
+  "loadMore": "Load more",
+  "standardOutput": "Standard output",
+  "standardError": "Standard error",
+  "selectTaskToInspectOutput": "Select a task to inspect its output",
+  "searchDirectoriesAuthorized": "Search directories authorized.",
+  "nativeProductDescription": "Native GPUI product · macOS 15 or later",
+  "dataDirectory": "Data directory",
+  "excludedApplications": "Excluded applications",
+  "excludedApplicationsHelp": "Bundle identifiers separated by commas or new lines",
+  "searchEngine": "Search engine",
+  "searchEngineDescription": "System Index, Ripgrep, or Combined",
+  "searchEngineSystemIndex": "System Index",
+  "searchEngineRipgrep": "Ripgrep",
+  "searchEngineCombined": "Combined",
+  "directoryAccess": "Directory access",
+  "authorizeSearchDirectories": "Authorize search directories",
+  "preparingDirectoryAccess": "Preparing directory access…",
+  "authorizedDirectories": "Authorized directories",
+  "authorizedDirectoriesHelp": "Absolute paths separated by commas or new lines",
+  "excludedDirectoryNames": "Excluded directory names",
+  "readOnlyActionDetails": "Read-only details provided by the action",
+  "unsupportedTool": "Unsupported tool",
+  "unsupportedToolDescription": "This action requested a native tool that is not registered in the GPUI host.",
+  "toolId": "Tool ID",
+  "inputLabel": "Input",
+  "nativeDestinationUnavailable": "Native destination unavailable",
+  "thisActionUnavailable": "This action is unavailable right now",
+  "runningAction": "Running “{title}”…",
+  "@runningAction": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "executionBridgePending": "Execution bridge pending for “{title}”",
+  "@executionBridgePending": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "actionUnavailableTitle": "“{title}” is unavailable right now",
+  "@actionUnavailableTitle": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "noActionSelected": "No action is selected",
+  "previewingTitle": "Previewing {title}",
+  "@previewingTitle": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "previewRuntimeNotAttached": "UI migration preview · the shared Rust runtime is not attached in this window",
+  "enableAction": "Enable",
+  "disableAction": "Disable",
+  "newPackage": "New package",
+  "permissions": "Permissions",
+  "rollback": "Roll back",
+  "installedPackagesAndPermissions": "Installed packages and permissions",
+  "webToolTitle": "Web Tool",
+  "preparingPluginDocument": "Preparing the plugin document…",
+  "returnToLauncherAndTryAgain": "Return to the launcher and try again",
+  "startingAnywhere": "Anywhere is still starting…",
+  "startingWebTool": "Starting Web tool…",
+  "waitingForHostDocument": "Waiting for the Host document",
+  "webToolClosedUnexpectedly": "The Web tool closed unexpectedly",
+  "webToolBackgroundFailed": "The Web tool could not apply its background",
+  "builtInFeatureDescription": "Enable this built-in feature",
+  "webToolsSettingsDescription": "Install, review permissions, update, roll back, or remove packages",
+  "manageWebTools": "Manage…",
+  "actionFailedWith": "Action failed: {error}",
+  "@actionFailedWith": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "actionCompletedWithWarning": "Action completed with a warning: {warning}",
+  "@actionCompletedWithWarning": {
+    "placeholders": {
+      "warning": {
+        "type": "String"
+      }
+    }
+  },
+  "openingWebTool": "Opening the Web tool…",
+  "actionCompleted": "Action completed",
+  "previewUnavailableWith": "Preview is unavailable: {error}",
+  "@previewUnavailableWith": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotActivateAnywhere": "Could not activate Anywhere: {error}",
+  "@couldNotActivateAnywhere": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "lastContextCapture": "Last context capture",
+  "contextSourcesNotCaptured": "Context sources appear here after the next launcher wake."
 }

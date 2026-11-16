@@ -10,5 +10,6 @@ pub mod web_tool;
 
 pub const PRODUCT_NAME: &str = "Anywhere";
 pub const CLIPBOARD_SHELF_TITLE: &str = "Clipboard Shelf";
+pub const TASKS_WINDOW_TITLE: &str = "Running Tasks";
 pub const BUNDLE_ID: &str = "dev.anywhere.launcher";
 pub const MINIMUM_MACOS_MAJOR: u32 = 15;

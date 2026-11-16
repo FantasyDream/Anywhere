@@ -7,5 +7,7 @@ fn main() {
         .with_writer(std::io::stderr)
         .try_init();
     anywhere_gpui::platform::require_supported_host();
-    gpui_kit::application().run(anywhere_gpui::app::run);
+    gpui_kit::application()
+        .with_assets(gpui_kit::assets::AllAssets)
+        .run(anywhere_gpui::app::run);
 }

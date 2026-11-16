@@ -131,11 +131,15 @@ impl Application {
         }
     }
 
-    pub fn execution_sessions(&self) -> Vec<ExecutionSessionSummary> {
+    pub fn execution_sessions(&self) -> Result<Vec<ExecutionSessionSummary>> {
         self.executions.list()
     }
 
-    pub fn execution_session(&self, id: &str) -> Option<ExecutionSessionDetail> {
+    pub fn execution_updates(&self) -> tokio::sync::watch::Receiver<u64> {
+        self.executions.updates()
+    }
+
+    pub fn execution_session(&self, id: &str) -> Result<Option<ExecutionSessionDetail>> {
         self.executions.detail(id)
     }
 
@@ -147,8 +151,8 @@ impl Application {
         self.executions.remove(id)
     }
 
-    pub fn shutdown_execution_sessions(&self) {
-        self.executions.shutdown();
+    pub fn shutdown_execution_sessions(&self) -> Result<()> {
+        self.executions.shutdown()
     }
 
     /// Override the first-content grace.
@@ -164,6 +168,15 @@ impl Application {
 
     /// Presentation may resume for 15 seconds; side effects are revoked immediately.
     pub async fn suspend_session(&self, session_id: SessionId) -> Result<()> {
+        self.suspend_session_now(session_id)
+    }
+
+    /// Revoke interaction and execution eligibility without waiting on I/O.
+    ///
+    /// The retained snapshot expires asynchronously after the shared launcher
+    /// retention interval. Calling this repeatedly for the same suspension does
+    /// not extend that interval because resume advances the execution epoch.
+    pub fn suspend_session_now(&self, session_id: SessionId) -> Result<()> {
         let epoch = {
             let mut session = self.session()?;
             if session.state.session_id != session_id || self.resolver.is_abandoned() {
@@ -359,11 +372,19 @@ impl Application {
     }
 
     pub fn set_excluded_apps(&self, ids: Vec<String>) {
-        let _ = self.resolver.application_index.set_excluded(ids);
+        if let Err(error) = self.resolver.application_index.set_excluded(ids) {
+            tracing::warn!(%error, "application_exclusions_update_failed");
+            return;
+        }
         if let Ok(session) = self.session() {
             let session_id = session.state.session_id;
             drop(session);
-            let _ = self.resolver.recompute_current(session_id);
+            if session_id == 0 {
+                return;
+            }
+            if self.resolver.recompute_current(session_id).is_none() {
+                tracing::warn!(session_id, "excluded_apps_refresh_failed");
+            }
         }
     }
 

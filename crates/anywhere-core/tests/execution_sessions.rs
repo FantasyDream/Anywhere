@@ -22,7 +22,7 @@ fn request(directory: &Path, script: &str) -> ProcessRequest {
 fn wait(manager: &ExecutionSessionManager, id: &str) -> anywhere_protocol::ExecutionSessionDetail {
     let deadline = Instant::now() + Duration::from_secs(5);
     loop {
-        let detail = manager.detail(id).unwrap();
+        let detail = manager.detail(id).unwrap().unwrap();
         if !detail.summary.status.is_active() {
             return detail;
         }
@@ -47,9 +47,9 @@ fn stdout_stderr_and_nonzero_exit_are_retained_and_arguments_are_literal() {
     assert_eq!(detail.stdout, "中文🙂");
     assert_eq!(detail.stderr, "failure");
     manager.stop(&id).unwrap(); // Completed tasks are never signalled again.
-    assert_eq!(manager.detail(&id).unwrap(), detail);
+    assert_eq!(manager.detail(&id).unwrap().unwrap(), detail);
     manager.remove(&id).unwrap();
-    assert!(manager.list().is_empty());
+    assert!(manager.list().unwrap().is_empty());
 
     let literal = "$(touch unexpected); `whoami`";
     let id = manager
@@ -63,6 +63,43 @@ fn stdout_stderr_and_nonzero_exit_are_retained_and_arguments_are_literal() {
         .unwrap();
     assert_eq!(wait(&manager, &id).stdout, literal);
     assert!(!dir.path().join("unexpected").exists());
+}
+
+#[tokio::test]
+async fn execution_updates_publish_start_output_and_completion() {
+    let dir = tempfile::tempdir().unwrap();
+    let manager = ExecutionSessionManager::default();
+    let mut updates = manager.updates();
+    let id = manager
+        .start(request(
+            dir.path(),
+            "printf 'first'; sleep 0.05; printf 'second'",
+        ))
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(1), updates.changed())
+        .await
+        .expect("start notification")
+        .unwrap();
+    tokio::time::timeout(Duration::from_secs(2), async {
+        loop {
+            if manager
+                .detail(&id)
+                .unwrap()
+                .is_some_and(|detail| !detail.summary.status.is_active())
+            {
+                break;
+            }
+            updates.changed().await.unwrap();
+        }
+    })
+    .await
+    .expect("completion notification");
+    let detail = manager.detail(&id).unwrap().unwrap();
+    assert_eq!(detail.stdout, "firstsecond");
+    assert_eq!(
+        detail.summary.status,
+        anywhere_protocol::ExecutionSessionStatus::Succeeded
+    );
 }
 
 #[test]
@@ -90,7 +127,13 @@ fn stop_kills_descendants_and_releases_concurrency_slot() {
         ))
         .unwrap();
     let deadline = Instant::now() + Duration::from_secs(3);
-    while !manager.detail(&id).unwrap().stdout.contains("READY") {
+    while !manager
+        .detail(&id)
+        .unwrap()
+        .unwrap()
+        .stdout
+        .contains("READY")
+    {
         assert!(Instant::now() < deadline);
         std::thread::sleep(Duration::from_millis(5));
     }
@@ -112,8 +155,8 @@ fn stop_kills_descendants_and_releases_concurrency_slot() {
     }
     let last = manager.start(request(dir.path(), "printf OK")).unwrap();
     assert_eq!(wait(&manager, &last).stdout, "OK");
-    manager.shutdown();
-    assert!(manager.list().is_empty());
+    manager.shutdown().unwrap();
+    assert!(manager.list().unwrap().is_empty());
     assert!(manager.start(request(dir.path(), "printf NO")).is_err());
 }
 
@@ -128,9 +171,15 @@ fn completed_results_are_evicted_but_running_tasks_are_retained() {
         let id = manager.start(request(dir.path(), "printf OK")).unwrap();
         wait(&manager, &id);
     }
-    assert_eq!(manager.list().len(), 32);
-    assert!(manager.detail(&first).is_none());
-    assert!(manager.detail(&active).unwrap().summary.status.is_active());
+    assert_eq!(manager.list().unwrap().len(), 32);
+    assert!(manager.detail(&first).unwrap().is_none());
+    assert!(manager
+        .detail(&active)
+        .unwrap()
+        .unwrap()
+        .summary
+        .status
+        .is_active());
     manager.stop(&active).unwrap();
     wait(&manager, &active);
 }
@@ -144,7 +193,7 @@ fn output_revision_detects_full_tail_changes_and_completed_output_is_stable() {
     )).unwrap();
     let deadline = Instant::now() + Duration::from_secs(5);
     let first = loop {
-        let detail = manager.detail(&id).unwrap();
+        let detail = manager.detail(&id).unwrap().unwrap();
         if detail.stdout.len() == MAX_STREAM_BYTES {
             break detail;
         }
@@ -152,7 +201,7 @@ fn output_revision_detects_full_tail_changes_and_completed_output_is_stable() {
         std::thread::sleep(Duration::from_millis(5));
     };
     assert!(first.summary.output_revision > 0);
-    let unchanged = manager.detail(&id).unwrap();
+    let unchanged = manager.detail(&id).unwrap().unwrap();
     assert_eq!(
         unchanged.summary.output_revision,
         first.summary.output_revision
@@ -162,5 +211,5 @@ fn output_revision_detects_full_tail_changes_and_completed_output_is_stable() {
     assert_eq!(final_detail.stdout.len(), first.stdout.len());
     assert!(final_detail.stdout.ends_with('b'));
     assert!(final_detail.summary.output_revision > first.summary.output_revision);
-    assert_eq!(manager.detail(&id).unwrap(), final_detail);
+    assert_eq!(manager.detail(&id).unwrap().unwrap(), final_detail);
 }

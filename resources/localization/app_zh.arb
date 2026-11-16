@@ -777,6 +777,7 @@
   "appHistorySources": "历史来源",
   "appHistorySourceDescription": "默认仅开启已安装应用的 Action，手动开关优先。可自定义历史文件路径，使用对应 Action 时才读取历史内容。",
   "appHistorySourcePath": "历史元数据文件路径",
+  "appHistoryEditPath": "编辑来源路径",
   "appHistoryUnconfigured": "暂无可用的历史文件，请在「设置 → 应用历史」中重新检测或指定自定义路径。",
   "appHistoryReadFailed": "部分来源暂时无法读取，请在「设置 → 应用历史」中检查所选文件。",
   "appHistoryBusy": "正在结束上一次历史操作，请稍后刷新重试。",
@@ -796,8 +797,155 @@
   "appHistoryCustomAdapters": "自定义适配",
   "appHistoryCustomAdaptersHelp": "在下列目录的子文件夹中放入 source.json 和 transform.js，重启后生效。同 ID 配置覆盖内置适配。请只放入可信的本机配置；使用对应 Action 时才运行转换。",
   "appHistoryOpenAdapters": "打开适配目录",
+  "openedFolder": "已打开 {path}",
+  "@openedFolder": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
   "permissionInputRead": "读取启动器搜索内容",
   "permissionInputWrite": "修改启动器搜索内容",
   "permissionFrontmostApp": "读取实时前台应用",
-  "webPackageDamaged": "插件文件缺失或损坏。请恢复已批准版本，或卸载后重新导入。"
+  "webPackageDamaged": "插件文件缺失或损坏。请恢复已批准版本，或卸载后重新导入。",
+  "webDocumentFailed": "无法打开 Web 文档：{error}",
+  "@webDocumentFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "webViewStartFailed": "无法启动 Web 视图：{error}",
+  "@webViewStartFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "webThemeFailed": "无法应用 Web 视图主题：{error}",
+  "@webThemeFailed": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "hotkeyStateUnavailable": "快捷键设置暂时不可用，请重新打开应用后重试。",
+  "loadMore": "加载更多",
+  "standardOutput": "标准输出",
+  "standardError": "标准错误",
+  "selectTaskToInspectOutput": "选择任务以查看输出",
+  "searchDirectoriesAuthorized": "搜索目录已授权。",
+  "nativeProductDescription": "原生 GPUI 产品 · 最低 macOS 15",
+  "dataDirectory": "数据目录",
+  "excludedApplications": "排除的应用",
+  "excludedApplicationsHelp": "使用逗号或换行分隔 Bundle ID",
+  "searchEngine": "搜索引擎",
+  "searchEngineDescription": "系统索引、Ripgrep 或组合模式",
+  "searchEngineSystemIndex": "系统索引",
+  "searchEngineRipgrep": "Ripgrep",
+  "searchEngineCombined": "组合模式",
+  "directoryAccess": "目录访问权限",
+  "authorizeSearchDirectories": "授权搜索目录",
+  "preparingDirectoryAccess": "正在准备目录访问权限…",
+  "authorizedDirectories": "已授权目录",
+  "authorizedDirectoriesHelp": "使用逗号或换行分隔绝对路径",
+  "excludedDirectoryNames": "排除的目录名称",
+  "readOnlyActionDetails": "由操作提供的只读详情",
+  "unsupportedTool": "不支持的工具",
+  "unsupportedToolDescription": "此操作请求了 GPUI 宿主中未注册的原生工具。",
+  "toolId": "工具 ID",
+  "inputLabel": "输入",
+  "nativeDestinationUnavailable": "原生目标不可用",
+  "thisActionUnavailable": "此操作暂时不可用",
+  "runningAction": "正在执行“{title}”…",
+  "@runningAction": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "executionBridgePending": "“{title}”的执行桥接尚待接入",
+  "@executionBridgePending": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "actionUnavailableTitle": "“{title}”暂时不可用",
+  "@actionUnavailableTitle": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "noActionSelected": "当前没有选中的操作",
+  "previewingTitle": "正在预览 {title}",
+  "@previewingTitle": {
+    "placeholders": {
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "previewRuntimeNotAttached": "UI 迁移预览 · 此窗口尚未接入共享 Rust 运行时",
+  "enableAction": "启用",
+  "disableAction": "停用",
+  "newPackage": "新安装包",
+  "permissions": "权限",
+  "rollback": "回滚",
+  "installedPackagesAndPermissions": "已安装包与权限",
+  "webToolTitle": "Web 工具",
+  "preparingPluginDocument": "正在准备插件文档…",
+  "returnToLauncherAndTryAgain": "返回启动器后重试",
+  "startingAnywhere": "Anywhere 仍在启动中…",
+  "startingWebTool": "正在启动 Web 工具…",
+  "waitingForHostDocument": "正在等待宿主文档",
+  "webToolClosedUnexpectedly": "Web 工具意外关闭",
+  "webToolBackgroundFailed": "Web 工具无法应用背景",
+  "builtInFeatureDescription": "启用此内置功能",
+  "webToolsSettingsDescription": "安装、审查权限、更新、回滚或移除安装包",
+  "manageWebTools": "管理…",
+  "actionFailedWith": "操作失败：{error}",
+  "@actionFailedWith": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "actionCompletedWithWarning": "操作已完成，但出现警告：{warning}",
+  "@actionCompletedWithWarning": {
+    "placeholders": {
+      "warning": {
+        "type": "String"
+      }
+    }
+  },
+  "openingWebTool": "正在打开 Web 工具…",
+  "actionCompleted": "操作已完成",
+  "previewUnavailableWith": "无法预览：{error}",
+  "@previewUnavailableWith": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "couldNotActivateAnywhere": "无法激活 Anywhere：{error}",
+  "@couldNotActivateAnywhere": {
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "lastContextCapture": "上次上下文采集",
+  "contextSourcesNotCaptured": "下次唤醒启动器后会在此显示上下文来源状态。"
 }

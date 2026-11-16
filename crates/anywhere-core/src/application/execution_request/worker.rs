@@ -86,6 +86,7 @@ impl ExecutionRequest {
                     .start(
                         &command,
                         context,
+                        session.state.session_id,
                         self.captured_app.as_ref(),
                         &self.source_app,
                     )?,

@@ -900,7 +900,13 @@ async fn source_application_is_frozen_while_frontmost_is_queried_live() {
         .web_plugins
         .lock()
         .unwrap()
-        .start(command, &input, Some(&frozen), &frozen.bundle_id)
+        .start(
+            command,
+            &input,
+            input.session_id,
+            Some(&frozen),
+            &frozen.bundle_id,
+        )
         .unwrap()
     else {
         panic!("view")

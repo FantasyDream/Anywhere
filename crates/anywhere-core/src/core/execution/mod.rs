@@ -11,14 +11,25 @@ use std::{
     thread::{self, JoinHandle},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use tokio::sync::watch;
 
 pub const MAX_RUNNING_SESSIONS: usize = 4;
 pub const MAX_RETAINED_SESSIONS: usize = 32;
 pub const MAX_STREAM_BYTES: usize = 128 * 1024;
 
-#[derive(Default)]
 pub struct ExecutionSessionManager {
     state: Mutex<ManagerState>,
+    updates: watch::Sender<u64>,
+}
+
+impl Default for ExecutionSessionManager {
+    fn default() -> Self {
+        let (updates, _) = watch::channel(0);
+        Self {
+            state: Mutex::new(ManagerState::default()),
+            updates,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -80,27 +91,25 @@ impl TailBuffer {
 }
 
 impl ExecutionSessionManager {
+    pub fn updates(&self) -> watch::Receiver<u64> {
+        self.updates.subscribe()
+    }
+
+    fn publish_update(&self) {
+        self.updates.send_modify(|revision| {
+            *revision = revision.saturating_add(1);
+        });
+    }
+
     pub fn start(&self, request: ProcessRequest) -> Result<ExecutionSessionId> {
-        let mut manager = self
-            .state
-            .lock()
-            .map_err(|_| anyhow::anyhow!("session manager unavailable"))?;
+        let mut manager = manager_state(&self.state)?;
         if manager.closed {
             bail!("task manager is shutting down");
         }
         let active = manager
             .sessions
             .values()
-            .filter(|session| {
-                session
-                    .record
-                    .state
-                    .lock()
-                    .unwrap()
-                    .summary
-                    .status
-                    .is_active()
-            })
+            .filter(|session| record_state(&session.record).summary.status.is_active())
             .count();
         if active >= MAX_RUNNING_SESSIONS {
             bail!("Four tasks are already running. Stop or wait for one before starting another.");
@@ -135,39 +144,43 @@ impl ExecutionSessionManager {
             }),
         });
         let task_record = record.clone();
+        let updates = self.updates.clone();
         let worker = thread::Builder::new()
             .name("execution-session".into())
-            .spawn(move || run(process, task_record))?;
-        if manager.sessions.len() >= MAX_RETAINED_SESSIONS {
+            .spawn(move || run(process, task_record, updates))?;
+        let evicted = if manager.sessions.len() >= MAX_RETAINED_SESSIONS {
             let oldest = manager
                 .sessions
                 .iter()
                 .filter_map(|(id, session)| {
-                    let state = session.record.state.lock().unwrap();
+                    let state = record_state(&session.record);
                     (!state.summary.status.is_active())
                         .then(|| (state.summary.started_at_ms, id.clone()))
                 })
                 .min()
                 .map(|(_, id)| id)
                 .context("completed session required for eviction")?;
-            if let Some(session) = manager.sessions.remove(&oldest) {
-                let _ = session.worker.join();
-            }
-        }
+            manager.sessions.remove(&oldest)
+        } else {
+            None
+        };
         manager
             .sessions
             .insert(id.clone(), Session { record, worker });
+        drop(manager);
+        if let Some(session) = evicted {
+            let _ = session.worker.join();
+        }
+        self.publish_update();
         Ok(id)
     }
 
-    pub fn list(&self) -> Vec<ExecutionSessionSummary> {
-        let Ok(manager) = self.state.lock() else {
-            return Vec::new();
-        };
+    pub fn list(&self) -> Result<Vec<ExecutionSessionSummary>> {
+        let manager = manager_state(&self.state)?;
         let mut summaries: Vec<_> = manager
             .sessions
             .values()
-            .map(|session| session.record.state.lock().unwrap().summary.clone())
+            .map(|session| record_state(&session.record).summary.clone())
             .collect();
         summaries.sort_by(|left, right| {
             right
@@ -175,26 +188,34 @@ impl ExecutionSessionManager {
                 .cmp(&left.started_at_ms)
                 .then_with(|| right.id.cmp(&left.id))
         });
-        summaries
+        Ok(summaries)
     }
 
-    pub fn detail(&self, id: &str) -> Option<ExecutionSessionDetail> {
-        let manager = self.state.lock().ok()?;
-        let record = manager.sessions.get(id)?.record.clone();
-        drop(manager);
-        let mut state = record.state.lock().ok()?;
-        Some(ExecutionSessionDetail {
+    pub fn detail(&self, id: &str) -> Result<Option<ExecutionSessionDetail>> {
+        let record = {
+            let manager = manager_state(&self.state)?;
+            let Some(record) = manager
+                .sessions
+                .get(id)
+                .map(|session| session.record.clone())
+            else {
+                return Ok(None);
+            };
+            record
+        };
+        let mut state = record
+            .state
+            .lock()
+            .map_err(|_| anyhow::anyhow!("task unavailable"))?;
+        Ok(Some(ExecutionSessionDetail {
             summary: state.summary.clone(),
             stdout: state.stdout.text(),
             stderr: state.stderr.text(),
-        })
+        }))
     }
 
     pub fn stop(&self, id: &str) -> Result<()> {
-        let manager = self
-            .state
-            .lock()
-            .map_err(|_| anyhow::anyhow!("session manager unavailable"))?;
+        let manager = manager_state(&self.state)?;
         let record = &manager
             .sessions
             .get(id)
@@ -207,40 +228,31 @@ impl ExecutionSessionManager {
         if state.summary.status.is_active() {
             state.summary.status = ExecutionSessionStatus::Stopping;
             record.cancel.store(true, Ordering::Release);
+            drop(state);
+            self.publish_update();
         }
         Ok(())
     }
 
     pub fn remove(&self, id: &str) -> Result<()> {
-        let mut manager = self
-            .state
-            .lock()
-            .map_err(|_| anyhow::anyhow!("session manager unavailable"))?;
+        let mut manager = manager_state(&self.state)?;
         if let Some(session) = manager.sessions.get(id) {
-            if session
-                .record
-                .state
-                .lock()
-                .unwrap()
-                .summary
-                .status
-                .is_active()
-            {
+            if record_state(&session.record).summary.status.is_active() {
                 bail!("stop the task before removing it");
             }
         }
         if let Some(session) = manager.sessions.remove(id) {
+            drop(manager);
             let _ = session.worker.join();
+            self.publish_update();
         }
         Ok(())
     }
 
     /// Called at app termination. Closing the task window itself never calls this.
-    pub fn shutdown(&self) {
+    pub fn shutdown(&self) -> Result<()> {
         let sessions = {
-            let Ok(mut manager) = self.state.lock() else {
-                return;
-            };
+            let mut manager = manager_state(&self.state)?;
             manager.closed = true;
             for session in manager.sessions.values() {
                 session.record.cancel.store(true, Ordering::Release);
@@ -250,19 +262,22 @@ impl ExecutionSessionManager {
         for session in sessions.into_values() {
             let _ = session.worker.join();
         }
+        Ok(())
     }
 }
 
 impl Drop for ExecutionSessionManager {
     fn drop(&mut self) {
-        self.shutdown();
+        if let Err(error) = self.shutdown() {
+            tracing::error!(%error, "execution_session_shutdown_failed");
+        }
     }
 }
 
-fn run(mut process: OwnedProcess, record: Arc<Record>) {
+fn run(mut process: OwnedProcess, record: Arc<Record>, updates: watch::Sender<u64>) {
     let result = (|| -> Result<std::process::ExitStatus> {
         loop {
-            let received_output = drain(&mut process, &record, 4)?;
+            let received_output = drain(&mut process, &record, &updates, 4)?;
             if record.cancel.load(Ordering::Acquire) {
                 break process.stop();
             }
@@ -274,9 +289,9 @@ fn run(mut process: OwnedProcess, record: Arc<Record>) {
         }
     })();
     // Finite final drain: a descendant cannot hold the session open forever.
-    let drain_error = drain(&mut process, &record, 32).err();
+    let drain_error = drain(&mut process, &record, &updates, 32).err();
     drop(process);
-    let mut state = record.state.lock().unwrap();
+    let mut state = record_state(&record);
     state.summary.finished_at_ms = Some(now());
     match result {
         Ok(status) => {
@@ -298,24 +313,38 @@ fn run(mut process: OwnedProcess, record: Arc<Record>) {
     if drain_error.is_some() {
         state.summary.error = Some("Some task output could not be read.".into());
     }
+    drop(state);
+    updates.send_modify(|revision| {
+        *revision = revision.saturating_add(1);
+    });
 }
 
-fn drain(process: &mut OwnedProcess, record: &Record, rounds: usize) -> Result<bool> {
+fn drain(
+    process: &mut OwnedProcess,
+    record: &Record,
+    updates: &watch::Sender<u64>,
+    rounds: usize,
+) -> Result<bool> {
     let mut buffer = [0; 8192];
     let mut received_output = false;
     for _ in 0..rounds {
         let stdout = process.read_stdout(&mut buffer)?;
         // Publish stdout even if reading stderr fails afterwards.
         if stdout > 0 {
-            let mut state = record.state.lock().unwrap();
+            let mut state = record_state(record);
             state.append_output(&buffer[..stdout], &[]);
             received_output = true;
         }
         let stderr = process.read_stderr(&mut buffer)?;
         if stderr > 0 {
-            let mut state = record.state.lock().unwrap();
+            let mut state = record_state(record);
             state.append_output(&[], &buffer[..stderr]);
             received_output = true;
+        }
+        if stdout > 0 || stderr > 0 {
+            updates.send_modify(|revision| {
+                *revision = revision.saturating_add(1);
+            });
         }
         if stdout == 0 && stderr == 0 {
             break;
@@ -334,6 +363,19 @@ impl RecordState {
         self.summary.output_revision = self.summary.output_revision.saturating_add(1);
         self.summary.output_truncated = self.stdout.truncated || self.stderr.truncated;
     }
+}
+
+fn record_state(record: &Record) -> std::sync::MutexGuard<'_, RecordState> {
+    record.state.lock().unwrap_or_else(|poisoned| {
+        tracing::error!("execution_record_lock_poisoned");
+        poisoned.into_inner()
+    })
+}
+
+fn manager_state(state: &Mutex<ManagerState>) -> Result<std::sync::MutexGuard<'_, ManagerState>> {
+    state
+        .lock()
+        .map_err(|_| anyhow::anyhow!("session manager unavailable"))
 }
 
 fn now() -> i64 {
@@ -361,5 +403,19 @@ mod tests {
         assert!(unicode.truncated);
         assert!(!unicode.text().contains('�'));
         assert!(unicode.text().ends_with('x'));
+    }
+
+    #[test]
+    fn poisoned_manager_reports_unavailable_instead_of_an_empty_success() {
+        let manager = ExecutionSessionManager::default();
+        let poisoned = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _state = manager.state.lock().unwrap();
+            panic!("poison the synthetic manager");
+        }));
+        assert!(poisoned.is_err());
+
+        let error = manager.list().unwrap_err();
+        assert!(error.to_string().contains("session manager unavailable"));
+        assert!(manager.shutdown().is_err());
     }
 }

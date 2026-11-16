@@ -29,7 +29,9 @@ class GpuiLocalizationTests(unittest.TestCase):
 
     def test_generated_catalog_has_full_message_count(self):
         value = module.render()
-        self.assertIn('pub const MESSAGE_COUNT: usize = 511;', value)
+        self.assertIn(
+            f'pub const MESSAGE_COUNT: usize = {module.message_count()};',
+            value)
         self.assertIn('pub fn search_issues(', value)
         self.assertIn('pub fn history_storage_usage(', value)
         self.assertIn('pub fn empty_file_type(locale: Locale, r#type: &str)',

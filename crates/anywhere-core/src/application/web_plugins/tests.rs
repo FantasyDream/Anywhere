@@ -122,8 +122,9 @@ pub(super) fn start(
     command: &crate::core::action::web_command::WebCommandRef,
     input: &ResolvedContext,
 ) -> String {
-    let HostView::WebPlugin { invocation_id } =
-        service.start(command, input, None, "test.app").unwrap()
+    let HostView::WebPlugin { invocation_id } = service
+        .start(command, input, input.session_id, None, "test.app")
+        .unwrap()
     else {
         panic!("wrong view");
     };
@@ -361,11 +362,11 @@ fn update_revokes_references_documents_and_same_ids_have_new_qualifications() {
     assert_ne!(command, reference(&updated));
     service.replace_catalog(next);
     assert!(service
-        .start(&command, &context("old"), None, "test")
+        .start(&command, &context("old"), 0, None, "test")
         .is_err());
     assert!(service.invocation(&binding, source(&binding)).is_err());
     assert!(service
-        .start(&reference(&updated), &context("new"), None, "test")
+        .start(&reference(&updated), &context("new"), 0, None, "test")
         .is_ok());
 }
 
@@ -454,6 +455,7 @@ async fn application_executes_committed_candidate_records_only_ready_and_revokes
     let binding = app
         .bind_web_document(&invocation_id, WebPlatform::Macos)
         .unwrap();
+    rpc_value(&app, &binding, "state", "state.subscribe").await;
     assert_eq!(
         serde_json::from_value::<Option<WebCurrentApp>>(
             rpc_value(&app, &binding, "app", "context.getCurrentApp").await
