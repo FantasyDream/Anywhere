@@ -1,9 +1,9 @@
 //! Query-local external sorting. A loaded batch consumes a cursor instead of
 //! re-ranking the whole match file. New committed records merge into the unread tail.
 use super::scan::{
-    read_record, write_record, NameQuery, RankedHit, ScanPage, ScanStore, PAGE_SIZE,
+    read_match_record, write_match_record, RankedHit, ScanPage, ScanStore, PAGE_SIZE,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use std::{
     collections::{BinaryHeap, HashSet},
     fs::File,
@@ -20,6 +20,7 @@ pub(super) struct ContinuousResults {
     file: Option<PathBuf>,
     position: u64,
     serial: u64,
+    allocated: HashSet<PathBuf>,
 }
 struct Head {
     hit: RankedHit,
@@ -44,10 +45,8 @@ impl Ord for Head {
             .then(self.source.cmp(&other.source))
     }
 }
-fn next(reader: &mut impl Read, query: &NameQuery) -> Result<Option<RankedHit>> {
-    read_record(reader)?
-        .map(|(path, directory, _)| query.rank(&path, directory).context("invalid match record"))
-        .transpose()
+fn next(reader: &mut impl Read) -> Result<Option<RankedHit>> {
+    Ok(read_match_record(reader)?.map(|(hit, _)| hit))
 }
 fn check(cancelled: &(dyn Fn() -> bool + Sync)) -> Result<()> {
     if cancelled() {
@@ -56,16 +55,20 @@ fn check(cancelled: &(dyn Fn() -> bool + Sync)) -> Result<()> {
     Ok(())
 }
 impl ContinuousResults {
-    pub fn invalidate(&mut self) {
+    pub fn invalidate(&mut self, store: &ScanStore) {
         self.boundary = 0;
         self.position = 0;
         self.file = None;
-        // Keep serial monotonic so retry cannot overwrite an orphaned sort run.
+        for path in self.allocated.drain() {
+            let _ = store.remove_run(&path);
+        }
     }
 
     fn path(&mut self, directory: &Path) -> PathBuf {
         self.serial += 1;
-        directory.join(format!("sorted-{}", self.serial))
+        let path = directory.join(format!("sorted-{}", self.serial));
+        self.allocated.insert(path.clone());
+        path
     }
     fn merge(
         &mut self,
@@ -74,29 +77,30 @@ impl ContinuousResults {
         cancelled: &(dyn Fn() -> bool + Sync),
     ) -> Result<PathBuf> {
         let output = self.path(store.workspace());
-        let mut writer = BufWriter::new(File::create(&output)?);
+        let mut writer = BufWriter::new(store.writer(File::create(&output)?));
         let mut readers = Vec::new();
         let mut heads = BinaryHeap::new();
         for (source, (path, offset)) in sources.iter().enumerate() {
             let mut file = File::open(path)?;
             file.seek(SeekFrom::Start(*offset))?;
             let mut reader = BufReader::new(file);
-            if let Some(hit) = next(&mut reader, &store.query)? {
+            if let Some(hit) = next(&mut reader)? {
                 heads.push(Head { hit, source });
             }
             readers.push(reader);
         }
         while let Some(Head { hit, source }) = heads.pop() {
             check(cancelled)?;
-            write_record(&mut writer, &hit.path, hit.is_directory)?;
-            if let Some(hit) = next(&mut readers[source], &store.query)? {
+            write_match_record(&mut writer, &hit)?;
+            if let Some(hit) = next(&mut readers[source])? {
                 heads.push(Head { hit, source });
             }
         }
         writer.flush()?;
         drop(readers);
         for (path, _) in sources {
-            std::fs::remove_file(path)?;
+            store.remove_run(path)?;
+            self.allocated.remove(path);
         }
         Ok(output)
     }
@@ -115,7 +119,7 @@ impl ContinuousResults {
             let mut bytes = 0;
             while hits.len() < SORT_ITEMS && bytes < SORT_BYTES {
                 check(cancelled)?;
-                let Some(hit) = next(&mut reader, &store.query)? else {
+                let Some(hit) = next(&mut reader)? else {
                     break;
                 };
                 bytes += hit.path.as_os_str().len() + hit.normalized.len();
@@ -126,9 +130,9 @@ impl ContinuousResults {
             }
             hits.sort_by(RankedHit::compare);
             let path = self.path(store.workspace());
-            let mut writer = BufWriter::new(File::create(&path)?);
+            let mut writer = BufWriter::new(store.writer(File::create(&path)?));
             for hit in hits {
-                write_record(&mut writer, &hit.path, hit.is_directory)?;
+                write_match_record(&mut writer, &hit)?;
             }
             writer.flush()?;
             levels[0].push(path);
@@ -189,24 +193,25 @@ impl ContinuousResults {
         let mut hits = Vec::with_capacity(PAGE_SIZE);
         while hits.len() < PAGE_SIZE {
             check(cancelled)?;
-            let Some((path, directory, bytes)) = read_record(&mut reader)? else {
+            let Some((hit, bytes)) = read_match_record(&mut reader)? else {
                 break;
             };
             self.position += bytes;
-            if !displayed.contains(&path) {
-                hits.push(
-                    store
-                        .query
-                        .rank(&path, directory)
-                        .context("invalid match record")?,
-                );
+            if !displayed.contains(&hit.path) {
+                hits.push(hit);
             }
         }
-        // Peek without consuming; duplicates from a provisional batch are skipped
-        // during the next read and can only cause a harmless empty final batch.
-        let more = read_record(&mut reader)?.is_some();
-        let mut progress = store.page_progress(&hits, boundary, 0, more)?;
-        progress.needs_refresh = boundary != store.committed_boundary();
+        // Consume already displayed records, but leave the next unseen hit
+        // for the next page. A duplicate-only tail is already exhausted.
+        let more = loop {
+            check(cancelled)?;
+            match read_match_record(&mut reader)? {
+                Some((hit, _)) if !displayed.contains(&hit.path) => break true,
+                Some((_, bytes)) => self.position += bytes,
+                None => break false,
+            }
+        };
+        let progress = store.page_progress(boundary, more);
         Ok(ScanPage { hits, progress })
     }
 }

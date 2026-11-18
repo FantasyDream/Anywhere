@@ -1,4 +1,9 @@
 use anyhow::{bail, Context, Result};
+#[cfg(target_os = "macos")]
+use std::{
+    cell::{OnceCell, RefCell},
+    rc::Rc,
+};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PreviewPoll {
@@ -11,8 +16,56 @@ pub enum PreviewPoll {
 
 #[cfg(target_os = "macos")]
 pub struct PreviewHost {
+    shared: Rc<SharedPreviewPanel>,
+    active: Option<Rc<ActivePreview>>,
+}
+
+#[cfg(target_os = "macos")]
+struct SharedPreviewPanel {
     panel: quicklook::QuickLookPanel,
-    active: Option<ActivePreview>,
+    ownership: PreviewOwnership,
+}
+
+#[cfg(target_os = "macos")]
+thread_local! {
+    static SHARED_PREVIEW: OnceCell<Rc<SharedPreviewPanel>> = const { OnceCell::new() };
+}
+
+#[cfg(target_os = "macos")]
+#[derive(Default)]
+struct PreviewOwnership(RefCell<Option<Rc<ActivePreview>>>);
+
+#[cfg(target_os = "macos")]
+impl PreviewOwnership {
+    fn replace(&self, active: Rc<ActivePreview>) {
+        self.0.replace(Some(active));
+    }
+
+    fn is_current(&self, active: &Rc<ActivePreview>) -> bool {
+        self.0
+            .borrow()
+            .as_ref()
+            .is_some_and(|current| Rc::ptr_eq(current, active))
+    }
+
+    fn clear(&self, active: &Rc<ActivePreview>) -> bool {
+        if !self.is_current(active) {
+            return false;
+        }
+        self.0.take();
+        true
+    }
+
+    fn is_idle(&self) -> bool {
+        self.0.borrow().is_none()
+    }
+
+    fn belongs_to(&self, owner_title: &str) -> bool {
+        self.0
+            .borrow()
+            .as_ref()
+            .is_some_and(|active| active.owner_title == owner_title)
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -24,9 +77,22 @@ struct ActivePreview {
 #[cfg(target_os = "macos")]
 impl PreviewHost {
     pub fn new() -> Result<Self> {
-        let panel = quicklook::QuickLookPanel::shared().context("Quick Look is unavailable")?;
+        let shared = SHARED_PREVIEW.with(|shared| {
+            if let Some(shared) = shared.get() {
+                return Ok::<_, anyhow::Error>(shared.clone());
+            }
+            let panel = quicklook::QuickLookPanel::shared().context("Quick Look is unavailable")?;
+            Ok(shared
+                .get_or_init(|| {
+                    Rc::new(SharedPreviewPanel {
+                        panel,
+                        ownership: PreviewOwnership::default(),
+                    })
+                })
+                .clone())
+        })?;
         Ok(Self {
-            panel,
+            shared,
             active: None,
         })
     }
@@ -46,17 +112,10 @@ impl PreviewHost {
         let owner = application
             .windows()
             .iter()
-            .find(|window| window.title().to_string() == owner_title)
+            .find(|window| crate::platform::window_matches_title(window, owner_title))
             .context("launcher window is unavailable")?;
         if !owner.isVisible() {
             bail!("launcher window is not visible");
-        }
-        let previous = self
-            .active
-            .as_ref()
-            .map(|active| active.resource_id.clone());
-        if previous.is_some() {
-            self.close();
         }
         let items = paths
             .iter()
@@ -68,14 +127,20 @@ impl PreviewHost {
         if items.is_empty() || items.len() > 256 {
             bail!("invalid Quick Look selection");
         }
-        self.panel.set_items(items);
-        self.panel.reload_if_dirty();
-        self.panel.set_current_preview_item_index(0);
-        self.panel.show();
-        self.active = Some(ActivePreview {
+        let active = Rc::new(ActivePreview {
             resource_id,
             owner_title: owner_title.to_owned(),
         });
+        let previous = self
+            .active
+            .replace(active.clone())
+            .map(|active| active.resource_id.clone());
+        self.shared.ownership.replace(active);
+        let panel = &self.shared.panel;
+        panel.set_items(items);
+        panel.reload_if_dirty();
+        panel.set_current_preview_item_index(0);
+        panel.show();
         Ok(previous)
     }
 
@@ -83,10 +148,12 @@ impl PreviewHost {
         let Some(active) = self.active.as_ref() else {
             return PreviewPoll::Open;
         };
-        let application_active = objc2::MainThreadMarker::new().is_some_and(|marker| {
-            objc2_app_kit::NSApplication::sharedApplication(marker).isActive()
-        });
-        let closed = !self.panel.is_visible() || !application_active;
+        let owns_panel = self.shared.ownership.is_current(active);
+        let application_active = owns_panel
+            && objc2::MainThreadMarker::new().is_some_and(|marker| {
+                objc2_app_kit::NSApplication::sharedApplication(marker).isActive()
+            });
+        let closed = !application_active || !self.shared.panel.is_visible();
         if !closed {
             return PreviewPoll::Open;
         }
@@ -97,18 +164,25 @@ impl PreviewHost {
         }
     }
 
+    pub fn owns_panel(&self) -> bool {
+        self.active
+            .as_ref()
+            .is_some_and(|active| self.shared.ownership.is_current(active))
+    }
+
     pub fn close(&mut self) -> Option<String> {
         let active = self.active.take()?;
-        self.panel.hide();
-        self.panel.set_items(Vec::new());
+        if !self.shared.ownership.clear(&active) {
+            return Some(active.resource_id.clone());
+        }
+        self.shared.panel.set_items(Vec::new());
+        self.shared.panel.hide();
         if let Some(marker) = objc2::MainThreadMarker::new() {
             let application = objc2_app_kit::NSApplication::sharedApplication(marker);
-            if application.isActive() {
-                if let Some(owner) = application
-                    .windows()
-                    .iter()
-                    .find(|window| window.title().to_string() == active.owner_title)
-                {
+            if application.isActive() && self.shared.ownership.is_idle() {
+                if let Some(owner) = application.windows().iter().find(|window| {
+                    crate::platform::window_matches_title(window, &active.owner_title)
+                }) {
                     if owner.isVisible() {
                         owner.makeKeyAndOrderFront(None);
                     }
@@ -116,23 +190,19 @@ impl PreviewHost {
             }
         }
         tracing::debug!(resource_id = %active.resource_id, "quick_look_closed");
-        Some(active.resource_id)
+        Some(active.resource_id.clone())
     }
 }
 
 #[cfg(target_os = "macos")]
-pub(super) fn dismiss_quick_look() {
-    let Some(marker) = objc2::MainThreadMarker::new() else {
-        return;
-    };
-    // SAFETY: This queries the process-wide shared panel on the main thread.
-    if !unsafe { objc2_quick_look_ui::QLPreviewPanel::sharedPreviewPanelExists(marker) } {
-        return;
-    }
-    if let Some(panel) = unsafe { objc2_quick_look_ui::QLPreviewPanel::sharedPreviewPanel(marker) }
-    {
-        panel.orderOut(None);
-    }
+pub(super) fn dismiss_quick_look(owner_title: &str) {
+    SHARED_PREVIEW.with(|shared| {
+        if let Some(shared) = shared.get() {
+            if shared.ownership.belongs_to(owner_title) {
+                shared.panel.hide();
+            }
+        }
+    });
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -157,7 +227,38 @@ impl PreviewHost {
         PreviewPoll::Open
     }
 
+    pub fn owns_panel(&self) -> bool {
+        false
+    }
+
     pub fn close(&mut self) -> Option<String> {
         None
+    }
+}
+
+#[cfg(all(test, target_os = "macos"))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn closing_the_launcher_preview_cannot_clear_the_shelf_preview() {
+        let ownership = PreviewOwnership::default();
+        let launcher = Rc::new(ActivePreview {
+            resource_id: "launcher-resource".into(),
+            owner_title: crate::PRODUCT_NAME.into(),
+        });
+        let shelf = Rc::new(ActivePreview {
+            resource_id: "shelf-resource".into(),
+            owner_title: crate::CLIPBOARD_SHELF_TITLE.into(),
+        });
+        ownership.replace(launcher.clone());
+        assert!(ownership.is_current(&launcher));
+        ownership.replace(shelf.clone());
+        assert!(!ownership.belongs_to(crate::PRODUCT_NAME));
+        assert!(ownership.belongs_to(crate::CLIPBOARD_SHELF_TITLE));
+        assert!(!ownership.clear(&launcher));
+        assert!(ownership.is_current(&shelf));
+        assert!(ownership.clear(&shelf));
+        assert!(ownership.is_idle());
     }
 }

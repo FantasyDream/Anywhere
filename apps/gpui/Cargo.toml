@@ -23,7 +23,8 @@ global-hotkey = "0.10.0"
 rfd = "0.15"
 sys-locale = "0.3"
 url.workspace = true
-wry = { package = "lb-wry", version = "=0.53.3" }
+raw-window-handle = "=0.6.2"
+wry = { package = "lb-wry", version = "=0.53.3", features = ["transparent"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = "0.6"

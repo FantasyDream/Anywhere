@@ -16,7 +16,7 @@ old plans; dated records under `docs/archive/` describe earlier implementations.
 | Persistence | SQLite, bounded source reads and stored preferences | `crates/anywhere-core/src/persistence/` |
 | Platform | OS capabilities, application identity, paths and native operations | `crates/anywhere-platform/src/` |
 | GPUI | Pages, input, selection, focus, settings, tool surfaces and window presentation | `apps/gpui/src/` |
-| macOS bridge | Thin AppKit boundaries for floating windows, status item, Quick Look, login item and WebKit | `apps/gpui/src/platform/`, `apps/gpui/src/host/` |
+| macOS bridge | Thin AppKit boundaries for floating windows, status item, Quick Look, login item and WebKit | `apps/gpui/src/platform/` (`platform/macos/`, `platform/material/`), `apps/gpui/src/host/` |
 | Web plugins | Plugin business logic through the shared SDK and theme | `packages/plugin-sdk/`, `plugins/examples/` |
 
 First-party features are compiled modules with registration contributions, not
@@ -24,25 +24,24 @@ hot-loaded plugins. Third-party plugins use the existing package/grant/SDK
 boundary: WebView for UI, on-demand QuickJS for finite background jobs, and the
 same Rust capability broker. Third-party Context types must stay in
 `plugin.<package-id>.*`; use the existing Context registry and never convert
-script data into native file authority. The legacy declarative protocol is
-compatibility code; do not extend it into another UI framework.
+script data into native file authority. Legacy declarative TOML plugins have been retired.
 
 ## Find the behavior before editing
 
-- Product entry: `apps/gpui/src/app.rs`. It owns the main GPUI window, global
+- Product entry: `apps/gpui/src/app.rs` (with window render owners in `launcher/tool_windows.rs`). It owns the main GPUI window, global
   hotkey dispatch, status-item restoration and the independent Clipboard Shelf
-  window. The product has one UI implementation and one presentation stack.
+  and Running Tasks windows. The product has one UI implementation and one presentation stack.
 - Launcher navigation, retention and selection:
-  `apps/gpui/src/launcher/model.rs`, `launcher/view/`,
-  `launcher/snapshot_gate.rs`, `application/session_*` and
+  `apps/gpui/src/launcher/model.rs`, `launcher/view/` (`controllers/`, `pages/`),
+  `launcher/snapshot_gate.rs`, `application/session_*` (`session_coordinator.rs`, `session_runtime/`) and
   [launcher-interaction.md](docs/launcher-interaction.md).
 - Action ranking: `core/action/matcher.rs`, `core/ranking/` and
   `core/search/`. Empty action lists compare usage count, last use, relevance
   and stable IDs. GPUI only filters the chosen scope and limits visible rows.
   Keyword search, file results and source history lists have separate contracts.
 - File search scanning: `features/filesystem/scan.rs` owns query lifetime; its
-  `query`, `scope`, `record`, `traversal`, `progress` and `pagination` modules
-  own matching, scope checks, record format, enumeration and result delivery.
+  `query`, `scope`, `record`, `traversal`, `storage`, `progress` and `pagination` modules
+  own matching, scope checks, record format, enumeration, byte budgets and result delivery.
   `result_store.rs` keeps continuous external sorting; see
   [file-search.md](docs/file-search.md).
 - Installed application index: `application/application_index.rs` owns scan
@@ -70,7 +69,8 @@ compatibility code; do not extend it into another UI framework.
   `apps/gpui/src/launcher/view/` and `host/runtime/`. See
   [the source guide](docs/application-history-sources.md).
 - Settings close decisions, drafts, authorization and native effects live in
-  `apps/gpui/src/launcher/view/settings.rs`, `host/preferences.rs` and
+  `apps/gpui/src/launcher/view/settings.rs`, `launcher/view/settings/` (`controller.rs` and per-category modules),
+  `host/native_window.rs`, `host/preferences.rs` and
   `host/runtime/`; domain-to-GPUI snapshot projection belongs in
   `host/runtime_support.rs`. Hotkey parsing belongs in `host/hotkeys.rs`;
   login-item reconciliation in `host/login_item.rs`; directory bookmarks in
@@ -115,7 +115,8 @@ Do not merge them into a global activity log.
 
 The GPUI app owns product pages. Shared values come from
 `resources/design-tokens.json`; Rust projections are generated into
-`apps/gpui/src/ui/design_tokens.rs`. User-facing strings come from
+`apps/gpui/src/ui/design_tokens.rs`. File-type icons and filters come from
+`resources/file-types.json` (`apps/gpui/src/launcher/file_icons.rs`). User-facing strings come from
 `resources/localization/`; the typed Rust projection is
 `apps/gpui/src/l10n/generated.rs`. Web documents receive
 `resources/web-bootstrap.js` and `resources/web-controls.css` automatically.

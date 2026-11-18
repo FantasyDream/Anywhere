@@ -57,33 +57,46 @@ impl LauncherView {
                 detail,
             )
         } else {
+            let scroll_area = div()
+                .flex_1()
+                .min_h(px(0.))
+                .relative()
+                .child(
+                    gpui_kit::uniform_list(
+                        "file-search-list",
+                        self.model.rows.len(),
+                        cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
+                            range
+                                .map(|index| {
+                                    this.render_row(
+                                        index,
+                                        this.model.rows[index].clone(),
+                                        this.file_search.browsing && this.model.selected == index,
+                                        cx,
+                                    )
+                                })
+                                .collect::<Vec<_>>()
+                        }),
+                    )
+                    .size_full()
+                    .px(px(10.))
+                    .track_scroll(&self.tool_list_scrolls.file_search)
+                    .on_scroll(cx.listener(|this, _, _, cx| {
+                        if this.file_search_scroll.offset().y
+                            + this.file_search_scroll.max_offset().y
+                            <= px(24.)
+                        {
+                            this.request_more_files(false, cx);
+                        }
+                    })),
+                )
+                .vertical_scrollbar(&self.file_search_scroll);
             let mut list = div()
-                .id("file-search-list")
                 .flex_1()
                 .min_h(px(0.))
                 .flex()
                 .flex_col()
-                .gap(px(2.0))
-                .px(px(10.))
-                .pb(px(8.))
-                .track_scroll(&self.file_search_scroll)
-                .on_scroll(cx.listener(|this, _, _, cx| {
-                    let offset = this.file_search_scroll.offset().y;
-                    let maximum = this.file_search_scroll.max_offset().y;
-                    if offset + maximum <= px(24.) {
-                        this.request_more_files(false, cx);
-                    }
-                }))
-                .overflow_y_scroll()
-                .vertical_scrollbar(&self.file_search_scroll);
-            for (index, row) in self.model.rows.clone().into_iter().enumerate() {
-                list = list.child(self.render_row(
-                    index,
-                    row,
-                    self.file_search.browsing && self.model.selected == index,
-                    cx,
-                ));
-            }
+                .child(scroll_area);
             if progress
                 .as_ref()
                 .and_then(|progress| progress.next_cursor.as_ref())
@@ -97,6 +110,8 @@ impl LauncherView {
                         .child(
                             Button::new("load-more-files")
                                 .secondary()
+                                .loading(self.file_search.page_in_flight)
+                                .disabled(self.file_search.page_in_flight)
                                 .label(l10n::load_more(self.locale))
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.request_more_files(false, cx);
@@ -262,14 +277,7 @@ impl LauncherView {
                 div()
                     .mx(px(metrics::SPACE_MD))
                     .mb(px(metrics::SPACE_SM))
-                    .px(px(metrics::SPACE_MD))
-                    .py(px(metrics::SPACE_SM))
-                    .rounded(px(metrics::CONTROL_RADIUS))
-                    .bg(theme::field())
-                    .caption_text()
-                    .text_color(theme::secondary())
-                    .truncate()
-                    .child(notice),
+                    .child(components::notice(notice, self.notice_kind)),
             );
         }
         root.child(div().flex_1().min_h(px(0.)).flex().flex_col().child(rows))

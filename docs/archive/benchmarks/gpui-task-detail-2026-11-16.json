@@ -1,0 +1,32 @@
+{
+  "date": "2026-11-16",
+  "source": "b428899 plus the current uncommitted GPUI worktree; paired runs in this session",
+  "environment": {
+    "cpu": "Apple M5",
+    "memory_bytes": 17179869184,
+    "architecture": "arm64",
+    "macos": "27.2.1 (26B131)",
+    "rustc": "1.100.0-beta.7 (fd8e211ae 2026-10-17)",
+    "profile": "release"
+  },
+  "command": "cargo run -p anywhere-gpui --example task_detail_measure --release --locked",
+  "before": {
+    "scope": "Synthetic ExecutionDetail clone only; requested Rust allocation bytes, not RSS or physical footprint. Excludes Core reads, GPUI layout, text shaping, native presentation and clipboard writes.",
+    "stream_bytes": 131072,
+    "samples": 1000,
+    "requested_bytes_per_clone": 262206,
+    "p50_us": 3.708,
+    "p95_us": 4.208,
+    "max_us": 41.583
+  },
+  "after": {
+    "scope": "Synthetic ExecutionDetail clone only; requested Rust allocation bytes, not RSS or physical footprint. Excludes Core reads, GPUI layout, text shaping, native presentation and clipboard writes.",
+    "stream_bytes": 131072,
+    "samples": 1000,
+    "requested_bytes_per_clone": 62,
+    "p50_us": 0.167,
+    "p95_us": 0.209,
+    "max_us": 3.084
+  },
+  "limits": "A synthetic ExecutionDetail clone benchmark, not end-to-end rendering, RSS, physical footprint, peak app memory or a GUI acceptance result. Initial host projection and explicit clipboard writes are outside the measured region."
+}

@@ -82,8 +82,8 @@ impl LauncherView {
             .min_h(px(0.))
             .track_scroll(&self.unsupported_tool_scroll)
             .overflow_y_scroll()
-            .vertical_scrollbar(&self.unsupported_tool_scroll)
-            .child(sections);
+            .child(sections)
+            .vertical_scrollbar(&self.unsupported_tool_scroll);
         self.render_page_shell(
             SharedString::from(title),
             SharedString::from(l10n::native_destination_unavailable(self.locale)),

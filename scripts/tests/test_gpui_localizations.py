@@ -1,6 +1,7 @@
 """Unit tests for the deterministic GPUI localization projection."""
 
 import importlib.util
+import json
 from pathlib import Path
 import unittest
 
@@ -34,13 +35,24 @@ class GpuiLocalizationTests(unittest.TestCase):
             value)
         self.assertIn('pub fn search_issues(', value)
         self.assertIn('pub fn history_storage_usage(', value)
-        self.assertIn('pub fn empty_file_type(locale: Locale, r#type: &str)',
-                      value)
+        self.assertIn(
+            'pub fn permission_context_read(locale: Locale, types: &str)',
+            value)
         self.assertIn('Locale::En => "Settings".to_string(),', value)
 
     def test_rust_ident_only_escapes_keywords(self):
         self.assertEqual(module.rust_ident('type'), 'r#type')
         self.assertEqual(module.rust_ident('count'), 'count')
+
+    def test_duplicate_keys_are_rejected_including_nested_metadata(self):
+        for value in [
+                '{"same": "one", "same": "two"}',
+                '{"@message": {"type": "int", "type": "String"}}'
+        ]:
+            with self.assertRaisesRegex(ValueError,
+                                        'Duplicate localization key'):
+                json.loads(value,
+                           object_pairs_hook=module.reject_duplicate_keys)
 
     def test_committed_output_is_current(self):
         self.assertEqual(module.OUTPUT.read_text(), module.render())

@@ -43,6 +43,7 @@ pub enum LiveEvent {
         message: String,
         snapshot: Option<SettingsSnapshot>,
     },
+    LoginItemReconciled(Option<String>),
     Preferences {
         preferences: HostPreferences,
         host_error: Option<String>,
@@ -112,6 +113,7 @@ pub struct LiveLauncher {
     application: Arc<ApplicationRuntime>,
     session_id: AtomicU32,
     preferences_path: PathBuf,
+    explicit_data_directory: bool,
     directory_access: Arc<DirectoryAccess>,
     search_access_error: Arc<Mutex<Option<String>>>,
     preferences_write: Arc<tokio::sync::Mutex<()>>,
@@ -122,10 +124,14 @@ pub struct LiveLauncher {
 impl LiveLauncher {
     pub fn open() -> Result<Self> {
         let paths = ProductPaths::discover()?;
-        Self::open_at(paths.runtime_paths())
+        Self::open_with_isolation(paths.runtime_paths(), paths.explicit_data_directory)
     }
 
     pub fn open_at(paths: RuntimePaths) -> Result<Self> {
+        Self::open_with_isolation(paths, true)
+    }
+
+    fn open_with_isolation(paths: RuntimePaths, explicit_data_directory: bool) -> Result<Self> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .thread_name("anywhere-core")
@@ -153,6 +159,7 @@ impl LiveLauncher {
             application,
             session_id: AtomicU32::new(0),
             preferences_path,
+            explicit_data_directory,
             directory_access,
             search_access_error: Arc::new(Mutex::new(access_error)),
             preferences_write: Arc::new(tokio::sync::Mutex::new(())),
@@ -207,10 +214,17 @@ impl LiveLauncher {
         operation: impl FnOnce() -> Result<LiveEvent> + Send + 'static,
     ) -> Receiver<LiveEvent> {
         let (sender, receiver) = channel(1);
+        let preferences = self.preferences_cache.clone();
         self.runtime().spawn_blocking(move || {
             let event = match operation() {
                 Ok(event) => event,
-                Err(error) => LiveEvent::Error(format!("{error:#}")),
+                Err(error) => {
+                    let locale = preferences
+                        .lock()
+                        .map(|preferences| preferences.ui_language.locale())
+                        .unwrap_or(crate::l10n::Locale::En);
+                    LiveEvent::Error(super::directory_access::localized_error(&error, locale))
+                }
             };
             let _ = sender.blocking_send(event);
         });

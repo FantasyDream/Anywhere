@@ -5,9 +5,8 @@ impl LauncherView {
         &mut self,
         cx: &mut Context<Self>,
     ) -> AnyElement {
-        let status = self.clipboard.status.clone();
+        let status = self.clipboard.status.as_ref();
         let header_status = status
-            .as_ref()
             .map(|status| {
                 if !status.available {
                     l10n::unavailable(self.locale)
@@ -233,195 +232,32 @@ impl LauncherView {
                 )
                 .into_any_element()
         } else {
-            let mut list = div()
-                .id("clipboard-shelf-list")
+            div()
                 .flex_1()
                 .min_h(px(0.))
-                .px(px(6.))
-                .pb(px(4.))
-                .flex()
-                .flex_col()
-                .track_scroll(&self.clipboard_shelf_scroll)
-                .overflow_y_scroll()
-                .vertical_scrollbar(&self.clipboard_shelf_scroll);
-            for (index, item) in self.clipboard.items().to_vec().into_iter().enumerate() {
-                let selected = self.clipboard.browsing && self.clipboard.selected == index;
-                let item_id = item.id;
-                let summary = item.summary.clone();
-                let metadata = if selected && self.clipboard.copied_item == Some(item_id) {
-                    l10n::copied(self.locale)
-                } else {
-                    let kind = components::clipboard_kind_label(self.locale, &item.kind);
-                    let date = components::clipboard_copy_date(item.copied_at_ms, true);
-                    if date.is_empty() {
-                        kind
-                    } else {
-                        format!("{kind} · {date}")
-                    }
-                };
-                let command_hint = if selected {
-                    None
-                } else if index < 9 {
-                    Some(format!("⌘{}", index + 1))
-                } else {
-                    None
-                };
-                list = list.child(
-                    div()
-                        .id(SharedString::from(format!(
-                            "clipboard-shelf-item-{item_id}"
-                        )))
-                        .role(gpui_kit::Role::ListBoxOption)
-                        .aria_label(summary.clone())
-                        .aria_selected(selected)
-                        .h(px(48.))
-                        .flex_shrink_0()
-                        .py(px(1.))
-                        .cursor_pointer()
-                        .on_mouse_down(
-                            MouseButton::Left,
-                            cx.listener(move |this, _, window, cx| {
-                                this.select_clipboard_row(index, window, cx);
-                            }),
-                        )
-                        .on_double_click(cx.listener(move |this, _, _, cx| {
-                            this.clipboard.selected = index;
-                            this.clipboard.browsing = true;
-                            this.copy_selected_clipboard(cx);
-                        }))
-                        .on_mouse_down(
-                            MouseButton::Right,
-                            cx.listener(move |this, _, _, cx| {
-                                this.open_clipboard_actions(item_id, cx);
-                            }),
-                        )
-                        .child(
-                            div()
-                                .h_full()
-                                .px(px(12.))
-                                .flex()
-                                .items_center()
-                                .gap(px(12.))
-                                .result_surface(selected)
-                                .child(
-                                    Icon::new(components::clipboard_kind_icon(&item.kind))
-                                        .size(px(18.))
-                                        .text_color(components::clipboard_kind_tint(&item.kind)),
-                                )
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w(px(0.))
-                                        .flex()
-                                        .flex_col()
-                                        .justify_center()
-                                        .gap(px(2.))
-                                        .child(
-                                            div()
-                                                .id(SharedString::from(format!(
-                                                    "shelf-title-{item_id}"
-                                                )))
-                                                .truncate()
-                                                .text_size(px(12.))
-                                                .line_height(px(12. * metrics::BODY_LINE_HEIGHT))
-                                                .text_color(theme::primary())
-                                                .tooltip(components::text_tooltip(summary))
-                                                .child(item.summary),
-                                        )
-                                        .child(
-                                            div()
-                                                .truncate()
-                                                .text_size(px(10.))
-                                                .line_height(px(10. * metrics::CAPTION_LINE_HEIGHT))
-                                                .text_color(
-                                                    if selected
-                                                        && self.clipboard.copied_item
-                                                            == Some(item_id)
-                                                    {
-                                                        theme::success()
-                                                    } else {
-                                                        theme::muted()
-                                                    },
-                                                )
-                                                .child(metadata),
-                                        ),
-                                )
-                                .when(selected, |element| {
-                                    let actions_id = item_id;
-                                    element
-                                        .child(
-                                            div()
-                                                .id(SharedString::from(format!(
-                                                    "shelf-preview-{item_id}"
-                                                )))
-                                                .role(gpui_kit::Role::Button)
-                                                .aria_label(l10n::preview(self.locale))
-                                                .h(px(metrics::CONTROL_HEIGHT))
-                                                .flex_none()
-                                                .px(px(metrics::CONTROL_PADDING_X))
-                                                .flex()
-                                                .items_center()
-                                                .rounded(px(6.))
-                                                .hover(|style| style.bg(theme::hover()))
-                                                .cursor_pointer()
-                                                .on_click(cx.listener(move |this, _, _, cx| {
-                                                    cx.stop_propagation();
-                                                    this.clipboard.selected = index;
-                                                    this.clipboard.browsing = true;
-                                                    this.preview_selected_clipboard(cx);
-                                                }))
-                                                .child(
-                                                    Icon::new(IconName::Eye)
-                                                        .size(px(14.))
-                                                        .text_color(theme::secondary()),
-                                                ),
-                                        )
-                                        .child(
-                                            div()
-                                                .id(SharedString::from(format!(
-                                                    "shelf-more-{item_id}"
-                                                )))
-                                                .role(gpui_kit::Role::Button)
-                                                .aria_label(l10n::actions(self.locale))
-                                                .h(px(metrics::CONTROL_HEIGHT))
-                                                .flex_none()
-                                                .px(px(metrics::CONTROL_PADDING_X))
-                                                .flex()
-                                                .items_center()
-                                                .gap(px(4.))
-                                                .rounded(px(6.))
-                                                .hover(|style| style.bg(theme::hover()))
-                                                .cursor_pointer()
-                                                .on_click(cx.listener(move |this, _, _, cx| {
-                                                    cx.stop_propagation();
-                                                    this.open_clipboard_actions(actions_id, cx);
-                                                }))
-                                                .child(
-                                                    Icon::new(IconName::Ellipsis)
-                                                        .size(px(14.))
-                                                        .text_color(theme::secondary()),
-                                                )
-                                                .child("⌘K"),
-                                        )
-                                        .child(div().child(self.keycap("↵")))
-                                })
-                                .when(!selected, |element| {
-                                    element.when_some(command_hint, |element, hint| {
-                                        element.child(
-                                            div()
-                                                .text_size(px(10.))
-                                                .text_color(theme::muted())
-                                                .child(hint),
-                                        )
-                                    })
-                                }),
-                        ),
-                );
-            }
-            list.into_any_element()
+                .relative()
+                .child(
+                    gpui_kit::uniform_list(
+                        "clipboard-shelf-list",
+                        self.clipboard.items().len(),
+                        cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
+                            range
+                                .map(|index| this.render_clipboard_shelf_list_row(index, cx))
+                                .collect::<Vec<_>>()
+                        }),
+                    )
+                    .size_full()
+                    .px(px(6.))
+                    .track_scroll(&self.tool_list_scrolls.clipboard_shelf),
+                )
+                .vertical_scrollbar(&self.clipboard_shelf_scroll)
+                .into_any_element()
         };
 
-        let notice = self.notice.clone();
+        let notice = self
+            .notice
+            .clone()
+            .or_else(|| self.clipboard.notice_text(self.locale));
         div()
             .size_full()
             .flex()
@@ -463,6 +299,10 @@ impl LauncherView {
                             .gap(px(1.))
                             .child(
                                 div()
+                                    .id("shelf-drag-region")
+                                    .on_mouse_down(MouseButton::Left, |_, window, _| {
+                                        window.start_window_move()
+                                    })
                                     .truncate()
                                     .text_size(px(10.))
                                     .line_height(px(10. * metrics::CAPTION_LINE_HEIGHT))
@@ -538,5 +378,174 @@ impl LauncherView {
             })
             .child(body)
             .into_any_element()
+    }
+    fn render_clipboard_shelf_list_row(
+        &mut self,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        let item = self.clipboard.items()[index].clone();
+        let selected = self.clipboard.browsing && self.clipboard.selected == index;
+        let item_id = item.id;
+        let summary = item.summary.clone();
+        let metadata = if selected && self.clipboard.copied_item == Some(item_id) {
+            l10n::copied(self.locale)
+        } else {
+            let kind = components::clipboard_kind_label(self.locale, &item.kind);
+            let date = components::clipboard_copy_date(item.copied_at_ms, true);
+            if date.is_empty() {
+                kind
+            } else {
+                format!("{kind} · {date}")
+            }
+        };
+        let command_hint = if selected {
+            None
+        } else if index < 9 {
+            Some(format!("⌘{}", index + 1))
+        } else {
+            None
+        };
+        let row = div()
+            .id(SharedString::from(format!(
+                "clipboard-shelf-item-{item_id}"
+            )))
+            .role(gpui_kit::Role::ListBoxOption)
+            .aria_label(summary.clone())
+            .aria_selected(selected)
+            .h(px(48.))
+            .flex_shrink_0()
+            .py(px(1.))
+            .cursor_pointer()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, _, window, cx| {
+                    this.select_clipboard_row(index, window, cx);
+                }),
+            )
+            .on_double_click(cx.listener(move |this, _, _, cx| {
+                this.clipboard.selected = index;
+                this.clipboard.browsing = true;
+                this.copy_selected_clipboard(cx);
+            }))
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |this, _, _, cx| {
+                    this.open_clipboard_actions(item_id, cx);
+                }),
+            )
+            .child(
+                div()
+                    .h_full()
+                    .px(px(12.))
+                    .flex()
+                    .items_center()
+                    .gap(px(12.))
+                    .result_surface(selected)
+                    .child(
+                        Icon::new(components::clipboard_kind_icon(&item.kind))
+                            .size(px(18.))
+                            .text_color(components::clipboard_kind_tint(&item.kind)),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.))
+                            .flex()
+                            .flex_col()
+                            .justify_center()
+                            .gap(px(2.))
+                            .child(
+                                div()
+                                    .id(SharedString::from(format!("shelf-title-{item_id}")))
+                                    .truncate()
+                                    .text_size(px(12.))
+                                    .line_height(px(12. * metrics::BODY_LINE_HEIGHT))
+                                    .text_color(theme::primary())
+                                    .tooltip(components::text_tooltip(summary))
+                                    .child(item.summary),
+                            )
+                            .child(
+                                div()
+                                    .truncate()
+                                    .text_size(px(10.))
+                                    .line_height(px(10. * metrics::CAPTION_LINE_HEIGHT))
+                                    .text_color(
+                                        if selected && self.clipboard.copied_item == Some(item_id) {
+                                            theme::success()
+                                        } else {
+                                            theme::muted()
+                                        },
+                                    )
+                                    .child(metadata),
+                            ),
+                    )
+                    .when(selected, |element| {
+                        let actions_id = item_id;
+                        element
+                            .child(
+                                div()
+                                    .id(SharedString::from(format!("shelf-preview-{item_id}")))
+                                    .role(gpui_kit::Role::Button)
+                                    .aria_label(l10n::preview(self.locale))
+                                    .h(px(metrics::CONTROL_HEIGHT))
+                                    .flex_none()
+                                    .px(px(metrics::CONTROL_PADDING_X))
+                                    .flex()
+                                    .items_center()
+                                    .rounded(px(6.))
+                                    .hover(|style| style.bg(theme::hover()))
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        cx.stop_propagation();
+                                        this.clipboard.selected = index;
+                                        this.clipboard.browsing = true;
+                                        this.preview_selected_clipboard(cx);
+                                    }))
+                                    .child(
+                                        Icon::new(IconName::Eye)
+                                            .size(px(14.))
+                                            .text_color(theme::secondary()),
+                                    ),
+                            )
+                            .child(
+                                div()
+                                    .id(SharedString::from(format!("shelf-more-{item_id}")))
+                                    .role(gpui_kit::Role::Button)
+                                    .aria_label(l10n::actions(self.locale))
+                                    .h(px(metrics::CONTROL_HEIGHT))
+                                    .flex_none()
+                                    .px(px(metrics::CONTROL_PADDING_X))
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(4.))
+                                    .rounded(px(6.))
+                                    .hover(|style| style.bg(theme::hover()))
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        cx.stop_propagation();
+                                        this.open_clipboard_actions(actions_id, cx);
+                                    }))
+                                    .child(
+                                        Icon::new(IconName::Ellipsis)
+                                            .size(px(14.))
+                                            .text_color(theme::secondary()),
+                                    )
+                                    .child("⌘K"),
+                            )
+                            .child(div().child(self.keycap("↵")))
+                    })
+                    .when(!selected, |element| {
+                        element.when_some(command_hint, |element, hint| {
+                            element.child(
+                                div()
+                                    .text_size(px(10.))
+                                    .text_color(theme::muted())
+                                    .child(hint),
+                            )
+                        })
+                    }),
+            );
+        row.into_any_element()
     }
 }

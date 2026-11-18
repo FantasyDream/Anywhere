@@ -16,7 +16,7 @@
 
 | 区域 | 状态 |
 | --- | --- |
-| macOS GPUI 产品壳 | 主窗口、状态栏、全局热键、独立 Clipboard Shelf 已接入；物理验收待完成 |
+| macOS GPUI 产品壳 | 主窗口、状态栏、全局热键、独立 Clipboard Shelf 与独立 Running Tasks 窗口已接入；物理验收待完成 |
 | Launcher / Scope / 菜单 | 已接入，包含 Current App、迟到 Context 和执行资格 |
 | 文件搜索与 Quick Look | Rust 搜索、连续结果与 GPUI 路由已接入；系统焦点 / 格式矩阵待验收 |
 | Clipboard | History、策略、Shelf 与按需预览已接入；长期资源和权限矩阵待验收 |

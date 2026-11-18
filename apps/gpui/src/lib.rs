@@ -4,7 +4,6 @@ pub mod l10n;
 pub mod launcher;
 pub mod platform;
 pub mod settings;
-pub mod tools;
 pub mod ui;
 pub mod web_tool;
 

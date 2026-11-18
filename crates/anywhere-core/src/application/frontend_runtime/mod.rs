@@ -88,6 +88,14 @@ impl std::error::Error for RuntimeError {}
 
 pub type RuntimeResult<T> = std::result::Result<T, RuntimeError>;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum WebPackageOperation {
+    Enable,
+    Disable,
+    Uninstall,
+    Rollback,
+}
+
 /// Metadata needed by a native web surface after a document has been bound.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct WebDocumentView {
@@ -130,8 +138,6 @@ impl ApplicationRuntime {
                 Box::new(crate::core::ranking::usage::MemoryUsage::default())
             }
         };
-        let user_plugins = paths.data_directory.join("plugins");
-        std::fs::create_dir_all(&user_plugins)?;
         let application = Arc::new(Application::new(
             anywhere_platform::native_platform()?,
             builtin_registry(),
@@ -140,7 +146,6 @@ impl ApplicationRuntime {
         ));
         let settings = SettingsService::open(
             paths.data_directory.join("extensions.json"),
-            vec![paths.bundled_plugin_directory.clone(), user_plugins],
             application.as_ref(),
         )?;
         application.configure_web_storage(
@@ -283,31 +288,38 @@ impl ApplicationRuntime {
     }
 
     #[cfg(target_os = "macos")]
-    pub fn change_web_package(&self, id: &str, operation: &str) -> Result<Vec<WebPackageStatus>> {
+    pub fn change_web_package(
+        &self,
+        id: &str,
+        operation: WebPackageOperation,
+    ) -> Result<Vec<WebPackageStatus>> {
         {
             let mut packages = self.web_packages()?;
             let store = packages.as_mut().context("Web tools are unavailable")?;
             match operation {
-                "enable" => {
+                WebPackageOperation::Enable => {
                     store.set_enabled(self.application.as_ref(), id, true)?;
                 }
-                "disable" | "revoke" => {
+                WebPackageOperation::Disable => {
                     store.set_enabled(self.application.as_ref(), id, false)?;
                 }
-                "uninstall" => {
+                WebPackageOperation::Uninstall => {
                     store.uninstall(self.application.as_ref(), id)?;
                 }
-                "rollback" => {
+                WebPackageOperation::Rollback => {
                     store.rollback(self.application.as_ref(), id)?;
                 }
-                _ => anyhow::bail!("unknown Web package operation"),
             }
         }
         self.web_package_statuses()
     }
 
     #[cfg(not(target_os = "macos"))]
-    pub fn change_web_package(&self, _: &str, _: &str) -> Result<Vec<WebPackageStatus>> {
+    pub fn change_web_package(
+        &self,
+        _: &str,
+        _: WebPackageOperation,
+    ) -> Result<Vec<WebPackageStatus>> {
         anyhow::bail!("Web tools are not enabled on this platform")
     }
 
@@ -449,6 +461,10 @@ mod tests {
         let error = RuntimeError::new(RuntimeErrorKind::Stale, "test.stale", "stale");
         assert_eq!(error.code, "test.stale");
         assert_eq!(error.kind, RuntimeErrorKind::Stale);
+        let wrapped = anyhow::Error::new(error).context("frontend boundary");
+        let restored = wrapped.downcast_ref::<RuntimeError>().unwrap();
+        assert_eq!(restored.kind, RuntimeErrorKind::Stale);
+        assert_eq!(restored.code, "test.stale");
     }
 
     #[test]

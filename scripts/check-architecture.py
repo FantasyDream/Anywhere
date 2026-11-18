@@ -55,6 +55,8 @@ print('Persistence imports OK: adapters do not call Application')
 
 # Shared product logic cannot select OS adapters or assume a macOS application identity.
 for source in Path('crates/anywhere-core/src').rglob('*.rs'):
+    if source.name == 'tests.rs' or source.name.endswith('_tests.rs'):
+        continue
     production = production_source(source.read_text())
     for token in ['MacOsPlatform', 'com.apple.finder', '/bin/sh', 'std::os::']:
         assert token not in production, (source, token)

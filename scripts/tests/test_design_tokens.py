@@ -51,6 +51,7 @@ class DesignTokenTests(unittest.TestCase):
 
     def test_font_weights_have_matching_gpui_and_css_types(self):
         css, rust = module.render(self.valid())
+        self.assertIn(':root { color-scheme: dark; }', css)
         self.assertIn('--aw-heading-weight: 600;', css)
         self.assertIn('--aw-text: var(--aw-primary);', css)
         self.assertIn('pub const HEADING_WEIGHT: f32 = 600.0;', rust)

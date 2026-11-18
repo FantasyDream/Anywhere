@@ -250,8 +250,7 @@ mod tests {
         use crate::application::settings_service::{SettingsChange, SettingsService};
         let tmp = tempfile::tempdir().unwrap();
         let app = app();
-        let mut settings =
-            SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+        let mut settings = SettingsService::open(tmp.path().join("extensions.json"), &app).unwrap();
         let mut selected = clip(None);
         selected.source = ContextSource::SelectedText;
         selected.text = Some("https://example.org/selected".into());
@@ -357,7 +356,6 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut settings = crate::application::settings_service::SettingsService::open(
             tmp.path().join("extensions.json"),
-            vec![],
             &app,
         )
         .unwrap();

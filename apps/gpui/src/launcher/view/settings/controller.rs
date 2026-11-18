@@ -1,14 +1,15 @@
 use super::{
-    effective_shortcuts, excluded_app_ids, l10n, lines, locale_for_language, set_input_value,
-    shortcut_action_title, ActionShortcutBinding, ActionShortcutRoute, ContextShortcutDraft,
-    HostPreferences, LauncherEvent, LauncherView, LiveEvent, Screen, SettingsExitIntent,
-    ShortcutCatalogAction,
+    excluded_app_ids, l10n, lines, locale_for_language, set_input_value, shortcut_action_title,
+    ActionShortcutBinding, ActionShortcutRoute, ContextShortcutDraft, HostPreferences,
+    LauncherEvent, LauncherView, LiveEvent, Screen, SettingsExitIntent, ShortcutCatalogAction,
 };
-use gpui_kit::{Context, Window};
+use gpui_kit::{Context, Focusable as _, Window};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::Receiver;
 
+use crate::host::HotKeyController;
 use crate::launcher::components;
+use std::sync::{Arc, Mutex};
 
 impl LauncherView {
     pub(super) fn preferences_from_editors(&self, cx: &Context<Self>) -> HostPreferences {
@@ -189,12 +190,49 @@ impl LauncherView {
             return;
         }
         self.settings_draft = preferences.clone();
+        let operation_id = self.begin_settings_operation();
+        self.save_preferences(preferences, cx);
+        tracing::debug!(operation_id, "settings_save_started");
+        cx.notify();
+    }
+
+    pub(super) fn begin_settings_operation(&mut self) -> u64 {
         self.settings.saving = true;
         self.settings.error = None;
         self.settings_save_generation = self.settings_save_generation.wrapping_add(1);
-        let operation_id = self.settings_save_generation;
-        self.save_preferences(preferences, cx);
-        tracing::debug!(operation_id, "settings_save_started");
+        self.settings_save_generation
+    }
+
+    pub(super) fn set_clipboard_recording(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        if self.settings.saving {
+            return;
+        }
+        self.settings.clipboard_recording = enabled;
+        if let Some(live) = self.live.clone() {
+            let operation_id = self.begin_settings_operation();
+            self.poll_settings_save(live.set_clipboard_recording(enabled), operation_id, cx);
+        }
+        cx.notify();
+    }
+
+    pub(super) fn change_feature_setting(
+        &mut self,
+        key: &str,
+        enabled: bool,
+        cx: &mut Context<Self>,
+    ) {
+        if self.settings.saving {
+            return;
+        }
+        self.settings.set_feature_enabled(key, enabled);
+        if let Some(live) = self.live.clone() {
+            let operation_id = self.begin_settings_operation();
+            self.poll_settings_save(
+                live.change_feature(key.to_owned(), enabled),
+                operation_id,
+                cx,
+            );
+        }
         cx.notify();
     }
 
@@ -211,7 +249,18 @@ impl LauncherView {
         }
     }
 
-    fn poll_settings_save(
+    pub(super) fn retry_login_item(&mut self, cx: &mut Context<Self>) {
+        if self.settings.saving || self.settings_dirty(cx) {
+            return;
+        }
+        if let Some(live) = self.live.clone() {
+            let operation_id = self.begin_settings_operation();
+            self.poll_settings_save(live.retry_login_item(), operation_id, cx);
+            cx.notify();
+        }
+    }
+
+    pub(super) fn poll_settings_save(
         &mut self,
         mut receiver: Receiver<LiveEvent>,
         operation_id: u64,
@@ -232,8 +281,36 @@ impl LauncherView {
                         this.apply_preferences_result(preferences, host_error, cx);
                         tracing::debug!(operation_id, "settings_save_finished");
                     }
-                    Some(LiveEvent::Error(error))
-                    | Some(LiveEvent::SettingsError { message: error, .. }) => {
+                    Some(LiveEvent::Settings(snapshot)) => {
+                        this.settings.apply_snapshot(snapshot);
+                        this.notice = None;
+                        if this.settings_close_pending && !this.settings_dirty(cx) {
+                            this.finish_settings_exit_after_save(cx);
+                        }
+                    }
+                    Some(LiveEvent::LoginItemReconciled(error)) => {
+                        if let Some(error) = error.as_ref() {
+                            this.set_notice(error.clone(), components::NoticeKind::Error);
+                        } else {
+                            this.clear_notice();
+                            if this.settings_close_pending && !this.settings_dirty(cx) {
+                                this.finish_settings_exit_after_save(cx);
+                            }
+                        }
+                        this.settings.login_item_error = error;
+                    }
+                    Some(LiveEvent::SettingsError {
+                        message: error,
+                        snapshot,
+                    }) => {
+                        if let Some(snapshot) = snapshot {
+                            this.settings.apply_snapshot(snapshot);
+                        }
+                        this.settings.error = Some(error.clone());
+                        this.set_notice(error, components::NoticeKind::Error);
+                        tracing::warn!(operation_id, "settings_save_failed");
+                    }
+                    Some(LiveEvent::Error(error)) => {
                         this.settings.error = Some(error.clone());
                         this.set_notice(error, components::NoticeKind::Error);
                         tracing::warn!(operation_id, "settings_save_failed");
@@ -289,6 +366,8 @@ impl LauncherView {
     fn present_settings_close_prompt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.clipboard_confirmation = None;
         self.clipboard_settings_choice = None;
+        self.shortcut_recording = None;
+        self.settings_action_picker_open = false;
         if self.settings_modal_return_focus.is_none() {
             self.settings_modal_return_focus = window.focused(cx);
         }
@@ -338,6 +417,45 @@ impl LauncherView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.settings_action_picker_open
+            && !self.settings_close_pending
+            && self.clipboard_confirmation.is_none()
+        {
+            let original = window.focused(cx);
+            self.settings_action_picker_focus.focus(window, cx);
+            let mut handles = Vec::new();
+            for _ in 0..128 {
+                window.focus_next(cx);
+                let Some(focused) = window.focused(cx) else {
+                    break;
+                };
+                if !self
+                    .settings_action_picker_focus
+                    .contains_focused(window, cx)
+                    || handles.contains(&focused)
+                {
+                    break;
+                }
+                handles.push(focused);
+            }
+            if handles.is_empty() {
+                self.action_shortcut_input
+                    .focus_handle(cx)
+                    .focus(window, cx);
+            } else {
+                let current = original
+                    .as_ref()
+                    .and_then(|original| handles.iter().position(|handle| handle == original));
+                let next = match (current, backwards) {
+                    (Some(index), true) => (index + handles.len() - 1) % handles.len(),
+                    (Some(index), false) => (index + 1) % handles.len(),
+                    (None, true) => handles.len() - 1,
+                    (None, false) => 0,
+                };
+                handles[next].focus(window, cx);
+            }
+            return;
+        }
         let handles = if self.settings_close_pending {
             let mut handles = vec![self.settings_keep_editing_focus.clone()];
             if !self.settings.saving {
@@ -353,6 +471,8 @@ impl LauncherView {
                 handles.push(self.settings_confirm_accept_focus.clone());
             }
             handles
+        } else if self.settings_action_picker_open {
+            vec![self.action_shortcut_input.focus_handle(cx)]
         } else {
             return;
         };
@@ -378,12 +498,8 @@ impl LauncherView {
         self.save_settings(cx);
     }
 
-    fn finish_settings_exit_after_save(&mut self, cx: &mut Context<Self>) {
-        let intent = self
-            .settings_exit_intent
-            .take()
-            .unwrap_or(SettingsExitIntent::Close);
-        self.settings_close_pending = false;
+    pub(super) fn finish_settings_exit_after_save(&mut self, cx: &mut Context<Self>) {
+        self.settings_close_pending = true;
         let window_handle = self.window_handle;
         cx.spawn(async move |this, cx| {
             cx.background_executor()
@@ -391,9 +507,18 @@ impl LauncherView {
                 .await;
             let _ = window_handle.update(cx, |_, window, cx| {
                 let _ = this.update(cx, |this, cx| {
-                    if this.screen != Screen::Settings {
+                    if this.screen != Screen::Settings
+                        || !this.settings_close_pending
+                        || this.settings.saving
+                        || this.settings_dirty(cx)
+                    {
                         return;
                     }
+                    let intent = this
+                        .settings_exit_intent
+                        .take()
+                        .unwrap_or(SettingsExitIntent::Close);
+                    this.settings_close_pending = false;
                     let _ = this.execute_settings_exit(intent, window, cx);
                 });
             });
@@ -480,7 +605,7 @@ impl LauncherView {
             self.model.set_locale(saved_locale);
             cx.emit(LauncherEvent::PreferencesApplied {
                 locale: saved_locale,
-                preferences: self.preferences.clone(),
+                preferences: self.registered_preferences(),
             });
         }
         self.sync_search_placeholder(window, cx);
@@ -506,8 +631,19 @@ impl LauncherView {
         if self.locale != next_locale {
             self.locale = next_locale;
             self.model.set_locale(self.locale);
+            let window_handle = self.window_handle;
+            let weak = cx.weak_entity();
+            cx.defer(move |cx| {
+                let _ = window_handle.update(cx, |_, window, cx| {
+                    let _ = weak.update(cx, |this, cx| {
+                        this.refresh_editor_placeholders(window, cx);
+                    });
+                });
+            });
         }
-        let hotkey_error = self.hotkeys.as_ref().and_then(|hotkeys| {
+        // Keep a failed startup controller for retries. Manager creation itself
+        // can also fail, so recover it here when the live runtime is available.
+        self.hotkey_error = if let Some(hotkeys) = self.hotkeys.as_ref() {
             hotkeys
                 .lock()
                 .map_err(|_| l10n::hotkey_state_unavailable(self.locale))
@@ -517,33 +653,32 @@ impl LauncherView {
                         .map_err(|error| format!("{error:#}"))
                 })
                 .err()
-        });
+        } else if self.live.is_some() {
+            match HotKeyController::new(&preferences) {
+                Ok(controller) => {
+                    let error = controller.registration_error().map(str::to_owned);
+                    self.hotkeys = Some(Arc::new(Mutex::new(controller)));
+                    error
+                }
+                Err(error) => Some(format!("{error:#}")),
+            }
+        } else {
+            self.hotkey_error.clone()
+        };
         let current_draft = self.preferences_from_editors(cx);
         let draft_matches_saved = current_draft == preferences;
+        let login_item_changed = self.preferences.launch_at_login != preferences.launch_at_login;
         self.preferences = preferences.clone();
         if draft_matches_saved {
             self.settings_draft = preferences.clone();
         }
         self.settings.saving = false;
 
-        let mut effective = preferences;
-        if hotkey_error.is_some() {
-            let registered = self.hotkeys.as_ref().and_then(|hotkeys| {
-                hotkeys
-                    .lock()
-                    .ok()
-                    .map(|hotkeys| effective_shortcuts(&hotkeys))
-            });
-            if let Some((current, universal)) = registered {
-                effective.current_app_shortcut = current.unwrap_or_default();
-                effective.universal_shortcut = universal.unwrap_or_default();
-            } else {
-                effective.current_app_shortcut.clear();
-                effective.universal_shortcut.clear();
-            }
+        let effective = self.registered_preferences();
+        let combined_error = host_error.clone().or_else(|| self.hotkey_error_message());
+        if login_item_changed || host_error.is_some() {
+            self.settings.login_item_error = host_error;
         }
-        let combined_error = host_error.clone().or(hotkey_error.clone());
-        self.settings.error = combined_error.clone();
         if !draft_matches_saved {
             self.set_notice(
                 l10n::new_edits_were_made_while_saving_save(self.locale),

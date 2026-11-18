@@ -5,6 +5,7 @@
 //! file and cannot reach the others.
 mod aliases;
 mod application;
+mod automation;
 mod browser;
 mod clipboard;
 mod editor;

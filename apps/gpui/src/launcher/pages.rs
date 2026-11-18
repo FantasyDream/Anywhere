@@ -1,9 +1,12 @@
 use crate::host::{
     AppHistoryItem, AppHistoryObjectAction, AppHistorySnapshot, AppHistorySource, ClipboardItem,
-    ClipboardSnapshot, ExecutionDetail, ExecutionRow, WebPackage,
+    ClipboardSnapshot, WebPackage,
 };
 use anywhere_core::features::application_history::model::Notice as HistoryNotice;
 use anywhere_protocol::FileSearchFilter;
+
+mod tasks;
+pub use tasks::TasksPageModel;
 
 #[derive(Clone, Debug, Default)]
 pub struct ClipboardPageModel {
@@ -40,6 +43,21 @@ impl ClipboardPageModel {
 
     pub fn loading(&mut self) {
         self.loading = true;
+    }
+
+    pub fn notice_text(&self, locale: crate::l10n::Locale) -> Option<String> {
+        use crate::l10n;
+        use anywhere_core::features::clipboard::service::HistoryNotice;
+        Some(match self.status.as_ref()?.notice? {
+            HistoryNotice::FeatureDisabled => l10n::history_feature_disabled(locale),
+            HistoryNotice::StorageUnavailable => l10n::history_storage_unavailable(locale),
+            HistoryNotice::AccessRequired => l10n::history_access_required(locale),
+            HistoryNotice::ItemTooLarge => l10n::history_item_too_large(locale),
+            HistoryNotice::ReadFailed => l10n::history_read_failed(locale),
+            HistoryNotice::CaptureUnavailable => l10n::history_capture_unavailable(locale),
+            HistoryNotice::MonitoringUnavailable => l10n::history_monitoring_unavailable(locale),
+            HistoryNotice::Paused => l10n::history_recording_paused(locale),
+        })
     }
 
     pub fn items(&self) -> &[ClipboardItem] {
@@ -118,6 +136,15 @@ pub struct AppHistoryPageModel {
 }
 
 impl AppHistoryPageModel {
+    pub(crate) fn release_workspace(&mut self) {
+        *self = Self {
+            session_generation: self.session_generation,
+            query_generation: self.query_generation,
+            object_actions_request: self.object_actions_request,
+            ..Default::default()
+        };
+    }
+
     pub fn begin_open(&mut self) {
         self.query.clear();
         self.reset_selection_on_next_snapshot = true;
@@ -335,193 +362,6 @@ impl AppHistoryPageModel {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct TasksPageModel {
-    pub rows: Vec<ExecutionRow>,
-    pub selected: usize,
-    pub detail: Option<ExecutionDetail>,
-    pub detail_request: u64,
-    pub filter: String,
-    pub follow_output: bool,
-    pub follow_output_request: bool,
-    pub diagnostics: bool,
-    pub command_details_open: bool,
-    pub tool_options_open: bool,
-    pub tool_option_selected: usize,
-    pub task_actions_open: bool,
-    pub task_action_selected: usize,
-    pub refresh_generation: u64,
-}
-
-impl Default for TasksPageModel {
-    fn default() -> Self {
-        Self {
-            rows: Vec::new(),
-            selected: 0,
-            detail: None,
-            detail_request: 0,
-            filter: String::new(),
-            follow_output: true,
-            follow_output_request: false,
-            diagnostics: false,
-            command_details_open: false,
-            tool_options_open: false,
-            tool_option_selected: 0,
-            task_actions_open: false,
-            task_action_selected: 0,
-            refresh_generation: 0,
-        }
-    }
-}
-
-impl TasksPageModel {
-    pub fn apply_rows(&mut self, rows: Vec<ExecutionRow>) {
-        let previous_id = self.selected_row().map(|row| row.id.clone());
-        let previous_visible_position = self
-            .visible_indices()
-            .iter()
-            .position(|index| *index == self.selected);
-        self.rows = rows;
-        if self.rows.is_empty() {
-            self.selected = 0;
-            self.detail = None;
-            self.tool_options_open = false;
-            self.tool_option_selected = 0;
-            self.task_actions_open = false;
-            self.task_action_selected = 0;
-            return;
-        }
-        let visible = self.visible_indices();
-        if visible.is_empty() {
-            self.selected = 0;
-            self.detail = None;
-            self.tool_options_open = false;
-            self.tool_option_selected = 0;
-            self.task_actions_open = false;
-            self.task_action_selected = 0;
-            return;
-        }
-        self.selected = previous_id
-            .as_ref()
-            .and_then(|id| {
-                visible
-                    .iter()
-                    .copied()
-                    .find(|index| self.rows[*index].id.as_str() == id.as_str())
-            })
-            .unwrap_or_else(|| {
-                let position = previous_visible_position
-                    .unwrap_or(0)
-                    .min(visible.len() - 1);
-                visible[position]
-            });
-        let selection_changed = self.selected_row().map(|row| &row.id) != previous_id.as_ref();
-        if selection_changed {
-            self.detail = None;
-            self.detail_request = self.detail_request.wrapping_add(1);
-            self.tool_options_open = false;
-            self.tool_option_selected = 0;
-            self.task_actions_open = false;
-            self.task_action_selected = 0;
-        }
-    }
-
-    pub fn selected_row(&self) -> Option<&ExecutionRow> {
-        self.rows.get(self.selected)
-    }
-
-    pub fn detail_is_current(&self) -> bool {
-        match (&self.detail, self.selected_row()) {
-            (Some(detail), Some(row)) => detail.row == *row,
-            (None, None) => true,
-            (None, Some(_)) | (Some(_), None) => false,
-        }
-    }
-
-    pub fn visible_indices(&self) -> Vec<usize> {
-        let terms = self
-            .filter
-            .split_whitespace()
-            .map(str::to_lowercase)
-            .collect::<Vec<_>>();
-        self.rows
-            .iter()
-            .enumerate()
-            .filter(|(_, row)| {
-                terms.is_empty()
-                    || terms.iter().all(|term| {
-                        row.title.to_lowercase().contains(term)
-                            || row.directory.to_lowercase().contains(term)
-                    })
-            })
-            .map(|(index, _)| index)
-            .collect()
-    }
-
-    pub fn request_follow_output(&mut self) {
-        self.follow_output = true;
-        self.follow_output_request = true;
-    }
-
-    pub fn take_follow_output_request(&mut self) -> bool {
-        std::mem::take(&mut self.follow_output_request) && self.follow_output
-    }
-
-    pub fn update_follow_output(&mut self, offset: gpui_kit::Pixels, maximum: gpui_kit::Pixels) {
-        self.follow_output = offset + maximum <= gpui_kit::px(24.);
-        if !self.follow_output {
-            self.follow_output_request = false;
-        }
-    }
-
-    pub fn set_filter(&mut self, filter: String) {
-        self.filter = filter;
-        let visible = self.visible_indices();
-        if !visible.contains(&self.selected) {
-            self.selected = visible.first().copied().unwrap_or(0);
-            self.detail = None;
-            self.detail_request = self.detail_request.wrapping_add(1);
-        }
-    }
-
-    pub fn select_next_visible(&mut self) {
-        self.select_visible_relative(1);
-    }
-
-    pub fn select_previous_visible(&mut self) {
-        self.select_visible_relative(-1);
-    }
-
-    fn select_visible_relative(&mut self, direction: isize) {
-        let visible = self.visible_indices();
-        if visible.is_empty() {
-            return;
-        }
-        let position = visible
-            .iter()
-            .position(|index| *index == self.selected)
-            .map(|index| index as isize)
-            .unwrap_or(-1);
-        let target = (position + direction).clamp(0, visible.len() as isize - 1) as usize;
-        self.selected = visible[target];
-    }
-
-    pub fn begin_detail_request(&mut self) -> u64 {
-        self.detail_request = self.detail_request.wrapping_add(1);
-        self.detail_request
-    }
-
-    pub fn apply_detail(&mut self, request_id: u64, detail: ExecutionDetail) {
-        if request_id == self.detail_request
-            && self
-                .selected_row()
-                .is_some_and(|row| row.id == detail.row.id)
-        {
-            self.detail = Some(detail);
-        }
-    }
-}
-
 #[derive(Clone, Debug, Default)]
 pub struct WebPageModel {
     pub packages: Vec<WebPackage>,
@@ -566,11 +406,17 @@ pub struct FileSearchPageModel {
     pub browsing: bool,
     pub page_generation: u64,
     pub page_in_flight: bool,
-    pub select_after_load: bool,
+    pub advance_from: Option<String>,
     pub space_edit: Option<(String, usize)>,
 }
 
 impl FileSearchPageModel {
+    pub fn cancel_page(&mut self) {
+        self.page_generation = self.page_generation.wrapping_add(1);
+        self.page_in_flight = false;
+        self.advance_from = None;
+    }
+
     pub fn next_filter(&mut self) {
         self.filter = match self.filter {
             FileSearchFilter::All => FileSearchFilter::Files,
@@ -621,6 +467,7 @@ impl FileSearchPageModel {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::host::{ExecutionDetail, ExecutionRow};
 
     fn clipboard_snapshot(ids: &[i64]) -> ClipboardSnapshot {
         ClipboardSnapshot {
@@ -629,8 +476,7 @@ mod tests {
             available: true,
             paused_until_ms: None,
             retention_days: 30,
-            stored_entries: ids.len() as u32,
-            stored_bytes: 0,
+            storage_usage: Some((ids.len() as u32, 0)),
             notice: None,
             items: ids
                 .iter()
@@ -727,17 +573,19 @@ mod tests {
         };
         let detail = |id: &str, output: &str| ExecutionDetail {
             row: row(id),
-            stdout: output.to_owned(),
-            stderr: String::new(),
+            stdout: output.into(),
+            stderr: "".into(),
         };
         let mut model = TasksPageModel::default();
         model.apply_rows(vec![row("a"), row("b")]);
-        let older = model.begin_detail_request();
+        let older = model.begin_detail_request().unwrap();
         model.selected = 1;
-        let latest = model.begin_detail_request();
-        model.apply_detail(older, detail("a", "old"));
+        model.clear_detail();
+        let latest = model.begin_detail_request().unwrap();
+        assert!(!model.finish_detail_request(older));
         assert!(model.detail.is_none());
-        model.apply_detail(latest, detail("b", "latest"));
+        assert!(model.finish_detail_request(latest));
+        model.apply_detail(detail("b", "latest"));
         assert_eq!(
             model.detail.as_ref().map(|detail| detail.stdout.as_str()),
             Some("latest")
@@ -764,22 +612,34 @@ mod tests {
         let mut model = TasksPageModel::default();
         model.apply_rows(vec![row.clone()]);
         assert!(!model.detail_is_current());
-        let request = model.begin_detail_request();
-        model.apply_detail(
-            request,
-            ExecutionDetail {
-                row: row.clone(),
-                stdout: "output".into(),
-                stderr: String::new(),
-            },
-        );
-        assert!(model.detail_is_current());
-        model.apply_rows(vec![row.clone()]);
-        assert!(model.detail_is_current());
-        let mut changed = row;
+        let request = model.begin_detail_request().unwrap();
+        let mut changed = row.clone();
         changed.output_revision += 1;
-        model.apply_rows(vec![changed]);
+        model.apply_rows(vec![changed.clone()]);
+        assert!(model.begin_detail_request().is_none());
+        assert!(model.finish_detail_request(request));
+        model.apply_detail(ExecutionDetail {
+            row,
+            stdout: "output".into(),
+            stderr: "".into(),
+        });
         assert!(!model.detail_is_current());
+
+        let request = model.begin_detail_request().unwrap();
+        assert!(model.finish_detail_request(request));
+        let mut finished = changed.clone();
+        finished.output_revision += 1;
+        finished.status = anywhere_protocol::ExecutionSessionStatus::Succeeded;
+        model.apply_detail(ExecutionDetail {
+            row: finished,
+            stdout: "latest output".into(),
+            stderr: "".into(),
+        });
+        assert!(model.detail_is_current());
+        changed.output_revision += 1;
+        changed.status = anywhere_protocol::ExecutionSessionStatus::Stopping;
+        model.apply_rows(vec![changed]);
+        assert!(model.detail_is_current());
     }
 
     #[test]
@@ -805,12 +665,12 @@ mod tests {
         ]);
         model.set_filter("cargo site".to_owned());
         assert_eq!(
-            model.visible_indices(),
-            vec![0, 2],
+            model.visible_indices().as_ref(),
+            &[0, 2],
             "every filter term must match the task or its directory"
         );
         model.set_filter("cargo".to_owned());
-        assert_eq!(model.visible_indices(), vec![0, 2]);
+        assert_eq!(model.visible_indices().as_ref(), &[0, 2]);
         assert_eq!(
             model.selected_row().map(|row| row.id.as_str()),
             Some("cargo-check")

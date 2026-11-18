@@ -75,8 +75,9 @@ impl ActionMatcher<'_> {
             context.source == ContextSource::FinderSelection
                 && matches!(&context.value, ContextValue::FileSelection(paths) if paths.len() > 1)
         });
+        let roots = crate::core::context::navigation::RootIndex::new(contexts);
         let mut candidates = Vec::new();
-        for context in contexts {
+        for (context_index, context) in contexts.iter().enumerate() {
             let text = match &context.value {
                 ContextValue::Text(text) => text.as_ref(),
                 _ => "",
@@ -213,9 +214,7 @@ impl ActionMatcher<'_> {
                             owned_by.clone().or_else(|| action.owning_app.clone())
                         },
                         menu_path: action.menu_path.clone(),
-                        context_keys: vec![crate::core::context::navigation::root_key(
-                            context, contexts,
-                        )],
+                        context_keys: vec![roots.root_key(context_index).to_owned()],
                         execution_context_id: Some(context.id.clone()),
                         execution_target_label: Some(context.display_detail()),
                         primary_action: action.primary_action,
@@ -228,7 +227,7 @@ impl ActionMatcher<'_> {
                             _ => self.registry.label(&action.group_id),
                         }),
                     },
-                    target: crate::core::search::candidate::CandidateTarget::from_action(
+                    target: crate::core::search::candidate::CandidateTarget::from_shared_action(
                         action.clone(),
                         context.clone(),
                     ),

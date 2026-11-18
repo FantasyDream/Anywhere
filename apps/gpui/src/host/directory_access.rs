@@ -1,13 +1,36 @@
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::{
-    io::{Read as _, Write as _},
+    io::Read as _,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
 };
 
+#[derive(Debug)]
+pub enum DirectoryAccessError {
+    Authorization,
+    Unavailable,
+}
+
+impl std::fmt::Display for DirectoryAccessError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("search directory access unavailable")
+    }
+}
+impl std::error::Error for DirectoryAccessError {}
+
+pub(super) fn localized_error(error: &anyhow::Error, locale: crate::l10n::Locale) -> String {
+    match error.downcast_ref::<DirectoryAccessError>() {
+        Some(DirectoryAccessError::Authorization) => {
+            crate::l10n::search_directory_authorization_failed(locale)
+        }
+        Some(DirectoryAccessError::Unavailable) => {
+            crate::l10n::search_directory_unavailable(locale)
+        }
+        None => error.to_string(),
+    }
+}
+
 const MAX_BOOKMARK_FILE_BYTES: usize = 1024 * 1024;
-static BOOKMARK_TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,7 +52,19 @@ struct StoredBookmark {
 pub struct DirectoryAccess {
     bookmark_file: PathBuf,
     #[cfg(target_os = "macos")]
-    leases: std::sync::Mutex<Vec<objc2::rc::Retained<objc2_foundation::NSURL>>>,
+    leases: std::sync::Mutex<Vec<SecurityScope>>,
+}
+
+#[cfg(target_os = "macos")]
+struct SecurityScope(objc2::rc::Retained<objc2_foundation::NSURL>);
+
+#[cfg(target_os = "macos")]
+impl Drop for SecurityScope {
+    fn drop(&mut self) {
+        // SAFETY: Constructed only after a successful start; this guard owns
+        // exactly one scope, including during partial reconciliation failure.
+        unsafe { self.0.stopAccessingSecurityScopedResource() };
+    }
 }
 
 impl DirectoryAccess {
@@ -43,17 +78,33 @@ impl DirectoryAccess {
 
     /// Saves user-selected directory grants and verifies that the selected
     /// roots can all be restored and opened.
-    pub fn authorize(&self, selected: &[PathBuf], roots: &[String]) -> Result<Vec<String>> {
-        let mut current = self.load().unwrap_or(BookmarkFile {
-            version: 1,
-            bookmarks: Vec::new(),
-        });
+    pub fn authorize(
+        &self,
+        selected: &[PathBuf],
+        roots: &[String],
+        saved_roots: &[String],
+    ) -> Result<Vec<String>> {
+        self.authorize_impl(selected, roots, saved_roots)
+            .map_err(|error| {
+                tracing::warn!(%error, "search_directory_authorization_failed");
+                DirectoryAccessError::Authorization.into()
+            })
+    }
+    fn authorize_impl(
+        &self,
+        selected: &[PathBuf],
+        roots: &[String],
+        saved_roots: &[String],
+    ) -> Result<Vec<String>> {
         let requested = canonical_roots(roots)?;
-        current.bookmarks.retain(|bookmark| {
-            requested
-                .iter()
-                .any(|root| root.to_string_lossy() == bookmark.path)
+        let mut current = self.load().unwrap_or_else(|error| {
+            tracing::warn!(%error, "search_directory_bookmarks_reset");
+            BookmarkFile {
+                version: 1,
+                bookmarks: Vec::new(),
+            }
         });
+        current.keep_roots(&requested, saved_roots);
         for path in selected {
             let path = path
                 .canonicalize()
@@ -82,10 +133,12 @@ impl DirectoryAccess {
                 bytes,
             });
         }
-        current.bookmarks.truncate(16);
+        // Probe the draft grants with temporary scopes. Only reconciliation
+        // of the saved preferences replaces the leases used by live search.
+        #[cfg(target_os = "macos")]
+        Self::resolve_macos(&current, &requested)?;
         self.save(&current)?;
-        let roots = self.reconcile(roots)?;
-        Ok(roots
+        Ok(requested
             .into_iter()
             .map(|path| path.to_string_lossy().into_owned())
             .collect())
@@ -94,14 +147,29 @@ impl DirectoryAccess {
     /// Starts access for exactly the configured roots. Missing, stale, or
     /// unreadable grants are errors; callers must leave file search disabled.
     pub fn reconcile(&self, roots: &[String]) -> Result<Vec<PathBuf>> {
-        let requested = canonical_roots(roots)?;
+        let requested = canonical_roots(roots).map_err(|error| {
+            tracing::warn!(%error, "search_directory_roots_unavailable");
+            DirectoryAccessError::Unavailable
+        })?;
         if requested.is_empty() {
             self.clear();
             return Ok(Vec::new());
         }
         #[cfg(target_os = "macos")]
         {
-            self.reconcile_macos(&requested)
+            (|| {
+                let resolved = Self::resolve_macos(&self.load()?, &requested)?;
+                *self
+                    .leases
+                    .lock()
+                    .map_err(|_| anyhow::anyhow!("search directory access is unavailable"))? =
+                    resolved;
+                Ok(requested)
+            })()
+            .map_err(|error: anyhow::Error| {
+                tracing::warn!(%error, "search_directory_reconcile_failed");
+                DirectoryAccessError::Authorization.into()
+            })
         }
         #[cfg(not(target_os = "macos"))]
         {
@@ -120,11 +188,7 @@ impl DirectoryAccess {
         #[cfg(target_os = "macos")]
         {
             if let Ok(mut leases) = self.leases.lock() {
-                // SAFETY: Each URL is released exactly once by the thread that
-                // owns this controller. NSURL's scope APIs are thread-safe.
-                for url in leases.drain(..) {
-                    unsafe { url.stopAccessingSecurityScopedResource() };
-                }
+                leases.clear();
             }
         }
     }
@@ -157,51 +221,16 @@ impl DirectoryAccess {
     }
 
     fn save(&self, file: &BookmarkFile) -> Result<()> {
-        let parent = self
-            .bookmark_file
-            .parent()
-            .context("search access path has no parent")?;
-        std::fs::create_dir_all(parent)?;
+        anyhow::ensure!(
+            file.bookmarks.len() <= 16,
+            "too many search access bookmarks"
+        );
         let bytes = serde_json::to_vec_pretty(file)?;
         anyhow::ensure!(
             bytes.len() <= MAX_BOOKMARK_FILE_BYTES,
             "search access file is too large"
         );
-        let file_name = self
-            .bookmark_file
-            .file_name()
-            .and_then(|name| name.to_str())
-            .context("search access path has no file name")?;
-        let sequence = BOOKMARK_TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let temporary = parent.join(format!(
-            ".{file_name}.{}.{}.tmp",
-            std::process::id(),
-            sequence
-        ));
-        let result = (|| {
-            let mut options = std::fs::OpenOptions::new();
-            options.write(true).create_new(true);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt as _;
-                options.mode(0o600);
-            }
-            let mut output = options.open(&temporary)?;
-            output.write_all(&bytes)?;
-            output.sync_all()?;
-            drop(output);
-            std::fs::rename(&temporary, &self.bookmark_file)?;
-            Ok::<(), anyhow::Error>(())
-        })();
-        if result.is_err() {
-            let _ = std::fs::remove_file(&temporary);
-        }
-        result?;
-        #[cfg(unix)]
-        if let Ok(directory) = std::fs::File::open(parent) {
-            let _ = directory.sync_all();
-        }
-        Ok(())
+        super::atomic_write_private(&self.bookmark_file, &bytes)
     }
 
     #[cfg(target_os = "macos")]
@@ -232,10 +261,9 @@ impl DirectoryAccess {
     }
 
     #[cfg(target_os = "macos")]
-    fn reconcile_macos(&self, requested: &[PathBuf]) -> Result<Vec<PathBuf>> {
+    fn resolve_macos(file: &BookmarkFile, requested: &[PathBuf]) -> Result<Vec<SecurityScope>> {
         use objc2_foundation::{NSData, NSURLBookmarkResolutionOptions, NSURL};
 
-        let file = self.load()?;
         let mut resolved = Vec::new();
         for root in requested {
             let bookmark = file
@@ -290,18 +318,25 @@ impl DirectoryAccess {
                 "search directory access could not be opened: {}",
                 root.display()
             );
-            resolved.push(url);
+            resolved.push(SecurityScope(url));
         }
-        let mut leases = self
-            .leases
-            .lock()
-            .map_err(|_| anyhow::anyhow!("search directory access is unavailable"))?;
-        // SAFETY: Each previous URL is balanced exactly once.
-        for url in leases.drain(..) {
-            unsafe { url.stopAccessingSecurityScopedResource() };
-        }
-        *leases = resolved;
-        Ok(requested.to_vec())
+        Ok(resolved)
+    }
+}
+
+impl BookmarkFile {
+    fn keep_roots(&mut self, draft: &[PathBuf], saved: &[String]) {
+        let saved = saved
+            .iter()
+            .map(|root| {
+                let path = PathBuf::from(root);
+                path.canonicalize().unwrap_or(path)
+            })
+            .collect::<Vec<_>>();
+        self.bookmarks.retain(|bookmark| {
+            let path = Path::new(&bookmark.path);
+            draft.iter().chain(&saved).any(|root| root == path)
+        });
     }
 }
 
@@ -340,6 +375,66 @@ fn nsdata_bytes(data: &objc2_foundation::NSData) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn staging_directory_grants_preserves_saved_roots() {
+        let temporary = tempfile::tempdir().unwrap();
+        let saved = temporary.path().join("saved-offline").display().to_string();
+        let abandoned = temporary.path().join("abandoned").display().to_string();
+        let access = DirectoryAccess::new(temporary.path().join("bookmarks.json"));
+        access
+            .save(&BookmarkFile {
+                version: 1,
+                bookmarks: vec![
+                    StoredBookmark {
+                        path: saved.clone(),
+                        bytes: vec![1],
+                    },
+                    StoredBookmark {
+                        path: abandoned,
+                        bytes: vec![2],
+                    },
+                ],
+            })
+            .unwrap();
+
+        assert!(access
+            .authorize(&[], &[], std::slice::from_ref(&saved))
+            .unwrap()
+            .is_empty());
+        let bookmarks = access.load().unwrap().bookmarks;
+        assert_eq!(bookmarks.len(), 1);
+        assert_eq!(bookmarks[0].path, saved);
+        assert_eq!(bookmarks[0].bytes, [1]);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn failed_draft_validation_keeps_the_previous_bookmark_file() {
+        let temporary = tempfile::tempdir().unwrap();
+        let requested = temporary.path().join("no-bookmark");
+        std::fs::create_dir(&requested).unwrap();
+        let path = temporary.path().join("bookmarks.json");
+        let access = DirectoryAccess::new(path.clone());
+        access
+            .save(&BookmarkFile {
+                version: 1,
+                bookmarks: vec![StoredBookmark {
+                    path: "/saved-offline".into(),
+                    bytes: vec![1],
+                }],
+            })
+            .unwrap();
+        let previous = std::fs::read(&path).unwrap();
+        assert!(access
+            .authorize(
+                &[],
+                &[requested.display().to_string()],
+                &["/saved-offline".into()]
+            )
+            .is_err());
+        assert_eq!(std::fs::read(path).unwrap(), previous);
+    }
 
     #[test]
     fn roots_are_canonicalized_and_deduplicated() {

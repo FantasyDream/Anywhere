@@ -255,6 +255,7 @@ dependencies = [
  "objc2-quick-look-ui",
  "objc2-service-management",
  "quicklook",
+ "raw-window-handle",
  "rfd",
  "serde",
  "serde_json",
@@ -296,11 +297,8 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.11.1",
- "toml 1.1.8+spec-1.1.0",
- "tracing",
  "unicode-casefold",
  "unicode-normalization",
- "url",
  "zip",
 ]
 
@@ -311,7 +309,6 @@ dependencies = [
  "schemars",
  "serde",
  "serde_json",
- "toml 1.1.8+spec-1.1.0",
 ]
 
 [[package]]

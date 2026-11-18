@@ -2,11 +2,11 @@
 
 当前源码为 V0.14 macOS 15+ GPUI 开发预览。Rust Core 决定业务语义，GPUI
 呈现并处理输入，AppKit / Quick Look / WebKit 只提供系统适配。最后核对：
-2026-11-11。
+2026-11-17。
 
 产品入口是 `apps/gpui/src/app.rs`。当前范围与证据见
 [GPUI 技术方案与验收](mvp-gpui.md)，窗口、焦点和输入契约见
-[GPUI 产品架构](gpui-migration.md)。
+[GPUI 产品架构](archive/gpui-migration.md)。
 
 ## 分层
 
@@ -48,12 +48,11 @@ crates/anywhere-core/src/
 └── persistence/     SQLite、配置、剪贴板、应用历史与 Web 包
 
 apps/gpui/src/
-├── app.rs           产品壳、主窗口、状态栏、热键与独立 Shelf
-├── launcher/        Snapshot gate、页面模型、图标缓存与 GPUI 视图
+├── app.rs           产品壳、主窗口、状态栏、热键及独立 Shelf / Running Tasks 窗口
+├── launcher/        Snapshot gate、页面模型、独立工具窗壳（tool_windows.rs）、图标缓存与视图（controllers/、pages/、settings/）
 ├── settings/        设置展示模型
-├── host/            数据路径、运行时分派、快照投影、偏好、热键与目录授权
-├── platform/        AppKit、状态栏、Quick Look 与 WebView 系统边界
-├── tools/           NativeTool 路由领域
+├── host/            数据路径、运行时分派、快照投影、原生借用协调、偏好、热键与目录授权
+├── platform/        跨平台门面与 macOS（platform/macos/、material/、preview.rs）系统边界
 ├── l10n/            共享本地化的 Rust 投影
 └── ui/              设计 tokens 投影与 theme
 ```
@@ -73,7 +72,7 @@ Session 或执行动作。`app.rs` 最终创建：
 - 主 GPUI 窗口；
 - `NSStatusBar` 状态项；
 - 全局热键控制器；
-- 按需打开的独立 Clipboard Shelf；
+- 按需打开的独立 Clipboard Shelf 与 Running Tasks 窗口；
 - 窗口关闭、清理和状态栏恢复路径。
 
 `LiveLauncher` facade 位于 `apps/gpui/src/host/runtime/mod.rs`，在 blocking
@@ -86,8 +85,10 @@ Application History、Tasks 和 Web 拆分请求方法。`host/runtime_support.r
 
 GPUI 内的 Session / revision / snapshot gate / stream cancellation 由
 `launcher/view/live_state.rs` 持有；File Search、Clipboard、Application History、
-Tasks 的页面工作态由 `launcher/model` 与 `launcher/pages.rs` 的页面模型持有；
-WebView / document / ack 状态由 `launcher/view/web_surface.rs` 持有。根视图负责
+Tasks 的页面工作态由 `launcher/model.rs`、`launcher/pages.rs` 与
+`launcher/pages/tasks.rs` 持有。文件分页在 `launcher/view/controllers/file_search.rs`
+复用 Launcher 快照门禁。Tasks 列表只由任务订阅发布。WebView / document / ack
+状态由 `launcher/view/web_surface.rs` 持有。根视图负责
 路由和跨页意图；activation / retention 位于 `view/navigation.rs`，按键与 IME
 优先级位于 `view/input.rs`，Settings 草稿 / 保存 / 关闭控制器位于
 `view/settings/controller.rs`。原生通道采用有界 admission；激活、恢复、分页和后续 follow
@@ -106,6 +107,9 @@ WebView / document / ack 状态由 `launcher/view/web_surface.rs` 持有。根�
 
 当前应用读取按 Session 单飞。Launcher 或其他已取得焦点的应用不会成为新的
 “来源应用”。缺失某项权限时只移除对应来源，其他动作继续运行。
+
+已安装应用目录由 `application/application_index.rs` 独立刷新。最多进行一次扫描并保留
+一个待执行请求。扫描中的连续激活合并为最新请求，已有目录仍可供当前查询使用。
 
 ## 快照、取消与执行
 
@@ -132,7 +136,7 @@ GPUI 的顺序门禁在 `apps/gpui/src/launcher/snapshot_gate.rs`。
 ## 文件与预览
 
 `features/filesystem/scan.rs` 持有查询寿命，子模块分别负责查询、范围、记录、
-遍历、进度和分页；`result_store.rs` 维护连续外部排序。已显示前缀必须稳定，
+遍历、写入预算（`storage.rs`）、进度和分页；`result_store.rs` 维护连续外部排序。已显示前缀必须稳定，
 查询切换后旧结果不能追加。
 
 系统索引提供早期结果，完整目录遍历补充其余命中。磁盘授权在读取前复验；
@@ -157,10 +161,11 @@ JS 转换并形成普通候选和对象动作。它与 Launcher Usage、剪贴�
 设置草稿、已保存值和保存结果分开管理。每个操作在 blocking runtime 中执行，
 成功后才更新已保存快照；失败保留可重试状态。
 
-- 热键：`apps/gpui/src/host/hotkeys.rs`，注册失败恢复旧绑定。
+- 热键：`apps/gpui/src/host/hotkeys.rs`，持有真实注册状态和最近错误，注册失败恢复旧绑定；菜单提示按实际注册投影，设置页保留诊断并允许重试。
+- 原生启动配置与外观更新：`apps/gpui/src/host/native_window.rs` 通过 AsyncApp 的可失败窗口更新探测借用边界，释放借用后再执行可能同步触发 resize 的 AppKit 操作，最后返回 GPUI 更新页面。嵌套事件循环中借用尚未释放时等待重试；窗口关闭或 owner 释放时取消。普通 GCD 异步入队不能作为 GPUI 借用已释放的保证。
 - 目录：`apps/gpui/src/host/directory_access.rs`，使用安全范围书签。
-- 登录项：`apps/gpui/src/host/login_item.rs`，显式数据目录下不访问系统项。
-- 状态栏与窗口：`apps/gpui/src/platform/mod.rs`。
+- 登录项：`apps/gpui/src/host/login_item.rs` 对照系统状态应用保存值。系统操作失败可在通用设置独立重试，直接使用已保存的启动偏好。显式数据目录下跳过系统操作。
+- 状态栏与窗口：`apps/gpui/src/platform/mod.rs` 与 `apps/gpui/src/platform/macos/`。
 - Quick Look：`apps/gpui/src/platform/preview.rs`。
 - Web document：`apps/gpui/src/web_tool.rs` 与 `launcher/view/`。
 
@@ -170,7 +175,7 @@ helper 行为必须按[验收矩阵](mvp-gpui.md#物理桌验矩阵)单独记录
 ## Web 插件
 
 安装时 Rust 验证 Manifest、资源、摘要和权限。批准后 WebView 只访问固定 origin
-与已验证资源；页面通过 binary IPC 进入统一 broker。Rust 拥有文档 handle、
+与已验证资源；页面通过受限 JSON 字符串帧 IPC 进入统一 broker。Rust 拥有文档 handle、
 请求资格、预算和取消，GPUI 只挂载视图和转发生命周期事件。
 
 替换文档会推进 generation。旧页面的资源请求、ack、状态事件或关闭回调不能影响
@@ -185,7 +190,7 @@ helper 行为必须按[验收矩阵](mvp-gpui.md#物理桌验矩阵)单独记录
 - 新页面：使用 typed `HostView::NativeTool` 路由，在 GPUI 页面层映射已知类型；
   未知或歧义 ID 明确拒绝。
 - 新系统能力：先增加窄 Platform 接口，再由各平台适配器实现。
-- 新第三方能力：优先使用 Web SDK、Manifest 与权限代理；不扩展旧 UI DSL。
+- 新第三方能力：统一通过 `.awplugin` Web 包、TypeScript SDK、Manifest 与权限代理接入；旧声明式 TOML 插件已下线。
 
 ## 验证
 
@@ -197,3 +202,31 @@ git diff --check
 
 `check-architecture.py` 验证 Cargo 依赖与 Core 反向导入。自动化通过不代替真实
 键盘、权限、窗口、Quick Look、WebView、VoiceOver、资源趋势或跨平台桌面产物。
+
+## 本轮组织与通信约定
+
+GPUI 工具列表采用 `uniform_list`，仅投影可见行。设置的七类表单位于
+`apps/gpui/src/launcher/view/settings/`；设置决策在 controller 中，原生窗口延迟
+变更经 `host/native_window.rs` 避免重入 GPUI 的窗口借用。macOS adapter 按
+window、status_item、observers、activation 拆分，以原生 identifier 查找窗口。
+Clipboard Shelf 与 Running Tasks 独立于主窗口，关闭会释放各自实体。
+
+Core Launcher 状态只由 watch 发送最新不可变快照；已移除无生产消费者的旧
+LauncherEvent 广播。动作结果与有限请求仍用有界通道，不缓存过期执行资格。
+历史 Usage、单来源应用历史和剪贴板历史继续各自存储。
+
+SessionCoordinator 封装 Session 锁与 execution epoch；Resolver 的准备 / 复验和
+`session_runtime/publication.rs` 的快照组装分开。完整提交与文件进度快路径都在
+同一组 Session / policy 锁内通过 `publish_state` 投递 watch。普通对象和应用历史
+对象共用请求票据、借用 Usage 查询、动作匹配及发布复验；历史对象保留自己的
+来源、路径和执行守卫。
+
+空查询 offers、Scopes 和快捷键目录使用有界单项缓存，键包含动作注册表、Context、
+Facts、Usage 与排名时钟。动态工厂包含请求版本，静态 offers 在使用时绑定回当前
+Context；缓存不能授权旧执行。开发者 Project 的字符串属性仍是现有捕获元数据契约，
+没有在本轮增加 Core 对 Node / Cargo 类型的反向依赖。
+
+Finder / 浏览器固定只读脚本在串行 OSA 组件内缓存编译，外部 Apple Event 绑定
+捕获的 PID；每次发送与返回均复验进程启动身份，并设置事件和解释器执行期限。
+首次 OSA 编译与系统授权仍需独立桌验。资源打开统一通过 NSWorkspace，保留
+选定 JetBrains 安装的显式参数交接。

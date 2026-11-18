@@ -904,6 +904,7 @@ async fn source_application_is_frozen_while_frontmost_is_queried_live() {
             command,
             &input,
             input.session_id,
+            input.revision,
             Some(&frozen),
             &frozen.bundle_id,
         )

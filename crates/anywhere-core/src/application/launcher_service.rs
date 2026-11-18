@@ -47,8 +47,6 @@ pub trait LauncherApplication: Send + Sync {
     ///
     /// Presentation only: it never runs while a snapshot is being built.
     fn application_icon(&self, candidate_id: &str) -> Result<Option<Vec<u8>>>;
-    /// Subscribe to state updates for one session, replaying the latest snapshot.
-    fn subscribe(&self, session_id: SessionId) -> SessionSubscription;
     fn deactivate(&self, session_id: SessionId) -> Result<()>;
 }
 
@@ -187,10 +185,7 @@ impl Application {
                 .lock()
                 .map_err(|_| anyhow::anyhow!("Web service unavailable"))?
                 .suspend();
-            self.resolver
-                .execution_epoch
-                .fetch_add(1, std::sync::atomic::Ordering::AcqRel)
-                + 1
+            self.resolver.session.advance_execution() + 1
         };
         let resolver = self.resolver.clone();
         let files = self.file_search_source.clone();
@@ -200,15 +195,12 @@ impl Application {
                 anywhere_protocol::policy::LAUNCHER_RETENTION_MS,
             ))
             .await;
-            let Ok(mut session) = resolver.session.lock() else {
+            let Ok(mut session) = resolver.session.access() else {
                 return;
             };
             if session.state.session_id == session_id
                 && session.suspended
-                && resolver
-                    .execution_epoch
-                    .load(std::sync::atomic::Ordering::Acquire)
-                    == epoch
+                && resolver.session.execution_epoch() == epoch
             {
                 session.invalidate_execution();
                 if let Ok(mut web) = web_plugins.lock() {
@@ -231,9 +223,7 @@ impl Application {
                 return Ok(None);
             }
             session.suspended = false;
-            self.resolver
-                .execution_epoch
-                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+            self.resolver.session.advance_execution();
         }
         self.resolver.recompute_current(session_id);
         if let Some(state) = self.latest_state(session_id) {
@@ -332,9 +322,7 @@ impl Application {
             .catalog
             .publish(selection, persist, |registry| {
                 web.invalidate();
-                self.resolver
-                    .execution_epoch
-                    .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                self.resolver.session.advance_execution();
                 session.actions = registry;
                 session.invalidate_execution();
                 self.resolver.abandon_session();
@@ -360,9 +348,7 @@ impl Application {
             .set_sources(finder, selected_text, browser_page, clipboard, || {
                 // Policy and execution revocation share the capture -> session lock order.
                 if let Ok(mut session) = self.session() {
-                    self.resolver
-                        .execution_epoch
-                        .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
+                    self.resolver.session.advance_execution();
                     session.execution = Default::default();
                     if let Ok(mut web) = self.web_plugins.lock() {
                         web.invalidate();
@@ -372,9 +358,13 @@ impl Application {
     }
 
     pub fn set_excluded_apps(&self, ids: Vec<String>) {
-        if let Err(error) = self.resolver.application_index.set_excluded(ids) {
-            tracing::warn!(%error, "application_exclusions_update_failed");
-            return;
+        match self.resolver.application_index.set_excluded(ids) {
+            Ok(true) => {}
+            Ok(false) => return,
+            Err(error) => {
+                tracing::warn!(%error, "application_exclusions_update_failed");
+                return;
+            }
         }
         if let Ok(session) = self.session() {
             let session_id = session.state.session_id;
@@ -483,7 +473,7 @@ impl Application {
     ) -> Result<std::sync::MutexGuard<'_, crate::application::session_model::LauncherSession>> {
         self.resolver
             .session
-            .lock()
+            .access()
             .map_err(|_| anyhow::anyhow!("session lock poisoned"))
     }
 
@@ -555,7 +545,7 @@ impl Application {
         let resolver = self.resolver.clone();
         // Only continue for the session that is still current; otherwise the late
         // result could not be published anyway.
-        match self.resolver.session.lock() {
+        match self.resolver.session.access() {
             Ok(session) if session.state.session_id == session_id => {}
             _ => return,
         }
@@ -674,28 +664,23 @@ impl LauncherApplication for Application {
         self.platform.application_icon(&path, ICON_PIXELS)
     }
 
-    fn subscribe(&self, session_id: SessionId) -> SessionSubscription {
-        SessionSubscription {
-            receiver: self.resolver.events.subscribe(),
-            session_id,
-            current: self.resolver.current.clone(),
-            latest: self.resolver.latest_tx.subscribe(),
-        }
-    }
-
     fn deactivate(&self, session_id: SessionId) -> Result<()> {
         let mut session = self.session()?;
-        if session.state.session_id == session_id {
-            self.web_plugins
-                .lock()
-                .map_err(|_| anyhow::anyhow!("Web service unavailable"))?
-                .invalidate();
-            self.resolver
-                .execution_epoch
-                .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
-            session.invalidate_execution();
-            self.resolver.abandon_session();
-            self.file_search_source.clear();
+        if session.state.session_id != session_id || self.resolver.is_abandoned() {
+            return Ok(());
+        }
+        self.web_plugins
+            .lock()
+            .map_err(|_| anyhow::anyhow!("Web service unavailable"))?
+            .invalidate();
+        self.resolver.session.advance_execution();
+        session.invalidate_execution();
+        self.resolver.abandon_session();
+        let scan = self.file_search_source.take_cancelled_scan();
+        drop(session);
+        if let (Some(scan), Ok(runtime)) = (scan, tokio::runtime::Handle::try_current()) {
+            // Dropping the last scan reference can unlink its temporary workspace.
+            runtime.spawn_blocking(move || drop(scan));
         }
         Ok(())
     }
@@ -711,67 +696,4 @@ pub enum SnapshotWait {
 
 fn snapshot_cursor(state: &LauncherState) -> u64 {
     (u64::from(state.revision) << 32) | u64::from(state.snapshot_seq)
-}
-
-pub struct SessionSubscription {
-    receiver: tokio::sync::broadcast::Receiver<LauncherEvent>,
-    session_id: SessionId,
-    current: Arc<std::sync::atomic::AtomicU64>,
-    latest: watch::Receiver<Option<Arc<LauncherState>>>,
-}
-
-impl SessionSubscription {
-    /// Latest committed state for this subscription's session.
-    pub fn latest_state(&self) -> Option<LauncherState> {
-        let latest = self.latest.borrow();
-        let state = latest.as_ref()?;
-        (state.session_id == self.session_id).then(|| (**state).clone())
-    }
-
-    fn superseded(&self) -> bool {
-        let current = self.current.load(std::sync::atomic::Ordering::Acquire);
-        current == 0 || (current >> 32) != u64::from(self.session_id)
-    }
-
-    pub async fn recv(&mut self) -> Result<LauncherEvent> {
-        loop {
-            if self.superseded() {
-                anyhow::bail!("subscription superseded");
-            }
-            tokio::select! {
-                event = self.receiver.recv() => {
-                    let event = event?;
-                    let (session_id, revision) = match &event {
-                        LauncherEvent::ContextAdded { context } => {
-                            (context.session_id, context.revision)
-                        }
-                        LauncherEvent::ActionsUpdated { state } => {
-                            (state.session_id, state.revision)
-                        }
-                        LauncherEvent::ProviderCompleted {
-                            session_id,
-                            revision,
-                            ..
-                        }
-                        | LauncherEvent::ProviderFailed {
-                            session_id,
-                            revision,
-                            ..
-                        } => (*session_id, *revision),
-                    };
-                    if session_id == self.session_id
-                        && self.current.load(std::sync::atomic::Ordering::Acquire)
-                            == crate::core::context::engine::stamp(session_id, revision)
-                    {
-                        return Ok(event);
-                    }
-                }
-                changed = self.latest.changed() => {
-                    if changed.is_err() {
-                        anyhow::bail!("subscription closed");
-                    }
-                }
-            }
-        }
-    }
 }

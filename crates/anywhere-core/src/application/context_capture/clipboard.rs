@@ -112,7 +112,7 @@ impl ContextCaptureService {
             if !policy.allows(ContextSource::Clipboard, token) {
                 return;
             }
-            let Ok(mut session) = self.resolver.session.lock() else {
+            let Ok(mut session) = self.resolver.session.access() else {
                 return;
             };
             if session.state.session_id != session_id

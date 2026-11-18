@@ -3,6 +3,7 @@ use anywhere_core::features::{
     clipboard::service::HistoryNotice as ClipboardNotice,
 };
 use anywhere_protocol::ExecutionSessionStatus;
+use gpui_kit::SharedString;
 use std::path::PathBuf;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -21,8 +22,7 @@ pub struct ClipboardSnapshot {
     pub available: bool,
     pub paused_until_ms: Option<i64>,
     pub retention_days: u32,
-    pub stored_entries: u32,
-    pub stored_bytes: u32,
+    pub storage_usage: Option<(u32, u32)>,
     pub notice: Option<ClipboardNotice>,
     pub items: Vec<ClipboardItem>,
 }
@@ -96,8 +96,8 @@ pub struct ExecutionRow {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExecutionDetail {
     pub row: ExecutionRow,
-    pub stdout: String,
-    pub stderr: String,
+    pub stdout: SharedString,
+    pub stderr: SharedString,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -1,6 +1,24 @@
 use super::*;
 
 impl LauncherView {
+    pub(super) fn row_popup(
+        window: &Window,
+        scroll: &gpui_kit::UniformListScrollHandle,
+        selected: usize,
+        panel: AnyElement,
+    ) -> AnyElement {
+        let state = scroll.0.borrow();
+        let bounds = state.base_handle.bounds();
+        let height = state
+            .last_item_size
+            .map(|size| size.item.height)
+            .unwrap_or(px(64.));
+        let top = (bounds.origin.y + state.base_handle.offset().y + height * selected as f32)
+            .max(bounds.origin.y)
+            .min(bounds.bottom() - height);
+        Self::page_popup(window, top, px(metrics::SPACE_MD), panel)
+    }
+
     pub(super) fn page_popup(
         window: &Window,
         top: gpui_kit::Pixels,

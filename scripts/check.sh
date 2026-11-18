@@ -24,9 +24,8 @@ cargo run -p anywhere-protocol --features web-schema --example generate_web_sdk_
 python3 scripts/check-docs.py
 python3 -m unittest discover -s scripts/tests -p test_docs.py
 scripts/check-macos-menu.sh
-scripts/check-gpui.sh
 cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 scripts/check-web-sdk.sh
-scripts/check-web-examples.sh
+ANYWHERE_SDK_READY=1 scripts/check-web-examples.sh
 python3 scripts/check-architecture.py

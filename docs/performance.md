@@ -32,6 +32,10 @@ cargo run -p anywhere-core --example memory_measure --release --locked
 或脱敏目录。报告至少包含 p50、p95、最大值、样本数和取消 / 错误计数，不保留
 查询正文、剪贴板内容或真实用户路径。
 
+GPUI 的剪贴板结果页和 Shelf 一次读取录制状态与匹配条目。设置页单独读取已存条数
+和字节数。Tasks 合并选中任务在途期间的详情更新，减少重复拷贝 stdout 和 stderr。
+整 App footprint 仍待实测。
+
 ## GPUI 桌面测量
 
 GPUI 当前显式记录：
@@ -53,10 +57,28 @@ hotkey_to_visible_ms
 物理 IME 候选选择、Quick Look 首帧、WebKit 内容呈现和窗口合成必须单独测量，
 不能从 Rust 或 GPUI 状态测试推断。
 
+### Launcher 隐藏与过渡验收
+
+在同一台 Mac、同一份测试数据和同一缩放下对比优化前后的 Release 构建。记录构建编号、
+PID、macOS 版本及显示刷新率。空白首页与保留会话分别采样，连续操作至少五轮。
+
+| 操作 | 验收现象 |
+| --- | --- |
+| 热键或状态栏唤起，键入、快速删除，按 Esc 清查询 | 输入框获得焦点且可立即输入。窗口从顶边稳定调整，无中间空白边框、旧内容拉伸或清空时闪回 |
+| 中文组字，切换 Current App、Global、文件搜索与 Settings | 组字时的键盘路由保持原样，切页后可立即操作目标页；打开系统「减少动态效果」后重复验证 |
+| 空白页隐藏，再切到另一个前台应用立即唤醒 | 隐藏后旧快照和图标缓存释放，唤醒后捕获新的前台应用 |
+| 带查询、较多结果或文件页隐藏 | 15 秒内恢复查询、选择和可继续的操作；超过 15 秒唤醒后开始新会话 |
+| 保留会话期间从状态栏打开 Settings 并修改未保存的设置 | 保留期限结束后草稿仍可保存或取消，关闭设置后 Launcher 正常获得焦点 |
+
+分别记录空闲、操作后可见、隐藏约 1 秒、隐藏约 16 秒和再次唤醒的主进程 footprint。
+验证包含 WebView 的场景时单记该会话所属的 WebKit helper。比较每阶段的中位数和多轮峰值，
+同时记录 `launcher_workspace_retention_expired` 与 `launcher_window_resized_atomically` 的时间。
+自动化回归可验证 Rust 快照和缓存对象的所有权释放，进程 footprint 下降幅度以实测为准。
+
 ### 2026-11-13 合成投影基线
 
-`projection_measure` 使用 10,000 条合成候选，在 Release 构建下预热 10 次并
-采集 100 次。它只测 `LauncherModel::apply_shared` 的展示投影，不读取用户数据，
+`projection_measure` 的旧样本输入了 10,000 条合成候选，但当时模型最多投影 7 行。
+该样本在 Release 构建下预热 10 次并采集 100 次，只测 `LauncherModel::apply_shared` 的展示投影，不读取用户数据，
 也不包含 Core 查询、GPUI 布局 / 栅格化、窗口合成或显示器呈现：
 
 ```bash
@@ -71,7 +93,7 @@ cargo run -p anywhere-gpui --example projection_measure --release --locked
 | 共享候选列表，仅元数据变化 | 0.208 µs | 0.25 µs | 3.375 µs |
 | 全新模型的完整可见投影 | 28.625 µs | 31.833 µs | 95.458 µs |
 
-该表用于发现重复投影回归，不是整 App 性能承诺。机器、构建、fixture 或场景
+上表代表旧的紧凑投影。当前完整列表的同机样本见下节。机器、构建、fixture 或场景
 改变时不得直接比较数值；比较最终实现与基线时还应记录 Core 发布、通道等待、
 GPUI notify / resize 次数和实际首帧证据。
 
@@ -85,6 +107,51 @@ GPUI notify / resize 次数和实际首帧证据。
 Session / Core 查询决定。
 这个单次样本不能代表慢磁盘、权限提示或冷 LaunchServices；后续 A/B 必须使用
 同一个阻塞存储 fixture，并同时记录主线程是否被占用、Ready 延迟和首次可用快照。
+
+### 2026-11-18 文件结果投影配对测量
+
+Apple M5、16 GB、macOS 27.2.1、arm64、Rust 1.100.0-beta.7 Release。
+同一 fixture 投影 10,000 行文件搜索结果，进度更新用例选中末行，两边各预热
+10 次、采样 100 次。命令仍为上面的 `projection_measure`。
+
+| 场景 | 修改前 p50 / p95 / max | 修改后 p50 / p95 / max |
+| --- | ---: | ---: |
+| 共享列表，仅进度等元数据变化 | 39.208 / 39.833 / 41.917 µs | 0.084 / 0.166 / 1.292 µs |
+| 完整投影 10,000 行 | 1480.792 / 1920.875 / 2089.500 µs | 1318.416 / 1671.125 / 1830.667 µs |
+
+共享列表保持同一行选择，省去按 ID 扫描及重建 Scope。完整投影按需迭代并使用
+借用 ID 去重，省去候选引用数组与临时 ID 副本。数据只包含模型投影，未测量
+Core、布局、首帧或整 App 内存。
+
+## 2026-11-16 图标请求与任务文本优化
+
+图标缺失、读取失败或通道中断会在原 128 项 LRU 中记录 30 秒的失败缓存，期间
+保持普通图标占位，避免完成回调立即再次读取同一图标。到期后允许后续候选更新
+重新请求，不启动独立重试计时器。隐藏窗口和其他工具页不补发 Launcher 图标请求；
+返回 Launcher 后继续补齐。图标失败不覆盖页面业务提示，旧 ticket 不能结束新请求。
+
+Tasks 的两路有界输出在 Host 投影为 GPUI `SharedString`，详情、当前输出控件和
+复制按钮闭包共享同一文本。只在明确复制时构造系统剪贴板所需的字符串，不改变
+Core 的 128 KiB / stream 限额、截断、换行或 Unicode 内容。
+
+同机配对合成测量使用 Apple M5 / 16 GB、macOS 27.2.1、arm64、Rust
+1.100.0-beta.7 Release；每路 128 KiB，预热 100 次、采样 1,000 次：
+
+| 指标 | 修改前 | 修改后 |
+| --- | ---: | ---: |
+| 每次详情 clone 申请的 Rust 堆字节 | 262,206 B | 62 B |
+| clone p50 | 3.708 µs | 0.167 µs |
+| clone p95 | 4.208 µs | 0.209 µs |
+| clone max | 41.583 µs | 3.084 µs |
+
+命令为 `cargo run -p anywhere-gpui --example task_detail_measure --release --locked`，
+原始结果见 [配对样本](archive/benchmarks/gpui-task-detail-2026-11-16.json)。
+剩余 62 B 是该 fixture 的任务元数据副本。这里只测详情 clone，排除初次 Host
+投影、显式复制、Core 读取、文本布局、GPU 和原生呈现；申请字节不是 RSS 或
+footprint，也不代表整 App 内存或界面延迟按同一比例下降。
+
+Tasks 的筛选复用同一匹配规则；每行标题只做一次小写转换，目录只在标题不能
+满足词项时按需转换一次。此处没有单独耗时测量，不据此给出整页性能数字。
 
 ## 历史材料
 

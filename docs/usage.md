@@ -5,8 +5,8 @@ macOS 现行使用指南；应用历史属于 V0.14 开发预览。实际版本�
 
 ## 1. 启动与授权
 
-打开 `Anywhere.app`。首次启动会显示 Launcher，之后通过全局快捷键或菜单栏 `A`
-恢复；Settings 与 Running Tasks 从 Launcher 或对应 Action 进入。
+打开 `Anywhere.app` 后在菜单栏后台驻留；通过全局快捷键或菜单栏搜索图标
+恢复 Launcher；Settings 与 Running Tasks 从 Launcher 或对应 Action 进入。
 
 部分能力需要系统授权，可根据使用场景开启：
 
@@ -17,7 +17,7 @@ macOS 现行使用指南；应用历史属于 V0.14 开发预览。实际版本�
 | 目录访问 | 搜索用户指定的目录 | Anywhere Settings → Search |
 | 完全磁盘访问（可选） | 扩大受保护目录的可访问范围 | macOS 系统设置 → 隐私与安全性 → 完全磁盘访问 |
 
-文件搜索在启动和修改搜索范围时准备目录授权，查询只使用可访问的范围。受保护或无法读取的位置会跳过；完全磁盘访问需要用户在系统设置中开启。
+文件搜索默认关闭；先在 Settings → Search 显式授权目录，查询只使用已授权范围，默认不含隐藏文件。受保护或无法读取的位置会跳过；完全磁盘访问需要用户在系统设置中开启。
 
 未授权的来源不会阻止其他功能。例如，缺少辅助功能权限时隐藏应用菜单，仍可使用不依赖该权限的动作。在 Settings → Context 查看和开关应用环境来源；剪贴板的采集状态、自动填入与历史配置统一位于 Settings → Clipboard。
 
@@ -25,8 +25,8 @@ macOS 现行使用指南；应用历史属于 V0.14 开发预览。实际版本�
 
 | 方式 | 如何进入 | 用途 |
 |---|---|---|
-| **Current App** | 默认按 `⌘⌥Space` | 操作当前环境，搜索应用菜单及适用的目录、Git、开发项目等动作 |
-| **Global Search** | 默认按 `⌘Space`，或通过搜索图标菜单切换 | 搜索应用、动作和收藏目录，查找 File Search 等工具入口 |
+| **Current App** | 默认按 `⌃⌥Space` | 操作当前环境，搜索应用菜单及适用的目录、Git、开发项目等动作 |
+| **Global Search** | 默认按 `⌥Space`，或通过搜索图标菜单切换 | 搜索应用、动作和收藏目录，查找 File Search 等工具入口 |
 | **内容输入** | Current App 唤醒时自动填入可识别的选中文本或新复制内容 | 操作这份内容，例如复制 URL、打开路径 |
 
 Current App 空输入首页和各动作 Scope 共用同一顺序：当前来源应用内执行次数优先，同次数看最近使用，再用上下文和默认优先级兜底。首页只显示前几项，没有动作白名单或额外推荐加分；常用的复制分支名等动作也能进入首页。菜单的长期历史仍按身份安全边界隔离，关键词搜索和文件 / 应用历史列表的排序不受此规则改变。
@@ -35,7 +35,7 @@ Current App 聚合当前环境的所有可用动作。顶部的 **Folder、Git�
 
 内容输入的优先级是：
 
-1. 当前应用中能解析为 URL、真实文件 / 目录等具体 Context，或被已批准且启用的 Web 工具命令识别的选中文本。
+1. 当前应用中能解析为 URL、真实文件 / 目录等具体 Context，或被已批准且启用的 Web 工具（宿主匹配器或后台解析器）识别的选中文本。
 2. 距今不超过 **15 秒**、复制时间可确认，且满足同样识别条件的剪贴板内容。
 3. 没有任何识别器或命令匹配的普通文本、无效对象或没有可用内容时，进入 Current App。
 
@@ -52,11 +52,11 @@ Actions 和预览仍先退出所属局部层。更多规则见
 
 - **Clipboard History / 剪贴板**：在 Launcher 搜索框下打开历史页，适合查找后复制。
 - **Clipboard Shelf / 剪贴板悬浮窗**：打开 480×520 的独立置顶 GPUI 窗口。
-  单击只选择，Enter / 选中行的复制按钮复制并保留窗口焦点。可见时更新当前查询，
+  单击只选择，Enter / 双击或对象操作中的复制项复制并保留窗口焦点。可见时更新当前查询，
   重复触发会激活同一窗口，若已最小化则先恢复。窗口可缩放到最小 360×360；
-  每次打开都定位到鼠标所在屏幕右下角，打开页面不会自动开启采集。
+  首次打开定位到鼠标所在屏幕右下角；可拖动，本次进程内重新打开保留位置，打开页面不会自动开启采集。
 
-悬浮窗顶部提供搜索，底部提供复制、预览、删除与刷新按钮；复制反馈留在窗口内。
+悬浮窗顶部提供搜索，选中行提供预览与更多操作入口（以及 `↵` 回车复制提示）；复制、复制并返回原应用、删除和刷新位于对象操作菜单中，复制反馈留在窗口内。
 空列表仍可刷新。`⌘K` 使用当前选中对象打开统一对象操作。
 
 悬浮窗支持完整键盘操作，无需 Tab：
@@ -67,8 +67,8 @@ Actions 和预览仍先退出所属局部层。更多规则见
 | 复制当前条目 | `Enter`；复制后仍可继续选择 |
 | 打开操作列表 | `⌘K` 或右键条目；`↑↓` 选择、`Enter` 执行 |
 | 开关系统预览 | macOS `⌘Y` 或按钮；查询编辑器聚焦、列表已选中且输入法未组合时空格也可切换 |
-| 删除当前条目 | Delete / Backspace 或按钮 |
-| 刷新当前查询 | Refresh 按钮 |
+| 删除当前条目 | `⌘⇧⌫` 或对象操作中的删除 |
+| 刷新当前查询 | `⌘R` 或 `⌘K` 菜单中的刷新 |
 | 退出 | `Esc` 先关闭预览 / 操作，再隐藏悬浮窗 |
 
 预览保留列表并跟随选择，关闭后保留查询和条目位置；浏览列表时不加载完整正文 / 图片。鼠标悬停和拖动不会复制，删除确认绑定原条目，不因后台刷新而指向另一条。
@@ -85,9 +85,9 @@ Actions 和预览仍先退出所属局部层。更多规则见
 开发第三方插件请先看 [开发指南](plugin-development.md)：SDK 导出包内含独立模板
 和打包工具，不需要修改主程序或安装 Rust。
 
-在 Settings → Features → Web tools → Import 选择可信的本地 `.awplugin` 包，核对版本、内容摘要和权限后批准；随即可以搜索工具名称，无须重启。该区域还支持禁用 / 撤销、卸载、更新和恢复上一批准版本。批准更新会立即撤销旧 Web 调用，不会等待旧页面编辑完成；先保存需要保留的内容。卸载会清理该安装的私有 KV，没有“保留数据”选项。当前仅供 macOS 本地开发验收，不开放插件市场或自动更新；同 ID 的本地包更新不验证发布者身份。
+在 Settings → Features → Manage…（Web tools）→ Import… 选择可信的本地 `.awplugin` 包，核对版本、内容摘要和权限后批准；随即可以搜索工具名称，无须重启。该区域还支持禁用 / 撤销、卸载、更新和恢复上一批准版本。批准更新会立即撤销旧 Web 调用，不会等待旧页面编辑完成；先保存需要保留的内容。卸载会清理该安装的私有 KV，没有“保留数据”选项。当前仅供 macOS 本地开发验收，不开放插件市场或自动更新；同 ID 的本地包更新不验证发布者身份。
 
-运行 `python3 scripts/build-web-examples.py` 构建 [JSON Workspace](../plugins/examples/json-workspace/README.md) 与 [Text Pad](../plugins/examples/web-text/README.md)。导入 JSON 包后搜索 `JSON Workspace`：左侧输入停顿后自动格式化，上方默认使用 JavaScript，也可切到 JSONPath 并输入公式，`$` / `this` 自动补入，右侧展示和复制结果；`⌘↵` 立即查询，`⌘⇧C` 复制当前结果。输入 / 输出各最多 1 MiB，不保存正文，只保存缩进偏好。声明宿主 `inputMatchers` 的新版 JSON 包还支持自动识别对象 / 数组：直接输入 JSON 可匹配 Action，选择后带入原文；选中文本和 15 秒内新复制内容沿用自动填入规则。自动识别最多 16 KiB / 128 层，不将普通标量误当成 JSON。
+运行 `python3 scripts/build-web-examples.py` 构建 [JSON Workspace](../plugins/examples/json-workspace/README.md)、[Text Pad](../plugins/examples/web-text/README.md) 与 [JSON Summary](../plugins/examples/background-context/README.md) 三个示例包。导入 JSON 包后搜索 `JSON Workspace`：左侧输入停顿后自动格式化，上方默认使用 JavaScript，也可切到 JSONPath 并输入公式，`$` / `this` 自动补入，右侧展示和复制结果；`⌘↵` 立即查询，`⌘⇧C` 复制当前结果。输入 / 输出各最多 1 MiB，不保存正文，只保存缩进偏好。JSON Workspace（v0.7.1）通过按需后台 QuickJS 解析器自动识别 JSON 对象 / 数组及转义 JSON 容器：直接输入 JSON 可匹配对应复制或打开 Action，选择后带入原文；选中文本和 15 秒内新复制内容沿用自动填入规则，不将普通标量误当成 JSON。
 
 Web 工具复用 Launcher 页框，页头省略号提供 Reload Tool / Back to Search，
 Esc 返回搜索，隐藏后的输入仍保留 15 秒。插件安装时批准剪贴板读写权限，运行时
@@ -103,15 +103,14 @@ Web Action ID。
 
 | 按键 | 操作 |
 |---|---|
-| `⌘⌥Space` | 唤醒 Current App |
-| `⌘Space` | 唤醒 Global Search |
+| `⌃⌥Space` | 唤醒 Current App |
+| `⌥Space` | 唤醒 Global Search |
 | `↑` / `↓` | 选择候选项 |
 | `Enter` | 执行动作、打开对象或进入子菜单 |
 | `⌘K` | 打开选中对象的二级 Actions；支持菜单浏览时也可进入菜单 |
 | `Tab` / `Shift+Tab` | 向后 / 向前切换 Scope；文件搜索中切换文件类型（兼容 Ctrl 组合） |
 | `→` / `←` | 输入为空时进入 / 返回菜单；有输入时保留光标移动 |
 | `Esc` | 局部层先返回上一级；根页按 Content → Current App → Global → 隐藏返回 |
-| `⌘W` / `⌘M` | 关闭 / 最小化 Settings、Running Tasks 独立窗口 |
 
 Launcher 的 `Tab` / `Shift+Tab` 用于切换可见分类，不遍历控件；中文组词期间交给输入法。重复当前唤醒入口可隐藏窗口，点击其他窗口也会隐藏。
 
@@ -152,9 +151,10 @@ Launcher 的 `Tab` / `Shift+Tab` 用于切换可见分类，不遍历控件；�
 
 在 Settings → Search 可以：
 
-- 开关文件搜索，设置搜索目录（每行一个绝对路径，留空使用 Home）。
-- 开关隐藏文件；新配置默认包含隐藏文件。
-- 按目录名配置排除项，例如 `node_modules`。排除会缩小搜索范围。
+- 开关文件搜索，配置并授权至少一个绝对路径搜索目录（最多 8 个目录）。
+- 选择搜索引擎（System Index、Ripgrep 或 Combined）。
+- 开关隐藏文件；新配置默认不包含隐藏文件。
+- 按目录名配置排除项（最多 32 项），例如 `node_modules`。排除会缩小搜索范围。
 - 为保存的搜索目录授权，按需要打开完全磁盘访问设置。
 
 搜索结合 **Spotlight 快速结果与完整文件名遍历**，无需安装 `rg`。遍历包含未索引文件和被 `.gitignore` 忽略的文件；隐藏文件受设置控制。符号链接本身可列出，不沿链接继续遍历目标。可搜索范围受目录设置、排除项和系统权限限制。
@@ -183,18 +183,14 @@ Maven、Gradle 优先使用项目 wrapper。识别阶段只读取项目标记及
 
 ## 7. 自定义快捷键与扩展
 
-**快捷键：** Settings → Shortcuts → Action shortcuts 支持固定动作绑定、Global 开关、按应用 / Context 分派的意图，以及配置导入 / 导出。触发时重新解析适用对象：一个目标直接执行，多个目标先选择，缺少 Context 时不执行。
+**快捷键：** Settings → Shortcuts → Action shortcuts 支持固定动作绑定、Global 开关，以及按应用 / Context 分派的上下文快捷键规则。触发时重新解析适用对象：一个目标直接执行，多个目标先选择，缺少 Context 时不执行。
 
 动态应用菜单不显示原应用快捷键，当前不支持长期自定义绑定；菜单也暂不记录使用频次，避免不稳定菜单身份关联旧记录。
 
-**扩展：** Settings → Features 管理第一方模块及已安装的声明式插件。
+**扩展：** Settings → Features 管理第一方内置模块开关，并通过 **Manage…** 进入 Web 工具管理页面导入、启停、更新、回滚或卸载 `.awplugin` 包。
 
-- 内置模块包括 URL、Git、Maven、Gradle、Node、Rust、Spring Boot、收藏目录、剪贴板历史。
-- 用户插件放入 `~/Library/Application Support/Anywhere/plugins/`，支持 `*.toml` 或子目录中的 `manifest.toml`；安装或修改后重启；新批准下次启动生效，撤销立即失效。**Refresh** 只刷新设置和业务数据。
-- v2 / v3 插件先 **Review permissions → Allow for next launch**，然后重启激活。撤销权限或关闭模块后，相关候选与快捷键立即失效；绑定配置保留以便重新启用。此批准流程与 Web 包批准后即时可用的流程不同。
-- 现有外部 v2 支持声明式复制、打开 URL / 文件，v3 有 Detail / KeyValue 开发切片；这条 DSL 路线停止扩展。新插件使用 WebView，本地页面、安装入口和 [SDK](../packages/plugin-sdk/README.md) 已进入 macOS 开发预览；按 [开发指南](plugin-development.md) 开始。平台与发行边界见 [方案与进度](web-plugin-design.md)，Terminal 延后。
-
-示例：[v1 搜索插件](../plugins/examples/search.toml)、[v2 复制插件](../plugins/examples/copy-v2.toml)、[v3 Detail 插件](../plugins/examples/context-detail.toml)。搜索示例中的 `example.com` 是占位地址，需要自行配置；应用不自动安装 Web Search 插件。
+- 内置模块包括 URL、Git、Maven、Gradle、Node、Rust、Spring Boot、收藏目录、剪贴板历史与应用历史；关闭模块后相关识别、候选与快捷键资格立即撤销，绑定配置保留以便重新启用。
+- 第三方插件统一采用 WebView + 按需后台 QuickJS 架构，本地包安装入口与 [SDK](../packages/plugin-sdk/README.md) 已进入 macOS 开发预览；按 [开发指南](plugin-development.md) 开始，平台与发行边界见 [方案与进度](web-plugin-design.md)。早期外部 TOML 声明式插件协议已退役。
 
 ## 8. 本地数据
 
@@ -204,10 +200,8 @@ macOS 数据目录：`~/Library/Application Support/Anywhere/`。
 |---|---|
 | `settings.json` | 唤醒键、Action 快捷键、来源开关及搜索设置 |
 | `usage.sqlite3` | 动作 ID、Context 类型、来源应用、成功执行次数与时间 |
-| `features.json` | 内置功能开关，启动时从旧配置迁移 |
-| `extensions.json` | 外部插件开关和能力授权；旧第一方键保留为迁移备份 |
-| `extension-storage.sqlite3` | 按模块隔离的持久数据，例如主动收藏的目录路径 |
-| `plugins/` | 用户安装的旧声明式插件 |
+| `features.json` | 内置功能开关，首次启动时兼容迁移旧 `extensions.json` 中的内置开关 |
+| `extension-storage.sqlite3` | 按模块隔离的持久数据，例如主动收藏的目录路径与应用历史偏好 |
 | `clipboard-history.sqlite3` | 开启采集后保留的多格式剪贴板内容与检索数据 |
 | `web-packages/` | 已导入的 Web 包、资源及 `receipts.json` 安装账本 |
 | `web-storage.sqlite3` | Web 插件按命名空间隔离的 KV 数据 |
@@ -228,7 +222,7 @@ Usage 不保存输入正文或文件路径。Context 正文属于临时会话；
 
 已适配的 18 个来源仅默认开启已安装应用的 Action；未安装应用默认关闭，手动开关优先。安装或卸载应用后重启可更新默认判断。已开启来源检测标准配置目录中的历史文件，包括 JetBrains 系列、VS Code / Insiders / Cursor / Windsurf / VSCodium、Sublime Text 和 Obsidian 最近仓库。
 
-设置中的“应用历史”使用紧凑来源列表；按应用名筛选，或只显示已启用来源。展开某个应用可重新检测、保存自定义路径或还原尚未保存的编辑。关闭 Action 不删除位置，也不阻止预先配置；修改位置不会重新开启已关闭的 Action。路径草稿在筛选和切换分类时保留，关闭设置前可选择保存、继续编辑或放弃；保存失败会留在设置并显示对应来源，新的编辑不会被先前保存覆盖。
+设置中的“应用历史”使用紧凑来源列表；按应用名筛选，或只显示已启用来源。展开某个应用的路径编辑器可切换回自动检测或立即保存自定义路径。关闭 Action 不删除已保存位置，也不阻止预先配置；修改位置不会重新开启已关闭的 Action。
 
 在对应应用唤醒 Current App，会自动匹配其“最近项目”入口；也可全局检索应用名 + “最近项目”，或通过独立 Action 快捷键打开。进入后固定查询该来源，支持标题、路径、中文和拼音；↑↓选择、PageUp / PageDown 按可见页移动，Enter 或双击在来源应用打开，远端条目直接复制 URI。右键或行内更多操作查看所选对象适用的文件 / 目录、Git、项目动作，或刷新；历史行不显示 ⌘K，空结果仍可从页头操作菜单刷新；远端仍只复制 URI。动作结果返回后保留查询和选择，不改变 Current App。Esc 先清空查询，再返回父页面；页头返回按钮直接返回。没有新增默认全局快捷键或 Scope。
 

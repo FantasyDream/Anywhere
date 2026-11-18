@@ -123,14 +123,13 @@ impl WebDocumentPolicy {
 
     pub fn protect_html(&self, bytes: Vec<u8>) -> Vec<u8> {
         let body = String::from_utf8_lossy(&bytes);
-        format!(
-            "<!doctype html><html><head><meta charset=\"utf-8\">\
-             <meta http-equiv=\"Content-Security-Policy\" content=\"{}\">\
-             <style data-anywhere-theme>{}</style></head>{body}</html>",
+        let injection = format!(
+            "<meta charset=\"utf-8\"><meta http-equiv=\"Content-Security-Policy\" content=\"{}\">\
+             <style data-anywhere-theme>{}</style>",
             content_security_policy(&self.origin),
             web_theme_css()
-        )
-        .into_bytes()
+        );
+        inject_document_head(&body, &injection).into_bytes()
     }
 
     pub fn response(&self, path: &str, bytes: Vec<u8>) -> Response<Cow<'static, [u8]>> {
@@ -155,6 +154,74 @@ impl WebDocumentPolicy {
     }
 }
 
+fn inject_document_head(body: &str, injection: &str) -> String {
+    let body = body.strip_prefix('\u{feff}').unwrap_or(body);
+    let mut offset = 0;
+    let mut html_end = None;
+    let mut doctype_end = None;
+    while offset < body.len() {
+        let rest = &body[offset..];
+        let trimmed = rest.trim_start();
+        offset += rest.len() - trimmed.len();
+        if trimmed.starts_with("<!--") {
+            let Some(end) = trimmed.find("-->") else {
+                break;
+            };
+            offset += end + 3;
+            continue;
+        }
+        if !trimmed.starts_with('<') {
+            break;
+        }
+        let mut quote = None;
+        let end = trimmed.char_indices().skip(1).find_map(|(index, ch)| {
+            if let Some(current) = quote {
+                if current == ch {
+                    quote = None;
+                }
+            } else if ch == '\'' || ch == '"' {
+                quote = Some(ch);
+            } else if ch == '>' {
+                return Some(index);
+            }
+            None
+        });
+        let Some(end) = end else { break };
+        let tag = &trimmed[..end + 1];
+        let name = tag[1..]
+            .split(|c: char| c.is_ascii_whitespace() || c == '>')
+            .next()
+            .unwrap_or_default();
+        if name.eq_ignore_ascii_case("head") {
+            let index = offset + end + 1;
+            return format!("{}{}{}", &body[..index], injection, &body[index..]);
+        }
+        if name.eq_ignore_ascii_case("html") {
+            html_end = Some(offset + end + 1);
+        } else if name.eq_ignore_ascii_case("!doctype") {
+            doctype_end = Some(offset + end + 1);
+        } else {
+            break;
+        }
+        offset += end + 1;
+    }
+    if let Some(index) = html_end {
+        format!(
+            "{}<head>{injection}</head>{}",
+            &body[..index],
+            &body[index..]
+        )
+    } else if let Some(index) = doctype_end {
+        format!(
+            "{}<html><head>{injection}</head>{}</html>",
+            &body[..index],
+            &body[index..]
+        )
+    } else {
+        format!("<!doctype html><html><head>{injection}</head>{body}</html>")
+    }
+}
+
 pub fn bootstrap_script(language: &str) -> String {
     format!("{}\n{BOOTSTRAP}", locale_script(language))
 }
@@ -175,9 +242,8 @@ pub fn locale_script(language: &str) -> String {
 }
 
 pub fn reply_script(frame: &str) -> String {
-    let bytes = frame.as_bytes();
-    let values = serde_json::to_string(bytes).expect("byte array serialization");
-    format!("window.anywhereNative.onmessage({{data:new Uint8Array({values}).buffer}});")
+    let frame = serde_json::to_string(frame).expect("JSON string serialization");
+    format!("window.anywhereNative.onmessage({{data:{frame}}});")
 }
 
 pub fn state_script(frame: &str) -> String {
@@ -196,6 +262,121 @@ pub fn canvas_script(transparent: bool) -> String {
         "var(--aw-fallback-surface)"
     };
     format!("document.documentElement.style.setProperty('--aw-web-canvas','{value}','important');")
+}
+
+fn css_color(argb: u32) -> String {
+    format!("#{:06x}{:02x}", argb & 0x00ff_ffff, argb >> 24)
+}
+
+pub fn web_theme_script(light_surface: bool) -> String {
+    use crate::ui::design_tokens::colors;
+
+    let palette = if light_surface {
+        [
+            ("--aw-primary", colors::GLASS_LIGHT_PRIMARY),
+            ("--aw-secondary", colors::GLASS_LIGHT_SECONDARY),
+            ("--aw-muted", colors::GLASS_LIGHT_MUTED),
+            ("--aw-accent", colors::GLASS_LIGHT_ACCENT),
+            ("--aw-warning", colors::GLASS_LIGHT_WARNING),
+            ("--aw-danger", colors::GLASS_LIGHT_DANGER),
+            ("--aw-success", colors::GLASS_LIGHT_SUCCESS),
+            ("--aw-field", colors::GLASS_LIGHT_FIELD),
+            ("--aw-card", colors::GLASS_LIGHT_CARD),
+            ("--aw-hover", colors::GLASS_LIGHT_HOVER),
+            (
+                "--aw-selected-surface",
+                colors::GLASS_LIGHT_SELECTED_SURFACE,
+            ),
+            (
+                "--aw-button-selection",
+                colors::GLASS_LIGHT_BUTTON_SELECTION,
+            ),
+            ("--aw-border", colors::GLASS_LIGHT_BORDER),
+            ("--aw-divider", colors::GLASS_LIGHT_DIVIDER),
+            (
+                "--aw-selection-outline",
+                colors::GLASS_LIGHT_SELECTION_OUTLINE,
+            ),
+            ("--aw-selected-border", colors::GLASS_LIGHT_SELECTED_BORDER),
+            ("--aw-keycap-surface", colors::GLASS_LIGHT_KEYCAP_SURFACE),
+            ("--aw-keycap-border", colors::GLASS_LIGHT_KEYCAP_BORDER),
+            ("--aw-text-selection", colors::GLASS_LIGHT_TEXT_SELECTION),
+            ("--aw-sidebar", colors::GLASS_LIGHT_SIDEBAR),
+            (
+                "--aw-sidebar-selection",
+                colors::GLASS_LIGHT_SIDEBAR_SELECTION,
+            ),
+            ("--aw-control-border", colors::GLASS_LIGHT_CONTROL_BORDER),
+            ("--aw-action-surface", colors::GLASS_LIGHT_ACTION_SURFACE),
+            ("--aw-elevated", colors::GLASS_LIGHT_ELEVATED),
+            ("--aw-result-surface", colors::GLASS_LIGHT_RESULT_SURFACE),
+            (
+                "--aw-result-surface-selected",
+                colors::GLASS_LIGHT_RESULT_SURFACE_SELECTED,
+            ),
+            ("--aw-icon-blue", colors::GLASS_LIGHT_ICON_BLUE),
+            ("--aw-icon-green", colors::GLASS_LIGHT_ICON_GREEN),
+            ("--aw-icon-coral", colors::GLASS_LIGHT_ICON_CORAL),
+            ("--aw-icon-purple", colors::GLASS_LIGHT_ICON_PURPLE),
+            ("--aw-icon-amber", colors::GLASS_LIGHT_ICON_AMBER),
+            ("--aw-icon-pink", colors::GLASS_LIGHT_ICON_PINK),
+            ("--aw-icon-neutral", colors::GLASS_LIGHT_ICON_NEUTRAL),
+        ]
+    } else {
+        [
+            ("--aw-primary", colors::PRIMARY),
+            ("--aw-secondary", colors::SECONDARY),
+            ("--aw-muted", colors::MUTED),
+            ("--aw-accent", colors::GLASS_DARK_ACCENT),
+            ("--aw-warning", colors::GLASS_DARK_WARNING),
+            ("--aw-danger", colors::GLASS_DARK_DANGER),
+            ("--aw-success", colors::GLASS_DARK_SUCCESS),
+            ("--aw-field", colors::FIELD),
+            ("--aw-card", colors::CARD),
+            ("--aw-hover", colors::HOVER),
+            ("--aw-selected-surface", colors::SELECTED_SURFACE),
+            ("--aw-button-selection", colors::BUTTON_SELECTION),
+            ("--aw-border", colors::BORDER),
+            ("--aw-divider", colors::DIVIDER),
+            ("--aw-selection-outline", colors::SELECTION_OUTLINE),
+            ("--aw-selected-border", colors::SELECTED_BORDER),
+            ("--aw-keycap-surface", colors::KEYCAP_SURFACE),
+            ("--aw-keycap-border", colors::KEYCAP_BORDER),
+            ("--aw-text-selection", colors::TEXT_SELECTION),
+            ("--aw-sidebar", colors::SIDEBAR),
+            ("--aw-sidebar-selection", colors::SIDEBAR_SELECTION),
+            ("--aw-control-border", colors::CONTROL_BORDER),
+            ("--aw-action-surface", colors::ACTION_SURFACE),
+            ("--aw-elevated", colors::ELEVATED),
+            ("--aw-result-surface", colors::RESULT_SURFACE),
+            (
+                "--aw-result-surface-selected",
+                colors::RESULT_SURFACE_SELECTED,
+            ),
+            ("--aw-icon-blue", colors::ICON_BLUE),
+            ("--aw-icon-green", colors::ICON_GREEN),
+            ("--aw-icon-coral", colors::ICON_CORAL),
+            ("--aw-icon-purple", colors::ICON_PURPLE),
+            ("--aw-icon-amber", colors::ICON_AMBER),
+            ("--aw-icon-pink", colors::ICON_PINK),
+            ("--aw-icon-neutral", colors::ICON_NEUTRAL),
+        ]
+    };
+    let assignments = palette
+        .into_iter()
+        .map(|(name, value)| {
+            format!(
+                "root.style.setProperty('{name}','{}','important');",
+                css_color(value)
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("");
+    let color_scheme = if light_surface { "light" } else { "dark" };
+    format!(
+        "(() => {{ const root=document.documentElement; {assignments}\
+         root.style.setProperty('color-scheme','{color_scheme}','important'); }})();"
+    )
 }
 
 pub fn plain_response(status: u16, message: &str) -> Response<Cow<'static, [u8]>> {
@@ -252,6 +433,35 @@ mod tests {
         "anywhere-plugin://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.plugin.local";
 
     #[test]
+    fn head_injection_preserves_quoted_tags_and_doctype_fragments() {
+        let text = inject_document_head("<!doctype html><body>中文 > result</body>", "INJECT");
+        assert_eq!(text.matches("<!doctype html>").count(), 1);
+        assert!(text.starts_with("<!doctype html><html><head>INJECT</head>"));
+        assert_eq!(
+            inject_document_head(
+                "<html><head data-value='a>b'><title>x</title></head></html>",
+                "INJECT"
+            ),
+            "<html><head data-value='a>b'>INJECT<title>x</title></head></html>"
+        );
+        assert!(inject_document_head("中文 > result", "INJECT").ends_with("中文 > result</html>"));
+    }
+
+    #[test]
+    fn complete_documents_have_one_head_with_policy_before_plugin_resources() {
+        let policy = WebDocumentPolicy::new(ORIGIN, "index.html").unwrap();
+        for markup in ["<!doctype html><html><head><script src='/app.js'></script></head><body>ok</body></html>",
+                       "<!-- <head> --><HTML lang='en'><HEAD><title>ok</title></HEAD></HTML>",
+                       "<!doctype html><html><body>ok</body></html>"] {
+            let protected = String::from_utf8(policy.protect_html(markup.as_bytes().to_vec())).unwrap();
+            let lower = protected.to_ascii_lowercase();
+            assert_eq!(lower.matches("<html").count(), 1);
+            assert_eq!(lower.matches("<head>").count(), if markup.starts_with("<!--") { 2 } else { 1 });
+            assert!(protected.find("Content-Security-Policy").unwrap() < protected.find("</head>").or_else(|| protected.find("</HEAD>")).unwrap());
+        }
+    }
+
+    #[test]
     fn only_the_bound_origin_entry_and_runtime_assets_are_addressable() {
         let policy = WebDocumentPolicy::new(ORIGIN, "assets/index.html").unwrap();
         assert_eq!(
@@ -292,18 +502,33 @@ mod tests {
         assert!(protected.starts_with("<!doctype html><html><head>"));
         assert!(protected.contains("Content-Security-Policy"));
         assert!(protected.contains("frame-src 'none'"));
+        assert!(protected.contains("--aw-on-dark-primary"));
+        assert!(protected.contains("dialog button"));
         assert!(protected.contains("<body><script src=\"/app.js\"></script></body>"));
     }
 
     #[test]
-    fn reply_and_state_scripts_use_binary_transport_and_structured_details() {
+    fn reply_and_state_scripts_use_string_transport_and_structured_details() {
         assert_eq!(
             reply_script("{\"x\":\"中\"}"),
-            "window.anywhereNative.onmessage({data:new Uint8Array([123,34,120,34,58,34,228,184,173,34,125]).buffer});"
+            r#"window.anywhereNative.onmessage({data:"{\"x\":\"中\"}"});"#
         );
         let script = state_script("{\"event\":\"state.changed\"}");
         assert!(script.contains("\"{\\\"event\\\":\\\"state.changed\\\"}\""));
         assert!(script.contains("anywhere:state"));
+    }
+
+    #[test]
+    fn web_semantic_colors_and_color_scheme_follow_the_material_surface() {
+        let light = web_theme_script(true);
+        let dark = web_theme_script(false);
+        assert!(light.contains("'--aw-primary','#14181fff'"));
+        assert!(light.contains("'--aw-field','#e8ebf0d9'"));
+        assert!(light.contains("'color-scheme','light'"));
+        assert!(dark.contains("'--aw-primary','#f9fafcff'"));
+        assert!(dark.contains("'--aw-field','#20232a80'"));
+        assert!(dark.contains("'color-scheme','dark'"));
+        assert_ne!(light, dark);
     }
 
     #[test]

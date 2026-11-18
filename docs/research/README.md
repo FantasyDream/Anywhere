@@ -4,6 +4,7 @@
 
 | 文档 | 内容 |
 |---|---|
+| [Anywhere 产品发展调研](product-direction-2026-11-18.md) | 2026-11-18，启动器对照、首批用户与工作流、macOS 试用及后续投入条件 |
 | [外部评审与后续排期复核](roadmap-review-2026-10-23.md) | 2026-10-23，逐项核对已有能力、真实缺口、过度设计及建议排期；后续顺序统一维护在产品路线图 |
 | [全功能开源库复用清单](open-source-reuse-audit.md) | 2026-10-17 的功能快照、可替换边界、接入成本与优先级；后续已采用 / 未采用结果见复用归档 |
 | [R2 SQLite 临时排序对照](result-store-r2.md) | 2026-10-18 同机原型、顺序 / 取消 / 失败回归及资源测量；保留现有生产后端 |
@@ -15,12 +16,12 @@
 | [原生模块 / Web 插件改造](plugin-architecture-native-web.md) | 2026-10-14 历史方案；第一方 runtime 与原排期已废弃，Web 新方案见下文 |
 | [内置功能模块架构](builtin-feature-modules.md) | 已实施方案：取消第一方热加载；历史设计与现行架构分开阅读 |
 
-当前生产文件搜索使用 Spotlight + 完整遍历，预览为固定右侧元数据 / 有界文本；详见 [文件搜索](../file-search.md)。当前项目目录来源与未实现部分见 [开发动作](../developer-actions.md)。
+当前生产文件搜索使用 Spotlight + 完整遍历，文件与剪贴板按需使用 macOS Quick Look；详见 [文件搜索](../file-search.md)。当前项目目录来源与未实现部分见 [开发动作](../developer-actions.md)。
 
 研究结论若转为实现，更新当前专题、代码与验收；新的外部版本或性能结论需要另有验证记录。
 
-[第三方 Web 插件设计](../web-plugin-design.md)维护当前实现边界，P1–P6 已接入 macOS 本地开发预览；Terminal 延后，目录 watch / HMR、第三方 Provider 与 Windows 宿主尚未实现。早期 P0 探针已退役。旧研究的代码与排期说明不能当作现状。
+[第三方 Web 插件设计](../web-plugin-design.md)维护当前实现边界，P1–P6 已接入 macOS 本地开发预览；Terminal 延后，目录 watch / HMR 与 Windows 宿主尚未实现；第三方 Context 使用按需 QuickJS 与统一能力代理。早期 P0 探针已退役。旧研究的代码与排期说明不能当作现状。
 
-- [第三方 Context 注册与运行方案](third-party-context-providers.md)：2026-10-20，类型与权限隔离、统一 Graph、QuickJS / Wasm 比较及分步验证；尚未接入。
+- [第三方 Context 注册与运行方案](third-party-context-providers.md)：2026-10-20，历史设计；当前按需 QuickJS Context / Action 已接入，现行边界见 Web 插件设计。
 
 - [中英国际化与拼音开源选型](i18n-pinyin.md)：历史选型、Rust pinyin 与当前 typed resource 边界。

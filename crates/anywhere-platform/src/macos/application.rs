@@ -261,13 +261,11 @@ pub(super) fn application_icon(path: &str, size: u32) -> Result<Option<Vec<u8>>>
     let mut length = 0u32;
     // SAFETY: the native side allocates the buffer and reports its exact length.
     let buffer = unsafe { launcher_application_icon(path.as_ptr(), size, &mut length) };
-    if buffer.is_null() || length == 0 {
-        return Ok(None);
-    }
-    // SAFETY: `buffer` is a malloc-owned allocation of `length` bytes, freed once.
-    let bytes = unsafe { std::slice::from_raw_parts(buffer, length as usize).to_vec() };
-    unsafe { launcher_free_bytes(buffer) };
-    Ok(Some(bytes))
+    // SAFETY: a non-null buffer is a native allocation of exactly `length` bytes.
+    let bytes = unsafe { NativeBytes::from_raw(buffer, length) };
+    Ok(bytes
+        .filter(|bytes| !bytes.as_slice().is_empty())
+        .map(|bytes| bytes.as_slice().to_vec()))
 }
 
 #[cfg(test)]

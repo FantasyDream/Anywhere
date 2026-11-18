@@ -123,7 +123,14 @@ pub(super) fn start(
     input: &ResolvedContext,
 ) -> String {
     let HostView::WebPlugin { invocation_id } = service
-        .start(command, input, input.session_id, None, "test.app")
+        .start(
+            command,
+            input,
+            input.session_id,
+            input.revision,
+            None,
+            "test.app",
+        )
         .unwrap()
     else {
         panic!("wrong view");
@@ -362,11 +369,11 @@ fn update_revokes_references_documents_and_same_ids_have_new_qualifications() {
     assert_ne!(command, reference(&updated));
     service.replace_catalog(next);
     assert!(service
-        .start(&command, &context("old"), 0, None, "test")
+        .start(&command, &context("old"), 0, 0, None, "test")
         .is_err());
     assert!(service.invocation(&binding, source(&binding)).is_err());
     assert!(service
-        .start(&reference(&updated), &context("new"), 0, None, "test")
+        .start(&reference(&updated), &context("new"), 0, 0, None, "test")
         .is_ok());
 }
 
@@ -379,6 +386,16 @@ fn source_replacement_and_registration_collision_fail_without_partial_publicatio
     let next = WebPluginCatalog::prepare(WebPlatform::Macos, [(&package, changed)]).unwrap();
     assert!(service.prepare_registry(&next, &registry).is_err());
     let mut conflict = ActionRegistry::default();
+    struct CollisionHandler;
+    impl crate::core::action::handler::ActionHandler for CollisionHandler {
+        fn execute(
+            &self,
+            _: &crate::core::context::ResolvedContext,
+            _: &dyn anywhere_platform::Platform,
+        ) -> anyhow::Result<crate::core::action::handler::ExecutionOutput> {
+            Ok(crate::core::action::handler::ExecutionOutput::dismiss())
+        }
+    }
     let definition = crate::core::action::descriptor::ActionDefinition {
         localized_titles: Default::default(),
         id: "web:dev.example.tool:open".into(),
@@ -386,7 +403,9 @@ fn source_replacement_and_registration_collision_fail_without_partial_publicatio
         subtitle: None,
         shortcut: None,
         accepts: vec![],
-        executor: ActionExecutor::Declarative(DeclarativeAction::Copy { text: "x".into() }),
+        executor: ActionExecutor::Native(crate::core::action::handler::ActionHandlerRef::Static(
+            &CollisionHandler,
+        )),
         availability: Default::default(),
         base_priority: 0,
         icon: "code".into(),

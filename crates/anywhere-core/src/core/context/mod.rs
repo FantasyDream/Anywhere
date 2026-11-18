@@ -20,14 +20,10 @@ pub use anywhere_protocol::{ContextSource, ContextTypeId, ProviderId};
 use anywhere_protocol::*;
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ContextValue {
     Text(Arc<str>),
     Url(url::Url),
-    Json {
-        raw: Arc<str>,
-        parsed: Arc<serde_json::Value>,
-    },
     File(PathBuf),
     /// One Finder selection, preserving the collection as the user's object.
     FileSelection(Arc<[PathBuf]>),
@@ -52,7 +48,6 @@ impl ContextValue {
     pub fn shared_text(&self) -> Arc<str> {
         match self {
             Self::Text(text) | Self::Extension(text) => Arc::clone(text),
-            Self::Json { raw, .. } => Arc::clone(raw),
             Self::Url(url) => Arc::from(url.as_str()),
             Self::File(path) | Self::Directory(path) | Self::Repository(path) => {
                 Arc::from(path.to_string_lossy().as_ref())
@@ -110,7 +105,7 @@ fn fingerprint(text: &str) -> u64 {
     hash
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ResolvedContext {
     pub id: ContextId,
     pub type_id: ContextTypeId,
@@ -151,7 +146,6 @@ impl ResolvedContext {
                     Arc::from(format!("{} characters", text.chars().count()))
                 }
                 ContextValue::Url(_) => Arc::from("Copied URL"),
-                ContextValue::Json { .. } => Arc::from("Copied JSON"),
                 _ => Arc::from("Copied context"),
             }
         } else {
@@ -177,47 +171,10 @@ impl ResolvedContext {
         shortened
     }
 
-    pub fn descriptor(&self) -> ContextDescriptor {
-        let mut properties = BTreeMap::new();
-        if let ContextValue::Project {
-            properties: metadata,
-            ..
-        } = &self.value
-        {
-            properties.extend(
-                metadata
-                    .iter()
-                    .map(|(key, value)| (key.clone(), value.clone())),
-            );
-        }
-        if let ContextValue::Application { name, .. } = &self.value {
-            properties.insert("name".into(), name.clone());
-        }
-        if let Some(capture) = &self.capture {
-            properties.insert("captured_at_ms".into(), capture.captured_at_ms.to_string());
-            if let Some(owning_app) = &capture.owning_app {
-                properties.insert("owning_app".into(), owning_app.clone());
-            }
-        }
-        ContextDescriptor {
-            id: self.id.clone(),
-            type_id: self.type_id.clone(),
-            value: self.value.text(),
-            properties,
-            source: self.source,
-            provider_id: self.provider_id.clone(),
-            confidence: self.confidence,
-            depth: self.depth,
-            source_context_id: self.source_context_id.clone(),
-            session_id: self.session_id,
-            revision: self.revision,
-        }
-    }
     pub fn presentation(&self) -> ContextPresentation {
         let label = match &self.value {
             ContextValue::Text(_) => "Text",
             ContextValue::Url(_) => "URL",
-            ContextValue::Json { .. } => "JSON",
             ContextValue::File(_) => "File",
             ContextValue::FileSelection(_) => "Finder Selection",
             ContextValue::Project { label, .. } => label,
@@ -373,17 +330,7 @@ mod tests {
             ContextSource::Clipboard,
             "test",
         );
-        let json = ResolvedContext::new(
-            JSON_DOCUMENT,
-            ContextValue::Json {
-                raw: r#"{"token":"private"}"#.into(),
-                parsed: Arc::new(serde_json::json!({"token":"private"})),
-            },
-            ContextSource::Clipboard,
-            "test",
-        );
         assert_eq!(url.presentation().detail, "Copied URL");
-        assert_eq!(json.presentation().detail, "Copied JSON");
         assert_eq!(
             context(TEXT, "private", ContextSource::Clipboard).display_detail(),
             "7 characters"

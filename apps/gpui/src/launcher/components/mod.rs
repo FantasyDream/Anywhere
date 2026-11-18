@@ -1,5 +1,9 @@
 use gpui_kit::{
-    component::{tooltip::Tooltip, Icon},
+    component::{
+        button::{Button, ButtonCustomVariant, ButtonVariants as _},
+        tooltip::Tooltip,
+        Icon,
+    },
     div,
     prelude::*,
     px, AnyElement, AnyView, App, Div, FontWeight, Hsla, IntoElement, SharedString, Window,
@@ -10,11 +14,32 @@ use crate::{
     ui::{design_tokens::metrics, theme},
 };
 
+/// Shared dark action surface; callers supply size, layout and menu contents.
+pub fn menu_popover() -> Div {
+    div()
+        .rounded(px(metrics::CARD_RADIUS))
+        .bg(theme::menu_surface())
+        .border(px(metrics::DIVIDER_WIDTH))
+        .border_color(theme::on_dark_selection_outline())
+        .text_color(theme::on_dark_primary())
+}
+
 pub fn text_tooltip(
     text: impl Into<SharedString>,
 ) -> impl Fn(&mut Window, &mut App) -> AnyView + 'static {
     let text = text.into();
     move |window, cx| Tooltip::new(text.clone()).build(window, cx)
+}
+
+pub fn dark_surface_button(id: impl Into<SharedString>, selected: bool, cx: &App) -> Button {
+    let mut variant = ButtonCustomVariant::new(cx)
+        .foreground(theme::on_dark_primary())
+        .hover(theme::on_dark_hover())
+        .active(theme::on_dark_selected());
+    if selected {
+        variant = variant.color(theme::on_dark_selected());
+    }
+    Button::new(id.into()).custom(variant)
 }
 
 pub fn keycap(value: impl Into<SharedString>) -> Div {
@@ -197,12 +222,53 @@ pub fn clipboard_kind_label(locale: Locale, kind: &str) -> String {
 
 pub fn clipboard_copy_date(milliseconds: i64, compact: bool) -> String {
     use chrono::{Local, TimeZone as _};
-    let Some(date) = Local.timestamp_millis_opt(milliseconds).single() else {
-        return String::new();
-    };
-    if compact && date.date_naive() == Local::now().date_naive() {
-        date.format("%H:%M").to_string()
-    } else {
-        date.format("%x · %H:%M").to_string()
+    type DateCache = (
+        std::time::Instant,
+        chrono::NaiveDate,
+        i32,
+        std::collections::HashMap<(i64, bool), String>,
+    );
+    thread_local! {
+        static DATES: std::cell::RefCell<Option<DateCache>> = const { std::cell::RefCell::new(None) };
     }
+    DATES.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        if cache
+            .as_ref()
+            .is_none_or(|(at, ..)| at.elapsed() >= std::time::Duration::from_secs(1))
+        {
+            let now = Local::now();
+            let today = now.date_naive();
+            let offset = now.offset().local_minus_utc();
+            if let Some((at, previous_day, previous_offset, values)) = cache.as_mut() {
+                if *previous_day != today || *previous_offset != offset {
+                    values.clear();
+                }
+                *at = std::time::Instant::now();
+                *previous_day = today;
+                *previous_offset = offset;
+            } else {
+                *cache = Some((std::time::Instant::now(), today, offset, Default::default()));
+            }
+        }
+        let (_, today, _, values) = cache.as_mut().unwrap();
+        if let Some(value) = values.get(&(milliseconds, compact)) {
+            return value.clone();
+        }
+        // Resolve the timestamp's historical offset once, including DST. Using
+        // today's offset for old clipboard records would display the wrong time.
+        let Some(date) = Local.timestamp_millis_opt(milliseconds).single() else {
+            return String::new();
+        };
+        let value = if compact && date.date_naive() == *today {
+            date.format("%H:%M").to_string()
+        } else {
+            date.format("%x · %H:%M").to_string()
+        };
+        if values.len() >= 256 {
+            values.clear();
+        }
+        values.insert((milliseconds, compact), value.clone());
+        value
+    })
 }

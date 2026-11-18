@@ -44,6 +44,12 @@ pub enum WindowAppearance {
     Dark,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum WindowGlassStyle {
+    /// Use the system's regular material without a custom tint or backdrop veil.
+    Regular,
+}
+
 impl WindowAppearance {
     const fn code(self) -> u8 {
         match self {
@@ -154,16 +160,18 @@ pub(crate) fn prepare_window_material() {
 pub(crate) fn install_window_material(
     #[cfg(target_os = "macos")] window: &objc2_app_kit::NSWindow,
     corner_radius: f64,
+    glass_style: WindowGlassStyle,
 ) -> bool {
     #[cfg(target_os = "macos")]
     {
-        macos::install_window_material(window, corner_radius)
+        macos::install_window_material(window, corner_radius, glass_style)
     }
     #[cfg(not(target_os = "macos"))]
     {
         // A future Windows adapter maps the same plan to DWM SystemBackdrop
         // (Mica/Acrylic) and its accessibility fallback.
         let _ = corner_radius;
+        let _ = glass_style;
         prepare_window_material();
         true
     }

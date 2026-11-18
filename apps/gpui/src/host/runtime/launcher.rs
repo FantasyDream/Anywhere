@@ -57,6 +57,11 @@ impl LiveLauncher {
             .suspend_session_now(session_id)
     }
 
+    pub fn discard_session_now(&self, session_id: SessionId) -> Result<()> {
+        let _runtime = self.runtime().enter();
+        self.application.application().deactivate(session_id)
+    }
+
     pub fn update_input(
         &self,
         input: String,

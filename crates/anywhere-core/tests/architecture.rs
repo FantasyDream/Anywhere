@@ -319,11 +319,40 @@ fn feature_contributions_have_unique_ownership_and_share_registration_contract()
 }
 
 #[test]
-fn menu_semantics_are_explicit_and_plugin_ids_are_opaque() {
-    let raw = anywhere_plugin::EXAMPLE_PLUGIN.replace("id = \"example\"", "id = \"app\"");
+fn menu_semantics_are_explicit_and_action_ids_are_opaque() {
+    use anywhere_core::core::action::{
+        availability::AvailabilityRule,
+        bundle::ActionSpec,
+        handler::{ActionHandler, ExecutionOutput},
+    };
+    struct Opaque;
+    impl ActionHandler for Opaque {
+        fn execute(
+            &self,
+            _: &ResolvedContext,
+            _: &dyn anywhere_platform::Platform,
+        ) -> anyhow::Result<ExecutionOutput> {
+            Ok(ExecutionOutput::dismiss())
+        }
+    }
     let mut registry = anywhere_core::application::builtin_registry();
     registry
-        .register_plugin(anywhere_plugin::parse_manifest(&raw).unwrap())
+        .register(
+            ActionSpec {
+                localized_titles: &[],
+                id: "app.search",
+                title: "Search",
+                accepts: TEXT,
+                handler: &Opaque,
+                availability: AvailabilityRule::Enabled,
+                base_priority: 0,
+                icon: "globe",
+                aliases: &[],
+                keywords: &[],
+                primary_action: false,
+            }
+            .descriptor("web"),
+        )
         .unwrap();
     assert!(!registry.get("app.search").unwrap().executor.is_menu());
     let app = anywhere_platform::ApplicationInfo {

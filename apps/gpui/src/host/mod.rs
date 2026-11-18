@@ -1,7 +1,10 @@
+mod atomic_write;
 mod directory_access;
+use atomic_write::atomic_write_private;
 mod dto;
 mod hotkeys;
 mod login_item;
+mod native_window;
 mod preferences;
 mod runtime;
 mod runtime_support;
@@ -10,15 +13,20 @@ use anyhow::{Context, Result};
 use std::path::{Component, Path, PathBuf};
 
 use anywhere_core::application::frontend_runtime::RuntimePaths;
+pub use anywhere_core::application::frontend_runtime::WebPackageOperation;
 
 pub use dto::{
     AppHistoryItem, AppHistoryObjectAction, AppHistorySnapshot, AppHistorySource, ClipboardItem,
     ClipboardSnapshot, ExecutionDetail, ExecutionRow, PreviewFile, ShortcutCandidate,
     ShortcutCatalogAction, WebDocument, WebPackage, WebPackageReview,
 };
-pub use hotkeys::{effective_shortcuts, HotKeyAction, HotKeyController};
+pub use hotkeys::{registered_preferences, HotKeyAction, HotKeyController};
 pub use login_item::LoginItemState;
-pub use preferences::{ActionShortcutBinding, ActionShortcutRoute, HostPreferences, UiLanguage};
+pub(crate) use native_window::defer_native_window_update;
+pub use preferences::{
+    reserved_action_shortcut, ActionShortcutBinding, ActionShortcutRoute, HostPreferences,
+    UiLanguage,
+};
 pub use runtime::{LiveEvent, LiveLauncher};
 
 /// Stable product paths owned by the GPUI application.
@@ -26,6 +34,7 @@ pub use runtime::{LiveEvent, LiveLauncher};
 pub struct ProductPaths {
     pub data_directory: PathBuf,
     pub bundled_plugin_directory: PathBuf,
+    pub explicit_data_directory: bool,
 }
 
 impl ProductPaths {
@@ -43,6 +52,7 @@ impl ProductPaths {
         data_override: Option<PathBuf>,
         plugin_override: Option<PathBuf>,
     ) -> Result<Self> {
+        let explicit_data_directory = data_override.is_some();
         let data_directory = match data_override {
             Some(path) => path,
             None => {
@@ -62,6 +72,7 @@ impl ProductPaths {
         Ok(Self {
             data_directory,
             bundled_plugin_directory,
+            explicit_data_directory,
         })
     }
 

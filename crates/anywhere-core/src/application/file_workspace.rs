@@ -3,8 +3,7 @@ use super::Application;
 use crate::core::search::candidate_source::AsyncCandidateSource;
 use anyhow::{bail, Result};
 use anywhere_protocol::{
-    InputMode, LauncherEvent, LauncherState, Revision, SearchSourcePresentation, SearchSourceState,
-    SessionId,
+    InputMode, LauncherState, Revision, SearchSourcePresentation, SearchSourceState, SessionId,
 };
 use std::path::PathBuf;
 
@@ -135,6 +134,10 @@ impl Application {
         session_id: SessionId,
         revision: Revision,
     ) -> Result<Option<LauncherState>> {
+        let ticket = self.resolver.execution(session_id, revision);
+        // Each request must collect the displayed rows after the previous
+        // cursor advance and publication have both completed.
+        let permit = self.file_search_source.reserve_page(&ticket).await?;
         let generation = self
             .file_search_policy
             .read()
@@ -142,9 +145,7 @@ impl Application {
             .generation;
         let (query_id, displayed) = {
             let mut session = self.session()?;
-            if !self.resolver.is_current(session_id, revision)
-                || session.input_mode != InputMode::FileSearch
-            {
+            if !ticket.is_current() || session.input_mode != InputMode::FileSearch {
                 bail!("file search expired");
             }
             let query_id = session
@@ -162,27 +163,36 @@ impl Application {
                 .collect();
             (query_id, displayed)
         };
-        let ticket = self.resolver.execution(session_id, revision);
-        let batch = self
-            .file_search_source
-            .more(query_id, displayed, ticket.clone())
-            .await?;
-        if !ticket.is_current() {
-            return Ok(None);
-        }
-        commit_file_batch(
-            &self.resolver,
-            &self.file_search_policy,
-            generation,
-            session_id,
-            revision,
-            SourcePublication {
-                id: "files",
-                append_results: true,
-            },
-            batch,
-        );
-        Ok(self.latest_state(session_id))
+        let source = self.file_search_source.clone();
+        let resolver = self.resolver.clone();
+        let policy = self.file_search_policy.clone();
+        // The worker owns read and publication together, including when the
+        // awaiting caller drops its future after the cursor has advanced.
+        tokio::task::spawn_blocking(move || {
+            let _permit = permit;
+            let batch = source.read_page(query_id, &displayed, &ticket)?;
+            if !ticket.is_current() {
+                return Ok(None);
+            }
+            commit_file_batch(
+                &resolver,
+                &policy,
+                generation,
+                session_id,
+                revision,
+                SourcePublication {
+                    id: "files",
+                    append_results: true,
+                },
+                batch,
+            );
+            let state = resolver.latest_tx.borrow().clone();
+            Ok(state
+                .filter(|state| state.session_id == session_id && state.revision == revision)
+                .filter(|_| ticket.is_current())
+                .map(|state| (*state).clone()))
+        })
+        .await?
     }
 }
 
@@ -217,7 +227,7 @@ fn commit_file_batch(
         {
             return;
         }
-        let Ok(mut session) = resolver.session.lock() else {
+        let Ok(mut session) = resolver.session.access() else {
             return;
         };
         if session.state.session_id != session_id
@@ -238,6 +248,9 @@ fn commit_file_batch(
                     || (old.finished && !new.finished)
                 {
                     new.needs_refresh = true;
+                    if old.confirmed_matches > new.confirmed_matches {
+                        new.next_cursor = Some(new.query_id.to_string());
+                    }
                     new.scanned_entries = old.scanned_entries;
                     new.confirmed_matches = old.confirmed_matches;
                     new.finished = old.finished;
@@ -266,7 +279,6 @@ fn commit_file_batch(
                 }
                 file_search = Some(progress);
                 batch.state = SearchSourceState::Partial;
-                batch.candidates = session.resolution.search_candidates.clone();
             }
         }
         if let (Some(old), Some(new)) = (&session.resolution.file_search, &file_search) {
@@ -296,9 +308,10 @@ fn commit_file_batch(
                 }));
         } else if frozen {
             if let (Some(old), Some(new)) = (&session.resolution.file_search, &mut file_search) {
-                new.next_cursor = old.next_cursor.clone();
-                new.previous_cursor = old.previous_cursor.clone();
-                new.page = old.page;
+                new.next_cursor = old.next_cursor.clone().or_else(|| {
+                    (new.confirmed_matches > old.confirmed_matches)
+                        .then(|| new.query_id.to_string())
+                });
                 new.needs_refresh = old.needs_refresh
                     || new.confirmed_matches != old.confirmed_matches
                     || new.finished != old.finished;
@@ -373,15 +386,10 @@ fn commit_file_batch(
             session.state.snapshot_seq = session.resolution.snapshot_seq;
             session.state.file_search = session.resolution.file_search.clone().map(Box::new);
             session.state.search_sources = session.resolution.search_sources.clone();
-            let state = session.state.clone();
             // Publish while holding the session/policy guards, just like a full
             // commit. Unlocking first could publish past a new query or session.
-            resolver
-                .latest_tx
-                .send_replace(Some(std::sync::Arc::new(state.clone())));
-            let _ = resolver
-                .events
-                .send(LauncherEvent::ActionsUpdated { state });
+            resolver.publish_state(&session);
+
             fast_published = true;
         }
         committed && !fast_published
@@ -427,7 +435,7 @@ impl Application {
         }
         let filter = resolver
             .session
-            .lock()
+            .access()
             .map(|s| s.file_filter)
             .unwrap_or_default();
         super::search_sources::mark_sources_loading(
@@ -488,6 +496,69 @@ mod progress_tests {
     use crate::core::{action::descriptor::ActionRegistry, ranking::usage::MemoryUsage};
     use std::sync::{Arc, RwLock};
     #[test]
+    fn a_finished_page_reopens_when_the_scan_commits_more_matches() {
+        use crate::core::search::candidate_source::{AsyncCandidateBatch, BatchUpdate};
+        use anywhere_protocol::FileSearchProgress;
+
+        let resolver = Resolver::new(ActionRegistry::default(), Box::new(MemoryUsage::default()));
+        resolver.reset_session(1);
+        let policy = RwLock::new(crate::features::filesystem::search::FileSearchPolicy::default());
+        {
+            let mut session = resolver.session.access().unwrap();
+            session.state.session_id = 1;
+            session.input_mode = InputMode::FileSearch;
+            session.resolution.committed_revision = Some(0);
+            session.resolution.file_results_frozen = true;
+            session.resolution.file_search = Some(FileSearchProgress {
+                query_id: 42,
+                confirmed_matches: 64,
+                scanned_entries: 100,
+                ..Default::default()
+            });
+            session.execution.action_catalog_version = Some(resolver.catalog.version());
+        }
+        let publish = |scanned_entries, confirmed_matches, append_results| {
+            commit_file_batch(
+                &resolver,
+                &policy,
+                0,
+                1,
+                0,
+                SourcePublication {
+                    id: "files",
+                    append_results,
+                },
+                AsyncCandidateBatch {
+                    update: BatchUpdate::Replace,
+                    candidates: vec![],
+                    state: SearchSourceState::Loading,
+                    metadata: Some(Arc::new(FileSearchProgress {
+                        query_id: 42,
+                        scanned_entries,
+                        confirmed_matches,
+                        ..Default::default()
+                    })),
+                },
+            );
+            resolver
+                .latest_tx
+                .borrow()
+                .as_ref()
+                .unwrap()
+                .file_search
+                .clone()
+                .unwrap()
+        };
+
+        assert!(publish(110, 64, false).next_cursor.is_none());
+        assert_eq!(publish(120, 65, false).next_cursor.as_deref(), Some("42"));
+        let late_page = publish(110, 64, true);
+        assert_eq!(late_page.confirmed_matches, 65);
+        assert_eq!(late_page.next_cursor.as_deref(), Some("42"));
+        assert!(publish(120, 65, true).next_cursor.is_none());
+    }
+
+    #[test]
     fn progress_commits_reuse_large_row_arrays_and_do_not_rebuild_execution() {
         for count in [1000, 10000] {
             let resolver =
@@ -501,7 +572,7 @@ mod progress_tests {
                 .unwrap();
             let rows = Arc::new(vec![sample; count]);
             {
-                let mut session = resolver.session.lock().unwrap();
+                let mut session = resolver.session.access().unwrap();
                 session.state.session_id = 1;
                 session.input_mode = InputMode::FileSearch;
                 session.state.candidates = rows.clone();
@@ -549,7 +620,7 @@ mod progress_tests {
             assert_eq!(state.snapshot_seq, 100);
             assert!(resolver
                 .session
-                .lock()
+                .access()
                 .unwrap()
                 .execution
                 .candidates

@@ -10,7 +10,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering as AtomicOrdering},
-        Mutex,
+        Arc, Mutex,
     },
 };
 
@@ -19,12 +19,15 @@ mod progress;
 mod query;
 mod record;
 mod scope;
+mod storage;
 #[cfg(test)]
 mod tests;
 mod traversal;
 
 pub use query::{normalize, NameQuery, RankedHit};
-pub(super) use record::{read_record, write_record};
+pub(super) use record::{read_match_record, write_match_record};
+#[cfg(test)]
+use record::{read_record, write_record};
 
 pub const PAGE_SIZE: usize = 64;
 const BUFFER: usize = 64 * 1024;
@@ -42,6 +45,10 @@ pub struct ScanStore {
     scope: ScanScope,
     progress: Mutex<Progress>,
     continuous: Mutex<super::result_store::ContinuousResults>,
+    storage_bytes: Arc<AtomicU64>,
+    pub(super) projections: Mutex<
+        std::collections::HashMap<(PathBuf, bool), crate::core::search::candidate::Candidate>,
+    >,
     pub cancelled: AtomicBool,
 }
 impl ScanStore {
@@ -56,8 +63,23 @@ impl ScanStore {
             scope: ScanScope::new(options, direct_only, exact_path),
             progress: Mutex::new(Progress::default()),
             continuous: Mutex::new(Default::default()),
+            storage_bytes: Arc::new(AtomicU64::new(0)),
+            projections: Mutex::new(Default::default()),
             cancelled: AtomicBool::new(false),
         })
+    }
+    pub(super) fn writer<W>(&self, writer: W) -> storage::BudgetWriter<W> {
+        storage::BudgetWriter::new(writer, self.storage_bytes.clone())
+    }
+    pub(super) fn remove_run(&self, path: &Path) -> Result<()> {
+        let bytes = std::fs::metadata(path)?.len();
+        std::fs::remove_file(path)?;
+        let _ = self.storage_bytes.try_update(
+            AtomicOrdering::AcqRel,
+            AtomicOrdering::Acquire,
+            |used| Some(used.saturating_sub(bytes)),
+        );
+        Ok(())
     }
     pub fn cancel(&self) {
         self.cancelled.store(true, AtomicOrdering::Release);

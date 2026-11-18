@@ -362,9 +362,44 @@ impl UsageRepository for SharedHistory {
 }
 
 pub(crate) fn registry() -> ActionRegistry {
+    use anywhere_core::core::action::{
+        availability::AvailabilityRule,
+        bundle::ActionSpec,
+        handler::{ActionHandler, ExecutionOutput},
+    };
+    struct ExampleSearch;
+    impl ActionHandler for ExampleSearch {
+        fn execute(
+            &self,
+            context: &ResolvedContext,
+            platform: &dyn Platform,
+        ) -> Result<ExecutionOutput> {
+            let mut target = url::Url::parse("https://example.com/search")?;
+            target
+                .query_pairs_mut()
+                .append_pair("q", &context.value.text());
+            platform.open_url(target.as_str())?;
+            Ok(ExecutionOutput::dismiss())
+        }
+    }
     let mut registry = anywhere_core::application::builtin_registry();
     registry
-        .register_plugin(anywhere_plugin::parse_manifest(anywhere_plugin::EXAMPLE_PLUGIN).unwrap())
+        .register(
+            ActionSpec {
+                localized_titles: &[],
+                id: "example.search",
+                title: "Search the Web",
+                accepts: TEXT,
+                handler: &ExampleSearch,
+                availability: AvailabilityRule::Enabled,
+                base_priority: 40,
+                icon: "globe",
+                aliases: &["web", "query"],
+                keywords: &["browser", "lookup"],
+                primary_action: false,
+            }
+            .descriptor("web"),
+        )
         .unwrap();
     registry
 }
@@ -499,8 +534,10 @@ pub(crate) async fn settled(
             continue;
         }
         let state = {
-            let subscription = app.subscribe(session);
-            subscription.latest_state()
+            app.state_updates()
+                .borrow()
+                .as_ref()
+                .map(|state| (**state).clone())
         };
         if let Some(state) = state {
             if state.revision == revision

@@ -2,7 +2,7 @@
 
 当前源码为 **V0.14 GPUI 开发预览**。产品只有一个 macOS 15+ GPUI 界面实现；
 Rust Core 负责 Context、匹配、排序、授权和执行。自动化、构建和物理桌面矩阵
-分别记录，Development Preview 不等于正式发行。最后整理：2026-11-13。先从
+分别记录，Development Preview 不等于正式发行。最后整理：2026-11-17。先从
 [项目首页](../README.md)了解功能和平台状态。
 
 ## 使用与参与
@@ -11,6 +11,7 @@ Rust Core 负责 Context、匹配、排序、授权和执行。自动化、构�
 |---|---|
 | [使用指南](usage.md) | 唤醒、权限、Scope、快捷键、搜索、剪贴板、项目工具和本地数据 |
 | [开发与构建](development.md) | 环境、App / SDK 构建、测试、生成物和代码入口 |
+| [完整测试用例与验收清单](test-acceptance-checklist.md) | 当前GPUI逐项用例、前置数据、优先级、18来源和环境矩阵、自动化追溯及结果模板 |
 | [代码规范](code-style.md) | Google / 官方语言规范、隔离工具、自动检查与生成文件边界 |
 | [发布检查](releasing.md) | 开发包、版本、签名 / 归档、验收与 GitHub 发布边界 |
 | [贡献指南](../CONTRIBUTING.md) | 改动约定、提交与 PR 验证 |
@@ -23,9 +24,7 @@ Rust Core 负责 Context、匹配、排序、授权和执行。自动化、构�
 |---|---|
 | [仓库阅读入口](../AGENTS.md) | AI / 开发者的代码地图、稳定边界与验证入口 |
 | [架构](architecture.md) | Rust Core / GPUI / macOS 薄适配的分工、静态模块、快照、取消与执行 |
-| [GPUI 产品架构](gpui-migration.md) | 当前产品壳、展示边界、窗口与焦点契约 |
 | [GPUI 技术方案与验收](mvp-gpui.md) | 当前功能范围、自动化证据、发布检查与物理桌验矩阵 |
-| [GPUI 界面对齐方案](gpui-ui-alignment-plan.md) | 审查证据、原 UI 基准、代码完成范围、实施记录与仍待桌验项 |
 | [Context 模型](context-model.md) | 类型、来源、Provider 图、等价与身份 |
 | [默认输入](context-input-navigation.md) | 选中文本、15 秒剪贴板、InputMode 和 Esc |
 | [Launcher 交互](launcher-interaction.md) | Scope、菜单、二级操作、快捷键和隐藏恢复 |
@@ -41,10 +40,8 @@ Rust Core 负责 Context、匹配、排序、授权和执行。自动化、构�
 
 | 文档 | 用途 |
 |---|---|
-| [全仓代码整理与 GPUI 通信优化方案](code-cleanup-and-gpui-runtime-plan.md) | 实施中：代码审查证据、Rust 整理原则、共享状态与请求生命周期、已落地切片、剩余 T00–T24 验收 |
 | [第三方插件开发](plugin-development.md) | 独立模板、SDK、统一样式、权限、打包与更新 |
 | [Web 插件架构](web-plugin-design.md) | 包身份、能力代理、Context 输入、生命周期和系统边界 |
-| [旧声明式协议](plugin-protocol.md) | v1 / v2 / v3 兼容行为；停止扩展 UI DSL |
 | [路线图](roadmap.md) | 后续功能、依赖与 1.0 门槛 |
 | [应用历史设计](application-history.md) | V0.14：IDE / 编辑器 / 笔记最近对象与原应用打开；当前已有 18 个配置化来源 |
 | [独立浏览器规划](browser-feature.md) | 后续单独实现历史、书签与 Tab 管理；尚未实现，版本待定 |

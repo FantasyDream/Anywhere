@@ -1,8 +1,5 @@
-use super::identifiers::{
-    CandidateId, ContextId, ContextKey, ContextTypeId, ProviderId, Revision, SessionId,
-};
+use super::identifiers::{CandidateId, ContextId, ContextKey, ContextTypeId};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
 
 /// Host tool execution target; never a captured user object or a UI Scope.
 pub const LAUNCHER_ENTRY_CONTEXT: &str = "core.launcher";
@@ -41,23 +38,6 @@ pub enum ContextSource {
     SelectedText,
     BrowserCurrentPage,
     Clipboard,
-}
-
-/// Open type identifier + transport value. New types don't change this protocol.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ContextDescriptor {
-    pub id: ContextId,
-    pub type_id: ContextTypeId,
-    pub value: String,
-    #[serde(default)]
-    pub properties: BTreeMap<String, String>,
-    pub source: ContextSource,
-    pub provider_id: ProviderId,
-    pub source_context_id: Option<ContextId>,
-    pub confidence: f32,
-    pub depth: u8,
-    pub session_id: SessionId,
-    pub revision: Revision,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

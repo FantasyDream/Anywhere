@@ -40,6 +40,7 @@ fn candidate(index: usize) -> CandidatePresentation {
 fn state(candidates: Arc<Vec<CandidatePresentation>>, snapshot_seq: u32) -> LauncherState {
     LauncherState {
         input: "operation".into(),
+        file_search: Some(Default::default()),
         candidates,
         snapshot_seq,
         ..Default::default()
@@ -69,18 +70,19 @@ fn main() {
     let candidates = Arc::new((0..CANDIDATES).map(candidate).collect::<Vec<_>>());
     let mut metadata_model = LauncherModel::preview(Locale::En);
     metadata_model.apply_shared(Arc::new(state(candidates.clone(), 0)));
+    metadata_model.select_row(CANDIDATES - 1);
     let metadata = timing(|snapshot_seq| {
         let state = state(candidates.clone(), snapshot_seq as u32 + 1);
         let result = metadata_model.apply_shared(Arc::new(state));
         assert!(!result.rows_changed);
-        black_box(metadata_model.rows.first());
+        black_box(metadata_model.selected_row());
     });
     let rebuild = timing(|snapshot_seq| {
         let mut model = LauncherModel::preview(Locale::En);
         let result =
             model.apply_shared(Arc::new(state(candidates.clone(), snapshot_seq as u32 + 1)));
         assert!(result.rows_changed);
-        assert!(!model.rows.is_empty());
+        assert_eq!(model.rows.len(), CANDIDATES);
         black_box(model.rows);
     });
     println!(

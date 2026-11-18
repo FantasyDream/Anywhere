@@ -3,25 +3,16 @@
 //! activates or searches other browsers.
 use super::native::launcher_application_identity_matches;
 use crate::{ApplicationInfo, ContextReadError};
-use anyhow::{anyhow, Result};
-use std::{
-    ffi::CString,
-    io::Read,
-    process::{Command, Stdio},
-    sync::mpsc::{self, Receiver},
-    thread,
-    time::{Duration, Instant},
-};
+use anyhow::Result;
+use std::{ffi::CString, time::Duration};
 
 const SAFARI_BUNDLE_ID: &str = "com.apple.Safari";
 const CHROME_BUNDLE_ID: &str = "com.google.Chrome";
 const EDGE_BUNDLE_ID: &str = "com.microsoft.edgemac";
 const MAX_URL_BYTES: usize = 8 * 1024;
-const MAX_ERROR_BYTES: usize = 4 * 1024;
 // A first Automation prompt can outlive the ordinary fast-path read. The caller
 // runs this off the first-snapshot path; it still needs a finite process deadline.
 const CAPTURE_TIMEOUT: Duration = Duration::from_secs(15);
-const PIPE_TIMEOUT: Duration = Duration::from_secs(1);
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Browser {
     Safari,
@@ -62,9 +53,14 @@ pub(super) fn current_url(application: &ApplicationInfo) -> Result<Option<String
     if !same_running_instance(application) {
         return Err(ContextReadError::ApplicationChanged.into());
     }
-    let result = read_current_url(browser);
-    // `application id` resolves a bundle, not the PID captured at activation. A quit,
-    // relaunch, or PID reuse during the Apple Event must discard the reply.
+    let result = super::automation::read(
+        browser.script(),
+        application,
+        CAPTURE_TIMEOUT,
+        MAX_URL_BYTES as u32,
+    );
+    // The sender addresses this PID. A quit or PID reuse during the event still
+    // invalidates its reply, regardless of which bundle happens to be running.
     if !same_running_instance(application) {
         return Err(ContextReadError::ApplicationChanged.into());
     }
@@ -95,97 +91,6 @@ fn same_running_instance(application: &ApplicationInfo) -> bool {
         launcher_application_identity_matches(application.pid, bundle.as_ptr(), instance.as_ptr())
             == 1
     }
-}
-
-struct BoundedOutput {
-    bytes: Vec<u8>,
-    exceeded: bool,
-}
-
-fn drain_to_limit(mut pipe: impl Read, limit: usize) -> std::io::Result<BoundedOutput> {
-    let mut bytes = Vec::new();
-    let mut buffer = [0u8; 1024];
-    let mut exceeded = false;
-    loop {
-        let count = pipe.read(&mut buffer)?;
-        if count == 0 {
-            return Ok(BoundedOutput { bytes, exceeded });
-        }
-        let room = limit.saturating_sub(bytes.len());
-        bytes.extend_from_slice(&buffer[..count.min(room)]);
-        exceeded |= count > room;
-    }
-}
-
-fn spawn_reader(
-    pipe: impl Read + Send + 'static,
-    limit: usize,
-) -> Receiver<std::io::Result<BoundedOutput>> {
-    let (tx, rx) = mpsc::channel();
-    thread::spawn(move || {
-        let _ = tx.send(drain_to_limit(pipe, limit));
-    });
-    rx
-}
-
-fn receive(reader: Receiver<std::io::Result<BoundedOutput>>) -> Result<BoundedOutput> {
-    reader
-        .recv_timeout(PIPE_TIMEOUT)
-        .map_err(|_| anyhow!("Browser URL capture output did not close"))?
-        .map_err(|_| anyhow!("Browser URL capture output could not be read"))
-}
-
-fn read_current_url(browser: Browser) -> Result<String> {
-    let mut child = Command::new("/usr/bin/osascript")
-        .arg("-e")
-        .arg(browser.script())
-        .env("LC_ALL", "en_US.UTF-8")
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|_| anyhow!("Browser URL capture could not start"))?;
-    let stdout = spawn_reader(
-        child
-            .stdout
-            .take()
-            .ok_or_else(|| anyhow!("Browser URL capture has no output"))?,
-        MAX_URL_BYTES + 2, // osascript adds a line ending
-    );
-    let stderr = spawn_reader(
-        child
-            .stderr
-            .take()
-            .ok_or_else(|| anyhow!("Browser URL capture has no error pipe"))?,
-        MAX_ERROR_BYTES,
-    );
-    let started = Instant::now();
-    let status = loop {
-        if let Some(status) = child
-            .try_wait()
-            .map_err(|_| anyhow!("Browser URL capture could not be checked"))?
-        {
-            break status;
-        }
-        if started.elapsed() >= CAPTURE_TIMEOUT {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(ContextReadError::TimedOut.into());
-        }
-        thread::sleep(Duration::from_millis(10));
-    };
-    let output = receive(stdout)?;
-    let errors = receive(stderr)?;
-    if !status.success() {
-        if errors.bytes.windows(5).any(|window| window == b"-1743") {
-            return Err(ContextReadError::PermissionDenied.into());
-        }
-        return Err(anyhow!("Browser URL capture failed"));
-    }
-    if output.exceeded {
-        return Err(ContextReadError::TooLarge.into());
-    }
-    String::from_utf8(output.bytes).map_err(|_| anyhow!("Browser URL is not UTF-8"))
 }
 
 fn validate_url(output: &str) -> Option<String> {
@@ -234,15 +139,6 @@ mod tests {
             "x".repeat(MAX_URL_BYTES)
         ))
         .is_none());
-    }
-
-    #[test]
-    fn bounded_pipe_read_keeps_only_the_limit() {
-        let output = drain_to_limit(&b"123456"[..], 4).unwrap();
-        assert_eq!(output.bytes, b"1234");
-        assert!(output.exceeded);
-        let output = drain_to_limit(&b"https://example.org"[..], MAX_URL_BYTES).unwrap();
-        assert!(!output.exceeded);
     }
 
     #[test]

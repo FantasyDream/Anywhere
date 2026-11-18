@@ -18,6 +18,29 @@ pub(crate) enum Reader {
         tables: Vec<String>,
     },
 }
+pub(crate) fn read_json_text(path: &Path, cancelled: &Cancelled) -> Result<String> {
+    ensure!(!cancelled(), "source read cancelled");
+    let mut file = File::open(path)?;
+    let before = file.metadata()?;
+    ensure!(
+        before.is_file() && before.len() <= MAX_INPUT as u64,
+        "source too large"
+    );
+    let mut text = String::new();
+    (&mut file)
+        .take(MAX_INPUT as u64 + 1)
+        .read_to_string(&mut text)?;
+    let after = file.metadata()?;
+    ensure!(
+        text.len() <= MAX_INPUT
+            && before.len() == after.len()
+            && before.modified()? == after.modified()?
+            && !cancelled(),
+        "source changed or cancelled"
+    );
+    Ok(text)
+}
+
 pub(crate) fn read(path: &Path, reader: &Reader, cancelled: Cancelled) -> Result<Value> {
     ensure!(!cancelled(), "source read cancelled");
     if let Reader::Sqlite {

@@ -1,4 +1,5 @@
 use super::*;
+use crate::host::WebPackageOperation;
 
 impl LauncherView {
     pub(in crate::launcher::view) fn render_web_packages(
@@ -17,8 +18,7 @@ impl LauncherView {
                 .gap(px(2.0))
                 .p(px(6.))
                 .track_scroll(&self.web_packages_scroll)
-                .overflow_y_scroll()
-                .vertical_scrollbar(&self.web_packages_scroll);
+                .overflow_y_scroll();
             for (index, package) in self.web.packages.clone().into_iter().enumerate() {
                 let selected = self.web.selected == index;
                 let package_id = package.id.clone();
@@ -45,6 +45,7 @@ impl LauncherView {
                         .items_center()
                         .gap(px(metrics::SPACE_MD))
                         .rounded(px(metrics::RESULT_RADIUS))
+                        .cursor_pointer()
                         .when(selected, |element| {
                             element
                                 .bg(theme::selected())
@@ -107,14 +108,19 @@ impl LauncherView {
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.change_web_package_operation(
                                         package_id.clone(),
-                                        if package.enabled { "disable" } else { "enable" },
+                                        if package.enabled {
+                                            WebPackageOperation::Disable
+                                        } else {
+                                            WebPackageOperation::Enable
+                                        },
                                         cx,
                                     )
                                 })),
                         ),
                 );
             }
-            list.into_any_element()
+            list.vertical_scrollbar(&self.web_packages_scroll)
+                .into_any_element()
         };
         let selected = self.web.packages.get(self.web.selected).cloned();
         let review = self.web_surface.review.clone().map(|review| {
@@ -223,9 +229,7 @@ impl LauncherView {
                     div()
                         .text_size(px(metrics::CAPTION_SIZE))
                         .text_color(theme::muted())
-                        .child(l10n::approval_applies_to_this_inspected_definition_restart(
-                            self.locale,
-                        )),
+                        .child(l10n::approval_applies_to_this_package_digest(self.locale)),
                 )
                 .child(
                     div()
@@ -310,7 +314,7 @@ impl LauncherView {
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.change_web_package_operation(
                                     rollback_id.clone(),
-                                    "rollback",
+                                    WebPackageOperation::Rollback,
                                     cx,
                                 )
                             })),
@@ -322,7 +326,7 @@ impl LauncherView {
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.change_web_package_operation(
                                     uninstall_id.clone(),
-                                    "uninstall",
+                                    WebPackageOperation::Uninstall,
                                     cx,
                                 )
                             })),

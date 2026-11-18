@@ -94,7 +94,8 @@ async fn real_node_expansion_inherits_owner_and_disabled_factory_loses_shortcut_
         .await
         .unwrap();
     let mut registry = super::builtin_registry();
-    let (mut expanded, diagnostics) = registry.for_contexts(&contexts);
+    let (expanded, diagnostics) = registry.for_contexts(&contexts);
+    let mut expanded = expanded.into_owned();
     assert!(diagnostics.is_empty());
     let build = "developer.node.build";
     assert_eq!(expanded.get(build).unwrap().contributor(), Some("node"));
@@ -167,7 +168,7 @@ async fn atomic_policy_publication_filters_all_contributions_and_revokes_retaine
     app.suspend_session(initial.session_id).await.unwrap();
     let old_policy = app.resolver.catalog.policy();
     let ticket = app.resolver.execution(initial.session_id, 1);
-    let (registry, providers) = super::composition::configured_builtins(&Default::default());
+    let (registry, providers) = super::composition::configured_builtins();
     let mut sources = SourceSet {
         synchronous: vec![Arc::new(Empty("node.sync"))],
         asynchronous: vec![Arc::new(SlowSource)],

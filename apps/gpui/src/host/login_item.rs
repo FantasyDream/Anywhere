@@ -51,12 +51,14 @@ mod macos {
             if current == LoginItemState::NotFound {
                 bail!("Open at login is unavailable because the app service was not found");
             }
-            // SAFETY: The service was obtained from the main application and
-            // the call is scoped to this process.
-            unsafe {
-                service.registerAndReturnError().map_err(|error| {
-                    anyhow!("Open at login failed: {}", error.localizedDescription())
-                })?;
+            if current == LoginItemState::NotRegistered {
+                // SAFETY: The service was obtained from the main application and
+                // the call is scoped to this process.
+                unsafe {
+                    service.registerAndReturnError().map_err(|error| {
+                        anyhow!("Open at login failed: {}", error.localizedDescription())
+                    })?;
+                }
             }
         } else if matches!(
             current,
@@ -78,8 +80,15 @@ mod macos {
         let result = status(&service);
         if desired && result != LoginItemState::Enabled {
             if result == LoginItemState::RequiresApproval {
-                // SAFETY: This only opens the system Login Items settings pane.
-                unsafe { SMAppService::openSystemSettingsLoginItems() };
+                if objc2::MainThreadMarker::new().is_some() {
+                    // SAFETY: This only opens the system Login Items settings pane on the main thread.
+                    unsafe { SMAppService::openSystemSettingsLoginItems() };
+                } else {
+                    dispatch2::DispatchQueue::main().exec_async(|| {
+                        // SAFETY: Dispatched to the AppKit main queue.
+                        unsafe { SMAppService::openSystemSettingsLoginItems() };
+                    });
+                }
                 bail!("Open at login requires approval in System Settings > General > Login Items");
             }
             bail!("Open at login was not confirmed");

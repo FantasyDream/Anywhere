@@ -36,6 +36,7 @@ impl Default for ExecutionSessionManager {
 struct ManagerState {
     next_id: u64,
     closed: bool,
+    starting: usize,
     sessions: BTreeMap<ExecutionSessionId, Session>,
 }
 
@@ -111,11 +112,21 @@ impl ExecutionSessionManager {
             .values()
             .filter(|session| record_state(&session.record).summary.status.is_active())
             .count();
-        if active >= MAX_RUNNING_SESSIONS {
+        if active + manager.starting >= MAX_RUNNING_SESSIONS {
             bail!("Four tasks are already running. Stop or wait for one before starting another.");
         }
         // Spawn can fail; do not evict a completed result or publish a running row until it succeeds.
-        let process = OwnedProcess::spawn(&request)?;
+        manager.starting += 1;
+        drop(manager);
+        let process = OwnedProcess::spawn(&request);
+        let mut manager = manager_state(&self.state)?;
+        manager.starting -= 1;
+        if manager.closed {
+            drop(manager);
+            drop(process);
+            bail!("task manager is shutting down");
+        }
+        let process = process?;
         manager.next_id = manager
             .next_id
             .checked_add(1)

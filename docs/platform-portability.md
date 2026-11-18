@@ -24,9 +24,9 @@ GPUI 页面不是 AppKit 控件。系统能力缺失时返回明确禁用状态�
 `apps/gpui/src/host/mod.rs` 解析：
 
 - 数据目录：默认 `~/Library/Application Support/Anywhere`；
-- 插件目录：默认数据目录下的 `plugins`；
+- 用户已批准 Web 包、应用历史自定义适配与模块存储：位于数据目录下的对应子目录；
 - 显式覆盖：绝对路径、非根目录、不含 `..`；
-- 显式数据目录：不修改系统登录项。
+- 显式数据目录（`ANYWHERE_DATA_DIR`）：自动跳过 macOS 系统登录项修改。
 
 路径或运行时初始化失败必须显示可诊断错误，不能猜测其他动态库、数据目录或产品
 身份。仓库没有跨语言运行库加载步骤。
@@ -63,9 +63,8 @@ macOS adapter 位于 `apps/gpui/src/host/hotkeys.rs`。共享 schema 可以跨�
 
 ## 状态栏、窗口与预览
 
-macOS 在 `apps/gpui/src/platform/mod.rs` 使用 `NSStatusItem` 提供恢复入口。
-主窗口关闭执行 Quick Look / Web / 待执行资格清理后隐藏。Clipboard Shelf 使用
-独立 GPUI floating window；Quick Look 在
+macOS 在 `apps/gpui/src/platform/macos/status_item.rs` 使用 `NSStatusItem` 提供恢复入口。
+主窗口关闭执行 Quick Look / Web / 待执行资格清理后隐藏。Clipboard Shelf（floating）与 Running Tasks（normal）使用各自独立的 GPUI 窗口；Quick Look 在
 `apps/gpui/src/platform/preview.rs` 使用 `QLPreviewPanel`。
 
 文件与剪贴板资源由 Rust 校验，GPUI 只管理当前选择和 preview generation。关闭

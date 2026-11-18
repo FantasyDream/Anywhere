@@ -1,8 +1,5 @@
 //! Semantic read model for the Launcher; graph identities remain in Core.
-use crate::core::context::{
-    navigation::{key, root_key},
-    ContextSource, ContextValue, ResolvedContext,
-};
+use crate::core::context::{navigation::RootIndex, ContextSource, ContextValue, ResolvedContext};
 use crate::core::search::candidate::Candidate;
 use anywhere_protocol::{AvailabilityState, ContextPresentation, TEXT};
 fn priority(source: ContextSource) -> u8 {
@@ -18,17 +15,31 @@ fn priority(source: ContextSource) -> u8 {
 }
 
 pub fn build(contexts: &[ResolvedContext], offers: &[Candidate]) -> Vec<ContextPresentation> {
+    let roots = RootIndex::new(contexts);
+    let base: Vec<_> = contexts.iter().map(ResolvedContext::presentation).collect();
+    let mut children_by_root = std::collections::HashMap::<usize, Vec<usize>>::new();
+    for index in 0..contexts.len() {
+        children_by_root
+            .entry(roots.root(index))
+            .or_default()
+            .push(index);
+    }
+    let mut offers_by_root = std::collections::HashMap::<&str, Vec<&Candidate>>::new();
+    for offer in offers {
+        for key in &offer.presentation.context_keys {
+            offers_by_root.entry(key).or_default().push(offer);
+        }
+    }
     let mut result = Vec::with_capacity(contexts.len());
-    for context in contexts {
-        let mut presentation = context.presentation();
-        presentation.root_key = root_key(context, contexts);
+    for (index, context) in contexts.iter().enumerate() {
+        let mut presentation = base[index].clone();
+        presentation.root_key = roots.root_key(index).to_owned();
         presentation.icon_key = match &context.value {
             ContextValue::Application { .. } => "application",
             ContextValue::Directory(_) | ContextValue::Repository(_) => "folder",
             ContextValue::Project { .. } => "code",
             ContextValue::File(_) | ContextValue::FileSelection(_) => "file",
             ContextValue::Url(_) => "globe",
-            ContextValue::Json { .. } => "code",
             _ => "text",
         }
         .into();
@@ -63,21 +74,24 @@ pub fn build(contexts: &[ResolvedContext], offers: &[Candidate]) -> Vec<ContextP
             }
         };
         if presentation.key == presentation.root_key {
-            let children: Vec<_> = contexts
-                .iter()
-                .filter(|child| root_key(child, contexts) == presentation.key)
-                .collect();
-            for child in &children {
-                if key(child) == presentation.key {
+            let children = children_by_root
+                .get(&index)
+                .map(Vec::as_slice)
+                .unwrap_or_default();
+            for &child_index in children {
+                let child = &contexts[child_index];
+                if roots.key(child_index) == presentation.key {
                     continue;
                 }
                 let capability = match &child.value {
-                    _ if child.source == ContextSource::Clipboard => child.presentation().label,
+                    _ if child.source == ContextSource::Clipboard => {
+                        base[child_index].label.clone()
+                    }
                     ContextValue::Repository(path) => format!(
                         "Git · {}",
                         path.file_name().unwrap_or_default().to_string_lossy()
                     ),
-                    _ => child.presentation().label,
+                    _ => base[child_index].label.clone(),
                 };
                 if !presentation.capabilities.contains(&capability) {
                     presentation.capabilities.push(capability);
@@ -85,11 +99,14 @@ pub fn build(contexts: &[ResolvedContext], offers: &[Candidate]) -> Vec<ContextP
             }
             // A normal query is not an explicit new object. Recognized input is selectable.
             let selectable = context.source != ContextSource::UserInput
-                || children.iter().any(|child| child.type_id != TEXT);
-            if selectable {
-                for offer in offers
+                || children
                     .iter()
-                    .filter(|offer| offer.presentation.context_keys.contains(&presentation.key))
+                    .any(|&child| contexts[child].type_id != TEXT);
+            if selectable {
+                for offer in offers_by_root
+                    .get(presentation.key.as_str())
+                    .into_iter()
+                    .flatten()
                 {
                     presentation
                         .candidate_ids
@@ -127,6 +144,7 @@ pub fn preferred(summary: &[ContextPresentation]) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::context::navigation::root_key;
     use anywhere_protocol::{DIRECTORY, GIT_REPOSITORY};
 
     #[test]

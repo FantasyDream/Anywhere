@@ -1,7 +1,7 @@
 use super::{
     candidate::{CandidatePresentation, Scope, ScopeEntry},
-    context::{ContextCapturePresentation, ContextDescriptor, ContextPresentation},
-    identifiers::{ContextId, ContextKey, GroupId, ProviderId, Revision, SessionId},
+    context::{ContextCapturePresentation, ContextPresentation},
+    identifiers::{ContextKey, GroupId, Revision, SessionId},
 };
 use serde::{Deserialize, Serialize};
 
@@ -95,30 +95,4 @@ impl LauncherState {
             },
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum LauncherEvent {
-    ContextAdded {
-        context: ContextDescriptor,
-    },
-    ActionsUpdated {
-        state: LauncherState,
-    },
-    ProviderCompleted {
-        session_id: SessionId,
-        revision: Revision,
-        provider_id: ProviderId,
-        source_context_id: ContextId,
-        duration_us: u64,
-    },
-    ProviderFailed {
-        session_id: SessionId,
-        revision: Revision,
-        provider_id: ProviderId,
-        source_context_id: ContextId,
-        duration_us: u64,
-        message: String,
-    },
 }

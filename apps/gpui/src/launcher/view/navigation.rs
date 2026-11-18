@@ -74,7 +74,7 @@ impl LauncherView {
                 RuntimeState::Preview | RuntimeState::Ready => unreachable!(),
             };
             self.set_notice(message, kind);
-            self.resize_window_for_screen(window);
+            self.resize_window_for_screen(window, cx);
             self.focus_launcher_input(window, cx);
             cx.notify();
             return true;
@@ -119,18 +119,12 @@ impl LauncherView {
             return true;
         }
 
-        let can_resume = self.retained_workspace
-            && self.hidden_at.is_some_and(|hidden_at| {
-                hidden_at.elapsed()
-                    < Duration::from_millis(anywhere_protocol::policy::LAUNCHER_RETENTION_MS)
-            })
-            && self.live_state.session_id.is_some();
-        if can_resume {
-            self.hidden_at = None;
-            self.retained_workspace = false;
+        if self.can_resume_workspace() {
             self.begin_resume(cx);
             if self.screen == Screen::Tasks {
                 self.start_tasks_refresh(cx);
+            } else if matches!(self.screen, Screen::Clipboard | Screen::ClipboardShelf) {
+                self.request_clipboard_search(cx);
             } else if self.screen == Screen::ApplicationHistory {
                 if self.app_history.session_id.is_some() {
                     self.request_app_history_search(cx);
@@ -177,11 +171,16 @@ impl LauncherView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        if self.hidden_at.is_some() {
+            self.release_workspace(cx);
+            self.clear_workspace_editors(window, cx);
+        } else {
+            self.release_app_history_session();
+            self.close_web_surface(cx);
+            self.parent_workspace = None;
+        }
         self.pending_shortcut_execution = None;
         self.action_shortcut_resolving = None;
-        self.release_app_history_session();
-        self.close_web_surface(cx);
-        self.parent_workspace = None;
         let previous_mode = self.input_mode;
         self.screen = Screen::Launcher;
         self.input_mode = input_mode;
@@ -192,7 +191,7 @@ impl LauncherView {
         self.begin_scope_selection_for_mode(input_mode);
         self.reveal_selected_scope();
         self.notice = None;
-        self.resize_window_for_screen(window);
+        self.resize_window_for_screen(window, cx);
         self.sync_mode_editor(previous_mode, input_mode, window, cx);
         self.focus_launcher_input(window, cx);
     }
@@ -220,6 +219,9 @@ impl LauncherView {
     }
 
     fn begin_resume(&mut self, cx: &mut Context<Self>) {
+        self.retention_task = None;
+        self.hidden_at = None;
+        self.retained_workspace = false;
         let Some(live) = self.live.clone() else {
             return;
         };
@@ -261,7 +263,7 @@ impl LauncherView {
         self.poll(receiver, self.live_state.generation, cx);
     }
 
-    pub fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub fn open_settings(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         if matches!(
             self.runtime_state,
             RuntimeState::Starting | RuntimeState::Failed
@@ -281,11 +283,13 @@ impl LauncherView {
             };
             self.set_notice(message, kind);
             cx.notify();
-            return;
+            return false;
         }
         if self.is_settings_surface() {
-            return;
+            return false;
         }
+        self.close_preview(cx);
+        self.close_web_surface(cx);
         self.screen = Screen::Settings;
         self.root_navigation_open = false;
         self.shortcut_recording = None;
@@ -295,7 +299,7 @@ impl LauncherView {
         self.context_shortcut_draft = None;
         self.presented = true;
         self.notice = None;
-        self.resize_window_for_screen(window);
+        self.resize_window_for_screen(window, cx);
         crate::platform::configure_settings_window_after_update(PRODUCT_NAME);
         self.request_shortcut_catalog(cx);
         if self.settings.selected == SettingsCategory::ApplicationHistory {
@@ -311,19 +315,14 @@ impl LauncherView {
             }
         });
         cx.notify();
+        true
     }
 
     pub(super) fn settings_launcher_recovery(&self) -> LauncherStreamRecovery {
         if self.live_state.cancel.is_some() {
             return LauncherStreamRecovery::KeepActive;
         }
-        if self.retained_workspace
-            && self.live_state.session_id.is_some()
-            && self.hidden_at.is_some_and(|hidden_at| {
-                hidden_at.elapsed()
-                    < Duration::from_millis(anywhere_protocol::policy::LAUNCHER_RETENTION_MS)
-            })
-        {
+        if self.can_resume_workspace() {
             return LauncherStreamRecovery::Resume;
         }
         LauncherStreamRecovery::Restart
@@ -337,13 +336,9 @@ impl LauncherView {
         match self.settings_launcher_recovery() {
             LauncherStreamRecovery::KeepActive => {}
             LauncherStreamRecovery::Resume => {
-                self.hidden_at = None;
-                self.retained_workspace = false;
                 self.begin_resume(cx);
             }
             LauncherStreamRecovery::Restart => {
-                self.hidden_at = None;
-                self.retained_workspace = false;
                 let mode = self.input_mode;
                 self.reset_for_activation(mode, window, cx);
                 self.begin_new_activation(mode, cx);
@@ -412,6 +407,9 @@ impl LauncherView {
         if !self.is_settings_surface() {
             return false;
         }
+        if self.handle_settings_modal_escape(window, cx) {
+            return true;
+        }
         self.handle_key(
             "escape",
             KeyModifiers {
@@ -451,7 +449,8 @@ impl LauncherView {
     }
 
     pub fn dismiss_on_focus_loss(&self) -> bool {
-        !self.preview_open
+        self.presented
+            && !self.preview_open
             && !self.preview_busy
             && !self.is_settings_surface()
             && !self.standalone_shelf
@@ -459,14 +458,19 @@ impl LauncherView {
     }
 
     pub fn prepare_hide(&mut self, cx: &mut Context<Self>) {
+        if self.standalone_shelf {
+            crate::platform::remember_clipboard_shelf_position();
+        }
         self.presented = false;
         self.pending_shortcut_execution = None;
         self.action_shortcut_resolving = None;
         self.cancel_stream();
         self.live_state.generation = self.live_state.generation.wrapping_add(1);
         self.cancel_tasks_refresh();
+        self.file_search.cancel_page();
         self.tasks.refresh_generation = self.tasks.refresh_generation.wrapping_add(1);
         self.clipboard.operation_generation = self.clipboard.operation_generation.wrapping_add(1);
+        self.clipboard.query_generation = self.clipboard.query_generation.wrapping_add(1);
         self.app_history.session_generation = self.app_history.session_generation.wrapping_add(1);
         self.app_history.query_generation = self.app_history.query_generation.wrapping_add(1);
         if self.screen == Screen::ApplicationHistory {
@@ -475,15 +479,17 @@ impl LauncherView {
                 live.cancel_app_history_session(session_id);
             }
         }
-        if !self.standalone_shelf && !self.standalone_tasks {
+        self.retained_workspace = self.should_retain_workspace();
+        self.hidden_at = self.retained_workspace.then(Instant::now);
+        if self.retained_workspace {
             if let Some(live) = &self.live {
                 if let Err(error) = live.suspend_current_now() {
                     tracing::warn!(%error, "launcher_suspend_failed");
                 }
             }
-            self.retained_workspace = self.should_retain_workspace();
-            self.hidden_at = self.retained_workspace.then(Instant::now);
         }
+        self.clipboard_search_task = None;
+        self.preview_selection_task = None;
         self.root_navigation_open = false;
         self.model.hide_object_actions();
         self.app_history.close_object_actions();
@@ -496,18 +502,108 @@ impl LauncherView {
         self.tasks.task_actions_open = false;
         self.tasks.task_action_selected = 0;
         self.close_preview(cx);
+        if !self.retained_workspace && !self.standalone_shelf && !self.standalone_tasks {
+            self.release_workspace(cx);
+            return;
+        }
         if !self.retained_workspace || self.screen != Screen::WebTool {
             self.close_web_surface(cx);
-        } else if self.web_surface.view.is_some() {
-            let _ = self.evaluate_web_script(&visibility_script(false), cx);
+        } else {
+            self.web_surface.needs_resume = true;
+            if self.web_surface.view.is_some() {
+                let _ = self.evaluate_web_script(&visibility_script(false), cx);
+            }
             self.web_surface.ready = false;
             self.web_surface.state_handle = None;
             self.web_surface.state_version = 0;
         }
-        if !self.retained_workspace {
-            self.application_icons_requested.clear();
-            self.application_icons.clear();
+        if let Some(hidden_at) = self.hidden_at {
+            self.retention_task = Some(cx.spawn(async move |this, cx| {
+                cx.background_executor()
+                    .timer(Duration::from_millis(
+                        anywhere_protocol::policy::LAUNCHER_RETENTION_MS,
+                    ))
+                    .await;
+                let _ = this.update(cx, |this, cx| {
+                    if this.hidden_at != Some(hidden_at) || !this.retained_workspace {
+                        return;
+                    }
+                    this.release_workspace(cx);
+                    tracing::debug!("launcher_workspace_retention_expired");
+                });
+            }));
+        } else {
+            self.retention_task = None;
         }
+    }
+
+    fn can_resume_workspace(&self) -> bool {
+        self.retained_workspace
+            && self.live_state.session_id.is_some()
+            && self.hidden_at.is_some_and(|hidden_at| {
+                hidden_at.elapsed()
+                    < Duration::from_millis(anywhere_protocol::policy::LAUNCHER_RETENTION_MS)
+            })
+    }
+
+    fn release_workspace(&mut self, cx: &mut Context<Self>) {
+        self.retention_task = None;
+        self.hidden_at = None;
+        self.retained_workspace = false;
+        self.close_web_surface(cx);
+        self.release_app_history_session();
+        if let (Some(live), Some(session_id)) = (&self.live, self.live_state.session_id.take()) {
+            if let Err(error) = live.discard_session_now(session_id) {
+                tracing::warn!(%error, "launcher_discard_failed");
+            }
+        }
+        self.live_state.snapshot_gate = None;
+        self.live_state.request_revision = 0;
+        self.parent_workspace = None;
+        self.app_history.release_workspace();
+        self.clipboard = ClipboardPageModel {
+            query_generation: self.clipboard.query_generation,
+            operation_generation: self.clipboard.operation_generation,
+            ..Default::default()
+        };
+        self.file_search = FileSearchPageModel {
+            page_generation: self.file_search.page_generation,
+            ..Default::default()
+        };
+        self.tasks.release_workspace();
+        self.pending_task_selection = None;
+        if matches!(
+            self.runtime_state,
+            RuntimeState::Ready | RuntimeState::Preview
+        ) {
+            self.model = LauncherModel::empty(self.locale);
+        }
+        self.application_icons_requested.clear();
+        self.application_icons = crate::launcher::icon_cache::ApplicationIconCache::default();
+
+        let generation = self.live_state.generation;
+        let window_handle = self.window_handle;
+        let view = cx.weak_entity();
+        cx.defer(move |cx| {
+            let _ = window_handle.update(cx, |_, window, cx| {
+                let _ = view.update(cx, |this, cx| {
+                    if this.live_state.generation == generation
+                        && (!this.presented || this.is_settings_surface())
+                    {
+                        this.clear_workspace_editors(window, cx);
+                    }
+                });
+            });
+        });
+        cx.notify();
+    }
+
+    fn clear_workspace_editors(&self, window: &mut Window, cx: &mut Context<Self>) {
+        set_input_value(&self.input, "", window, cx);
+        set_textarea_value(&self.content_input, "", window, cx);
+        set_input_value(&self.clipboard_input, "", window, cx);
+        set_input_value(&self.history_input, "", window, cx);
+        set_input_value(&self.tasks_filter_input, "", window, cx);
     }
 
     fn should_retain_workspace(&self) -> bool {

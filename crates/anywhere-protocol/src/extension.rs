@@ -16,9 +16,6 @@ pub enum ExtensionCapability {
     ProcessStart,
     #[serde(rename = "storage")]
     Storage,
-    /// Legacy v1 compatibility only; v2 delegation is not yet exposed.
-    #[serde(rename = "builtin.invoke")]
-    InvokeBuiltin,
 }
 impl ExtensionCapability {
     pub fn as_str(self) -> &'static str {
@@ -30,7 +27,6 @@ impl ExtensionCapability {
             Self::GitRead => "git.read",
             Self::ProcessStart => "process.start",
             Self::Storage => "storage",
-            Self::InvokeBuiltin => "builtin.invoke",
         }
     }
 }

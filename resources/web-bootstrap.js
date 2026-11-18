@@ -68,15 +68,40 @@
   const encoder = new TextEncoder();
   const decoder = new TextDecoder('utf-8', {fatal: true, ignoreBOM: true});
   window.anywhereNative.onmessage = event => {
-    const bytes = event.data;
-    if (!(bytes instanceof ArrayBuffer) || bytes.byteLength > 65536) return;
+    const data = event.data;
     let frame, message;
     try {
-      frame = decoder.decode(bytes);
+      if (typeof data === 'string') {
+        if (data.length > 65536 || encoder.encode(data).length > 65536) return;
+        frame = data;
+      } else {
+        if (!(data instanceof ArrayBuffer) || data.byteLength > 65536) return;
+        frame = decoder.decode(data);
+      }
       message = JSON.parse(frame);
     } catch {
       return;
     }
+    if (
+      !visible ||
+      message === null ||
+      typeof message !== 'object' ||
+      Array.isArray(message) ||
+      typeof message.requestId !== 'string' ||
+      !pending.has(message.requestId)
+    )
+      return;
+    const object = value =>
+      value !== null && typeof value === 'object' && !Array.isArray(value);
+    const result = Object.hasOwn(message, 'result');
+    const error = Object.hasOwn(message, 'error');
+    if (
+      result === error ||
+      (result && !object(message.result)) ||
+      (error &&
+        (!object(message.error) || typeof message.error.code !== 'string'))
+    )
+      return;
     pending.delete(message.requestId);
     for (const receive of receivers) receive(frame);
   };
@@ -88,21 +113,22 @@
     value: Object.freeze({
       send(frame) {
         if (!visible) throw new Error('INACTIVE');
+        if (encoder.encode(frame).length > 65536) {
+          throw new Error('TOO_LARGE');
+        }
         const message = JSON.parse(frame);
         const cancellation = message.method === 'request.cancel';
-        // Cancellation is unqueued and still checked independently by Rust.
-        if (
-          encoder.encode(frame).length > 65536 ||
-          (!cancellation && pending.size >= 32)
-        ) {
-          throw new Error('BUSY');
+        // Cancellation is unqueued and only forwarded for an active pending request.
+        if (cancellation) {
+          if (!pending.delete(message.params?.request_id)) return;
+        } else {
+          if (pending.size >= 32) throw new Error('BUSY');
+          pending.add(message.requestId);
         }
-        if (cancellation) pending.delete(message.params?.request_id);
-        else pending.add(message.requestId);
         try {
           window.anywhereNative.postMessage(frame);
         } catch (error) {
-          pending.delete(message.requestId);
+          if (!cancellation) pending.delete(message.requestId);
           throw error;
         }
       },

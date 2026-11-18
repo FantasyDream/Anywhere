@@ -20,8 +20,8 @@ pub fn matches(name: &str, tokens: &[String]) -> bool {
 }
 
 fn matches_token(name: &str, token: &str, initials: bool) -> bool {
-    let mut active = vec![false; token.len() + 1];
-    let mut next = active.clone();
+    let mut active = [false; MAX_TOKEN_BYTES + 1];
+    let mut next = [false; MAX_TOKEN_BYTES + 1];
     active[0] = true;
     for ch in name.chars() {
         next.fill(false);

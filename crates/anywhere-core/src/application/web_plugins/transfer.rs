@@ -64,7 +64,7 @@ impl RpcState {
             bytes,
             sequence,
             text,
-            ..
+            expires,
         }) = &mut self.transfer
         else {
             return Err(WebError::new(WebErrorCode::Expired));
@@ -80,6 +80,7 @@ impl RpcState {
         }
         text.push_str(chunk);
         *sequence += 1;
+        *expires = Instant::now() + Duration::from_millis(REQUEST_TIMEOUT_MS);
         Ok(Value::Null)
     }
     pub fn commit_text(&mut self, ticket: &str) -> WebResult<String> {
@@ -99,7 +100,7 @@ impl RpcState {
             sequence,
             offset,
             text,
-            ..
+            expires,
         }) = &mut self.transfer
         else {
             return Err(WebError::new(WebErrorCode::Expired));
@@ -118,6 +119,7 @@ impl RpcState {
             json!({"text": &text[*offset..end], "sequence":index, "done":end == text.len()});
         *sequence += 1;
         *offset = end;
+        *expires = Instant::now() + Duration::from_millis(REQUEST_TIMEOUT_MS);
         if end == text.len() {
             self.transfer = None;
         }

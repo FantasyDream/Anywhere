@@ -74,16 +74,12 @@ impl LauncherView {
                 (IconName::RefreshCw, l10n::reload_tool(self.locale)),
                 (IconName::ArrowLeft, l10n::back_to_search_esc(self.locale)),
             ];
-            div()
+            components::menu_popover()
                 .id("web-tool-actions-panel")
                 .debug_selector(|| "web-tool-actions-panel".into())
                 .test_support()
                 .w(px(230.))
                 .overflow_hidden()
-                .rounded(px(metrics::CARD_RADIUS))
-                .bg(theme::menu_surface())
-                .border(px(metrics::DIVIDER_WIDTH))
-                .border_color(theme::selection_outline())
                 .p(px(6.))
                 .flex()
                 .flex_col()
@@ -93,19 +89,19 @@ impl LauncherView {
                         .into_iter()
                         .enumerate()
                         .map(|(index, (icon, label))| {
-                            Button::new(SharedString::from(format!("web-tool-action-{index}")))
-                                .when(index == self.web_surface.action_selected, |button| {
-                                    button.secondary()
-                                })
-                                .when(index != self.web_surface.action_selected, |button| {
-                                    button.ghost()
-                                })
-                                .icon(icon)
-                                .label(label)
-                                .on_click(cx.listener(move |this, _, window, cx| {
+                            components::dark_surface_button(
+                                SharedString::from(format!("web-tool-action-{index}")),
+                                index == self.web_surface.action_selected,
+                                cx,
+                            )
+                            .icon(icon)
+                            .label(label)
+                            .on_click(cx.listener(
+                                move |this, _, window, cx| {
                                     this.web_surface.action_selected = index;
                                     this.execute_web_action(index, window, cx);
-                                }))
+                                },
+                            ))
                         }),
                 )
                 .into_any_element()
@@ -127,7 +123,7 @@ impl LauncherView {
             .children(actions_panel.map(|panel| {
                 Self::page_popup(
                     window,
-                    px(metrics::PAGE_HEADER_HEIGHT + metrics::DIVIDER_WIDTH + 52.),
+                    px(metrics::PAGE_HEADER_HEIGHT + metrics::DIVIDER_WIDTH),
                     px(12.),
                     panel,
                 )

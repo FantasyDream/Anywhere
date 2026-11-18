@@ -2,10 +2,10 @@
 
 当前采用本地 `.awplugin` 包、系统 WebView、版本化 TypeScript SDK 和 Rust 能力
 代理。WebView 承载 UI；按需 QuickJS 承载有限 Context / 后台命令。两者不直接
-互调，统一通过 Rust broker。最后整理：2026-11-11。
+互调，统一通过 Rust broker。最后整理：2026-11-16。
 
-开发步骤见[插件开发](plugin-development.md)，传输与旧声明式协议边界见
-[插件协议](plugin-protocol.md)。
+开发步骤见[插件开发](plugin-development.md)，整体模块与运行时分工见
+[架构](architecture.md)。
 
 ## 目标
 
@@ -25,7 +25,7 @@ flowchart TD
   Runtime --> Handle[Rust-owned document handle]
   Handle --> GPUI[GPUI tool surface]
   GPUI --> WebView[macOS WKWebView]
-  WebView --> IPC[versioned binary IPC]
+  WebView --> IPC[versioned JSON string IPC]
   IPC --> Broker[Rust capability broker]
   Background[On-demand QuickJS] --> Broker
   SDK[TypeScript SDK] --> WebView
@@ -65,10 +65,16 @@ Manifest 声明包 ID、版本、入口、资源、命令、Context resolver、�
 - 批准与权限快照；
 - 固定 origin；
 - 输入投影；
+- 已提交执行请求的 session / revision；
 - 资源预算、取消状态和 generation。
 
 WebView 只允许加载该 handle 的入口和已验证资源。导航到其他 origin 被拒绝。
 GPUI 不自行拼资源路径，也不把任意本地路径暴露给页面。
+
+首次 Web state 以执行请求冻结的 revision 为启动基线，不从选定 Context 自身
+推导。名称搜索得到的 Launcher Entry 可以是 revision 0，而实际执行属于当前
+session revision；只有后者能区分“启动输入”和“启动后的新输入”。相同 revision
+的 `snapshot_seq` 更新只表示宿主快照变化，不能把搜索词重新投影成正文。
 
 替换文档推进 generation。旧页面的资源请求、IPC、ack、状态事件、崩溃和关闭
 回调都不能操作新 surface。文档关闭、应用退出或执行资格撤销会取消待处理请求并
@@ -84,7 +90,7 @@ GPUI 不自行拼资源路径，也不把任意本地路径暴露给页面。
 - 后台事件：与 UI 请求分离，不把订阅错误报告为已完成操作；
 - ack / close：绑定 resource ID 与 document generation。
 
-二进制传输和 HTML bootstrap 由 `apps/gpui/src/web_tool.rs` 生成并验证。消息大小、
+字符串帧传输和 HTML bootstrap 由 `apps/gpui/src/web_tool.rs` 生成并验证（文档侧同时保留 `ArrayBuffer` 解码兼容）。消息大小、
 并发、等待时间和输出都有上限。JS 不直接访问 Rust API 或文件系统。
 
 请求在 worker admission 时等待取消；已经开始的实际 I/O 保持自己的许可至结束。
@@ -116,6 +122,10 @@ commit / cancel 是事务；失败后释放待回复名额并继续允许后续�
 Web 页面自动获得 `resources/web-controls.css` 和
 `resources/web-bootstrap.js`。插件通常不导入基础控件 CSS；局部 CSS 只处理业务
 布局。Web token 与 GPUI 同源，但系统 WebKit 与 GPUI 的文字栅格允许细微差异。
+macOS 的 `lb-wry` 编译启用 `transparent`，原生 WebView 不再额外绘制白底。
+普通控件继承文档根 `color-scheme`；固定深色 menu / dialog / tooltip 局部指定
+`dark` 并使用 `--aw-on-dark-*`。SDK 静态 token 默认深色，生产 Host 按当前
+材质外观覆盖当前文档。
 
 ## 页面生命周期
 
@@ -125,6 +135,13 @@ Web 页面自动获得 `resources/web-controls.css` 和
 - WebView 获得焦点后，页面内部键盘由 WebKit 处理；宿主返回和清理使用显式
   app 路径。
 - 页面替换、关闭和退出清空消息、资源、ack、焦点与文档状态。
+- Reload 保留旧文档直到替换绑定成功；不能先关闭当前绑定并删除重载所需的
+  invocation。打开 / Reload 和恢复各有请求代次，重入被拒绝；迟到文档只释放
+  自己的 handle，旧关闭失败不发布到新页面。
+- 保留隐藏窗口时，在途绑定只能保留元数据。Core 绑定要求 Session 仍可交互；
+  隐藏撤销的文档须在恢复后换取有效 epoch，再挂载或恢复 WebView IPC。
+  以显式恢复意图区分初次等待 ready 与隐藏恢复，不因普通快照重复发起恢复。
+  关闭响应通道也须结束 busy 并提供重试，旧响应不能覆盖替换后的页面。
 
 ## 安装与管理
 
@@ -137,7 +154,7 @@ Settings 中展示包来源、版本、权限、启用状态和错误。安装 /
 自动化覆盖：
 
 - 包路径、资源、摘要、schema 和 grant 校验；
-- HTML policy、固定 origin、bootstrap 和二进制 IPC；
+- HTML policy、固定 origin、bootstrap 和受限字符串帧 IPC；
 - 旧 document generation 的迟到回复、状态和关闭；
 - 安装 review token、取消、更新与撤销；
 - SDK 文本上传、Unicode、1 MiB 边界和失败后恢复；

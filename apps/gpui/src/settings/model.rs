@@ -67,6 +67,7 @@ pub struct SettingsModel {
     pub features: Vec<FeatureSetting>,
     pub saving: bool,
     pub error: Option<String>,
+    pub login_item_error: Option<String>,
 }
 
 impl Default for SettingsModel {
@@ -77,6 +78,7 @@ impl Default for SettingsModel {
             features: Vec::new(),
             saving: false,
             error: None,
+            login_item_error: None,
         }
     }
 }

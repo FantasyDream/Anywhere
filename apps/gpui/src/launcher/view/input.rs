@@ -396,7 +396,7 @@ impl LauncherView {
         if command && key.eq_ignore_ascii_case("r") {
             if self.screen == Screen::Tasks {
                 self.start_tasks_refresh(cx);
-            } else if self.screen == Screen::ClipboardShelf {
+            } else if matches!(self.screen, Screen::Clipboard | Screen::ClipboardShelf) {
                 self.request_clipboard_search(cx);
             }
             return;
@@ -409,7 +409,7 @@ impl LauncherView {
                         input.select_all(window, cx);
                     });
                 }
-            } else if self.screen == Screen::ClipboardShelf {
+            } else if matches!(self.screen, Screen::Clipboard | Screen::ClipboardShelf) {
                 self.clipboard_input.update(cx, |input, cx| {
                     input.focus(window, cx);
                     input.select_all(window, cx);
@@ -428,6 +428,7 @@ impl LauncherView {
                 if (1..=9).contains(&index) && index <= self.clipboard.items().len() {
                     self.clipboard.browsing = true;
                     self.clipboard.selected = index - 1;
+                    self.refresh_clipboard_selection(cx);
                     self.copy_selected_clipboard(cx);
                     return;
                 }
@@ -436,7 +437,7 @@ impl LauncherView {
                 if !self.clipboard.items().is_empty() {
                     self.clipboard.browsing = true;
                     self.clipboard.selected = 0;
-                    cx.notify();
+                    self.refresh_clipboard_selection(cx);
                 }
                 return;
             }
@@ -444,7 +445,7 @@ impl LauncherView {
                 if !self.clipboard.items().is_empty() {
                     self.clipboard.browsing = true;
                     self.clipboard.selected = self.clipboard.items().len() - 1;
-                    cx.notify();
+                    self.refresh_clipboard_selection(cx);
                 }
                 return;
             }
@@ -576,6 +577,7 @@ impl LauncherView {
             (Screen::FileSearch, "escape") => {
                 if self.model.object_actions_active {
                     self.model.hide_object_actions();
+                    self.reveal_result_row(self.model.selected);
                     cx.notify();
                 } else if !self.model.query.is_empty() {
                     self.reset_file_search_browsing(cx);
@@ -631,7 +633,10 @@ impl LauncherView {
                     self.go_back(window, cx);
                 }
             }
-            (Screen::ApplicationHistory | Screen::ClipboardShelf, "pageup" | "pagedown") => {
+            (
+                Screen::ApplicationHistory | Screen::Clipboard | Screen::ClipboardShelf,
+                "pageup" | "pagedown",
+            ) => {
                 let history = self.screen == Screen::ApplicationHistory;
                 let (height, row_height, selected, count) = if history {
                     (
@@ -639,6 +644,13 @@ impl LauncherView {
                         64.,
                         self.app_history.selected,
                         self.app_history.items.len(),
+                    )
+                } else if self.screen == Screen::Clipboard {
+                    (
+                        self.clipboard_scroll.bounds().size.height,
+                        64.,
+                        self.clipboard.selected,
+                        self.clipboard.items().len(),
                     )
                 } else {
                     (
@@ -660,12 +672,39 @@ impl LauncherView {
                 } else if count > 0 {
                     self.clipboard.browsing = true;
                     self.clipboard.selected = target;
+                    self.clipboard.copied_item = None;
+                    self.notice = None;
                     if self.preview_open {
                         self.preview_selected_clipboard(cx);
                     }
                 }
                 self.reveal_result_row(target);
                 cx.notify();
+            }
+            (Screen::FileSearch, "pageup" | "pagedown") => {
+                let count = self.model.rows.len();
+                if count > 0 {
+                    let height = self.file_search_scroll.bounds().size.height;
+                    let step = (f32::from(height) / 56.).floor().clamp(1., 100.) as usize;
+                    let selected = if self.file_search.browsing {
+                        self.model.selected
+                    } else {
+                        0
+                    };
+                    let target = if key == "pageup" {
+                        selected.saturating_sub(step)
+                    } else {
+                        selected.saturating_add(step).min(count - 1)
+                    };
+                    self.file_search.browsing = true;
+                    self.model.selected = target;
+                    self.notice = None;
+                    if self.preview_open {
+                        self.request_preview(cx);
+                    }
+                    self.reveal_result_row(target);
+                    cx.notify();
+                }
             }
             (Screen::ApplicationHistory, "down") => {
                 self.app_history.select_next();
@@ -700,13 +739,13 @@ impl LauncherView {
                 }
             }
             (Screen::Tasks, "down") => {
+                self.pending_task_selection = None;
                 if !self.tasks.visible_indices().is_empty() {
                     let previous = self.tasks.selected;
                     self.tasks.select_next_visible();
                     self.reveal_result_row(self.tasks.selected);
                     if self.tasks.selected != previous {
-                        self.tasks.detail = None;
-                        self.tasks.detail_request = self.tasks.detail_request.wrapping_add(1);
+                        self.tasks.clear_detail();
                         if let Some(task_id) = self.tasks.selected_row().map(|row| row.id.clone()) {
                             self.request_task_detail(task_id, cx);
                         }
@@ -715,13 +754,13 @@ impl LauncherView {
                 }
             }
             (Screen::Tasks, "up") => {
+                self.pending_task_selection = None;
                 if !self.tasks.visible_indices().is_empty() {
                     let previous = self.tasks.selected;
                     self.tasks.select_previous_visible();
                     self.reveal_result_row(self.tasks.selected);
                     if self.tasks.selected != previous {
-                        self.tasks.detail = None;
-                        self.tasks.detail_request = self.tasks.detail_request.wrapping_add(1);
+                        self.tasks.clear_detail();
                         if let Some(task_id) = self.tasks.selected_row().map(|row| row.id.clone()) {
                             self.request_task_detail(task_id, cx);
                         }
@@ -765,7 +804,7 @@ impl LauncherView {
             (Screen::WebPackages, "enter" | "return") => self.toggle_selected_web_package(cx),
             (Screen::WebPackages, "escape") => self.go_back(window, cx),
             (Screen::WebTool, "escape") => self.go_back(window, cx),
-            (Screen::PluginDetail | Screen::UnsupportedTool, "escape") => self.go_back(window, cx),
+            (Screen::UnsupportedTool, "escape") => self.go_back(window, cx),
             _ => {}
         }
     }

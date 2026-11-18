@@ -228,9 +228,11 @@ pub struct FileSearchOptions {
     pub include_hidden: bool,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum FileSearchEngine {
     #[default]
+    #[serde(alias = "systemIndex")]
     SystemIndex,
     Ripgrep,
     Combined,

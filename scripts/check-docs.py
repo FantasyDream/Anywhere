@@ -48,8 +48,27 @@ def heading_ids(text):
     return result
 
 
+def ignored_paths(root, relatives):
+    if not relatives:
+        return set()
+    payload = b"\0".join(str(rel).encode("utf-8") for rel in relatives) + b"\0"
+    result = subprocess.run(
+        ["git", "check-ignore", "--stdin", "-z"],
+        cwd=root,
+        input=payload,
+        capture_output=True,
+        check=False,
+    )
+    return {
+        Path(item.decode("utf-8"))
+        for item in result.stdout.split(b"\0")
+        if item
+    }
+
+
 def check_documents(root, documents, *, check_ignored=True):
-    failures, ignored, headings = [], {}, {}
+    failures, headings = [], {}
+    pending_targets = []
     links = 0
     for document in documents:
         text = document.read_text()
@@ -69,25 +88,22 @@ def check_documents(root, documents, *, check_ignored=True):
             except ValueError:
                 failures.append(f"{source}: {raw}: target outside repository")
                 continue
-            if check_ignored and relative not in ignored:
-                ignored[relative] = subprocess.run(
-                    ["git", "check-ignore", "-q",
-                     str(relative)],
-                    cwd=root,
-                    check=False,
-                ).returncode == 0
-            if ignored.get(relative, False):
-                failures.append(
-                    f"{source}: {raw}: ignored target is not shipped")
-                continue
-            if not target.exists():
-                failures.append(f"{source}: {raw}: missing target")
-                continue
-            if anchor and target.suffix == ".md":
-                if target not in headings:
-                    headings[target] = heading_ids(target.read_text())
-                if unquote(anchor) not in headings[target]:
-                    failures.append(f"{source}: {raw}: missing heading")
+            pending_targets.append((source, raw, target, relative, anchor))
+    ignored = ignored_paths(
+        root, sorted({rel for _, _, _, rel, _ in pending_targets
+                     })) if check_ignored else set()
+    for source, raw, target, relative, anchor in pending_targets:
+        if relative in ignored:
+            failures.append(f"{source}: {raw}: ignored target is not shipped")
+            continue
+        if not target.exists():
+            failures.append(f"{source}: {raw}: missing target")
+            continue
+        if anchor and target.suffix == ".md":
+            if target not in headings:
+                headings[target] = heading_ids(target.read_text())
+            if unquote(anchor) not in headings[target]:
+                failures.append(f"{source}: {raw}: missing heading")
     return failures, links
 
 

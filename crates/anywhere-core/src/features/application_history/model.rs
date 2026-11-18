@@ -117,6 +117,16 @@ pub struct PageInput {
     pub localized_titles: std::collections::BTreeMap<String, String>,
 }
 pub type Cancelled = std::sync::Arc<dyn Fn() -> bool + Send + Sync>;
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SourceRevision {
+    pub path: PathBuf,
+    pub bytes: u64,
+    pub modified: std::time::SystemTime,
+    pub journal: Option<(u64, std::time::SystemTime)>,
+    pub rollback_journal: Option<(u64, std::time::SystemTime)>,
+    pub header_fingerprint: [u8; 64],
+}
+
 pub trait SourceLoader: Send + Sync {
     fn descriptors(&self) -> Vec<SourceDescriptor>;
     /// Metadata-only detection. Never parse history while configuring a source.
@@ -124,6 +134,9 @@ pub trait SourceLoader: Send + Sync {
         None
     }
     fn configuration_error(&self) -> Option<&str> {
+        None
+    }
+    fn revision(&self, _source: &SourcePreference) -> Option<SourceRevision> {
         None
     }
     fn read(&self, source: &SourcePreference, cancelled: Cancelled) -> anyhow::Result<Vec<Entry>>;

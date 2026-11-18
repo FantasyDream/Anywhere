@@ -1,6 +1,6 @@
 use super::{
-    plan_window_material, remember_material_plan, WindowAppearance, WindowMaterialEnvironment,
-    WindowMaterialMode, WindowMaterialPlan,
+    plan_window_material, remember_material_plan, WindowAppearance, WindowGlassStyle,
+    WindowMaterialEnvironment, WindowMaterialMode, WindowMaterialPlan,
 };
 use objc2::{
     runtime::{AnyClass, NSObjectProtocol},
@@ -67,8 +67,16 @@ fn configure_material_wrapper(wrapper: &NSView, plan: WindowMaterialPlan) {
     }
 }
 
-fn configure_glass(glass: &NSGlassEffectView, plan: WindowMaterialPlan) {
-    glass.setStyle(NSGlassEffectViewStyle::Regular);
+fn configure_glass(
+    glass: &NSGlassEffectView,
+    plan: WindowMaterialPlan,
+    glass_style: WindowGlassStyle,
+) {
+    // Use one unmodified system material on every product window. AppKit owns
+    // its adaptive density, refraction and rim; GPUI adds no compensating veil.
+    glass.setStyle(match glass_style {
+        WindowGlassStyle::Regular => NSGlassEffectViewStyle::Regular,
+    });
     glass.setCornerRadius(plan.corner_radius);
     // Keep the system material unmodified, including its accessibility and
     // Liquid Glass appearance preferences. Nil also clears any previous tint.
@@ -131,11 +139,14 @@ pub(super) fn prepare_window_material() {
     );
 }
 
-pub(super) fn install_window_material(window: &NSWindow, corner_radius: f64) -> bool {
+pub(super) fn install_window_material(
+    window: &NSWindow,
+    corner_radius: f64,
+    glass_style: WindowGlassStyle,
+) -> bool {
     let liquid_glass_available = AnyClass::get(c"NSGlassEffectView").is_some();
     let environment = read_environment(&window.effectiveAppearance(), liquid_glass_available);
     let plan = plan_window_material(environment, corner_radius);
-    remember_material_plan(plan);
 
     let Some(mut content) = window.contentView() else {
         return false;
@@ -144,6 +155,8 @@ pub(super) fn install_window_material(window: &NSWindow, corner_radius: f64) -> 
         if is_material_wrapper(&content) && !restore_content_view(window, &content) {
             return false;
         }
+        window.setOpaque(true);
+        window.setBackgroundColor(Some(&NSColor::windowBackgroundColor()));
         return true;
     }
 
@@ -158,7 +171,7 @@ pub(super) fn install_window_material(window: &NSWindow, corner_radius: f64) -> 
         if matches {
             if liquid_glass_available {
                 if let Some(glass) = content.downcast_ref::<NSGlassEffectView>() {
-                    configure_glass(glass, plan);
+                    configure_glass(glass, plan, glass_style);
                 }
             }
             configure_material_wrapper(&content, plan);
@@ -181,7 +194,7 @@ pub(super) fn install_window_material(window: &NSWindow, corner_radius: f64) -> 
                 MainThreadMarker::new().expect("window material requires AppKit main thread");
             let glass = NSGlassEffectView::new(marker);
             glass.setFrame(bounds);
-            configure_glass(&glass, plan);
+            configure_glass(&glass, plan, glass_style);
             glass.setContentView(Some(&content));
             glass.into_super()
         }
@@ -210,6 +223,7 @@ pub(super) fn install_window_material(window: &NSWindow, corner_radius: f64) -> 
     window.setContentView(Some(&wrapper));
     tracing::debug!(
         mode = ?plan.mode,
+        glass_style = ?glass_style,
         appearance = ?plan.appearance,
         reduce_transparency = environment.reduce_transparency,
         increase_contrast = environment.increase_contrast,

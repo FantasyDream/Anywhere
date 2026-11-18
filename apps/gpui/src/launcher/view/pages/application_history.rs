@@ -30,187 +30,26 @@ impl LauncherView {
                 self.app_history.notice_text(self.locale),
             )
         } else {
-            let mut list = div()
-                .id("application-history-list")
+            div()
                 .flex_1()
                 .min_h(px(0.))
-                .flex()
-                .flex_col()
-                .px(px(10.))
-                .py(px(3.))
-                .track_scroll(&self.history_scroll)
-                .overflow_y_scroll()
-                .vertical_scrollbar(&self.history_scroll);
-            for (index, item) in self.app_history.items.clone().into_iter().enumerate() {
-                let selected = self.app_history.selected == index;
-                let can_open = item.can_open;
-                let item_id = item.id.clone();
-                list = list.child(
-                    div()
-                        .id(SharedString::from(format!("history-item-{item_id}")))
-                        .role(gpui_kit::Role::ListBoxOption)
-                        .aria_label(item.title.clone())
-                        .aria_selected(selected)
-                        .h(px(64.))
-                        .flex_shrink_0()
-                        .py(px(3.))
-                        .cursor_pointer()
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.app_history.selected = index;
-                            this.app_history.close_object_actions();
-                            this.notice = None;
-                            cx.notify();
-                        }))
-                        .on_mouse_down(
-                            MouseButton::Right,
-                            cx.listener(move |this, _, _, cx| {
-                                this.app_history.selected = index;
-                                this.notice = None;
-                                if can_open {
-                                    this.request_app_history_object_actions(cx);
-                                } else {
-                                    this.toggle_fallback_app_history_actions(cx);
-                                }
-                            }),
-                        )
-                        .on_double_click(cx.listener(move |this, _, _, cx| {
-                            this.app_history.selected = index;
-                            if can_open {
-                                this.open_selected_history_item(cx);
-                            } else {
-                                this.copy_selected_history_item(cx);
-                            }
-                        }))
-                        .child(
-                            div()
-                                .flex()
-                                .h_full()
-                                .px(px(12.))
-                                .items_center()
-                                .result_surface(selected)
-                                .child(
-                                    Icon::new(match item.kind {
-                                        "directory" => IconName::Folder,
-                                        "workspace" => IconName::Code,
-                                        "remote" => IconName::Globe,
-                                        _ => IconName::File,
-                                    })
-                                    .size(px(23.))
-                                    .text_color(
-                                        if item.kind == "directory" {
-                                            theme::icon_blue()
-                                        } else {
-                                            theme::icon_purple()
-                                        },
-                                    ),
-                                )
-                                .child(div().w(px(12.)))
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w(px(0.))
-                                        .flex()
-                                        .flex_col()
-                                        .justify_center()
-                                        .gap(px(3.))
-                                        .child(
-                                            div()
-                                                .truncate()
-                                                .body_text()
-                                                .text_color(theme::primary())
-                                                .child(item.title),
-                                        )
-                                        .child(
-                                            div()
-                                                .truncate()
-                                                .caption_text()
-                                                .text_color(theme::secondary())
-                                                .child(item.value),
-                                        ),
-                                )
-                                .when(selected, |element| {
-                                    element
-                                        .child(
-                                            div()
-                                                .id(SharedString::from(format!(
-                                                    "history-open-{item_id}"
-                                                )))
-                                                .role(gpui_kit::Role::Button)
-                                                .aria_label(if can_open {
-                                                    l10n::open(self.locale)
-                                                } else {
-                                                    l10n::copy(self.locale)
-                                                })
-                                                .h(px(metrics::CONTROL_HEIGHT))
-                                                .flex_none()
-                                                .px(px(metrics::CONTROL_PADDING_X))
-                                                .flex()
-                                                .items_center()
-                                                .gap(px(5.))
-                                                .rounded(px(6.))
-                                                .hover(|style| style.bg(theme::hover()))
-                                                .cursor_pointer()
-                                                .on_click(cx.listener(move |this, _, _, cx| {
-                                                    cx.stop_propagation();
-                                                    this.app_history.selected = index;
-                                                    if can_open {
-                                                        this.open_selected_history_item(cx);
-                                                    } else {
-                                                        this.copy_selected_history_item(cx);
-                                                    }
-                                                }))
-                                                .child(if can_open {
-                                                    l10n::open(self.locale)
-                                                } else {
-                                                    l10n::copy(self.locale)
-                                                })
-                                                .when(!can_open, |element| {
-                                                    element.child(
-                                                        Icon::new(IconName::CornerDownLeft)
-                                                            .size(px(12.))
-                                                            .text_color(theme::secondary()),
-                                                    )
-                                                }),
-                                        )
-                                        .child(
-                                            div()
-                                                .id(SharedString::from(format!(
-                                                    "history-actions-{item_id}"
-                                                )))
-                                                .test_support()
-                                                .role(gpui_kit::Role::Button)
-                                                .aria_label(l10n::actions(self.locale))
-                                                .h(px(metrics::CONTROL_HEIGHT))
-                                                .flex_none()
-                                                .px(px(metrics::CONTROL_PADDING_X))
-                                                .flex()
-                                                .items_center()
-                                                .gap(px(4.))
-                                                .rounded(px(6.))
-                                                .hover(|style| style.bg(theme::hover()))
-                                                .cursor_pointer()
-                                                .on_click(cx.listener(move |this, _, _, cx| {
-                                                    cx.stop_propagation();
-                                                    this.app_history.selected = index;
-                                                    if can_open {
-                                                        this.request_app_history_object_actions(cx);
-                                                    } else {
-                                                        this.toggle_fallback_app_history_actions(
-                                                            cx,
-                                                        );
-                                                    }
-                                                }))
-                                                .child(
-                                                    Icon::new(IconName::Ellipsis)
-                                                        .size(px(14.))
-                                                        .text_color(theme::secondary()),
-                                                ),
-                                        )
-                                }),
-                        ),
-                );
-            }
-            list.into_any_element()
+                .relative()
+                .child(
+                    gpui_kit::uniform_list(
+                        "application-history-list",
+                        self.app_history.items.len(),
+                        cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
+                            range
+                                .map(|index| this.render_history_list_row(index, cx))
+                                .collect::<Vec<_>>()
+                        }),
+                    )
+                    .size_full()
+                    .px(px(10.))
+                    .track_scroll(&self.tool_list_scrolls.history),
+                )
+                .vertical_scrollbar(&self.history_scroll)
+                .into_any_element()
         };
         let object_actions_panel = self.app_history.object_actions_active.then(|| {
             let language = match self.locale {
@@ -232,62 +71,61 @@ impl LauncherView {
                     .cloned()
                     .unwrap_or(action.title);
                 rows = rows.child(
-                    Button::new(SharedString::from(format!("history-object-action-{index}")))
-                        .when(index == selected_action, |button| button.secondary())
-                        .when(index != selected_action, |button| button.ghost())
-                        .label(title)
-                        .disabled(!action.enabled)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.app_history.object_action_selected = index;
-                            if this.app_history.selected_object_action().is_none() {
-                                return;
-                            }
-                            this.execute_selected_app_history_action(cx);
-                            cx.notify();
-                        })),
+                    components::dark_surface_button(
+                        SharedString::from(format!("history-object-action-{index}")),
+                        index == selected_action,
+                        cx,
+                    )
+                    .label(title)
+                    .disabled(!action.enabled)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.app_history.object_action_selected = index;
+                        if this.app_history.selected_object_action().is_none() {
+                            return;
+                        }
+                        this.execute_selected_app_history_action(cx);
+                        cx.notify();
+                    })),
                 );
             }
             let fallback_copy = self.app_history.object_actions_fallback_copy();
             if fallback_copy {
                 rows = rows.child(
-                    Button::new("history-object-action-copy")
-                        .when(selected_action == 0, |button| button.secondary())
-                        .when(selected_action != 0, |button| button.ghost())
-                        .label(l10n::app_history_copy_target(self.locale))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.app_history.object_action_selected = 0;
-                            this.execute_selected_app_history_action(cx);
-                            cx.notify();
-                        })),
+                    components::dark_surface_button(
+                        "history-object-action-copy",
+                        selected_action == 0,
+                        cx,
+                    )
+                    .label(l10n::app_history_copy_target(self.locale))
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.app_history.object_action_selected = 0;
+                        this.execute_selected_app_history_action(cx);
+                        cx.notify();
+                    })),
                 );
             }
             if !self.app_history.object_actions_loading {
                 let refresh_index =
                     self.app_history.object_actions.len() + usize::from(fallback_copy);
                 rows = rows.child(
-                    Button::new("history-object-action-refresh")
-                        .when(selected_action == refresh_index, |button| {
-                            button.secondary()
-                        })
-                        .when(selected_action != refresh_index, |button| button.ghost())
-                        .label(l10n::refresh(self.locale))
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.app_history.object_action_selected =
-                                this.app_history.object_actions.len();
-                            this.execute_selected_app_history_action(cx);
-                            cx.notify();
-                        })),
+                    components::dark_surface_button(
+                        "history-object-action-refresh",
+                        selected_action == refresh_index,
+                        cx,
+                    )
+                    .label(l10n::refresh(self.locale))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.app_history.object_action_selected = refresh_index;
+                        this.execute_selected_app_history_action(cx);
+                        cx.notify();
+                    })),
                 );
             }
-            div()
+            components::menu_popover()
                 .debug_selector(|| "history-object-actions".into())
                 .w(px(300.))
                 .max_h(px(340.))
                 .overflow_y_scrollbar()
-                .rounded(px(metrics::CARD_RADIUS))
-                .bg(theme::menu_surface())
-                .border(px(metrics::DIVIDER_WIDTH))
-                .border_color(theme::selection_outline())
                 .child(
                     div()
                         .px(px(metrics::SPACE_MD))
@@ -311,19 +149,19 @@ impl LauncherView {
                                 .child(
                                     div()
                                         .caption_text()
-                                        .text_color(theme::muted())
+                                        .text_color(theme::on_dark_muted())
                                         .child(l10n::actions(self.locale)),
                                 ),
                         )
                         .child(self.keycap("esc")),
                 )
-                .child(div().h(px(0.5)).bg(theme::divider()))
+                .child(div().h(px(0.5)).bg(theme::on_dark_divider()))
                 .when(self.app_history.object_actions_loading, |panel| {
                     panel.child(
                         div()
                             .p(px(metrics::SPACE_MD))
                             .text_size(px(metrics::CAPTION_SIZE))
-                            .text_color(theme::muted())
+                            .text_color(theme::on_dark_muted())
                             .child(l10n::loading(self.locale)),
                     )
                 })
@@ -331,14 +169,10 @@ impl LauncherView {
                 .into_any_element()
         });
         let empty_actions_panel = self.app_history.empty_actions_open.then(|| {
-            div()
+            components::menu_popover()
                 .debug_selector(|| "app-history-empty-actions-panel".into())
                 .w(px(260.))
                 .overflow_hidden()
-                .rounded(px(metrics::CARD_RADIUS))
-                .bg(theme::menu_surface())
-                .border(px(metrics::DIVIDER_WIDTH))
-                .border_color(theme::selection_outline())
                 .child(
                     div()
                         .px(px(metrics::SPACE_MD))
@@ -357,11 +191,14 @@ impl LauncherView {
                         )
                         .child(self.keycap("esc")),
                 )
-                .child(div().h(px(metrics::DIVIDER_WIDTH)).bg(theme::divider()))
+                .child(
+                    div()
+                        .h(px(metrics::DIVIDER_WIDTH))
+                        .bg(theme::on_dark_divider()),
+                )
                 .child(
                     div().p(px(4.)).child(
-                        Button::new("app-history-empty-refresh")
-                            .secondary()
+                        components::dark_surface_button("app-history-empty-refresh", false, cx)
                             .label(l10n::refresh(self.locale))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.refresh_empty_app_history(cx);
@@ -375,16 +212,12 @@ impl LauncherView {
                 l10n::app_history_copy_target(self.locale),
                 l10n::refresh(self.locale),
             ];
-            div()
+            components::menu_popover()
                 .id("app-history-fallback-actions-panel")
                 .debug_selector(|| "app-history-fallback-actions-panel".into())
                 .test_support()
                 .w(px(260.))
                 .overflow_hidden()
-                .rounded(px(metrics::CARD_RADIUS))
-                .bg(theme::menu_surface())
-                .border(px(metrics::DIVIDER_WIDTH))
-                .border_color(theme::selection_outline())
                 .child(
                     div()
                         .px(px(metrics::SPACE_MD))
@@ -403,19 +236,17 @@ impl LauncherView {
                         )
                         .child(self.keycap("esc")),
                 )
-                .child(div().h(px(metrics::DIVIDER_WIDTH)).bg(theme::divider()))
+                .child(
+                    div()
+                        .h(px(metrics::DIVIDER_WIDTH))
+                        .bg(theme::on_dark_divider()),
+                )
                 .child(div().p(px(4.)).flex().flex_col().children(
                     labels.into_iter().enumerate().map(|(index, label)| {
-                        Button::new(SharedString::from(format!(
-                            "app-history-fallback-action-{index}"
-                        )))
-                        .when(
+                        components::dark_surface_button(
+                            SharedString::from(format!("app-history-fallback-action-{index}")),
                             index == self.app_history.fallback_action_selected,
-                            |button| button.secondary(),
-                        )
-                        .when(
-                            index != self.app_history.fallback_action_selected,
-                            |button| button.ghost(),
+                            cx,
                         )
                         .label(label)
                         .on_click(cx.listener(move |this, _, _, cx| {
@@ -477,29 +308,190 @@ impl LauncherView {
             .relative()
             .child(page)
             .children(object_actions_panel.map(|panel| {
-                Self::page_popup(
+                Self::row_popup(
                     window,
-                    px(metrics::PAGE_HEADER_HEIGHT + metrics::DIVIDER_WIDTH + 52.),
-                    px(12.),
+                    &self.tool_list_scrolls.history,
+                    self.app_history.selected,
                     panel,
                 )
             }))
             .children(empty_actions_panel.map(|panel| {
                 Self::page_popup(
                     window,
-                    px(metrics::PAGE_HEADER_HEIGHT + metrics::DIVIDER_WIDTH + 52.),
-                    px(12.),
+                    px(metrics::PAGE_HEADER_HEIGHT + metrics::DIVIDER_WIDTH),
+                    px(metrics::SPACE_MD),
                     panel,
                 )
             }))
             .children(fallback_actions_panel.map(|panel| {
-                Self::page_popup(
+                Self::row_popup(
                     window,
-                    px(metrics::PAGE_HEADER_HEIGHT + metrics::DIVIDER_WIDTH + 52.),
-                    px(12.),
+                    &self.tool_list_scrolls.history,
+                    self.app_history.selected,
                     panel,
                 )
             }))
             .into_any_element()
+    }
+    fn render_history_list_row(&mut self, index: usize, cx: &mut Context<Self>) -> AnyElement {
+        let item = self.app_history.items[index].clone();
+        let selected = self.app_history.selected == index;
+        let can_open = item.can_open;
+        let item_id = item.id.clone();
+        let row = div()
+            .id(SharedString::from(format!("history-item-{item_id}")))
+            .role(gpui_kit::Role::ListBoxOption)
+            .aria_label(item.title.clone())
+            .aria_selected(selected)
+            .h(px(64.))
+            .flex_shrink_0()
+            .py(px(3.))
+            .cursor_pointer()
+            .on_click(cx.listener(move |this, _, _, cx| {
+                this.app_history.selected = index;
+                this.app_history.close_object_actions();
+                this.notice = None;
+                cx.notify();
+            }))
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |this, _, _, cx| {
+                    this.app_history.selected = index;
+                    this.notice = None;
+                    if can_open {
+                        this.request_app_history_object_actions(cx);
+                    } else {
+                        this.open_fallback_app_history_actions(cx);
+                    }
+                }),
+            )
+            .on_double_click(cx.listener(move |this, _, _, cx| {
+                this.app_history.selected = index;
+                if can_open {
+                    this.open_selected_history_item(cx);
+                } else {
+                    this.copy_selected_history_item(cx);
+                }
+            }))
+            .child(
+                div()
+                    .flex()
+                    .h_full()
+                    .px(px(12.))
+                    .items_center()
+                    .result_surface(selected)
+                    .child(
+                        Icon::new(match item.kind {
+                            "directory" => IconName::Folder,
+                            "workspace" => IconName::Code,
+                            "remote" => IconName::Globe,
+                            _ => IconName::File,
+                        })
+                        .size(px(23.))
+                        .text_color(if item.kind == "directory" {
+                            theme::icon_blue()
+                        } else {
+                            theme::icon_purple()
+                        }),
+                    )
+                    .child(div().w(px(12.)))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.))
+                            .flex()
+                            .flex_col()
+                            .justify_center()
+                            .gap(px(3.))
+                            .child(
+                                div()
+                                    .truncate()
+                                    .body_text()
+                                    .text_color(theme::primary())
+                                    .child(item.title),
+                            )
+                            .child(
+                                div()
+                                    .truncate()
+                                    .caption_text()
+                                    .text_color(theme::secondary())
+                                    .child(item.value),
+                            ),
+                    )
+                    .when(selected, |element| {
+                        element
+                            .child(
+                                div()
+                                    .id(SharedString::from(format!("history-open-{item_id}")))
+                                    .role(gpui_kit::Role::Button)
+                                    .aria_label(if can_open {
+                                        l10n::open(self.locale)
+                                    } else {
+                                        l10n::copy(self.locale)
+                                    })
+                                    .h(px(metrics::CONTROL_HEIGHT))
+                                    .flex_none()
+                                    .px(px(metrics::CONTROL_PADDING_X))
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(5.))
+                                    .rounded(px(6.))
+                                    .hover(|style| style.bg(theme::hover()))
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        cx.stop_propagation();
+                                        this.app_history.selected = index;
+                                        if can_open {
+                                            this.open_selected_history_item(cx);
+                                        } else {
+                                            this.copy_selected_history_item(cx);
+                                        }
+                                    }))
+                                    .child(if can_open {
+                                        l10n::open(self.locale)
+                                    } else {
+                                        l10n::copy(self.locale)
+                                    })
+                                    .when(!can_open, |element| {
+                                        element.child(
+                                            Icon::new(IconName::CornerDownLeft)
+                                                .size(px(12.))
+                                                .text_color(theme::secondary()),
+                                        )
+                                    }),
+                            )
+                            .child(
+                                div()
+                                    .id(SharedString::from(format!("history-actions-{item_id}")))
+                                    .test_support()
+                                    .role(gpui_kit::Role::Button)
+                                    .aria_label(l10n::actions(self.locale))
+                                    .h(px(metrics::CONTROL_HEIGHT))
+                                    .flex_none()
+                                    .px(px(metrics::CONTROL_PADDING_X))
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(4.))
+                                    .rounded(px(6.))
+                                    .hover(|style| style.bg(theme::hover()))
+                                    .cursor_pointer()
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        cx.stop_propagation();
+                                        this.app_history.selected = index;
+                                        if can_open {
+                                            this.request_app_history_object_actions(cx);
+                                        } else {
+                                            this.toggle_fallback_app_history_actions(cx);
+                                        }
+                                    }))
+                                    .child(
+                                        Icon::new(IconName::Ellipsis)
+                                            .size(px(14.))
+                                            .text_color(theme::secondary()),
+                                    ),
+                            )
+                    }),
+            );
+        row.into_any_element()
     }
 }

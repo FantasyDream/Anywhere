@@ -34,9 +34,32 @@ impl LiveLauncher {
         })
     }
 
+    pub fn retry_login_item(&self) -> Receiver<LiveEvent> {
+        let explicit_data_directory = self.explicit_data_directory;
+        let preferences = self.preferences_cache.clone();
+        let preferences_write = self.preferences_write.clone();
+        self.spawn(async move {
+            if explicit_data_directory {
+                return LiveEvent::LoginItemReconciled(None);
+            }
+            let _guard = preferences_write.lock().await;
+            let Ok(desired) = preferences.lock().map(|saved| saved.launch_at_login) else {
+                return LiveEvent::Error("preferences cache is unavailable".into());
+            };
+            match tokio::task::spawn_blocking(move || apply_login_item(desired)).await {
+                Ok(error) => LiveEvent::LoginItemReconciled(error),
+                Err(error) => {
+                    LiveEvent::Error(format!("login item worker could not finish: {error}"))
+                }
+            }
+        })
+    }
+
     pub fn set_preferences(&self, preferences: HostPreferences) -> Receiver<LiveEvent> {
+        let locale = preferences.ui_language.locale();
         let application = self.application.clone();
         let path = self.preferences_path.clone();
+        let explicit_data_directory = self.explicit_data_directory;
         let directory_access = self.directory_access.clone();
         let access_error = self.search_access_error.clone();
         let preferences_write = self.preferences_write.clone();
@@ -81,9 +104,13 @@ impl LiveLauncher {
                 if let Ok(mut error) = access_error.lock() {
                     *error = None;
                 }
-                let host_error = login_item::apply(preferences.launch_at_login)
-                    .err()
-                    .map(|error| format!("{error:#}"));
+                let host_error = if !explicit_data_directory
+                    && previous.launch_at_login != preferences.launch_at_login
+                {
+                    apply_login_item(preferences.launch_at_login)
+                } else {
+                    None
+                };
                 let snapshot = settings_snapshot_from(&application)?;
                 *preferences_cache
                     .lock()
@@ -100,7 +127,9 @@ impl LiveLauncher {
             .await;
             let event = match event {
                 Ok(Ok(event)) => event,
-                Ok(Err(error)) => LiveEvent::Error(format!("{error:#}")),
+                Ok(Err(error)) => LiveEvent::Error(
+                    super::super::directory_access::localized_error(&error, locale),
+                ),
                 Err(error) => {
                     LiveEvent::Error(format!("preferences worker could not finish: {error}"))
                 }
@@ -116,14 +145,35 @@ impl LiveLauncher {
         roots: Vec<String>,
     ) -> Receiver<LiveEvent> {
         let directory_access = self.directory_access.clone();
-        let access_error = self.search_access_error.clone();
-        self.spawn_blocking(move || {
-            let selected = selected.into_iter().map(PathBuf::from).collect::<Vec<_>>();
-            let roots = directory_access.authorize(&selected, &roots)?;
-            if let Ok(mut error) = access_error.lock() {
-                *error = None;
+        let path = self.preferences_path.clone();
+        let preferences_write = self.preferences_write.clone();
+        let locale = self
+            .preferences()
+            .map(|p| p.ui_language.locale())
+            .unwrap_or(crate::l10n::Locale::En);
+        self.spawn(async move {
+            let _guard = preferences_write.lock().await;
+            match tokio::task::spawn_blocking(move || {
+                let saved = HostPreferences::load(&path)?;
+                let selected = selected.into_iter().map(PathBuf::from).collect::<Vec<_>>();
+                directory_access.authorize(&selected, &roots, &saved.file_search_roots)
+            })
+            .await
+            {
+                Ok(Ok(roots)) => LiveEvent::DirectoriesAuthorized { roots },
+                Ok(Err(error)) => LiveEvent::Error(
+                    super::super::directory_access::localized_error(&error, locale),
+                ),
+                Err(error) => LiveEvent::Error(format!(
+                    "directory authorization worker could not finish: {error}"
+                )),
             }
-            Ok(LiveEvent::DirectoriesAuthorized { roots })
         })
     }
+}
+
+fn apply_login_item(desired: bool) -> Option<String> {
+    login_item::apply(desired)
+        .err()
+        .map(|error| format!("{error:#}"))
 }

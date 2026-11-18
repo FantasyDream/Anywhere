@@ -1216,8 +1216,12 @@ async fn subscription_replays_the_latest_snapshot() {
     let app = app(platform);
     let state = app.activate().await.unwrap().unwrap();
     // Subscribing after activation still sees the committed state.
-    let subscription = app.subscribe(state.session_id);
-    let latest = subscription.latest_state().expect("replayed snapshot");
+    let updates = app.state_updates();
+    let latest = updates
+        .borrow()
+        .as_ref()
+        .cloned()
+        .expect("replayed snapshot");
     assert_eq!(latest.session_id, state.session_id);
     assert_eq!(latest.snapshot_seq, state.snapshot_seq);
 }

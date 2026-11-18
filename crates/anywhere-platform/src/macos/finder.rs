@@ -5,15 +5,12 @@ use anyhow::{bail, Context, Result};
 use std::{
     collections::HashSet,
     ffi::CString,
-    io::{self, Read},
     path::{Component, Path, PathBuf},
-    process::{Command, Stdio},
-    thread,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 const MAX_SELECTED_PATHS: usize = 32;
-const MAX_SCRIPT_OUTPUT_BYTES: usize = 256 * 1024;
+const MAX_SCRIPT_OUTPUT_BYTES: u32 = 256 * 1024;
 const SCRIPT_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub(super) fn application_directory(application: &ApplicationInfo) -> Result<Option<PathBuf>> {
@@ -27,7 +24,8 @@ pub(super) fn application_directory(application: &ApplicationInfo) -> Result<Opt
         verify_finder_instance(application, "before_directory")?;
     }
     let script = include_str!("../../native/finder.applescript");
-    let output = run_finder_script(script)?;
+    let output =
+        super::automation::read(script, application, SCRIPT_TIMEOUT, MAX_SCRIPT_OUTPUT_BYTES)?;
     if captured {
         verify_finder_instance(application, "after_directory")?;
     }
@@ -48,15 +46,19 @@ pub(super) fn application_directory(application: &ApplicationInfo) -> Result<Opt
 
 /// Read the selection associated with the Finder instance captured at activation.
 ///
-/// Finder Automation addresses an app by bundle ID. Checking the captured PID's
-/// kernel start identity on both sides of the call prevents publishing a result
-/// after Finder restarts while the Apple event is in flight.
+/// The native sender binds Apple Events to the captured PID and validates its
+/// kernel start identity before dispatch and before publishing a reply.
 pub(super) fn selected_paths(application: &ApplicationInfo) -> Result<Vec<PathBuf>> {
     if application.bundle_id != "com.apple.finder" {
         return Ok(Vec::new());
     }
     verify_finder_instance(application, "before_selection")?;
-    let output = run_finder_script(include_str!("../../native/finder_selection.applescript"))?;
+    let output = super::automation::read(
+        include_str!("../../native/finder_selection.applescript"),
+        application,
+        SCRIPT_TIMEOUT,
+        MAX_SCRIPT_OUTPUT_BYTES,
+    )?;
     verify_finder_instance(application, "after_selection")?;
     parse_selected_paths(&output)
 }
@@ -99,82 +101,6 @@ fn verify_finder_instance(application: &ApplicationInfo, stage: &'static str) ->
         return Err(ContextReadError::ApplicationChanged.into());
     }
     Ok(())
-}
-
-fn run_finder_script(script: &str) -> Result<String> {
-    let mut child = Command::new("/usr/bin/osascript")
-        .args(["-e", script])
-        .env("LC_ALL", "en_US.UTF-8")
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("start Finder context capture")?;
-
-    // Drain both pipes while waiting: a selection of 32 long paths can exceed
-    // a pipe's capacity, otherwise the child could block until our timeout.
-    let stdout = child
-        .stdout
-        .take()
-        .context("Finder response pipe missing")?;
-    let stderr = child.stderr.take().context("Finder error pipe missing")?;
-    let output_reader = thread::spawn(move || read_limited(stdout, MAX_SCRIPT_OUTPUT_BYTES));
-    let error_reader = thread::spawn(move || read_limited(stderr, 16 * 1024));
-    let started = Instant::now();
-    let status = loop {
-        if let Some(status) = child.try_wait().context("wait for Finder selection")? {
-            break Some(status);
-        }
-        if started.elapsed() >= SCRIPT_TIMEOUT {
-            let _ = child.kill();
-            let _ = child.wait();
-            break None;
-        }
-        thread::sleep(Duration::from_millis(5));
-    };
-    let output = output_reader
-        .join()
-        .map_err(|_| anyhow::anyhow!("Finder response reader failed"))??;
-    let error = error_reader
-        .join()
-        .map_err(|_| anyhow::anyhow!("Finder error reader failed"))??;
-    let Some(status) = status else {
-        return Err(ContextReadError::TimedOut.into());
-    };
-    if !status.success() {
-        // osascript may include a selected filename in its diagnostic. Only
-        // return a category; never copy that diagnostic into logs or UI.
-        let detail = String::from_utf8_lossy(&error);
-        if detail.contains("(-1743)") || detail.contains("not authorized") {
-            return Err(ContextReadError::PermissionDenied.into());
-        }
-        if detail.contains("(17201)") {
-            return Err(ContextReadError::TooManyItems.into());
-        }
-        bail!("Finder selection is unavailable (osascript failed)");
-    }
-    String::from_utf8(output).context("Finder selection response is not UTF-8")
-}
-
-fn read_limited(mut reader: impl Read, limit: usize) -> io::Result<Vec<u8>> {
-    let mut bytes = Vec::new();
-    let mut overflow = false;
-    let mut chunk = [0u8; 4096];
-    loop {
-        let count = reader.read(&mut chunk)?;
-        if count == 0 {
-            break;
-        }
-        if bytes.len().saturating_add(count) <= limit {
-            bytes.extend_from_slice(&chunk[..count]);
-        } else {
-            overflow = true;
-        }
-    }
-    if overflow {
-        return Err(io::Error::other("Finder selection response exceeded limit"));
-    }
-    Ok(bytes)
 }
 
 fn parse_selected_paths(output: &str) -> Result<Vec<PathBuf>> {

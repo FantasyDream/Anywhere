@@ -2,7 +2,6 @@ use super::{WebDocumentBinding, WebMessageSource, WebPluginCatalog};
 use crate::application::Application;
 use anyhow::{Context, Result};
 use anywhere_protocol::web_plugin::{WebInvocation, WebPlatform};
-use std::sync::atomic::Ordering;
 
 impl Application {
     /// Resource reads validate identity without cloning the (up to 1 MiB) invocation.
@@ -82,7 +81,7 @@ impl Application {
             web.replace_catalog(catalog);
             *providers = next_providers;
             self.resolver.catalog.replace_registry(registry);
-            self.resolver.execution_epoch.fetch_add(1, Ordering::AcqRel);
+            self.resolver.session.advance_execution();
             session.actions = self.resolver.base_registry();
             session.execution = Default::default();
             if restart {
@@ -97,11 +96,17 @@ impl Application {
             }
             let restart = if let Some(revision) = revision {
                 let input = session.state.input.clone();
+                let selected_scope = session.state.selected_scope.clone();
+                let input_mode = session.input_mode;
+                self.file_search_source.clear();
                 session.begin_revision(revision, input.clone());
                 self.resolver
                     .mark_current(session.state.session_id, revision);
                 Some((
                     revision,
+                    input.clone(),
+                    selected_scope,
+                    input_mode,
                     crate::application::session_runtime::seeds_from(&session, &input),
                 ))
             } else {
@@ -109,8 +114,15 @@ impl Application {
             };
             (session.state.session_id, restart)
         };
-        if let Some((revision, seeds)) = restart {
+        if let Some((revision, input, selected_scope, input_mode, seeds)) = restart {
             if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+                self.spawn_search_sources(
+                    session_id,
+                    revision,
+                    &input,
+                    selected_scope.as_deref(),
+                    input_mode,
+                );
                 let resolver = self.resolver.clone();
                 runtime.spawn(async move {
                     let started = std::time::Instant::now();

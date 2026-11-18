@@ -284,7 +284,12 @@ async fn application_icons_are_fetched_on_demand_for_application_candidates() {
     assert!(app.application_icon("missing-candidate").unwrap().is_none());
 
     // Icon lookup must not disturb the committed snapshot or the ordering.
-    let after = app.subscribe(state.session_id).latest_state().unwrap();
+    let after = app
+        .state_updates()
+        .borrow()
+        .as_ref()
+        .map(|state| (**state).clone())
+        .unwrap();
     assert_eq!(after.revision, 2);
     assert_eq!(
         after.candidates[0].id, url.candidates[0].id,
@@ -369,30 +374,6 @@ async fn a_disabled_candidate_cannot_execute() {
     assert!(error.to_string().contains("Git 不可用"));
     assert_eq!(inner.git_calls.load(Ordering::Relaxed), 0);
 }
-
-pub(crate) const WRAP_PLUGIN: &str = r#"
-protocol_version = 1
-id = "wrap"
-name = "Wrap"
-
-[[commands]]
-id = "status"
-title = "Wrapped Git Status"
-accepts = ["git.repository"]
-action = { type = "execute_builtin", command_id = "core.git.status" }
-
-[[commands]]
-id = "copy"
-title = "Wrapped Copy"
-accepts = ["core.directory"]
-action = { type = "execute_builtin", command_id = "core.directory.copy" }
-
-[[commands]]
-id = "url"
-title = "Copy URL"
-accepts = ["core.url"]
-action = { type = "execute_builtin", command_id = "core.url.copy" }
-"#;
 
 #[tokio::test]
 async fn a_disabled_text_fallback_cannot_execute() {

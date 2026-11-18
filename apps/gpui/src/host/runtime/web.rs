@@ -42,10 +42,14 @@ impl LiveLauncher {
         })
     }
 
-    pub fn change_web_package(&self, id: String, operation: String) -> Receiver<LiveEvent> {
+    pub fn change_web_package(
+        &self,
+        id: String,
+        operation: crate::host::WebPackageOperation,
+    ) -> Receiver<LiveEvent> {
         let application = self.application.clone();
         self.spawn_blocking(move || {
-            application.change_web_package(&id, &operation)?;
+            application.change_web_package(&id, operation)?;
             Ok(LiveEvent::WebPackages(web_packages_from(&application)?))
         })
     }

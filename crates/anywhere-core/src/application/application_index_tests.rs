@@ -44,6 +44,62 @@ impl Gate {
 }
 
 #[derive(Default)]
+struct CatalogProbe {
+    calls: AtomicUsize,
+    gate: Option<Arc<Gate>>,
+}
+
+impl ApplicationCatalogHost for CatalogProbe {
+    fn installed_applications(&self) -> anywhere_platform::InstalledApplications {
+        self.calls.fetch_add(1, Ordering::AcqRel);
+        if let Some(gate) = &self.gate {
+            gate.wait();
+        }
+        anywhere_platform::InstalledApplications::default()
+    }
+}
+
+#[tokio::test]
+async fn activation_bursts_keep_only_one_running_scan_and_the_latest_follow_up() {
+    let index = Arc::new(ApplicationIndex::default());
+    let first_gate = Arc::new(Gate::default());
+    let first = Arc::new(CatalogProbe {
+        gate: Some(first_gate.clone()),
+        ..Default::default()
+    });
+    let skipped = Arc::new(CatalogProbe::default());
+    let last_gate = Arc::new(Gate::default());
+    let last = Arc::new(CatalogProbe {
+        gate: Some(last_gate.clone()),
+        ..Default::default()
+    });
+
+    let first_generation = index.spawn_scan(first.clone());
+    tokio::time::timeout(Duration::from_secs(2), first_gate.entered.notified())
+        .await
+        .unwrap();
+    for _ in 0..16 {
+        index.spawn_scan(skipped.clone());
+    }
+    let last_generation = index.spawn_scan(last.clone());
+    assert_eq!(last.calls.load(Ordering::Acquire), 0);
+    first_gate.release();
+    let started = tokio::time::timeout(Duration::from_secs(2), last_gate.entered.notified()).await;
+    last_gate.release();
+    started.unwrap();
+    // The worker published the first scan before entering the last one. Wait
+    // for the latest generation even though intermediate requests were merged.
+    assert!(index.snapshot().unwrap().completed_scan >= first_generation);
+    tokio::time::timeout(Duration::from_secs(2), index.ready())
+        .await
+        .unwrap();
+    assert_eq!(index.snapshot().unwrap().completed_scan, last_generation);
+    assert_eq!(first.calls.load(Ordering::Acquire), 1);
+    assert_eq!(skipped.calls.load(Ordering::Acquire), 0);
+    assert_eq!(last.calls.load(Ordering::Acquire), 1);
+}
+
+#[derive(Default)]
 struct HeldSearch {
     armed: AtomicBool,
     calls: AtomicUsize,
@@ -246,4 +302,18 @@ fn partial_and_empty_successes_replace_the_index_while_a_pending_scan_keeps_it()
     assert!(index.snapshot().unwrap().catalog.is_empty());
     assert!(index.full_catalog().unwrap().is_empty());
     assert_eq!(*index.updates().borrow(), empty);
+}
+
+#[test]
+fn reapplying_the_same_exclusions_keeps_the_current_catalog() {
+    let index = ApplicationIndex::default();
+    index.publish(index.issue_scan(), report(&["Editor", "Terminal"], 0));
+    assert!(index.set_excluded(vec!["dev.test.editor".into()]).unwrap());
+    let snapshot = index.snapshot().unwrap();
+
+    assert!(!index
+        .set_excluded(vec!["dev.test.editor".into(), "dev.test.editor".into()])
+        .unwrap());
+    assert!(index.is_current(&snapshot).unwrap());
+    assert_eq!(names(&snapshot), ["Terminal"]);
 }

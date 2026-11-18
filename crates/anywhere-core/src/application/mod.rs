@@ -8,7 +8,6 @@ pub mod application_history;
 pub mod execute;
 pub mod frontend_runtime;
 pub mod launcher_service;
-mod legacy_plugins;
 mod native_features;
 pub mod settings_service;
 pub mod update_query;
@@ -24,6 +23,7 @@ mod search_sources;
 pub use crate::features::context_semantic;
 pub use composition::builtin_registry;
 
+mod session_coordinator;
 mod session_model;
 mod session_runtime;
 mod snapshot;

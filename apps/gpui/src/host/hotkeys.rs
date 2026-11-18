@@ -15,9 +15,30 @@ struct RegisteredActionShortcut {
     binding: ActionShortcutBinding,
 }
 
+trait HotKeyRegistry: Send {
+    fn register(&self, hotkey: HotKey) -> Result<()>;
+    fn unregister(&self, hotkey: HotKey) -> Result<()>;
+    fn unregister_all(&self, hotkeys: &[HotKey]) -> Result<()>;
+}
+
+impl HotKeyRegistry for GlobalHotKeyManager {
+    fn register(&self, hotkey: HotKey) -> Result<()> {
+        GlobalHotKeyManager::register(self, hotkey).map_err(Into::into)
+    }
+
+    fn unregister(&self, hotkey: HotKey) -> Result<()> {
+        GlobalHotKeyManager::unregister(self, hotkey).map_err(Into::into)
+    }
+
+    fn unregister_all(&self, hotkeys: &[HotKey]) -> Result<()> {
+        GlobalHotKeyManager::unregister_all(self, hotkeys).map_err(Into::into)
+    }
+}
+
 /// Owns registered macOS global hotkeys for the process lifetime.
 pub struct HotKeyController {
-    manager: GlobalHotKeyManager,
+    manager: Box<dyn HotKeyRegistry>,
+    registration_error: Option<String>,
     current: Option<HotKey>,
     universal: Option<HotKey>,
     actions: Vec<RegisteredActionShortcut>,
@@ -26,8 +47,13 @@ pub struct HotKeyController {
 impl HotKeyController {
     pub fn new(preferences: &HostPreferences) -> Result<Self> {
         let manager = GlobalHotKeyManager::new().context("create global hotkey manager")?;
+        Ok(Self::with_registry(Box::new(manager), preferences))
+    }
+
+    fn with_registry(manager: Box<dyn HotKeyRegistry>, preferences: &HostPreferences) -> Self {
         let mut controller = Self {
             manager,
+            registration_error: None,
             current: None,
             universal: None,
             actions: Vec::new(),
@@ -35,10 +61,20 @@ impl HotKeyController {
         if let Err(error) = controller.register(preferences) {
             tracing::warn!(error = ?error, "global_hotkeys_unavailable");
         }
-        Ok(controller)
+        controller
+    }
+
+    pub fn registration_error(&self) -> Option<&str> {
+        self.registration_error.as_deref()
     }
 
     pub fn register(&mut self, preferences: &HostPreferences) -> Result<()> {
+        let result = self.register_inner(preferences);
+        self.registration_error = result.as_ref().err().map(|error| format!("{error:#}"));
+        result
+    }
+
+    fn register_inner(&mut self, preferences: &HostPreferences) -> Result<()> {
         preferences.validate()?;
         let current = preferences
             .current_app_shortcut
@@ -80,7 +116,7 @@ impl HotKeyController {
             .collect::<Vec<_>>();
         if let Err(error) = self.manager.unregister_all(&previous_hotkeys) {
             let rollback = restore_registrations(
-                &self.manager,
+                self.manager.as_ref(),
                 previous_current,
                 previous_universal,
                 &previous_actions,
@@ -99,7 +135,7 @@ impl HotKeyController {
         }
         if let Err(error) = self.manager.register(current) {
             let rollback = restore_registrations(
-                &self.manager,
+                self.manager.as_ref(),
                 previous_current,
                 previous_universal,
                 &previous_actions,
@@ -119,7 +155,7 @@ impl HotKeyController {
         if let Err(error) = self.manager.register(universal) {
             let _ = self.manager.unregister(current);
             let rollback = restore_registrations(
-                &self.manager,
+                self.manager.as_ref(),
                 previous_current,
                 previous_universal,
                 &previous_actions,
@@ -145,7 +181,7 @@ impl HotKeyController {
                     let _ = self.manager.unregister(registered.hotkey);
                 }
                 let rollback = restore_registrations(
-                    &self.manager,
+                    self.manager.as_ref(),
                     previous_current,
                     previous_universal,
                     &previous_actions,
@@ -213,7 +249,7 @@ impl RegistrationRollback {
 }
 
 fn restore_registrations(
-    manager: &GlobalHotKeyManager,
+    manager: &dyn HotKeyRegistry,
     current: Option<HotKey>,
     universal: Option<HotKey>,
     actions: &[RegisteredActionShortcut],
@@ -251,11 +287,23 @@ fn apply_registration_state(
     };
 }
 
-pub fn effective_shortcuts(controller: &HotKeyController) -> (Option<String>, Option<String>) {
+fn effective_shortcuts(controller: &HotKeyController) -> (Option<String>, Option<String>) {
     (
         controller.current.as_ref().map(format_hotkey),
         controller.universal.as_ref().map(format_hotkey),
     )
+}
+
+/// Status hints reflect registrations owned by this process, never desired keys.
+pub fn registered_preferences(
+    preferences: &HostPreferences,
+    controller: Option<&HotKeyController>,
+) -> HostPreferences {
+    let mut effective = preferences.clone();
+    let (current, universal) = controller.map(effective_shortcuts).unwrap_or_default();
+    effective.current_app_shortcut = current.unwrap_or_default();
+    effective.universal_shortcut = universal.unwrap_or_default();
+    effective
 }
 
 fn format_hotkey(hotkey: &HotKey) -> String {
@@ -366,5 +414,147 @@ mod tests {
     fn effective_hotkeys_round_trip_through_parser_labels() {
         let hotkey = "control+alt+shift+KeyK".parse::<HotKey>().unwrap();
         assert_eq!(format_hotkey(&hotkey), "control+alt+shift+KeyK");
+    }
+    #[derive(Clone, Default)]
+    struct MockRegistry(std::sync::Arc<std::sync::Mutex<RegistryState>>);
+
+    #[derive(Default)]
+    struct RegistryState {
+        blocked: std::collections::HashSet<u32>,
+        owned: std::collections::HashSet<u32>,
+    }
+
+    impl HotKeyRegistry for MockRegistry {
+        fn register(&self, key: HotKey) -> Result<()> {
+            let mut state = self.0.lock().unwrap();
+            anyhow::ensure!(!state.blocked.contains(&key.id()), "shortcut is occupied");
+            anyhow::ensure!(state.owned.insert(key.id()), "shortcut already owned");
+            Ok(())
+        }
+        fn unregister(&self, key: HotKey) -> Result<()> {
+            self.0.lock().unwrap().owned.remove(&key.id());
+            Ok(())
+        }
+        fn unregister_all(&self, keys: &[HotKey]) -> Result<()> {
+            for key in keys {
+                self.unregister(*key)?;
+            }
+            Ok(())
+        }
+    }
+
+    fn pressed(key: &str) -> GlobalHotKeyEvent {
+        GlobalHotKeyEvent {
+            id: key.parse::<HotKey>().unwrap().id(),
+            state: HotKeyState::Pressed,
+        }
+    }
+
+    #[test]
+    fn startup_conflict_is_reported_and_retry_recovers_the_controller() {
+        let preferences = HostPreferences::default();
+        let registry = MockRegistry::default();
+        registry
+            .0
+            .lock()
+            .unwrap()
+            .blocked
+            .insert(pressed(&preferences.current_app_shortcut).id());
+        let mut controller =
+            HotKeyController::with_registry(Box::new(registry.clone()), &preferences);
+        assert!(controller
+            .registration_error()
+            .unwrap()
+            .contains("register Current App shortcut"));
+        let effective = registered_preferences(&preferences, Some(&controller));
+        assert!(effective.current_app_shortcut.is_empty());
+        assert!(effective.universal_shortcut.is_empty());
+        assert_eq!(
+            controller.action_for_event(pressed(&preferences.current_app_shortcut)),
+            None
+        );
+        registry.0.lock().unwrap().blocked.clear();
+        controller.register(&preferences).unwrap();
+        assert!(controller.registration_error().is_none());
+        assert_eq!(
+            controller.action_for_event(pressed(&preferences.current_app_shortcut)),
+            Some(HotKeyAction::CurrentApp)
+        );
+        assert!(!registered_preferences(&preferences, Some(&controller))
+            .universal_shortcut
+            .is_empty());
+    }
+
+    #[test]
+    fn universal_conflict_cleans_up_the_new_current_app_registration() {
+        let preferences = HostPreferences::default();
+        let registry = MockRegistry::default();
+        registry
+            .0
+            .lock()
+            .unwrap()
+            .blocked
+            .insert(pressed(&preferences.universal_shortcut).id());
+        let controller = HotKeyController::with_registry(Box::new(registry.clone()), &preferences);
+        assert!(controller
+            .registration_error()
+            .unwrap()
+            .contains("register Universal Search shortcut"));
+        assert!(registry.0.lock().unwrap().owned.is_empty());
+        assert_eq!(effective_shortcuts(&controller), (None, None));
+    }
+
+    #[test]
+    fn a_failed_change_preserves_actual_status_hints_until_retry_succeeds() {
+        let previous = HostPreferences::default();
+        let registry = MockRegistry::default();
+        let mut controller = HotKeyController::with_registry(Box::new(registry.clone()), &previous);
+        let desired = HostPreferences {
+            current_app_shortcut: "control+alt+shift+KeyO".into(),
+            universal_shortcut: "control+alt+shift+KeyP".into(),
+            ..previous.clone()
+        };
+        registry
+            .0
+            .lock()
+            .unwrap()
+            .blocked
+            .insert(pressed(&desired.universal_shortcut).id());
+        assert!(controller.register(&desired).is_err());
+        assert_eq!(
+            controller.action_for_event(pressed(&previous.current_app_shortcut)),
+            Some(HotKeyAction::CurrentApp)
+        );
+        assert_eq!(
+            controller.action_for_event(pressed(&desired.current_app_shortcut)),
+            None
+        );
+        let effective = registered_preferences(&desired, Some(&controller));
+        assert_eq!(
+            pressed(&effective.current_app_shortcut).id(),
+            pressed(&previous.current_app_shortcut).id()
+        );
+        assert_eq!(
+            pressed(&effective.universal_shortcut).id(),
+            pressed(&previous.universal_shortcut).id()
+        );
+        registry.0.lock().unwrap().blocked.clear();
+        controller.register(&desired).unwrap();
+        assert!(controller.registration_error().is_none());
+        assert_eq!(
+            controller.action_for_event(pressed(&desired.universal_shortcut)),
+            Some(HotKeyAction::Universal)
+        );
+    }
+
+    #[test]
+    fn an_unavailable_manager_never_advertises_desired_shortcuts() {
+        let effective = registered_preferences(&HostPreferences::default(), None);
+        assert!(effective.current_app_shortcut.is_empty());
+        assert!(effective.universal_shortcut.is_empty());
+        for locale in [crate::l10n::Locale::En, crate::l10n::Locale::Zh] {
+            let labels = crate::platform::StatusMenuLabels::new(locale, &effective);
+            assert!(!format!("{labels:?}").contains("⌘"));
+        }
     }
 }

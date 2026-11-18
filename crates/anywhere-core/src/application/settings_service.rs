@@ -1,13 +1,12 @@
-//! Settings coordination: native policy, legacy preferences and typed data refresh.
+//! Settings coordination: native policy and typed data refresh.
 //! Contributions are captured once at startup; changes never construct a feature again.
 use super::{
-    legacy_plugins::{invalid, LegacyPluginSettings},
     native_features::{BuiltinCatalog, FeatureSettings},
     Application,
 };
 use crate::{
     features::{policy::FeaturePolicySnapshot, services::FeatureServices},
-    persistence::{extensions::PluginPreferences, module_storage::ModuleStorageHost},
+    persistence::module_storage::ModuleStorageHost,
 };
 use anyhow::{ensure, Result};
 use std::{collections::BTreeMap, path::PathBuf, sync::Arc};
@@ -19,34 +18,41 @@ pub struct ModuleStatus {
     pub name: String,
     pub version: String,
     pub first_party: bool,
-    pub legacy: bool,
     pub enabled: bool,
     pub active: bool,
-    pub needs_approval: bool,
     pub configurable: bool,
-    /// An approved startup-only plugin is waiting for a fresh process.
-    /// Host presentation must not infer this from diagnostic prose.
-    pub restart_required: bool,
     pub capabilities: Vec<String>,
-    pub approval_token: String,
     pub detail: String,
 }
+
+fn recovery_status(name: String, detail: String) -> ModuleStatus {
+    ModuleStatus {
+        key: format!("invalid:{name}"),
+        id: name.clone(),
+        name,
+        version: String::new(),
+        first_party: false,
+        enabled: false,
+        active: false,
+        configurable: false,
+        capabilities: vec![],
+        detail,
+    }
+}
+
 pub enum SettingsChange {
     Enable { key: String, enabled: bool },
-    Approve { key: String, token: String },
-    Revoke { key: String },
 }
 impl SettingsChange {
     pub(super) fn key(&self) -> &str {
         match self {
-            Self::Enable { key, .. } | Self::Approve { key, .. } | Self::Revoke { key } => key,
+            Self::Enable { key, .. } => key,
         }
     }
 }
 
 pub struct SettingsService {
     native: FeatureSettings,
-    legacy: LegacyPluginSettings,
     catalog: BuiltinCatalog,
     services: FeatureServices,
     storage: Result<ModuleStorageHost, String>,
@@ -54,28 +60,28 @@ pub struct SettingsService {
     data_errors: BTreeMap<String, String>,
 }
 impl SettingsService {
-    pub fn open(path: PathBuf, directories: Vec<PathBuf>, app: &Application) -> Result<Self> {
+    pub fn open(legacy_path: PathBuf, app: &Application) -> Result<Self> {
         let installation = app.resolver.catalog.begin_install()?;
-        let settings = Self::assemble(path, directories, app)?;
+        let settings = Self::assemble(legacy_path, app)?;
         installation.commit();
         Ok(settings)
     }
-    fn assemble(path: PathBuf, directories: Vec<PathBuf>, app: &Application) -> Result<Self> {
+    fn assemble(legacy_path: PathBuf, app: &Application) -> Result<Self> {
         app.previews
             .lock()
             .map_err(|_| anyhow::anyhow!("preview service unavailable"))?
-            .configure(path.with_file_name("preview-resources"));
-        let feature_path = path.with_file_name("features.json");
+            .configure(legacy_path.with_file_name("preview-resources"));
+        let feature_path = legacy_path.with_file_name("features.json");
         ensure!(
-            path != feature_path,
+            legacy_path != feature_path,
             "external and feature preference paths must differ"
         );
-        let storage_path = path.with_file_name("extension-storage.sqlite3");
+        let storage_path = legacy_path.with_file_name("extension-storage.sqlite3");
         let storage = ModuleStorageHost::open(&storage_path).map_err(|e| format!("{e:#}"));
         let mut services = FeatureServices::new(binding(&storage));
         let clipboard = Arc::new(crate::features::clipboard::service::HistoryService::new(
             crate::persistence::clipboard::SqliteHistoryRepository::open(
-                &path.with_file_name("clipboard-history.sqlite3"),
+                &legacy_path.with_file_name("clipboard-history.sqlite3"),
             )
             .map(|repo| {
                 Box::new(repo) as Box<dyn crate::features::clipboard::history::HistoryRepository>
@@ -87,35 +93,64 @@ impl SettingsService {
             host.bind("application_history")
                 .map_err(|_| "history preferences unavailable".into())
         });
+        let installed = if app.resolver.application_index.has_completed_scan() {
+            app.resolver
+                .application_index
+                .full_catalog()
+                .map(|catalog| {
+                    catalog
+                        .applications()
+                        .iter()
+                        .map(|application| application.bundle_id.clone())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default()
+        } else {
+            let scanned = crate::features::applications::index::scan(app.platform.as_ref());
+            let ids = scanned
+                .applications
+                .iter()
+                .map(|application| application.bundle_id.clone())
+                .collect::<Vec<_>>();
+            app.resolver.application_index.seed(scanned);
+            ids
+        };
         services.bind_application_history(Arc::new(
             crate::features::application_history::service::HistoryService::new(
                 history_storage,
                 crate::application::application_history::SourceCatalog::with_user_directory(
-                    &path.with_file_name("application-history-sources"),
+                    &legacy_path.with_file_name("application-history-sources"),
                 )?,
             )
-            .with_installed_applications(
-                app.platform
-                    .installed_applications()
-                    .applications
-                    .into_iter()
-                    .filter(|app| app.path.is_some())
-                    .map(|app| app.bundle_id),
-            ),
+            .with_application_lookup({
+                let index = app.resolver.application_index.clone();
+                Arc::new(move |ids| {
+                    index
+                        .full_catalog()
+                        .map(|catalog| {
+                            catalog
+                                .applications()
+                                .iter()
+                                .filter(|application| ids.contains(&application.bundle_id))
+                                .map(|application| anywhere_platform::BundleApplication {
+                                    bundle_id: application.bundle_id.clone(),
+                                    name: application.name.clone(),
+                                    path: Some(application.path.clone()),
+                                    icon: None,
+                                    aliases: application.aliases.clone(),
+                                    localized_names: application.localized_names.clone(),
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                })
+            })
+            .with_installed_applications(installed),
         ));
-        let mut catalog = BuiltinCatalog::assemble(&mut services)?;
-        let legacy = LegacyPluginSettings::open(path, directories, &mut catalog.registry)?;
-        let native = FeatureSettings::open(
-            feature_path,
-            if let Some(e) = &legacy.error {
-                Err(e)
-            } else {
-                Ok(&legacy.preferences)
-            },
-        );
+        let catalog = BuiltinCatalog::assemble(&mut services)?;
+        let native = FeatureSettings::open(feature_path, legacy_path);
         let mut settings = Self {
             native,
-            legacy,
             catalog,
             services,
             storage,
@@ -123,12 +158,7 @@ impl SettingsService {
             data_errors: Default::default(),
         };
         settings.refresh_business_data();
-        settings.publish(
-            app,
-            settings.native.policy.clone(),
-            &settings.legacy.preferences,
-            || Ok(()),
-        )?;
+        settings.publish(app, settings.native.policy.clone(), || Ok(()))?;
         clipboard.start(app.platform.clone())?;
         Ok(settings)
     }
@@ -136,9 +166,11 @@ impl SettingsService {
         let mut statuses = self
             .catalog
             .statuses(&self.native.policy, &self.data_errors);
-        statuses.extend(self.legacy.statuses());
         if let Some(e) = &self.native.error {
-            statuses.push(invalid("Feature settings recovery".into(), e.clone()));
+            statuses.push(recovery_status(
+                "Feature settings recovery".into(),
+                e.clone(),
+            ));
         }
         statuses
     }
@@ -180,12 +212,7 @@ impl SettingsService {
     }
     fn publish_application_history(&mut self, app: &Application) -> Result<()> {
         self.refresh_application_history();
-        self.publish(
-            app,
-            self.native.policy.clone(),
-            &self.legacy.preferences,
-            || Ok(()),
-        )
+        self.publish(app, self.native.policy.clone(), || Ok(()))
     }
     fn refresh_application_history(&mut self) {
         match self
@@ -236,20 +263,9 @@ impl SettingsService {
     }
     /// Refresh preference files and business data. Does not discover or bind code.
     pub fn refresh(&mut self, app: &Application) -> Result<Vec<ModuleStatus>> {
-        self.legacy.read();
-        self.legacy.verify_definitions();
-        self.native.read(if let Some(e) = &self.legacy.error {
-            Err(e)
-        } else {
-            Ok(&self.legacy.preferences)
-        })?;
+        self.native.read()?;
         self.refresh_business_data();
-        self.publish(
-            app,
-            self.native.policy.clone(),
-            &self.legacy.preferences,
-            || Ok(()),
-        )?;
+        self.publish(app, self.native.policy.clone(), || Ok(()))?;
         Ok(self.statuses())
     }
     pub fn change(
@@ -261,61 +277,46 @@ impl SettingsService {
         let status = self
             .statuses()
             .into_iter()
-            .find(|s| s.key == key && s.configurable)
-            .ok_or_else(|| anyhow::anyhow!("feature or plugin unavailable; Refresh settings"))?;
-        if status.first_party {
-            let SettingsChange::Enable { enabled, .. } = change else {
-                anyhow::bail!("built-in features do not require user plugin approval");
-            };
-            let mut next = self.native.preferences.clone();
-            if enabled {
-                next.disabled.remove(&status.id);
-            } else {
-                next.disabled.insert(status.id.clone());
-            }
-            let policy = self.native.policy_for(&next)?;
-            // Re-enabling a feature may refresh its data; it never rebinds its handlers.
-            if enabled && status.id == "saved_directories" {
-                match self
-                    .services
-                    .refresh_saved_directories(binding(&self.storage))
-                {
-                    Ok(()) => {
-                        self.data_errors.remove(&status.id);
-                    }
-                    Err(e) => {
-                        self.data_errors.insert(status.id.clone(), format!("{e:#}"));
-                    }
+            .find(|s| s.key == key && s.configurable && s.first_party)
+            .ok_or_else(|| anyhow::anyhow!("feature unavailable; Refresh settings"))?;
+        let SettingsChange::Enable { enabled, .. } = change;
+        let mut next = self.native.preferences.clone();
+        if enabled {
+            next.disabled.remove(&status.id);
+        } else {
+            next.disabled.insert(status.id.clone());
+        }
+        let policy = self.native.policy_for(&next)?;
+        // Re-enabling a feature may refresh its data; it never rebinds its handlers.
+        if enabled && status.id == "saved_directories" {
+            match self
+                .services
+                .refresh_saved_directories(binding(&self.storage))
+            {
+                Ok(()) => {
+                    self.data_errors.remove(&status.id);
+                }
+                Err(e) => {
+                    self.data_errors.insert(status.id.clone(), format!("{e:#}"));
                 }
             }
-            self.publish(app, policy.clone(), &self.legacy.preferences, || {
-                next.save_checked(&self.native.path, &self.native.preferences)
-            })?;
-            self.native.preferences = next;
-            self.native.policy = policy;
-        } else {
-            let next = self.legacy.prepare_change(&change)?;
-            self.publish(app, self.native.policy.clone(), &next, || {
-                next.save_checked(&self.legacy.path, &self.legacy.preferences)
-            })?;
-            self.legacy.preferences = next;
         }
+        let prepared = next.prepare_save(&self.native.path)?;
+        self.publish(app, policy.clone(), || {
+            next.commit_prepared(&self.native.path, &self.native.preferences, prepared)
+        })?;
+        self.native.preferences = next;
+        self.native.policy = policy;
         Ok(self.statuses())
     }
     fn publish(
         &self,
         app: &Application,
         policy: Arc<FeaturePolicySnapshot>,
-        plugins: &PluginPreferences,
         persist: impl FnOnce() -> Result<()>,
     ) -> Result<()> {
-        let mut excluded: std::collections::BTreeSet<String> =
+        let excluded: std::collections::BTreeSet<String> =
             self.data_errors.keys().cloned().collect();
-        for status in self.legacy.statuses() {
-            if !self.legacy.available_at_startup(&status.key, plugins) {
-                excluded.insert(status.key);
-            }
-        }
         let clipboard_enabled = policy.is_enabled("clipboard");
         let history_enabled = policy.is_enabled("application_history")
             && !self.data_errors.contains_key("application_history");
@@ -372,7 +373,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let app = app();
         let path = directory.path().join("extensions.json");
-        let mut settings = SettingsService::open(path.clone(), vec![], &app).unwrap();
+        let mut settings = SettingsService::open(path.clone(), &app).unwrap();
         let action = app
             .resolver
             .base_registry()
@@ -420,77 +421,18 @@ mod tests {
             &source,
             &app.resolver.catalog.synchronous_sources().unwrap()[0]
         ));
-        assert!(SettingsService::open(path, vec![], &app).is_err());
+        assert!(SettingsService::open(path, &app).is_err());
     }
     #[test]
-    fn refresh_never_discovers_new_plugins_and_restart_is_the_only_loading_boundary() {
+    fn conflicting_feature_path_is_rejected_and_failed_startup_can_retry() {
         let directory = tempfile::tempdir().unwrap();
         let app = app();
-        let path = directory.path().join("extensions.json");
-        let mut settings =
-            SettingsService::open(path.clone(), vec![directory.path().into()], &app).unwrap();
-        std::fs::write(
-            directory.path().join("new.toml"),
-            anywhere_plugin::EXAMPLE_PLUGIN,
-        )
-        .unwrap();
-        settings.refresh(&app).unwrap();
-        assert!(!settings.statuses().iter().any(|s| s.id == "example"));
-        assert!(app.resolver.base_registry().get("example.search").is_none());
-        let restarted = super::tests::app();
-        let loaded =
-            SettingsService::open(path, vec![directory.path().into()], &restarted).unwrap();
-        assert!(loaded
+        assert!(SettingsService::open(directory.path().join("features.json"), &app).is_err());
+        let settings =
+            SettingsService::open(directory.path().join("extensions.json"), &app).unwrap();
+        assert!(settings
             .statuses()
             .iter()
-            .any(|s| s.id == "example" && s.active));
-    }
-    #[test]
-    fn disabled_native_target_hides_startup_delegate_and_failed_startup_can_retry() {
-        let directory = tempfile::tempdir().unwrap();
-        let app = app();
-        assert!(
-            SettingsService::open(directory.path().join("features.json"), vec![], &app).is_err()
-        );
-        std::fs::write(
-            directory.path().join("delegate.toml"),
-            r#"protocol_version=1
-id="delegate"
-name="Delegating action"
-[[commands]]
-id="url"
-title="Copy URL"
-accepts=["core.url"]
-action={type="execute_builtin",command_id="core.url.copy"}
-"#,
-        )
-        .unwrap();
-        let mut settings = SettingsService::open(
-            directory.path().join("extensions.json"),
-            vec![directory.path().into()],
-            &app,
-        )
-        .unwrap();
-        assert!(app.resolver.base_registry().get("delegate.url").is_some());
-        settings
-            .change(
-                &app,
-                SettingsChange::Enable {
-                    key: "first-party:url".into(),
-                    enabled: false,
-                },
-            )
-            .unwrap();
-        assert!(app.resolver.base_registry().get("delegate.url").is_none());
-        settings
-            .change(
-                &app,
-                SettingsChange::Enable {
-                    key: "first-party:url".into(),
-                    enabled: true,
-                },
-            )
-            .unwrap();
-        assert!(app.resolver.base_registry().get("delegate.url").is_some());
+            .any(|s| s.id == "url" && s.active));
     }
 }

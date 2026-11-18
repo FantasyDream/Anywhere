@@ -56,7 +56,11 @@ fn all_pages(store: &ScanStore, first: ScanPage) -> BTreeSet<PathBuf> {
             assert!(all.insert(hit.path), "duplicate page result");
         }
         match page.progress.next_cursor {
-            Some(cursor) => page = store.page(Some(&cursor), &|| false).unwrap(),
+            Some(_) => {
+                page = store
+                    .more(&all.iter().cloned().collect(), &|| false)
+                    .unwrap()
+            }
             None => break,
         }
     }
@@ -103,12 +107,11 @@ fn continuous_external_sort_reaches_every_match_across_merge_levels() {
     let mut writer = BufWriter::new(File::create(store.matches_path()).unwrap());
     let mut boundary = 0;
     for i in (0..17001).rev() {
-        boundary += write_record(
-            &mut writer,
-            &fixture.path().join(format!("report-{i:05}.txt")),
-            false,
-        )
-        .unwrap();
+        let hit = store
+            .query
+            .rank(&fixture.path().join(format!("report-{i:05}.txt")), false)
+            .unwrap();
+        boundary += write_match_record(&mut writer, &hit).unwrap();
     }
     writer.flush().unwrap();
     {
@@ -159,7 +162,7 @@ fn continuous_batches_include_late_higher_ranked_matches_without_duplicates() {
         .append(true)
         .open(store.matches_path())
         .unwrap();
-    let bytes = write_record(&mut file, &late, false).unwrap();
+    let bytes = write_match_record(&mut file, &store.query.rank(&late, false).unwrap()).unwrap();
     file.flush().unwrap();
     {
         let mut progress = store.progress.lock().unwrap();
@@ -256,50 +259,6 @@ fn filters_run_before_page_limits_and_hidden_ignored_noise_directories_are_searc
     assert!(!all.iter().any(|p| p
         .components()
         .any(|c| c.as_os_str() == ".hidden" || c.as_os_str() == "node_modules")));
-}
-
-#[test]
-fn reverse_paging_is_stable_without_retaining_a_cursor_history() {
-    let fixture = tempfile::tempdir().unwrap();
-    for i in 0..150 {
-        std::fs::write(fixture.path().join(format!("report-{i:03}")), "").unwrap();
-    }
-    let store = ScanStore::new("report", FileSearchFilter::All, options(fixture.path())).unwrap();
-    let first = finish(&store);
-    let first_paths: Vec<_> = first.hits.iter().map(|h| h.path.clone()).collect();
-    let second = store
-        .page(first.progress.next_cursor.as_deref(), &|| false)
-        .unwrap();
-    let third = store
-        .page(second.progress.next_cursor.as_deref(), &|| false)
-        .unwrap();
-    let second_again = store
-        .page(third.progress.previous_cursor.as_deref(), &|| false)
-        .unwrap();
-    assert_eq!(
-        second
-            .hits
-            .iter()
-            .map(|h| h.path.clone())
-            .collect::<Vec<_>>(),
-        second_again
-            .hits
-            .iter()
-            .map(|h| h.path.clone())
-            .collect::<Vec<_>>()
-    );
-    let first_again = store
-        .page(second_again.progress.previous_cursor.as_deref(), &|| false)
-        .unwrap();
-    assert_eq!(
-        first_paths,
-        first_again
-            .hits
-            .iter()
-            .map(|h| h.path.clone())
-            .collect::<Vec<_>>()
-    );
-    assert_eq!(first_again.progress.page, 0);
 }
 
 #[test]
@@ -505,7 +464,7 @@ fn literal_short_unicode_names_share_one_matching_contract() {
 }
 
 #[test]
-fn cancellation_and_foreign_cursors_do_not_return_complete_results() {
+fn cancelled_scan_and_first_batch_do_not_return_complete_results() {
     let fixture = tempfile::tempdir().unwrap();
     for i in 0..65 {
         std::fs::write(fixture.path().join(format!("report-{i}")), "").unwrap();
@@ -515,15 +474,9 @@ fn cancellation_and_foreign_cursors_do_not_return_complete_results() {
         .run(&|| true, |_| panic!("cancelled query published"))
         .is_err());
     assert!(!store.progress().finished);
-    let first = finish(&store);
-    let cursor = first.progress.next_cursor.unwrap();
-    let another = ScanStore::new("report", FileSearchFilter::All, options(fixture.path())).unwrap();
-    finish(&another);
-    assert!(another.page(Some(&cursor), &|| false).is_err());
-    assert!(store.page(Some(&cursor), &|| true).is_err());
-    let mut forged: serde_json::Value = serde_json::from_str(&cursor).unwrap();
-    forged["page"] = u32::MAX.into();
-    assert!(store.page(Some(&forged.to_string()), &|| false).is_err());
+    finish(&store);
+    assert!(store.first_page(&|| true).is_err());
+    assert!(store.more(&Default::default(), &|| true).is_err());
 }
 
 #[test]
@@ -703,7 +656,7 @@ fn provisional_hits_obey_roots_type_hidden_exclusions_existence_and_name() {
 }
 
 #[test]
-fn batches_commit_complete_records_and_old_page_boundaries_require_refresh() {
+fn batches_commit_complete_records_before_continuous_delivery() {
     let fixture = tempfile::tempdir().unwrap();
     for i in 0..170 {
         std::fs::write(fixture.path().join(format!("report-{i:03}")), "").unwrap();
@@ -720,7 +673,7 @@ fn batches_commit_complete_records_and_old_page_boundaries_require_refresh() {
                 false
             },
             |page| {
-                let committed = store.page(None, &|| false)?;
+                let committed = store.first_page(&|| false)?;
                 assert_eq!(
                     committed.progress.confirmed_matches,
                     page.progress.confirmed_matches
@@ -736,12 +689,15 @@ fn batches_commit_complete_records_and_old_page_boundaries_require_refresh() {
             },
         )
         .unwrap();
-    let cursor = partial_cursor.expect("intermediate batch with more than one page");
-    let stale_boundary = store.page(Some(&cursor), &|| false).unwrap();
-    assert!(stale_boundary.progress.needs_refresh);
+    assert!(
+        partial_cursor.is_some(),
+        "intermediate batch with more than one page"
+    );
+    let complete = store.first_page(&|| false).unwrap();
+    assert!(!complete.progress.needs_refresh);
     assert!(store.progress().finished);
     assert_eq!(
-        all_pages(&store, store.page(None, &|| false).unwrap()).len(),
+        all_pages(&store, store.first_page(&|| false).unwrap()).len(),
         170
     );
 }
@@ -756,7 +712,7 @@ fn broken_storage_is_an_error_and_cannot_be_reported_complete() {
         .unwrap_err();
     store.fail(&error);
     assert!(store.progress().finished && store.progress().issue_count > 0);
-    assert!(store.page(None, &|| false).is_err());
+    assert!(store.first_page(&|| false).is_err());
 }
 
 #[test]

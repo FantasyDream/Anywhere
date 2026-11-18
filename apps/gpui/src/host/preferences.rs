@@ -1,12 +1,8 @@
+use crate::l10n;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Deserializer, Serialize};
-use std::{
-    io::{Read as _, Write as _},
-    path::Path,
-    sync::atomic::{AtomicU64, Ordering},
-};
+use std::{io::Read as _, path::Path};
 
-static SETTINGS_TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 const MAX_PREFERENCES_BYTES: usize = 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -16,6 +12,27 @@ pub enum UiLanguage {
     System,
     En,
     Zh,
+}
+
+impl UiLanguage {
+    pub fn locale(self) -> l10n::Locale {
+        match self {
+            Self::En => l10n::Locale::En,
+            Self::Zh => l10n::Locale::Zh,
+            Self::System => {
+                if sys_locale::get_locale().is_some_and(|locale| {
+                    locale
+                        .split(['-', '_'])
+                        .next()
+                        .is_some_and(|language| language.eq_ignore_ascii_case("zh"))
+                }) {
+                    l10n::Locale::Zh
+                } else {
+                    l10n::Locale::En
+                }
+            }
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -43,6 +60,11 @@ pub struct ActionShortcutBinding {
     pub routes: Vec<ActionShortcutRoute>,
 }
 
+const DEFAULT_CURRENT_APP_SHORTCUT: &str = "control+alt+Space";
+const DEFAULT_UNIVERSAL_SHORTCUT: &str = "alt+Space";
+const LEGACY_CURRENT_APP_SHORTCUT: &str = "meta+alt+Space";
+const LEGACY_UNIVERSAL_SHORTCUT: &str = "meta+Space";
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct HostPreferences {
@@ -56,7 +78,7 @@ pub struct HostPreferences {
     pub capture_browser_current_page: bool,
     pub capture_clipboard: bool,
     pub file_search_enabled: bool,
-    pub file_search_engine: String,
+    pub file_search_engine: anywhere_platform::FileSearchEngine,
     pub file_search_include_hidden: bool,
     pub file_search_roots: Vec<String>,
     pub file_search_excluded_names: Vec<String>,
@@ -67,8 +89,8 @@ pub struct HostPreferences {
 impl Default for HostPreferences {
     fn default() -> Self {
         Self {
-            current_app_shortcut: "meta+alt+Space".to_owned(),
-            universal_shortcut: "meta+Space".to_owned(),
+            current_app_shortcut: DEFAULT_CURRENT_APP_SHORTCUT.to_owned(),
+            universal_shortcut: DEFAULT_UNIVERSAL_SHORTCUT.to_owned(),
             launch_at_login: false,
             ui_language: UiLanguage::System,
             excluded_apps: Vec::new(),
@@ -77,7 +99,7 @@ impl Default for HostPreferences {
             capture_browser_current_page: true,
             capture_clipboard: true,
             file_search_enabled: false,
-            file_search_engine: "system_index".to_owned(),
+            file_search_engine: anywhere_platform::FileSearchEngine::SystemIndex,
             file_search_include_hidden: false,
             file_search_roots: Vec::new(),
             file_search_excluded_names: Vec::new(),
@@ -95,13 +117,26 @@ impl HostPreferences {
                     .read_to_end(&mut bytes)?;
                 anyhow::ensure!(
                     bytes.len() <= MAX_PREFERENCES_BYTES,
-                    "settings exceed {MAX_PREFERENCES_BYTES} bytes"
+                    l10n::settings_too_large(UiLanguage::System.locale())
                 );
-                serde_json::from_slice::<Self>(&bytes)
-                    .with_context(|| format!("read {}", path.display()))
+                let mut preferences = serde_json::from_slice::<Self>(&bytes)
+                    .with_context(|| format!("read {}", path.display()))?;
+                preferences.migrate_legacy_default_shortcuts();
+                Ok(preferences)
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
             Err(error) => Err(error).with_context(|| format!("read {}", path.display())),
+        }
+    }
+
+    fn migrate_legacy_default_shortcuts(&mut self) {
+        let current_is_legacy =
+            equivalent_hotkeys(&self.current_app_shortcut, LEGACY_CURRENT_APP_SHORTCUT);
+        let universal_is_legacy =
+            equivalent_hotkeys(&self.universal_shortcut, LEGACY_UNIVERSAL_SHORTCUT);
+        if current_is_legacy && universal_is_legacy {
+            self.current_app_shortcut = DEFAULT_CURRENT_APP_SHORTCUT.to_owned();
+            self.universal_shortcut = DEFAULT_UNIVERSAL_SHORTCUT.to_owned();
         }
     }
 
@@ -110,70 +145,29 @@ impl HostPreferences {
         let bytes = serde_json::to_vec_pretty(self)?;
         anyhow::ensure!(
             bytes.len() <= MAX_PREFERENCES_BYTES,
-            "settings exceed {MAX_PREFERENCES_BYTES} bytes"
+            l10n::settings_too_large(self.ui_language.locale())
         );
-        let parent = path.parent().context("settings path has no parent")?;
-        std::fs::create_dir_all(parent)?;
-        let sequence = SETTINGS_TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let file_name = path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .context("settings path has no file name")?;
-        let temporary = parent.join(format!(
-            ".{file_name}.{}.{}.tmp",
-            std::process::id(),
-            sequence
-        ));
-        let result = (|| {
-            let mut options = std::fs::OpenOptions::new();
-            options.write(true).create_new(true);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt as _;
-                options.mode(0o600);
-            }
-            let mut file = options.open(&temporary)?;
-            file.write_all(&bytes)?;
-            file.sync_all()?;
-            drop(file);
-            std::fs::rename(&temporary, path)?;
-            Ok::<(), anyhow::Error>(())
-        })();
-        if result.is_err() {
-            let _ = std::fs::remove_file(&temporary);
-        }
-        result?;
-        #[cfg(unix)]
-        if let Ok(directory) = std::fs::File::open(parent) {
-            let _ = directory.sync_all();
-        }
-        Ok(())
+        super::atomic_write_private(path, &bytes)
     }
 
     pub fn validate(&self) -> Result<()> {
-        anyhow::ensure!(
-            matches!(
-                self.file_search_engine.as_str(),
-                "system_index" | "systemIndex" | "ripgrep" | "combined"
-            ),
-            "Unsupported file search engine"
-        );
+        let locale = self.ui_language.locale();
         anyhow::ensure!(
             self.file_search_roots.len() <= 8
                 && self.file_search_excluded_names.len()
                     <= anywhere_protocol::policy::MAX_SEARCH_EXCLUSIONS as usize,
-            "Use at most 8 directories and 32 exclusions"
+            l10n::search_directory_limits(locale)
         );
         anyhow::ensure!(
             !self.file_search_enabled || !self.file_search_roots.is_empty(),
-            "Choose and authorize at least one search directory"
+            l10n::choose_authorized_directories(locale)
         );
         for root in &self.file_search_roots {
             anyhow::ensure!(
                 Path::new(root).is_absolute()
                     && root.len() <= anywhere_protocol::policy::MAX_SEARCH_PATH_BYTES as usize
                     && !root.chars().any(char::is_control),
-                "Search directories must be absolute paths"
+                l10n::absolute_search_directories(locale)
             );
         }
         for name in &self.file_search_excluded_names {
@@ -184,24 +178,24 @@ impl HostPreferences {
                     && !name.chars().any(char::is_control)
                     && name != "."
                     && name != "..",
-                "Exclusions must be directory names"
+                l10n::invalid_search_exclusions(locale)
             );
         }
         let current_app_hotkey = self
             .current_app_shortcut
             .parse::<global_hotkey::hotkey::HotKey>()
-            .with_context(|| format!("invalid global shortcut: {}", self.current_app_shortcut))?;
+            .with_context(|| l10n::invalid_global_shortcut(locale))?;
         let universal_hotkey = self
             .universal_shortcut
             .parse::<global_hotkey::hotkey::HotKey>()
-            .with_context(|| format!("invalid global shortcut: {}", self.universal_shortcut))?;
+            .with_context(|| l10n::invalid_global_shortcut(locale))?;
         anyhow::ensure!(
             current_app_hotkey != universal_hotkey,
-            "Current App and Universal Search shortcuts must differ"
+            l10n::distinct_launcher_shortcuts(locale)
         );
         anyhow::ensure!(
             self.action_shortcuts.len() <= anywhere_protocol::policy::MAX_ACTION_SHORTCUTS as usize,
-            "Too many action shortcuts"
+            l10n::too_many_action_shortcuts(locale)
         );
         let mut action_ids = std::collections::HashSet::new();
         let mut action_shortcuts = std::collections::HashSet::new();
@@ -210,16 +204,16 @@ impl HostPreferences {
                 !binding.action_id.trim().is_empty()
                     && binding.action_id.len()
                         <= anywhere_protocol::policy::MAX_ACTION_ID_BYTES as usize,
-                "Invalid action shortcut identity"
+                l10n::invalid_action_shortcut_identity(locale)
             );
             anyhow::ensure!(
                 action_ids.insert(binding.action_id.as_str()),
-                "Action shortcuts must use distinct actions"
+                l10n::distinct_action_shortcuts(locale)
             );
             let hotkey = binding
                 .shortcut
                 .parse::<global_hotkey::hotkey::HotKey>()
-                .with_context(|| format!("invalid action shortcut: {}", binding.shortcut))?;
+                .with_context(|| l10n::invalid_action_shortcut(locale))?;
             anyhow::ensure!(
                 binding.shortcut.rsplit('+').next().is_some_and(|key| {
                     key.len() == 4
@@ -228,24 +222,24 @@ impl HostPreferences {
                 }) && ["control", "alt", "meta"]
                     .iter()
                     .any(|modifier| { binding.shortcut.split('+').any(|part| part == *modifier) }),
-                "Action shortcuts must combine a letter with Command, Option, or Control"
+                l10n::action_shortcut_modifiers(locale)
             );
             anyhow::ensure!(
                 hotkey != current_app_hotkey && hotkey != universal_hotkey,
-                "Action shortcuts must not reuse launcher shortcuts"
+                l10n::reserved_launcher_shortcut(locale)
             );
             anyhow::ensure!(
                 action_shortcuts.insert(hotkey),
-                "Action shortcuts must use distinct key combinations"
+                l10n::distinct_shortcut_keys(locale)
             );
             anyhow::ensure!(
                 !reserved_action_shortcut(&binding.shortcut),
-                "Action shortcut is reserved for text editing or launcher commands"
+                l10n::reserved_editing_shortcut(locale)
             );
             let is_intent = binding.action_id.starts_with("intent:");
             anyhow::ensure!(
                 is_intent == !binding.routes.is_empty(),
-                "Context shortcut identity and rules must agree"
+                l10n::invalid_context_shortcut_identity(locale)
             );
             if is_intent {
                 anyhow::ensure!(
@@ -254,7 +248,7 @@ impl HostPreferences {
                             <= anywhere_protocol::policy::MAX_ACTION_TITLE_BYTES as usize
                         && binding.routes.len()
                             <= anywhere_protocol::policy::MAX_SHORTCUT_ROUTES as usize,
-                    "Invalid context shortcut"
+                    l10n::invalid_context_shortcut(locale)
                 );
                 let mut conditions = std::collections::HashSet::new();
                 for route in &binding.routes {
@@ -270,11 +264,11 @@ impl HostPreferences {
                                 .context_type
                                 .as_deref()
                                 .is_none_or(|value| valid_shortcut_condition(value, 128)),
-                        "Invalid context shortcut rule"
+                        l10n::invalid_context_shortcut_rule(locale)
                     );
                     anyhow::ensure!(
                         conditions.insert((&route.app_bundle_id, &route.context_type)),
-                        "Context shortcut rules must use distinct conditions"
+                        l10n::distinct_context_shortcut_conditions(locale)
                     );
                 }
             }
@@ -283,11 +277,7 @@ impl HostPreferences {
     }
 
     pub fn file_search_engine(&self) -> anywhere_platform::FileSearchEngine {
-        match self.file_search_engine.as_str() {
-            "ripgrep" => anywhere_platform::FileSearchEngine::Ripgrep,
-            "combined" => anywhere_platform::FileSearchEngine::Combined,
-            _ => anywhere_platform::FileSearchEngine::SystemIndex,
-        }
+        self.file_search_engine
     }
 }
 
@@ -299,7 +289,7 @@ fn valid_shortcut_condition(value: &str, maximum: usize) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
 }
 
-fn reserved_action_shortcut(shortcut: &str) -> bool {
+pub fn reserved_action_shortcut(shortcut: &str) -> bool {
     use global_hotkey::hotkey::Code;
     let Ok(hotkey) = shortcut.parse::<global_hotkey::hotkey::HotKey>() else {
         return false;
@@ -318,6 +308,16 @@ fn reserved_action_shortcut(shortcut: &str) -> bool {
                 | Code::KeyY
                 | Code::KeyZ
         )
+}
+
+fn equivalent_hotkeys(left: &str, right: &str) -> bool {
+    let (Ok(left), Ok(right)) = (
+        left.parse::<global_hotkey::hotkey::HotKey>(),
+        right.parse::<global_hotkey::hotkey::HotKey>(),
+    ) else {
+        return false;
+    };
+    left.id() == right.id()
 }
 
 fn deserialize_action_shortcuts<'de, D>(
@@ -419,9 +419,46 @@ mod tests {
     fn missing_preferences_use_authorization_safe_defaults() {
         let directory = tempfile::tempdir().unwrap();
         let preferences = HostPreferences::load(&directory.path().join("settings.json")).unwrap();
+        assert_eq!(
+            preferences.current_app_shortcut,
+            DEFAULT_CURRENT_APP_SHORTCUT
+        );
+        assert_eq!(preferences.universal_shortcut, DEFAULT_UNIVERSAL_SHORTCUT);
         assert!(!preferences.file_search_enabled);
         assert!(preferences.file_search_roots.is_empty());
         assert!(preferences.validate().is_ok());
+    }
+
+    #[test]
+    fn legacy_default_shortcuts_migrate_without_overwriting_custom_pairs() {
+        let directory = tempfile::tempdir().unwrap();
+        let legacy_path = directory.path().join("legacy.json");
+        std::fs::write(
+            &legacy_path,
+            serde_json::json!({
+                "currentAppShortcut": LEGACY_CURRENT_APP_SHORTCUT,
+                "universalShortcut": LEGACY_UNIVERSAL_SHORTCUT
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let migrated = HostPreferences::load(&legacy_path).unwrap();
+        assert_eq!(migrated.current_app_shortcut, DEFAULT_CURRENT_APP_SHORTCUT);
+        assert_eq!(migrated.universal_shortcut, DEFAULT_UNIVERSAL_SHORTCUT);
+
+        let custom_path = directory.path().join("custom.json");
+        std::fs::write(
+            &custom_path,
+            serde_json::json!({
+                "currentAppShortcut": "control+shift+Space",
+                "universalShortcut": LEGACY_UNIVERSAL_SHORTCUT
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let custom = HostPreferences::load(&custom_path).unwrap();
+        assert_eq!(custom.current_app_shortcut, "control+shift+Space");
+        assert_eq!(custom.universal_shortcut, LEGACY_UNIVERSAL_SHORTCUT);
     }
 
     #[test]
@@ -431,7 +468,10 @@ mod tests {
         let file = std::fs::File::create(&path).unwrap();
         file.set_len(MAX_PREFERENCES_BYTES as u64 + 1).unwrap();
         let error = HostPreferences::load(&path).unwrap_err();
-        assert!(error.to_string().contains("exceed"));
+        assert_eq!(
+            error.to_string(),
+            l10n::settings_too_large(UiLanguage::System.locale())
+        );
     }
 
     #[test]
@@ -520,6 +560,13 @@ mod tests {
         };
         assert!(preferences.validate().is_ok());
 
+        preferences.action_shortcuts[0].shortcut = "alt+KeyU".to_owned();
+        assert!(
+            preferences.validate().is_ok(),
+            "Option is sufficient as an action shortcut modifier"
+        );
+        preferences.action_shortcuts[0].shortcut = "meta+shift+KeyU".to_owned();
+
         preferences.action_shortcuts.push(ActionShortcutBinding {
             action_id: "core.files.search".to_owned(),
             title: "Find files".to_owned(),
@@ -569,5 +616,22 @@ mod tests {
         let duplicate = preferences.action_shortcuts[0].routes[0].clone();
         preferences.action_shortcuts[0].routes.push(duplicate);
         assert!(preferences.validate().is_err());
+    }
+    #[test]
+    fn validation_uses_the_selected_language() {
+        let mut preferences = HostPreferences {
+            ui_language: UiLanguage::Zh,
+            file_search_enabled: true,
+            ..Default::default()
+        };
+        assert_eq!(
+            preferences.validate().unwrap_err().to_string(),
+            l10n::choose_authorized_directories(l10n::Locale::Zh)
+        );
+        preferences.ui_language = UiLanguage::En;
+        assert_eq!(
+            preferences.validate().unwrap_err().to_string(),
+            l10n::choose_authorized_directories(l10n::Locale::En)
+        );
     }
 }

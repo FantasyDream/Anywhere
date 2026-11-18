@@ -34,6 +34,24 @@ pub struct ActionSearch<'a> {
 }
 
 impl<'a> ActionSearch<'a> {
+    /// Reuse immutable empty-query action offers while still gathering the
+    /// current extra sources and applying the ordinary scope/ranking pipeline.
+    pub(crate) fn search_cached_empty(
+        &self,
+        contexts: &[ResolvedContext],
+        extra: &[&dyn CandidateSource],
+        scope_id: Option<&str>,
+        offers: &[super::candidate::Candidate],
+    ) -> CandidateSet {
+        let ready = super::candidate_source::ReadySource(offers);
+        let mut sources: Vec<&dyn CandidateSource> = vec![&ready];
+        if scope_id.is_none() {
+            sources.extend_from_slice(extra);
+        }
+        self.engine
+            .search_scoped(&Query::parse(""), contexts, &sources, scope_id)
+    }
+
     pub fn new(
         registry: &'a ActionRegistry,
         usage: &'a dyn Fn(&str, &str) -> UsageStats,
@@ -233,8 +251,21 @@ mod tests {
             registry.register(spec.descriptor("test")).unwrap();
         }
         registry
-            .register_plugin(
-                anywhere_plugin::parse_manifest(anywhere_plugin::EXAMPLE_PLUGIN).unwrap(),
+            .register(
+                ActionSpec {
+                    localized_titles: &[],
+                    id: "example.search",
+                    title: "Search Example",
+                    accepts: anywhere_protocol::TEXT,
+                    handler: &Noop,
+                    availability: AvailabilityRule::Enabled,
+                    base_priority: 40,
+                    icon: "globe",
+                    aliases: &["example"],
+                    keywords: &["web"],
+                    primary_action: false,
+                }
+                .descriptor("web"),
             )
             .unwrap();
         registry

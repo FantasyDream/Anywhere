@@ -139,6 +139,7 @@ fn sensitive_markers_and_size_preflight_prevent_content_reads() {
         .is_none());
     assert_eq!(board.reads.load(Ordering::Relaxed), 0);
     board.formats = vec![("public.png".into(), vec![0])];
+    board.text = None;
     assert!(collect(
         &board,
         |_, _| Err(ContextReadError::TooLarge.into()),
@@ -275,4 +276,33 @@ fn invalid_optional_format_names_do_not_discard_readable_text() {
         .validate()
         .is_err());
     }
+}
+
+#[test]
+fn png_capture_skips_tiff_and_preserves_other_readable_formats() {
+    let board = Board {
+        formats: vec![
+            ("public.png".into(), vec![137, 80]),
+            ("public.tiff".into(), vec![0; 1024]),
+            ("custom.oversized".into(), vec![]),
+        ],
+        ..Default::default()
+    };
+    let payload = collect(
+        &board,
+        |name, _| {
+            assert_ne!(name, "public.tiff");
+            if name == "custom.oversized" {
+                Err(ContextReadError::TooLarge.into())
+            } else {
+                Ok(true)
+            }
+        },
+        || Ok(()),
+    )
+    .unwrap()
+    .unwrap();
+    assert_eq!(payload.formats.len(), 1);
+    assert_eq!(payload.formats[0].name, "public.png");
+    assert_eq!(board.reads.load(Ordering::Relaxed), 1);
 }

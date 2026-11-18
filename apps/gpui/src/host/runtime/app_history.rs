@@ -1,4 +1,5 @@
 use super::*;
+use anywhere_core::features::application_history::service::InteractiveSearch;
 
 impl LiveLauncher {
     pub fn app_history_sources(&self) -> Receiver<LiveEvent> {
@@ -59,8 +60,10 @@ impl LiveLauncher {
     pub fn search_app_history(
         &self,
         session_id: u64,
+        revision: u64,
         query: String,
         source_id: String,
+        force_refresh: bool,
     ) -> Receiver<LiveEvent> {
         let application = self.application.clone();
         self.spawn(async move {
@@ -75,7 +78,13 @@ impl LiveLauncher {
                 }
             };
             match service
-                .search_wait(session_id, query, source_id.clone())
+                .search_wait(InteractiveSearch {
+                    owner: session_id,
+                    revision,
+                    query,
+                    source_id: source_id.clone(),
+                    force_refresh,
+                })
                 .await
             {
                 Ok(result) => LiveEvent::AppHistory(AppHistorySnapshot {

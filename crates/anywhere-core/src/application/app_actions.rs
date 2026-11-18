@@ -161,12 +161,36 @@ impl Application {
         if invalidate {
             self.resolver.recompute_current(session_id);
         }
+        struct SlotGuard(Arc<(std::sync::Mutex<usize>, std::sync::Condvar)>);
+        impl Drop for SlotGuard {
+            fn drop(&mut self) {
+                let (lock, condvar) = &*self.0;
+                let mut active = lock.lock().unwrap_or_else(|e| e.into_inner());
+                *active = active.saturating_sub(1);
+                condvar.notify_one();
+            }
+        }
+        static MENU_WORKERS: std::sync::OnceLock<
+            Arc<(std::sync::Mutex<usize>, std::sync::Condvar)>,
+        > = std::sync::OnceLock::new();
+        let slots = MENU_WORKERS
+            .get_or_init(|| Arc::new((std::sync::Mutex::new(0), std::sync::Condvar::new())))
+            .clone();
         let platform = self.platform.clone();
         let catalog = self.app_actions.clone();
         let resolver = self.resolver.clone();
         let result = std::thread::Builder::new()
             .name("app-action-discovery".into())
             .spawn(move || {
+                let _permit = {
+                    let (lock, condvar) = &*slots;
+                    let mut active = lock.lock().unwrap_or_else(|e| e.into_inner());
+                    while *active >= 2 {
+                        active = condvar.wait(active).unwrap_or_else(|e| e.into_inner());
+                    }
+                    *active += 1;
+                    SlotGuard(slots.clone())
+                };
                 let started = Instant::now();
                 let version = version.or_else(|| {
                     if trusted {
@@ -228,7 +252,7 @@ impl Application {
                 );
                 let mut published = false;
                 catalog.finish(&ticket, version, items, || {
-                    let Ok(mut session) = resolver.session.lock() else {
+                    let Ok(mut session) = resolver.session.access() else {
                         return;
                     };
                     if session.state.session_id != session_id

@@ -9,6 +9,7 @@ pub(super) struct LiveState {
     pub generation: u64,
     pub cancel: Option<oneshot::Sender<()>>,
     pub snapshot_gate: Option<SnapshotGate>,
+    pub awaiting_query_layout: bool,
 }
 
 impl LiveState {
@@ -21,6 +22,7 @@ impl LiveState {
     }
 
     pub(super) fn cancel_stream(&mut self) {
+        self.awaiting_query_layout = false;
         if let Some(cancel) = self.cancel.take() {
             let _ = cancel.send(());
         }

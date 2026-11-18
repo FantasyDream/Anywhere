@@ -87,7 +87,7 @@ scripts/check-web-sdk.sh
 
 也可声明 `json_escaped`。它匹配带 / 不带外层引号的转义 JSON 容器，最多解开 4 层；编码原文仍受 16 KiB、解码容器受 128 层限制。它不匹配普通字符串 / 标量或已是正常 JSON 的对象，Invocation 保留编码原文。解码、格式化、复制仍由业务插件处理，Host 识别不执行插件代码。
 
-必须有匹配内容才能使用的命令可声明 `"requireInputMatch": true`（默认为 `false`），且必须设置 `inputMatchers`。此类命令不会提供无对象的名称搜索或快捷键入口；捕获内容不匹配时隐藏，执行前再次验证。JSON 示例的三个复制命令使用 `json` / `json_escaped`，去转义命令仅使用 `json_escaped`；Workspace 仍可独立打开。
+必须有匹配内容才能使用的命令可声明 `"requireInputMatch": true`（默认为 `false`），且必须设置 `inputMatchers`（若改用 `background.resolvers` 派生自定义类型，则在命令上声明 `"requireContext": true`，如仓库当前的 JSON Workspace v0.7.1 示例；Workspace 主入口仍保持独立可打开）。此类命令不会提供无对象的名称搜索或快捷键入口；捕获内容不匹配时隐藏，执行前再次验证。
 
 ### 原始 API（进阶集成，自行管理生命周期）
 
@@ -137,7 +137,7 @@ Host 通过 `HostTransport` 注入一条只传字符串帧的消息连接。原�
 
 macOS 页面在加载包之前注入默认 transport，业务可直接导入 `host`。Host 通过原生 main-frame / origin 回调提供身份，JS 不携带授权票据。隐藏立即使未完成请求失效；`lifecycle.onVisibility` 可监听展示事件，自行恢复时再次 `host.ready()`；使用 `definePlugin` 的普通插件无需处理。事件本身不会延长调用资格。
 
-页面复用 ToolPageShell，主题使用 `--aw-text` / `--aw-secondary` / `--aw-surface` / `--aw-border` / `--aw-accent` CSS tokens（当前为应用的深色外观）。Esc 和 ⌘K 由 Host 管理，插件不注册这两个全局键。导航返回与重载当前由 Host 按钮 / 菜单提供，没有通用 invoke、插件声明的原生 UI DSL 或第三方任意导航。
+页面挂载在 GPUI 统一的工具页容器中，主题使用 `--aw-text` / `--aw-secondary` / `--aw-surface` / `--aw-border` / `--aw-accent` CSS tokens。Host 会按当前原生玻璃表面更新这些语义变量；普通控件继承当前 `color-scheme`，固定深色 menu / dialog / tooltip 局部指定 `dark` 并使用 `--aw-on-dark-*` 字色与边界。自建固定深色面板也必须重映射这些局部语义变量，不能只给父元素设置 `color`。Esc 和 ⌘K 由 Host 管理，插件不注册这两个全局键。导航返回与重载当前由 Host 按钮 / 菜单提供，没有通用 invoke、插件声明的原生 UI DSL 或第三方任意导航。
 
 生产页与 JSON / 无框架 Text Pad 示例见 [平台实施记录](https://github.com/FantasyDream/Anywhere/blob/main/docs/web-plugin-design.md)。
 
@@ -145,7 +145,7 @@ macOS 页面在加载包之前注入默认 transport，业务可直接导入 `ho
 
 **插件不需要编写背景适配代码，不需要导入 CSS、注册背景事件、调用 API 或声明额外权限。** Host 对所有 Web 工具执行同一套加载 / 恢复流程，与插件 ID 和前端框架无关。
 
-- 玻璃与窗口底色由宿主提供；原生 WebView 画布支持时透明，不支持时统一深色回退。
+- 玻璃与窗口底色由宿主提供；原生 WebView 画布支持时透明，Reduce Transparency 或平台不支持时使用不透明深色回退。
 - Host 自动设置 `html`、`body` 以及常见挂载根 `#app` / `#root` / `#__next` 的背景和默认文字颜色，覆盖前端模板自带的页面底色（包括加载时的内联背景）。
 - 插件负责内容布局和局部组件。页面根节点属于宿主画布，不用再给它们配置背景或 `color-scheme`；普通卡片、图表等子组件仍可使用自己的业务颜色。
 - 加载、重载与隐藏后恢复都会应用背景；过时的异步响应不修改已隐藏或替换的页面。没有轮询或整页 DOM 监听。
@@ -154,7 +154,7 @@ macOS 页面在加载包之前注入默认 transport，业务可直接导入 `ho
 
 ## 统一样式
 
-GPUI 与 Web 的设计参数来自同一份 [`resources/design-tokens.json`](https://github.com/FantasyDream/Anywhere/blob/main/resources/design-tokens.json)。Host 在插件 HTML 之前自动注入默认控件 CSS：普通 button / input / textarea / select / checkbox / radio / label / kbd 均使用共享字体、字号、字重、尺寸、圆角、边界和交互状态，无需插件导入 CSS。当前仅提供与 App 一致的深色外观，没有动态主题订阅 API。
+GPUI 与 Web 的设计参数来自同一份 [`resources/design-tokens.json`](https://github.com/FantasyDream/Anywhere/blob/main/resources/design-tokens.json)。Host 在插件 HTML 之前自动注入默认控件 CSS：普通 button / input / textarea / select / checkbox / radio / label / kbd 均使用共享字体、字号、字重、尺寸、圆角、边界和交互状态，无需插件导入 CSS。SDK 静态 CSS 的根节点保留深色默认值供独立预览；生产 Host 会按材质外观覆盖当前文档的 `color-scheme` 与语义变量，不提供由插件读取的公开主题状态 API。
 
 SDK 也提供相同 CSS 的导出，供独立浏览器预览使用，不要求前端框架。生产页不必重复导入：
 
@@ -211,9 +211,9 @@ python3 scripts/generate-design-tokens.py --check
 
 通用控件规则只修改 [`resources/web-controls.css`](https://github.com/FantasyDream/Anywhere/blob/main/resources/web-controls.css)，再运行生成脚本；生成的 SDK CSS 与 GPUI token 投影不手改。规则使用低优先级选择器，第三方可覆盖局部布局 / 组件；宿主不能保证任意第三方自定义组件与 GPUI 像素一致。`scripts/check.sh` 检查同步与透明度转换，并运行 GPUI / SDK / 示例回归测试。主题只属于呈现层，Rust 继续负责权限、生命周期和调用执行。
 
-画布透明度由 GPUI WebView 适配层控制，默认使用公共深色底色，防止默认白画布与白字冲突。Web 文档通过 Rust 校验的自定义协议和固定 bootstrap 注入主题；WebKit API、焦点和关闭时释放必须在真实窗口验收，接口不可用时保留可读的深色回退。
+画布透明度由 GPUI WebView 适配层控制；macOS `lb-wry` 显式启用 `transparent` feature，材质可用时关闭 WKWebView 自身背景并露出透明画布，不可用时切换到公共不透明深色 fallback。Web 文档通过 Rust 校验的自定义协议和固定 bootstrap 注入静态默认主题，再由绑定当前文档句柄的运行时脚本同步外观语义变量与 `color-scheme`，不重载页面。WebKit API、焦点和关闭时释放必须在真实窗口验收。
 
-宿主 macOS 回复使用受限 UTF-8 `ArrayBuffer`，在文档传输层还原成 SDK 字符串帧，避免原生字符串插值损坏 JSON 转义。插件的 API 与输入处理代码不变；单帧仍为 64 KiB，非法 UTF-8 / 超限帧不交付。该适配不开放通用二进制或流接口。
+宿主 macOS 回复通过经过完整 JSON 转义的字符串帧直传 SDK（传输层同时保留受限 UTF-8 `ArrayBuffer` 兼容解码）。插件的 API 与输入处理代码不变；单帧仍为 64 KiB，非法 UTF-8 / 超限帧不交付。该适配不开放通用二进制或流接口。
 
 SDK 实现分为 `client.ts`（具体能力、队列与分块）、`lifecycle.ts`（展示事件）、`plugin.ts`（默认连接寿命），公开入口仅重导出；业务插件不需要依赖这些内部路径。
 

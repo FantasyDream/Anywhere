@@ -97,3 +97,20 @@ class PackageTests(unittest.TestCase):
                     "styles/controls.css").read_text()
         self.assertIn('input[role="switch"]', controls)
         self.assertIn('[role="tooltip"]', controls)
+
+    def test_controls_follow_host_scheme_except_for_fixed_dark_surfaces(self):
+        controls = (Path(__file__).parents[1] /
+                    "styles/controls.css").read_text()
+        self.assertIn(
+            ":where(button, select, input, textarea) {\n"
+            "  margin: 0; font-family: var(--aw-font-ui); "
+            "color-scheme: inherit;", controls)
+        for selector in [
+                ':where(select option)',
+                ':where(dialog, [role="dialog"])',
+                ':where(menu, [role="menu"], [role="listbox"])',
+                ':where([role="tooltip"])',
+        ]:
+            start = controls.index(selector)
+            end = controls.index('}', start)
+            self.assertIn('color-scheme: dark;', controls[start:end])

@@ -10,7 +10,10 @@ use std::sync::{
 
 use crate::{
     host::{HotKeyAction, HotKeyController, LiveLauncher},
-    launcher::{launcher_window_size, locale_for_language, LauncherEvent, LauncherView},
+    launcher::{
+        launcher_window_size, locale_for_language, ClipboardShelfView, LauncherEvent, LauncherView,
+        TasksWindowView,
+    },
     ui::{
         design_tokens::{fonts, metrics},
         theme,
@@ -26,6 +29,7 @@ struct ProductShell {
     tasks_launcher: Option<Entity<LauncherView>>,
     _status_item: Option<crate::platform::StatusItemHost>,
     _launcher_events: Option<Subscription>,
+    _window_closed: Option<Subscription>,
 }
 
 enum RuntimeStartup {
@@ -43,9 +47,7 @@ impl ProductShell {
     fn open_clipboard_shelf(&mut self, cx: &mut Context<Self>) {
         crate::platform::remember_clipboard_shelf_destination();
         if self.shelf_window.is_some() {
-            if crate::platform::position_clipboard_shelf_window()
-                && crate::platform::activate_window_after_update(CLIPBOARD_SHELF_TITLE)
-            {
+            if crate::platform::activate_window_after_update(CLIPBOARD_SHELF_TITLE) {
                 return;
             }
             self.shelf_window = None;
@@ -55,9 +57,10 @@ impl ProductShell {
         };
         let locale = self.launcher.read(cx).locale();
         let opened = gpui_kit::open_window(shelf_window_options(cx), cx, |window, cx| {
+            crate::platform::bind_window_identity(window, CLIPBOARD_SHELF_TITLE);
             let launcher =
                 cx.new(|cx| LauncherView::clipboard_shelf(window, cx, live.clone(), locale));
-            cx.new(|cx| ClipboardShelfShell::new(launcher, cx))
+            cx.new(|cx| ClipboardShelfView::new(launcher, cx))
         });
         match opened {
             Ok((window, shell)) => {
@@ -99,9 +102,10 @@ impl ProductShell {
         let locale = self.launcher.read(cx).locale();
         let main_launcher = self.launcher.downgrade();
         let opened = gpui_kit::open_window(tasks_window_options(cx), cx, |window, cx| {
+            crate::platform::bind_window_identity(window, TASKS_WINDOW_TITLE);
             let launcher =
                 cx.new(|cx| LauncherView::tasks_window(window, cx, live.clone(), locale));
-            cx.new(|cx| TasksShell::new(launcher, main_launcher, cx))
+            cx.new(|cx| TasksWindowView::new(launcher, main_launcher, cx))
         });
         match opened {
             Ok((window, shell)) => {
@@ -124,93 +128,6 @@ impl ProductShell {
                 false
             }
         }
-    }
-}
-
-struct ClipboardShelfShell {
-    launcher: Entity<LauncherView>,
-    _launcher_observation: Subscription,
-}
-
-impl ClipboardShelfShell {
-    fn new(launcher: Entity<LauncherView>, cx: &mut Context<Self>) -> Self {
-        let launcher_observation = cx.observe(&launcher, |_, _, cx| cx.notify());
-        Self {
-            launcher,
-            _launcher_observation: launcher_observation,
-        }
-    }
-}
-
-impl Render for ClipboardShelfShell {
-    fn render(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> impl gpui_kit::IntoElement {
-        let launcher = self.launcher.downgrade();
-        window.on_window_should_close(cx, move |window, cx| {
-            let _ = launcher.update(cx, |launcher, cx| launcher.prepare_hide(cx));
-            let handle = window.window_handle();
-            cx.spawn(async move |cx| {
-                cx.background_executor()
-                    .timer(std::time::Duration::from_millis(0))
-                    .await;
-                let _ = handle.update(cx, |_, window, _| window.remove_window());
-            })
-            .detach();
-            false
-        });
-        self.launcher.clone()
-    }
-}
-
-struct TasksShell {
-    launcher: Entity<LauncherView>,
-    _launcher_observation: Subscription,
-    _launcher_events: Subscription,
-}
-
-impl TasksShell {
-    fn new(
-        launcher: Entity<LauncherView>,
-        main_launcher: gpui_kit::WeakEntity<LauncherView>,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        let launcher_observation = cx.observe(&launcher, |_, _, cx| cx.notify());
-        let events = cx.subscribe(&launcher, move |_, _, event: &LauncherEvent, cx| {
-            if matches!(event, LauncherEvent::RestoreLauncher) {
-                let _ = main_launcher.update(cx, |view, cx| view.restore_from_tool(cx));
-            }
-        });
-        Self {
-            _launcher_events: events,
-            launcher,
-            _launcher_observation: launcher_observation,
-        }
-    }
-}
-
-impl Render for TasksShell {
-    fn render(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> impl gpui_kit::IntoElement {
-        let launcher = self.launcher.downgrade();
-        window.on_window_should_close(cx, move |window, cx| {
-            let _ = launcher.update(cx, |launcher, cx| launcher.prepare_hide(cx));
-            let handle = window.window_handle();
-            cx.spawn(async move |cx| {
-                cx.background_executor()
-                    .timer(std::time::Duration::from_millis(0))
-                    .await;
-                let _ = handle.update(cx, |_, window, _| window.remove_window());
-            })
-            .detach();
-            false
-        });
-        self.launcher.clone()
     }
 }
 
@@ -242,7 +159,7 @@ fn configure_component_theme(theme: &mut gpui_kit::component::Theme) {
     theme.mono_font_family = fonts::FONT_MONO.into();
     theme.mono_font_size = px(metrics::PREVIEW_CODE_SIZE);
     theme.radius = px(metrics::CONTROL_RADIUS);
-    theme.window_radius = px(18.);
+    theme.window_radius = px(crate::ui::LAUNCHER_CORNER_RADIUS);
     // GPUI Kit's Root paints this token underneath the product view. A clear
     // LauncherView alone cannot expose native glass through an opaque Root.
     theme.colors.background = theme::transparent();
@@ -251,6 +168,8 @@ fn configure_component_theme(theme: &mut gpui_kit::component::Theme) {
     theme.colors.secondary_foreground = theme::secondary();
     theme.colors.muted_foreground = theme::muted();
     theme.colors.border = theme::border();
+    theme.colors.popover = theme::menu_surface();
+    theme.colors.popover_foreground = theme::on_dark_primary();
     theme.colors.input = theme::control_border();
     theme.colors.ring = theme::selection_outline();
     theme.colors.caret = theme::accent();
@@ -258,14 +177,14 @@ fn configure_component_theme(theme: &mut gpui_kit::component::Theme) {
     theme.tokens.input = theme::control_border().into();
     theme.tokens.selection = theme::text_selection().into();
     theme.colors.primary = theme::accent_fill();
-    theme.colors.primary_foreground = theme::primary();
+    theme.colors.primary_foreground = theme::on_dark_primary();
     theme.colors.primary_hover = theme::accent();
     theme.colors.primary_active = theme::accent_fill();
     theme.tokens.primary = theme::accent_fill().into();
     theme.tokens.primary_hover = theme::accent().into();
     theme.tokens.primary_active = theme::accent_fill().into();
     theme.colors.button_primary = theme::primary_button_surface();
-    theme.colors.button_primary_foreground = theme::primary();
+    theme.colors.button_primary_foreground = theme::on_dark_primary();
     theme.colors.button_primary_hover = theme::accent();
     theme.colors.button_primary_active = theme::accent_fill();
     theme.tokens.button_primary = theme::primary_button_surface().into();
@@ -293,26 +212,30 @@ fn configure_component_theme(theme: &mut gpui_kit::component::Theme) {
     theme.tokens.list_hover = theme::hover().into();
     theme.tokens.list_active = theme::selected().into();
     theme.colors.switch = theme::control_surface();
-    theme.colors.switch_thumb = theme::primary();
+    theme.colors.switch_thumb = theme::on_dark_primary();
     theme.colors.scrollbar_thumb = theme::control_border();
     theme.colors.scrollbar_thumb_hover = theme::secondary();
     theme.tokens.switch = theme::control_surface().into();
-    theme.tokens.switch_thumb = theme::primary().into();
+    theme.tokens.switch_thumb = theme::on_dark_primary().into();
     theme.tokens.scrollbar_thumb = theme::control_border().into();
     theme.tokens.scrollbar_thumb_hover = theme::secondary().into();
 }
 
-fn install_component_theme(cx: &mut GpuiApp) {
+pub(crate) fn install_component_theme(cx: &mut GpuiApp) {
     gpui_kit::component::Theme::update(cx, |theme| {
-        theme.mode = gpui_kit::component::ThemeMode::Dark;
+        theme.mode = if theme::glass_surface_is_light() {
+            gpui_kit::component::ThemeMode::Light
+        } else {
+            gpui_kit::component::ThemeMode::Dark
+        };
     });
     gpui_kit::component::Theme::update(cx, configure_component_theme);
 }
 
 pub fn run(cx: &mut GpuiApp) {
     gpui_kit::init(cx);
-    install_component_theme(cx);
     crate::platform::prepare_window_material();
+    install_component_theme(cx);
     cx.set_reduce_motion(crate::platform::uses_reduce_motion());
     cx.set_activation_policy(app_activation_policy());
     let preview = std::env::var_os("ANYWHERE_PREVIEW").is_some();
@@ -321,6 +244,7 @@ pub fn run(cx: &mut GpuiApp) {
         tokio::sync::mpsc::channel::<crate::platform::StatusItemAction>(64);
     let options = main_window_options(cx);
     let opened = gpui_kit::open_window(options, cx, |window, cx| {
+        crate::platform::bind_window_identity(window, PRODUCT_NAME);
         let launcher = cx.new(|cx| {
             if preview {
                 LauncherView::new(window, cx)
@@ -336,6 +260,7 @@ pub fn run(cx: &mut GpuiApp) {
             tasks_launcher: None,
             _status_item: None,
             _launcher_events: None,
+            _window_closed: None,
         })
     });
     let (window_handle, shell) = match opened {
@@ -345,13 +270,24 @@ pub fn run(cx: &mut GpuiApp) {
             return;
         }
     };
-    crate::platform::configure_main_window_after_launch(PRODUCT_NAME);
+    crate::host::defer_native_window_update(
+        shell.downgrade(),
+        window_handle,
+        cx,
+        || crate::platform::configure_main_window(PRODUCT_NAME),
+        |_, _, _, configured| {
+            if !configured {
+                tracing::warn!("launcher_window_configuration_failed");
+            }
+        },
+    );
     if preview {
         tracing::warn!("ui_preview_uses_fixture_data_without_live_runtime");
         crate::platform::show_main_window_after_launch();
     }
     let locale = shell.read(cx).launcher.read(cx).locale();
-    let preferences = crate::host::HostPreferences::default();
+    let preferences =
+        crate::host::registered_preferences(&crate::host::HostPreferences::default(), None);
     tracing::debug!(
         locale = ?locale,
         current_shortcut = %preferences.current_app_shortcut,
@@ -368,6 +304,24 @@ pub fn run(cx: &mut GpuiApp) {
     let launcher_window = window_handle;
     shell.update(cx, |shell, cx| {
         shell._status_item = status_item;
+        let weak = cx.weak_entity();
+        shell._window_closed = Some(cx.on_window_closed(move |cx, id| {
+            let _ = weak.update(cx, |shell, _| {
+                if shell
+                    .shelf_window
+                    .is_some_and(|handle| handle.window_id() == id)
+                {
+                    shell.shelf_window = None;
+                }
+                if shell
+                    .tasks_window
+                    .is_some_and(|handle| handle.window_id() == id)
+                {
+                    shell.tasks_window = None;
+                    shell.tasks_launcher = None;
+                }
+            });
+        }));
         shell._launcher_events = Some(cx.subscribe(
             &shell.launcher,
             move |shell: &mut ProductShell, _, event: &LauncherEvent, cx| {
@@ -413,6 +367,24 @@ pub fn run(cx: &mut GpuiApp) {
                         locale,
                         preferences,
                     } => {
+                        for handle in [shell.shelf_window, shell.tasks_window]
+                            .into_iter()
+                            .flatten()
+                        {
+                            let locale = *locale;
+                            let _ = handle.update(cx, |view, window, cx| {
+                                if let Ok(shelf) = view.clone().downcast::<ClipboardShelfView>() {
+                                    shelf.read(cx).launcher.clone().update(cx, |view, cx| {
+                                        view.update_tool_locale(locale, window, cx)
+                                    });
+                                } else if let Ok(tasks) = view.downcast::<TasksWindowView>() {
+                                    tasks.read(cx).launcher.clone().update(cx, |view, cx| {
+                                        view.update_tool_locale(locale, window, cx)
+                                    });
+                                }
+                                window.refresh();
+                            });
+                        }
                         if let Some(status_item) = shell._status_item.as_ref() {
                             status_item.update_labels(crate::platform::StatusMenuLabels::new(
                                 *locale,
@@ -458,21 +430,34 @@ pub fn run(cx: &mut GpuiApp) {
                             return;
                         }
                     };
-                    let hotkeys = match HotKeyController::new(&preferences) {
-                        Ok(controller) => Some(Arc::new(Mutex::new(controller))),
+                    let (hotkeys, hotkey_error) = match HotKeyController::new(&preferences) {
+                        Ok(controller) => {
+                            let error = controller.registration_error().map(str::to_owned);
+                            (Some(Arc::new(Mutex::new(controller))), error)
+                        }
                         Err(error) => {
                             tracing::error!(%error, "global_hotkey_manager_unavailable");
-                            None
+                            (None, Some(format!("{error:#}")))
                         }
                     };
                     let locale = locale_for_language(preferences.ui_language);
-                    let labels = crate::platform::StatusMenuLabels::new(locale, &preferences);
+                    let effective = {
+                        let controller = hotkeys.as_ref().and_then(|hotkeys| hotkeys.lock().ok());
+                        crate::host::registered_preferences(&preferences, controller.as_deref())
+                    };
+                    let labels = crate::platform::StatusMenuLabels::new(locale, &effective);
                     let attached = startup_window
                         .update(cx, |_, window, cx| {
                             startup_shell.update(cx, |shell, cx| {
                                 shell.live = Some(live.clone());
                                 shell.launcher.update(cx, |launcher, cx| {
-                                    launcher.attach_runtime(live, hotkeys.clone(), window, cx)
+                                    launcher.attach_runtime(
+                                        live,
+                                        hotkeys.clone(),
+                                        hotkey_error,
+                                        window,
+                                        cx,
+                                    )
                                 });
                                 if let Some(status_item) = shell._status_item.as_ref() {
                                     status_item.update_labels(labels);
@@ -481,9 +466,7 @@ pub fn run(cx: &mut GpuiApp) {
                         })
                         .is_ok();
                     if attached {
-                        if let Some(hotkeys) = hotkeys {
-                            install_global_hotkeys(cx, hotkeys, startup_window, startup_shell);
-                        }
+                        install_global_hotkeys(cx, startup_window, startup_shell);
                     }
                 }
                 RuntimeStartup::Failed(error) => {
@@ -569,13 +552,9 @@ pub fn run(cx: &mut GpuiApp) {
                     let opened = status_window
                         .update(cx, |_, window, cx| {
                             status_shell.update(cx, |shell, cx| {
-                                if shell.live.is_none() {
-                                    return false;
-                                }
                                 shell
                                     .launcher
-                                    .update(cx, |launcher, cx| launcher.open_settings(window, cx));
-                                true
+                                    .update(cx, |launcher, cx| launcher.open_settings(window, cx))
                             })
                         })
                         .unwrap_or(false);
@@ -713,12 +692,21 @@ pub fn run(cx: &mut GpuiApp) {
                     let _ = focus_window.update(cx, |_, window, cx| {
                         cx.set_reduce_motion(reduce_motion);
                         if refreshed {
+                            install_component_theme(cx);
                             focus_shell.update(cx, |shell, cx| {
                                 shell.launcher.update(cx, |launcher, cx| {
                                     launcher.platform_appearance_changed(cx)
                                 });
                             });
                             window.refresh();
+                        }
+                    });
+                    focus_shell.update(cx, |shell, cx| {
+                        for handle in [shell.shelf_window, shell.tasks_window]
+                            .into_iter()
+                            .flatten()
+                        {
+                            let _ = handle.update(cx, |_, window, _| window.refresh());
                         }
                     });
                 }
@@ -755,7 +743,6 @@ fn start_runtime_worker(
 
 fn install_global_hotkeys(
     cx: &mut gpui_kit::AsyncApp,
-    hotkeys: Arc<Mutex<HotKeyController>>,
     window_handle: AnyWindowHandle,
     shell: Entity<ProductShell>,
 ) {
@@ -773,10 +760,18 @@ fn install_global_hotkeys(
                 hotkey_event_state = ?event.state(),
                 "global_hotkey_event_received"
             );
-            let action = hotkeys
-                .lock()
+            // Read the current controller so a retry can recover even if the
+            // native manager could not be created during startup.
+            let action = window_handle
+                .update(cx, |_, _, cx| {
+                    hotkey_shell
+                        .read(cx)
+                        .launcher
+                        .read(cx)
+                        .global_hotkey_action(event)
+                })
                 .ok()
-                .and_then(|controller| controller.action_for_event(event));
+                .flatten();
             let Some(action) = action else {
                 continue;
             };
@@ -920,7 +915,10 @@ fn shelf_window_options(cx: &mut GpuiApp) -> WindowOptions {
 }
 
 fn tasks_window_options(cx: &mut GpuiApp) -> WindowOptions {
-    let requested = size(px(920.), px(600.));
+    let requested = size(
+        px(crate::ui::TASKS_WINDOW_WIDTH),
+        px(crate::ui::TASKS_WINDOW_HEIGHT),
+    );
     WindowOptions {
         window_bounds: Some(WindowBounds::centered(
             constrained_window_size(requested, cx),
@@ -1025,7 +1023,7 @@ mod tests {
         assert_eq!(theme.tokens.button_secondary.color, theme::transparent());
         assert_eq!(theme.tokens.list_active.color, theme::selected());
         assert_eq!(theme.tokens.primary.color, theme::accent_fill());
-        assert_eq!(theme.tokens.switch_thumb.color, theme::primary());
+        assert_eq!(theme.tokens.switch_thumb.color, theme::on_dark_primary());
     }
 
     #[gpui_kit::test]
@@ -1047,7 +1045,7 @@ mod tests {
             assert_eq!(theme.tokens.button_secondary.color, theme::transparent());
             assert_eq!(theme.tokens.list_active.color, theme::selected());
             assert_eq!(theme.tokens.primary.color, theme::accent_fill());
-            assert_eq!(theme.tokens.switch_thumb.color, theme::primary());
+            assert_eq!(theme.tokens.switch_thumb.color, theme::on_dark_primary());
         });
     }
 
@@ -1145,7 +1143,7 @@ mod tests {
                         let launcher = cx.new(|cx| {
                             LauncherView::tasks_window(window, cx, live, crate::l10n::Locale::En)
                         });
-                        cx.new(|cx| TasksShell::new(launcher, main_launcher, cx))
+                        cx.new(|cx| TasksWindowView::new(launcher, main_launcher, cx))
                     },
                 )
             })
@@ -1206,6 +1204,7 @@ mod tests {
                             tasks_launcher: None,
                             _status_item: None,
                             _launcher_events: None,
+                            _window_closed: None,
                         })
                     },
                 )

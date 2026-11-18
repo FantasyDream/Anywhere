@@ -10,7 +10,7 @@ use crate::{
         policy::FeaturePolicySnapshot,
         services::FeatureServices,
     },
-    persistence::{extensions::PluginPreferences, features::FeaturePreferences},
+    persistence::features::FeaturePreferences,
 };
 use anyhow::{ensure, Context, Result};
 use std::{path::PathBuf, sync::Arc};
@@ -85,18 +85,14 @@ impl BuiltinCatalog {
                     name: descriptor.name.into(),
                     version: APP_VERSION.into(),
                     first_party: true,
-                    legacy: false,
                     enabled,
                     active: enabled && error.is_none(),
-                    needs_approval: false,
                     configurable: policy.is_configurable(),
-                    restart_required: false,
                     capabilities: descriptor
                         .capabilities
                         .iter()
                         .map(|c| c.as_str().into())
                         .collect(),
-                    approval_token: String::new(),
                     detail: error.cloned().unwrap_or_else(|| {
                         if enabled {
                             "Built in · Enabled"
@@ -113,26 +109,31 @@ impl BuiltinCatalog {
 
 pub(super) struct FeatureSettings {
     pub path: PathBuf,
+    pub legacy_path: PathBuf,
     pub preferences: FeaturePreferences,
     pub policy: Arc<FeaturePolicySnapshot>,
     pub error: Option<String>,
 }
 impl FeatureSettings {
-    pub fn open(path: PathBuf, legacy: Result<&PluginPreferences, &str>) -> Self {
+    pub fn open(path: PathBuf, legacy_path: PathBuf) -> Self {
         let mut settings = Self {
             path,
+            legacy_path,
             preferences: Default::default(),
             policy: Arc::new(FeaturePolicySnapshot::new(0, Default::default(), false)),
             error: None,
         };
-        settings
-            .read(legacy)
-            .expect("initial generation is available");
+        settings.read().expect("initial generation is available");
         settings
     }
-    pub fn read(&mut self, legacy: Result<&PluginPreferences, &str>) -> Result<()> {
-        let loaded = FeaturePreferences::load_or_migrate(&self.path, legacy);
-        self.error = loaded.as_ref().err().map(|e| format!("Feature settings could not be read: {e:#}. Repair {} and Refresh. Existing files have not been overwritten.", self.path.display()));
+    pub fn read(&mut self) -> Result<()> {
+        let loaded = FeaturePreferences::load_or_migrate(&self.path, &self.legacy_path);
+        self.error = loaded.as_ref().err().map(|e| {
+            format!(
+                "Feature settings could not be read: {e:#}. Repair {} and Refresh. Existing files have not been overwritten.",
+                self.path.display()
+            )
+        });
         let next = loaded.unwrap_or_else(|_| FeaturePreferences {
             recovery: true,
             ..Default::default()

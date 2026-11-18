@@ -5,7 +5,7 @@ impl LiveLauncher {
         let application = self.application.clone();
         self.spawn_blocking(move || {
             tracing::debug!(query_length = query.len(), "clipboard_snapshot_started");
-            let snapshot = clipboard_snapshot_from(&application, &query)?;
+            let snapshot = clipboard_snapshot_from(&application, Some(&query))?;
             tracing::debug!(
                 item_count = snapshot.items.len(),
                 "clipboard_snapshot_completed"
@@ -25,7 +25,7 @@ impl LiveLauncher {
             }
             Ok(LiveEvent::Clipboard(clipboard_snapshot_from(
                 &application,
-                &query,
+                Some(&query),
             )?))
         })
     }
@@ -39,12 +39,22 @@ impl LiveLauncher {
             }
             Ok(LiveEvent::Clipboard(clipboard_snapshot_from(
                 &application,
-                &query,
+                Some(&query),
             )?))
         })
     }
 
-    pub fn clear_clipboard(&self, query: String) -> Receiver<LiveEvent> {
+    pub fn clipboard_settings_snapshot(&self) -> Receiver<LiveEvent> {
+        let application = self.application.clone();
+        self.spawn_blocking(move || {
+            Ok(LiveEvent::Clipboard(clipboard_snapshot_from(
+                &application,
+                None,
+            )?))
+        })
+    }
+
+    pub fn clear_clipboard(&self) -> Receiver<LiveEvent> {
         let application = self.application.clone();
         self.spawn_blocking(move || {
             {
@@ -53,12 +63,12 @@ impl LiveLauncher {
             }
             Ok(LiveEvent::Clipboard(clipboard_snapshot_from(
                 &application,
-                &query,
+                None,
             )?))
         })
     }
 
-    pub fn set_clipboard_pause(&self, minutes: u32, query: String) -> Receiver<LiveEvent> {
+    pub fn set_clipboard_pause(&self, minutes: u32) -> Receiver<LiveEvent> {
         let application = self.application.clone();
         self.spawn_blocking(move || {
             {
@@ -69,12 +79,12 @@ impl LiveLauncher {
             }
             Ok(LiveEvent::Clipboard(clipboard_snapshot_from(
                 &application,
-                &query,
+                None,
             )?))
         })
     }
 
-    pub fn set_clipboard_retention(&self, days: u32, query: String) -> Receiver<LiveEvent> {
+    pub fn set_clipboard_retention(&self, days: u32) -> Receiver<LiveEvent> {
         let application = self.application.clone();
         self.spawn_blocking(move || {
             {
@@ -83,7 +93,7 @@ impl LiveLauncher {
             }
             Ok(LiveEvent::Clipboard(clipboard_snapshot_from(
                 &application,
-                &query,
+                None,
             )?))
         })
     }

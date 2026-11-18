@@ -172,10 +172,7 @@ impl Application {
                 call = calls.recv() => {
                     let Some((call, reply)) = call else { break worker.await.context("background worker failed")? };
                     sequence += 1;
-                    let mut frame = serde_json::to_value(call)?;
-                    frame["protocol"] = json!(PROTOCOL);
-                    frame["requestId"] = json!(format!("background_{sequence}"));
-                    let raw = self.dispatch_web_message(binding, source(binding), &frame.to_string()).await;
+                    let raw = self.dispatch_web_call(binding, source(binding), format!("background_{sequence}"), call).await;
                     let result = self.background_reply_value(binding, &raw, &mut sequence).await;
                     let _ = reply.send(result);
                 }

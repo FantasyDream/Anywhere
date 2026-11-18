@@ -11,7 +11,7 @@ impl Application {
         revision: Revision,
         candidate_id: CandidateId,
     ) -> Result<crate::features::preview::PreviewResource> {
-        let epoch = self.resolver.execution_epoch.clone();
+        let epoch = self.resolver.session.epoch_guard();
         let expected_epoch = epoch.load(Ordering::Acquire);
         let ticket = self.resolver.execution(session_id, revision);
         let policy = self.file_search_policy.clone();

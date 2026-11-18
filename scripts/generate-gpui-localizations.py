@@ -79,14 +79,27 @@ def rust_string(value):
     return json.dumps(value, ensure_ascii=False)
 
 
+def reject_duplicate_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError(f'Duplicate localization key: {key}')
+        result[key] = value
+    return result
+
+
+def read_catalog(path):
+    return json.loads(path.read_text(), object_pairs_hook=reject_duplicate_keys)
+
+
 def message_count():
-    catalog = json.loads((SOURCE_DIRECTORY / 'app_en.arb').read_text())
+    catalog = read_catalog(SOURCE_DIRECTORY / 'app_en.arb')
     return len([key for key in catalog if not key.startswith('@')])
 
 
 def render():
     catalogs = {
-        locale: json.loads((SOURCE_DIRECTORY / f'app_{locale}.arb').read_text())
+        locale: read_catalog(SOURCE_DIRECTORY / f'app_{locale}.arb')
         for locale in LOCALES
     }
     english_keys = [key for key in catalogs['en'] if not key.startswith('@')]

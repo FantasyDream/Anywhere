@@ -14,8 +14,7 @@ async fn deferred_tool_has_no_actions_shortcuts_scope_or_prefill_but_preserves_s
         Box::<MemoryUsage>::default(),
         vec![],
     );
-    let settings =
-        SettingsService::open(temp.path().join("extensions.json"), vec![], &app).unwrap();
+    let settings = SettingsService::open(temp.path().join("extensions.json"), &app).unwrap();
     assert!(settings.statuses().iter().all(|status| status.id != "json"));
     assert_eq!(std::fs::read(feature_path).unwrap(), original);
     assert!(app

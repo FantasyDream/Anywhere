@@ -64,125 +64,26 @@ impl LauncherView {
             l10n::running_count(locale, active_count as i64)
         };
 
-        let mut sidebar_rows = div()
-            .id("task-list")
+        let indices = visible_indices.clone();
+        let sidebar_rows = div()
             .flex_1()
             .min_h(px(0.))
-            .px(px(8.))
-            .pb(px(8.))
-            .flex()
-            .flex_col()
-            .track_scroll(&self.tasks_scroll)
-            .overflow_y_scroll()
+            .relative()
+            .child(
+                gpui_kit::uniform_list(
+                    "task-list",
+                    indices.len(),
+                    cx.processor(move |this, range: std::ops::Range<usize>, _, cx| {
+                        range
+                            .map(|position| this.render_task_list_row(indices[position], cx))
+                            .collect::<Vec<_>>()
+                    }),
+                )
+                .size_full()
+                .px(px(8.))
+                .track_scroll(&self.tool_list_scrolls.tasks),
+            )
             .vertical_scrollbar(&self.tasks_scroll);
-        for index in visible_indices.iter().copied() {
-            let Some(row) = self.tasks.rows.get(index).cloned() else {
-                continue;
-            };
-            let selected = self.tasks.selected == index;
-            let (status_color, status_icon) = task_status_style(row.status);
-            let status_label = match row.status {
-                anywhere_protocol::ExecutionSessionStatus::Running => l10n::running(locale),
-                anywhere_protocol::ExecutionSessionStatus::Stopping => l10n::stopping(locale),
-                anywhere_protocol::ExecutionSessionStatus::Succeeded => l10n::completed(locale),
-                anywhere_protocol::ExecutionSessionStatus::Failed => l10n::failed(locale),
-                anywhere_protocol::ExecutionSessionStatus::Stopped => l10n::stopped(locale),
-            };
-            let color = if selected {
-                theme::primary()
-            } else {
-                status_color
-            };
-            sidebar_rows = sidebar_rows.child(
-                div()
-                    .id(SharedString::from(format!("execution-row-{index}")))
-                    .role(gpui_kit::Role::ListBoxOption)
-                    .aria_label(row.title.clone())
-                    .aria_selected(selected)
-                    .h(px(86.))
-                    .flex_shrink_0()
-                    .pb(px(4.))
-                    .cursor_pointer()
-                    .on_click(cx.listener(move |this, _, window, cx| {
-                        this.select_task_row(index, window, cx)
-                    }))
-                    .child(
-                        div()
-                            .h_full()
-                            .px(px(10.))
-                            .py(px(8.))
-                            .flex()
-                            .items_center()
-                            .result_surface(selected)
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .min_w(px(0.))
-                                    .flex()
-                                    .flex_col()
-                                    .gap(px(4.))
-                                    .child(
-                                        div()
-                                            .id(SharedString::from(format!(
-                                                "execution-title-{index}"
-                                            )))
-                                            .truncate()
-                                            .body_text()
-                                            .font_weight(FontWeight::MEDIUM)
-                                            .text_color(theme::primary())
-                                            .tooltip(components::text_tooltip(row.title.clone()))
-                                            .child(row.title),
-                                    )
-                                    .child(
-                                        div()
-                                            .id(SharedString::from(format!(
-                                                "execution-directory-{index}"
-                                            )))
-                                            .truncate()
-                                            .text_size(px(metrics::LABEL_SIZE))
-                                            .line_height(px(
-                                                metrics::LABEL_SIZE * metrics::BODY_LINE_HEIGHT
-                                            ))
-                                            .text_color(if selected {
-                                                theme::primary()
-                                            } else {
-                                                theme::secondary()
-                                            })
-                                            .tooltip(components::text_tooltip(
-                                                row.directory.clone(),
-                                            ))
-                                            .child(directory_display(&row.directory).to_owned()),
-                                    )
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(8.))
-                                            .child(components::status_badge(
-                                                status_label,
-                                                color,
-                                                status_icon,
-                                            ))
-                                            .when_some(row.exit_code, |element, code| {
-                                                element.child(
-                                                    div()
-                                                        .text_size(px(11.))
-                                                        .text_color(if selected {
-                                                            theme::primary()
-                                                        } else {
-                                                            theme::muted()
-                                                        })
-                                                        .child(l10n::exit_code(
-                                                            locale,
-                                                            &code.to_string(),
-                                                        )),
-                                                )
-                                            }),
-                                    ),
-                            ),
-                    ),
-            );
-        }
 
         let sidebar = div()
             .w(px(252.))
@@ -251,14 +152,14 @@ impl LauncherView {
             let row = detail.row.clone();
             let active = row.status.is_active();
             let output = if self.tasks.diagnostics {
-                detail.stderr.as_str()
+                detail.stderr.clone()
             } else {
-                detail.stdout.as_str()
+                detail.stdout.clone()
             };
             let copy_output = if output.is_empty() {
                 None
             } else {
-                Some(output.to_owned())
+                Some(output.clone())
             };
             let (status_color, status_icon) = task_status_style(row.status);
             let status_label = match row.status {
@@ -424,6 +325,14 @@ impl LauncherView {
                         components::NoticeKind::Info,
                     ))
                 });
+            let rendered_output = if output.is_empty() {
+                SharedString::from(empty_output.clone())
+            } else {
+                output.clone()
+            };
+            let (lines, longest_line) =
+                self.tasks.output_lines_and_longest(rendered_output.clone());
+            let diagnostic_output = self.tasks.diagnostics;
             let output_panel = div()
                 .flex_1()
                 .min_h(px(0.))
@@ -538,7 +447,9 @@ impl LauncherView {
                                     let Some(output) = copy_output.clone() else {
                                         return;
                                     };
-                                    cx.write_to_clipboard(ClipboardItem::new_string(output));
+                                    cx.write_to_clipboard(ClipboardItem::new_string(
+                                        output.to_string(),
+                                    ));
                                     this.set_notice(
                                         l10n::copied(locale),
                                         components::NoticeKind::Success,
@@ -550,39 +461,58 @@ impl LauncherView {
                 .child(div().h(px(metrics::DIVIDER_WIDTH)).bg(theme::divider()))
                 .child(
                     div()
-                        .id("task-output-scroll")
-                        .debug_selector(|| "task-output-scroll".into())
                         .flex_1()
                         .min_h(px(0.))
-                        .p(px(14.))
-                        .track_scroll(&self.tasks_output_scroll)
-                        .on_scroll(cx.listener(|this, _, _, cx| {
-                            let offset = this.tasks_output_scroll.offset().y;
-                            let maximum = this.tasks_output_scroll.max_offset().y;
-                            this.tasks.update_follow_output(offset, maximum);
-                            cx.notify();
-                        }))
-                        .overflow_y_scroll()
-                        .vertical_scrollbar(&self.tasks_output_scroll)
+                        .relative()
                         .child(
-                            div()
-                                .font_family(fonts::FONT_MONO)
-                                .text_size(px(metrics::PREVIEW_CODE_SIZE))
-                                .line_height(px(
-                                    metrics::PREVIEW_CODE_SIZE * metrics::PREVIEW_CODE_LINE_HEIGHT
-                                ))
-                                .whitespace_normal()
-                                .text_color(if self.tasks.diagnostics {
-                                    theme::warning()
-                                } else {
-                                    theme::primary()
-                                })
-                                .child(if output.is_empty() {
-                                    empty_output
-                                } else {
-                                    output.to_owned()
-                                }),
-                        ),
+                            gpui_kit::uniform_list(
+                                "task-output-scroll",
+                                lines.len(),
+                                move |range, _, _| {
+                                    range
+                                        .map(|index| {
+                                            div()
+                                                .h(px(metrics::PREVIEW_CODE_SIZE
+                                                    * metrics::PREVIEW_CODE_LINE_HEIGHT))
+                                                .font_family(fonts::FONT_MONO)
+                                                .text_size(px(metrics::PREVIEW_CODE_SIZE))
+                                                .line_height(px(metrics::PREVIEW_CODE_SIZE
+                                                    * metrics::PREVIEW_CODE_LINE_HEIGHT))
+                                                .text_color(if diagnostic_output {
+                                                    theme::warning()
+                                                } else {
+                                                    theme::primary()
+                                                })
+                                                .child(
+                                                    rendered_output[lines[index].clone()]
+                                                        .to_owned(),
+                                                )
+                                        })
+                                        .collect::<Vec<_>>()
+                                },
+                            )
+                            .size_full()
+                            .p(px(14.))
+                            .with_width_from_item(longest_line)
+                            .with_horizontal_sizing_behavior(
+                                gpui_kit::ListHorizontalSizingBehavior::Unconstrained,
+                            )
+                            .track_scroll(&self.tool_list_scrolls.tasks_output)
+                            .on_scroll(cx.listener(
+                                |this, _, _, cx| {
+                                    let previous = this.tasks.follow_output;
+                                    this.tasks.update_follow_output(
+                                        this.tasks_output_scroll.offset().y,
+                                        this.tasks_output_scroll.max_offset().y,
+                                    );
+                                    if previous != this.tasks.follow_output {
+                                        cx.notify();
+                                    }
+                                },
+                            )),
+                        )
+                        .vertical_scrollbar(&self.tasks_output_scroll)
+                        .horizontal_scrollbar(&self.tasks_output_scroll),
                 );
             div()
                 .flex_1()
@@ -683,17 +613,13 @@ impl LauncherView {
             )
             .child(tool_options);
         let tool_options_panel = self.tasks.tool_options_open.then(|| {
-            div()
+            components::menu_popover()
                 .debug_selector(|| "tasks-tool-options-panel".into())
                 .w(px(210.))
                 .p(px(6.))
                 .flex()
                 .flex_col()
                 .gap(px(4.))
-                .rounded(px(metrics::CARD_RADIUS))
-                .bg(theme::menu_surface())
-                .border(px(metrics::DIVIDER_WIDTH))
-                .border_color(theme::control_border())
                 .child(
                     div()
                         .id("tasks-refresh")
@@ -705,9 +631,9 @@ impl LauncherView {
                         .gap(px(8.))
                         .rounded(px(6.))
                         .when(self.tasks.tool_option_selected == 0, |element| {
-                            element.bg(theme::sidebar_selection())
+                            element.bg(theme::on_dark_selected())
                         })
-                        .hover(|style| style.bg(theme::hover()))
+                        .hover(|style| style.bg(theme::on_dark_hover()))
                         .cursor_pointer()
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.tasks.tool_option_selected = 0;
@@ -716,7 +642,7 @@ impl LauncherView {
                         .child(
                             Icon::new(IconName::RefreshCw)
                                 .size(px(15.))
-                                .text_color(theme::secondary()),
+                                .text_color(theme::on_dark_secondary()),
                         )
                         .child(l10n::shortcut_hint(locale, &l10n::refresh(locale), "⌘R")),
                 )
@@ -732,9 +658,9 @@ impl LauncherView {
                         .gap(px(8.))
                         .rounded(px(6.))
                         .when(self.tasks.tool_option_selected == 1, |element| {
-                            element.bg(theme::sidebar_selection())
+                            element.bg(theme::on_dark_selected())
                         })
-                        .hover(|style| style.bg(theme::hover()))
+                        .hover(|style| style.bg(theme::on_dark_hover()))
                         .cursor_pointer()
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.tasks.tool_option_selected = 1;
@@ -743,7 +669,7 @@ impl LauncherView {
                         .child(
                             Icon::new(IconName::ArrowLeft)
                                 .size(px(15.))
-                                .text_color(theme::secondary()),
+                                .text_color(theme::on_dark_secondary()),
                         )
                         .child(l10n::shortcut_hint(locale, &l10n::launcher(locale), "⌘L")),
                 )
@@ -758,14 +684,10 @@ impl LauncherView {
                     .is_some_and(|detail| detail.row.status.is_active());
                 let copy_selected = self.tasks.task_action_selected == 0;
                 let remove_selected = self.tasks.task_action_selected == 1;
-                div()
+                components::menu_popover()
                     .debug_selector(|| "tasks-actions".into())
                     .w(px(210.))
                     .overflow_hidden()
-                    .rounded(px(metrics::CARD_RADIUS))
-                    .bg(theme::menu_surface())
-                    .border(px(metrics::DIVIDER_WIDTH))
-                    .border_color(theme::control_border())
                     .child(
                         div()
                             .px(px(metrics::SPACE_MD))
@@ -782,32 +704,44 @@ impl LauncherView {
                             )
                             .child(self.keycap("esc")),
                     )
-                    .child(div().h(px(metrics::DIVIDER_WIDTH)).bg(theme::divider()))
+                    .child(
+                        div()
+                            .h(px(metrics::DIVIDER_WIDTH))
+                            .bg(theme::on_dark_divider()),
+                    )
                     .child(
                         div()
                             .p(px(4.))
                             .flex()
                             .flex_col()
                             .child(
-                                Button::new("task-action-copy-command")
-                                    .when(copy_selected, |button| button.secondary())
-                                    .when(!copy_selected, |button| button.ghost())
-                                    .label(l10n::copy_command(locale))
-                                    .on_click(cx.listener(|this, _, _, cx| {
+                                components::dark_surface_button(
+                                    "task-action-copy-command",
+                                    copy_selected,
+                                    cx,
+                                )
+                                .label(l10n::copy_command(locale))
+                                .on_click(cx.listener(
+                                    |this, _, _, cx| {
                                         this.tasks.task_action_selected = 0;
                                         this.execute_task_action(0, cx);
-                                    })),
+                                    },
+                                )),
                             )
                             .when(!active, |element| {
                                 element.child(
-                                    Button::new("task-action-remove-result")
-                                        .when(remove_selected, |button| button.secondary())
-                                        .when(!remove_selected, |button| button.ghost())
-                                        .label(l10n::remove_result(locale))
-                                        .on_click(cx.listener(|this, _, _, cx| {
+                                    components::dark_surface_button(
+                                        "task-action-remove-result",
+                                        remove_selected,
+                                        cx,
+                                    )
+                                    .label(l10n::remove_result(locale))
+                                    .on_click(cx.listener(
+                                        |this, _, _, cx| {
                                             this.tasks.task_action_selected = 1;
                                             this.execute_task_action(1, cx);
-                                        })),
+                                        },
+                                    )),
                                 )
                             }),
                     )
@@ -883,9 +817,9 @@ impl LauncherView {
         let Some(row_id) = self.tasks.rows.get(index).map(|row| row.id.clone()) else {
             return;
         };
+        self.pending_task_selection = None;
         self.tasks.selected = index;
-        self.tasks.detail = None;
-        self.tasks.detail_request = self.tasks.detail_request.wrapping_add(1);
+        self.tasks.clear_detail();
         self.tasks.request_follow_output();
         self.tasks.diagnostics = false;
         self.tasks.command_details_open = false;
@@ -896,5 +830,102 @@ impl LauncherView {
         self.request_task_detail(row_id, cx);
         window.blur(cx);
         cx.notify();
+    }
+    fn render_task_list_row(&mut self, index: usize, cx: &mut Context<Self>) -> AnyElement {
+        let locale = self.locale;
+        let row = self.tasks.rows[index].clone();
+        let selected = self.tasks.selected == index;
+        let (status_color, status_icon) = task_status_style(row.status);
+        let status_label = match row.status {
+            anywhere_protocol::ExecutionSessionStatus::Running => l10n::running(locale),
+            anywhere_protocol::ExecutionSessionStatus::Stopping => l10n::stopping(locale),
+            anywhere_protocol::ExecutionSessionStatus::Succeeded => l10n::completed(locale),
+            anywhere_protocol::ExecutionSessionStatus::Failed => l10n::failed(locale),
+            anywhere_protocol::ExecutionSessionStatus::Stopped => l10n::stopped(locale),
+        };
+        let color = if selected {
+            theme::primary()
+        } else {
+            status_color
+        };
+        let element = div()
+            .id(SharedString::from(format!("execution-row-{index}")))
+            .role(gpui_kit::Role::ListBoxOption)
+            .aria_label(row.title.clone())
+            .aria_selected(selected)
+            .h(px(86.))
+            .flex_shrink_0()
+            .pb(px(4.))
+            .cursor_pointer()
+            .on_click(
+                cx.listener(move |this, _, window, cx| this.select_task_row(index, window, cx)),
+            )
+            .child(
+                div()
+                    .h_full()
+                    .px(px(10.))
+                    .py(px(8.))
+                    .flex()
+                    .items_center()
+                    .result_surface(selected)
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.))
+                            .flex()
+                            .flex_col()
+                            .gap(px(4.))
+                            .child(
+                                div()
+                                    .id(SharedString::from(format!("execution-title-{index}")))
+                                    .truncate()
+                                    .body_text()
+                                    .font_weight(FontWeight::MEDIUM)
+                                    .text_color(theme::primary())
+                                    .tooltip(components::text_tooltip(row.title.clone()))
+                                    .child(row.title),
+                            )
+                            .child(
+                                div()
+                                    .id(SharedString::from(format!("execution-directory-{index}")))
+                                    .truncate()
+                                    .text_size(px(metrics::LABEL_SIZE))
+                                    .line_height(
+                                        px(metrics::LABEL_SIZE * metrics::BODY_LINE_HEIGHT),
+                                    )
+                                    .text_color(if selected {
+                                        theme::primary()
+                                    } else {
+                                        theme::secondary()
+                                    })
+                                    .tooltip(components::text_tooltip(row.directory.clone()))
+                                    .child(directory_display(&row.directory).to_owned()),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(8.))
+                                    .child(components::status_badge(
+                                        status_label,
+                                        color,
+                                        status_icon,
+                                    ))
+                                    .when_some(row.exit_code, |element, code| {
+                                        element.child(
+                                            div()
+                                                .text_size(px(11.))
+                                                .text_color(if selected {
+                                                    theme::primary()
+                                                } else {
+                                                    theme::muted()
+                                                })
+                                                .child(l10n::exit_code(locale, &code.to_string())),
+                                        )
+                                    }),
+                            ),
+                    ),
+            );
+        element.into_any_element()
     }
 }

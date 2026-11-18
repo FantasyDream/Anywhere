@@ -104,7 +104,7 @@ impl TextFallbackSource<'_> {
                         primary_action: action.primary_action,
                         section_label: Some(self.registry.label(&action.group_id)),
                     },
-                    target: crate::core::search::candidate::CandidateTarget::from_action(
+                    target: crate::core::search::candidate::CandidateTarget::from_shared_action(
                         action.clone(),
                         context.clone(),
                     ),

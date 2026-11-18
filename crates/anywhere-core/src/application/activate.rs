@@ -224,7 +224,7 @@ impl Application {
                 );
             };
             tokio::join!(usage_refresh, git_refresh, clipboard_refresh);
-            if let Ok(mut session) = resolver.session.lock() {
+            if let Ok(mut session) = resolver.session.access() {
                 if session.state.session_id == session_id {
                     session.supplemental_pending = false;
                 }
@@ -250,7 +250,7 @@ fn publish_supplemental(
     apply: impl FnOnce(&mut LauncherSession, &mut Vec<String>) -> bool,
 ) {
     let changed = {
-        let Ok(mut session) = resolver.session.lock() else {
+        let Ok(mut session) = resolver.session.access() else {
             return;
         };
         if session.state.session_id != session_id || !resolver.is_session_active(session_id) {

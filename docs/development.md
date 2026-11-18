@@ -77,6 +77,10 @@ POSIX CI 只编译和测试 `anywhere-core`、`anywhere-platform`、`anywhere-pl
 - 原生文案：运行 `python3 scripts/generate-native-localizations.py`。
 - 文件类型、运行时策略和 Web 协议：运行对应的 `scripts/generate-*.py` 或
   Cargo example。
+- Web 协议 schema：
+  `cargo run -p anywhere-protocol --features web-schema --example generate_web_plugin_schema --locked`。
+- SDK 契约：
+  `cargo run -p anywhere-protocol --features web-schema --example generate_web_sdk_contract --locked`。
 - 编译内功能目录：
   `cargo run -p anywhere-core --example generate_feature_catalog --locked`。
 

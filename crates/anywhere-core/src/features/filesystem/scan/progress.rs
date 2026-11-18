@@ -16,11 +16,14 @@ pub(super) struct Progress {
 impl ScanStore {
     /// Only flushed match records are visible to pagination and external sorting.
     pub(in crate::features::filesystem) fn committed_boundary(&self) -> u64 {
-        self.progress.lock().unwrap().boundary
+        self.progress
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .boundary
     }
 
     pub(super) fn issue(&self, message: impl Into<String>) {
-        let mut p = self.progress.lock().expect("scan progress poisoned");
+        let mut p = self.progress.lock().unwrap_or_else(|e| e.into_inner());
         p.issues += 1;
         if p.examples.len() < 8 {
             let message = message.into();
@@ -35,7 +38,7 @@ impl ScanStore {
             std::io::ErrorKind::PermissionDenied => {
                 self.progress
                     .lock()
-                    .expect("scan progress poisoned")
+                    .unwrap_or_else(|e| e.into_inner())
                     .inaccessible += 1;
             }
             // A mutable tree is not a filesystem snapshot. Entries removed
@@ -53,11 +56,18 @@ impl ScanStore {
     }
     pub fn fail(&self, error: &anyhow::Error) {
         self.issue(error.to_string());
-        self.progress.lock().unwrap().finished = true;
+        self.progress
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .finished = true;
     }
     pub fn progress(&self) -> FileSearchProgress {
-        let p = self.progress.lock().unwrap();
-        FileSearchProgress {
+        self.progress_with_boundary().0
+    }
+
+    pub(super) fn progress_with_boundary(&self) -> (FileSearchProgress, u64) {
+        let p = self.progress.lock().unwrap_or_else(|e| e.into_inner());
+        let progress = FileSearchProgress {
             query_id: self.query_id,
             roots: if self.scope.options.roots.is_empty() {
                 vec!["Home".into()]
@@ -76,6 +86,7 @@ impl ScanStore {
             inaccessible_count: p.inaccessible,
             issue_examples: p.examples.clone(),
             ..Default::default()
-        }
+        };
+        (progress, p.boundary)
     }
 }

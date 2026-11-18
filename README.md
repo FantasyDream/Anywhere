@@ -17,7 +17,11 @@ V0.14 已接入[应用历史与动作排序](docs/mvp-gpui.md)：通用文件读
 
 本地开发包使用持久本机签名，手动 GitHub 打包使用独立 CI 开发签名；公开分发所需的签名、公证、安装升级和完整辅助功能矩阵仍需验收。当前进度见 [GPUI 技术方案与验收](docs/mvp-gpui.md)，更早的界面阶段记录只作为[历史证据](docs/archive/README.md)。
 
-**下载提示：** GitHub 的 [`latest` 历史预览](https://github.com/FantasyDream/Anywhere/releases/tag/latest) 是 2026-09-18 的 V0.3 开发包，不包含当前 GPUI 产品，也不代表当前 Windows 支持状态。当前版本请从源码构建；新版预览尚未上传 Release。
+**下载提示：** 当前 GPUI 开发预览发布在
+[`v0.14.0`](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.0)；
+历史 [`latest`](https://github.com/FantasyDream/Anywhere/releases/tag/latest)
+仍是 2026-09-18 的 V0.3 开发包，不代表当前 macOS 或 Windows 支持状态。当前
+macOS 产物使用开发签名，未使用 Developer ID，也未公证。
 
 ## 能做什么
 
@@ -38,14 +42,14 @@ V0.14 已接入[应用历史与动作排序](docs/mvp-gpui.md)：通用文件读
 
 | 按键 | 操作 |
 |---|---|
-| `⌘⌥Space` | 当前应用：展示当前环境可用的动作 |
-| `⌘Space` | 全局搜索：查找应用与动作 |
+| `⌃⌥Space` | 当前应用：展示当前环境可用的动作 |
+| `⌥Space` | 全局搜索：查找应用与动作 |
 | `↑` / `↓`、`Enter` | 选择、执行 |
 | `Tab` / `Shift+Tab` | 前后切换 Scope；文件页切换类型 |
 | `⌘K` | 在支持此快捷键的页面查看更多对象操作 |
 | `Esc` | 清空查询、返回上一层，最后隐藏窗口 |
 
-例如，输入“文件搜索”或 `wjss` 进入文件页；在 Git 项目目录唤醒后执行 Git Status 或 Copy Branch Name。选中文本或新复制内容仅在能识别具体 Context，或被已批准且启用的 Web 工具命令匹配时自动填入；剪贴板有效期为 15 秒。输入法组词期间 GPUI 不抢占字符输入、方向键、Enter 或 Esc。
+例如，输入“文件搜索”或 `wjss` 进入文件页；在 Git 项目目录唤醒后执行 Git Status 或 Copy Branch Name。选中文本或新复制内容仅在能识别具体 Context，或被已批准且启用的 Web 工具（宿主匹配器或后台 Context 解析器）匹配时自动填入；剪贴板有效期为 15 秒。输入法组词期间 GPUI 不抢占字符输入、方向键、Enter 或 Esc。
 
 有查询或工具页面的 Launcher 隐藏后保留状态 15 秒；空白首页重新采集当前环境。Clipboard Shelf 与后台任务使用各自窗口生命周期。
 

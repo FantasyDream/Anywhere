@@ -25,7 +25,6 @@ cargo build --locked --release -p anywhere-gpui
 rm -rf "$APP"
 mkdir -p \
   "$APP/Contents/MacOS" \
-  "$APP/Contents/Resources/plugins" \
   "$APP/Contents/Resources/Licenses"
 cp target/release/anywhere-gpui "$APP/Contents/MacOS/Anywhere"
 cp apps/gpui/macos/Info.plist "$APP/Contents/Info.plist"

@@ -5,6 +5,7 @@ use anywhere_core::{
         action::{
             availability::AvailabilityRule,
             descriptor::{ActionDefinition, ActionExecutor, ActionRegistry},
+            handler::{ActionHandler, ActionHandlerRef, ExecutionOutput},
             matcher::ActionMatcher,
         },
         context::{ContextValue, ResolvedContext},
@@ -15,9 +16,20 @@ use anywhere_core::{
     persistence::clipboard::SqliteHistoryRepository,
 };
 use anywhere_platform::clipboard::{ClipboardFormat, ClipboardPayload};
-use anywhere_protocol::{ContextMatcher, ContextSource, DeclarativeAction, APPLICATION};
+use anywhere_protocol::{ContextMatcher, ContextSource, APPLICATION};
 use serde_json::{json, Value};
 use std::time::Instant;
+
+struct BenchHandler;
+impl ActionHandler for BenchHandler {
+    fn execute(
+        &self,
+        _: &ResolvedContext,
+        _: &dyn anywhere_platform::Platform,
+    ) -> Result<ExecutionOutput> {
+        Ok(ExecutionOutput::dismiss())
+    }
+}
 
 fn measure(mut operation: impl FnMut() -> Result<()>) -> Result<Value> {
     let mut samples = Vec::new();
@@ -43,9 +55,7 @@ fn main() -> Result<()> {
             accepts: vec![ContextMatcher {
                 type_id: APPLICATION.into(),
             }],
-            executor: ActionExecutor::Declarative(DeclarativeAction::Copy {
-                text: String::new(),
-            }),
+            executor: ActionExecutor::Native(ActionHandlerRef::Static(&BenchHandler)),
             availability: AvailabilityRule::Enabled,
             base_priority: 0,
             icon: "menu".into(),

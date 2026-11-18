@@ -49,13 +49,7 @@ impl LiveLauncher {
         let application = self.application.application().clone();
         self.spawn_blocking(move || {
             application.stop_execution_session(&id)?;
-            Ok(LiveEvent::Executions(
-                application
-                    .execution_sessions()?
-                    .into_iter()
-                    .map(execution_row)
-                    .collect(),
-            ))
+            Ok(LiveEvent::Ignored)
         })
     }
 
@@ -63,13 +57,7 @@ impl LiveLauncher {
         let application = self.application.application().clone();
         self.spawn_blocking(move || {
             application.remove_execution_session(&id)?;
-            Ok(LiveEvent::Executions(
-                application
-                    .execution_sessions()?
-                    .into_iter()
-                    .map(execution_row)
-                    .collect(),
-            ))
+            Ok(LiveEvent::Ignored)
         })
     }
 }

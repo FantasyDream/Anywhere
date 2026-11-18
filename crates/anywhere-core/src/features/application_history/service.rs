@@ -10,20 +10,39 @@ use anyhow::{ensure, Result};
 
 mod execution;
 mod query;
+pub use query::InteractiveSearch;
 use std::sync::{
     atomic::{AtomicBool, AtomicU64, Ordering},
     Arc, Mutex,
 };
 
+pub(super) struct IndexedEntry {
+    pub entry: Entry,
+    pub key_digest: String,
+    pub search: std::sync::OnceLock<crate::core::search::query::SearchFields>,
+}
+
+struct CachedSource {
+    source: SourcePreference,
+    revision: SourceRevision,
+    entries: Arc<[IndexedEntry]>,
+}
+
 struct State {
+    latest_interactive_revision: Option<u64>,
+    cache: Option<CachedSource>,
     configurations: Vec<SourceConfiguration>,
     sources: Vec<SourcePreference>,
     items: Arc<[Item]>,
 }
+type ApplicationLookup =
+    Arc<dyn Fn(&[String]) -> Vec<anywhere_platform::BundleApplication> + Send + Sync>;
+
 pub struct HistoryService {
     storage: Result<Arc<dyn ExtensionStorage>, String>,
     loader: Arc<dyn SourceLoader>,
     installed_applications: std::collections::BTreeSet<String>,
+    application_lookup: Option<ApplicationLookup>,
     state: Mutex<State>,
     worker: Arc<tokio::sync::Semaphore>,
     query_changed: tokio::sync::Notify,
@@ -41,7 +60,10 @@ impl HistoryService {
             storage,
             loader,
             installed_applications: Default::default(),
+            application_lookup: None,
             state: Mutex::new(State {
+                latest_interactive_revision: None,
+                cache: None,
                 configurations: vec![],
                 sources: vec![],
                 items: Default::default(),
@@ -62,6 +84,55 @@ impl HistoryService {
         self.installed_applications = applications.into_iter().collect();
         self
     }
+    pub fn with_application_lookup(mut self, lookup: ApplicationLookup) -> Self {
+        self.application_lookup = Some(lookup);
+        self
+    }
+
+    fn read_for_query(
+        &self,
+        source: &SourcePreference,
+        cancelled: Cancelled,
+    ) -> Result<Arc<[IndexedEntry]>> {
+        use sha2::{Digest, Sha256};
+        let revision = self.loader.revision(source);
+        if let Some(revision) = &revision {
+            let state = self.state.lock().unwrap();
+            if let Some(cache) = state
+                .cache
+                .as_ref()
+                .filter(|cache| cache.source == *source && cache.revision == *revision)
+            {
+                ensure!(!cancelled(), "history query expired");
+                return Ok(cache.entries.clone());
+            }
+        }
+        let entries: Arc<[IndexedEntry]> = self
+            .loader
+            .read(source, cancelled.clone())?
+            .into_iter()
+            .map(|entry| IndexedEntry {
+                key_digest: hex::encode(Sha256::digest(entry.key.as_bytes())),
+                entry,
+                search: std::sync::OnceLock::new(),
+            })
+            .collect::<Vec<_>>()
+            .into();
+        if let Some(revision) = revision {
+            if self.loader.revision(source).as_ref() == Some(&revision) {
+                let mut state = self.state.lock().unwrap();
+                if !cancelled() {
+                    state.cache = Some(CachedSource {
+                        source: source.clone(),
+                        revision,
+                        entries: entries.clone(),
+                    });
+                }
+            }
+        }
+        Ok(entries)
+    }
+
     fn action_enabled(
         &self,
         source: &SourceDescriptor,
@@ -119,6 +190,7 @@ impl HistoryService {
             state.configurations = configurations;
             state.sources = sources;
             state.items = Arc::default();
+            state.cache = None;
         }
     }
     pub fn sources(&self) -> Vec<SourceStatus> {
@@ -279,5 +351,61 @@ impl HistoryService {
         let mut state = self.state.lock().unwrap();
         self.advance_epoch();
         state.items = Arc::default();
+    }
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+    use std::sync::atomic::AtomicUsize;
+    struct Loader {
+        reads: AtomicUsize,
+        journal: AtomicU64,
+    }
+    impl SourceLoader for Loader {
+        fn descriptors(&self) -> Vec<SourceDescriptor> {
+            vec![]
+        }
+        fn revision(&self, source: &SourcePreference) -> Option<SourceRevision> {
+            Some(SourceRevision {
+                path: source.path.clone(),
+                bytes: 10,
+                modified: std::time::SystemTime::UNIX_EPOCH,
+                journal: Some((
+                    self.journal.load(Ordering::Acquire),
+                    std::time::SystemTime::UNIX_EPOCH,
+                )),
+                rollback_journal: None,
+                header_fingerprint: [0; 64],
+            })
+        }
+        fn read(&self, _: &SourcePreference, _: Cancelled) -> Result<Vec<Entry>> {
+            self.reads.fetch_add(1, Ordering::AcqRel);
+            Ok(vec![])
+        }
+    }
+    #[test]
+    fn query_cache_reuses_one_read_but_rechecks_wal_and_session_ownership() {
+        let loader = Arc::new(Loader {
+            reads: AtomicUsize::new(0),
+            journal: AtomicU64::new(0),
+        });
+        let service = HistoryService::new(Err("synthetic".into()), loader.clone());
+        let source = SourcePreference {
+            id: "synthetic".into(),
+            path: "/synthetic/history.db".into(),
+        };
+        let current: Cancelled = Arc::new(|| false);
+        let first = service.read_for_query(&source, current.clone()).unwrap();
+        let second = service.read_for_query(&source, current.clone()).unwrap();
+        assert!(Arc::ptr_eq(&first, &second));
+        assert_eq!(loader.reads.load(Ordering::Acquire), 1);
+        loader.journal.store(1, Ordering::Release);
+        service.read_for_query(&source, current.clone()).unwrap();
+        assert_eq!(loader.reads.load(Ordering::Acquire), 2);
+        assert!(service.read_for_query(&source, Arc::new(|| true)).is_err());
+        service.cancel_session(0);
+        service.read_for_query(&source, current).unwrap();
+        assert_eq!(loader.reads.load(Ordering::Acquire), 3);
     }
 }

@@ -80,7 +80,7 @@ pub(super) fn settings_snapshot_from(application: &ApplicationRuntime) -> Result
     let features = settings
         .statuses()
         .into_iter()
-        .filter(|status| status.first_party && status.configurable && !status.legacy)
+        .filter(|status| status.first_party && status.configurable)
         .map(|status| FeatureSetting {
             key: status.id,
             name: status.name,
@@ -95,15 +95,16 @@ pub(super) fn settings_snapshot_from(application: &ApplicationRuntime) -> Result
 
 pub(super) fn clipboard_snapshot_from(
     application: &ApplicationRuntime,
-    query: &str,
+    query: Option<&str>,
 ) -> Result<ClipboardSnapshot> {
     let settings = application.settings().map_err(anyhow::Error::new)?;
     let history = settings.clipboard();
-    let status = history.status()?;
-    let (stored_entries, stored_bytes) = history.usage()?;
-    let items = if status.available {
-        history
-            .search(query)?
+    let (status, items, storage_usage) = if let Some(query) = query {
+        let snapshot = history
+            .snapshot(query, None)?
+            .ok_or_else(|| anyhow::anyhow!("clipboard snapshot unavailable"))?;
+        let items = snapshot
+            .items
             .into_iter()
             .map(|item| ClipboardItem {
                 id: item.id,
@@ -112,9 +113,10 @@ pub(super) fn clipboard_snapshot_from(
                 copied_at_ms: item.copied_at_ms,
                 byte_count: item.byte_count,
             })
-            .collect()
+            .collect();
+        (snapshot.status, items, None)
     } else {
-        Vec::new()
+        (history.status()?, Vec::new(), Some(history.usage()?))
     };
     Ok(ClipboardSnapshot {
         recording: status.recording,
@@ -122,8 +124,7 @@ pub(super) fn clipboard_snapshot_from(
         available: status.available,
         paused_until_ms: status.policy.paused_until_ms,
         retention_days: status.policy.retention_days,
-        stored_entries,
-        stored_bytes,
+        storage_usage,
         notice: status.notice,
         items,
     })
@@ -208,8 +209,8 @@ fn is_plain_execution_argument(argument: &str) -> bool {
 pub(super) fn execution_detail(value: ExecutionSessionDetail) -> ExecutionDetail {
     ExecutionDetail {
         row: execution_row(value.summary),
-        stdout: value.stdout,
-        stderr: value.stderr,
+        stdout: value.stdout.into(),
+        stderr: value.stderr.into(),
     }
 }
 
@@ -266,7 +267,25 @@ pub(super) fn web_permission_label(
 
 #[cfg(test)]
 mod tests {
-    use super::format_execution_command;
+    use super::{clipboard_snapshot_from, format_execution_command, ApplicationRuntime};
+    use anywhere_core::application::frontend_runtime::RuntimePaths;
+
+    #[test]
+    fn clipboard_result_and_settings_reads_request_different_data() {
+        let directory = tempfile::tempdir().unwrap();
+        let application = ApplicationRuntime::open(RuntimePaths::new(
+            directory.path().join("data"),
+            directory.path().join("plugins"),
+        ))
+        .unwrap();
+        let results = clipboard_snapshot_from(&application, Some("")).unwrap();
+        let settings = clipboard_snapshot_from(&application, None).unwrap();
+        assert_eq!(results.storage_usage, None);
+        assert_eq!(settings.storage_usage, Some((0, 0)));
+        assert_eq!(results.retention_days, settings.retention_days);
+        assert_eq!(results.recording_enabled, settings.recording_enabled);
+        assert!(settings.items.is_empty());
+    }
 
     #[test]
     fn execution_commands_quote_arguments_like_the_flutter_view() {

@@ -1183,6 +1183,7 @@ fn non_unicode_parents_do_not_merge_valid_children_and_are_reported_as_partial()
 /// Simulates a filesystem call that cannot return immediately on cancellation.
 /// The real FileSearchSource still owns admission and cancel-on-drop behavior.
 struct SlowIndex {
+    engines: Mutex<Vec<anywhere_platform::FileSearchEngine>>,
     active: AtomicUsize,
     peak: AtomicUsize,
     calls: AtomicUsize,
@@ -1221,9 +1222,10 @@ impl FileSearchHost for SlowIndex {
         &self,
         query: &str,
         limit: usize,
-        _: &anywhere_platform::FileSearchOptions,
+        options: &anywhere_platform::FileSearchOptions,
         cancelled: &(dyn Fn() -> bool + Sync),
     ) -> Result<Vec<FileSearchHit>> {
+        self.engines.lock().unwrap().push(options.engine);
         self.search_files(query, limit, cancelled)
     }
     fn search_files(
@@ -1274,6 +1276,7 @@ impl MenuHost for SlowIndex {}
 impl GitHost for SlowIndex {}
 fn slow_index(path: PathBuf) -> Arc<SlowIndex> {
     Arc::new(SlowIndex {
+        engines: Mutex::new(Vec::new()),
         active: AtomicUsize::new(0),
         peak: AtomicUsize::new(0),
         calls: AtomicUsize::new(0),
@@ -1428,6 +1431,53 @@ async fn new_activation_cannot_receive_the_previous_sessions_file_batch() {
 }
 
 #[tokio::test]
+async fn file_search_quick_batch_uses_the_configured_engine() {
+    use anywhere_platform::{FileSearchEngine, FileSearchOptions};
+
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().canonicalize().unwrap();
+    let path = root.join("report.txt");
+    std::fs::write(&path, "").unwrap();
+    let index = slow_index(path);
+    let app = Application::new(
+        index.clone(),
+        registry(),
+        Box::<MemoryUsage>::default(),
+        vec![],
+    );
+    let id = app.activate().await.unwrap().unwrap().session_id;
+    let engines = [
+        FileSearchEngine::SystemIndex,
+        FileSearchEngine::Ripgrep,
+        FileSearchEngine::Combined,
+    ];
+    for (offset, engine) in engines.into_iter().enumerate() {
+        app.configure_file_search(
+            true,
+            FileSearchOptions {
+                roots: vec![root.clone()],
+                engine,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        app.update_file_search_input(
+            id,
+            "report".into(),
+            offset as u32 + 1,
+            FileSearchFilter::All,
+        )
+        .await
+        .unwrap();
+        tokio::time::timeout(Duration::from_secs(3), index.started.notified())
+            .await
+            .unwrap();
+    }
+    assert_eq!(*index.engines.lock().unwrap(), engines);
+    app.deactivate(id).unwrap();
+}
+
+#[tokio::test]
 async fn complete_engine_appends_all_unindexed_matches_and_retains_execution_targets() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().canonicalize().unwrap();
@@ -1491,21 +1541,25 @@ async fn complete_engine_appends_all_unindexed_matches_and_retains_execution_tar
         assert!(contexts.contains(action.execution_context_id.as_ref().unwrap()));
     }
     let original_ids: Vec<_> = state.candidates.iter().map(|c| c.id.clone()).collect();
-    let mut batches = 0;
-    while state.file_search.as_ref().unwrap().next_cursor.is_some() {
-        let old_len = state.candidates.len();
-        state = app.load_more_files(id, 1).await.unwrap().unwrap();
-        assert!(state.candidates.len() > old_len);
-        assert_eq!(
-            state.candidates[..64]
-                .iter()
-                .map(|c| c.id.clone())
-                .collect::<Vec<_>>(),
-            original_ids
-        );
-        batches += 1;
-        assert!(batches <= 3);
-    }
+    let (first, second) = tokio::join!(app.load_more_files(id, 1), app.load_more_files(id, 1));
+    let first = first.unwrap().unwrap();
+    state = second.unwrap().unwrap();
+    assert_eq!(first.candidates.len(), 128);
+    assert_eq!(state.candidates.len(), expected.len());
+    assert_eq!(
+        first.candidates[..64]
+            .iter()
+            .map(|row| &row.id)
+            .collect::<Vec<_>>(),
+        original_ids.iter().collect::<Vec<_>>(),
+    );
+    assert!(first
+        .candidates
+        .iter()
+        .zip(&state.candidates[..128])
+        .all(|(before, after)| before.id == after.id));
+    assert!(first.file_search.as_ref().unwrap().next_cursor.is_some());
+    assert!(state.file_search.as_ref().unwrap().next_cursor.is_none());
     let found: std::collections::BTreeSet<_> =
         state.candidates.iter().map(|c| c.title.clone()).collect();
     assert_eq!(state.candidates.len(), expected.len());

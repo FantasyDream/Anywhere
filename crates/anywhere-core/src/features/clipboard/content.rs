@@ -29,11 +29,21 @@ pub fn rich_format(name: &str) -> bool {
 }
 pub fn metadata(payload: &ClipboardPayload) -> (String, String, String) {
     let files = payload.files().unwrap_or_default();
+    let has_rich = payload.formats.iter().any(|f| rich_format(&f.name));
+    let has_non_empty_text = payload
+        .plain_text()
+        .is_some_and(|text| !text.trim().is_empty());
+    let has_non_tiff_image = payload
+        .formats
+        .iter()
+        .any(|f| image_format(&f.name) && f.name != "public.tiff");
     let kind = if !files.is_empty() {
         "files"
+    } else if has_rich && has_non_empty_text && !has_non_tiff_image {
+        "rich_text"
     } else if payload.formats.iter().any(|f| image_format(&f.name)) {
         "image"
-    } else if payload.formats.iter().any(|f| rich_format(&f.name)) {
+    } else if has_rich {
         "rich_text"
     } else if payload.plain_text().is_some() {
         "text"
@@ -79,6 +89,9 @@ pub fn metadata(payload: &ClipboardPayload) -> (String, String, String) {
         .take(SUMMARY_CHARACTERS)
         .map(|c| if c.is_control() { ' ' } else { c })
         .collect();
+    const MAX_SEARCH_BYTES: usize = 128 * 1024;
+    let end = searchable.floor_char_boundary(searchable.len().min(MAX_SEARCH_BYTES));
+    let searchable = &searchable[..end];
     let mut search = format!(
         "{searchable}\n{}\n{kind}",
         payload

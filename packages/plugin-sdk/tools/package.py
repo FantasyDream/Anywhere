@@ -78,7 +78,7 @@ def package(project, destination, assets=("dist",)):
                                          delete=False) as work:
             temporary = Path(work.name)
         with zipfile.ZipFile(temporary, "w",
-                             compression=zipfile.ZIP_STORED) as archive:
+                             compression=zipfile.ZIP_DEFLATED) as archive:
             for path in sorted(
                     files,
                     key=lambda path: path.relative_to(project).as_posix()):

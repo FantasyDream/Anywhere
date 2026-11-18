@@ -44,17 +44,23 @@ impl HistoryService {
                 .ok_or_else(|| anyhow::anyhow!("history source disabled"))?;
             (item, source)
         };
-        let _worker = self
-            .worker
-            .try_acquire()
-            .map_err(|_| anyhow::anyhow!("history reader busy"))?;
         let cancelled = self.cancellation(epoch);
-        let fresh = self.loader.read(&source, cancelled.clone())?;
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+        let _worker = loop {
+            if let Ok(permit) = self.worker.try_acquire() {
+                break permit;
+            }
+            if cancelled() || std::time::Instant::now() >= deadline {
+                bail!("history reader busy");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        };
+        let fresh = self.read_for_query(&source, cancelled.clone())?;
         ensure!(
             !cancelled()
-                && fresh
-                    .iter()
-                    .any(|e| e.key == item.entry.key && e.target == item.entry.target),
+                && fresh.iter().any(|indexed| {
+                    indexed.entry.key == item.entry.key && indexed.entry.target == item.entry.target
+                }),
             "history target changed"
         );
         use_item(&item, &cancelled)
@@ -86,9 +92,12 @@ impl HistoryService {
             .into_iter()
             .find(|d| d.id == item.source_id)
             .ok_or_else(|| anyhow::anyhow!("source unavailable"))?;
-        let apps = platform.installed_applications();
+        let apps = if let Some(lookup) = &self.application_lookup {
+            lookup(&descriptor.applications)
+        } else {
+            platform.installed_applications().applications
+        };
         let matches: Vec<_> = apps
-            .applications
             .iter()
             .filter(|app| descriptor.applications.contains(&app.bundle_id))
             .collect();

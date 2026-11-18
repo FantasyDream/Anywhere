@@ -141,11 +141,7 @@ impl LauncherView {
                                     .line_height(px(
                                         metrics::HEADING_SIZE * metrics::BODY_LINE_HEIGHT
                                     ))
-                                    .font_weight(if selected {
-                                        FontWeight::SEMIBOLD
-                                    } else {
-                                        FontWeight::MEDIUM
-                                    })
+                                    .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(if enabled {
                                         theme::primary()
                                     } else {
@@ -243,6 +239,7 @@ impl LauncherView {
                     this.mark_scope_user_controlled();
                     if this.screen == Screen::FileSearch {
                         this.file_search.browsing = true;
+                        this.file_search.advance_from = None;
                     }
                     this.model.select_row(index);
                     this.notice = None;

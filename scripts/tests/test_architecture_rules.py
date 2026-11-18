@@ -27,6 +27,17 @@ class CoreBoundaries(unittest.TestCase):
             check_feature_imports('use crate::application::Application;',
                                   'features/fixture_tests.rs')
 
+    def test_test_declarations_and_comments_do_not_hide_later_production(self):
+        for prefix in [
+                '#[cfg(test)] mod tests {}', '#[cfg(test)] mod tests;',
+                '/* https://example.com // comment */',
+                'const EXAMPLE: &str = "use crate::application;";'
+        ]:
+            with self.subTest(prefix=prefix), self.assertRaises(AssertionError):
+                check_feature_imports(
+                    prefix + '\nuse crate::application::Application;',
+                    'fixture.rs')
+
     def test_persistence_cannot_publish_application_state(self):
         for source in [
                 'use crate::Application;',

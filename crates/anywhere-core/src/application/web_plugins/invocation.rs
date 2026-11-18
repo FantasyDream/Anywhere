@@ -7,7 +7,7 @@ use anyhow::{ensure, Context, Result};
 use anywhere_platform::ApplicationInfo;
 use anywhere_protocol::{
     web_plugin::{WebCurrentApp, WebInvocation, WebPermission, WebPlatform},
-    HostView, SessionId,
+    HostView, Revision, SessionId,
 };
 use std::{collections::BTreeMap, time::Duration};
 use tokio::time::Instant;
@@ -54,7 +54,7 @@ pub(super) struct Invocation {
     pub(super) command: WebCommandRef,
     pub(super) input: WebInvocation,
     pub(super) session_id: anywhere_protocol::SessionId,
-    pub(super) launch_revision: anywhere_protocol::Revision,
+    pub(super) launch_revision: Revision,
     // Paths stay private; the public broker grants no filesystem operation.
     _resources: projection::Resources,
     app: Option<WebCurrentApp>,
@@ -96,9 +96,7 @@ impl WebPluginService {
     pub(crate) fn restore_providers(
         &self,
         providers: &crate::core::context::registry::ContextProviderRegistry,
-        session: std::sync::Arc<
-            std::sync::Mutex<crate::application::session_model::LauncherSession>,
-        >,
+        session: std::sync::Arc<crate::application::session_coordinator::SessionCoordinator>,
         platform: std::sync::Arc<dyn anywhere_platform::Platform>,
     ) -> Result<crate::core::context::registry::ContextProviderRegistry> {
         self.catalog.append_providers(providers, session, platform)
@@ -143,6 +141,7 @@ impl WebPluginService {
         command: &WebCommandRef,
         context: &ResolvedContext,
         session_id: SessionId,
+        launch_revision: Revision,
         app: Option<&ApplicationInfo>,
         source_app: &str,
     ) -> Result<HostView> {
@@ -191,7 +190,9 @@ impl WebPluginService {
         let invocation = Invocation {
             command: command.clone(),
             session_id,
-            launch_revision: context.revision,
+            // The accepted Context can be a revision-0 launcher entry. Only the
+            // committed execution request identifies the input revision at launch.
+            launch_revision,
             input: WebInvocation {
                 plugin_id: command.plugin_id.clone(),
                 command_id: command.command_id.clone(),

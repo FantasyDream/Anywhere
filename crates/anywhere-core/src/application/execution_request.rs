@@ -17,7 +17,7 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use anywhere_platform::{ApplicationInfo, Platform};
 use anywhere_protocol::*;
-use std::sync::{atomic::Ordering, Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 mod worker;
 
@@ -58,7 +58,7 @@ impl ExecutionRequest {
         revision: Revision,
         candidate_id: CandidateId,
     ) -> Result<Self> {
-        let execution_epoch = app.resolver.execution_epoch.load(Ordering::Acquire);
+        let execution_epoch = app.resolver.session.execution_epoch();
         let file_policy = app.file_search_policy.clone();
         let file_generation = file_policy
             .read()
@@ -202,7 +202,7 @@ impl ExecutionRequest {
                 .resolver
                 .catalog
                 .is_policy_current(&self.feature_policy)
-            && self.resolver.execution_epoch.load(Ordering::Acquire) == self.execution_epoch
+            && self.resolver.session.execution_epoch() == self.execution_epoch
             && self.resolver.catalog.version() == self.catalog_version
     }
 }

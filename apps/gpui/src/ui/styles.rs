@@ -22,9 +22,14 @@ pub trait AppStyle: Styled + Sized {
     {
         let surface = self.rounded(px(metrics::RESULT_RADIUS));
         if selected {
-            surface.selected_surface()
+            surface
+                .bg(theme::result_surface(true))
+                .border(px(metrics::DIVIDER_WIDTH))
+                .border_color(theme::selection_outline())
         } else {
-            surface.hover(|style| style.bg(theme::hover()))
+            surface
+                .bg(theme::result_surface(false))
+                .hover(|style| style.bg(theme::result_surface(true)))
         }
     }
     fn selected_surface(self) -> Self {

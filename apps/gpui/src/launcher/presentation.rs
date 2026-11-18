@@ -15,25 +15,7 @@ use crate::{
 };
 
 pub(crate) fn locale_for_language(language: UiLanguage) -> Locale {
-    match language {
-        UiLanguage::En => Locale::En,
-        UiLanguage::Zh => Locale::Zh,
-        UiLanguage::System => sys_locale::get_locale()
-            .and_then(|identifier| {
-                identifier
-                    .split(['-', '_'])
-                    .next()
-                    .map(str::to_ascii_lowercase)
-            })
-            .map(|language| {
-                if language == "zh" {
-                    Locale::Zh
-                } else {
-                    Locale::En
-                }
-            })
-            .unwrap_or(Locale::En),
-    }
+    language.locale()
 }
 
 pub(crate) fn lines(value: &str) -> Vec<String> {
@@ -90,24 +72,7 @@ pub(crate) fn normalized_shortcut(
 }
 
 pub(crate) fn reserved_action_shortcut(shortcut: &str) -> bool {
-    let mut parts = shortcut.split('+');
-    matches!(parts.next(), Some("meta"))
-        && parts.next().is_some_and(|key| {
-            matches!(
-                key,
-                "KeyA"
-                    | "KeyC"
-                    | "KeyK"
-                    | "KeyM"
-                    | "KeyQ"
-                    | "KeyR"
-                    | "KeyW"
-                    | "KeyX"
-                    | "KeyY"
-                    | "KeyZ"
-            )
-        })
-        && parts.next().is_none()
+    crate::host::reserved_action_shortcut(shortcut)
 }
 
 pub(crate) fn excluded_app_ids(value: &str) -> Vec<String> {
@@ -204,93 +169,23 @@ pub(crate) fn file_icon_appearance(name: &str, kind: Option<FileObjectKind>) -> 
         return plain_icon(IconName::Folder, theme::icon_blue);
     }
 
-    let name = name
-        .rsplit(['/', '\\'])
-        .next()
-        .unwrap_or(name)
-        .to_ascii_lowercase();
-    if matches!(
-        name.as_str(),
-        ".env"
-            | ".gitignore"
-            | ".gitattributes"
-            | ".gitmodules"
-            | ".editorconfig"
-            | ".npmrc"
-            | ".nvmrc"
-            | ".prettierrc"
-            | ".eslintrc"
-            | ".bashrc"
-            | ".zshrc"
-            | ".bash_profile"
-            | ".zprofile"
-            | ".profile"
-    ) || name.starts_with(".env.")
-    {
-        return plain_icon(IconName::FileCog, theme::icon_amber);
-    }
-    if matches!(
-        name.as_str(),
-        "dockerfile"
-            | "makefile"
-            | "cmakelists.txt"
-            | "gemfile"
-            | "rakefile"
-            | "procfile"
-            | "justfile"
-    ) {
-        return plain_icon(IconName::FileCode, theme::icon_purple);
-    }
-    if matches!(
-        name.as_str(),
-        "readme" | "license" | "licence" | "changelog" | "authors"
-    ) {
-        return stamped_icon(IconName::Type, theme::icon_neutral, "TXT");
-    }
-
-    let dot = name.rfind('.');
-    let extension = dot
-        .filter(|dot| *dot > 0 && *dot + 1 < name.len())
-        .map(|dot| &name[dot + 1..])
-        .unwrap_or_default();
-    match extension {
-        "pdf" => stamped_icon(IconName::FileText, theme::icon_coral, "PDF"),
-        "doc" | "docx" | "odt" | "rtf" | "pages" => {
-            stamped_icon(IconName::FileText, theme::icon_blue, "DOC")
-        }
-        "txt" | "md" | "markdown" | "log" | "rst" | "tex" => {
-            stamped_icon(IconName::Type, theme::icon_neutral, "TXT")
-        }
-        "xls" | "xlsx" | "ods" | "csv" | "tsv" | "numbers" => {
-            plain_icon(IconName::FileSpreadsheet, theme::icon_green)
-        }
-        "ppt" | "pptx" | "odp" | "key" => plain_icon(IconName::Presentation, theme::icon_amber),
-        "jpg" | "jpeg" | "png" | "gif" | "webp" | "heic" | "heif" | "avif" | "bmp" | "tif"
-        | "tiff" | "svg" | "ico" | "icns" | "psd" | "raw" => {
-            plain_icon(IconName::Image, theme::icon_blue)
-        }
-        "mp3" | "m4a" | "aac" | "wav" | "flac" | "ogg" | "opus" | "aiff" | "aif" | "wma" => {
-            plain_icon(IconName::Music, theme::icon_pink)
-        }
-        "mp4" | "mov" | "mkv" | "avi" | "webm" | "m4v" | "wmv" | "mpeg" | "mpg" => {
-            plain_icon(IconName::FileVideoCamera, theme::icon_purple)
-        }
-        "zip" | "7z" | "rar" | "tar" | "gz" | "bz2" | "xz" | "tgz" | "zst" | "lz" | "lzma"
-        | "tbz2" => plain_icon(IconName::FileArchive, theme::icon_amber),
-        "dmg" | "iso" | "pkg" | "exe" | "dll" | "dylib" | "so" => {
-            plain_icon(IconName::Package, theme::icon_neutral)
-        }
-        "epub" | "mobi" | "azw" | "azw3" => plain_icon(IconName::BookOpen, theme::icon_green),
-        "ttf" | "otf" | "woff" | "woff2" => plain_icon(IconName::Type, theme::icon_pink),
-        "json" | "yaml" | "yml" | "toml" | "xml" | "ini" | "conf" | "cfg" | "properties"
-        | "lock" => plain_icon(IconName::FileCog, theme::icon_amber),
-        "dart" | "swift" | "rs" | "java" | "kt" | "kts" | "js" | "jsx" | "ts" | "tsx" | "py"
-        | "go" | "c" | "h" | "cpp" | "hpp" | "cc" | "cxx" | "hxx" | "cs" | "sh" | "bash"
-        | "zsh" | "ps1" | "bat" | "cmd" | "fish" | "rb" | "php" | "lua" | "sql" | "html"
-        | "htm" | "css" | "scss" | "sass" | "less" | "vue" | "svelte" | "ipynb" | "ex" | "exs"
-        | "erl" | "clj" | "cljs" | "pl" | "pm" | "scala" | "sc" | "groovy" | "r" | "m" | "mm"
-        | "cmake" | "gradle" | "hs" => plain_icon(IconName::FileCode, theme::icon_purple),
-        _ => plain_icon(IconName::File, theme::icon_neutral),
+    use super::file_icons::{kind as icon_kind, FileIconKind::*};
+    match icon_kind(name) {
+        Some(Pdf) => stamped_icon(IconName::FileText, theme::icon_coral, "PDF"),
+        Some(Document) => stamped_icon(IconName::FileText, theme::icon_blue, "DOC"),
+        Some(Text) => stamped_icon(IconName::Type, theme::icon_neutral, "TXT"),
+        Some(Spreadsheet) => plain_icon(IconName::FileSpreadsheet, theme::icon_green),
+        Some(Presentation) => plain_icon(IconName::Presentation, theme::icon_amber),
+        Some(Image) => plain_icon(IconName::Image, theme::icon_blue),
+        Some(Audio) => plain_icon(IconName::Music, theme::icon_pink),
+        Some(Video) => plain_icon(IconName::FileVideoCamera, theme::icon_purple),
+        Some(Archive) => plain_icon(IconName::FileArchive, theme::icon_amber),
+        Some(Package) => plain_icon(IconName::Package, theme::icon_neutral),
+        Some(Book) => plain_icon(IconName::BookOpen, theme::icon_green),
+        Some(Font) => plain_icon(IconName::Type, theme::icon_pink),
+        Some(Config) => plain_icon(IconName::FileCog, theme::icon_amber),
+        Some(Code) => plain_icon(IconName::FileCode, theme::icon_purple),
+        None => plain_icon(IconName::File, theme::icon_neutral),
     }
 }
 

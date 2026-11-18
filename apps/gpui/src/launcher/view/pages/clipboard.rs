@@ -53,212 +53,26 @@ impl LauncherView {
                 })
                 .into_any_element()
         } else {
-            let mut list = div()
-                .id("clipboard-history-list")
+            div()
                 .flex_1()
                 .min_h(px(0.))
-                .px(px(10.))
-                .pb(px(4.))
-                .flex()
-                .flex_col()
-                .track_scroll(&self.clipboard_scroll)
-                .overflow_y_scroll()
-                .vertical_scrollbar(&self.clipboard_scroll);
-            for (index, item) in self.clipboard.items().to_vec().into_iter().enumerate() {
-                let selected = self.clipboard.browsing && self.clipboard.selected == index;
-                let item_id = item.id;
-                let summary = item.summary.clone();
-                let copied = selected && self.clipboard.copied_item == Some(item_id);
-                let metadata = if copied {
-                    l10n::copied(self.locale)
-                } else {
-                    let kind = components::clipboard_kind_label(self.locale, &item.kind);
-                    let date = components::clipboard_copy_date(item.copied_at_ms, false);
-                    if date.is_empty() {
-                        kind
-                    } else {
-                        format!("{kind} · {date}")
-                    }
-                };
-                let mut selected_commands = div().flex_none().flex().items_center();
-                if selected {
-                    let copy_id = item_id;
-                    let preview_space =
-                        self.clipboard.browsing || self.clipboard.query.trim().is_empty();
-                    selected_commands = selected_commands
-                        .child(
-                            div()
-                                .id(SharedString::from(format!("clipboard-preview-{item_id}")))
-                                .role(gpui_kit::Role::Button)
-                                .aria_label(l10n::preview(self.locale))
-                                .tooltip(components::text_tooltip(l10n::shortcut_hint(
-                                    self.locale,
-                                    &l10n::preview(self.locale),
-                                    "␣",
-                                )))
-                                .h(px(metrics::CONTROL_HEIGHT))
-                                .flex_none()
-                                .px(px(metrics::CONTROL_PADDING_X))
-                                .flex()
-                                .items_center()
-                                .gap(px(3.))
-                                .rounded(px(6.))
-                                .hover(|style| style.bg(theme::hover()))
-                                .cursor_pointer()
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    cx.stop_propagation();
-                                    this.clipboard.selected = index;
-                                    this.clipboard.browsing = true;
-                                    this.preview_selected_clipboard(cx);
-                                }))
-                                .child(
-                                    Icon::new(IconName::Eye)
-                                        .size(px(14.))
-                                        .text_color(theme::secondary()),
-                                )
-                                .when(preview_space, |element| element.child("␣")),
-                        )
-                        .child(
-                            div()
-                                .id(SharedString::from(format!("clipboard-actions-{item_id}")))
-                                .role(gpui_kit::Role::Button)
-                                .aria_label(l10n::actions(self.locale))
-                                .tooltip(components::text_tooltip(l10n::shortcut_hint(
-                                    self.locale,
-                                    &l10n::actions(self.locale),
-                                    "⌘K",
-                                )))
-                                .h(px(metrics::CONTROL_HEIGHT))
-                                .flex_none()
-                                .px(px(metrics::CONTROL_PADDING_X))
-                                .flex()
-                                .items_center()
-                                .gap(px(4.))
-                                .rounded(px(6.))
-                                .hover(|style| style.bg(theme::hover()))
-                                .cursor_pointer()
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    cx.stop_propagation();
-                                    this.open_clipboard_actions(item_id, cx);
-                                }))
-                                .child(
-                                    Icon::new(IconName::Ellipsis)
-                                        .size(px(14.))
-                                        .text_color(theme::secondary()),
-                                )
-                                .child("⌘K"),
-                        )
-                        .child(
-                            div()
-                                .id(SharedString::from(format!("clipboard-copy-{item_id}")))
-                                .role(gpui_kit::Role::Button)
-                                .aria_label(l10n::copy(self.locale))
-                                .tooltip(components::text_tooltip(l10n::shortcut_hint(
-                                    self.locale,
-                                    &l10n::copy(self.locale),
-                                    "↵",
-                                )))
-                                .h(px(metrics::CONTROL_HEIGHT))
-                                .flex_none()
-                                .px(px(metrics::CONTROL_PADDING_X))
-                                .flex()
-                                .items_center()
-                                .gap(px(5.))
-                                .rounded(px(6.))
-                                .hover(|style| style.bg(theme::hover()))
-                                .cursor_pointer()
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    cx.stop_propagation();
-                                    if this.select_clipboard_item(copy_id) {
-                                        this.copy_selected_clipboard(cx);
-                                    }
-                                }))
-                                .child(l10n::copy(self.locale))
-                                .child(
-                                    Icon::new(IconName::CornerDownLeft)
-                                        .size(px(12.))
-                                        .text_color(theme::secondary()),
-                                ),
-                        );
-                }
-                list = list.child(
-                    div()
-                        .id(SharedString::from(format!("clipboard-item-{item_id}")))
-                        .role(gpui_kit::Role::ListBoxOption)
-                        .aria_label(summary.clone())
-                        .aria_selected(selected)
-                        .h(px(64.))
-                        .flex_shrink_0()
-                        .py(px(3.))
-                        .cursor_pointer()
-                        .on_mouse_down(
-                            MouseButton::Left,
-                            cx.listener(move |this, _, window, cx| {
-                                this.select_clipboard_row(index, window, cx);
-                            }),
-                        )
-                        .on_double_click(cx.listener(move |this, _, _, cx| {
-                            this.clipboard.selected = index;
-                            this.clipboard.browsing = true;
-                            this.copy_selected_clipboard(cx);
-                        }))
-                        .on_mouse_down(
-                            MouseButton::Right,
-                            cx.listener(move |this, _, _, cx| {
-                                this.open_clipboard_actions(item_id, cx);
-                            }),
-                        )
-                        .child(
-                            div()
-                                .h_full()
-                                .px(px(12.))
-                                .flex()
-                                .items_center()
-                                .result_surface(selected)
-                                .child(
-                                    Icon::new(components::clipboard_kind_icon(&item.kind))
-                                        .size(px(22.))
-                                        .text_color(components::clipboard_kind_tint(&item.kind)),
-                                )
-                                .child(div().w(px(12.)))
-                                .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w(px(0.))
-                                        .flex()
-                                        .flex_col()
-                                        .justify_center()
-                                        .gap(px(4.))
-                                        .child(
-                                            div()
-                                                .id(SharedString::from(format!(
-                                                    "clipboard-title-{item_id}"
-                                                )))
-                                                .truncate()
-                                                .body_text()
-                                                .text_color(theme::primary())
-                                                .tooltip(components::text_tooltip(summary))
-                                                .child(item.summary),
-                                        )
-                                        .child(
-                                            div()
-                                                .truncate()
-                                                .caption_text()
-                                                .text_color(if copied {
-                                                    theme::success()
-                                                } else {
-                                                    theme::muted()
-                                                })
-                                                .child(metadata),
-                                        ),
-                                )
-                                .when(selected, |element| {
-                                    element.child(div().w(px(4.))).child(selected_commands)
-                                }),
-                        ),
-                );
-            }
-            list.into_any_element()
+                .relative()
+                .child(
+                    gpui_kit::uniform_list(
+                        "clipboard-history-list",
+                        self.clipboard.items().len(),
+                        cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
+                            range
+                                .map(|index| this.render_clipboard_list_row(index, cx))
+                                .collect::<Vec<_>>()
+                        }),
+                    )
+                    .size_full()
+                    .px(px(10.))
+                    .track_scroll(&self.tool_list_scrolls.clipboard),
+                )
+                .vertical_scrollbar(&self.clipboard_scroll)
+                .into_any_element()
         };
 
         let action_target = self
@@ -279,14 +93,10 @@ impl LauncherView {
                 l10n::delete_entry(self.locale),
                 l10n::refresh(self.locale),
             ];
-            div()
+            components::menu_popover()
                 .debug_selector(|| "clipboard-actions".into())
                 .w(px(300.))
                 .overflow_hidden()
-                .rounded(px(metrics::CARD_RADIUS))
-                .bg(theme::menu_surface())
-                .border(px(metrics::DIVIDER_WIDTH))
-                .border_color(theme::selection_outline())
                 .child(
                     div()
                         .px(px(metrics::SPACE_MD))
@@ -309,22 +119,24 @@ impl LauncherView {
                         )
                         .child(self.keycap("esc")),
                 )
-                .child(div().h(px(metrics::DIVIDER_WIDTH)).bg(theme::divider()))
+                .child(
+                    div()
+                        .h(px(metrics::DIVIDER_WIDTH))
+                        .bg(theme::on_dark_divider()),
+                )
                 .child(div().p(px(4.)).flex().flex_col().children(
                     labels.into_iter().enumerate().map(|(index, label)| {
-                        Button::new(SharedString::from(format!("clipboard-action-row-{index}")))
-                            .when(index == self.clipboard.action_selected, |button| {
-                                button.secondary()
-                            })
-                            .when(index != self.clipboard.action_selected, |button| {
-                                button.ghost()
-                            })
-                            .disabled(!target_exists && index != refresh_action)
-                            .label(label)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.clipboard.action_selected = index;
-                                this.execute_clipboard_action(index, cx);
-                            }))
+                        components::dark_surface_button(
+                            SharedString::from(format!("clipboard-action-row-{index}")),
+                            index == self.clipboard.action_selected,
+                            cx,
+                        )
+                        .disabled(!target_exists && index != refresh_action)
+                        .label(label)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.clipboard.action_selected = index;
+                            this.execute_clipboard_action(index, cx);
+                        }))
                     }),
                 ))
                 .into_any_element()
@@ -381,13 +193,213 @@ impl LauncherView {
             .relative()
             .child(page)
             .children(actions_panel.map(|panel| {
-                Self::page_popup(
-                    window,
-                    px(metrics::PAGE_HEADER_HEIGHT + metrics::DIVIDER_WIDTH + 52.),
-                    px(12.),
-                    panel,
-                )
+                if self.clipboard.items().is_empty() || self.clipboard.action_target.is_none() {
+                    Self::page_popup(
+                        window,
+                        px(metrics::PAGE_HEADER_HEIGHT + metrics::DIVIDER_WIDTH),
+                        px(metrics::SPACE_MD),
+                        panel,
+                    )
+                } else {
+                    Self::row_popup(
+                        window,
+                        &self.tool_list_scrolls.clipboard,
+                        self.clipboard.selected,
+                        panel,
+                    )
+                }
             }))
             .into_any_element()
+    }
+    fn render_clipboard_list_row(&mut self, index: usize, cx: &mut Context<Self>) -> AnyElement {
+        let item = self.clipboard.items()[index].clone();
+        let selected = self.clipboard.browsing && self.clipboard.selected == index;
+        let item_id = item.id;
+        let summary = item.summary.clone();
+        let copied = selected && self.clipboard.copied_item == Some(item_id);
+        let metadata = if copied {
+            l10n::copied(self.locale)
+        } else {
+            let kind = components::clipboard_kind_label(self.locale, &item.kind);
+            let date = components::clipboard_copy_date(item.copied_at_ms, false);
+            if date.is_empty() {
+                kind
+            } else {
+                format!("{kind} · {date}")
+            }
+        };
+        let mut selected_commands = div().flex_none().flex().items_center();
+        if selected {
+            let copy_id = item_id;
+            let preview_space = self.clipboard.browsing || self.clipboard.query.trim().is_empty();
+            selected_commands = selected_commands
+                .child(
+                    div()
+                        .id(SharedString::from(format!("clipboard-preview-{item_id}")))
+                        .role(gpui_kit::Role::Button)
+                        .aria_label(l10n::preview(self.locale))
+                        .tooltip(components::text_tooltip(l10n::shortcut_hint(
+                            self.locale,
+                            &l10n::preview(self.locale),
+                            "␣",
+                        )))
+                        .h(px(metrics::CONTROL_HEIGHT))
+                        .flex_none()
+                        .px(px(metrics::CONTROL_PADDING_X))
+                        .flex()
+                        .items_center()
+                        .gap(px(3.))
+                        .rounded(px(6.))
+                        .hover(|style| style.bg(theme::hover()))
+                        .cursor_pointer()
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            cx.stop_propagation();
+                            this.clipboard.selected = index;
+                            this.clipboard.browsing = true;
+                            this.preview_selected_clipboard(cx);
+                        }))
+                        .child(
+                            Icon::new(IconName::Eye)
+                                .size(px(14.))
+                                .text_color(theme::secondary()),
+                        )
+                        .when(preview_space, |element| element.child("␣")),
+                )
+                .child(
+                    div()
+                        .id(SharedString::from(format!("clipboard-actions-{item_id}")))
+                        .role(gpui_kit::Role::Button)
+                        .aria_label(l10n::actions(self.locale))
+                        .tooltip(components::text_tooltip(l10n::shortcut_hint(
+                            self.locale,
+                            &l10n::actions(self.locale),
+                            "⌘K",
+                        )))
+                        .h(px(metrics::CONTROL_HEIGHT))
+                        .flex_none()
+                        .px(px(metrics::CONTROL_PADDING_X))
+                        .flex()
+                        .items_center()
+                        .gap(px(4.))
+                        .rounded(px(6.))
+                        .hover(|style| style.bg(theme::hover()))
+                        .cursor_pointer()
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            cx.stop_propagation();
+                            this.open_clipboard_actions(item_id, cx);
+                        }))
+                        .child(
+                            Icon::new(IconName::Ellipsis)
+                                .size(px(14.))
+                                .text_color(theme::secondary()),
+                        )
+                        .child("⌘K"),
+                )
+                .child(
+                    div()
+                        .id(SharedString::from(format!("clipboard-copy-{item_id}")))
+                        .role(gpui_kit::Role::Button)
+                        .aria_label(l10n::copy(self.locale))
+                        .tooltip(components::text_tooltip(l10n::shortcut_hint(
+                            self.locale,
+                            &l10n::copy(self.locale),
+                            "↵",
+                        )))
+                        .h(px(metrics::CONTROL_HEIGHT))
+                        .flex_none()
+                        .px(px(metrics::CONTROL_PADDING_X))
+                        .flex()
+                        .items_center()
+                        .gap(px(5.))
+                        .rounded(px(6.))
+                        .hover(|style| style.bg(theme::hover()))
+                        .cursor_pointer()
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            cx.stop_propagation();
+                            if this.select_clipboard_item(copy_id) {
+                                this.copy_selected_clipboard(cx);
+                            }
+                        }))
+                        .child(l10n::copy(self.locale))
+                        .child(
+                            Icon::new(IconName::CornerDownLeft)
+                                .size(px(12.))
+                                .text_color(theme::secondary()),
+                        ),
+                );
+        }
+        let row = div()
+            .id(SharedString::from(format!("clipboard-item-{item_id}")))
+            .role(gpui_kit::Role::ListBoxOption)
+            .aria_label(summary.clone())
+            .aria_selected(selected)
+            .h(px(64.))
+            .flex_shrink_0()
+            .py(px(3.))
+            .cursor_pointer()
+            .on_mouse_down(
+                MouseButton::Left,
+                cx.listener(move |this, _, window, cx| {
+                    this.select_clipboard_row(index, window, cx);
+                }),
+            )
+            .on_double_click(cx.listener(move |this, _, _, cx| {
+                this.clipboard.selected = index;
+                this.clipboard.browsing = true;
+                this.copy_selected_clipboard(cx);
+            }))
+            .on_mouse_down(
+                MouseButton::Right,
+                cx.listener(move |this, _, _, cx| {
+                    this.open_clipboard_actions(item_id, cx);
+                }),
+            )
+            .child(
+                div()
+                    .h_full()
+                    .px(px(12.))
+                    .flex()
+                    .items_center()
+                    .result_surface(selected)
+                    .child(
+                        Icon::new(components::clipboard_kind_icon(&item.kind))
+                            .size(px(22.))
+                            .text_color(components::clipboard_kind_tint(&item.kind)),
+                    )
+                    .child(div().w(px(12.)))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.))
+                            .flex()
+                            .flex_col()
+                            .justify_center()
+                            .gap(px(4.))
+                            .child(
+                                div()
+                                    .id(SharedString::from(format!("clipboard-title-{item_id}")))
+                                    .truncate()
+                                    .body_text()
+                                    .text_color(theme::primary())
+                                    .tooltip(components::text_tooltip(summary))
+                                    .child(item.summary),
+                            )
+                            .child(
+                                div()
+                                    .truncate()
+                                    .caption_text()
+                                    .text_color(if copied {
+                                        theme::success()
+                                    } else {
+                                        theme::muted()
+                                    })
+                                    .child(metadata),
+                            ),
+                    )
+                    .when(selected, |element| {
+                        element.child(div().w(px(4.))).child(selected_commands)
+                    }),
+            );
+        row.test_support().into_any_element()
     }
 }

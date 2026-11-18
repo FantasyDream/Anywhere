@@ -12,6 +12,15 @@ pub(super) fn transform(
 ) -> Result<Vec<Entry>> {
     ensure!(!cancelled(), "transform cancelled");
     let input = serde_json::to_string(input)?;
+    transform_json(source, &input, cancelled)
+}
+
+pub(super) fn transform_json(
+    source: &str,
+    input: &str,
+    cancelled: Cancelled,
+) -> Result<Vec<Entry>> {
+    ensure!(!cancelled(), "transform cancelled");
     ensure!(input.len() <= MAX_INPUT, "transform input too large");
     let runtime = Runtime::new().map_err(|_| anyhow::anyhow!("script runtime unavailable"))?;
     runtime.set_memory_limit(32 * 1024 * 1024);

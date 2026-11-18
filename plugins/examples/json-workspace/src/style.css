@@ -18,7 +18,27 @@
 .json-menu > .json-more > span { font-size: var(--aw-heading-size); font-weight: var(--aw-heading-weight); }
 .json-menu > .json-more:hover, .json-menu[data-open="true"] > .json-more { background: var(--aw-hover); color: var(--aw-primary); }
 .json-menu > .json-more:focus-visible { outline: var(--aw-focus-border-width) solid var(--aw-selected-border); outline-offset: 1px; }
-.json-menu-panel { position: absolute; top: calc(100% + var(--aw-space-xs)); right: 0; z-index: 2; display: flex; flex-direction: column; width: 220px; max-height: 340px; overflow: auto; padding: var(--aw-space-xs); background: var(--aw-menu-surface); border: var(--aw-control-border-width) solid var(--aw-border); border-radius: var(--aw-control-radius); }
-.json-menu-panel > button { justify-content: flex-start; border-color: transparent; }
-.json-menu-panel > hr { margin: var(--aw-space-xs) 0; }
+.json-menu-panel {
+  --aw-text: var(--aw-on-dark-primary);
+  --aw-primary: var(--aw-on-dark-primary);
+  --aw-secondary: var(--aw-on-dark-secondary);
+  --aw-muted: var(--aw-on-dark-muted);
+  --aw-border: var(--aw-on-dark-control-border);
+  --aw-control-border: var(--aw-on-dark-control-border);
+  --aw-divider: var(--aw-on-dark-divider);
+  --aw-hover: var(--aw-on-dark-hover);
+  --aw-selected-surface: var(--aw-on-dark-selected-surface);
+  --aw-button-selection: var(--aw-on-dark-selected-surface);
+  --aw-selection-outline: var(--aw-on-dark-selection-outline);
+  --aw-selected-border: var(--aw-on-dark-selection-outline);
+  position: absolute; top: calc(100% + var(--aw-space-xs)); right: 0; z-index: 2; display: flex; flex-direction: column; width: 220px; max-height: 340px; overflow: auto; padding: var(--aw-space-xs);
+  color-scheme: dark; color: var(--aw-on-dark-primary);
+  background: var(--aw-menu-surface); border: var(--aw-control-border-width) solid var(--aw-on-dark-control-border); border-radius: var(--aw-control-radius);
+}
+.json-menu-panel > button { justify-content: flex-start; color: var(--aw-on-dark-primary); border-color: transparent; }
+.json-menu-panel > button:hover:not(:disabled) { background: var(--aw-on-dark-hover); }
+.json-menu-panel > button:active:not(:disabled), .json-menu-panel > button:focus-visible { background: var(--aw-on-dark-selected-surface); border-color: var(--aw-on-dark-selection-outline); }
+.json-menu-panel select { color: var(--aw-on-dark-primary); border-color: var(--aw-on-dark-control-border); }
+.json-menu-panel .indent { color: var(--aw-on-dark-secondary); }
+.json-menu-panel > hr { margin: var(--aw-space-xs) 0; border-color: var(--aw-on-dark-divider); }
 .indent { display: flex; align-items: center; justify-content: space-between; gap: var(--aw-space-sm); padding: var(--aw-space-xs) var(--aw-space-sm); color: var(--aw-secondary); }

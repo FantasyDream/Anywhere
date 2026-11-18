@@ -79,7 +79,7 @@ impl FactValue {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct SessionFacts {
     pub frontmost: Option<ApplicationInfo>,
     values: BTreeMap<String, FactValue>,

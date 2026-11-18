@@ -278,13 +278,6 @@ pub fn modified(locale: Locale) -> String {
     }
 }
 
-pub fn location(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Location".to_string(),
-        Locale::Zh => "位置".to_string(),
-    }
-}
-
 pub fn all_types(locale: Locale) -> String {
     match locale {
         Locale::En => "All types".to_string(),
@@ -425,13 +418,6 @@ pub fn copied(locale: Locale) -> String {
     }
 }
 
-pub fn copied_paste(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Copied. Paste in the destination app.".to_string(),
-        Locale::Zh => "已复制，可在目标应用中粘贴。".to_string(),
-    }
-}
-
 pub fn copy_failed(locale: Locale) -> String {
     match locale {
         Locale::En => "Could not copy. Try again.".to_string(),
@@ -453,24 +439,10 @@ pub fn searching(locale: Locale) -> String {
     }
 }
 
-pub fn suggested(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Suggested".to_string(),
-        Locale::Zh => "建议".to_string(),
-    }
-}
-
 pub fn menus(locale: Locale) -> String {
     match locale {
         Locale::En => "Menus".to_string(),
         Locale::Zh => "菜单".to_string(),
-    }
-}
-
-pub fn browse_menus(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Browse Menus…".to_string(),
-        Locale::Zh => "浏览菜单…".to_string(),
     }
 }
 
@@ -492,13 +464,6 @@ pub fn finder_selection(locale: Locale) -> String {
     match locale {
         Locale::En => "Finder selection".to_string(),
         Locale::Zh => "访达选中项".to_string(),
-    }
-}
-
-pub fn file_selection(locale: Locale) -> String {
-    match locale {
-        Locale::En => "File selection".to_string(),
-        Locale::Zh => "选中文件".to_string(),
     }
 }
 
@@ -711,20 +676,6 @@ pub fn action_unavailable_shortcut_paused(locale: Locale) -> String {
     }
 }
 
-pub fn actions_unavailable_shortcut_paused(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Actions unavailable · shortcut paused".to_string(),
-        Locale::Zh => "动作不可用 · 快捷键已暂停".to_string(),
-    }
-}
-
-pub fn some_rules_are_unavailable(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Some rules are unavailable".to_string(),
-        Locale::Zh => "部分规则不可用".to_string(),
-    }
-}
-
 pub fn not_detected_in_the_last_context(locale: Locale) -> String {
     match locale {
         Locale::En => "Not detected in the last context".to_string(),
@@ -853,13 +804,6 @@ pub fn clear_history(locale: Locale) -> String {
     }
 }
 
-pub fn clipboard_history_setting(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Clipboard history".to_string(),
-        Locale::Zh => "剪贴板历史".to_string(),
-    }
-}
-
 pub fn record_clipboard_history(locale: Locale) -> String {
     match locale {
         Locale::En => "Record clipboard history".to_string(),
@@ -878,13 +822,6 @@ pub fn text_images_rich_text_and_file_references(locale: Locale) -> String {
     match locale {
         Locale::En => "Text, images, rich text and file references are saved locally. Pausing keeps existing history.".to_string(),
         Locale::Zh => "文本、图片、富文本和文件引用均保存在本机。暂停记录会保留已有历史。".to_string(),
-    }
-}
-
-pub fn try_again(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Try Again".to_string(),
-        Locale::Zh => "重试".to_string(),
     }
 }
 
@@ -909,20 +846,6 @@ pub fn history_storage(locale: Locale) -> String {
     }
 }
 
-pub fn remove_all_saved_entries_this_does_not(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Remove all saved entries. This does not change recording or the current system clipboard.".to_string(),
-        Locale::Zh => "删除所有已保存的记录，不改变采集开关或当前系统剪贴板。".to_string(),
-    }
-}
-
-pub fn clear_history_action(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Clear History…".to_string(),
-        Locale::Zh => "清空历史…".to_string(),
-    }
-}
-
 pub fn enabled(locale: Locale) -> String {
     match locale {
         Locale::En => "Enabled".to_string(),
@@ -937,31 +860,10 @@ pub fn disabled(locale: Locale) -> String {
     }
 }
 
-pub fn awaiting_permission(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Awaiting permission".to_string(),
-        Locale::Zh => "等待授权".to_string(),
-    }
-}
-
-pub fn could_not_start(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Could not start".to_string(),
-        Locale::Zh => "无法启动".to_string(),
-    }
-}
-
 pub fn unavailable(locale: Locale) -> String {
     match locale {
         Locale::En => "Unavailable".to_string(),
         Locale::Zh => "不可用".to_string(),
-    }
-}
-
-pub fn restart_required(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Restart required".to_string(),
-        Locale::Zh => "需要重新启动".to_string(),
     }
 }
 
@@ -993,118 +895,10 @@ pub fn built_in(locale: Locale) -> String {
     }
 }
 
-pub fn installed_plugins(locale: Locale) -> String {
+pub fn approval_applies_to_this_package_digest(locale: Locale) -> String {
     match locale {
-        Locale::En => "Installed plugins".to_string(),
-        Locale::Zh => "已安装的插件".to_string(),
-    }
-}
-
-pub fn legacy_v1_permissions_cannot_be_revoked_individually(locale: Locale) -> String {
-    match locale {
-        Locale::En => {
-            "Legacy v1 permissions cannot be revoked individually. Disable to stop its actions."
-                .to_string()
-        }
-        Locale::Zh => "旧版 v1 权限无法逐项撤销，停用扩展后可停止其动作。".to_string(),
-    }
-}
-
-pub fn review_permissions(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Review permissions…".to_string(),
-        Locale::Zh => "查看权限…".to_string(),
-    }
-}
-
-pub fn revoke_permissions(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Revoke permissions".to_string(),
-        Locale::Zh => "撤销权限".to_string(),
-    }
-}
-
-pub fn this_extension_requests_permission_to(locale: Locale) -> String {
-    match locale {
-        Locale::En => "This extension requests permission to:".to_string(),
-        Locale::Zh => "此扩展请求以下权限：".to_string(),
-    }
-}
-
-pub fn no_host_permissions_requested(locale: Locale) -> String {
-    match locale {
-        Locale::En => "No host permissions requested.".to_string(),
-        Locale::Zh => "未请求宿主权限。".to_string(),
-    }
-}
-
-pub fn approval_applies_to_this_inspected_definition_restart(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Approval applies to this inspected definition. Restart Anywhere to activate a newly approved plugin. Revoking permission takes effect immediately.".to_string(),
-        Locale::Zh => "授权仅适用于当前检查的定义。新授权的插件将在重启 Anywhere 后生效；撤销权限会立即生效。".to_string(),
-    }
-}
-
-pub fn allow_for_next_launch(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Allow for next launch".to_string(),
-        Locale::Zh => "允许下次启动时使用".to_string(),
-    }
-}
-
-pub fn show_aplugin_view_in_anywhere(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Show a plugin view in Anywhere".to_string(),
-        Locale::Zh => "在 Anywhere 中显示插件页面".to_string(),
-    }
-}
-
-pub fn write_to_the_clipboard(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Write to the clipboard".to_string(),
-        Locale::Zh => "写入剪贴板".to_string(),
-    }
-}
-
-pub fn open_web_addresses(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Open web addresses".to_string(),
-        Locale::Zh => "打开网页地址".to_string(),
-    }
-}
-
-pub fn open_files(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Open files".to_string(),
-        Locale::Zh => "打开文件".to_string(),
-    }
-}
-
-pub fn read_repository_information(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Read repository information".to_string(),
-        Locale::Zh => "读取仓库信息".to_string(),
-    }
-}
-
-pub fn run_project_tasks(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Run project tasks".to_string(),
-        Locale::Zh => "运行项目任务".to_string(),
-    }
-}
-
-pub fn save_extension_data(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Save extension data".to_string(),
-        Locale::Zh => "保存扩展数据".to_string(),
-    }
-}
-
-pub fn file_search_setting(locale: Locale) -> String {
-    match locale {
-        Locale::En => "File search".to_string(),
-        Locale::Zh => "文件搜索".to_string(),
+        Locale::En => "Approval applies only to this verified package digest and takes effect immediately. Disabling or uninstalling revokes access immediately.".to_string(),
+        Locale::Zh => "授权仅适用于当前校验通过的包摘要并立即生效；停用或卸载会立即撤销访问权限。".to_string(),
     }
 }
 
@@ -1112,13 +906,6 @@ pub fn search_file_names_in_the_file_search(locale: Locale) -> String {
     match locale {
         Locale::En => "Search file names in the File Search action".to_string(),
         Locale::Zh => "通过文件搜索动作按名称查找文件".to_string(),
-    }
-}
-
-pub fn system_search_shows_early_results_filename_scanning(locale: Locale) -> String {
-    match locale {
-        Locale::En => "System search shows early results. Filename scanning uses accessible, authorized directories.".to_string(),
-        Locale::Zh => "系统搜索先显示结果，文件名扫描仅在可访问且已授权的目录中进行。".to_string(),
     }
 }
 
@@ -1136,17 +923,10 @@ pub fn include_dotfiles_and_files_in_hidden_directories(locale: Locale) -> Strin
     }
 }
 
-pub fn search_directories(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Search directories".to_string(),
-        Locale::Zh => "搜索目录".to_string(),
-    }
-}
-
 pub fn excluded_directory_names(locale: Locale) -> String {
     match locale {
-        Locale::En => "Excluded directory names".to_string(),
-        Locale::Zh => "排除的目录名称".to_string(),
+        Locale::En => "Exclusions must be directory names, one per line.".to_string(),
+        Locale::Zh => "排除项必须是目录名，每行一个。".to_string(),
     }
 }
 
@@ -1157,27 +937,6 @@ pub fn one_directory_name_per_line(locale: Locale) -> String {
     }
 }
 
-pub fn files_and_folders_are_scanned_including_gitignored(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Files and folders are scanned, including gitignored files. Exclusions narrow the search range. Symbolic links are listed without scanning their targets.".to_string(),
-        Locale::Zh => "扫描文件和文件夹，包括被 Git 忽略的文件。排除项会缩小搜索范围。符号链接只列出链接本身，不扫描目标。".to_string(),
-    }
-}
-
-pub fn directory_access_is_prepared_at_startup_and(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Directory access is prepared at startup and when the search range changes. Protected locations are skipped. Full Disk Access is optional and must be enabled in System Settings.".to_string(),
-        Locale::Zh => "启动和变更搜索范围时预先检查目录权限，跳过受保护的位置。完全磁盘访问权限为可选项，需在系统设置中启用。".to_string(),
-    }
-}
-
-pub fn authorize_saved_directories(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Authorize saved directories".to_string(),
-        Locale::Zh => "授权已保存的目录".to_string(),
-    }
-}
-
 pub fn full_disk_access(locale: Locale) -> String {
     match locale {
         Locale::En => "Full Disk Access…".to_string(),
@@ -1185,31 +944,10 @@ pub fn full_disk_access(locale: Locale) -> String {
     }
 }
 
-pub fn save_file_search(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Save file search".to_string(),
-        Locale::Zh => "保存文件搜索设置".to_string(),
-    }
-}
-
-pub fn add_at_least_one_rule(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Add at least one rule.".to_string(),
-        Locale::Zh => "请至少添加一条规则。".to_string(),
-    }
-}
-
 pub fn context_shortcut(locale: Locale) -> String {
     match locale {
         Locale::En => "Context shortcut".to_string(),
         Locale::Zh => "上下文快捷键".to_string(),
-    }
-}
-
-pub fn shortcut_name(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Shortcut name".to_string(),
-        Locale::Zh => "快捷键名称".to_string(),
     }
 }
 
@@ -1224,13 +962,6 @@ pub fn global(locale: Locale) -> String {
     match locale {
         Locale::En => "Global".to_string(),
         Locale::Zh => "全局".to_string(),
-    }
-}
-
-pub fn more_specific_conditions_take_priority_equal_matches(locale: Locale) -> String {
-    match locale {
-        Locale::En => "More specific conditions take priority. Equal matches let you choose. An unavailable matching action will not fall back.".to_string(),
-        Locale::Zh => "优先匹配更具体的条件。多条规则同等匹配时由你选择；已匹配的动作不可用时，不会执行其他动作。".to_string(),
     }
 }
 
@@ -1258,34 +989,6 @@ pub fn save_context_shortcut(locale: Locale) -> String {
     }
 }
 
-pub fn saved_app(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Saved app".to_string(),
-        Locale::Zh => "已保存的应用".to_string(),
-    }
-}
-
-pub fn shortcut_rule(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Shortcut rule".to_string(),
-        Locale::Zh => "快捷键规则".to_string(),
-    }
-}
-
-pub fn in_app(locale: Locale) -> String {
-    match locale {
-        Locale::En => "In app".to_string(),
-        Locale::Zh => "应用".to_string(),
-    }
-}
-
-pub fn any_app(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Any app".to_string(),
-        Locale::Zh => "任意应用".to_string(),
-    }
-}
-
 pub fn with_context(locale: Locale) -> String {
     match locale {
         Locale::En => "With context".to_string(),
@@ -1297,27 +1000,6 @@ pub fn any_compatible_context(locale: Locale) -> String {
     match locale {
         Locale::En => "Any compatible context".to_string(),
         Locale::Zh => "任意兼容的上下文".to_string(),
-    }
-}
-
-pub fn a_rule_already_uses_these_conditions(locale: Locale) -> String {
-    match locale {
-        Locale::En => "A rule already uses these conditions.".to_string(),
-        Locale::Zh => "已有规则使用了相同条件。".to_string(),
-    }
-}
-
-pub fn save_rule(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Save rule".to_string(),
-        Locale::Zh => "保存规则".to_string(),
-    }
-}
-
-pub fn finish_or_cancel_editing_the_action_shortcut(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Finish or cancel editing the action shortcut before closing.".to_string(),
-        Locale::Zh => "请先完成或取消动作快捷键编辑，再关闭窗口。".to_string(),
     }
 }
 
@@ -1334,71 +1016,6 @@ pub fn new_edits_were_made_while_saving_save(locale: Locale) -> String {
     match locale {
         Locale::En => "New edits were made while saving. Save them before closing.".to_string(),
         Locale::Zh => "保存期间有新的修改，请先保存再关闭。".to_string(),
-    }
-}
-
-pub fn changes_apply_on_the_next_wake_status(locale: Locale) -> String {
-    match locale {
-        Locale::En => {
-            "Changes apply on the next wake. Status refers to the last capture.".to_string()
-        }
-        Locale::Zh => "更改将在下次唤醒时生效，状态显示上一次采集的结果。".to_string(),
-    }
-}
-
-pub fn hidden_apps(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Hidden apps".to_string(),
-        Locale::Zh => "隐藏的应用".to_string(),
-    }
-}
-
-pub fn enter_one_application_idper_line_to(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Enter one application ID per line to keep it out of search.".to_string(),
-        Locale::Zh => "每行输入一个应用 ID，使其不出现在搜索结果中。".to_string(),
-    }
-}
-
-pub fn save_apps(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Save apps".to_string(),
-        Locale::Zh => "保存应用设置".to_string(),
-    }
-}
-
-pub fn press_shortcut_key(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Press a shortcut".to_string(),
-        Locale::Zh => "请按下快捷键".to_string(),
-    }
-}
-
-pub fn choose_app(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Choose app".to_string(),
-        Locale::Zh => "选择应用".to_string(),
-    }
-}
-
-pub fn find_an_app(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Find an app…".to_string(),
-        Locale::Zh => "查找应用…".to_string(),
-    }
-}
-
-pub fn no_matching_apps(locale: Locale) -> String {
-    match locale {
-        Locale::En => "No matching apps".to_string(),
-        Locale::Zh => "没有匹配的应用".to_string(),
-    }
-}
-
-pub fn output_could_not_be_copied_try_again(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Output could not be copied. Try again.".to_string(),
-        Locale::Zh => "无法复制输出，请重试。".to_string(),
     }
 }
 
@@ -1469,13 +1086,6 @@ pub fn latest(locale: Locale) -> String {
     match locale {
         Locale::En => "Latest".to_string(),
         Locale::Zh => "最新".to_string(),
-    }
-}
-
-pub fn the_window_could_not_be_changed_try(locale: Locale) -> String {
-    match locale {
-        Locale::En => "The window could not be changed. Try again.".to_string(),
-        Locale::Zh => "无法调整窗口，请重试。".to_string(),
     }
 }
 
@@ -1556,13 +1166,6 @@ pub fn find_atask(locale: Locale) -> String {
     }
 }
 
-pub fn clear_search(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Clear search".to_string(),
-        Locale::Zh => "清空搜索".to_string(),
-    }
-}
-
 pub fn tasks(locale: Locale) -> String {
     match locale {
         Locale::En => "Tasks".to_string(),
@@ -1595,13 +1198,6 @@ pub fn command_copied(locale: Locale) -> String {
     match locale {
         Locale::En => "Command copied".to_string(),
         Locale::Zh => "已复制命令".to_string(),
-    }
-}
-
-pub fn command_could_not_be_copied_try_again(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Command could not be copied. Try again.".to_string(),
-        Locale::Zh => "无法复制命令，请重试。".to_string(),
     }
 }
 
@@ -1668,13 +1264,6 @@ pub fn search_this_file_type(locale: Locale) -> String {
     }
 }
 
-pub fn select_afile_to_preview(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Select a file to preview".to_string(),
-        Locale::Zh => "选择文件以预览".to_string(),
-    }
-}
-
 pub fn find_apps_and_actions(locale: Locale) -> String {
     match locale {
         Locale::En => "Find apps and actions".to_string(),
@@ -1710,13 +1299,6 @@ pub fn delete_entry(locale: Locale) -> String {
     }
 }
 
-pub fn preview_unavailable(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Preview unavailable".to_string(),
-        Locale::Zh => "无法预览".to_string(),
-    }
-}
-
 pub fn no_matching_entries(locale: Locale) -> String {
     match locale {
         Locale::En => "No matching entries".to_string(),
@@ -1747,20 +1329,6 @@ pub fn manage_recording_in_settings_clipboard(locale: Locale) -> String {
     }
 }
 
-pub fn the_window_could_not_be_closed_use(locale: Locale) -> String {
-    match locale {
-        Locale::En => "The window could not be closed. Use the window close button.".to_string(),
-        Locale::Zh => "无法关闭窗口，请使用窗口关闭按钮。".to_string(),
-    }
-}
-
-pub fn back_to_list_esc(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Back to list · Esc".to_string(),
-        Locale::Zh => "返回列表 · Esc".to_string(),
-    }
-}
-
 pub fn clipboard_always_on_top(locale: Locale) -> String {
     match locale {
         Locale::En => "Clipboard · Always on top".to_string(),
@@ -1786,13 +1354,6 @@ pub fn action_failed(locale: Locale) -> String {
     match locale {
         Locale::En => "Action failed".to_string(),
         Locale::Zh => "动作失败".to_string(),
-    }
-}
-
-pub fn action_result(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Action result".to_string(),
-        Locale::Zh => "动作结果".to_string(),
     }
 }
 
@@ -1845,27 +1406,6 @@ pub fn back_to_search_esc(locale: Locale) -> String {
     }
 }
 
-pub fn cancel_esc(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Cancel · Esc".to_string(),
-        Locale::Zh => "取消 · Esc".to_string(),
-    }
-}
-
-pub fn cancel_escape_selected(locale: Locale) -> String {
-    match locale {
-        Locale::En => "✓ Cancel · Esc".to_string(),
-        Locale::Zh => "✓ 取消 · Esc".to_string(),
-    }
-}
-
-pub fn web_tools_are_unavailable_on_this_platform(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Web tools are unavailable on this platform.".to_string(),
-        Locale::Zh => "此平台暂不支持 Web 工具。".to_string(),
-    }
-}
-
 pub fn requested_access(locale: Locale) -> String {
     match locale {
         Locale::En => "Requested access".to_string(),
@@ -1901,32 +1441,6 @@ pub fn approve_and_install(locale: Locale) -> String {
     }
 }
 
-pub fn installed_search_for_the_tool_by_name(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Installed. Search for the tool by name to open it.".to_string(),
-        Locale::Zh => "安装完成，搜索工具名称即可打开。".to_string(),
-    }
-}
-
-pub fn the_package_could_not_be_installed_the(locale: Locale) -> String {
-    match locale {
-        Locale::En => {
-            "The package could not be installed. The existing version is unchanged.".to_string()
-        }
-        Locale::Zh => "安装失败，现有版本未改变。".to_string(),
-    }
-}
-
-pub fn the_operation_could_not_finish_check_the(locale: Locale) -> String {
-    match locale {
-        Locale::En => {
-            "The operation could not finish. Check the current tool status and try again."
-                .to_string()
-        }
-        Locale::Zh => "操作未完成，请检查工具状态后重试。".to_string(),
-    }
-}
-
 pub fn web_tools(locale: Locale) -> String {
     match locale {
         Locale::En => "Web tools".to_string(),
@@ -1948,75 +1462,10 @@ pub fn no_web_tools_installed(locale: Locale) -> String {
     }
 }
 
-pub fn restore_approved_version(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Restore approved version".to_string(),
-        Locale::Zh => "恢复已批准的版本".to_string(),
-    }
-}
-
 pub fn uninstall(locale: Locale) -> String {
     match locale {
         Locale::En => "Uninstall".to_string(),
         Locale::Zh => "卸载".to_string(),
-    }
-}
-
-pub fn the_tool_did_not_become_ready_go(locale: Locale) -> String {
-    match locale {
-        Locale::En => "The tool did not become ready. Go back and reopen it.".to_string(),
-        Locale::Zh => "工具未就绪，请返回后重新打开。".to_string(),
-    }
-}
-
-pub fn this_tool_is_no_longer_available_return(locale: Locale) -> String {
-    match locale {
-        Locale::En => {
-            "This tool is no longer available. Return to search and reopen it.".to_string()
-        }
-        Locale::Zh => "此工具已不可用，请返回搜索后重新打开。".to_string(),
-    }
-}
-
-pub fn the_tool_could_not_load_reload_it(locale: Locale) -> String {
-    match locale {
-        Locale::En => "The tool could not load. Reload it or return to search.".to_string(),
-        Locale::Zh => "工具加载失败，请重新加载或返回搜索。".to_string(),
-    }
-}
-
-pub fn opening_tool(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Opening tool…".to_string(),
-        Locale::Zh => "正在打开工具…".to_string(),
-    }
-}
-
-pub fn loading_tool(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Loading tool…".to_string(),
-        Locale::Zh => "正在加载工具…".to_string(),
-    }
-}
-
-pub fn the_tool_stopped_reload_it_or_return(locale: Locale) -> String {
-    match locale {
-        Locale::En => "The tool stopped. Reload it or return to search.".to_string(),
-        Locale::Zh => "工具已停止，请重新加载或返回搜索。".to_string(),
-    }
-}
-
-pub fn dismiss_message(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Dismiss message".to_string(),
-        Locale::Zh => "关闭提示".to_string(),
-    }
-}
-
-pub fn return_key(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Return".to_string(),
-        Locale::Zh => "回车".to_string(),
     }
 }
 
@@ -2041,87 +1490,10 @@ pub fn selected_files(locale: Locale) -> String {
     }
 }
 
-pub fn web_link(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Web link".to_string(),
-        Locale::Zh => "网页链接".to_string(),
-    }
-}
-
-pub fn git_repository(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Git repository".to_string(),
-        Locale::Zh => "Git 仓库".to_string(),
-    }
-}
-
-pub fn node_project(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Node project".to_string(),
-        Locale::Zh => "Node 项目".to_string(),
-    }
-}
-
-pub fn maven_project(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Maven project".to_string(),
-        Locale::Zh => "Maven 项目".to_string(),
-    }
-}
-
-pub fn gradle_project(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Gradle project".to_string(),
-        Locale::Zh => "Gradle 项目".to_string(),
-    }
-}
-
-pub fn rust_project(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Rust project".to_string(),
-        Locale::Zh => "Rust 项目".to_string(),
-    }
-}
-
-pub fn spring_project(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Spring Boot project".to_string(),
-        Locale::Zh => "Spring Boot 项目".to_string(),
-    }
-}
-
-pub fn anywhere_tool(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Anywhere tool".to_string(),
-        Locale::Zh => "Anywhere 工具".to_string(),
-    }
-}
-
-pub fn pdf_document(locale: Locale) -> String {
-    match locale {
-        Locale::En => "PDF document".to_string(),
-        Locale::Zh => "PDF 文档".to_string(),
-    }
-}
-
 pub fn document(locale: Locale) -> String {
     match locale {
         Locale::En => "Document".to_string(),
         Locale::Zh => "文档".to_string(),
-    }
-}
-
-pub fn text_file(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Text file".to_string(),
-        Locale::Zh => "文本文件".to_string(),
-    }
-}
-
-pub fn spreadsheet(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Spreadsheet".to_string(),
-        Locale::Zh => "电子表格".to_string(),
     }
 }
 
@@ -2139,38 +1511,10 @@ pub fn archive(locale: Locale) -> String {
     }
 }
 
-pub fn source_code(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Source code".to_string(),
-        Locale::Zh => "源代码".to_string(),
-    }
-}
-
-pub fn configuration_file(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Configuration file".to_string(),
-        Locale::Zh => "配置文件".to_string(),
-    }
-}
-
-pub fn ebook(locale: Locale) -> String {
-    match locale {
-        Locale::En => "E-book".to_string(),
-        Locale::Zh => "电子书".to_string(),
-    }
-}
-
 pub fn font(locale: Locale) -> String {
     match locale {
         Locale::En => "Font".to_string(),
         Locale::Zh => "字体".to_string(),
-    }
-}
-
-pub fn package_or_binary(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Package or binary".to_string(),
-        Locale::Zh => "软件包或二进制文件".to_string(),
     }
 }
 
@@ -2327,38 +1671,10 @@ pub fn too_many_items_help(locale: Locale) -> String {
     }
 }
 
-pub fn loading_more_files(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Loading more files…".to_string(),
-        Locale::Zh => "正在加载更多文件…".to_string(),
-    }
-}
-
 pub fn authorize_search_directories(locale: Locale) -> String {
     match locale {
         Locale::En => "Authorize search directories".to_string(),
         Locale::Zh => "授权搜索目录".to_string(),
-    }
-}
-
-pub fn authorize_search_help(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Open Settings → Search and authorize saved directories. No file search runs before access is prepared.".to_string(),
-        Locale::Zh => "请在“设置 → 搜索”中授权已保存的目录。权限准备完成后才会开始搜索。".to_string(),
-    }
-}
-
-pub fn file_search_off(locale: Locale) -> String {
-    match locale {
-        Locale::En => "File search is turned off".to_string(),
-        Locale::Zh => "文件搜索已关闭".to_string(),
-    }
-}
-
-pub fn search_unavailable(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Search is unavailable".to_string(),
-        Locale::Zh => "搜索不可用".to_string(),
     }
 }
 
@@ -2390,24 +1706,17 @@ pub fn searching_files(locale: Locale) -> String {
     }
 }
 
-pub fn file_search_unavailable(locale: Locale) -> String {
-    match locale {
-        Locale::En => "File search unavailable".to_string(),
-        Locale::Zh => "文件搜索不可用".to_string(),
-    }
-}
-
-pub fn file_search_disabled_help(locale: Locale) -> String {
-    match locale {
-        Locale::En => "File search is disabled. Enable it in Settings → Search.".to_string(),
-        Locale::Zh => "文件搜索已关闭，可在“设置 → 搜索”中启用。".to_string(),
-    }
-}
-
 pub fn type_file_name(locale: Locale) -> String {
     match locale {
         Locale::En => "Type a file or folder name to search".to_string(),
         Locale::Zh => "输入文件或文件夹名称开始搜索".to_string(),
+    }
+}
+
+pub fn file_page_load_failed(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Could not load more files. Try again.".to_string(),
+        Locale::Zh => "未能加载更多文件，请重试。".to_string(),
     }
 }
 
@@ -2432,38 +1741,10 @@ pub fn no_actions_available(locale: Locale) -> String {
     }
 }
 
-pub fn file_search_incomplete(locale: Locale) -> String {
-    match locale {
-        Locale::En => "File search is incomplete. Available results are still usable.".to_string(),
-        Locale::Zh => "文件搜索未完成，已找到的结果仍然可用。".to_string(),
-    }
-}
-
-pub fn actions_load_incomplete(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Some actions could not be loaded. Reopen Anywhere to try again; other actions are still available.".to_string(),
-        Locale::Zh => "部分动作未能加载，请重新唤醒 Anywhere 后重试；其他动作仍可使用。".to_string(),
-    }
-}
-
-pub fn file_search_other_results(locale: Locale) -> String {
-    match locale {
-        Locale::En => "File search unavailable · Other results are still usable".to_string(),
-        Locale::Zh => "文件搜索不可用 · 其他结果仍可使用".to_string(),
-    }
-}
-
 pub fn current_page(locale: Locale) -> String {
     match locale {
         Locale::En => "Current page".to_string(),
         Locale::Zh => "当前网页".to_string(),
-    }
-}
-
-pub fn choose_target(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Choose a target".to_string(),
-        Locale::Zh => "选择目标".to_string(),
     }
 }
 
@@ -2474,13 +1755,6 @@ pub fn content_actions(locale: Locale) -> String {
     }
 }
 
-pub fn search_complete(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Search complete".to_string(),
-        Locale::Zh => "搜索完成".to_string(),
-    }
-}
-
 pub fn clipboard_settings_failed(locale: Locale) -> String {
     match locale {
         Locale::En => "Clipboard settings could not be loaded or updated. Try again.".to_string(),
@@ -2488,85 +1762,10 @@ pub fn clipboard_settings_failed(locale: Locale) -> String {
     }
 }
 
-pub fn history_load_failed(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Clipboard history could not be loaded. Try Refresh.".to_string(),
-        Locale::Zh => "无法加载剪贴板历史，请刷新重试。".to_string(),
-    }
-}
-
-pub fn history_entry_missing(locale: Locale) -> String {
-    match locale {
-        Locale::En => "This entry is no longer available. Refresh history.".to_string(),
-        Locale::Zh => "此记录已不可用，请刷新历史。".to_string(),
-    }
-}
-
-pub fn history_preview_failed(locale: Locale) -> String {
-    match locale {
-        Locale::En => "This entry could not be previewed.".to_string(),
-        Locale::Zh => "无法预览此记录。".to_string(),
-    }
-}
-
 pub fn history_operation_failed(locale: Locale) -> String {
     match locale {
         Locale::En => "The operation could not be completed. Refresh and try again.".to_string(),
         Locale::Zh => "操作未完成，请刷新后重试。".to_string(),
-    }
-}
-
-pub fn history_copy_failed(locale: Locale) -> String {
-    match locale {
-        Locale::En => "This entry could not be copied. For files, check that the originals still exist and are accessible.".to_string(),
-        Locale::Zh => "无法复制此记录。如为文件，请确认原文件仍然存在且可访问。".to_string(),
-    }
-}
-
-pub fn source_unsupported_help(locale: Locale, source: &str) -> String {
-    let values = &[("source", source.to_string())];
-    match locale {
-        Locale::En => fill(
-            "{source} is not exposed by this app. Other sources still work.",
-            values,
-        ),
-        Locale::Zh => fill("此应用未提供{source}，其他来源仍可使用。", values),
-    }
-}
-
-pub fn source_timeout_help(locale: Locale, source: &str) -> String {
-    let values = &[("source", source.to_string())];
-    match locale {
-        Locale::En => fill(
-            "{source} took too long to respond. Reopen Anywhere to try again.",
-            values,
-        ),
-        Locale::Zh => fill("{source}响应超时，请重新唤醒 Anywhere 后重试。", values),
-    }
-}
-
-pub fn source_too_long_help(locale: Locale, source: &str) -> String {
-    let values = &[("source", source.to_string())];
-    match locale {
-        Locale::En => fill(
-            "{source} is too long to use. Use less content and reopen Anywhere.",
-            values,
-        ),
-        Locale::Zh => fill("{source}内容过长，请减少内容后重新唤醒 Anywhere。", values),
-    }
-}
-
-pub fn source_failed_help(locale: Locale, source: &str) -> String {
-    let values = &[("source", source.to_string())];
-    match locale {
-        Locale::En => fill(
-            "{source} could not be read. Reopen Anywhere to try again; other sources still work.",
-            values,
-        ),
-        Locale::Zh => fill(
-            "无法读取{source}，请重新唤醒 Anywhere 后重试；其他来源仍可使用。",
-            values,
-        ),
     }
 }
 
@@ -2595,53 +1794,11 @@ pub fn search_issues(locale: Locale, count: i64) -> String {
     }
 }
 
-pub fn file_search_issue_notice(locale: Locale, count: i64) -> String {
-    let values = &[("count", count.to_string())];
-    match locale {
-        Locale::En => {
-            let template = match Some(count) {
-                Some(1) => "File search encountered 1 issue. Available results are still usable.",
-                _ => match plural_category(count) {
-                    "other" => "File search encountered {count} issues. Available results are still usable.",
-                    _ => "File search encountered {count} issues. Available results are still usable.",
-                },
-            };
-            plural(template, count, values)
-        }
-        Locale::Zh => fill(
-            "文件搜索遇到 {count} 个问题，已找到的结果仍然可用。",
-            values,
-        ),
-    }
-}
-
 pub fn filter_actions(locale: Locale, scope: &str) -> String {
     let values = &[("scope", scope.to_string())];
     match locale {
         Locale::En => fill("Filter {scope} actions", values),
         Locale::Zh => fill("筛选{scope}动作", values),
-    }
-}
-
-pub fn empty_file_type(locale: Locale, r#type: &str) -> String {
-    let values = &[("type", r#type.to_string())];
-    match locale {
-        Locale::En => fill(
-            "No {type} in these results. Try All types or another search.",
-            values,
-        ),
-        Locale::Zh => fill("结果中没有{type}，请尝试“所有类型”或其他关键词。", values),
-    }
-}
-
-pub fn file_roots_hint(locale: Locale, example: &str) -> String {
-    let values = &[("example", example.to_string())];
-    match locale {
-        Locale::En => fill(
-            "{example}\nLeave empty to search your home directory",
-            values,
-        ),
-        Locale::Zh => fill("{example}\n留空则搜索个人主目录", values),
     }
 }
 
@@ -2680,30 +1837,6 @@ pub fn shortcut_hint(locale: Locale, label: &str, shortcut: &str) -> String {
     }
 }
 
-pub fn enable_feature(locale: Locale, name: &str) -> String {
-    let values = &[("name", name.to_string())];
-    match locale {
-        Locale::En => fill("Enable {name}", values),
-        Locale::Zh => fill("启用{name}", values),
-    }
-}
-
-pub fn allow_feature(locale: Locale, name: &str) -> String {
-    let values = &[("name", name.to_string())];
-    match locale {
-        Locale::En => fill("Allow {name}?", values),
-        Locale::Zh => fill("允许{name}？", values),
-    }
-}
-
-pub fn remove_rule(locale: Locale, number: i64) -> String {
-    let values = &[("number", number.to_string())];
-    match locale {
-        Locale::En => fill("Remove rule {number}", values),
-        Locale::Zh => fill("移除第 {number} 条规则", values),
-    }
-}
-
 pub fn context_rules_count(locale: Locale, count: i64) -> String {
     let values = &[("count", count.to_string())];
     match locale {
@@ -2718,14 +1851,6 @@ pub fn context_rules_count(locale: Locale, count: i64) -> String {
             plural(template, count, values)
         }
         Locale::Zh => fill("{count} 条上下文规则", values),
-    }
-}
-
-pub fn edit_action_shortcut(locale: Locale, title: &str) -> String {
-    let values = &[("title", title.to_string())];
-    match locale {
-        Locale::En => fill("Edit shortcut for {title}", values),
-        Locale::Zh => fill("编辑“{title}”的快捷键", values),
     }
 }
 
@@ -2772,14 +1897,6 @@ pub fn tools(locale: Locale) -> String {
     }
 }
 
-pub fn restricted_locations_skipped(locale: Locale, count: &str) -> String {
-    let values = &[("count", count.to_string())];
-    match locale {
-        Locale::En => fill("{count} restricted locations skipped", values),
-        Locale::Zh => fill("已跳过 {count} 个受限位置", values),
-    }
-}
-
 pub fn quit_anywhere(locale: Locale) -> String {
     match locale {
         Locale::En => "Quit Anywhere".to_string(),
@@ -2791,34 +1908,6 @@ pub fn edit(locale: Locale) -> String {
     match locale {
         Locale::En => "Edit".to_string(),
         Locale::Zh => "编辑".to_string(),
-    }
-}
-
-pub fn undo(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Undo".to_string(),
-        Locale::Zh => "撤销".to_string(),
-    }
-}
-
-pub fn redo(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Redo".to_string(),
-        Locale::Zh => "重做".to_string(),
-    }
-}
-
-pub fn cut(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Cut".to_string(),
-        Locale::Zh => "剪切".to_string(),
-    }
-}
-
-pub fn paste(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Paste".to_string(),
-        Locale::Zh => "粘贴".to_string(),
     }
 }
 
@@ -2836,59 +1925,10 @@ pub fn window(locale: Locale) -> String {
     }
 }
 
-pub fn minimize(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Minimize".to_string(),
-        Locale::Zh => "最小化".to_string(),
-    }
-}
-
-pub fn zoom(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Zoom".to_string(),
-        Locale::Zh => "缩放".to_string(),
-    }
-}
-
 pub fn close_window(locale: Locale) -> String {
     match locale {
         Locale::En => "Close Window".to_string(),
         Locale::Zh => "关闭窗口".to_string(),
-    }
-}
-
-pub fn find_task_menu(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Find Task…".to_string(),
-        Locale::Zh => "查找任务…".to_string(),
-    }
-}
-
-pub fn stop_selected_task(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Stop Selected Task".to_string(),
-        Locale::Zh => "停止所选任务".to_string(),
-    }
-}
-
-pub fn refresh_tasks(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Refresh Tasks".to_string(),
-        Locale::Zh => "刷新任务".to_string(),
-    }
-}
-
-pub fn open_launcher(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Open Launcher".to_string(),
-        Locale::Zh => "打开启动器".to_string(),
-    }
-}
-
-pub fn close_task_window(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Close Task Window".to_string(),
-        Locale::Zh => "关闭任务窗口".to_string(),
     }
 }
 
@@ -2903,13 +1943,6 @@ pub fn settings_menu(locale: Locale) -> String {
     match locale {
         Locale::En => "Settings…".to_string(),
         Locale::Zh => "设置…".to_string(),
-    }
-}
-
-pub fn authorize_file_search(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Authorize File Search".to_string(),
-        Locale::Zh => "授权文件搜索".to_string(),
     }
 }
 
@@ -2938,15 +1971,6 @@ pub fn file_search_access_message(locale: Locale) -> String {
     match locale {
         Locale::En => "Choose folders Anywhere may search. Access is saved for future launches. Protected system or app data may still require Full Disk Access in System Settings.".to_string(),
         Locale::Zh => "请选择允许 Anywhere 搜索的文件夹，授权会保存供以后启动时使用。受保护的系统或应用数据可能仍需在系统设置中启用完全磁盘访问权限。".to_string(),
-    }
-}
-
-pub fn inspect_trusted_package(locale: Locale) -> String {
-    match locale {
-        Locale::En => {
-            "Choose a trusted .awplugin package to inspect before installing.".to_string()
-        }
-        Locale::Zh => "请选择可信的 .awplugin 包，在安装前检查其内容。".to_string(),
     }
 }
 
@@ -2985,27 +2009,6 @@ pub fn launcher_startup_failed(locale: Locale) -> String {
     }
 }
 
-pub fn tasks_startup_failed(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Running Tasks could not open".to_string(),
-        Locale::Zh => "无法打开运行中的任务".to_string(),
-    }
-}
-
-pub fn shelf_startup_failed(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Clipboard Shelf could not open".to_string(),
-        Locale::Zh => "无法打开剪贴板悬浮窗".to_string(),
-    }
-}
-
-pub fn saved_directories(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Saved Directories".to_string(),
-        Locale::Zh => "收藏的文件夹".to_string(),
-    }
-}
-
 pub fn browser_page_description(locale: Locale) -> String {
     match locale {
         Locale::En => "Use the active Safari, Chrome, or Edge tab’s web address".to_string(),
@@ -3018,13 +2021,6 @@ pub fn permission_context_read(locale: Locale, types: &str) -> String {
     match locale {
         Locale::En => fill("Selected context: {types}", values),
         Locale::Zh => fill("选中的上下文：{types}", values),
-    }
-}
-
-pub fn supported_browser_description(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Active URL in a supported browser".to_string(),
-        Locale::Zh => "支持的浏览器当前页面的网址".to_string(),
     }
 }
 
@@ -3058,50 +2054,10 @@ pub fn detail(locale: Locale) -> String {
     }
 }
 
-pub fn formats_count(locale: Locale, count: i64) -> String {
-    let values = &[("count", count.to_string())];
-    match locale {
-        Locale::En => {
-            let template = match Some(count) {
-                Some(1) => "1 format",
-                _ => match plural_category(count) {
-                    "other" => "{count} formats",
-                    _ => "{count} formats",
-                },
-            };
-            plural(template, count, values)
-        }
-        Locale::Zh => fill("{count} 种格式", values),
-    }
-}
-
 pub fn automation_usage(locale: Locale) -> String {
     match locale {
         Locale::En => "Read the current Finder location and selection, and the active Safari, Chrome, or Edge tab URL to suggest actions when you open Anywhere.".to_string(),
         Locale::Zh => "在唤醒 Anywhere 时读取访达当前位置和所选项目，以及 Safari、Chrome 或 Edge 当前标签页的网址，以推荐相关动作。".to_string(),
-    }
-}
-
-pub fn content_preview(locale: Locale, kind: &str) -> String {
-    let values = &[("kind", kind.to_string())];
-    match locale {
-        Locale::En => fill("{kind} preview", values),
-        Locale::Zh => fill("{kind}预览", values),
-    }
-}
-
-pub fn saved_size(locale: Locale, size: &str) -> String {
-    let values = &[("size", size.to_string())];
-    match locale {
-        Locale::En => fill("{size} saved", values),
-        Locale::Zh => fill("已保存 {size}", values),
-    }
-}
-
-pub fn invalid_action_identity(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Invalid action identity.".to_string(),
-        Locale::Zh => "动作标识无效。".to_string(),
     }
 }
 
@@ -3112,121 +2068,10 @@ pub fn letter_with_modifier(locale: Locale) -> String {
     }
 }
 
-pub fn modifier_with_letter(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Use a modifier with the letter key.".to_string(),
-        Locale::Zh => "请为字母键添加修饰键。".to_string(),
-    }
-}
-
 pub fn reserved_editing_shortcut(locale: Locale) -> String {
     match locale {
         Locale::En => "This shortcut is reserved for editing or window commands.".to_string(),
         Locale::Zh => "此快捷键用于编辑或窗口操作，无法重新绑定。".to_string(),
-    }
-}
-
-pub fn invalid_shortcut_intent(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Invalid shortcut intent identity.".to_string(),
-        Locale::Zh => "上下文快捷键标识无效。".to_string(),
-    }
-}
-
-pub fn shortcut_rule_limit(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Name the shortcut and use at most 16 rules.".to_string(),
-        Locale::Zh => "请填写快捷键名称，且最多设置 16 条规则。".to_string(),
-    }
-}
-
-pub fn different_shortcut_conditions(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Rules must use different app and context conditions.".to_string(),
-        Locale::Zh => "每条规则的应用和上下文条件必须不同。".to_string(),
-    }
-}
-
-pub fn shortcut_already_opens(locale: Locale) -> String {
-    match locale {
-        Locale::En => "This shortcut already opens Anywhere.".to_string(),
-        Locale::Zh => "此快捷键已用于唤醒 Anywhere。".to_string(),
-    }
-}
-
-pub fn invalid_shortcut_rule(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Invalid shortcut rule.".to_string(),
-        Locale::Zh => "快捷键规则无效。".to_string(),
-    }
-}
-
-pub fn search_directory_limits(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Use at most 8 directories and 32 exclusions.".to_string(),
-        Locale::Zh => "最多使用 8 个目录和 32 个排除项。".to_string(),
-    }
-}
-
-pub fn absolute_search_directories(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Search directories must be absolute paths, one per line.".to_string(),
-        Locale::Zh => "搜索目录必须使用绝对路径，每行一个。".to_string(),
-    }
-}
-
-pub fn unsupported_shortcut_settings(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Unsupported action shortcut settings version. Update Anywhere before changing settings.".to_string(),
-        Locale::Zh => "不支持此版本的动作快捷键设置，请先更新 Anywhere。".to_string(),
-    }
-}
-
-pub fn one_shortcut_per_action(locale: Locale) -> String {
-    match locale {
-        Locale::En => "An action can only have one shortcut.".to_string(),
-        Locale::Zh => "每个动作只能绑定一个快捷键。".to_string(),
-    }
-}
-
-pub fn shortcuts_refresh_failed(locale: Locale) -> String {
-    match locale {
-        Locale::En => {
-            "Action shortcuts could not be refreshed. Reopen Settings to try again.".to_string()
-        }
-        Locale::Zh => "无法刷新动作快捷键，请重新打开设置后重试。".to_string(),
-    }
-}
-
-pub fn shortcut_assigned_to(locale: Locale, title: &str) -> String {
-    let values = &[("title", title.to_string())];
-    match locale {
-        Locale::En => fill("This shortcut is assigned to {title}.", values),
-        Locale::Zh => fill("此快捷键已绑定到“{title}”。", values),
-    }
-}
-
-pub fn max_action_shortcuts(locale: Locale, count: i64) -> String {
-    let values = &[("count", count.to_string())];
-    match locale {
-        Locale::En => fill("At most {count} action shortcuts are supported.", values),
-        Locale::Zh => fill("最多支持 {count} 个动作快捷键。", values),
-    }
-}
-
-pub fn shortcuts_saved_by_newer_version(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Action shortcuts were saved by a newer version. Update Anywhere before changing settings.".to_string(),
-        Locale::Zh => "动作快捷键由更新版本保存，请先更新 Anywhere 再修改设置。".to_string(),
-    }
-}
-
-pub fn directory_access_failed(locale: Locale) -> String {
-    match locale {
-        Locale::En => {
-            "Directory access could not be prepared. Try again in Search settings.".to_string()
-        }
-        Locale::Zh => "无法准备目录访问权限，请在搜索设置中重试。".to_string(),
     }
 }
 
@@ -3236,44 +2081,6 @@ pub fn open_system_settings_failed(locale: Locale) -> String {
             "System Settings could not be opened. Open the system settings manually.".to_string()
         }
         Locale::Zh => "无法打开系统设置，请手动打开。".to_string(),
-    }
-}
-
-pub fn shortcuts_restore_failed(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Action shortcuts could not be restored. Change the conflicting shortcut or try closing again.".to_string(),
-        Locale::Zh => "无法恢复动作快捷键，请修改冲突的快捷键或尝试再次关闭。".to_string(),
-    }
-}
-
-pub fn extensions_load_failed(locale: Locale, detail: &str) -> String {
-    let values = &[("detail", detail.to_string())];
-    match locale {
-        Locale::En => fill("Extensions could not be loaded: {detail}", values),
-        Locale::Zh => fill("无法加载扩展：{detail}", values),
-    }
-}
-
-pub fn extensions_update_failed(locale: Locale, detail: &str) -> String {
-    let values = &[("detail", detail.to_string())];
-    match locale {
-        Locale::En => fill("Extension settings could not be updated: {detail}", values),
-        Locale::Zh => fill("无法更新扩展设置：{detail}", values),
-    }
-}
-
-pub fn shortcut_load_failed(locale: Locale, detail: &str) -> String {
-    let values = &[("detail", detail.to_string())];
-    match locale {
-        Locale::En => fill("Action shortcuts could not be loaded: {detail}", values),
-        Locale::Zh => fill("无法加载动作快捷键：{detail}", values),
-    }
-}
-
-pub fn shortcuts_paused_help(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Some action shortcuts are paused. Reopen Settings to try again, or choose a different key combination.".to_string(),
-        Locale::Zh => "部分动作快捷键已暂停，请重新打开设置重试，或改用其他按键组合。".to_string(),
     }
 }
 
@@ -3305,38 +2112,10 @@ pub fn shelf_delete_description(locale: Locale) -> String {
     }
 }
 
-pub fn hide_preview(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Hide preview".to_string(),
-        Locale::Zh => "收起预览".to_string(),
-    }
-}
-
 pub fn details(locale: Locale) -> String {
     match locale {
         Locale::En => "Details".to_string(),
         Locale::Zh => "详细信息".to_string(),
-    }
-}
-
-pub fn source_status(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Source status".to_string(),
-        Locale::Zh => "来源状态".to_string(),
-    }
-}
-
-pub fn search_rules(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Search rules".to_string(),
-        Locale::Zh => "搜索规则".to_string(),
-    }
-}
-
-pub fn search_help(locale: Locale) -> String {
-    match locale {
-        Locale::En => "How search works".to_string(),
-        Locale::Zh => "搜索说明".to_string(),
     }
 }
 
@@ -3446,14 +2225,6 @@ pub fn pause_history_recording(locale: Locale) -> String {
     }
 }
 
-pub fn history_paused_until(locale: Locale, time: &str) -> String {
-    let values = &[("time", time.to_string())];
-    match locale {
-        Locale::En => fill("Paused until {time}", values),
-        Locale::Zh => fill("暂停至 {time}", values),
-    }
-}
-
 pub fn resume_recording(locale: Locale) -> String {
     match locale {
         Locale::En => "Resume".to_string(),
@@ -3538,13 +2309,6 @@ pub fn history_storage_usage(locale: Locale, count: i64, mib: &str) -> String {
     }
 }
 
-pub fn history_storage_explanation(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Stored only on this Mac, without encryption. Up to 1,000 entries / 128 MiB of logical data; database file size may differ. Expiry deletes all saved formats, not the system clipboard or original files.".to_string(),
-        Locale::Zh => "仅保存在本机，未加密。最多 1,000 条 / 128 MiB 逻辑数据，数据库文件大小可能不同。过期会删除全部已存格式，不影响系统剪贴板和原始文件。".to_string(),
-    }
-}
-
 pub fn app_history(locale: Locale) -> String {
     match locale {
         Locale::En => "App History".to_string(),
@@ -3577,13 +2341,6 @@ pub fn app_history_show_all_sources(locale: Locale) -> String {
     match locale {
         Locale::En => "Clear filters and show all sources".to_string(),
         Locale::Zh => "清除筛选并显示全部来源".to_string(),
-    }
-}
-
-pub fn app_history_revert_path(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Revert edits".to_string(),
-        Locale::Zh => "还原编辑".to_string(),
     }
 }
 
@@ -3672,16 +2429,6 @@ pub fn app_history_operation_failed(locale: Locale) -> String {
     }
 }
 
-pub fn app_history_settings_failed(locale: Locale) -> String {
-    match locale {
-        Locale::En => {
-            "History sources could not be loaded or saved. Check the file path and try again."
-                .to_string()
-        }
-        Locale::Zh => "无法读取或保存历史来源，请检查文件路径后重试。".to_string(),
-    }
-}
-
 pub fn app_history_copy_target(locale: Locale) -> String {
     match locale {
         Locale::En => "Copy path or URI".to_string(),
@@ -3721,13 +2468,6 @@ pub fn app_history_use_automatic(locale: Locale) -> String {
     match locale {
         Locale::En => "Use automatic detection".to_string(),
         Locale::Zh => "使用自动检测".to_string(),
-    }
-}
-
-pub fn app_history_detect_again(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Detect again".to_string(),
-        Locale::Zh => "重新检测".to_string(),
     }
 }
 
@@ -3843,38 +2583,10 @@ pub fn load_more(locale: Locale) -> String {
     }
 }
 
-pub fn standard_output(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Standard output".to_string(),
-        Locale::Zh => "标准输出".to_string(),
-    }
-}
-
-pub fn standard_error(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Standard error".to_string(),
-        Locale::Zh => "标准错误".to_string(),
-    }
-}
-
-pub fn select_task_to_inspect_output(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Select a task to inspect its output".to_string(),
-        Locale::Zh => "选择任务以查看输出".to_string(),
-    }
-}
-
 pub fn search_directories_authorized(locale: Locale) -> String {
     match locale {
         Locale::En => "Search directories authorized.".to_string(),
         Locale::Zh => "搜索目录已授权。".to_string(),
-    }
-}
-
-pub fn native_product_description(locale: Locale) -> String {
-    match locale {
-        Locale::En => "Native GPUI product · macOS 15 or later".to_string(),
-        Locale::Zh => "原生 GPUI 产品 · 最低 macOS 15".to_string(),
     }
 }
 
@@ -4053,16 +2765,6 @@ pub fn previewing_title(locale: Locale, title: &str) -> String {
     }
 }
 
-pub fn preview_runtime_not_attached(locale: Locale) -> String {
-    match locale {
-        Locale::En => {
-            "UI migration preview · the shared Rust runtime is not attached in this window"
-                .to_string()
-        }
-        Locale::Zh => "UI 迁移预览 · 此窗口尚未接入共享 Rust 运行时".to_string(),
-    }
-}
-
 pub fn enable_action(locale: Locale) -> String {
     match locale {
         Locale::En => "Enable".to_string(),
@@ -4074,13 +2776,6 @@ pub fn disable_action(locale: Locale) -> String {
     match locale {
         Locale::En => "Disable".to_string(),
         Locale::Zh => "停用".to_string(),
-    }
-}
-
-pub fn new_package(locale: Locale) -> String {
-    match locale {
-        Locale::En => "New package".to_string(),
-        Locale::Zh => "新安装包".to_string(),
     }
 }
 
@@ -4244,5 +2939,162 @@ pub fn context_sources_not_captured(locale: Locale) -> String {
     }
 }
 
+pub fn global_shortcut_registration_failed(locale: Locale, error: &str) -> String {
+    let values = &[("error", error.to_string())];
+    match locale {
+        Locale::En => fill("Could not register global shortcuts: {error}. Choose different shortcuts in Shortcuts settings, or retry after releasing the conflicting keys.", values),
+        Locale::Zh => fill("全局快捷键注册失败：{error}。请在快捷键设置中更换按键，或解除冲突后重试。", values),
+    }
+}
+
+pub fn retry_shortcuts(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Retry shortcuts".to_string(),
+        Locale::Zh => "重试快捷键".to_string(),
+    }
+}
+
+pub fn search_directory_limits(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Use at most 8 directories and 32 exclusions.".to_string(),
+        Locale::Zh => "最多使用 8 个目录和 32 个排除项。".to_string(),
+    }
+}
+
+pub fn absolute_search_directories(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Search directories must be absolute paths, one per line.".to_string(),
+        Locale::Zh => "搜索目录必须使用绝对路径，每行一个。".to_string(),
+    }
+}
+
+pub fn settings_too_large(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Settings exceed the storage limit.".to_string(),
+        Locale::Zh => "设置内容超出存储上限。".to_string(),
+    }
+}
+
+pub fn choose_authorized_directories(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Choose and authorize at least one search directory".to_string(),
+        Locale::Zh => "请至少选择并授权一个搜索目录。".to_string(),
+    }
+}
+
+pub fn invalid_search_exclusions(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Exclusions must be directory names".to_string(),
+        Locale::Zh => "排除项必须是目录名称，不能包含路径分隔符。".to_string(),
+    }
+}
+
+pub fn invalid_global_shortcut(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Invalid global shortcut".to_string(),
+        Locale::Zh => "全局快捷键格式无效。".to_string(),
+    }
+}
+
+pub fn distinct_launcher_shortcuts(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Current App and Universal Search shortcuts must differ".to_string(),
+        Locale::Zh => "当前应用与全局搜索的快捷键不能相同。".to_string(),
+    }
+}
+
+pub fn too_many_action_shortcuts(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Too many action shortcuts".to_string(),
+        Locale::Zh => "动作快捷键数量超出上限。".to_string(),
+    }
+}
+
+pub fn invalid_action_shortcut_identity(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Invalid action shortcut identity".to_string(),
+        Locale::Zh => "动作快捷键标识无效。".to_string(),
+    }
+}
+
+pub fn distinct_action_shortcuts(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Action shortcuts must use distinct actions".to_string(),
+        Locale::Zh => "不能重复添加同一个动作。".to_string(),
+    }
+}
+
+pub fn invalid_action_shortcut(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Invalid action shortcut".to_string(),
+        Locale::Zh => "动作快捷键格式无效。".to_string(),
+    }
+}
+
+pub fn action_shortcut_modifiers(locale: Locale) -> String {
+    match locale {
+        Locale::En => {
+            "Action shortcuts must combine a letter with Command, Option, or Control".to_string()
+        }
+        Locale::Zh => "动作快捷键需要使用字母，并搭配 Command、Option 或 Control。".to_string(),
+    }
+}
+
+pub fn reserved_launcher_shortcut(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Action shortcuts must not reuse launcher shortcuts".to_string(),
+        Locale::Zh => "动作快捷键不能与启动器快捷键相同。".to_string(),
+    }
+}
+
+pub fn distinct_shortcut_keys(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Action shortcuts must use distinct key combinations".to_string(),
+        Locale::Zh => "动作快捷键的按键组合不能重复。".to_string(),
+    }
+}
+
+pub fn invalid_context_shortcut_identity(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Context shortcut identity and rules must agree".to_string(),
+        Locale::Zh => "上下文快捷键的标识与规则不一致。".to_string(),
+    }
+}
+
+pub fn invalid_context_shortcut(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Invalid context shortcut".to_string(),
+        Locale::Zh => "上下文快捷键配置无效。".to_string(),
+    }
+}
+
+pub fn invalid_context_shortcut_rule(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Invalid context shortcut rule".to_string(),
+        Locale::Zh => "上下文快捷键规则无效。".to_string(),
+    }
+}
+
+pub fn distinct_context_shortcut_conditions(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Context shortcut rules must use distinct conditions".to_string(),
+        Locale::Zh => "上下文快捷键的条件不能重复。".to_string(),
+    }
+}
+
+pub fn search_directory_authorization_failed(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Search directory authorization expired or is unavailable. Authorize these directories again.".to_string(),
+        Locale::Zh => "搜索目录授权已失效或不可用，请重新授权这些目录。".to_string(),
+    }
+}
+
+pub fn search_directory_unavailable(locale: Locale) -> String {
+    match locale {
+        Locale::En => "A search directory is unavailable. Check the configured paths.".to_string(),
+        Locale::Zh => "搜索目录不可用，请检查配置的路径。".to_string(),
+    }
+}
+
 /// Stable message count for generated-resource verification.
-pub const MESSAGE_COUNT: usize = 573;
+pub const MESSAGE_COUNT: usize = 421;
