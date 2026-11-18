@@ -1,0 +1,65 @@
+CHANGELOG.md
+  s_ced4a9e25a472b::t_c647811de457e0 17-20
+README.md
+  s_ced4a9e25a472b::t_774b01a0717d24 9,24-26
+docs/README.md
+  s_ced4a9e25a472b::t_2b983fe6d2b4f9 5,12,54
+docs/architecture.md
+  s_ced4a9e25a472b::t_850af7ba00876f 5,40-44,46-49
+docs/archive/README.md
+  s_ced4a9e25a472b::t_6323798d31cb52 25
+docs/archive/flutter-3.50-memory.md
+  s_ced4a9e25a472b::t_449f975e5726f9 3-7
+docs/archive/gpui-ui-alignment-plan.md
+  s_ced4a9e25a472b::t_5fa624655857fd 1752
+docs/browser-feature.md
+  s_ced4a9e25a472b::t_98fb04109bf49a 28-29
+docs/context-input-navigation.md
+  s_ced4a9e25a472b::t_25d4cb7ce7c120 3,29
+docs/current-app-actions.md
+  s_ced4a9e25a472b::t_7f8807c679d475 3,44
+docs/development.md
+  s_ced4a9e25a472b::t_9baf475cf91c0d 19-23,31-34
+docs/file-search.md
+  s_ced4a9e25a472b::t_d33c84f083e875 3,78,96,100
+docs/launcher-interaction.md
+  s_ced4a9e25a472b::t_6c4e92a19d9fe9 3,67,90,148,199,201,213,219,225,227-228
+docs/mvp-gpui.md
+  s_ced4a9e25a472b::t_93ade4e2c9e811 43,79-80
+docs/plugin-development.md
+  s_ced4a9e25a472b::t_adc02b274d1393 127-129
+docs/releasing.md
+  s_ced4a9e25a472b::t_b8c42abbe2f99b 91,114,116-125,137-167
+docs/research/product-direction-2026-11-18.md
+  s_ced4a9e25a472b::t_20c34bc39c27f8 24-26,29,31-35
+docs/roadmap.md
+  s_ced4a9e25a472b::t_94fcc353afb76d 3-4,35,37-39
+docs/test-acceptance-checklist.md
+  s_ced4a9e25a472b::t_9a100a99ec84d3 3-13,221,757
+docs/ui-design.md
+  s_ced4a9e25a472b::t_4c76c2c8a9f00a 4
+docs/usage.md
+  s_ced4a9e25a472b::t_1a22a71cad92f0 3-30,70,104,121,146,164,187,205,216,229-230,233-234,236,245
+packages/plugin-sdk/README.md
+  s_ced4a9e25a472b::t_4cb7922aef76c8 110
+plugins/examples/background-context/README.md
+  s_ced4a9e25a472b::t_a7e2c88c8d6632 9-14
+plugins/examples/json-workspace/README.md
+  s_ced4a9e25a472b::t_c7799a8c99964f 3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "3df3fe167691d37b14a5b29a4346de13442c6feb",
+  "prompts": {},
+  "sessions": {
+    "s_ced4a9e25a472b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e3aa-e48c-7303-bdb9-d545f0d5bc2d",
+        "model": "unknown"
+      },
+      "human_author": "diwen.zhang <diwen.zhang@lkcoffee.com>"
+    }
+  }
+}
