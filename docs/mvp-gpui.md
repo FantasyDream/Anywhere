@@ -39,7 +39,7 @@ Covered 表示有代码路径和自动化回归，不表示真实窗口、键盘
 当前工作树的实施、门禁、实机结果与保留理由维护在
 [2026-11-18 工作树审查](archive/reviews/worktree-review-2026-11-18.md)。
 2026-11-18 重新执行两套门禁：GPUI 278 项通过；`scripts/check.sh` exit 0，完整
-Rust 工作区、SDK 53 项、JSON Workspace 31 项、严格 Clippy、原生边界与
+Rust 工作区、SDK 54 项、JSON Workspace 31 项、严格 Clippy、原生边界与
 115 份 Markdown / 933 个本地链接检查通过。随后重新构建、签名并从精确 App
 路径启动隔离进程；完整物理矩阵仍有未执行项。自动化不能沿用为真实 IME、材质、
 系统授权或辅助技术通过结论。
@@ -73,21 +73,19 @@ Build 16–167 及后续阶段的逐次结果、测量与当时的桌面证据�
   首屏恢复。临时 QA 包装只解决同 Bundle ID 的自动化绑定，生产审查包身份与签名
   由上面的静态检查单独确认。
 
-2026-11-18 最终复验包为 `build/Anywhere.app`，主程序 SHA-256
-`61ff8797ec56c91098b07952cacbf52983fba2d2a7334bf7cef0d5fcc09e5120`；
-`build/Anywhere-macos-arm64.zip` SHA-256
-`7ba0f4d14909401c1048ab7b29b9d52918c5635de30cf7d7594554d1e264a361`。
-`scripts/check-gpui.sh` 278 项通过。
+2026-11-18 发布前复验使用 `build/Anywhere.app`，`scripts/check-gpui.sh`
+278 项通过。发布包的源码 commit、主程序和 ZIP 的 SHA-256、架构、最低系统及
+签名身份记录在 `v0.14.0` Release 的 `package-provenance.json` 中；可变的本机
+构建时间不写回源码文档。
 
-隔离进程 PID 58350 使用
-`build/Anywhere.app/Contents/MacOS/Anywhere`、Bundle ID
-`dev.anywhere.launcher` 和
-`build/verification-20261118-review-run1/data`。实机确认文件下一页加载与
+隔离验收使用精确 App 路径、Bundle ID `dev.anywhere.launcher` 和独立数据目录。
+实机确认文件下一页加载与
 跨页选择、系统 Quick Look 的 `⌘Y` / Esc、剪贴板查询与设置刷新、Settings
 草稿确认和保存回读、热键重绑定后旧键注销 / 新键生效 / 原键恢复、
 Running Tasks 启动 / 输出 / 完成 / 停止、JSON Workspace 合法与非法输入、
 宿主 Reload / Back，以及 Cursor Application History 查询与 Esc 清空。
-证据和身份记录位于 `build/verification-20261118-review-run1/evidence/`。
+详细证据和身份记录保留在本地忽略的验收目录及
+[工作树审查](archive/reviews/worktree-review-2026-11-18.md)。
 
 同一构建的定向复验已经从 Finder 所选 Node 目录取得四个 `npm Run` 动作，
 也在文件结果进入浏览状态后通过注入 Space 打开系统 Quick Look。实机硬件 Space、
