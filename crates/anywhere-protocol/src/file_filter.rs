@@ -14,20 +14,3 @@ pub enum FileSearchFilter {
     Archives,
     Code,
 }
-impl FileSearchFilter {
-    pub fn from_wire(name: &str) -> Option<Self> {
-        match name {
-            "all" => Some(Self::All),
-            "files" => Some(Self::Files),
-            "folders" => Some(Self::Folders),
-            "documents" => Some(Self::Documents),
-            "pdf" => Some(Self::Pdf),
-            "images" => Some(Self::Images),
-            "audio" => Some(Self::Audio),
-            "video" => Some(Self::Video),
-            "archives" => Some(Self::Archives),
-            "code" => Some(Self::Code),
-            _ => None,
-        }
-    }
-}

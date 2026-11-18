@@ -1,4 +1,4 @@
-//! Read-only traversal/continuous-result probe. No Spotlight, Flutter, GUI or content reads.
+//! Read-only traversal/continuous-result probe. No Spotlight, GPUI or content reads.
 //! Run a release binary under an external RSS sampler; `--baseline` loads no query.
 use anywhere_core::features::filesystem::scan::ScanStore;
 use anywhere_platform::FileSearchOptions;

@@ -5,8 +5,7 @@ use anywhere_core::application::settings_service::{SettingsChange, SettingsServi
 async fn uninstalled_history_actions_are_absent_from_search_and_shortcut_targets_by_default() {
     let tmp = tempfile::tempdir().unwrap();
     let app = app(Arc::new(TestPlatform::new(tmp.path().into(), false)));
-    let mut settings =
-        SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+    let mut settings = SettingsService::open(tmp.path().join("extensions.json"), &app).unwrap();
     let service = settings.application_history().unwrap();
     assert!(service
         .sources()
@@ -71,7 +70,7 @@ async fn a_broken_user_adapter_does_not_break_the_native_feature_catalog() {
     std::fs::create_dir_all(&directory).unwrap();
     std::fs::write(directory.join("source.json"), "{invalid").unwrap();
     let app = app(Arc::new(TestPlatform::default()));
-    let settings = SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+    let settings = SettingsService::open(tmp.path().join("extensions.json"), &app).unwrap();
     let statuses = settings.statuses();
     assert!(
         !statuses
@@ -107,8 +106,7 @@ async fn user_history_actions_register_once_and_switch_off_search_bindings_and_o
         directory: tmp.path().into(),
         ..Default::default()
     }));
-    let mut settings =
-        SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+    let mut settings = SettingsService::open(tmp.path().join("extensions.json"), &app).unwrap();
     settings
         .set_application_history_action_enabled(&app, "example", true)
         .unwrap();
@@ -186,8 +184,7 @@ async fn history_entries_match_current_app_and_bind_independently_without_duplic
             ..Default::default()
         });
         let app = app(platform);
-        let mut settings =
-            SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+        let mut settings = SettingsService::open(tmp.path().join("extensions.json"), &app).unwrap();
         // Route tests explicitly enable their synthetic sources; installation defaults
         // are exercised separately with an empty installed-application snapshot.
         for source in [source, other] {
@@ -302,8 +299,7 @@ async fn history_objects_reuse_actions_without_leaking_targets_to_usage_or_accep
         Box::new(SharedHistory(usage.clone())),
         vec![],
     );
-    let mut settings =
-        SettingsService::open(temp.path().join("extensions.json"), vec![], &app).unwrap();
+    let mut settings = SettingsService::open(temp.path().join("extensions.json"), &app).unwrap();
     let history = settings.application_history().unwrap();
     settings
         .set_application_history_action_enabled(&app, "idea", true)

@@ -143,41 +143,24 @@ async fn streaming_completion_and_failure_preserve_the_frozen_selection_and_repo
         })
         .await
         .unwrap();
-        let initial_ids: std::collections::BTreeSet<_> =
-            initial.candidates.iter().map(|c| c.id.clone()).collect();
-        let final_ids: std::collections::BTreeSet<_> = final_state
-            .candidates
-            .iter()
-            .map(|c| c.id.clone())
-            .collect();
-        if freeze {
-            assert_eq!(
-                initial.candidates.iter().map(|c| &c.id).collect::<Vec<_>>(),
-                final_state
-                    .candidates
-                    .iter()
-                    .take(initial.candidates.len())
-                    .map(|c| &c.id)
-                    .collect::<Vec<_>>()
-            );
-        } else {
-            assert!(initial_ids.is_subset(&final_ids));
-            assert_eq!(final_state.candidates.len(), 3);
-        }
+        assert_eq!(
+            initial.candidates.iter().map(|c| &c.id).collect::<Vec<_>>(),
+            final_state
+                .candidates
+                .iter()
+                .take(initial.candidates.len())
+                .map(|c| &c.id)
+                .collect::<Vec<_>>()
+        );
         let progress = final_state.file_search.as_ref().unwrap();
         assert_eq!(progress.confirmed_matches, 3);
         assert_eq!(final_state.candidates.len(), if freeze { 2 } else { 3 });
+        assert_eq!(
+            final_state.candidate_list_version,
+            initial.candidate_list_version
+        );
         if freeze {
-            assert_eq!(
-                final_state.candidate_list_version,
-                initial.candidate_list_version
-            );
             assert!(progress.needs_refresh);
-        } else {
-            assert!(
-                final_state.candidate_list_version > initial.candidate_list_version,
-                "an unfrozen improved result window is a replacement"
-            );
         }
         assert_eq!(
             final_state.search_sources[0].state,
@@ -1200,6 +1183,7 @@ fn non_unicode_parents_do_not_merge_valid_children_and_are_reported_as_partial()
 /// Simulates a filesystem call that cannot return immediately on cancellation.
 /// The real FileSearchSource still owns admission and cancel-on-drop behavior.
 struct SlowIndex {
+    engines: Mutex<Vec<anywhere_platform::FileSearchEngine>>,
     active: AtomicUsize,
     peak: AtomicUsize,
     calls: AtomicUsize,
@@ -1238,9 +1222,10 @@ impl FileSearchHost for SlowIndex {
         &self,
         query: &str,
         limit: usize,
-        _: &anywhere_platform::FileSearchOptions,
+        options: &anywhere_platform::FileSearchOptions,
         cancelled: &(dyn Fn() -> bool + Sync),
     ) -> Result<Vec<FileSearchHit>> {
+        self.engines.lock().unwrap().push(options.engine);
         self.search_files(query, limit, cancelled)
     }
     fn search_files(
@@ -1291,6 +1276,7 @@ impl MenuHost for SlowIndex {}
 impl GitHost for SlowIndex {}
 fn slow_index(path: PathBuf) -> Arc<SlowIndex> {
     Arc::new(SlowIndex {
+        engines: Mutex::new(Vec::new()),
         active: AtomicUsize::new(0),
         peak: AtomicUsize::new(0),
         calls: AtomicUsize::new(0),
@@ -1445,7 +1431,54 @@ async fn new_activation_cannot_receive_the_previous_sessions_file_batch() {
 }
 
 #[tokio::test]
-async fn complete_engine_pages_all_matches_without_growing_the_session_window() {
+async fn file_search_quick_batch_uses_the_configured_engine() {
+    use anywhere_platform::{FileSearchEngine, FileSearchOptions};
+
+    let temp = tempfile::tempdir().unwrap();
+    let root = temp.path().canonicalize().unwrap();
+    let path = root.join("report.txt");
+    std::fs::write(&path, "").unwrap();
+    let index = slow_index(path);
+    let app = Application::new(
+        index.clone(),
+        registry(),
+        Box::<MemoryUsage>::default(),
+        vec![],
+    );
+    let id = app.activate().await.unwrap().unwrap().session_id;
+    let engines = [
+        FileSearchEngine::SystemIndex,
+        FileSearchEngine::Ripgrep,
+        FileSearchEngine::Combined,
+    ];
+    for (offset, engine) in engines.into_iter().enumerate() {
+        app.configure_file_search(
+            true,
+            FileSearchOptions {
+                roots: vec![root.clone()],
+                engine,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        app.update_file_search_input(
+            id,
+            "report".into(),
+            offset as u32 + 1,
+            FileSearchFilter::All,
+        )
+        .await
+        .unwrap();
+        tokio::time::timeout(Duration::from_secs(3), index.started.notified())
+            .await
+            .unwrap();
+    }
+    assert_eq!(*index.engines.lock().unwrap(), engines);
+    app.deactivate(id).unwrap();
+}
+
+#[tokio::test]
+async fn complete_engine_appends_all_unindexed_matches_and_retains_execution_targets() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path().canonicalize().unwrap();
     let unrelated = root.join("unrelated.txt");
@@ -1507,81 +1540,31 @@ async fn complete_engine_pages_all_matches_without_growing_the_session_window() 
     for action in &state.result_actions {
         assert!(contexts.contains(action.execution_context_id.as_ref().unwrap()));
     }
-    let first_ids: Vec<_> = state.candidates.iter().map(|c| c.id.clone()).collect();
-    let first_titles: Vec<_> = state.candidates.iter().map(|c| c.title.clone()).collect();
-    let first_cursor = state
-        .file_search
-        .as_ref()
-        .unwrap()
-        .next_cursor
-        .clone()
-        .unwrap();
-    assert_eq!(state.candidates.len(), 64);
-
-    state = app
-        .load_file_page(id, 1, first_cursor.clone())
-        .await
-        .unwrap()
-        .unwrap();
-    let second_ids: Vec<_> = state.candidates.iter().map(|c| c.id.clone()).collect();
-    let second_titles: Vec<_> = state.candidates.iter().map(|c| c.title.clone()).collect();
-    assert_eq!(second_ids.len(), 64);
-    assert!(first_ids.iter().all(|id| !second_ids.contains(id)));
-    assert_eq!(state.file_search.as_ref().unwrap().page, 1);
-    assert!(state
-        .file_search
-        .as_ref()
-        .unwrap()
-        .previous_cursor
-        .is_some());
-    assert!(state.file_search.as_ref().unwrap().next_cursor.is_some());
-
-    state = app.load_more_files(id, 1).await.unwrap().unwrap();
-    let third_ids: Vec<_> = state.candidates.iter().map(|c| c.id.clone()).collect();
-    let third_titles: Vec<_> = state.candidates.iter().map(|c| c.title.clone()).collect();
-    assert_eq!(third_ids.len(), 3);
-    assert!(second_ids.iter().all(|id| !third_ids.contains(id)));
-    assert_eq!(state.file_search.as_ref().unwrap().page, 2);
-    assert!(state
-        .file_search
-        .as_ref()
-        .unwrap()
-        .previous_cursor
-        .is_some());
-    assert!(state.file_search.as_ref().unwrap().next_cursor.is_none());
-
-    let found = first_titles
-        .iter()
-        .chain(&second_titles)
-        .chain(&third_titles)
-        .cloned()
-        .collect::<std::collections::BTreeSet<_>>();
-    assert_eq!(found, expected);
-    assert!(app.execute(id, 1, first_ids[0].clone()).await.is_err());
-
-    // A previous-page cursor rehydrates the exact earlier window.
-    let second_cursor = state
-        .file_search
-        .as_ref()
-        .unwrap()
-        .previous_cursor
-        .clone()
-        .unwrap();
-    state = app
-        .load_file_page(id, 1, second_cursor)
-        .await
-        .unwrap()
-        .unwrap();
+    let original_ids: Vec<_> = state.candidates.iter().map(|c| c.id.clone()).collect();
+    let (first, second) = tokio::join!(app.load_more_files(id, 1), app.load_more_files(id, 1));
+    let first = first.unwrap().unwrap();
+    state = second.unwrap().unwrap();
+    assert_eq!(first.candidates.len(), 128);
+    assert_eq!(state.candidates.len(), expected.len());
     assert_eq!(
-        state
-            .candidates
+        first.candidates[..64]
             .iter()
-            .map(|candidate| candidate.id.clone())
+            .map(|row| &row.id)
             .collect::<Vec<_>>(),
-        second_ids
+        original_ids.iter().collect::<Vec<_>>(),
     );
-
-    // Only the current window is authorized for secondary actions and execution.
+    assert!(first
+        .candidates
+        .iter()
+        .zip(&state.candidates[..128])
+        .all(|(before, after)| before.id == after.id));
+    assert!(first.file_search.as_ref().unwrap().next_cursor.is_some());
+    assert!(state.file_search.as_ref().unwrap().next_cursor.is_none());
+    let found: std::collections::BTreeSet<_> =
+        state.candidates.iter().map(|c| c.title.clone()).collect();
+    assert_eq!(state.candidates.len(), expected.len());
+    assert_eq!(found, expected);
+    // An earlier row remains an authorized execution target after appends.
     let actions = app
         .file_actions(id, 1, state.candidates[0].id.clone())
         .unwrap();
@@ -1608,28 +1591,11 @@ async fn complete_engine_pages_all_matches_without_growing_the_session_window() 
                 .into_owned()
         ]
     );
-    let last_page = app.load_more_files(id, 1).await.unwrap().unwrap();
-    assert_eq!(
-        last_page
-            .candidates
-            .iter()
-            .map(|candidate| candidate.id.clone())
-            .collect::<Vec<_>>(),
-        third_ids
-    );
     let again = app.load_more_files(id, 1).await.unwrap().unwrap();
-    assert_eq!(
-        again
-            .candidates
-            .iter()
-            .map(|candidate| candidate.id.clone())
-            .collect::<Vec<_>>(),
-        third_ids
-    );
+    assert_eq!(again.candidates.len(), expected.len());
     app.update_file_search_input(id, "report".into(), 2, FileSearchFilter::Folders)
         .await
         .unwrap();
-    assert!(app.load_file_page(id, 2, first_cursor).await.is_err());
     assert!(app.load_more_files(id, 1).await.is_err());
     let state = files_ready(&app, id, 2).await;
     assert_eq!(state.candidates.len(), 1);

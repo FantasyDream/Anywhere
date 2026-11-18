@@ -10,8 +10,4 @@
 *.ttf binary
 *.woff2 binary
 
-apps/flutter/lib/src/rust/** linguist-generated=true
-apps/flutter/lib/l10n/generated/** linguist-generated=true
-crates/anywhere-bridge-flutter/src/frb_generated.rs linguist-generated=true
-**/*.g.dart linguist-generated=true
 **/*.g.swift linguist-generated=true

@@ -38,10 +38,7 @@ impl FeatureDescriptor {
             "builtin feature requires a name of 1..200 bytes"
         );
         ensure!(
-            self.capabilities.len() <= 8
-                && !self
-                    .capabilities
-                    .contains(&ExtensionCapability::InvokeBuiltin),
+            self.capabilities.len() <= 8,
             "invalid builtin feature capabilities"
         );
         ensure!(
@@ -125,10 +122,5 @@ mod tests {
         )
         .validate()
         .is_err());
-        assert!(
-            FeatureDescriptor::new("tool", "Tool", &[Capability::InvokeBuiltin])
-                .validate()
-                .is_err()
-        );
     }
 }

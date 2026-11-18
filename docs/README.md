@@ -1,6 +1,9 @@
 # 文档导航
 
-当前源码为 **V0.14 开发预览**，已接入应用历史、所选对象动作与统一频次排序；完整发布和实机矩阵尚未完成；此前 V0.13 已完成工程检查与该轮常规 macOS 验收，均不等于正式发行。最后整理：2026-10-27。先从[项目首页](../README.md)了解功能和平台状态。
+当前源码为 **V0.14 GPUI 开发预览**。产品只有一个 macOS 15+ GPUI 界面实现；
+Rust Core 负责 Context、匹配、排序、授权和执行。自动化、构建和物理桌面矩阵
+分别记录，Development Preview 不等于正式发行。最后整理：2026-11-17。先从
+[项目首页](../README.md)了解功能和平台状态。
 
 ## 使用与参与
 
@@ -8,6 +11,7 @@
 |---|---|
 | [使用指南](usage.md) | 唤醒、权限、Scope、快捷键、搜索、剪贴板、项目工具和本地数据 |
 | [开发与构建](development.md) | 环境、App / SDK 构建、测试、生成物和代码入口 |
+| [完整测试用例与验收清单](test-acceptance-checklist.md) | 当前GPUI逐项用例、前置数据、优先级、18来源和环境矩阵、自动化追溯及结果模板 |
 | [代码规范](code-style.md) | Google / 官方语言规范、隔离工具、自动检查与生成文件边界 |
 | [发布检查](releasing.md) | 开发包、版本、签名 / 归档、验收与 GitHub 发布边界 |
 | [贡献指南](../CONTRIBUTING.md) | 改动约定、提交与 PR 验证 |
@@ -19,7 +23,8 @@
 | 文档 | 用途 |
 |---|---|
 | [仓库阅读入口](../AGENTS.md) | AI / 开发者的代码地图、稳定边界与验证入口 |
-| [架构](architecture.md) | Rust / Flutter / Host 分工、静态模块、快照、取消与执行 |
+| [架构](architecture.md) | Rust Core / GPUI / macOS 薄适配的分工、静态模块、快照、取消与执行 |
+| [GPUI 技术方案与验收](mvp-gpui.md) | 当前功能范围、自动化证据、发布检查与物理桌验矩阵 |
 | [Context 模型](context-model.md) | 类型、来源、Provider 图、等价与身份 |
 | [默认输入](context-input-navigation.md) | 选中文本、15 秒剪贴板、InputMode 和 Esc |
 | [Launcher 交互](launcher-interaction.md) | Scope、菜单、二级操作、快捷键和隐藏恢复 |
@@ -27,8 +32,8 @@
 | [文件搜索](file-search.md) | 范围、权限、稳定连续结果、系统预览和临时存储 |
 | [开发动作](developer-actions.md) | Git、项目识别、IDEA 来源和后台进程 |
 | [系统预览](native-preview.md) | 按需窗口、空格输入边界、资源租约与跨平台接口 |
-| [共享 UI](ui-design.md) | 组件、材质、交互信息层级与平台回退 |
-| [性能](performance.md) | 资源预算、取消、测量方法和历史样本边界 |
+| [GPUI UI 设计](ui-design.md) | tokens、页面层级、材质、交互状态与可访问性 |
+| [性能](performance.md) | 资源预算、Core 测量、`hotkey_to_visible_ms` 与历史样本边界 |
 | [跨平台](platform-portability.md) | 平台能力、路径、快捷键与未完成的 Windows 接入 |
 
 ## 插件与后续计划
@@ -37,10 +42,6 @@
 |---|---|
 | [第三方插件开发](plugin-development.md) | 独立模板、SDK、统一样式、权限、打包与更新 |
 | [Web 插件架构](web-plugin-design.md) | 包身份、能力代理、Context 输入、生命周期和系统边界 |
-| [旧声明式协议](plugin-protocol.md) | v1 / v2 / v3 兼容行为；停止扩展 UI DSL |
-| [V0.13 MVP](mvp-v0.13.md) | 前一阶段的收尾证据、已知 SDK / 资源边界及后续发布检查 |
-| [V0.14 范围与验收](mvp-v0.14.md) | 已接入功能、未交付 / 未验收范围、代码入口与最新验证基线 |
-| [V0.12 MVP](mvp-v0.12.md) | 上一阶段工程与真实键盘验收基线 |
 | [路线图](roadmap.md) | 后续功能、依赖与 1.0 门槛 |
 | [应用历史设计](application-history.md) | V0.14：IDE / 编辑器 / 笔记最近对象与原应用打开；当前已有 18 个配置化来源 |
 | [独立浏览器规划](browser-feature.md) | 后续单独实现历史、书签与 Tab 管理；尚未实现，版本待定 |

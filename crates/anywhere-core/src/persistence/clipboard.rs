@@ -17,6 +17,9 @@ impl SqliteHistoryRepository {
         connection.busy_timeout(std::time::Duration::from_secs(2))?;
         let version: u32 = connection.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         ensure!(version <= 3, "unsupported clipboard database version");
+        if version == 0 {
+            let _ = connection.execute_batch("PRAGMA auto_vacuum=INCREMENTAL;");
+        }
         connection.execute_batch("PRAGMA journal_mode=DELETE; PRAGMA secure_delete=ON; PRAGMA cache_size=-512; PRAGMA temp_store=FILE; PRAGMA foreign_keys=ON;")?;
         let tx = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
         if version == 1 {
@@ -108,11 +111,11 @@ fn insert(
     Ok(id)
 }
 fn load(connection: &Connection, id: i64) -> Result<Option<ClipboardPayload>> {
-    let (count, bytes): (usize, usize) = connection.query_row(
-        "SELECT COUNT(*),COALESCE(SUM(length(data)),0) FROM clipboard_formats WHERE item_id=?1",
-        [id],
-        |r| Ok((r.get(0)?, r.get(1)?)),
-    )?;
+    let (count, bytes): (usize, usize) = connection
+        .prepare_cached(
+            "SELECT COUNT(*),COALESCE(SUM(length(data)),0) FROM clipboard_formats WHERE item_id=?1",
+        )?
+        .query_row([id], |r| Ok((r.get(0)?, r.get(1)?)))?;
     if count == 0 {
         return Ok(None);
     }
@@ -121,7 +124,7 @@ fn load(connection: &Connection, id: i64) -> Result<Option<ClipboardPayload>> {
         "clipboard record exceeds limits"
     );
     let mut statement = connection
-        .prepare("SELECT name,data FROM clipboard_formats WHERE item_id=?1 ORDER BY name")?;
+        .prepare_cached("SELECT name,data FROM clipboard_formats WHERE item_id=?1 ORDER BY name")?;
     let formats = statement
         .query_map([id], |r| {
             Ok(ClipboardFormat {
@@ -139,56 +142,54 @@ impl HistoryRepository for SqliteHistoryRepository {
         self.0.total_changes()
     }
     fn policy(&self) -> Result<HistoryPolicy> {
-        let policy = self.0.query_row(
-            "SELECT paused_until_ms,retention_days FROM clipboard_policy WHERE id=1",
-            [],
-            |row| {
+        let policy = self
+            .0
+            .prepare_cached(
+                "SELECT paused_until_ms,retention_days FROM clipboard_policy WHERE id=1",
+            )?
+            .query_row([], |row| {
                 Ok(HistoryPolicy {
                     paused_until_ms: row.get(0)?,
                     retention_days: row.get(1)?,
                 })
-            },
-        )?;
+            })?;
         policy.validate()?;
         Ok(policy)
     }
     fn set_policy(&mut self, policy: HistoryPolicy) -> Result<()> {
-        self.0.execute(
-            "UPDATE clipboard_policy SET paused_until_ms=?1,retention_days=?2 WHERE id=1",
-            params![policy.paused_until_ms, policy.retention_days],
-        )?;
+        self.0
+            .prepare_cached(
+                "UPDATE clipboard_policy SET paused_until_ms=?1,retention_days=?2 WHERE id=1",
+            )?
+            .execute(params![policy.paused_until_ms, policy.retention_days])?;
         Ok(())
     }
     fn expire(&mut self, cutoff_ms: i64) -> Result<()> {
         // Most reads have nothing to expire. Avoid a write transaction and its
         // lock contention on each search, status read and preview recheck.
-        let due: bool = self.0.query_row(
-            "SELECT EXISTS(SELECT 1 FROM clipboard_items WHERE copied_at_ms<=?1)",
-            [cutoff_ms],
-            |row| row.get(0),
-        )?;
+        let due: bool = self
+            .0
+            .prepare_cached("SELECT EXISTS(SELECT 1 FROM clipboard_items WHERE copied_at_ms<=?1)")?
+            .query_row([cutoff_ms], |row| row.get(0))?;
         if !due {
             return Ok(());
         }
-        self.0.execute(
-            "DELETE FROM clipboard_items WHERE copied_at_ms<=?1",
-            [cutoff_ms],
-        )?;
+        self.0
+            .prepare_cached("DELETE FROM clipboard_items WHERE copied_at_ms<=?1")?
+            .execute([cutoff_ms])?;
         Ok(())
     }
     fn usage(&self) -> Result<(u32, u32)> {
-        Ok(self.0.query_row(
-            "SELECT COUNT(*),COALESCE(SUM(stored_bytes),0) FROM clipboard_items",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?)),
-        )?)
+        Ok(self
+            .0
+            .prepare_cached("SELECT COUNT(*),COALESCE(SUM(stored_bytes),0) FROM clipboard_items")?
+            .query_row([], |row| Ok((row.get(0)?, row.get(1)?)))?)
     }
     fn recording_enabled(&self) -> Result<bool> {
-        Ok(self.0.query_row(
-            "SELECT recording FROM clipboard_settings WHERE id=1",
-            [],
-            |r| r.get(0),
-        )?)
+        Ok(self
+            .0
+            .prepare_cached("SELECT recording FROM clipboard_settings WHERE id=1")?
+            .query_row([], |r| r.get(0))?)
     }
     fn set_recording_enabled(&mut self, enabled: bool) -> Result<()> {
         let tx = self.0.transaction()?;
@@ -251,8 +252,19 @@ impl HistoryRepository for SqliteHistoryRepository {
         } else {
             insert(&tx, payload, &digest, copied_at_ms, sequence, None)?
         };
-        tx.execute("DELETE FROM clipboard_items WHERE id IN(SELECT id FROM(SELECT id,ROW_NUMBER() OVER(ORDER BY sequence DESC) position,SUM(stored_bytes) OVER(ORDER BY sequence DESC) total FROM clipboard_items) WHERE position>?1 OR total>?2)",params![MAX_ENTRIES,MAX_STORED_BYTES])?;
+        let (entries, bytes): (u64, u64) = tx.query_row(
+            "SELECT COUNT(*),COALESCE(SUM(stored_bytes),0) FROM clipboard_items",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        let evicted = entries > MAX_ENTRIES as u64 || bytes > MAX_STORED_BYTES as u64;
+        if evicted {
+            tx.execute("DELETE FROM clipboard_items WHERE id IN(SELECT id FROM(SELECT id,ROW_NUMBER() OVER(ORDER BY sequence DESC) position,SUM(stored_bytes) OVER(ORDER BY sequence DESC) total FROM clipboard_items) WHERE position>?1 OR total>?2)",params![MAX_ENTRIES,MAX_STORED_BYTES])?;
+        }
         tx.commit()?;
+        if evicted {
+            let _ = self.0.execute_batch("PRAGMA incremental_vacuum(256);");
+        }
         Ok(Some(id))
     }
     fn search(&self, query: &str) -> Result<Vec<HistoryItem>> {
@@ -266,31 +278,44 @@ impl HistoryRepository for SqliteHistoryRepository {
             sql.push_str(&vec!["instr(search_text,?)>0"; tokens.len()].join(" AND "));
         }
         sql.push_str(&format!(" ORDER BY sequence DESC LIMIT {MAX_ENTRIES}"));
-        let mut statement = self.0.prepare(&sql)?;
-        let rows = statement
-            .query_map(rusqlite::params_from_iter(tokens), item)?
-            .collect::<rusqlite::Result<_>>()?;
+        let rows = if tokens.len() <= 2 {
+            let mut statement = self.0.prepare_cached(&sql)?;
+            let mapped = statement.query_map(rusqlite::params_from_iter(tokens), item)?;
+            mapped.collect::<rusqlite::Result<_>>()?
+        } else {
+            let mut statement = self.0.prepare(&sql)?;
+            let mapped = statement.query_map(rusqlite::params_from_iter(tokens), item)?;
+            mapped.collect::<rusqlite::Result<_>>()?
+        };
         Ok(rows)
     }
     fn item(&self, id: i64) -> Result<Option<HistoryItem>> {
-        Ok(self.0.query_row(&format!("SELECT id,substr(summary,1,{SUMMARY_CHARACTERS}),copied_at_ms,byte_count,kind FROM clipboard_items WHERE id=?1"),[id],item).optional()?)
+        let sql = format!("SELECT id,substr(summary,1,{SUMMARY_CHARACTERS}),copied_at_ms,byte_count,kind FROM clipboard_items WHERE id=?1");
+        Ok(self
+            .0
+            .prepare_cached(&sql)?
+            .query_row([id], item)
+            .optional()?)
     }
     fn payload(&self, id: i64) -> Result<Option<ClipboardPayload>> {
         load(&self.0, id)
     }
     fn delete(&mut self, id: i64) -> Result<()> {
         self.0
-            .execute("DELETE FROM clipboard_items WHERE id=?1", [id])?;
+            .prepare_cached("DELETE FROM clipboard_items WHERE id=?1")?
+            .execute([id])?;
+        let _ = self.0.execute_batch("PRAGMA incremental_vacuum(64);");
         Ok(())
     }
     fn clear(&mut self) -> Result<()> {
         self.0.execute("DELETE FROM clipboard_items", [])?;
+        let _ = self.0.execute_batch("PRAGMA incremental_vacuum;");
         Ok(())
     }
 }
 fn stored_equivalent(connection: &Connection, id: i64, payload: &ClipboardPayload) -> Result<bool> {
     let mut statement =
-        connection.prepare("SELECT name,data FROM clipboard_formats WHERE item_id=?1")?;
+        connection.prepare_cached("SELECT name,data FROM clipboard_formats WHERE item_id=?1")?;
     let mut rows = statement.query([id])?;
     let mut count = 0;
     while let Some(row) = rows.next()? {
@@ -371,7 +396,7 @@ mod tests {
         assert_eq!(rows.len(), MAX_ENTRIES);
         assert_eq!(rows.last().unwrap().summary, "entry-5");
         repo.clear().unwrap();
-        for i in 0..12 {
+        for i in 0..20 {
             repo.record(&format!("{i:03}{}", "x".repeat(MAX_ENTRY_BYTES / 2 - 3)), i)
                 .unwrap();
         }
@@ -383,7 +408,7 @@ mod tests {
                 |r| Ok((r.get(0)?, r.get(1)?)),
             )
             .unwrap();
-        assert!(count < 12 && bytes <= MAX_STORED_BYTES);
+        assert!(count < 20 && bytes <= MAX_STORED_BYTES);
         assert_eq!(
             repo.search("").unwrap()[0].summary.chars().count(),
             SUMMARY_CHARACTERS

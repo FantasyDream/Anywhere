@@ -11,6 +11,74 @@ pub fn key(context: &ResolvedContext) -> String {
     )
 }
 
+/// One bounded parent/key projection shared by all rows in a snapshot.
+pub struct RootIndex {
+    keys: Vec<String>,
+    roots: Vec<usize>,
+}
+impl RootIndex {
+    pub fn new(contexts: &[ResolvedContext]) -> Self {
+        let mut ids = std::collections::HashMap::new();
+        for (index, context) in contexts.iter().enumerate() {
+            if !context.id.is_empty() {
+                ids.entry(context.id.as_str()).or_insert(index);
+            }
+        }
+        let parents: Vec<_> = contexts
+            .iter()
+            .map(|context| {
+                context
+                    .source_context_id
+                    .as_deref()
+                    .and_then(|id| ids.get(id).copied())
+                    .filter(|parent| {
+                        contexts[*parent].type_id != APPLICATION || context.type_id == APPLICATION
+                    })
+            })
+            .collect();
+        let mut roots = vec![usize::MAX; contexts.len()];
+        let mut visiting = vec![false; contexts.len()];
+        for index in 0..contexts.len() {
+            if roots[index] != usize::MAX {
+                continue;
+            }
+            let mut chain = Vec::new();
+            let mut current = index;
+            let root = loop {
+                if roots[current] != usize::MAX {
+                    break roots[current];
+                }
+                if visiting[current] {
+                    break current;
+                }
+                visiting[current] = true;
+                chain.push(current);
+                let Some(parent) = parents[current] else {
+                    break current;
+                };
+                current = parent;
+            };
+            for node in chain {
+                roots[node] = root;
+                visiting[node] = false;
+            }
+        }
+        Self {
+            keys: contexts.iter().map(key).collect(),
+            roots,
+        }
+    }
+    pub fn key(&self, index: usize) -> &str {
+        &self.keys[index]
+    }
+    pub fn root(&self, index: usize) -> usize {
+        self.roots[index]
+    }
+    pub fn root_key(&self, index: usize) -> &str {
+        &self.keys[self.roots[index]]
+    }
+}
+
 /// Application provenance does not make its directory the application action target.
 pub fn root<'a>(
     context: &'a ResolvedContext,

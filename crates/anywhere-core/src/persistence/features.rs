@@ -1,11 +1,19 @@
 //! Native feature configuration, independent of external package approval.
-use super::{config_file, extensions::PluginPreferences};
+use super::config_file;
 use crate::features::descriptor::valid_id;
 use anyhow::{ensure, Context, Result};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, path::Path};
 
 const MAX_BYTES: usize = 128 * 1024;
+const LEGACY_MAX_BYTES: usize = 4 * 1024 * 1024;
+
+#[derive(Deserialize)]
+struct LegacyExtensionPreferences {
+    schema_version: u32,
+    #[serde(default)]
+    disabled: BTreeSet<String>,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -50,17 +58,33 @@ impl FeaturePreferences {
         Ok(Some(prefs))
     }
 
+    fn load_legacy_disabled(path: &Path) -> Result<BTreeSet<String>> {
+        let Some(raw) = config_file::read_bounded(path, LEGACY_MAX_BYTES)? else {
+            return Ok(BTreeSet::new());
+        };
+        ensure!(
+            raw.len() <= LEGACY_MAX_BYTES,
+            "extension preferences exceed 4 MiB"
+        );
+        let prefs: LegacyExtensionPreferences =
+            serde_json::from_slice(&raw).context("invalid extension preferences")?;
+        ensure!(
+            prefs.schema_version == 1,
+            "unsupported extension preference version"
+        );
+        Ok(prefs.disabled)
+    }
+
     /// Never re-import legacy keys once a valid new configuration exists. The old
     /// file is retained unchanged, including if this migration cannot be persisted.
-    pub fn load_or_migrate(path: &Path, legacy: Result<&PluginPreferences, &str>) -> Result<Self> {
+    pub fn load_or_migrate(path: &Path, legacy_path: &Path) -> Result<Self> {
         if let Some(prefs) = Self::load(path)? {
             return Ok(prefs);
         }
-        let legacy = legacy
+        let legacy_disabled = Self::load_legacy_disabled(legacy_path)
             .map_err(|error| anyhow::anyhow!("legacy feature preferences unavailable: {error}"))?;
         let prefs = Self {
-            disabled: legacy
-                .disabled
+            disabled: legacy_disabled
                 .iter()
                 .filter_map(|key| key.strip_prefix("first-party:"))
                 .filter(|id| valid_id(id))
@@ -86,14 +110,33 @@ impl FeaturePreferences {
     }
 
     /// A setting opened before a file was damaged / changed must not overwrite it.
-    pub fn save_checked(&self, path: &Path, expected: &Self) -> Result<()> {
+    pub(crate) fn prepare_save(&self, path: &Path) -> Result<tempfile::NamedTempFile> {
+        ensure!(
+            !self.recovery,
+            "repair feature preferences and refresh before changing settings"
+        );
+        self.validate()?;
+        config_file::prepare_json(path, self, MAX_BYTES)
+    }
+
+    pub(crate) fn commit_prepared(
+        &self,
+        path: &Path,
+        expected: &Self,
+        file: tempfile::NamedTempFile,
+    ) -> Result<()> {
         let current = Self::load(path)?
             .context("feature preferences were removed; refresh before changing settings")?;
         ensure!(
             current == *expected,
             "feature preferences changed; refresh before changing settings"
         );
-        self.save(path)
+        file.persist(path).context("could not save preferences")?;
+        Ok(())
+    }
+
+    pub fn save_checked(&self, path: &Path, expected: &Self) -> Result<()> {
+        self.commit_prepared(path, expected, self.prepare_save(path)?)
     }
 }
 
@@ -106,22 +149,25 @@ mod tests {
         let temporary = tempfile::tempdir().unwrap();
         let legacy_path = temporary.path().join("extensions.json");
         let path = temporary.path().join("features.json");
-        let legacy = PluginPreferences {
-            disabled: [
+        let raw_legacy = serde_json::json!({
+            "schema_version": 1,
+            "disabled": [
                 "first-party:json",
                 "first-party:future_tool",
                 "first-party:Bad",
-                "plugin:example",
-            ]
-            .into_iter()
-            .map(str::to_owned)
-            .collect(),
-            approvals: [("plugin:example".into(), "exact inspected definition".into())].into(),
-            ..Default::default()
-        };
-        legacy.save(&legacy_path).unwrap();
+                "plugin:example"
+            ],
+            "approvals": {
+                "plugin:example": "exact inspected definition"
+            }
+        });
+        std::fs::write(
+            &legacy_path,
+            serde_json::to_vec_pretty(&raw_legacy).unwrap(),
+        )
+        .unwrap();
         let original = std::fs::read(&legacy_path).unwrap();
-        let mut migrated = FeaturePreferences::load_or_migrate(&path, Ok(&legacy)).unwrap();
+        let mut migrated = FeaturePreferences::load_or_migrate(&path, &legacy_path).unwrap();
         assert_eq!(
             migrated.disabled,
             ["future_tool".into(), "json".into()].into()
@@ -129,11 +175,12 @@ mod tests {
         assert_eq!(std::fs::read(&legacy_path).unwrap(), original);
         migrated.disabled.remove("json");
         migrated.save(&path).unwrap();
-        let reloaded =
-            FeaturePreferences::load_or_migrate(&path, Err("unreadable legacy file")).unwrap();
+        let unreadable_legacy = temporary.path().join("broken_extensions.json");
+        std::fs::write(&unreadable_legacy, "not json").unwrap();
+        let reloaded = FeaturePreferences::load_or_migrate(&path, &unreadable_legacy).unwrap();
         assert_eq!(reloaded, migrated);
         assert_eq!(
-            FeaturePreferences::load_or_migrate(&path, Ok(&legacy)).unwrap(),
+            FeaturePreferences::load_or_migrate(&path, &legacy_path).unwrap(),
             migrated
         );
         assert_eq!(std::fs::read(&legacy_path).unwrap(), original);
@@ -144,7 +191,7 @@ mod tests {
     fn unknown_malformed_and_oversized_feature_files_are_never_replaced() {
         let temporary = tempfile::tempdir().unwrap();
         let path = temporary.path().join("features.json");
-        let legacy = PluginPreferences::default();
+        let legacy_path = temporary.path().join("extensions.json");
         for raw in [
             "not json",
             r#"{"schema_version":99,"disabled":[]}"#,
@@ -153,12 +200,12 @@ mod tests {
             r#"{"schema_version":1,"disabled":[],"approvals":{}}"#,
         ] {
             std::fs::write(&path, raw).unwrap();
-            assert!(FeaturePreferences::load_or_migrate(&path, Ok(&legacy)).is_err());
+            assert!(FeaturePreferences::load_or_migrate(&path, &legacy_path).is_err());
             assert_eq!(std::fs::read_to_string(&path).unwrap(), raw);
         }
         let file = std::fs::File::create(&path).unwrap();
         file.set_len(8 * 1024 * 1024).unwrap();
-        assert!(FeaturePreferences::load_or_migrate(&path, Ok(&legacy))
+        assert!(FeaturePreferences::load_or_migrate(&path, &legacy_path)
             .unwrap_err()
             .to_string()
             .contains("128 KiB"));
@@ -170,17 +217,17 @@ mod tests {
         let temporary = tempfile::tempdir().unwrap();
         let legacy_path = temporary.path().join("extensions.json");
         let path = temporary.path().join("missing_directory/features.json");
-        let legacy = PluginPreferences {
-            disabled: ["first-party:json".into()].into(),
-            ..Default::default()
-        };
-        legacy.save(&legacy_path).unwrap();
+        std::fs::write(
+            &legacy_path,
+            r#"{"schema_version":1,"disabled":["first-party:json"]}"#,
+        )
+        .unwrap();
         let original = std::fs::read(&legacy_path).unwrap();
-        assert!(FeaturePreferences::load_or_migrate(&path, Ok(&legacy)).is_err());
+        assert!(FeaturePreferences::load_or_migrate(&path, &legacy_path).is_err());
         assert!(!path.exists());
         assert_eq!(std::fs::read(&legacy_path).unwrap(), original);
         std::fs::create_dir(path.parent().unwrap()).unwrap();
-        assert!(FeaturePreferences::load_or_migrate(&path, Ok(&legacy))
+        assert!(FeaturePreferences::load_or_migrate(&path, &legacy_path)
             .unwrap()
             .disabled
             .contains("json"));

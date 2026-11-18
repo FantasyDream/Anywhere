@@ -40,6 +40,42 @@ impl Application {
         source: WebMessageSource<'_>,
         raw: &str,
     ) -> String {
+        let parsed = anywhere_plugin::web::wire::parse(raw);
+        let hint = parsed
+            .as_ref()
+            .ok()
+            .map(|request| request.id.clone())
+            .or_else(|| anywhere_plugin::web::wire::request_id_hint(raw));
+        self.dispatch_web_request(binding, source, parsed, hint)
+            .await
+    }
+
+    pub(super) async fn dispatch_web_call(
+        &self,
+        binding: &WebDocumentBinding,
+        source: WebMessageSource<'_>,
+        id: String,
+        call: WebCall,
+    ) -> String {
+        self.dispatch_web_request(
+            binding,
+            source,
+            Ok(anywhere_plugin::web::wire::Request {
+                id: id.clone(),
+                call,
+            }),
+            Some(id),
+        )
+        .await
+    }
+
+    async fn dispatch_web_request(
+        &self,
+        binding: &WebDocumentBinding,
+        source: WebMessageSource<'_>,
+        parsed: WebResult<anywhere_plugin::web::wire::Request>,
+        hint: Option<String>,
+    ) -> String {
         let source = Source::new(source);
         let admission = (|| {
             let mut web = self
@@ -47,19 +83,15 @@ impl Application {
                 .lock()
                 .map_err(|_| error(WebErrorCode::HostFailure))?;
             web.rpc(binding, source.get())?;
-            let parsed = anywhere_plugin::web::wire::parse(raw)?;
-            let queued = !matches!(parsed.call, WebCall::Cancel { .. });
-            let request = web.rpc(binding, source.get())?.admit(&parsed.id, queued)?;
+            let parsed = parsed?;
+            let request = web
+                .rpc(binding, source.get())?
+                .admit_call(&parsed.id, &parsed.call)?;
             Ok::<_, WebError>((request, parsed.call))
         })();
         let (request, call) = match admission {
-            Ok(v) => v,
-            Err(e) => {
-                return failure(
-                    anywhere_plugin::web::wire::request_id_hint(raw).as_deref(),
-                    e,
-                )
-            }
+            Ok(value) => value,
+            Err(error) => return failure(hint.as_deref(), error),
         };
         // Cancellation is never queued behind the operation it is meant to cancel.
         if matches!(call, WebCall::Cancel { .. }) {

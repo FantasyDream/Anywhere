@@ -173,7 +173,7 @@ helper 保留由其导致。关闭页面应验证 WKWebView、文档绑定、订
 自动格式化副本、JavaScript 引擎和渲染高水位。5 次新 origin reload 后，仍打开空白文档的
 WebContent 保留约 49.1 MiB 高水位，说明关闭旧文档可回收绑定，却不能要求 WebContent 进程
 在仍服务同一窗口时立即归还全部页。完整原始值和限制见
-[P6 大文档矩阵](../benchmarks/flutter-3.50-web-matrix-2026-11-12.json)。
+[P6 大文档矩阵](../archive/benchmarks/flutter-era-v0.14/flutter-3.50-web-matrix-2026-11-12.json)。
 
 剪贴板 128 MiB 是持久内容预算，不等于启动就加载 128 MiB；列表查询只取摘要。
 单条 16 MiB 载荷在采集、SQLite 比较、按需预览及原生剪贴板写回中可能形成不同阶段的峰值。
@@ -219,7 +219,7 @@ cargo run --release -p anywhere-core --example memory_measure --locked
 三次独立运行的四项结果均一致。这些值验证既有 Rust 副本优化仍在，不是本次 SDK 升级带来的节省。
 尤其 125 字节排除了已准备好的 16 MiB 输入，也排除了 SQLite / C 分配，不能表述为
 “复制一张 16 MiB 图片只消耗 125 字节”。完整结果、源码 / 二进制 SHA-256 和环境记录见
-[本次基准 JSON](../benchmarks/flutter-3.50-rust-memory-2026-11-12.json)。
+[本次基准 JSON](../archive/benchmarks/flutter-era-v0.14/flutter-3.50-rust-memory-2026-11-12.json)。
 
 ### 4.3 本次 Release 初始隐藏进程样本
 
@@ -246,7 +246,7 @@ vmmap 的映射库 region 包含共享驻留，不能与 ps RSS、malloc zone �
 这些证据能说明当前初始实例有一套主引擎、malloc 与图形开销，但不能可靠拆成各语言比例。
 样本结束后只向自己启动的 PID 发送 SIGTERM，确认退出；不作为 GUI 正常退出验收。
 其他开发实例和主机压力未控制；未在采样期间启动编译 / 全量门禁。完整脱敏数据见
-[初始进程记录](../benchmarks/flutter-3.50-desktop-initial-2026-11-12.json)。
+[初始进程记录](../archive/benchmarks/flutter-era-v0.14/flutter-3.50-desktop-initial-2026-11-12.json)。
 
 ### 4.4 标准场景矩阵
 
@@ -365,7 +365,7 @@ macOS Host 每个按需 engine 保留一个有生命周期的 `DispatchSourceMem
 这只说明当前独立按需引擎的成本与基本释放，不证明长期无泄漏。由于共享 engine 需要同时承担
 两个工具的页面状态、后台任务寿命、文本输入、AX 和关闭握手，而现有对象没有累积，暂不采用
 实验性多视图 API。验证见
-[窗口内存记录](../benchmarks/flutter-3.50-window-memory-2026-11-12.json)。
+[窗口内存记录](../archive/benchmarks/flutter-era-v0.14/flutter-3.50-window-memory-2026-11-12.json)。
 
 P6 使用仓库内本地 Text Pad 包完成了单文档生命周期测量。无文档时主进程没有
 `WKWebView`；热打开时 main footprint 为 111.6 MiB，进程外 WebContent / GPU / Networking
@@ -443,7 +443,7 @@ SDK 回退需同时恢复 `.flutter-version`、新 SDK 产生的 lockfile / 必�
   返回上一页并选中 `report-000063.txt`。切到 TextEdit 后在 15 秒内唤醒，query、页窗口和
   选择保持不变。主进程 footprint 样本为 130.4–136.2 MiB、恢复后 122.9 MiB，扫描峰值
   180.1 MiB；这是单次全扫描和高水位，不当作稳定增量或 P2 节省百分比。方法、原始日志和
-  限制见[100k 分页实机记录](../benchmarks/flutter-3.50-file-pages-macos-2026-11-12.json)。
+  限制见[100k 分页实机记录](../archive/benchmarks/flutter-era-v0.14/flutter-3.50-file-pages-macos-2026-11-12.json)。
 - P2 追加 `file_page_next` / `file_page_previous` 诊断，计时到 replacement 列表完成帧；
   metrics、Native 白名单、桌面采样器和页面方向回归已覆盖。多进程 p50 / p95 尚未采集。
 - P3 HTML 保护改为先无分配校验 UTF-8，再一次构造前缀 + 原字节 + 后缀的 `Uint8List`，
@@ -490,7 +490,7 @@ FRB、本地化、token 和资源策略生成物均由各自源文件与生成�
 `load_file_page` 公开函数并重新生成绑定，没有改变持久化 schema。
 第三方 WebView 的 Swift 弃用告警以及 `-ld_classic` 已不支持的链接器告警仍存在；
 不能把成功退出描述为所有工具零警告。版本、方法、包内二进制摘要见
-[本次验证记录](../benchmarks/flutter-3.50-validation-2026-11-12.json)。
+[本次验证记录](../archive/benchmarks/flutter-era-v0.14/flutter-3.50-validation-2026-11-12.json)。
 
 未运行远端 CI、真实中文候选 / 物理快捷键、跨应用焦点、VoiceOver、物理中文 IME、
 Quick Look 和多显示器 / DPI 的交互验收；当前环境只连接一个 2560 × 1440 显示器。P2 已用
@@ -696,7 +696,7 @@ A1–A3 若分批落地，未覆盖部分保持现状并明确标注，不能在
 换肤。隐藏不足 15 秒时恢复最新外观并保留 Web 内容；隐藏超过 15 秒时按既有契约回到空白
 Launcher。测试结束已通过系统 UI 和 `defaults` 恢复深色、多色、默认高亮、原玻璃色调和三项
 辅助功能关闭状态。截图、逐项结果和未测项见
-[macOS A4 外观验收记录](../benchmarks/flutter-3.50-appearance-macos-2026-11-12.json)。
+[macOS A4 外观验收记录](../archive/benchmarks/flutter-era-v0.14/flutter-3.50-appearance-macos-2026-11-12.json)。
 
 同一进程的 heap 对照进一步确认：深色 → 浅色 → 深色前后，`FlutterEngine`、
 `FlutterViewController`、`FlutterVSyncWaiter`、`WindowMaterialController`、

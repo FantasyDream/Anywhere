@@ -4,7 +4,6 @@ use super::{
     catalog::WebPluginCatalog,
     projection,
 };
-use crate::application::session_model::LauncherSession;
 use crate::core::context::{
     provider::{ContextProvider, ProviderDescriptor},
     registry::ContextProviderRegistry,
@@ -17,7 +16,7 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Arc, Mutex,
+    Arc,
 };
 
 #[derive(Clone)]
@@ -27,7 +26,7 @@ struct BackgroundProvider {
     file: crate::persistence::web_packages::WebResourceFile,
     permissions: Vec<WebPermission>,
     active: Arc<AtomicBool>,
-    session: Arc<Mutex<LauncherSession>>,
+    session: Arc<crate::application::session_coordinator::SessionCoordinator>,
     platform: Arc<dyn Platform>,
 }
 #[derive(Deserialize)]
@@ -42,7 +41,7 @@ impl WebPluginCatalog {
     pub(super) fn append_providers(
         &self,
         base: &ContextProviderRegistry,
-        session: Arc<Mutex<LauncherSession>>,
+        session: Arc<crate::application::session_coordinator::SessionCoordinator>,
         platform: Arc<dyn Platform>,
     ) -> Result<ContextProviderRegistry> {
         let mut next = base.clone();
@@ -85,15 +84,25 @@ impl WebPluginCatalog {
                             id: provider.descriptor.id.clone(),
                             priority: -100,
                             recognize: Arc::new(move |text| {
-                                let (id, revision) = {
-                                    let session = recognizer.session.lock().ok()?;
-                                    (session.state.session_id, session.state.revision)
+                                let (id, revision, epoch) = {
+                                    let session = recognizer.session.access().ok()?;
+                                    (
+                                        session.state.session_id,
+                                        session.state.revision,
+                                        recognizer.session.execution_epoch(),
+                                    )
                                 };
+                                let epoch_guard = recognizer.session.epoch_guard();
+                                let mut execution = ExecutionContext::detached(id, revision);
+                                execution.guard = Some(Arc::new(move || {
+                                    epoch_guard.load(Ordering::Acquire) == epoch
+                                }));
                                 let input = crate::features::text::provider::text_context(text)?;
                                 recognizer
-                                    .resolve_job(
+                                    .resolve_job_with_query(
                                         &input,
-                                        &ExecutionContext::detached(id, revision),
+                                        &execution,
+                                        Some(text.to_owned()),
                                         std::time::Duration::from_millis(75),
                                     )
                                     .ok()?
@@ -135,27 +144,33 @@ impl BackgroundProvider {
         execution: &ExecutionContext,
         budget: std::time::Duration,
     ) -> Result<Vec<ResolvedContext>> {
+        self.resolve_job_with_query(input, execution, None, budget)
+    }
+
+    fn resolve_job_with_query(
+        &self,
+        input: &ResolvedContext,
+        execution: &ExecutionContext,
+        query_override: Option<String>,
+        budget: std::time::Duration,
+    ) -> Result<Vec<ResolvedContext>> {
         let input = input.clone();
         let projected = projection::build_with_resources(&input, &self.permissions)?.0;
         let permissions = self.permissions.clone();
-        let source_app = self
+        let (source_app, session_query) = self
             .session
-            .lock()
+            .access()
             .ok()
             .filter(|s| s.state.session_id == execution.session_id)
-            .and_then(|s| {
-                s.identity.frontmost.as_ref().map(|app| WebCurrentApp {
+            .map(|s| {
+                let app = s.identity.frontmost.as_ref().map(|app| WebCurrentApp {
                     id: app.bundle_id.clone(),
                     name: app.name.clone(),
-                })
-            });
-        let query = self
-            .session
-            .lock()
-            .ok()
-            .filter(|s| s.state.session_id == execution.session_id)
-            .map(|s| s.state.input.clone())
-            .unwrap_or_default();
+                });
+                (app, s.state.input.clone())
+            })
+            .unwrap_or((None, String::new()));
+        let query = query_override.unwrap_or(session_query);
         let platform = self.platform.clone();
         let snapshot = PluginSnapshot {
             version: u64::from(execution.revision),

@@ -51,7 +51,16 @@ fn context_only_web_commands_cannot_be_offered_or_executed_without_their_object(
         ),
     ] {
         assert!(offers(&registry, "Unescape", std::slice::from_ref(&context), None).is_empty());
-        assert!(service.start(&command, &context, None, "").is_err());
+        assert!(service
+            .start(
+                &command,
+                &context,
+                context.session_id,
+                context.revision,
+                None,
+                "",
+            )
+            .is_err());
     }
     start(&mut service, &command, &input);
 }
@@ -95,6 +104,8 @@ fn legacy_typing_json_offers_copy_actions_and_invocation_keeps_exact_text() {
         .start(
             command,
             &raw("search term", ContextSource::UserInput),
+            0,
+            0,
             None,
             ""
         )
@@ -210,11 +221,23 @@ fn legacy_json_helpers_reject_unmatched_execution_without_starting_a_webview() {
             raw("{broken}", ContextSource::SelectedText),
             raw("ordinary text", ContextSource::Clipboard),
         ] {
-            assert!(service.start(command, &input, None, "").is_err(), "{id}");
+            assert!(
+                service
+                    .start(command, &input, input.session_id, input.revision, None, "",)
+                    .is_err(),
+                "{id}"
+            );
         }
         if id == "unescape" {
             assert!(service
-                .start(command, &raw("{}", ContextSource::SelectedText), None, "")
+                .start(
+                    command,
+                    &raw("{}", ContextSource::SelectedText),
+                    0,
+                    0,
+                    None,
+                    ""
+                )
                 .is_err());
         }
     }
@@ -345,16 +368,102 @@ async fn legacy_launcher_search_and_content_mode_execute_the_committed_json_cand
         let binding = app
             .bind_web_document(&invocation_id, WebPlatform::Macos)
             .unwrap();
+        let expected = WebInput::Text {
+            source: ContextSource::UserInput,
+            text: input.into(),
+        };
+        let invocation = app.web_invocation(&binding, source(&binding)).unwrap();
+        assert_eq!(invocation.input, expected);
         assert_eq!(
-            app.web_invocation(&binding, source(&binding))
+            app.web_snapshot(&binding, source(&binding))
                 .unwrap()
-                .input,
-            WebInput::Text {
-                source: ContextSource::UserInput,
-                text: input.into()
-            }
+                .context,
+            expected
         );
     }
+}
+
+#[tokio::test]
+async fn web_launch_baseline_uses_the_committed_revision_for_entry_search() {
+    use crate::application::LauncherApplication;
+    let app = app();
+    app.publish_web_catalog(catalog(&json_package())).unwrap();
+    let session = app.begin_activation().unwrap();
+    let mut last_binding = None;
+
+    for (revision, keyword) in [(1, "json"), (2, "jsonpath"), (3, "JSON Workspace")] {
+        let state = app
+            .update_context_input(session, keyword.into(), revision, None, InputMode::Search)
+            .await
+            .unwrap()
+            .unwrap();
+        let candidate = state
+            .candidates
+            .iter()
+            .find(|candidate| {
+                candidate.command_id.as_deref() == Some("web:dev.anywhere.json-workspace:open")
+            })
+            .unwrap_or_else(|| panic!("missing JSON Workspace candidate for {keyword}"));
+        let result = app
+            .execute(session, revision, candidate.id.clone())
+            .await
+            .unwrap();
+        assert!(result.succeeded(), "{:?}", result.error);
+        let HostView::WebPlugin { invocation_id } = result.view.unwrap() else {
+            panic!()
+        };
+        let binding = app
+            .bind_web_document(&invocation_id, WebPlatform::Macos)
+            .unwrap();
+        let invocation = app.web_invocation(&binding, source(&binding)).unwrap();
+        assert_eq!(
+            invocation.input,
+            WebInput::Empty {
+                reason: WebInputReason::NoObject
+            },
+            "{keyword}"
+        );
+        assert_eq!(
+            app.web_snapshot(&binding, source(&binding))
+                .unwrap()
+                .context,
+            WebInput::Empty {
+                reason: WebInputReason::NoObject
+            },
+            "the launch revision must not project the search keyword as document input: {keyword}"
+        );
+        last_binding = Some(binding);
+    }
+
+    let document = r#"{"n":900719925474099312345,"n":1,"text":"中文\n"}"#;
+    app.update_context_input(session, document.into(), 4, None, InputMode::Content)
+        .await
+        .unwrap()
+        .unwrap();
+    let binding = last_binding.unwrap();
+    let expected = WebInput::Text {
+        source: ContextSource::UserInput,
+        text: document.into(),
+    };
+    assert_eq!(
+        app.web_snapshot(&binding, source(&binding))
+            .unwrap()
+            .context,
+        expected
+    );
+
+    {
+        let mut session = app.session().unwrap();
+        session.state.snapshot_seq = session.state.snapshot_seq.saturating_add(1);
+        session.resolution.snapshot_seq = session.state.snapshot_seq;
+    }
+    assert_eq!(
+        app.web_snapshot(&binding, source(&binding))
+            .unwrap()
+            .context,
+        expected,
+        "a snapshot at the same revision must retain the current document input"
+    );
 }
 
 #[tokio::test]

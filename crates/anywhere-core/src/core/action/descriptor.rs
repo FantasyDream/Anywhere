@@ -12,25 +12,19 @@ use std::collections::{BTreeMap, BTreeSet};
 pub enum ActionExecutor {
     WebCommand(super::web_command::WebCommandRef),
     Native(ActionHandlerRef),
-    Declarative(DeclarativeAction),
-    ScopedDeclarative {
-        action: DeclarativeAction,
-        grant: super::capabilities::CapabilityGrant,
-    },
 }
 
 impl ActionExecutor {
     pub fn is_menu(&self) -> bool {
         match self {
             Self::Native(handler) => handler.is_menu(),
-            Self::WebCommand(_) | Self::Declarative(_) | Self::ScopedDeclarative { .. } => false,
+            Self::WebCommand(_) => false,
         }
     }
     pub fn records_usage(&self) -> bool {
         match self {
             Self::Native(handler) => handler.records_usage(),
             Self::WebCommand(_) => false, // Recorded once after the qualified document is ready.
-            Self::Declarative(_) | Self::ScopedDeclarative { .. } => true,
         }
     }
 
@@ -42,7 +36,7 @@ impl ActionExecutor {
     pub fn execution_token(&self) -> Option<u64> {
         match self {
             Self::Native(handler) => handler.execution_token(),
-            Self::WebCommand(_) | Self::Declarative(_) | Self::ScopedDeclarative { .. } => None,
+            Self::WebCommand(_) => None,
         }
     }
 }
@@ -212,18 +206,7 @@ impl ActionRegistry {
             .ok_or_else(|| anyhow::anyhow!("action no longer exists"))?;
         let policy = match &action.executor {
             ActionExecutor::Native(handler) => handler.binding_policy(),
-            ActionExecutor::Declarative(DeclarativeAction::ExecuteBuiltin { command_id }) => {
-                let target = self
-                    .get(command_id)
-                    .ok_or_else(|| anyhow::anyhow!("built-in action no longer exists"))?;
-                match &target.executor {
-                    ActionExecutor::Native(handler) => handler.binding_policy(),
-                    _ => bail!("execute_builtin target is not built-in"),
-                }
-            }
-            ActionExecutor::WebCommand(_)
-            | ActionExecutor::Declarative(_)
-            | ActionExecutor::ScopedDeclarative { .. } => BindingPolicy::Persistent,
+            ActionExecutor::WebCommand(_) => BindingPolicy::Persistent,
         };
         if let BindingPolicy::Unavailable { reason } = policy {
             bail!("{reason}");
@@ -281,29 +264,18 @@ impl ActionRegistry {
     /// Select configured commands without reconstructing their contributors.
     pub fn retain_actions(&mut self, enabled: impl Fn(&ActionDescriptor) -> bool) {
         self.actions.retain(|_, action| enabled(action));
-        // Delegating commands must disappear with their target, even if the delegate
-        // has a different contribution owner. Execution and binding also revalidate.
-        let missing: BTreeSet<_> = self
-            .actions
-            .values()
-            .filter_map(|action| {
-                let target = match &action.executor {
-                    ActionExecutor::Declarative(DeclarativeAction::ExecuteBuiltin {
-                        command_id,
-                    }) => command_id,
-                    _ => return None,
-                };
-                (!self.actions.contains_key(target)).then(|| action.id.clone())
-            })
-            .collect();
-        self.actions.retain(|id, _| !missing.contains(id));
     }
 
     /// Build an immutable snapshot registry. Generated handlers travel with candidates.
-    pub fn for_contexts(&self, contexts: &[ResolvedContext]) -> (Self, Vec<String>) {
-        let mut registry = self.clone();
-        registry.factories.clear();
+    pub fn for_contexts(
+        &self,
+        contexts: &[ResolvedContext],
+    ) -> (std::borrow::Cow<'_, Self>, Vec<String>) {
+        if self.factories.is_empty() {
+            return (std::borrow::Cow::Borrowed(self), Vec::new());
+        }
         let mut diagnostics = Vec::new();
+        let mut generated = Vec::new();
         for registered in &self.factories {
             let factory = &registered.factory;
             let expansion = factory.actions(contexts);
@@ -314,17 +286,23 @@ impl ActionRegistry {
                     .map(|message| format!("context actions [{}]: {message}", factory.id())),
             );
             for action in expansion.actions {
-                if let Err(error) =
-                    registry.register_owned(action, registered.contributor.as_deref())
-                {
-                    diagnostics.push(format!("context actions [{}]: {error}", factory.id()));
-                }
+                generated.push((factory.id(), action, registered.contributor.clone()));
             }
         }
-        (registry, diagnostics)
+        if generated.is_empty() {
+            return (std::borrow::Cow::Borrowed(self), diagnostics);
+        }
+        let mut registry = self.clone();
+        registry.factories.clear();
+        for (factory_id, action, contributor) in generated {
+            if let Err(error) = registry.register_owned(action, contributor.as_deref()) {
+                diagnostics.push(format!("context actions [{factory_id}]: {error}"));
+            }
+        }
+        (std::borrow::Cow::Owned(registry), diagnostics)
     }
     /// Check every action, then insert. A failure leaves the registry unchanged.
-    fn commit_batch(
+    pub(crate) fn commit_batch(
         &mut self,
         actions: Vec<ActionDefinition>,
         contributor: Option<&str>,
@@ -376,7 +354,7 @@ impl ActionRegistry {
         Ok(())
     }
 
-    fn remember_group(&mut self, group: ActionGroup, ranked: bool) {
+    pub(crate) fn remember_group(&mut self, group: ActionGroup, ranked: bool) {
         if group.id.trim().is_empty() || self.groups.contains_key(&group.id) {
             return;
         }
@@ -407,154 +385,36 @@ impl ActionRegistry {
     pub fn matching<'a>(
         &'a self,
         context: &'a ResolvedContext,
-    ) -> impl Iterator<Item = &'a ActionDescriptor> {
+    ) -> impl Iterator<Item = &'a std::sync::Arc<ActionDescriptor>> {
         self.actions
             .values()
-            .map(std::sync::Arc::as_ref)
             .filter(|command| command.matches(context))
     }
 
     pub fn commands(&self) -> impl Iterator<Item = &ActionDescriptor> {
         self.actions.values().map(std::sync::Arc::as_ref)
     }
-
-    /// Validate all commands first; a bad plugin never leaves half a registration.
-    pub fn register_plugin(&mut self, plugin: PluginManifest) -> Result<()> {
-        self.register_plugin_with_capabilities(plugin, &[])
-    }
-
-    /// The caller supplies grants independently of the manifest. Default loading
-    /// grants nothing to versioned plugins; v1 retains its existing explicit-install behavior.
-    pub fn register_plugin_with_capabilities(
-        &mut self,
-        plugin: PluginManifest,
-        allowed: &[extension::ExtensionCapability],
-    ) -> Result<()> {
-        self.register_owned_plugin(plugin, allowed, None)
-    }
-
-    pub fn register_owned_plugin(
-        &mut self,
-        plugin: PluginManifest,
-        allowed: &[extension::ExtensionCapability],
-        contributor: Option<&str>,
-    ) -> Result<()> {
-        anywhere_plugin::validate_manifest(&plugin)?;
-        let grant = if plugin.protocol_version >= 2 {
-            Some(super::capabilities::CapabilityGrant::approve(
-                &plugin.capabilities,
-                allowed,
-            )?)
-        } else {
-            None
-        };
-        let default_group = format!("plugin.{}", plugin.id);
-        let plugin_name = plugin.name.clone();
-        let mut commands = Vec::new();
-        for command in plugin.commands {
-            let id = format!("{}.{}", plugin.id, command.id);
-            if self.actions.contains_key(&id)
-                || commands.iter().any(|c: &ActionDefinition| c.id == id)
-            {
-                bail!("duplicate command id: {id}");
-            }
-            // V0.1 manifests use `core.json`; normalize before the compatibility check.
-            let accepts = command
-                .accepts
-                .iter()
-                .map(|type_id| canonical_context_type(type_id).to_owned())
-                .collect::<Vec<_>>();
-            let availability =
-                if let DeclarativeAction::ExecuteBuiltin { command_id } = &command.action {
-                    let Some(builtin) = self.get(command_id) else {
-                        bail!("unknown builtin: {command_id}");
-                    };
-                    if !matches!(builtin.executor, ActionExecutor::Native(_))
-                        || accepts
-                            .iter()
-                            .any(|kind| !builtin.accepts.iter().any(|m| &m.type_id == kind))
-                    {
-                        bail!("plugin matcher is incompatible with builtin: {command_id}");
-                    }
-                    builtin.availability.clone()
-                } else {
-                    AvailabilityRule::Enabled
-                };
-            availability.validate()?;
-            for field in command
-                .aliases
-                .iter()
-                .chain(command.keywords.iter())
-                .chain(std::iter::once(&command.title))
-            {
-                if !crate::core::search::query::valid_search_field(field) {
-                    bail!("command {id} search field exceeds 200 bytes");
-                }
-            }
-            let icon = match command.action {
-                DeclarativeAction::RenderDetail { .. } => "file",
-                DeclarativeAction::OpenUrl { .. } => "globe",
-                DeclarativeAction::OpenFile { .. } => "file",
-                DeclarativeAction::Copy { .. } => "copy",
-                DeclarativeAction::ExecuteBuiltin { .. } => "bolt",
-            };
-            let aliases = command.aliases.clone();
-            let keywords = command.keywords.clone();
-            commands.push(ActionDefinition {
-                localized_titles: Default::default(),
-                shortcut: None,
-                id,
-                title: command.title.clone(),
-                subtitle: Some(command.subtitle.unwrap_or_else(|| plugin_name.clone())),
-                accepts: accepts
-                    .into_iter()
-                    .map(|type_id| ContextMatcher { type_id })
-                    .collect(),
-                executor: if let Some(grant) = &grant {
-                    ActionExecutor::ScopedDeclarative {
-                        action: command.action,
-                        grant: grant.clone(),
-                    }
-                } else {
-                    ActionExecutor::Declarative(command.action)
-                },
-                availability,
-                base_priority: command.base_priority,
-                icon: icon.into(),
-                group_id: command.group_id.unwrap_or_else(|| default_group.clone()),
-                owning_app: None,
-                menu_path: Vec::new(),
-                primary_action: false,
-                aliases,
-                keywords,
-                search_title: None,
-            });
-        }
-        let group_ids = commands
-            .iter()
-            .map(|command| command.group_id.clone())
-            .collect::<Vec<_>>();
-        self.commit_batch(commands, contributor)?;
-        for id in group_ids {
-            self.remember_group(
-                ActionGroup {
-                    id: id.clone(),
-                    title: label_for(&id),
-                    icon: None,
-                },
-                false,
-            );
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::action::bundle::ActionSpec;
     use crate::core::action::group::groups;
+    use crate::core::action::handler::{ActionHandler, ExecutionOutput};
     use crate::features::git::actions::is_git_action;
     use crate::features::recognized_contexts;
+
+    struct NoopHandler;
+    impl ActionHandler for NoopHandler {
+        fn execute(
+            &self,
+            _: &ResolvedContext,
+            _: &dyn anywhere_platform::Platform,
+        ) -> anyhow::Result<ExecutionOutput> {
+            Ok(ExecutionOutput::dismiss())
+        }
+    }
 
     fn json_context() -> ResolvedContext {
         ResolvedContext::new(
@@ -586,7 +446,7 @@ mod tests {
                 accepts: vec![ContextMatcher {
                     type_id: APPLICATION.into(),
                 }],
-                executor: ActionExecutor::Declarative(DeclarativeAction::Copy { text: "".into() }),
+                executor: ActionExecutor::Native(ActionHandlerRef::Static(&NoopHandler)),
                 availability: AvailabilityRule::Enabled,
                 base_priority: 0,
                 icon: "".into(),
@@ -742,34 +602,27 @@ mod tests {
     }
 
     #[test]
-    fn legacy_matcher_normalization_remains_without_retired_builtin_targets() {
+    fn legacy_matcher_normalization_remains_for_action_specs() {
         let mut registry = crate::application::builtin_registry();
-        let raw = r#"
-protocol_version = 1
-id = "legacy"
-name = "Legacy"
-
-[[commands]]
-id = "pretty"
-title = "Pretty JSON"
-accepts = ["core.json"]
-action = { type = "copy", text = "{{context.value}}" }
-"#;
-        let manifest = anywhere_plugin::parse_manifest(raw).unwrap();
-        registry.register_plugin(manifest.clone()).unwrap();
+        let definition = ActionSpec {
+            localized_titles: &[],
+            id: "legacy.pretty",
+            title: "Pretty JSON",
+            accepts: JSON_LEGACY,
+            handler: &NoopHandler,
+            availability: AvailabilityRule::Enabled,
+            base_priority: 0,
+            icon: "copy",
+            aliases: &[],
+            keywords: &[],
+            primary_action: false,
+        }
+        .descriptor("plugin.legacy");
+        registry.register(definition).unwrap();
         let command = registry.get("legacy.pretty").unwrap();
         assert_eq!(command.accepts[0].type_id, JSON_DOCUMENT);
         assert_eq!(command.group_id, "plugin.legacy");
-        // The legacy matcher from the manifest must match the canonical context.
         assert!(command.matches(&json_context()));
-
-        // A mismatched builtin is still rejected after normalization.
-        let mut bad = manifest;
-        bad.commands[0].action = DeclarativeAction::ExecuteBuiltin {
-            command_id: "core.url.open".into(),
-        };
-        let mut fresh = crate::application::builtin_registry();
-        assert!(fresh.register_plugin(bad).is_err());
     }
 
     #[test]
@@ -824,32 +677,8 @@ action = { type = "copy", text = "{{context.value}}" }
     }
 
     #[test]
-    fn plugins_without_group_metadata_get_an_explicit_default() {
-        let mut registry = crate::application::builtin_registry();
-        registry
-            .register_plugin(
-                anywhere_plugin::parse_manifest(anywhere_plugin::EXAMPLE_PLUGIN).unwrap(),
-            )
-            .unwrap();
-        assert_eq!(registry.get("example.search").unwrap().group_id, "web");
-    }
-
-    #[test]
     fn register_rejects_unknown_and_mistyped_availability_facts() {
-        use crate::core::action::bundle::ActionSpec;
-        use crate::core::action::handler::{ActionHandler, ExecutionOutput};
         use crate::core::session::facts::{CLIPBOARD, GIT};
-
-        struct Noop;
-        impl ActionHandler for Noop {
-            fn execute(
-                &self,
-                _: &ResolvedContext,
-                _: &dyn anywhere_platform::Platform,
-            ) -> anyhow::Result<ExecutionOutput> {
-                Ok(ExecutionOutput::dismiss())
-            }
-        }
 
         let spec = |id: &'static str, availability: AvailabilityRule| {
             ActionSpec {
@@ -857,7 +686,7 @@ action = { type = "copy", text = "{{context.value}}" }
                 id,
                 title: "Bad",
                 accepts: TEXT,
-                handler: &Noop,
+                handler: &NoopHandler,
                 availability,
                 base_priority: 0,
                 icon: "copy",
@@ -891,98 +720,35 @@ action = { type = "copy", text = "{{context.value}}" }
         assert!(registry.get("test.require-git").is_some());
     }
 
-    const WRAP_PLUGIN: &str = r#"
-protocol_version = 1
-id = "wrap"
-name = "Wrap"
-
-[[commands]]
-id = "status"
-title = "Wrapped Git Status"
-accepts = ["git.repository"]
-action = { type = "execute_builtin", command_id = "core.git.status" }
-
-[[commands]]
-id = "copy"
-title = "Wrapped Copy"
-accepts = ["core.directory"]
-action = { type = "execute_builtin", command_id = "core.directory.copy" }
-"#;
-
     #[test]
-    fn execute_builtin_inherits_the_target_availability_rule() {
-        let mut registry = crate::application::builtin_registry();
-        registry
-            .register_plugin(anywhere_plugin::parse_manifest(WRAP_PLUGIN).unwrap())
-            .unwrap();
-        assert_eq!(
-            registry.get("wrap.status").unwrap().availability,
-            registry.get("core.git.status").unwrap().availability
-        );
-        assert_eq!(
-            registry.get("wrap.copy").unwrap().availability,
-            registry.get("core.directory.copy").unwrap().availability
-        );
-        registry
-            .register_plugin(
-                anywhere_plugin::parse_manifest(anywhere_plugin::EXAMPLE_PLUGIN).unwrap(),
-            )
-            .unwrap();
-        assert_eq!(
-            registry.get("example.search").unwrap().availability,
-            AvailabilityRule::Enabled
-        );
-    }
-
-    #[test]
-    fn a_bad_wrapping_plugin_does_not_leave_a_partial_registration() {
-        let mut registry = crate::application::builtin_registry();
-        let raw = format!(
-            "{WRAP_PLUGIN}
-
-[[commands]]
-id = \"missing\"
-title = \"Missing\"
-accepts = [\"git.repository\"]
-action = {{ type = \"execute_builtin\", command_id = \"core.missing.action\" }}
-"
-        );
-        assert!(anywhere_plugin::parse_manifest(&raw)
-            .and_then(|manifest| registry.register_plugin(manifest))
-            .is_err());
-        assert!(registry.get("wrap.status").is_none());
-        assert!(registry.get("wrap.copy").is_none());
-        assert!(registry.get("wrap.missing").is_none());
-        assert!(registry.get("core.git.status").is_some());
-    }
-
-    #[test]
-    fn a_later_invalid_command_does_not_keep_the_earlier_one() {
+    fn a_later_invalid_command_in_bundle_does_not_keep_the_earlier_one() {
+        use crate::core::action::group::ActionGroup;
         let mut registry = ActionRegistry::default();
-        let raw = r#"
-protocol_version = 1
-id = "partial"
-name = "Partial"
-
-[[commands]]
-id = "ok"
-title = "Ok"
-accepts = ["core.text"]
-group_id = "tools"
-action = { type = "copy", text = "x" }
-
-[[commands]]
-id = "bad"
-title = "Bad"
-accepts = ["core.text"]
-group_id = ""
-action = { type = "copy", text = "y" }
-"#;
-        assert!(anywhere_plugin::parse_manifest(raw)
-            .and_then(|manifest| registry.register_plugin(manifest))
-            .is_err());
+        let ok = ActionSpec {
+            localized_titles: &[],
+            id: "partial.ok",
+            title: "Ok",
+            accepts: TEXT,
+            handler: &NoopHandler,
+            availability: AvailabilityRule::Enabled,
+            base_priority: 0,
+            icon: "copy",
+            aliases: &[],
+            keywords: &[],
+            primary_action: false,
+        }
+        .descriptor("tools");
+        let mut bad = ok.clone();
+        bad.id = "partial.bad".into();
+        bad.group_id = "".into();
+        assert!(registry.commit_batch(vec![ok, bad], None).is_err());
         assert!(registry.get("partial.ok").is_none());
         assert!(registry.get("partial.bad").is_none());
+        let _ = ActionGroup {
+            id: "tools".into(),
+            title: "Tools".into(),
+            icon: None,
+        };
     }
 
     #[test]

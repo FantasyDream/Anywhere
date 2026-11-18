@@ -5,7 +5,7 @@
 #import "macos_application_names.h"
 #import "macos_process.h"
 
-// Only OS context capture. All window/UI code lives in the Flutter host.
+// Only OS context capture. Window and product UI ownership stays in the GPUI app.
 char *launcher_frontmost_application(void) {
   @autoreleasepool {
     NSRunningApplication *application = NSWorkspace.sharedWorkspace.frontmostApplication;
@@ -19,7 +19,7 @@ char *launcher_frontmost_application(void) {
     NSData *data = [NSJSONSerialization dataWithJSONObject:value options:0 error:NULL];
     if (!data) return NULL;
     NSString *json = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-    return strdup(json.UTF8String);
+    return json ? strdup(json.UTF8String) : NULL;
   }
 }
 
@@ -263,7 +263,10 @@ int launcher_clipboard_text_guard(unsigned long long capacity) {
       if (clipboard_access_behavior(pasteboard) == 3) return 4;
       if (!text && [pasteboard.types containsObject:NSPasteboardTypeString]) return 0;
       if (!text.length) return 2;
-      return [text lengthOfBytesUsingEncoding:NSUTF8StringEncoding] > capacity ? 3 : 1;
+      if (text.length > capacity) return 3;
+      NSUInteger bytes = [text lengthOfBytesUsingEncoding:NSUTF8StringEncoding];
+      if (!bytes) return 0;
+      return bytes > capacity ? 3 : 1;
     }
   } @catch (NSException *exception) {
     return 0;
@@ -280,19 +283,38 @@ unsigned long long launcher_clipboard_item_count(void) {
 }
 // Avoid copying an oversized representation into Rust. Reading NSData can still
 // materialize lazy data in the source app; the OS API cannot preflight that cost.
-int launcher_clipboard_format_guard(const char *format, unsigned long long capacity) {
+unsigned char *launcher_clipboard_read_format(const char *format, unsigned long long capacity,
+                                              unsigned int *out_length, int *out_status) {
+  if (!out_length || !out_status) return NULL;
+  *out_length = 0;
+  *out_status = 0;
   @try {
     @autoreleasepool {
       NSPasteboard *pasteboard = NSPasteboard.generalPasteboard;
-      if (clipboard_access_behavior(pasteboard) != 2) return 4;
+      if (clipboard_access_behavior(pasteboard) != 2) {
+        *out_status = 4;
+        return NULL;
+      }
       NSString *type = format ? [NSString stringWithUTF8String:format] : nil;
-      if (!type) return 0;
+      if (!type) return NULL;
       NSData *data = [pasteboard dataForType:type];
-      if (clipboard_access_behavior(pasteboard) != 2) return 4;
-      if (!data) return 0;
-      return data.length > capacity ? 3 : 1;
+      if (clipboard_access_behavior(pasteboard) != 2) {
+        *out_status = 4;
+        return NULL;
+      }
+      if (!data) return NULL;
+      if (data.length > capacity || data.length > UINT_MAX) {
+        *out_status = 3;
+        return NULL;
+      }
+      unsigned char *bytes = malloc(MAX(data.length, 1));
+      if (!bytes) return NULL;
+      memcpy(bytes, data.bytes, data.length);
+      *out_length = (unsigned int)data.length;
+      *out_status = 1;
+      return bytes;
     }
   } @catch (NSException *exception) {
-    return 0;
+    return NULL;
   }
 }

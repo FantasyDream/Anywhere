@@ -122,10 +122,6 @@ pub struct ScopeEntry {
     pub id: GroupId,
     pub label: String,
     pub is_current_app: bool,
-    #[serde(default)]
-    pub action_ids: Vec<CandidateId>,
-    #[serde(default)]
-    pub menu_ids: Vec<CandidateId>,
 }
 
 impl ScopeEntry {

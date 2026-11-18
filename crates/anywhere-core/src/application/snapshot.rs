@@ -13,6 +13,8 @@ use crate::features::applications::index::ApplicationCatalog;
 use anywhere_protocol::*;
 use std::{collections::HashMap, sync::Arc};
 
+pub(crate) mod cache;
+
 pub struct PreparedSnapshot {
     pub set: CandidateSet,
     pub diagnostics: Vec<String>,
@@ -31,9 +33,9 @@ pub struct SnapshotInput<'a> {
     pub input_mode: InputMode,
     pub selected_scope: Option<&'a str>,
     pub facts: &'a SessionFacts,
-    pub usage: &'a HashMap<(String, String), UsageStats>,
+    pub usage: &'a Arc<HashMap<(String, String), UsageStats>>,
     pub app_usage: &'a HashMap<(String, String), UsageStats>,
-    pub actions: &'a ActionRegistry,
+    pub actions: &'a Arc<ActionRegistry>,
     pub contexts: &'a [ResolvedContext],
     pub incoming_diagnostics: &'a [String],
     pub prior_diagnostics: &'a [String],
@@ -44,7 +46,22 @@ pub struct SnapshotInput<'a> {
     pub now: i64,
 }
 
-pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
+pub fn prepare(
+    input: SnapshotInput<'_>,
+    cache: &std::sync::Mutex<Option<cache::OfferCache>>,
+) -> PreparedSnapshot {
+    let usage_index: HashMap<_, _> = input
+        .usage
+        .iter()
+        .map(|((command, kind), stats)| ((command.as_str(), kind.as_str()), stats))
+        .collect();
+    let usage_of = |command: &str, kind: &str| {
+        usage_index
+            .get(&(command, kind))
+            .map(|stats| **stats)
+            .unwrap_or_default()
+    };
+    let offers = cache::prepare(&input, cache, &usage_of);
     let SnapshotInput {
         action_catalog_version,
         input,
@@ -53,7 +70,7 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
         facts,
         usage,
         app_usage,
-        actions,
+        actions: base_actions,
         contexts,
         incoming_diagnostics,
         prior_diagnostics,
@@ -63,18 +80,16 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
         object_actions,
         now,
     } = input;
-    let (expanded_actions, action_diagnostics) = actions.for_contexts(contexts);
-    let actions = &expanded_actions;
-    let usage_of = |command: &str, kind: &str| {
-        usage
-            .get(&(command.to_owned(), kind.to_owned()))
-            .copied()
-            .unwrap_or_default()
-    };
+    let action_diagnostics = offers.diagnostics;
+    let actions = &offers.actions;
+    let app_usage_index: HashMap<_, _> = app_usage
+        .iter()
+        .map(|((command, kind), stats)| ((command.as_str(), kind.as_str()), stats))
+        .collect();
     let app_usage_of = |command: &str, kind: &str| {
-        app_usage
-            .get(&(command.to_owned(), kind.to_owned()))
-            .copied()
+        app_usage_index
+            .get(&(command, kind))
+            .map(|stats| **stats)
             .unwrap_or_default()
     };
     let search = ActionSearch::new(
@@ -116,6 +131,8 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
             sources_us: 0,
             ranking_us: 0,
         }
+    } else if query.is_empty() {
+        search.search_cached_empty(contexts, &extra, selected_scope, &offers.candidates)
     } else {
         search.search_scoped(&query, contexts, &extra, selected_scope)
     };
@@ -131,6 +148,7 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
         }
     }
     // Menu browsing and scope generation retain full offers even with a query.
+    let offers_candidate_count = offers.candidates.len();
     let mut context_candidates = if input.trim().is_empty() && selected_scope.is_none() {
         set.candidates
             .iter()
@@ -143,12 +161,28 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
             .cloned()
             .collect()
     } else {
-        let offers = search.search(&Query::parse(""), contexts, &[]);
-        set.matcher_us += offers.matcher_us;
-        set.ranking_us += offers.ranking_us;
         offers.candidates
     };
     let mut host_actions = workspace.binding_offers(&context_candidates);
+    let object_registry = if object_actions.iter().any(|candidate| {
+        matches!(
+            &candidate.target,
+            crate::core::search::candidate::CandidateTarget::Action { action, .. }
+                if actions.get_shared(&action.id).is_none()
+        )
+    }) {
+        let mut object_contexts = Vec::new();
+        for candidate in object_actions {
+            if let Some(context) = candidate.context() {
+                if !object_contexts.contains(context) {
+                    object_contexts.push(context.clone());
+                }
+            }
+        }
+        Some(base_actions.for_contexts(&object_contexts).0)
+    } else {
+        None
+    };
     let mut result_actions: Vec<_> = object_actions
         .iter()
         .filter_map(|candidate| {
@@ -156,7 +190,11 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
             if let crate::core::search::candidate::CandidateTarget::Action { action, context } =
                 &mut candidate.target
             {
-                let current = actions.get_shared(&action.id)?;
+                let current = actions.get_shared(&action.id).or_else(|| {
+                    object_registry
+                        .as_ref()
+                        .and_then(|registry| registry.get_shared(&action.id))
+                })?;
                 if !current.matches(context) {
                     return None;
                 }
@@ -193,16 +231,23 @@ pub fn prepare(input: SnapshotInput<'_>) -> PreparedSnapshot {
             }
         }
     }
-    let scopes = crate::core::search::scope::build(
-        &context_candidates,
-        actions,
-        usage,
-        facts.frontmost.as_ref(),
-        now,
-    );
+    let scopes = if input.trim().is_empty()
+        && selected_scope.is_none()
+        && context_candidates.len() != offers_candidate_count
+    {
+        crate::core::search::scope::build(
+            &context_candidates,
+            actions,
+            usage,
+            facts.frontmost.as_ref(),
+            now,
+        )
+    } else {
+        offers.scopes
+    };
     let summary = crate::application::context_projection::build(contexts, &context_candidates);
     let preferred_context_key = crate::application::context_projection::preferred(&summary);
-    let shortcut_catalog = super::shortcuts::catalog_options(actions);
+    let shortcut_catalog = offers.shortcuts;
     PreparedSnapshot {
         shortcut_catalog,
         set,

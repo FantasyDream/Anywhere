@@ -1,13 +1,15 @@
 # 中英国际化与拼音：开源选型
 
-日期：2026-10-21。范围为现有 Flutter / Rust / Web 分层；性能数字需要本项目测量，不按星数或框架名判断。
+日期：2026-10-21。本文保留当时本地化选型依据；当前资源与生成路径以
+[开发指南](../development.md)为准。性能数字需要本项目测量，不按星数或框架名
+判断。
 
 | 候选 | 来源与能力 | 选择 |
 |---|---|---|
-| Flutter 官方 flutter_localizations + intl / gen-l10n | [官方指南](https://docs.flutter.dev/ui/internationalization)：ARB、编译期类型化访问、参数 / 复数、系统控件与日期 | 采用；随固定 Flutter SDK 锁定 intl，不另写翻译引擎 |
-| slang | [包文档](https://pub.dev/packages/slang)：代码生成、多资源格式与命名空间 | 当前仅两种语言，官方方案足够，不增加第二套 Flutter 资源模型 |
+| 当时 UI SDK 的官方本地化 + ARB 生成 | 参数 / 复数、系统控件与日期 | 历史采用；已由当前 `resources/localization/` 和 Rust typed projection 取代 |
+| slang | 代码生成、多资源格式与命名空间 | 当前仅两种语言，不需要第二套资源模型 |
 | Rust pinyin 0.11.0 | [源码](https://github.com/mozillazg/rust-pinyin)、[API](https://docs.rs/pinyin/0.11.0/pinyin/trait.ToPinyinMulti.html)、[特性](https://docs.rs/crate/pinyin/0.11.0/features)：MIT，字符读音与多音字 | 采用，关闭默认特性，仅 plain / heteronym；静态词典，按需匹配，无组合爆炸或常驻全盘拼音缓存 |
-| rust-i18n | [项目](https://github.com/longbridge/rust-i18n)：编译期资源、fallback、插值，可显式传 locale | 暂不引入。Core 不存 UI 当前语言；先将 Host 文案交给官方 Flutter 呈现。后续若业务返回类型化 message key / 参数，再评估 Rust 侧必须翻译的真实需求 |
+| rust-i18n | [项目](https://github.com/longbridge/rust-i18n)：编译期资源、fallback、插值，可显式传 locale | 暂不引入。Core 不存 UI 当前语言；GPUI 消费生成的类型化投影，Web 使用宿主语言事件。 |
 | Fluent | [FluentBundle](https://docs.rs/fluent/latest/fluent/bundle/struct.FluentBundle.html)：复合语法与运行时 bundle | 现阶段不需要额外的格式语法 / bundle 生命周期 |
 | i18next | [官方入门](https://www.i18next.com/overview/getting-started)：框架无关、内嵌资源、复数 / 插值与语言切换 | Web 示例优先采用；宿主 SDK 只提供语言，不绑定翻译库或联网加载器 |
 

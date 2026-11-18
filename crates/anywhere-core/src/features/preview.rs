@@ -60,17 +60,22 @@ impl PreviewStore {
                 "public.rtf" | "text/rtf" | "Rich Text Format"
             )
         });
-        let (extension, bytes) = if let Some(image) = image {
+        let html = payload
+            .formats
+            .iter()
+            .find(|f| matches!(f.name.as_str(), "public.html" | "text/html" | "HTML Format"));
+        let prefer_text_over_tiff = (rich.is_some() || html.is_some())
+            && payload
+                .plain_text()
+                .is_some_and(|text| !text.trim().is_empty())
+            && matches!(image, Some(("tiff", _)));
+        let (extension, bytes) = if let Some(image) = image.filter(|_| !prefer_text_over_tiff) {
             image
         } else if let Some(text) = payload.plain_text() {
             ("txt", text.as_bytes())
         } else if let Some(rich) = rich {
             ("rtf", rich.data.as_slice())
-        } else if let Some(html) = payload
-            .formats
-            .iter()
-            .find(|f| matches!(f.name.as_str(), "public.html" | "text/html" | "HTML Format"))
-        {
+        } else if let Some(html) = html {
             // Display source as inert text; never render clipboard HTML with network access.
             std::str::from_utf8(&html.data).context("unsupported text encoding")?;
             ("txt", html.data.as_slice())

@@ -10,7 +10,11 @@ use unicode_casefold::UnicodeCaseFold;
 use unicode_normalization::UnicodeNormalization;
 
 pub fn normalize(text: &str) -> String {
-    text.nfc().case_fold().nfc().collect()
+    if text.is_ascii() {
+        text.to_ascii_lowercase()
+    } else {
+        text.nfc().case_fold().nfc().collect()
+    }
 }
 
 #[derive(Clone)]
@@ -30,10 +34,10 @@ impl NameQuery {
     }
     pub fn rank(&self, path: &Path, is_directory: bool) -> Option<RankedHit> {
         let name = path.file_name()?.to_str()?;
-        let normalized = normalize(name);
         if !self.filter.accepts(name, is_directory) {
             return None;
         }
+        let normalized = normalize(name);
         let literal = self.words.iter().all(|w| normalized.contains(w));
         if !literal && !crate::core::search::pinyin::matches(&normalized, &self.words) {
             return None;
@@ -90,19 +94,6 @@ impl RankedHit {
 pub(super) fn insert_top(top: &mut Vec<RankedHit>, hit: RankedHit) {
     let at = top
         .binary_search_by(|old| old.compare(&hit))
-        .unwrap_or_else(|at| at);
-    if at >= PAGE_SIZE {
-        return;
-    }
-    top.insert(at, hit);
-    if top.len() > PAGE_SIZE {
-        top.pop();
-    }
-}
-
-pub(super) fn insert_before(top: &mut Vec<RankedHit>, hit: RankedHit) {
-    let at = top
-        .binary_search_by(|old| hit.compare(old))
         .unwrap_or_else(|at| at);
     if at >= PAGE_SIZE {
         return;

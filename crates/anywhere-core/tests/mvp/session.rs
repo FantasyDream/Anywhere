@@ -763,7 +763,7 @@ async fn late_context_never_overwrites_a_newer_revision() {
 /// `update_input` makes its revision current before it resolves anything, so between the
 /// input arriving and the snapshot being published the session's revision is new while
 /// the candidate map still holds the old revision's candidates — carrying the old context
-/// and execution target. The shipped Flutter host cannot reach that state (it refuses to
+/// and execution target. The shipped GPUI host cannot reach that state (it refuses to
 /// submit while it is resolving), but the core API is a public boundary and a host that
 /// echoed a revision it had not received yet would otherwise get the stale action.
 #[tokio::test]
@@ -1216,8 +1216,12 @@ async fn subscription_replays_the_latest_snapshot() {
     let app = app(platform);
     let state = app.activate().await.unwrap().unwrap();
     // Subscribing after activation still sees the committed state.
-    let subscription = app.subscribe(state.session_id);
-    let latest = subscription.latest_state().expect("replayed snapshot");
+    let updates = app.state_updates();
+    let latest = updates
+        .borrow()
+        .as_ref()
+        .cloned()
+        .expect("replayed snapshot");
     assert_eq!(latest.session_id, state.session_id);
     assert_eq!(latest.snapshot_seq, state.snapshot_seq);
 }
@@ -1279,8 +1283,8 @@ async fn every_named_performance_metric_is_emitted_for_one_activation() {
         // hotkey_to_visible is the native host's, not the core's.
         if metric == metrics::HOTKEY_TO_VISIBLE {
             assert!(
-                include_str!("../../../../apps/flutter/macos/Runner/Main.swift").contains(metric),
-                "the native host must still emit {metric}"
+                include_str!("../../../../apps/gpui/src/app.rs").contains(metric),
+                "the GPUI host must still emit {metric}"
             );
             continue;
         }

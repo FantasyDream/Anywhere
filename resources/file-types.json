@@ -4,7 +4,177 @@
     "rust": "All",
     "label": "All types",
     "extensions": [],
-    "names": []
+    "names": [],
+    "icons": [
+      {
+        "kind": "Pdf",
+        "extensions": [
+          "pdf"
+        ]
+      },
+      {
+        "kind": "Document",
+        "extensions": [
+          "doc",
+          "docx",
+          "odt",
+          "rtf",
+          "pages"
+        ]
+      },
+      {
+        "kind": "Text",
+        "extensions": [
+          "txt",
+          "md",
+          "markdown",
+          "log",
+          "rst",
+          "tex"
+        ],
+        "names": [
+          "readme",
+          "license",
+          "licence",
+          "changelog",
+          "authors"
+        ]
+      },
+      {
+        "kind": "Spreadsheet",
+        "extensions": [
+          "xls",
+          "xlsx",
+          "ods",
+          "csv",
+          "tsv",
+          "numbers"
+        ]
+      },
+      {
+        "kind": "Presentation",
+        "extensions": [
+          "ppt",
+          "pptx",
+          "odp",
+          "key"
+        ]
+      },
+      {
+        "kind": "Image",
+        "filter": "images",
+        "extensions": [
+          "icns",
+          "psd",
+          "raw"
+        ]
+      },
+      {
+        "kind": "Audio",
+        "filter": "audio"
+      },
+      {
+        "kind": "Video",
+        "filter": "video"
+      },
+      {
+        "kind": "Archive",
+        "filter": "archives",
+        "exclude": [
+          "dmg",
+          "iso"
+        ]
+      },
+      {
+        "kind": "Package",
+        "extensions": [
+          "dmg",
+          "iso",
+          "pkg",
+          "exe",
+          "dll",
+          "dylib",
+          "so"
+        ]
+      },
+      {
+        "kind": "Book",
+        "extensions": [
+          "epub",
+          "mobi",
+          "azw",
+          "azw3"
+        ]
+      },
+      {
+        "kind": "Font",
+        "extensions": [
+          "ttf",
+          "otf",
+          "woff",
+          "woff2"
+        ]
+      },
+      {
+        "kind": "Config",
+        "extensions": [
+          "json",
+          "yaml",
+          "yml",
+          "toml",
+          "xml",
+          "ini",
+          "conf",
+          "cfg",
+          "properties",
+          "lock"
+        ],
+        "names": [
+          ".env",
+          ".gitignore",
+          ".gitattributes",
+          ".gitmodules",
+          ".editorconfig",
+          ".npmrc",
+          ".nvmrc",
+          ".prettierrc",
+          ".eslintrc",
+          ".bashrc",
+          ".zshrc",
+          ".bash_profile",
+          ".zprofile",
+          ".profile"
+        ],
+        "prefixes": [
+          ".env."
+        ]
+      },
+      {
+        "kind": "Code",
+        "filter": "code",
+        "exclude": [
+          "lock",
+          "json",
+          "yaml",
+          "yml",
+          "toml",
+          "xml",
+          "ini",
+          "conf",
+          "cfg",
+          "properties"
+        ],
+        "names": [
+          "dockerfile",
+          "makefile",
+          "cmakelists.txt",
+          "gemfile",
+          "rakefile",
+          "procfile",
+          "justfile"
+        ]
+      }
+    ]
   },
   {
     "id": "files",

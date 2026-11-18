@@ -16,7 +16,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
 };
-use tokio::sync::Semaphore;
+use tokio::sync::{OwnedSemaphorePermit, Semaphore};
 
 #[derive(Clone, Copy, Default)]
 pub struct FileSearchRequest {
@@ -113,15 +113,29 @@ impl FileSearchSource {
         }
     }
     pub fn clear(&self) {
-        if let Some(store) = self.active.lock().unwrap().take() {
-            store.cancel();
+        drop(self.take_cancelled_scan());
+    }
+
+    pub(crate) fn take_cancelled_scan(&self) -> Option<Arc<super::scan::ScanStore>> {
+        let store = self.active.lock().unwrap().take()?;
+        store.cancel();
+        Some(store)
+    }
+    pub(crate) async fn reserve_page(
+        &self,
+        execution: &ExecutionContext,
+    ) -> Result<OwnedSemaphorePermit> {
+        tokio::select! {
+            permit = self.page_worker.clone().acquire_owned() => Ok(permit?),
+            _ = execution.superseded() => anyhow::bail!("search expired"),
         }
     }
-    pub async fn more(
+
+    pub(crate) fn read_page(
         &self,
         query_id: u64,
-        displayed: std::collections::HashSet<std::path::PathBuf>,
-        execution: ExecutionContext,
+        displayed: &std::collections::HashSet<std::path::PathBuf>,
+        execution: &ExecutionContext,
     ) -> Result<AsyncCandidateBatch> {
         let store = self
             .active
@@ -129,42 +143,11 @@ impl FileSearchSource {
             .unwrap()
             .clone()
             .ok_or_else(|| anyhow::anyhow!("search expired"))?;
-        if store.query_id != query_id {
+        if store.query_id != query_id || !execution.is_current() {
             anyhow::bail!("search expired");
         }
-        let permit = tokio::select! { p = self.page_worker.clone().acquire_owned() => p?, _ = execution.superseded() => anyhow::bail!("search expired"), };
-        let actions = self.actions.clone();
-        tokio::task::spawn_blocking(move || {
-            let _permit = permit;
-            let page = store.more(&displayed, &|| !execution.is_current())?;
-            Ok(scan_batch(page, &actions))
-        })
-        .await?
-    }
-    pub async fn page(
-        &self,
-        query_id: u64,
-        cursor: String,
-        execution: ExecutionContext,
-    ) -> Result<AsyncCandidateBatch> {
-        let store = self
-            .active
-            .lock()
-            .unwrap()
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("search expired"))?;
-        if store.query_id != query_id {
-            anyhow::bail!("search expired");
-        }
-        let permit = tokio::select! { p = self.page_worker.clone().acquire_owned() => p?, _ = execution.superseded() => anyhow::bail!("search expired"), };
-        let actions = self.actions.clone();
-        tokio::task::spawn_blocking(move || {
-            let _permit = permit;
-            let cursor = (!cursor.is_empty()).then_some(cursor.as_str());
-            let page = store.page(cursor, &|| !execution.is_current())?;
-            Ok(scan_batch(page, &actions))
-        })
-        .await?
+        let page = store.more(displayed, &|| !execution.is_current())?;
+        Ok(scan_batch(page, &self.actions, &store))
     }
 }
 
@@ -274,8 +257,7 @@ impl AsyncCandidateSource for FileSearchSource {
             let platform = self.platform.clone();
             let query = request.text.clone();
             let check = current.clone();
-            let mut options = policy.options.clone();
-            options.engine = anywhere_platform::FileSearchEngine::SystemIndex;
+            let options = policy.options.clone();
             let index_store = store.clone();
             let result = tokio::task::spawn_blocking(move || {
                 let _permit = permit;
@@ -294,6 +276,7 @@ impl AsyncCandidateSource for FileSearchSource {
                         .send(scan_batch(
                             super::scan::ScanPage { hits, progress },
                             &self.actions,
+                            &store,
                         ))
                         .await;
                 }
@@ -316,15 +299,15 @@ impl AsyncCandidateSource for FileSearchSource {
                     if check() {
                         anyhow::bail!("search cancelled");
                     }
-                    tx.blocking_send(scan_batch(page, &actions))
+                    tx.blocking_send(scan_batch(page, &actions, &store))
                         .map_err(|_| anyhow::anyhow!("search receiver closed"))
                 });
                 if let Err(error) = result {
                     if !check() {
                         store.fail(&error);
-                        match store.page(None, &*check) {
+                        match store.first_page(&*check) {
                             Ok(page) => {
-                                let _ = tx.blocking_send(scan_batch(page, &actions));
+                                let _ = tx.blocking_send(scan_batch(page, &actions, &store));
                             }
                             Err(error) => {
                                 store.fail(&error);
@@ -348,17 +331,33 @@ impl AsyncCandidateSource for FileSearchSource {
     }
 }
 
-fn scan_batch(page: super::scan::ScanPage, actions: &ActionRegistry) -> AsyncCandidateBatch {
+fn scan_batch(
+    page: super::scan::ScanPage,
+    actions: &ActionRegistry,
+    store: &super::scan::ScanStore,
+) -> AsyncCandidateBatch {
     // The walker owns stable page order; matching and filtering have already happened.
     let candidates = page
         .hits
         .iter()
         .flat_map(|hit| {
-            let mut rows = file_candidates(vec![hit.hit()], "", actions);
-            for candidate in &mut rows {
+            let key = (hit.path.clone(), hit.is_directory);
+            let cached = store.projections.lock().unwrap().get(&key).cloned();
+            let mut candidate = cached.or_else(|| {
+                let candidate = file_candidates(vec![hit.hit()], "", actions)
+                    .into_iter()
+                    .next()?;
+                let mut cache = store.projections.lock().unwrap();
+                if cache.len() >= 128 {
+                    cache.clear();
+                }
+                cache.insert(key, candidate.clone());
+                Some(candidate)
+            });
+            if let Some(candidate) = &mut candidate {
                 candidate.presentation.score = f32::from(hit.score);
             }
-            rows
+            candidate
         })
         .collect();
     AsyncCandidateBatch {

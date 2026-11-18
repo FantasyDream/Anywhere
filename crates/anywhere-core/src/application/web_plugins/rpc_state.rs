@@ -1,7 +1,7 @@
 //! Per-document bounded bookkeeping. Dropping/rebinding cancels all unfinished requests.
 use anywhere_protocol::web_bridge::*;
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, VecDeque},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -78,6 +78,8 @@ impl Transfer {
 #[derive(Default)]
 pub(super) struct RpcState {
     seen: BTreeSet<String>,
+    seen_order: VecDeque<String>,
+    business_requests: usize,
     pub pending: BTreeMap<String, Arc<RequestControl>>,
     pub transfer: Option<Transfer>,
 }
@@ -89,12 +91,36 @@ impl Drop for RpcState {
     }
 }
 impl RpcState {
+    #[cfg(test)]
     pub fn admit(&mut self, id: &str, queued: bool) -> WebResult<RequestTicket> {
+        self.admit_with_quota(id, queued, true)
+    }
+
+    pub fn admit_call(&mut self, id: &str, call: &WebCall) -> WebResult<RequestTicket> {
+        let queued = !matches!(call, WebCall::Cancel { .. });
+        let counts_quota = !matches!(
+            call,
+            WebCall::TextBegin { .. }
+                | WebCall::TextChunk { .. }
+                | WebCall::TextCommit { .. }
+                | WebCall::TextRead { .. }
+                | WebCall::TextCancel { .. }
+                | WebCall::Cancel { .. }
+        );
+        self.admit_with_quota(id, queued, counts_quota)
+    }
+
+    fn admit_with_quota(
+        &mut self,
+        id: &str,
+        queued: bool,
+        counts_quota: bool,
+    ) -> WebResult<RequestTicket> {
         self.prune();
         if self.seen.contains(id) {
             return Err(WebError::new(WebErrorCode::DuplicateRequest));
         }
-        if self.seen.len() >= MAX_REQUESTS {
+        if counts_quota && self.business_requests >= MAX_REQUESTS {
             return Err(WebError::new(WebErrorCode::QuotaExceeded));
         }
         if queued
@@ -108,7 +134,20 @@ impl RpcState {
         {
             return Err(WebError::new(WebErrorCode::Busy));
         }
+        if self.seen_order.len() >= MAX_REQUESTS * 2 {
+            if let Some(evicted) = self.seen_order.pop_front() {
+                if !self.pending.contains_key(&evicted) {
+                    self.seen.remove(&evicted);
+                } else {
+                    self.seen_order.push_back(evicted);
+                }
+            }
+        }
         self.seen.insert(id.into());
+        self.seen_order.push_back(id.into());
+        if counts_quota {
+            self.business_requests += 1;
+        }
         let control = Arc::new(RequestControl {
             cancelled: AtomicBool::new(false),
             cancellation: tokio::sync::Notify::new(),

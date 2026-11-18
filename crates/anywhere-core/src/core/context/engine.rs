@@ -22,7 +22,7 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use tokio::sync::{broadcast, oneshot};
+use tokio::sync::oneshot;
 
 /// How deep a provider chain may usefully go.
 pub const MAX_DEPTH: u8 = 3;
@@ -37,7 +37,6 @@ pub struct ExecutionContext {
     pub session_id: SessionId,
     pub revision: Revision,
     pub(crate) current: Arc<AtomicU64>,
-    pub(crate) events: broadcast::Sender<LauncherEvent>,
     pub(crate) guard: Option<ExecutionGuard>,
 }
 
@@ -52,12 +51,10 @@ impl ExecutionContext {
     /// tests. The launcher service gets its contexts from the resolver instead, which is what
     /// makes supersession observable across revisions.
     pub fn detached(session_id: SessionId, revision: Revision) -> Self {
-        let (events, _) = broadcast::channel(16);
         Self {
             session_id,
             revision,
             current: Arc::new(AtomicU64::new(stamp(session_id, revision))),
-            events,
             guard: None,
         }
     }
@@ -75,12 +72,6 @@ impl ExecutionContext {
     pub async fn superseded(&self) {
         while self.is_current() {
             tokio::time::sleep(SUPERSEDED_POLL).await;
-        }
-    }
-
-    pub(crate) fn emit(&self, event: LauncherEvent) {
-        if self.is_current() {
-            let _ = self.events.send(event);
         }
     }
 }
@@ -273,18 +264,8 @@ impl ContextGraphRun {
     }
 
     fn insert(&mut self, context: ResolvedContext) {
-        let kept =
-            self.contexts
-                .insert(context, self.execution.session_id, self.execution.revision);
-        if !kept {
-            return;
-        }
-        let Some(context) = self.contexts.as_slice().last() else {
-            return;
-        };
-        self.execution.emit(LauncherEvent::ContextAdded {
-            context: context.descriptor(),
-        });
+        self.contexts
+            .insert(context, self.execution.session_id, self.execution.revision);
     }
 
     /// Await the started call, or `None` when it has no pending call.
@@ -437,13 +418,7 @@ impl ContextGraphRun {
                     }
                     self.insert(output);
                 }
-                self.execution.emit(LauncherEvent::ProviderCompleted {
-                    session_id: self.execution.session_id,
-                    revision: self.execution.revision,
-                    provider_id: provider_id.clone(),
-                    source_context_id: source_context_id.clone(),
-                    duration_us,
-                });
+
                 tracing::info!(
                     session_id = self.execution.session_id,
                     revision = self.execution.revision,
@@ -462,14 +437,7 @@ impl ContextGraphRun {
                     error = %error,
                     "provider_failed"
                 );
-                self.execution.emit(LauncherEvent::ProviderFailed {
-                    session_id: self.execution.session_id,
-                    revision: self.execution.revision,
-                    provider_id,
-                    source_context_id,
-                    duration_us,
-                    message: message.clone(),
-                });
+
                 self.diagnostics.push(message);
             }
         }
@@ -521,7 +489,6 @@ mod tests {
             session_id: 1,
             revision: 0,
             current: Arc::new(AtomicU64::new(stamp(1, 0))),
-            events: broadcast::channel(32).0,
             guard: None,
         }
     }

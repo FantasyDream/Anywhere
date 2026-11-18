@@ -5,13 +5,25 @@ use serde::Deserialize;
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Envelope<'a> {
+    #[serde(rename = "protocol")]
+    _protocol: u32,
+    #[serde(rename = "requestId")]
+    request_id: String,
+    #[serde(rename = "method")]
+    _method: String,
+    #[serde(borrow, rename = "params")]
+    _params: &'a serde_json::value::RawValue,
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Frame {
     protocol: u32,
     #[serde(rename = "requestId")]
     request_id: String,
-    method: String,
-    #[serde(borrow)]
-    params: &'a serde_json::value::RawValue,
+    #[serde(flatten)]
+    call: WebCall,
 }
+
 pub struct Request {
     pub id: String,
     pub call: WebCall,
@@ -30,25 +42,17 @@ pub fn parse(raw: &str) -> WebResult<Request> {
     if raw.len() > MAX_FRAME_BYTES {
         return Err(WebError::new(WebErrorCode::TooLarge));
     }
-    let envelope: Envelope<'_> =
+    let frame: Frame =
         serde_json::from_str(raw).map_err(|_| WebError::new(WebErrorCode::InvalidRequest))?;
-    if envelope.protocol != PROTOCOL {
+    if frame.protocol != PROTOCOL {
         return Err(WebError::new(WebErrorCode::IncompatibleProtocol));
     }
-    if !valid_id(&envelope.request_id) {
+    if !valid_id(&frame.request_id) {
         return Err(WebError::new(WebErrorCode::InvalidRequest));
     }
-    let method = serde_json::to_string(&envelope.method)
-        .map_err(|_| WebError::new(WebErrorCode::InvalidRequest))?;
-    let call = serde_json::from_str(&format!(
-        "{{\"method\":{method},\"params\":{}}}",
-        envelope.params.get()
-    ))
-    .map_err(|_| WebError::new(WebErrorCode::InvalidRequest))?;
+    let call = frame.call;
     // Bound arbitrary storage JSON's nesting and entry count too, not just envelope bytes.
-    let value: serde_json::Value = serde_json::from_str(envelope.params.get())
-        .map_err(|_| WebError::new(WebErrorCode::InvalidRequest))?;
-    let mut fields = 0;
+    let mut fields = 2;
     fn shape(value: &serde_json::Value, depth: usize, fields: &mut usize) -> bool {
         if depth > 16 {
             return false;
@@ -65,11 +69,13 @@ pub fn parse(raw: &str) -> WebResult<Request> {
             _ => true,
         }
     }
-    if !shape(&value, 0, &mut fields) {
-        return Err(WebError::new(WebErrorCode::TooLarge));
+    if let WebCall::StorageSet { value, .. } = &call {
+        if !shape(value, 1, &mut fields) {
+            return Err(WebError::new(WebErrorCode::TooLarge));
+        }
     }
     Ok(Request {
-        id: envelope.request_id,
+        id: frame.request_id,
         call,
     })
 }

@@ -21,5 +21,4 @@ name = "generate_web_sdk_contract"
 required-features = ["web-schema"]
 
 [dev-dependencies]
-toml = "1.1"
 

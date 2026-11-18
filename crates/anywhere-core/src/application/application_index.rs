@@ -14,8 +14,19 @@ use tokio::sync::watch;
 
 pub(super) struct ApplicationIndex {
     published: Mutex<PublishedIndex>,
+    scans: Mutex<ScanQueue>,
     issued: AtomicU64,
     updates: watch::Sender<u64>,
+}
+
+enum ScanQueue {
+    Idle,
+    Running { pending: Option<ScanRequest> },
+}
+
+struct ScanRequest {
+    generation: u64,
+    platform: Arc<dyn ApplicationCatalogHost>,
 }
 
 struct PublishedIndex {
@@ -41,6 +52,7 @@ impl Default for ApplicationIndex {
                 full,
                 excluded: BTreeSet::new(),
             }),
+            scans: Mutex::new(ScanQueue::Idle),
             issued: AtomicU64::new(0),
             updates: watch::channel(0).0,
         }
@@ -76,6 +88,18 @@ impl ApplicationIndex {
             .map_err(|_| anyhow!("application catalog lock poisoned"))
     }
 
+    pub fn has_completed_scan(&self) -> bool {
+        self.published
+            .lock()
+            .map(|state| state.completed_scan > 0)
+            .unwrap_or(false)
+    }
+
+    pub fn seed(&self, report: index::ScanReport) {
+        let generation = self.issue_scan();
+        self.publish(generation, ScanStatus::Complete(report));
+    }
+
     pub fn excluded(&self) -> Vec<String> {
         self.published
             .lock()
@@ -83,27 +107,56 @@ impl ApplicationIndex {
             .unwrap_or_default()
     }
 
-    pub fn set_excluded(&self, ids: Vec<String>) -> Result<()> {
+    pub fn set_excluded(&self, ids: Vec<String>) -> Result<bool> {
         let excluded = ids.into_iter().filter(|id| !id.trim().is_empty()).collect();
         let mut state = self
             .published
             .lock()
             .map_err(|_| anyhow!("catalog lock poisoned"))?;
+        if state.excluded == excluded {
+            return Ok(false);
+        }
         // Preferences and the filtered view change together, including during scans.
         state.excluded = excluded;
         state.visible = filtered(&state.full, &state.excluded);
-        Ok(())
+        Ok(true)
     }
 
-    /// Each activation scans again, without holding index or session locks over OS I/O.
+    /// Keep at most one scan running and one follow-up for the latest activation.
     pub fn spawn_scan(self: &Arc<Self>, platform: Arc<dyn ApplicationCatalogHost>) -> u64 {
+        let mut queue = self.scans.lock().expect("application scan queue poisoned");
         let generation = self.issue_scan();
+        let request = ScanRequest {
+            generation,
+            platform,
+        };
+        if let ScanQueue::Running { pending } = &mut *queue {
+            *pending = Some(request);
+            return generation;
+        }
+        *queue = ScanQueue::Running { pending: None };
+        drop(queue);
+
         let index = self.clone();
-        tokio::spawn(async move {
-            let scanned = index::scan_async(platform).await;
-            index.publish(generation, scanned);
-        });
+        tokio::spawn(index.run_scans(request));
         generation
+    }
+
+    async fn run_scans(self: Arc<Self>, mut request: ScanRequest) {
+        loop {
+            let scanned = index::scan_async(request.platform).await;
+            self.publish(request.generation, scanned);
+
+            let mut queue = self.scans.lock().expect("application scan queue poisoned");
+            let ScanQueue::Running { pending } = &mut *queue else {
+                unreachable!("scan worker owns the running queue");
+            };
+            let Some(next) = pending.take() else {
+                *queue = ScanQueue::Idle;
+                return;
+            };
+            request = next;
+        }
     }
 
     fn issue_scan(&self) -> u64 {

@@ -27,6 +27,11 @@ async function init(destination, background = false) {
       target,
       {recursive: true},
     );
+    await lstat(resolve(sdk, 'dist/index.js')).catch(() => {
+      throw new Error(
+        'Plugin SDK is not built yet. Run `npm run build` in packages/plugin-sdk first.',
+      );
+    });
     const vendor = resolve(target, 'vendor/plugin-sdk');
     await mkdir(vendor, {recursive: true});
     for (const entry of [

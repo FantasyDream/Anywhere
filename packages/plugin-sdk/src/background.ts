@@ -1,5 +1,5 @@
 /** Selected at build time by the anywhere-background export condition.
- * No browser globals, Flutter transport, runtime imports or style code are needed.
+ * No browser globals, frontend transport, runtime imports or style code are needed.
  */
 import {HostError} from './errors.js';
 import {inspectText, uploadText} from './text_upload.js';

@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 
 pub(super) struct ScanScope {
     pub(super) options: FileSearchOptions,
+    pub(super) canonical_roots: Vec<PathBuf>,
     pub(super) system_exclusions: anywhere_platform::search_exclusions::SearchExclusions,
     pub(super) direct_only: bool,
     pub(super) exact_path: Option<PathBuf>,
@@ -16,11 +17,17 @@ impl ScanScope {
         direct_only: bool,
         exact_path: Option<PathBuf>,
     ) -> Self {
+        let canonical_roots = options
+            .roots
+            .iter()
+            .filter_map(|root| root.canonicalize().ok())
+            .collect();
         Self {
             system_exclusions: anywhere_platform::search_exclusions::SearchExclusions::for_search(
                 &options.roots,
             ),
             options,
+            canonical_roots,
             direct_only,
             exact_path,
         }
@@ -28,10 +35,16 @@ impl ScanScope {
     pub(super) fn authorized_link_target(&self, path: &Path) -> bool {
         !self.options.restrict_to_roots
             || path.canonicalize().is_ok_and(|target| {
-                self.options.roots.iter().any(|root| {
-                    root.canonicalize()
-                        .is_ok_and(|root| target.starts_with(root))
-                })
+                if self.canonical_roots.len() == self.options.roots.len() {
+                    self.canonical_roots
+                        .iter()
+                        .any(|root| target.starts_with(root))
+                } else {
+                    self.options.roots.iter().any(|root| {
+                        root.canonicalize()
+                            .is_ok_and(|root| target.starts_with(root))
+                    })
+                }
             })
     }
     pub(super) fn configured_roots(&self) -> Result<Vec<PathBuf>> {

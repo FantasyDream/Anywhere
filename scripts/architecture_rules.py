@@ -3,11 +3,40 @@ import re
 
 
 def production_source(source):
-    """Exclude explicit inline and file-level test modules from production rules."""
-    production = source.split('#[cfg(test)]', 1)[0]
-    production = re.sub(r'//[^\n]*|/\*.*?\*/', '', production, flags=re.S)
+    """Mask literals/comments and test items, preserving later production code."""
+    tokens = re.compile(
+        r'(?s)r(?P<hashes>\#{0,16})".*?"(?P=hashes)|"(?:\\.|[^"\\])*"|/\*.*?\*/|//[^\n]*|\'(?:\\.|[^\'\\])\''
+    )
+    production = tokens.sub(lambda match: re.sub(r'[^\n]', ' ', match[0]),
+                            source)
     if re.match(r'\s*#!\[cfg\(test\)\]', production):
         return ''
+    pattern = re.compile(r'#\[cfg\(test\)\]')
+    while match := pattern.search(production):
+        start = match.start()
+        cursor = match.end()
+        # Attributes after cfg(test) may contain braces; skip them first.
+        while True:
+            attr = re.match(r'\s*#\[[^]]*\]', production[cursor:])
+            if attr is None:
+                break
+            cursor += attr.end()
+        opening = re.search(r'[;{]', production[cursor:])
+        if opening is None:
+            production = production[:start]
+            break
+        cursor += opening.start()
+        if production[cursor] == ';':
+            end = cursor + 1
+        else:
+            depth, end = 1, cursor + 1
+            while end < len(production) and depth:
+                if production[end] == '{':
+                    depth += 1
+                elif production[end] == '}':
+                    depth -= 1
+                end += 1
+        production = production[:start] + production[end:]
     return production
 
 

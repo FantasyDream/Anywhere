@@ -1,7 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-python3 scripts/build-web-examples.py
+if [[ "${ANYWHERE_SDK_READY:-0}" == 1 ]]; then
+  python3 scripts/build-web-examples.py --sdk-ready
+else
+  python3 scripts/build-web-examples.py
+fi
 for package in build/web-examples/dev.anywhere.json-workspace.awplugin build/web-examples/dev.example.text-pad.awplugin build/web-examples/dev.example.json-summary.awplugin; do
   cargo run -p anywhere-plugin --example inspect_web_package --locked -- "$package"
 done

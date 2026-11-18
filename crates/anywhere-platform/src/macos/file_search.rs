@@ -3,14 +3,20 @@ use crate::FileSearchHit;
 use anyhow::{bail, Context, Result};
 use std::{
     collections::BTreeSet,
+    path::{Component, Path, PathBuf},
+    time::Duration,
+};
+
+#[cfg(test)]
+use std::{
     io::Read,
     os::fd::AsRawFd,
-    path::{Component, Path, PathBuf},
     process::{Child, Command, Stdio},
-    time::{Duration, Instant},
+    time::Instant,
 };
 
 const MAX_BYTES: usize = 256 * 1024;
+#[cfg(test)]
 const MAX_PATH_BYTES: usize = 16 * 1024;
 const TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -48,17 +54,27 @@ pub(super) fn search_with_options(
             crate::file_search::ripgrep(query, limit, options, cancelled, TIMEOUT)
         }
         FileSearchEngine::Combined => {
-            let index = index_search(query, limit, options, cancelled, Duration::from_millis(700));
-            if cancelled() {
-                return Ok(Vec::new());
-            }
-            let scan = crate::file_search::ripgrep(
-                query,
-                limit,
-                options,
-                cancelled,
-                Duration::from_millis(1600),
-            );
+            let (index, scan) = std::thread::scope(|scope| {
+                let index = scope.spawn(|| {
+                    index_search(query, limit, options, cancelled, Duration::from_millis(700))
+                });
+                let scan = scope.spawn(|| {
+                    crate::file_search::ripgrep(
+                        query,
+                        limit,
+                        options,
+                        cancelled,
+                        Duration::from_millis(1600),
+                    )
+                });
+                (
+                    index
+                        .join()
+                        .unwrap_or_else(|_| Err(anyhow::anyhow!("index worker failed"))),
+                    scan.join()
+                        .unwrap_or_else(|_| Err(anyhow::anyhow!("scan worker failed"))),
+                )
+            });
             if cancelled() {
                 return Ok(Vec::new());
             }
@@ -82,48 +98,99 @@ fn index_search(
     {
         return Ok(Vec::new());
     }
-    let roots = crate::file_search::roots(options)?;
-    let deadline = Instant::now() + timeout;
-    let mut hits = Vec::new();
+    let roots: Vec<_> = crate::file_search::roots(options)?
+        .into_iter()
+        .map(|root| {
+            let root = root
+                .canonicalize()
+                .context("search directory unavailable")?;
+            anyhow::ensure!(root.is_dir(), "search root is not a directory");
+            Ok(root)
+        })
+        .collect::<Result<_>>()?;
+    let name = std::ffi::CString::new(query.trim())?;
+    let encoded = std::ffi::CString::new(serde_json::to_string(&roots)?)?;
+    extern "C" {
+        fn pthread_main_np() -> std::ffi::c_int;
+    }
+    if unsafe { pthread_main_np() != 0 } {
+        return std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    run_spotlight_query(&name, &encoded, &roots, limit, options, cancelled, timeout)
+                })
+                .join()
+                .unwrap_or_else(|_| Err(anyhow::anyhow!("index worker failed")))
+        });
+    }
+    run_spotlight_query(&name, &encoded, &roots, limit, options, cancelled, timeout)
+}
+
+fn run_spotlight_query(
+    name: &std::ffi::CString,
+    encoded: &std::ffi::CString,
+    roots: &[PathBuf],
+    limit: usize,
+    options: &crate::FileSearchOptions,
+    cancelled: &(dyn Fn() -> bool + Sync),
+    timeout: Duration,
+) -> Result<Vec<FileSearchHit>> {
+    struct Cancellation<'a>(&'a (dyn Fn() -> bool + Sync));
+    unsafe extern "C" fn check(context: *mut std::ffi::c_void) -> i32 {
+        // SAFETY: the native query borrows this stack adapter synchronously.
+        let cancellation = unsafe { &*context.cast::<Cancellation<'_>>() };
+        i32::from((cancellation.0)())
+    }
+    let mut cancellation = Cancellation(cancelled);
+    let mut length = 0;
+    let mut status = 0;
+    // SAFETY: strings and callback context outlive this bounded native query.
+    let pointer = unsafe {
+        super::native::launcher_spotlight_paths(
+            name.as_ptr(),
+            encoded.as_ptr(),
+            timeout.as_millis() as u32,
+            MAX_BYTES as u32,
+            check,
+            (&mut cancellation as *mut Cancellation<'_>).cast(),
+            &mut length,
+            &mut status,
+        )
+    };
+    // SAFETY: a successful query returns exactly `length` owned bytes.
+    let Some(bytes) = (unsafe { super::native::NativeBytes::from_raw(pointer, length) }) else {
+        if status == 7 || cancelled() {
+            return Ok(vec![]);
+        }
+        bail!("file index query failed (status {status})");
+    };
+    if cancelled() {
+        return Ok(vec![]);
+    }
     let mut seen = BTreeSet::new();
-    for root in roots {
-        if cancelled() {
-            return Ok(Vec::new());
-        }
-        let root = root
-            .canonicalize()
-            .context("search directory unavailable")?;
-        if !root.is_dir() {
-            bail!("search root is not a directory");
-        }
-        let mut command = Command::new("/usr/bin/mdfind");
-        command
-            .args(["-0", "-onlyin"])
-            .arg(&root)
-            .arg("-name")
-            .arg(query.trim());
-        let remaining = deadline.saturating_duration_since(Instant::now());
-        let batch = collect_configured(
-            command,
-            limit.min(64),
-            cancelled,
-            remaining,
-            options,
-            Some(&root),
-        )?;
-        for hit in batch {
-            if seen.insert(hit.path.clone()) {
+    let mut hits = Vec::new();
+    for raw in bytes
+        .as_slice()
+        .split(|byte| *byte == 0)
+        .filter(|raw| !raw.is_empty())
+    {
+        if let Some(hit) = accept(raw, &mut seen, options, None) {
+            // Retain the exact authorized scopes even if the index returns a
+            // stale path, symlink escape, or an item from another directory.
+            if roots.iter().any(|root| hit.path.starts_with(root)) {
                 hits.push(hit);
             }
             if hits.len() >= limit.min(64) {
-                return Ok(hits);
+                break;
             }
         }
     }
     Ok(hits)
 }
 
+#[cfg(test)]
 struct SearchChild(Child);
+#[cfg(test)]
 impl Drop for SearchChild {
     fn drop(&mut self) {
         let _ = self.0.kill();
@@ -196,6 +263,7 @@ fn collect(
     )
 }
 
+#[cfg(test)]
 fn collect_configured(
     mut command: Command,
     limit: usize,

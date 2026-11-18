@@ -25,6 +25,7 @@ import {inspectText, uploadText} from './text_upload.js';
 export {HostError} from './errors.js';
 
 type Body = {value: unknown} | {transfer: {ticket: string; bytes: number}};
+type Outcome = {value: Body} | {error: HostError; cancel?: boolean};
 type Job = {
   id: string;
   frame: string;
@@ -59,14 +60,34 @@ export function createHost(transport: HostTransport) {
     (context: PluginSnapshot['context']) => void
   >();
   const inputListeners = new Set<(input: string) => void>();
+  function sameContext(
+    left: PluginSnapshot['context'],
+    right: PluginSnapshot['context'],
+  ): boolean {
+    if (left === right) return true;
+    if (!left || !right || left.kind !== right.kind) return false;
+    const keys = new Set([...Object.keys(left), ...Object.keys(right)]);
+    for (const key of keys) {
+      const a = (left as Record<string, unknown>)[key];
+      const b = (right as Record<string, unknown>)[key];
+      if (a === b) continue;
+      if (
+        typeof a !== 'object' ||
+        a === null ||
+        typeof b !== 'object' ||
+        b === null ||
+        JSON.stringify(a) !== JSON.stringify(b)
+      ) {
+        return false;
+      }
+    }
+    return true;
+  }
   function accept(state: PluginSnapshot) {
     if (disposed || (snapshot && state.version <= snapshot.version)) return;
     const previous = snapshot;
     snapshot = state;
-    if (
-      !previous ||
-      JSON.stringify(previous.context) !== JSON.stringify(state.context)
-    )
+    if (!previous || !sameContext(previous.context, state.context))
       for (const listener of contextListeners) {
         try {
           listener(state.context);
@@ -155,15 +176,21 @@ export function createHost(transport: HostTransport) {
       () => {},
     );
   }
-  function settle(job: Job, error?: unknown, value?: Body) {
+  function settle(job: Job, outcome: Outcome) {
     const queued = queue.indexOf(job);
     const active = pending.delete(job.id);
     if (!active && queued < 0) return;
     if (queued >= 0) queue.splice(queued, 1);
     clearTimeout(job.timer);
     if (job.abort) job.options?.signal?.removeEventListener('abort', job.abort);
-    if (error) job.reject(error);
-    else job.resolve(value!);
+    if ('error' in outcome) {
+      // The transport also counts pending requests. Free the cancelled slot
+      // before sending another job from the local queue.
+      if (active && outcome.cancel) cancel(job.id);
+      job.reject(outcome.error);
+    } else {
+      job.resolve(outcome.value);
+    }
     pump();
   }
   function pump() {
@@ -171,10 +198,16 @@ export function createHost(transport: HostTransport) {
       const job = queue.shift()!;
       pending.set(job.id, job);
       job.timer = setTimeout(() => {
-        settle(job, new HostError('TIMEOUT'));
-        cancel(job.id);
+        settle(job, {error: new HostError('TIMEOUT'), cancel: true});
       }, job.timeout);
-      send(job.frame, () => settle(job, new HostError('HOST_FAILURE')));
+      send(job.frame, error => {
+        const code =
+          error instanceof Error &&
+          (errorCodes as readonly string[]).includes(error.message)
+            ? error.message
+            : 'HOST_FAILURE';
+        settle(job, {error: new HostError(code)});
+      });
     }
   }
   const unsubscribe = transport.subscribe(frame => {
@@ -208,15 +241,14 @@ export function createHost(transport: HostTransport) {
     if (!job) return;
     if ('error' in message && !('result' in message) && object(message.error)) {
       const code = message.error.code;
-      settle(
-        job,
-        new HostError(
+      settle(job, {
+        error: new HostError(
           typeof code === 'string' &&
             (errorCodes as readonly string[]).includes(code)
             ? code
             : 'HOST_FAILURE',
         ),
-      );
+      });
     } else if (
       'result' in message &&
       !('error' in message) &&
@@ -224,7 +256,7 @@ export function createHost(transport: HostTransport) {
     ) {
       const result = message.result;
       if ('value' in result && !('transfer' in result))
-        settle(job, undefined, {value: result.value});
+        settle(job, {value: {value: result.value}});
       else if (
         'transfer' in result &&
         !('value' in result) &&
@@ -235,11 +267,11 @@ export function createHost(transport: HostTransport) {
         (result.transfer.bytes as number) > 0 &&
         (result.transfer.bytes as number) <= limits.transferBytes
       ) {
-        settle(job, undefined, {
-          transfer: result.transfer as {ticket: string; bytes: number},
+        settle(job, {
+          value: {transfer: result.transfer as {ticket: string; bytes: number}},
         });
-      } else settle(job, new HostError('INVALID_RESPONSE'));
-    } else settle(job, new HostError('INVALID_RESPONSE'));
+      } else settle(job, {error: new HostError('INVALID_RESPONSE')});
+    } else settle(job, {error: new HostError('INVALID_RESPONSE')});
   });
   function raw<M extends keyof Calls>(
     method: M,
@@ -270,11 +302,8 @@ export function createHost(transport: HostTransport) {
         resolve,
         reject,
       };
-      job.abort = () => {
-        const sent = pending.has(job.id);
-        settle(job, new HostError('CANCELLED'));
-        if (sent) cancel(job.id);
-      };
+      job.abort = () =>
+        settle(job, {error: new HostError('CANCELLED'), cancel: true});
       options?.signal?.addEventListener('abort', job.abort, {once: true});
       queue.push(job);
       pump();
@@ -445,10 +474,8 @@ export function createHost(transport: HostTransport) {
       contextListeners.clear();
       inputListeners.clear();
       snapshot = undefined;
-      const sent = [...pending.keys()];
       for (const job of [...queue, ...pending.values()])
-        settle(job, new HostError('INACTIVE'));
-      for (const requestId of sent) cancel(requestId);
+        settle(job, {error: new HostError('INACTIVE'), cancel: true});
     },
   };
 }

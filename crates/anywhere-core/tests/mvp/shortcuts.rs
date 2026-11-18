@@ -449,9 +449,35 @@ async fn registration_catalog_distinguishes_revocation_from_missing_project() {
 
 #[tokio::test]
 async fn plugin_binding_registration_tracks_catalog_replacement_without_context() {
+    use anywhere_core::core::action::{
+        availability::AvailabilityRule,
+        bundle::ActionSpec,
+        handler::{ActionHandler, ExecutionOutput},
+    };
+    struct WrapStatus;
+    impl ActionHandler for WrapStatus {
+        fn execute(&self, _: &ResolvedContext, _: &dyn Platform) -> Result<ExecutionOutput> {
+            Ok(ExecutionOutput::dismiss())
+        }
+    }
     let mut installed = registry();
     installed
-        .register_plugin(anywhere_plugin::parse_manifest(crate::search::WRAP_PLUGIN).unwrap())
+        .register(
+            ActionSpec {
+                localized_titles: &[],
+                id: "wrap.status",
+                title: "Wrapped Git Status",
+                accepts: GIT_REPOSITORY,
+                handler: &WrapStatus,
+                availability: AvailabilityRule::Enabled,
+                base_priority: 0,
+                icon: "bolt",
+                aliases: &[],
+                keywords: &[],
+                primary_action: false,
+            }
+            .descriptor("git"),
+        )
         .unwrap();
     let app = Application::new(
         Arc::new(TestPlatform::default()),

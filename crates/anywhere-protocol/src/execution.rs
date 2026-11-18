@@ -1,7 +1,4 @@
-use super::{
-    identifiers::{ExecutionSessionId, Revision, SessionId},
-    ui,
-};
+use super::identifiers::{ExecutionSessionId, Revision, SessionId};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -60,9 +57,6 @@ pub enum HostView {
     NativeTool {
         id: String,
         input: String,
-    },
-    PluginDetail {
-        detail: ui::DetailView,
     },
     /// Opaque Host-issued ticket. Not a resource URL or a page-supplied plugin identity.
     WebPlugin {

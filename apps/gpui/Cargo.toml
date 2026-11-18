@@ -1,0 +1,75 @@
+[package]
+name = "anywhere-gpui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Anywhere desktop application"
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+anywhere-core.workspace = true
+anywhere-platform.workspace = true
+anywhere-protocol.workspace = true
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+gpui-kit = { version = "=0.9.1", features = ["gpui-fast"] }
+gpui-webview = { version = "=0.9.1", features = ["gpui-fast"] }
+global-hotkey = "0.10.0"
+rfd = "0.15"
+sys-locale = "0.3"
+url.workspace = true
+raw-window-handle = "=0.6.2"
+wry = { package = "lb-wry", version = "=0.53.3", features = ["transparent"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
+dispatch2 = "0.3.1"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3.2", features = [
+  "NSApplication",
+  "NSAppearance",
+  "NSButton",
+  "NSColor",
+  "NSControl",
+  "NSEvent",
+  "NSGlassEffectView",
+  "NSMenu",
+  "NSMenuItem",
+  "NSImage",
+  "NSPanel",
+  "NSResponder",
+  "NSRunningApplication",
+  "NSScreen",
+  "NSStatusBar",
+  "NSStatusBarButton",
+  "NSStatusItem",
+  "NSView",
+  "NSVisualEffectView",
+  "NSWindow",
+  "NSWorkspace",
+] }
+objc2-foundation = { version = "0.3.2", features = [
+  "NSArray",
+  "NSData",
+  "NSError",
+  "NSNotification",
+  "NSOperation",
+  "NSString",
+  "NSURL",
+] }
+objc2-quartz-core = "0.3.2"
+objc2-quick-look-ui = { version = "0.3.2", default-features = false, features = [
+  "QLPreviewPanel",
+  "objc2-app-kit",
+] }
+objc2-service-management = { version = "0.3.2", features = ["SMAppService"] }
+quicklook = "0.2.2"
+
+[dev-dependencies]
+gpui-kit = { version = "=0.9.1", features = ["gpui-fast", "test-support"] }
+tempfile = "3"

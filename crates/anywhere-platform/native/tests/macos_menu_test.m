@@ -3,6 +3,8 @@
 #import <ApplicationServices/ApplicationServices.h>
 #include <assert.h>
 static AXError test_attribute(AXUIElementRef element, CFStringRef attribute, CFTypeRef *out);
+static AXError test_multiple(AXUIElementRef element, CFArrayRef attributes,
+                             AXCopyMultipleAttributeOptions options, CFArrayRef *out);
 static AXError test_actions(AXUIElementRef element, CFArrayRef *out);
 static AXError test_press(AXUIElementRef element, CFStringRef action);
 static AXError test_timeout(AXUIElementRef element, float timeout);
@@ -12,11 +14,13 @@ static AXUIElementRef test_prepared_element;
 static float test_prepared_timeout;
 static BOOL test_require_bound;
 static NSUInteger test_attribute_count;
+#define AXUIElementCopyMultipleAttributeValues test_multiple
 #define AXUIElementCopyAttributeValue test_attribute
 #define AXUIElementCopyActionNames test_actions
 #define AXUIElementPerformAction test_press
 #define AXUIElementSetMessagingTimeout test_timeout
 #include "../macos_menu.m"
+#undef AXUIElementCopyMultipleAttributeValues
 #undef AXUIElementCopyAttributeValue
 #undef AXUIElementCopyActionNames
 #undef AXUIElementPerformAction
@@ -58,6 +62,19 @@ static AXError test_attribute(AXUIElementRef element, CFStringRef attribute, CFT
   id value = node[(__bridge NSString *)attribute];
   if (!value) return kAXErrorNoValue;
   *out = CFRetain((__bridge CFTypeRef)value);
+  return kAXErrorSuccess;
+}
+static AXError test_multiple(AXUIElementRef element, CFArrayRef attributes,
+                             AXCopyMultipleAttributeOptions options, CFArrayRef *out) {
+  (void)options;
+  test_bound(element);
+  test_attribute_count++;
+  NSDictionary *node = (__bridge NSDictionary *)element;
+  if (node[@"TestAXError"]) return (AXError)[node[@"TestAXError"] intValue];
+  NSMutableArray *values = [NSMutableArray array];
+  for (NSString *name in (__bridge NSArray *)attributes)
+    [values addObject:node[name] ?: NSNull.null];
+  *out = CFRetain((__bridge CFArrayRef)values);
   return kAXErrorSuccess;
 }
 static AXError test_actions(AXUIElementRef element, CFArrayRef *out) {
@@ -431,7 +448,7 @@ int main(void) {
     menu_incomplete = NO;
     menu_ax_failure = kAXErrorSuccess;
     NSDictionary *shortcut = @{@"AXMenuItemCmdVirtualKey" : @123, @"AXMenuItemCmdModifiers" : @0};
-    assert([shortcut_of((__bridge AXUIElementRef)shortcut) isEqualToString:@"⌘←"]);
+    assert([shortcut_values(shortcut) isEqualToString:@"⌘←"]);
     puts("Native menu and selection checks passed (identity, ambiguity, insertion, localization, "
          "disabled ancestors, AX errors, shortcuts, text cap)");
   }

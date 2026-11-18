@@ -1,11 +1,12 @@
 # 历史基准样本
 
-这些数据仅对采样时的构建、硬件与 fixture 有效。当前策略见 [性能](../../performance.md) 和 [文件搜索](../../file-search.md)。
+这些数据仅对采样时的构建、硬件与 fixture 有效。当前策略见 [性能](../mvp-migration/performance-flutter-era.md) 和 [文件搜索](../../file-search.md)。
 
 | 样本 | 边界 |
 |---|---|
 | [R2 SQLite 排序对照，2026-10-18](open-source-result-store-r2-2026-10-18.json) | 旧原型位于提交 `9d14251`；当前已移除，保留原始顺序 / 耗时 / RSS / 磁盘对照 |
 | [R3 匹配对照，2026-10-18](open-source-matcher-r3-2026-10-18.json) | 旧原型位于提交 `9d14251`；采用原生流式比较，nucleo 未接入生产且依赖已清理 |
+| [连续文件遍历，2026-10-18](flutter-era-v0.14/file-search-continuous-r2.json) | 10k / 40k 合成文件及完整结果分页读取；历史 UI 轮次样本，不代表当前 GPUI 路径 |
 | [长期索引原型，2026-10-10](file-search-index-prototype-2026-10-10.json) | 已被取代的实验，不代表生产路径；status 与 hardware 保留在原始 JSON |
 | [V0.9 整 App，2026-10-16](v0.9-app-2026-10-16.json) | Build 6 主进程 RSS 快照、可见 / 隐藏 vmmap 与原生可见事件，非长期或端到端帧耗时保证 |
 | [V0.9 遍历器，2026-10-16](v0.9-file-search-2026-10-16.json) | 0.9 收尾源码，10k / 40k 刚创建文件，3 次采样；独立 Rust release 进程，不含 Spotlight / Flutter |

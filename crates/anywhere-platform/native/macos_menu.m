@@ -140,38 +140,80 @@ static BOOL is_separator_title(NSString *title) {
   return [trimmed rangeOfCharacterFromSet:dashes.invertedSet].location == NSNotFound;
 }
 
-static NSArray *flatten_children_depth(AXUIElementRef element, NSUInteger depth) {
-  if (depth > 16) {
-    menu_incomplete = YES;
-    return @[];
+// Read each node's presentation and descendants in one cross-process AX request.
+static NSDictionary *menu_attributes(AXUIElementRef element) {
+  if (!ax_prepare(element)) return @{};
+  NSArray *names = @[
+    (__bridge id)kAXRoleAttribute, (__bridge id)kAXTitleAttribute,
+    (__bridge id)kAXIdentifierAttribute, (__bridge id)kAXEnabledAttribute,
+    (__bridge id)kAXChildrenAttribute, (__bridge id)kAXMenuItemCmdCharAttribute,
+    (__bridge id)kAXMenuItemCmdVirtualKeyAttribute, (__bridge id)kAXMenuItemCmdModifiersAttribute
+  ];
+  CFArrayRef raw = NULL;
+  AXError error =
+      AXUIElementCopyMultipleAttributeValues(element, (__bridge CFArrayRef)names, 0, &raw);
+  menu_note_ax_error(error);
+  menu_note_operation(error, CFSTR("AXMultipleAttributes"));
+  if (error != kAXErrorSuccess || !raw || menu_expired()) {
+    if (raw) CFRelease(raw);
+    return @{};
   }
-  if (++menu_visited > 20000 || menu_expired()) {
-    menu_incomplete = YES;
-    return @[];
-  }
-  NSMutableArray *out = [NSMutableArray array];
-  id raw = ax_value(element, kAXChildrenAttribute);
-  if (![raw isKindOfClass:NSArray.class]) return out;
-  for (id childObj in (NSArray *)raw) {
-    AXUIElementRef child = (__bridge AXUIElementRef)childObj;
-    NSString *role = ax_string(child, kAXRoleAttribute) ?: @"";
-    if ([role isEqualToString:@"AXMenu"] || [role isEqualToString:@"AXMenuBar"]) {
-      [out addObjectsFromArray:flatten_children_depth(child, depth + 1)];
-    } else {
-      [out addObject:childObj];
+  NSArray *values = CFBridgingRelease(raw);
+  NSMutableDictionary *result = [NSMutableDictionary dictionary];
+  for (NSUInteger index = 0; index < MIN(names.count, values.count); index++) {
+    id value = values[index];
+    if (CFGetTypeID((__bridge CFTypeRef)value) == AXValueGetTypeID() &&
+        AXValueGetType((__bridge AXValueRef)value) == kAXValueAXErrorType) {
+      AXError attributeError = kAXErrorSuccess;
+      AXValueGetValue((__bridge AXValueRef)value, kAXValueAXErrorType, &attributeError);
+      CFStringRef attrName = (__bridge CFStringRef)names[index];
+      BOOL structural =
+          CFEqual(attrName, kAXRoleAttribute) || CFEqual(attrName, kAXChildrenAttribute);
+      if (attributeError == kAXErrorAPIDisabled || structural) {
+        menu_note_ax_error(attributeError);
+        menu_note_operation(attributeError, attrName);
+      }
+    } else if (value != NSNull.null) {
+      result[names[index]] = value;
     }
   }
-  return out;
+  return result;
 }
 
-static NSArray *flatten_children(AXUIElementRef element) {
-  return flatten_children_depth(element, 0);
+static NSArray *menu_entries(id raw, NSUInteger depth) {
+  if (depth > 16 || ++menu_visited > 20000 || menu_expired()) {
+    menu_incomplete = YES;
+    return @[];
+  }
+  if (![raw isKindOfClass:NSArray.class]) return @[];
+  NSMutableArray *entries = [NSMutableArray array];
+  for (id childObject in raw) {
+    NSDictionary *values = menu_attributes((__bridge AXUIElementRef)childObject);
+    NSString *role = values[(__bridge id)kAXRoleAttribute];
+    if ([role isEqual:@"AXMenu"] || [role isEqual:@"AXMenuBar"]) {
+      [entries
+          addObjectsFromArray:menu_entries(values[(__bridge id)kAXChildrenAttribute], depth + 1)];
+    } else if ([role isEqual:@"AXMenuItem"] || [role isEqual:@"AXMenuBarItem"]) {
+      id title = values[(__bridge id)kAXTitleAttribute];
+      id identifier = values[(__bridge id)kAXIdentifierAttribute];
+      [entries addObject:@{
+        @"element" : childObject,
+        @"role" : role,
+        @"title" : [title isKindOfClass:NSString.class] ? title : @"",
+        @"identifier" : [identifier isKindOfClass:NSString.class] ? identifier : @"",
+        @"attributes" : values
+      }];
+    }
+    if (menu_expired()) break;
+  }
+  return entries;
 }
 
-static NSString *shortcut_of(AXUIElementRef element) {
-  NSString *cmd = ax_string(element, kAXMenuItemCmdCharAttribute);
+static NSString *shortcut_values(NSDictionary *values) {
+  id character = values[(__bridge id)kAXMenuItemCmdCharAttribute];
+  NSString *cmd = [character isKindOfClass:NSString.class] ? character : nil;
   if (cmd.length == 0) {
-    id key = ax_value(element, kAXMenuItemCmdVirtualKeyAttribute);
+    id key = values[(__bridge id)kAXMenuItemCmdVirtualKeyAttribute];
     if ([key isKindOfClass:NSNumber.class]) {
       cmd = @{
         @36 : @"↩",
@@ -204,7 +246,7 @@ static NSString *shortcut_of(AXUIElementRef element) {
     }
   }
   if (cmd.length == 0) return nil;
-  id modifiersValue = ax_value(element, kAXMenuItemCmdModifiersAttribute);
+  id modifiersValue = values[(__bridge id)kAXMenuItemCmdModifiersAttribute];
   unsigned long modifiers =
       [modifiersValue isKindOfClass:NSNumber.class] ? [modifiersValue unsignedLongValue] : 0;
   BOOL noCommand = (modifiers & (1UL << 3)) != 0;
@@ -220,21 +262,9 @@ static NSString *shortcut_of(AXUIElementRef element) {
   return out;
 }
 
-// All retained AX references are local to this one bounded discovery/execute call.
+// All references are confined to the current bounded request.
 static NSArray *menu_children(AXUIElementRef element) {
-  NSMutableArray *entries = [NSMutableArray array];
-  for (id childObject in flatten_children(element)) {
-    AXUIElementRef child = (__bridge AXUIElementRef)childObject;
-    NSString *role = ax_string(child, kAXRoleAttribute) ?: @"";
-    if (![role isEqualToString:@"AXMenuItem"] && ![role isEqualToString:@"AXMenuBarItem"]) continue;
-    [entries addObject:@{
-      @"element" : childObject,
-      @"role" : role,
-      @"title" : ax_string(child, kAXTitleAttribute) ?: @"",
-      @"identifier" : ax_string(child, kAXIdentifierAttribute) ?: @"",
-    }];
-  }
-  return entries;
+  return menu_entries(ax_value(element, kAXChildrenAttribute), 0);
 }
 
 static NSDictionary *unique_entry(NSArray *entries, NSString *title, NSString *identifier) {
@@ -253,14 +283,19 @@ static NSDictionary *unique_entry(NSArray *entries, NSString *title, NSString *i
   return match;
 }
 
-static void collect_items(AXUIElementRef element, NSArray *path, NSArray *identifiers,
-                          NSMutableArray *out, BOOL parentEnabled) {
+static void collect_entries(NSArray *children, NSArray *path, NSArray *identifiers,
+                            NSMutableArray *out, BOOL parentEnabled) {
   if (path.count >= 12) {
     menu_incomplete = YES;
     return;
   }
   if (menu_expired()) return;
-  NSArray *children = menu_children(element);
+  NSCountedSet *pairs = [NSCountedSet set];
+  NSCountedSet *titles = [NSCountedSet set];
+  for (NSDictionary *entry in children) {
+    [pairs addObject:@[ entry[@"title"], entry[@"identifier"] ]];
+    [titles addObject:entry[@"title"]];
+  }
   for (NSDictionary *entry in children) {
     if (++menu_visited > 20000 || out.count >= kMaxMenuItems || menu_expired()) {
       menu_incomplete = YES;
@@ -272,14 +307,20 @@ static void collect_items(AXUIElementRef element, NSArray *path, NSArray *identi
     if (is_separator_title(title)) continue;
     NSString *identifier = entry[@"identifier"];
     // Require a unique title/ID pair in this parent, preserving the ID in the locator.
-    if (!unique_entry(children, title, identifier)) continue;
+    if ((identifier.length ? [pairs countForObject:@[ title, identifier ]]
+                           : [titles countForObject:title]) != 1)
+      continue;
     NSArray *nextPath = [path arrayByAddingObject:title];
     NSArray *nextIdentifiers =
         [identifiers arrayByAddingObject:identifier.length ? (id)identifier : NSNull.null];
-    NSArray *descendants = menu_children(child);
-    BOOL enabled = parentEnabled && ax_bool(child, kAXEnabledAttribute, descendants.count > 0);
+    NSDictionary *values = entry[@"attributes"];
+    NSArray *descendants = menu_entries(values[(__bridge id)kAXChildrenAttribute], 0);
+    id enabledValue = values[(__bridge id)kAXEnabledAttribute];
+    BOOL enabled =
+        parentEnabled && ([enabledValue isKindOfClass:NSNumber.class] ? [enabledValue boolValue]
+                                                                      : descendants.count > 0);
     if (descendants.count > 0) {
-      collect_items(child, nextPath, nextIdentifiers, out, enabled);
+      collect_entries(descendants, nextPath, nextIdentifiers, out, enabled);
       continue;
     }
     if (![role isEqualToString:@"AXMenuItem"] || !ax_has_press(child)) continue;
@@ -289,10 +330,15 @@ static void collect_items(AXUIElementRef element, NSArray *path, NSArray *identi
       @"identifiers" : nextIdentifiers,
       @"enabled" : @(enabled),
     } mutableCopy];
-    NSString *shortcut = shortcut_of(child);
+    NSString *shortcut = shortcut_values(values);
     if (shortcut.length) item[@"shortcut"] = shortcut;
     [out addObject:item];
   }
+}
+
+static void collect_items(AXUIElementRef element, NSArray *path, NSArray *identifiers,
+                          NSMutableArray *out, BOOL parentEnabled) {
+  collect_entries(menu_children(element), path, identifiers, out, parentEnabled);
 }
 
 static AXUIElementRef locate(AXUIElementRef root, NSArray *titles, NSArray *identifiers,
@@ -429,7 +475,8 @@ static NSDictionary *selected_text_for_app(AXUIElementRef app, BOOL configureTim
     CFRelease(focused);
     return @{@"status" : @"timeout"};
   }
-  if (configureTimeout) AXUIElementSetMessagingTimeout((AXUIElementRef)focused, 0.15);
+  if (configureTimeout && CFGetTypeID(focused) == AXUIElementGetTypeID())
+    AXUIElementSetMessagingTimeout((AXUIElementRef)focused, 0.15);
   CFTypeRef selected = NULL;
   AXError selectionError =
       AXUIElementCopyAttributeValue((AXUIElementRef)focused, kAXSelectedTextAttribute, &selected);
@@ -484,25 +531,17 @@ char *launcher_selected_text(const char *application_json) {
 int launcher_accessibility_trusted(int prompt) {
   if (AXIsProcessTrusted()) return 1;
   if (!prompt) return 0;
-  __block int trusted = 0;
   void (^check)(void) = ^{
     @autoreleasepool {
-      static BOOL prompted = NO;
-      if (prompted) {
-        trusted = AXIsProcessTrusted() ? 1 : 0;
-        return;
-      }
-      prompted = YES;
       NSDictionary *options = @{(__bridge id)kAXTrustedCheckOptionPrompt : @YES};
-      trusted = AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)options) ? 1 : 0;
+      AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)options);
     }
   };
-  if ([NSThread isMainThread]) {
+  if ([NSThread isMainThread])
     check();
-  } else {
-    dispatch_sync(dispatch_get_main_queue(), check);
-  }
-  return trusted;
+  else
+    dispatch_async(dispatch_get_main_queue(), check);
+  return AXIsProcessTrusted() ? 1 : 0;
 }
 
 char *launcher_application_version(const char *bundle_id) {
@@ -514,10 +553,14 @@ char *launcher_application_version(const char *bundle_id) {
         [NSRunningApplication runningApplicationsWithBundleIdentifier:identifier].firstObject;
     NSURL *url = running.bundleURL;
     if (!url) return NULL;
-    NSBundle *bundle = [NSBundle bundleWithURL:url];
-    NSString *version = bundle.infoDictionary[@"CFBundleShortVersionString"];
+    NSURL *plistURL = [url URLByAppendingPathComponent:@"Contents/Info.plist"];
+    NSDictionary *info = [NSDictionary dictionaryWithContentsOfURL:plistURL];
+    if (![info isKindOfClass:NSDictionary.class]) {
+      info = [NSBundle bundleWithURL:url].infoDictionary;
+    }
+    NSString *version = info[@"CFBundleShortVersionString"];
     if (![version isKindOfClass:NSString.class] || version.length == 0) {
-      version = bundle.infoDictionary[@"CFBundleVersion"];
+      version = info[@"CFBundleVersion"];
     }
     if (![version isKindOfClass:NSString.class] || version.length == 0) return NULL;
     return strdup(version.UTF8String);
@@ -657,9 +700,28 @@ int launcher_perform_menu_action(const char *application_json, const char *locat
       return 6;
     NSRunningApplication *running = running_app(identity);
     if (!running) return 1;
-    if (![running activateWithOptions:NSApplicationActivateAllWindows]) return 8;
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+    [running activateWithOptions:NSApplicationActivateAllWindows];
+#pragma clang diagnostic pop
     // Activation is asynchronous. A fixed sleep does not prove the target is active.
-    for (NSUInteger attempt = 0; attempt < 25 && !running.active; attempt++) usleep(10000);
+    for (NSUInteger attempt = 0; attempt < 15 && !running.active; attempt++) usleep(10000);
+    if (!running.active && running.bundleURL) {
+      NSWorkspaceOpenConfiguration *config = [NSWorkspaceOpenConfiguration configuration];
+      config.activates = YES;
+      config.createsNewApplicationInstance = NO;
+      dispatch_semaphore_t done = dispatch_semaphore_create(0);
+      [NSWorkspace.sharedWorkspace
+          openApplicationAtURL:running.bundleURL
+                 configuration:config
+             completionHandler:^(NSRunningApplication *activated, NSError *error) {
+               (void)activated;
+               (void)error;
+               dispatch_semaphore_signal(done);
+             }];
+      dispatch_semaphore_wait(done, dispatch_time(DISPATCH_TIME_NOW, 250 * NSEC_PER_MSEC));
+      for (NSUInteger attempt = 0; attempt < 15 && !running.active; attempt++) usleep(10000);
+    }
     if (!running.active || !running_app(identity)) return 8;
     menu_deadline = CFAbsoluteTimeGetCurrent() + 3.0;
     menu_incomplete = NO;

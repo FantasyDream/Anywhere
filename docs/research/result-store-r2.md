@@ -39,9 +39,11 @@ cargo build --release -p anywhere-core --example file_search_measure --locked
 python3 scripts/bench-file-search.py --output docs/benchmarks/file-search-continuous-r2.json
 ```
 
-macOS 27.0.1 / arm64，Release；每组各采样 3 次、两后端交替顺序、独立进程和 workspace；OS cache 不清。最终测量与编译 / 全量测试顺序执行。完整数据见 [排序对照](../archive/benchmarks/open-source-result-store-r2-2026-10-18.json) 和 [实际遍历 / 连续读取](../benchmarks/file-search-continuous-r2.json)。
+macOS 27.0.1 / arm64，Release；每组各采样 3 次、两后端交替顺序、独立进程和 workspace；OS cache 不清。最终测量与编译 / 全量测试顺序执行。完整数据见 [排序对照](../archive/benchmarks/open-source-result-store-r2-2026-10-18.json) 和 [实际遍历 / 连续读取历史样本索引](../archive/benchmarks/README.md)。
 
-排序对照不遍历真实目录，不包含 Spotlight、Flutter、Bridge 或 GUI；输入为相同合成原始路径。已有 7 条显示前缀，16 次提交场景在每次提交后读取一批，最后读完余下结果。所有样本的返回数量及完整显示顺序 SHA-256 均一致。
+排序对照不遍历真实目录，不包含 Spotlight、UI、运行时转发或 GUI；输入为相同
+合成原始路径。已有 7 条显示前缀，16 次提交场景在每次提交后读取一批，最后读完
+余下结果。所有样本的返回数量及完整显示顺序 SHA-256 均一致。
 
 这里的“首批”是存储后端首次读取未读结果，包含 SQLite 打开 / 建表，不是 Launcher 输入到首屏时间；生产扫描器已发布的 top 64 不依赖该步骤。全量耗时包含建库 / 排序 / 持续读取，排除 fixture 写入及验证摘要。RSS 包含共用测试 harness 和已显示路径集合；临时文件大小在批次之间采样，**不是真实峰值**，不包括已删除的归并中间文件或短暂 journal。
 
@@ -67,4 +69,6 @@ SQLite 原型保留共同的原始输入文件，另存索引、规范化名称�
 
 旧 `file_search_measure` 使用 `ScanStore.page`，旧文档中 10k 命中的 786–798 ms 属于该游标路径。该基准已改为产品实际使用的 `ScanStore.more`，新增不重复与完整数量检查；历史数据保留。**新连续读取数据是测量路径修正，不是本轮生产代码提速。**
 
-完整 `scripts/check.sh`：490 Rust / 273 Flutter 通过，7 项 ignored（6 项既有，新增资源基准已用 Release 显式运行）。本轮没有产品 UI 改动，不另做 GUI 验收或打包；R1 Build 10 仍有效。下一阶段为 R3 应用 / Action 匹配对照。
+完整 `scripts/check.sh`：490 项 Rust 回归通过，7 项 ignored（6 项既有，新增资源
+基准已用 Release 显式运行）。该数字属于当时的工作树；本轮没有产品 UI 改动，
+不另做 GUI 验收或打包。下一阶段为 R3 应用 / Action 匹配对照。

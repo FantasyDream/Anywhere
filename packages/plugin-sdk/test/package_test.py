@@ -82,3 +82,35 @@ class PackageTests(unittest.TestCase):
             file.truncate(16 * 1024 * 1024 + 1)
         with self.assertRaises(ValueError):
             pack.package(self.root, self.output)
+
+    def test_default_controls_fixture_has_no_plugin_specific_styling(self):
+        fixture = (Path(__file__).parent / "fixtures/controls.html").read_text()
+        for selector in [
+                "type=\"checkbox\"", "type=\"radio\"", "role=\"switch\"",
+                "type=\"range\"", "<progress", "<dialog", "role=\"menu\"",
+                "role=\"listbox\"", "<kbd>"
+        ]:
+            self.assertIn(selector, fixture)
+        self.assertNotIn("<style", fixture)
+        self.assertNotIn("style=", fixture)
+        controls = (Path(__file__).parents[1] /
+                    "styles/controls.css").read_text()
+        self.assertIn('input[role="switch"]', controls)
+        self.assertIn('[role="tooltip"]', controls)
+
+    def test_controls_follow_host_scheme_except_for_fixed_dark_surfaces(self):
+        controls = (Path(__file__).parents[1] /
+                    "styles/controls.css").read_text()
+        self.assertIn(
+            ":where(button, select, input, textarea) {\n"
+            "  margin: 0; font-family: var(--aw-font-ui); "
+            "color-scheme: inherit;", controls)
+        for selector in [
+                ':where(select option)',
+                ':where(dialog, [role="dialog"])',
+                ':where(menu, [role="menu"], [role="listbox"])',
+                ':where([role="tooltip"])',
+        ]:
+            start = controls.index(selector)
+            end = controls.index('}', start)
+            self.assertIn('color-scheme: dark;', controls[start:end])

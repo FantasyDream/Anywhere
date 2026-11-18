@@ -1,0 +1,150 @@
+mod atomic_write;
+mod directory_access;
+use atomic_write::atomic_write_private;
+mod dto;
+mod hotkeys;
+mod login_item;
+mod native_window;
+mod preferences;
+mod runtime;
+mod runtime_support;
+
+use anyhow::{Context, Result};
+use std::path::{Component, Path, PathBuf};
+
+use anywhere_core::application::frontend_runtime::RuntimePaths;
+pub use anywhere_core::application::frontend_runtime::WebPackageOperation;
+
+pub use dto::{
+    AppHistoryItem, AppHistoryObjectAction, AppHistorySnapshot, AppHistorySource, ClipboardItem,
+    ClipboardSnapshot, ExecutionDetail, ExecutionRow, PreviewFile, ShortcutCandidate,
+    ShortcutCatalogAction, WebDocument, WebPackage, WebPackageReview,
+};
+pub use hotkeys::{registered_preferences, HotKeyAction, HotKeyController};
+pub use login_item::LoginItemState;
+pub(crate) use native_window::defer_native_window_update;
+pub use preferences::{
+    reserved_action_shortcut, ActionShortcutBinding, ActionShortcutRoute, HostPreferences,
+    UiLanguage,
+};
+pub use runtime::{LiveEvent, LiveLauncher};
+
+/// Stable product paths owned by the GPUI application.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ProductPaths {
+    pub data_directory: PathBuf,
+    pub bundled_plugin_directory: PathBuf,
+    pub explicit_data_directory: bool,
+}
+
+impl ProductPaths {
+    pub fn discover() -> Result<Self> {
+        let data_override = path_override("ANYWHERE_DATA_DIR")?;
+        let plugin_override = path_override("ANYWHERE_PLUGIN_DIR")?;
+        let home = std::env::var_os("HOME").map(PathBuf::from);
+        let executable = std::env::current_exe()?;
+        Self::resolve(home.as_deref(), &executable, data_override, plugin_override)
+    }
+
+    fn resolve(
+        home: Option<&Path>,
+        executable: &Path,
+        data_override: Option<PathBuf>,
+        plugin_override: Option<PathBuf>,
+    ) -> Result<Self> {
+        let explicit_data_directory = data_override.is_some();
+        let data_directory = match data_override {
+            Some(path) => path,
+            None => {
+                let home = home.context("HOME is unavailable")?;
+                home.join("Library")
+                    .join("Application Support")
+                    .join("Anywhere")
+            }
+        };
+        let bundled_plugin_directory = plugin_override.unwrap_or_else(|| {
+            executable
+                .parent()
+                .and_then(|contents| contents.parent())
+                .map(|bundle| bundle.join("Resources").join("plugins"))
+                .unwrap_or_else(|| PathBuf::from("plugins"))
+        });
+        Ok(Self {
+            data_directory,
+            bundled_plugin_directory,
+            explicit_data_directory,
+        })
+    }
+
+    pub fn runtime_paths(&self) -> RuntimePaths {
+        RuntimePaths::new(
+            self.data_directory.clone(),
+            self.bundled_plugin_directory.clone(),
+        )
+    }
+}
+
+fn path_override(name: &str) -> Result<Option<PathBuf>> {
+    let Some(value) = std::env::var_os(name) else {
+        return Ok(None);
+    };
+    validate_override_path(PathBuf::from(value), name).map(Some)
+}
+
+fn validate_override_path(path: PathBuf, name: &str) -> Result<PathBuf> {
+    anyhow::ensure!(path.is_absolute(), "{name} must be an absolute directory");
+    anyhow::ensure!(
+        path.parent().is_some() && !path.components().any(|c| c == Component::ParentDir),
+        "{name} must not be the filesystem root or contain '..'"
+    );
+    Ok(path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn data_and_plugin_overrides_are_independent() {
+        let executable = Path::new("/Applications/Anywhere.app/Contents/MacOS/Anywhere");
+        let data = PathBuf::from("/tmp/gpui-data");
+        let plugins = PathBuf::from("/tmp/gpui-plugins");
+
+        let data_only = ProductPaths::resolve(
+            Some(Path::new("/Users/example")),
+            executable,
+            Some(data.clone()),
+            None,
+        )
+        .unwrap();
+        assert_eq!(data_only.data_directory, data);
+        assert_eq!(
+            data_only.bundled_plugin_directory,
+            Path::new("/Applications/Anywhere.app/Contents/Resources/plugins")
+        );
+
+        let plugin_only = ProductPaths::resolve(
+            Some(Path::new("/Users/example")),
+            executable,
+            None,
+            Some(plugins.clone()),
+        )
+        .unwrap();
+        assert_eq!(
+            plugin_only.data_directory,
+            Path::new("/Users/example/Library/Application Support/Anywhere")
+        );
+        assert_eq!(plugin_only.bundled_plugin_directory, plugins);
+    }
+
+    #[test]
+    fn explicit_directories_reject_unsafe_paths() {
+        for path in ["relative/path", "/", "/tmp/../data"] {
+            assert!(validate_override_path(PathBuf::from(path), "TEST_PATH").is_err());
+        }
+        assert_eq!(
+            validate_override_path(PathBuf::from("/tmp/gpui-data"), "TEST_PATH").unwrap(),
+            Path::new("/tmp/gpui-data")
+        );
+    }
+}

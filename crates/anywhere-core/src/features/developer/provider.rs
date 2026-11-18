@@ -226,7 +226,7 @@ mod tests {
             anywhere_protocol::ContextSource::Clipboard,
             "test",
         );
-        assert!(!format!("{:?}", context.descriptor()).contains("private-token"));
+        assert!(!format!("{:?}", context.presentation()).contains("private-token"));
         std::fs::write(&manifest, vec![b' '; MAX_PACKAGE_BYTES + 1]).unwrap();
         assert!(super::super::node::inspect(dir.path())
             .unwrap_err()

@@ -102,7 +102,7 @@ fn main() -> Result<()> {
     println!(
         "{}",
         serde_json::to_string_pretty(
-            &json!({"scope":"Rust service, source reads, QuickJS transforms and matching; excludes Bridge/Flutter/physical display", "synthetic_entries":1000,"entries_per_source":500,"query_scope":"one source per Action; not comparable to the removed cross-source query","private_history_used":false,"queries":output})
+            &json!({"scope":"Rust service, source reads, QuickJS transforms and matching; excludes GPUI/physical display", "synthetic_entries":1000,"entries_per_source":500,"query_scope":"one source per Action; not comparable to the removed cross-source query","private_history_used":false,"queries":output})
         )?
     );
     Ok(())

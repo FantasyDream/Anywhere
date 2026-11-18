@@ -17,7 +17,7 @@
   -webkit-font-smoothing: auto;
 }
 :where(button, select, input, textarea) {
-  margin: 0; font-family: var(--aw-font-ui); color-scheme: var(--aw-color-scheme, dark);
+  margin: 0; font-family: var(--aw-font-ui); color-scheme: inherit;
   letter-spacing: 0; text-transform: none;
   -webkit-appearance: none; appearance: none;
 }
@@ -35,19 +35,32 @@
 :where(button) { display: inline-flex; align-items: center; justify-content: center; gap: var(--aw-space-xs); cursor: pointer; }
 :where(button:hover:not(:disabled), select:hover:not(:disabled)) { background-color: var(--aw-hover); }
 :where(button:active:not(:disabled), button:focus-visible) { background-color: var(--aw-button-selection); }
-:where(.aw-button--primary) { background: var(--aw-primary-button-surface); font-weight: var(--aw-primary-control-weight); }
+:where(.aw-button--primary) { color: var(--aw-on-dark-primary); background: var(--aw-primary-button-surface); font-weight: var(--aw-primary-control-weight); }
 :where(.aw-button--primary:hover:not(:disabled)) { background: var(--aw-primary-button-surface); box-shadow: inset 0 0 0 999px var(--aw-hover); }
 :where(button:focus-visible, select:focus-visible) {
   outline: none; border-color: var(--aw-selected-border);
   box-shadow: inset 0 0 0 calc(var(--aw-focus-border-width) - var(--aw-control-border-width)) var(--aw-selected-border);
 }
+:where(dialog button, dialog select, [role="dialog"] button, [role="dialog"] select, menu button, [role="menu"] button, [role="listbox"] button) {
+  color: var(--aw-on-dark-primary); border-color: var(--aw-on-dark-control-border);
+}
+:where(dialog button:hover:not(:disabled), dialog select:hover:not(:disabled), [role="dialog"] button:hover:not(:disabled), [role="dialog"] select:hover:not(:disabled), menu button:hover:not(:disabled), [role="menu"] button:hover:not(:disabled), [role="listbox"] button:hover:not(:disabled)) {
+  background-color: var(--aw-on-dark-hover);
+}
+:where(dialog button:active:not(:disabled), dialog select:active:not(:disabled), [role="dialog"] button:active:not(:disabled), [role="dialog"] select:active:not(:disabled), menu button:active:not(:disabled), [role="menu"] button:active:not(:disabled), [role="listbox"] button:active:not(:disabled)) {
+  background-color: var(--aw-on-dark-selected-surface);
+}
+:where(dialog button:focus-visible, dialog select:focus-visible, [role="dialog"] button:focus-visible, [role="dialog"] select:focus-visible, menu button:focus-visible, [role="menu"] button:focus-visible, [role="listbox"] button:focus-visible) {
+  border-color: var(--aw-on-dark-selection-outline);
+  box-shadow: inset 0 0 0 calc(var(--aw-focus-border-width) - var(--aw-control-border-width)) var(--aw-on-dark-selection-outline);
+}
 :where(button:disabled, select:disabled, input:disabled, textarea:disabled) { opacity: var(--aw-disabled-opacity); cursor: default; }
 :where(select) {
   padding-right: calc(var(--aw-control-padding-x) + var(--aw-icon-size));
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m5 6.5 3 3 3-3' fill='none' stroke='%23e0e3e9' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m5 6.5 3 3 3-3' fill='none' stroke='%233c434d' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right var(--aw-space-xs) center; background-size: var(--aw-icon-size);
 }
-:where(select option) { background: var(--aw-menu-surface); color: var(--aw-text); }
+:where(select option) { color-scheme: dark; background: var(--aw-menu-surface); color: var(--aw-on-dark-primary); }
 :where(input, textarea) {
   min-width: 0; padding: var(--aw-field-padding-y) var(--aw-field-padding-x);
   color: var(--aw-text); background: var(--aw-field);
@@ -60,6 +73,8 @@
   box-shadow: inset 0 0 0 calc(var(--aw-field-focus-border-width) - var(--aw-field-border-width)) var(--aw-selected-border);
 }
 :where(input::placeholder, textarea::placeholder) { color: var(--aw-muted); opacity: 1; }
+:where(input:read-only, textarea:read-only) { background: var(--aw-elevated); }
+:where(input:read-only:focus-visible, textarea:read-only:focus-visible) { box-shadow: none; }
 :where(input[type="search"])::-webkit-search-cancel-button { -webkit-appearance: none; }
 :where(input[type="checkbox"], input[type="radio"]) {
   width: var(--aw-icon-size); height: var(--aw-icon-size); padding: 0; vertical-align: middle;
@@ -70,7 +85,23 @@
 :where(input[type="checkbox"]:checked) {
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m4 8 2.5 2.5L12 5' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 }
-:where(input[type="radio"]:checked)::after { content: ''; display: block; width: 6px; height: 6px; margin: 4px; border-radius: 50%; background: var(--aw-primary); }
+:where(input[type="radio"]:checked) { background-image: radial-gradient(circle, var(--aw-primary) 0 28%, transparent 31%); }
+:where(input[role="switch"]) {
+  width: calc(var(--aw-icon-size) * 1.9); height: var(--aw-icon-size); padding: 0;
+  border-radius: 999px; background-color: var(--aw-elevated);
+  background-image: radial-gradient(circle, var(--aw-secondary) 0 35%, transparent 39%);
+  background-position: left center; background-repeat: no-repeat; background-size: var(--aw-icon-size);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+:where(input[role="switch"]:checked) {
+  background-color: var(--aw-accent-fill); border-color: var(--aw-accent-fill);
+  background-image: radial-gradient(circle, white 0 35%, transparent 39%);
+  background-position: right center;
+}
+:where(input[type="range"]) { min-width: 80px; padding: 0; border: 0; background: transparent; accent-color: var(--aw-accent-fill); }
+:where(progress) { width: 100%; height: 5px; overflow: hidden; border: 0; border-radius: 999px; background: var(--aw-elevated); color: var(--aw-accent-fill); }
+:where(progress)::-webkit-progress-bar { background: var(--aw-elevated); }
+:where(progress)::-webkit-progress-value { background: var(--aw-accent-fill); }
 :where(label) { font-size: var(--aw-label-size); font-weight: var(--aw-body-weight); }
 :where(h1, h2, h3) { font-size: var(--aw-heading-size); line-height: var(--aw-body-line-height); font-weight: var(--aw-heading-weight); }
 :where(kbd) {
@@ -92,9 +123,37 @@
 :where(.aw-tool) { height: 100%; min-height: 0; display: flex; flex-direction: column; gap: var(--aw-space-md); padding: var(--aw-space-lg); }
 :where(.aw-tool > textarea) { flex: 1; min-height: 80px; resize: none; }
 :where(.aw-tool > p) { margin: 0; }
+:where(fieldset) { min-width: 0; margin: 0; padding: var(--aw-space-md); border: var(--aw-divider-width) solid var(--aw-divider); border-radius: var(--aw-card-radius); }
+:where(legend) { padding: 0 var(--aw-space-xs); color: var(--aw-primary); font-size: var(--aw-label-size); font-weight: var(--aw-primary-control-weight); }
+:where(dialog, [role="dialog"]) { max-width: min(92vw, 520px); max-height: min(86vh, 640px); overflow: auto; padding: var(--aw-space-xl); color-scheme: dark; color: var(--aw-on-dark-primary); background: var(--aw-overlay); border: var(--aw-divider-width) solid var(--aw-on-dark-control-border); border-radius: var(--aw-card-radius); box-shadow: 0 18px 48px #00000059; }
+:where(dialog)::backdrop { background: #00000066; backdrop-filter: none; }
+:where(menu, [role="menu"], [role="listbox"]) { margin: 0; padding: var(--aw-space-xs); color-scheme: dark; color: var(--aw-on-dark-primary); background: var(--aw-menu-surface); border: var(--aw-divider-width) solid var(--aw-on-dark-control-border); border-radius: var(--aw-control-radius); box-shadow: 0 12px 32px #00000040; }
+:where([role="menuitem"], [role="option"], [role="menuitemcheckbox"]) { min-height: var(--aw-control-height); padding: var(--aw-control-padding-y) var(--aw-control-padding-x); border-radius: calc(var(--aw-control-radius) - 2px); }
+:where([role="menuitem"]:hover, [role="option"][aria-selected="true"], [role="menuitemcheckbox"][aria-checked="true"]) { background: var(--aw-on-dark-selected-surface); color: var(--aw-on-dark-primary); }
+:where([role="tooltip"]) { max-width: min(320px, 80vw); padding: var(--aw-space-xs) var(--aw-space-sm); color-scheme: dark; color: var(--aw-on-dark-primary); background: var(--aw-overlay); border: var(--aw-divider-width) solid var(--aw-on-dark-control-border); border-radius: var(--aw-tooltip-radius); box-shadow: 0 8px 24px #00000040; font-size: var(--aw-caption-size); line-height: var(--aw-caption-line-height); }
+:where(dialog a, [role="dialog"] a, menu a, [role="menu"] a, [role="listbox"] a, [role="tooltip"] a) { color: var(--aw-on-dark-accent); }
+:where([hidden]) { display: none !important; }
 :where(.sr-only) { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 ::-webkit-scrollbar { width: var(--aw-scrollbar-size); height: var(--aw-scrollbar-size); }
 ::-webkit-scrollbar-thumb { background: var(--aw-border); border-radius: var(--aw-scrollbar-size); }
+@media (prefers-contrast: more) {
+  :where(body, .aw-ui) { color: var(--aw-primary); }
+  :where(button, select, input, textarea, .aw-card, fieldset, dialog, menu, [role="listbox"]) {
+    border-color: var(--aw-secondary);
+  }
+  :where(.aw-muted, .aw-workspace-notice) { color: var(--aw-secondary); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  /* The native host replaces Glass with its opaque fallback. Plugin-local
+     overlays must not create a second blur or translucent layer. */
+  :where(*, *::before, *::after) { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
+  :where(dialog, [role="dialog"], menu, [role="menu"], [role="listbox"], [role="tooltip"]) {
+    background-color: var(--aw-fallback-surface);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(*, *::before, *::after) { scroll-behavior: auto !important; transition-duration: 0s !important; animation-duration: 0s !important; }
+}
 
 /* Ordinary semantic elements inherit the Host style without SDK classes. */
 :where(a) { color: var(--aw-accent); }
@@ -116,7 +175,7 @@
 :where(.aw-tabs) { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 :where(.aw-tab) { height: var(--aw-filter-height); min-height: var(--aw-filter-height); border-color: transparent; border-radius: var(--aw-filter-radius); padding: 0 var(--aw-space-md); font-size: var(--aw-filter-size); color: var(--aw-secondary); }
 :where(.aw-tab[aria-pressed="true"]) { color: var(--aw-primary); background: var(--aw-selected-surface); border-color: var(--aw-selection-outline); font-weight: var(--aw-heading-weight); }
-:where(.aw-workspace-panes) { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) clamp(220px, calc(100% * var(--aw-preview-fraction)), 360px); }
+:where(.aw-workspace-panes) { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) clamp(220px, calc(100% * var(--aw-preview-fraction, .38)), 360px); }
 :where(.aw-pane) { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 :where(.aw-pane + .aw-pane) { border-left: var(--aw-divider-width) solid var(--aw-divider); }
 :where(.aw-pane-header) { flex-wrap: wrap; overflow-wrap: anywhere; min-height: var(--aw-page-toolbar-height); display: flex; align-items: center; justify-content: space-between; gap: var(--aw-space-sm); padding: var(--aw-space-md) var(--aw-space-lg) var(--aw-space-sm); color: var(--aw-secondary); }
@@ -181,3 +240,7 @@
 :where(.aw-disclosure > summary:hover) { color: var(--aw-primary); }
 :where(.aw-disclosure > summary:focus-visible) { outline: 1px solid var(--aw-selected-border); outline-offset: 3px; border-radius: var(--aw-control-radius); }
 :where(.aw-disclosure-body) { display: flex; flex-direction: column; gap: var(--aw-space-sm); padding: var(--aw-space-sm) 0; }
+
+@media (prefers-color-scheme: dark) {
+  :where(select) { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m5 6.5 3 3 3-3' fill='none' stroke='%23e0e3e9' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
+}

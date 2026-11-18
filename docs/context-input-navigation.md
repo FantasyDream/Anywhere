@@ -8,15 +8,18 @@
 
 | 默认唤醒时的内容 | 打开的页面 |
 |---|---|
-| 可解析为具体 Context，或被已批准且启用的 Web 工具命令识别的选中文本 | Global Search：自动填入选中文本，专用内容输入 UI |
+| 可解析为具体 Context，或被已批准且启用的 Web 工具（宿主匹配器或后台解析器）识别的选中文本 | Global Search：自动填入选中文本，专用内容输入 UI |
 | 没有可识别选中文本，剪贴板复制年龄不超过 15 秒且满足同样的识别条件 | Global Search：自动填入剪贴板，专用内容输入 UI |
 | 只有普通文本、对象解析失败、剪贴板过期或年龄未知 | Current App：空输入，当前应用环境动作 |
 
-自动填入要求实际识别器产生 URL、真实文件 / 目录等非 Text Context，或已批准且启用的 Web 工具通过声明的 `inputMatchers` 识别文本。仅有普通 Text 不满足自动跳转条件；无效 URL、不存在的路径和未被任何命令识别的文本不会打开内容页。识别失败的选区允许继续尝试有效剪贴板。手动输入和进入内容页面后的编辑仍沿用原图规则。
+自动填入要求实际识别器产生 URL、真实文件 / 目录或第三方 `plugin.<package-id>.*` 等非 Text Context，或已批准且启用的 Web 工具通过声明的 `inputMatchers` 识别文本。仅有普通 Text 不满足自动跳转条件；无效 URL、不存在的路径和未被任何解析器或命令识别的文本不会打开内容页。识别失败的选区允许继续尝试有效剪贴板。手动输入和进入内容页面后的编辑仍沿用原图规则。
 
-内容 UI 标明 Selected text 或 Recent clipboard，并提示 Esc 返回 Current App。正文可以编辑；它是待处理对象，不作为动作标题查询。URL、路径等仍走同一 Context Graph、Registry 和 Ranking；只处理当前输入及派生 Context，不混入当前应用、网页、Finder 选择或其他捕获文本。
+内容 UI 标明 Selected text 或 Recent clipboard。正文可以编辑；它是待处理对象，不作为动作标题查询。URL、路径等仍走同一 Context Graph、Registry 和 Ranking；只处理当前输入及派生 Context，不混入当前应用、网页、Finder 选择或其他捕获文本。
 
-Esc 从内容页面清空并返回 Current App，重新解析当前应用环境；再次 Esc 进入完全空白 Global Search；再按 Esc 关闭窗口。菜单浏览、结果页及已有查询的返回逻辑仍保留。显式 Universal 唤醒直接进入空白搜索，绕过自动填入；显式全局动作快捷键独立使用完整采集图。
+内容页第一次 Esc 返回 Current App，并清空内容输入；进入 Current App 后，空白
+根页再次 Esc 切到空白 Global Search，Global 根页最后才隐藏。普通查询先清空，
+菜单、对象 Actions、预览和 Web 内部层仍先退出所属局部层。显式 Universal
+唤醒直接进入空白搜索，绕过自动填入；显式全局动作快捷键独立使用完整采集图。
 
 ## 采集与生命周期
 
@@ -45,8 +48,8 @@ Esc 从内容页面清空并返回 Current App，重新解析当前应用环境�
 
 有查询或工具 / 二级操作时，隐藏后 15 秒恢复原内容和 Context。空白 Global / Current App 首页按本次入口新建 Session，重新采集前台应用。菜单、Scope 与来源定义不因恢复而改写。
 
-回归覆盖来源优先级、过期 / 未知复制年龄、输入编辑、迟到结果不覆盖用户交互、Esc 链、环境恢复、来源单次读取和设置丢弃正文。历史真实采集与包验证边界见 [V0.6 记录](archive/v0.6-final-acceptance.md)，当前工程状态见 [V0.14 技术方案](mvp-v0.14.md)，此前真实键盘基线见 [V0.12 MVP](mvp-v0.12.md)。
+回归覆盖来源优先级、过期 / 未知复制年龄、输入编辑、迟到结果不覆盖用户交互、Esc 链、环境恢复、来源单次读取和设置丢弃正文。历史真实采集与包验证边界见 [V0.6 记录](archive/v0.6-final-acceptance.md)，当前工程状态见 [V0.14 技术方案](mvp-gpui.md)，此前真实键盘基线见 [V0.12 归档](archive/mvp-migration/v0.12-flutter-era.md)。
 
-JSON Workspace 已作为 Web 工具实现。安装、批准并启用声明 `json` / `json_escaped` 匹配器的版本后，JSON 对象 / 数组及其转义形式可以自动进入内容页，选择动作后带入原文；识别时不启动 WebView。自动识别限制为 16 KiB 原文 / 解码后 128 层，标量和不完整 JSON 不匹配。禁用、撤销或卸载后立即停止该命令的自动识别，没有其他识别器命中时回到 Current App；选区优先级和剪贴板 15 秒期限保持不变。插件声明与输入边界见 [开发指南](plugin-development.md#自动匹配-json)。
+JSON Workspace 已作为普通 Web 插件实现（v0.7.1）。安装、批准并启用后，其按需后台 QuickJS 解析器识别 JSON 对象 / 数组或转义 JSON 容器并产出 `plugin.dev.anywhere.json-workspace.json`，唤醒时可自动进入内容页并在执行命令后带入原文；识别期间不启动 WebView。插件也可按需声明宿主的固定 `inputMatchers`（`json` / `json_escaped`）。禁用、撤销或卸载后立即停止自动识别，没有其他识别器命中时回到 Current App；选区优先级和剪贴板 15 秒期限保持不变。插件声明与输入边界见 [开发指南](plugin-development.md#自动匹配-json)。
 
 剪贴板自动填入开关及上次采集状态位于 Settings → Clipboard，与历史采集开关分别控制；Finder、选中文本和浏览器来源仍位于 Settings → Context。

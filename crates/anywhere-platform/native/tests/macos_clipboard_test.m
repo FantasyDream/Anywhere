@@ -37,6 +37,14 @@
 #define NSPasteboard TestPasteboard
 #include "../macos.m"
 #undef NSPasteboard
+static int read_status(const char *format, unsigned long long capacity) {
+  unsigned int length = 0;
+  int status = 0;
+  unsigned char *bytes = launcher_clipboard_read_format(format, capacity, &length, &status);
+  if (status == 1) assert(length <= capacity && bytes);
+  launcher_free_bytes(bytes);
+  return status;
+}
 int main(void) {
   @autoreleasepool {
     TestPasteboard *board = TestPasteboard.generalPasteboard;
@@ -45,8 +53,10 @@ int main(void) {
     board.text = @"hello 中文";
     assert(launcher_clipboard_text_guard(64) == 1);
     assert(launcher_clipboard_text_guard(2) == 3);
-    assert(launcher_clipboard_format_guard("public.utf8-plain-text", 64) == 1);
-    assert(launcher_clipboard_format_guard("public.utf8-plain-text", 2) == 3);
+    NSUInteger before = board.reads;
+    assert(read_status("public.utf8-plain-text", 64) == 1);
+    assert(board.reads == before + 1);
+    assert(read_status("public.utf8-plain-text", 2) == 3);
     board.text = nil;
     assert(launcher_clipboard_text_guard(64) == 0);
     board.types = @[];
@@ -62,7 +72,7 @@ int main(void) {
         board.accessBehavior = behavior.integerValue;
         NSUInteger reads = board.reads;
         assert(launcher_clipboard_history_access_allowed() == 0);
-        assert(launcher_clipboard_format_guard("public.utf8-plain-text", 64) == 4);
+        assert(read_status("public.utf8-plain-text", 64) == 4);
         assert(board.reads == reads);
       }
       board.accessBehavior = 3;
@@ -70,7 +80,7 @@ int main(void) {
       assert(launcher_clipboard_text_guard(64) == 4 && board.reads == reads);
       board.accessBehavior = 2;
       board.denyAfterRead = YES;
-      assert(launcher_clipboard_format_guard("public.utf8-plain-text", 64) == 4);
+      assert(read_status("public.utf8-plain-text", 64) == 4);
       board.accessBehavior = 2;
       assert(launcher_clipboard_text_guard(64) == 4);
     }

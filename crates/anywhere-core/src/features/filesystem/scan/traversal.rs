@@ -1,13 +1,13 @@
 //! Disk-backed FIFO traversal and flush-before-publication of complete records.
 use super::{
     query::insert_top,
-    record::{read_record, write_record},
+    record::{read_record, write_match_record, write_record},
     ScanPage, ScanStore, BUFFER, PAGE_SIZE,
 };
 use anyhow::{bail, Result};
 use std::{
     fs::{File, OpenOptions},
-    io::{BufReader, BufWriter, Write},
+    io::{BufReader, BufWriter, Seek, SeekFrom, Write},
     sync::atomic::Ordering as AtomicOrdering,
     time::{Duration, Instant},
 };
@@ -19,7 +19,20 @@ impl ScanStore {
         mut publish: impl FnMut(ScanPage) -> Result<()>,
     ) -> Result<()> {
         let queue_path = self.directory.path().join("pending-dirs");
-        let mut queue = BufWriter::with_capacity(BUFFER, File::create(&queue_path)?);
+        struct PendingDirsCleanup<'a> {
+            store: &'a ScanStore,
+            path: std::path::PathBuf,
+        }
+        impl Drop for PendingDirsCleanup<'_> {
+            fn drop(&mut self) {
+                let _ = self.store.remove_run(&self.path);
+            }
+        }
+        let _queue_cleanup = PendingDirsCleanup {
+            store: self,
+            path: queue_path.clone(),
+        };
+        let mut queue = BufWriter::with_capacity(BUFFER, self.writer(File::create(&queue_path)?));
         let mut roots = Vec::new();
         let configured = self.scope.configured_roots()?;
         for root in configured {
@@ -49,10 +62,12 @@ impl ScanStore {
         let mut pending = BufReader::with_capacity(BUFFER, File::open(queue_path)?);
         let mut matches = BufWriter::with_capacity(
             BUFFER,
-            OpenOptions::new()
-                .write(true)
-                .truncate(true)
-                .open(self.matches_path())?,
+            self.writer(
+                OpenOptions::new()
+                    .write(true)
+                    .truncate(true)
+                    .open(self.matches_path())?,
+            ),
         );
         let mut top = Vec::with_capacity(PAGE_SIZE + 1);
         let mut boundary = 0;
@@ -62,13 +77,32 @@ impl ScanStore {
         if !self.scope.direct_only {
             for root in &roots {
                 if let Some(hit) = self.query.rank(root, true) {
-                    boundary += write_record(&mut matches, root, true)?;
+                    boundary += write_match_record(&mut matches, &hit)?;
                     match_count += 1;
                     insert_top(&mut top, hit);
                 }
             }
         }
-        while let Some((directory, _, _)) = read_record(&mut pending)? {
+        let mut pending_position = 0;
+        loop {
+            let record = read_record(&mut pending);
+            let partial = record.as_ref().is_ok_and(Option::is_none)
+                || record.as_ref().err().is_some_and(|error| {
+                    error
+                        .downcast_ref::<std::io::Error>()
+                        .is_some_and(|error| error.kind() == std::io::ErrorKind::UnexpectedEof)
+                });
+            let record = if partial && !queue.buffer().is_empty() {
+                queue.flush()?;
+                pending.seek(SeekFrom::Start(pending_position))?;
+                read_record(&mut pending)?
+            } else {
+                record?
+            };
+            let Some((directory, _, bytes)) = record else {
+                break;
+            };
+            pending_position += bytes;
             if cancelled() || self.cancelled.load(AtomicOrdering::Acquire) {
                 bail!("search cancelled");
             }
@@ -163,7 +197,7 @@ impl ScanStore {
                         .is_none_or(|exact| exact == &path)
                 {
                     if let Some(hit) = self.query.rank(&path, directory) {
-                        boundary += write_record(&mut matches, &path, directory)?;
+                        boundary += write_match_record(&mut matches, &hit)?;
                         match_count += 1;
                         insert_top(&mut top, hit);
                     }
@@ -176,12 +210,7 @@ impl ScanStore {
                         p.scanned = scanned;
                         p.matches = match_count;
                     }
-                    let progress = self.page_progress(
-                        &top,
-                        boundary,
-                        0,
-                        self.progress().confirmed_matches > PAGE_SIZE as u64,
-                    )?;
+                    let progress = self.page_progress(boundary, match_count > PAGE_SIZE as u64);
                     publish(ScanPage {
                         hits: top.clone(),
                         progress,
@@ -189,22 +218,19 @@ impl ScanStore {
                     last_publish = Instant::now();
                 }
             }
-            queue.flush()?;
         }
+        drop(pending);
+        drop(queue);
+        drop(_queue_cleanup);
         matches.flush()?;
         {
-            let mut p = self.progress.lock().unwrap();
+            let mut p = self.progress.lock().unwrap_or_else(|e| e.into_inner());
             p.boundary = boundary;
             p.scanned = scanned;
             p.matches = match_count;
             p.finished = true;
         }
-        let progress = self.page_progress(
-            &top,
-            boundary,
-            0,
-            self.progress().confirmed_matches > PAGE_SIZE as u64,
-        )?;
+        let progress = self.page_progress(boundary, match_count > PAGE_SIZE as u64);
         publish(ScanPage {
             hits: top,
             progress,

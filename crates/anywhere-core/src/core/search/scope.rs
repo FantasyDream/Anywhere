@@ -31,8 +31,6 @@ pub fn build(
                         .clone()
                         .unwrap_or_else(|| registry.label(&candidate.group_id)),
                     is_current_app: current_group.as_ref() == Some(&candidate.group_id),
-                    action_ids: Vec::new(),
-                    menu_ids: Vec::new(),
                 },
                 0,
                 i32::MIN,
@@ -63,8 +61,6 @@ pub fn build(
                             id: groups::for_app(&app.bundle_id),
                             label: app.name.clone(),
                             is_current_app: true,
-                            action_ids: Vec::new(),
-                            menu_ids: Vec::new(),
                         },
                         0,
                         i32::MIN,
@@ -82,22 +78,7 @@ pub fn build(
             .then_with(|| b.2.cmp(&a.2))
             .then_with(|| a.0.id.cmp(&b.0.id))
     });
-    entries
-        .into_iter()
-        .map(|entry| {
-            let mut scope = entry.0;
-            for offer in offers {
-                let c = &offer.presentation;
-                if scope.contains(c) {
-                    scope.action_ids.push(c.id.clone());
-                }
-                if c.is_menu && c.availability.is_visible() && c.group_id == scope.id {
-                    scope.menu_ids.push(c.id.clone());
-                }
-            }
-            scope
-        })
-        .collect()
+    entries.into_iter().map(|entry| entry.0).collect()
 }
 
 /// Current App includes every applicable action. Other scopes filter one domain.
@@ -129,8 +110,6 @@ mod tests {
             id: id.into(),
             label: id.into(),
             is_current_app: false,
-            action_ids: Vec::new(),
-            menu_ids: Vec::new(),
         }
     }
     #[test]

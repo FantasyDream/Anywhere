@@ -14,7 +14,7 @@ impl ExecutionRequest {
         let execution_ticket = &self.execution_ticket;
         let session_id = execution_ticket.session_id;
         let revision = execution_ticket.revision;
-        let epoch = &resolver.execution_epoch;
+        let epoch = resolver.session.epoch_guard();
         let catalog = &resolver.catalog;
         let history = &resolver.history;
         let session_for_execution = &resolver.session;
@@ -27,7 +27,7 @@ impl ExecutionRequest {
         }
         if let Some(token) = self.guarded_target {
             let session = session_for_execution
-                .lock()
+                .access()
                 .map_err(|_| anyhow::anyhow!("session lock poisoned"))?;
             if !execution_ticket.is_current()
                 || epoch.load(Ordering::Acquire) != self.execution_epoch
@@ -71,7 +71,7 @@ impl ExecutionRequest {
             // Mint the invocation under the same lock used by hide/activation/catalog
             // publication. A queued worker cannot recreate a ticket after revocation.
             let session = session_for_execution
-                .lock()
+                .access()
                 .map_err(|_| anyhow::anyhow!("session unavailable"))?;
             if session.suspended || !self.is_current() {
                 bail!("Web action expired before opening");
@@ -86,6 +86,8 @@ impl ExecutionRequest {
                     .start(
                         &command,
                         context,
+                        session.state.session_id,
+                        revision,
                         self.captured_app.as_ref(),
                         &self.source_app,
                     )?,

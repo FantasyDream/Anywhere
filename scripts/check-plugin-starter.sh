@@ -5,9 +5,9 @@ ROOT="$PWD"
 mkdir -p build/plugin-sdk
 (
   cd packages/plugin-sdk
-  npm pack --pack-destination "$ROOT/build/plugin-sdk"
+  npm pack --json --pack-destination "$ROOT/build/plugin-sdk" >"$ROOT/build/plugin-sdk/pack.json"
 )
-SDK_ARCHIVE="$ROOT/build/plugin-sdk/anywhere-sdk-0.1.0.tgz"
+SDK_ARCHIVE="$ROOT/build/plugin-sdk/$(node -e 'process.stdout.write(JSON.parse(require("fs").readFileSync("build/plugin-sdk/pack.json", "utf8"))[0].filename)')"
 # Build outside the repository: source-relative SDK imports cannot accidentally work.
 STARTER_WORK="$(mktemp -d "${TMPDIR:-/tmp}/anywhere-plugin-starter.XXXXXX")"
 trap 'rm -rf "$STARTER_WORK"' EXIT

@@ -31,7 +31,7 @@ async fn saved_directory_source_roundtrip_ranking_open_forget_and_restart() {
     let platform = Arc::new(TestPlatform::default());
     let app = application(platform.clone());
     let policy = tmp.path().join("extensions.json");
-    let mut manager = SettingsService::open(policy.clone(), vec![], &app).unwrap();
+    let mut manager = SettingsService::open(policy.clone(), &app).unwrap();
     save(&app, &project).await;
     let state = search(&app, "unique_saved_project").await;
     let row = state
@@ -70,7 +70,7 @@ async fn saved_directory_source_roundtrip_ranking_open_forget_and_restart() {
     // Data refresh keeps the startup source and its bounded service cache.
     manager.refresh(&app).unwrap();
     let restarted = application(Arc::new(TestPlatform::default()));
-    let _loaded = SettingsService::open(policy, vec![], &restarted).unwrap();
+    let _loaded = SettingsService::open(policy, &restarted).unwrap();
     assert!(search(&restarted, "unique_saved_project")
         .await
         .candidates
@@ -110,8 +110,7 @@ async fn source_disable_reenable_and_missing_directory_reject_stale_execution() 
     std::fs::create_dir(&project).unwrap();
     let platform = Arc::new(TestPlatform::default());
     let app = application(platform.clone());
-    let mut manager =
-        SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+    let mut manager = SettingsService::open(tmp.path().join("extensions.json"), &app).unwrap();
     save(&app, &project).await;
     let old = search(&app, "saved_lifecycle").await;
     let old_row = candidate(&old, OPEN);
@@ -183,8 +182,7 @@ async fn corrupt_module_data_is_isolated_and_refresh_can_recover_without_affecti
     let store = host.bind("saved_directories").unwrap();
     store.put("directories", b"not valid JSON").unwrap();
     let app = application(Arc::new(TestPlatform::default()));
-    let mut manager =
-        SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+    let mut manager = SettingsService::open(tmp.path().join("extensions.json"), &app).unwrap();
     assert!(
         !manager
             .statuses()
@@ -231,12 +229,12 @@ async fn another_instance_forget_blocks_a_cached_open_without_side_effects() {
     let policy = temporary.path().join("extensions.json");
     let platform = Arc::new(TestPlatform::default());
     let first = application(platform.clone());
-    let _first_manager = SettingsService::open(policy.clone(), vec![], &first).unwrap();
+    let _first_manager = SettingsService::open(policy.clone(), &first).unwrap();
     save(&first, &directory).await;
     let cached = search(&first, "shared_saved_project").await;
     let row = candidate(&cached, OPEN);
     let second = application(Arc::new(TestPlatform::default()));
-    let _second_manager = SettingsService::open(policy, vec![], &second).unwrap();
+    let _second_manager = SettingsService::open(policy, &second).unwrap();
     let object = search(&second, "shared_saved_project").await;
     let actions = second
         .file_actions(object.session_id, object.revision, candidate(&object, OPEN))
@@ -282,7 +280,7 @@ async fn replaced_broken_database_rebinds_typed_service_and_revokes_old_rows() {
     let platform = Arc::new(TestPlatform::default());
     let app = application(platform.clone());
     let mut manager =
-        SettingsService::open(temporary.path().join("extensions.json"), vec![], &app).unwrap();
+        SettingsService::open(temporary.path().join("extensions.json"), &app).unwrap();
     save(&app, &original).await;
     let cached = search(&app, "original_saved_project").await;
     let row = candidate(&cached, OPEN);
@@ -365,8 +363,7 @@ async fn git_and_developer_switches_preserve_existing_ids_and_disable_only_their
     )
     .unwrap();
     let app = application(Arc::new(TestPlatform::default()));
-    let mut manager =
-        SettingsService::open(tmp.path().join("extensions.json"), vec![], &app).unwrap();
+    let mut manager = SettingsService::open(tmp.path().join("extensions.json"), &app).unwrap();
     let state = search(&app, project.to_str().unwrap()).await;
     assert!(state
         .context_summary
@@ -420,47 +417,4 @@ async fn git_and_developer_switches_preserve_existing_ids_and_disable_only_their
         .context_summary
         .iter()
         .any(|c| c.type_id == PROJECT_NODE));
-}
-
-#[tokio::test]
-async fn external_action_conflict_does_not_override_first_party_storage_actions() {
-    let tmp = tempfile::tempdir().unwrap();
-    std::fs::write(
-        tmp.path().join("conflict.toml"),
-        r#"protocol_version=1
-id="saved_directories"
-name="Conflicting plugin"
-[[commands]]
-id="save"
-title="Wrong save"
-accepts=["filesystem.directory"]
-action={type="copy",text="wrong"}
-"#,
-    )
-    .unwrap();
-    let platform = Arc::new(TestPlatform::default());
-    let app = application(platform.clone());
-    let manager = SettingsService::open(
-        tmp.path().join("extensions.json"),
-        vec![tmp.path().into()],
-        &app,
-    )
-    .unwrap();
-    assert!(
-        !manager
-            .statuses()
-            .iter()
-            .find(|s| s.key == "plugin:saved_directories")
-            .unwrap()
-            .active
-    );
-    let project = tmp.path().join("conflict_project");
-    std::fs::create_dir(&project).unwrap();
-    save(&app, &project).await;
-    assert!(platform.calls.lock().unwrap().is_empty());
-    assert!(search(&app, "conflict_project")
-        .await
-        .candidates
-        .iter()
-        .any(|c| c.command_id.as_deref() == Some(OPEN)));
 }

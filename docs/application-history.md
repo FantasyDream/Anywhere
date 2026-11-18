@@ -1,16 +1,21 @@
 # 应用历史
 
-当前 V0.14 开发预览已接入 18 个配置化来源，覆盖 JetBrains、VS Code 同类编辑器、Sublime Text 和 Obsidian 最近仓库。工程与实机验证程度以 [V0.14 MVP](mvp-v0.14.md) 为准，不能从“已有适配”推断所有版本和安装方式均已验收。
+当前 V0.14 开发预览已接入 18 个配置化来源，覆盖 JetBrains、VS Code 同类编辑器、Sublime Text 和 Obsidian 最近仓库。工程与实机验证程度以 [V0.14 MVP](mvp-gpui.md) 为准，不能从“已有适配”推断所有版本和安装方式均已验收。
 
 ## 使用方式
 
 每个来源有独立 Action，例如“IDEA 最近项目”“VS Code 最近项目与文件”。在对应应用中唤醒 Current App 会匹配该入口；也可全局搜索名称或配置独立 Action 快捷键。不增加 Scope，也不在首页常挂一组历史工具按钮。
 
-进入页面后固定查询这一来源，支持标题、路径、中文和拼音。↑ / ↓ 选择，PageUp / PageDown 按可见页移动，Enter 或双击在来源应用打开；远端条目只复制 URI。行内更多操作或右键可复制目标、刷新，或使用该本地对象适用的第一方动作。**历史页不绑定或显示 ⌘K。**
+进入页面后固定查询这一来源，支持标题、路径、中文和拼音。↑ / ↓ 选择，PageUp / PageDown 按可见页移动，Enter 或双击在来源应用打开；远端条目只复制 URI。行内 `…` 或右键打开当前对象适用的第一方动作；页面不绑定 `⌘K` / `⌘R`，避免与 Launcher 对象动作和任务刷新快捷键混淆。这里不增加独立 Scope。目标被删除或对象动作请求失败时关闭空操作面板并显示可恢复错误。
 
 Esc 有查询时先清空，再返回父页面；页头返回按钮直接返回。对象结果子页返回后保留查询和选择。入口与隐藏规则沿用 [Launcher 契约](launcher-interaction.md)，来源配置只放在设置中。
 
 查询变化立即撤销旧结果资格，等待 120ms 后提交；输入法组词期间不查询。在途取消由同一页面的后续输入共享，完成前不启动新读取，避免每次按键排队一个原生取消。隐藏保留恢复所需状态，页面销毁则立即清空结果与对象动作，即使旧请求尚未结束；迟到结果仍需通过版本及可见性检查。
+
+来源回包为空或全部 Action 已关闭时，页面结束加载并说明未配置 / 已停用；这类
+边界可能出现在入口执行后来源状态发生变化时。会话或查询响应通道异常结束也会
+解除加载并显示可恢复错误。远端条目的复制 / 刷新菜单可再次点击关闭，Esc 仍先
+关闭当前菜单。
 
 ## 来源与设置
 
@@ -34,7 +39,7 @@ Esc 有查询时先清空，再返回父页面；页头返回按钮直接返回�
 
 文件夹、文件、多根工作区文件、Obsidian 仓库和远端 URI 保留各自类型。原应用打开只在匹配到唯一安装应用时提交；目标删除、类型变化、来源关闭或请求过期都拒绝执行，不猜测安装实例或退到默认应用。工作区不会被替换成其第一个目录，远端 URI 不截成本机路径。
 
-macOS 对识别为 JetBrains IDE 的安装包（实际 Bundle ID 与 `product-info.json` 产品标记）使用其官方命令行入口，并传递已校验的完整目标路径，让 IDE 处理已打开项目的切换。其余应用仍使用明确安装路径的系统打开接口；不按项目名或窗口标题猜测，也不依赖 PATH 中可能指向另一安装的脚本。实现依据见 [JetBrains 命令行说明](https://www.jetbrains.com/help/idea/working-with-the-ide-features-from-command-line.html)。
+macOS 对识别为 JetBrains IDE 的安装包通过进程内 `NSWorkspaceOpenConfiguration`（`createsNewApplicationInstance = YES`）直接向所选安装的 `.app` 显式交接完整目标路径参数，让 IDE 自身处理项目切换。其余应用仍使用明确安装路径的系统打开接口；不按项目名或窗口标题猜测，也不依赖 PATH 中可能指向另一安装的脚本。参数语义参照 [JetBrains 官方说明](https://www.jetbrains.com/help/idea/working-with-the-ide-features-from-command-line.html)。
 
 只有打开所选本地对象的更多操作时，才通过已有 Context Graph / Registry 解析 File / Directory 及 Git、Developer 等第一方 Native 动作。不会在读列表时遍历每个项目，也不扩大 Web grant 或旧 DSL 权限。Copy Path 是这个菜单的首项，其余项保留共享排序。
 
@@ -45,9 +50,11 @@ macOS 对识别为 JetBrains IDE 的安装包（实际 Bundle ID 与 `product-in
 ## 当前限制与后续范围
 
 - 每来源只选一份文件，不合并多个安装、Profile 或 Vault 的历史。自动检测只定位标准路径，不能精确识别当前安装使用了哪份配置。
-- JetBrains 项目切换交给 IDE 的命令行处理，其他来源使用应用级打开；均不承诺恢复原 Profile、编辑器布局或所有版本的窗口行为。未知格式和应用歧义明确失败。
+- JetBrains 项目切换通过 `NSWorkspaceOpenConfiguration` 向所选 IDE 实例传递参数交接，其他来源使用应用级打开；均不承诺恢复原 Profile、编辑器布局或所有版本的窗口行为。未知格式和应用歧义明确失败。
 - Obsidian 仅支持已登记仓库；最近文件暂缓，尚未建立 Vault 与可自定义配置目录的可靠关联。
 - 浏览器历史、书签与实时 Tab 属于 [独立浏览器规划](browser-feature.md)，当前未实现。
 - 来源适配目前用合成文件覆盖，另有明确版本的 VS Code 本机只读验证；不代表已在全部 18 个应用完成真实打开。
 
 早期方案、采纳或延期的工作包及逐构建证据保留在 [开发归档](archive/v0.14-development-records.md)，不作为当前接口说明。
+
+同一工具会话中的解析结果按来源、规范路径、mtime、大小、SQLite `-wal` / `-journal` 元数据及数据库文件头变更指纹缓存，并预构建搜索索引。查询只重做匹配，手动 Refresh 会清空会话缓存并重新检测来源；切换会话、配置、文件或日志变化均会重新读取。JSON 原文直接进入有界 QuickJS 转换。对象菜单准备与执行均基于当前验证结果核验目标（同时展开项目级动态动作），安装应用来自 ApplicationIndex 的不可变完整目录。

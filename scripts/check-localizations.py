@@ -1,14 +1,10 @@
 #!/usr/bin/env python3
-"""Validate paired ARB messages and compare official Flutter-generated output."""
+"""Validate the paired GPUI and native ARB messages."""
 import json
 from pathlib import Path
-import shutil
-import subprocess
-import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
-APP = ROOT / 'apps/flutter'
-ARB = APP / 'lib/l10n'
+ARB = ROOT / 'resources/localization'
 
 
 def main():
@@ -27,37 +23,7 @@ def main():
         zh = catalogs['zh'].get('@' + key, {}).get('placeholders', {})
         if en != zh:
             raise SystemExit(f'Placeholder definitions differ: {key}')
-    # Generate in a disposable project, leaving the checkout untouched.
-    with tempfile.TemporaryDirectory(prefix='anywhere-l10n-') as temporary:
-        # Mirror a fresh checkout: no root build/ or Flutter cache exists. Use
-        # the production config too, so path assumptions cannot escape this gate.
-        project = Path(temporary) / 'apps/flutter'
-        local_arb = project / 'lib/l10n'
-        local_arb.mkdir(parents=True)
-        (project / 'pubspec.yaml').write_text(
-            (APP / 'pubspec.yaml').read_text())
-        for source in ARB.glob('*.arb'):
-            shutil.copy2(source, local_arb / source.name)
-        shutil.copy2(APP / 'l10n.yaml', project / 'l10n.yaml')
-        subprocess.run([
-            'flutter', '--no-version-check', 'gen-l10n', '--project-dir',
-            str(project)
-        ],
-                       cwd=project,
-                       check=True)
-        generated = {
-            p.name: p.read_bytes()
-            for p in (local_arb / 'generated').glob('*.dart')
-        }
-        committed = {
-            p.name: p.read_bytes() for p in (ARB / 'generated').glob('*.dart')
-        }
-        if not generated or generated != committed:
-            raise SystemExit(
-                'Generated localizations are stale; run flutter gen-l10n')
-    print(
-        f'Localizations OK: {len(keys(catalogs["en"]))} messages, en/zh, official generated output'
-    )
+    print(f'Localizations OK: {len(keys(catalogs["en"]))} messages, en/zh')
 
 
 if __name__ == '__main__':

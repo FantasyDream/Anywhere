@@ -1,13 +1,11 @@
 //! Stable, serializable boundary types. No UI or OS dependencies.
 mod candidate;
 mod context;
-mod declarative;
 mod execution;
 pub mod extension;
 mod identifiers;
 mod launcher;
 pub mod policy;
-pub mod ui;
 pub mod web_bridge;
 pub mod web_plugin;
 
@@ -17,11 +15,9 @@ pub use candidate::{
 };
 pub use context::{
     canonical_context_type, is_json_context, ContextCapturePresentation, ContextCaptureStatus,
-    ContextDescriptor, ContextMatcher, ContextPresentation, ContextSource, InputMode, APPLICATION,
-    DIRECTORY, FILE, FILE_SELECTION, GIT_REPOSITORY, JSON_DOCUMENT, JSON_LEGACY,
-    LAUNCHER_ENTRY_CONTEXT, TEXT, URL,
+    ContextMatcher, ContextPresentation, ContextSource, InputMode, APPLICATION, DIRECTORY, FILE,
+    FILE_SELECTION, GIT_REPOSITORY, JSON_DOCUMENT, JSON_LEGACY, LAUNCHER_ENTRY_CONTEXT, TEXT, URL,
 };
-pub use declarative::{DeclarativeAction, PluginCommand, PluginManifest};
 pub use execution::{
     ActionResult, ActionStatus, ExecutionSessionDetail, ExecutionSessionStatus,
     ExecutionSessionSummary, HostView,
@@ -32,7 +28,7 @@ pub use identifiers::{
     PROJECT_RUST,
 };
 pub use launcher::{
-    FileSearchProgress, LauncherEvent, LauncherState, SearchSourcePresentation, SearchSourceState,
+    FileSearchProgress, LauncherState, SearchSourcePresentation, SearchSourceState,
 };
 
 mod file_filter;
@@ -49,21 +45,6 @@ mod tests {
             serde_json::to_string(&ContextSource::UserInput).unwrap(),
             "\"user_input\""
         );
-        let descriptor = ContextDescriptor {
-            id: "1:2:3".into(),
-            type_id: "github.issue".into(),
-            value: "42".into(),
-            properties: BTreeMap::new(),
-            source: ContextSource::ApplicationContext,
-            provider_id: "example.issues".into(),
-            source_context_id: Some("1:2:1".into()),
-            confidence: 0.9,
-            depth: 2,
-            session_id: 1,
-            revision: 2,
-        };
-        let json = serde_json::to_string(&descriptor).unwrap();
-        assert_eq!(descriptor, serde_json::from_str(&json).unwrap());
         let state = LauncherState {
             session_id: 1,
             ..Default::default()
@@ -123,27 +104,6 @@ mod tests {
             .unwrap()
             .context_captures
             .is_empty());
-    }
-
-    #[test]
-    fn v0_1_plugin_manifest_still_parses_without_v0_2_metadata() {
-        // Mirrors plugins/examples/google.toml: no group_id, aliases or keywords.
-        let v0_1 = r#"
-protocol_version = 1
-id = "google"
-name = "Google"
-
-[[commands]]
-id = "search"
-title = "Search Google"
-accepts = ["core.text"]
-base_priority = 40
-action = { type = "open_url", url = "https://www.google.com/search?q={{context.value}}" }
-"#;
-        let manifest: PluginManifest = toml::from_str(v0_1).unwrap();
-        assert_eq!(manifest.commands[0].group_id, None);
-        assert!(manifest.commands[0].aliases.is_empty());
-        assert!(manifest.commands[0].keywords.is_empty());
     }
 
     #[test]
@@ -255,15 +215,11 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
                     id: "app.finder".into(),
                     label: "Finder".into(),
                     is_current_app: true,
-                    action_ids: Vec::new(),
-                    menu_ids: Vec::new(),
                 },
                 ScopeEntry {
                     id: "folder".into(),
                     label: "Folder".into(),
                     is_current_app: false,
-                    action_ids: Vec::new(),
-                    menu_ids: Vec::new(),
                 },
             ],
             ..Default::default()
@@ -282,35 +238,6 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
 
     #[test]
     fn representative_json_keeps_tags_defaults_and_labels() {
-        assert_eq!(
-            serde_json::to_value(DeclarativeAction::OpenUrl {
-                url: "https://example.com/search?q=anywhere".into(),
-            })
-            .unwrap(),
-            serde_json::json!({
-                "type": "open_url",
-                "url": "https://example.com/search?q=anywhere",
-            })
-        );
-        assert_eq!(
-            serde_json::to_value(LauncherEvent::ProviderCompleted {
-                session_id: 7,
-                revision: 9,
-                provider_id: "example.provider".into(),
-                source_context_id: "context-1".into(),
-                duration_us: 123,
-            })
-            .unwrap(),
-            serde_json::json!({
-                "type": "provider_completed",
-                "session_id": 7,
-                "revision": 9,
-                "provider_id": "example.provider",
-                "source_context_id": "context-1",
-                "duration_us": 123,
-            })
-        );
-
         let candidate = CandidatePresentation {
             id: "candidate-1".into(),
             kind: CandidateKind::Action,
@@ -363,14 +290,5 @@ action = { type = "open_url", url = "https://www.google.com/search?q={{context.v
         let mut future_state = old_state;
         future_state["future_optional_field"] = serde_json::json!(true);
         assert!(serde_json::from_value::<LauncherState>(future_state).is_ok());
-
-        let manifest_with_unknown_field = r#"
-protocol_version = 1
-id = "legacy"
-name = "Legacy"
-future_required_field = true
-commands = []
-"#;
-        assert!(toml::from_str::<PluginManifest>(manifest_with_unknown_field).is_err());
     }
 }

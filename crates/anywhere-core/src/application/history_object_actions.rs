@@ -7,10 +7,8 @@ use crate::{
             engine::{ContextGraph, GraphStep},
             ContextValue, ResolvedContext,
         },
-        ranking::score::UsageStats,
         search::{
             candidate::{CandidateGuard, CandidateTarget},
-            engine::ActionSearch,
             query::Query,
         },
     },
@@ -101,27 +99,9 @@ impl Application {
         revision: Revision,
         item_id: String,
     ) -> Result<Vec<CandidatePresentation>> {
-        let (registry, facts, usage, epoch, catalog, inputs, generation, expected) = {
-            let session = self.session()?;
-            ensure!(
-                !session.suspended
-                    && self.resolver.is_current(session_id, revision)
-                    && session.execution.revision == Some(revision),
-                "object actions expired"
-            );
-            let generation = session.resolution.object_action_epoch.clone();
-            let expected = generation.fetch_add(1, Ordering::AcqRel) + 1;
-            (
-                session.actions.clone(),
-                session.facts(),
-                session.usage.clone(),
-                self.resolver.execution_epoch.load(Ordering::Acquire),
-                self.resolver.catalog.version(),
-                session.resolution.inputs_epoch,
-                generation,
-                expected,
-            )
-        };
+        let object_ticket = self.prepare_object_action_ticket(session_id, revision)?;
+        let generation = object_ticket.generation.clone();
+        let expected = object_ticket.expected;
         let service = history.clone();
         let selected = item_id.clone();
         let (seed, cancelled) = tokio::task::spawn_blocking(move || {
@@ -164,22 +144,13 @@ impl Application {
                 }
             }
         };
-        let mut actions = {
-            let usage_of = |command: &str, kind: &str| {
-                usage
-                    .get(&(command.into(), kind.into()))
-                    .copied()
-                    .unwrap_or(UsageStats::default())
-            };
-            let engine = ActionSearch::new(
-                &registry,
-                &usage_of,
-                &facts,
-                super::session_runtime::now(),
-                crate::features::context_semantic,
-            );
-            engine.search(&Query::parse(""), &contexts, &[]).candidates
-        };
+        let (expanded, _) = object_ticket.registry.for_contexts(&contexts);
+        let mut actions = super::object_actions::resolve_offers(
+            &expanded,
+            &object_ticket.facts,
+            &object_ticket.usage,
+            |engine| engine.search(&Query::parse(""), &contexts, &[]).candidates,
+        );
         // This first-party workflow does not add new Web grants or legacy DSL access.
         actions.retain(|candidate| {
             matches!(&candidate.target, CandidateTarget::Action { action, .. }
@@ -206,30 +177,13 @@ impl Application {
                 generation: generation.clone(),
                 expected,
             });
-            let validate = guard.clone();
-            tokio::task::spawn_blocking(move || validate.validate()).await??;
             for action in &mut actions {
                 action.presentation.id = format!("{prefix}{}", action.presentation.id);
                 action.guard = Some(guard.clone());
             }
         }
-        {
-            let mut session = self.session()?;
-            ensure!(
-                !session.suspended
-                    && ticket.is_current()
-                    && self.resolver.execution_epoch.load(Ordering::Acquire) == epoch
-                    && self.resolver.catalog.version() == catalog
-                    && session.resolution.inputs_epoch == inputs,
-                "object actions expired"
-            );
-            session.resolution.object_actions = actions;
-            session.note_snapshot_inputs();
-        }
-        self.resolver.recompute_current(session_id);
-        let state = self
-            .latest_state(session_id)
-            .context("object actions expired")?;
+        ensure!(ticket.is_current(), "object actions expired");
+        let state = self.publish_object_actions(&object_ticket, actions)?;
         ensure!(
             state.revision == revision
                 && state
@@ -254,8 +208,9 @@ mod tests {
                 descriptor::ActionRegistry,
                 handler::{ActionHandler, ActionHandlerRef, ExecutionOutput},
             },
-            ranking::usage::MemoryUsage,
+            ranking::{score::UsageStats, usage::MemoryUsage},
             search::candidate::CandidateGuard,
+            search::engine::ActionSearch,
             session::facts::SessionFacts,
         },
     };
@@ -376,7 +331,7 @@ mod tests {
         }
         let result = app.execute_use_case(1, 0, id).await.unwrap();
         assert_eq!(result.status, ActionStatus::Failed);
-        assert!(app.execution_sessions().is_empty());
+        assert!(app.execution_sessions().unwrap().is_empty());
         assert_eq!(guard.calls.load(Ordering::Relaxed), 2);
     }
 }

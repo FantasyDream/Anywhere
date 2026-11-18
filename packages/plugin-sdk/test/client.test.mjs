@@ -391,3 +391,32 @@ test('a write fences an already running state read without retrying the write', 
     client.dispose();
   }
 });
+
+test('cancellation releases transport capacity before sending queued work', async () => {
+  const transportPending = new Set();
+  const fake = mock((call, reply) => {
+    if (call.method === 'request.cancel') {
+      transportPending.delete(call.params.request_id);
+    } else if (transportPending.size === 8) {
+      throw new Error('BUSY');
+    } else if (call.params.key === 'queued') {
+      reply(call, 'ok');
+    } else {
+      transportPending.add(call.requestId);
+    }
+  });
+  const client = createHost(fake.transport);
+  const controller = new AbortController();
+  const active = client.storage.get('abort', {signal: controller.signal});
+  const others = Array.from({length: 7}, () => client.storage.get('active'));
+  const queued = client.storage.get('queued');
+  controller.abort();
+
+  assert.equal(fake.calls.at(-2).method, 'request.cancel');
+  assert.equal(fake.calls.at(-1).params.key, 'queued');
+  await assert.rejects(active, {code: 'CANCELLED'});
+  assert.equal(await queued, 'ok');
+  const inactive = Promise.allSettled(others);
+  client.dispose();
+  await inactive;
+});

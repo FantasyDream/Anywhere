@@ -1,19 +1,45 @@
 //! Opening things: URLs, files, directories, a terminal, and Finder reveal.
 use anyhow::{bail, Context, Result};
 use std::{
-    ffi::{OsStr, OsString},
-    io::Write,
+    ffi::{CString, OsStr, OsString},
     path::Path,
-    process::{Command, Stdio},
-    time::{Duration, Instant},
 };
+
+fn workspace_open(
+    target: &OsStr,
+    file: bool,
+    application: Option<&Path>,
+    operation: i32,
+) -> Result<()> {
+    let target = CString::new(target.to_str().context("target is not UTF-8")?)?;
+    let application = application
+        .map(|path| {
+            CString::new(path.to_str().context("application path is not UTF-8")?)
+                .map_err(anyhow::Error::from)
+        })
+        .transpose()?;
+    // SAFETY: C strings live for this bounded synchronous call; Cocoa copies
+    // target/application URLs before scheduling its completion handler.
+    let status = unsafe {
+        super::native::launcher_open_resource(
+            target.as_ptr(),
+            i32::from(file),
+            application
+                .as_ref()
+                .map_or(std::ptr::null(), |path| path.as_ptr()),
+            operation,
+        )
+    };
+    anyhow::ensure!(status == 1, "native resource open failed");
+    Ok(())
+}
 
 pub(super) fn open_url(value: &str) -> Result<()> {
     let url = url::Url::parse(value).context("invalid URL")?;
     if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
         bail!("only absolute http/https URLs are permitted");
     }
-    run("/usr/bin/open", &[OsStr::new(url.as_str())], None).map(|_| ())
+    workspace_open(OsStr::new(url.as_str()), false, None, 0)
 }
 
 pub(super) fn open_file(path: &Path) -> Result<()> {
@@ -21,7 +47,7 @@ pub(super) fn open_file(path: &Path) -> Result<()> {
         bail!("file no longer exists: {}", path.display());
     }
     let path = path.canonicalize()?;
-    run("/usr/bin/open", &[path.as_os_str()], None).map(|_| ())
+    workspace_open(path.as_os_str(), true, None, 0)
 }
 
 pub(super) fn open_file_in_application(application: &Path, target: &Path) -> Result<()> {
@@ -37,12 +63,12 @@ pub(super) fn open_file_in_application(application: &Path, target: &Path) -> Res
         &target,
         bundle.as_ref().map(|app| app.bundle_id.as_str()),
     );
-    run(
-        "/usr/bin/open",
-        &args.iter().map(OsString::as_os_str).collect::<Vec<_>>(),
-        None,
-    )
-    .map(|_| ())
+    let operation = if args.first().is_some_and(|arg| arg == "-n") {
+        3
+    } else {
+        0
+    };
+    workspace_open(target.as_os_str(), true, Some(&application), operation)
 }
 
 fn file_open_arguments(
@@ -93,12 +119,7 @@ fn application_path(application: &Path) -> Result<std::path::PathBuf> {
 }
 
 fn open_in_application(application: &Path, target: &OsStr) -> Result<()> {
-    run(
-        "/usr/bin/open",
-        &[OsStr::new("-a"), application.as_os_str(), target],
-        None,
-    )
-    .map(|_| ())
+    workspace_open(target, false, Some(application), 0)
 }
 
 pub(super) fn reveal_file(path: &Path) -> Result<()> {
@@ -106,25 +127,19 @@ pub(super) fn reveal_file(path: &Path) -> Result<()> {
         bail!("file no longer exists: {}", path.display());
     }
     let path = path.canonicalize()?;
-    run("/usr/bin/open", &[OsStr::new("-R"), path.as_os_str()], None).map(|_| ())
+    workspace_open(path.as_os_str(), true, None, 1)
 }
 
 pub(super) fn open_directory(path: &Path) -> Result<()> {
     require_directory(path)?;
     let path = path.canonicalize()?;
-    run("/usr/bin/open", &[path.as_os_str()], None).map(|_| ())
+    workspace_open(path.as_os_str(), true, None, 0)
 }
 
 pub(super) fn open_terminal(path: &Path) -> Result<()> {
     require_directory(path)?;
     let path = path.canonicalize()?;
-    // Terminal natively accepts directory arguments; no shell interpolation.
-    run(
-        "/usr/bin/open",
-        &[OsStr::new("-a"), OsStr::new("Terminal"), path.as_os_str()],
-        None,
-    )
-    .map(|_| ())
+    workspace_open(path.as_os_str(), true, None, 2)
 }
 
 pub(super) fn require_directory(path: &Path) -> Result<()> {
@@ -132,58 +147,6 @@ pub(super) fn require_directory(path: &Path) -> Result<()> {
         bail!("directory no longer exists: {}", path.display());
     }
     Ok(())
-}
-
-pub(super) fn run(program: &str, args: &[&OsStr], stdin: Option<&str>) -> Result<String> {
-    let start = Instant::now();
-    let result = (|| -> Result<String> {
-        let mut child = Command::new(program)
-            .args(args)
-            // GUI launches often inherit the C locale. pbcopy silently clears
-            // non-ASCII text under that locale, despite exiting successfully.
-            .env("LC_ALL", "en_US.UTF-8")
-            .stdin(if stdin.is_some() {
-                Stdio::piped()
-            } else {
-                Stdio::null()
-            })
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
-            .with_context(|| format!("start {program}"))?;
-        if let Some(text) = stdin {
-            let mut pipe = child.stdin.take().context("child stdin missing")?;
-            if let Err(error) = pipe.write_all(text.as_bytes()) {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(error).context("write clipboard input");
-            }
-        }
-        loop {
-            if child.try_wait()?.is_some() {
-                break;
-            }
-            if start.elapsed() >= Duration::from_secs(5) {
-                let _ = child.kill();
-                let _ = child.wait();
-                bail!("{program} timed out; check macOS Automation permission for Finder");
-            }
-            std::thread::sleep(Duration::from_millis(5));
-        }
-        let output = child.wait_with_output()?;
-        if !output.status.success() {
-            bail!(
-                "{program}: {}",
-                String::from_utf8_lossy(&output.stderr).trim()
-            );
-        }
-        String::from_utf8(output.stdout).context("platform response is not UTF-8")
-    })();
-    if result.is_err() {
-        // System diagnostics may contain private history URLs or target paths.
-        tracing::error!(program, "platform_api_failure");
-    }
-    result
 }
 
 #[cfg(test)]

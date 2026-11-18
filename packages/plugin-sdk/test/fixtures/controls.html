@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Anywhere default controls</title>
+    <link rel="stylesheet" href="../../styles/tokens.css">
+    <link rel="stylesheet" href="../../styles/controls.css">
+  </head>
+  <body>
+    <main class="aw-tool">
+      <h1>Default controls</h1>
+      <p class="aw-muted">No plugin-specific visual styles are applied to this fixture.</p>
+
+      <div class="aw-toolbar">
+        <div class="aw-actions">
+          <button type="button">Button</button>
+          <button type="button" class="aw-button--primary">Primary</button>
+          <button type="button" disabled>Disabled</button>
+        </div>
+        <button type="button" class="aw-icon-button" aria-label="Clear">
+          <span class="aw-icon aw-icon--clear" aria-hidden="true"></span>
+        </button>
+      </div>
+
+      <section class="aw-card" aria-labelledby="fields-heading">
+        <h2 id="fields-heading">Fields</h2>
+        <label for="name">Name</label>
+        <input id="name" value="Anywhere 中文 Aa 0123">
+        <label for="readonly">Read only</label>
+        <input id="readonly" value="Read only value" readonly>
+        <label for="invalid">Invalid</label>
+        <input id="invalid" value="Invalid value" aria-invalid="true">
+        <label for="select">Select</label>
+        <select id="select">
+          <option>First option</option>
+          <option>Second option</option>
+        </select>
+        <label for="notes">Notes</label>
+        <textarea id="notes" rows="4">Resizable content</textarea>
+      </section>
+
+      <fieldset>
+        <legend>Toggle controls</legend>
+        <label><input type="checkbox" checked> Checkbox</label>
+        <label><input type="radio" name="choice" checked> Radio A</label>
+        <label><input type="radio" name="choice"> Radio B</label>
+        <label><input type="checkbox" role="switch" checked> Switch</label>
+        <label for="range">Range</label>
+        <input id="range" type="range" value="60">
+        <progress max="100" value="60">60%</progress>
+      </fieldset>
+
+      <details class="aw-disclosure">
+        <summary>Disclosure</summary>
+        <div class="aw-disclosure-body">
+          <button type="button">Secondary command</button>
+        </div>
+      </details>
+
+      <menu role="menu">
+        <li role="menuitem">Menu item</li>
+        <li role="menuitemcheckbox" aria-checked="true">Checked item</li>
+      </menu>
+
+      <div role="listbox" aria-label="Options">
+        <div role="option" aria-selected="true">Selected option</div>
+        <div role="option">Other option</div>
+      </div>
+
+      <p><kbd>⌘</kbd> <kbd>K</kbd> <a href="#controls">Link</a></p>
+      <pre><code>{ "default": true }</code></pre>
+      <div role="tooltip">Tooltip text</div>
+      <p class="aw-error" role="alert">Field-level error</p>
+
+      <dialog open>
+        <h2>Dialog</h2>
+        <p>Dialog content uses the shared overlay surface.</p>
+        <button type="button" class="aw-button--primary">Confirm</button>
+      </dialog>
+    </main>
+  </body>
+</html>

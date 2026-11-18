@@ -36,7 +36,7 @@ pub(super) fn create_json<T: serde::Serialize>(
     }
 }
 
-fn prepare_json<T: serde::Serialize>(
+pub(crate) fn prepare_json<T: serde::Serialize>(
     path: &Path,
     value: &T,
     limit: usize,

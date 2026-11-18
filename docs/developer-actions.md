@@ -56,7 +56,10 @@ Provider 只做标记与有界元数据读取，动态 Action 工厂基于已识
 
 Cargo Run 在执行时重新读取目标清单，将 `required-features` 解析为字符串列表，再以 `--features` 启用这些 feature，保留 Cargo 默认 feature 行为；未声明时使用原有运行参数。
 
-开发任务进入 ExecutionSessionManager。菜单栏 Running Tasks 查看状态、stdout / stderr、退出码、停止；关闭窗口或 Launcher 不停止已启动任务，退出应用会停止任务。当前只有进程会话，没有 PTY、交互式终端或应用重启后任务恢复。
+开发任务进入 ExecutionSessionManager。启动成功后新建或复用 Running Tasks，
+并选中本次 `execution_session_id`；菜单栏入口查看状态、stdout / stderr、
+退出码、停止和输出复制。关闭窗口或 Launcher 不停止已启动任务，退出应用会
+停止任务。当前只有进程会话，没有 PTY、交互式终端或应用重启后任务恢复。
 
 ## 模块与验证
 

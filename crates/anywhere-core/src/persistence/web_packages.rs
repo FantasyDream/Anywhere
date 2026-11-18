@@ -26,13 +26,14 @@ pub(crate) struct WebPackageRepository {
 }
 #[derive(Clone)]
 pub struct WebResourceFile {
+    root: PathBuf,
     path: PathBuf,
     size: u64,
     sha256: String,
 }
 impl WebResourceFile {
     pub fn read(&self) -> Result<Vec<u8>> {
-        let bytes = read_regular(&self.path, self.size)?;
+        let bytes = read_regular_within(&self.path, Some(&self.root), self.size)?;
         ensure!(
             bytes.len() as u64 == self.size && hex::encode(Sha256::digest(&bytes)) == self.sha256,
             "Web resource changed"
@@ -72,6 +73,7 @@ impl WebPackageRepository {
     }
     pub fn resource_file(&self, digest: &str, asset: &VerifiedAsset) -> WebResourceFile {
         WebResourceFile {
+            root: self.root.clone(),
             path: self.root.join(digest).join("assets").join(asset.path()),
             size: asset.size(),
             sha256: asset.sha256(),
@@ -144,16 +146,24 @@ fn valid_digest(s: &str) -> bool {
             .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
 }
 fn read_regular(path: &Path, limit: u64) -> Result<Vec<u8>> {
+    read_regular_within(path, None, limit)
+}
+
+fn read_regular_within(path: &Path, stop_at: Option<&Path>, limit: u64) -> Result<Vec<u8>> {
     // Never follow an installed symlink, including a substituted parent directory.
     for ancestor in path.ancestors() {
         ensure!(
             !fs::symlink_metadata(ancestor)?.file_type().is_symlink(),
             "Web package links are unsupported"
         );
+        if stop_at == Some(ancestor) {
+            break;
+        }
     }
     let file = fs::File::open(path)?;
+    let metadata = file.metadata()?;
     ensure!(
-        file.metadata()?.is_file() && file.metadata()?.len() <= limit,
+        metadata.is_file() && metadata.len() <= limit,
         "Web resource exceeds limit"
     );
     let mut bytes = Vec::new();

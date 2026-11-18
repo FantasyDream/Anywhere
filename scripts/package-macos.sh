@@ -19,14 +19,9 @@ except (ValueError, OSError, RuntimeError) as error:
     sys.exit(str(error))
 if app.suffix != '.app' or not app.is_dir():
     sys.exit('The selected app does not exist.')
-source = plistlib.loads((root / 'apps/flutter/macos/Runner/Info.plist').read_bytes())
+source = plistlib.loads((root / 'apps/gpui/macos/Info.plist').read_bytes())
 bundle = plistlib.loads((app / 'Contents/Info.plist').read_bytes())
-version = re.search(r'^version:\s*(\S+)\s*$',
-                    (root / 'apps/flutter/pubspec.yaml').read_text(), re.MULTILINE)
-expected = f"{source['CFBundleShortVersionString']}+{source['CFBundleVersion']}"
-if version is None or version.group(1) != expected:
-    sys.exit('Flutter and native source versions differ; align them before packaging.')
-for key in ['CFBundleIdentifier', 'CFBundleShortVersionString', 'CFBundleVersion', 'FLTEnableImpeller']:
+for key in ['CFBundleIdentifier', 'CFBundleShortVersionString']:
     if bundle.get(key) != source.get(key):
         sys.exit(f'The selected app has a stale {key}; rebuild it before packaging.')
 print(app)
@@ -49,7 +44,7 @@ import hashlib, pathlib, plistlib, sys, zipfile
 app, archive = map(pathlib.Path, sys.argv[1:])
 with zipfile.ZipFile(archive) as bundle:
     for file in ['Contents/Info.plist', 'Contents/MacOS/Anywhere',
-                 'Contents/Frameworks/libanywhere_bridge_flutter.dylib']:
+                 'Contents/Resources/Anywhere.icns']:
         original = hashlib.sha256((app / file).read_bytes()).digest()
         packaged = hashlib.sha256(bundle.read(f'{app.name}/{file}')).digest()
         if original != packaged:

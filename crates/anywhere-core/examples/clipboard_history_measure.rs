@@ -88,7 +88,7 @@ fn main() -> Result<()> {
             "summary_utf8_bytes": summary_bytes, "insert_ms": insert_ms,
             "prepare_preview_mean_us": prepare_preview_mean_us, "queries": results,
             "service_policy_queries": policy_queries,
-            "scope": "Rust repository queries and service previews; excludes Flutter, bridge and OS clipboard",
+            "scope": "Rust repository queries and service previews; excludes GPUI and OS clipboard",
         }))?
     );
     Ok(())

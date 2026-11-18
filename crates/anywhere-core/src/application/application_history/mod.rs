@@ -270,6 +270,42 @@ impl SourceLoader for SourceCatalog {
             })
             .collect()
     }
+    fn revision(&self, source: &SourcePreference) -> Option<SourceRevision> {
+        use std::io::Read;
+        let path = source.path.canonicalize().ok()?;
+        let metadata = std::fs::metadata(&path).ok()?;
+        if !metadata.is_file() {
+            return None;
+        }
+        let sidecar_meta = |suffix: &str| -> Option<Option<(u64, std::time::SystemTime)>> {
+            let mut sidecar = path.as_os_str().to_os_string();
+            sidecar.push(suffix);
+            match std::fs::metadata(std::path::Path::new(&sidecar)) {
+                Ok(meta) => Some(Some((meta.len(), meta.modified().ok()?))),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Some(None),
+                Err(_) => None,
+            }
+        };
+        let journal = sidecar_meta("-wal")?;
+        let rollback_journal = sidecar_meta("-journal")?;
+        let mut header_fingerprint = [0u8; 64];
+        if let Ok(mut main_file) = std::fs::File::open(&path) {
+            let _ = main_file.read(&mut header_fingerprint[..32]);
+        }
+        let mut wal_path = path.as_os_str().to_os_string();
+        wal_path.push("-wal");
+        if let Ok(mut wal_file) = std::fs::File::open(std::path::Path::new(&wal_path)) {
+            let _ = wal_file.read(&mut header_fingerprint[32..]);
+        }
+        Some(SourceRevision {
+            path,
+            bytes: metadata.len(),
+            modified: metadata.modified().ok()?,
+            journal,
+            rollback_journal,
+            header_fingerprint,
+        })
+    }
     fn read(&self, source: &SourcePreference, cancelled: Cancelled) -> Result<Vec<Entry>> {
         ensure!(
             self.configuration_error.is_none(),
@@ -283,6 +319,14 @@ impl SourceLoader for SourceCatalog {
         let started = Instant::now();
         let cancelled: Cancelled =
             Arc::new(move || cancelled() || started.elapsed() > Duration::from_secs(5));
+        if matches!(
+            package.manifest.reader,
+            crate::persistence::application_history::Reader::Json
+        ) {
+            let input =
+                crate::persistence::application_history::read_json_text(&source.path, &cancelled)?;
+            return script::transform_json(&package.script, &input, cancelled);
+        }
         let input = crate::persistence::application_history::read(
             &source.path,
             &package.manifest.reader,

@@ -2,6 +2,7 @@
 """Build ordinary installable examples; does not install or approve them."""
 from pathlib import Path
 import json
+import sys
 import shutil
 import subprocess
 
@@ -16,15 +17,16 @@ def run(args, path):
 
 run(['python3', 'scripts/generate-design-tokens.py', '--check'], ROOT)
 sdk = ROOT / 'packages/plugin-sdk'
+if '--sdk-ready' not in sys.argv:
+    run([
+        'npm', 'ci', '--registry=https://registry.npmjs.org',
+        '--ignore-scripts', '--no-audit', '--no-fund'
+    ], sdk)
+    run(['npm', 'run', 'build'], sdk)
+json_tool = ROOT / 'plugins/examples/json-workspace'
 run([
     'npm', 'ci', '--registry=https://registry.npmjs.org', '--ignore-scripts',
     '--no-audit', '--no-fund'
-], sdk)
-run(['npm', 'run', 'build'], sdk)
-json_tool = ROOT / 'plugins/examples/json-workspace'
-run([
-    'npm', 'ci', '--registry=https://registry.npmjs.org', '--no-audit',
-    '--no-fund'
 ], json_tool)
 run(['npm', 'test'], json_tool)
 run(['npm', 'run', 'build'], json_tool)

@@ -1,5 +1,5 @@
 //! Counts requested Rust heap bytes in isolated fixtures. Excludes C/SQLite, VM,
-//! Flutter, GPU and allocator overhead; this is not process RSS or footprint.
+//! GPUI, GPU and allocator overhead; this is not process RSS or footprint.
 use anyhow::{ensure, Result};
 use anywhere_core::{
     features::{
@@ -121,7 +121,7 @@ fn main() -> Result<()> {
     println!(
         "{}",
         serde_json::to_string_pretty(&json!({
-            "scope":"Requested Rust heap bytes only; excludes SQLite/C allocations, allocator overhead, VM, OS, Bridge, Flutter and GPU. Not RSS or physical footprint.",
+            "scope":"Requested Rust heap bytes only; excludes SQLite/C allocations, allocator overhead, VM, OS, GPUI and GPU. Not RSS or physical footprint.",
             "clipboard_payload_bytes":16*1024*1024,"duplicate_clipboard_peak_extra_bytes":clipboard_peak,
             "history_entries":1024,"history_query_peak_extra_bytes":history_peak,
             "history_result_and_service_live_extra_bytes":history_live,"history_after_result_drop_and_cancel_extra_bytes":history_idle,

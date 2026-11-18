@@ -2,7 +2,7 @@
 
 插件可以是 Web 界面，也可以是无需界面的后台 JavaScript。你只负责 TypeScript / JavaScript 业务；Anywhere 负责容器、默认样式、权限、Context 调度和资源释放。界面可使用普通 HTML，也可以使用 React、Vue、Svelte。
 
-**当前范围：macOS 本地开发预览。** 下述 API 描述当前源码；历史发布包不一定具备这些能力。SDK 尚未发布到 npm，使用导出的 `.tgz` 安装。开发需要 Node.js 22+ 和 Python 3.10+；插件运行时不需要 Node、Python、Rust 或 Flutter。
+**当前范围：macOS 本地开发预览。** 下述 API 描述当前源码；历史发布包不一定具备这些能力。SDK 尚未发布到 npm，使用导出的 `.tgz` 安装。开发需要 Node.js 22+ 和 Python 3.10+；插件运行时不需要 Node、Python 或 Rust。
 
 ## 1. 从模板开始
 
@@ -27,7 +27,7 @@ SDK 自动保存在 `vendor/plugin-sdk/`，项目可独立移动。提交源码�
 1. 打开 Anywhere → **Settings → Features → Web tools → Import**。
 2. 选择 `.awplugin`，核对名称、版本和权限后批准。
 3. 在 Global Search 搜索 **My Tool**，回车打开。
-4. 输入文字，点 Uppercase；点 Copy text… 后，宿主会询问是否允许本次复制。
+4. 输入文字，点 Uppercase；点 Copy text 后，在安装时批准的权限内直接复制；失败时由 SDK 报告。
 
 修改后重新执行 `npm run build`、`npm run pack`，再导入更新。**Reload 只重新加载已批准的包，不读取源码目录。** 当前不支持开发服务器和 HMR。
 
@@ -182,7 +182,7 @@ QuickJS 每次按需创建，32 MiB 内存、256 KiB 栈、250 ms JS 执行预�
 
 ## 5. 界面与生命周期
 
-- **背景自动适配**：无需权限、API 或背景 CSS。不要给根节点设置不透明背景或覆盖 Host 的 `color-scheme`。
+- **背景自动适配**：无需权限、API 或背景 CSS。不要给根节点设置不透明背景或覆盖 Host 的 `color-scheme`。普通控件会继承当前 scheme；若自建固定深色 menu / dialog / tooltip，局部声明 `color-scheme: dark`，并把 `--aw-text`、Primary / Secondary / Muted、边界和交互表面映射到 `--aw-on-dark-*`。
 - **窗口由 Host 提供**：不用再画标题栏、关闭按钮、搜索框或返回按钮。
 - **默认控件样式**：普通 HTML 自动继承 Host 的字体、颜色和控件外观，无需样式导入或 `aw-ui` 包装。模板的 `aw-tool` 提供页面留白；组合输入和分栏复用 [SDK 公共类](../packages/plugin-sdk/README.md#统一样式)，局部 CSS 只负责业务布局或例外。
 - 编辑器 / 查询工具可用 `aw-workspace`、`aw-workspace-toolbar`、`aw-workspace-panes`、`aw-pane` 和 `aw-editor`；分栏与代码区域跟随 File Search 的共享设计，不用再画两张独立大卡片。完整类名见 SDK README。

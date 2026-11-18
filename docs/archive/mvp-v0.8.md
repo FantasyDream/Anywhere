@@ -27,7 +27,7 @@
 - 模块状态只保留有界持久数据，runtime 可重建；Storage 事务内读改写，Reload 重开连接 / 刷新状态。
 - 配置损坏或未知 schema 保持只读与原文件，基础功能可用；修复后 Reload 恢复。
 
-详细接口见 [扩展协议](../plugin-protocol.md)，职责与 Source 生命周期见 [架构](../architecture.md)。
+详细接口见 [扩展协议](plugin-protocol.md)，职责与 Source 生命周期见 [架构](../architecture.md)。
 
 ## 收藏目录的实际闭环
 

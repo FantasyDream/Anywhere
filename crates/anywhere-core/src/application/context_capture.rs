@@ -336,7 +336,7 @@ impl ContextCaptureService {
             if !policy.allows(capture.source, token) {
                 return;
             }
-            let Ok(mut session) = resolver.session.lock() else {
+            let Ok(mut session) = resolver.session.access() else {
                 return;
             };
             if session.state.session_id != session_id || !resolver.is_session_active(session_id) {
@@ -348,7 +348,7 @@ impl ContextCaptureService {
             let _ = resolver.recompute_current(session_id);
             return;
         }
-        if resolver.session.lock().is_ok_and(|session| {
+        if resolver.session.access().is_ok_and(|session| {
             matches!(
                 session.input_mode,
                 InputMode::Content | InputMode::Search | InputMode::FileSearch
@@ -371,7 +371,7 @@ impl ContextCaptureService {
                 Start(Revision),
             }
             let next = {
-                let Ok(session) = resolver.session.lock() else {
+                let Ok(session) = resolver.session.access() else {
                     return;
                 };
                 if session.state.session_id != session_id || !resolver.is_session_active(session_id)

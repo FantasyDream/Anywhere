@@ -46,23 +46,40 @@ fn same_generation(_: i64) -> bool {
 }
 
 #[cfg(target_os = "macos")]
-fn guard_format(name: &str, capacity: usize) -> Result<bool> {
+fn read_format(_clipboard: &dyn Clipboard, name: &str, capacity: usize) -> Result<Option<Vec<u8>>> {
     let name = std::ffi::CString::new(name)?;
-    // SAFETY: NUL-terminated format identifier, no output pointers.
-    let status = unsafe {
-        crate::macos::native::launcher_clipboard_format_guard(name.as_ptr(), capacity as u64)
+    let mut length = 0;
+    let mut status = 0;
+    // SAFETY: valid input string and writable outputs. The shim bounds the
+    // allocation and returns one owned buffer from one NSData read.
+    let pointer = unsafe {
+        crate::macos::native::launcher_clipboard_read_format(
+            name.as_ptr(),
+            capacity as u64,
+            &mut length,
+            &mut status,
+        )
     };
+    if !pointer.is_null() {
+        // SAFETY: the shim returned `length` initialized bytes; release with its allocator.
+        let bytes = unsafe { std::slice::from_raw_parts(pointer, length as usize).to_vec() };
+        unsafe { crate::macos::native::launcher_free_bytes(pointer) };
+        return Ok(Some(bytes));
+    }
     match status {
-        1 => Ok(true),
-        0 => Ok(false),
+        0 => Ok(None),
         3 => Err(ContextReadError::TooLarge.into()),
         4 => Err(ContextReadError::PermissionDenied.into()),
         _ => Err(ContextReadError::Unavailable.into()),
     }
 }
 #[cfg(not(target_os = "macos"))]
-fn guard_format(_: &str, _: usize) -> Result<bool> {
-    Ok(true)
+fn read_format(clipboard: &dyn Clipboard, name: &str, capacity: usize) -> Result<Option<Vec<u8>>> {
+    let Ok(bytes) = clipboard.get_buffer(name) else {
+        return Ok(None);
+    };
+    ensure!(bytes.len() <= capacity, ContextReadError::TooLarge);
+    Ok(Some(bytes))
 }
 fn persistent_format(name: &str) -> bool {
     valid_format_name(name)
@@ -82,7 +99,13 @@ pub fn read(generation: i64) -> Result<Option<ClipboardPayload>> {
         return Ok(None);
     }
     ensure!(allowed(), ContextReadError::PermissionDenied);
-    let payload = context(|clipboard| collect(clipboard, guard_format, guard_files))?;
+    let payload = context(|clipboard| {
+        collect_with_reader(
+            clipboard,
+            |name, remaining| read_format(clipboard, name, remaining),
+            guard_files,
+        )
+    })?;
     ensure!(allowed(), ContextReadError::PermissionDenied);
     if !same_generation(generation) {
         return Ok(None);
@@ -102,9 +125,9 @@ fn guard_files() -> Result<()> {
 fn guard_files() -> Result<()> {
     Ok(())
 }
-fn collect(
+fn collect_with_reader(
     clipboard: &dyn Clipboard,
-    check_format: impl Fn(&str, usize) -> Result<bool>,
+    read_format: impl Fn(&str, usize) -> Result<Option<Vec<u8>>>,
     check_files: impl Fn() -> Result<()>,
 ) -> Result<Option<ClipboardPayload>> {
     let mut names = clipboard
@@ -114,9 +137,21 @@ fn collect(
         return Ok(None);
     }
     ensure!(names.len() <= MAX_FORMATS, ContextReadError::TooManyItems);
-    names.sort();
+    names.sort_by_key(|name| {
+        (
+            if name == "public.png" {
+                0
+            } else if name == "public.tiff" {
+                2
+            } else {
+                1
+            },
+            name.clone(),
+        )
+    });
     names.dedup();
     let mut payload = ClipboardPayload::default();
+    let mut oversized = false;
     // clipboard-rs reconstructs the complete file list across pasteboard items.
     if clipboard.has(clipboard_rs::ContentFormat::Files) {
         check_files()?;
@@ -130,39 +165,143 @@ fn collect(
         // Do not replay Finder's private move/cut or promise metadata.
     } else {
         for name in names {
-            if !persistent_format(&name) {
+            if !persistent_format(&name) || tiff_alias(&name) || secondary_plain_text_alias(&name) {
                 continue;
             }
             let remaining = MAX_PAYLOAD_BYTES.saturating_sub(payload.byte_count());
-            if !check_format(&name, remaining)? {
+            if name == "public.tiff"
+                && payload
+                    .formats
+                    .iter()
+                    .any(|format| format.name == "public.png")
+            {
                 continue;
             }
-            let Ok(data) = clipboard.get_buffer(&name) else {
+            if primary_utf8_text_alias(&name)
+                && payload
+                    .formats
+                    .iter()
+                    .any(|format| primary_utf8_text_alias(&format.name))
+            {
                 continue;
+            }
+            let data = match read_format(&name, remaining) {
+                Ok(Some(data)) if data.len() <= remaining => data,
+                Ok(None) => continue,
+                Ok(Some(_)) => {
+                    oversized = true;
+                    continue;
+                }
+                Err(error)
+                    if matches!(
+                        error.downcast_ref::<ContextReadError>(),
+                        Some(ContextReadError::TooLarge)
+                    ) =>
+                {
+                    oversized = true;
+                    continue;
+                }
+                Err(error) => return Err(error),
             };
-            ensure!(data.len() <= remaining, ContextReadError::TooLarge);
             payload.formats.push(ClipboardFormat { name, data });
         }
         // Store a canonical UTF-8 text representation for searching and portable restore.
-        if clipboard.has(clipboard_rs::ContentFormat::Text) {
-            let text = clipboard
-                .get_text()
-                .map_err(|_| ContextReadError::Unavailable)?;
-            // AppKit advertises legacy aliases for the same plain text. Keeping
-            // those as independent formats makes copying a migrated entry create
-            // another history item, even though its text has not changed.
-            payload.formats.retain(|f| !plain_text_alias(&f.name));
-            payload.formats.push(ClipboardFormat {
-                name: TEXT.into(),
-                data: text.into_bytes(),
-            });
+        let buffered_utf8 = payload
+            .formats
+            .iter()
+            .find(|format| primary_utf8_text_alias(&format.name))
+            .and_then(|format| std::str::from_utf8(&format.data).ok())
+            .filter(|text| !text.contains('\0'))
+            .map(str::to_owned);
+        payload.formats.retain(|f| !plain_text_alias(&f.name));
+        if let Some(text) = buffered_utf8 {
+            if !text.is_empty() {
+                payload.formats.push(ClipboardFormat {
+                    name: TEXT.into(),
+                    data: text.into_bytes(),
+                });
+            }
+        } else if clipboard.has(clipboard_rs::ContentFormat::Text) {
+            let remaining = MAX_PAYLOAD_BYTES.saturating_sub(payload.byte_count());
+            #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
+            let mut text_ok = remaining > 0;
+            #[cfg(target_os = "macos")]
+            if text_ok {
+                let status = unsafe {
+                    crate::macos::native::launcher_clipboard_text_guard(remaining as u64)
+                };
+                match status {
+                    1 => {}
+                    2 | 0 => text_ok = false,
+                    3 => {
+                        oversized = true;
+                        text_ok = false;
+                    }
+                    4 => return Err(ContextReadError::PermissionDenied.into()),
+                    _ => text_ok = false,
+                }
+            }
+            if text_ok {
+                if let Ok(text) = clipboard.get_text() {
+                    if text.len() <= remaining {
+                        let sanitized = text.replace('\0', "");
+                        if !sanitized.is_empty() {
+                            payload.formats.push(ClipboardFormat {
+                                name: TEXT.into(),
+                                data: sanitized.into_bytes(),
+                            });
+                        }
+                    } else {
+                        oversized = true;
+                    }
+                }
+            } else if remaining == 0 {
+                oversized = true;
+            }
         }
     }
     if payload.formats.is_empty() {
+        ensure!(!oversized, ContextReadError::TooLarge);
         return Ok(None);
     }
     payload.validate()?;
     Ok(Some(payload))
+}
+
+#[cfg(test)]
+fn collect(
+    clipboard: &dyn Clipboard,
+    check_format: impl Fn(&str, usize) -> Result<bool>,
+    check_files: impl Fn() -> Result<()>,
+) -> Result<Option<ClipboardPayload>> {
+    collect_with_reader(
+        clipboard,
+        |name, remaining| {
+            if !check_format(name, remaining)? {
+                return Ok(None);
+            }
+            Ok(clipboard.get_buffer(name).ok())
+        },
+        check_files,
+    )
+}
+
+fn tiff_alias(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "next tiff v4.0 pasteboard type" | "corepasteboardflavortype 0x54494646"
+    )
+}
+
+fn primary_utf8_text_alias(name: &str) -> bool {
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "public.utf8-plain-text" | "text/plain;charset=utf-8" | "text/plain" | "utf8_string"
+    )
+}
+
+fn secondary_plain_text_alias(name: &str) -> bool {
+    plain_text_alias(name) && !primary_utf8_text_alias(name)
 }
 
 fn plain_text_alias(name: &str) -> bool {

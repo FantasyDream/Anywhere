@@ -7,21 +7,14 @@ use crate::features::filesystem::provider::{CurrentDirectoryProvider, DirectoryM
 use std::sync::Arc;
 
 pub fn builtin_registry() -> ActionRegistry {
-    configured_builtins(&Default::default()).0
+    configured_builtins().0
 }
 
 /// Actions and recognizers are assembled from the same enabled contributions.
-pub(crate) fn configured_builtins(
-    disabled: &std::collections::BTreeSet<String>,
-) -> (ActionRegistry, ContextProviderRegistry) {
+pub(crate) fn configured_builtins() -> (ActionRegistry, ContextProviderRegistry) {
     let mut registry = ActionRegistry::default();
     let mut providers = ContextProviderRegistry::default();
     for contribution in crate::features::contribution::builtins() {
-        if contribution.configurable
-            && disabled.contains(&format!("first-party:{}", contribution.id))
-        {
-            continue;
-        }
         append_contribution(&mut registry, &mut providers, contribution)
             .expect("invalid built-in contribution");
     }
@@ -70,7 +63,7 @@ pub(super) fn builtin_sources(
 }
 
 pub(super) fn builtin_providers() -> ContextProviderRegistry {
-    configured_builtins(&Default::default()).1
+    configured_builtins().1
 }
 
 pub(super) fn session_providers(

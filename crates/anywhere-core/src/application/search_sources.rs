@@ -66,7 +66,7 @@ pub(super) fn mark_sources_loading(
     revision: Revision,
     states: &[SearchSourcePresentation],
 ) {
-    let Ok(mut session) = resolver.session.lock() else {
+    let Ok(mut session) = resolver.session.access() else {
         return;
     };
     if !resolver.is_current(session_id, revision) {
@@ -83,7 +83,7 @@ fn commit_plain_batch(
     batch: AsyncCandidateBatch,
 ) {
     let committed = {
-        let Ok(mut session) = resolver.session.lock() else {
+        let Ok(mut session) = resolver.session.access() else {
             return;
         };
         if !resolver.is_current(session_id, revision)
