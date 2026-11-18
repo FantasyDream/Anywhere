@@ -20,7 +20,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 gpui-kit = { version = "=0.9.1", features = ["gpui-fast"] }
 gpui-webview = { version = "=0.9.1", features = ["gpui-fast"] }
 global-hotkey = "0.10.0"
-rfd = "0.15"
+rfd = "0.18"
 sys-locale = "0.3"
 url.workspace = true
 raw-window-handle = "=0.6.2"
