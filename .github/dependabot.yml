@@ -10,10 +10,19 @@ updates:
       - /packages/plugin-sdk
       - /packages/plugin-sdk/templates/minimal
       - /plugins/examples/json-workspace
-      - /tools/code-style
     schedule:
       interval: monthly
     open-pull-requests-limit: 3
+  - package-ecosystem: npm
+    directory: /tools/code-style
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 3
+    ignore:
+      # GTS 7 uses typescript-eslint 8, whose compiler API supports TypeScript <6.1.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
   - package-ecosystem: pip
     directory: /tools/code-style
     schedule:
