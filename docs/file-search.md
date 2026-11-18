@@ -42,7 +42,7 @@ macOS Host 在启动和保存搜索设置时恢复只读书签，持有搜索所
    ├─ 配置的有界快批 → 核验并显示早期候选
    └─ 输入稳定后完整遍历 → 查询临时记录
                               → 外部排序 / 未读尾部归并
-                              → 按批次追加到稳定列表
+                              → 按 cursor 读取 64 行稳定窗口
 ```
 
 Spotlight 返回多少、是否失败都不决定是否遍历（少于 2 个字符的短查询跳过 Spotlight 快批，直接由完整遍历覆盖）。
@@ -58,7 +58,7 @@ Settings → Search 允许在默认 `SystemIndex`、`Ripgrep` 与并发合并的
 | `features/filesystem/scan/progress.rs` / `pagination.rs` | 有界诊断、已提交边界；首批读取与连续批次交付 |
 | `features/filesystem/result_store.rs` | 有界外部排序、未读尾部归并、失败重建 |
 | `application/source_runtime.rs` | 通用异步来源 admission、取消、批次与版本校验 |
-| `application/file_workspace.rs` | 文件配置、进度、冻结与原子稳定追加 |
+| `application/file_workspace.rs` | 文件配置、进度、冻结、页面替换和 query-bound cursor 校验 |
 | `application/object_actions.rs` | 按选中对象生成二级动作和凭证复验 |
 | Platform `search_storage` / macOS `file_search` | 原始路径编码、私有临时目录与租约、多范围 MDQuery |
 | GPUI `launcher/view/controllers/file_search.rs` | 分页与 follow 共用快照顺序，维护加载状态与键盘选择 |
@@ -72,7 +72,12 @@ Settings → Search 允许在默认 `SystemIndex`、`Ripgrep` 与并发合并的
 
 查询、类型、范围、来源目录或会话变更撤销旧任务。worker 持有 admission 至真正结束；有界通道避免积压。临时目录使用私有权限和 lease 锁，释放引用后清理，异常退出的无活租约目录在后续准备时回收。
 
-已加载候选和执行表随浏览量增长；Delta / 共享分块减少重复复制，不保证整 App 恒定 RSS。没有生产遍历的 50,000 项或首批满即完成上限。冷扫描和磁盘不足不能承诺固定耗时。
+生产路径只把当前 64 行 Candidate、presentation 和执行索引保留在 Session；上一页 / 下一页从
+查询临时记录按 cursor 重读，因此访问页数不会线性增加 Rust 会话状态。兼容 append 路径的
+Delta / 共享分块仍保留。2026-11-12 的隔离夹具在 10,000 与 100,000 个总命中上测得窗口均为
+77,946 Rust 请求字节；查询临时文件、Bridge / Dart、Flutter、GPU 和整 App footprint 不计入。
+100k 真实目录的翻页延迟和整进程峰值仍需测量。没有生产遍历的 50,000 项或首批满即完成上限。
+冷扫描和磁盘不足不能承诺固定耗时。
 
 ## 临时目录与回收站过滤
 

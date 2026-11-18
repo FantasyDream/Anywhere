@@ -1,0 +1,211 @@
+{
+  "date": "2026-11-12",
+  "system": {
+    "name": "macOS",
+    "version": "27.2.1",
+    "build": "26B131",
+    "architecture": "arm64"
+  },
+  "app": {
+    "version": "0.14.0+46",
+    "executable_sha256": "bb8a9e078cded99880f70749e0c4b2555a1e5ebc98f37460f40f08e48b152e4f",
+    "engine": "Flutter 3.50.0",
+    "isolated_data_directory": true
+  },
+  "original_and_restored_system_state": {
+    "appearance": "dark",
+    "accent": "multicolor/default",
+    "text_highlight": "automatic/default",
+    "liquid_glass_tone": 0.4976543188095093,
+    "liquid_glass_tone_range": [0, 1],
+    "tint_window_background_from_wallpaper": true,
+    "reduce_motion": false,
+    "increase_contrast": false,
+    "reduce_transparency": false
+  },
+  "cases": [
+    {
+      "id": "A4-01",
+      "case": "dark baseline",
+      "system_change": "none",
+      "result": "pass",
+      "evidence": ["01-dark-baseline.png", "02-system-appearance-dark.png"]
+    },
+    {
+      "id": "A4-02",
+      "case": "live dark-to-light switch",
+      "system_change": "appearance=light",
+      "result": "pass; Flutter background, text, controls, focus and warning surface updated without restart",
+      "evidence": ["03-anywhere-light.png"]
+    },
+    {
+      "id": "A4-03",
+      "case": "Liquid Glass tone endpoints",
+      "system_change": "native Liquid Glass tone slider 0.4976543188095093 -> 0 -> 1 -> 0.4976543188095093",
+      "result": "pass; native material changed in place and Flutter content remained readable; no Flutter child or engine recreation was required",
+      "limitation": "The slider is a system tint control, not a public blur-radius API. Optical intensity was assessed visually rather than by a synthetic opacity value.",
+      "evidence": ["04-anywhere-light-glass-tone-low.png", "05-anywhere-light-glass-tone-high.png"]
+    },
+    {
+      "id": "A4-04",
+      "case": "system accent color",
+      "system_change": "multicolor -> orange -> multicolor",
+      "result": "pass; semantic accent and primary button tint updated",
+      "evidence": ["06-anywhere-light-orange-accent.png"]
+    },
+    {
+      "id": "A4-05",
+      "case": "increase contrast",
+      "system_change": "off -> on -> off",
+      "result": "pass; enhanced semantic palette, primary text and focus/selection borders became more distinct",
+      "evidence": ["07-anywhere-light-increased-contrast.png"]
+    },
+    {
+      "id": "A4-06",
+      "case": "reduce transparency",
+      "system_change": "off -> on -> off",
+      "result": "pass; the Flutter content and native surface fallback became opaque and remained readable",
+      "evidence": ["08-anywhere-light-reduced-transparency.png"]
+    },
+    {
+      "id": "A4-07",
+      "case": "reduce motion",
+      "system_change": "off -> on -> off",
+      "result": "pass; the system flag propagated to the running app without recreating it",
+      "limitation": "This confirms signal and rendering liveness, not frame-by-frame duration measurement for every transition.",
+      "evidence": ["09-anywhere-light-reduced-motion.png"]
+    },
+    {
+      "id": "A4-08",
+      "case": "Web document live theme switch",
+      "system_change": "light+reduceMotion -> dark while Text Pad remained open",
+      "result": "pass; same document URL and origin stayed mounted, the 16-character Unicode sentinel remained, caret was retained, and the page palette updated",
+      "evidence": ["10-web-light-reduced-motion-before-switch.png", "11-web-dark-reduced-motion-after-switch.png"]
+    },
+    {
+      "id": "A4-09",
+      "case": "combined accessibility appearance",
+      "system_change": "light + increased contrast + reduce transparency + reduce motion",
+      "result": "pass; the opaque high-contrast surface remained readable and the same Web handle, URL and text remained present",
+      "evidence": ["12-web-light-contrast-reduced-transparency-reduced-motion.png"]
+    },
+    {
+      "id": "A4-10",
+      "case": "active versus inactive window material",
+      "system_change": "System Settings active, then Anywhere active under the combined accessibility appearance",
+      "result": "pass; native material followed window activity without a theme/controller rebuild",
+      "evidence": ["13-system-combo-active.png", "14-anywhere-combo-inactive.png", "15-anywhere-combo-active.png"]
+    },
+    {
+      "id": "A4-11",
+      "case": "hidden recovery inside 15 seconds",
+      "system_change": "hide Anywhere with an open Web document, switch dark->light, restore immediately",
+      "result": "pass; the Web document URL and 16-character Unicode text remained present and the newest light theme was applied",
+      "evidence": ["17-web-light-after-hidden-within-15s.png"]
+    },
+    {
+      "id": "A4-12",
+      "case": "hidden recovery after retention expiry",
+      "system_change": "hide longer than 15 seconds, make native accessibility changes, restore",
+      "result": "pass by contract; the old Web document was retired and Anywhere returned to the blank launcher",
+      "note": "The first recovery attempt deliberately crossed the 15-second retention boundary; this is treated as expiry cleanup, not content loss."
+    },
+    {
+      "id": "A4-13",
+      "case": "shared-engine Settings window",
+      "system_change": "dark -> light while Anywhere Settings was open",
+      "result": "pass; window stayed open, shortcut page remained selected and the palette/native surface changed live",
+      "evidence": ["21-anywhere-settings-dark.png", "22-anywhere-settings-light.png"]
+    },
+    {
+      "id": "A4-14",
+      "case": "Clipboard Shelf",
+      "system_change": "light -> dark while Shelf was open",
+      "result": "pass; the separately owned window remained open and updated its content and system material",
+      "evidence": ["23-shelf-light.png", "24-shelf-dark.png"]
+    },
+    {
+      "id": "A4-15",
+      "case": "Tasks window",
+      "system_change": "light -> dark while Tasks was open",
+      "result": "pass; the separately owned engine/window remained open and updated its content and system material",
+      "evidence": ["25-tasks-light.png", "26-tasks-dark.png"]
+    }
+  ],
+  "restoration": {
+    "verified_after_test": true,
+    "verified_after_app_exit": true,
+    "defaults": {
+      "AppleInterfaceStyle": "Dark",
+      "AppleAccentColor": "default",
+      "AppleHighlightColor": "default",
+      "reduceMotion": 0,
+      "increaseContrast": 0,
+      "reduceTransparency": 0
+    },
+    "ui_controls": {
+      "dark_selected": true,
+      "multicolor_selected": true,
+      "liquid_glass_tone": 0.4976543188095093,
+      "tint_window_background_from_wallpaper": true,
+      "reduce_motion_off": true
+    },
+    "evidence": ["18-system-accessibility-restored.txt", "19-system-appearance-restored.txt", "27-system-final-appearance-and-motion.txt", "system-state-post-exit.txt"]
+  },
+  "same_process_engine_counts": {
+    "scope": "Anywhere Settings open; the same Release PID was sampled before, between and after dark/light switches",
+    "dark_before": {
+      "fluttermacos_engines": 1,
+      "flutter_view_controllers": 1,
+      "flutter_vsync_waiters": 1,
+      "window_material_controllers": 1,
+      "appearance_hosts": 1,
+      "memory_pressure_hosts": 1,
+      "rss_mib": 156.28,
+      "physical_footprint_mib": 137.3
+    },
+    "light": {
+      "fluttermacos_engines": 1,
+      "flutter_view_controllers": 1,
+      "flutter_vsync_waiters": 1,
+      "window_material_controllers": 1,
+      "appearance_hosts": 1,
+      "memory_pressure_hosts": 1,
+      "rss_mib": 79.61,
+      "physical_footprint_mib": 69.9
+    },
+    "dark_restored": {
+      "fluttermacos_engines": 1,
+      "flutter_view_controllers": 1,
+      "flutter_vsync_waiters": 1,
+      "window_material_controllers": 1,
+      "appearance_hosts": 1,
+      "memory_pressure_hosts": 1,
+      "rss_mib": 66.08,
+      "physical_footprint_mib": 68.8
+    },
+    "conclusion": "system appearance changes reused the same engine, controller, material and appearance objects",
+    "memory_limit": "the footprint decrease is not attributed to dark/light selection; page reclamation, prior heap sampling and host state can affect these samples"
+  },
+  "diagnostics": [
+    "The local Text Pad fixture displayed its existing INACTIVE notice while the editor and Web document remained usable; this is not counted as a clean functional plugin pass.",
+    "Normal app quit emitted two 'Communicating on a dead channel.' diagnostics, so this run is not claimed to be warning-free.",
+    "WebView, channel delegate and message-listener deallocation was observed during shutdown."
+  ],
+  "remaining": [
+    "VoiceOver traversal of Flutter pages and the embedded WebKit subtree.",
+    "Physical Chinese IME composition while switching appearance settings.",
+    "Quick Look and multiple-display/DPI material matrices.",
+    "Quantitative material memory A/B and optical transition timing.",
+    "Windows Win32/DWM host tests; this repository still has no Windows runner."
+  ],
+  "evidence_root": "build/acceptance-flutter-350-a4-20261112/a4-matrix",
+  "raw_logs": [
+    "build/acceptance-flutter-350-a4-20261112/a4-matrix/app.log",
+    "build/acceptance-flutter-350-a4-20261112/a4-matrix/system-state-final.txt",
+    "build/acceptance-flutter-350-a4-20261112/a4-matrix/system-state-post-exit.txt",
+    "build/acceptance-flutter-350-a4-20261112/a4-engine-count/dark-settings-heap.txt",
+    "build/acceptance-flutter-350-a4-20261112/a4-engine-count/light-settings-heap.txt",
+    "build/acceptance-flutter-350-a4-20261112/a4-engine-count/dark-restored-settings-heap.txt"
+  ]
+}

@@ -98,9 +98,7 @@ impl Application {
             }
             session.resolution.file_search = None;
             session.resolution.file_results_frozen = false;
-            session
-                .resolution
-                .search_candidates
+            std::sync::Arc::make_mut(&mut session.resolution.search_candidates)
                 .retain(|c| !crate::features::filesystem::search::is_search_target(c));
             session
                 .resolution
@@ -298,14 +296,13 @@ fn commit_file_batch(
                 .iter()
                 .filter_map(|c| c.context()?.value.path().map(PathBuf::from))
                 .collect();
-            session
-                .resolution
-                .search_candidates
-                .extend(batch.candidates.into_iter().filter(|c| {
+            std::sync::Arc::make_mut(&mut session.resolution.search_candidates).extend(
+                batch.candidates.into_iter().filter(|c| {
                     c.context()
                         .and_then(|context| context.value.path())
                         .is_some_and(|path| displayed.insert(path.to_owned()))
-                }));
+                }),
+            );
         } else if frozen {
             if let (Some(old), Some(new)) = (&session.resolution.file_search, &mut file_search) {
                 new.next_cursor = old.next_cursor.clone().or_else(|| {
@@ -326,10 +323,10 @@ fn commit_file_batch(
                 .iter()
                 .filter_map(|c| c.context()?.value.path().map(PathBuf::from))
                 .collect();
+            let search_candidates =
+                std::sync::Arc::make_mut(&mut session.resolution.search_candidates);
             for candidate in batch.candidates {
-                if session.resolution.search_candidates.len()
-                    >= crate::features::filesystem::scan::PAGE_SIZE
-                {
+                if search_candidates.len() >= crate::features::filesystem::scan::PAGE_SIZE {
                     break;
                 }
                 if candidate
@@ -337,7 +334,7 @@ fn commit_file_batch(
                     .and_then(|c| c.value.path())
                     .is_some_and(|path| displayed.insert(path.to_owned()))
                 {
-                    session.resolution.search_candidates.push(candidate);
+                    search_candidates.push(candidate);
                 }
             }
         }

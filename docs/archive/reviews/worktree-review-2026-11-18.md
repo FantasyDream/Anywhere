@@ -27,7 +27,8 @@ AppKit 边界测试。
 - `scripts/check.sh` 通过，完整 Rust 工作区、SDK 53 项、JSON Workspace 31 项、
   严格 Clippy、原生合成回归、架构规则、独立插件模板和真实 Rust broker 往返
   检查通过。
-- 当前文档共 114 份 Markdown、923 个本地链接，文档检查与 `git diff --check` 通过。
+- 合并最新 `main` 后，当前文档共 115 份 Markdown、933 个本地链接，文档检查与
+  `git diff --check` 通过。
 - 重新构建的 `build/Anywhere.app` 为 arm64，内部版本 0.14.0+1，最低 macOS 15，
   使用本地 `Anywhere Local Code Signing`，严格签名验证与 plist 检查通过；不是
   Developer ID，也未公证。主程序 SHA-256 为

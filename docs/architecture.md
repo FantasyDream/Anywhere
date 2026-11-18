@@ -37,6 +37,17 @@ flowchart TD
 | `apps/gpui` | 页面、选择、焦点、设置、窗口、状态栏、热键与 Web 文档 | 消费 Core 排序与资格；不复制业务策略 |
 | `packages/plugin-sdk` | Web UI、按需后台任务和权限受限 API | 不直接取得文件或进程权限 |
 
+外观和能力分开表达：`capabilities.backdrop` 仍兼容旧 Host 的能力探测，生产外观使用
+`anywhere/appearance` 的 `DesktopAppearanceSnapshot`。每个窗口 token 绑定一个 native source；
+完整快照带 revision、明暗、对比、减少透明度 / 动态、系统强调 / 焦点色和实际表面。Dart 只负责
+呈现选择，macOS `AppearanceHost` / `WindowMaterial` 负责 AppKit 材质，Windows Host 后续负责
+DWM。旧消息、旧文档的晚回主题和未知协议均有不透明降级。
+
+`anywhere/memory-pressure` 只传 warning / critical 枚举。Dart 清理 ImageCache 非 live 项和
+可重建编码图标；Rust 查询、15 秒会话、执行资格、Web handle 与活动 Widget 不随之销毁。
+`ANYWHERE_PROFILE_UI=1` 时，既有 performance sample 增加只含数字的候选、分块、图标、
+ImageCache、engine / document 和 DTO 尾部计数。
+
 ## 代码组织
 
 ```text

@@ -40,7 +40,7 @@ Covered 表示有代码路径和自动化回归，不表示真实窗口、键盘
 [2026-11-18 工作树审查](archive/reviews/worktree-review-2026-11-18.md)。
 2026-11-18 重新执行两套门禁：GPUI 278 项通过；`scripts/check.sh` exit 0，完整
 Rust 工作区、SDK 53 项、JSON Workspace 31 项、严格 Clippy、原生边界与
-114 份 Markdown / 923 个本地链接检查通过。随后重新构建、签名并从精确 App
+115 份 Markdown / 933 个本地链接检查通过。随后重新构建、签名并从精确 App
 路径启动隔离进程；完整物理矩阵仍有未执行项。自动化不能沿用为真实 IME、材质、
 系统授权或辅助技术通过结论。
 

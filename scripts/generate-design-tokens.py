@@ -32,9 +32,31 @@ def css_color(argb):
 
 
 def render(spec):
-    if spec['schemaVersion'] != 1 or spec['colorFormat'] != 'ARGB' or spec[
+    if spec['schemaVersion'] != 2 or spec['colorFormat'] != 'ARGB' or spec[
             'appearance'] != 'dark':
         raise ValueError('Unsupported design token schema')
+    colors = spec['colors']
+    variants = spec['variants']
+    palettes = {
+        'dark': colors,
+        'light': {
+            **colors,
+            **variants['light']
+        },
+        'darkContrast': {
+            **colors,
+            **variants['contrast']['dark']
+        },
+        'lightContrast': {
+            **colors,
+            **variants['light'],
+            **variants['contrast']['light']
+        },
+    }
+    expected_colors = set(colors)
+    if any(set(palette) != expected_colors for palette in palettes.values()):
+        raise ValueError(
+            'Appearance variant colors differ from the base palette')
     names = [
         key for group in ['colors', 'metrics', 'fonts'] for key in spec[group]
     ]

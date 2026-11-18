@@ -32,9 +32,7 @@ impl Application {
                 bail!("preview expired; choose a current file");
             }
             let candidate = session
-                .execution
-                .candidates
-                .get(candidate_id.as_str())
+                .execution_candidate(candidate_id.as_str())
                 .context("preview target expired")?;
             if candidate.presentation.kind != CandidateKind::File
                 || !session

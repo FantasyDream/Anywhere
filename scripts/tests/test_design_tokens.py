@@ -25,11 +25,24 @@ class DesignTokenTests(unittest.TestCase):
 
     def valid(self):
         return {
-            'schemaVersion': 1,
+            'schemaVersion': 2,
             'appearance': 'dark',
             'colorFormat': 'ARGB',
             'colors': {
                 'primary': '#fff7f8fa'
+            },
+            'variants': {
+                'light': {
+                    'primary': '#ff101010'
+                },
+                'contrast': {
+                    'dark': {
+                        'primary': '#ffffffff'
+                    },
+                    'light': {
+                        'primary': '#ff000000'
+                    }
+                }
             },
             'metrics': {
                 'radius': {

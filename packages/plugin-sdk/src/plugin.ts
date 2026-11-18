@@ -35,7 +35,8 @@ export function definePlugin(options: PluginOptions = {}) {
   let active = true,
     disposed = false,
     delivered = false,
-    generation = 0;
+    generation = 0,
+    connected = false;
   const lifetime = new AbortController();
   let settleReady!: () => void;
   const ready = new Promise<void>(resolve => {
@@ -63,6 +64,7 @@ export function definePlugin(options: PluginOptions = {}) {
     kind: K,
     callback: Parameters<ReturnType<typeof createHost>[K]['onChange']>[0],
   ) {
+    if (!active || disposed) throw new HostError('INACTIVE');
     const item = {
       bind: () =>
         kind === 'input'
@@ -74,8 +76,8 @@ export function definePlugin(options: PluginOptions = {}) {
             ),
       stop: undefined as (() => void) | undefined,
     };
-    item.stop = item.bind();
     subscriptions.add(item);
+    if (connected) item.stop = item.bind();
     return () => {
       item.stop?.();
       subscriptions.delete(item);
@@ -127,12 +129,13 @@ export function definePlugin(options: PluginOptions = {}) {
     const isCurrent = () => active && !disposed && ticket === generation;
     try {
       const api = current();
+      await api.ready();
+      if (!isCurrent()) return;
+      connected = true;
       for (const item of subscriptions) {
         item.stop?.();
         item.stop = item.bind();
       }
-      await api.ready();
-      if (!isCurrent()) return;
       if (!delivered) {
         const invocation = await api.invocation.get();
         if (!isCurrent()) return;
@@ -152,6 +155,7 @@ export function definePlugin(options: PluginOptions = {}) {
     if (visible) void connect();
     else {
       ++generation;
+      connected = false;
       client?.dispose();
       client = undefined;
     }
@@ -160,6 +164,7 @@ export function definePlugin(options: PluginOptions = {}) {
     if (disposed) return;
     disposed = true;
     active = false;
+    connected = false;
     ++generation;
     stop();
     for (const item of subscriptions) item.stop?.();

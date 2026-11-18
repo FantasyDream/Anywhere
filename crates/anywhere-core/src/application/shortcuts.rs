@@ -311,6 +311,8 @@ fn binding_offers(
         .execution
         .candidates
         .values()
+        .map(|candidate| candidate as &crate::core::search::candidate::Candidate)
+        .chain(session.resolution.search_candidates.iter())
         .filter(|c| {
             c.presentation.command_id.as_deref() == Some(action_id)
                 && c.presentation.availability.is_executable()
@@ -319,11 +321,16 @@ fn binding_offers(
         .collect();
     candidates.sort_by(|a, b| b.score.total_cmp(&a.score).then(a.id.cmp(&b.id)));
     if candidates.is_empty() {
-        let reason = session.execution.candidates.values().find_map(|c| {
-            (c.presentation.command_id.as_deref() == Some(action_id))
-                .then(|| c.presentation.availability.reason.clone())
-                .flatten()
-        });
+        let reason = session
+            .execution
+            .candidates
+            .values()
+            .chain(session.resolution.search_candidates.iter())
+            .find_map(|c| {
+                (c.presentation.command_id.as_deref() == Some(action_id))
+                    .then(|| c.presentation.availability.reason.clone())
+                    .flatten()
+            });
         bail!(
             "{}",
             reason

@@ -23,7 +23,7 @@ await anywhere.app.getSource();     // 唤醒前冻结的来源应用
 await anywhere.app.getFrontmost();  // 实时前台应用
 ```
 
-接口使用 Promise，事件订阅返回取消函数。`context.read`、`input.read`、`input.write`、`context.currentApp`、`app.frontmost`、剪贴板及 `storage.local` 权限由 Rust 校验，插件不能指定宿主身份。Context/Input 初始化快照后按变化推送，不自行轮询。只使用这些 API 时不需要启动代码；需要启动输入和自定义错误处理时继续使用 `definePlugin`，它也返回 `anywhere`。
+接口使用 Promise，事件订阅返回取消函数。`context.read`、`input.read`、`input.write`、`context.currentApp`、`app.frontmost`、剪贴板及 `storage.local` 权限由 Rust 校验，插件不能指定宿主身份。Context/Input 初始化快照后按变化推送，不自行轮询。`definePlugin()` 后可以立即注册订阅；SDK 保存取消句柄，但实际 `state.subscribe` 等到 `lifecycle.ready` 成功后才发出，恢复时也先重新 ready。只使用这些 API 时不需要启动代码；需要启动输入和自定义错误处理时继续使用 `definePlugin`，它也返回 `anywhere`。
 
 创建后台模板时在 `init my-tool` 后添加 `--background`。模板把 TypeScript 构建为单个 ES module，并设置 `anywhere-background` 导出条件，同样导入 `@anywhere/sdk`。后台解析器仅返回自身 `plugin.<插件 id>.*` Context，自动解析无副作用；显式后台 Action 沿用宿主确认。没有常驻后台监听，订阅仅属于这次有限调用。WebView 与 QuickJS 不直接通信。
 

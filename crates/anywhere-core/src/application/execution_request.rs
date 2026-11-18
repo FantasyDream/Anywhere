@@ -97,9 +97,7 @@ impl ExecutionRequest {
                 bail!("action expired; choose a current action");
             }
             let candidate = session
-                .execution
-                .candidates
-                .get(candidate_id.as_str())
+                .execution_candidate(candidate_id.as_str())
                 .cloned()
                 .context("action expired; choose a current action")?;
             let feature_policy = app.resolver.catalog.policy();

@@ -117,13 +117,15 @@ fn commit_plain_batch(
                 }
             }
         }
-        session.resolution.search_candidates = session
-            .resolution
-            .source_candidates
-            .values()
-            .flatten()
-            .cloned()
-            .collect();
+        session.resolution.search_candidates = std::sync::Arc::new(
+            session
+                .resolution
+                .source_candidates
+                .values()
+                .flatten()
+                .cloned()
+                .collect(),
+        );
         if let Some(s) = session
             .resolution
             .search_sources

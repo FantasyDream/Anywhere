@@ -1,0 +1,48 @@
+{
+  "date": "2026-11-12",
+  "base_commit": "81c523cdb95031ac00cfcdc25360eefb48f85b21",
+  "product": "Flutter main; no GPUI changes",
+  "app_version": "0.14.0+46",
+  "environment": {
+    "os": "macOS 27.2.1 (26B131)",
+    "arch": "arm64",
+    "rust": "rustc 1.100.0-beta.7 (fd8e211ae 2026-10-17)"
+  },
+  "method": "Existing memory_measure Release binary, three fresh process runs; synthetic temporary data. These are requested Rust allocation bytes, not RSS or footprint. No SDK A/B comparison.",
+  "source_sha256": "08fb7430154667cb604278670b7ad0c72482be768be0deb4a37f8ad296400938",
+  "binary_sha256": "d5fb663c653d1f72ed7942de49fd4078594b7e65c67a2d760ef17c45dd0fcb8d",
+  "runs": [
+    {
+      "clipboard_payload_bytes": 16777216,
+      "duplicate_clipboard_peak_extra_bytes": 125,
+      "history_after_result_drop_and_cancel_extra_bytes": 64,
+      "history_entries": 1024,
+      "history_query_peak_extra_bytes": 2536515,
+      "history_result_and_service_live_extra_bytes": 2339920,
+      "scope": "Requested Rust heap bytes only; excludes SQLite/C allocations, allocator overhead, VM, OS, Bridge, Flutter and GPU. Not RSS or physical footprint."
+    },
+    {
+      "clipboard_payload_bytes": 16777216,
+      "duplicate_clipboard_peak_extra_bytes": 125,
+      "history_after_result_drop_and_cancel_extra_bytes": 64,
+      "history_entries": 1024,
+      "history_query_peak_extra_bytes": 2536515,
+      "history_result_and_service_live_extra_bytes": 2339920,
+      "scope": "Requested Rust heap bytes only; excludes SQLite/C allocations, allocator overhead, VM, OS, Bridge, Flutter and GPU. Not RSS or physical footprint."
+    },
+    {
+      "clipboard_payload_bytes": 16777216,
+      "duplicate_clipboard_peak_extra_bytes": 125,
+      "history_after_result_drop_and_cancel_extra_bytes": 64,
+      "history_entries": 1024,
+      "history_query_peak_extra_bytes": 2536515,
+      "history_result_and_service_live_extra_bytes": 2339920,
+      "scope": "Requested Rust heap bytes only; excludes SQLite/C allocations, allocator overhead, VM, OS, Bridge, Flutter and GPU. Not RSS or physical footprint."
+    }
+  ],
+  "limitations": [
+    "Input payload allocated before baseline; excluded from extra-byte measurements.",
+    "SQLite C heap, allocator overhead, VM, Bridge, Flutter, native UI, GPU and external processes excluded.",
+    "Does not measure current desktop app memory or establish a leak-free long run."
+  ]
+}

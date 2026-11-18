@@ -32,7 +32,9 @@ pub struct ActivationCapture {
 
 #[derive(Default)]
 pub struct SessionResolution {
-    pub search_candidates: Vec<Candidate>,
+    /// Immutable snapshots share this allocation; only file-result commits take
+    /// a mutable copy, and only when this Arc is still observed elsewhere.
+    pub search_candidates: Arc<Vec<Candidate>>,
     pub object_actions: Vec<Candidate>,
     pub object_action_epoch: Arc<std::sync::atomic::AtomicU64>,
     pub source_candidates: BTreeMap<String, Vec<Candidate>>,
@@ -52,6 +54,9 @@ pub struct SessionResolution {
 #[derive(Default)]
 pub struct SessionExecution {
     pub candidates: HashMap<crate::core::action::identity::ExecutionCandidateId, Candidate>,
+    /// File rows already live in `resolution.search_candidates`; store only the
+    /// index instead of retaining a second Candidate clone per target.
+    pub file_candidate_indices: HashMap<crate::core::action::identity::ExecutionCandidateId, usize>,
     pub revision: Option<Revision>,
     pub action_catalog_version: Option<u64>,
 }
@@ -100,7 +105,7 @@ impl LauncherSession {
         self.resolution
             .object_action_epoch
             .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
-        self.resolution.search_candidates.clear();
+        Arc::make_mut(&mut self.resolution.search_candidates).clear();
         self.resolution.object_actions.clear();
         self.resolution.source_candidates.clear();
         self.resolution.search_sources.clear();
@@ -154,5 +159,57 @@ impl LauncherSession {
     pub fn facts(&self) -> SessionFacts {
         SessionFacts::from_map(self.identity.frontmost.clone(), self.environment.clone())
             .expect("session facts are validated at capture")
+    }
+
+    pub fn execution_candidate(&self, id: &str) -> Option<&Candidate> {
+        self.execution.candidates.get(id).or_else(|| {
+            self.execution
+                .file_candidate_indices
+                .get(id)
+                .and_then(|index| self.resolution.search_candidates.get(*index))
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::features::filesystem::search::file_candidates;
+    use anywhere_platform::FileSearchHit;
+    use std::path::PathBuf;
+
+    #[test]
+    fn file_execution_indices_resolve_the_shared_candidate_without_a_copy() {
+        let registry = crate::application::builtin_registry();
+        let rows = file_candidates(
+            (0..3)
+                .map(|index| FileSearchHit {
+                    path: PathBuf::from(format!("/synthetic/file-{index}.txt")),
+                    is_directory: false,
+                })
+                .collect(),
+            "",
+            &registry,
+        );
+        let expected = rows[0].presentation.id.clone();
+        let shared = Arc::new(rows);
+        let mut session = LauncherSession::reserved(1, Arc::new(registry));
+        session.resolution.search_candidates = shared.clone();
+        session.execution.file_candidate_indices = shared
+            .iter()
+            .enumerate()
+            .map(|(index, candidate)| (candidate.presentation.id.clone().into(), index))
+            .collect();
+
+        assert_eq!(
+            session
+                .execution_candidate(&expected)
+                .unwrap()
+                .presentation
+                .id,
+            expected
+        );
+        assert!(session.execution.candidates.is_empty());
+        assert!(Arc::ptr_eq(&session.resolution.search_candidates, &shared));
     }
 }
