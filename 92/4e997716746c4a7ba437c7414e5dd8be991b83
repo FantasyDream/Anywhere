@@ -1,0 +1,19 @@
+docs/mvp-gpui.md
+  s_ced4a9e25a472b::t_adba2ba762dea6 76-79,81-82,87-88
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "924e997716746c4a7ba437c7414e5dd8be991b83",
+  "prompts": {},
+  "sessions": {
+    "s_ced4a9e25a472b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e3aa-e48c-7303-bdb9-d545f0d5bc2d",
+        "model": "unknown"
+      },
+      "human_author": "diwen.zhang <diwen.zhang@lkcoffee.com>"
+    }
+  }
+}
