@@ -1,0 +1,80 @@
+crates/anywhere-core/examples/file_result_memory.rs
+  h_1cd0f22fd6a213 1-194
+crates/anywhere-core/src/application/activate.rs
+  h_1cd0f22fd6a213 547
+crates/anywhere-core/src/application/execution_request.rs
+  h_1cd0f22fd6a213 100
+crates/anywhere-core/src/application/file_preview.rs
+  h_1cd0f22fd6a213 35
+crates/anywhere-core/src/application/file_workspace.rs
+  h_1cd0f22fd6a213 101,299-300,304-305,326-327,329,337
+crates/anywhere-core/src/application/launcher_service.rs
+  h_1cd0f22fd6a213 648-659
+crates/anywhere-core/src/application/search_sources.rs
+  h_1cd0f22fd6a213 120-128
+crates/anywhere-core/src/application/session_model.rs
+  h_1cd0f22fd6a213 35-37,57-59,108,163-214
+crates/anywhere-core/src/application/shortcuts.rs
+  h_1cd0f22fd6a213 314-315,324-333
+docs/README.md
+  h_1cd0f22fd6a213 53
+docs/architecture.md
+  h_1cd0f22fd6a213 40-50
+docs/archive/benchmarks/flutter-era-v0.14/file-result-memory-2026-11-12.json
+  h_1cd0f22fd6a213 1-127
+docs/archive/benchmarks/flutter-era-v0.14/flutter-3.50-appearance-macos-2026-11-12.json
+  h_1cd0f22fd6a213 1-211
+docs/archive/benchmarks/flutter-era-v0.14/flutter-3.50-desktop-initial-2026-11-12.json
+  h_1cd0f22fd6a213 1-134
+docs/archive/benchmarks/flutter-era-v0.14/flutter-3.50-file-pages-macos-2026-11-12.json
+  h_1cd0f22fd6a213 1-81
+docs/archive/benchmarks/flutter-era-v0.14/flutter-3.50-rust-memory-2026-11-12.json
+  h_1cd0f22fd6a213 1-48
+docs/archive/benchmarks/flutter-era-v0.14/flutter-3.50-validation-2026-11-12.json
+  h_1cd0f22fd6a213 1-92
+docs/archive/benchmarks/flutter-era-v0.14/flutter-3.50-web-matrix-2026-11-12.json
+  h_1cd0f22fd6a213 1-222
+docs/archive/benchmarks/flutter-era-v0.14/flutter-3.50-window-memory-2026-11-12.json
+  h_1cd0f22fd6a213 1-155
+docs/archive/reviews/worktree-review-2026-11-18.md
+  h_1cd0f22fd6a213 30-31
+docs/development.md
+  h_1cd0f22fd6a213 19-33
+docs/file-search.md
+  h_1cd0f22fd6a213 45,61,75-80
+docs/mvp-gpui.md
+  h_1cd0f22fd6a213 43
+docs/plugin-development.md
+  h_1cd0f22fd6a213 116-120
+docs/research/flutter-3.50-memory.md
+  h_1cd0f22fd6a213 1-717
+packages/plugin-sdk/README.md
+  h_1cd0f22fd6a213 26
+packages/plugin-sdk/src/plugin.ts
+  h_1cd0f22fd6a213 38-39,67,80,132-134,158,167
+packages/plugin-sdk/styles/controls.css
+  h_1cd0f22fd6a213 5-12,205-220
+packages/plugin-sdk/test/plugin.test.mjs
+  h_1cd0f22fd6a213 86-121
+resources/design-tokens.json
+  h_1cd0f22fd6a213 2,103-206
+resources/licenses/flutter-design-packages.txt
+  h_1cd0f22fd6a213 1-27
+resources/web-controls.css
+  h_1cd0f22fd6a213 4-11,204-219
+scripts/generate-design-tokens.py
+  h_1cd0f22fd6a213 35,38-59
+scripts/tests/test_design_tokens.py
+  h_1cd0f22fd6a213 28,34-46
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "afe8365018a194eafcbeb3072a996c1540f2ea6b",
+  "prompts": {},
+  "humans": {
+    "h_1cd0f22fd6a213": {
+      "author": "diwen.zhang <diwen.zhang@lkcoffee.com>"
+    }
+  }
+}
