@@ -1,6 +1,6 @@
 # JSON Workspace
 
-第三方混合插件示例：Preact 页面、jsonc-parser 格式化、jsonpath-js 查询、SandboxJS 计算、统一 Anywhere SDK；QuickJS 按需识别 Context 和执行复制命令，无 JSON 专用 Rust API，无 Node 运行时。当前包版本为 0.7.1，需要 V0.14 Build 25 或更新的 Host，以使用无逐次确认的剪贴板和直接后台执行，使用 Host 的共享工作区样式与图标。计算和结果复制直接可见；缩进与复制变体收在输入区的“JSON 操作”中。
+第三方混合插件示例：Preact 页面、jsonc-parser 格式化、jsonpath-js 查询、SandboxJS 计算、统一 Anywhere SDK；QuickJS 按需识别 Context 和执行复制命令，无 JSON 专用 Rust API，无 Node 运行时。当前包版本为 0.7.1，面向当前 V0.14 GPUI Host；安装时批准剪贴板权限后即可直接后台执行，无逐次确认，并使用 Host 的共享工作区样式与图标。计算和结果复制直接可见；缩进与复制变体收在输入区的“JSON 操作”中。
 
 源码使用 `@anywhere/sdk` 标准包导入；本仓库开发时用 npm `file:` 依赖连接 SDK，独立工程可改为 SDK `.tgz`。通用打包器与新项目模板见 [第三方插件开发指南](../../../docs/plugin-development.md)。
 

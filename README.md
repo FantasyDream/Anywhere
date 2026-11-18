@@ -6,7 +6,7 @@
 
 ## 项目状态
 
-当前为 **V0.14 GPUI 开发预览**。macOS 15+ 产品界面已由原生 GPUI 实现，Rust Core 继续负责 Context、Action、匹配、排序、授权和执行；旧的嵌入 UI、桥接层和对应宿主代码已从工作树移除。完整发布、签名公信和实机辅助技术矩阵尚未完成；开发构建不等于正式发行。
+当前为 **V0.14.0 GPUI 开发预览**。macOS 15+ 产品界面已由原生 GPUI 实现，Rust Core 继续负责 Context、Action、匹配、排序、授权和执行；旧的嵌入 UI、桥接层和对应宿主代码已从工作树移除。Developer ID 公信、公证、自动更新和完整实机辅助技术矩阵尚未完成；开发预览不等于正式发行。
 
 V0.14 已接入[应用历史与动作排序](docs/mvp-gpui.md)：通用文件读取器 + 官方配置 / JS 转换，共享历史页已接入 18 个来源，覆盖 JetBrains、VS Code 同类编辑器、Sublime Text 和 Obsidian 最近仓库。支持默认路径检测、自定义路径、逐来源 Action 开关与可信用户适配；Obsidian 最近笔记暂缓接入，多实例仍待验证；浏览器历史、书签与 Tab 管理调整为[后续独立功能](docs/browser-feature.md)。
 
@@ -21,7 +21,9 @@ V0.14 已接入[应用历史与动作排序](docs/mvp-gpui.md)：通用文件读
 [`v0.14.0`](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.0)；
 历史 [`latest`](https://github.com/FantasyDream/Anywhere/releases/tag/latest)
 仍是 2026-09-18 的 V0.3 开发包，不代表当前 macOS 或 Windows 支持状态。当前
-macOS 产物使用开发签名，未使用 Developer ID，也未公证。
+`v0.14.0` 是 pre-release，提供 Apple Silicon（arm64）ZIP；macOS 产物使用开发
+签名，未使用 Developer ID，也未公证。下载、校验和首次打开的步骤见
+[使用指南](docs/usage.md#1-安装启动与授权)。
 
 ## 能做什么
 

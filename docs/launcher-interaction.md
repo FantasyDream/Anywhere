@@ -1,6 +1,6 @@
 # Launcher 交互契约
 
-现行导航与交互契约；文档整理：2026-11-11。使用教程见 [README](../README.md)，本页是导航、快捷键与状态恢复的统一依据。
+现行导航与交互契约；文档整理：2026-11-18。使用教程见 [README](../README.md)，本页是导航、快捷键与状态恢复的统一依据。
 
 ## 入口与 Scope
 
@@ -64,7 +64,7 @@ Tab 仅在搜索框聚焦且分类可用时切换，保留查询与输入焦点�
 关闭模式选择器并切换为设置窗口样式；快捷键录制与输入法组词优先处理，Shelf /
 Tasks 独立窗口不响应此入口。用户配置的 Action 快捷键独立于原应用菜单快捷键；一个适用对象直接执行，多个对象先选择。快捷键目录和失效规则见 [架构](architecture.md)。
 
-Launcher 候选继续按 Flutter 首尾回绕；工具列表的 `↑` / `↓` 在首尾保持当前项。
+Launcher 候选在首尾回绕；工具列表的 `↑` / `↓` 在首尾保持当前项。
 Clipboard History / Shelf、Application History 与 Tasks 都使用后一规则，页边界
 不跳到另一端，也不因在同一项上重复按键而刷新详情。Application History 刷新
 按 `object_key` 保留选中项；只有查询变化或从 Action 重新打开页面才回到首项并
@@ -87,7 +87,7 @@ Clipboard History / Shelf 的 `⌘` 命令、以及与当前 Launcher 匹配的�
 ## Esc 与返回
 
 - 导航选择器、对象 Actions、绑定选择、输出等局部层先退出该层。
-- Launcher 根页按 Flutter 的层级返回：内容页先回 Current App；普通查询先清空；
+- Launcher 根页按产品返回链处理：内容页先回 Current App；普通查询先清空；
   Current App 空白首页切到空白 Global Search；Global 空白首页最后隐藏。
 - Application History 有查询时 Esc 先清空查询并保留页面；查询为空才返回。
   页面右上角的可见 Esc 控件与真实 Esc 走同一条返回链，不能从有查询状态直接
@@ -145,7 +145,7 @@ Clipboard History / Shelf 的 `⌘` 命令、以及与当前 Launcher 匹配的�
   `↑` / `↓`、Enter、Esc，切换任务或隐藏页面会关闭旧目标菜单。
 - Tasks Tool options 固定为 Refresh / Launcher；Launcher 与 `⌘L` 走同一
   返回入口，Keyboard help 只保留在页脚。任务详情与 Copy command 使用
-  Flutter 的 POSIX argv 引号规则，不用无转义空格拼接。
+  POSIX argv 引号规则，不用无转义空格拼接。
 - Clipboard History / Shelf、Application History、Plugin Detail 与结果详情
   消费无 Control / Option / Command 的 Tab / Shift+Tab；Settings 的焦点遍历和
   WebView Tab 保持各自规则。输入法组合中的 Tab 仍归编辑器。
@@ -196,9 +196,9 @@ Quick Look 失焦豁免、标题栏关闭草稿路由、15 秒恢复 / 超时、
 编辑，原生面板不算外部失焦。只有查询编辑器拥有焦点时 Space 才归预览；页面按钮
 聚焦时 Space / Enter 激活按钮。完整规则见 [系统预览](native-preview.md)。
 
-## Flutter 键盘迁移核对
+## GPUI 键盘迁移核对
 
-基准为 `81c523c` 的 Launcher、ToolPageShell、Clipboard History / Shelf、
+迁移基准为 Flutter 历史提交 `81c523c` 的 Launcher、ToolPageShell、Clipboard History / Shelf、
 Application History、ExecutionSessionsView、Settings。以下区分源码路由与桌验；
 已有路由不能代替真实 IME / 焦点验收。
 
@@ -210,18 +210,19 @@ Application History、ExecutionSessionsView、Settings。以下区分源码路�
 | Launcher / 文件 | ⌘K 对象操作、Space / ⌘Y 开关预览；预览中 ⌘L 返回查询 | 已有；IME / 编辑状态优先，repeat 只处理首次 key-down |
 | 文件 | Tab 类型过滤、Esc 清查询 / 返回、末尾继续加载 | 已有 |
 | Clipboard History | ↑↓、Enter 复制、⌘K 操作、Space / ⌘Y 开关预览、Esc 清查询 / 返回 | 已有；普通 Backspace / Delete 留给编辑器并关闭预览，不删除记录 |
-| Clipboard History / Shelf 操作菜单 | 打开时 ⌘K 关闭；⌘F / ⌘R 等命令先关菜单再继续；输入文字恢复搜索；目标过期时 Refresh 仍可用 | v159 物理通过；过期 Refresh target 仅有回归 |
+| Clipboard History / Shelf 操作菜单 | 打开时 ⌘K 关闭；⌘F / ⌘R 等命令先关菜单再继续；输入文字恢复搜索；目标过期时 Refresh 仍可用 | 历史 Build 159 桌验通过；过期 target 仅有回归；v0.14.0 未逐项复验 |
 | Shelf | ⌘1…9 复制、⌘Enter 复制返回、⌘F 搜索、⌘R 刷新、⌘K 操作 | 已有 |
 | Shelf | ⌘↑↓ 首尾、PageUp / PageDown 按可见行翻页 | 补齐翻页，页边界不回环 |
 | Shelf 删除确认 | ⌘Shift+Backspace 打开；←→ 切按钮、Enter 确认、Esc 取消 | 已有；不添加原版没有的裸 Backspace 删除 |
 | 应用历史 | ↑↓、Enter 打开或复制、PageUp / PageDown、Esc；行内 `…` / 右键打开 Actions | 补齐翻页、不能打开时的复制分支和空结果刷新菜单；不绑定 `⌘K` / `⌘R` |
 | Tasks | ⌘F 搜索、⌘K 操作、⌘R 刷新、Esc 清查询 / 返回 | 已有；不依赖搜索框或结果行持有焦点，⌘K 不接受 repeat |
-| Tasks | 无 Shift / Command / Control / Option 的 Esc、↑↓、Enter 由原生键路由进入页面；Shift 修饰键保留编辑语义 | v159 物理通过 |
+| Tasks | 无 Shift / Command / Control / Option 的 Esc、↑↓、Enter 由原生键路由进入页面；Shift 修饰键保留编辑语义 | 历史 Build 159 桌验通过；v0.14.0 未逐项复验 |
 | Tasks | ⌘. 停止、⌘⌥↑↓ 切任务、⌘L 返回 Launcher | 补齐；空任务页同样可用，移除普通 s 停止任务的误触路径 |
 | Settings | ⌘, 打开、⌘S 保存、Esc 逐层取消、Tab / Shift+Tab 控件焦点 | 已有；输入法组合期间不截获 Esc / Tab，快捷键录制和 Esc 不接受 repeat |
 | Web / 详情 | 插件内部编辑、返回、复制及滚动；宿主省略号 Actions 提供 Reload / Back | WebKit 所有权保持；完整物理矩阵待核对 |
 | 全局 | 两个启动器热键、自定义 Action / Context 快捷键 | 使用现有注册与冲突校验，不重新解释绑定 |
 
-本轮新增修改键导航与翻页边界回归；Tasks 筛选后的滚动定位使用可见列表序号，
+修改键导航与翻页边界已有回归；Tasks 筛选后的滚动定位使用可见列表序号，
 而非完整任务数组序号。真实按键是否到达页面、中文候选窗、辅助技术与插件内部
-快捷键仍需分别验收。未宣称所有 Flutter 操作已逐项物理通过。
+快捷键仍需按当前发布构建分别验收。历史 Flutter 路由只作为迁移对照，不宣称
+所有迁移操作已在 v0.14.0 逐项物理通过。

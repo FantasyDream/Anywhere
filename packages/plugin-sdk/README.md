@@ -107,7 +107,7 @@ const clipboard = await host.clipboard.readText();
 
 - `context.read` 只允许本次调用中声明的类型，不包含完整 Context Graph；文件只给显示名称与不透明句柄。
 - `context.currentApp` 是唤醒前冻结的 ID / 名称，需要单独批准。
-- 剪贴板读写分别需要安装时批准对应权限；Build 25+ 不再逐次确认。网页不能用 `approved`、`userGesture` 或自报 pluginId 获得资格。SDK Promise 等待 Host 的最终响应，不会自动重试副作用。
+- 剪贴板读写分别需要安装时批准对应权限；当前 V0.14 GPUI Host 不再逐次确认。网页不能用 `approved`、`userGesture` 或自报 pluginId 获得资格。SDK Promise 等待 Host 的最终响应，不会自动重试副作用。
 - `storage.local` 只能使用当前插件及来源绑定的键空间，不接受 namespace。值是 JSON；`get` 返回值或 `null`。
 - 支持 `AbortSignal`。隐藏、重载、返回、撤销时 Host 负责撤销 Rust 文档资格并释放旧客户端；`createHost(transport)` 提供的实例也有 `dispose()`。
 - 没有通用 `invoke`、Shell、后台监控、历史剪贴板、任意文件或网络 API。

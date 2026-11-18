@@ -124,7 +124,9 @@ stop();
 
 `definePlugin()` 仍适用于需要 `onLaunch` 或 `onError` 的页面，返回的 `plugin.anywhere` 提供同一套业务 API；`plugin.host` 是已有兼容入口。
 
-从 V0.14 Build 25 起，剪贴板读写只需安装时批准相应权限，运行时不再逐次弹窗。缺少权限、隐藏 / 撤销或失效的实例仍被拒绝；成功后才显示“已复制”，不要自动重试写入。旧版 Host 仍使用逐次确认。
+当前 V0.14 GPUI Host 中，剪贴板读写只需安装时批准相应权限，运行时不再逐次
+弹窗。缺少权限、隐藏 / 撤销或失效的实例仍被拒绝；成功后才显示“已复制”，
+不要自动重试写入。历史 Host 的逐次确认流程不属于当前 SDK 契约。
 
 `context.read` 也支持 `core.url`、`core.file`、`core.directory`、`core.file_selection`，需要同时加入 `accepts`。文件只提供名称、类型和不透明句柄，目前不能读取文件正文或取得完整路径。
 

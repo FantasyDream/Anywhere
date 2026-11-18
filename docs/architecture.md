@@ -2,7 +2,7 @@
 
 当前源码为 V0.14 macOS 15+ GPUI 开发预览。Rust Core 决定业务语义，GPUI
 呈现并处理输入，AppKit / Quick Look / WebKit 只提供系统适配。最后核对：
-2026-11-17。
+2026-11-18。
 
 产品入口是 `apps/gpui/src/app.rs`。当前范围与证据见
 [GPUI 技术方案与验收](mvp-gpui.md)，窗口、焦点和输入契约见
@@ -37,16 +37,16 @@ flowchart TD
 | `apps/gpui` | 页面、选择、焦点、设置、窗口、状态栏、热键与 Web 文档 | 消费 Core 排序与资格；不复制业务策略 |
 | `packages/plugin-sdk` | Web UI、按需后台任务和权限受限 API | 不直接取得文件或进程权限 |
 
-外观和能力分开表达：`capabilities.backdrop` 仍兼容旧 Host 的能力探测，生产外观使用
-`anywhere/appearance` 的 `DesktopAppearanceSnapshot`。每个窗口 token 绑定一个 native source；
-完整快照带 revision、明暗、对比、减少透明度 / 动态、系统强调 / 焦点色和实际表面。Dart 只负责
-呈现选择，macOS `AppearanceHost` / `WindowMaterial` 负责 AppKit 材质，Windows Host 后续负责
-DWM。旧消息、旧文档的晚回主题和未知协议均有不透明降级。
+外观和能力由同一进程表达：`resources/design-tokens.json` 生成 Rust 主题投影与
+Web CSS；`apps/gpui/src/platform/material/` 读取 macOS 明暗、Reduce
+Transparency、Increase Contrast 和 Reduce Motion，安装
+`NSGlassEffectView` / `NSVisualEffectView`。GPUI 只绘制透明内容层和语义色，
+不伪造原生玻璃，也没有 Flutter / Dart / bridge 之间的 appearance 回传。
 
-`anywhere/memory-pressure` 只传 warning / critical 枚举。Dart 清理 ImageCache 非 live 项和
-可重建编码图标；Rust 查询、15 秒会话、执行资格、Web handle 与活动 Widget 不随之销毁。
-`ANYWHERE_PROFILE_UI=1` 时，既有 performance sample 增加只含数字的候选、分块、图标、
-ImageCache、engine / document 和 DTO 尾部计数。
+图标缓存、文件结果窗口和 Web document 分别限额；当前没有跨语言的
+`memory-pressure` 协议或 `ANYWHERE_PROFILE_UI` 开关。性能诊断使用
+`performance.md` 中的 Rust/GPUI 入口和显式环境变量，不以已删除的 Flutter
+ImageCache / engine 指标推断当前资源行为。
 
 ## 代码组织
 
