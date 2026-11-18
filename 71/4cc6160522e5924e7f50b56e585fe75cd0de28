@@ -1,0 +1,21 @@
+crates/anywhere-core/src/application/frontend_runtime/mod.rs
+  s_ced4a9e25a472b::t_3a6e3873e2d9c2 6-7,12,421,440-444
+crates/anywhere-platform/src/clipboard/backend.rs
+  s_ced4a9e25a472b::t_1664ed8a5f5dfc 226
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "714cc6160522e5924e7f50b56e585fe75cd0de28",
+  "prompts": {},
+  "sessions": {
+    "s_ced4a9e25a472b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e3aa-e48c-7303-bdb9-d545f0d5bc2d",
+        "model": "unknown"
+      },
+      "human_author": "diwen.zhang <diwen.zhang@lkcoffee.com>"
+    }
+  }
+}
