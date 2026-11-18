@@ -1,0 +1,405 @@
+apps/gpui/Cargo.toml
+  s_e3c20b75da9763::t_a8594268da00f3 26-27
+apps/gpui/examples/projection_measure.rs
+  s_512125f9be8f7f::t_9f87aa5588efeb 43,73,78,85
+apps/gpui/examples/task_detail_measure.rs
+  s_4592f0cb1b157c::t_f60b8e34a7894b 1-87
+apps/gpui/src/host/atomic_write.rs
+  s_e3c20b75da9763::t_438d1696116c4e 1-47
+apps/gpui/src/host/directory_access.rs
+  s_512125f9be8f7f::t_c9389c9e31d2ef 4,8-32,55-67,81-98,100-105,107,136-139,141,150-153,160-172,191,224-227,233,264,321,323-339,379-438
+apps/gpui/src/host/dto.rs
+  s_512125f9be8f7f::t_08a7dd93b3b6a5 6,25,99-100
+apps/gpui/src/host/hotkeys.rs
+  s_4592f0cb1b157c::t_320d916618d458 18-37,40-41,50-53,56,64-68,72-77,119,138,158,184,252,290,297-308,418-559
+apps/gpui/src/host/login_item.rs
+  s_512125f9be8f7f::t_012332c0f8295e 54-61,83-91
+apps/gpui/src/host/native_window.rs
+  s_4592f0cb1b157c::t_aa00011cc8161e 1-2,4-19,21-37,39-53,57-58,61-62,66,68-89,91-169
+apps/gpui/src/host/runtime/app_history.rs
+  s_512125f9be8f7f::t_6b761a263c5b8f 2,63,66,81-87
+apps/gpui/src/host/runtime/clipboard.rs
+  s_512125f9be8f7f::t_6f4c2089c73a82 8,28,42,47-57,66,71,82,87,96
+apps/gpui/src/host/runtime/launcher.rs
+  s_512125f9be8f7f::t_dfe10408aa0a54 60-64
+apps/gpui/src/host/runtime/mod.rs
+  s_512125f9be8f7f::t_dd7d8f1fa5f757 46,116,127,131-134,162,217,221-227
+apps/gpui/src/host/runtime/settings.rs
+  s_512125f9be8f7f::t_24138895ac66ac 37-57,59,62,107-113,130-132,148-169,174-179
+apps/gpui/src/host/runtime/tasks.rs
+  s_512125f9be8f7f::t_a191cbeca49d29 52,60
+apps/gpui/src/host/runtime/web.rs
+  s_e3c20b75da9763::t_aa62e7373aae85 45-49,52
+apps/gpui/src/host/runtime_support.rs
+  s_512125f9be8f7f::t_1130a7ff0f860a 83,98,102-107,116-117,119,127,212-213,270-288
+apps/gpui/src/l10n/generated.rs
+  s_512125f9be8f7f::t_2999df63ffa060 898,900-901,928-929,1360,1709,1711-1712,1716,1718-1719,1923-1924,1928,1930-1931,1935,1937-1938,1942,1944-1945,1949,1951-1952,1956,1958-1959,1963,1965-1966,1970,1972-1973,1977,1979-1980,1984,1986-1987,1991,1993-1994,1998,2000-2001,2005,2007-2008,2012,2014-2015,2019-2020,2022-2023,2027-2028,2030-2031,2035-2036,2038-2039,2043,2045-2046,2050,2052-2053,2057,2059-2060,2064,2066-2067,2071,2073-2074,2078,2080-2083,2942-3098,3100
+apps/gpui/src/launcher/components/mod.rs
+  s_e3c20b75da9763::t_93989c076f06f8 2-6,17-26,34-44,225-232,234-273
+apps/gpui/src/launcher/file_icons.rs
+  s_e3c20b75da9763::t_9c84d5dc659168 1-94
+apps/gpui/src/launcher/icon_cache.rs
+  s_e3c20b75da9763::t_a3a11ab798c552 2-6,9,12-13,25-31,39,43-54,60,77,83-116
+apps/gpui/src/launcher/mod.rs
+  s_e3c20b75da9763::t_f6085c168d769f 2,8-9
+apps/gpui/src/launcher/model.rs
+  s_512125f9be8f7f::t_13e8771a137a8b 105-111,117-123,193-201,215-216,229,233-238,394,402-411,444-447,493,496,501-503,506-508,510-520,609-625,629-641,645-646,851-888
+apps/gpui/src/launcher/pages.rs
+  s_512125f9be8f7f::t_bbc7cae1b48b8d 3,8-10,48-62,139-147,409,414-419,470,479,576-577,581,583-585,587-588,615-637,640,642,668-669,673
+apps/gpui/src/launcher/pages/tasks.rs
+  s_512125f9be8f7f::t_3c51a719320231 1-8,10-29,31-53,55-61,63-81,83-103,105-125,127-128,131-142,144-148,151-158,160-172,174-191,193-195,198-273,275-289,293-300,302-309
+apps/gpui/src/launcher/view/candidate_row.rs
+  s_512125f9be8f7f::t_29a29f15c74401 144,242
+apps/gpui/src/launcher/view/controllers/clipboard.rs
+  s_512125f9be8f7f::t_3c926322d2104d 1-508
+apps/gpui/src/launcher/view/controllers/file_search.rs
+  s_512125f9be8f7f::t_46fd22fe3ada57 1-111
+apps/gpui/src/launcher/view/controllers/history.rs
+  s_512125f9be8f7f::t_82366b6214d330 1-335
+apps/gpui/src/launcher/view/controllers/icons.rs
+  s_e3c20b75da9763::t_06e7c537848cd3 1-94
+apps/gpui/src/launcher/view/controllers/navigation.rs
+  s_512125f9be8f7f::t_53b5ba6ba0f5e9 1-376
+apps/gpui/src/launcher/view/controllers/preview.rs
+  s_512125f9be8f7f::t_3be0c3d7bff0dc 1-501
+apps/gpui/src/launcher/view/controllers/streams.rs
+  s_512125f9be8f7f::t_8c37f03431774d 1-431
+apps/gpui/src/launcher/view/controllers/tasks.rs
+  s_512125f9be8f7f::t_e1e8777082cda7 1-385
+apps/gpui/src/launcher/view/controllers/web.rs
+  s_e3c20b75da9763::t_c4309d6d2703cf 1-532
+apps/gpui/src/launcher/view/input.rs
+  s_512125f9be8f7f::t_f8a9ad85c3bd9f 399,412,431,440,448,580,636-639,648-654,675-676,684-708,742,748,757,763,807
+apps/gpui/src/launcher/view/live_state.rs
+  s_512125f9be8f7f::t_f1186b23201098 12,25
+apps/gpui/src/launcher/view/mod.rs
+  s_512125f9be8f7f::t_d2c19782162b6b 21,37,60-67,71-72,75-76,80-85,91-107,212-225,320,335,365,383,387,395-398,403-404,424,427,437,450,474,498,508,552-554,559-560,568-572,575-578,581-586,596,598-600,626-640,667-669,691-693,760-762,780,788-790,802-804,808-810,812-814,818-827,830-831,838-839,844-877,880-881,886-899,925,938,943-956,977-988,1148-1167,1179-1184,1191,1206,1236-1245,1247-1254,1266,1269-1274,1277,1283-1286,1291-1292,1304-1305,1323,1330,1639,1677-1683,1690-1693,1739-1751,1779-1780,1783,1857-1863,1865-1877,1879,1881-1886,1890-1936,1941,1943,1947-1958,1962-1981,1984-1985,1990-2014,2039-2059,2061-2067,2072-2073,2107,2128-2130,2133-2134,2137-2140,2142-2151,2153-2163,2166-2168,2170-2173,2176-2195,2197-2201,2203,2206,2208-2209,2212-2232,2234-2250,2252,2254-2272,2275-2282,2284,2286-2299,2302-2309,2312-2314,2316-2319,2322-2329,2332-2336,2339-2344,2346-2351,2354-2368,2370-2372,2374-2375,2377-2380,2385-2386,2389,2391-2392,2395-2398,2401,2403-2406,2410-2412,2414-2417,2420-2451,2453-2454,2456-2493,2495-2497,2499-2570,2572-2601,2603-2677,2679-2722,2724-2746,2748-2752,2755-2756,2758,2760-2774,2776-2865,2867-2880,2882,2884-2886,2888-2893,2895-2908,2910,2912-2922,2924-2928,2930-2931,2933-2938,2940-2944,2946-2952,2954-2958,2960-2962,2964-2969,2971-2979,2982-2984
+apps/gpui/src/launcher/view/navigation.rs
+  s_512125f9be8f7f::t_3b1e58b73248a2 77,122,126-127,174-181,194,222-224,266,286,289,291-292,302,318,325,410-412,452-453,461-463,470,473,482-484,491-492,505-508,511-515,520-579,581-606
+apps/gpui/src/launcher/view/page_shell.rs
+  s_e3c20b75da9763::t_628af53c16f859 4-21
+apps/gpui/src/launcher/view/pages/file_search.rs
+  s_512125f9be8f7f::t_000e639a3af6cb 60-93,99,113-114,280
+apps/gpui/src/launcher/view/pages/tasks.rs
+  s_512125f9be8f7f::t_455022b6b5a4f0 67-68,71-85,155,157,162,328-335,450-452,466,468-515,616,634,636,645,661,663,672,687,707-711,718-725,728-729,733-740,743-744,820,822,834-930
+apps/gpui/src/launcher/view/settings/application_history.rs
+  s_e3c20b75da9763::t_6fbe532ec4511e 1-346
+apps/gpui/src/launcher/view/settings/clipboard.rs
+  s_512125f9be8f7f::t_f501d95cc4621c 1-312
+apps/gpui/src/launcher/view/settings/context.rs
+  s_e3c20b75da9763::t_3df21d5f19ebbd 4-68,70-103,105-110,112-114,116-117,119-120,123-127,131-176,178-179
+apps/gpui/src/launcher/view/settings/controller.rs
+  s_512125f9be8f7f::t_b19842a95ec026 2-4,6,10,12,193-199,203-235,252-263,284-313,369-370,420-458,474-475,501-502,510-514,517-521,608,634-642,644-646,656-667,670,677-680
+apps/gpui/src/launcher/view/settings/features.rs
+  s_e3c20b75da9763::t_15c7f5d98402db 1-56
+apps/gpui/src/launcher/view/settings/general.rs
+  s_512125f9be8f7f::t_6d90f5d05e9e0c 1-37,39-76
+apps/gpui/src/launcher/view/settings/search.rs
+  s_512125f9be8f7f::t_0b41b734b624ef 1-225
+apps/gpui/src/launcher/view/tests/acceptance_regressions.rs
+  s_4592f0cb1b157c::t_96bfb086dda20a 1-105
+apps/gpui/src/launcher/view/tests/async_regressions.rs
+  s_512125f9be8f7f::t_db38104ba5e279 1-593
+apps/gpui/src/launcher/view/tests/full_review.rs
+  s_512125f9be8f7f::t_8eec45c78b0849 1-206
+apps/gpui/src/launcher/view/tests/lifecycle_regressions.rs
+  s_512125f9be8f7f::t_9c7dd7d1d10e71 1-596
+apps/gpui/src/launcher/view/tests/mod.rs
+  s_512125f9be8f7f::t_74e9e06e2ada09 1-5176
+apps/gpui/src/launcher/view/tests/optimization_regressions.rs
+  s_512125f9be8f7f::t_b5fa6bb9e941cf 1-15,18-63,65-77,79-93,95-108,110-128,130-173,175-184,187-232,234-301
+apps/gpui/src/platform/macos/activation.rs
+  s_e3c20b75da9763::t_3d0b2fdc770b65 1-132
+apps/gpui/src/platform/macos/mod.rs
+  s_e3c20b75da9763::t_c245bc8f732981 1-138
+apps/gpui/src/platform/macos/status_item.rs
+  s_e3c20b75da9763::t_a23c94717983a9 1-184
+apps/gpui/src/platform/macos/window.rs
+  s_512125f9be8f7f::t_fd2b52c86e7ad6 1-742
+apps/gpui/src/platform/material.rs
+  s_4592f0cb1b157c::t_2c431a405acf90 47-52,163,167,174
+apps/gpui/src/platform/material/macos.rs
+  s_e3c20b75da9763::t_a0479713ecd65d 2-3,70-79,142-146,158-159,174,197,226
+apps/gpui/src/platform/mod.rs
+  s_512125f9be8f7f::t_b45e82157d8b40 126-128,193,334-394,420,434,695,699-700,727,745-749,802-803,805,857,876,878,896-906
+apps/gpui/src/platform/preview.rs
+  s_512125f9be8f7f::t_e9425930769c0c 2-6,19-24,26-68,80-93,95,115,130,134-143,151-156,167-172,175-179,182-185,193,198-205,230-233,238-264
+apps/gpui/src/settings/model.rs
+  s_512125f9be8f7f::t_c54e5772ff2cfe 70,81
+apps/gpui/src/ui/mod.rs
+  s_e3c20b75da9763::t_b6476cfbf0d7a0 5
+apps/gpui/src/ui/styles.rs
+  s_ced4a9e25a472b::t_1b554f9bac09cb 25-28,30-32
+crates/anywhere-core/src/application/activate.rs
+  s_e3c20b75da9763::t_baf94567b664d7 227,253
+crates/anywhere-core/src/application/application_history/script.rs
+  s_e3c20b75da9763::t_8260e5915c5400 15-23
+crates/anywhere-core/src/application/application_index.rs
+  s_512125f9be8f7f::t_bf510e0e126e7d 17,22-31,55,91-102,110,116-118,122,125,127,129-139,141,145-161
+crates/anywhere-core/src/application/application_index_tests.rs
+  s_512125f9be8f7f::t_ac8a5a00e0ba30 46-101,306-319
+crates/anywhere-core/src/application/composition.rs
+  s_e3c20b75da9763::t_9b8d9dc766f86b 10,14,66
+crates/anywhere-core/src/application/context_capture.rs
+  s_e3c20b75da9763::t_4d8bb2755be9bf 339,351,374
+crates/anywhere-core/src/application/context_capture/clipboard.rs
+  s_e3c20b75da9763::t_04b9890096a12b 115
+crates/anywhere-core/src/application/context_projection.rs
+  s_e3c20b75da9763::t_043cc76c1657ca 2,18-32,34-36,77-83,87-89,94,102,104-109,147
+crates/anywhere-core/src/application/execution_request.rs
+  s_e3c20b75da9763::t_ea3329aebf77b0 20,61,205
+crates/anywhere-core/src/application/execution_request/worker.rs
+  s_e3c20b75da9763::t_c245e12ad8f60e 17,30,74,90
+crates/anywhere-core/src/application/feature_policy_tests.rs
+  s_e3c20b75da9763::t_ccb74d420a55a0 97-98,171
+crates/anywhere-core/src/application/file_preview.rs
+  s_e3c20b75da9763::t_df53cb5a4ca027 14
+crates/anywhere-core/src/application/file_workspace.rs
+  s_512125f9be8f7f::t_489075d42494f0 6,137-140,148,166-195,230,251-253,311-314,391-392,438,498-560,575,623
+crates/anywhere-core/src/application/launcher_service.rs
+  s_512125f9be8f7f::t_aa016c6cbc9b21 188,198,203,226,325,351,361-367,476,548,669-683
+crates/anywhere-core/src/application/search_sources.rs
+  s_e3c20b75da9763::t_6592274ff6409c 69,86
+crates/anywhere-core/src/application/session_coordinator.rs
+  s_e3c20b75da9763::t_b820cdfe81e119 1-8,10-28
+crates/anywhere-core/src/application/session_runtime.rs
+  s_e3c20b75da9763::t_5662c4b162f230 27-28,35,42,61-63,70,86-88,136,148,317,358,403-423,427,446-457,459
+crates/anywhere-core/src/application/session_runtime/publication.rs
+  s_e3c20b75da9763::t_6b4c5303e30b1e 1-217
+crates/anywhere-core/src/application/web_plugins/background_action.rs
+  s_e3c20b75da9763::t_871c49336bb3ba 175
+crates/anywhere-core/src/application/web_plugins/broker_tests.rs
+  s_e3c20b75da9763::t_509db892923154 907
+crates/anywhere-core/src/application/web_plugins/input_tests.rs
+  s_e3c20b75da9763::t_a53ddbc0a4701c 55-62,108,226,237,371-376,378,380-381,386-468
+crates/anywhere-core/src/application/web_plugins/invocation.rs
+  s_e3c20b75da9763::t_89561636cadf08 10,57,99,144,193-195
+crates/anywhere-core/src/core/action/matcher.rs
+  s_e3c20b75da9763::t_44de18ec6bc5f7 78,80,217,230
+crates/anywhere-core/src/core/context/engine.rs
+  s_e3c20b75da9763::t_8adaf257fdbdfa 25,267-268,421,440
+crates/anywhere-core/src/core/context/mod.rs
+  s_e3c20b75da9763::t_18cf41bb4fc053 23,108
+crates/anywhere-core/src/core/context/navigation.rs
+  s_e3c20b75da9763::t_331f0997be04a4 14-81
+crates/anywhere-core/src/core/execution/mod.rs
+  s_e3c20b75da9763::t_5f5133108d8737 39,115,119-129
+crates/anywhere-core/src/core/ranking/usage.rs
+  s_e3c20b75da9763::t_5f18cf41b0462c 54,59
+crates/anywhere-core/src/core/search/fallback.rs
+  s_e3c20b75da9763::t_344ce70bb63068 107
+crates/anywhere-core/src/core/search/pinyin.rs
+  s_e3c20b75da9763::t_259c7a3563a874 23-24
+crates/anywhere-core/src/core/search/scope.rs
+  s_e3c20b75da9763::t_ae755203a0268f 81
+crates/anywhere-core/src/core/session/facts.rs
+  s_e3c20b75da9763::t_139d520f6c025b 82
+crates/anywhere-core/src/features/application_history/service.rs
+  s_512125f9be8f7f::t_03952945a3d338 13,19-30,32-33,38-40,45,63,65-66,87-135,193,356-411
+crates/anywhere-core/src/features/application_history/service/query.rs
+  s_512125f9be8f7f::t_f452271c35de33 10-17,51,53,61,66,78-106,126,131-138,144-157,185,187-190,194-203,208,215,222-224,285-322,343,366,376,389,402
+crates/anywhere-core/src/features/developer/provider.rs
+  s_e3c20b75da9763::t_a343716ba9c152 229
+crates/anywhere-core/src/features/filesystem/result_store.rs
+  s_512125f9be8f7f::t_66fcd138805372 4,6,23,48-49,58,62-64,69-71,80,87,94-95,102-103,122,133,135,196,200-201,204-214
+crates/anywhere-core/src/features/filesystem/scan.rs
+  s_e3c20b75da9763::t_652ab28a68f53f 13,22,28-30,48-51,66-67,71-83
+crates/anywhere-core/src/features/filesystem/scan/pagination.rs
+  s_512125f9be8f7f::t_070cadf61f8665 1-3,15,17-23,25-27,30,32,37,39,55
+crates/anywhere-core/src/features/filesystem/scan/progress.rs
+  s_512125f9be8f7f::t_84d805a302b86e 19-22,26,41,59-62,65-70,89-90
+crates/anywhere-core/src/features/filesystem/scan/query.rs
+  s_e3c20b75da9763::t_583ff660051ce3 13-17,40
+crates/anywhere-core/src/features/filesystem/scan/record.rs
+  s_e3c20b75da9763::t_ac222337b3fb22 37-39,41,44-83
+crates/anywhere-core/src/features/filesystem/scan/storage.rs
+  s_e3c20b75da9763::t_ce074c84ef5260 1,3-7,10,12-14,16-18,20-33,35-36,44-65
+crates/anywhere-core/src/features/filesystem/scan/tests.rs
+  s_e3c20b75da9763::t_426469482942d9 59-63,110-114,165,467,477-479,659,676,692-697,700,715
+crates/anywhere-core/src/features/filesystem/scan/traversal.rs
+  s_512125f9be8f7f::t_c372ae71a05f57 4,10,22-35,65-70,80,86-105,200,213,222-224,227,233
+crates/anywhere-core/src/features/filesystem/search.rs
+  s_512125f9be8f7f::t_eddd99d6ac9280 19,116-130,133-134,137-138,146,149-150,260,279,302,308,310,334-338,344-357,360
+crates/anywhere-core/src/lib.rs
+  s_e3c20b75da9763::t_4acb27b5dce889 17
+crates/anywhere-core/src/persistence/application_history.rs
+  s_e3c20b75da9763::t_fdccf9f482dee4 21-43
+crates/anywhere-core/src/persistence/config_file.rs
+  s_e3c20b75da9763::t_e4ec1f47c06968 39
+crates/anywhere-core/tests/mvp/file_search.rs
+  s_512125f9be8f7f::t_49ed5e44d87e86 1186,1225,1228,1279,1433-1479,1544-1562
+crates/anywhere-core/tests/mvp/session.rs
+  s_e3c20b75da9763::t_27cae9bee7f8d6 1219-1224
+crates/anywhere-platform/native/macos_resources.m
+  s_512125f9be8f7f::t_02c42776177fc3 1-81
+crates/anywhere-platform/native/tests/macos_automation_test.m
+  s_e3c20b75da9763::t_b52dcb4ca46de4 1-92
+crates/anywhere-platform/native/tests/macos_clipboard_test.m
+  s_e3c20b75da9763::t_46d243a3bfc9ff 40-47,56-59,75,83
+crates/anywhere-platform/native/tests/macos_menu_test.m
+  s_e3c20b75da9763::t_f5f123375d1e53 6-7,17,23,67-79,451
+crates/anywhere-platform/native/tests/macos_resources_test.m
+  s_512125f9be8f7f::t_af644591ca49ae 1-98
+crates/anywhere-platform/native/tests/macos_spotlight_test.m
+  s_e3c20b75da9763::t_21a56bfe5403b7 1-72
+crates/anywhere-platform/src/clipboard/backend_tests.rs
+  s_e3c20b75da9763::t_feac820bd9a5cc 142,280-308
+crates/anywhere-platform/src/lib.rs
+  s_e3c20b75da9763::t_bd898cc5f5bb47 231-232,235
+crates/anywhere-platform/src/macos/application.rs
+  s_512125f9be8f7f::t_f3368138171c9d 264-268
+crates/anywhere-platform/src/macos/automation.rs
+  s_512125f9be8f7f::t_7470dcfacae6a4 1-53
+crates/anywhere-platform/src/macos/browser.rs
+  s_e3c20b75da9763::t_e6b683641c496c 6-7,56-63
+crates/anywhere-platform/src/macos/file_search.rs
+  s_512125f9be8f7f::t_56486ffd6224b1 6-11,15,19,57-77,101-163,165-180,184,191,193,266
+crates/anywhere-platform/src/macos/finder.rs
+  s_e3c20b75da9763::t_5d71067bd4977c 9,13,27-28,49-50,56-61
+crates/anywhere-platform/src/macos/mod.rs
+  s_e3c20b75da9763::t_f4a7de1838e7e1 8
+crates/anywhere-platform/src/macos/native.rs
+  s_512125f9be8f7f::t_9a1a0613cc584b 1,4-7,10-35,60-65,79-108
+crates/anywhere-platform/src/macos/shell.rs
+  s_e3c20b75da9763::t_210ad2195a9b28 4,8-36,42,50,66-71,122,130,136,142
+crates/anywhere-plugin/src/web/wire.rs
+  s_e3c20b75da9763::t_c5c3767305e37f 8-19,23-24,26,45,47,50,53,55,72-75,78
+crates/anywhere-protocol/src/context.rs
+  s_e3c20b75da9763::t_3d36ca93998805 1
+crates/anywhere-protocol/src/launcher.rs
+  s_e3c20b75da9763::t_7707daad9ab107 3-4
+docs/application-history-sources.md
+  s_512125f9be8f7f::t_8c35e582bffbc1 89,179
+docs/architecture.md
+  s_512125f9be8f7f::t_9f97a981619ba1 5,9,51-52,54-55,75,88-91,111-113,139,164-165,167-168,178,193,205-232
+docs/archive/README.md
+  s_512125f9be8f7f::t_75d2feab5aa871 28-43,79-84
+docs/archive/benchmarks/gpui-task-detail-2026-11-16.json
+  s_4592f0cb1b157c::t_d971349937eeaf 1-32
+docs/archive/changelog-pre-gpui-2026-11-17.md
+  s_e3c20b75da9763::t_d8bb5a5e6a2810 1-169
+docs/archive/code-cleanup-and-gpui-runtime-plan.md
+  s_e3c20b75da9763::t_50a28e30d103e3 1-2,12,15-17,59,73
+docs/archive/gpui-migration.md
+  s_e3c20b75da9763::t_925570491917b0 1-2,10-11,202
+docs/archive/gpui-ui-alignment-plan.md
+  s_e3c20b75da9763::t_3dd5d31188bc4d 1-2,127,146,151,153,174,238-242,487,676-677,810,825-826,829,836-837,842,887,1629,1752
+docs/archive/reviews/gpui-acceptance-run-2026-11-17.md
+  s_ced4a9e25a472b::t_5626edc13f5172 1-445
+docs/archive/reviews/gpui-async-selection-review-2026-11-16.md
+  s_e3c20b75da9763::t_6781754e93317b 1-76
+docs/archive/reviews/gpui-lifecycle-review-2026-11-17.md
+  s_e3c20b75da9763::t_e6fc5f8ba73f0d 1-67
+docs/archive/reviews/gpui-performance-task-review-2026-11-16.md
+  s_e3c20b75da9763::t_9f4930155c292c 1-75
+docs/archive/reviews/gpui-regular-glass-2026-11-17.md
+  s_e3c20b75da9763::t_15f9735b62cf84 1-63
+docs/archive/reviews/gpui-ui-followup-and-glass-plan-2026-11-16.md
+  s_e3c20b75da9763::t_83fab5b76e56af 1-276
+docs/archive/reviews/gpui-web-plugin-background-review-2026-11-16.md
+  s_e3c20b75da9763::t_366594fdfa3f17 1-163
+docs/archive/v0.14-gpui-development-records.md
+  s_e3c20b75da9763::t_64b28ed9c97938 1-1215
+docs/development.md
+  s_e3c20b75da9763::t_49e70b5431f558 80-83
+docs/file-search.md
+  s_512125f9be8f7f::t_ad28743cd6235d 3,11-14,18,28,34,36,42,48-50,56-58,63-64,70-71,91,102-103
+docs/launcher-interaction.md
+  s_512125f9be8f7f::t_a356ce632ff662 7-8,19-24,33-39,42-45,48-50,74-78,100-106,124-128,156,162,167,172,175-177,185-187,190-191
+docs/native-preview.md
+  s_512125f9be8f7f::t_328df0a6d169e8 5,34-38,60,63-65,71-73,82
+docs/performance.md
+  s_512125f9be8f7f::t_ef6df85dcd9aee 35-38,60-77,80-81,96,111-155
+docs/plugin-development.md
+  s_e3c20b75da9763::t_817e9621156a3a 30,180
+docs/research/README.md
+  s_512125f9be8f7f::t_e3d92f19635747 7,19,23,25
+docs/research/product-direction-2026-11-18.md
+  s_512125f9be8f7f::t_214d22c757617e 1-73
+docs/test-acceptance-checklist.md
+  s_512125f9be8f7f::t_7410c9d849a5d8 1-766
+packages/plugin-sdk/src/client.ts
+  s_512125f9be8f7f::t_c3d71237b39360 28,63-85,90,179,186-193,201,203-210,244-245,251,259,270-271,273-274,305-306,478
+packages/plugin-sdk/test/client.test.mjs
+  s_512125f9be8f7f::t_0f71483292be83 394-422
+packages/plugin-sdk/test/package_test.py
+  s_ced4a9e25a472b::t_6d49c1d4c157bd 100-116
+packages/plugin-sdk/test/web_transport.test.mjs
+  s_e3c20b75da9763::t_3e84e85818b647 13,32-37,71-92,94-109,111-116,136-151
+packages/plugin-sdk/tools/create.mjs
+  s_ced4a9e25a472b::t_dbe3f041a00848 30-34
+packages/plugin-sdk/tools/package.py
+  s_e3c20b75da9763::t_1e93e04495eee1 81
+plugins/examples/json-workspace/src/style.css
+  s_ced4a9e25a472b::t_859ef4fba7580a 21-43
+plugins/examples/json-workspace/test/style.test.mjs
+  s_ced4a9e25a472b::t_171b8ab36767c2 1-41
+resources/file-types.json
+  s_e3c20b75da9763::t_8f9dcacd94bb95 7-177
+resources/localization/app_en.arb
+  s_512125f9be8f7f::t_a1c41bef2bba56 154,269,627-656
+resources/localization/app_zh.arb
+  s_512125f9be8f7f::t_be7c251d9970e8 154,269,627-656
+resources/web-controls.css
+  s_e3c20b75da9763::t_1c66a06e026486 12,30,36-48,52,55,120,122,124-126,170,219-222
+scripts/architecture_rules.py
+  s_e3c20b75da9763::t_0a54e6b40e88bf 6-11,14-39
+scripts/check-plugin-starter.sh
+  s_e3c20b75da9763::t_415736e0151dae 8,10
+scripts/check-web-examples.sh
+  s_e3c20b75da9763::t_a0d3a2fa2b699c 4-8
+scripts/check.sh
+  s_e3c20b75da9763::t_5ca82d2444c3f8 30
+scripts/generate-design-tokens.py
+  s_ced4a9e25a472b::t_44b6a783ad5dbb 87
+scripts/generate-file-types.py
+  s_e3c20b75da9763::t_14c943e7f4ac77 35-69,71-73
+scripts/generate-gpui-localizations.py
+  s_e3c20b75da9763::t_59318afe27dbb8 82-94,96,102
+scripts/generate-native-localizations.py
+  s_e3c20b75da9763::t_7d1093cc47eb1e 34
+scripts/tests/test_architecture_rules.py
+  s_e3c20b75da9763::t_3654ae79986f33 30-40
+scripts/tests/test_design_tokens.py
+  s_ced4a9e25a472b::t_8b41243bf7eb09 54
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "21fad6d3c810ed77c4af9a7d68fd1732fbac1b7b",
+  "prompts": {},
+  "sessions": {
+    "s_4592f0cb1b157c": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e4a3-ef61-7ee3-9704-57b982796676",
+        "model": "unknown"
+      },
+      "human_author": "diwen.zhang <diwen.zhang@lkcoffee.com>"
+    },
+    "s_512125f9be8f7f": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1eb63-5915-7792-8016-b33bcdae4a87",
+        "model": "unknown"
+      },
+      "human_author": "diwen.zhang <diwen.zhang@lkcoffee.com>"
+    },
+    "s_ced4a9e25a472b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e3aa-e48c-7303-bdb9-d545f0d5bc2d",
+        "model": "unknown"
+      },
+      "human_author": "diwen.zhang <diwen.zhang@lkcoffee.com>"
+    },
+    "s_e3c20b75da9763": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1e8b2-4d05-79e0-9289-6ef7b70c2c70",
+        "model": "unknown"
+      },
+      "human_author": "diwen.zhang <diwen.zhang@lkcoffee.com>"
+    }
+  }
+}
