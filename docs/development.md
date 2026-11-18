@@ -16,10 +16,11 @@
 CocoaPods 或其他 UI SDK。GPUI、Quick Look、WebKit 与 AppKit 依赖只在 macOS
 构建；共享 Rust crates 另有 Linux / Windows 编译检查。
 
-Flutter 3.50 使用独立的 `material_ui` / `cupertino_ui` 设计库，版本随 App 的 pubspec / lockfile
-固定。共享 `LocalizedApp.localizationsDelegates` 组合应用文案与对应设计库的中英委托；
-不要在新设计库 Widget 树中使用 gen-l10n 仍生成的旧 SDK 设计委托列表。
-SDK 升级的兼容点和内存研究见[专项方案](research/flutter-3.50-memory.md)。
+当前产品 UI 只有 GPUI 一套实现；构建不依赖 Flutter、Dart、Cupertino / Material
+设计库或跨语言 bridge。旧 Flutter 3.50 迁移与内存研究仅保留在
+[历史归档](archive/flutter-3.50-memory.md)，不能作为当前构建、诊断或目录布局的
+依据。界面外观由 GPUI theme、设计 tokens 和 `apps/gpui/src/platform/material/`
+的 macOS 原生材质适配组成。
 
 文件结果执行索引的隔离分配测量：
 
@@ -27,9 +28,10 @@ SDK 升级的兼容点和内存研究见[专项方案](research/flutter-3.50-mem
 cargo run --release -p anywhere-core --example file_result_memory --locked -- 100000
 ```
 
-该夹具只启动 Rust，不加载 Flutter / Bridge / GUI；输出是请求的 Rust 堆字节，不是 RSS。
-系统外观与内存压力 Host 的编译 / 行为检查由 `scripts/check-macos-host.sh` 覆盖；
-`ANYWHERE_PROFILE_UI=1` 才启用 Flutter 的数值诊断样本。
+该夹具只启动 Rust，不加载 GPUI、WebKit、原生窗口或系统 Quick Look；输出是请求的
+Rust 堆字节，不是 RSS 或整 App footprint。当前外观与材质计划由
+`cargo test -p anywhere-gpui --locked` 中的 `platform::material` 回归覆盖，不再有
+`scripts/check-macos-host.sh` 或 Flutter `ANYWHERE_PROFILE_UI` 入口。
 
 ## 本机构建
 

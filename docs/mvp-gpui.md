@@ -40,7 +40,7 @@ Covered 表示有代码路径和自动化回归，不表示真实窗口、键盘
 [2026-11-18 工作树审查](archive/reviews/worktree-review-2026-11-18.md)。
 2026-11-18 重新执行两套门禁：GPUI 278 项通过；`scripts/check.sh` exit 0，完整
 Rust 工作区、SDK 54 项、JSON Workspace 31 项、严格 Clippy、原生边界与
-115 份 Markdown / 933 个本地链接检查通过。随后重新构建、签名并从精确 App
+115 份 Markdown / 941 个本地链接检查通过。随后重新构建、签名并从精确 App
 路径启动隔离进程；完整物理矩阵仍有未执行项。自动化不能沿用为真实 IME、材质、
 系统授权或辅助技术通过结论。
 
@@ -76,7 +76,8 @@ Build 16–167 及后续阶段的逐次结果、测量与当时的桌面证据�
 2026-11-18 发布前复验使用 `build/Anywhere.app`，`scripts/check-gpui.sh`
 278 项通过。发布包的源码 commit、主程序和 ZIP 的 SHA-256、架构、最低系统及
 签名身份记录在 `v0.14.0` Release 的 `package-provenance.json` 中；可变的本机
-构建时间不写回源码文档。
+构建时间不写回源码文档。`v0.14.0` 已作为 GitHub pre-release 发布，未替换
+历史 V0.3 的 `latest` 标记。
 
 隔离验收使用精确 App 路径、Bundle ID `dev.anywhere.launcher` 和独立数据目录。
 实机确认文件下一页加载与

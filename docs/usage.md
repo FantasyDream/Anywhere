@@ -1,12 +1,33 @@
 # 使用指南
 
-macOS 现行使用指南；应用历史属于 V0.14 开发预览。实际版本与验收状态见
-[项目首页](../README.md)和[GPUI 技术方案与验收](mvp-gpui.md)。
+macOS 现行使用指南；当前发布为 macOS 15+ Apple Silicon 的 V0.14 开发预览。
+实际版本与验收状态见[项目首页](../README.md)和
+[GPUI 技术方案与验收](mvp-gpui.md)。
 
-## 1. 启动与授权
+## 1. 安装、启动与授权
 
-打开 `Anywhere.app` 后在菜单栏后台驻留；通过全局快捷键或菜单栏搜索图标
-恢复 Launcher；Settings 与 Running Tasks 从 Launcher 或对应 Action 进入。
+从 [`v0.14.0` Release](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.0)
+下载 `Anywhere-macos-arm64.zip`、同名 `.sha256` 和
+`package-provenance.json`。当前资产只支持 Apple Silicon（arm64），最低
+macOS 15.0；不要把它当作 Intel 或正式公证件。
+
+```bash
+cd ~/Downloads
+shasum -a 256 -c Anywhere-macos-arm64.zip.sha256
+unzip Anywhere-macos-arm64.zip
+mv Anywhere.app /Applications/
+open /Applications/Anywhere.app
+```
+
+应用首次打开后只在菜单栏后台驻留，不显示 Dock 图标。通过 `⌃⌥Space` /
+`⌥Space` 或菜单栏搜索图标恢复 Launcher；Settings 与 Running Tasks 从
+Launcher、状态栏菜单或对应 Action 进入。升级时先退出旧实例，再替换
+`/Applications/Anywhere.app`；用户数据仍保存在下述独立数据目录。
+
+当前包使用 `Anywhere Local Code Signing` 开发签名，不是 Developer ID，也未
+公证。macOS 可能阻止首次打开；只有在核对 checksum、确认下载来源可信时才使用
+Finder 右键 **Open** 或“系统设置 → 隐私与安全性 → 仍要打开”，不要全局关闭
+Gatekeeper 或批量移除 quarantine 属性。
 
 部分能力需要系统授权，可根据使用场景开启：
 
@@ -46,7 +67,7 @@ Global Search，Global 空白首页最后隐藏 Launcher。普通查询先清空
 Actions 和预览仍先退出所属局部层。更多规则见
 [Context 输入与导航](context-input-navigation.md)。
 
-## 剪贴板历史
+## 3. 剪贴板历史
 
 剪贴板有两个独立 Action，都可在 Settings → Shortcuts 配置快捷键：
 
@@ -80,7 +101,7 @@ Actions 和预览仍先退出所属局部层。更多规则见
 - 展开“历史记录存储”可选择保留 1 / 7 / 30 / 90 天；默认沿用容量限制。缩短期限会确认并立即永久删除过期记录，之后延长期限也不会恢复。用量仅表示逻辑数据量，内容在本机明文保存；不影响系统剪贴板或原文件。
 - 本地明文存储，只记录应用运行期间观察到的复制。文件列表仅保存原路径，恢复时原文件必须仍然存在；HTML 不执行脚本，图片在明确预览时交给系统显示，不再在 Rust 生成缩略图。文件承诺、延迟对象及任意多 item 私有格式不能保证完整恢复。开发及验收状态见 [V0.10 MVP](archive/mvp-v0.10.md)。
 
-## Web 工具与 JSON Workspace（预览）
+## 4. Web 工具与 JSON Workspace（预览）
 
 开发第三方插件请先看 [开发指南](plugin-development.md)：SDK 导出包内含独立模板
 和打包工具，不需要修改主程序或安装 Rust。
@@ -97,7 +118,7 @@ Windows 验收边界见 [V0.11 MVP](archive/mvp-v0.11.md) 与
 [实施记录](web-plugin-design.md)。原生 JSON 工作区已退役，新工具使用独立的
 Web Action ID。
 
-## 3. 键盘操作
+## 5. 键盘操作
 
 以下为 macOS 默认键位。两个唤醒快捷键和 Action 快捷键都可以在 Settings → Shortcuts 修改。
 
@@ -122,7 +143,7 @@ Launcher 的 `Tab` / `Shift+Tab` 用于切换可见分类，不遍历控件；�
 
 详见 [Launcher 交互与状态保留](launcher-interaction.md)。
 
-## 4. 常用场景
+## 6. 常用场景
 
 | 场景 | 操作示例 |
 |---|---|
@@ -140,7 +161,7 @@ Launcher 的 `Tab` / `Shift+Tab` 用于切换可见分类，不遍历控件；�
 
 路径需要真实存在，支持绝对路径、`~` / `~/…` 和中文全角 `～/…`，主目录简写会展开为实际路径。文件名中的空格与波浪号保留；不展开 `~其他用户`、环境变量或 shell 表达式，也不把裸域名自动推断为 URL。IDEA 项目目录识别需要窗口暴露明确路径；VS Code、Cursor / ChatGPT 对话项目目录尚未接入。
 
-## 5. 文件搜索
+## 7. 文件搜索
 
 1. 打开 Global Search，输入 `files`、`File Search` 或“文件搜索”。
 2. 选择 **File Search**，按 Enter 进入文件页面。
@@ -163,7 +184,7 @@ Launcher 的 `Tab` / `Shift+Tab` 用于切换可见分类，不遍历控件；�
 
 可为 File Search 配置一个普通 Action 快捷键，并按需开启 Global，直接从其他应用进入文件页。
 
-## 6. 开发项目与后台任务
+## 8. 开发项目与后台任务
 
 目录 Context 会进一步识别项目类型，提供相应动作：
 
@@ -181,7 +202,7 @@ Maven、Gradle 优先使用项目 wrapper。识别阶段只读取项目标记及
 
 当前会话只在应用运行期间保留，尚不提供交互式 PTY 终端或应用重启后的任务恢复。
 
-## 7. 自定义快捷键与扩展
+## 9. 自定义快捷键与扩展
 
 **快捷键：** Settings → Shortcuts → Action shortcuts 支持固定动作绑定、Global 开关，以及按应用 / Context 分派的上下文快捷键规则。触发时重新解析适用对象：一个目标直接执行，多个目标先选择，缺少 Context 时不执行。
 
@@ -192,7 +213,7 @@ Maven、Gradle 优先使用项目 wrapper。识别阶段只读取项目标记及
 - 内置模块包括 URL、Git、Maven、Gradle、Node、Rust、Spring Boot、收藏目录、剪贴板历史与应用历史；关闭模块后相关识别、候选与快捷键资格立即撤销，绑定配置保留以便重新启用。
 - 第三方插件统一采用 WebView + 按需后台 QuickJS 架构，本地包安装入口与 [SDK](../packages/plugin-sdk/README.md) 已进入 macOS 开发预览；按 [开发指南](plugin-development.md) 开始，平台与发行边界见 [方案与进度](web-plugin-design.md)。早期外部 TOML 声明式插件协议已退役。
 
-## 8. 本地数据
+## 10. 本地数据
 
 macOS 数据目录：`~/Library/Application Support/Anywhere/`。
 
@@ -205,11 +226,14 @@ macOS 数据目录：`~/Library/Application Support/Anywhere/`。
 | `clipboard-history.sqlite3` | 开启采集后保留的多格式剪贴板内容与检索数据 |
 | `web-packages/` | 已导入的 Web 包、资源及 `receipts.json` 安装账本 |
 | `web-storage.sqlite3` | Web 插件按命名空间隔离的 KV 数据 |
-| `launcher.log` | 运行诊断和耗时日志，每次启动覆盖 |
+| `search-access/bookmarks.json` | 文件搜索目录的安全范围书签 |
+| `application-history-sources/` | 用户自定义应用历史来源与转换脚本 |
 
 Usage 不保存输入正文或文件路径。Context 正文属于临时会话；文件搜索命中存入查询临时文件，切换查询或会话清理时释放，不维护长期文件索引。
+当前 GPUI 默认把运行诊断写到 stderr，不再维护固定 `launcher.log`；排查时从
+Terminal 以 `RUST_LOG=anywhere_gpui=debug,anywhere_core=debug` 启动可限制日志级别。
 
-## 语言与拼音
+## 11. 语言与拼音
 
 设置 → General / 通用 → Language / 语言可选择跟随系统、简体中文或 English。
 当前 GPUI 主窗口、文件 / 剪贴板、任务、设置、原生菜单及 Web 宿主使用共享中英文
@@ -218,7 +242,7 @@ Usage 不保存输入正文或文件路径。Context 正文属于临时会话；
 应用和动作的中文显示名称 / 既有别名、文件名称支持全拼与首字母匹配，例如 `weixin` / `wx`、`kaifawendang` / `kfwd`。系统应用支持自身提供的中文名称：“提醒事项”可用 `Reminders` 或 `txsx` 查找，“文件搜索”可用 `wjss` 查找，搜索别名不受界面语言限制。文件搜索继续完整遍历授权目录；拼音不扩大权限、排除项或类型范围。切换语言不改变查询、ActionId 和快捷键；不转换文件名 / 路径、外部应用菜单或全部剪贴板正文。
 
 
-## 应用历史（V0.14 原型）
+## 12. 应用历史
 
 已适配的 18 个来源仅默认开启已安装应用的 Action；未安装应用默认关闭，手动开关优先。安装或卸载应用后重启可更新默认判断。已开启来源检测标准配置目录中的历史文件，包括 JetBrains 系列、VS Code / Insiders / Cursor / Windsurf / VSCodium、Sublime Text 和 Obsidian 最近仓库。
 

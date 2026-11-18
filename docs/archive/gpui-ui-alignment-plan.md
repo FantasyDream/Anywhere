@@ -1749,7 +1749,7 @@ CodeDone 只表示代码与定向检查完成，Verified 还需要该行要求�
 
 ### 键盘与层级
 
-逐项执行 [Flutter 键盘迁移核对](../launcher-interaction.md#flutter-键盘迁移核对) 的所有行，
+逐项执行 [GPUI 键盘迁移核对](../launcher-interaction.md#gpui-键盘迁移核对) 的所有行，
 每种操作分别覆盖按钮、真实键盘和隐藏恢复后的键盘入口。额外边界如下：
 
 - Current App Scope 迟到后默认选中一次；用户已经输入或手动切换时不能被迟到结果抢回。

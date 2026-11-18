@@ -88,7 +88,7 @@ otool -L build/Anywhere-preview.app/Contents/MacOS/Anywhere
 - Accessibility 权限缺失与授予后的菜单行为；
 - 登录项注册、批准与关闭；
 - 材质、Reduce Transparency、主题、缩放和布局；
-- VoiceOver 主要页面路径。
+- VoiceOver 不在 V0.14 开发预览范围内，继续作为 V1.0 发布门槛。
 
 记录设备、macOS、架构、构建号、数据目录、真实输入与未验证项。只使用脱敏材料；
 不要让自动化意外执行真实业务动作。未执行项保持 Unverified。
@@ -111,10 +111,18 @@ Developer ID / 公证。
 
 ## 6. Release
 
-现存 `latest` 是 2026-09-18 的 V0.3 历史预览，不包含当前 GPUI 产品。保留旧
-tag 和资产，不用其数据证明当前 macOS 或 Windows 支持。
+当前开发预览已经发布：
 
-上传新版时使用包含版本和构建号的不可变 tag，并保留：
+| 版本 | 日期 | 状态 | 资产 |
+|---|---|---|---|
+| [`v0.14.0`](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.0) | 2026-11-18 | Pre-release；macOS 15+ arm64 | `Anywhere-macos-arm64.zip`、SHA-256、`package-provenance.json` |
+
+`v0.14.0` 使用 annotated tag 固定最终源码，未替换历史 `latest`。现存 `latest`
+仍是 2026-09-18 的 V0.3 历史预览，不包含当前 GPUI 产品；保留旧 tag 和资产，
+不用其数据证明当前 macOS 或 Windows 支持。
+
+上传新版时使用包含语义版本的不可变 annotated tag；构建号保留在 Info.plist
+和 provenance 中。tag 一旦发布就不得移动或重写，并保留：
 
 - 对应源码 commit；
 - 本机架构；
@@ -126,3 +134,34 @@ tag 和资产，不用其数据证明当前 macOS 或 Windows 支持。
 开发预览标为 pre-release。不要上传真实日志、剪贴板数据库、用户路径、签名私钥
 或完整 Context。公开正式分发仍需 Developer ID 签名、公证、安装升级、权限身份
 和发布安全矩阵；`SECURITY.md` 的私密报告与分支保护也需在 GitHub 设置中启用。
+
+发布新版时把 `<version>` 与 `<final-main-commit>` 替换为本次不可变版本和提交。
+`v0.14.0` 已经发布，不得重写该 tag、替换其资产或重复创建同名 Release。
+
+```bash
+VERSION=vX.Y.Z
+FINAL_MAIN_COMMIT=<final-main-commit>
+git tag -a "$VERSION" "$FINAL_MAIN_COMMIT" \
+  -m "Anywhere $VERSION development preview"
+git push origin "$VERSION"
+gh release create "$VERSION" \
+  build/Anywhere-macos-arm64.zip \
+  build/Anywhere-macos-arm64.zip.sha256 \
+  build/package-provenance.json \
+  --title "Anywhere $VERSION — GPUI 开发预览（macOS arm64）" \
+  --notes-file "build/release-notes-$VERSION.md" \
+  --prerelease
+```
+
+发布后重新下载资产并复核 provenance，而不是只核对上传前文件：
+
+```bash
+gh release download "$VERSION" --dir /tmp/anywhere-release
+cd /tmp/anywhere-release
+shasum -a 256 -c Anywhere-macos-arm64.zip.sha256
+ditto -x -k Anywhere-macos-arm64.zip app
+codesign --verify --deep --strict app/Anywhere.app
+```
+
+`package-provenance.json` 的 `archive_sha256` 与 `executable_sha256` 必须分别
+匹配 ZIP 和解压后的主程序。

@@ -25,8 +25,8 @@
 
 ```mermaid
 flowchart TD
-    UI[Launcher 共享页面与设置] --> Bridge[类型化 Bridge]
-    Bridge --> App[Application：装配与调用协调]
+    UI[Launcher 共享页面与设置] --> Runtime[ApplicationRuntime]
+    Runtime --> App[Application：装配与调用协调]
     App --> Browser[浏览器 Feature：查询、对象身份、动作与资格]
     Browser --> Static[静态记录读取契约：历史 / 书签]
     Browser --> Live[实时浏览器会话契约：窗口 / Tab]

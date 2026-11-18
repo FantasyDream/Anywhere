@@ -1,6 +1,7 @@
 # Anywhere 产品路线图
 
-最后更新：2026-11-11。当前为 **V0.14 macOS 15+ GPUI 开发预览**。功能已接入，
+最后更新：2026-11-18。当前为 **V0.14 macOS 15+ GPUI 开发预览**。功能已接入并
+发布为 [`v0.14.0` pre-release](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.0)；
 完整物理桌面矩阵、正式签名、公证和 Windows / Linux 桌面产物尚未完成。当前
 范围与证据见 [GPUI 技术方案与验收](mvp-gpui.md)，版本以
 [Cargo workspace](../Cargo.toml)和
@@ -31,10 +32,11 @@
 
 ## 下一阶段
 
-### V0.14 收尾
+### V0.14 发布后验收
 
-1. 完成 GPUI 快速门禁、完整 workspace 测试、Clippy、文档和架构检查。
-2. 构建并验证 `Anywhere.app` 的 Bundle ID、最低系统、签名、资源和动态库。
+1. 保持 GPUI 快速门禁、完整 workspace 测试、Clippy、文档和架构检查持续通过。
+2. 在 Developer ID / 公证前继续使用开发签名包，并保持 Bundle ID、最低系统、
+   资源、动态库和 checksum 复验。
 3. 执行[物理桌验矩阵](mvp-gpui.md#物理桌验矩阵)，逐项记录结果。
 4. 修复桌验发现的 IME、焦点、状态栏、Shelf、Quick Look、WebView 和权限问题。
 5. 在不修改历史数字的前提下建立当前 GPUI 性能样本。

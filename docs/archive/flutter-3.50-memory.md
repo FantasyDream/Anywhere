@@ -1,5 +1,10 @@
 # Flutter 3.50 升级与内存调研实施方案
 
+> 历史资料：本页记录 GPUI 迁移前的 Flutter 产品、3.50 升级和内存调查，不是
+> 当前构建或使用说明。现行产品、构建、性能和发布边界分别见
+> [项目首页](../../README.md)、[开发指南](../development.md)、
+> [性能](../performance.md)和[GPUI 验收](../mvp-gpui.md)。
+
 调研日期：2026-11-12。对象为 `origin/main` 的 Flutter 产品，基线提交
 `81c523cdb95031ac00cfcdc25360eefb48f85b21`，版本 `0.14.0+46`，macOS arm64。
 本分支从该提交新建，不包含 GPUI 实验分支、未提交改动或界面迁移。

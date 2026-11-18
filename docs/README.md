@@ -2,13 +2,14 @@
 
 当前源码为 **V0.14 GPUI 开发预览**。产品只有一个 macOS 15+ GPUI 界面实现；
 Rust Core 负责 Context、匹配、排序、授权和执行。自动化、构建和物理桌面矩阵
-分别记录，Development Preview 不等于正式发行。最后整理：2026-11-17。先从
+分别记录，Development Preview 不等于正式发行。最后整理：2026-11-18。先从
 [项目首页](../README.md)了解功能和平台状态。
 
 ## 使用与参与
 
 | 文档 | 用途 |
 |---|---|
+| [V0.14.0 开发预览](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.0) | macOS 15+ Apple Silicon 下载、校验和、provenance 与已知限制 |
 | [使用指南](usage.md) | 唤醒、权限、Scope、快捷键、搜索、剪贴板、项目工具和本地数据 |
 | [开发与构建](development.md) | 环境、App / SDK 构建、测试、生成物和代码入口 |
 | [完整测试用例与验收清单](test-acceptance-checklist.md) | 当前GPUI逐项用例、前置数据、优先级、18来源和环境矩阵、自动化追溯及结果模板 |
@@ -50,7 +51,7 @@ Rust Core 负责 Context、匹配、排序、授权和执行。自动化、构�
 
 ## 历史与研究
 
-- [Flutter 3.50 与内存调研实施方案](research/flutter-3.50-memory.md)：main Flutter 产品的 SDK 升级、内存测量与优化路线，以及系统外观完整适配 / Windows 共享抽象方案。
+- [Flutter 3.50 与内存调研实施方案](archive/flutter-3.50-memory.md)：界面迁移到 GPUI 前的历史方案、测量与 Flutter / Windows 边界，不描述当前产品。
 - [历史验收、迁移与 Review](archive/README.md)：旧 MVP、已完成迁移、实验和逐构建证据。
 - [研究资料](research/README.md)：外部产品、开源选型与未落地设计。
 

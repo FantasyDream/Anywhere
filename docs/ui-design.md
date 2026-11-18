@@ -1,7 +1,7 @@
 # GPUI UI 设计与原生材质
 
 当前 GPUI 产品视觉契约。页面行为见 [Launcher 交互](launcher-interaction.md)，
-源码入口是 `apps/gpui/src/`。最后整理：2026-11-14。
+源码入口是 `apps/gpui/src/`。最后整理：2026-11-18。
 
 原版 Liquid Glass、文字度量、插件透明画布及逐页布局的目标与实施状态见
 [界面对齐方案](archive/gpui-ui-alignment-plan.md#2-界面目标与基线)。当前代码已经接入

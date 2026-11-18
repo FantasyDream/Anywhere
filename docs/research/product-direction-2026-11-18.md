@@ -21,14 +21,18 @@
 
 ## 当前交付起点
 
-- 当前工作树是 V0.14、macOS 15+ 原生 GPUI。核心流程已有实现，应用历史已有 18 个配置化来源。
-  应用历史的多安装、路径和权限组合仍需验证。Windows / Linux 当前有共享 crate 的检查。
+- 当前 `main` 已发布 V0.14.0、macOS 15+ 原生 GPUI。核心流程已有实现，应用历史已有
+  18 个配置化来源。应用历史的多安装、路径和权限组合仍需验证。Windows / Linux
+  当前有共享 crate 的检查。
   [项目状态](../../README.md) · [GPUI 交付范围与证据](../mvp-gpui.md)
 - 当前证据包括自动化、开发签名本地包和部分桌面实测。近期窗口过渡与隐藏释放改动的实体键盘、
-  减少动态效果和进程 footprint 需要按对应构建测量。V0.14 验收页将 VoiceOver 排除在本轮范围外，
+  减少动态效果和进程 footprint 需要按对应构建测量。V0.14 验收页明确 VoiceOver 不在本轮范围，
   V1.0 路线图将其保留为发布条件。 [测试矩阵](../test-acceptance-checklist.md) · [性能方法](../performance.md) · [路线图](../roadmap.md)
-- GitHub Releases 页面当前列出 2026-09-18 的 V0.3 历史预览。本地 GPUI 试用与对外分发之间仍有签名、
-  公证、干净机器安装和升级回退的工作。 [公开下载页](https://github.com/FantasyDream/Anywhere/releases) · [发布检查](../releasing.md) · [Apple 公证要求](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution/)
+- [`v0.14.0`](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.0) 已于
+  2026-11-18 作为 GPUI pre-release 发布，提供 macOS 15+ arm64 ZIP、校验和与 provenance；
+  公开 Releases 的 `latest` 仍是 2026-09-18 的 V0.3 历史预览。正式分发所需的 Developer ID、
+  公证、干净机器安装和升级回退仍未完成。
+  [发布检查](../releasing.md) · [Apple 公证要求](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution/)
 
 ## 首批验证的工作流
 

@@ -14,9 +14,10 @@
   支持输入与复制工作流。已安装插件需要单独更新，App 构建不替换用户插件。
 - 当前范围、门禁和物理桌验见 [GPUI 验收](docs/mvp-gpui.md)；
   Flutter 及较早内部逐构建细节见 [历史变更](docs/archive/changelog-pre-gpui-2026-11-17.md)。
-- 本轮工程门禁为 GPUI 278 项通过、完整 `scripts/check.sh` 通过；GitHub 开发预览
-  提供 arm64 App ZIP 与 SHA-256。产物使用本地或 CI 开发签名，不是 Developer ID，
-  也未公证。
+- 本轮工程门禁为 GPUI 278 项通过、完整 `scripts/check.sh` 通过；开发预览已发布到
+  [`v0.14.0`](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.0)，
+  提供 arm64 App ZIP、SHA-256 与 provenance。产物使用本地开发签名，不是
+  Developer ID，也未公证。
 
 ## V0.13 开发预览
 

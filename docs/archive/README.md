@@ -22,6 +22,7 @@
 | [开源复用重构](open-source-refactor-plan.md) | 已完成的 R1–R4 与未采用原型 |
 | [V0.11 MVP](mvp-v0.11.md) / [Web 实施记录](web-plugin-development-records.md) | Web 平台、JSON 与逐构建观察；不作为现行 SDK 文档 |
 | [P0 探针退役](web-plugin-p0.md) | 早期合成回显验证及删除原因，原代码在 Git 历史 |
+| [Flutter 3.50 升级与内存调研](flutter-3.50-memory.md) | GPUI 迁移前的 Flutter SDK、界面、内存与 Windows 共享层记录；不描述当前产品 |
 
 ## Review 与重构记录
 
