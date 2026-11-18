@@ -223,6 +223,7 @@ fn collect_with_reader(
             }
         } else if clipboard.has(clipboard_rs::ContentFormat::Text) {
             let remaining = MAX_PAYLOAD_BYTES.saturating_sub(payload.byte_count());
+            #[cfg_attr(not(target_os = "macos"), allow(unused_mut))]
             let mut text_ok = remaining > 0;
             #[cfg(target_os = "macos")]
             if text_ok {

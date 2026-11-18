@@ -3,14 +3,13 @@
 //! Frontend bridges may convert these domain values to their own transport DTOs,
 //! but business policy, storage ownership and document lifecycles stay here.
 
+#[cfg(target_os = "macos")]
+use crate::application::web_plugins::WebPackageStore;
 use crate::{
     application::{
         builtin_registry,
         settings_service::SettingsService,
-        web_plugins::{
-            WebDocumentBinding, WebMessageSource, WebPackageReview, WebPackageStatus,
-            WebPackageStore,
-        },
+        web_plugins::{WebDocumentBinding, WebMessageSource, WebPackageReview, WebPackageStatus},
         Application,
     },
     persistence::usage::SqliteUsageRepository,
@@ -419,6 +418,7 @@ impl ApplicationRuntime {
             .await)
     }
 
+    #[cfg(target_os = "macos")]
     pub fn web_resource(&self, handle: &str, path: &str) -> Result<Vec<u8>> {
         let binding = self.document(handle).map_err(anyhow::Error::new)?;
         let source = || WebMessageSource {
@@ -435,6 +435,11 @@ impl ApplicationRuntime {
             .resource(binding.content_digest(), path)?;
         self.application.validate_web_document(&binding, source())?;
         Ok(bytes)
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    pub fn web_resource(&self, _: &str, _: &str) -> Result<Vec<u8>> {
+        anyhow::bail!("Web tools are not enabled on this platform")
     }
 
     pub async fn wait_web_state(&self, handle: &str, after: u64) -> Result<Option<String>> {
