@@ -44,6 +44,43 @@ function page(encoding = 'string') {
   };
 }
 
+test('only unhandled Escape from the visible web document reaches the Host', () => {
+  const {context} = page();
+  const frames = [];
+  context.anywhereNative.postMessage = frame => frames.push(frame);
+  for (const fields of [
+    {key: 'Enter'},
+    {isComposing: true},
+    {keyCode: 229},
+    {repeat: true},
+    {metaKey: true},
+  ]) {
+    const event = Object.assign(new Event('keydown', {cancelable: true}), {
+      key: 'Escape',
+      ...fields,
+    });
+    context.dispatchEvent(event);
+    assert.equal(event.defaultPrevented, false);
+  }
+  const handled = Object.assign(new Event('keydown', {cancelable: true}), {
+    key: 'Escape',
+  });
+  handled.preventDefault();
+  context.dispatchEvent(handled);
+  assert.deepEqual(frames, []);
+  const escape = Object.assign(new Event('keydown', {cancelable: true}), {
+    key: 'Escape',
+  });
+  context.dispatchEvent(escape);
+  assert.equal(escape.defaultPrevented, true);
+  assert.deepEqual(frames, ['{"method":"host.escape"}']);
+  context.dispatchEvent(
+    new CustomEvent('anywhere:visibility', {detail: false}),
+  );
+  context.dispatchEvent(Object.assign(new Event('keydown'), {key: 'Escape'}));
+  assert.equal(frames.length, 1);
+});
+
 test('canceled requests and native send failures do not strand transport capacity', async t => {
   const current = page();
   const client = createHost(current.transport);

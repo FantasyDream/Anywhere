@@ -35,11 +35,13 @@ pub use shortcuts::{BindingResolution, ShortcutAction, ShortcutApplication, Shor
 
 mod history_object_actions;
 mod object_actions;
+pub use object_actions::ObjectActionSelection;
 
 pub mod input_policy;
 
 mod file_workspace;
 mod source_runtime;
+mod tool_window;
 
 pub mod context_projection;
 pub mod web_plugins;

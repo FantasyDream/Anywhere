@@ -424,7 +424,7 @@ async fn copied_finder_selection_hides_redundant_collection_copy() {
     assert!(state
         .candidates
         .iter()
-        .chain(&state.context_candidates)
+        .chain(state.context_candidates.iter())
         .all(|offer| offer.command_id.as_deref() != Some("core.file_selection.copy_paths")));
     assert!(state.scopes.iter().all(|scope| scope.id != "file"));
     assert!(state
@@ -665,7 +665,7 @@ async fn copied_current_page_hides_copy_url_and_merges_open_across_sources() {
     assert!(state
         .candidates
         .iter()
-        .chain(&state.context_candidates)
+        .chain(state.context_candidates.iter())
         .all(|offer| offer.command_id.as_deref() != Some("core.url.copy")));
     assert!(app
         .execute(
@@ -694,7 +694,7 @@ async fn copied_current_page_hides_copy_url_and_merges_open_across_sources() {
         assert!(searched
             .candidates
             .iter()
-            .chain(&searched.context_candidates)
+            .chain(searched.context_candidates.iter())
             .all(|offer| offer.command_id.as_deref() != Some("core.url.copy")));
     }
 }

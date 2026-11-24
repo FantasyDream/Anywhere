@@ -495,7 +495,12 @@ async fn application_executes_committed_candidate_records_only_ready_and_revokes
     rpc_value(&app, &reloaded, "ready3", "lifecycle.ready").await;
     let usage = app.resolver.history.lock().unwrap().load_global().unwrap();
     assert_eq!(
-        usage[&("web:dev.example.tool:open".into(), ENTRY_CONTEXT.into())].execute_count,
+        crate::core::ranking::usage::lookup_usage(
+            &usage,
+            "web:dev.example.tool:open",
+            ENTRY_CONTEXT,
+        )
+        .execute_count,
         1
     );
     app.suspend_session(session_id).await.unwrap();
@@ -583,6 +588,37 @@ async fn source_policy_changes_and_catalog_removal_revoke_issued_documents() {
         .is_none());
 }
 
+#[tokio::test]
+async fn normal_window_document_survives_new_launcher_sessions_and_obeys_catalog_revocation() {
+    let app = app();
+    let package = package(serde_json::json!([]), serde_json::json!([TEXT]), "hello");
+    app.publish_web_catalog(catalog(&package)).unwrap();
+    let id = app.begin_activation().unwrap();
+    let mut object = context("selected");
+    object.session_id = id;
+    let invocation = start(
+        &mut app.web_plugins.lock().unwrap(),
+        &reference(&app.resolver.base_registry()),
+        &object,
+    );
+    let binding = app
+        .bind_web_document(&invocation, WebPlatform::Macos)
+        .unwrap();
+    let (tool, state, invocation) = app.tool_window(&binding).unwrap();
+    let child = tool
+        .bind_web_document(&invocation, WebPlatform::Macos)
+        .unwrap();
+    assert_ne!(child.runtime_id(), binding.runtime_id());
+    assert!(app.web_invocation(&child, source(&child)).is_err());
+    let fresh = app.begin_activation().unwrap();
+    app.suspend_session_now(fresh).unwrap();
+    assert!(tool.is_session_active(state.session_id));
+    assert!(tool.web_invocation(&child, source(&child)).is_ok());
+    app.publish_web_catalog(Default::default()).unwrap();
+    assert!(!tool.is_session_active(state.session_id));
+    assert!(tool.web_invocation(&child, source(&child)).is_err());
+}
+
 #[tokio::test(start_paused = true)]
 async fn delayed_disposal_cannot_close_a_reloaded_or_resumed_document() {
     let package = package(serde_json::json!([]), serde_json::json!([TEXT]), "hello");
@@ -616,4 +652,89 @@ pub(super) async fn rpc_value(
     let result: serde_json::Value = serde_json::from_str(&reply).unwrap();
     assert!(result.get("error").is_none(), "{result}");
     result["result"]["value"].clone()
+}
+
+#[tokio::test]
+async fn poisoned_locks_still_revoke_web_and_capture_while_denying_rpc() {
+    fn poison_mutex<T>(mutex: &std::sync::Mutex<T>) {
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = mutex.lock().unwrap();
+            panic!("poison lock");
+        }));
+    }
+
+    let pkg = package(
+        serde_json::json!([{"name":"context.read","types":["core.text"]}]),
+        serde_json::json!([]),
+        "hello",
+    );
+    let app = Arc::new(app());
+    app.publish_web_catalog(catalog(&pkg)).unwrap();
+
+    let session = app.begin_activation().unwrap();
+    let state = app
+        .update_context_input(session, "Text Pad".into(), 1, None, InputMode::Search)
+        .await
+        .unwrap()
+        .unwrap();
+    let candidate = state
+        .candidates
+        .iter()
+        .find(|candidate| candidate.command_id.as_deref() == Some("web:dev.example.tool:open"))
+        .unwrap();
+    let result = app.execute(session, 1, candidate.id.clone()).await.unwrap();
+    let HostView::WebPlugin { invocation_id } = result.view.unwrap() else {
+        panic!("expected WebPlugin view");
+    };
+    let binding = app
+        .bind_web_document(&invocation_id, WebPlatform::Macos)
+        .unwrap();
+    assert!(app.web_invocation(&binding, source(&binding)).is_ok());
+
+    poison_mutex(&app.web_plugins);
+    app.context_capture.poison_policy_for_test();
+
+    // Authorization / RPC rejects on poisoned web_plugins lock without panicking.
+    let cancel_frame =
+        serde_json::json!({"protocol":1,"requestId":"req-1","method":"lifecycle.ready","params":{}})
+            .to_string();
+    let reply = app
+        .dispatch_web_message(&binding, source(&binding), &cancel_frame)
+        .await;
+    let parsed: serde_json::Value = serde_json::from_str(&reply).unwrap();
+    assert_eq!(parsed["error"]["code"], "HOST_FAILURE");
+
+    // Revocation paths recover and invalidate Web documents and capture policy.
+    app.set_capture_sources(false, false, false, false);
+    assert!(app.web_invocation(&binding, source(&binding)).is_err());
+
+    // A fresh app with a live bound document verifies replace_registry revocation on a poisoned lock.
+    let app2 = Arc::new(self::app());
+    app2.publish_web_catalog(catalog(&pkg)).unwrap();
+    let replacement = app2.begin_activation().unwrap();
+    let state = app2
+        .update_context_input(replacement, "Text Pad".into(), 1, None, InputMode::Search)
+        .await
+        .unwrap()
+        .unwrap();
+    let candidate = state
+        .candidates
+        .iter()
+        .find(|candidate| candidate.command_id.as_deref() == Some("web:dev.example.tool:open"))
+        .unwrap();
+    let result = app2
+        .execute(replacement, 1, candidate.id.clone())
+        .await
+        .unwrap();
+    let HostView::WebPlugin { invocation_id } = result.view.unwrap() else {
+        panic!("expected WebPlugin view");
+    };
+    let bound_before_deactivate = app2
+        .bind_web_document(&invocation_id, WebPlatform::Macos)
+        .unwrap();
+    poison_mutex(&app2.web_plugins);
+    app2.replace_registry(ActionRegistry::default());
+    assert!(app2
+        .web_invocation(&bound_before_deactivate, source(&bound_before_deactivate))
+        .is_err());
 }

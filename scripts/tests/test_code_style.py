@@ -1,12 +1,14 @@
 import importlib.util
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
 
-spec = importlib.util.spec_from_file_location(
-    'code_style',
-    Path(__file__).resolve().parents[1] / 'check-code-style.py')
+SCRIPTS = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(SCRIPTS))
+spec = importlib.util.spec_from_file_location('code_style',
+                                              SCRIPTS / 'check-code-style.py')
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
@@ -46,6 +48,40 @@ class CodeStyleSourcesTests(unittest.TestCase):
             groups['web'],
             ['.prettierrc.cjs', 'plugins/examples/web-text/dist/main.js'])
         self.assertEqual(groups['python'], ['scripts/new.py'])
+
+    def test_px_literal_budget_allows_reduction_and_rejects_growth(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            file_path = root / 'apps/gpui/src/launcher/view/example.rs'
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+            budget_path = root / 'scripts/px-literal-budget.json'
+            budget_path.parent.mkdir(parents=True, exist_ok=True)
+            budget_path.write_text(
+                '{"files": {"apps/gpui/src/launcher/view/example.rs": 1}}\n')
+
+            file_path.write_text(
+                'fn render() { let _ = px(12.); }\n#[cfg(test)]\nmod tests { fn t() { let _ = px(99.); } }\n'
+            )
+            self.assertEqual(
+                module.check_px_literal_budget(root=root,
+                                               budget_path=budget_path),
+                [],
+            )
+
+            file_path.write_text(
+                'fn render() { let _ = px(12.); }\n'
+                '#[cfg(test)]\nfn fixture() { let _ = px(99.); }\n'
+                'fn render_other() { let _ = px(16.); }\n')
+            errors = module.check_px_literal_budget(root=root,
+                                                    budget_path=budget_path)
+            self.assertEqual(len(errors), 1)
+            self.assertIn('exceeds budget 1', errors[0])
+
+            unlisted = root / 'apps/gpui/src/launcher/view/new_file.rs'
+            unlisted.write_text('fn render() { let _ = px(8.); }\n')
+            errors = module.check_px_literal_budget(root=root,
+                                                    budget_path=budget_path)
+            self.assertEqual(len(errors), 2)
 
 
 if __name__ == '__main__':

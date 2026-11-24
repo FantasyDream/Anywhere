@@ -37,6 +37,7 @@ impl WebDocumentBinding {
 }
 
 /// Values supplied by the native message callback, never copied from JS payload fields.
+#[derive(Clone, Copy)]
 pub struct WebMessageSource<'a> {
     pub runtime_id: &'a str,
     pub document_epoch: u64,
@@ -44,6 +45,7 @@ pub struct WebMessageSource<'a> {
     pub main_frame: bool,
 }
 
+#[derive(Clone)]
 pub(super) struct UsageRecord {
     pub action_id: String,
     pub context_type: String,
@@ -79,6 +81,57 @@ pub struct WebPluginService {
 }
 
 impl WebPluginService {
+    /// An explicitly opened window gets its own document, origin, RPC state and
+    /// cancellation. Only the previously approved invocation input is copied,
+    /// and standalone windows are available for all active Web plugins (built-in
+    /// and third-party).
+    pub(crate) fn tool_window(
+        &mut self,
+        document: &WebDocumentBinding,
+        session_id: SessionId,
+        revision: Revision,
+    ) -> Result<(Self, String)> {
+        let mut window = Self {
+            catalog: self.catalog.clone(),
+            storage: self.storage.clone(),
+            ..Default::default()
+        };
+        let parent = self.authorize(
+            document,
+            WebMessageSource {
+                runtime_id: document.runtime_id(),
+                document_epoch: document.document_epoch(),
+                origin: document.origin(),
+                main_frame: true,
+            },
+        )?;
+        ensure!(parent.session_id == session_id, "Web invocation expired");
+        let copied = Invocation {
+            command: parent.command.clone(),
+            input: parent.input.clone(),
+            session_id,
+            launch_revision: revision,
+            _resources: parent._resources.clone(),
+            app: parent.app.clone(),
+            binding: None,
+            hidden_at: None,
+            document_epoch: 0,
+            usage_recorded: true,
+            document_ready: false,
+            usage: parent.usage.clone(),
+            rpc: Default::default(),
+            bound_at: Instant::now(),
+            closed: tokio::sync::watch::channel(false).0,
+        };
+        ensure!(
+            self.catalog.entries.contains_key(&copied.command.plugin_id),
+            "Web package unavailable"
+        );
+        let id = super::token()?;
+        window.invocations.insert(id.clone(), copied);
+        Ok((window, id))
+    }
+
     /// Native view disposal may arrive after a reload/resume has rebound the same
     /// invocation. Only its current document generation can end the retained page.
     pub fn close_document(&mut self, binding: &WebDocumentBinding) {
@@ -242,7 +295,8 @@ impl WebPluginService {
             .get(&invocation.command.plugin_id)
             .context("Web package revoked")?;
         ensure!(
-            entry.token == invocation.command.registration
+            entry.active.load(std::sync::atomic::Ordering::Acquire)
+                && entry.token == invocation.command.registration
                 && entry.manifest.platforms.contains(&platform),
             "Web invocation no longer qualified"
         );
@@ -420,7 +474,8 @@ impl WebPluginService {
             .get(&invocation.command.plugin_id)
             .context("Web package revoked")?;
         ensure!(
-            entry.token == invocation.command.registration,
+            entry.active.load(std::sync::atomic::Ordering::Acquire)
+                && entry.token == invocation.command.registration,
             "Web grant expired"
         );
         ensure!(

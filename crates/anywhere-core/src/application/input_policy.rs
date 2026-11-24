@@ -215,7 +215,7 @@ mod tests {
         let selected = ContextCapturePresentation {
             status: ContextCaptureStatus::Captured,
             text: Some("https://example.org/selected".into()),
-            ..empty.clone()
+            ..empty
         };
         let choose = |captures: &[ContextCapturePresentation], now| {
             choose_activation_input(captures, now, true, true, false)

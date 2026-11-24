@@ -9,6 +9,14 @@ use std::{
 
 /// How long a read-only Git operation may run before it is killed.
 const GIT_TIMEOUT: Duration = Duration::from_secs(5);
+#[cfg(target_os = "macos")]
+const SANDBOX: &str = "/usr/bin/sandbox-exec";
+#[cfg(target_os = "macos")]
+const GIT_PROFILE: &str = r#"(version 1)
+(allow default)
+(deny process-fork)
+(deny process-exec (require-not (literal (param "GIT_BINARY"))))
+(deny network*)"#;
 
 pub fn available() -> bool {
     git_program().is_some()
@@ -18,7 +26,8 @@ pub fn run(repository: &Path, operation: GitOperation) -> Result<GitOutput> {
     if !repository.is_dir() {
         bail!("repository is no longer a directory");
     }
-    let program = git_program().context("git is not installed")?;
+    let program =
+        git_program().context("Git or its read-only process confinement is unavailable")?;
     let deadline = Instant::now() + GIT_TIMEOUT;
     let command = if operation == GitOperation::RemoteUrl {
         let (names, truncated) = run_command(
@@ -50,20 +59,20 @@ pub fn run(repository: &Path, operation: GitOperation) -> Result<GitOutput> {
 }
 
 fn run_command(
-    mut command: Command,
+    command: Command,
     operation: GitOperation,
     deadline: Instant,
 ) -> Result<(Vec<u8>, bool)> {
     if Instant::now() >= deadline {
         bail!("git {} timed out", operation.as_str());
     }
-    // Allowlisted argv only: no shell, no pager, no external helpers.
+    let mut command = confined_command(&command)?;
     let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .context("start read-only git command")?;
+        .context("start confined read-only git command")?;
     let stdout = child.stdout.take().context("git stdout missing")?;
     let stderr = child.stderr.take().context("git stderr missing")?;
     // Drain both pipes concurrently: waiting for exit first can deadlock on a large diff.
@@ -144,8 +153,61 @@ fn run_command(
     Ok((stdout, truncated))
 }
 
+#[cfg(target_os = "macos")]
+fn confined_command(command: &Command) -> Result<Command> {
+    let mut binary_parameter = std::ffi::OsString::from("GIT_BINARY=");
+    binary_parameter.push(command.get_program());
+    let mut confined = Command::new(SANDBOX);
+    confined
+        .args(["-p", GIT_PROFILE, "-D"])
+        .arg(binary_parameter)
+        .arg(command.get_program())
+        .args(command.get_args());
+    for (key, value) in command.get_envs() {
+        if let Some(value) = value {
+            confined.env(key, value);
+        } else {
+            confined.env_remove(key);
+        }
+    }
+    Ok(confined)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn confined_command(_: &Command) -> Result<Command> {
+    bail!("read-only git process confinement is unavailable on this platform")
+}
+
+#[cfg(target_os = "macos")]
 fn git_program() -> Option<PathBuf> {
-    crate::process::find_executable("git")
+    if !Path::new(SANDBOX).is_file() {
+        return None;
+    }
+    let binary = crate::process::find_executable("git")?
+        .canonicalize()
+        .ok()?;
+    if binary != Path::new("/usr/bin/git") {
+        return Some(binary);
+    }
+    let result = Command::new("/usr/bin/xcrun")
+        .args(["--find", "git"])
+        .output()
+        .ok()?;
+    if !result.status.success() {
+        return None;
+    }
+    let binary = Path::new(
+        std::str::from_utf8(&result.stdout)
+            .ok()?
+            .trim_end_matches(['\r', '\n']),
+    );
+    let binary = binary.canonicalize().ok()?;
+    (binary != Path::new("/usr/bin/git") && binary.is_file()).then_some(binary)
+}
+
+#[cfg(not(target_os = "macos"))]
+fn git_program() -> Option<PathBuf> {
+    None
 }
 
 #[cfg(test)]
@@ -271,6 +333,31 @@ mod tests {
             std::fs::write(self.root.join("file.txt"), "initial\n").unwrap();
             self.git(&["add", "file.txt"]);
             self.git(&["commit", "--quiet", "-m", "initial"]);
+        }
+    }
+
+    #[test]
+    fn read_only_worktree_queries_cannot_start_a_configured_clean_filter() {
+        let Some(repo) = Repository::new() else {
+            return;
+        };
+        repo.commit();
+        std::fs::write(
+            repo.root.join(".gitattributes"),
+            "file.txt filter=fixture\n",
+        )
+        .unwrap();
+        let file = repo.root.join("file.txt");
+        std::fs::write(&file, "changed\n").unwrap();
+        std::fs::File::open(file)
+            .unwrap()
+            .set_modified(std::time::UNIX_EPOCH + Duration::from_secs(60))
+            .unwrap();
+        repo.git(&["config", "filter.fixture.clean", "/bin/cat"]);
+        repo.git(&["config", "filter.fixture.required", "true"]);
+        for operation in [GitOperation::Status, GitOperation::Diff] {
+            let error = run(&repo.root, operation).unwrap_err().to_string();
+            assert!(error.contains("filter"), "{error}");
         }
     }
 

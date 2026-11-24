@@ -15,13 +15,11 @@ fn long_or_blank_capture_is_not_a_text_context() {
 
 #[test]
 fn browser_seed_requires_a_web_url() {
-    assert!(browser_context("https://example.org/a".into())
-        .unwrap()
-        .is_some());
-    assert!(browser_context("file:///tmp/a".into()).unwrap().is_none());
-    assert!(browser_context("about:blank".into()).unwrap().is_none());
+    assert!(browser_context("https://example.org/a").unwrap().is_some());
+    assert!(browser_context("file:///tmp/a").unwrap().is_none());
+    assert!(browser_context("about:blank").unwrap().is_none());
     assert_eq!(
-        failure_status(&browser_context("x".repeat(8193)).unwrap_err()),
+        failure_status(&browser_context(&"x".repeat(8193)).unwrap_err()),
         CaptureStatus::TooLarge
     );
 }

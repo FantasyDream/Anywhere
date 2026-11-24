@@ -2,7 +2,7 @@ use anywhere_core::features::{
     application_history::model::{Notice as HistoryNotice, SourceMode},
     clipboard::service::HistoryNotice as ClipboardNotice,
 };
-use anywhere_protocol::ExecutionSessionStatus;
+use anywhere_protocol::{ContextSource, ExecutionSessionStatus};
 use gpui_kit::SharedString;
 use std::path::PathBuf;
 
@@ -71,6 +71,13 @@ pub struct ShortcutCandidate {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ActivationInput {
+    pub source: ContextSource,
+    pub text: String,
+    pub valid_until_ms: Option<i64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AppHistorySnapshot {
     pub source_id: String,
     pub items: Vec<AppHistoryItem>,
@@ -110,6 +117,7 @@ pub struct WebPackage {
     pub enabled: bool,
     pub available: bool,
     pub rollback: bool,
+    pub builtin: bool,
     pub permission_count: usize,
 }
 
@@ -130,6 +138,7 @@ pub struct WebDocument {
     pub origin: String,
     pub entry: String,
     pub title: String,
+    pub builtin: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

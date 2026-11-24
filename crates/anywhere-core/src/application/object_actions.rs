@@ -1,9 +1,11 @@
 //! Resolve operations only for the object the user opened, not every loaded row.
 use super::Application;
+#[cfg(test)]
+use crate::core::ranking::score::UsageStats;
 use crate::{
     core::{
         action::descriptor::ActionRegistry,
-        ranking::score::UsageStats,
+        ranking::usage::{lookup_usage, UsageSnapshot},
         search::{candidate::Candidate, engine::ActionSearch},
         session::facts::SessionFacts,
     },
@@ -11,17 +13,21 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 use anywhere_protocol::*;
-use std::{
-    collections::HashMap,
-    sync::{atomic::Ordering, Arc},
-};
+use std::sync::{atomic::Ordering, Arc};
+
+/// Issued at selection time, before workers can reorder two user requests.
+pub struct ObjectActionSelection {
+    pub(super) session_id: SessionId,
+    pub(super) revision: Revision,
+    order: u64,
+}
 
 pub(super) struct ObjectActionTicket {
     pub session_id: SessionId,
     pub revision: Revision,
     pub registry: Arc<ActionRegistry>,
     pub facts: SessionFacts,
-    pub usage: Arc<HashMap<(String, String), UsageStats>>,
+    pub usage: Arc<UsageSnapshot>,
     pub epoch: u64,
     pub catalog: u64,
     pub inputs: u64,
@@ -36,19 +42,10 @@ struct ObjectActionRequest {
 pub(super) fn resolve_offers(
     registry: &ActionRegistry,
     facts: &SessionFacts,
-    usage: &HashMap<(String, String), UsageStats>,
+    usage: &UsageSnapshot,
     resolve: impl FnOnce(&ActionSearch<'_>) -> Vec<Candidate>,
 ) -> Vec<Candidate> {
-    let index: HashMap<_, _> = usage
-        .iter()
-        .map(|((command, kind), stats)| ((command.as_str(), kind.as_str()), stats))
-        .collect();
-    let usage_of = |command: &str, kind: &str| {
-        index
-            .get(&(command, kind))
-            .map(|stats| **stats)
-            .unwrap_or_default()
-    };
+    let usage_of = |command: &str, kind: &str| lookup_usage(usage, command, kind);
     let engine = ActionSearch::new(
         registry,
         &usage_of,
@@ -60,27 +57,36 @@ pub(super) fn resolve_offers(
 }
 
 impl Application {
-    pub(super) fn prepare_object_action_ticket(
+    pub fn select_action_object(
         &self,
         session_id: SessionId,
         revision: Revision,
-    ) -> Result<ObjectActionTicket> {
-        let session = self.session()?;
-        self.object_action_ticket_locked(&session, session_id, revision)
+    ) -> ObjectActionSelection {
+        ObjectActionSelection {
+            session_id,
+            revision,
+            order: self.object_selection_order.fetch_add(1, Ordering::Relaxed) + 1,
+        }
     }
 
-    fn object_action_ticket_locked(
+    pub(super) fn object_action_ticket_locked(
         &self,
-        session: &crate::application::session_model::LauncherSession,
-        session_id: SessionId,
-        revision: Revision,
+        session: &mut crate::application::session_model::LauncherSession,
+        selection: ObjectActionSelection,
     ) -> Result<ObjectActionTicket> {
+        let ObjectActionSelection {
+            session_id,
+            revision,
+            order,
+        } = selection;
         anyhow::ensure!(
             !session.suspended
                 && self.resolver.is_current(session_id, revision)
-                && session.execution.revision == Some(revision),
+                && session.execution.revision == Some(revision)
+                && order > session.resolution.last_object_selection,
             "object actions expired"
         );
+        session.resolution.last_object_selection = order;
         let generation = session.resolution.object_action_epoch.clone();
         let expected = generation.fetch_add(1, Ordering::AcqRel) + 1;
         Ok(ObjectActionTicket {
@@ -130,22 +136,31 @@ impl Application {
         revision: Revision,
         candidate_id: CandidateId,
     ) -> Result<Vec<CandidatePresentation>> {
-        let request = self.prepare_object_actions(session_id, revision, candidate_id)?;
+        let selection = self.select_action_object(session_id, revision);
+        let state = self.file_actions_snapshot(selection, candidate_id)?;
+        Ok(Arc::unwrap_or_clone(state.result_actions))
+    }
+
+    /// The native view consumes the exact snapshot validated for the selected
+    /// object, even if another query publishes before the reply is delivered.
+    pub fn file_actions_snapshot(
+        &self,
+        selection: ObjectActionSelection,
+        candidate_id: CandidateId,
+    ) -> Result<LauncherState> {
+        let request = self.prepare_object_actions(selection, candidate_id)?;
         self.resolve_object_actions(request)
     }
 
     fn prepare_object_actions(
         &self,
-        session_id: SessionId,
-        revision: Revision,
+        selection: ObjectActionSelection,
         candidate_id: CandidateId,
     ) -> Result<ObjectActionRequest> {
-        let session = self.session()?;
-        let ticket = self.object_action_ticket_locked(&session, session_id, revision)?;
+        let mut session = self.session()?;
+        let ticket = self.object_action_ticket_locked(&mut session, selection)?;
         let file = session
-            .execution
-            .candidates
-            .get(candidate_id.as_str())
+            .execution_candidate(candidate_id.as_str())
             .context("file expired")?
             .clone();
         if !file.presentation.primary_action || file.context().is_none() {
@@ -154,10 +169,7 @@ impl Application {
         Ok(ObjectActionRequest { ticket, file })
     }
 
-    fn resolve_object_actions(
-        &self,
-        request: ObjectActionRequest,
-    ) -> Result<Vec<CandidatePresentation>> {
+    fn resolve_object_actions(&self, request: ObjectActionRequest) -> Result<LauncherState> {
         let ObjectActionRequest { ticket, file } = request;
         let object_context = file.context().expect("validated object context");
         let (expanded, _) = ticket
@@ -190,7 +202,7 @@ impl Application {
         {
             bail!("object actions changed");
         }
-        Ok(state.result_actions)
+        Ok(state)
     }
 }
 
@@ -254,16 +266,31 @@ mod tests {
                     .insert(object.presentation.id.clone().into(), object.clone());
             }
         }
+        let queued_first = app.select_action_object(1, 0);
         let old = app
-            .prepare_object_actions(1, 0, objects[0].presentation.id.clone())
+            .prepare_object_actions(
+                app.select_action_object(1, 0),
+                objects[0].presentation.id.clone(),
+            )
             .unwrap();
         let current = app
-            .prepare_object_actions(1, 0, objects[1].presentation.id.clone())
+            .prepare_object_actions(
+                app.select_action_object(1, 0),
+                objects[1].presentation.id.clone(),
+            )
             .unwrap();
+        // The worker for the earliest selection starts last.
+        assert!(app
+            .prepare_object_actions(queued_first, objects[0].presentation.id.clone())
+            .is_err());
         // Hold the newer resolution open while the old one reaches publication.
         // The old request must not change inputs_epoch and invalidate the new one.
         assert!(app.resolve_object_actions(old).is_err());
-        let actions = app.resolve_object_actions(current).unwrap();
+        let resolved = app.resolve_object_actions(current).unwrap();
+        let later = app.resolver.recompute_current(1).unwrap();
+        assert!(later.snapshot_seq > resolved.snapshot_seq);
+        assert!(Arc::ptr_eq(&resolved.result_actions, &later.result_actions));
+        let actions = resolved.result_actions;
         assert!(!actions.is_empty());
         assert!(actions
             .iter()

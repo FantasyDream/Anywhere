@@ -1,4 +1,5 @@
 use super::*;
+use anywhere_protocol::ContextCapturePresentation;
 
 impl LiveLauncher {
     pub fn reserve_activation(&self) -> Result<SessionId> {
@@ -40,6 +41,34 @@ impl LiveLauncher {
                 }
                 Err(error) => LiveEvent::Error(format!("{error:#}")),
             }
+        })
+    }
+
+    pub fn choose_activation_input(
+        &self,
+        captures: Vec<ContextCapturePresentation>,
+        now_ms: i64,
+        selected_enabled: bool,
+        clipboard_enabled: bool,
+        allow_pending_selection: bool,
+    ) -> Receiver<LiveEvent> {
+        let application = self.application.application().clone();
+        self.spawn_blocking(move || {
+            Ok(LiveEvent::ActivationInput(
+                application
+                    .choose_activation_input(
+                        &captures,
+                        now_ms,
+                        selected_enabled,
+                        clipboard_enabled,
+                        allow_pending_selection,
+                    )
+                    .map(|input| ActivationInput {
+                        source: input.source,
+                        text: input.text,
+                        valid_until_ms: input.valid_until_ms,
+                    }),
+            ))
         })
     }
 
@@ -103,9 +132,28 @@ impl LiveLauncher {
         })
     }
 
-    /// Follow every later snapshot for this session. The watch carries the
-    /// already-shared Core snapshot, so the native UI does not clone and box
-    /// the complete state again before every paint.
+    /// Direct watch subscription to Core's shared snapshot stream.
+    /// GPUI awaits `watch::Receiver::changed()` directly on its own executor,
+    /// avoiding an intermediate Tokio relay task and `mpsc` hop.
+    pub fn subscribe_snapshots(
+        &self,
+    ) -> (
+        SessionId,
+        tokio::sync::watch::Receiver<Option<Arc<LauncherState>>>,
+    ) {
+        (
+            self.session_id(),
+            self.application.application().state_updates(),
+        )
+    }
+
+    pub fn is_session_active(&self, session_id: SessionId) -> bool {
+        self.application.application().is_session_active(session_id)
+    }
+
+    /// Follow every later snapshot for this session. Kept for host tests that
+    /// exercise the channel adapter explicitly.
+    #[cfg(test)]
     pub fn follow_snapshots(&self, after: u64) -> Receiver<LiveEvent> {
         let application = self.application.application().clone();
         let session_id = self.session_id();

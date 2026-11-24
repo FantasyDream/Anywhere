@@ -1,6 +1,6 @@
 # Launcher 交互契约
 
-现行导航与交互契约；文档整理：2026-11-18。使用教程见 [README](../README.md)，本页是导航、快捷键与状态恢复的统一依据。
+现行导航与交互契约；文档整理：2026-11-23。使用教程见 [README](../README.md)，本页是导航、快捷键与状态恢复的统一依据。
 
 ## 入口与 Scope
 
@@ -43,7 +43,7 @@ Clipboard History / Shelf 的首次加载、检索和刷新共用查询代次，
 共享快照 cursor 门禁，同 revision 的旧快照也不能回滚；旧错误不能关闭后开的
 面板。Core 在发布前复验对象请求代次，较早请求不能先发布并使较新请求过期。
 
-搜索页不显示通用页脚或普通结果条数。选中行右侧显示执行按钮与回车提示，对象支持更多操作时在同一行直接显示 `… ⌘K` 入口，替代主操作的重复回车图标；无更多操作时保留回车提示。原应用菜单的快捷键不展示，用户自定义的 Action 绑定保留。
+搜索页不显示通用页脚或普通结果条数。选中行右侧显示执行按钮与回车提示，对象支持更多操作时在同一行直接显示 `… ⌘K` 入口，替代主操作的重复回车图标；无更多操作时保留回车提示。主搜索列表支持 `⌘1`–`⌘9` 快速选中并执行第 1–9 项候选。原应用菜单的快捷键不展示，用户自定义的 Action 绑定保留。
 
 文件搜索使用同一输入 / 列表，不保留固定预览区；文件数量、扫描进度和重试显示在类型筛选下方。它的类型标签与 Scope 样式及切换键一致，但语义是文件过滤。
 滚动加载与末行 ↓ 共用同一个分页请求。加载期间按 ↓，仍选中原行时移到下一个结果。
@@ -55,14 +55,32 @@ Clipboard History / Shelf 的首次加载、检索和刷新共用查询代次，
 |---|---|
 | `↑` / `↓` | 无修饰键时移动候选；文件列表末尾继续加载。带 Shift / Command / Control / Alt 时交给输入框编辑，并退出空格预览浏览状态 |
 | `Enter` | 执行或进入当前项；按住产生的自动重复不再次执行 |
-| `⌘K`（其他平台页面命令用 Ctrl） | 对象 Actions；可浏览应用菜单时进入菜单。Application History 不使用此绑定 |
+| `⌘1`–`⌘9` | Launcher 主列表快速选中并执行第 1–9 项可见候选；Clipboard Shelf 复制第 1–9 项 |
+| `⌘K`（其他平台页面命令用 Ctrl） | 统一对象/页面 Actions 入口：Launcher（含菜单浏览）、File Search、Clipboard History / Shelf、Running Tasks 与 Application History（有选中项打开对象/回退操作，空态打开页头菜单） |
+| `⌘R` | 刷新当前工具页（Clipboard History / Shelf、Running Tasks、Application History） |
+| `⌘F` | 聚焦并全选当前工具页搜索框（Clipboard History / Shelf、Running Tasks、Application History） |
 | `Tab` / `Shift+Tab` | 向后 / 向前循环可见 Scope；文件页循环类型（兼容 Ctrl+Tab / Ctrl+Shift+Tab） |
 | `→` / `←` | 空输入进入 / 返回菜单，有输入保持光标移动 |
 | `Esc` | 当前层级返回；根页面最后关闭 |
 
+内容页的编辑器聚焦时，无修饰键的 `↑` / `↓` 和 `Enter` / `Return`
+在字符输入与换行处理前交给候选导航和执行；`Shift+Enter` 保留换行，
+其他修饰组合保留编辑器语义。
+
+异步更新把选中候选移到另一行时，Launcher 将选中项滚入可视区。Web 工具导入确认页
+只响应当前页面的控件，`Esc` 或页头返回先取消审查。设置重新置前时恢复打开的弹窗焦点，
+设置页的 `⌘S` 优先处理保存，已有本地 Action 绑定仍可在其他页面使用。
+
 Tab 仅在搜索框聚焦且分类可用时切换，保留查询与输入焦点；中文组词、导航选择器、对象 Actions、绑定选择或输出层不切换背后的 Scope。Tab 不遍历控件，Web 工具内部的 Tab 仍由页面处理。主窗口的 `⌘,` 打开 Settings，
 关闭模式选择器并切换为设置窗口样式；快捷键录制与输入法组词优先处理，Shelf /
 Tasks 独立窗口不响应此入口。用户配置的 Action 快捷键独立于原应用菜单快捷键；一个适用对象直接执行，多个对象先选择。快捷键目录和失效规则见 [架构](architecture.md)。
+
+主窗口与工具页的键盘分发按优先级分层：
+
+1. 输入法组合优先（`prefer_character_input` 为真时直接交由输入法，不截获普通字符、Esc、方向键与 Space；内容页无修饰键的候选导航与 Enter / Return 例外）；
+2. 预处理拦截层（`intercept_window_keystroke`）：重复按键过滤（`filter_repeated_key`）→ 快捷键录制（`handle_shortcut_recording_key`）→ 弹层路由（`handle_overlay_keys`）→ 用户自定义快捷键（`handle_user_shortcut_key`）→ 预览覆盖层（`handle_preview_key_overlay`）；
+3. GPUI `actions!` 与 `key_context` 派发（`apps/gpui/src/launcher/view/actions.rs`）：全局上下文 `Anywhere`（`⌘,` 打开设置、`⌘Q` 退出）及页面上下文 `Launcher` / `FileSearch` / `Clipboard` / `ClipboardShelf` / `Tasks` / `Settings`（如 `⌘Y`、`⌘L`、`⌘K`、`⌘R`、`⌘F`、`⌘S`、`⌘↵`、`⌘⇧⌫`、`⌘.`、`⌘⌥↑↓`）；非输入页（如 Tasks 无筛选框时）通过 `surface_focus_handle` 保持对应页面 `key_context` 留在派发路径中；
+4. 导航与输入编辑层：Shelf `⌘1…9` / `⌘↑↓` 导航快捷键、Application History 局部快捷键，以及各页 `↑` / `↓` / `←` / `→` / `Enter` / `Tab` / `Esc` 导航；其余普通字符交由聚焦的编辑器处理。
 
 Launcher 候选在首尾回绕；工具列表的 `↑` / `↓` 在首尾保持当前项。
 Clipboard History / Shelf、Application History 与 Tasks 都使用后一规则，页边界
@@ -95,6 +113,7 @@ Clipboard History / Shelf 的 `⌘` 命令、以及与当前 Launcher 匹配的�
 - 菜单浏览仍先返回上一级菜单；输入法候选和系统预览继续优先处理 Esc。Web Tool
   聚焦且没有输入法组字时，Esc 通过当前 document 的受控 IPC 返回原 Launcher
   工作区；旧文档不能关闭替换后的页面。
+- 所有 Web 工具页面（含内置 JSON Workspace 与已导入的第三方 Web 插件）保留页头外开按钮与 `⌘⇧O` 快捷方式以在独立窗口打开副本，并共享透明标题栏与 Liquid Glass 窗口外观；文件搜索、Clipboard History 与 Application History 不提供独立弹窗入口（独立的 `Clipboard Shelf` 与 `Running Tasks` 窗口保持不变）。打开 Web 独立窗口后，主搜索栏可继续用全局快捷键唤起，两个窗口各自保留会话、文档与焦点，失焦及主窗口隐藏均不会关闭它。
 - 文件页：先退出对象 Actions；有查询先清空，再按一次返回父页。返回按钮直接回父页。
 - Settings 使用带透明标题栏的独立窗口形态。标题栏关闭、Esc 和页面关闭入口都先处理保存与未保存草稿，不套用搜索页面的清空规则。
 - 打开 Settings 先关闭原预览与 Web 文档并撤销在途请求，避免不可见工具继续持有

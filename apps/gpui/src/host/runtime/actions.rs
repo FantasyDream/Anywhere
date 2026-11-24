@@ -84,34 +84,50 @@ impl LiveLauncher {
         })
     }
 
-    pub fn application_icon(&self, candidate_id: String) -> Receiver<LiveEvent> {
+    pub fn application_icon(
+        &self,
+        candidate_id: String,
+    ) -> tokio::sync::oneshot::Receiver<Option<anywhere_platform::RawIconImage>> {
         let application = self.application.application().clone();
-        self.spawn_blocking(move || {
-            let bytes = match application.application_icon(&candidate_id) {
-                Ok(bytes) => bytes,
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        self.runtime().spawn_blocking(move || {
+            let image = match application.application_icon_bgra(&candidate_id) {
+                Ok(image) => image,
                 Err(error) => {
                     tracing::debug!(%error, candidate_id, "application_icon_unavailable");
                     None
                 }
             };
-            Ok(LiveEvent::ApplicationIcon {
-                candidate_id,
-                bytes,
-            })
-        })
+            let _ = sender.send(image);
+        });
+        receiver
+    }
+
+    pub fn file_icon(
+        &self,
+        candidate_id: String,
+    ) -> tokio::sync::oneshot::Receiver<Option<anywhere_platform::RawIconImage>> {
+        let application = self.application.application().clone();
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        self.runtime().spawn_blocking(move || {
+            let image = match application.file_icon_bgra(&candidate_id) {
+                Ok(image) => image,
+                Err(error) => {
+                    tracing::debug!(%error, candidate_id, "file_icon_unavailable");
+                    None
+                }
+            };
+            let _ = sender.send(image);
+        });
+        receiver
     }
 
     pub fn object_actions(&self, revision: Revision, candidate_id: String) -> Receiver<LiveEvent> {
         let application = self.application.application().clone();
-        let session_id = self.session_id();
-        self.spawn(async move {
-            match application.file_actions(session_id, revision, candidate_id) {
-                Ok(_) => match application.latest_state(session_id) {
-                    Some(state) => LiveEvent::SharedState(Arc::new(state)),
-                    None => LiveEvent::Error("object actions expired".to_owned()),
-                },
-                Err(error) => LiveEvent::Error(format!("{error:#}")),
-            }
+        let selection = application.select_action_object(self.session_id(), revision);
+        self.spawn_blocking(move || {
+            let state = application.file_actions_snapshot(selection, candidate_id)?;
+            Ok(LiveEvent::SharedState(Arc::new(state)))
         })
     }
 

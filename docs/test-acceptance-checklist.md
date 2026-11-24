@@ -1,16 +1,14 @@
 # 当前 GPUI 完整测试用例与验收清单
 
-核对日期：2026-11-18。对象为已发布的 V0.14.0 macOS GPUI 开发预览，最终
-源码提交为 `0942491d6a8ac28e465d64bc54395c7edf21a29b`。本清单覆盖现有功能、
-异常、权限、异步竞争、资源和发布边界，不把路线图功能当作已交付功能。
-Flutter 时代的开发包只作为历史交互资料，不是本清单的被测对象。
+核对日期：2026-11-24。被测基线为当前 V0.14.1 GPUI 源码树的 macOS 15+ 构建，
+包括当前改动及从同一源码树生成的示例插件（JSON Workspace 0.7.3、
+Text Pad 1.1.1、JSON Summary 1.0.0）。每轮按第 2 节记录实际源码状态和产物
+摘要。已发布的 `v0.14.1` 对应当前固定基线，上一版 `v0.14.0` 保留历史结果；
+下载信息及历史结果见
+[交付范围与验收状态](mvp-gpui.md)。
 
-这是一份待执行清单，不是通过报告。发布前已经完成工程门禁、签名、包身份、
-进程级启动和部分实机冒烟，但 322 条基础用例仍没有逐项完成。当前发布包与
-provenance 见 [`v0.14.0`](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.0)，
-已执行范围见 [GPUI 技术方案与验收](mvp-gpui.md)；
-[2026-11-17 执行记录](archive/reviews/gpui-acceptance-run-2026-11-17.md)只保留
-当轮部分结果，未完成项仍不能视为通过。
+本文用于执行和记录验收，所有用例初始为 **Pending**。工程门禁、包与进程检查、
+实际功能操作和物理桌面证据按本轮环境分别记录。旧包结果只能用于定位历史问题。
 
 ## 1. 使用规则与结果记录
 
@@ -62,77 +60,102 @@ Result：Pending / Pass / Fail / Blocked / N/A
 
 ### 1.3 覆盖概览与跳转
 
-共 **322 条基础用例、26 个模块**，其中 P0 82 条、P1 225 条、P2 15 条；方式为
-M 146 条、H 147 条、A 29 条。另有18个来源和环境参数矩阵，展开后执行次数会更多。
+共 **341 条基础用例、26 个模块**，其中 P0 82 条、P1 244 条、P2 15 条；方式为
+M 158 条、H 151 条、A 32 条。另有 18 个来源和环境参数矩阵，展开后执行次数会更多。
 所有基础用例和来源矩阵初始均为 Pending。
 
 | 模块 | 基础用例数 |
 | --- | ---: |
 | [ENV：身份、启动、权限与隔离](#61-env身份启动权限与隔离) | 12 |
-| [LCH：Launcher、导航、Scope 与保留](#62-lchlauncher导航scope-与保留) | 14 |
-| [KEY：物理键盘、IME 与焦点](#63-key物理键盘ime-与焦点) | 12 |
-| [CTX：来源、默认输入与对象语义](#64-ctx来源默认输入与对象语义) | 14 |
+| [LCH：Launcher、导航、Scope 与保留](#62-lchlauncher导航scope-与保留) | 15 |
+| [KEY：物理键盘、IME 与焦点](#63-key物理键盘ime-与焦点) | 14 |
+| [CTX：来源、默认输入与对象语义](#64-ctx来源默认输入与对象语义) | 15 |
 | [APP：应用索引、启动与图标](#65-app应用索引启动与图标) | 8 |
 | [MENU：Current App 菜单与安全降级](#66-menucurrent-app-菜单与安全降级) | 10 |
 | [ACT：URL、原生对象动作、Usage 与输出](#67-acturl原生对象动作usage-与输出) | 10 |
-| [FILE：文件搜索、授权、遍历与对象动作](#68-file文件搜索授权遍历与对象动作) | 22 |
+| [FILE：文件搜索、授权、遍历与对象动作](#68-file文件搜索授权遍历与对象动作) | 24 |
 | [PRE：Quick Look 与预览资源](#69-prequick-look-与预览资源) | 12 |
-| [CLIP：剪贴板采集、历史与存储策略](#610-clip剪贴板采集历史与存储策略) | 16 |
+| [CLIP：剪贴板采集、历史与存储策略](#610-clip剪贴板采集历史与存储策略) | 17 |
 | [SHELF：独立悬浮窗](#611-shelf独立悬浮窗) | 10 |
-| [SET：设置、草稿、保存与登录项](#612-set设置草稿保存与登录项) | 16 |
-| [HOT：快捷键、Context 分派与配置兼容](#613-hot快捷键context-分派与配置兼容) | 12 |
+| [SET：设置、草稿、保存与登录项](#612-set设置草稿保存与登录项) | 18 |
+| [HOT：快捷键、Context 分派与配置兼容](#613-hot快捷键context-分派与配置兼容) | 13 |
 | [HIST：应用历史、来源设置与目标权威](#614-hist应用历史来源设置与目标权威) | 20 |
 | [GIT：仓库识别与只读 Git 动作](#615-git仓库识别与只读-git-动作) | 10 |
 | [DEV：项目识别、构建 / 运行与收藏目录](#616-dev项目识别构建--运行与收藏目录) | 12 |
 | [TASK：后台进程与 Running Tasks](#617-task后台进程与-running-tasks) | 14 |
 | [PKG：Web 包安装、批准、更新和撤销](#618-pkgweb-包安装批准更新和撤销) | 12 |
-| [WEB：WebView、SDK、权限与生命周期](#619-webwebviewsdk权限与生命周期) | 17 |
-| [JSON：JSON Workspace 与三个后台复制命令](#620-jsonjson-workspace-与三个后台复制命令) | 12 |
+| [WEB：WebView、SDK、权限与生命周期](#619-webwebviewsdk权限与生命周期) | 20 |
+| [JSON：JSON Workspace 与三个后台复制命令](#620-jsonjson-workspace-与三个后台复制命令) | 16 |
 | [BG：第三方 Context 与有限后台执行](#621-bg第三方-context-与有限后台执行) | 10 |
 | [DSL：内置模块开关与未知目标隔离](#622-dsl内置模块开关与未知目标隔离) | 3 |
-| [UI：布局、材质、本地化与可访问性](#623-ui布局材质本地化与可访问性) | 12 |
+| [UI：布局、材质、本地化与可访问性](#623-ui布局材质本地化与可访问性) | 16 |
 | [PERF：性能、内存与资源趋势](#624-perf性能内存与资源趋势) | 10 |
-| [REL：工程门禁、持久化升级与发行](#625-rel工程门禁持久化升级与发行) | 9 |
+| [REL：工程门禁、持久化升级与发行](#625-rel工程门禁持久化升级与发行) | 10 |
 | [RACE：跨模块高风险组合回归](#626-race跨模块高风险组合回归) | 10 |
 
 首轮冒烟建议至少执行：ENV-001/002/005、LCH-001/002/008/010/014、KEY-001、
 ACT-002、FILE-001/005/017、CLIP-001/002/007、SHELF-001/006、SET-004/005、
 HIST-002/008/011、DEV-010、TASK-001/005/006、PKG-001/003、WEB-001/012/015、
-JSON-008、REL-005/006。此子集通过只表示冒烟通过，不代表322项完整验收。
+JSON-008、REL-005/006。此子集通过只表示冒烟通过，不代表 341 项完整验收。
+
+### 1.4 功能入口核对
+
+以 [编译内注册目录](../crates/anywhere-core/src/features/catalog_generated.rs)、
+[原生功能入口](../crates/anywhere-core/src/application/native_features.rs)、
+[页面状态](../apps/gpui/src/launcher/pages.rs) 和
+[快捷键派发](../apps/gpui/src/launcher/view/actions.rs) 为核对入口。新增注册、
+来源、页面、设置项、快捷键或插件示例时，同次更新对应的验收组。
+
+| 现行入口 | 用例 |
+| --- | --- |
+| 六组注册中的十个模块 | URL → ACT；Git → GIT；Rust / Maven / Gradle / Node / Spring Boot → DEV、TASK（每种运行实际工具链）；收藏目录 → DEV；剪贴板 → CLIP、SHELF；应用历史 → HIST、SRC |
+| 状态栏 / Launcher / 全局和本地快捷键 | ENV、LCH、KEY、HOT；上下文来源另见 CTX，应用及菜单分别见 APP、MENU |
+| 文件搜索 / 系统预览 / 对象操作与结果 | FILE、PRE、ACT；不同对象的动作以 FILE、CLIP、HIST、DEV 为准 |
+| Settings 与独立窗口 | 七类设置见 SET 及对应领域；独立 Shelf 与 Running Tasks 见 SHELF、TASK；外观、语言、布局和辅助技术见 UI |
+| 第三方包与示例 | 安装 / 更新 / 回滚 / 撤销见 PKG；Text Pad 与通用页面能力见 WEB；JSON Workspace 见 JSON；JSON Summary 见 BG |
+| 跨功能交付 | PERF 测量、REL 工程 / 包、RACE 乱序与跨窗口回归 |
 
 ## 2. 被测环境与测试数据
 
 ### 2.1 构建、隔离与身份
 
-下面是**由执行者运行**的准备命令，本次编制没有执行构建或启动：
+在仓库根目录执行以下准备命令。签名身份和工具链准备见[开发与构建](development.md)。
 
 ```bash
+source scripts/env.sh
 git rev-parse HEAD
 git status --short
-git diff --stat
+git diff --stat HEAD
+sw_vers
+uname -m
 scripts/check-gpui.sh
 scripts/check.sh
-ANYWHERE_APP_OUTPUT="$PWD/build/Anywhere-acceptance.app" scripts/build-macos.sh
-codesign --verify --deep --strict build/Anywhere-acceptance.app
-plutil -lint build/Anywhere-acceptance.app/Contents/Info.plist
-shasum -a 256 build/Anywhere-acceptance.app/Contents/MacOS/Anywhere
-
+mkdir -p "$PWD/build"
 qa_root="$(mktemp -d "$PWD/build/acceptance-XXXXXX")"
+qa_app="$qa_root/Anywhere-acceptance.app"
 mkdir -p "$qa_root/data" "$qa_root/bundled-plugins" "$qa_root/fixtures"
+ANYWHERE_APP_OUTPUT="$qa_app" scripts/build-macos.sh
+python3 scripts/build-web-examples.py
+codesign --verify --deep --strict "$qa_app"
+plutil -lint "$qa_app/Contents/Info.plist"
+shasum -a 256 "$qa_app/Contents/MacOS/Anywhere"
+
 ANYWHERE_DATA_DIR="$qa_root/data" \
   ANYWHERE_PLUGIN_DIR="$qa_root/bundled-plugins" \
-  "$PWD/build/Anywhere-acceptance.app/Contents/MacOS/Anywhere"
+  "$qa_app/Contents/MacOS/Anywhere"
 ```
 
 先正常退出旧实例并确认实际运行的可执行路径。`ANYWHERE_PREVIEW=1` 只适合
 视觉预览壳，不得用于判定真实搜索、存储、插件、权限和任务通过。数据目录覆盖
-只隔离业务文件，**不隔离系统剪贴板、AX / Automation 授权、全局热键和登录项**。
-这些项目在专用测试用户或测试机器上执行；测试全局键先配置不冲突的键位。
+只隔离业务文件，**不隔离系统剪贴板、AX / Automation 授权及全局热键**。
+系统相关项目在专用测试用户或测试机器上执行；测试全局键先配置不冲突的键位。
 有关路径约束见[独立验收数据](development.md#独立验收数据)。
 
 当前[偏好保存实现](../apps/gpui/src/host/runtime/settings.rs)在显式数据目录下跳过
 `login_item::apply`。SET-015 仍需对照 macOS 登录项验证实际行为。需要触发系统注册、
-审批或失败后重试的用例使用专用测试用户的默认数据目录。
+审批或失败后重试的用例使用专用测试用户的默认数据目录。测试插件从
+`build/web-examples/` 的本轮输出导入，记录包版本与 SHA-256。F0 证据目录同步
+保存受测源码差异和未跟踪源码清单。
 
 ### 2.2 数据集
 
@@ -165,7 +188,7 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 
 同一用例无需机械执行全部笛卡尔积，但以下每一类都须有覆盖记录。组合风险至少
 补“中文 IME + WebView + 隐藏恢复”“多屏 + Shelf + Quick Look”“减少透明度 +
-浅色外观 + 深色浮层”。
+浅色外观 + 各原生与 Web 浮层”。
 
 | 维度 | 必测参数 | 优先覆盖 |
 | --- | --- | --- |
@@ -174,7 +197,7 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | 输入 | 英文、真实拼音 IME、组词 / 候选 / 取消、粘贴、连续按键 / repeat | Launcher、各搜索框、Settings 录制、Web 编辑器 |
 | 权限 | 未授权、允许、拒绝、运行中撤销、重新授权；部分目录可读 | 菜单、选区、Finder / 浏览器、文件、剪贴板 |
 | 显示 | 单屏、双屏、不同缩放、鼠标换屏、小可用区域、Dock / 菜单栏占位、全屏 Space | 位置、顶部锚点、尺寸、Shelf 右下角、焦点 |
-| 外观 | 浅色 / 深色、壁纸变化、Reduce Transparency、Increase Contrast、Reduce Motion | 材质、文字、边界、浮层、窗口缩放 |
+| 外观 | 跟随系统 / 固定浅色 / 固定深色、系统主题运行时切换、壁纸变化、Reduce Transparency、Increase Contrast、Reduce Motion | 材质、文字、边界、浮层、窗口缩放 |
 | 生命周期 | 冷启动、暖唤醒、失焦、隐藏小于 / 大于 15 秒、休眠唤醒、锁屏恢复、退出重启 | 输入、执行资格、数据持久化、资源 |
 | 数据 / 故障 | 空、少量、跨页、容量边界、损坏、不可读、磁盘不足、工具缺失 | 空态、错误、重试、取消、原数据不被破坏 |
 | 安装状态 | 首装、同签名替换、升级、包移位 / 解压后运行；多实例应用 | 路径身份、权限保留、配置迁移、拒绝歧义 |
@@ -187,7 +210,7 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | 对象 | 当前源码限额 / 规则 | 用例组 |
 | --- | --- | --- |
 | 会话与自动填入 | 保留 15 s；近期剪贴板 15 s；选区优先等待 500 ms；读取不续期 | LCH、CTX、RACE |
-| 文件范围 | 最多 8 roots、32 排除名；普通路径 4,096 B、排除名 128 B | FILE、SET |
+| 文件范围 | 最多 8 roots、32 排除名；普通路径 4,096 B、排除名 128 B；自动发布最多 64 个首批候选，后续按批追加；扫描临时写入预算 512 MiB | FILE、SET |
 | Action 绑定 | 最多 128 绑定、每意图最多 16 routes | HOT |
 | 剪贴板 | 1,000 条、128 MiB；单条 16 MiB、64 格式；保留 1 / 7 / 30 / 90 天或容量限制 | CLIP |
 | 开发任务 | 最多 4 个运行会话、保留 32 会话；stdout / stderr 各 128 KiB | TASK |
@@ -196,7 +219,7 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | Web bridge | frame 64 KiB、chunk 4,096 B、正文 1 MiB、transfer 2 MiB；24 pending、8 running、4,096 request IDs、5 s 请求期限 | WEB |
 | Web 包 | Manifest 128 KiB、归档20 MiB、2,000 entries、解压80 MiB、单资源16 MiB、压缩比200；图标另受256 KiB限制 | PKG |
 | Web 私有KV | key128 B、序列化值64 KiB、命名空间1 MiB / 256 keys；不放宽原生模块256 KiB / 128 keys的预算 | WEB |
-| JSON Workspace | 输入 / 输出各 1 MiB、深度 128；查询 50,000 值 / 10,000 matches / 路径 1,024 字符；自动识别原文 16 KiB、最多解码 4 层 | JSON |
+| JSON Workspace | 输入 / 输出各 1 MiB、深度 128；高亮 64 Ki 个 UTF-16 代码单元 / 4,096 tokens；查询 50,000 值 / 10,000 matches / 路径 1,024 字符；自动识别原文 16 KiB、最多解码 4 层 | JSON |
 | 后台插件 | 每任务 VM 堆 32 MiB、栈 256 KiB、输出 256 KiB；1,024 Host calls / 128 business calls；预填单任务 JS 75 ms、整轮 150 ms 后不再启动额外解析器 | BG |
 | Launcher 图标 | 128 项 LRU、最多 4 并发；失败缓存 30 s，后续候选更新才重试 | APP、PERF |
 
@@ -210,18 +233,18 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 [KV回归](../crates/anywhere-core/src/application/web_plugins/broker_tests.rs)。
 它们是单项资源约束，均不等于整个 App RSS / footprint 上限。
 
-## 5. 当前实现与旧说明的易混点
+## 5. 验收时使用的行为基线
 
 | 项目 | 本次验收使用的依据 |
 | --- | --- |
 | 正常启动 | [app.rs](../apps/gpui/src/app.rs)的普通 Accessory 路径与无 Core 的 Preview 壳分开验；不凭旧“首次自动显示”文字认定当前正常进程已进入 Ready |
-| 默认设置 | [HostPreferences](../apps/gpui/src/host/preferences.rs)当前搜索默认关闭、include_hidden=false，采集来源开关为 true、历史录制默认关闭；文件指南关于新配置隐藏文件的文字须与有效 Host 设置对照，差异记录，不默认为通过 |
+| 默认设置 | [HostPreferences](../apps/gpui/src/host/preferences.rs)默认关闭文件搜索与历史录制，隐藏文件默认排除；快批默认 System Index，Context 来源默认开启、外观默认跟随系统 |
 | 剪贴板删除 | [input.rs](../apps/gpui/src/launcher/view/input.rs)当前 Shelf 使用 `⌘⇧Backspace` 或对象菜单 / 删除按钮；裸 Backspace / Delete 不应作为列表删除快捷键，编辑器内仍是文本编辑 |
 | 应用历史键位 | 行内更多 / 右键打开对象菜单；不假定 `⌘K` 是历史行快捷键；PageUp / PageDown 按可见页移动 |
 | 快捷键导入导出 | 当前使用指南和 GPUI 设置都不承诺导入 / 导出；只验现有绑定编辑、持久化与旧配置兼容，不虚构入口 |
-| JSON 示例 | 当前 0.7.1 包通过后台 resolver 产生一个 `.json` Context，三个复制 Action 在后台执行；没有单独 Unescape Action；旧 Host `inputMatchers` 兼容能力与此包实现分别验 |
-| 安装批准 | Web 包批准即生效；旧 TOML v2 / v3 新批准下次启动生效；两个流程不能混用 |
-| 登录项 | 隔离数据目录不代表隔离 OS 副作用；保存偏好调用系统适配器的边界列为重点实测项 |
+| JSON 示例 | 当前 0.7.3 包通过后台 resolver 产生一个 `.json` Context，三个复制 Action 在后台执行；没有单独 Unescape Action；旧 Host `inputMatchers` 兼容能力与此包实现分别验 |
+| 安装批准 | Web 包批准后立即生效；旧配置迁移只导入内置功能禁用键 |
+| 登录项 | 显式数据目录保存偏好及重试时跳过系统登录项注册；真实注册使用专用测试用户的默认目录 |
 
 ## 6. 分模块测试用例
 
@@ -263,6 +286,7 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | LCH-012 | P1 / M | 空白首页先在应用 A 唤醒，切应用 B 后再次唤醒 | 重新捕获 B，不沿用 A 的空白环境 | Pending |
 | LCH-013 | P1 / H | 动作成功 close_window；同时已有 Preview / Web；再测试执行失败 | 先清理再隐藏；失败仍可操作，错误不冒充成功关闭 | Pending |
 | LCH-014 | P1 / M | 状态栏依次 Search、Running Tasks、Settings、Quit，关闭菜单后键入 | 各入口到达正确窗口；菜单结束后目标 key window 正确，无 Dock 图标泄漏 | Pending |
+| LCH-015 | P1 / M | 在 Launcher 分别有查询与空查询时按 ⌘↵ 打开根导航；用 ↑↓ 选择并按 Enter，再重开用 Esc 取消 | Enter 切换到高亮的搜索模式并保留查询，Esc 只关闭根导航并保留原模式；菜单关闭后可直接继续输入 | Pending |
 
 ### 6.3 KEY：物理键盘、IME 与焦点
 
@@ -280,6 +304,8 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | KEY-010 | P1 / M | WebView 正文聚焦后 Esc；IME 组合时再次 Esc | 非组合时宿主受控返回，组合时不误退出；返回后能立即输入 | Pending |
 | KEY-011 | P1 / M | Tasks / Shelf 为 key 时用全局键唤醒 Launcher，再切回 | 键盘归目标窗口；不同时路由到两页，不永久停在旧 responder | Pending |
 | KEY-012 | P1 / M | 失焦、最小化恢复、锁屏恢复、多 Space 与热键交替 30 次 | 无“窗口可见但无法输入 / Esc”；记录失败频率与 responder 日志 | Pending |
+| KEY-013 | P1 / H | 从合成 URL 或 JSON 进入内容编辑器，候选至少两项；分别按未修饰 ↑↓、Enter、Shift+Enter，再在中文组词时重复 | 普通 ↑↓ 选择候选；Enter 执行所选动作且不插入换行；Shift+Enter 插入换行；组词时由 IME 消费候选相关按键 | Pending |
+| KEY-014 | P1 / H | 在 Tasks 无筛选框的空态、详情与有筛选框三种状态，以及 Clipboard、Shelf、Settings 分别测试对应平台命令；再打开录制器或模态 | 无编辑器焦点时页面命令仍可派发；录制和模态优先处理按键；其他页同键命令与背后候选保持隔离 | Pending |
 
 ### 6.4 CTX：来源、默认输入与对象语义
 
@@ -299,6 +325,7 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | CTX-012 | P1 / M | IDEA 有明确项目路径和 `.idea`；再测标题缺路径 / 窗口切换 / 不可读 | 仅明确且匹配冻结窗口时识别；失败不猜项目目录 | Pending |
 | CTX-013 | P1 / H | 分别关闭 Finder / 选区 / 浏览器 / 剪贴板来源后保存再唤醒 | 相应来源停止参与；其他来源继续；旧采集不发布 | Pending |
 | CTX-014 | P0 / A | 查看 Settings 快照、Usage、偏好和日志中的合成敏感标记 | 正文不被复制到设置、Usage、快捷键配置或诊断日志 | Pending |
+| CTX-015 | P0 / A | 用受控回包在旧识别在途时更新 capture；分别在用户切 Scope / 打字 / 隐藏 / 新激活及剪贴板到期后释放旧回包 | 以新来源重新判定；迟到结果不能切到内容页、覆盖用户输入或使用过期剪贴板 | Pending |
 
 ### 6.5 APP：应用索引、启动与图标
 
@@ -350,7 +377,7 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | FILE-001 | P1 / M | 搜索 File Search / 文件搜索 / `wjss`，进入并返回 | 普通 Action 可达；普通 Launcher 查询不隐式全盘搜索；父页恢复 | Pending |
 | FILE-002 | P1 / H | 搜索关闭 / 无有效授权时查询；授权 F1 后重试 | 停用态明确；仅有效 roots 可搜索，不暗中启用 Home | Pending |
 | FILE-003 | P1 / H | 单字符、多词、标点、大小写、NFC / NFD、中文 / 拼音 | 多词均命中 basename，标点按字面，归一规则一致，无漏掉未命中词 | Pending |
-| FILE-004 | P1 / M | Tab / Shift+Tab 及 Ctrl 兼容组合切所有类型 | 查询与焦点保留；类型在计数和保存前过滤，IME 不误切换 | Pending |
+| FILE-004 | P1 / M | Tab / Shift+Tab 及 Ctrl 兼容组合切所有类型。在 PDF 结果中选中第二行并再次点击 PDF。换用仅匹配图片的查询，等 PDF 搜完后点击“搜索所有文件类型” | 重选保留位置和已打开的预览。扩大范围后原词保留、输入框获焦并出现图片。类型在计数和保存前过滤，IME 不误切换 | Pending |
 | FILE-005 | P1 / M | 修改查询 / 类型后直接 Enter，再首次 ↑ / ↓ | 默认无选择；首次方向键选首项，未选中不打开旧对象 | Pending |
 | FILE-006 | P1 / H | Spotlight 少量 / 空 / 失败，完整遍历含未索引匹配 | 均继续完整遍历，不以首批数量或 50,000 旧上限冒充完成 | Pending |
 | FILE-007 | P1 / H | 已显示前缀后注入晚到高分项并连续加载 | 已显示前缀稳定、去重；新结果只归并未读尾部 | Pending |
@@ -361,7 +388,7 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | FILE-012 | P1 / M | 隐藏开关开 / 关，排除名增删，node_modules / build / target 中匹配 | 隐藏 / 排除按有效设置；不隐含 gitignore 或项目目录黑名单 | Pending |
 | FILE-013 | P1 / H | 默认查询遇到系统 tmp、Trash、ShipIt；对这些位置再显式查询 | 默认按规则过滤；明确访问仍受授权 / 用户排除约束，不误排项目同名目录 | Pending |
 | FILE-014 | P1 / H | 搜索中 roots / 隐藏 / 类型更改、旧扫描慢返回 | 撤销旧结果与执行资格；旧批次不追加到新列表 | Pending |
-| FILE-015 | P1 / H | 不可读子目录、消失子项、根消失、临时磁盘不足 / 写失败 | 区分跳过与 Partial；保留已找到结果，原因有界且不冒充完整 | Pending |
+| FILE-015 | P1 / H | 不可读子目录、消失子项、根消失、临时磁盘不足 / 写失败 | 可区分跳过的条目与导致部分结果的错误。扫描中的问题数实时可见，部分结果保留已找到的条目并提供重试，错误原因有界 | Pending |
 | FILE-016 | P1 / M | 有已有结果时加载失败 → 重试 | 保留列表和当前查询；重试重扫 / 续交正确，无重复或漏项 | Pending |
 | FILE-017 | P1 / M | Enter 打开、对象菜单复制 / Reveal / 可用目录动作 | 对正确对象执行；复制反馈与实际剪贴板对应 | Pending |
 | FILE-018 | P0 / H | 候选出现后文件删除、改类型、授权撤销再执行 | 执行前拒绝旧目标，不误开替代路径、不记成功 Usage | Pending |
@@ -369,6 +396,8 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | FILE-020 | P1 / H | 同 revision 的 snapshot_seq 乱序，再改 query / revision | 仅单调且满足当前请求的快照发布；重复 cursor 不重复覆盖 | Pending |
 | FILE-021 | P2 / H | 深树、超长 / 不能表示的名称、超量 roots / 排除名 | 有界拒绝或正确 Partial，非权限问题不统一误报权限不足 | Pending |
 | FILE-022 | P1 / H | 查询取消 / 隐藏 / 超期 / 异常退出后检查临时区，再重启 | 在 worker 实际结束后释放租约；无活租约废目录可回收，不删活查询 | Pending |
+| FILE-023 | P1 / H | 对同一 F1 查询逐一保存并重启验证 System Index、Ripgrep、Combined；让 rg 缺失并重试；加入快批重复和未索引项 | 选择持久化；快批受当前范围和版本约束且去重；快批不可用时完整遍历仍可交付这些项 | Pending |
+| FILE-024 | P1 / H | F1 跨至少三批，连续加载后用 PageUp / PageDown 在已交付结果内移动；在一次加载在途时变更查询 | 已交付行保持稳定连续和可定位；旧批次不污染新查询，返回旧显示位置时无需重新搜索 | Pending |
 
 ### 6.9 PRE：Quick Look 与预览资源
 
@@ -407,6 +436,7 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | CLIP-014 | P1 / M | 允许 / 拒绝系统剪贴板读取、重复唤醒和后台运行 | 失败可见且不循环弹权限；不把拒绝记成成功采集 | Pending |
 | CLIP-015 | P1 / H | 历史库关闭、写失败 / 锁定、复制失败后恢复再刷新 | loading 收尾，数据不被清空冒充空结果；恢复后可继续 | Pending |
 | CLIP-016 | P0 / H | 退出重启、查本地 DB / 日志 / Usage 中合成标记 | 历史按配置本机持久化；明文边界明确；正文不外溢到 Usage / 日志 | Pending |
+| CLIP-017 | P1 / A | 用临时库刷新、复制、删除与清空交错执行，用受控同步点延迟查询读取及剪贴板写入；另测派生缓存失败后的刷新 | 读取、执行和缓存发布按当前存储状态完成；已删除对象无法开始新复制；失败后用最新数据重建缓存 | Pending |
 
 ### 6.11 SHELF：独立悬浮窗
 
@@ -417,7 +447,7 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | SHELF-003 | P1 / M | 外部应用点击、Launcher 唤醒、交通灯关闭、Esc | 普通失焦不隐藏；Esc 按局部层 / 查询 / 隐藏规则；关闭后可重开 | Pending |
 | SHELF-004 | P1 / M | ↑↓、⌘↑↓、PageUp / PageDown 移动跨屏列表选择 | 首尾 / 分页正确并滚入视口，无越界；预览和复制反馈同步 | Pending |
 | SHELF-005 | P1 / M | ⌘1–9 在 0 / 少于9 / 多于9 条时复制 | 仅对应存在的结果复制一次；无效数字不复制旧选择 | Pending |
-| SHELF-006 | P1 / M | Enter / 复制按钮后继续输入和选择，再 ⌘Enter | 普通复制保留 Shelf 焦点；复制并返回在成功后才回原应用 | Pending |
+| SHELF-006 | P1 / M | 在最小宽度的 Shelf 里分别按 Enter 和单击选中行的「复制」，继续输入和选择，再按 ⌘Enter | 普通复制保留 Shelf 焦点；复制并返回在成功后才回原应用 | Pending |
 | SHELF-007 | P0 / H | 复制并返回在途，切其他窗口 / 关 Shelf / 新操作后旧结果返回 | 旧复制可按已提交契约完成，但不能抢走当前应用焦点 | Pending |
 | SHELF-008 | P1 / M | ⌘F 聚焦搜索、⌘R 刷新、⌘⇧Backspace 删除并取消确认 | 各快捷键只作用于当前窗口和当前条目；取消不删除 | Pending |
 | SHELF-009 | P1 / M | 右键 / ⌘K / 选中行预览与更多操作菜单（复制、复制并返回、删除、刷新）及空列表菜单 | 控件和键盘入口一致；空列表可刷新，其他动作不执行旧对象 | Pending |
@@ -443,6 +473,8 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | SET-014 | P1 / M | App 移位 / 服务不可用 / 注册失败时保存开机启动 | 明确错误及有效状态；不能把持久布尔值当 OS 已注册证据 | Pending |
 | SET-015 | P0 / H | 测试用户中记录系统登录项；设置 `ANYWHERE_DATA_DIR` 后切换开机启动并保存，再对照系统登录项 | 显式数据目录隔离生效，不调用 `SMAppService` 修改真实系统登录项 | Pending |
 | SET-016 | P1 / M | 关闭并重开设置，检查错误提示、确认框和原输入焦点 | 不带入过期模态 / 录制态；错误只按真实成功清理，焦点回到可见控件 | Pending |
+| SET-017 | P1 / M | 首次打开设置 → 通用 → 外观。选浅色后放弃，再选浅色并保存。重启，随后切换深色、跟随系统 | 初始为跟随系统。放弃保持已保存外观，每次保存立即生效，重启保留选择 | Pending |
+| SET-018 | P1 / M | 打开设置后点击其他应用，再从状态菜单选 Settings；最小化后重复 | 同一 Settings 窗口恢复并取得焦点；草稿仍可编辑 | Pending |
 
 ### 6.13 HOT：快捷键、Context 分派与配置兼容
 
@@ -460,6 +492,7 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | HOT-010 | P1 / H | F0中备份后放入旧版、部分无效绑定及整体损坏偏好；重启加载 / 保存 | 依当前兼容规则保留合法旧绑定、过滤无效项；整体损坏明确报错，不默默覆盖原文件 | Pending |
 | HOT-011 | P1 / H | 动作目录加载失败、迟到加载、目录中绑定动作暂时缺失 | 不永久卡 loading；不可用规则可见，不误替换为同名动作 | Pending |
 | HOT-012 | P0 / A | 菜单动作及其包装动作尝试绑定，目录 / Catalog 变化后执行排队请求 | Menu BindingPolicy 不可绕过；发布 / 执行前复验版本与 token | Pending |
+| HOT-013 | P1 / H | 给 Clipboard Shelf 设置可用的全局 Action 快捷键；Settings 留有未保存草稿时触发，并返回 Settings | 直接打开独立 Shelf；Settings 草稿和页面保留，无需关闭确认或进入 Launcher | Pending |
 
 ### 6.14 HIST：应用历史、来源设置与目标权威
 
@@ -575,6 +608,9 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | WEB-015 | P0 / H | 初次打开 / Reload / resume 期间隐藏，15 s 内再唤醒，重复隐藏 | 隐藏立即撤销执行；仅留元数据，恢复有效 epoch 后再挂载 / visible IPC | Pending |
 | WEB-016 | P1 / M | Web 中文 IME、Esc 返回、失焦隐藏、超 15 s、退出、100 次循环 | 状态保留和销毁准确；不吞键、回滚正文或无限积累页面 / helper | Pending |
 | WEB-017 | P0 / A | 私有KV的key / value / key数 / 总字节上下边界，超限后读取旧值并重试小写入 | 配额和序列化字节正确，失败原子且不改旧值；Web预算不扩张原生模块预算 | Pending |
+| WEB-018 | P1 / M | 在跟随系统时打开 JSON、输入多行内容、选中文字并滚动，再用 macOS 外观设置切换明暗并恢复 Launcher | 在保留时间内恢复原 Web 文档。代码颜色、下拉控件与工作区同步切换，输入、选区和滚动位置保留 | Pending |
+| WEB-019 | P1 / M | 在深色、有文字的桌面窗口上切换到浅色，再打开 JSON Workspace 及页头工具菜单 | 页头只显示工具名称；窗口与编辑区背景层次清楚，公式与两栏的占位提示可读。宿主和 JSON 文档菜单均随主题，选中项可辨 | Pending |
+| WEB-020 | P1 / M | 通过名称打开 Text Pad，键入 A🚀 后清空；然后在 Launcher 有合成选区、剪贴板或父查询时再次用名称打开，并核对包的授权列表 | 名称入口正文为空，手工输入计数为 2，清空为 0；父查询和捕获信息不会误填；包没有剪贴板或存储权限 | Pending |
 
 ### 6.20 JSON：JSON Workspace 与三个后台复制命令
 
@@ -592,6 +628,10 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | JSON-010 | P1 / H | 非法 JSON / JSONPath / JS、死循环、原型 / 全局 / 网络访问尝试 | 错误可定位、预算有界，旧结果不被误当成功，不获得 Host 任意能力 | Pending |
 | JSON-011 | P1 / A | 各 1 MiB、深度128、50k值、10k匹配、路径1024字符等边界 | 超限明确报错而非截断；失败后小输入和后续复制仍可用 | Pending |
 | JSON-012 | P1 / M | 主题 / 语言切换、隐藏恢复、Reload、重开与卸载再安装 | 文案跟随 Host；新草稿不被旧事件覆盖；只有缩进偏好按安装生命周期保留 | Pending |
+| JSON-013 | P1 / M | 输入 `{"键":"中文🚀","number":-2.3e14,"values":[true,false,null],"html":"<b>plain</b>"}`。检查两栏，再输入未完成的字符串 | 键、字符串、数字与布尔值 / null 使用不同的主题色，HTML 文本原样显示。无效输入显示定位诊断，结果不保留上次值 | Pending |
+| JSON-014 | P1 / M | 粘贴几十行含长值的 JSON，拖动滚动条横向和纵向滚动。选区跨行复制到纯文本，使用中文输入法编辑并取消候选 | 高亮始终和文字位置对齐。粘贴内容保留原字符与转义，候选和原生光标正常，组合期间显示普通文字 | Pending |
+| JSON-015 | P1 / M | 用包含 70,000 个字符的字符串值和包含 4,100 个零的数组分别测试。返回到短文档 | 大文档显示完整纯文本，格式化和复制仍可用。缩小内容后高亮恢复 | Pending |
+| JSON-016 | P1 / M | 在能缩到 560 CSS px 以下的 WebKit 视口验证，或用同包的受控窄视口夹具。在插件内用 Tab 和方向键打开“JSON 操作”，修改缩进并复制；分别用 Esc 关闭文档菜单及宿主工具菜单，再退出 | 输入与结果上下排列，公式、计算按钮和菜单项可滚动访问。第一次 Esc 关闭当前菜单并恢复焦点，直接按 Esc 可从正文返回原搜索 | Pending |
 
 ### 6.21 BG：第三方 Context 与有限后台执行
 
@@ -629,9 +669,14 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | UI-007 | P1 / M | 长标题 / 路径 / 中英混排 / emoji / 底层长错误 / 多行提示 | 省略与滚动可理解；Notice 有界，失败原因可访问，不挤掉主内容 | Pending |
 | UI-008 | P1 / M | 普通、hover、selected、focus、disabled、busy、success、error 所有状态 | 状态可区分；disabled 不可触发，复制等成功样式不早于实际成功 | Pending |
 | UI-009 | P1 / M | 设置 / 删除 / 清空确认、菜单、tooltip 同时覆盖背景控件 | 无点击穿透；浮层不改变编辑区尺寸，Esc 只关最上层并恢复焦点 | Pending |
-| UI-010 | P1 / M | 中英切换逐页、状态菜单、原生对话框与两个 Web 示例 | 文案覆盖且无明显溢出；第三方标题 / 用户正文 / 底层诊断可保持原文 | Pending |
-| UI-011 | P1 / M | 开 VoiceOver，用键盘遍历主页、设置、Tasks、Shelf、确认和 Web | 名称 / role / 选中 / disabled / 展开状态可理解，主流程无需鼠标可完成 | Pending |
+| UI-010 | P1 / M | 中英切换逐页，覆盖状态菜单、原生对话框和使用宿主语言的 Web 示例 | 文案覆盖且无明显溢出；第三方标题 / 用户正文 / 底层诊断可保持原文 | Pending |
+| UI-011 | P1 / M | 开 VoiceOver，用键盘遍历主页、设置、Tasks、Shelf、确认和 Web。选中可展开菜单后单击旁边的禁用项，并用 VoiceOver 读取其原因 | 名称 / role / 选中 / disabled / 展开状态可理解，主流程无需鼠标可完成。当前菜单、选择及原提示保留，原因可读 | Pending |
 | UI-012 | P2 / H | 核对 shared tokens / l10n 生成物，主题变更后完整遍历控件 | 源配置与生成物同步；原生与 Web 控件共享规范，不出现第二套壳 | Pending |
+| UI-013 | P1 / M | 依次选择浅色和深色，每次在系统设置中切换相反外观，再改回跟随系统并切换系统明暗。打开 Settings、Launcher、Shelf、Tasks 和 JSON Workspace，分别开关减少透明度和增强对比度 | 固定外观保持选择，跟随系统时一同变化。实色背景及菜单、下拉箭头、键帽和焦点边界均可读，浅色时不会回到深色实底 | Pending |
+| UI-014 | P1 / M | 从同一查询进入文件搜索、剪贴板历史、应用历史和 JSON Workspace。分别用箭头按钮、页头 Esc 和键盘 Esc 返回 | 页头基线一致。键盘和可点击 Esc 先处理局部状态，退出后恢复父查询和选中项 | Pending |
+| UI-015 | P1 / M | 在应用历史和剪贴板历史各构造空列表、有结果和无匹配三种状态。打开页头操作和行内操作，再在浅色模式复查 Running Tasks 的对象菜单 | 页头入口位置稳定，可刷新。行内操作仍针对原选中项。同时最多一个操作面板可见，浅色菜单是浅底深字，深色菜单是深底浅字，菜单底色不透字，Esc 提示可读 | Pending |
+| UI-016 | P1 / M | 在 IDEA 历史中选择有 Git 和多种项目标记的测试目录，使用实际生成的长菜单或合成长菜单夹具。在列表顶部和底部打开菜单，用滚轮和 ↑↓ 访问末项 | 条目左对齐，标题在滚动时保持可见，菜单边缘不截断半行，最后一项可见可达 | Pending |
+| UI-017 | P1 / M | 从文件搜索、剪贴板历史、应用历史和 Web 工具页分别点击外开按钮或按 `⌘⇧O`。工具窗口打开后再次使用两个全局唤起快捷键，并在主窗口输入新查询。切换主题、语言，撤销插件或关闭对应捕获能力 | 工具窗口与主搜索栏并存，查询、焦点、选中项和滚动互不串扰。主题和语言同时刷新。权限或插件撤销后旧工具窗口保留可关闭页面并提示重新打开，执行资格失效 | Pending |
 
 ### 6.24 PERF：性能、内存与资源趋势
 
@@ -641,7 +686,7 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | PERF-002 | P1 / H | 连续改词、切Scope / 类型、慢源并存、取消100轮 | UI 不被同步阻塞；旧工作不无限积压，记录 worker / queue 与取消完成 | Pending |
 | PERF-003 | P2 / H | F1 从少量到10k / 50,001命中，记录扫描 / 追加 / 排序和临时区 | 完整性先成立；内存不收集全树；区分已加载结果增长与泄漏 | Pending |
 | PERF-004 | P2 / H | 图标失败 / 过期、工具页 / 隐藏，观测请求次数与并发 | 保留128项 / 4并发 / 30s规则，无立即重试风暴或隐藏补发 | Pending |
-| PERF-005 | P2 / A | 运行 projection_measure / task_detail_measure Release，固定 fixture重复 | 保留原始样本；共享文本不深拷贝正文，合成申请字节不写成 RSS 改善 | Pending |
+| PERF-005 | P2 / A | 运行 projection_measure / task_detail_measure Release，固定 fixture 重复 | 记录 10,000 个文件的快照接入与 8 行投影、元数据更新、模型净保留字节及任务文本 clone。整 App footprint 单独采样 | Pending |
 | PERF-006 | P1 / M | 主进程空闲、激活、隐藏<15s、超期、30min空闲逐阶段测量 | 记录 footprint / RSS / CPU及对象归属，解释缓存平台期；无无因忙轮询 | Pending |
 | PERF-007 | P1 / H | Quick Look / Web / Settings / History 开关100轮，每轮经历取消与超期 | 无持续增加的有效资源、源读槽、任务 / Web文档；helper按归属看趋势 | Pending |
 | PERF-008 | P1 / H | 接近剪贴板容量、持续任务输出、大历史输入、同时多窗口 | 各项硬预算成立；无卡死、无限内存或错误跨窗口发布 | Pending |
@@ -664,6 +709,7 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | REL-007 | P1 / M | 同签名升级、App改位置、干净测试用户安装，重新授权 / 重启 | 正常恢复数据和热键；权限身份变化有可理解行为，不误用旧实例 | Pending |
 | REL-008 | P1 / M | 正式分发专项：Developer ID、公证、Gatekeeper、干净机安装升级 | 未具备时记录Blocked / 未交付，不能以本机自签成功宣称正式发行完成 | Pending |
 | REL-009 | P0 / H | 检查交付包 / 证据 / 日志中测试正文、DB、路径、签名材料 | 只交付允许资源和脱敏证据；不包含个人库、凭据、私钥或完整Context | Pending |
+| REL-010 | P1 / A | 用 dwarfdump --uuid 核对 macOS Release 主程序和同目录 .app.dSYM；查看 GitHub 手动打包产物及发行 ZIP 清单 | 主程序与符号 UUID 和架构匹配，符号作为 CI 构建附件保留，用户 ZIP 仅含 App | Pending |
 
 ### 6.26 RACE：跨模块高风险组合回归
 
@@ -740,10 +786,11 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | UI、PERF、REL | [UI规范](ui-design.md)、[性能](performance.md)、[发行](releasing.md) | `scripts/check-gpui.sh`、`scripts/check.sh`、[scripts tests](../scripts/tests)、[portable CI](../.github/workflows/portable.yml) |
 | RACE | Session / revision / Catalog / 请求代次门禁 | async / lifecycle / optimization回归、[执行门禁](../crates/anywhere-core/src/application/execution_request.rs)、[Core对象动作测试](../crates/anywhere-core/src/application/object_actions.rs) |
 
-上一轮 2026-11-17 的本地工程记录为 GPUI 244 项通过、工作区 Rust 928 passed /
-6 ignored，完整门禁通过，见[生命周期审查](archive/reviews/gpui-lifecycle-review-2026-11-17.md)。
-这只作为已有自动化入口的记录；**本清单编制未重跑这些工程测试，未继承其中任何
-物理验收 Pass**。实际执行时记录本次命令、结果、源码差异和 App 摘要。
+新验收使用当前命令及其断言。内容输入与激活资格另见
+[GPUI 激活回归](../apps/gpui/src/launcher/view/tests/activation_prefill_regressions.rs)，
+JSON 高亮另见
+[高亮回归](../plugins/examples/json-workspace/test/highlight.test.mjs)。
+执行时记录命令、退出码、源码差异和 App 摘要，实机项目另附操作证据。
 
 ## 9. 当前不交付范围与最终报告
 
@@ -757,6 +804,8 @@ Obsidian 使用 `vaults` 下 16 位十六进制 ID 和测试路径。测试文�
 | 快捷键配置导入 / 导出UI | 当前不承诺此入口；只验现有配置兼容，不虚构成功UI流程 |
 | 正式公开签名 / 公证与完整发行安全矩阵 | 尚未完成，REL-008单独报告，不与开发预览本机包混为通过 |
 | 整App固定内存或毫秒SLA | 当前无此承诺；按PERF组采集、同机对照与资源归属解释 |
+
+VoiceOver（UI-011）纳入功能矩阵和正式发行门槛。开发预览可单独报告其缺口。
 
 最终报告至少列出：被测源码 / 包身份、环境、基础用例与参数实例数量、各优先级
 Pass / Fail / Blocked / Pending / N/A 数、缺陷与复验、18来源真实覆盖表、物理

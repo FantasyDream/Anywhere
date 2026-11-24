@@ -2,7 +2,12 @@
 use super::candidate::Candidate;
 use crate::core::action::descriptor::ActionRegistry;
 use crate::core::action::group::{groups, GroupMeta};
-use crate::core::ranking::score::{usage_terms, UsageStats};
+use crate::core::ranking::score::usage_terms;
+#[cfg(test)]
+use crate::core::ranking::score::UsageStats;
+#[cfg(test)]
+use crate::core::ranking::usage::UsageKey;
+use crate::core::ranking::usage::{lookup_usage, UsageSnapshot};
 use anywhere_platform::ApplicationInfo;
 use anywhere_protocol::*;
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -10,13 +15,13 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 pub fn build(
     offers: &[Candidate],
     registry: &ActionRegistry,
-    usage: &HashMap<(String, String), UsageStats>,
+    usage: &UsageSnapshot,
     current_app: Option<&ApplicationInfo>,
     now: i64,
 ) -> Vec<ScopeEntry> {
     let current_group = current_app.map(|app| groups::for_app(&app.bundle_id));
     let mut groups: BTreeMap<String, (ScopeEntry, i32, i32)> = BTreeMap::new();
-    let mut counted = HashSet::new();
+    let mut counted: HashSet<(&str, &str)> = HashSet::new();
     for offer in offers {
         let candidate = &offer.presentation;
         if candidate.kind != CandidateKind::Action || !candidate.availability.is_visible() {
@@ -37,9 +42,10 @@ pub fn build(
             )
         });
         if let (Some(command), Some(context)) = (candidate.command_id.as_ref(), offer.context()) {
-            let key = (command.clone(), context.type_id.clone());
-            if offer.target.uses_usage() && counted.insert(key.clone()) {
-                let stats = usage.get(&key).copied().unwrap_or_default();
+            if offer.target.uses_usage()
+                && counted.insert((command.as_str(), context.type_id.as_str()))
+            {
+                let stats = lookup_usage(usage, command, &context.type_id);
                 let (frequency, recency) =
                     usage_terms(stats.execute_count, stats.last_executed_at, now);
                 entry.1 = entry.1.saturating_add(frequency + recency);
@@ -99,7 +105,17 @@ pub fn freeze(scopes: &mut [ScopeEntry], order: &mut Vec<GroupId>) {
             order.push(scope.id.clone());
         }
     }
-    scopes.sort_by_key(|scope| order.iter().position(|id| id == &scope.id).unwrap());
+    let positions: HashMap<&str, usize> = order
+        .iter()
+        .enumerate()
+        .map(|(index, id)| (id.as_str(), index))
+        .collect();
+    scopes.sort_by_key(|scope| {
+        positions
+            .get(scope.id.as_str())
+            .copied()
+            .unwrap_or(usize::MAX)
+    });
 }
 
 #[cfg(test)]
@@ -178,7 +194,7 @@ mod tests {
         assert_eq!(offers[0].presentation.group_id, "git");
         let mut history = HashMap::new();
         history.insert(
-            ("core.directory.copy".into(), DIRECTORY.into()),
+            UsageKey::new("core.directory.copy", DIRECTORY),
             UsageStats {
                 execute_count: 10,
                 last_executed_at: 1000,
@@ -227,7 +243,7 @@ mod tests {
                 APPLICATION,
                 ContextValue::Application {
                     bundle_id: app.bundle_id.clone(),
-                    name: app.name.clone(),
+                    name: app.name,
                 },
                 ContextSource::ApplicationContext,
                 "test",
@@ -249,10 +265,7 @@ mod tests {
             .unwrap();
         let baseline = build(&offers, &registry, &HashMap::new(), None, 1000);
         let history = HashMap::from([(
-            (
-                menu.presentation.command_id.clone().unwrap(),
-                APPLICATION.into(),
-            ),
+            UsageKey::new(menu.presentation.command_id.clone().unwrap(), APPLICATION),
             UsageStats {
                 execute_count: u32::MAX,
                 last_executed_at: 1000,

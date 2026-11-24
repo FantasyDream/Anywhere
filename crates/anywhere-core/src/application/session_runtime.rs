@@ -71,21 +71,31 @@ impl Resolver {
         }
     }
 
+    /// Tool windows share definitions, usage and the application index. A window's
+    /// cursor, execution cancellation and latest snapshot belong to that window.
+    pub(super) fn tool_window(&self) -> Self {
+        Self {
+            session: Default::default(),
+            current: Default::default(),
+            latest_tx: watch::channel(None).0,
+            directory: Default::default(),
+            offer_cache: Default::default(),
+            shortcut_catalog: Default::default(),
+            ..self.clone()
+        }
+    }
+
     pub fn base_registry(&self) -> Arc<ActionRegistry> {
         self.catalog.registry()
     }
 
     pub(super) fn set_directory(&self, directory: Option<Arc<DirectoryMemo>>) {
-        if let Ok(mut slot) = self.directory.lock() {
-            *slot = directory;
-        }
+        *crate::core::sync::lock_cache(&self.directory, "directory_memo") = directory;
     }
 
     pub(super) fn clear_directory(&self) {
         self.set_directory(None);
-        if let Ok(mut cache) = self.offer_cache.lock() {
-            *cache = None;
-        }
+        *crate::core::sync::lock_cache(&self.offer_cache, "offer_cache") = None;
     }
 
     pub(super) fn mark_current(&self, session_id: SessionId, revision: Revision) {
@@ -173,18 +183,12 @@ impl Resolver {
 
     /// Providers for one revision: stateless built-ins plus the directory memo.
     fn providers_for(&self, _session_id: SessionId) -> Vec<Arc<dyn ContextProvider>> {
-        let directory = self
-            .directory
-            .lock()
-            .ok()
-            .and_then(|directory| directory.clone());
-        super::composition::session_providers(
-            self.catalog
-                .providers()
-                .expect("providers lock poisoned")
-                .clone(),
-            directory,
-        )
+        let directory = crate::core::sync::lock_cache(&self.directory, "directory_memo").clone();
+        let Ok(providers) = self.catalog.providers() else {
+            tracing::error!("providers_lock_poisoned_in_session_providers");
+            return Vec::new();
+        };
+        super::composition::session_providers(providers.clone(), directory)
     }
 
     pub fn build_run(

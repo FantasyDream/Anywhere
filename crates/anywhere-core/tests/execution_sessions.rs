@@ -32,6 +32,25 @@ fn wait(manager: &ExecutionSessionManager, id: &str) -> anywhere_protocol::Execu
 }
 
 #[test]
+fn a_naturally_exited_process_can_be_polled_and_stopped_again() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut process =
+        anywhere_platform::process::OwnedProcess::spawn(&request(directory.path(), "exit 7"))
+            .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(2);
+    let status = loop {
+        if let Some(status) = process.poll().unwrap() {
+            break status;
+        }
+        assert!(Instant::now() < deadline, "child exit was not observed");
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    assert_eq!(status.code(), Some(7));
+    assert_eq!(process.poll().unwrap(), Some(status));
+    assert_eq!(process.stop().unwrap(), status);
+}
+
+#[test]
 fn stdout_stderr_and_nonzero_exit_are_retained_and_arguments_are_literal() {
     let dir = tempfile::tempdir().unwrap();
     let manager = ExecutionSessionManager::default();

@@ -23,6 +23,7 @@ pub struct FileSearchRequest {
     pub filter: FileSearchFilter,
 }
 
+#[derive(Clone)]
 pub struct FileSearchSource {
     platform: Arc<dyn FileSearchHost>,
     actions: Arc<ActionRegistry>,
@@ -112,12 +113,20 @@ impl FileSearchSource {
             policy: Arc::new(std::sync::RwLock::new(FileSearchPolicy::default())),
         }
     }
+    pub(crate) fn tool_window(&self) -> Self {
+        Self {
+            active: Default::default(),
+            ..self.clone()
+        }
+    }
+
     pub fn clear(&self) {
         drop(self.take_cancelled_scan());
     }
 
     pub(crate) fn take_cancelled_scan(&self) -> Option<Arc<super::scan::ScanStore>> {
-        let store = self.active.lock().unwrap().take()?;
+        let store =
+            crate::core::sync::lock_for_revoke(&self.active, "file_search_active").take()?;
         store.cancel();
         Some(store)
     }
@@ -137,10 +146,7 @@ impl FileSearchSource {
         displayed: &std::collections::HashSet<std::path::PathBuf>,
         execution: &ExecutionContext,
     ) -> Result<AsyncCandidateBatch> {
-        let store = self
-            .active
-            .lock()
-            .unwrap()
+        let store = crate::core::sync::lock_state(&self.active, "file_search_active")?
             .clone()
             .ok_or_else(|| anyhow::anyhow!("search expired"))?;
         if store.query_id != query_id || !execution.is_current() {
@@ -163,7 +169,9 @@ impl AsyncCandidateSource for FileSearchSource {
         "files"
     }
     fn accepts(&self, query: &str) -> bool {
-        eligible_query(query) && self.policy.read().is_ok_and(|policy| policy.enabled)
+        eligible_query(query)
+            && crate::core::sync::read_or_deny(&self.policy, "file_search_policy")
+                .is_ok_and(|policy| policy.enabled)
     }
     fn debounce(&self) -> std::time::Duration {
         std::time::Duration::from_millis(40)
@@ -194,11 +202,7 @@ impl AsyncCandidateSource for FileSearchSource {
         execution: ExecutionContext,
         sender: tokio::sync::mpsc::Sender<AsyncCandidateBatch>,
     ) -> Result<()> {
-        let policy = self
-            .policy
-            .read()
-            .map_err(|_| anyhow::anyhow!("search settings unavailable"))?
-            .clone();
+        let policy = crate::core::sync::read_or_deny(&self.policy, "file_search_policy")?.clone();
         if !policy.enabled {
             return Ok(());
         }
@@ -221,11 +225,8 @@ impl AsyncCandidateSource for FileSearchSource {
             .await??,
         );
         {
-            let guard = self
-                .policy
-                .read()
-                .map_err(|_| anyhow::anyhow!("search settings unavailable"))?;
-            let mut active = self.active.lock().unwrap();
+            let guard = crate::core::sync::read_or_deny(&self.policy, "file_search_policy")?;
+            let mut active = crate::core::sync::lock_state(&self.active, "file_search_active")?;
             if !execution.is_current() || guard.generation != policy.generation || !guard.enabled {
                 return Ok(());
             }
@@ -244,8 +245,7 @@ impl AsyncCandidateSource for FileSearchSource {
                 cancelled.load(Ordering::Acquire)
                     || store.cancelled.load(Ordering::Acquire)
                     || !execution.is_current()
-                    || !policy_lock
-                        .read()
+                    || !crate::core::sync::read_or_deny(&policy_lock, "file_search_policy")
                         .is_ok_and(|p| p.enabled && p.generation == policy.generation)
             })
         };
@@ -342,12 +342,16 @@ fn scan_batch(
         .iter()
         .flat_map(|hit| {
             let key = (hit.path.clone(), hit.is_directory);
-            let cached = store.projections.lock().unwrap().get(&key).cloned();
+            let cached =
+                crate::core::sync::lock_cache(&store.projections, "file_search_projections")
+                    .get(&key)
+                    .cloned();
             let mut candidate = cached.or_else(|| {
                 let candidate = file_candidates(vec![hit.hit()], "", actions)
                     .into_iter()
                     .next()?;
-                let mut cache = store.projections.lock().unwrap();
+                let mut cache =
+                    crate::core::sync::lock_cache(&store.projections, "file_search_projections");
                 if cache.len() >= 128 {
                     cache.clear();
                 }
@@ -521,4 +525,28 @@ pub fn result_actions(
         }
     }
     result_actions
+}
+
+#[cfg(test)]
+mod poison_tests {
+    use super::*;
+    use crate::core::{action::descriptor::ActionRegistry, context::engine::ExecutionContext};
+
+    struct QuietFileHost;
+    impl FileSearchHost for QuietFileHost {}
+
+    #[test]
+    fn poisoned_active_lock_returns_error_and_allows_revoke() {
+        let source =
+            FileSearchSource::new(Arc::new(QuietFileHost), Arc::new(ActionRegistry::default()));
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = source.active.lock().unwrap();
+            panic!("poison active scan");
+        }));
+        let execution = ExecutionContext::detached(1, 1);
+        assert!(source
+            .read_page(1, &Default::default(), &execution)
+            .is_err());
+        assert!(source.take_cancelled_scan().is_none());
+    }
 }

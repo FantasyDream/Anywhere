@@ -6,6 +6,11 @@
 use anyhow::{Context, Result};
 use std::{borrow::Cow, path::Path};
 use url::Url;
+
+use crate::ui::{
+    design_tokens::{colors::FixedColors, Palette},
+    theme,
+};
 use wry::http::{
     header::{CACHE_CONTROL, CONTENT_SECURITY_POLICY, CONTENT_TYPE, X_CONTENT_TYPE_OPTIONS},
     Response,
@@ -121,8 +126,8 @@ impl WebDocumentPolicy {
         }
     }
 
-    pub fn protect_html(&self, bytes: Vec<u8>) -> Vec<u8> {
-        let body = String::from_utf8_lossy(&bytes);
+    pub fn protect_html(&self, bytes: &[u8]) -> Vec<u8> {
+        let body = String::from_utf8_lossy(bytes);
         let injection = format!(
             "<meta charset=\"utf-8\"><meta http-equiv=\"Content-Security-Policy\" content=\"{}\">\
              <style data-anywhere-theme>{}</style>",
@@ -137,7 +142,7 @@ impl WebDocumentPolicy {
             return plain_response(404, "Not found");
         };
         let body = if content_type.starts_with("text/html") {
-            self.protect_html(bytes)
+            self.protect_html(&bytes)
         } else {
             bytes
         };
@@ -255,12 +260,16 @@ pub fn visibility_script(visible: bool) -> String {
     format!("window.dispatchEvent(new CustomEvent('anywhere:visibility',{{detail:{visible}}}));")
 }
 
-pub fn canvas_script(transparent: bool) -> String {
-    let value = if transparent {
+fn canvas(transparent: bool) -> &'static str {
+    if transparent {
         "transparent"
     } else {
-        "var(--aw-fallback-surface)"
-    };
+        "var(--aw-web-fallback-surface, var(--aw-fallback-surface))"
+    }
+}
+
+pub fn canvas_script(transparent: bool) -> String {
+    let value = canvas(transparent);
     format!("document.documentElement.style.setProperty('--aw-web-canvas','{value}','important');")
 }
 
@@ -268,115 +277,37 @@ fn css_color(argb: u32) -> String {
     format!("#{:06x}{:02x}", argb & 0x00ff_ffff, argb >> 24)
 }
 
-pub fn web_theme_script(light_surface: bool) -> String {
-    use crate::ui::design_tokens::colors;
-
-    let palette = if light_surface {
-        [
-            ("--aw-primary", colors::GLASS_LIGHT_PRIMARY),
-            ("--aw-secondary", colors::GLASS_LIGHT_SECONDARY),
-            ("--aw-muted", colors::GLASS_LIGHT_MUTED),
-            ("--aw-accent", colors::GLASS_LIGHT_ACCENT),
-            ("--aw-warning", colors::GLASS_LIGHT_WARNING),
-            ("--aw-danger", colors::GLASS_LIGHT_DANGER),
-            ("--aw-success", colors::GLASS_LIGHT_SUCCESS),
-            ("--aw-field", colors::GLASS_LIGHT_FIELD),
-            ("--aw-card", colors::GLASS_LIGHT_CARD),
-            ("--aw-hover", colors::GLASS_LIGHT_HOVER),
-            (
-                "--aw-selected-surface",
-                colors::GLASS_LIGHT_SELECTED_SURFACE,
-            ),
-            (
-                "--aw-button-selection",
-                colors::GLASS_LIGHT_BUTTON_SELECTION,
-            ),
-            ("--aw-border", colors::GLASS_LIGHT_BORDER),
-            ("--aw-divider", colors::GLASS_LIGHT_DIVIDER),
-            (
-                "--aw-selection-outline",
-                colors::GLASS_LIGHT_SELECTION_OUTLINE,
-            ),
-            ("--aw-selected-border", colors::GLASS_LIGHT_SELECTED_BORDER),
-            ("--aw-keycap-surface", colors::GLASS_LIGHT_KEYCAP_SURFACE),
-            ("--aw-keycap-border", colors::GLASS_LIGHT_KEYCAP_BORDER),
-            ("--aw-text-selection", colors::GLASS_LIGHT_TEXT_SELECTION),
-            ("--aw-sidebar", colors::GLASS_LIGHT_SIDEBAR),
-            (
-                "--aw-sidebar-selection",
-                colors::GLASS_LIGHT_SIDEBAR_SELECTION,
-            ),
-            ("--aw-control-border", colors::GLASS_LIGHT_CONTROL_BORDER),
-            ("--aw-action-surface", colors::GLASS_LIGHT_ACTION_SURFACE),
-            ("--aw-elevated", colors::GLASS_LIGHT_ELEVATED),
-            ("--aw-result-surface", colors::GLASS_LIGHT_RESULT_SURFACE),
-            (
-                "--aw-result-surface-selected",
-                colors::GLASS_LIGHT_RESULT_SURFACE_SELECTED,
-            ),
-            ("--aw-icon-blue", colors::GLASS_LIGHT_ICON_BLUE),
-            ("--aw-icon-green", colors::GLASS_LIGHT_ICON_GREEN),
-            ("--aw-icon-coral", colors::GLASS_LIGHT_ICON_CORAL),
-            ("--aw-icon-purple", colors::GLASS_LIGHT_ICON_PURPLE),
-            ("--aw-icon-amber", colors::GLASS_LIGHT_ICON_AMBER),
-            ("--aw-icon-pink", colors::GLASS_LIGHT_ICON_PINK),
-            ("--aw-icon-neutral", colors::GLASS_LIGHT_ICON_NEUTRAL),
-        ]
+fn web_appearance(
+    palette: &Palette,
+    fixed: &FixedColors,
+    light_surface: bool,
+) -> impl Iterator<Item = (&'static str, String)> {
+    let scheme = if light_surface { "light" } else { "dark" };
+    let fallback = if light_surface {
+        "var(--aw-light-fallback-surface)"
     } else {
-        [
-            ("--aw-primary", colors::PRIMARY),
-            ("--aw-secondary", colors::SECONDARY),
-            ("--aw-muted", colors::MUTED),
-            ("--aw-accent", colors::GLASS_DARK_ACCENT),
-            ("--aw-warning", colors::GLASS_DARK_WARNING),
-            ("--aw-danger", colors::GLASS_DARK_DANGER),
-            ("--aw-success", colors::GLASS_DARK_SUCCESS),
-            ("--aw-field", colors::FIELD),
-            ("--aw-card", colors::CARD),
-            ("--aw-hover", colors::HOVER),
-            ("--aw-selected-surface", colors::SELECTED_SURFACE),
-            ("--aw-button-selection", colors::BUTTON_SELECTION),
-            ("--aw-border", colors::BORDER),
-            ("--aw-divider", colors::DIVIDER),
-            ("--aw-selection-outline", colors::SELECTION_OUTLINE),
-            ("--aw-selected-border", colors::SELECTED_BORDER),
-            ("--aw-keycap-surface", colors::KEYCAP_SURFACE),
-            ("--aw-keycap-border", colors::KEYCAP_BORDER),
-            ("--aw-text-selection", colors::TEXT_SELECTION),
-            ("--aw-sidebar", colors::SIDEBAR),
-            ("--aw-sidebar-selection", colors::SIDEBAR_SELECTION),
-            ("--aw-control-border", colors::CONTROL_BORDER),
-            ("--aw-action-surface", colors::ACTION_SURFACE),
-            ("--aw-elevated", colors::ELEVATED),
-            ("--aw-result-surface", colors::RESULT_SURFACE),
-            (
-                "--aw-result-surface-selected",
-                colors::RESULT_SURFACE_SELECTED,
-            ),
-            ("--aw-icon-blue", colors::ICON_BLUE),
-            ("--aw-icon-green", colors::ICON_GREEN),
-            ("--aw-icon-coral", colors::ICON_CORAL),
-            ("--aw-icon-purple", colors::ICON_PURPLE),
-            ("--aw-icon-amber", colors::ICON_AMBER),
-            ("--aw-icon-pink", colors::ICON_PINK),
-            ("--aw-icon-neutral", colors::ICON_NEUTRAL),
-        ]
+        "var(--aw-fallback-surface)"
     };
-    let assignments = palette
+    palette
+        .web_variables()
         .into_iter()
-        .map(|(name, value)| {
-            format!(
-                "root.style.setProperty('{name}','{}','important');",
-                css_color(value)
-            )
-        })
-        .collect::<Vec<_>>()
-        .join("");
-    let color_scheme = if light_surface { "light" } else { "dark" };
-    format!(
-        "(() => {{ const root=document.documentElement; {assignments}\
-         root.style.setProperty('color-scheme','{color_scheme}','important'); }})();"
-    )
+        .chain(fixed.web_contrast_variables())
+        .map(|(name, argb)| (name, css_color(argb)))
+        .chain([
+            ("--aw-web-fallback-surface", fallback.to_owned()),
+            (
+                "--aw-select-caret",
+                format!("var(--aw-select-caret-on-{scheme})"),
+            ),
+            ("color-scheme", scheme.to_owned()),
+        ])
+}
+
+pub fn web_theme_script(palette: &Palette, fixed: &FixedColors, light_surface: bool) -> String {
+    let assignments: String = web_appearance(palette, fixed, light_surface)
+        .map(|(name, value)| format!("root.style.setProperty('{name}','{value}','important');"))
+        .collect();
+    format!("(() => {{ const root=document.documentElement; {assignments} }})();")
 }
 
 pub fn plain_response(status: u16, message: &str) -> Response<Cow<'static, [u8]>> {
@@ -405,12 +336,18 @@ fn valid_relative_path(path: &str) -> bool {
 }
 
 fn web_theme_css() -> String {
+    let appearance: String =
+        web_appearance(theme::palette(), theme::fixed(), theme::surface_is_light())
+            .map(|(name, value)| format!("{name}:{value};"))
+            .collect();
+    let canvas = canvas(!crate::platform::uses_opaque_fallback());
     format!(
         "{WEB_TOKENS_CSS}\n{WEB_CONTROLS_CSS}\n\
+         html:root {{ {appearance} --aw-web-canvas:{canvas}; }}\n\
          html:root, html:root > body, #app, #root, #__next {{\
          background: var(--aw-web-canvas, var(--aw-fallback-surface)) !important;\
          color: var(--aw-text) !important;\
-         }}\nhtml:root {{ color-scheme: normal !important; }}"
+         }}"
     )
 }
 
@@ -453,7 +390,7 @@ mod tests {
         for markup in ["<!doctype html><html><head><script src='/app.js'></script></head><body>ok</body></html>",
                        "<!-- <head> --><HTML lang='en'><HEAD><title>ok</title></HEAD></HTML>",
                        "<!doctype html><html><body>ok</body></html>"] {
-            let protected = String::from_utf8(policy.protect_html(markup.as_bytes().to_vec())).unwrap();
+            let protected = String::from_utf8(policy.protect_html(markup.as_bytes())).unwrap();
             let lower = protected.to_ascii_lowercase();
             assert_eq!(lower.matches("<html").count(), 1);
             assert_eq!(lower.matches("<head>").count(), if markup.starts_with("<!--") { 2 } else { 1 });
@@ -496,7 +433,7 @@ mod tests {
     fn html_policy_is_prepended_and_markup_is_preserved() {
         let policy = WebDocumentPolicy::new(ORIGIN, "index.html").unwrap();
         let protected = String::from_utf8(
-            policy.protect_html(b"<body><script src=\"/app.js\"></script></body>".to_vec()),
+            policy.protect_html(b"<body><script src=\"/app.js\"></script></body>"),
         )
         .unwrap();
         assert!(protected.starts_with("<!doctype html><html><head>"));
@@ -520,15 +457,121 @@ mod tests {
 
     #[test]
     fn web_semantic_colors_and_color_scheme_follow_the_material_surface() {
-        let light = web_theme_script(true);
-        let dark = web_theme_script(false);
-        assert!(light.contains("'--aw-primary','#14181fff'"));
-        assert!(light.contains("'--aw-field','#e8ebf0d9'"));
-        assert!(light.contains("'color-scheme','light'"));
-        assert!(dark.contains("'--aw-primary','#f9fafcff'"));
-        assert!(dark.contains("'--aw-field','#20232a80'"));
-        assert!(dark.contains("'color-scheme','dark'"));
+        use crate::platform::WindowAppearance;
+        use crate::ui::theme;
+
+        let cases = [
+            (
+                WindowAppearance::Light,
+                false,
+                false,
+                true,
+                "#14181fff",
+                "#e8ebf0d9",
+            ),
+            (
+                WindowAppearance::Light,
+                false,
+                true,
+                true,
+                "#14181fff",
+                "#e8ebf0d9",
+            ),
+            (
+                WindowAppearance::Dark,
+                false,
+                false,
+                false,
+                "#f9fafcff",
+                "#20232a80",
+            ),
+            (
+                WindowAppearance::Dark,
+                false,
+                true,
+                false,
+                "#f9fafcff",
+                "#20232a80",
+            ),
+            (
+                WindowAppearance::Dark,
+                true,
+                false,
+                false,
+                "#f9fafcff",
+                "#20232a80",
+            ),
+            (
+                WindowAppearance::Dark,
+                true,
+                true,
+                false,
+                "#f9fafcff",
+                "#20232a80",
+            ),
+            (
+                WindowAppearance::Light,
+                true,
+                true,
+                true,
+                "#14181fff",
+                "#e8ebf0d9",
+            ),
+        ];
+        for (appearance, opaque, contrast, light_surface, primary, field) in cases {
+            let palette = theme::palette_for(appearance, opaque, contrast);
+            let script = web_theme_script(palette, theme::fixed_for(contrast), light_surface);
+            for (name, _) in palette.web_variables() {
+                assert!(script.contains(name), "missing {name}");
+            }
+            assert!(script.contains(primary));
+            assert!(script.contains(field));
+            for (name, normal_value, contrast_value) in [
+                ("--aw-on-dark-control-border", "#ffffff30", "#ffffff52"),
+                ("--aw-on-dark-selection-outline", "#ffffff30", "#ffffff68"),
+                ("--aw-on-dark-divider", "#ffffff1f", "#ffffff42"),
+            ] {
+                let value = if contrast {
+                    contrast_value
+                } else {
+                    normal_value
+                };
+                assert!(script.contains(&format!("setProperty('{name}','{value}','important')")));
+            }
+            assert!(script.contains(if light_surface {
+                "'color-scheme','light'"
+            } else {
+                "'color-scheme','dark'"
+            }));
+            assert!(script.contains(if light_surface {
+                "'--aw-web-fallback-surface','var(--aw-light-fallback-surface)'"
+            } else {
+                "'--aw-web-fallback-surface','var(--aw-fallback-surface)'"
+            }));
+        }
+        let light = web_theme_script(
+            theme::palette_for(WindowAppearance::Light, false, false),
+            theme::fixed_for(false),
+            true,
+        );
+        let dark = web_theme_script(
+            theme::palette_for(WindowAppearance::Dark, false, false),
+            theme::fixed_for(false),
+            false,
+        );
+        let opaque = web_theme_script(
+            theme::palette_for(WindowAppearance::Dark, true, false),
+            theme::fixed_for(false),
+            false,
+        );
+        let contrast = web_theme_script(
+            theme::palette_for(WindowAppearance::Dark, false, true),
+            theme::fixed_for(true),
+            false,
+        );
         assert_ne!(light, dark);
+        assert_ne!(dark, opaque);
+        assert_ne!(dark, contrast);
     }
 
     #[test]

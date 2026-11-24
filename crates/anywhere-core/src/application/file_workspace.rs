@@ -91,19 +91,24 @@ impl Application {
             policy.enabled = enabled;
             policy.options = options;
             policy.generation = policy.generation.wrapping_add(1);
+            drop(policy);
             let mut session = self.session()?;
+            self.revoke_tool_windows();
             session.resolution.object_actions.clear();
             for rows in session.resolution.source_candidates.values_mut() {
                 rows.retain(|c| !crate::features::filesystem::search::is_search_target(c));
             }
             session.resolution.file_search = None;
             session.resolution.file_results_frozen = false;
+            session.resolution.displayed_file_paths.clear();
             std::sync::Arc::make_mut(&mut session.resolution.search_candidates)
                 .retain(|c| !crate::features::filesystem::search::is_search_target(c));
             session
                 .resolution
                 .search_sources
                 .retain(|s| s.id != "files");
+            session.execution.file_candidate_indices.clear();
+            session.execution.file_candidates = Vec::new();
             session
                 .execution
                 .candidates
@@ -153,12 +158,18 @@ impl Application {
                 .ok_or_else(|| anyhow::anyhow!("file search not ready"))?
                 .query_id;
             session.resolution.file_results_frozen = true;
-            let displayed = session
-                .resolution
-                .search_candidates
-                .iter()
-                .filter_map(|candidate| candidate.context()?.value.path().map(PathBuf::from))
-                .collect();
+            if session.resolution.displayed_file_paths.is_empty()
+                && !session.resolution.search_candidates.is_empty()
+            {
+                let existing: Vec<PathBuf> = session
+                    .resolution
+                    .search_candidates
+                    .iter()
+                    .filter_map(|candidate| candidate.context()?.value.path().map(PathBuf::from))
+                    .collect();
+                session.resolution.displayed_file_paths.extend(existing);
+            }
+            let displayed = session.resolution.displayed_file_paths.clone();
             (query_id, displayed)
         };
         let source = self.file_search_source.clone();
@@ -287,16 +298,22 @@ fn commit_file_batch(
                 return;
             }
         }
+        let session = &mut *session;
         let frozen = session.resolution.file_results_frozen;
         let prior_rows = session.resolution.search_candidates.len();
-        if append_results {
-            let mut displayed: std::collections::HashSet<_> = session
+        if session.resolution.displayed_file_paths.is_empty() && prior_rows > 0 {
+            let existing: Vec<PathBuf> = session
                 .resolution
                 .search_candidates
                 .iter()
                 .filter_map(|c| c.context()?.value.path().map(PathBuf::from))
                 .collect();
-            std::sync::Arc::make_mut(&mut session.resolution.search_candidates).extend(
+            session.resolution.displayed_file_paths.extend(existing);
+        }
+        if append_results {
+            let resolution = &mut session.resolution;
+            let displayed = &mut resolution.displayed_file_paths;
+            std::sync::Arc::make_mut(&mut resolution.search_candidates).extend(
                 batch.candidates.into_iter().filter(|c| {
                     c.context()
                         .and_then(|context| context.value.path())
@@ -317,14 +334,9 @@ fn commit_file_batch(
             // Once visible, rows keep their position for this revision. Initial
             // batches may improve ranking, but only unseen targets are appended.
             // Automatic head growth remains bounded; more() reaches all matches.
-            let mut displayed: std::collections::HashSet<_> = session
-                .resolution
-                .search_candidates
-                .iter()
-                .filter_map(|c| c.context()?.value.path().map(PathBuf::from))
-                .collect();
-            let search_candidates =
-                std::sync::Arc::make_mut(&mut session.resolution.search_candidates);
+            let resolution = &mut session.resolution;
+            let displayed = &mut resolution.displayed_file_paths;
+            let search_candidates = std::sync::Arc::make_mut(&mut resolution.search_candidates);
             for candidate in batch.candidates {
                 if search_candidates.len() >= crate::features::filesystem::scan::PAGE_SIZE {
                     break;
@@ -366,17 +378,17 @@ fn commit_file_batch(
                 let catalog = resolver.catalog.version();
                 let mut rows = session.resolution.search_candidates[prior_rows..].to_vec();
                 super::snapshot::validate_ready_candidates(&mut rows, &registry, &facts);
-                for row in &mut rows {
-                    if catalog > 1 {
-                        row.presentation.id.push_str(&format!(":catalog:{catalog}"));
-                    }
-                }
+                super::snapshot::stamp_candidate_ids(rows.iter_mut(), catalog);
                 std::sync::Arc::make_mut(&mut session.state.candidates)
                     .extend(rows.iter().map(|c| c.presentation.clone()));
-                session.execution.candidates.extend(
-                    rows.into_iter()
-                        .map(|c| (c.presentation.id.clone().into(), c)),
-                );
+                let execution = &mut session.execution;
+                let base_index = execution.file_candidates.len();
+                execution
+                    .file_candidate_indices
+                    .extend(rows.iter().enumerate().map(|(offset, row)| {
+                        (row.presentation.id.clone().into(), base_index + offset)
+                    }));
+                execution.file_candidates.extend(rows);
             }
             // Metadata updates retain the immutable rows and execution map.
             session.resolution.snapshot_seq = session.resolution.snapshot_seq.saturating_add(1);
@@ -385,7 +397,7 @@ fn commit_file_batch(
             session.state.search_sources = session.resolution.search_sources.clone();
             // Publish while holding the session/policy guards, just like a full
             // commit. Unlocking first could publish past a new query or session.
-            resolver.publish_state(&session);
+            resolver.publish_state(session);
 
             fast_published = true;
         }
@@ -553,6 +565,101 @@ mod progress_tests {
         assert_eq!(late_page.confirmed_matches, 65);
         assert_eq!(late_page.next_cursor.as_deref(), Some("42"));
         assert!(publish(120, 65, true).next_cursor.is_none());
+    }
+
+    #[test]
+    fn file_row_ids_survive_full_recomputes_and_page_appends() {
+        use crate::core::search::candidate_source::{AsyncCandidateBatch, BatchUpdate};
+        use crate::features::filesystem::search::file_candidates;
+
+        let resolver = Resolver::new(
+            crate::application::builtin_registry(),
+            Box::new(MemoryUsage::default()),
+        );
+        resolver.reset_session(1);
+        let candidates = |name: &str| {
+            file_candidates(
+                vec![anywhere_platform::FileSearchHit {
+                    path: PathBuf::from("/synthetic").join(name),
+                    is_directory: false,
+                }],
+                "",
+                &resolver.base_registry(),
+            )
+        };
+        let initial = candidates("first.txt");
+        let raw_id = initial[0].presentation.id.clone();
+        {
+            let mut session = resolver.session.access().unwrap();
+            resolver
+                .catalog
+                .replace_registry(crate::application::builtin_registry());
+            *session =
+                super::super::session_model::LauncherSession::reserved(1, resolver.base_registry());
+            session.input_mode = InputMode::FileSearch;
+            session.resolution.committed_revision = Some(0);
+            session.resolution.search_candidates = Arc::new(initial);
+        }
+        let first = resolver.recompute_current(1).unwrap();
+        assert_eq!(first.candidates[0].id, format!("{raw_id}:catalog:2"));
+        let policy = RwLock::new(crate::features::filesystem::search::FileSearchPolicy::default());
+        commit_file_batch(
+            &resolver,
+            &policy,
+            0,
+            1,
+            0,
+            SourcePublication {
+                id: "files",
+                append_results: true,
+            },
+            AsyncCandidateBatch {
+                update: BatchUpdate::Replace,
+                candidates: candidates("second.txt"),
+                state: SearchSourceState::Ready,
+                metadata: None,
+            },
+        );
+        let appended = resolver.latest_tx.borrow().clone().unwrap();
+        assert_eq!(appended.candidates.len(), 2);
+        assert_eq!(appended.candidates[0].id, first.candidates[0].id);
+        let recomputed = resolver.recompute_current(1).unwrap();
+        assert!(Arc::ptr_eq(&appended.candidates, &recomputed.candidates));
+        assert_eq!(
+            recomputed.candidate_list_version,
+            first.candidate_list_version
+        );
+        {
+            let mut session = resolver.session.access().unwrap();
+            assert_eq!(
+                session.resolution.search_candidates[0].presentation.id,
+                raw_id
+            );
+            for row in recomputed.candidates.iter() {
+                assert_eq!(
+                    session
+                        .execution_candidate(&row.id)
+                        .unwrap()
+                        .presentation
+                        .id,
+                    row.id
+                );
+            }
+            resolver
+                .catalog
+                .replace_registry(crate::application::builtin_registry());
+            session.actions = resolver.base_registry();
+        }
+        assert_eq!(
+            resolver.recompute_current(1).unwrap().candidates[0].id,
+            format!("{raw_id}:catalog:3")
+        );
+        assert!(resolver
+            .session
+            .access()
+            .unwrap()
+            .execution_candidate(&first.candidates[0].id)
+            .is_none());
     }
 
     #[test]

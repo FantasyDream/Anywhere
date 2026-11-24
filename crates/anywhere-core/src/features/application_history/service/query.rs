@@ -41,7 +41,7 @@ fn empty(notice: Notice) -> SearchResult {
 impl HistoryService {
     pub fn open_session(&self) -> Result<u64> {
         self.refresh()?;
-        let mut state = self.state.lock().unwrap();
+        let mut state = crate::core::sync::lock_state(&self.state, "history_state")?;
         let owner = self
             .owner
             .try_update(Ordering::AcqRel, Ordering::Acquire, |n| n.checked_add(1))
@@ -54,7 +54,7 @@ impl HistoryService {
         Ok(owner)
     }
     pub fn cancel_session(&self, owner: u64) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = crate::core::sync::lock_for_revoke(&self.state, "history_state");
         if owner == self.owner.load(Ordering::Acquire) {
             self.advance_epoch();
             state.items = Arc::default();
@@ -85,7 +85,7 @@ impl HistoryService {
         } = request;
         if force_refresh {
             {
-                let state = self.state.lock().unwrap();
+                let state = crate::core::sync::lock_state(&self.state, "history_state")?;
                 if owner != self.owner.load(Ordering::Acquire)
                     || state
                         .latest_interactive_revision
@@ -137,7 +137,7 @@ impl HistoryService {
         force_refresh: bool,
     ) -> Result<Prepared> {
         ensure!(text.len() <= 1024, "history query too large");
-        let mut state = self.state.lock().unwrap();
+        let mut state = crate::core::sync::lock_state(&self.state, "history_state")?;
         if owner != self.owner.load(Ordering::Acquire) {
             return Ok(Prepared::Complete(empty(Notice::Stale)));
         }
@@ -229,7 +229,7 @@ impl HistoryService {
                 .then(a.source_order.cmp(&b.source_order))
         });
         let items: Arc<[_]> = ranked.into_iter().map(|entry| entry.item).collect();
-        let mut state = self.state.lock().unwrap();
+        let mut state = crate::core::sync::lock_state(&self.state, "history_state")?;
         if !current() {
             return Ok(empty(Notice::Stale));
         }

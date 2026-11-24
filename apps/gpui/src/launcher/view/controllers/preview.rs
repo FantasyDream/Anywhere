@@ -4,14 +4,14 @@ impl LauncherView {
     pub(super) fn schedule_selected_preview(&mut self, cx: &mut Context<Self>) {
         let generation = self.live_state.generation;
         let screen = self.screen;
-        self.preview_selection_task = Some(cx.spawn(async move |this, cx| {
+        self.preview.selection_task = Some(cx.spawn(async move |this, cx| {
             cx.background_executor()
                 .timer(Duration::from_millis(
                     anywhere_protocol::policy::PREVIEW_SELECTION_DEBOUNCE_MS,
                 ))
                 .await;
             let _ = this.update(cx, |this, cx| {
-                if this.preview_open
+                if this.preview.open
                     && this.live_state.generation == generation
                     && this.screen == screen
                 {
@@ -23,9 +23,9 @@ impl LauncherView {
 
     pub(super) fn can_toggle_preview_shortcut(&self) -> bool {
         let file_preview = matches!(self.screen, Screen::Launcher | Screen::FileSearch)
-            && (self.preview_open || self.can_preview_selected_file());
+            && (self.preview.open || self.can_preview_selected_file());
         let clipboard_preview = matches!(self.screen, Screen::Clipboard | Screen::ClipboardShelf)
-            && (self.preview_open || self.clipboard_selection_active());
+            && (self.preview.open || self.clipboard_selection_active());
         file_preview || clipboard_preview
     }
 
@@ -52,7 +52,7 @@ impl LauncherView {
         if self.screen == Screen::Launcher || self.screen == Screen::FileSearch {
             if let (Some(live), Some(row)) = (self.live.clone(), self.selected_row_for_action()) {
                 if row.kind == anywhere_protocol::CandidateKind::File {
-                    let receiver = live.preview_file(self.model.revision, row.id.clone());
+                    let receiver = live.preview_file(self.model.revision, row.id.to_string());
                     self.poll_preview(receiver, cx);
                 }
             }
@@ -65,7 +65,7 @@ impl LauncherView {
                 .selected_row_for_action()
                 .filter(|row| row.kind == CandidateKind::File)
                 .map(|row| PreviewTarget::File {
-                    candidate_id: row.id.clone(),
+                    candidate_id: row.id.to_string(),
                     revision: self.model.revision,
                 }),
             Screen::Clipboard | Screen::ClipboardShelf => {
@@ -76,7 +76,7 @@ impl LauncherView {
     }
 
     pub(super) fn preview_request_is_current(&self, request: &PreviewRequest) -> bool {
-        request.generation == self.preview_request_generation
+        request.generation == self.preview.request_generation
             && request.session_generation == self.live_state.generation
             && request.screen == self.screen
             && self.current_preview_target().as_ref() == Some(&request.target)
@@ -90,9 +90,9 @@ impl LauncherView {
         let Some(target) = self.current_preview_target() else {
             return;
         };
-        self.preview_request_generation = self.preview_request_generation.wrapping_add(1);
+        self.preview.request_generation = self.preview.request_generation.wrapping_add(1);
         let request = PreviewRequest {
-            generation: self.preview_request_generation,
+            generation: self.preview.request_generation,
             session_generation: self.live_state.generation,
             screen: self.screen,
             target,
@@ -153,20 +153,20 @@ impl LauncherView {
                         if !this.preview_request_is_current(&request) {
                             return Ok(PreviewReservation::Stale);
                         }
-                        if this.preview_busy {
+                        if this.preview.busy {
                             return Ok(PreviewReservation::Busy);
                         }
-                        this.preview_busy = true;
-                        if this.preview.is_none() {
-                            this.preview = Some(PreviewHost::new()?);
+                        this.preview.busy = true;
+                        if this.preview.host.is_none() {
+                            this.preview.host = Some(PreviewHost::new()?);
                         }
-                        let host = this.preview.take().ok_or_else(|| {
+                        let host = this.preview.host.take().ok_or_else(|| {
                             anyhow::anyhow!("Quick Look host was not initialized")
                         })?;
-                        this.preview_generation = this.preview_generation.wrapping_add(1);
-                        this.preview_open = false;
+                        this.preview.generation = this.preview.generation.wrapping_add(1);
+                        this.preview.open = false;
                         cx.notify();
-                        Ok(PreviewReservation::Ready(host, this.preview_generation))
+                        Ok(PreviewReservation::Ready(host, this.preview.generation))
                     })
                     .and_then(|reservation| reservation);
                 match reservation {
@@ -187,7 +187,7 @@ impl LauncherView {
                             let _ = live.release_preview(preview.id);
                         }
                         let _ = this.update(cx, |this, cx| {
-                            this.preview_busy = false;
+                            this.preview.busy = false;
                             if this.preview_request_is_current(&request) {
                                 this.set_notice(
                                     preview_error_message(this.locale, &error),
@@ -210,16 +210,16 @@ impl LauncherView {
             let mut reserved_host = Some(host);
             let applied = this
                 .update(cx, |this, cx| {
-                    if generation != this.preview_generation
+                    if generation != this.preview.generation
                         || !this.preview_request_is_current(&request)
                     {
                         return false;
                     }
-                    this.preview = reserved_host.take();
-                    this.preview_busy = false;
+                    this.preview.host = reserved_host.take();
+                    this.preview.busy = false;
                     match &result {
                         Ok(previous) => {
-                            this.preview_open = true;
+                            this.preview.open = true;
                             if let Some(live) = this.live.clone() {
                                 if let Some(previous) = previous {
                                     let _ = live.release_preview(previous.clone());
@@ -233,7 +233,7 @@ impl LauncherView {
                             this.start_preview_monitor(generation, cx);
                         }
                         Err(error) => {
-                            this.preview_open = owns_panel;
+                            this.preview.open = owns_panel;
                             if owns_panel {
                                 this.start_preview_monitor(generation, cx);
                             }
@@ -247,7 +247,7 @@ impl LauncherView {
                     this.refresh_current_window(cx);
                     tracing::debug!(
                         preview_id = %preview.id,
-                        preview_open = this.preview_open,
+                        preview_open = this.preview.open,
                         "quick_look_state_applied"
                     );
                     true
@@ -266,8 +266,8 @@ impl LauncherView {
                     }
                 }
                 let _ = this.update(cx, |this, cx| {
-                    this.preview = reserved_host.take();
-                    this.preview_busy = false;
+                    this.preview.host = reserved_host.take();
+                    this.preview.busy = false;
                     cx.notify();
                 });
             }
@@ -288,8 +288,8 @@ impl LauncherView {
             let Some(mut host) = host else {
                 let continue_polling = this
                     .update(cx, |this, _cx| {
-                        generation == this.preview_generation
-                            && (this.preview_busy || this.preview.is_some())
+                        generation == this.preview.generation
+                            && (this.preview.busy || this.preview.host.is_some())
                     })
                     .unwrap_or(false);
                 if !continue_polling {
@@ -336,11 +336,11 @@ impl LauncherView {
     }
 
     pub(super) fn reserve_preview_for_poll(&mut self, generation: u64) -> Option<PreviewHost> {
-        if generation != self.preview_generation || self.preview_busy {
+        if generation != self.preview.generation || self.preview.busy {
             return None;
         }
-        let host = self.preview.take()?;
-        self.preview_busy = true;
+        let host = self.preview.host.take()?;
+        self.preview.busy = true;
         Some(host)
     }
 
@@ -352,7 +352,7 @@ impl LauncherView {
         resource_id: Option<String>,
         cx: &mut Context<Self>,
     ) -> Option<Option<Entity<InputState>>> {
-        if generation != self.preview_generation {
+        if generation != self.preview.generation {
             let (host, closed_id) = match host {
                 Some(mut host) => {
                     let closed = host.close().or(resource_id);
@@ -363,20 +363,20 @@ impl LauncherView {
             self.finish_preview_close(host, closed_id, cx);
             return None;
         }
-        self.preview = host;
-        self.preview_busy = false;
+        self.preview.host = host;
+        self.preview.busy = false;
         match poll {
             PreviewPoll::Open => Some(None),
             PreviewPoll::Closed {
                 resource_id: active_resource_id,
                 application_active,
             } => {
-                self.preview_request_generation = self.preview_request_generation.wrapping_add(1);
+                self.preview.request_generation = self.preview.request_generation.wrapping_add(1);
                 debug_assert_eq!(resource_id.as_ref(), Some(active_resource_id));
                 if let (Some(live), Some(resource_id)) = (self.live.clone(), resource_id.as_ref()) {
                     let _ = live.release_preview(resource_id.clone());
                 }
-                self.preview_open = false;
+                self.preview.open = false;
                 self.notice = None;
                 cx.notify();
                 self.refresh_current_window(cx);
@@ -389,11 +389,11 @@ impl LauncherView {
     }
 
     pub(super) fn close_preview(&mut self, cx: &mut Context<Self>) -> bool {
-        self.preview_request_generation = self.preview_request_generation.wrapping_add(1);
-        let was_open = self.preview_open;
-        self.preview_generation = self.preview_generation.wrapping_add(1);
-        let generation = self.preview_generation;
-        self.preview_open = false;
+        self.preview.request_generation = self.preview.request_generation.wrapping_add(1);
+        let was_open = self.preview.open;
+        self.preview.generation = self.preview.generation.wrapping_add(1);
+        let generation = self.preview.generation;
+        self.preview.open = false;
         if was_open {
             self.notice = None;
             cx.notify();
@@ -420,11 +420,11 @@ impl LauncherView {
     }
 
     pub(super) fn reserve_preview_for_close(&mut self, generation: u64) -> Option<PreviewHost> {
-        if generation != self.preview_generation || self.preview_busy {
+        if generation != self.preview.generation || self.preview.busy {
             return None;
         }
-        let host = self.preview.take()?;
-        self.preview_busy = true;
+        let host = self.preview.host.take()?;
+        self.preview.busy = true;
         Some(host)
     }
 
@@ -434,29 +434,13 @@ impl LauncherView {
         resource_id: Option<String>,
         cx: &mut Context<Self>,
     ) {
-        self.preview = host;
-        self.preview_busy = false;
+        self.preview.host = host;
+        self.preview.busy = false;
         if let (Some(live), Some(resource_id)) = (self.live.clone(), resource_id) {
             let _ = live.release_preview(resource_id);
         }
         cx.notify();
         self.refresh_current_window(cx);
-    }
-
-    pub(super) fn handle_preview_key(
-        &mut self,
-        event: &gpui_kit::KeyDownEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        self.handle_preview_keystroke(
-            event.keystroke.key.as_str(),
-            event.keystroke.modifiers.modified(),
-            event.prefer_character_input,
-            event.is_held,
-            window,
-            cx,
-        )
     }
 
     pub(super) fn handle_preview_keystroke(
@@ -468,7 +452,7 @@ impl LauncherView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.preview_open && key == "escape" {
+        if self.preview.open && key == "escape" {
             self.close_preview(cx);
             self.focus_active_editor(window, cx);
             return true;
@@ -477,7 +461,7 @@ impl LauncherView {
             || prefer_character_input
             || modified
             || !self.active_editor_focused(window, cx)
-            || (!self.preview_open && !self.file_search_selection_active())
+            || (!self.preview.open && !self.file_search_selection_active())
         {
             return false;
         }
@@ -497,5 +481,47 @@ impl LauncherView {
             && self
                 .selected_row_for_action()
                 .is_some_and(|row| row.kind == anywhere_protocol::CandidateKind::File)
+    }
+
+    pub(in crate::launcher::view) fn handle_preview_key_overlay(
+        &mut self,
+        input: &crate::launcher::view::input::KeyInput<'_>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> crate::launcher::view::input::KeyFlow {
+        use crate::launcher::view::input::KeyFlow;
+        if !self.preview.open {
+            return KeyFlow::Continue;
+        }
+        let KeyModifiers {
+            command,
+            control,
+            alt,
+            shift,
+            modified,
+        } = input.modifiers;
+        if input.key == "escape"
+            || (command && !control && !alt && !shift && input.key.eq_ignore_ascii_case("l"))
+        {
+            self.close_preview(cx);
+            self.focus_active_editor(window, cx);
+            return KeyFlow::Handled;
+        }
+        if (!modified
+            && matches!(
+                input.key,
+                "left" | "right" | "home" | "end" | "backspace" | "delete"
+            ))
+            || (command && !control && !alt && !shift && input.key.eq_ignore_ascii_case("a"))
+        {
+            if matches!(self.screen, Screen::Launcher | Screen::FileSearch) {
+                self.file_search.browsing = false;
+            }
+            if matches!(self.screen, Screen::Clipboard | Screen::ClipboardShelf) {
+                self.clipboard.browsing = false;
+            }
+            self.close_preview(cx);
+        }
+        KeyFlow::Continue
     }
 }

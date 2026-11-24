@@ -29,9 +29,9 @@ fn action_picker_contains_tab_focus_and_matches_localized_titles(cx: &mut TestAp
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.open_settings(window, cx);
-            view.settings.selected = SettingsCategory::Shortcuts;
+            view.settings_editor.model.selected = SettingsCategory::Shortcuts;
             view.locale = Locale::Zh;
-            view.shortcut_catalog = vec![ShortcutCatalogAction {
+            view.shortcuts.catalog = vec![ShortcutCatalogAction {
                 action_id: "developer.terminal.open".into(),
                 title: "Open terminal".into(),
                 localized_titles: [("zh".into(), "打开终端".into())].into(),
@@ -45,7 +45,7 @@ fn action_picker_contains_tab_focus_and_matches_localized_titles(cx: &mut TestAp
     sync_test_viewport_to_desired(cx, window, &view);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
-            set_input_value(&view.action_shortcut_input, "终端", window, cx);
+            set_input_value(&view.shortcuts.action_input, "终端", window, cx);
         });
         window.render_frame(cx);
         assert!(window
@@ -59,7 +59,8 @@ fn action_picker_contains_tab_focus_and_matches_localized_titles(cx: &mut TestAp
             window.render_frame(cx);
             view.update(cx, |view, cx| {
                 assert!(view
-                    .settings_action_picker_focus
+                    .settings_editor
+                    .action_picker_focus
                     .contains_focused(window, cx));
                 assert!(view.settings_modal_active());
             });
@@ -103,7 +104,8 @@ fn clipboard_virtualization_reaches_the_last_of_a_thousand_rows(cx: &mut TestApp
         view.update(cx, |view, cx| {
             view.clipboard.selected = 999;
             view.clipboard.browsing = true;
-            view.tool_list_scrolls
+            view.scrolls
+                .tool_lists
                 .clipboard
                 .scroll_to_item_strict(999, gpui_kit::ScrollStrategy::Bottom);
             cx.notify();
@@ -131,7 +133,7 @@ fn hidden_workspace_expires_without_another_activation(cx: &mut TestAppContext) 
             set_input_value(&view.history_input, "history query", window, cx);
             set_input_value(&view.tasks_filter_input, "task query", window, cx);
             view.prepare_hide(cx);
-            assert!(view.retained_workspace);
+            assert!(view.presence.retained_workspace);
             // Model an output cache built while a hidden view was still retained.
             task_output = Arc::downgrade(&view.tasks.output_lines("task\noutput".into()));
         });
@@ -144,7 +146,7 @@ fn hidden_workspace_expires_without_another_activation(cx: &mut TestAppContext) 
     cx.run_until_parked();
     cx.update(|cx| {
         let view = view.read(cx);
-        assert!(!view.retained_workspace && view.hidden_at.is_none());
+        assert!(!view.presence.retained_workspace && view.presence.hidden_at.is_none());
         assert!(view.model.query.is_empty());
         assert!(view.input.read(cx).value().is_empty());
         assert!(view.content_input.read(cx).value().is_empty());
@@ -168,7 +170,7 @@ fn hiding_an_empty_home_releases_its_snapshot_without_waiting(cx: &mut TestAppCo
             view.apply_shared_state(state, cx);
             view.live_state.session_id = Some(7);
             view.live_state.snapshot_gate = Some(SnapshotGate::new(7));
-            view.presented = true;
+            view.presence.presented = true;
             assert!(snapshot.upgrade().is_some());
 
             view.prepare_hide(cx);
@@ -176,7 +178,7 @@ fn hiding_an_empty_home_releases_its_snapshot_without_waiting(cx: &mut TestAppCo
             assert!(snapshot.upgrade().is_none());
             assert!(view.live_state.session_id.is_none());
             assert!(view.live_state.snapshot_gate.is_none());
-            assert!(view.retention_task.is_none());
+            assert!(view.presence.retention_task.is_none());
             assert!(view.model.rows.is_empty());
             assert!(!view.model.loading);
         });
@@ -195,7 +197,7 @@ fn old_hidden_workspace_timer_cannot_clear_a_resumed_view(cx: &mut TestAppContex
     cx.run_until_parked();
     cx.update(|cx| {
         view.update(cx, |view, _| {
-            view.hidden_at = None;
+            view.presence.hidden_at = None;
             view.model.query = "resumed".into();
         })
     });

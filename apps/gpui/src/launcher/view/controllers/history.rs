@@ -93,7 +93,7 @@ impl LauncherView {
             return;
         };
         self.app_history.close_object_actions();
-        self.app_history.empty_actions_open = false;
+        self.app_history.page_actions_open = false;
         self.app_history.fallback_actions_open = false;
         self.app_history.failed_sources = false;
         self.app_history.notice = None;
@@ -234,6 +234,12 @@ impl LauncherView {
             let receiver = live.use_app_history_item(item.id.clone(), true);
             self.poll(receiver, self.live_state.generation, cx);
             self.notice = None;
+            self.show_hud_toast(
+                l10n::copied(self.locale),
+                IconName::Check,
+                components::NoticeKind::Success,
+                cx,
+            );
             cx.notify();
         }
     }
@@ -254,22 +260,25 @@ impl LauncherView {
         let request = self
             .app_history
             .begin_object_actions_request(item.id.clone(), revision);
-        let receiver =
-            live.app_history_object_actions(request, session_id, revision, item.id.clone());
+        self.scrolls
+            .history_actions
+            .set_offset(gpui_kit::Point::default());
+        let receiver = live.app_history_object_actions(request, session_id, revision, item.id);
         self.poll(receiver, self.live_state.generation, cx);
         cx.notify();
     }
 
-    pub(super) fn toggle_empty_app_history_actions(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn toggle_app_history_page_actions(&mut self, cx: &mut Context<Self>) {
         self.app_history.close_object_actions();
-        self.app_history.empty_actions_open = !self.app_history.empty_actions_open;
+        self.app_history.fallback_actions_open = false;
+        self.app_history.page_actions_open = !self.app_history.page_actions_open;
         self.notice = None;
         cx.notify();
     }
 
     pub(super) fn open_fallback_app_history_actions(&mut self, cx: &mut Context<Self>) {
         self.app_history.close_object_actions();
-        self.app_history.empty_actions_open = false;
+        self.app_history.page_actions_open = false;
         self.app_history.fallback_actions_open = true;
         self.app_history.fallback_action_selected = 0;
         self.notice = None;
@@ -279,7 +288,7 @@ impl LauncherView {
     pub(super) fn toggle_fallback_app_history_actions(&mut self, cx: &mut Context<Self>) {
         let open = !self.app_history.fallback_actions_open;
         self.app_history.close_object_actions();
-        self.app_history.empty_actions_open = false;
+        self.app_history.page_actions_open = false;
         self.app_history.fallback_actions_open = open;
         self.app_history.fallback_action_selected = 0;
         self.notice = None;
@@ -300,8 +309,8 @@ impl LauncherView {
         }
     }
 
-    pub(super) fn refresh_empty_app_history(&mut self, cx: &mut Context<Self>) {
-        self.app_history.empty_actions_open = false;
+    pub(super) fn refresh_app_history_from_page_menu(&mut self, cx: &mut Context<Self>) {
+        self.app_history.page_actions_open = false;
         self.request_app_history_refresh(cx);
         cx.notify();
     }
@@ -331,5 +340,124 @@ impl LauncherView {
         let receiver = live.execute(revision, action.id);
         self.poll(receiver, self.live_state.generation, cx);
         cx.notify();
+    }
+
+    pub(in crate::launcher::view) fn handle_app_history_overlay_keys(
+        &mut self,
+        input: &crate::launcher::view::input::KeyInput<'_>,
+        cx: &mut Context<Self>,
+    ) -> crate::launcher::view::input::KeyFlow {
+        use crate::launcher::view::input::KeyFlow;
+        if self.screen != Screen::ApplicationHistory || input.modifiers.modified {
+            return KeyFlow::Continue;
+        }
+        if self.app_history.fallback_actions_open {
+            match input.key {
+                "down" | "up" => {
+                    self.app_history.fallback_action_selected =
+                        1 - self.app_history.fallback_action_selected;
+                }
+                "enter" | "return" => {
+                    self.execute_fallback_app_history_action(
+                        self.app_history.fallback_action_selected,
+                        cx,
+                    );
+                }
+                "escape" => self.app_history.fallback_actions_open = false,
+                _ => return KeyFlow::Handled,
+            }
+            cx.notify();
+            return KeyFlow::Handled;
+        }
+        if self.app_history.page_actions_open {
+            match input.key {
+                "enter" | "return" => self.refresh_app_history_from_page_menu(cx),
+                "escape" => self.app_history.page_actions_open = false,
+                "down" | "up" => {}
+                _ => return KeyFlow::Handled,
+            }
+            cx.notify();
+            return KeyFlow::Handled;
+        }
+        if self.app_history.object_actions_active {
+            match input.key {
+                "down" | "up" => {
+                    if input.key == "down" {
+                        self.app_history.select_object_action_next();
+                    } else {
+                        self.app_history.select_object_action_previous();
+                    }
+                    self.scrolls
+                        .history_actions
+                        .scroll_to_item(self.app_history.object_action_selected);
+                }
+                "enter" | "return" => self.execute_selected_app_history_action(cx),
+                "escape" => self.app_history.close_object_actions(),
+                _ => return KeyFlow::Handled,
+            }
+            cx.notify();
+            return KeyFlow::Handled;
+        }
+        KeyFlow::Continue
+    }
+
+    pub(in crate::launcher::view) fn handle_app_history_key(
+        &mut self,
+        input: &crate::launcher::view::input::KeyInput<'_>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match input.key {
+            "pageup" | "pagedown" => {
+                let height = self.scrolls.history_base().bounds().size.height;
+                let count = self.app_history.items.len();
+                let step = (f32::from(height) / 64.).floor().clamp(1., 100.) as usize;
+                let target = if input.key == "pageup" {
+                    self.app_history.selected.saturating_sub(step)
+                } else {
+                    self.app_history
+                        .selected
+                        .saturating_add(step)
+                        .min(count.saturating_sub(1))
+                };
+                self.app_history.close_object_actions();
+                self.app_history.selected = target;
+                self.reveal_result_row(target);
+                cx.notify();
+            }
+            "down" => {
+                self.app_history.select_next();
+                self.reveal_result_row(self.app_history.selected);
+                cx.notify();
+            }
+            "up" => {
+                self.app_history.select_previous();
+                self.reveal_result_row(self.app_history.selected);
+                cx.notify();
+            }
+            "enter" | "return" => {
+                if self
+                    .app_history
+                    .selected_item()
+                    .is_some_and(|item| item.can_open)
+                {
+                    self.open_selected_history_item(cx);
+                } else {
+                    self.copy_selected_history_item(cx);
+                }
+            }
+            "escape" => {
+                if !self.app_history.query.is_empty() {
+                    self.history_input
+                        .update(cx, |input, cx| input.set_value("", window, cx));
+                    self.app_history.set_query(String::new());
+                    self.schedule_app_history_search(cx);
+                    cx.notify();
+                } else {
+                    self.go_back(window, cx);
+                }
+            }
+            _ => {}
+        }
     }
 }

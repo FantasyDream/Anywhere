@@ -159,14 +159,8 @@ impl ActionHandler for Noop {
     }
 }
 fn uses(app: &Application) -> u32 {
-    app.resolver
-        .history
-        .lock()
-        .unwrap()
-        .load_global()
-        .unwrap()
-        .get(&("test.execution".into(), TEXT.into()))
-        .map_or(0, |stats| stats.execute_count)
+    let snapshot = app.resolver.history.lock().unwrap().load_global().unwrap();
+    crate::core::ranking::usage::lookup_usage(&snapshot, "test.execution", TEXT).execute_count
 }
 
 #[test]

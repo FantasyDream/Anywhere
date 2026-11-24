@@ -54,6 +54,20 @@ pub trait ApplicationHost: Send + Sync {
         Ok(None)
     }
 
+    /// Raw premultiplied BGRA8 pixels for an application icon (zero PNG round-trip).
+    fn application_icon_bgra(
+        &self,
+        _path: &str,
+        _size: u32,
+    ) -> Result<Option<crate::RawIconImage>> {
+        Ok(None)
+    }
+
+    /// Raw premultiplied BGRA8 pixels for a filesystem path icon.
+    fn file_icon_bgra(&self, _path: &str, _size: u32) -> Result<Option<crate::RawIconImage>> {
+        Ok(None)
+    }
+
     /// Short version string for cache invalidation. `None` when unknown.
     fn application_version(&self, _bundle_id: &str) -> Option<String> {
         None

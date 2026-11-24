@@ -209,7 +209,7 @@ mod tests {
         application.id = "application".into();
         application.kind = CandidateKind::Application;
         let state = LauncherState {
-            context_candidates: vec![hidden, folder, git, application],
+            context_candidates: vec![hidden, folder, git, application].into(),
             scopes: vec![
                 ScopeEntry {
                     id: "app.finder".into(),

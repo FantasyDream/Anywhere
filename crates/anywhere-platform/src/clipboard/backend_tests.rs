@@ -19,6 +19,35 @@ fn cocoa_exception_is_an_error_and_does_not_abort_the_process() {
         .is_some());
     assert_eq!(native_operation(|| Ok(42)).unwrap(), 42);
 }
+
+#[cfg(target_os = "macos")]
+#[test]
+fn native_clipboard_operations_are_serialized() {
+    use std::sync::{Arc, Barrier};
+
+    let barrier = Arc::new(Barrier::new(3));
+    let inside = Arc::new(AtomicUsize::new(0));
+    let maximum = Arc::new(AtomicUsize::new(0));
+    let mut handles = Vec::new();
+    for _ in 0..2 {
+        let barrier = Arc::clone(&barrier);
+        let inside = Arc::clone(&inside);
+        let maximum = Arc::clone(&maximum);
+        handles.push(std::thread::spawn(move || {
+            barrier.wait();
+            let _guard = lock_native_clipboard().unwrap();
+            maximum.fetch_max(inside.fetch_add(1, Ordering::SeqCst) + 1, Ordering::SeqCst);
+            std::thread::sleep(std::time::Duration::from_millis(20));
+            inside.fetch_sub(1, Ordering::SeqCst);
+        }));
+    }
+    barrier.wait();
+    for handle in handles {
+        handle.join().unwrap();
+    }
+    assert_eq!(maximum.load(Ordering::SeqCst), 1);
+}
+
 #[derive(Default)]
 struct Board {
     formats: Vec<(String, Vec<u8>)>,

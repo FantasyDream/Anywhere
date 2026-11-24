@@ -8,7 +8,7 @@ use anyhow::{ensure, Context, Result};
 use anywhere_plugin::web::VerifiedWebPackage;
 use anywhere_protocol::web_plugin::{WebPermission, WebPlatform};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
 };
 
@@ -23,6 +23,7 @@ pub struct WebPackageStatus {
     pub available: bool,
     pub permissions: Vec<WebPermission>,
     pub rollback: bool,
+    pub builtin: bool,
 }
 pub struct WebPackageReview {
     pub token: String,
@@ -47,7 +48,51 @@ pub struct WebPackageStore {
 }
 impl WebPackageStore {
     pub fn open(root: PathBuf, platform: WebPlatform, app: &Application) -> Result<Self> {
-        let (repository, receipts) = WebPackageRepository::open(root)?;
+        Self::open_with_builtins(root, platform, &[], app)
+    }
+
+    pub fn open_with_builtins(
+        root: PathBuf,
+        platform: WebPlatform,
+        builtins: &[&[u8]],
+        app: &Application,
+    ) -> Result<Self> {
+        let mut packages = Vec::new();
+        let mut builtin_ids = BTreeSet::new();
+        for archive in builtins {
+            let package = VerifiedWebPackage::read(std::io::Cursor::new(*archive))?;
+            if package.manifest().platforms.contains(&platform) {
+                builtin_ids.insert(package.manifest().id.clone());
+                packages.push(package);
+            }
+        }
+        let (repository, mut receipts) = WebPackageRepository::open(root, builtin_ids)?;
+        let mut changed = false;
+        for package in packages {
+            let id = package.manifest().id.clone();
+            let digest = package.digest().to_owned();
+            repository.stage(&package)?;
+            if let Some(existing) = receipts.get_mut(&id) {
+                // Keep user's enabled toggle and storage namespace intact when upgrading or migrating.
+                if existing.digest != digest || existing.previous.is_some() {
+                    existing.digest = digest;
+                    existing.previous = None;
+                    changed = true;
+                }
+            } else {
+                receipts.insert(
+                    id.clone(),
+                    Receipt {
+                        id: id.clone(),
+                        digest,
+                        source: format!("builtin:{id}"),
+                        enabled: true,
+                        previous: None,
+                    },
+                );
+                changed = true;
+            }
+        }
         let mut store = Self {
             repository,
             platform,
@@ -58,6 +103,10 @@ impl WebPackageStore {
         };
         let prepared = store.prepare(&store.receipts)?;
         store.publish(app, prepared)?;
+        if changed {
+            store.repository.save(&store.receipts)?;
+            store.repository.collect_unused(&store.receipts);
+        }
         Ok(store)
     }
     pub fn statuses(&self) -> Vec<WebPackageStatus> {
@@ -74,7 +123,12 @@ impl WebPackageStore {
             "unsupported Web platform"
         );
         ensure!(
-            self.receipts.len() < 64 || self.receipts.contains_key(&package.manifest().id),
+            !self.repository.is_builtin(&package.manifest().id),
+            "built-in Web package cannot be overwritten"
+        );
+        ensure!(
+            self.repository
+                .can_insert(&self.receipts, &package.manifest().id),
             "too many Web packages"
         );
         let token = super::token()?;
@@ -137,6 +191,10 @@ impl WebPackageStore {
         self.change(app, next)
     }
     pub fn uninstall(&mut self, app: &Application, id: &str) -> Result<()> {
+        ensure!(
+            !self.repository.is_builtin(id),
+            "built-in Web package cannot be uninstalled"
+        );
         let mut next = self.receipts.clone();
         let removed = next.remove(id).context("Web package not installed")?;
         let namespace = super::storage_namespace(&removed.id, &removed.source);
@@ -146,6 +204,10 @@ impl WebPackageStore {
         Ok(())
     }
     pub fn rollback(&mut self, app: &Application, id: &str) -> Result<()> {
+        ensure!(
+            !self.repository.is_builtin(id),
+            "built-in Web package cannot be rolled back"
+        );
         let mut next = self.receipts.clone();
         let receipt = next.get_mut(id).context("Web package not installed")?;
         let previous = receipt
@@ -185,6 +247,7 @@ impl WebPackageStore {
         let mut statuses = vec![];
         let mut assets = BTreeMap::new();
         for receipt in receipts.values() {
+            let builtin = self.repository.is_builtin(&receipt.id);
             let package = self
                 .repository
                 .package(&receipt.digest)
@@ -208,7 +271,8 @@ impl WebPackageStore {
                         enabled: receipt.enabled,
                         available: false,
                         permissions: vec![],
-                        rollback: receipt.previous.is_some(),
+                        rollback: !builtin && receipt.previous.is_some(),
+                        builtin,
                     });
                     continue;
                 }
@@ -223,7 +287,8 @@ impl WebPackageStore {
                 enabled: receipt.enabled,
                 available: true,
                 permissions: m.permissions.clone(),
-                rollback: receipt.previous.is_some(),
+                rollback: !builtin && receipt.previous.is_some(),
+                builtin,
             });
             if !receipt.enabled {
                 continue;

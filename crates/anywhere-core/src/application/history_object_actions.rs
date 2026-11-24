@@ -99,7 +99,25 @@ impl Application {
         revision: Revision,
         item_id: String,
     ) -> Result<Vec<CandidatePresentation>> {
-        let object_ticket = self.prepare_object_action_ticket(session_id, revision)?;
+        let selection = self.select_action_object(session_id, revision);
+        let actions = self
+            .history_actions_for_selection(history, selection, item_id)
+            .await?;
+        Ok(Arc::unwrap_or_clone(actions))
+    }
+
+    pub async fn history_actions_for_selection(
+        &self,
+        history: Arc<HistoryService>,
+        selection: super::ObjectActionSelection,
+        item_id: String,
+    ) -> Result<Arc<Vec<CandidatePresentation>>> {
+        let session_id = selection.session_id;
+        let revision = selection.revision;
+        let object_ticket = {
+            let mut session = self.session()?;
+            self.object_action_ticket_locked(&mut session, selection)?
+        };
         let generation = object_ticket.generation.clone();
         let expected = object_ticket.expected;
         let service = history.clone();

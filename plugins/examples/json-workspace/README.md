@@ -1,6 +1,6 @@
 # JSON Workspace
 
-第三方混合插件示例：Preact 页面、jsonc-parser 格式化、jsonpath-js 查询、SandboxJS 计算、统一 Anywhere SDK；QuickJS 按需识别 Context 和执行复制命令，无 JSON 专用 Rust API，无 Node 运行时。当前包版本为 0.7.1，面向当前 V0.14 GPUI Host；安装时批准剪贴板权限后即可直接后台执行，无逐次确认，并使用 Host 的共享工作区样式与图标。计算和结果复制直接可见；缩进与复制变体收在输入区的“JSON 操作”中。
+第三方混合插件示例：Preact 页面、jsonc-parser 格式化、jsonpath-js 查询、SandboxJS 计算、统一 Anywhere SDK；QuickJS 按需识别 Context 和执行复制命令，无 JSON 专用 Rust API，无 Node 运行时。当前包版本为 0.7.3，面向当前 V0.14 GPUI Host；安装时批准剪贴板权限后即可直接后台执行，无逐次确认，并使用 Host 的共享工作区样式与图标。计算和结果复制直接可见；缩进与复制变体收在输入区的“JSON 操作”中。
 
 源码使用 `@anywhere/sdk` 标准包导入；本仓库开发时用 npm `file:` 依赖连接 SDK，独立工程可改为 SDK `.tgz`。通用打包器与新项目模板见 [第三方插件开发指南](../../../docs/plugin-development.md)。
 
@@ -17,7 +17,14 @@
 5. 直接在输入区使用原生 `⌘V` 粘贴、`⌘A` 全选与 `⌘C` 复制所选文字，不额外请求读取剪贴板的权限。完整粘贴转义 JSON 时自动解码，局部粘贴保持普通文本编辑行为。右侧标题栏提供结果复制，显式复制命令由已批准的安装权限授权，不再逐次确认；Launcher 的三个复制 Action 由 Rust 在后台完成，不创建工具页或 WebView，成功后关闭 Launcher。Host 的 `⌘K` 提供重载和返回，Esc 关闭面板或返回搜索；中文组合输入时不抢 Esc。
 6. 输入 / 输出不写本地数据库；只保存缩进偏好。隐藏后保留 15 秒，恢复重新签发调用资格，超过期限销毁。
 
-工作区沿用 File Search 的页框、代码字体和浅透明底色，采用桌面编辑器布局：顶部只有一行模式 / 公式 / 计算工具栏，输入与结果并排且接近等宽，不为窄窗口切换为上下堆叠。两个编辑区占满剩余空间，无底部按钮栏。输入区标题旁的“⋯”收纳缩进、清空与复制变体；结果复制留在右侧标题旁。空白打开时聚焦 JSON，带入内容时聚焦公式；`⌘L` 可随时聚焦公式。背景仍由 Host 提供。
+工作区沿用 Launcher 页框和宿主主题。顶部工具栏包含模式、公式和计算按钮，
+输入与结果在桌面宽度下并排，窄窗口改为上下排列。“JSON 操作”包含缩进、清空与
+复制变体，右侧标题保留结果复制。Esc 先关闭打开的 JSON 操作，再交给宿主返回搜索。
+空白打开时聚焦 JSON，带入内容时聚焦公式，`⌘L` 可随时聚焦公式。
+
+输入与结果用主题色区分 JSON 键、字符串、数字和布尔值 / null；高亮只影响显示。
+输入法组词、超过 65,536 个 UTF-16 代码单元或 4,096 个词法 token 时，编辑器
+显示普通文字。原生文本框继续负责光标、选区、滚动和复制。
 
 ## 查询示例
 
@@ -55,7 +62,7 @@ JavaScript 使用常规 JS 数值；源文档存在无法精确往返转换的�
 
 ## 验证
 
-`npm test` 覆盖后台解析、SDK 调用、事件顺序和编辑草稿保护，以及精度 / 转义 / 重复键、scalar root、错误位置、预算与格式化幂等，以及路径 / 切片 / 过滤、空结果、原型隔离、查询预算、缓存恢复和格式化光标映射。仓库的 `scripts/check-web-examples.sh` 还安装真实构建包，通过 Rust Host / QuickJS / SDK 验证类型匹配、复制结果、缩进共享及确认 / 取消（合成剪贴板）。生产浏览器集成与资源边界见 [平台设计](../../../docs/web-plugin-design.md)。同仓库的 Text Pad 不使用 UI 框架，两者走同一个 SDK 和 Host。
+`npm test` 覆盖后台解析、SDK 调用、事件顺序和编辑草稿保护，以及精度 / 转义 / 重复键、scalar root、错误位置、高亮分类与限额、预算与格式化幂等，以及路径 / 切片 / 过滤、空结果、原型隔离、查询预算、缓存恢复和格式化光标映射。仓库的 `scripts/check-web-examples.sh` 还安装真实构建包，通过 Rust Host / QuickJS / SDK 验证类型匹配、复制结果、缩进共享及确认 / 取消（合成剪贴板）。生产浏览器集成与资源边界见 [平台设计](../../../docs/web-plugin-design.md)。同仓库的 Text Pad 不使用 UI 框架，两者走同一个 SDK 和 Host。
 
 查询库固定为 [jsonpath-js 0.3.1](https://github.com/ashphy/jsonpath-js)，计算使用 [SandboxJS 0.9.7](https://github.com/nyariv/SandboxJS) 和 [Acorn 8.15.0](https://github.com/acornjs/acorn)，其 MIT 许可随插件运行资源一同打包。
 

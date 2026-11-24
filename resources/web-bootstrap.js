@@ -39,24 +39,23 @@
     writable: false,
   });
   const hostEscapeFrame = '{"method":"host.escape"}';
-  window.addEventListener(
-    'keydown',
-    event => {
-      if (
-        event.key !== 'Escape' ||
-        event.repeat ||
-        event.isComposing ||
-        event.keyCode === 229 ||
-        event.metaKey ||
-        event.ctrlKey ||
-        event.altKey
-      ) {
-        return;
-      }
-      native.postMessage(hostEscapeFrame);
-    },
-    true,
-  );
+  window.addEventListener('keydown', event => {
+    if (
+      !visible ||
+      event.defaultPrevented ||
+      event.key !== 'Escape' ||
+      event.repeat ||
+      event.isComposing ||
+      event.keyCode === 229 ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.altKey
+    ) {
+      return;
+    }
+    event.preventDefault();
+    native.postMessage(hostEscapeFrame);
+  });
   const receivers = new Set();
   const pending = new Set();
   let focused;

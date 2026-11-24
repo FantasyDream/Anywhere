@@ -29,7 +29,7 @@ impl HistoryService {
             "history feature disabled"
         );
         let (item, source) = {
-            let state = self.state.lock().unwrap();
+            let state = crate::core::sync::lock_state(&self.state, "history_state")?;
             let item = state
                 .items
                 .iter()

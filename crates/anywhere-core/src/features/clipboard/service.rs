@@ -31,8 +31,8 @@ pub enum HistoryNotice {
     MonitoringUnavailable,
     Paused,
 }
-struct State {
-    repository: Result<Box<dyn HistoryRepository>, String>,
+struct PolicyState {
+    repository_available: bool,
     feature_enabled: bool,
     recording: bool,
     policy: HistoryPolicy,
@@ -41,8 +41,32 @@ struct State {
     generation: Option<i64>,
     notice: Option<HistoryNotice>,
 }
+struct RepositoryState {
+    inner: Result<Box<dyn HistoryRepository>, String>,
+    epoch: u64,
+}
+impl RepositoryState {
+    fn get(&mut self) -> Result<&mut (dyn HistoryRepository + 'static)> {
+        match &mut self.inner {
+            Ok(repository) => Ok(repository.as_mut()),
+            Err(_) => anyhow::bail!("Clipboard history storage is unavailable"),
+        }
+    }
+    fn expire_if_needed(&mut self, cutoff: Option<i64>) -> Result<()> {
+        if let Some(cutoff) = cutoff {
+            if self.inner.is_ok() {
+                self.get()?.expire(cutoff)?;
+            }
+        }
+        Ok(())
+    }
+}
 pub struct HistoryService {
-    state: Mutex<State>,
+    // Lock order: state -> repository. Never acquire `state` while holding `repository`.
+    // Long SQLite reads/writes run under `repository` after dropping `state`, using `epoch`
+    // to reject stale writes or reads if policy/clear invalidated the session concurrently.
+    state: Mutex<PolicyState>,
+    repository: Mutex<RepositoryState>,
     // Shared by Launcher and Shelf: admit one payload/decoder at a time.
     preview: Mutex<()>,
     watcher: Mutex<Option<Box<dyn anywhere_platform::clipboard::ClipboardWatch>>>,
@@ -83,8 +107,8 @@ impl HistoryService {
             }
         };
         Self {
-            state: Mutex::new(State {
-                repository,
+            state: Mutex::new(PolicyState {
+                repository_available: repository.is_ok(),
                 feature_enabled: true,
                 recording,
                 policy,
@@ -93,62 +117,87 @@ impl HistoryService {
                 generation: None,
                 notice: None,
             }),
+            repository: Mutex::new(RepositoryState {
+                inner: repository,
+                epoch: 0,
+            }),
             preview: Mutex::new(()),
             watcher: Mutex::new(None),
             maintenance: Mutex::new(None),
             clock,
         }
     }
-    fn state(&self) -> Result<std::sync::MutexGuard<'_, State>> {
+    fn state(&self) -> Result<std::sync::MutexGuard<'_, PolicyState>> {
         self.state
             .lock()
             .map_err(|_| anyhow::anyhow!("clipboard history unavailable"))
     }
+    fn repository(&self) -> Result<std::sync::MutexGuard<'_, RepositoryState>> {
+        self.repository
+            .lock()
+            .map_err(|_| anyhow::anyhow!("clipboard history storage unavailable"))
+    }
     pub fn status(&self) -> Result<HistoryStatus> {
-        let mut state = self.state()?;
-        if state.repository.is_ok() {
-            state.expire((self.clock)())?;
-        }
-        Ok(state.status())
+        Ok(self.state()?.status())
     }
     /// One atomic view of status and metadata. Unchanged polls stop before SQL
     /// row loading, DTO conversion and bridge transport; expiry still runs.
     pub fn snapshot(&self, query: &str, after: Option<&str>) -> Result<Option<HistorySnapshot>> {
         ensure!(query.len() <= MAX_QUERY_BYTES, "clipboard query too large");
-        let mut state = self.state()?;
-        if state.repository.is_ok() {
-            state.expire((self.clock)())?;
+        let query_digest = hex::encode(Sha256::digest(query.as_bytes()));
+        loop {
+            let (epoch, available, status, cutoff) = {
+                let state = self.state()?;
+                (
+                    state.epoch,
+                    state.repository_available,
+                    state.status(),
+                    state.policy.cutoff((self.clock)()),
+                )
+            };
+            let mut repository = self.repository()?;
+            if repository.epoch != epoch {
+                drop(repository);
+                continue;
+            }
+            if available {
+                repository.expire_if_needed(cutoff)?;
+            }
+            let changes = repository.inner.as_ref().map_or(0, |repo| repo.revision());
+            let revision = format!("{epoch}:{changes}:{:?}:{query_digest}", status.notice);
+            if after == Some(revision.as_str()) {
+                return Ok(None);
+            }
+            let items = if status.available {
+                repository.get()?.search(query)?
+            } else {
+                vec![]
+            };
+            return Ok(Some(HistorySnapshot {
+                revision,
+                status,
+                items,
+            }));
         }
-        let status = state.status();
-        let changes = state.repository.as_ref().map_or(0, |repo| repo.revision());
-        let revision = format!(
-            "{}:{changes}:{:?}:{}",
-            state.epoch,
-            status.notice,
-            hex::encode(Sha256::digest(query.as_bytes()))
-        );
-        if after == Some(revision.as_str()) {
-            return Ok(None);
-        }
-        let items = if status.available {
-            state.repository()?.search(query)?
-        } else {
-            vec![]
-        };
-        Ok(Some(HistorySnapshot {
-            revision,
-            status,
-            items,
-        }))
     }
     /// Settings-only aggregate; regular history searches need no storage-usage scan.
     pub fn usage(&self) -> Result<(u32, u32)> {
-        let mut state = self.state()?;
-        if state.repository.is_err() {
-            return Ok((0, 0));
+        loop {
+            let (epoch, policy) = {
+                let state = self.state()?;
+                if !state.repository_available {
+                    return Ok((0, 0));
+                }
+                (state.epoch, state.policy)
+            };
+            let cutoff = policy.cutoff((self.clock)());
+            let mut repository = self.repository()?;
+            if repository.epoch != epoch {
+                continue;
+            }
+            repository.expire_if_needed(cutoff)?;
+            return repository.get()?.usage();
         }
-        state.expire((self.clock)())?;
-        state.repository()?.usage()
     }
     pub fn set_feature_enabled(&self, enabled: bool, platform: &dyn ClipboardHost) -> Result<()> {
         let mut state = self.state()?;
@@ -158,16 +207,19 @@ impl HistoryService {
             if enabled && state.recording {
                 state.generation = platform.clipboard_generation().ok();
             }
+            self.repository()?.epoch = state.epoch;
         }
         Ok(())
     }
     pub fn set_recording(&self, enabled: bool) -> Result<()> {
         let mut state = self.state()?;
         state.require_enabled()?;
-        state.repository()?.set_recording_enabled(enabled)?;
+        let mut repository = self.repository()?;
+        repository.get()?.set_recording_enabled(enabled)?;
         state.recording = enabled;
         state.policy.paused_until_ms = None;
         state.invalidate();
+        repository.epoch = state.epoch;
         Ok(())
     }
     pub fn request_recording(&self, enabled: bool, platform: &dyn ClipboardHost) -> Result<()> {
@@ -180,10 +232,12 @@ impl HistoryService {
             let mut state = self.state()?;
             state.require_enabled()?;
             let generation = platform.clipboard_generation()?;
-            state.repository()?.set_recording_enabled(true)?;
+            let mut repository = self.repository()?;
+            repository.get()?.set_recording_enabled(true)?;
             state.recording = true;
             state.policy.paused_until_ms = None;
             state.invalidate();
+            repository.epoch = state.epoch;
             state.generation = Some(generation);
             state.epoch
         };
@@ -203,24 +257,27 @@ impl HistoryService {
             matches!(minutes, 0 | 5 | 15 | 60),
             "unsupported pause duration"
         );
-        let mut state = self.state()?;
-        state.require_enabled()?;
-        ensure!(state.recording, "clipboard recording is not enabled");
-        let generation = if minutes == 0 {
-            Some(platform.clipboard_generation()?)
-        } else {
-            None
-        };
-        let policy = HistoryPolicy {
-            paused_until_ms: (minutes != 0)
-                .then(|| (self.clock)().saturating_add(i64::from(minutes) * 60_000)),
-            ..state.policy
-        };
-        state.repository()?.set_policy(policy)?;
-        state.policy = policy;
-        state.invalidate();
-        state.generation = generation;
-        drop(state);
+        {
+            let mut state = self.state()?;
+            state.require_enabled()?;
+            ensure!(state.recording, "clipboard recording is not enabled");
+            let generation = if minutes == 0 {
+                Some(platform.clipboard_generation()?)
+            } else {
+                None
+            };
+            let policy = HistoryPolicy {
+                paused_until_ms: (minutes != 0)
+                    .then(|| (self.clock)().saturating_add(i64::from(minutes) * 60_000)),
+                ..state.policy
+            };
+            let mut repository = self.repository()?;
+            repository.get()?.set_policy(policy)?;
+            state.policy = policy;
+            state.invalidate();
+            repository.epoch = state.epoch;
+            state.generation = generation;
+        }
         self.wake_maintenance();
         Ok(())
     }
@@ -232,46 +289,72 @@ impl HistoryService {
             ..state.policy
         };
         policy.validate()?;
-        state.repository()?.set_policy(policy)?;
+        let mut repository = self.repository()?;
+        repository.get()?.set_policy(policy)?;
         state.policy = policy;
         let generation = state.generation;
         state.invalidate();
+        repository.epoch = state.epoch;
         state.generation = generation;
-        state.expire((self.clock)())
+        repository.expire_if_needed(policy.cutoff((self.clock)()))
     }
     /// Uses only metadata while resuming; clipboard contents copied during a pause are discarded.
     fn maintain(&self, platform: &dyn ClipboardHost) -> Result<()> {
         let now = (self.clock)();
-        let mut state = self.state()?;
-        if state.repository.is_err() {
+        let (available, needs_cleanup, cutoff, paused_expired, epoch) = {
+            let state = self.state()?;
+            (
+                state.repository_available,
+                now >= state.next_cleanup_ms,
+                state.policy.cutoff(now),
+                state
+                    .policy
+                    .paused_until_ms
+                    .is_some_and(|deadline| deadline <= now),
+                state.epoch,
+            )
+        };
+        if !available {
             return Ok(());
         }
-        if now >= state.next_cleanup_ms {
-            state.expire(now)?;
-            state.next_cleanup_ms = now.saturating_add(60_000);
+        if needs_cleanup {
+            {
+                let mut repository = self.repository()?;
+                if repository.epoch == epoch {
+                    repository.expire_if_needed(cutoff)?;
+                }
+            }
+            let mut state = self.state()?;
+            if state.epoch == epoch {
+                state.next_cleanup_ms = now.saturating_add(60_000);
+            }
         }
-        if state
-            .policy
-            .paused_until_ms
-            .is_some_and(|deadline| deadline <= now)
-        {
+        if paused_expired {
             let generation = platform.clipboard_generation()?;
-            let policy = HistoryPolicy {
-                paused_until_ms: None,
-                ..state.policy
-            };
-            state.repository()?.set_policy(policy)?;
-            state.policy = policy;
-            state.invalidate();
-            state.generation = Some(generation);
+            let mut state = self.state()?;
+            if state
+                .policy
+                .paused_until_ms
+                .is_some_and(|deadline| deadline <= now)
+            {
+                let policy = HistoryPolicy {
+                    paused_until_ms: None,
+                    ..state.policy
+                };
+                let mut repository = self.repository()?;
+                repository.get()?.set_policy(policy)?;
+                state.policy = policy;
+                state.invalidate();
+                repository.epoch = state.epoch;
+                state.generation = Some(generation);
+            }
         }
         Ok(())
     }
     fn wake_maintenance(&self) {
-        if let Ok(worker) = self.maintenance.lock() {
-            if let Some(worker) = worker.as_ref() {
-                let _ = worker.0.send(MaintenanceEvent::Changed);
-            }
+        let worker = crate::core::sync::lock_for_revoke(&self.maintenance, "clipboard_maintenance");
+        if let Some(worker) = worker.as_ref() {
+            let _ = worker.0.send(MaintenanceEvent::Changed);
         }
     }
     fn maintenance_wait(&self) -> std::time::Duration {
@@ -290,10 +373,20 @@ impl HistoryService {
     }
     pub fn search(&self, query: &str) -> Result<Vec<HistoryItem>> {
         ensure!(query.len() <= MAX_QUERY_BYTES, "clipboard query too large");
-        let mut state = self.state()?;
-        state.require_enabled()?;
-        state.expire((self.clock)())?;
-        state.repository()?.search(query)
+        loop {
+            let (epoch, policy) = {
+                let state = self.state()?;
+                state.require_enabled()?;
+                (state.epoch, state.policy)
+            };
+            let cutoff = policy.cutoff((self.clock)());
+            let mut repository = self.repository()?;
+            if repository.epoch != epoch {
+                continue;
+            }
+            repository.expire_if_needed(cutoff)?;
+            return repository.get()?.search(query);
+        }
     }
     /// Explicit native preview only; preserve payload bytes and recheck deletion/policy after preparation.
     pub fn inspect_payload<T>(
@@ -305,37 +398,55 @@ impl HistoryService {
             .preview
             .lock()
             .map_err(|_| anyhow::anyhow!("clipboard preview unavailable"))?;
-        let (epoch, value) = {
-            let mut state = self.state()?;
+        let (epoch, cutoff) = {
+            let state = self.state()?;
             state.require_enabled()?;
-            state.expire((self.clock)())?;
-            let epoch = state.epoch;
-            let repo = state.repository()?;
+            (state.epoch, state.policy.cutoff((self.clock)()))
+        };
+        let value = {
+            let mut repository = self.repository()?;
+            if repository.epoch != epoch {
+                return Ok(None);
+            }
+            repository.expire_if_needed(cutoff)?;
+            let repo = repository.get()?;
             let Some(item) = repo.item(id)? else {
                 return Ok(None);
             };
-            (epoch, repo.payload(id)?.map(|payload| (item, payload)))
+            repo.payload(id)?.map(|payload| (item, payload))
         };
         let value = value
             .map(|(item, payload)| render(item, payload))
             .transpose()?;
-        let mut state = self.state()?;
-        state.require_enabled()?;
-        state.expire((self.clock)())?;
-        Ok(
-            if state.epoch == epoch && state.repository()?.item(id)?.is_some() {
+        let (epoch2, cutoff2) = {
+            let state = self.state()?;
+            state.require_enabled()?;
+            (state.epoch, state.policy.cutoff((self.clock)()))
+        };
+        if epoch2 != epoch {
+            return Ok(None);
+        }
+        let mut repository = self.repository()?;
+        Ok(if repository.epoch == epoch {
+            repository.expire_if_needed(cutoff2)?;
+            if repository.get()?.item(id)?.is_some() {
                 value
             } else {
                 None
-            },
-        )
+            }
+        } else {
+            None
+        })
     }
     pub fn copy(&self, id: i64, platform: &dyn ClipboardHost) -> Result<()> {
-        let mut state = self.state()?;
+        let state = self.state()?;
         state.require_enabled()?;
-        state.expire((self.clock)())?;
-        let payload = state
-            .repository()?
+        let cutoff = state.policy.cutoff((self.clock)());
+        let mut repository = self.repository()?;
+        drop(state);
+        repository.expire_if_needed(cutoff)?;
+        let payload = repository
+            .get()?
             .payload(id)?
             .context("clipboard entry no longer exists")?;
         // Serialize with deletion/disable so a stale view cannot copy a deleted record.
@@ -343,15 +454,17 @@ impl HistoryService {
             .write_clipboard(&payload)
     }
     pub fn delete(&self, id: i64) -> Result<()> {
-        let mut state = self.state()?;
+        let state = self.state()?;
         state.require_enabled()?;
-        state.repository()?.delete(id)
+        self.repository()?.get()?.delete(id)
     }
     pub fn clear(&self) -> Result<()> {
         let mut state = self.state()?;
         state.require_enabled()?;
-        state.repository()?.clear()?;
+        let mut repository = self.repository()?;
+        repository.get()?.clear()?;
         state.invalidate(); // Revoke a capture already in flight.
+        repository.epoch = state.epoch;
         Ok(())
     }
     pub fn poll(&self, platform: &dyn ClipboardHost, now_ms: i64) -> Result<()> {
@@ -361,7 +474,7 @@ impl HistoryService {
             if !state.feature_enabled
                 || !state.recording
                 || state.policy.paused_until_ms.is_some()
-                || state.repository.is_err()
+                || !state.repository_available
             {
                 return Ok(());
             }
@@ -380,33 +493,57 @@ impl HistoryService {
             }
         }
         let captured = platform.clipboard_history_payload(generation);
-        let mut state = self.state()?;
-        if state.epoch != epoch || state.generation != Some(generation) {
-            return Ok(());
-        }
+        let cutoff = {
+            let state = self.state()?;
+            if state.epoch != epoch || state.generation != Some(generation) {
+                return Ok(());
+            }
+            state.policy.cutoff((self.clock)())
+        };
         match captured {
             Ok(Some(payload)) => {
-                state.repository()?.record_payload(&payload, now_ms)?;
-                state.expire((self.clock)())?;
-                state.notice = None;
+                {
+                    let mut repository = self.repository()?;
+                    if repository.epoch != epoch {
+                        return Ok(());
+                    }
+                    repository.get()?.record_payload(&payload, now_ms)?;
+                    repository.expire_if_needed(cutoff)?;
+                }
+                let mut state = self.state()?;
+                if state.epoch == epoch && state.generation == Some(generation) {
+                    state.notice = None;
+                }
             }
             Ok(None) => {
-                state.notice = None;
+                let mut state = self.state()?;
+                if state.epoch == epoch && state.generation == Some(generation) {
+                    state.notice = None;
+                }
             }
             Err(error)
                 if error.downcast_ref::<ContextReadError>()
                     == Some(&ContextReadError::TooLarge) =>
             {
-                state.notice = Some(HistoryNotice::ItemTooLarge);
+                let mut state = self.state()?;
+                if state.epoch == epoch && state.generation == Some(generation) {
+                    state.notice = Some(HistoryNotice::ItemTooLarge);
+                }
             }
             Err(error)
                 if error.downcast_ref::<ContextReadError>()
                     == Some(&ContextReadError::PermissionDenied) =>
             {
-                state.notice = Some(HistoryNotice::AccessRequired);
+                let mut state = self.state()?;
+                if state.epoch == epoch && state.generation == Some(generation) {
+                    state.notice = Some(HistoryNotice::AccessRequired);
+                }
             }
             Err(_) => {
-                state.notice = Some(HistoryNotice::ReadFailed);
+                let mut state = self.state()?;
+                if state.epoch == epoch && state.generation == Some(generation) {
+                    state.notice = Some(HistoryNotice::ReadFailed);
+                }
             }
         }
         Ok(())
@@ -487,9 +624,9 @@ impl HistoryService {
         Ok(())
     }
 }
-impl State {
+impl PolicyState {
     fn status(&self) -> HistoryStatus {
-        let available = self.feature_enabled && self.repository.is_ok();
+        let available = self.feature_enabled && self.repository_available;
         HistoryStatus {
             recording: available && self.recording && self.policy.paused_until_ms.is_none(),
             recording_enabled: self.recording,
@@ -497,19 +634,13 @@ impl State {
             available,
             notice: if !self.feature_enabled {
                 Some(HistoryNotice::FeatureDisabled)
-            } else if self.repository.is_err() {
+            } else if !self.repository_available {
                 Some(HistoryNotice::StorageUnavailable)
             } else {
                 self.notice
                     .or_else(|| self.policy.paused_until_ms.map(|_| HistoryNotice::Paused))
             },
         }
-    }
-    fn expire(&mut self, now_ms: i64) -> Result<()> {
-        if let Some(cutoff) = self.policy.cutoff(now_ms) {
-            self.repository()?.expire(cutoff)?;
-        }
-        Ok(())
     }
     fn invalidate(&mut self) {
         self.epoch = self.epoch.wrapping_add(1);
@@ -519,12 +650,6 @@ impl State {
     fn require_enabled(&self) -> Result<()> {
         ensure!(self.feature_enabled, "Clipboard History is disabled");
         Ok(())
-    }
-    fn repository(&mut self) -> Result<&mut (dyn HistoryRepository + 'static)> {
-        match &mut self.repository {
-            Ok(repository) => Ok(repository.as_mut()),
-            Err(_) => anyhow::bail!("Clipboard history storage is unavailable"),
-        }
     }
 }
 

@@ -25,8 +25,8 @@ impl LauncherView {
             input.set_placeholder(l10n::find_atask(locale), window, cx)
         });
         view.standalone_tasks = true;
-        view.presented = true;
-        window.blur(cx);
+        view.presence.presented = true;
+        view.surface_focus_handle.focus(window, cx);
         view.resize_window_for_screen(window, cx);
         view
     }
@@ -39,13 +39,13 @@ impl LauncherView {
         if self.live.is_none() {
             return;
         }
-        self.pending_task_selection = selected_task_id;
+        self.tasks.pending_selection = selected_task_id;
         self.start_tasks_refresh(cx);
         cx.notify();
     }
 
     pub fn select_execution(&mut self, task_id: String, cx: &mut Context<Self>) {
-        self.pending_task_selection = Some(task_id);
+        self.tasks.pending_selection = Some(task_id);
         if self.apply_pending_task_selection(cx) {
             self.refresh_selected_task_detail(cx);
             self.reveal_result_row(self.tasks.selected);
@@ -107,7 +107,7 @@ impl LauncherView {
             let _ = this.update(cx, |this, cx| {
                 if !this.tasks.finish_detail_request(request_id)
                     || this.screen != Screen::Tasks
-                    || !this.presented
+                    || !this.presence.presented
                     || !this
                         .tasks
                         .selected_row()
@@ -161,7 +161,7 @@ impl LauncherView {
         self.tasks.task_actions_open = false;
         self.tasks.task_action_selected = 0;
         self.notice = None;
-        window.blur(cx);
+        self.surface_focus_handle.focus(window, cx);
         cx.notify();
     }
 
@@ -203,7 +203,7 @@ impl LauncherView {
         self.tasks.tool_options_open = false;
         self.tasks.tool_option_selected = 0;
         self.notice = None;
-        window.blur(cx);
+        self.surface_focus_handle.focus(window, cx);
         cx.notify();
     }
 
@@ -247,7 +247,7 @@ impl LauncherView {
         self.tasks.task_action_selected = 0;
         match action {
             0 => {
-                cx.write_to_clipboard(ClipboardItem::new_string(detail.row.command.clone()));
+                cx.write_to_clipboard(ClipboardItem::new_string(detail.row.command));
                 self.set_notice(
                     l10n::command_copied(self.locale),
                     components::NoticeKind::Success,
@@ -268,7 +268,7 @@ impl LauncherView {
         self.tasks.refresh_generation = self.tasks.refresh_generation.wrapping_add(1);
         let generation = self.tasks.refresh_generation;
         let (cancel, mut cancelled) = oneshot::channel();
-        self.tasks_refresh_cancel = Some(cancel);
+        self.tasks.refresh_cancel = Some(cancel);
         let mut receiver = live.follow_executions();
         cx.spawn(async move |this, cx| loop {
             let event = tokio::select! {
@@ -282,7 +282,7 @@ impl LauncherView {
                 .update(cx, |this, cx| {
                     if generation != this.tasks.refresh_generation
                         || this.screen != Screen::Tasks
-                        || !this.presented
+                        || !this.presence.presented
                     {
                         return false;
                     }
@@ -322,7 +322,7 @@ impl LauncherView {
                 let _ = window_handle.update(cx, |_, window, cx| {
                     let _ = view.update(cx, |this, cx| {
                         if this.screen == Screen::Tasks && this.tasks.rows.is_empty() {
-                            window.blur(cx);
+                            this.surface_focus_handle.focus(window, cx);
                         }
                     });
                 });
@@ -338,13 +338,13 @@ impl LauncherView {
     }
 
     fn apply_pending_task_selection(&mut self, cx: &mut Context<Self>) -> bool {
-        let Some(task_id) = self.pending_task_selection.as_deref() else {
+        let Some(task_id) = self.tasks.pending_selection.as_deref() else {
             return false;
         };
         let Some(index) = self.tasks.rows.iter().position(|row| row.id == task_id) else {
             return false;
         };
-        self.pending_task_selection = None;
+        self.tasks.pending_selection = None;
         if !self.tasks.visible_indices().contains(&index) {
             self.tasks.set_filter(String::new());
             let previous_input = self.tasks_filter_input.read(cx).value().to_string();
@@ -378,8 +378,119 @@ impl LauncherView {
     }
 
     fn stop_tasks_follow(&mut self) {
-        if let Some(cancel) = self.tasks_refresh_cancel.take() {
+        if let Some(cancel) = self.tasks.refresh_cancel.take() {
             let _ = cancel.send(());
+        }
+    }
+
+    pub(in crate::launcher::view) fn handle_tasks_overlay_keys(
+        &mut self,
+        input: &crate::launcher::view::input::KeyInput<'_>,
+        cx: &mut Context<Self>,
+    ) -> crate::launcher::view::input::KeyFlow {
+        use crate::launcher::view::input::KeyFlow;
+        if self.screen != Screen::Tasks {
+            return KeyFlow::Continue;
+        }
+        if self.tasks.tool_options_open {
+            if input.modifiers.command && input.key.eq_ignore_ascii_case("k") {
+                self.close_tool_options(cx);
+                return KeyFlow::Handled;
+            }
+            if !input.modifiers.modified {
+                match input.key {
+                    "down" | "up" => self.move_tool_option(cx),
+                    "enter" | "return" => {
+                        self.execute_tool_option(self.tasks.tool_option_selected, cx)
+                    }
+                    "escape" => self.close_tool_options(cx),
+                    _ => {}
+                }
+            }
+            return KeyFlow::Handled;
+        }
+        if self.tasks.task_actions_open {
+            if input.modifiers.command && input.key.eq_ignore_ascii_case("k") {
+                self.close_task_actions(cx);
+                return KeyFlow::Handled;
+            }
+            if !input.modifiers.modified {
+                match input.key {
+                    "down" => self.move_task_action(1, cx),
+                    "up" => self.move_task_action(-1, cx),
+                    "enter" | "return" => {
+                        self.execute_task_action(self.tasks.task_action_selected, cx)
+                    }
+                    "escape" => self.close_task_actions(cx),
+                    _ => {}
+                }
+            }
+            return KeyFlow::Handled;
+        }
+        KeyFlow::Continue
+    }
+
+    pub(in crate::launcher::view) fn handle_tasks_key(
+        &mut self,
+        key: &str,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match key {
+            "down" => {
+                self.tasks.pending_selection = None;
+                if !self.tasks.visible_indices().is_empty() {
+                    let previous = self.tasks.selected;
+                    self.tasks.select_next_visible();
+                    self.reveal_result_row(self.tasks.selected);
+                    if self.tasks.selected != previous {
+                        self.tasks.clear_detail();
+                        if let Some(task_id) = self.tasks.selected_row().map(|row| row.id.clone()) {
+                            self.request_task_detail(task_id, cx);
+                        }
+                    }
+                    cx.notify();
+                }
+            }
+            "up" => {
+                self.tasks.pending_selection = None;
+                if !self.tasks.visible_indices().is_empty() {
+                    let previous = self.tasks.selected;
+                    self.tasks.select_previous_visible();
+                    self.reveal_result_row(self.tasks.selected);
+                    if self.tasks.selected != previous {
+                        self.tasks.clear_detail();
+                        if let Some(task_id) = self.tasks.selected_row().map(|row| row.id.clone()) {
+                            self.request_task_detail(task_id, cx);
+                        }
+                    }
+                    cx.notify();
+                }
+            }
+            "enter" | "return" => {
+                if self
+                    .tasks_filter_input
+                    .read(cx)
+                    .focus_handle(cx)
+                    .is_focused(window)
+                {
+                    self.surface_focus_handle.focus(window, cx);
+                } else {
+                    self.open_selected_execution(cx);
+                }
+            }
+            "escape" => {
+                if !self.tasks.filter.is_empty() {
+                    self.tasks_filter_input
+                        .update(cx, |input, cx| input.set_value("", window, cx));
+                    self.tasks.set_filter(String::new());
+                    self.surface_focus_handle.focus(window, cx);
+                    cx.notify();
+                } else {
+                    self.go_back(window, cx);
+                }
+            }
+            _ => {}
         }
     }
 }

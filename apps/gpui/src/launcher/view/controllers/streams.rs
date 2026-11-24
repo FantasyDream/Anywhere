@@ -44,7 +44,7 @@ impl LauncherView {
         &mut self,
         mut receiver: Receiver<LiveEvent>,
         generation: u64,
-        mut request_reply: bool,
+        request_reply: bool,
         mut cancelled: Option<oneshot::Receiver<()>>,
         cx: &mut Context<Self>,
     ) {
@@ -93,13 +93,13 @@ impl LauncherView {
                                 this.resize_current_window(cx);
                             }
                             let follow = if request_reply && accepted {
-                                this.live.as_ref().map(|live| {
-                                    live.follow_snapshots(
-                                        this.live_state
-                                            .snapshot_gate
-                                            .as_ref()
-                                            .map_or(0, SnapshotGate::cursor),
-                                    )
+                                this.live.clone().map(|live| {
+                                    let cursor = this
+                                        .live_state
+                                        .snapshot_gate
+                                        .as_ref()
+                                        .map_or(0, SnapshotGate::cursor);
+                                    (live, cursor)
                                 })
                             } else {
                                 None
@@ -111,9 +111,12 @@ impl LauncherView {
                         break;
                     }
                     if request_reply {
-                        let Some(follow) = outcome.1 else { break };
-                        receiver = follow;
-                        request_reply = false;
+                        let Some((live, cursor)) = outcome.1 else {
+                            break;
+                        };
+                        Self::follow_watch_snapshots(this, live, cursor, generation, cancelled, cx)
+                            .await;
+                        break;
                     }
                 }
                 Some(LiveEvent::Ignored) | None => {
@@ -163,7 +166,7 @@ impl LauncherView {
                         if generation == this.live_state.generation {
                             this.live_state.awaiting_query_layout = false;
                             this.model.loading = false;
-                            this.shortcut_catalog_loading = false;
+                            this.shortcuts.catalog_loading = false;
                             this.set_notice(error, components::NoticeKind::Error);
                             cx.notify();
                         }
@@ -185,6 +188,81 @@ impl LauncherView {
             }
         })
         .detach();
+    }
+
+    async fn follow_watch_snapshots(
+        this: gpui_kit::WeakEntity<Self>,
+        live: Arc<LiveLauncher>,
+        mut cursor: u64,
+        generation: u64,
+        mut cancelled: Option<oneshot::Receiver<()>>,
+        cx: &mut gpui_kit::AsyncApp,
+    ) {
+        let (session_id, mut updates) = live.subscribe_snapshots();
+        loop {
+            let next = {
+                let current = updates.borrow_and_update();
+                current.as_ref().and_then(|state| {
+                    let state_cursor =
+                        (u64::from(state.revision) << 32) | u64::from(state.snapshot_seq);
+                    (state.session_id == session_id && state_cursor > cursor)
+                        .then(|| (state_cursor, state.clone()))
+                })
+            };
+            if let Some((state_cursor, state)) = next {
+                cursor = state_cursor;
+                let keep_going = this
+                    .update(cx, |this, cx| {
+                        if generation != this.live_state.generation
+                            || this.live_state.session_id != Some(state.session_id)
+                        {
+                            return false;
+                        }
+                        if this
+                            .live_state
+                            .snapshot_gate
+                            .as_mut()
+                            .is_some_and(|gate| gate.accept_update(&state))
+                        {
+                            let query_layout_ready =
+                                std::mem::take(&mut this.live_state.awaiting_query_layout);
+                            let applied = this.apply_shared_state(state, cx);
+                            this.request_application_icons(cx);
+                            if query_layout_ready || applied.rows_changed || applied.scopes_changed
+                            {
+                                this.resize_current_window(cx);
+                            }
+                            cx.notify();
+                        }
+                        true
+                    })
+                    .unwrap_or(false);
+                if !keep_going {
+                    break;
+                }
+            }
+            if !live.is_session_active(session_id) {
+                let _ = this.update(cx, |this, cx| {
+                    if generation == this.live_state.generation
+                        && std::mem::take(&mut this.live_state.awaiting_query_layout)
+                    {
+                        this.resize_current_window(cx);
+                    }
+                });
+                break;
+            }
+            let changed = if let Some(cancel) = cancelled.as_mut() {
+                tokio::select! {
+                    _ = cancel => break,
+                    changed = updates.changed() => changed,
+                }
+            } else {
+                updates.changed().await
+            };
+            if changed.is_err() {
+                break;
+            }
+        }
     }
 
     pub(super) fn apply_auxiliary_event(&mut self, event: LiveEvent, cx: &mut Context<Self>) {
@@ -231,8 +309,14 @@ impl LauncherView {
                 revision,
                 actions,
             } => {
-                self.app_history
-                    .apply_object_actions(request, &item_id, revision, actions);
+                if self
+                    .app_history
+                    .apply_object_actions(request, &item_id, revision, actions)
+                {
+                    self.scrolls
+                        .history_actions
+                        .scroll_to_item(self.app_history.object_action_selected);
+                }
             }
             LiveEvent::AppHistoryObjectActionsFailed { request } => {
                 if self.app_history.fail_object_actions(request) {
@@ -249,18 +333,19 @@ impl LauncherView {
                 );
             }
             LiveEvent::ShortcutCatalog(actions) => {
-                self.shortcut_catalog = actions;
-                self.shortcut_catalog_loading = false;
+                self.shortcuts.catalog = actions;
+                self.shortcuts.catalog_loading = false;
             }
+            LiveEvent::ActivationInput(_) => {}
             LiveEvent::ActionShortcutReady {
                 action_id,
                 revision,
                 candidates,
             } => {
-                if self.action_shortcut_resolving.as_deref() != Some(action_id.as_str()) {
+                if self.shortcuts.resolving.as_deref() != Some(action_id.as_str()) {
                     return;
                 }
-                self.action_shortcut_resolving = None;
+                self.shortcuts.resolving = None;
                 match candidates.as_slice() {
                     [candidate] => {
                         self.set_notice(
@@ -287,8 +372,8 @@ impl LauncherView {
                 }
             }
             LiveEvent::ActionShortcutFailed { action_id, message } => {
-                if self.action_shortcut_resolving.as_deref() == Some(action_id.as_str()) {
-                    self.action_shortcut_resolving = None;
+                if self.shortcuts.resolving.as_deref() == Some(action_id.as_str()) {
+                    self.shortcuts.resolving = None;
                     self.set_notice(
                         l10n::action_failed_with(self.locale, &message),
                         components::NoticeKind::Error,
@@ -360,7 +445,6 @@ impl LauncherView {
             }
             LiveEvent::DirectoriesAuthorized { .. }
             | LiveEvent::LoginItemReconciled(_)
-            | LiveEvent::ApplicationIcon { .. }
             | LiveEvent::Preview(_)
             | LiveEvent::SharedState(_)
             | LiveEvent::ActionResult(_)
@@ -392,7 +476,7 @@ impl LauncherView {
             this.update(cx, |this, cx| {
                 if generation != this.live_state.generation
                     || request_id != this.object_action_generation
-                    || !this.presented
+                    || !this.presence.presented
                     || this.screen != screen
                     || this.model.revision != revision
                     || !this.model.object_actions_active

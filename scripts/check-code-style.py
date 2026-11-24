@@ -1,16 +1,45 @@
 #!/usr/bin/env python3
 """Check or apply the repository's language-specific Google style tools."""
 import argparse
+import json
 from pathlib import Path
 import platform
 import re
 import subprocess
 import sys
+from architecture_rules import production_source
 
 ROOT = Path(__file__).resolve().parent.parent
 PYTOOLS = ROOT / '.tools/code-style/python/bin'
 NODETOOLS = ROOT / 'tools/code-style/node_modules'
 SWIFT_FORMAT = ROOT / '.tools/code-style/swift-format/.build/release/swift-format'
+PX_LITERAL_PATTERN = re.compile(r'\bpx\(\s*\d+(?:\.\d*)?\s*\)')
+PX_BUDGET_PATH = ROOT / 'scripts/px-literal-budget.json'
+
+
+def count_px_literals(text):
+    return len(PX_LITERAL_PATTERN.findall(production_source(text)))
+
+
+def check_px_literal_budget(root=ROOT, budget_path=PX_BUDGET_PATH):
+    if not budget_path.is_file():
+        return []
+    budget = json.loads(budget_path.read_text()).get('files', {})
+    gpui_src = root / 'apps/gpui/src'
+    if not gpui_src.is_dir():
+        return []
+    errors = []
+    for path in sorted(gpui_src.rglob('*.rs')):
+        rel = path.relative_to(root).as_posix()
+        if '/tests/' in rel or rel.endswith('_tests.rs'):
+            continue
+        count = count_px_literals(path.read_text())
+        allowed = budget.get(rel, 0)
+        if count > allowed:
+            errors.append(
+                f'{rel}: {count} numeric px(...) literals exceeds budget {allowed}; use metrics::* tokens'
+            )
+    return errors
 
 
 def sources():
@@ -113,6 +142,9 @@ def main():
             run([PYTOOLS / 'shellcheck', '--external-sources', *files])
     if args.language in (None, 'rust'):
         run(['cargo', 'fmt', '--all', *([] if args.fix else ['--check'])])
+        px_errors = check_px_literal_budget()
+        if px_errors:
+            sys.exit('\n'.join(px_errors))
 
 
 if __name__ == '__main__':

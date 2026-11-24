@@ -204,7 +204,7 @@ checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
 name = "anywhere-core"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "anyhow",
  "anywhere-platform",
@@ -235,7 +235,7 @@ dependencies = [
 
 [[package]]
 name = "anywhere-gpui"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "anyhow",
  "anywhere-core",
@@ -247,6 +247,7 @@ dependencies = [
  "global-hotkey",
  "gpui-kit",
  "gpui-webview",
+ "image",
  "lb-wry",
  "objc2 0.6.5",
  "objc2-app-kit 0.3.2",
@@ -259,6 +260,7 @@ dependencies = [
  "rfd",
  "serde",
  "serde_json",
+ "smallvec",
  "sys-locale",
  "tempfile",
  "tokio",
@@ -269,7 +271,7 @@ dependencies = [
 
 [[package]]
 name = "anywhere-platform"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "anyhow",
  "cc",
@@ -286,7 +288,7 @@ dependencies = [
 
 [[package]]
 name = "anywhere-plugin"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "anyhow",
  "anywhere-protocol",
@@ -304,7 +306,7 @@ dependencies = [
 
 [[package]]
 name = "anywhere-protocol"
-version = "0.14.0"
+version = "0.14.1"
 dependencies = [
  "schemars",
  "serde",

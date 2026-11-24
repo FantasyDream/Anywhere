@@ -1,6 +1,7 @@
 use super::*;
+use crate::core::ranking::score::UsageStats;
 use crate::core::search::candidate::{Candidate, CandidateTarget};
-use std::sync::Mutex;
+use std::{collections::HashMap, sync::Mutex};
 
 #[derive(Clone)]
 pub(super) struct Offers {
@@ -15,7 +16,7 @@ pub(crate) struct OfferCache {
     registry: Arc<ActionRegistry>,
     contexts: Vec<ResolvedContext>,
     facts: SessionFacts,
-    usage: Arc<HashMap<(String, String), UsageStats>>,
+    usage: Arc<UsageSnapshot>,
     now: i64,
     offers: Offers,
 }
@@ -36,8 +37,9 @@ pub(super) fn prepare(
             context
         })
         .collect();
-    let cached = cache.lock().ok().and_then(|cache| {
-        cache
+    let cached = {
+        let guard = crate::core::sync::lock_cache(cache, "offer_cache");
+        guard
             .as_ref()
             .filter(|cache| {
                 Arc::ptr_eq(&cache.registry, input.actions)
@@ -47,7 +49,7 @@ pub(super) fn prepare(
                     && cache.now.div_euclid(60) == input.now.div_euclid(60)
             })
             .map(|cache| cache.offers.clone())
-    });
+    };
     let mut offers = cached.unwrap_or_else(|| {
         let (expanded, diagnostics) = input.actions.for_contexts(input.contexts);
         let actions = match expanded {
@@ -79,16 +81,14 @@ pub(super) fn prepare(
             scopes,
             shortcuts,
         };
-        if let Ok(mut cache) = cache.lock() {
-            *cache = Some(OfferCache {
-                registry: input.actions.clone(),
-                contexts,
-                facts: input.facts.clone(),
-                usage: input.usage.clone(),
-                now: input.now,
-                offers: offers.clone(),
-            });
-        }
+        *crate::core::sync::lock_cache(cache, "offer_cache") = Some(OfferCache {
+            registry: input.actions.clone(),
+            contexts,
+            facts: input.facts.clone(),
+            usage: input.usage.clone(),
+            now: input.now,
+            offers: offers.clone(),
+        });
         offers
     });
     let current: HashMap<_, _> = input

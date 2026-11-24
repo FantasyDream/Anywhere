@@ -20,16 +20,18 @@ pub trait AppStyle: Styled + Sized {
     where
         Self: InteractiveElement,
     {
-        let surface = self.rounded(px(metrics::RESULT_RADIUS));
+        let surface = self
+            .rounded(px(metrics::RESULT_RADIUS))
+            .border(px(metrics::DIVIDER_WIDTH));
         if selected {
             surface
                 .bg(theme::result_surface(true))
-                .border(px(metrics::DIVIDER_WIDTH))
-                .border_color(theme::selection_outline())
+                .border_color(theme::result_selection_outline())
         } else {
             surface
                 .bg(theme::result_surface(false))
-                .hover(|style| style.bg(theme::result_surface(true)))
+                .border_color(theme::transparent())
+                .hover(|style| style.bg(theme::hover()))
         }
     }
     fn selected_surface(self) -> Self {

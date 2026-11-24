@@ -16,7 +16,7 @@ impl LauncherView {
             cx,
             LauncherModel::preview(locale),
             locale,
-            Some(live.clone()),
+            Some(live),
             None,
             ViewKind::ClipboardShelf,
         );
@@ -161,6 +161,14 @@ impl LauncherView {
                         if copied_item.is_none() || copied_item == this.clipboard.selected_id() {
                             this.clipboard.copied_item = copied_item;
                             this.clear_notice();
+                            if copied_item.is_some() {
+                                this.show_hud_toast(
+                                    l10n::copied(this.locale),
+                                    IconName::Check,
+                                    components::NoticeKind::Success,
+                                    cx,
+                                );
+                            }
                             if return_to_application {
                                 this.return_after_clipboard_copy();
                             }
@@ -296,12 +304,7 @@ impl LauncherView {
     }
 
     pub(super) fn select_clipboard_item(&mut self, item_id: i64) -> bool {
-        let Some(index) = self
-            .clipboard
-            .items()
-            .iter()
-            .position(|item| item.id == item_id)
-        else {
+        let Some(index) = self.clipboard.visible_position(item_id) else {
             return false;
         };
         self.clipboard.selected = index;
@@ -313,7 +316,7 @@ impl LauncherView {
         if !self.select_clipboard_item(item_id) {
             return;
         }
-        if self.preview_open {
+        if self.preview.open {
             self.close_preview(cx);
         }
         self.clipboard.actions_open = true;
@@ -325,7 +328,7 @@ impl LauncherView {
     }
 
     pub(super) fn open_empty_clipboard_actions(&mut self, cx: &mut Context<Self>) {
-        if self.preview_open {
+        if self.preview.open {
             self.close_preview(cx);
         }
         self.clipboard.actions_open = true;
@@ -478,7 +481,7 @@ impl LauncherView {
         self.reveal_result_row(self.clipboard.selected);
         self.clipboard.copied_item = None;
         self.notice = None;
-        if self.preview_open {
+        if self.preview.open {
             self.preview_selected_clipboard(cx);
         }
         cx.notify();
@@ -504,5 +507,172 @@ impl LauncherView {
             }
         });
         cx.notify();
+    }
+
+    pub(in crate::launcher::view) fn handle_clipboard_overlay_keys(
+        &mut self,
+        input: &crate::launcher::view::input::KeyInput<'_>,
+        cx: &mut Context<Self>,
+    ) -> crate::launcher::view::input::KeyFlow {
+        use crate::launcher::view::input::KeyFlow;
+        if !matches!(self.screen, Screen::Clipboard | Screen::ClipboardShelf) {
+            return KeyFlow::Continue;
+        }
+        let modified = input.modifiers.modified;
+        if self.clipboard.delete_pending.is_some() {
+            match input.key {
+                "left" if !modified => {
+                    self.clipboard.delete_confirm_selected = false;
+                    cx.notify();
+                }
+                "right" if !modified => {
+                    self.clipboard.delete_confirm_selected = true;
+                    cx.notify();
+                }
+                "enter" | "return" if !modified => {
+                    if self.clipboard.delete_confirm_selected {
+                        self.confirm_clipboard_delete(cx);
+                    }
+                    self.clipboard.delete_pending = None;
+                    self.clipboard.delete_confirm_selected = false;
+                    cx.notify();
+                }
+                "escape" if !modified => {
+                    self.clipboard.delete_pending = None;
+                    self.clipboard.delete_confirm_selected = false;
+                    cx.notify();
+                }
+                _ => {}
+            }
+            return KeyFlow::Handled;
+        }
+        if self.clipboard.actions_open {
+            if input.modifiers.command && input.key.eq_ignore_ascii_case("k") {
+                self.close_clipboard_actions(cx);
+                return KeyFlow::Handled;
+            }
+            let action_count = if self.screen == Screen::ClipboardShelf {
+                5
+            } else {
+                4
+            };
+            if !modified {
+                match input.key {
+                    "down" => {
+                        self.move_clipboard_action(1, action_count, cx);
+                        return KeyFlow::Handled;
+                    }
+                    "up" => {
+                        self.move_clipboard_action(-1, action_count, cx);
+                        return KeyFlow::Handled;
+                    }
+                    "enter" | "return" => {
+                        self.execute_clipboard_action(self.clipboard.action_selected, cx);
+                        return KeyFlow::Handled;
+                    }
+                    "escape" => {
+                        self.close_clipboard_actions(cx);
+                        return KeyFlow::Handled;
+                    }
+                    _ => {}
+                }
+            }
+            self.close_clipboard_actions(cx);
+        }
+        KeyFlow::Continue
+    }
+
+    pub(in crate::launcher::view) fn handle_shelf_command_key(
+        &mut self,
+        key: &str,
+        cx: &mut Context<Self>,
+    ) -> crate::launcher::view::input::KeyFlow {
+        use crate::launcher::view::input::KeyFlow;
+        if let Ok(index) = key.parse::<usize>() {
+            if (1..=9).contains(&index) && index <= self.clipboard.items().len() {
+                self.clipboard.browsing = true;
+                self.clipboard.selected = index - 1;
+                self.refresh_clipboard_selection(cx);
+                self.copy_selected_clipboard(cx);
+                return KeyFlow::Handled;
+            }
+        }
+        if key == "up" {
+            if !self.clipboard.items().is_empty() {
+                self.clipboard.browsing = true;
+                self.clipboard.selected = 0;
+                self.refresh_clipboard_selection(cx);
+            }
+            return KeyFlow::Handled;
+        }
+        if key == "down" {
+            if !self.clipboard.items().is_empty() {
+                self.clipboard.browsing = true;
+                self.clipboard.selected = self.clipboard.items().len() - 1;
+                self.refresh_clipboard_selection(cx);
+            }
+            return KeyFlow::Handled;
+        }
+        KeyFlow::Continue
+    }
+
+    pub(in crate::launcher::view) fn handle_clipboard_key(
+        &mut self,
+        input: &crate::launcher::view::input::KeyInput<'_>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        match input.key {
+            "down" => self.select_clipboard(1, cx),
+            "up" => self.select_clipboard(-1, cx),
+            "enter" | "return" => self.copy_selected_clipboard(cx),
+            "space" if self.active_editor_focused(window, cx) => {
+                self.preview_selected_clipboard(cx);
+            }
+            "escape" => {
+                if !self.clipboard.query.is_empty() {
+                    self.clipboard_input
+                        .update(cx, |input, cx| input.set_value("", window, cx));
+                    self.clipboard.query.clear();
+                    self.reset_clipboard_browsing(cx);
+                    self.request_clipboard_search(cx);
+                    cx.notify();
+                } else {
+                    self.go_back(window, cx);
+                }
+            }
+            "pageup" | "pagedown" => {
+                let (height, row_height) = if self.screen == Screen::Clipboard {
+                    (self.scrolls.clipboard_base().bounds().size.height, 64.)
+                } else {
+                    (
+                        self.scrolls.clipboard_shelf_base().bounds().size.height,
+                        48.,
+                    )
+                };
+                let count = self.clipboard.items().len();
+                let step = (f32::from(height) / row_height).floor().clamp(1., 100.) as usize;
+                let target = if input.key == "pageup" {
+                    self.clipboard.selected.saturating_sub(step)
+                } else {
+                    self.clipboard
+                        .selected
+                        .saturating_add(step)
+                        .min(count.saturating_sub(1))
+                };
+                if count > 0 {
+                    self.clipboard.browsing = true;
+                    self.clipboard.selected = target;
+                    self.clipboard.copied_item = None;
+                    self.notice = None;
+                    if self.preview.open {
+                        self.preview_selected_clipboard(cx);
+                    }
+                }
+                self.reveal_result_row(target);
+                cx.notify();
+            }
+            _ => {}
+        }
     }
 }

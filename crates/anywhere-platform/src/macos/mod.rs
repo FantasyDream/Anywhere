@@ -86,6 +86,12 @@ impl ApplicationHost for MacOsPlatform {
     fn application_icon(&self, path: &str, size: u32) -> Result<Option<Vec<u8>>> {
         application::application_icon(path, size)
     }
+    fn application_icon_bgra(&self, path: &str, size: u32) -> Result<Option<crate::RawIconImage>> {
+        application::application_icon_bgra(path, size)
+    }
+    fn file_icon_bgra(&self, path: &str, size: u32) -> Result<Option<crate::RawIconImage>> {
+        application::file_icon_bgra(path, size)
+    }
     fn application_version(&self, bundle_id: &str) -> Option<String> {
         application::application_version(bundle_id)
     }

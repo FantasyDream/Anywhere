@@ -1,12 +1,12 @@
 # 使用指南
 
-macOS 现行使用指南；当前发布为 macOS 15+ Apple Silicon 的 V0.14 开发预览。
+macOS 现行使用指南；当前发布为 macOS 15+ Apple Silicon 的 V0.14.1 开发预览。
 实际版本与验收状态见[项目首页](../README.md)和
 [GPUI 技术方案与验收](mvp-gpui.md)。
 
 ## 1. 安装、启动与授权
 
-从 [`v0.14.0` Release](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.0)
+从 [`v0.14.1` Release](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.1)
 下载 `Anywhere-macos-arm64.zip`、同名 `.sha256` 和
 `package-provenance.json`。当前资产只支持 Apple Silicon（arm64），最低
 macOS 15.0；不要把它当作 Intel 或正式公证件。
@@ -41,6 +41,9 @@ Gatekeeper 或批量移除 quarantine 属性。
 文件搜索默认关闭；先在 Settings → Search 显式授权目录，查询只使用已授权范围，默认不含隐藏文件。受保护或无法读取的位置会跳过；完全磁盘访问需要用户在系统设置中开启。
 
 未授权的来源不会阻止其他功能。例如，缺少辅助功能权限时隐藏应用菜单，仍可使用不依赖该权限的动作。在 Settings → Context 查看和开关应用环境来源；剪贴板的采集状态、自动填入与历史配置统一位于 Settings → Clipboard。
+
+在 **设置 → 通用 → 外观** 可选跟随系统、浅色或深色。点击保存后立即生效，
+重启后保留选择。跟随系统会随 macOS 外观变化同步更新。
 
 ## 2. 三种操作方式
 
@@ -95,11 +98,11 @@ Actions 和预览仍先退出所属局部层。更多规则见
 预览保留列表并跟随选择，关闭后保留查询和条目位置；浏览列表时不加载完整正文 / 图片。鼠标悬停和拖动不会复制，删除确认绑定原条目，不因后台刷新而指向另一条。
 
 - 默认不采集，在 **Settings → Clipboard → Record clipboard history** 开启后保存未来复制的文本、图片、文件列表、HTML / RTF 及可读取的自定义格式，关闭开关暂停。旧剪贴板不补录；macOS 需要允许剪贴板读取，后台不会反复弹权限申请。
-- 输入检索内容，`↑↓` 选择，按需用眼睛按钮、`⌘Y` 或浏览结果后的空格预览，`Enter` / 双击 / 选中行按钮复制；复制反馈和“更多操作 · ⌘K”都在选中行，不显示固定页脚或条数。`⌘K` 或右键可复制、单条删除或刷新，空列表仍提供操作入口；采集开关、清空历史和 15 秒自动填入设置统一位于 **Settings → Clipboard**。`Esc` 关闭 Actions，再按 `Esc` 返回原搜索。
+- 输入检索内容，`↑↓` 选择，按需用眼睛按钮、`⌘Y` 或浏览结果后的空格预览，`Enter` / 双击 / 选中行按钮复制；复制反馈和“更多操作 · ⌘K”都在选中行，不显示固定页脚或条数。`⌘K` 或右键可复制、单条删除或刷新，页头操作在有无结果时均可刷新；采集开关、清空历史和 15 秒自动填入设置统一位于 **Settings → Clipboard**。`Esc` 关闭 Actions，再按 `Esc` 返回原搜索。
 - 最多保存 1,000 条、128 MiB 数据，每条最多 16 MiB / 64 个格式；重复内容合并。历史期限与唤醒时的 **15 秒自动填入** 无关。
 - 在“设置 → 剪贴板”中可暂停记录 5 / 15 / 60 分钟，或提前恢复。暂停期间的内容不补录，关闭记录会取消自动恢复；已有历史仍可使用。
 - 展开“历史记录存储”可选择保留 1 / 7 / 30 / 90 天；默认沿用容量限制。缩短期限会确认并立即永久删除过期记录，之后延长期限也不会恢复。用量仅表示逻辑数据量，内容在本机明文保存；不影响系统剪贴板或原文件。
-- 本地明文存储，只记录应用运行期间观察到的复制。文件列表仅保存原路径，恢复时原文件必须仍然存在；HTML 不执行脚本，图片在明确预览时交给系统显示，不再在 Rust 生成缩略图。文件承诺、延迟对象及任意多 item 私有格式不能保证完整恢复。开发及验收状态见 [V0.10 MVP](archive/mvp-v0.10.md)。
+- 本地明文存储，只记录应用运行期间观察到的复制。文件列表仅保存原路径，恢复时原文件必须仍然存在；HTML 不执行脚本，图片在明确预览时交给系统显示，不再在 Rust 生成缩略图。文件承诺、延迟对象及任意多 item 私有格式不能保证完整恢复。逐项验收见[剪贴板用例](test-acceptance-checklist.md#610-clip剪贴板采集历史与存储策略)。
 
 ## 4. Web 工具与 JSON Workspace（预览）
 
@@ -108,10 +111,12 @@ Actions 和预览仍先退出所属局部层。更多规则见
 
 在 Settings → Features → Manage…（Web tools）→ Import… 选择可信的本地 `.awplugin` 包，核对版本、内容摘要和权限后批准；随即可以搜索工具名称，无须重启。该区域还支持禁用 / 撤销、卸载、更新和恢复上一批准版本。批准更新会立即撤销旧 Web 调用，不会等待旧页面编辑完成；先保存需要保留的内容。卸载会清理该安装的私有 KV，没有“保留数据”选项。当前仅供 macOS 本地开发验收，不开放插件市场或自动更新；同 ID 的本地包更新不验证发布者身份。
 
-运行 `python3 scripts/build-web-examples.py` 构建 [JSON Workspace](../plugins/examples/json-workspace/README.md)、[Text Pad](../plugins/examples/web-text/README.md) 与 [JSON Summary](../plugins/examples/background-context/README.md) 三个示例包。导入 JSON 包后搜索 `JSON Workspace`：左侧输入停顿后自动格式化，上方默认使用 JavaScript，也可切到 JSONPath 并输入公式，`$` / `this` 自动补入，右侧展示和复制结果；`⌘↵` 立即查询，`⌘⇧C` 复制当前结果。输入 / 输出各最多 1 MiB，不保存正文，只保存缩进偏好。JSON Workspace（v0.7.1）通过按需后台 QuickJS 解析器自动识别 JSON 对象 / 数组及转义 JSON 容器：直接输入 JSON 可匹配对应复制或打开 Action，选择后带入原文；选中文本和 15 秒内新复制内容沿用自动填入规则，不将普通标量误当成 JSON。
+JSON Workspace（v0.7.3）现为内置工具，开箱自动登记并默认启用，无需手动导入 `.awplugin`（可在 Settings → Features → Web tools 中禁用或重新启用，但不支持卸载；运行 `python3 scripts/build-web-examples.py` 仍可打包 [JSON Workspace](../plugins/examples/json-workspace/README.md)、[Text Pad](../plugins/examples/web-text/README.md) 与 [JSON Summary](../plugins/examples/background-context/README.md) 示例包用于本地开发或校验）。搜索 `JSON Workspace` 即可打开：左侧输入停顿后自动格式化，上方默认使用 JavaScript，也可切到 JSONPath 并输入公式，`$` / `this` 自动补入，右侧展示和复制结果；输入和结果以主题色区分 JSON 键、字符串、数字和字面量。`⌘↵` 立即查询，`⌘⇧C` 复制当前结果。输入 / 输出各最多 1 MiB，不保存正文，只保存缩进偏好。JSON Workspace（v0.7.3）通过按需后台 QuickJS 解析器自动识别 JSON 对象 / 数组及转义 JSON 容器：直接输入 JSON 可匹配对应复制或打开 Action，选择后带入原文；选中文本和 15 秒内新复制内容沿用自动填入规则，不将普通标量误当成 JSON。
 
-Web 工具复用 Launcher 页框，页头省略号提供 Reload Tool / Back to Search，
-Esc 返回搜索，隐藏后的输入仍保留 15 秒。插件安装时批准剪贴板读写权限，运行时
+Web 工具复用 Launcher 页框，页头的工具选项提供 Reload Tool / Back to Search。
+页面页头的外开按钮或 `⌘⇧O` 对所有 Web 插件生效（包含内置 JSON Workspace 与手动导入的第三方 Web 插件），用于在新独立普通窗口打开副本；独立工具窗口沿用无边框透明标题栏与 Liquid Glass 玻璃质感。文件搜索、剪贴板历史与应用历史不再外开为独立弹窗（常驻置顶的 `Clipboard Shelf` 与 `Running Tasks` 为独立产品窗口，不受影响）。独立窗口打开后，主搜索栏继续可以由全局快捷键打开，两个窗口并存且互不共享输入焦点。插件被禁用、撤销、更新或捕获权限改变时，旧窗口的执行资格立即失效并提示从搜索栏重新打开。
+JSON 输入区的“JSON 操作”包含缩进、清空与复制变体。按 Esc 先退出当前菜单，
+再返回搜索。隐藏后的输入仍保留 15 秒。插件安装时批准剪贴板读写权限，运行时
 不再逐次确认；后台复制动作直接执行，不打开工作区。资源来自已批准包，网络、
 frame、弹窗和导航均受限制；这些策略不等于操作系统进程沙箱。原生 IME / 安全 /
 Windows 验收边界见 [V0.11 MVP](archive/mvp-v0.11.md) 与
@@ -129,6 +134,7 @@ Web Action ID。
 | `↑` / `↓` | 选择候选项 |
 | `Enter` | 执行动作、打开对象或进入子菜单 |
 | `⌘K` | 打开选中对象的二级 Actions；支持菜单浏览时也可进入菜单 |
+| `⌘↵` | Launcher 根页打开 Global Search / Current App 切换菜单；Shelf 中复制并返回来源应用 |
 | `Tab` / `Shift+Tab` | 向后 / 向前切换 Scope；文件搜索中切换文件类型（兼容 Ctrl 组合） |
 | `→` / `←` | 输入为空时进入 / 返回菜单；有输入时保留光标移动 |
 | `Esc` | 局部层先返回上一级；根页按 Content → Current App → Global → 隐藏返回 |
@@ -178,7 +184,7 @@ Launcher 的 `Tab` / `Shift+Tab` 用于切换可见分类，不遍历控件；�
 - 按目录名配置排除项（最多 32 项），例如 `node_modules`。排除会缩小搜索范围。
 - 为保存的搜索目录授权，按需要打开完全磁盘访问设置。
 
-搜索结合 **Spotlight 快速结果与完整文件名遍历**，无需安装 `rg`。遍历包含未索引文件和被 `.gitignore` 忽略的文件；隐藏文件受设置控制。符号链接本身可列出，不沿链接继续遍历目标。可搜索范围受目录设置、排除项和系统权限限制。
+默认使用 **Spotlight 快批与完整文件名遍历**。可切换到 Ripgrep 快批或同时运行两种快批的 Combined；`rg` 不可用时仍由完整遍历交付结果。遍历包含未索引文件和被 `.gitignore` 忽略的文件；隐藏文件受设置控制。符号链接本身可列出，不沿链接继续遍历目标。可搜索范围受目录设置、排除项和系统权限限制。
 
 当前 macOS 使用系统 Quick Look 预览，格式支持由系统决定，查询时不自动读取正文。`⌘Y` 在文件与 Clipboard History / Shelf 中开关预览，按住只处理首次 key-down。Space / Esc 先关闭预览并保留查询、选择和滚动位置，`⌘L` 返回查询；页面按钮聚焦时 Space / Enter 激活按钮。系统面板获得焦点不隐藏 Launcher，切到其他应用会关闭预览。候选图标按文件类型分类，不生成逐文件缩略图。Windows 已预留接口但未实现原生窗口。完整规则见 [系统预览](native-preview.md)。
 
@@ -219,7 +225,7 @@ macOS 数据目录：`~/Library/Application Support/Anywhere/`。
 
 | 文件 / 目录 | 内容 |
 |---|---|
-| `settings.json` | 唤醒键、Action 快捷键、来源开关及搜索设置 |
+| `settings.json` | 外观、唤醒键、Action 快捷键、来源开关及搜索设置 |
 | `usage.sqlite3` | 动作 ID、Context 类型、来源应用、成功执行次数与时间 |
 | `features.json` | 内置功能开关，首次启动时兼容迁移旧 `extensions.json` 中的内置开关 |
 | `extension-storage.sqlite3` | 按模块隔离的持久数据，例如主动收藏的目录路径与应用历史偏好 |

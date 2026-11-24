@@ -45,7 +45,7 @@ scripts/package-macos.sh build/Anywhere-preview.app
 1. 检查本地化、设计 tokens、entitlements 和 Info.plist。
 2. 编译 workspace 版本 `anywhere-gpui` release 二进制。
 3. 复制二进制、图标、原生文案与许可证。
-4. 写入版本和构建号，签名并执行 deep strict 验证。
+4. 写入版本和构建号，签名并执行 deep strict 验证。macOS Release 的 `.app.dSYM` 放在 App 旁边；用 `dwarfdump --uuid` 核对它与主程序的 UUID。用户 ZIP 只包含 App。
 
 打包流程复查 Bundle 与 Info.plist、要求持久签名身份、读取主程序架构、生成
 ZIP，并比较归档内 Info.plist、主程序和图标摘要。示例：
@@ -88,10 +88,10 @@ otool -L build/Anywhere-preview.app/Contents/MacOS/Anywhere
 - Accessibility 权限缺失与授予后的菜单行为；
 - 登录项注册、批准与关闭；
 - 材质、Reduce Transparency、主题、缩放和布局；
-- VoiceOver 不在 V0.14 开发预览范围内，继续作为 V1.0 发布门槛。
+- VoiceOver 按 UI-011 验收。开发预览可记录缺口，正式分发需完成辅助技术矩阵。
 
 记录设备、macOS、架构、构建号、数据目录、真实输入与未验证项。只使用脱敏材料；
-不要让自动化意外执行真实业务动作。未执行项保持 Unverified。
+不要让自动化意外执行真实业务动作。未执行项按清单记录为 Pending 或 Blocked。
 
 ## 5. GitHub 打包
 
@@ -102,7 +102,7 @@ gh workflow run macos.yml --ref main
 ```
 
 PR / push 只执行检查；手动运行在完整检查通过后构建当前架构 App，并上传 ZIP、
-SHA-256 和 `package-provenance.json`，保留 30 天。工作流不创建或替换 Release。
+SHA-256、`package-provenance.json` 和独立 `.app.dSYM`，保留 30 天。工作流不创建或替换 Release。
 
 仓库 Secrets 需要 `ANYWHERE_CI_SIGNING_P12` 与
 `ANYWHERE_CI_SIGNING_PASSWORD`。工作流使用临时 keychain 中的独立
@@ -115,9 +115,10 @@ Developer ID / 公证。
 
 | 版本 | 日期 | 状态 | 资产 |
 |---|---|---|---|
+| [`v0.14.1`](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.1) | 2026-11-24 | Pre-release；macOS 15+ arm64 | `Anywhere-macos-arm64.zip`、SHA-256、`package-provenance.json` |
 | [`v0.14.0`](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.0) | 2026-11-18 | Pre-release；macOS 15+ arm64 | `Anywhere-macos-arm64.zip`、SHA-256、`package-provenance.json` |
 
-`v0.14.0` 使用 annotated tag 固定最终源码，未替换历史 `latest`。现存 `latest`
+`v0.14.1` 使用 annotated tag 固定最终源码，未替换历史 `latest`。现存 `latest`
 仍是 2026-09-18 的 V0.3 历史预览，不包含当前 GPUI 产品；保留旧 tag 和资产，
 不用其数据证明当前 macOS 或 Windows 支持。
 
@@ -136,7 +137,8 @@ Developer ID / 公证。
 和发布安全矩阵；`SECURITY.md` 的私密报告与分支保护也需在 GitHub 设置中启用。
 
 发布新版时把 `<version>` 与 `<final-main-commit>` 替换为本次不可变版本和提交。
-`v0.14.0` 已经发布，不得重写该 tag、替换其资产或重复创建同名 Release。
+`v0.14.0` 与 `v0.14.1` 一旦发布，不得重写对应 tag、替换其资产或重复创建
+同名 Release。
 
 ```bash
 VERSION=vX.Y.Z

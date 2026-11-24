@@ -404,7 +404,7 @@ mod tests {
         )];
         contexts.push(ResolvedContext::new(
             GIT_REPOSITORY,
-            ContextValue::Repository(path.clone()),
+            ContextValue::Repository(path),
             ContextSource::ApplicationContext,
             "git",
         ));

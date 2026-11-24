@@ -26,6 +26,7 @@ python3 -m unittest discover -s scripts/tests -p test_docs.py
 scripts/check-macos-menu.sh
 cargo test --workspace --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo clippy --workspace --lib --bins --locked -- -W clippy::too_many_lines -D warnings
 scripts/check-web-sdk.sh
 ANYWHERE_SDK_READY=1 scripts/check-web-examples.sh
 python3 scripts/check-architecture.py

@@ -46,7 +46,8 @@ pub struct HistoryService {
     state: Mutex<State>,
     worker: Arc<tokio::sync::Semaphore>,
     query_changed: tokio::sync::Notify,
-    configuration: Mutex<()>,
+    configuration: Arc<Mutex<()>>,
+    readers: Mutex<Vec<std::sync::Weak<Self>>>,
     epoch: Arc<AtomicU64>,
     owner: AtomicU64,
     enabled: Arc<AtomicBool>,
@@ -70,11 +71,28 @@ impl HistoryService {
             }),
             worker: Arc::new(tokio::sync::Semaphore::new(1)),
             query_changed: tokio::sync::Notify::new(),
-            configuration: Mutex::new(()),
+            configuration: Default::default(),
+            readers: Default::default(),
             epoch: Arc::new(AtomicU64::new(1)),
             owner: AtomicU64::new(0),
             enabled: Arc::new(AtomicBool::new(true)),
         }
+    }
+    /// A window owns its item identities and selection epoch. Source settings,
+    /// revocation and the physical reader budget are shared by the process.
+    pub fn window_reader(&self) -> Arc<Self> {
+        let reader = Arc::new(Self {
+            enabled: self.enabled.clone(),
+            configuration: self.configuration.clone(),
+            worker: self.worker.clone(),
+            application_lookup: self.application_lookup.clone(),
+            installed_applications: self.installed_applications.clone(),
+            ..Self::new(self.storage.clone(), self.loader.clone())
+        });
+        let mut readers = crate::core::sync::lock_for_revoke(&self.readers, "history_readers");
+        readers.retain(|reader| reader.strong_count() > 0);
+        readers.push(Arc::downgrade(&reader));
+        reader
     }
     /// Startup metadata only; implicit defaults never become saved user choices.
     pub fn with_installed_applications(
@@ -97,7 +115,7 @@ impl HistoryService {
         use sha2::{Digest, Sha256};
         let revision = self.loader.revision(source);
         if let Some(revision) = &revision {
-            let state = self.state.lock().unwrap();
+            let state = crate::core::sync::lock_state(&self.state, "history_state")?;
             if let Some(cache) = state
                 .cache
                 .as_ref()
@@ -120,7 +138,7 @@ impl HistoryService {
             .into();
         if let Some(revision) = revision {
             if self.loader.revision(source).as_ref() == Some(&revision) {
-                let mut state = self.state.lock().unwrap();
+                let mut state = crate::core::sync::lock_state(&self.state, "history_state")?;
                 if !cancelled() {
                     state.cache = Some(CachedSource {
                         source: source.clone(),
@@ -149,7 +167,8 @@ impl HistoryService {
         )
     }
     pub fn refresh(&self) -> Result<()> {
-        let _configuration = self.configuration.lock().unwrap();
+        let _configuration =
+            crate::core::sync::lock_state(&self.configuration, "history_configuration")?;
         ensure!(
             self.loader.configuration_error().is_none(),
             "custom history adapters unavailable; repair configuration and restart"
@@ -184,18 +203,30 @@ impl HistoryService {
                 })
             })
             .collect::<Vec<_>>();
-        let mut state = self.state.lock().unwrap();
+        let mut state = crate::core::sync::lock_for_revoke(&self.state, "history_state");
         if state.configurations != configurations || state.sources != sources {
             self.advance_epoch();
+            for reader in crate::core::sync::lock_for_revoke(&self.readers, "history_readers")
+                .iter()
+                .filter_map(std::sync::Weak::upgrade)
+            {
+                let mut local = crate::core::sync::lock_for_revoke(&reader.state, "history_state");
+                reader.advance_epoch();
+                local.items = Arc::default();
+                local.configurations.clone_from(&configurations);
+                local.sources.clone_from(&sources);
+                local.cache = None;
+            }
             state.configurations = configurations;
             state.sources = sources;
             state.items = Arc::default();
             state.cache = None;
         }
     }
-    pub fn sources(&self) -> Vec<SourceStatus> {
-        let state = self.state.lock().unwrap();
-        self.loader
+    pub fn try_sources(&self) -> Result<Vec<SourceStatus>> {
+        let state = crate::core::sync::lock_state(&self.state, "history_state")?;
+        Ok(self
+            .loader
             .descriptors()
             .into_iter()
             .map(|d| SourceStatus {
@@ -220,7 +251,21 @@ impl HistoryService {
                     }),
                 descriptor: d,
             })
-            .collect()
+            .collect())
+    }
+    pub fn sources(&self) -> Vec<SourceStatus> {
+        self.try_sources().unwrap_or_else(|_| {
+            self.loader
+                .descriptors()
+                .into_iter()
+                .map(|d| SourceStatus {
+                    action_enabled: false,
+                    mode: SourceMode::Disabled,
+                    path: None,
+                    descriptor: d,
+                })
+                .collect()
+        })
     }
     pub fn page_input(&self, id: &str) -> Result<PageInput> {
         ensure!(
@@ -228,7 +273,7 @@ impl HistoryService {
             "history feature disabled"
         );
         ensure!(
-            self.sources()
+            self.try_sources()?
                 .iter()
                 .any(|s| s.descriptor.id == id && s.action_enabled),
             "history action disabled"
@@ -246,7 +291,8 @@ impl HistoryService {
         })
     }
     pub fn configure_mode(&self, id: &str, mode: SourceMode, path: Option<&str>) -> Result<()> {
-        let _configuration = self.configuration.lock().unwrap();
+        let _configuration =
+            crate::core::sync::lock_state(&self.configuration, "history_configuration")?;
         let descriptor = self
             .loader
             .descriptors()
@@ -277,7 +323,8 @@ impl HistoryService {
         })
     }
     pub fn set_action_enabled(&self, id: &str, enabled: bool) -> Result<()> {
-        let _configuration = self.configuration.lock().unwrap();
+        let _configuration =
+            crate::core::sync::lock_state(&self.configuration, "history_configuration")?;
         ensure!(
             self.loader.descriptors().iter().any(|s| s.id == id),
             "unknown source"
@@ -297,11 +344,19 @@ impl HistoryService {
         })
     }
     pub fn disabled_action_ids(&self) -> std::collections::BTreeSet<String> {
-        self.sources()
-            .into_iter()
-            .filter(|s| !s.action_enabled)
-            .map(|s| format!("core.application_history.{}.open", s.descriptor.id))
-            .collect()
+        match self.try_sources() {
+            Ok(sources) => sources
+                .into_iter()
+                .filter(|s| !s.action_enabled)
+                .map(|s| format!("core.application_history.{}.open", s.descriptor.id))
+                .collect(),
+            Err(_) => self
+                .loader
+                .descriptors()
+                .into_iter()
+                .map(|d| format!("core.application_history.{}.open", d.id))
+                .collect(),
+        }
     }
     fn save_configuration(
         &self,
@@ -334,6 +389,12 @@ impl HistoryService {
     pub fn set_enabled(&self, enabled: bool) {
         self.enabled.store(enabled, Ordering::Release);
         self.cancel();
+        for reader in crate::core::sync::lock_for_revoke(&self.readers, "history_readers")
+            .iter()
+            .filter_map(std::sync::Weak::upgrade)
+        {
+            reader.cancel();
+        }
     }
     fn cancellation(&self, expected: u64) -> Cancelled {
         let epoch = self.epoch.clone();
@@ -348,7 +409,7 @@ impl HistoryService {
         epoch
     }
     pub fn cancel(&self) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = crate::core::sync::lock_for_revoke(&self.state, "history_state");
         self.advance_epoch();
         state.items = Arc::default();
     }
@@ -407,5 +468,27 @@ mod cache_tests {
         service.cancel_session(0);
         service.read_for_query(&source, current).unwrap();
         assert_eq!(loader.reads.load(Ordering::Acquire), 3);
+    }
+
+    #[test]
+    fn poisoned_history_state_returns_error_instead_of_panicking() {
+        let loader = Arc::new(Loader {
+            reads: AtomicUsize::new(0),
+            journal: AtomicU64::new(0),
+        });
+        let service = HistoryService::new(Err("synthetic".into()), loader);
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = service.state.lock().unwrap();
+            panic!("poison history state");
+        }));
+        assert!(service.open_session().is_err());
+        assert!(service.try_sources().is_err());
+        assert!(service.search(1, "q", "synthetic").is_err());
+        assert!(service
+            .sources()
+            .into_iter()
+            .all(|status| !status.action_enabled));
+        assert!(service.disabled_action_ids().is_empty());
+        service.cancel();
     }
 }

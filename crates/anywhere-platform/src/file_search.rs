@@ -123,11 +123,11 @@ pub fn ripgrep(
     }
     let program =
         crate::process::find_executable("rg").context("ripgrep is unavailable; install rg")?;
-    scan(program, query, limit.min(64), options, cancelled, timeout)
+    scan(&program, query, limit.min(64), options, cancelled, timeout)
 }
 
 fn scan(
-    program: PathBuf,
+    program: &Path,
     query: &str,
     limit: usize,
     options: &FileSearchOptions,
@@ -170,7 +170,7 @@ fn scan(
         arguments.extend(["--".into(), ".".into()]);
         let mut child = OwnedProcess::spawn(&ProcessRequest {
             title: "File search".into(),
-            program: program.clone(),
+            program: program.to_path_buf(),
             arguments,
             directory: root.clone(),
             environment: Default::default(),
@@ -318,7 +318,7 @@ mod tests {
             ..Default::default()
         };
         let hits = scan(
-            program.clone(),
+            &program,
             "报告",
             64,
             &options,
@@ -329,7 +329,7 @@ mod tests {
         assert_eq!(hits.len(), 1);
         options.include_hidden = true;
         let hits = scan(
-            program.clone(),
+            &program,
             "报告",
             64,
             &options,
@@ -340,7 +340,7 @@ mod tests {
         assert_eq!(hits.len(), 2);
         assert_eq!(
             scan(
-                program.clone(),
+                &program,
                 "报告[季度]",
                 64,
                 &options,
@@ -352,7 +352,7 @@ mod tests {
             1
         );
         assert!(scan(
-            program,
+            &program,
             "content",
             64,
             &options,
@@ -379,7 +379,7 @@ mod tests {
             let _ = std::fs::remove_file(&pid_file);
             let start = Instant::now();
             let result = scan(
-                program.clone(),
+                &program,
                 "report",
                 64,
                 &options,
@@ -408,7 +408,7 @@ mod tests {
         }
         let start = Instant::now();
         let hits = scan(
-            program,
+            &program,
             "report",
             2,
             &FileSearchOptions {
@@ -475,7 +475,7 @@ mod tests {
             ..Default::default()
         };
         assert!(scan(
-            program,
+            &program,
             "report",
             64,
             &options,
@@ -489,7 +489,7 @@ mod tests {
             ..Default::default()
         };
         assert!(scan(
-            program,
+            &program,
             "report",
             64,
             &options,

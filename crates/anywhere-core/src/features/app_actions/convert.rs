@@ -69,16 +69,17 @@ pub fn descriptors(
             };
             let search_title = path.join(" › ");
             let mut aliases = vec![path.join(" ")];
-            let mut keywords = path.clone();
+            let mut keywords = path;
 
             if let Some(shortcut) = &item.shortcut {
                 aliases.push(shortcut.clone());
                 keywords.push(shortcut.clone());
             }
+            let base_priority = default_priority(&leaf);
             ActionDefinition {
                 localized_titles: Default::default(),
                 id,
-                title: leaf.clone(),
+                title: leaf,
                 subtitle: None,
                 shortcut: item.shortcut.clone(),
                 accepts: vec![ContextMatcher {
@@ -97,7 +98,7 @@ pub fn descriptors(
                 } else {
                     AvailabilityRule::Hidden
                 },
-                base_priority: default_priority(&leaf),
+                base_priority,
                 icon: "menu".into(),
                 group_id: groups::for_app(&app.bundle_id),
                 aliases,

@@ -13,6 +13,7 @@ struct Clipboard {
     payload: Option<anywhere_platform::clipboard::ClipboardPayload>,
     written: Mutex<Vec<anywhere_platform::clipboard::ClipboardPayload>>,
     on_read: Option<Box<dyn Fn() + Send + Sync>>,
+    on_write: Option<Box<dyn Fn() + Send + Sync>>,
     on_access: Option<Box<dyn Fn() -> Result<()> + Send + Sync>>,
     read_error: Option<ContextReadError>,
     generation_error: bool,
@@ -26,6 +27,9 @@ impl ClipboardHost for Clipboard {
         &self,
         payload: &anywhere_platform::clipboard::ClipboardPayload,
     ) -> Result<()> {
+        if let Some(callback) = &self.on_write {
+            callback();
+        }
         self.written.lock().unwrap().push(payload.clone());
         Ok(())
     }
@@ -621,6 +625,83 @@ fn captured_multiformat_item_restores_long_format_names_and_original_bytes() {
 }
 
 #[test]
+fn clipboard_write_keeps_storage_locked_against_revocation() {
+    let (_directory, service) = service();
+    let observed_service = service.clone();
+    let platform = Clipboard {
+        on_write: Some(Box::new(move || {
+            assert!(matches!(
+                observed_service.repository.try_lock(),
+                Err(std::sync::TryLockError::WouldBlock)
+            ));
+            assert!(observed_service.state.try_lock().is_ok());
+        })),
+        ..Default::default()
+    };
+    service.request_recording(true, &platform).unwrap();
+    platform.generation.store(1, Ordering::Relaxed);
+    service.poll(&platform, 1).unwrap();
+    let id = service.search("").unwrap()[0].id;
+    service.copy(id, &platform).unwrap();
+    service.delete(id).unwrap();
+    assert!(service.copy(id, &platform).is_err());
+    assert_eq!(platform.written.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn search_and_usage_retry_when_retention_changes_before_repository_access() {
+    for aggregate in [false, true] {
+        let directory = tempfile::tempdir().unwrap();
+        let mut repository = crate::persistence::clipboard::SqliteHistoryRepository::open(
+            &directory.path().join("clipboard.sqlite3"),
+        )
+        .unwrap();
+        let now = 10 * policy::DAY_MS;
+        repository
+            .set_policy(HistoryPolicy {
+                retention_days: 1,
+                ..HistoryPolicy::default()
+            })
+            .unwrap();
+        repository
+            .record("older entry", now - 2 * policy::DAY_MS)
+            .unwrap();
+        let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+        let (resume_tx, resume_rx) = std::sync::mpsc::channel();
+        let pending = Mutex::new(Some((entered_tx, resume_rx)));
+        let clock = Arc::new(move || {
+            if std::thread::current().name() == Some("clipboard-reader") {
+                if let Some((entered, resume)) = pending.lock().unwrap().take() {
+                    entered.send(()).unwrap();
+                    resume
+                        .recv_timeout(std::time::Duration::from_secs(5))
+                        .unwrap();
+                }
+            }
+            now
+        });
+        let service = Arc::new(HistoryService::with_clock(Ok(Box::new(repository)), clock));
+        let reader_service = service.clone();
+        let reader = std::thread::Builder::new()
+            .name("clipboard-reader".into())
+            .spawn(move || {
+                if aggregate {
+                    assert_eq!(reader_service.usage().unwrap().0, 1);
+                } else {
+                    assert_eq!(reader_service.search("").unwrap()[0].summary, "older entry");
+                }
+            })
+            .unwrap();
+        entered_rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .unwrap();
+        service.set_retention_days(0).unwrap();
+        resume_tx.send(()).unwrap();
+        reader.join().unwrap();
+    }
+}
+
+#[test]
 fn deletion_clear_and_disable_during_preview_revoke_its_result() {
     for operation in ["delete", "clear", "disable"] {
         let (_directory, service) = service();
@@ -668,7 +749,7 @@ fn preview_admission_serializes_bodies_without_blocking_policy_or_storage() {
     assert_eq!(service.search("").unwrap().len(), 1);
     service.set_recording(false).unwrap();
     service.delete(id).unwrap();
-    let second_service = service.clone();
+    let second_service = service;
     let second =
         std::thread::spawn(move || second_service.inspect_payload(id, |_, payload| Ok(payload)));
     release_tx.send(()).unwrap();

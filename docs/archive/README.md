@@ -18,19 +18,20 @@
 | [V0.9 开发记录](v0.9-development-records.md) | Detail / KeyValue 的协议、执行、Host 回归与开发包 |
 | [V0.8 MVP](mvp-v0.8.md) | 旧模块 / 协议及验收边界，已被静态内置模块替代 |
 | [V0.9 MVP](mvp-v0.9.md) / [模块迁移](feature-module-roadmap.md) | 已完成的第一方热加载退役和原生工具页迁移 |
-| [V0.10 MVP](mvp-v0.10.md) / [多格式改造](clipboard-multiformat-plan.md) | 剪贴板历史、存储 / 格式边界及初始验收 |
+| [V0.10 剪贴板记录](mvp-v0.10.md) | 剪贴板历史、存储 / 格式边界及初始验收 |
 | [开源复用重构](open-source-refactor-plan.md) | 已完成的 R1–R4 与未采用原型 |
 | [V0.11 MVP](mvp-v0.11.md) / [Web 实施记录](web-plugin-development-records.md) | Web 平台、JSON 与逐构建观察；不作为现行 SDK 文档 |
-| [P0 探针退役](web-plugin-p0.md) | 早期合成回显验证及删除原因，原代码在 Git 历史 |
 | [Flutter 3.50 升级与内存调研](flutter-3.50-memory.md) | GPUI 迁移前的 Flutter SDK、界面、内存与 Windows 共享层记录；不描述当前产品 |
 
 ## Review 与重构记录
+
+- [全仓代码审查修复方案（2026-11-18）](reviews/code-review-remediation-plan-2026-11-18.md)：锁中毒策略、Token 调色板与 Web 主题生成、键盘分层与 action 迁移、`LauncherView` 拆分、通用列表行、Release 配置及测量门槛项的实施方案与 PR 顺序；撰写时未实施。
 
 - [当前工作树综合审查（2026-11-18）](reviews/worktree-review-2026-11-18.md)记录文件分页、剪贴板、任务、共享快照投影、应用索引、原生桥接和 SDK 修复，以及桌面验收步骤。
 
 - [GPUI Regular 玻璃调整（2026-11-17）](reviews/gpui-regular-glass-2026-11-17.md)：所有原生窗口使用 Regular、移除页面和普通结果行补色蒙版，保留系统辅助功能回退与交互层；通知对照待实机验收。
 
-- [GPUI 当前构建验收执行记录（2026-11-17）](reviews/gpui-acceptance-run-2026-11-17.md)：按 322 条清单执行本轮构建的工程门禁、包身份、隔离启动、输入、Tasks 与缺陷记录；macOS 锁屏后的模块保持 Blocked / Pending。
+- [GPUI 构建验收执行记录（2026-11-17）](reviews/gpui-acceptance-run-2026-11-17.md)：按 322 条清单执行本轮构建的工程门禁、包身份、隔离启动、输入、Tasks 与缺陷记录；macOS 锁屏后的模块保持 Blocked / Pending。
 
 - [GPUI 对象操作、设置与 Web 生命周期审查（2026-11-17）](reviews/gpui-lifecycle-review-2026-11-17.md)：Core 对象请求抢占、旧 Actions 回包、设置保存隔离与排队退出、Web Reload / 隐藏恢复；包含可控排序回归和待执行的人工清单。
 
@@ -81,5 +82,5 @@ Review 的问题列表描述审查基线，修复记录描述其后变更；不�
 ## 2026-11-17 归档整理
 
 - [GPUI 迁移契约](gpui-migration.md)、[UI 对齐历史](gpui-ui-alignment-plan.md)、[旧声明式协议](plugin-protocol.md)和[早期重构切片](code-cleanup-and-gpui-runtime-plan.md)。
-- [V0.14 开发记录](v0.14-gpui-development-records.md)与[GPUI 前内部构建变更](changelog-pre-gpui-2026-11-17.md)。
+- [V0.14 历史开发与发布前验收记录](v0.14-gpui-development-records.md)与[GPUI 前内部构建变更](changelog-pre-gpui-2026-11-17.md)。
 - [当前工作树实施记录](reviews/full-worktree-remediation-2026-11-17.md)。

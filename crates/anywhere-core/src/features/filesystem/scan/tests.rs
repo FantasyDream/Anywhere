@@ -205,7 +205,7 @@ fn all_matches_are_reachable_past_two_pages_with_overlapping_roots_and_folders()
     std::fs::write(&nested, "").unwrap();
     expected.insert(nested);
     let mut options = options(&root);
-    options.roots.extend([child.clone(), root]);
+    options.roots.extend([child, root]);
     let store = ScanStore::new("report", FileSearchFilter::All, options).unwrap();
     let page = finish(&store);
     assert!(page.progress.finished);

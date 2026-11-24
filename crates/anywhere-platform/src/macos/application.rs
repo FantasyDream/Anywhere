@@ -140,10 +140,10 @@ pub(super) fn selected_text(application: &ApplicationInfo) -> Result<Option<Stri
         launcher_free_string(raw);
         decoded
     };
-    decode_selected_text(decoded.context("decode selected text status")?)
+    decode_selected_text(&decoded.context("decode selected text status")?)
 }
 
-fn decode_selected_text(value: serde_json::Value) -> Result<Option<String>> {
+fn decode_selected_text(value: &serde_json::Value) -> Result<Option<String>> {
     match value.get("status").and_then(|status| status.as_str()) {
         Some("ok") => {
             if value.get("truncated").and_then(|flag| flag.as_bool()) == Some(true) {
@@ -268,6 +268,51 @@ pub(super) fn application_icon(path: &str, size: u32) -> Result<Option<Vec<u8>>>
         .map(|bytes| bytes.as_slice().to_vec()))
 }
 
+pub(super) fn application_icon_bgra(path: &str, size: u32) -> Result<Option<crate::RawIconImage>> {
+    icon_bgra(path, size, true)
+}
+
+pub(super) fn file_icon_bgra(path: &str, size: u32) -> Result<Option<crate::RawIconImage>> {
+    icon_bgra(path, size, false)
+}
+
+fn icon_bgra(path: &str, size: u32, prefer_bundle: bool) -> Result<Option<crate::RawIconImage>> {
+    let path = c_path(path)?;
+    let mut width = 0u32;
+    let mut height = 0u32;
+    let mut length = 0u32;
+    // SAFETY: the native side allocates a BGRA buffer of exact length `length`.
+    let buffer = unsafe {
+        if prefer_bundle {
+            launcher_application_icon_bgra(
+                path.as_ptr(),
+                size,
+                &mut width,
+                &mut height,
+                &mut length,
+            )
+        } else {
+            launcher_file_icon_bgra(path.as_ptr(), size, &mut width, &mut height, &mut length)
+        }
+    };
+    // SAFETY: a non-null buffer is a native allocation of exactly `length` bytes.
+    let Some(bytes) = (unsafe { NativeBytes::from_raw(buffer, length) }) else {
+        return Ok(None);
+    };
+    let expected = width
+        .checked_mul(height)
+        .and_then(|pixels| pixels.checked_mul(4))
+        .map(|count| count as usize);
+    if expected != Some(bytes.as_slice().len()) || bytes.as_slice().is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(crate::RawIconImage {
+        width,
+        height,
+        bgra: bytes.as_slice().to_vec(),
+    }))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -298,11 +343,11 @@ mod tests {
         use serde_json::json;
 
         assert_eq!(
-            decode_selected_text(json!({"status":"no_selection"})).unwrap(),
+            decode_selected_text(&json!({"status":"no_selection"})).unwrap(),
             None
         );
         assert_eq!(
-            decode_selected_text(json!({"status":"ok", "text":"hello"})).unwrap(),
+            decode_selected_text(&json!({"status":"ok", "text":"hello"})).unwrap(),
             Some("hello".into())
         );
         for (status, expected) in [
@@ -313,14 +358,15 @@ mod tests {
             ("too_large", SelectedTextError::TooLarge),
             ("unavailable", SelectedTextError::Unavailable),
         ] {
-            let error = decode_selected_text(json!({"status":status})).unwrap_err();
+            let error = decode_selected_text(&json!({"status":status})).unwrap_err();
             assert_eq!(error.downcast_ref::<SelectedTextError>(), Some(&expected));
         }
         assert!(
-            decode_selected_text(json!({"status":"ok", "text":"x".repeat(16 * 1024 + 1)})).is_err()
+            decode_selected_text(&json!({"status":"ok", "text":"x".repeat(16 * 1024 + 1)}))
+                .is_err()
         );
         assert_eq!(
-            decode_selected_text(json!({"status":"ok", "text":"truncated", "truncated":true}))
+            decode_selected_text(&json!({"status":"ok", "text":"truncated", "truncated":true}))
                 .unwrap_err()
                 .downcast_ref::<SelectedTextError>(),
             Some(&SelectedTextError::TooLarge)
@@ -383,7 +429,7 @@ mod tests {
             "pid reuse checks require kernel start time: {app:?}"
         );
         if platform.accessibility_trusted(false) {
-            let mut rejected = app.clone();
+            let mut rejected = app;
             rejected.instance_id = None;
             assert!(
                 matches!(

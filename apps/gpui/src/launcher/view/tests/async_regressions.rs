@@ -111,7 +111,7 @@ fn preview_responses_are_rejected_after_close_selection_revision_or_page_changes
         cx.update(|cx| {
             view.update(cx, |view, cx| {
                 view.screen = Screen::FileSearch;
-                view.model.rows = vec![file_row("a", "a.txt"), file_row("b", "b.txt")];
+                view.model.rows = vec![file_row("a", "a.txt"), file_row("b", "b.txt")].into();
                 view.model.selected = 0;
                 view.model.revision = 1;
                 view.file_search.browsing = true;
@@ -147,8 +147,8 @@ fn preview_responses_are_rejected_after_close_selection_revision_or_page_changes
         cx.update(|cx| {
             let view = view.read(cx);
             assert_eq!(view.notice.as_deref(), Some("current state"));
-            assert!(!view.preview_open);
-            assert!(!view.preview_busy);
+            assert!(!view.preview.open);
+            assert!(!view.preview.busy);
         });
     }
 }
@@ -162,8 +162,8 @@ fn native_preview_close_revokes_an_in_flight_update(cx: &mut TestAppContext) {
             view.screen = Screen::Clipboard;
             view.clipboard.apply(clipboard_snapshot(&[1]));
             view.clipboard.browsing = true;
-            view.preview_open = true;
-            view.preview_generation = 42;
+            view.preview.open = true;
+            view.preview.generation = 42;
             view.poll_preview(receiver, cx);
             view.apply_preview_poll(
                 42,
@@ -189,8 +189,8 @@ fn native_preview_close_revokes_an_in_flight_update(cx: &mut TestAppContext) {
     cx.update(|cx| {
         let view = view.read(cx);
         assert_eq!(view.notice.as_deref(), Some("panel closed"));
-        assert!(!view.preview_open);
-        assert!(view.preview.is_none());
+        assert!(!view.preview.open);
+        assert!(view.preview.host.is_none());
     });
 }
 
@@ -203,7 +203,7 @@ fn closing_a_prepared_preview_cancels_the_queued_native_show(cx: &mut TestAppCon
             view.clipboard.apply(clipboard_snapshot(&[1]));
             view.clipboard.browsing = true;
             let request = PreviewRequest {
-                generation: view.preview_request_generation,
+                generation: view.preview.request_generation,
                 session_generation: view.live_state.generation,
                 screen: view.screen,
                 target: PreviewTarget::Clipboard(1),
@@ -225,9 +225,9 @@ fn closing_a_prepared_preview_cancels_the_queued_native_show(cx: &mut TestAppCon
     cx.update(|cx| {
         let view = view.read(cx);
         assert_eq!(view.notice.as_deref(), Some("closed before native show"));
-        assert!(!view.preview_open);
-        assert!(!view.preview_busy);
-        assert!(view.preview.is_none());
+        assert!(!view.preview.open);
+        assert!(!view.preview.busy);
+        assert!(view.preview.host.is_none());
     });
 }
 
@@ -264,8 +264,8 @@ fn a_failed_preview_update_keeps_the_current_panel_monitor_valid(cx: &mut TestAp
             view.screen = Screen::Clipboard;
             view.clipboard.apply(clipboard_snapshot(&[1]));
             view.clipboard.browsing = true;
-            view.preview_open = true;
-            view.preview_generation = 42;
+            view.preview.open = true;
+            view.preview.generation = 42;
             view.poll_preview(receiver, cx);
         });
     });
@@ -276,9 +276,46 @@ fn a_failed_preview_update_keeps_the_current_panel_monitor_valid(cx: &mut TestAp
     cx.update(|cx| {
         let view = view.read(cx);
         assert_eq!(view.notice.as_deref(), Some("current preview failure"));
-        assert!(view.preview_open);
-        assert_eq!(view.preview_generation, 42);
+        assert!(view.preview.open);
+        assert_eq!(view.preview.generation, 42);
     });
+}
+
+#[gpui_kit::test]
+fn shelf_copy_button_submits_once_at_minimum_width(cx: &mut TestAppContext) {
+    let directory = tempfile::tempdir().unwrap();
+    let plugins = directory.path().join("plugins");
+    std::fs::create_dir_all(&plugins).unwrap();
+    // The displayed ID is synthetic. The empty, isolated store cannot write a payload.
+    let live = LiveLauncher::open_at(
+        anywhere_core::application::frontend_runtime::RuntimePaths::new(
+            directory.path().join("data"),
+            plugins,
+        ),
+    )
+    .unwrap();
+    let (window, view) = open_view(cx);
+    cx.update(|cx| {
+        view.update(cx, |view, _| {
+            view.screen = Screen::ClipboardShelf;
+            view.standalone_shelf = true;
+            view.live = Some(Arc::new(live));
+            view.clipboard.apply(clipboard_snapshot(&[7, 42]));
+            assert!(view.select_clipboard_item(42));
+        });
+    });
+    sync_test_viewport(cx, window, gpui_kit::size(px(360.), px(360.)));
+    cx.update_window(window, |_, window, cx| {
+        let button = window.find("shelf-copy-42").bounds();
+        assert!(button.left() >= window.find("shelf-more-42").bounds().right());
+        assert!(button.right() <= window.viewport_size().width);
+        assert!(window.try_find("shelf-copy-7").is_none());
+        let previous = view.read(cx).clipboard.operation_generation;
+        window.click("shelf-copy-42", cx);
+        assert_eq!(view.read(cx).clipboard.operation_generation, previous + 1);
+        assert_eq!(view.read(cx).clipboard.selected_id(), Some(42));
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]
@@ -310,7 +347,7 @@ fn shelf_command_arrows_reveal_the_selected_row(cx: &mut TestAppContext) {
         let view_state = view.read(cx);
         assert_eq!(view_state.clipboard.selected_id(), Some(30));
         assert!(view_state.clipboard.copied_item.is_none());
-        assert!(view_state.clipboard_shelf_scroll.offset().y < px(0.));
+        assert!(view_state.scrolls.clipboard_shelf_base().offset().y < px(0.));
         view.update(cx, |view, cx| view.handle_key("up", command, window, cx));
     })
     .unwrap();
@@ -319,7 +356,7 @@ fn shelf_command_arrows_reveal_the_selected_row(cx: &mut TestAppContext) {
         window.render_frame(cx);
         let view = view.read(cx);
         assert_eq!(view.clipboard.selected_id(), Some(1));
-        assert_eq!(view.clipboard_shelf_scroll.offset().y, px(0.));
+        assert_eq!(view.scrolls.clipboard_shelf_base().offset().y, px(0.));
     })
     .unwrap();
 }

@@ -1,9 +1,10 @@
 # 历史基准样本
 
-这些数据仅对采样时的构建、硬件与 fixture 有效。当前策略见 [性能](../mvp-migration/performance-flutter-era.md) 和 [文件搜索](../../file-search.md)。
+这些数据仅对采样时的构建、硬件与 fixture 有效。当前策略见 [性能](../../performance.md) 和 [文件搜索](../../file-search.md)。
 
 | 样本 | 边界 |
 |---|---|
+| [GPUI 文件候选视口投影，2026-11-21](gpui-file-projection-2026-11-21.json) | 相同 10,000 个文件候选，三轮配对，覆盖模型时间与新增保留堆 |
 | [R2 SQLite 排序对照，2026-10-18](open-source-result-store-r2-2026-10-18.json) | 旧原型位于提交 `9d14251`；当前已移除，保留原始顺序 / 耗时 / RSS / 磁盘对照 |
 | [R3 匹配对照，2026-10-18](open-source-matcher-r3-2026-10-18.json) | 旧原型位于提交 `9d14251`；采用原生流式比较，nucleo 未接入生产且依赖已清理 |
 | [连续文件遍历，2026-10-18](flutter-era-v0.14/file-search-continuous-r2.json) | 10k / 40k 合成文件及完整结果分页读取；历史 UI 轮次样本，不代表当前 GPUI 路径 |

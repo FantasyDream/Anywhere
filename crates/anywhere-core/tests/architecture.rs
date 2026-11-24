@@ -191,7 +191,7 @@ fn every_candidate_kind_has_a_source_behind_it() {
         "with no application index there are no application rows"
     );
     // Ordering is a property of candidates, and every source's rows go through it.
-    let mut sorted = set.candidates.clone();
+    let mut sorted = set.candidates;
     sorted.sort_by(compare_candidates);
     assert!(sorted
         .windows(2)

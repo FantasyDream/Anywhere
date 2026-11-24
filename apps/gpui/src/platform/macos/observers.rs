@@ -128,7 +128,7 @@ pub(in crate::platform) fn install_platform_observers() -> tokio::sync::mpsc::Re
         tracing::debug!("clipboard_shelf_destination_unavailable_at_startup");
     }
 
-    let key_sender = sender.clone();
+    let key_sender = sender;
     let key_marker = marker;
     let key_monitor = RcBlock::new(move |event: NonNull<NSEvent>| -> *mut NSEvent {
         let event_ptr = event.as_ptr();
@@ -192,11 +192,9 @@ pub(in crate::platform) fn install_platform_observers() -> tokio::sync::mpsc::Re
             .as_ref()
             .is_some_and(|responder| responder.class().name().to_string_lossy().starts_with("WK"));
         if web_responder {
-            tracing::debug!("web_view_escape_intercepted");
-            if key_sender.try_send(PlatformEvent::WebViewEscape).is_err() {
-                tracing::warn!("platform_event_queue_full");
-            }
-            return ptr::null_mut();
+            // WebKit must deliver Escape to the focused control first. The
+            // bootstrap forwards unhandled keys through document-bound IPC.
+            return event_ptr;
         }
         if !window.styleMask().contains(NSWindowStyleMask::Closable) {
             return event_ptr;

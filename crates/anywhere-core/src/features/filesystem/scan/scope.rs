@@ -200,7 +200,7 @@ pub(super) fn prepare_query(
         }
     }
     let (root, name, exact) = if path.is_dir() {
-        (path.clone(), String::new(), None)
+        (path, String::new(), None)
     } else {
         (
             path.parent()

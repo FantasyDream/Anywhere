@@ -16,10 +16,7 @@
 CocoaPods 或其他 UI SDK。GPUI、Quick Look、WebKit 与 AppKit 依赖只在 macOS
 构建；共享 Rust crates 另有 Linux / Windows 编译检查。
 
-当前产品 UI 只有 GPUI 一套实现；构建不依赖 Flutter、Dart、Cupertino / Material
-设计库或跨语言 bridge。旧 Flutter 3.50 迁移与内存研究仅保留在
-[历史归档](archive/flutter-3.50-memory.md)，不能作为当前构建、诊断或目录布局的
-依据。界面外观由 GPUI theme、设计 tokens 和 `apps/gpui/src/platform/material/`
+当前产品 UI 只有 GPUI 一套实现；构建使用原生 GPUI。界面外观由 GPUI theme、设计 tokens 和 `apps/gpui/src/platform/material/`
 的 macOS 原生材质适配组成。
 
 文件结果执行索引的隔离分配测量：
@@ -44,7 +41,8 @@ scripts/run-macos.sh
 ```
 
 产物为 `build/Anywhere.app`，Bundle ID 为 `dev.anywhere.launcher`，可执行文件为
-`Contents/MacOS/Anywhere`。更新时先退出旧实例。构建默认使用
+`Contents/MacOS/Anywhere`。macOS 调试符号随 Release 构建输出到同目录的
+`Anywhere.app.dSYM`。更新时先退出旧实例。构建默认使用
 `Anywhere Local Code Signing`；可用 `ANYWHERE_CODESIGN_IDENTITY` 指定其他身份。
 
 独立输出：
@@ -90,7 +88,7 @@ POSIX CI 只编译和测试 `anywhere-core`、`anywhere-platform`、`anywhere-pl
 - 本地化：修改 `resources/localization/`，运行
   `python3 scripts/generate-gpui-localizations.py`。
 - 设计 tokens：修改 `resources/design-tokens.json`，运行
-  `python3 scripts/generate-design-tokens.py`。
+  `python3 scripts/generate-design-tokens.py`（输出 schema v3 完整调色板、`FixedColors` 与 Web 变量表）。
 - 原生文案：运行 `python3 scripts/generate-native-localizations.py`。
 - 文件类型、运行时策略和 Web 协议：运行对应的 `scripts/generate-*.py` 或
   Cargo example。
@@ -129,7 +127,7 @@ scripts/check-web-examples.sh
   Accessibility 和 VoiceOver。
 
 自动化通过不证明物理桌面行为。物理矩阵与当前状态见
-[GPUI 技术方案与验收](mvp-gpui.md#物理桌验矩阵)。
+[完整验收清单](test-acceptance-checklist.md#3-环境执行矩阵)。
 
 ## 独立验收数据
 

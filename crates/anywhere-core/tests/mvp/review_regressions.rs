@@ -129,9 +129,7 @@ async fn saved_directory_usage_participates_in_shared_ranking() {
         .load_global()
         .unwrap();
     assert_eq!(
-        usage
-            .get(&(OPEN.into(), "saved.directory".into()))
-            .unwrap()
+        anywhere_core::core::ranking::usage::lookup_usage(&usage, OPEN, "saved.directory")
             .execute_count,
         1
     );

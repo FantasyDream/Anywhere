@@ -1,7 +1,6 @@
 # Anywhere 产品路线图
 
-最后更新：2026-11-18。当前为 **V0.14 macOS 15+ GPUI 开发预览**。功能已接入并
-发布为 [`v0.14.0` pre-release](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.0)；
+最后更新：2026-11-24。当前为 **V0.14.1 macOS 15+ GPUI 开发预览**。已发布版本为 [`v0.14.1` pre-release](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.1)；
 完整物理桌面矩阵、正式签名、公证和 Windows / Linux 桌面产物尚未完成。当前
 范围与证据见 [GPUI 技术方案与验收](mvp-gpui.md)，版本以
 [Cargo workspace](../Cargo.toml)和
@@ -21,7 +20,7 @@
 | Launcher / Scope / 菜单 | 已接入，包含 Current App、迟到 Context 和执行资格 |
 | 文件搜索与 Quick Look | Rust 搜索、连续结果与 GPUI 路由已接入；系统焦点 / 格式矩阵待验收 |
 | Clipboard | History、策略、Shelf 与按需预览已接入；长期资源和权限矩阵待验收 |
-| Settings | 热键、Context、目录、剪贴板、应用历史、Feature、语言与登录项已接入 |
+| Settings | 热键、Context、目录、剪贴板、应用历史、Feature、语言、外观与登录项已接入 |
 | 应用历史 | 18 个配置化来源、页面查询与对象动作已接入 |
 | Running Tasks / Native Tools | 已有 typed 路由、详情和明确未知类型错误 |
 | Web plugins | 安装审查、启停、WebView、IPC、ack、主题与 teardown 已接入 |
@@ -32,7 +31,7 @@
 
 ## 下一阶段
 
-### V0.14 发布后验收
+### V0.14.1 发布后验收
 
 1. 保持 GPUI 快速门禁、完整 workspace 测试、Clippy、文档和架构检查持续通过。
 2. 在 Developer ID / 公证前继续使用开发签名包，并保持 Bundle ID、最低系统、

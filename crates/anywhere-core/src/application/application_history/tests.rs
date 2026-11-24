@@ -18,6 +18,23 @@ fn idea(path: &Path) -> String {
     )
 }
 #[test]
+fn xml_history_revision_ignores_sqlite_sidecars() {
+    let directory = tempfile::tempdir().unwrap();
+    let source = directory.path().join("recentProjects.xml");
+    std::fs::write(&source, "<application/>").unwrap();
+    std::fs::create_dir(directory.path().join("recentProjects.xml-wal")).unwrap();
+    let catalog = SourceCatalog::bundled_with_config_directory(None).unwrap();
+    let revision = catalog
+        .revision(&SourcePreference {
+            id: "idea".into(),
+            path: source,
+        })
+        .unwrap();
+    assert!(revision.journal.is_none());
+    assert_eq!(revision.header_fingerprint[32..], [0; 32]);
+}
+
+#[test]
 fn official_idea_xml_to_searchable_history_is_configured_not_special_cased() {
     let temp = tempfile::tempdir().unwrap();
     let project = temp.path().join("项目 with spaces");
@@ -149,7 +166,7 @@ fn vscode_uses_the_same_sqlite_reader_and_preserves_workspace_and_remote_types()
         .read(
             &SourcePreference {
                 id: "vscode".into(),
-                path: path.clone(),
+                path,
             },
             Arc::new(|| false),
         )

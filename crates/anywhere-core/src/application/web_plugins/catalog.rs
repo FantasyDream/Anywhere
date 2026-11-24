@@ -22,6 +22,7 @@ pub struct WebPackageApproval {
     pub source_id: String,
 }
 
+#[derive(Clone)]
 pub(super) struct Registration {
     pub platform: WebPlatform,
     pub manifest: Arc<WebPluginManifest>,
@@ -32,7 +33,7 @@ pub(super) struct Registration {
     pub active: Arc<std::sync::atomic::AtomicBool>,
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct WebPluginCatalog {
     pub(super) entries: BTreeMap<String, Registration>,
 }

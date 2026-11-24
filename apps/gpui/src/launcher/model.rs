@@ -1,8 +1,12 @@
+mod rows;
+pub use rows::LauncherRows;
+
 use crate::l10n::Locale;
 use anywhere_protocol::{
     AvailabilityState, CandidateKind, CandidatePresentation, ContextCapturePresentation,
     ContextSource, FileObjectKind, FileSearchProgress, LauncherState, Scope,
 };
+use gpui_kit::SharedString;
 use std::{collections::HashSet, sync::Arc};
 
 const MAX_HOME_ROWS: usize = 5;
@@ -17,10 +21,10 @@ pub struct LauncherScope {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LauncherRow {
-    pub id: String,
-    pub title: String,
-    pub subtitle: Option<String>,
-    pub shortcut: Option<String>,
+    pub id: SharedString,
+    pub title: SharedString,
+    pub subtitle: Option<SharedString>,
+    pub shortcut: Option<SharedString>,
     pub icon: String,
     pub kind: CandidateKind,
     pub enabled: bool,
@@ -28,7 +32,7 @@ pub struct LauncherRow {
     pub menu_path: Vec<String>,
     pub command_id: Option<String>,
     pub file_kind: Option<FileObjectKind>,
-    pub source_label: Option<String>,
+    pub source_label: Option<SharedString>,
     pub icon_identity: Option<String>,
     pub execution_context_id: Option<String>,
     pub primary_action: bool,
@@ -72,10 +76,10 @@ impl LauncherRow {
             .or_else(|| candidate.owning_app.clone())
             .filter(|identity| !identity.trim().is_empty());
         Self {
-            id: candidate.id.clone(),
-            title: localized.unwrap_or(&candidate.title).clone(),
-            subtitle,
-            shortcut: candidate.shortcut.clone(),
+            id: SharedString::from(candidate.id.clone()),
+            title: SharedString::from(localized.unwrap_or(&candidate.title).clone()),
+            subtitle: subtitle.map(SharedString::from),
+            shortcut: candidate.shortcut.clone().map(SharedString::from),
             icon: candidate.icon.key.clone(),
             kind: candidate.kind,
             enabled: candidate.availability.state == AvailabilityState::Enabled,
@@ -83,7 +87,7 @@ impl LauncherRow {
             menu_path: candidate.menu_path.clone(),
             command_id: candidate.command_id.clone(),
             file_kind: candidate.file_kind,
-            source_label,
+            source_label: source_label.map(SharedString::from),
             icon_identity,
             execution_context_id: candidate.execution_context_id.clone(),
             primary_action: candidate.primary_action,
@@ -167,7 +171,7 @@ pub struct LauncherModel {
     pub query: String,
     pub selected_scope: Option<String>,
     pub scopes: Vec<LauncherScope>,
-    pub rows: Vec<LauncherRow>,
+    pub rows: LauncherRows,
     pub selected: usize,
     pub loading: bool,
     pub diagnostics: Vec<String>,
@@ -178,6 +182,7 @@ pub struct LauncherModel {
     object_action_parent: Option<String>,
     source: Option<Arc<LauncherState>>,
     preview_rows: Vec<LauncherRow>,
+    rows_awaiting_snapshot: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -202,7 +207,7 @@ impl LauncherModel {
             query: String::new(),
             selected_scope: None,
             scopes: Vec::new(),
-            rows: Vec::new(),
+            rows: Vec::new().into(),
             selected: 0,
             loading: false,
             diagnostics: Vec::new(),
@@ -213,6 +218,7 @@ impl LauncherModel {
             object_action_parent: None,
             source: None,
             preview_rows: Vec::new(),
+            rows_awaiting_snapshot: false,
         }
     }
 
@@ -237,10 +243,10 @@ impl LauncherModel {
     }
 
     pub fn selection_id(&self) -> Option<&str> {
-        self.rows.get(self.selected).map(|row| row.id.as_str())
+        self.rows.id(self.selected)
     }
 
-    pub fn selected_row(&self) -> Option<&LauncherRow> {
+    pub fn selected_row(&self) -> Option<std::borrow::Cow<'_, LauncherRow>> {
         self.rows.get(self.selected)
     }
 
@@ -362,7 +368,7 @@ impl LauncherModel {
     pub fn open_selected_menu(&mut self) -> bool {
         let Some(path) = self
             .selected_row()
-            .filter(|row| row.is_menu)
+            .filter(|row| row.enabled && row.is_menu)
             .map(|row| row.menu_path.clone())
         else {
             return false;
@@ -403,6 +409,7 @@ impl LauncherModel {
             let expected_id = format!("menu:{}", title.to_ascii_lowercase());
             if let Some(index) = self
                 .rows
+                .projected()
                 .iter()
                 .position(|row| row.is_menu && (row.id == expected_id || row.title == title))
             {
@@ -433,10 +440,7 @@ impl LauncherModel {
         let parent = self.object_action_parent.take();
         self.object_actions_active = false;
         self.rebuild_rows();
-        if let Some(index) = parent
-            .as_deref()
-            .and_then(|id| self.rows.iter().position(|row| row.id == id))
-        {
+        if let Some(index) = parent.as_deref().and_then(|id| self.rows.position(id)) {
             self.selected = index;
         }
     }
@@ -466,11 +470,17 @@ impl LauncherModel {
         if let Some(index) = workspace
             .selection_id
             .as_deref()
-            .and_then(|id| self.rows.iter().position(|row| row.id == id))
+            .and_then(|id| self.rows.position(id))
         {
             self.selected = index;
         }
         self.skip_disabled(1);
+    }
+
+    pub(super) fn clear_rows_until_snapshot(&mut self) {
+        self.rows.clear();
+        self.selected = 0;
+        self.rows_awaiting_snapshot = true;
     }
 
     pub fn apply(&mut self, state: LauncherState) {
@@ -489,15 +499,23 @@ impl LauncherModel {
                         || current.label != next.label
                         || current.is_current_app != next.is_current_app
                 });
-        let rows_changed = self.source.as_ref().is_none_or(|current| {
-            input_changed
-                || self.selected_scope != state.selected_scope
-                || !Arc::ptr_eq(&current.candidates, &state.candidates)
-                || current.file_search.is_some() != state.file_search.is_some()
-                || current.context_candidates != state.context_candidates
-                || (self.object_actions_active && current.result_actions != state.result_actions)
-                || current.context_summary != state.context_summary
-        });
+        let rows_changed = self.rows_awaiting_snapshot
+            || self.source.as_ref().is_none_or(|current| {
+                input_changed
+                    || current.input.trim().is_empty() != state.input.trim().is_empty()
+                    || (scopes_changed
+                        && state.input.trim().is_empty()
+                        && state.selected_scope.is_some())
+                    || self.selected_scope != state.selected_scope
+                    || !Arc::ptr_eq(&current.candidates, &state.candidates)
+                    || current.file_search.is_some() != state.file_search.is_some()
+                    || (!Arc::ptr_eq(&current.context_candidates, &state.context_candidates)
+                        && current.context_candidates != state.context_candidates)
+                    || (self.object_actions_active
+                        && !Arc::ptr_eq(&current.result_actions, &state.result_actions)
+                        && current.result_actions != state.result_actions)
+                    || current.context_summary != state.context_summary
+            });
         let previous_id = rows_changed
             .then(|| self.selection_id().map(str::to_owned))
             .flatten();
@@ -523,11 +541,13 @@ impl LauncherModel {
         if rows_changed {
             self.rebuild_rows();
         }
-        if let Some(index) = previous_id
-            .as_deref()
-            .and_then(|id| self.rows.iter().position(|row| row.id == id))
-        {
-            self.selected = index;
+        if let Some(id) = previous_id.as_deref() {
+            if self.selection_id() != Some(id) {
+                if let Some(index) = self.rows.position(id) {
+                    self.selected = index;
+                    self.skip_disabled(1);
+                }
+            }
         }
         LauncherApply {
             input_changed,
@@ -558,6 +578,7 @@ impl LauncherModel {
                     self.menu_path.as_deref().unwrap_or_default(),
                     self.locale,
                 )
+                .into()
             } else {
                 snapshot_rows(source, self.selected_scope.as_deref(), self.locale)
             }
@@ -581,6 +602,7 @@ impl LauncherModel {
                 .cloned()
                 .collect()
         };
+        self.rows_awaiting_snapshot = false;
         self.rows = rows;
         if self.selected >= self.rows.len() {
             self.selected = 0;
@@ -589,14 +611,15 @@ impl LauncherModel {
     }
 
     fn skip_disabled(&mut self, direction: i8) {
-        if self.rows.len() > 1 && self.rows.iter().any(|row| row.enabled) {
-            while self.rows.get(self.selected).is_some_and(|row| !row.enabled) {
-                self.selected = if direction < 0 {
-                    (self.selected + self.rows.len() - 1) % self.rows.len()
-                } else {
-                    (self.selected + 1) % self.rows.len()
-                };
+        for _ in 0..self.rows.len() {
+            if self.rows.enabled(self.selected) {
+                break;
             }
+            self.selected = if direction < 0 {
+                (self.selected + self.rows.len() - 1) % self.rows.len()
+            } else {
+                (self.selected + 1) % self.rows.len()
+            };
         }
     }
 }
@@ -605,7 +628,7 @@ fn snapshot_rows(
     state: &LauncherState,
     selected_scope: Option<&str>,
     locale: Locale,
-) -> Vec<LauncherRow> {
+) -> LauncherRows {
     let empty_query = state.input.trim().is_empty();
     let limit = if state.file_search.is_some() {
         usize::MAX
@@ -621,6 +644,11 @@ fn snapshot_rows(
             locale,
             limit,
         );
+    }
+    if state.file_search.is_some() {
+        if let Some(rows) = LauncherRows::files(&state.candidates, locale) {
+            return rows;
+        }
     }
     project_rows(
         state
@@ -638,7 +666,7 @@ fn project_rows<'a>(
     state: &LauncherState,
     locale: Locale,
     limit: usize,
-) -> Vec<LauncherRow> {
+) -> LauncherRows {
     let mut seen = HashSet::new();
     candidates
         .into_iter()
@@ -725,10 +753,10 @@ fn preview_rows(locale: Locale) -> Vec<LauncherRow> {
         .into_iter()
         .map(
             |(id, title, subtitle, icon, shortcut, enabled)| LauncherRow {
-                id: id.to_owned(),
-                title: title.to_owned(),
-                subtitle: Some(subtitle.to_owned()),
-                shortcut: shortcut.map(str::to_owned),
+                id: SharedString::from(id),
+                title: SharedString::from(title),
+                subtitle: Some(SharedString::from(subtitle)),
+                shortcut: shortcut.map(SharedString::from),
                 icon: icon.to_owned(),
                 kind: CandidateKind::Action,
                 enabled,
@@ -784,8 +812,8 @@ fn menu_rows(
     folders
         .into_iter()
         .map(|(title, menu_path)| LauncherRow {
-            id: format!("menu:{}", title.to_ascii_lowercase()),
-            title,
+            id: SharedString::from(format!("menu:{}", title.to_ascii_lowercase())),
+            title: SharedString::from(title),
             subtitle: None,
             shortcut: None,
             icon: "menu".to_owned(),
@@ -866,7 +894,7 @@ mod tests {
         );
         state.file_search = Some(Default::default());
         assert_eq!(snapshot_rows(&state, None, Locale::En).len(), 23);
-        state.result_actions = candidates.as_ref().clone();
+        state.result_actions = candidates.clone();
         let mut model = LauncherModel::preview(Locale::En);
         model.apply(state);
         model.show_object_actions();
@@ -894,7 +922,7 @@ mod tests {
         let mut model = LauncherModel::preview(Locale::En);
         model.apply(LauncherState {
             candidates: std::sync::Arc::new(vec![one.clone(), two.clone()]),
-            context_candidates: vec![one, two.clone()],
+            context_candidates: vec![one, two].into(),
             scopes: vec![ScopeEntry {
                 id: "files".into(),
                 label: "Files".into(),
@@ -921,7 +949,7 @@ mod tests {
         let state = LauncherState {
             input: "open".into(),
             candidates: std::sync::Arc::new(matches),
-            context_candidates: offers.clone(),
+            context_candidates: offers.into(),
             scopes: vec![ScopeEntry {
                 id: "current-app".into(),
                 label: "Current App".into(),
@@ -953,7 +981,7 @@ mod tests {
             ..Default::default()
         }));
         assert!(initial.rows_changed);
-        let row_id = model.rows[0].id.clone();
+        let row_id = model.rows.get(0).unwrap().id.clone();
         let update = model.apply_shared(Arc::new(LauncherState {
             candidates,
             input: "one".into(),
@@ -963,8 +991,24 @@ mod tests {
         }));
         assert!(!update.rows_changed);
         assert!(!update.input_changed);
-        assert_eq!(model.rows[0].id, row_id);
+        assert_eq!(model.rows.get(0).unwrap().id, row_id);
         assert_eq!(model.diagnostics, vec!["late metadata"]);
+    }
+
+    #[test]
+    fn cleared_scope_rows_reappear_when_the_authoritative_candidates_are_shared() {
+        let state = Arc::new(LauncherState {
+            input: "one".into(),
+            candidates: Arc::new(vec![candidate("action:1", "One", true)]),
+            ..Default::default()
+        });
+        let mut model = LauncherModel::empty(Locale::En);
+        model.apply_shared(state.clone());
+        model.clear_rows_until_snapshot();
+        assert!(model.rows.is_empty());
+        assert!(model.apply_shared(state.clone()).rows_changed);
+        assert_eq!(model.selection_id(), Some("action:1"));
+        assert!(!model.apply_shared(state).rows_changed);
     }
 
     #[test]
@@ -974,6 +1018,73 @@ mod tests {
         assert_eq!(model.rows.len(), 1);
         assert_eq!(model.selected, 0);
         assert!(model.selected_row().is_some_and(|row| !row.enabled));
+    }
+
+    #[test]
+    fn file_results_project_on_demand_and_restore_only_selectable_targets() {
+        let mut a = candidate("a", "English", true);
+        a.kind = CandidateKind::File;
+        a.localized_titles.insert("zh".into(), "中文".into());
+        let mut hidden = a.clone();
+        hidden.availability = Availability::hidden();
+        let mut b = candidate("b", "Second", false);
+        b.kind = CandidateKind::File;
+        let mut c = candidate("c", "Third", true);
+        c.kind = CandidateKind::File;
+        let state = LauncherState {
+            candidates: Arc::new(vec![hidden, a.clone(), a.clone(), b.clone(), c.clone()]),
+            input: "query".into(),
+            file_search: Some(Default::default()),
+            ..Default::default()
+        };
+        let mut model = LauncherModel::empty(Locale::En);
+        model.apply(state.clone());
+        assert!(model.rows.projected().is_empty());
+        assert_eq!(model.rows.len(), 3);
+        model.set_locale(Locale::Zh);
+        assert_eq!(model.selected_row().unwrap().title, "中文");
+        model.select_next();
+        assert_eq!(model.selection_id(), Some("c"));
+        c.availability = Availability::disabled("moved");
+        model.apply(LauncherState {
+            candidates: Arc::new(vec![b, c, a]),
+            ..state
+        });
+        assert_eq!(model.selection_id(), Some("a"));
+        assert_eq!(model.selected, 2);
+        assert!(model.rows.get(3).is_none());
+    }
+
+    #[test]
+    fn reused_candidates_respect_query_mode_and_changed_scope_membership() {
+        let offers: Arc<Vec<_>> = Arc::new(
+            (0..10)
+                .map(|i| candidate(&i.to_string(), "Action", true))
+                .collect(),
+        );
+        let mut state = LauncherState {
+            candidates: offers.clone(),
+            context_candidates: offers,
+            selected_scope: Some("current".into()),
+            scopes: vec![ScopeEntry {
+                id: "current".into(),
+                label: "Editor".into(),
+                is_current_app: true,
+            }],
+            ..Default::default()
+        };
+        let mut model = LauncherModel::empty(Locale::En);
+        model.apply(state.clone());
+        assert_eq!(model.rows.len(), MAX_HOME_ROWS);
+        model.set_query("query".into());
+        state.input = "query".into();
+        model.apply(state.clone());
+        assert_eq!(model.rows.len(), MAX_QUERY_ROWS);
+        state.input.clear();
+        model.apply(state.clone());
+        state.scopes[0].is_current_app = false;
+        model.apply(state);
+        assert!(model.rows.is_empty());
     }
 
     #[test]
@@ -1061,7 +1172,10 @@ mod tests {
         };
         let mut model = LauncherModel::preview(Locale::En);
         model.apply(state);
-        assert_eq!(model.rows[0].source_label.as_deref(), Some("Selected text"));
+        assert_eq!(
+            model.rows.get(0).unwrap().source_label.as_deref(),
+            Some("Selected text")
+        );
 
         let mut menu = candidate("menu-action", "Layout", true);
         menu.is_menu = true;
@@ -1071,7 +1185,10 @@ mod tests {
             candidates: std::sync::Arc::new(vec![menu]),
             ..Default::default()
         });
-        assert_eq!(model.rows[0].source_label.as_deref(), Some("Editor"));
+        assert_eq!(
+            model.rows.get(0).unwrap().source_label.as_deref(),
+            Some("Editor")
+        );
 
         let mut file = candidate("file", "report.pdf", true);
         file.kind = CandidateKind::File;
@@ -1081,7 +1198,10 @@ mod tests {
             candidates: std::sync::Arc::new(vec![file]),
             ..Default::default()
         });
-        assert_eq!(model.rows[0].source_label.as_deref(), Some("Files"));
+        assert_eq!(
+            model.rows.get(0).unwrap().source_label.as_deref(),
+            Some("Files")
+        );
     }
 
     #[test]
@@ -1094,7 +1214,7 @@ mod tests {
             candidates: std::sync::Arc::new(vec![application]),
             ..Default::default()
         });
-        assert!(!model.can_show_object_actions(&model.rows[0], false));
+        assert!(!model.can_show_object_actions(&model.rows.get(0).unwrap(), false));
 
         let mut target = candidate("action", "Website", true);
         target.primary_action = true;
@@ -1103,10 +1223,10 @@ mod tests {
         object_action.execution_context_id = Some("context:url".into());
         model.apply(LauncherState {
             candidates: std::sync::Arc::new(vec![target]),
-            result_actions: vec![object_action],
+            result_actions: vec![object_action].into(),
             ..Default::default()
         });
-        assert!(model.can_show_object_actions(&model.rows[0], false));
+        assert!(model.can_show_object_actions(&model.rows.get(0).unwrap(), false));
 
         let mut file = candidate("file", "Report", true);
         file.kind = CandidateKind::File;
@@ -1116,6 +1236,6 @@ mod tests {
             candidates: std::sync::Arc::new(vec![file]),
             ..Default::default()
         });
-        assert!(model.can_show_object_actions(&model.rows[0], true));
+        assert!(model.can_show_object_actions(&model.rows.get(0).unwrap(), true));
     }
 }

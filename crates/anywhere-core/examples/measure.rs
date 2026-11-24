@@ -141,6 +141,48 @@ fn main() {
         println!("pinyin {input:?}: 1000 Chinese names p50={p50:.3}ms p95={p95:.3}ms");
     }
 
+    let diverse_prefixes = [
+        "微信开发工具",
+        "重庆银行客户端",
+        "旅游攻略助手",
+        "绿茶文档编辑器",
+        "飞书会议纪要",
+        "采购商品管理台",
+        "终端执行器",
+        "律师事务所",
+    ];
+    let names_2000: Vec<_> = (0..2000)
+        .map(|i| {
+            let prefix = diverse_prefixes[i % diverse_prefixes.len()];
+            SearchFields::new(&format!("{prefix} {i}"), &[], &[])
+        })
+        .collect();
+    for input in [
+        "weixin",
+        "wxkfgj",
+        "chongqing",
+        "lvcha",
+        "lvyou",
+        "feishu",
+        "missing",
+    ] {
+        let query = Query::parse(input);
+        let mut samples = Vec::new();
+        for index in 0..220 {
+            let started = Instant::now();
+            let count = names_2000
+                .iter()
+                .filter(|name| name.matched(std::hint::black_box(&query)).is_some())
+                .count();
+            std::hint::black_box(count);
+            if index >= 20 {
+                samples.push(started.elapsed().as_nanos());
+            }
+        }
+        let (p50, p95) = percentiles(samples);
+        println!("pinyin {input:?}: 2000 Chinese names p50={p50:.3}ms p95={p95:.3}ms");
+    }
+
     // Repository detection is metadata-only and must stay off the Git hot path.
     let repository = repository_root(&std::env::current_dir().unwrap());
     println!(

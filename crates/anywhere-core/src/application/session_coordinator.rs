@@ -1,7 +1,8 @@
 //! Session ownership and execution revocation. Acquire access before Web/catalog
 //! publication guards; prepare filesystem writes before entering this boundary.
 use super::session_model::LauncherSession;
-use anyhow::{anyhow, Result};
+use crate::core::sync::{lock_for_revoke, lock_or_deny};
+use anyhow::Result;
 use std::sync::{
     atomic::{AtomicU64, Ordering},
     Arc, Mutex, MutexGuard,
@@ -14,9 +15,10 @@ pub(crate) struct SessionCoordinator {
 }
 impl SessionCoordinator {
     pub(crate) fn access(&self) -> Result<MutexGuard<'_, LauncherSession>> {
-        self.state
-            .lock()
-            .map_err(|_| anyhow!("session lock poisoned"))
+        lock_or_deny(&self.state, "session")
+    }
+    pub(crate) fn access_for_revoke(&self) -> MutexGuard<'_, LauncherSession> {
+        lock_for_revoke(&self.state, "session")
     }
     pub(crate) fn execution_epoch(&self) -> u64 {
         self.epoch.load(Ordering::Acquire)

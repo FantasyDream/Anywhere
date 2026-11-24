@@ -90,7 +90,7 @@ pub(super) fn menu_item(
 
 pub(in crate::platform) fn install_status_item(
     actions: tokio::sync::mpsc::Sender<StatusItemAction>,
-    labels: StatusMenuLabels,
+    labels: &StatusMenuLabels,
 ) -> Option<StatusItemHost> {
     let mtm = MainThreadMarker::new()?;
     let bar = NSStatusBar::systemStatusBar();
@@ -108,7 +108,7 @@ pub(in crate::platform) fn install_status_item(
     button.setToolTip(Some(&NSString::from_str(crate::PRODUCT_NAME)));
     let menu = NSMenu::initWithTitle(NSMenu::alloc(mtm), &NSString::from_str(crate::PRODUCT_NAME));
     menu.setAutoenablesItems(false);
-    populate_menu(mtm, &menu, &target, &labels);
+    populate_menu(mtm, &menu, &target, labels);
     item.setMenu(Some(&menu));
     Some(StatusItemHost {
         bar,
@@ -175,10 +175,10 @@ pub(super) fn populate_menu(
 pub(in crate::platform) fn update_status_menu(
     menu: &NSMenu,
     target: &StatusItemTarget,
-    labels: StatusMenuLabels,
+    labels: &StatusMenuLabels,
 ) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
-    populate_menu(mtm, menu, target, &labels);
+    populate_menu(mtm, menu, target, labels);
 }

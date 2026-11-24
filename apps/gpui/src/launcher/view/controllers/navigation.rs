@@ -7,6 +7,7 @@ impl LauncherView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
+        self.cancel_activation_prefill();
         tracing::debug!(
             ?screen,
             current_screen = ?self.screen,
@@ -22,7 +23,7 @@ impl LauncherView {
         }
         if self.screen == Screen::ApplicationHistory {
             self.app_history.close_object_actions();
-            self.app_history.empty_actions_open = false;
+            self.app_history.page_actions_open = false;
             self.app_history.fallback_actions_open = false;
             self.release_app_history_session();
         }
@@ -66,20 +67,33 @@ impl LauncherView {
         } else if screen == Screen::ApplicationHistory {
             self.history_input
                 .update(cx, |input, cx| input.focus(window, cx));
+        } else if matches!(
+            screen,
+            Screen::Tasks | Screen::WebPackages | Screen::WebTool | Screen::UnsupportedTool
+        ) {
+            self.surface_focus_handle.focus(window, cx);
         }
         self.resize_window_for_screen(window, cx);
         cx.notify();
     }
 
     pub(super) fn go_back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.standalone_tool {
+            self.prepare_hide(cx);
+            window.remove_window();
+            return;
+        }
         self.cancel_tasks_refresh();
         self.tasks.refresh_generation = self.tasks.refresh_generation.wrapping_add(1);
         if self.screen == Screen::WebPackages {
+            if self.cancel_web_package_review(window, cx) {
+                return;
+            }
             self.screen = Screen::Settings;
             self.notice = None;
             self.resize_window_for_screen(window, cx);
             crate::platform::configure_settings_window_after_update(PRODUCT_NAME);
-            self.settings_focus_handle.focus(window, cx);
+            self.settings_editor.focus_handle.focus(window, cx);
             cx.notify();
             return;
         }
@@ -95,7 +109,7 @@ impl LauncherView {
         }
         if self.screen == Screen::ApplicationHistory {
             self.app_history.close_object_actions();
-            self.app_history.empty_actions_open = false;
+            self.app_history.page_actions_open = false;
             self.app_history.fallback_actions_open = false;
             self.release_app_history_session();
         }
@@ -164,6 +178,7 @@ impl LauncherView {
     }
 
     pub(super) fn toggle_root_navigation(&mut self, cx: &mut Context<Self>) {
+        self.cancel_activation_prefill();
         if self.screen != Screen::Launcher
             || self.model.object_actions_active
             || self.input_mode == InputMode::Content
@@ -269,6 +284,7 @@ impl LauncherView {
     }
 
     pub(super) fn select_root_mode(&mut self, input_mode: InputMode, cx: &mut Context<Self>) {
+        self.cancel_activation_prefill();
         if self.input_mode == InputMode::Content {
             return;
         }
@@ -286,14 +302,15 @@ impl LauncherView {
     pub(super) fn render_root_navigation(&self, cx: &mut Context<Self>) -> impl IntoElement {
         div()
             .id("launcher-mode-chooser")
+            .role(gpui_kit::Role::ListBox)
             .test_support()
             .h(px(108.))
             .flex_shrink_0()
             .px(px(10.))
-            .py(px(8.))
+            .py(px(metrics::SPACE_XS))
             .flex()
             .flex_col()
-            .gap(px(4.))
+            .gap(px(metrics::SPACE_XS))
             .child(self.root_navigation_row(InputMode::Search, cx))
             .child(self.root_navigation_row(InputMode::Environment, cx))
     }
@@ -321,56 +338,49 @@ impl LauncherView {
             InputMode::Search => "launcher-navigation-search",
             _ => "launcher-navigation-environment",
         };
-        div()
-            .id(id)
+        let mut row = components::ListRow::new(id)
+            .density(components::RowDensity::Compact)
+            .selected(selected)
+            .title(label)
+            .title_weight(FontWeight::SEMIBOLD)
+            .subtitle(detail)
+            .subtitle_id(format!("{id}-detail"))
+            .leading(
+                Icon::new(icon)
+                    .size(px(metrics::ICON_SIZE))
+                    .text_color(theme::secondary()),
+            );
+        if active {
+            row = row.trailing(
+                Icon::new(IconName::Check)
+                    .size(px(metrics::ICON_SIZE))
+                    .text_color(theme::secondary()),
+            );
+        }
+        row.build()
             .test_support()
-            .role(gpui_kit::Role::Button)
-            .aria_label(label.clone())
-            .aria_selected(selected)
-            .h(px(44.))
-            .flex_shrink_0()
-            .px(px(12.))
-            .flex()
-            .items_center()
-            .gap(px(14.))
-            .cursor_pointer()
-            .result_surface(selected)
-            .on_click(cx.listener(move |this, _, _, cx| {
-                this.select_root_mode(mode, cx);
-            }))
-            .child(Icon::new(icon).size(px(20.)).text_color(theme::secondary()))
-            .child(
-                div()
-                    .flex_1()
-                    .min_w(px(0.))
-                    .flex()
-                    .flex_col()
-                    .gap(px(1.))
-                    .child(
-                        div()
-                            .id(SharedString::from(format!("{id}-title")))
-                            .test_support()
-                            .truncate()
-                            .body_text()
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .child(label),
-                    )
-                    .child(
-                        div()
-                            .id(SharedString::from(format!("{id}-detail")))
-                            .test_support()
-                            .truncate()
-                            .caption_text()
-                            .text_color(theme::secondary())
-                            .child(detail),
-                    ),
-            )
-            .when(active, |element| {
-                element.child(
-                    Icon::new(IconName::Check)
-                        .size(px(15.))
-                        .text_color(theme::secondary()),
-                )
-            })
+            .on_click(cx.listener(move |this, _, _, cx| this.select_root_mode(mode, cx)))
+    }
+
+    pub(in crate::launcher::view) fn handle_root_navigation_key(
+        &mut self,
+        input: &crate::launcher::view::input::KeyInput<'_>,
+        cx: &mut Context<Self>,
+    ) -> crate::launcher::view::input::KeyFlow {
+        use crate::launcher::view::input::KeyFlow;
+        if self.screen != Screen::Launcher || !self.root_navigation_open {
+            return KeyFlow::Continue;
+        }
+        if input.modifiers.modified {
+            return KeyFlow::Handled;
+        }
+        match input.key {
+            "escape" => self.toggle_root_navigation(cx),
+            "down" => self.move_root_navigation(1, cx),
+            "up" => self.move_root_navigation(-1, cx),
+            "enter" | "return" => self.choose_root_navigation(cx),
+            _ => {}
+        }
+        KeyFlow::Handled
     }
 }

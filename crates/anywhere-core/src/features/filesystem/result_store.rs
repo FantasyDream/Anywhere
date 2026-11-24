@@ -11,7 +11,13 @@ use std::{
     path::{Path, PathBuf},
 };
 const FAN_IN: usize = 16;
+#[cfg(not(test))]
+const SORT_BYTES: usize = 4 * 1024 * 1024;
+#[cfg(test)]
 const SORT_BYTES: usize = 1024 * 1024;
+#[cfg(not(test))]
+const SORT_ITEMS: usize = 4096;
+#[cfg(test)]
 const SORT_ITEMS: usize = 512;
 
 #[derive(Default)]

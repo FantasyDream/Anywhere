@@ -35,7 +35,7 @@ async fn deferred_tool_has_no_actions_shortcuts_scope_or_prefill_but_preserves_s
         assert!(state
             .candidates
             .iter()
-            .chain(&state.context_candidates)
+            .chain(state.context_candidates.iter())
             .all(|row| !row
                 .command_id
                 .as_deref()

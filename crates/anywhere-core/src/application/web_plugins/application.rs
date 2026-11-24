@@ -80,6 +80,8 @@ impl Application {
             };
             web.replace_catalog(catalog);
             *providers = next_providers;
+            drop(providers);
+            self.revoke_tool_windows();
             self.resolver.catalog.replace_registry(registry);
             self.resolver.session.advance_execution();
             session.actions = self.resolver.base_registry();

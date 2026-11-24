@@ -1,6 +1,7 @@
 mod material;
 mod preview;
 
+pub(crate) use material::set_application_appearance;
 pub use material::{
     current_appearance as current_window_appearance, current_mode as current_window_material,
     uses_increase_contrast, uses_opaque_fallback, uses_reduce_motion, WindowAppearance,
@@ -14,7 +15,6 @@ pub enum PlatformEvent {
     ApplicationLostActive,
     ApplicationBecameActive,
     SettingsEscape,
-    WebViewEscape,
     TasksKey {
         key: TasksNavigationKey,
         repeated: bool,
@@ -353,6 +353,8 @@ pub fn bind_window_identity(window: &gpui_kit::Window, title: &str) {
     let _ = (window, title);
 }
 
+pub(in crate::platform) const TOOL_WINDOW_IDENTITY: &str = "dev.anywhere.window.tool";
+
 fn window_identity(title: &str) -> Option<&'static str> {
     match title {
         crate::PRODUCT_NAME => Some("dev.anywhere.window.main"),
@@ -360,6 +362,33 @@ fn window_identity(title: &str) -> Option<&'static str> {
         crate::TASKS_WINDOW_TITLE => Some("dev.anywhere.window.tasks"),
         _ => None,
     }
+}
+
+pub fn configure_tool_window(window: &gpui_kit::Window) {
+    #[cfg(target_os = "macos")]
+    {
+        use objc2_app_kit::NSUserInterfaceItemIdentification as _;
+        use raw_window_handle::RawWindowHandle;
+        let Ok(handle) = raw_window_handle::HasWindowHandle::window_handle(window) else {
+            return;
+        };
+        let RawWindowHandle::AppKit(handle) = handle.as_raw() else {
+            return;
+        };
+        // SAFETY: GPUI owns this live AppKit view for the borrowed window.
+        let view = unsafe { &*handle.ns_view.as_ptr().cast::<objc2_app_kit::NSView>() };
+        if let Some(native) = view.window() {
+            native.setIdentifier(Some(&objc2_foundation::NSString::from_str(
+                TOOL_WINDOW_IDENTITY,
+            )));
+            let number = native.windowNumber();
+            dispatch2::DispatchQueue::main().exec_async(move || {
+                macos::configure_tool_window_number(number);
+            });
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = window;
 }
 
 #[cfg(target_os = "macos")]
@@ -382,7 +411,9 @@ pub(in crate::platform) fn is_auxiliary_product_window(window: &objc2_app_kit::N
     window.identifier().is_some_and(|current| {
         matches!(
             current.to_string().as_str(),
-            "dev.anywhere.window.clipboard-shelf" | "dev.anywhere.window.tasks"
+            "dev.anywhere.window.clipboard-shelf"
+                | "dev.anywhere.window.tasks"
+                | TOOL_WINDOW_IDENTITY
         )
     })
 }
@@ -416,12 +447,24 @@ pub fn refresh_window_material(title: &str) -> bool {
     }
 }
 
+pub fn refresh_tool_window_materials() -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        macos::refresh_tool_window_materials()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        false
+    }
+}
+
 pub fn refresh_all_window_materials() -> bool {
     material::prepare_window_material();
     let main = refresh_window_material(crate::PRODUCT_NAME);
     let shelf = refresh_window_material(crate::CLIPBOARD_SHELF_TITLE);
     let tasks = refresh_window_material(crate::TASKS_WINDOW_TITLE);
-    main || shelf || tasks
+    let tools = refresh_tool_window_materials();
+    main || shelf || tasks || tools
 }
 
 pub fn position_main_window() -> bool {
@@ -591,7 +634,7 @@ pub struct StatusItemHost {
 }
 
 impl StatusItemHost {
-    pub fn update_labels(&self, labels: StatusMenuLabels) -> bool {
+    pub fn update_labels(&self, labels: &StatusMenuLabels) -> bool {
         #[cfg(target_os = "macos")]
         {
             macos::update_status_menu(&self._menu, &self._target, labels);
@@ -607,7 +650,7 @@ impl StatusItemHost {
 
 pub fn install_status_item(
     actions: tokio::sync::mpsc::Sender<StatusItemAction>,
-    labels: StatusMenuLabels,
+    labels: &StatusMenuLabels,
 ) -> Option<StatusItemHost> {
     #[cfg(target_os = "macos")]
     {
@@ -894,6 +937,10 @@ mod tests {
             WindowLayerPolicy::Normal
         );
         assert_eq!(
+            window_layer_policy(NativeSurface::ToolWindow),
+            WindowLayerPolicy::Normal
+        );
+        assert_eq!(
             NativeSurface::Launcher.glass_style(),
             WindowGlassStyle::Regular
         );
@@ -901,6 +948,7 @@ mod tests {
             NativeSurface::ClipboardShelf,
             NativeSurface::Settings,
             NativeSurface::Tasks,
+            NativeSurface::ToolWindow,
         ] {
             assert_eq!(surface.glass_style(), WindowGlassStyle::Regular);
         }
@@ -924,6 +972,7 @@ mod tests {
             macos::clipboard_shelf_window_style_mask(),
             macos::settings_window_style_mask(),
             macos::tasks_window_style_mask(),
+            macos::tool_window_style_mask(),
         ] {
             assert!(style.contains(NSWindowStyleMask::Titled));
             assert!(style.contains(NSWindowStyleMask::Closable));
@@ -934,6 +983,7 @@ mod tests {
 
         assert!(macos::clipboard_shelf_window_style_mask().contains(NSWindowStyleMask::Resizable));
         assert!(macos::tasks_window_style_mask().contains(NSWindowStyleMask::Resizable));
+        assert!(macos::tool_window_style_mask().contains(NSWindowStyleMask::Resizable));
         assert!(!macos::settings_window_style_mask().contains(NSWindowStyleMask::Resizable));
     }
 

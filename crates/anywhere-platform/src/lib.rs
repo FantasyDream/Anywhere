@@ -25,6 +25,15 @@ pub struct FileSearchHit {
     pub is_directory: bool,
 }
 
+/// Premultiplied top-down BGRA8 bitmap returned directly by OS icon APIs
+/// without an intermediate PNG encode/decode round-trip.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RawIconImage {
+    pub width: u32,
+    pub height: u32,
+    pub bgra: Vec<u8>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApplicationInfo {
     pub bundle_id: String,

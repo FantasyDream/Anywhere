@@ -31,6 +31,27 @@ async fn binding_waits_for_supplemental_capture_and_keeps_disabled_reason() {
 }
 
 #[tokio::test]
+async fn clipboard_shelf_binding_reaches_the_native_tool_without_context() {
+    let app = app(Arc::new(TestPlatform::default()));
+    let state = app.activate().await.unwrap().unwrap();
+    let _ = settled(&app, state.session_id, 0).await;
+    let binding = app
+        .wait_action_binding(state.session_id, 0, "core.clipboard.shelf")
+        .await
+        .unwrap();
+    assert_eq!(binding.candidates.len(), 1);
+    let output = app
+        .execute(state.session_id, 0, binding.candidates[0].id.clone())
+        .await
+        .unwrap();
+    assert!(matches!(
+        output.view,
+        Some(anywhere_protocol::HostView::NativeTool { ref id, .. })
+            if id == "clipboard.shelf"
+    ));
+}
+
+#[tokio::test]
 async fn binding_resolves_current_business_action_outside_query_and_scope_and_records_usage() {
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().canonicalize().unwrap();

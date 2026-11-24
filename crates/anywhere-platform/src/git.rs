@@ -61,6 +61,8 @@ fn base_command(program: &Path, repository: &Path) -> Command {
         .env("LC_ALL", "en_US.UTF-8")
         .env("GIT_OPTIONAL_LOCKS", "0")
         .env("GIT_PAGER", "cat")
+        .env("GIT_NO_LAZY_FETCH", "1")
+        .env("GIT_ALLOW_PROTOCOL", "")
         .env_remove("GIT_DIR")
         .env_remove("GIT_WORK_TREE")
         .env_remove("GIT_INDEX_FILE")
@@ -74,7 +76,7 @@ fn base_command(program: &Path, repository: &Path) -> Command {
 fn append_operation(command: &mut Command, operation: GitOperation) {
     match operation {
         GitOperation::Status => {
-            command.args(["status", "--porcelain=v1"]);
+            command.args(["status", "--porcelain=v1", "--ignore-submodules=dirty"]);
         }
         GitOperation::Log => {
             command.args(["log", "--oneline", "--no-color", "-n", "100"]);
@@ -82,7 +84,13 @@ fn append_operation(command: &mut Command, operation: GitOperation) {
         GitOperation::Diff => {
             // `--no-ext-diff` covers external diff drivers; a repository can also
             // configure a textconv driver, which needs `--no-textconv`.
-            command.args(["diff", "--no-color", "--no-ext-diff", "--no-textconv"]);
+            command.args([
+                "diff",
+                "--no-color",
+                "--no-ext-diff",
+                "--no-textconv",
+                "--ignore-submodules=dirty",
+            ]);
         }
         GitOperation::StagedDiff => {
             command.args([
@@ -91,6 +99,7 @@ fn append_operation(command: &mut Command, operation: GitOperation) {
                 "--no-color",
                 "--no-ext-diff",
                 "--no-textconv",
+                "--ignore-submodules=dirty",
             ]);
         }
         GitOperation::Branches => {

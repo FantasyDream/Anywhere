@@ -16,6 +16,10 @@
 
 内容 UI 标明 Selected text 或 Recent clipboard。正文可以编辑；它是待处理对象，不作为动作标题查询。URL、路径等仍走同一 Context Graph、Registry 和 Ranking；只处理当前输入及派生 Context，不混入当前应用、网页、Finder 选择或其他捕获文本。
 
+内容页的编辑器拥有焦点且没有修饰键时，`↑` / `↓` 切换候选动作，
+`Enter` / `Return` 执行选中项；`Shift+Enter` 仍插入换行，其余修饰组合
+保留编辑语义。
+
 内容页第一次 Esc 返回 Current App，并清空内容输入；进入 Current App 后，空白
 根页再次 Esc 切到空白 Global Search，Global 根页最后才隐藏。普通查询先清空，
 菜单、对象 Actions、预览和 Web 内部层仍先退出所属局部层。显式 Universal
@@ -50,6 +54,6 @@
 
 回归覆盖来源优先级、过期 / 未知复制年龄、输入编辑、迟到结果不覆盖用户交互、Esc 链、环境恢复、来源单次读取和设置丢弃正文。历史真实采集与包验证边界见 [V0.6 记录](archive/v0.6-final-acceptance.md)，当前工程状态见 [V0.14 技术方案](mvp-gpui.md)，此前真实键盘基线见 [V0.12 归档](archive/mvp-migration/v0.12-flutter-era.md)。
 
-JSON Workspace 已作为普通 Web 插件实现（v0.7.1）。安装、批准并启用后，其按需后台 QuickJS 解析器识别 JSON 对象 / 数组或转义 JSON 容器并产出 `plugin.dev.anywhere.json-workspace.json`，唤醒时可自动进入内容页并在执行命令后带入原文；识别期间不启动 WebView。插件也可按需声明宿主的固定 `inputMatchers`（`json` / `json_escaped`）。禁用、撤销或卸载后立即停止自动识别，没有其他识别器命中时回到 Current App；选区优先级和剪贴板 15 秒期限保持不变。插件声明与输入边界见 [开发指南](plugin-development.md#自动匹配-json)。
+JSON Workspace 作为内置 Web 插件随主程序自动启用，无需手动导入与批准（仍可在 Web tools 管理页禁用或启用，不支持卸载或被本地同 ID 包覆盖）。其按需后台 QuickJS 解析器识别 JSON 对象 / 数组或转义 JSON 容器并产出 `plugin.dev.anywhere.json-workspace.json`，唤醒时可自动进入内容页并在执行命令后带入原文；识别期间不启动 WebView。第三方插件也可按需声明宿主的固定 `inputMatchers`（`json` / `json_escaped`）。禁用或撤销后立即停止自动识别，没有其他识别器命中时回到 Current App；选区优先级和剪贴板 15 秒期限保持不变。插件声明与输入边界见 [开发指南](plugin-development.md#自动匹配-json)。
 
 剪贴板自动填入开关及上次采集状态位于 Settings → Clipboard，与历史采集开关分别控制；Finder、选中文本和浏览器来源仍位于 Settings → Context。

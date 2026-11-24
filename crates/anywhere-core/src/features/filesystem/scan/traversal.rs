@@ -33,28 +33,7 @@ impl ScanStore {
             path: queue_path.clone(),
         };
         let mut queue = BufWriter::with_capacity(BUFFER, self.writer(File::create(&queue_path)?));
-        let mut roots = Vec::new();
-        let configured = self.scope.configured_roots()?;
-        for root in configured {
-            match root.canonicalize() {
-                Ok(root) if root.is_dir() => {
-                    if !roots.contains(&root) {
-                        roots.push(root);
-                    }
-                }
-                Ok(_) => self.issue(format!(
-                    "Search root is not a directory: {}",
-                    root.display()
-                )),
-                Err(error) => self.root_issue(&root, &error),
-            }
-        }
-        let outer = roots.clone();
-        roots.retain(|root| {
-            !outer
-                .iter()
-                .any(|other| other != root && root.starts_with(other))
-        });
+        let roots = self.collect_canonical_roots()?;
         for root in &roots {
             write_record(&mut queue, root, true)?;
         }
@@ -205,7 +184,10 @@ impl ScanStore {
                 if last_publish.elapsed() >= Duration::from_millis(100) {
                     matches.flush()?;
                     {
-                        let mut p = self.progress.lock().unwrap();
+                        let mut p = crate::core::sync::lock_for_revoke(
+                            &self.progress,
+                            "file_search_progress",
+                        );
                         p.boundary = boundary;
                         p.scanned = scanned;
                         p.matches = match_count;
@@ -224,7 +206,7 @@ impl ScanStore {
         drop(_queue_cleanup);
         matches.flush()?;
         {
-            let mut p = self.progress.lock().unwrap_or_else(|e| e.into_inner());
+            let mut p = crate::core::sync::lock_for_revoke(&self.progress, "file_search_progress");
             p.boundary = boundary;
             p.scanned = scanned;
             p.matches = match_count;
@@ -236,5 +218,30 @@ impl ScanStore {
             progress,
         })?;
         Ok(())
+    }
+
+    fn collect_canonical_roots(&self) -> Result<Vec<std::path::PathBuf>> {
+        let mut roots = Vec::new();
+        for root in self.scope.configured_roots()? {
+            match root.canonicalize() {
+                Ok(root) if root.is_dir() => {
+                    if !roots.contains(&root) {
+                        roots.push(root);
+                    }
+                }
+                Ok(_) => self.issue(format!(
+                    "Search root is not a directory: {}",
+                    root.display()
+                )),
+                Err(error) => self.root_issue(&root, &error),
+            }
+        }
+        let outer = roots.clone();
+        roots.retain(|root| {
+            !outer
+                .iter()
+                .any(|other| other != root && root.starts_with(other))
+        });
+        Ok(roots)
     }
 }

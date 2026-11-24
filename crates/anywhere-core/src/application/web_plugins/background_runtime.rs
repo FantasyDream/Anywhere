@@ -27,8 +27,8 @@ struct HostAdapter {
     current: Current,
 }
 impl HostAdapter {
-    fn dispatch(&self, method: String, params: String) -> String {
-        let result = self.call(&method, &params);
+    fn dispatch(&self, method: &str, params: &str) -> String {
+        let result = self.call(method, params);
         match result {
             Ok(value) => json!({"value": value}),
             Err(error) => json!({"error": error}),
@@ -124,7 +124,7 @@ pub(super) fn run_with_budget(
     let output = context
         .with(|ctx| -> Result<Value> {
             let host = Function::new(ctx.clone(), move |method: String, params: String| {
-                adapter.dispatch(method, params)
+                adapter.dispatch(&method, &params)
             })?;
             ctx.globals().set("__anywhereInvoke", host)?;
             let (module, ready) = Module::declare(ctx.clone(), "plugin", source)?.eval()?;

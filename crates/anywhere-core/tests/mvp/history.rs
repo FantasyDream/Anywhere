@@ -273,7 +273,10 @@ async fn usage_is_recorded_even_when_the_action_ends_its_own_session() {
     assert!(result.succeeded(), "{result:?}");
 
     let recorded = history.lock().unwrap().load_global().unwrap();
-    let key = ("core.directory.copy".to_owned(), DIRECTORY.to_owned());
+    let key = anywhere_core::core::ranking::usage::UsageKey(
+        "core.directory.copy".to_owned(),
+        DIRECTORY.to_owned(),
+    );
     let stats = recorded
         .get(&key)
         .unwrap_or_else(|| panic!("no usage row for {key:?}: {recorded:?}"));

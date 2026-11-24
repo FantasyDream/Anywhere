@@ -404,6 +404,7 @@ async fn web_launch_baseline_uses_the_committed_revision_for_entry_search() {
                 candidate.command_id.as_deref() == Some("web:dev.anywhere.json-workspace:open")
             })
             .unwrap_or_else(|| panic!("missing JSON Workspace candidate for {keyword}"));
+        assert_eq!(candidate.subtitle.as_deref(), Some("JSON Workspace"));
         let result = app
             .execute(session, revision, candidate.id.clone())
             .await

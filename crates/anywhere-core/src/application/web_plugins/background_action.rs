@@ -37,9 +37,8 @@ struct HeadlessDocument {
 }
 impl Drop for HeadlessDocument {
     fn drop(&mut self) {
-        if let Ok(mut service) = self.service.lock() {
-            service.close_document(&self.binding);
-        }
+        let mut service = crate::core::sync::lock_for_revoke(&self.service, "web_plugins");
+        service.close_document(&self.binding);
     }
 }
 fn source(binding: &WebDocumentBinding) -> WebMessageSource<'_> {
@@ -178,9 +177,7 @@ impl Application {
                 }
             }
         };
-        self.web_plugins
-            .lock()
-            .map_err(|_| anyhow::anyhow!("plugin service unavailable"))?
+        crate::core::sync::lock_for_revoke(&self.web_plugins, "web_plugins")
             .backgrounds
             .remove(binding.runtime_id());
         Ok(serde_json::to_string(&result?)?)

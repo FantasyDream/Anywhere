@@ -25,8 +25,8 @@ impl LauncherView {
                     l10n::record_clipboard_history(self.locale),
                     l10n::save_future_copies_while_anywhere_is_running(self.locale),
                     Switch::new("clipboard-recording")
-                        .checked(self.settings.clipboard_recording)
-                        .disabled(self.settings.saving)
+                        .checked(self.settings_editor.model.clipboard_recording)
+                        .disabled(self.settings_editor.model.saving)
                         .accessibility_label(l10n::clipboard(self.locale))
                         .on_change(cx.listener(|this, checked, _, cx| {
                             this.set_clipboard_recording(*checked, cx);
@@ -53,7 +53,7 @@ impl LauncherView {
                                 .disabled(controls_disabled)
                                 .label(retention_label)
                                 .on_click(cx.listener(|this, _, _, cx| {
-                                    this.clipboard_settings_choice = Some(
+                                    this.settings_editor.clipboard_choice = Some(
                                         ClipboardSettingsChoice::Retention,
                                     );
                                     cx.notify();
@@ -65,7 +65,7 @@ impl LauncherView {
                                 .disabled(controls_disabled)
                                 .label(pause_label)
                                 .on_click(cx.listener(|this, _, _, cx| {
-                                    this.clipboard_settings_choice =
+                                    this.settings_editor.clipboard_choice =
                                         Some(ClipboardSettingsChoice::Pause);
                                     cx.notify();
                                 })),
@@ -100,11 +100,11 @@ impl LauncherView {
                 ContextSource::Clipboard,
                 l10n::clipboard_text(self.locale),
                 l10n::auto_fill_supported_content_copied_within_the(self.locale),
-                self.settings_draft.capture_clipboard,
+                self.settings_editor.draft.capture_clipboard,
                 Switch::new("capture-clipboard")
-                    .checked(self.settings_draft.capture_clipboard)
+                    .checked(self.settings_editor.draft.capture_clipboard)
                     .on_change(cx.listener(|this, checked, _, cx| {
-                        this.settings_draft.capture_clipboard = *checked;
+                        this.settings_editor.draft.capture_clipboard = *checked;
                         cx.notify();
                     })),
                 cx,
@@ -115,7 +115,7 @@ impl LauncherView {
         &mut self,
         cx: &mut Context<Self>,
     ) -> Option<AnyElement> {
-        let choice = self.clipboard_settings_choice?;
+        let choice = self.settings_editor.clipboard_choice?;
         let status = self.clipboard.status.as_ref();
         let (title, options): (String, Vec<(String, usize, bool)>) = match choice {
             ClipboardSettingsChoice::Retention => (
@@ -208,7 +208,7 @@ impl LauncherView {
         else {
             return;
         };
-        self.clipboard_settings_choice = None;
+        self.settings_editor.clipboard_choice = None;
         if clipboard_retention_removes_entries(current, days) {
             self.present_clipboard_confirmation(
                 ClipboardConfirmation::SetRetention(days),
@@ -237,7 +237,7 @@ impl LauncherView {
         minutes: u32,
         cx: &mut Context<Self>,
     ) {
-        self.clipboard_settings_choice = None;
+        self.settings_editor.clipboard_choice = None;
         let Some(live) = self.live.clone() else {
             return;
         };
@@ -255,14 +255,14 @@ impl LauncherView {
         if self.clipboard.loading {
             return;
         }
-        self.settings_close_pending = false;
-        self.settings_exit_intent = None;
-        self.clipboard_settings_choice = None;
-        if self.settings_modal_return_focus.is_none() {
-            self.settings_modal_return_focus = window.focused(cx);
+        self.settings_editor.close_pending = false;
+        self.settings_editor.exit_intent = None;
+        self.settings_editor.clipboard_choice = None;
+        if self.settings_editor.modal_return_focus.is_none() {
+            self.settings_editor.modal_return_focus = window.focused(cx);
         }
         self.clipboard_confirmation = Some(confirmation);
-        let focus = self.settings_confirm_cancel_focus.clone();
+        let focus = self.settings_editor.confirm_cancel_focus.clone();
         cx.defer_in(window, move |this, window, cx| {
             if this.clipboard_confirmation.is_some() {
                 focus.focus(window, cx);

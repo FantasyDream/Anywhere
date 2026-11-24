@@ -16,13 +16,20 @@ impl SqliteHistoryRepository {
     fn connection(mut connection: Connection) -> Result<Self> {
         connection.busy_timeout(std::time::Duration::from_secs(2))?;
         let version: u32 = connection.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-        ensure!(version <= 3, "unsupported clipboard database version");
+        ensure!(version <= 5, "unsupported clipboard database version");
         if version == 0 {
             let _ = connection.execute_batch("PRAGMA auto_vacuum=INCREMENTAL;");
         }
-        connection.execute_batch("PRAGMA journal_mode=DELETE; PRAGMA secure_delete=ON; PRAGMA cache_size=-512; PRAGMA temp_store=FILE; PRAGMA foreign_keys=ON;")?;
+        connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA secure_delete=ON; PRAGMA cache_size=-2048; PRAGMA temp_store=FILE; PRAGMA foreign_keys=ON;")?;
         let tx = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;
-        if version == 1 {
+        let version = tx.pragma_query_value(None, "user_version", |row| row.get::<_, u32>(0))?;
+        ensure!(version <= 5, "unsupported clipboard database version");
+        let legacy_text = version == 1 && tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM pragma_table_info('clipboard_items') WHERE name='text')",
+            [],
+            |row| row.get::<_, bool>(0),
+        )?;
+        if legacy_text {
             tx.execute_batch("ALTER TABLE clipboard_items RENAME TO clipboard_text_v1; DROP INDEX clipboard_recent;")?;
         }
         tx.execute_batch("CREATE TABLE IF NOT EXISTS clipboard_settings(id INTEGER PRIMARY KEY CHECK(id=1), recording INTEGER NOT NULL CHECK(recording IN(0,1)));
@@ -34,7 +41,7 @@ impl SqliteHistoryRepository {
             CREATE INDEX IF NOT EXISTS clipboard_recent ON clipboard_items(sequence DESC);
             CREATE TABLE IF NOT EXISTS clipboard_formats(item_id INTEGER NOT NULL REFERENCES clipboard_items(id) ON DELETE CASCADE,
                 name TEXT NOT NULL, data BLOB NOT NULL, PRIMARY KEY(item_id,name));")?;
-        if version == 1 {
+        if legacy_text {
             // Preserve identity, ordering and recording preference. No old clipboard reads.
             let mut statement = tx.prepare(
                 "SELECT id,text,copied_at_ms,sequence FROM clipboard_text_v1 ORDER BY id",
@@ -69,11 +76,52 @@ impl SqliteHistoryRepository {
             retention_days INTEGER NOT NULL CHECK(retention_days IN(0,1,7,30,90)));
             INSERT OR IGNORE INTO clipboard_policy VALUES(1,NULL,0);
             CREATE INDEX IF NOT EXISTS clipboard_expiry ON clipboard_items(copied_at_ms);
-            PRAGMA user_version=3;",
+            CREATE VIRTUAL TABLE IF NOT EXISTS clipboard_items_fts USING fts5(
+                search_text,
+                content='clipboard_items',
+                content_rowid='id',
+                tokenize='trigram'
+            );
+            CREATE TRIGGER IF NOT EXISTS clipboard_items_fts_ai AFTER INSERT ON clipboard_items BEGIN
+                INSERT INTO clipboard_items_fts(rowid, search_text) VALUES (new.id, new.search_text);
+            END;
+            CREATE TRIGGER IF NOT EXISTS clipboard_items_fts_ad AFTER DELETE ON clipboard_items BEGIN
+                INSERT INTO clipboard_items_fts(clipboard_items_fts, rowid, search_text) VALUES ('delete', old.id, old.search_text);
+            END;
+            CREATE TRIGGER IF NOT EXISTS clipboard_items_fts_au AFTER UPDATE OF search_text ON clipboard_items BEGIN
+                INSERT INTO clipboard_items_fts(clipboard_items_fts, rowid, search_text) VALUES ('delete', old.id, old.search_text);
+                INSERT INTO clipboard_items_fts(rowid, search_text) VALUES (new.id, new.search_text);
+            END;",
         )?;
+        if version < 5 {
+            tx.execute_batch(
+                "INSERT INTO clipboard_items_fts(clipboard_items_fts, rank) VALUES('secure-delete', 1);
+                 INSERT INTO clipboard_items_fts(clipboard_items_fts) VALUES('rebuild');
+                 CREATE TABLE IF NOT EXISTS clipboard_pending_checkpoint (pending INTEGER);
+                 PRAGMA user_version=5;",
+            )?;
+        }
         tx.commit()?;
+        if let Err(error) = finish_migration_checkpoint(&connection) {
+            tracing::warn!(%error, "clipboard_migration_checkpoint_failed");
+        }
         Ok(Self(connection))
     }
+}
+fn finish_migration_checkpoint(connection: &Connection) -> Result<()> {
+    let pending: bool = connection.query_row(
+        "SELECT EXISTS(SELECT 1 FROM sqlite_schema WHERE type='table' AND name='clipboard_pending_checkpoint')",
+        [],
+        |row| row.get(0),
+    )?;
+    if pending {
+        let busy: u32 =
+            connection.query_row("PRAGMA wal_checkpoint(TRUNCATE)", [], |row| row.get(0))?;
+        if busy == 0 {
+            connection.execute_batch("DROP TABLE IF EXISTS clipboard_pending_checkpoint;")?;
+        }
+    }
+    Ok(())
 }
 fn fingerprint(payload: &ClipboardPayload) -> Vec<u8> {
     let mut hash = Sha256::new();
@@ -177,6 +225,7 @@ impl HistoryRepository for SqliteHistoryRepository {
         self.0
             .prepare_cached("DELETE FROM clipboard_items WHERE copied_at_ms<=?1")?
             .execute([cutoff_ms])?;
+        let _ = self.0.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);");
         Ok(())
     }
     fn usage(&self) -> Result<(u32, u32)> {
@@ -273,18 +322,35 @@ impl HistoryRepository for SqliteHistoryRepository {
         let mut sql = format!(
             "SELECT id,substr(summary,1,{SUMMARY_CHARACTERS}),copied_at_ms,byte_count,kind FROM clipboard_items"
         );
-        if !tokens.is_empty() {
+        let mut clauses: Vec<&'static str> = Vec::new();
+        let mut bindings: Vec<String> = Vec::new();
+        let fts_terms: Vec<String> = tokens
+            .iter()
+            .filter(|token| token.chars().count() >= 3)
+            .map(|token| format!("\"{}\"", token.replace('"', "\"\"")))
+            .collect();
+        if !fts_terms.is_empty() {
+            clauses.push(
+                "id IN (SELECT rowid FROM clipboard_items_fts WHERE clipboard_items_fts MATCH ?)",
+            );
+            bindings.push(fts_terms.join(" AND "));
+        }
+        for token in &tokens {
+            clauses.push("instr(search_text,?)>0");
+            bindings.push((*token).to_owned());
+        }
+        if !clauses.is_empty() {
             sql.push_str(" WHERE ");
-            sql.push_str(&vec!["instr(search_text,?)>0"; tokens.len()].join(" AND "));
+            sql.push_str(&clauses.join(" AND "));
         }
         sql.push_str(&format!(" ORDER BY sequence DESC LIMIT {MAX_ENTRIES}"));
         let rows = if tokens.len() <= 2 {
             let mut statement = self.0.prepare_cached(&sql)?;
-            let mapped = statement.query_map(rusqlite::params_from_iter(tokens), item)?;
+            let mapped = statement.query_map(rusqlite::params_from_iter(bindings), item)?;
             mapped.collect::<rusqlite::Result<_>>()?
         } else {
             let mut statement = self.0.prepare(&sql)?;
-            let mapped = statement.query_map(rusqlite::params_from_iter(tokens), item)?;
+            let mapped = statement.query_map(rusqlite::params_from_iter(bindings), item)?;
             mapped.collect::<rusqlite::Result<_>>()?
         };
         Ok(rows)
@@ -304,12 +370,16 @@ impl HistoryRepository for SqliteHistoryRepository {
         self.0
             .prepare_cached("DELETE FROM clipboard_items WHERE id=?1")?
             .execute([id])?;
-        let _ = self.0.execute_batch("PRAGMA incremental_vacuum(64);");
+        let _ = self
+            .0
+            .execute_batch("PRAGMA incremental_vacuum(64); PRAGMA wal_checkpoint(TRUNCATE);");
         Ok(())
     }
     fn clear(&mut self) -> Result<()> {
         self.0.execute("DELETE FROM clipboard_items", [])?;
-        let _ = self.0.execute_batch("PRAGMA incremental_vacuum;");
+        let _ = self
+            .0
+            .execute_batch("PRAGMA incremental_vacuum; PRAGMA wal_checkpoint(TRUNCATE);");
         Ok(())
     }
 }
@@ -462,6 +532,49 @@ mod multiformat_tests {
         }
     }
     #[test]
+    fn v4_upgrade_erases_deleted_index_terms_and_securely_removes_future_entries() {
+        fn index_contains_fixture(repo: &SqliteHistoryRepository) -> bool {
+            repo.0.query_row(
+                "SELECT EXISTS(SELECT 1 FROM clipboard_items_fts_data WHERE instr(block, CAST('qzx' AS BLOB)) > 0)",
+                [],
+                |row| row.get(0),
+            ).unwrap()
+        }
+
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("history");
+        let mut previous = SqliteHistoryRepository::open(&path).unwrap();
+        previous.0.execute_batch(
+            "INSERT INTO clipboard_items_fts(clipboard_items_fts, rank) VALUES('secure-delete', 0);
+             PRAGMA user_version=4;",
+        ).unwrap();
+        let stale = previous
+            .record("qzx legacy clipboard fixture", 1)
+            .unwrap()
+            .unwrap();
+        previous.record("kept clipboard fixture", 2).unwrap();
+        previous.delete(stale).unwrap();
+        assert!(index_contains_fixture(&previous));
+        drop(previous);
+
+        let repo = SqliteHistoryRepository::open(&path).unwrap();
+        assert!(!index_contains_fixture(&repo));
+        assert_eq!(repo.search("kept").unwrap().len(), 1);
+        drop(repo);
+        let mut repo = SqliteHistoryRepository::open(&path).unwrap();
+        let item = repo.record("qzx deleted fixture", 3).unwrap().unwrap();
+        assert!(index_contains_fixture(&repo));
+        repo.delete(item).unwrap();
+        assert!(!index_contains_fixture(&repo));
+        repo.record("qzx expired fixture", 4).unwrap();
+        repo.expire(4).unwrap();
+        assert!(!index_contains_fixture(&repo));
+        repo.record("qzx cleared fixture", 5).unwrap();
+        repo.clear().unwrap();
+        assert!(!index_contains_fixture(&repo));
+    }
+
+    #[test]
     fn expiry_checks_are_read_only_until_a_record_is_due_and_delete_failure_is_not_ignored() {
         let mut repo = memory();
         repo.record("fresh", 100).unwrap();
@@ -595,6 +708,64 @@ mod multiformat_tests {
         let repo = SqliteHistoryRepository::open(&path).unwrap();
         assert_eq!(repo.search("").unwrap().len(), 2);
     }
+    #[test]
+    fn interrupted_v1_migration_recovers_the_already_converted_schema() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("history");
+        let mut converted = SqliteHistoryRepository::open(&path).unwrap();
+        let id = converted.record("keep this payload", 1).unwrap().unwrap();
+        converted.0.pragma_update(None, "user_version", 1).unwrap();
+        drop(converted);
+
+        let recovered = SqliteHistoryRepository::open(&path).unwrap();
+        assert_eq!(
+            recovered.payload(id).unwrap().unwrap().plain_text(),
+            Some("keep this payload")
+        );
+        let version: u32 = recovered
+            .0
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 5);
+    }
+
+    #[test]
+    fn busy_migration_checkpoint_retries_on_reopen() {
+        fn pending(connection: &Connection) -> bool {
+            connection.query_row(
+                "SELECT EXISTS(SELECT 1 FROM sqlite_schema WHERE name='clipboard_pending_checkpoint')",
+                [],
+                |row| row.get(0),
+            ).unwrap()
+        }
+
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("history");
+        let mut previous = SqliteHistoryRepository::open(&path).unwrap();
+        previous.record("kept across a busy checkpoint", 1).unwrap();
+        previous.0.pragma_update(None, "user_version", 4).unwrap();
+        let reader = Connection::open(&path).unwrap();
+        reader.execute_batch("BEGIN").unwrap();
+        let count: usize = reader
+            .query_row("SELECT count(*) FROM clipboard_items", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(count, 1);
+
+        let migrated = SqliteHistoryRepository::open(&path).unwrap();
+        assert!(pending(&migrated.0));
+        let version: u32 = migrated
+            .0
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 5);
+        assert_eq!(migrated.search("kept").unwrap().len(), 1);
+        drop(reader);
+        drop(migrated);
+        let reopened = SqliteHistoryRepository::open(&path).unwrap();
+        assert!(!pending(&reopened.0));
+        assert_eq!(reopened.search("kept").unwrap().len(), 1);
+    }
+
     #[test]
     fn fingerprint_mismatch_is_rejected_instead_of_merging_different_content() {
         let mut repo = memory();
