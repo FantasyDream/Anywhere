@@ -9,6 +9,9 @@ import subprocess
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / 'build/web-examples'
 OUT.mkdir(parents=True, exist_ok=True)
+BUILTIN_WEB_PLUGINS = (ROOT /
+                       'crates/anywhere-core/resources/builtin-web-plugins')
+BUILTIN_IDS = {'dev.anywhere.json-workspace'}
 
 
 def run(args, path):
@@ -51,3 +54,7 @@ for directory in [json_tool, text_tool, background_tool]:
     run([
         'python3', sdk / 'tools/package.py', directory, '--output', destination
     ], ROOT)
+    if manifest['id'] in BUILTIN_IDS and '--sync-builtin' in sys.argv:
+        BUILTIN_WEB_PLUGINS.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(destination,
+                     BUILTIN_WEB_PLUGINS / (manifest['id'] + '.awplugin'))

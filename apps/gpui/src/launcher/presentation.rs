@@ -18,6 +18,158 @@ pub(crate) fn locale_for_language(language: UiLanguage) -> Locale {
     language.locale()
 }
 
+/// Replace the user's home directory with `~` and middle-truncate deep paths so
+/// the root anchor and immediate parent directories stay readable.
+pub(crate) fn format_path_middle_truncated(path: &str) -> String {
+    let trimmed = path.trim();
+    if trimmed.is_empty() {
+        return String::new();
+    }
+    let contracted = std::env::var("HOME")
+        .ok()
+        .filter(|home| !home.is_empty())
+        .and_then(|home| {
+            trimmed
+                .strip_prefix(&home)
+                .filter(|rest| rest.is_empty() || rest.starts_with('/'))
+                .map(|rest| format!("~{rest}"))
+        })
+        .unwrap_or_else(|| trimmed.to_owned());
+    let segments: Vec<&str> = contracted
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .collect();
+    if segments.len() <= 4 && contracted.chars().count() <= 48 {
+        return contracted;
+    }
+    let leading = if contracted.starts_with('~') {
+        if segments.len() >= 2 {
+            format!("~/{}", segments[1])
+        } else {
+            "~".to_owned()
+        }
+    } else if contracted.starts_with('/') {
+        format!("/{}", segments[0])
+    } else {
+        segments[0].to_owned()
+    };
+    let tail_count = segments.len().min(2);
+    let tail = segments[segments.len() - tail_count..].join(" › ");
+    format!("{leading} › … › {tail}")
+}
+
+/// Human-friendly byte size formatting (e.g. `512 B`, `14.2 KB`, `2.4 MB`).
+pub(crate) fn current_unix_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as i64)
+        .unwrap_or(0)
+}
+
+pub(crate) fn format_byte_count(bytes: usize) -> String {
+    const KB: f64 = 1024.0;
+    const MB: f64 = 1024.0 * 1024.0;
+    let value = bytes as f64;
+    if bytes < 1024 {
+        format!("{bytes} B")
+    } else if value < MB {
+        format!("{:.1} KB", value / KB)
+    } else {
+        format!("{:.1} MB", value / MB)
+    }
+}
+
+/// Human-friendly elapsed duration formatting for Running Tasks.
+pub(crate) fn format_duration_ms(
+    started_at_ms: i64,
+    finished_at_ms: Option<i64>,
+    now_ms: i64,
+) -> String {
+    let end = finished_at_ms.unwrap_or(now_ms);
+    let elapsed = (end - started_at_ms).max(0) as u64;
+    if elapsed < 1_000 {
+        format!("{elapsed} ms")
+    } else if elapsed < 60_000 {
+        format!("{:.1} s", elapsed as f64 / 1000.0)
+    } else {
+        let secs = elapsed / 1_000;
+        let mins = secs / 60;
+        let rem = secs % 60;
+        format!("{mins}m {rem}s")
+    }
+}
+
+/// Human-friendly relative timestamp for Clipboard items.
+pub(crate) fn format_relative_time(timestamp_ms: i64, now_ms: i64, locale: Locale) -> String {
+    if timestamp_ms <= 0 {
+        return String::new();
+    }
+    let delta_secs = ((now_ms - timestamp_ms) / 1000).max(0);
+    match locale {
+        Locale::Zh => {
+            if delta_secs < 60 {
+                "刚刚".to_owned()
+            } else if delta_secs < 3600 {
+                format!("{} 分钟前", delta_secs / 60)
+            } else if delta_secs < 86_400 {
+                format!("{} 小时前", delta_secs / 3600)
+            } else if delta_secs < 172_800 {
+                "昨天".to_owned()
+            } else {
+                format!("{} 天前", delta_secs / 86_400)
+            }
+        }
+        Locale::En => {
+            if delta_secs < 60 {
+                "Just now".to_owned()
+            } else if delta_secs < 3600 {
+                format!("{}m ago", delta_secs / 60)
+            } else if delta_secs < 86_400 {
+                format!("{}h ago", delta_secs / 3600)
+            } else if delta_secs < 172_800 {
+                "Yesterday".to_owned()
+            } else {
+                format!("{}d ago", delta_secs / 86_400)
+            }
+        }
+    }
+}
+
+/// Parse `#RGB`, `#RRGGBB`, `#RRGGBBAA`, or `rgb(r, g, b)` literals into an `Hsla` swatch.
+pub(crate) fn detect_color_swatch(text: &str) -> Option<gpui_kit::Hsla> {
+    let trimmed = text.trim();
+    if let Some(hex) = trimmed.strip_prefix('#') {
+        let rgba_u32 = match hex.len() {
+            3 => {
+                let r = u8::from_str_radix(&hex[0..1], 16).ok()? * 17;
+                let g = u8::from_str_radix(&hex[1..2], 16).ok()? * 17;
+                let b = u8::from_str_radix(&hex[2..3], 16).ok()? * 17;
+                u32::from_be_bytes([r, g, b, 0xff])
+            }
+            6 => {
+                let rgb = u32::from_str_radix(hex, 16).ok()?;
+                (rgb << 8) | 0xff
+            }
+            8 => u32::from_str_radix(hex, 16).ok()?,
+            _ => return None,
+        };
+        return Some(gpui_kit::rgba(rgba_u32).into());
+    }
+    let inner = trimmed
+        .strip_prefix("rgb(")
+        .or_else(|| trimmed.strip_prefix("RGB("))?
+        .strip_suffix(')')?;
+    let parts: Vec<u8> = inner
+        .split(',')
+        .map(|part| part.trim().parse::<u8>().ok())
+        .collect::<Option<Vec<_>>>()?;
+    if parts.len() == 3 {
+        let rgba_u32 = u32::from_be_bytes([parts[0], parts[1], parts[2], 0xff]);
+        return Some(gpui_kit::rgba(rgba_u32).into());
+    }
+    None
+}
+
 pub(crate) fn lines(value: &str) -> Vec<String> {
     unique_trimmed(value.split('\n'))
 }
@@ -354,4 +506,39 @@ pub(crate) fn plain_space_insertion(
         return None;
     }
     Some((previous.to_owned(), cursor))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn middle_truncation_keeps_prefix_and_tail_segments() {
+        let short = "/Users/me/notes.txt";
+        assert_eq!(format_path_middle_truncated(short), short);
+        let deep = "/Users/alice/Documents/Projects/Anywhere/crates/anywhere-core/src/lib.rs";
+        let truncated = format_path_middle_truncated(deep);
+        assert!(truncated.contains('…'));
+        assert!(truncated.ends_with("src › lib.rs"));
+    }
+
+    #[test]
+    fn formatting_helpers_handle_bytes_durations_and_relative_time() {
+        assert_eq!(format_byte_count(512), "512 B");
+        assert_eq!(format_byte_count(2048), "2.0 KB");
+        assert_eq!(format_duration_ms(1_000, Some(2_500), 5_000), "1.5 s");
+        assert_eq!(format_duration_ms(0, Some(125_000), 200_000), "2m 5s");
+        assert_eq!(format_relative_time(10_000, 25_000, Locale::En), "Just now");
+        assert_eq!(format_relative_time(10_000, 25_000, Locale::Zh), "刚刚");
+        assert_eq!(format_relative_time(1_000, 181_000, Locale::En), "3m ago");
+    }
+
+    #[test]
+    fn color_swatch_parses_hex_and_rgb_literals() {
+        assert!(detect_color_swatch("#fff").is_some());
+        assert!(detect_color_swatch("#0a84ff").is_some());
+        assert!(detect_color_swatch("#0a84ff80").is_some());
+        assert!(detect_color_swatch("rgb(10, 132, 255)").is_some());
+        assert!(detect_color_swatch("not a color").is_none());
+    }
 }

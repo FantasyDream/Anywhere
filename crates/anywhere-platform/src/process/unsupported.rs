@@ -7,6 +7,9 @@ pub(super) fn configure(_: &mut Command) -> Result<()> {
 pub(super) fn prepare_pipes(_: &Child) -> Result<()> {
     bail!("Managed process pipes are unsupported")
 }
+pub(super) fn has_exited(_: &Child) -> Result<bool> {
+    bail!("Managed process observation is unsupported")
+}
 pub(super) fn kill_tree(_: &mut Child) -> Result<()> {
     bail!("Managed process cancellation is unsupported")
 }

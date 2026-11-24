@@ -2,6 +2,25 @@
 //! This is lexical expansion only: never invoke a shell or expand variables.
 use std::path::{Path, PathBuf};
 
+/// Open a regular file without waiting for a named pipe to acquire a writer.
+pub fn open_regular_read(path: &Path) -> std::io::Result<std::fs::File> {
+    let mut options = std::fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NONBLOCK);
+    }
+    let file = options.open(path)?;
+    if !file.metadata()?.is_file() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            "expected a regular file",
+        ));
+    }
+    Ok(file)
+}
+
 pub fn home_directory() -> Option<PathBuf> {
     #[cfg(windows)]
     let keys = ["USERPROFILE", "HOME"];
@@ -53,6 +72,28 @@ fn expand_home_with(raw: &str, home: Option<&Path>) -> Option<PathBuf> {
 mod tests {
     use super::*;
 
+    #[cfg(unix)]
+    #[test]
+    fn regular_read_rejects_a_fifo_without_a_writer() {
+        use std::os::unix::ffi::OsStrExt;
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("fifo");
+        let native_path = std::ffi::CString::new(path.as_os_str().as_bytes()).unwrap();
+        // SAFETY: the path is NUL-terminated and within the temporary test directory.
+        assert_eq!(unsafe { libc::mkfifo(native_path.as_ptr(), 0o600) }, 0);
+        let (send, receive) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let _ = send.send(open_regular_read(&path));
+        });
+        assert_eq!(
+            receive
+                .recv_timeout(std::time::Duration::from_secs(2))
+                .unwrap()
+                .unwrap_err()
+                .kind(),
+            std::io::ErrorKind::InvalidInput
+        );
+    }
     #[test]
     fn expands_both_home_spellings_without_changing_the_filename() {
         let directory = tempfile::tempdir().unwrap();

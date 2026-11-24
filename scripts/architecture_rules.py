@@ -58,3 +58,12 @@ def check_feature_imports(source, name):
 
 def check_persistence_imports(source, name):
     _check_imports(source, name, r'\b(application|Application)\b')
+
+
+def check_lock_usage(source, name):
+    if str(name).replace('\\', '/').endswith('core/sync.rs'):
+        return
+    production = production_source(source)
+    match = re.search(r'\.(lock|read|write)\(\)\s*\.(unwrap|expect)\b',
+                      production)
+    assert match is None, (name, match.group(0))

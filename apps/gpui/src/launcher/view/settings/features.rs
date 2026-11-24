@@ -3,7 +3,8 @@ use super::*;
 impl LauncherView {
     pub(in crate::launcher::view) fn feature_settings(&mut self, cx: &mut Context<Self>) -> Div {
         let feature_rows = self
-            .settings
+            .settings_editor
+            .model
             .features
             .clone()
             .into_iter()
@@ -17,7 +18,7 @@ impl LauncherView {
                     l10n::built_in_feature_description(self.locale),
                     Switch::new(switch_key)
                         .checked(feature.enabled)
-                        .disabled(self.settings.saving)
+                        .disabled(self.settings_editor.model.saving)
                         .accessibility_label(accessibility)
                         .on_change(cx.listener(move |this, checked, _, cx| {
                             this.change_feature_setting(&key, *checked, cx);

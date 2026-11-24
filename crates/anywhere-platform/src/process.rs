@@ -77,17 +77,19 @@ impl OwnedProcess {
     }
 
     pub fn poll(&mut self) -> Result<Option<ExitStatus>> {
-        let status = self.child.try_wait()?;
-        if status.is_some() {
-            // A non-interactive build must not orphan descendants keeping our pipes open.
-            self.kill_group()?;
-            self.finished = true;
+        if self.finished {
+            return Ok(self.child.try_wait()?);
         }
-        Ok(status)
+        if !backend::has_exited(&self.child)? {
+            return Ok(None);
+        }
+        self.stop().map(Some)
     }
 
     pub fn stop(&mut self) -> Result<ExitStatus> {
-        self.kill_group()?;
+        if !self.finished {
+            self.kill_group()?;
+        }
         let status = self.child.wait()?;
         self.finished = true;
         Ok(status)

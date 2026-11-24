@@ -257,9 +257,12 @@ async fn file_search_entry_is_a_real_action_without_context_or_scope_and_support
     assert!(!output.close_window && output.output_text.is_none());
     assert!(platform.calls.lock().unwrap().is_empty());
     assert_eq!(
-        history.lock().unwrap().load("test.editor").unwrap()
-            [&("core.files.search".into(), "core.launcher".into())]
-            .execute_count,
+        anywhere_core::core::ranking::usage::lookup_usage(
+            &history.lock().unwrap().load("test.editor").unwrap(),
+            "core.files.search",
+            "core.launcher",
+        )
+        .execute_count,
         2
     );
     app.update_context_input(
@@ -494,11 +497,13 @@ async fn async_files_open_current_targets_and_record_only_business_usage() {
         .any(|(op, path)| op == "directory" && path == folder.to_str().unwrap()));
     let rows = history.lock().unwrap().load("test.editor").unwrap();
     assert_eq!(
-        rows[&("core.file.open".into(), FILE.into())].execute_count,
+        anywhere_core::core::ranking::usage::lookup_usage(&rows, "core.file.open", FILE)
+            .execute_count,
         1
     );
     assert_eq!(
-        rows[&("core.directory.open".into(), DIRECTORY.into())].execute_count,
+        anywhere_core::core::ranking::usage::lookup_usage(&rows, "core.directory.open", DIRECTORY)
+            .execute_count,
         1
     );
 }
@@ -1537,7 +1542,7 @@ async fn complete_engine_appends_all_unindexed_matches_and_retains_execution_tar
         64,
         "each file owns its secondary action targets"
     );
-    for action in &state.result_actions {
+    for action in state.result_actions.iter() {
         assert!(contexts.contains(action.execution_context_id.as_ref().unwrap()));
     }
     let original_ids: Vec<_> = state.candidates.iter().map(|c| c.id.clone()).collect();

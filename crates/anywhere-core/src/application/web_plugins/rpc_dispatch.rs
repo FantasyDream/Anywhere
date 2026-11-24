@@ -1,13 +1,39 @@
 //! Bounded scheduling and cancellation around the capability planner.
 use super::{
     broker::{error, Plan, Source},
-    rpc_state::RequestTicket,
+    rpc_state::{RequestControl, RequestTicket},
     transfer::failure,
     WebDocumentBinding, WebMessageSource,
 };
 use crate::{application::Application, persistence::module_storage::ModuleStorageHost};
 use anywhere_protocol::web_bridge::*;
 use serde_json::{json, Value};
+
+fn update_web_storage(
+    store: &dyn crate::core::storage::ExtensionStorage,
+    key: &str,
+    control: &RequestControl,
+    mut value: Option<Vec<u8>>,
+) -> WebResult<Value> {
+    let mut rejected = None;
+    let updated = store.update(key, &mut |_| {
+        control.check().map_err(|error| {
+            rejected = Some(error);
+            anyhow::anyhow!("Web storage request expired")
+        })?;
+        Ok(value.take())
+    });
+    if let Some(error) = rejected {
+        return Err(error);
+    }
+    updated.map(|_| Value::Null).map_err(|error_value| {
+        if error_value.is::<crate::core::storage::StorageQuotaExceeded>() {
+            error(WebErrorCode::QuotaExceeded)
+        } else {
+            error(WebErrorCode::StorageUnavailable)
+        }
+    })
+}
 
 impl Application {
     pub fn clear_web_storage_namespace(&self, namespace: &str) -> anyhow::Result<()> {
@@ -95,7 +121,7 @@ impl Application {
         };
         // Cancellation is never queued behind the operation it is meant to cancel.
         if matches!(call, WebCall::Cancel { .. }) {
-            let mut web = match self.web_plugins.lock() {
+            let mut web = match crate::core::sync::lock_or_deny(&self.web_plugins, "web_plugins") {
                 Ok(web) => web,
                 Err(_) => return failure(Some(&request.id), error(WebErrorCode::HostFailure)),
             };
@@ -209,20 +235,10 @@ impl Application {
                     None => Value::Null,
                 },
                 Plan::Set(store, key, bytes) => {
-                    store.put(&key, &bytes).map_err(|e| {
-                        if e.is::<crate::core::storage::StorageQuotaExceeded>() {
-                            error(WebErrorCode::QuotaExceeded)
-                        } else {
-                            error(WebErrorCode::StorageUnavailable)
-                        }
-                    })?;
-                    Value::Null
+                    update_web_storage(store.as_ref(), &key, &worker_request.control, Some(bytes))?
                 }
                 Plan::Remove(store, key) => {
-                    store
-                        .remove(&key)
-                        .map_err(|_| error(WebErrorCode::StorageUnavailable))?;
-                    Value::Null
+                    update_web_storage(store.as_ref(), &key, &worker_request.control, None)?
                 }
             };
             Ok::<_, WebError>(Work::Value(value))
@@ -272,7 +288,7 @@ impl Application {
         request: &RequestTicket,
         result: WebResult<Value>,
     ) -> String {
-        match self.web_plugins.lock() {
+        match crate::core::sync::lock_or_deny(&self.web_plugins, "web_plugins") {
             Ok(mut web) => web.finish_call(binding, source, request, result),
             Err(_) => failure(Some(&request.id), error(WebErrorCode::HostFailure)),
         }
@@ -281,4 +297,40 @@ impl Application {
 enum Work {
     Host(Plan),
     Value(Value),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::application::web_plugins::rpc_state::RpcState;
+
+    #[test]
+    fn storage_update_rechecks_the_ticket_after_namespace_revocation() {
+        let host = ModuleStorageHost::memory().unwrap();
+        let store = host.bind("web.test").unwrap();
+        store.put("key", b"before").unwrap();
+        let mut rpc = RpcState::default();
+        let write = rpc.admit("write", true).unwrap();
+        let remove = rpc.admit("remove", true).unwrap();
+        assert!(write.control.check().is_ok());
+        assert!(remove.control.check().is_ok());
+
+        drop(rpc);
+        host.clear_namespace("web.test").unwrap();
+        let result = update_web_storage(
+            store.as_ref(),
+            "key",
+            &write.control,
+            Some(b"stale".to_vec()),
+        );
+        assert_eq!(result.unwrap_err().code, WebErrorCode::Cancelled);
+        assert_eq!(store.get("key").unwrap(), None);
+        store.put("key", b"current").unwrap();
+        let result = update_web_storage(store.as_ref(), "key", &remove.control, None);
+        assert_eq!(result.unwrap_err().code, WebErrorCode::Cancelled);
+        assert_eq!(
+            store.get("key").unwrap().as_deref(),
+            Some(b"current".as_slice())
+        );
+    }
 }

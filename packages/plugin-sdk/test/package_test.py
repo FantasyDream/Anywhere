@@ -107,8 +107,16 @@ class PackageTests(unittest.TestCase):
             "color-scheme: inherit;", controls)
         for selector in [
                 ':where(select option)',
+                ':where(.aw-action-popover, menu, [role="menu"], [role="listbox"])',
+        ]:
+            start = controls.index(selector)
+            end = controls.index('}', start)
+            self.assertIn('background: var(--aw-action-menu-surface);',
+                          controls[start:end])
+            self.assertNotIn('color-scheme: dark;', controls[start:end])
+        for selector in [
+                ':where(dialog select option, [role="dialog"] select option)',
                 ':where(dialog, [role="dialog"])',
-                ':where(menu, [role="menu"], [role="listbox"])',
                 ':where([role="tooltip"])',
         ]:
             start = controls.index(selector)

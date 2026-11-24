@@ -8,7 +8,7 @@
 
 ### 当前执行进度
 
-2026-10-18：已开始 P0，独立探针与构建脚本（已退役，见[历史说明](web-plugin-p0.md)）接入锁定的 flutter_inappwebview 稳定版。已构建 Release App 并通过 deep / strict 签名；实际启动后的自定义协议页面完成 Unicode 回显、未开放能力拒绝，原生 frame / origin 经接收层验证。具体单元 / 导航回归和最新运行结果以探针记录为准。
+2026-10-18：已开始 P0，已退役的独立探针与构建脚本接入锁定的 flutter_inappwebview 稳定版。已构建 Release App 并通过 deep / strict 签名；实际启动后的自定义协议页面完成 Unicode 回显、未开放能力拒绝，原生 frame / origin 经接收层验证。当时通过 7 项探针测试。探针只处理合成回显；单次 fetch 失败、IME 与资源释放仍需另验。2026-10-22 正式宿主接替探针，实验源码与构建脚本留在 Git 历史。
 
 P0 仍未整体验收：真实中文 IME / 保留快捷键、15 秒恢复、连续创建销毁的资源基线、完整网络 / iframe 攻击矩阵和 Windows 实机待验证。`connectBlocked` 不当作全面断网证据。正式 Launcher 尚无 Web 包安装入口，探针不接真实用户内容或 Rust 业务能力。
 

@@ -26,6 +26,37 @@ fn plural(template: &str, _count: i64, values: &[(&str, String)]) -> String {
     fill(template, values)
 }
 
+pub fn open_tool_window_copy(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Open a Copy in Separate Window".to_string(),
+        Locale::Zh => "在独立窗口打开副本".to_string(),
+    }
+}
+
+pub fn tool_access_changed(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Tool access changed".to_string(),
+        Locale::Zh => "工具访问设置已更改".to_string(),
+    }
+}
+
+pub fn reopen_tool_after_access_change(locale: Locale) -> String {
+    match locale {
+        Locale::En => {
+            "Close this window and reopen the tool from search to use the current settings."
+                .to_string()
+        }
+        Locale::Zh => "请关闭此窗口，从搜索栏重新打开工具以使用当前设置。".to_string(),
+    }
+}
+
+pub fn open_tool_window(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Open in Separate Window".to_string(),
+        Locale::Zh => "在独立窗口打开".to_string(),
+    }
+}
+
 pub fn settings(locale: Locale) -> String {
     match locale {
         Locale::En => "Settings".to_string(),
@@ -86,6 +117,34 @@ pub fn language_description(locale: Locale) -> String {
     match locale {
         Locale::En => "Choose the language used throughout Anywhere".to_string(),
         Locale::Zh => "选择 Anywhere 使用的语言".to_string(),
+    }
+}
+
+pub fn theme(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Appearance".to_string(),
+        Locale::Zh => "外观".to_string(),
+    }
+}
+
+pub fn theme_description(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Choose a light or dark appearance, or match macOS".to_string(),
+        Locale::Zh => "使用浅色或深色外观，也可跟随 macOS".to_string(),
+    }
+}
+
+pub fn theme_light(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Light".to_string(),
+        Locale::Zh => "浅色".to_string(),
+    }
+}
+
+pub fn theme_dark(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Dark".to_string(),
+        Locale::Zh => "深色".to_string(),
     }
 }
 
@@ -275,6 +334,13 @@ pub fn modified(locale: Locale) -> String {
     match locale {
         Locale::En => "Modified".to_string(),
         Locale::Zh => "修改时间".to_string(),
+    }
+}
+
+pub fn search_all_file_types(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Search all file types".to_string(),
+        Locale::Zh => "搜索所有文件类型".to_string(),
     }
 }
 
@@ -1399,10 +1465,10 @@ pub fn reload_tool(locale: Locale) -> String {
     }
 }
 
-pub fn back_to_search_esc(locale: Locale) -> String {
+pub fn back_to_search(locale: Locale) -> String {
     match locale {
-        Locale::En => "Back to search · Esc".to_string(),
-        Locale::Zh => "返回搜索 · Esc".to_string(),
+        Locale::En => "Back to search".to_string(),
+        Locale::Zh => "返回搜索".to_string(),
     }
 }
 
@@ -3097,4 +3163,4 @@ pub fn search_directory_unavailable(locale: Locale) -> String {
 }
 
 /// Stable message count for generated-resource verification.
-pub const MESSAGE_COUNT: usize = 421;
+pub const MESSAGE_COUNT: usize = 430;

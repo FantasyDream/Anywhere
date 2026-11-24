@@ -36,16 +36,36 @@ impl LauncherView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
-        if self.is_settings_surface() || self.shortcut_recording.is_some() {
+        if binding.global
+            && binding.routes.is_empty()
+            && binding.action_id == anywhere_core::features::clipboard::SHELF_ACTION_ID
+            && self.live.is_some()
+            && self.clipboard_shelf_feature_enabled()
+        {
+            self.cancel_activation_prefill();
+            cx.emit(LauncherEvent::OpenClipboardShelf);
             return false;
         }
+        if self.is_settings_surface() || self.shortcuts.recording.is_some() {
+            return false;
+        }
+        self.cancel_activation_prefill();
         self.live_state.generation = self.live_state.generation.wrapping_add(1);
         self.reset_for_activation(InputMode::Search, window, cx);
-        self.presented = true;
+        self.presence.presented = true;
         self.pending_shortcut_execution = Some(binding);
-        self.action_shortcut_resolving = None;
+        self.shortcuts.resolving = None;
         self.begin_new_activation(InputMode::Search, cx);
         true
+    }
+
+    fn clipboard_shelf_feature_enabled(&self) -> bool {
+        self.settings_editor
+            .model
+            .features
+            .iter()
+            .find(|feature| feature.key == "clipboard")
+            .is_none_or(|feature| feature.enabled)
     }
 
     pub(super) fn activate_from_entry(
@@ -59,7 +79,7 @@ impl LauncherView {
             self.runtime_state,
             RuntimeState::Starting | RuntimeState::Failed
         ) {
-            self.presented = true;
+            self.presence.presented = true;
             let (message, kind) = match self.runtime_state {
                 RuntimeState::Starting => (
                     l10n::starting_anywhere(self.locale),
@@ -87,7 +107,7 @@ impl LauncherView {
             }
             return exited;
         }
-        if self.presented
+        if self.presence.presented
             && toggle
             && self.input_mode == input_mode
             && self.screen == Screen::Launcher
@@ -97,8 +117,8 @@ impl LauncherView {
             return false;
         }
 
-        let was_presented = self.presented;
-        self.presented = true;
+        let was_presented = self.presence.presented;
+        self.presence.presented = true;
         if was_presented && self.screen == Screen::Launcher && self.input_mode == input_mode {
             self.focus_launcher_input(window, cx);
             return true;
@@ -137,11 +157,12 @@ impl LauncherView {
         }
 
         self.reset_for_activation(input_mode, window, cx);
+        self.begin_activation_prefill(input_mode == InputMode::Environment, cx);
         self.begin_new_activation(input_mode, cx);
         true
     }
 
-    fn sync_mode_editor(
+    pub(super) fn sync_mode_editor(
         &self,
         previous_mode: InputMode,
         input_mode: InputMode,
@@ -171,7 +192,7 @@ impl LauncherView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.hidden_at.is_some() {
+        if self.presence.hidden_at.is_some() {
             self.release_workspace(cx);
             self.clear_workspace_editors(window, cx);
         } else {
@@ -180,7 +201,8 @@ impl LauncherView {
             self.parent_workspace = None;
         }
         self.pending_shortcut_execution = None;
-        self.action_shortcut_resolving = None;
+        self.shortcuts.resolving = None;
+        self.cancel_activation_prefill();
         let previous_mode = self.input_mode;
         self.screen = Screen::Launcher;
         self.input_mode = input_mode;
@@ -203,8 +225,8 @@ impl LauncherView {
                     self.live_state.session_id = Some(session_id);
                     self.live_state.snapshot_gate = Some(SnapshotGate::new(session_id));
                     self.live_state.request_revision = 0;
-                    self.retained_workspace = false;
-                    self.hidden_at = None;
+                    self.presence.retained_workspace = false;
+                    self.presence.hidden_at = None;
                     self.begin_stream(live.activate_session(session_id, input_mode), cx);
                 }
                 Err(error) => {
@@ -219,9 +241,8 @@ impl LauncherView {
     }
 
     fn begin_resume(&mut self, cx: &mut Context<Self>) {
-        self.retention_task = None;
-        self.hidden_at = None;
-        self.retained_workspace = false;
+        self.cancel_activation_prefill();
+        self.presence.clear_retention();
         let Some(live) = self.live.clone() else {
             return;
         };
@@ -234,7 +255,7 @@ impl LauncherView {
     }
 
     pub(super) fn try_start_pending_action_shortcut(&mut self, cx: &mut Context<Self>) {
-        if self.action_shortcut_resolving.is_some() {
+        if self.shortcuts.resolving.is_some() {
             return;
         }
         let Some(binding) = self.pending_shortcut_execution.take() else {
@@ -252,13 +273,13 @@ impl LauncherView {
         binding: ActionShortcutBinding,
         cx: &mut Context<Self>,
     ) {
-        if self.action_shortcut_resolving.is_some() {
+        if self.shortcuts.resolving.is_some() {
             return;
         }
         let (Some(live), Some(session_id)) = (self.live.clone(), self.live_state.session_id) else {
             return;
         };
-        self.action_shortcut_resolving = Some(binding.action_id.clone());
+        self.shortcuts.resolving = Some(binding.action_id.clone());
         let receiver = live.wait_action_shortcut(session_id, self.model.revision, binding);
         self.poll(receiver, self.live_state.generation, cx);
     }
@@ -286,36 +307,39 @@ impl LauncherView {
             return false;
         }
         if self.is_settings_surface() {
-            return false;
+            self.presence.presented = true;
+            self.schedule_settings_focus(window, cx);
+            return true;
         }
+        self.cancel_activation_prefill();
         self.close_preview(cx);
         self.close_web_surface(cx);
         self.screen = Screen::Settings;
         self.root_navigation_open = false;
-        self.shortcut_recording = None;
-        self.settings_action_picker_open = false;
-        self.pending_action_shortcut = None;
-        self.pending_action_shortcut_value = None;
-        self.context_shortcut_draft = None;
-        self.presented = true;
+        self.shortcuts.recording = None;
+        self.settings_editor.action_picker_open = false;
+        self.shortcuts.pending_action = None;
+        self.shortcuts.pending_value = None;
+        self.shortcuts.context_draft = None;
+        self.presence.presented = true;
         self.notice = None;
         self.resize_window_for_screen(window, cx);
         crate::platform::configure_settings_window_after_update(PRODUCT_NAME);
         self.request_shortcut_catalog(cx);
-        if self.settings.selected == SettingsCategory::ApplicationHistory {
+        if self.settings_editor.model.selected == SettingsCategory::ApplicationHistory {
             self.request_app_history_settings_sources(cx);
-        } else if self.settings.selected == SettingsCategory::Clipboard {
+        } else if self.settings_editor.model.selected == SettingsCategory::Clipboard {
             self.request_clipboard_settings_status(cx);
         }
-        let settings_focus_handle = self.settings_focus_handle.clone();
-        cx.defer_in(window, move |this, window, cx| {
-            if this.screen == Screen::Settings {
-                settings_focus_handle.focus(window, cx);
-                cx.notify();
-            }
-        });
+        self.schedule_settings_focus(window, cx);
         cx.notify();
         true
+    }
+
+    fn schedule_settings_focus(&self, window: &mut Window, cx: &mut Context<Self>) {
+        cx.defer_in(window, |this, window, cx| {
+            this.focus_settings_navigation(window, cx);
+        });
     }
 
     pub(super) fn settings_launcher_recovery(&self) -> LauncherStreamRecovery {
@@ -351,20 +375,29 @@ impl LauncherView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.is_settings_surface() {
-            self.settings_focus_handle.focus(window, cx);
-            cx.notify();
+        match self.screen {
+            Screen::Settings if self.settings_modal_active() => {
+                self.focus_active_settings_modal(window, cx);
+            }
+            Screen::Settings => self.settings_editor.focus_handle.focus(window, cx),
+            Screen::WebPackages => {
+                if !self.surface_focus_handle.contains_focused(window, cx) {
+                    self.surface_focus_handle.focus(window, cx);
+                }
+            }
+            _ => return,
         }
+        cx.notify();
     }
 
     fn request_shortcut_catalog(&mut self, cx: &mut Context<Self>) {
-        if self.shortcut_catalog_loading {
+        if self.shortcuts.catalog_loading {
             return;
         }
         let Some(live) = self.live.clone() else {
             return;
         };
-        self.shortcut_catalog_loading = true;
+        self.shortcuts.catalog_loading = true;
         let receiver = live.shortcut_catalog();
         self.poll(receiver, self.live_state.generation, cx);
     }
@@ -449,21 +482,23 @@ impl LauncherView {
     }
 
     pub fn dismiss_on_focus_loss(&self) -> bool {
-        self.presented
-            && !self.preview_open
-            && !self.preview_busy
+        self.presence.presented
+            && !self.preview.open
+            && !self.preview.busy
             && !self.is_settings_surface()
+            && !self.standalone_tool
             && !self.standalone_shelf
             && !self.standalone_tasks
     }
 
     pub fn prepare_hide(&mut self, cx: &mut Context<Self>) {
+        self.cancel_activation_prefill();
         if self.standalone_shelf {
             crate::platform::remember_clipboard_shelf_position();
         }
-        self.presented = false;
+        self.presence.presented = false;
         self.pending_shortcut_execution = None;
-        self.action_shortcut_resolving = None;
+        self.shortcuts.resolving = None;
         self.cancel_stream();
         self.live_state.generation = self.live_state.generation.wrapping_add(1);
         self.cancel_tasks_refresh();
@@ -479,9 +514,17 @@ impl LauncherView {
                 live.cancel_app_history_session(session_id);
             }
         }
-        self.retained_workspace = self.should_retain_workspace();
-        self.hidden_at = self.retained_workspace.then(Instant::now);
-        if self.retained_workspace {
+        if self.standalone_tool {
+            self.close_preview(cx);
+            self.close_web_surface(cx);
+            if let (Some(live), Some(id)) = (&self.live, self.live_state.session_id.take()) {
+                let _ = live.discard_session_now(id);
+            }
+            return;
+        }
+        self.presence.retained_workspace = self.should_retain_workspace();
+        self.presence.hidden_at = self.presence.retained_workspace.then(Instant::now);
+        if self.presence.retained_workspace {
             if let Some(live) = &self.live {
                 if let Err(error) = live.suspend_current_now() {
                     tracing::warn!(%error, "launcher_suspend_failed");
@@ -489,11 +532,11 @@ impl LauncherView {
             }
         }
         self.clipboard_search_task = None;
-        self.preview_selection_task = None;
+        self.preview.selection_task = None;
         self.root_navigation_open = false;
         self.model.hide_object_actions();
         self.app_history.close_object_actions();
-        self.app_history.empty_actions_open = false;
+        self.app_history.page_actions_open = false;
         self.app_history.fallback_actions_open = false;
         self.web_surface.actions_open = false;
         self.web_surface.action_selected = 0;
@@ -502,11 +545,11 @@ impl LauncherView {
         self.tasks.task_actions_open = false;
         self.tasks.task_action_selected = 0;
         self.close_preview(cx);
-        if !self.retained_workspace && !self.standalone_shelf && !self.standalone_tasks {
+        if !self.presence.retained_workspace && !self.standalone_shelf && !self.standalone_tasks {
             self.release_workspace(cx);
             return;
         }
-        if !self.retained_workspace || self.screen != Screen::WebTool {
+        if !self.presence.retained_workspace || self.screen != Screen::WebTool {
             self.close_web_surface(cx);
         } else {
             self.web_surface.needs_resume = true;
@@ -517,15 +560,17 @@ impl LauncherView {
             self.web_surface.state_handle = None;
             self.web_surface.state_version = 0;
         }
-        if let Some(hidden_at) = self.hidden_at {
-            self.retention_task = Some(cx.spawn(async move |this, cx| {
+        if let Some(hidden_at) = self.presence.hidden_at {
+            self.presence.retention_task = Some(cx.spawn(async move |this, cx| {
                 cx.background_executor()
                     .timer(Duration::from_millis(
                         anywhere_protocol::policy::LAUNCHER_RETENTION_MS,
                     ))
                     .await;
                 let _ = this.update(cx, |this, cx| {
-                    if this.hidden_at != Some(hidden_at) || !this.retained_workspace {
+                    if this.presence.hidden_at != Some(hidden_at)
+                        || !this.presence.retained_workspace
+                    {
                         return;
                     }
                     this.release_workspace(cx);
@@ -533,23 +578,21 @@ impl LauncherView {
                 });
             }));
         } else {
-            self.retention_task = None;
+            self.presence.retention_task = None;
         }
     }
 
     fn can_resume_workspace(&self) -> bool {
-        self.retained_workspace
+        self.presence.retained_workspace
             && self.live_state.session_id.is_some()
-            && self.hidden_at.is_some_and(|hidden_at| {
+            && self.presence.hidden_at.is_some_and(|hidden_at| {
                 hidden_at.elapsed()
                     < Duration::from_millis(anywhere_protocol::policy::LAUNCHER_RETENTION_MS)
             })
     }
 
     fn release_workspace(&mut self, cx: &mut Context<Self>) {
-        self.retention_task = None;
-        self.hidden_at = None;
-        self.retained_workspace = false;
+        self.presence.clear_retention();
         self.close_web_surface(cx);
         self.release_app_history_session();
         if let (Some(live), Some(session_id)) = (&self.live, self.live_state.session_id.take()) {
@@ -571,15 +614,15 @@ impl LauncherView {
             ..Default::default()
         };
         self.tasks.release_workspace();
-        self.pending_task_selection = None;
+        self.tasks.pending_selection = None;
         if matches!(
             self.runtime_state,
             RuntimeState::Ready | RuntimeState::Preview
         ) {
             self.model = LauncherModel::empty(self.locale);
         }
-        self.application_icons_requested.clear();
-        self.application_icons = crate::launcher::icon_cache::ApplicationIconCache::default();
+        let evicted_icons = self.icons.trim_for_idle();
+        self.drop_render_images(evicted_icons, cx);
 
         let generation = self.live_state.generation;
         let window_handle = self.window_handle;
@@ -588,7 +631,7 @@ impl LauncherView {
             let _ = window_handle.update(cx, |_, window, cx| {
                 let _ = view.update(cx, |this, cx| {
                     if this.live_state.generation == generation
-                        && (!this.presented || this.is_settings_surface())
+                        && (!this.presence.presented || this.is_settings_surface())
                     {
                         this.clear_workspace_editors(window, cx);
                     }

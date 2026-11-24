@@ -1,0 +1,127 @@
+{
+  "hardware": "Apple M5, 16 GB, arm64",
+  "system": "macOS 27.2.1",
+  "toolchain": "rustc 1.100.0-beta.7, release",
+  "fixture": "10,000 synthetic English file candidates with paths and execution IDs. Baseline is the working tree before this review. No window is created.",
+  "warmup_per_run": 10,
+  "run_order": [
+    [
+      "before",
+      "after"
+    ],
+    [
+      "after",
+      "before"
+    ],
+    [
+      "before",
+      "after"
+    ]
+  ],
+  "before": [
+    {
+      "scope": "synthetic release projection fixture; excludes GPUI layout, rasterization, Core work and native presentation",
+      "candidates": 10000,
+      "metadata_only": {
+        "samples": 100,
+        "p50_us": 0.083,
+        "p95_us": 0.125,
+        "max_us": 2.042
+      },
+      "snapshot_and_eight_rows": {
+        "samples": 100,
+        "p50_us": 1838.541,
+        "p95_us": 2298.833,
+        "max_us": 2714.25
+      },
+      "projection_retained_bytes_delta": 4889319
+    },
+    {
+      "scope": "synthetic release projection fixture; excludes GPUI layout, rasterization, Core work and native presentation",
+      "candidates": 10000,
+      "metadata_only": {
+        "samples": 100,
+        "p50_us": 0.083,
+        "p95_us": 0.084,
+        "max_us": 2.0
+      },
+      "snapshot_and_eight_rows": {
+        "samples": 100,
+        "p50_us": 1768.584,
+        "p95_us": 2104.959,
+        "max_us": 2204.5
+      },
+      "projection_retained_bytes_delta": 4889319
+    },
+    {
+      "scope": "synthetic release projection fixture; excludes GPUI layout, rasterization, Core work and native presentation",
+      "candidates": 10000,
+      "metadata_only": {
+        "samples": 100,
+        "p50_us": 0.083,
+        "p95_us": 0.125,
+        "max_us": 1.084
+      },
+      "snapshot_and_eight_rows": {
+        "samples": 100,
+        "p50_us": 1785.5,
+        "p95_us": 1981.209,
+        "max_us": 2151.25
+      },
+      "projection_retained_bytes_delta": 4889319
+    }
+  ],
+  "after": [
+    {
+      "scope": "synthetic release projection fixture; excludes GPUI layout, rasterization, Core work and native presentation",
+      "candidates": 10000,
+      "metadata_only": {
+        "samples": 100,
+        "p50_us": 0.125,
+        "p95_us": 1.167,
+        "max_us": 1.917
+      },
+      "snapshot_and_eight_rows": {
+        "samples": 100,
+        "p50_us": 136.75,
+        "p95_us": 242.542,
+        "max_us": 492.583
+      },
+      "projection_retained_bytes_delta": 77997
+    },
+    {
+      "scope": "synthetic release projection fixture; excludes GPUI layout, rasterization, Core work and native presentation",
+      "candidates": 10000,
+      "metadata_only": {
+        "samples": 100,
+        "p50_us": 0.125,
+        "p95_us": 0.25,
+        "max_us": 2.333
+      },
+      "snapshot_and_eight_rows": {
+        "samples": 100,
+        "p50_us": 133.708,
+        "p95_us": 162.875,
+        "max_us": 177.667
+      },
+      "projection_retained_bytes_delta": 77997
+    },
+    {
+      "scope": "synthetic release projection fixture; excludes GPUI layout, rasterization, Core work and native presentation",
+      "candidates": 10000,
+      "metadata_only": {
+        "samples": 100,
+        "p50_us": 0.125,
+        "p95_us": 0.125,
+        "max_us": 1.334
+      },
+      "snapshot_and_eight_rows": {
+        "samples": 100,
+        "p50_us": 122.125,
+        "p95_us": 150.5,
+        "max_us": 173.083
+      },
+      "projection_retained_bytes_delta": 77997
+    }
+  ]
+}

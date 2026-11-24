@@ -67,15 +67,9 @@ impl LiveLauncher {
     ) -> Receiver<LiveEvent> {
         let application = self.application.clone();
         self.spawn(async move {
-            let service = {
-                let settings = match application.settings() {
-                    Ok(settings) => settings,
-                    Err(error) => return LiveEvent::Error(error.to_string()),
-                };
-                match settings.application_history() {
-                    Ok(service) => service,
-                    Err(error) => return LiveEvent::Error(format!("{error:#}")),
-                }
+            let service = match application.history_reader() {
+                Ok(service) => service,
+                Err(error) => return LiveEvent::Error(format!("{error:#}")),
             };
             match service
                 .search_wait(InteractiveSearch {
@@ -123,10 +117,7 @@ impl LiveLauncher {
     pub fn open_app_history_session(&self, request: u64) -> Receiver<LiveEvent> {
         let application = self.application.clone();
         self.spawn_blocking(move || {
-            let session_id = {
-                let settings = application.settings().map_err(anyhow::Error::new)?;
-                settings.application_history()?.open_session()?
-            };
+            let session_id = application.history_reader()?.open_session()?;
             Ok(LiveEvent::AppHistorySources {
                 request,
                 session_id: Some(session_id),
@@ -139,9 +130,7 @@ impl LiveLauncher {
         let application = self.application.clone();
         self.runtime().spawn_blocking(move || {
             let result = application
-                .settings()
-                .map_err(anyhow::Error::new)
-                .and_then(|settings| settings.application_history())
+                .history_reader()
                 .map(|history| history.cancel_session(session_id));
             if let Err(error) = result {
                 tracing::warn!(%error, session_id, "app_history_session_cancel_failed");
@@ -152,8 +141,7 @@ impl LiveLauncher {
     pub fn use_app_history_item(&self, id: String, copy: bool) -> Receiver<LiveEvent> {
         let application = self.application.clone();
         self.spawn_blocking(move || {
-            let settings = application.settings().map_err(anyhow::Error::new)?;
-            settings.application_history()?.use_item(
+            application.history_reader()?.use_item(
                 &id,
                 copy,
                 application.application().platform(),
@@ -170,12 +158,11 @@ impl LiveLauncher {
         item_id: String,
     ) -> Receiver<LiveEvent> {
         let application = self.application.clone();
+        let selection = application
+            .application()
+            .select_action_object(session_id, revision);
         self.spawn(async move {
-            let history = match application
-                .settings()
-                .map_err(anyhow::Error::new)
-                .and_then(|settings| settings.application_history())
-            {
+            let history = match application.history_reader() {
                 Ok(history) => history,
                 Err(error) => {
                     tracing::warn!(
@@ -188,7 +175,7 @@ impl LiveLauncher {
             };
             let actions = match application
                 .application()
-                .history_object_actions(history, session_id, revision, item_id.clone())
+                .history_actions_for_selection(history, selection, item_id.clone())
                 .await
             {
                 Ok(actions) => actions,
@@ -202,7 +189,7 @@ impl LiveLauncher {
                 item_id,
                 revision,
                 actions: actions
-                    .into_iter()
+                    .iter()
                     .filter_map(app_history_object_action)
                     .collect(),
             }

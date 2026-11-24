@@ -1,27 +1,63 @@
+mod footer_bar;
+mod highlight;
+mod list_row;
+
+pub use footer_bar::{footer_action_button, footer_bar, hud_toast};
+pub use highlight::highlighted_text;
+pub use list_row::{primary_row_action, row_action_button, ListRow, RowDensity};
+
+use crate::ui::styles::AppStyle as _;
+use gpui_kit::TestSupportExt as _;
 use gpui_kit::{
+    assets::IconName,
     component::{
-        button::{Button, ButtonCustomVariant, ButtonVariants as _},
+        button::{Button, ButtonVariants as _},
         tooltip::Tooltip,
-        Icon,
+        Icon, Selectable as _,
     },
     div,
     prelude::*,
-    px, AnyElement, AnyView, App, Div, FontWeight, Hsla, IntoElement, SharedString, Window,
+    px, AnyElement, AnyView, App, Div, FontWeight, Hsla, IntoElement, SharedString, Stateful,
+    Window,
 };
+
+pub fn page_actions_button(id: &'static str, label: String, open: bool) -> Button {
+    Button::new(id)
+        .ghost()
+        .icon(IconName::Ellipsis)
+        .accessibility_label(label.clone())
+        .tooltip(label)
+        .open(open)
+}
 
 use crate::{
     l10n::{self, Locale},
     ui::{design_tokens::metrics, theme},
 };
 
-/// Shared dark action surface; callers supply size, layout and menu contents.
-pub fn menu_popover() -> Div {
+/// A second level replaces the page results and uses the same selection semantics.
+pub fn action_candidates(id: &'static str, title: impl Into<SharedString>) -> Stateful<Div> {
+    let title = title.into();
     div()
-        .rounded(px(metrics::CARD_RADIUS))
-        .bg(theme::menu_surface())
-        .border(px(metrics::DIVIDER_WIDTH))
-        .border_color(theme::on_dark_selection_outline())
-        .text_color(theme::on_dark_primary())
+        .id(id)
+        .role(gpui_kit::Role::ListBox)
+        .aria_label(title.clone())
+        .flex_1()
+        .min_h_0()
+        .w_full()
+        .flex()
+        .flex_col()
+        .px(px(metrics::SPACE_MD))
+        .child(
+            div()
+                .flex_none()
+                .truncate()
+                .px(px(metrics::SPACE_SM))
+                .py(px(metrics::SPACE_SM))
+                .caption_text()
+                .text_color(theme::secondary())
+                .child(title),
+        )
 }
 
 pub fn text_tooltip(
@@ -31,30 +67,59 @@ pub fn text_tooltip(
     move |window, cx| Tooltip::new(text.clone()).build(window, cx)
 }
 
-pub fn dark_surface_button(id: impl Into<SharedString>, selected: bool, cx: &App) -> Button {
-    let mut variant = ButtonCustomVariant::new(cx)
-        .foreground(theme::on_dark_primary())
-        .hover(theme::on_dark_hover())
-        .active(theme::on_dark_selected());
-    if selected {
-        variant = variant.color(theme::on_dark_selected());
+pub fn squircle_icon_plate(icon: IconName, tint: Hsla, icon_size: f32) -> Div {
+    div()
+        .size(px(metrics::ICON_PLATE_SIZE))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .rounded(px(metrics::ICON_PLATE_RADIUS))
+        .bg(tint.opacity(0.14))
+        .border(px(metrics::DIVIDER_WIDTH))
+        .border_color(tint.opacity(0.24))
+        .child(Icon::new(icon).size(px(icon_size)).text_color(tint))
+}
+
+pub fn action_candidate(
+    id: impl Into<SharedString>,
+    label: impl Into<SharedString>,
+    icon: IconName,
+    selected: bool,
+    enabled: bool,
+) -> gpui_kit::base::ObservedElement<Stateful<Div>> {
+    let label = label.into();
+    let mut row = ListRow::new(id)
+        .density(RowDensity::Compact)
+        .selected(selected)
+        .enabled(enabled)
+        .leading(
+            Icon::new(icon)
+                .size(px(metrics::ICON_SIZE))
+                .text_color(theme::secondary()),
+        )
+        .title(label.clone())
+        .title_tooltip(label);
+    if selected && enabled {
+        row = row.trailing(keycap("↵"));
     }
-    Button::new(id.into()).custom(variant)
+    row.build().test_support()
 }
 
 pub fn keycap(value: impl Into<SharedString>) -> Div {
     let value = value.into();
+    let ink = theme::secondary();
     let content = if value.as_ref() == "↵" {
-        Icon::new(gpui_kit::assets::IconName::CornerDownLeft)
+        Icon::new(IconName::CornerDownLeft)
             .size(px(12.))
-            .text_color(theme::secondary())
+            .text_color(ink)
             .into_any_element()
     } else {
         div()
             .text_size(px(metrics::KEYCAP_FONT_SIZE))
             .line_height(px(metrics::KEYCAP_FONT_SIZE * metrics::KEYCAP_LINE_HEIGHT))
             .font_weight(FontWeight::MEDIUM)
-            .text_color(theme::secondary())
+            .text_color(ink)
             .child(value)
             .into_any_element()
     };
@@ -78,7 +143,7 @@ pub fn empty_state(
     icon: gpui_kit::assets::IconName,
     title: impl Into<SharedString>,
     detail: Option<String>,
-) -> AnyElement {
+) -> Div {
     div()
         .flex_1()
         .min_h(px(180.))
@@ -108,11 +173,11 @@ pub fn empty_state(
                     .child(detail),
             )
         })
-        .into_any_element()
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub enum NoticeKind {
+    #[default]
     Info,
     Warning,
     Error,
@@ -174,17 +239,45 @@ pub fn status_badge(
 ) -> Div {
     div()
         .flex_none()
-        .px(px(7.))
-        .py(px(3.))
+        .px(px(metrics::SPACE_SM))
+        .py(px(metrics::ROW_INSET_Y_COMPACT))
         .flex()
         .items_center()
-        .gap(px(5.))
-        .rounded(px(6.))
-        .child(Icon::new(icon).size(px(12.)).text_color(color))
+        .gap(px(metrics::SPACE_XS))
+        .rounded(px(metrics::TOOLTIP_RADIUS))
+        .bg(color.opacity(0.14))
+        .child(
+            Icon::new(icon)
+                .size(px(metrics::CAPTION_SIZE))
+                .text_color(color),
+        )
         .child(
             div()
-                .text_size(px(11.))
-                .line_height(px(11. * 1.2))
+                .text_size(px(metrics::CAPTION_SIZE))
+                .line_height(px(metrics::CAPTION_SIZE * metrics::CAPTION_LINE_HEIGHT))
+                .font_weight(FontWeight::MEDIUM)
+                .text_color(color)
+                .child(label.into()),
+        )
+}
+
+pub fn status_badge_spinning(label: impl Into<SharedString>, color: Hsla) -> Div {
+    use gpui_kit::component::{spinner::Spinner, Sizable as _};
+    div()
+        .flex_none()
+        .px(px(metrics::SPACE_SM))
+        .py(px(metrics::ROW_INSET_Y_COMPACT))
+        .flex()
+        .items_center()
+        .gap(px(metrics::SPACE_XS))
+        .rounded(px(metrics::TOOLTIP_RADIUS))
+        .bg(color.opacity(0.14))
+        .child(Spinner::new().xsmall().color(color))
+        .child(
+            div()
+                .text_size(px(metrics::CAPTION_SIZE))
+                .line_height(px(metrics::CAPTION_SIZE * metrics::CAPTION_LINE_HEIGHT))
+                .font_weight(FontWeight::MEDIUM)
                 .text_color(color)
                 .child(label.into()),
         )

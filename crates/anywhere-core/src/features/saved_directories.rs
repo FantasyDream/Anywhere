@@ -154,10 +154,7 @@ impl BuiltinFeature for Feature {
         Ok(FeatureBindings {
             actions,
             sources: crate::core::search::candidate_source::SourceSet {
-                synchronous: vec![Arc::new(SavedDirectorySource {
-                    store: store.clone(),
-                    registry,
-                })],
+                synchronous: vec![Arc::new(SavedDirectorySource { store, registry })],
                 ..Default::default()
             },
         })

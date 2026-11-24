@@ -104,7 +104,7 @@ fn toggling_an_action_preserves_a_path_committed_by_another_service() {
         .unwrap();
     let second = installed_service(Ok(storage), loader);
     gated.armed.store(true, Ordering::Release);
-    let worker = first.clone();
+    let worker = first;
     let toggling = std::thread::spawn(move || worker.set_action_enabled("idea", false));
     gated.entered.wait();
     second
@@ -136,7 +136,7 @@ fn user_sources_share_the_bundled_contract_and_are_captured_once() {
         catalog.descriptors().len(),
         BUNDLED_HISTORY_SOURCES.len() + 1
     );
-    let service = installed_service(Ok(storage()), catalog.clone());
+    let service = installed_service(Ok(storage()), catalog);
     service
         .configure_mode("example", SourceMode::Custom, source.to_str())
         .unwrap();

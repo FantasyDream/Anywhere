@@ -3,7 +3,7 @@ from pathlib import Path
 import unittest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from architecture_rules import check_core_imports, check_feature_imports, check_persistence_imports, production_source
+from architecture_rules import check_core_imports, check_feature_imports, check_lock_usage, check_persistence_imports, production_source
 
 
 class CoreBoundaries(unittest.TestCase):
@@ -80,6 +80,20 @@ class CoreBoundaries(unittest.TestCase):
         check_feature_imports(
             'use crate::{core::storage::StorageHost, features::clipboard::history::HistoryRepository};',
             'features/fixture.rs')
+
+    def test_lock_usage_rejects_unwrap_and_expect_in_production_source(self):
+        for bad in [
+                'fn f(m: &std::sync::Mutex<()>) { let _ = m.lock().unwrap(); }',
+                'fn f(m: &std::sync::Mutex<()>) { let _ = m.lock().expect("x"); }',
+                'fn f(m: &std::sync::RwLock<()>) { let _ = m.read().unwrap(); }',
+                'fn f(m: &std::sync::RwLock<()>) { let _ = m.write().expect("x"); }',
+        ]:
+            with self.subTest(bad=bad), self.assertRaises(AssertionError):
+                check_lock_usage(bad, 'application/fixture.rs')
+        check_lock_usage(
+            'fn f(m: &std::sync::Mutex<()>) -> anyhow::Result<()> { let _ = crate::core::sync::lock_state(m, "x")?; Ok(()) }\n#[cfg(test)] mod tests { fn t(m: &std::sync::Mutex<()>) { let _ = m.lock().unwrap(); } }',
+            'application/fixture.rs')
+        check_lock_usage('let _ = lock.lock().unwrap();', 'core/sync.rs')
 
 
 if __name__ == '__main__':

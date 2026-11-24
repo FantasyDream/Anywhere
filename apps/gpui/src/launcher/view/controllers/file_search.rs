@@ -76,14 +76,14 @@ impl LauncherView {
                         // this reply. Use the current rows in either delivery order.
                         if this.file_search.browsing
                             && !this.model.object_actions_active
-                            && advance_from.as_deref().is_some_and(|id| {
-                                this.model.selected_row().is_some_and(|row| row.id == id)
-                            })
+                            && advance_from
+                                .as_deref()
+                                .is_some_and(|id| this.model.selection_id() == Some(id))
                             && this.model.selected + 1 < this.model.rows.len()
                         {
                             this.model.select_next();
                             this.reveal_result_row(this.model.selected);
-                            if this.preview_open {
+                            if this.preview.open {
                                 this.schedule_selected_preview(cx);
                             }
                         }
@@ -105,7 +105,96 @@ impl LauncherView {
         cx.notify();
     }
 
+    pub(in crate::launcher::view) fn select_file_filter(
+        &mut self,
+        filter: FileSearchFilter,
+        cx: &mut Context<Self>,
+    ) {
+        if self.file_search.filter != filter {
+            self.file_search.filter = filter;
+            self.apply_file_filter_change(cx);
+        }
+    }
+
+    fn apply_file_filter_change(&mut self, cx: &mut Context<Self>) {
+        self.model.hide_object_actions();
+        self.reveal_selected_file_filter();
+        self.reset_file_search_browsing(cx);
+        self.request_live_update(cx);
+        self.notice = None;
+        cx.notify();
+    }
+
     fn remember_file_page_advance(&mut self) {
-        self.file_search.advance_from = self.model.selected_row().map(|row| row.id.clone());
+        self.file_search.advance_from = self.model.selection_id().map(str::to_owned);
+    }
+
+    pub(in crate::launcher::view) fn handle_file_search_key(
+        &mut self,
+        input: &crate::launcher::view::input::KeyInput<'_>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let modified = input.modifiers.modified;
+        match input.key {
+            "down" if !modified => self.select_file_search(1, cx),
+            "up" if !modified => self.select_file_search(-1, cx),
+            "tab"
+                if is_scope_tab_shortcut(input.key, input.modifiers)
+                    && self.active_editor_focused(window, cx) =>
+            {
+                if input.modifiers.shift {
+                    self.file_search.previous_filter();
+                } else {
+                    self.file_search.next_filter();
+                }
+                self.apply_file_filter_change(cx);
+            }
+            "enter" | "return" => self.activate_selection(cx),
+            "escape" => {
+                if self.model.object_actions_active {
+                    self.model.hide_object_actions();
+                    self.reveal_result_row(self.model.selected);
+                    cx.notify();
+                } else if !self.model.query.is_empty() {
+                    self.reset_file_search_browsing(cx);
+                    self.input
+                        .update(cx, |input, cx| input.set_value("", window, cx));
+                    self.model.set_query(String::new());
+                    self.request_live_update(cx);
+                    cx.notify();
+                } else {
+                    self.go_back(window, cx);
+                }
+            }
+            "pageup" | "pagedown" => {
+                let count = self.model.rows.len();
+                if count > 0 {
+                    let height = self.scrolls.file_search_base().bounds().size.height;
+                    let step = (f32::from(height) / metrics::ROW_HEIGHT)
+                        .floor()
+                        .clamp(1., 100.) as usize;
+                    let selected = if self.file_search.browsing {
+                        self.model.selected
+                    } else {
+                        0
+                    };
+                    let target = if input.key == "pageup" {
+                        selected.saturating_sub(step)
+                    } else {
+                        selected.saturating_add(step).min(count - 1)
+                    };
+                    self.file_search.browsing = true;
+                    self.model.selected = target;
+                    self.notice = None;
+                    if self.preview.open {
+                        self.request_preview(cx);
+                    }
+                    self.reveal_result_row(target);
+                    cx.notify();
+                }
+            }
+            _ => {}
+        }
     }
 }

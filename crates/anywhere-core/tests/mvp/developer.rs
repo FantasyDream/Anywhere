@@ -95,7 +95,12 @@ async fn cargo_action_uses_the_graph_scope_history_and_independent_execution_lif
     assert!(detail.stderr.contains("Finished"));
     let usage = history.lock().unwrap().load("com.apple.finder").unwrap();
     assert_eq!(
-        usage[&("developer.cargo.check".into(), PROJECT_RUST.into())].execute_count,
+        anywhere_core::core::ranking::usage::lookup_usage(
+            &usage,
+            "developer.cargo.check",
+            PROJECT_RUST,
+        )
+        .execute_count,
         1
     );
     app.shutdown_execution_sessions().unwrap();

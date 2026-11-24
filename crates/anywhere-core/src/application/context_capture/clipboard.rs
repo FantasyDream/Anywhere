@@ -37,9 +37,7 @@ impl ClipboardCapture {
         } = self;
         let read = token
             .filter(|token| {
-                service
-                    .policy
-                    .lock()
+                crate::core::sync::lock_or_deny(&service.policy, "capture_policy")
                     .is_ok_and(|policy| policy.allows(ContextSource::Clipboard, *token))
             })
             .map(|_| {
@@ -106,7 +104,7 @@ impl ContextCaptureService {
         age_ms: Option<u64>,
     ) {
         let changed = {
-            let Ok(policy) = self.policy.lock() else {
+            let Ok(policy) = crate::core::sync::lock_or_deny(&self.policy, "capture_policy") else {
                 return;
             };
             if !policy.allows(ContextSource::Clipboard, token) {

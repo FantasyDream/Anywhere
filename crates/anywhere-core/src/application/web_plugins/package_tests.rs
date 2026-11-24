@@ -350,3 +350,266 @@ fn corrupt_enabled_package_can_be_disabled_or_rolled_back() {
     store.set_enabled(&app, "dev.example.tool", true).unwrap();
     assert_eq!(store.resource(old.digest(), "index.html").unwrap(), b"old");
 }
+
+#[test]
+fn builtin_json_workspace_stages_automatically_preserves_disable_and_rejects_mutation() {
+    let root = tempfile::tempdir().unwrap();
+    let app = app();
+    let location = root.path().join("store");
+    let mut store = WebPackageStore::open_with_builtins(
+        location.clone(),
+        WebPlatform::Macos,
+        BUILTIN_WEB_PACKAGES,
+        &app,
+    )
+    .unwrap();
+    let statuses = store.statuses();
+    let json = statuses
+        .iter()
+        .find(|status| status.id == "dev.anywhere.json-workspace")
+        .expect("built-in json-workspace must be registered");
+    assert!(json.builtin);
+    assert!(json.enabled);
+    assert!(json.available);
+    assert!(!json.rollback);
+    assert!(app
+        .resolver
+        .base_registry()
+        .get("web:dev.anywhere.json-workspace:open")
+        .is_some());
+
+    store
+        .set_enabled(&app, "dev.anywhere.json-workspace", false)
+        .unwrap();
+    assert!(app
+        .resolver
+        .base_registry()
+        .get("web:dev.anywhere.json-workspace:open")
+        .is_none());
+    drop(store);
+
+    let mut store = WebPackageStore::open_with_builtins(
+        location.clone(),
+        WebPlatform::Macos,
+        BUILTIN_WEB_PACKAGES,
+        &app,
+    )
+    .unwrap();
+    let reloaded = store
+        .statuses()
+        .into_iter()
+        .find(|status| status.id == "dev.anywhere.json-workspace")
+        .unwrap();
+    assert!(reloaded.builtin);
+    assert!(!reloaded.enabled);
+    assert!(!reloaded.rollback);
+
+    let file = root.path().join("override.awplugin");
+    fs::write(&file, builtin::JSON_WORKSPACE_PACKAGE).unwrap();
+    assert!(store.inspect(&file).is_err());
+    assert!(store
+        .uninstall(&app, "dev.anywhere.json-workspace")
+        .is_err());
+    assert!(store.rollback(&app, "dev.anywhere.json-workspace").is_err());
+}
+
+#[test]
+fn builtin_migration_keeps_a_full_third_party_ledger_readable() {
+    let root = tempfile::tempdir().unwrap();
+    let location = root.path().join("store");
+    fs::create_dir(&location).unwrap();
+    let app = app();
+    let mut receipts = serde_json::Map::new();
+    for index in 0..64 {
+        let id = format!("dev.example.package-{index}");
+        receipts.insert(
+            id.clone(),
+            serde_json::json!({
+                "id": id, "digest": format!("{index:064x}"), "source": id,
+                "enabled": false, "previous": null
+            }),
+        );
+    }
+    let ledger = location.join("receipts.json");
+    fs::write(&ledger, serde_json::to_vec(&receipts).unwrap()).unwrap();
+    for _ in 0..2 {
+        let store = WebPackageStore::open_with_builtins(
+            location.clone(),
+            WebPlatform::Macos,
+            BUILTIN_WEB_PACKAGES,
+            &app,
+        )
+        .unwrap();
+        let statuses = store.statuses();
+        assert_eq!(statuses.iter().filter(|status| !status.builtin).count(), 64);
+        assert!(statuses
+            .iter()
+            .any(|status| status.builtin && status.available));
+    }
+    let extra = root.path().join("extra.awplugin");
+    archive(
+        &package(serde_json::json!([]), serde_json::json!([]), "extra"),
+        &extra,
+    );
+    let mut store = WebPackageStore::open_with_builtins(
+        location.clone(),
+        WebPlatform::Macos,
+        BUILTIN_WEB_PACKAGES,
+        &app,
+    )
+    .unwrap();
+    assert_eq!(
+        store.inspect(&extra).err().unwrap().to_string(),
+        "too many Web packages"
+    );
+    store.uninstall(&app, "dev.example.package-0").unwrap();
+    let review = store.inspect(&extra).unwrap();
+    store.approve(&app, &review.token).unwrap();
+    drop(store);
+    let reopened = WebPackageStore::open_with_builtins(
+        location,
+        WebPlatform::Macos,
+        BUILTIN_WEB_PACKAGES,
+        &app,
+    )
+    .unwrap();
+    assert!(reopened
+        .statuses()
+        .iter()
+        .any(|status| status.id == review.id && status.available));
+}
+
+#[test]
+fn builtin_migration_preserves_prior_manual_source_and_enabled_state() {
+    let root = tempfile::tempdir().unwrap();
+    let app = app();
+    let location = root.path().join("store");
+    let file = root.path().join("manual-json.awplugin");
+    let manual = package_named(
+        "dev.anywhere.json-workspace",
+        serde_json::json!([]),
+        serde_json::json!([]),
+        "manual",
+    );
+    archive(&manual, &file);
+
+    let mut store = WebPackageStore::open(location.clone(), WebPlatform::Macos, &app).unwrap();
+    let review = store.inspect(&file).unwrap();
+    store.approve(&app, &review.token).unwrap();
+    store
+        .set_enabled(&app, "dev.anywhere.json-workspace", false)
+        .unwrap();
+    drop(store);
+
+    let before_json: serde_json::Value =
+        serde_json::from_slice(&fs::read(location.join("receipts.json")).unwrap()).unwrap();
+    let original_source = before_json["dev.anywhere.json-workspace"]["source"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+
+    let store = WebPackageStore::open_with_builtins(
+        location.clone(),
+        WebPlatform::Macos,
+        BUILTIN_WEB_PACKAGES,
+        &app,
+    )
+    .unwrap();
+    let status = store
+        .statuses()
+        .into_iter()
+        .find(|status| status.id == "dev.anywhere.json-workspace")
+        .unwrap();
+    assert!(status.builtin);
+    assert!(status.available);
+    assert!(!status.enabled);
+    assert!(!status.rollback);
+    assert_ne!(status.digest, manual.digest());
+
+    let after_json: serde_json::Value =
+        serde_json::from_slice(&fs::read(location.join("receipts.json")).unwrap()).unwrap();
+    assert_eq!(
+        after_json["dev.anywhere.json-workspace"]["source"]
+            .as_str()
+            .unwrap(),
+        original_source
+    );
+    assert!(after_json["dev.anywhere.json-workspace"]["previous"].is_null());
+}
+
+#[tokio::test]
+async fn standalone_tool_window_allows_builtin_and_third_party_web_plugins() {
+    let root = tempfile::tempdir().unwrap();
+    let app = app();
+    let location = root.path().join("store");
+    let mut store = WebPackageStore::open_with_builtins(
+        location,
+        WebPlatform::Macos,
+        BUILTIN_WEB_PACKAGES,
+        &app,
+    )
+    .unwrap();
+    let third_party = package_named(
+        "dev.example.third-party-pad",
+        serde_json::json!([]),
+        serde_json::json!([]),
+        "<p>third-party</p>",
+    );
+    let file = root.path().join("third-party.awplugin");
+    archive(&third_party, &file);
+    let review = store.inspect(&file).unwrap();
+    store.approve(&app, &review.token).unwrap();
+
+    let session_id = app.begin_activation().unwrap();
+    let mut ctx = crate::core::context::ResolvedContext::new(
+        crate::features::tools::ENTRY_CONTEXT,
+        crate::core::context::ContextValue::Text(String::new().into()),
+        anywhere_protocol::ContextSource::SelectedText,
+        "test",
+    );
+    ctx.session_id = session_id;
+
+    let registry = app.resolver.base_registry();
+    let builtin_action = registry
+        .get("web:dev.anywhere.json-workspace:open")
+        .unwrap();
+    let crate::core::action::descriptor::ActionExecutor::WebCommand(builtin_cmd) =
+        &builtin_action.executor
+    else {
+        panic!("expected built-in Web command");
+    };
+    let builtin_invocation = start(&mut app.web_plugins.lock().unwrap(), builtin_cmd, &ctx);
+    let builtin_binding = app
+        .bind_web_document(&builtin_invocation, WebPlatform::Macos)
+        .unwrap();
+    let (builtin_tool, builtin_state, builtin_child_invocation) =
+        app.tool_window(&builtin_binding).unwrap();
+    let builtin_child_binding = builtin_tool
+        .bind_web_document(&builtin_child_invocation, WebPlatform::Macos)
+        .unwrap();
+    assert!(builtin_tool.is_session_active(builtin_state.session_id));
+    assert!(builtin_tool
+        .web_invocation(&builtin_child_binding, source(&builtin_child_binding))
+        .is_ok());
+
+    let third_action = registry
+        .get("web:dev.example.third-party-pad:open")
+        .unwrap();
+    let crate::core::action::descriptor::ActionExecutor::WebCommand(third_cmd) =
+        &third_action.executor
+    else {
+        panic!("expected third-party Web command");
+    };
+    let third_invocation = start(&mut app.web_plugins.lock().unwrap(), third_cmd, &ctx);
+    let third_binding = app
+        .bind_web_document(&third_invocation, WebPlatform::Macos)
+        .unwrap();
+    let (tool, state, child_invocation) = app.tool_window(&third_binding).unwrap();
+    let child_binding = tool
+        .bind_web_document(&child_invocation, WebPlatform::Macos)
+        .unwrap();
+    assert!(tool.is_session_active(state.session_id));
+    assert!(tool
+        .web_invocation(&child_binding, source(&child_binding))
+        .is_ok());
+}

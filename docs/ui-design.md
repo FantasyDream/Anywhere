@@ -1,7 +1,7 @@
 # GPUI UI 设计与原生材质
 
 当前 GPUI 产品视觉契约。页面行为见 [Launcher 交互](launcher-interaction.md)，
-源码入口是 `apps/gpui/src/`。最后整理：2026-11-18。
+源码入口是 `apps/gpui/src/`。最后整理：2026-11-23。
 
 原版 Liquid Glass、文字度量、插件透明画布及逐页布局的目标与实施状态见
 [界面对齐方案](archive/gpui-ui-alignment-plan.md#2-界面目标与基线)。当前代码已经接入
@@ -25,7 +25,11 @@
 
 单一 Current App 使用搜索框上方的应用标签说明范围，不显示只有一个选项的
 Scope 标签栏。首页保留 Rust 顺序并限制可见条数；菜单浏览入口必须在首屏可达。
-返回只保留页头入口和 Esc，不增加固定页脚。
+文件搜索、剪贴板历史、应用历史与 Web 工具共用页头的返回、内容区、Esc 和随主题变化的操作浮层样式。
+应用历史和剪贴板历史的页头操作在有无结果时均可刷新，行内操作只作用于选中项。
+JSON 工作区用带文字的“JSON 操作”按钮区分文档操作与宿主页头的工具选项。
+Web 工具页头显示工具名称。应用历史的对象菜单保留对象标题，长列表只在操作行区域
+滚动，方向键会把选中行滚入视野。菜单项左对齐，菜单占用的高度随可用窗口调整。
 
 ## Tokens 与组件
 
@@ -36,11 +40,20 @@ Scope 标签栏。首页保留 Rust 顺序并限制可见条数；菜单浏览�
 
 - 页面使用 GPUI 普通组件和 `ui/theme.rs`，不另建平行 UI framework。
 - Launcher 输入区、Scope 行和结果行共享相同焦点边框、行高和文字层级。
-- 选中态使用中性覆盖和边界；图标不套单独底板。
+- 结果行选中态以中性透明高光覆盖为主（Dark Glass 使用半透明白色提亮，Light Glass 保持高对比度柔和灰蓝），只搭配分隔线强度的细边界，并在左侧以绝对定位 3×20 px 强调色指示条标示焦点，保持标题与搜索框文字左对齐；Increase Contrast 时恢复焦点轮廓色。未选中行 hover 使用更弱的 `hover`，不能与选中态相同；符号/工具图标统一包裹在 `26×26 px`（圆角 7 px）的半透明 Squircle 图标底板中，真实应用图标保留原始形状。
+- Launcher、文件搜索、剪贴板历史、Shelf 与应用历史的列表标题支持查询关键词高亮（`StyledText::with_highlights`，按 UTF-8 边界安全切分）；文件路径副标题按中段省略（保留首段与末两级路径），悬停 tooltip 保留完整绝对路径。
+- 剪贴板历史与应用历史底部显示 32 px 上下文操作页脚栏（`footer_bar`），集中呈现主动作、次要动作及快捷键键帽（如 `↵`、`␣`、`⌘K`、`⌘R`）；主 Launcher 搜索页保持紧凑高度，不显示额外页脚栏。
+- 剪贴板历史提供类型筛选栏（全部 / 文本 / 图片 / 文件）、选中项右侧实时预览检查器（含十六进制 / RGB 颜色色块预览、字节数、相对时间与快捷操作）以及非阻塞底部居中 HUD Toast（1.6 秒自动消失，不引发窗口尺寸重排）。
+- 文件搜索扫描中与 Running Tasks 活跃任务状态（Running / Stopping）使用动态 `Spinner` 替代静态图标；Running Tasks 选中行保留语义状态色并在侧栏与详情头展示已运行/总耗时，Output / Diagnostics 标签具备 hover 与 active 按压态。文件搜索在滚动接近底部时自动续页，不再常驻冗余的静态“加载更多”按钮，仅在翻页在途时展示内联加载指示。
+- Settings 所有模态对话框（剪贴板确认、未保存关闭提示、Action 快捷键选择器）使用随明暗主题自适应的 100% 不透明 `actionMenuSurface` 与主题前景色，避免浅色模式下黑字叠黑底；侧栏七个分类使用差异化语义图标色；外观设置提供 System / Light / Dark 三张可视化预览卡片并点击即刻生效；搜索目录、排除目录名和隐藏应用在保留文本框批量编辑的同时展示可逐项移除的结构化标签。
+- Launcher 候选标题与搜索输入文字左对齐，图标框与搜索图标左对齐；结果区上下留白对称。
+  副标题为空、与标题重复或与来源标签重复时不显示，Core 也不为空 Context 详情拼接
+  悬空的 `·`。
 - 普通搜索不显示结果条数。有对象动作时行内显示 `… ⌘K`；无对象动作时保留
   Enter 提示。
-- 文件页的数量、进度和错误属于查询，位于类型过滤下方；打开和更多操作属于
-  选中行。
+- 文件页在类型过滤下方突出结果数。扫描中、完成、部分结果分别配搜索、对勾或警示图标，扫描期间已有的问题数同步显示，重试与状态文字并排。指定类型搜索完成且无匹配、无错误时，可点“搜索所有文件类型”保留关键词并返回输入框。再次点击当前类型保留浏览位置与预览。
+- Launcher、应用历史、剪贴板历史与 Shelf 使用同一套行内主操作按钮，文字和细边界标出打开或复制。Shelf 的「复制」支持直接点击，应用历史中可悬停查看完整标题和路径。
+- 共享结果行向辅助技术提供标题和副标题。不可用候选保留原因和禁用指针，点击后维持当前选择、菜单层级及提示。
 - Settings 使用紧凑侧栏和统一行背景；标题、状态、描述和控件保持稳定对齐。
 - Clipboard capture 属于 Clipboard 页，并以 “When opening Launcher” 分区说明
   15 秒自动填入；隐藏应用属于 Search 页。Context 只列 Finder selection、Selected
@@ -125,14 +138,16 @@ Scope 标签栏。首页保留 Rust 顺序并限制可见条数；菜单浏览�
   窗口层级和默认 Space 行为，失焦后保持打开但可以被其他应用覆盖。Clipboard
   Shelf 只保持置顶，失焦不隐藏，必须使用明确的关闭入口。Quick Look 显示期间
   不把系统预览面板误判为外部失焦。
-- `prefer_character_input` 为真时，根视图直接让字符、Enter、Esc、方向键和
-  Space 先交给输入法。
+- 输入法组字优先；内容页编辑器聚焦且无修饰键时，Launcher 在字符输入前接管
+  `↑` / `↓`、`Enter` / `Return`，而 `Shift+Enter` 和其他修饰组合保留编辑语义。
+  其余 `prefer_character_input` 字符、Esc、方向键和 Space 先交给输入法。
 - 查询中的空间是文字；只有列表已选中且不在输入法组合态时，Space 才切换
   系统预览。
 - Quick Look 关闭后，焦点回到发起预览的当前页面编辑器。
 - 设置分类切换、未保存草稿和工具返回都恢复对应页面的原编辑器，而非首页。
-- WebView 获得焦点后，页面内部键盘由 WebKit 管理；返回和宿主命令使用显式
-  原生路径，不从网页 keydown 猜测。
+- WebView 获得焦点后，WebKit 先将按键送到当前控件。网页浮层消费 Esc 后留在文档，
+  未消费的 Esc 通过当前文档句柄发给宿主，沿相同的返回路径处理。输入法组词继续由
+  WebKit 处理。
 
 ## 材质与可读性
 
@@ -174,24 +189,27 @@ GPU 主题根背景与所有产品页背景保持透明；不再按页面绘制 
 
 `Regular` Liquid Glass 可以随宿主面积、背后内容和系统设置改变浓度，这是本次
 保留的系统行为，不再切换为 Clear 或通过蒙版抵消。`tintColor` 为 `nil`，原生
-appearance 跟随系统；GPUI 不额外叠加整窗描边、渐变、阴影或第二层模糊。
+appearance 由已保存的外观设置决定；GPUI 不额外叠加整窗描边、渐变、阴影或第二层模糊。
 原生 18 px 圆角与几何 mask 仅负责裁切，窗口 near-clear 背景仅用于保留系统阴影。
 
-局部玻璃表面通过克制的双主题窗口托底（Dark `window` / Light `glassLightWindow`，开启 Increase Contrast 时自动增强不透明度）将极端纯白或纯黑底层的玻璃合成亮度约束在中灰对比度死区之外，同时保留原生玻璃折射与边缘高光。`ui/theme.rs` 读取
+局部玻璃表面通过克制的双主题窗口托底（`palettes.glassDark.window` / `palettes.glassLight.window`，开启 Increase Contrast 时切换到 `contrast.*` 生成调色板）将极端纯白或纯黑底层的玻璃合成亮度约束在中灰对比度死区之外，同时保留原生玻璃折射与边缘高光。`ui/theme.rs` 直接选择生成的 `Palette` / `FixedColors`。Web 文档同步调色板和 `contrast.fixed` 中的 `--aw-*` 变量，操作菜单随当前明暗外观，采用不透明的菜单表面和独立选中背景。浅色在窗口玻璃之上
+使用更高覆盖率的浅灰托底，JSON 编辑区单独使用高覆盖率的表面，以减轻桌面内容透出。
 原生材质当前的 Light / Dark 外观：普通浅色 Glass / HUD 使用深炭墨色系
 Primary / Secondary / Muted 与对应状态色，深色 Glass / HUD 使用柔和亮色角色及微暗向选中态（避免白雾高亮在白底上降低对比度）。
-Reduce Transparency 的深色 fallback 使用深色表面字色；Increase Contrast
-仍按实际 Light / Dark 材质选择字色。`menuSurface`、确认框和主按钮等固定深色局部表面使用独立的
+Reduce Transparency 使用和当前 Light / Dark 外观对应的实色背景及字色；
+Increase Contrast 沿用该外观的高对比度角色。`menuSurface`、确认框和主按钮等固定深色局部表面使用独立的
 `onDark*` 字色与前景观；Field、Card、Hover、Selection、Keycap 等半透明局部
 表面随玻璃明暗选择对应表面并搭配同向文字。Accent、Warning、Danger、Success
 及图标也有表面变体，不能只切换三个灰阶角色。搜索头、候选标题和模式选项沿用
 `.SystemUIFont`，主要标题使用 Semibold，说明文字保持 Normal，与 macOS
 通知卡的层级一致。
 
-启动顺序是先读取原生材质，再安装 GPUI Kit 语义主题；主窗口、Settings、Tasks、
-Shelf 和新建 Web 文档通过 `observe_window_appearance` 及辅助功能通知刷新同一
-决策。WebView 的 `--aw-*` 语义变量绑定当前 Rust 文档句柄，在系统外观变化时
-更新而不重载文档，因此不会清空输入、IME、选择或滚动位置。系统明暗不等于字下
+设置 → 通用 → 外观提供跟随系统、浅色和深色。已有设置默认跟随系统。保存后为
+AppKit 设置应用级外观并刷新主窗口、Settings、Tasks、Shelf 和当前 Web 文档，
+设置草稿按现有保存与放弃流程处理。启动时在读取已保存偏好后应用该选择。跟随
+系统时通过窗口外观通知同步，辅助功能通知继续刷新原生材质与语义配色。WebView
+通过当前 Rust 文档句柄更新 `--aw-*` 语义变量和原生控件配色，保留文档输入、
+选择与滚动位置。系统明暗不等于字下
 背景的实际亮度；当前方案改善可读性，但单一外观信号不能保证所有透明混合背景
 达标，仍失败的局部区域应调整对应语义角色或局部表面，不恢复整窗 scrim。
 
@@ -227,17 +245,16 @@ Shelf 和新建 Web 文档通过 `observe_window_appearance` 及辅助功能通�
 `--aw-web-canvas` 切到 transparent，使 html、body 和常见应用根节点露出同一个
 原生材质；Reduce Transparency 时露出的是宿主不透明 fallback。宿主同时把
 Primary / Secondary / Muted、状态色、Field、Card、交互表面与焦点边界等
-`--aw-*` 变量更新为当前玻璃表面配色；固定深色 menu / dialog / tooltip 保留
-`--aw-on-dark-*` 字色。更新只作用于当前 Rust 文档句柄，不重载页面。CSS 控件层
+`--aw-*` 变量从首帧起使用当前玻璃表面配色，并随主题更新。dialog / tooltip 保留
+固定深色的 `--aw-on-dark-*` 字色。更新只作用于当前 Rust 文档句柄，不重载页面。CSS 控件层
 不创建第二个模糊层。Web 与 GPUI 共享 fonts、colors、spacing 和 control metrics，
 允许系统 WebKit 与 GPUI 文字栅格存在细微差异。
 
 macOS `lb-wry 0.53.3` 依赖已显式启用 `transparent` feature，因此
 `.with_transparent(true)` 会关闭 WKWebView 自身背景绘制，再由
 `--aw-web-canvas` 与原生材质交接。普通 Web 控件的 `color-scheme` 继承根节点；
-固定深色 menu / dialog / tooltip 才局部指定 `dark`。插件自建固定深色面板必须
-同时把 `--aw-text`、Primary / Secondary / Muted 和交互边界映射到
-`--aw-on-dark-*`，不能只设置父元素 `color`。自动依赖与 CSS 检查不能替代
+带按钮和选择器的操作菜单可使用 `.aw-action-popover`，继承宿主的浅色或深色
+菜单底色。固定深色的 dialog / tooltip 局部使用 `dark` 和 `--aw-on-dark-*`。自动依赖与 CSS 检查不能替代
 桌面、主题和 Reduce Transparency 的真实 WebView 验收；诊断与回归范围见
 [Web 插件排查](archive/reviews/gpui-web-plugin-background-review-2026-11-16.md)。
 

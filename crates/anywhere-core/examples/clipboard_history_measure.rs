@@ -7,8 +7,39 @@ use anywhere_core::{
     },
     persistence::clipboard::SqliteHistoryRepository,
 };
+use anywhere_platform::{
+    clipboard::{ClipboardFormat, ClipboardPayload},
+    ClipboardHost,
+};
 use serde_json::json;
+use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Instant;
+
+struct SyntheticClipboardHost {
+    generation: AtomicI64,
+}
+
+impl ClipboardHost for SyntheticClipboardHost {
+    fn copy_text(&self, _text: &str) -> Result<()> {
+        Ok(())
+    }
+    fn clipboard_generation(&self) -> Result<i64> {
+        Ok(self.generation.load(Ordering::Relaxed))
+    }
+    fn request_clipboard_history_access(&self) -> Result<()> {
+        Ok(())
+    }
+    fn clipboard_history_payload(&self, generation: i64) -> Result<Option<ClipboardPayload>> {
+        let mut bytes = vec![0x89u8; 2 * 1024 * 1024];
+        bytes[..8].copy_from_slice(&generation.to_le_bytes());
+        Ok(Some(ClipboardPayload {
+            formats: vec![ClipboardFormat {
+                name: "public.png".to_owned(),
+                data: bytes,
+            }],
+        }))
+    }
+}
 
 fn main() -> Result<()> {
     let directory = tempfile::tempdir()?;
@@ -80,6 +111,48 @@ fn main() -> Result<()> {
     drop(service);
     let reopened = SqliteHistoryRepository::open(&database)?;
     ensure!(reopened.search("")?.len() == MAX_ENTRIES);
+
+    // Continuous large-copy contention probe: 20 x 2 MiB image copies concurrently with UI status/snapshot.
+    let service = HistoryService::new(Ok(Box::new(reopened)));
+    let host = SyntheticClipboardHost {
+        generation: AtomicI64::new(1),
+    };
+    service.request_recording(true, &host)?;
+    let mut status_ms = Vec::new();
+    let mut snapshot_ms = Vec::new();
+    let mut poll_ms = std::thread::scope(|scope| -> Result<Vec<f64>> {
+        let writer = scope.spawn(|| -> Result<Vec<f64>> {
+            let mut times = Vec::with_capacity(20);
+            for step in 2..=21 {
+                host.generation.store(step, Ordering::Relaxed);
+                let t0 = Instant::now();
+                service.poll(&host, copied_at + 10_000 + step)?;
+                times.push(t0.elapsed().as_secs_f64() * 1000.0);
+            }
+            Ok(times)
+        });
+        while !writer.is_finished() {
+            let t0 = Instant::now();
+            let _ = service.status()?;
+            status_ms.push(t0.elapsed().as_secs_f64() * 1000.0);
+            let t1 = Instant::now();
+            let _ = service.snapshot("", None)?;
+            snapshot_ms.push(t1.elapsed().as_secs_f64() * 1000.0);
+        }
+        writer
+            .join()
+            .map_err(|_| anyhow::anyhow!("clipboard benchmark writer panicked"))?
+    })?;
+    poll_ms.sort_by(f64::total_cmp);
+    status_ms.sort_by(f64::total_cmp);
+    snapshot_ms.sort_by(f64::total_cmp);
+    let pct = |samples: &[f64], percentile: usize| {
+        samples
+            .get((samples.len() * percentile / 100).min(samples.len().saturating_sub(1)))
+            .copied()
+    };
+    let over_5ms = |samples: &[f64]| samples.iter().filter(|&&ms| ms > 5.0).count();
+
     println!(
         "{}",
         serde_json::to_string_pretty(&json!({
@@ -88,6 +161,23 @@ fn main() -> Result<()> {
             "summary_utf8_bytes": summary_bytes, "insert_ms": insert_ms,
             "prepare_preview_mean_us": prepare_preview_mean_us, "queries": results,
             "service_policy_queries": policy_queries,
+            "continuous_2mib_image_contention": {
+                "poll_samples": poll_ms.len(),
+                "poll_p50_ms": pct(&poll_ms, 50),
+                "poll_p95_ms": pct(&poll_ms, 95),
+                "poll_max_ms": poll_ms.last().copied(),
+                "poll_over_5ms": over_5ms(&poll_ms),
+                "status_samples": status_ms.len(),
+                "status_p50_ms": pct(&status_ms, 50),
+                "status_p95_ms": pct(&status_ms, 95),
+                "status_max_ms": status_ms.last().copied(),
+                "status_over_5ms": over_5ms(&status_ms),
+                "snapshot_samples": snapshot_ms.len(),
+                "snapshot_p50_ms": pct(&snapshot_ms, 50),
+                "snapshot_p95_ms": pct(&snapshot_ms, 95),
+                "snapshot_max_ms": snapshot_ms.last().copied(),
+                "snapshot_over_5ms": over_5ms(&snapshot_ms),
+            },
             "scope": "Rust repository queries and service previews; excludes GPUI and OS clipboard",
         }))?
     );

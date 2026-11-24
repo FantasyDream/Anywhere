@@ -14,6 +14,7 @@ import {QueryEngine, QueryError, MAX_QUERY_LENGTH} from './query.mjs';
 import {stripRoot} from './expression.mjs';
 import {workspaceInput} from './workspace-input.mjs';
 import {jsonInputText} from './input.mjs';
+import {JsonEditor} from './editor.jsx';
 import './style.css';
 
 const encoder = new TextEncoder();
@@ -305,6 +306,7 @@ function App() {
   }, []);
 
   const error = fresh ? processed.error : null;
+  const inputInvalid = !!error && !processed.queryError;
   const isJavaScript = mode === 'javascript';
   const summary =
     error ||
@@ -482,18 +484,20 @@ function App() {
             >
               <button
                 class="json-more"
-                aria-label={t('actions')}
-                title={t('actions')}
                 aria-expanded={actionsOpen}
                 aria-controls={actionsOpen ? 'json-actions-panel' : undefined}
                 onClick={() => setActionsOpen(value => !value)}
               >
-                <span aria-hidden="true">⋯</span>
+                {t('actions')}
+                <span
+                  class="aw-icon aw-icon--chevron-down"
+                  aria-hidden="true"
+                />
               </button>
               {actionsOpen && (
                 <div
                   id="json-actions-panel"
-                  class="json-menu-panel"
+                  class="aw-command-list json-menu-panel"
                   role="group"
                   aria-label={t('actions')}
                 >
@@ -556,11 +560,12 @@ function App() {
             </div>
           </header>
           <div class="aw-pane-body">
-            <textarea
+            <JsonEditor
               id="json-input"
-              class="aw-editor"
-              ref={inputRef}
-              spellcheck={false}
+              editorRef={inputRef}
+              composing={composing}
+              aria-invalid={inputInvalid ? 'true' : 'false'}
+              aria-describedby={inputInvalid ? 'json-error' : undefined}
               autocomplete="off"
               autocapitalize="off"
               placeholder={t('pasteHint')}
@@ -597,15 +602,15 @@ function App() {
           <header class="aw-pane-header">
             <div class="json-pane-heading">
               <label for="json-output">{t('result')}</label>
-              <span>
-                {count == null
-                  ? '—'
-                  : isJavaScript
+              {output && (
+                <span>
+                  {isJavaScript
                     ? t('resultCount', {count: 1})
                     : t('match', {count})}
-                {' · '}
-                {t('bytes', {count: outputBytes})}
-              </span>
+                  {' · '}
+                  {t('bytes', {count: outputBytes})}
+                </span>
+              )}
             </div>
             <button
               class="aw-button--action"
@@ -622,11 +627,9 @@ function App() {
             </button>
           </header>
           <div class="aw-pane-body">
-            <textarea
+            <JsonEditor
               id="json-output"
-              class="aw-editor"
               readonly
-              spellcheck={false}
               placeholder={t('outputHint')}
               value={output}
             />

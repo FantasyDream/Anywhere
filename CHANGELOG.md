@@ -2,6 +2,22 @@
 
 记录用户可感知的变化。开发里程碑不是正式发行日期，逐构建测试与限制见[文档索引](docs/README.md)。
 
+## V0.14.1 开发预览 — 2026-11-24
+
+- Launcher、Settings、Clipboard 与 Running Tasks 使用统一的页头、列表行和操作区；
+  补齐可见行滚动、键盘焦点恢复、重复按键过滤与设置保存优先级。
+- macOS 原生剪贴板上下文操作改为进程内串行，避免并发读取同一 Pasteboard 时
+  触发 AppKit 的枚举变更异常。
+- 扩展 Current App / Context 自动填入、应用历史对象动作和文件搜索分页；修复迟到
+  Context、迟到查询结果、对象动作与窗口关闭之间的状态竞争。
+- 新增独立工具窗口路由；内置 JSON Workspace 0.7.3 自动安装并可单独打开，
+  Web 包更新、回滚、WebView 替换和 SDK 文本传输继续走统一权限代理。
+- 完成跟随系统 / 浅色 / 深色主题、Liquid Glass 材质边界、共享设计 tokens、
+  本地化文案和生成物同步。
+- 工程门禁为 GPUI 316 项通过；完整 `scripts/check.sh`、Web SDK 55 项、
+  JSON Workspace 33 项、严格 Clippy、文档与架构检查通过。物理 IME、辅助技术、
+  Quick Look 与完整 WebView 矩阵仍按验收文档保留为 Pending。
+
 ## V0.14.0 开发预览 — 2026-11-18
 
 - macOS 产品界面迁移至 GPUI Kit，Rust 统一管理 Context、动作、设置和 Web 文档；

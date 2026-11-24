@@ -2,7 +2,7 @@ use super::*;
 
 fn open_presented_view(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<LauncherView>) {
     let (window, view) = open_view(cx);
-    cx.update(|cx| view.update(cx, |view, _| view.presented = true));
+    cx.update(|cx| view.update(cx, |view, _| view.presence.presented = true));
     (window, view)
 }
 
@@ -32,7 +32,7 @@ fn editing_keeps_window_height_until_the_newest_query_returns(cx: &mut TestAppCo
             view.live_state.awaiting_query_layout = view.model.query_differs_from_snapshot();
             assert_ne!(view.desired_window_size(), original_size);
             view.resize_current_window(cx);
-            assert!(!view.resize_pending);
+            assert!(!view.presence.resize_pending);
         });
     })
     .unwrap();
@@ -61,7 +61,7 @@ fn object_action_reply_cannot_roll_back_a_newer_snapshot(cx: &mut TestAppContext
     let (sender, receiver) = tokio::sync::mpsc::channel(1);
     cx.update(|cx| {
         view.update(cx, |view, cx| {
-            view.model.rows = vec![file_row("file", "test.txt")];
+            view.model.rows = vec![file_row("file", "test.txt")].into();
             view.model.revision = 4;
             view.model.selected = 0;
             view.model.show_object_actions();
@@ -103,7 +103,7 @@ fn launcher_errors_cannot_finish_an_inflight_settings_save(cx: &mut TestAppConte
     cx.update(|cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::Settings;
-            view.settings.saving = true;
+            view.settings_editor.model.saving = true;
             view.poll(receiver, view.live_state.generation, cx);
         });
     });
@@ -112,8 +112,8 @@ fn launcher_errors_cannot_finish_an_inflight_settings_save(cx: &mut TestAppConte
         .unwrap();
     cx.run_until_parked();
     cx.update(|cx| {
-        assert!(view.read(cx).settings.saving);
-        assert!(view.read(cx).settings.error.is_none());
+        assert!(view.read(cx).settings_editor.model.saving);
+        assert!(view.read(cx).settings_editor.model.error.is_none());
     });
 }
 
@@ -124,7 +124,7 @@ fn a_snapshot_follow_error_cannot_finish_an_inflight_settings_save(cx: &mut Test
     cx.update(|cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::Settings;
-            view.settings.saving = true;
+            view.settings_editor.model.saving = true;
             view.poll_follow(receiver, view.live_state.generation, None, cx);
         });
     });
@@ -133,8 +133,8 @@ fn a_snapshot_follow_error_cannot_finish_an_inflight_settings_save(cx: &mut Test
         .unwrap();
     cx.run_until_parked();
     cx.update(|cx| {
-        assert!(view.read(cx).settings.saving);
-        assert!(view.read(cx).settings.error.is_none());
+        assert!(view.read(cx).settings_editor.model.saving);
+        assert!(view.read(cx).settings_editor.model.error.is_none());
     });
 }
 
@@ -145,18 +145,18 @@ fn a_closed_settings_channel_keeps_the_close_prompt_open_for_retry(cx: &mut Test
     cx.update(|cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::Settings;
-            view.settings.saving = true;
-            view.settings_close_pending = true;
-            view.settings_exit_intent = Some(SettingsExitIntent::Close);
-            view.poll_settings_save(receiver, view.settings_save_generation, cx);
+            view.settings_editor.model.saving = true;
+            view.settings_editor.close_pending = true;
+            view.settings_editor.exit_intent = Some(SettingsExitIntent::Close);
+            view.poll_settings_save(receiver, view.settings_editor.save_generation, cx);
         });
     });
     drop(sender);
     cx.run_until_parked();
     cx.update(|cx| {
-        assert!(!view.read(cx).settings.saving);
-        assert!(view.read(cx).settings.error.is_some());
-        assert!(view.read(cx).settings_close_pending);
+        assert!(!view.read(cx).settings_editor.model.saving);
+        assert!(view.read(cx).settings_editor.model.error.is_some());
+        assert!(view.read(cx).settings_editor.close_pending);
         assert_eq!(view.read(cx).screen, Screen::Settings);
     });
 }
@@ -167,8 +167,8 @@ fn cancelling_a_queued_settings_exit_keeps_settings_open(cx: &mut TestAppContext
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::Settings;
-            view.settings_close_pending = true;
-            view.settings_exit_intent = Some(SettingsExitIntent::Close);
+            view.settings_editor.close_pending = true;
+            view.settings_editor.exit_intent = Some(SettingsExitIntent::Close);
             view.save_settings_and_close(cx);
             view.cancel_settings_close_prompt(window, cx);
         });
@@ -184,10 +184,10 @@ fn edits_after_a_successful_save_prevent_a_queued_settings_exit(cx: &mut TestApp
     cx.update(|cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::Settings;
-            view.settings_close_pending = true;
-            view.settings_exit_intent = Some(SettingsExitIntent::Close);
+            view.settings_editor.close_pending = true;
+            view.settings_editor.exit_intent = Some(SettingsExitIntent::Close);
             view.save_settings_and_close(cx);
-            view.settings_draft.launch_at_login = !view.preferences.launch_at_login;
+            view.settings_editor.draft.launch_at_login = !view.preferences.launch_at_login;
         });
     });
     cx.run_until_parked();
@@ -200,6 +200,7 @@ fn web_document(handle: &str) -> WebDocument {
         origin: "anywhere-plugin://example".into(),
         entry: "index.html".into(),
         title: "Example".into(),
+        builtin: false,
     }
 }
 
@@ -224,12 +225,12 @@ fn opening_settings_closes_preview_and_web_surfaces(cx: &mut TestAppContext) {
         cx.update_window(window, |_, window, cx| {
             view.update(cx, |view, cx| {
                 view.screen = screen;
-                view.preview_open = screen == Screen::Launcher;
+                view.preview.open = screen == Screen::Launcher;
                 view.web_surface.invocation_id = Some("invocation".into());
                 view.web_surface.document = Some(web_document("document"));
                 view.open_settings(window, cx);
                 assert_eq!(view.screen, Screen::Settings);
-                assert!(!view.preview_open);
+                assert!(!view.preview.open);
                 assert!(view.web_surface.document.is_none());
                 assert!(view.web_surface.invocation_id.is_none());
             });
@@ -257,7 +258,7 @@ fn object_action_replies_obey_the_cursor_at_the_same_revision(cx: &mut TestAppCo
                 view.live_state.snapshot_gate = Some(gate);
                 view.apply_state(current, cx);
                 view.model.hide_object_actions();
-                view.model.rows = vec![file_row("file", "test.txt")];
+                view.model.rows = vec![file_row("file", "test.txt")].into();
                 view.model.selected = 0;
                 view.model.show_object_actions();
                 view.poll_auxiliary_state(receiver, view.live_state.generation, cx);
@@ -286,12 +287,12 @@ fn an_old_object_action_error_cannot_close_a_newer_panel(cx: &mut TestAppContext
     let (new_sender, new_receiver) = tokio::sync::mpsc::channel(1);
     cx.update(|cx| {
         view.update(cx, |view, cx| {
-            view.model.rows = vec![file_row("file", "test.txt")];
+            view.model.rows = vec![file_row("file", "test.txt")].into();
             view.model.selected = 0;
             view.model.show_object_actions();
             view.poll_auxiliary_state(old_receiver, view.live_state.generation, cx);
             view.model.hide_object_actions();
-            view.model.rows = vec![file_row("file", "test.txt")];
+            view.model.rows = vec![file_row("file", "test.txt")].into();
             view.model.selected = 0;
             view.model.show_object_actions();
             view.poll_auxiliary_state(new_receiver, view.live_state.generation, cx);
@@ -323,8 +324,8 @@ fn settings_operations_finish_after_the_launcher_generation_changes(cx: &mut Tes
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::Settings;
-            view.settings.saving = true;
-            view.settings_save_generation = 3;
+            view.settings_editor.model.saving = true;
+            view.settings_editor.save_generation = 3;
             view.poll_settings_save(receiver, 3, cx);
             assert!(!view.request_settings_exit(SettingsExitIntent::Close, window, cx));
             view.live_state.generation += 1;
@@ -339,8 +340,8 @@ fn settings_operations_finish_after_the_launcher_generation_changes(cx: &mut Tes
         .unwrap();
     cx.run_until_parked();
     cx.update(|cx| {
-        assert!(view.read(cx).settings.clipboard_recording);
-        assert!(!view.read(cx).settings.saving);
+        assert!(view.read(cx).settings_editor.model.clipboard_recording);
+        assert!(!view.read(cx).settings_editor.model.saving);
         assert_eq!(view.read(cx).screen, Screen::Launcher);
     });
 }
@@ -352,11 +353,11 @@ fn settings_operation_failures_roll_back_the_switch_and_keep_the_draft(cx: &mut 
     cx.update(|cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::Settings;
-            view.settings.saving = true;
-            view.settings.clipboard_recording = true;
-            view.settings_draft.launch_at_login = !view.preferences.launch_at_login;
-            view.settings_close_pending = true;
-            view.poll_settings_save(receiver, view.settings_save_generation, cx);
+            view.settings_editor.model.saving = true;
+            view.settings_editor.model.clipboard_recording = true;
+            view.settings_editor.draft.launch_at_login = !view.preferences.launch_at_login;
+            view.settings_editor.close_pending = true;
+            view.poll_settings_save(receiver, view.settings_editor.save_generation, cx);
         });
     });
     sender
@@ -368,14 +369,14 @@ fn settings_operation_failures_roll_back_the_switch_and_keep_the_draft(cx: &mut 
     cx.run_until_parked();
     cx.update(|cx| {
         let view = view.read(cx);
-        assert!(!view.settings.clipboard_recording);
-        assert!(!view.settings.saving);
-        assert_eq!(view.settings.error.as_deref(), Some("denied"));
+        assert!(!view.settings_editor.model.clipboard_recording);
+        assert!(!view.settings_editor.model.saving);
+        assert_eq!(view.settings_editor.model.error.as_deref(), Some("denied"));
         assert_ne!(
-            view.settings_draft.launch_at_login,
+            view.settings_editor.draft.launch_at_login,
             view.preferences.launch_at_login
         );
-        assert!(view.settings_close_pending);
+        assert!(view.settings_editor.close_pending);
         assert_eq!(view.screen, Screen::Settings);
     });
 }
@@ -386,15 +387,24 @@ fn late_folder_authorization_does_not_overwrite_new_roots(cx: &mut TestAppContex
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::Settings;
-            set_input_value(&view.file_roots_input, "/newer-edit".to_owned(), window, cx);
+            set_input_value(
+                &view.settings_editor.file_roots_input,
+                "/newer-edit".to_owned(),
+                window,
+                cx,
+            );
             view.finish_search_directory_selection(
-                vec!["/original".to_owned()],
+                &["/original".to_owned()],
                 Ok(Some(vec!["/original".to_owned(), "/picked".to_owned()])),
                 window,
                 cx,
             );
             assert_eq!(
-                view.file_roots_input.read(cx).value().as_ref(),
+                view.settings_editor
+                    .file_roots_input
+                    .read(cx)
+                    .value()
+                    .as_ref(),
                 "/newer-edit"
             );
         });
@@ -411,26 +421,34 @@ fn login_item_failure_stays_separate_from_subsequent_settings_updates(cx: &mut T
             view.screen = Screen::Settings;
             let preferences = view.preferences.clone();
             view.apply_preferences_result(preferences.clone(), Some("needs approval".into()), cx);
-            view.settings
+            view.settings_editor
+                .model
                 .apply_snapshot(crate::settings::SettingsSnapshot::default());
             assert_eq!(
-                view.settings.login_item_error.as_deref(),
+                view.settings_editor.model.login_item_error.as_deref(),
                 Some("needs approval")
             );
             assert!(!view.settings_dirty(cx));
             view.apply_preferences_result(preferences, None, cx);
             assert_eq!(
-                view.settings.login_item_error.as_deref(),
+                view.settings_editor.model.login_item_error.as_deref(),
                 Some("needs approval")
             );
-            view.poll_settings_save(receiver, view.settings_save_generation, cx);
+            view.poll_settings_save(receiver, view.settings_editor.save_generation, cx);
         });
     });
     sender
         .try_send(LiveEvent::LoginItemReconciled(None))
         .unwrap();
     cx.run_until_parked();
-    cx.update(|cx| assert!(view.read(cx).settings.login_item_error.is_none()));
+    cx.update(|cx| {
+        assert!(view
+            .read(cx)
+            .settings_editor
+            .model
+            .login_item_error
+            .is_none())
+    });
 }
 
 #[gpui_kit::test]
@@ -438,18 +456,18 @@ fn feature_switches_cannot_start_a_second_settings_operation(cx: &mut TestAppCon
     let (_window, view) = open_presented_view(cx);
     cx.update(|cx| {
         view.update(cx, |view, cx| {
-            view.settings.saving = true;
-            view.settings.clipboard_recording = false;
-            view.settings.features = vec![crate::settings::FeatureSetting {
+            view.settings_editor.model.saving = true;
+            view.settings_editor.model.clipboard_recording = false;
+            view.settings_editor.model.features = vec![crate::settings::FeatureSetting {
                 key: "feature".into(),
                 name: "Feature".into(),
                 enabled: false,
             }];
             view.set_clipboard_recording(true, cx);
             view.change_feature_setting("feature", true, cx);
-            assert!(!view.settings.clipboard_recording);
-            assert!(!view.settings.features[0].enabled);
-            assert!(view.settings.saving);
+            assert!(!view.settings_editor.model.clipboard_recording);
+            assert!(!view.settings_editor.model.features[0].enabled);
+            assert!(view.settings_editor.model.saving);
         });
     });
 }
@@ -561,7 +579,7 @@ fn a_hidden_web_document_retains_metadata_and_requires_resume_before_mount(
         cx.update_window(window, |_, window, cx| {
             view.update(cx, |view, cx| {
                 view.screen = Screen::WebTool;
-                view.presented = true;
+                view.presence.presented = true;
                 view.web_surface.invocation_id = Some("invocation".into());
                 view.web_surface.document = Some(web_document("old"));
                 if resume {
@@ -570,7 +588,7 @@ fn a_hidden_web_document_retains_metadata_and_requires_resume_before_mount(
                     view.poll_web_document(receiver, cx);
                 }
                 view.prepare_hide(cx);
-                assert!(view.retained_workspace);
+                assert!(view.presence.retained_workspace);
                 assert!(view.web_surface.needs_resume);
                 view.ensure_web_view(window, cx);
                 assert!(view.web_surface.view.is_none());

@@ -118,6 +118,33 @@ fn read_environment(
     }
 }
 
+pub(super) fn set_application_appearance(appearance: Option<WindowAppearance>) -> bool {
+    let Some(marker) = MainThreadMarker::new() else {
+        return false;
+    };
+    let application = NSApplication::sharedApplication(marker);
+    let requested = match appearance {
+        Some(appearance) => {
+            let name = match appearance {
+                WindowAppearance::Light => unsafe { objc2_app_kit::NSAppearanceNameAqua },
+                WindowAppearance::Dark => unsafe { objc2_app_kit::NSAppearanceNameDarkAqua },
+            };
+            let Some(appearance) = NSAppearance::appearanceNamed(name) else {
+                return false;
+            };
+            Some(appearance)
+        }
+        None => None,
+    };
+    if application.appearance().as_deref().map(NSAppearance::name)
+        == requested.as_deref().map(NSAppearance::name)
+    {
+        return false;
+    }
+    application.setAppearance(requested.as_deref());
+    true
+}
+
 pub(super) fn prepare_window_material() {
     let Some(marker) = MainThreadMarker::new() else {
         return;

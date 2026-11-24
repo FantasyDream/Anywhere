@@ -87,7 +87,7 @@ scripts/check-web-sdk.sh
 
 也可声明 `json_escaped`。它匹配带 / 不带外层引号的转义 JSON 容器，最多解开 4 层；编码原文仍受 16 KiB、解码容器受 128 层限制。它不匹配普通字符串 / 标量或已是正常 JSON 的对象，Invocation 保留编码原文。解码、格式化、复制仍由业务插件处理，Host 识别不执行插件代码。
 
-必须有匹配内容才能使用的命令可声明 `"requireInputMatch": true`（默认为 `false`），且必须设置 `inputMatchers`（若改用 `background.resolvers` 派生自定义类型，则在命令上声明 `"requireContext": true`，如仓库当前的 JSON Workspace v0.7.1 示例；Workspace 主入口仍保持独立可打开）。此类命令不会提供无对象的名称搜索或快捷键入口；捕获内容不匹配时隐藏，执行前再次验证。
+必须有匹配内容才能使用的命令可声明 `"requireInputMatch": true`（默认为 `false`），且必须设置 `inputMatchers`（若改用 `background.resolvers` 派生自定义类型，则在命令上声明 `"requireContext": true`，如仓库当前的 JSON Workspace 示例；Workspace 主入口仍保持独立可打开）。此类命令不会提供无对象的名称搜索或快捷键入口；捕获内容不匹配时隐藏，执行前再次验证。
 
 ### 原始 API（进阶集成，自行管理生命周期）
 
@@ -137,7 +137,7 @@ Host 通过 `HostTransport` 注入一条只传字符串帧的消息连接。原�
 
 macOS 页面在加载包之前注入默认 transport，业务可直接导入 `host`。Host 通过原生 main-frame / origin 回调提供身份，JS 不携带授权票据。隐藏立即使未完成请求失效；`lifecycle.onVisibility` 可监听展示事件，自行恢复时再次 `host.ready()`；使用 `definePlugin` 的普通插件无需处理。事件本身不会延长调用资格。
 
-页面挂载在 GPUI 统一的工具页容器中，主题使用 `--aw-text` / `--aw-secondary` / `--aw-surface` / `--aw-border` / `--aw-accent` CSS tokens。Host 会按当前原生玻璃表面更新这些语义变量；普通控件继承当前 `color-scheme`，固定深色 menu / dialog / tooltip 局部指定 `dark` 并使用 `--aw-on-dark-*` 字色与边界。自建固定深色面板也必须重映射这些局部语义变量，不能只给父元素设置 `color`。Esc 和 ⌘K 由 Host 管理，插件不注册这两个全局键。导航返回与重载当前由 Host 按钮 / 菜单提供，没有通用 invoke、插件声明的原生 UI DSL 或第三方任意导航。
+页面挂载在 GPUI 统一的工具页容器中，主题使用 `--aw-text` / `--aw-secondary` / `--aw-surface` / `--aw-border` / `--aw-accent` CSS tokens。Host 会按当前原生玻璃表面更新这些语义变量；普通控件和操作菜单继承当前 `color-scheme`。带按钮和选择器的浮层可使用 `.aw-action-popover`。固定深色的 dialog / tooltip 局部指定 `dark` 并使用 `--aw-on-dark-*` 字色与边界。自建固定深色面板也必须重映射这些局部语义变量，不能只给父元素设置 `color`。Esc 和 ⌘K 由 Host 管理，插件不注册这两个全局键。导航返回与重载当前由 Host 按钮 / 菜单提供，没有通用 invoke、插件声明的原生 UI DSL 或第三方任意导航。
 
 生产页与 JSON / 无框架 Text Pad 示例见 [平台实施记录](https://github.com/FantasyDream/Anywhere/blob/main/docs/web-plugin-design.md)。
 

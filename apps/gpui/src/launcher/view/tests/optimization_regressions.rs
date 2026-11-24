@@ -19,12 +19,12 @@ fn task_row(id: &str) -> crate::host::ExecutionRow {
 #[gpui_kit::test]
 fn failed_icons_are_cached_instead_of_becoming_immediately_requestable(cx: &mut TestAppContext) {
     let (_window, view) = open_view(cx);
-    for outcome in 0..3 {
-        let (sender, receiver) = tokio::sync::mpsc::channel(1);
+    for outcome in 0..2 {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
         cx.update(|cx| {
             view.update(cx, |view, cx| {
-                view.application_icons.clear();
-                view.application_icons_requested.insert(
+                let _ = view.icons.cache.clear();
+                view.icons.requested.insert(
                     "application".to_owned(),
                     ApplicationIconRequest {
                         ticket: 1,
@@ -40,24 +40,16 @@ fn failed_icons_are_cached_instead_of_becoming_immediately_requestable(cx: &mut 
                 );
             });
         });
-        match outcome {
-            0 => sender
-                .try_send(LiveEvent::ApplicationIcon {
-                    candidate_id: "application".to_owned(),
-                    bytes: None,
-                })
-                .unwrap(),
-            1 => sender
-                .try_send(LiveEvent::Error("no icon".to_owned()))
-                .unwrap(),
-            _ => {}
+        if outcome == 0 {
+            let _ = sender.send(None);
+        } else {
+            drop(sender);
         }
-        drop(sender);
         cx.run_until_parked();
         cx.update(|cx| {
             let view = view.read(cx);
-            assert!(view.application_icons.contains("identity"));
-            assert!(view.application_icons_requested.is_empty());
+            assert!(view.icons.cache.contains("identity"));
+            assert!(view.icons.requested.is_empty());
             assert!(view.notice.is_none());
         });
     }
@@ -99,15 +91,15 @@ fn pending_task_selection_waits_until_the_task_appears(cx: &mut TestAppContext) 
     cx.update(|cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::Tasks;
-            view.pending_task_selection = Some("new".to_owned());
+            view.tasks.pending_selection = Some("new".to_owned());
             view.apply_tasks_rows(vec![task_row("old")], cx);
-            assert_eq!(view.pending_task_selection.as_deref(), Some("new"));
+            assert_eq!(view.tasks.pending_selection.as_deref(), Some("new"));
             view.apply_tasks_rows(vec![task_row("old"), task_row("new")], cx);
             assert_eq!(
                 view.tasks.selected_row().map(|row| row.id.as_str()),
                 Some("new")
             );
-            assert!(view.pending_task_selection.is_none());
+            assert!(view.tasks.pending_selection.is_none());
         });
     });
 }
@@ -127,7 +119,7 @@ fn selecting_an_existing_task_reveals_it_through_a_previous_filter(cx: &mut Test
                 view.tasks.selected_row().map(|row| row.id.as_str()),
                 Some("new")
             );
-            assert!(view.pending_task_selection.is_none());
+            assert!(view.tasks.pending_selection.is_none());
         });
     })
     .unwrap();
@@ -153,7 +145,7 @@ fn manual_task_navigation_cancels_an_older_pending_selection(cx: &mut TestAppCon
                 view.screen = Screen::Tasks;
                 view.tasks
                     .apply_rows(vec![task_row("old"), task_row("other")]);
-                view.pending_task_selection = Some("new".to_owned());
+                view.tasks.pending_selection = Some("new".to_owned());
                 match method {
                     0 => view.select_task_row(0, window, cx),
                     1 => view.handle_key("down", KeyModifiers::default(), window, cx),
@@ -169,7 +161,7 @@ fn manual_task_navigation_cancels_an_older_pending_selection(cx: &mut TestAppCon
         cx.update(|cx| {
             view.update(cx, |view, cx| {
                 assert!(
-                    view.pending_task_selection.is_none(),
+                    view.tasks.pending_selection.is_none(),
                     "manual route {method}"
                 );
                 view.apply_tasks_rows(
@@ -188,7 +180,7 @@ fn manual_task_navigation_cancels_an_older_pending_selection(cx: &mut TestAppCon
 #[gpui_kit::test]
 fn stale_icon_failure_does_not_settle_a_newer_request(cx: &mut TestAppContext) {
     let (_window, view) = open_view(cx);
-    let (sender, receiver) = tokio::sync::mpsc::channel(1);
+    let (sender, receiver) = tokio::sync::oneshot::channel();
     cx.update(|cx| {
         view.update(cx, |view, cx| {
             view.poll_application_icon(
@@ -198,7 +190,7 @@ fn stale_icon_failure_does_not_settle_a_newer_request(cx: &mut TestAppContext) {
                 1,
                 cx,
             );
-            view.application_icons_requested.insert(
+            view.icons.requested.insert(
                 "app".to_owned(),
                 ApplicationIconRequest {
                     ticket: 2,
@@ -207,15 +199,13 @@ fn stale_icon_failure_does_not_settle_a_newer_request(cx: &mut TestAppContext) {
             );
         });
     });
-    sender
-        .try_send(LiveEvent::Error("old failure".to_owned()))
-        .unwrap();
+    let _ = sender.send(None);
     cx.run_until_parked();
     cx.update(|cx| {
         let view = view.read(cx);
-        assert_eq!(view.application_icons_requested["app"].ticket, 2);
-        assert!(!view.application_icons.contains("old identity"));
-        assert!(!view.application_icons.contains("new identity"));
+        assert_eq!(view.icons.requested["app"].ticket, 2);
+        assert!(!view.icons.cache.contains("old identity"));
+        assert!(!view.icons.cache.contains("new identity"));
     });
 }
 
@@ -239,21 +229,21 @@ fn icon_requests_pause_when_the_launcher_is_hidden_or_showing_a_tool(cx: &mut Te
             view.live = Some(live);
             let mut row = file_row("synthetic-app", "Synthetic App");
             row.kind = CandidateKind::Application;
-            view.model.rows = vec![row];
+            view.model.rows = vec![row].into();
             for (screen, presented) in [
                 (Screen::Launcher, false),
                 (Screen::Settings, true),
                 (Screen::ClipboardShelf, true),
             ] {
                 view.screen = screen;
-                view.presented = presented;
+                view.presence.presented = presented;
                 view.request_application_icons(cx);
-                assert!(view.application_icons_requested.is_empty());
+                assert!(view.icons.requested.is_empty());
             }
             view.screen = Screen::Launcher;
-            view.presented = true;
+            view.presence.presented = true;
             view.request_application_icons(cx);
-            assert_eq!(view.application_icons_requested.len(), 1);
+            assert_eq!(view.icons.requested.len(), 1);
         });
     });
 }
@@ -274,7 +264,8 @@ fn task_output_updates_do_not_scroll_the_sidebar_away_from_the_user(cx: &mut Tes
     sync_test_viewport(cx, window, gpui_kit::size(px(920.), px(600.)));
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, _| {
-            view.tasks_scroll
+            view.scrolls
+                .tasks_base()
                 .set_offset(gpui_kit::point(px(0.), px(-500.)));
         });
         window.render_frame(cx);
@@ -282,7 +273,7 @@ fn task_output_updates_do_not_scroll_the_sidebar_away_from_the_user(cx: &mut Tes
     .unwrap();
     cx.update(|cx| {
         view.update(cx, |view, cx| {
-            let offset = view.tasks_scroll.offset();
+            let offset = view.scrolls.tasks_base().offset();
             assert!(offset.y < px(0.));
             let mut next = rows;
             next[0].output_revision += 1;
@@ -296,7 +287,101 @@ fn task_output_updates_do_not_scroll_the_sidebar_away_from_the_user(cx: &mut Tes
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert_eq!(view.read(cx).tasks_scroll.offset().y, px(-500.));
+        assert_eq!(view.read(cx).scrolls.tasks_base().offset().y, px(-500.));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn file_search_empty_filter_recovery_preserves_input_and_exposes_scan_status(
+    cx: &mut TestAppContext,
+) {
+    let (window, view) = open_view(cx);
+    let state = |finished, issue_count| anywhere_protocol::LauncherState {
+        input: "invoice".into(),
+        revision: 4,
+        file_search: Some(Box::new(anywhere_protocol::FileSearchProgress {
+            finished,
+            issue_count,
+            ..Default::default()
+        })),
+        ..Default::default()
+    };
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::FileSearch;
+            view.file_search.filter = FileSearchFilter::Pdf;
+            view.model.apply(state(false, 2));
+            view.input
+                .update(cx, |input, cx| input.set_value("invoice", window, cx));
+            cx.notify();
+        });
+        window.render_frame(cx);
+        let summary = window.find("file-search-summary");
+        assert_eq!(summary.role(), Some(gpui_kit::Role::Status));
+        assert!(summary.label().unwrap().contains("2 issues"));
+        assert!(window.try_find("file-search-all-types").is_none());
+        view.update(cx, |view, cx| {
+            view.model.apply(state(true, 0));
+            cx.notify();
+        });
+        window.render_frame(cx);
+        window.click("file-search-all-types", cx);
+        assert_eq!(view.read(cx).file_search.filter, FileSearchFilter::All);
+        assert_eq!(view.read(cx).model.query, "invoice");
+        view.update(cx, |view, cx| {
+            assert!(view.active_editor_focused(window, cx))
+        });
+        window.render_frame(cx);
+        assert!(window.try_find("file-search-all-types").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn clicking_active_file_filter_preserves_the_browsed_row(cx: &mut TestAppContext) {
+    let (window, view) = open_view(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::FileSearch;
+            view.model.rows = vec![file_row("one", "One.pdf"), file_row("two", "Two.pdf")].into();
+            view.file_search.filter = FileSearchFilter::Pdf;
+            view.file_search.browsing = true;
+            view.model.select_row(1);
+            cx.notify();
+        });
+        window.render_frame(cx);
+        window.click("file-filter-pdf", cx);
+        let view = view.read(cx);
+        assert!(view.file_search.browsing);
+        assert_eq!(view.model.selection_id(), Some("two"));
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn a_disabled_menu_row_does_not_open_the_selected_menu_or_dismiss_a_notice(
+    cx: &mut TestAppContext,
+) {
+    let (window, view) = open_view(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            let mut menu = file_row("menu:parent", "Menu");
+            menu.is_menu = true;
+            menu.menu_path = vec!["Menu".into()];
+            let mut disabled = menu.clone();
+            disabled.id = "unavailable".into();
+            disabled.enabled = false;
+            view.model.rows = vec![menu, disabled].into();
+            view.set_notice("Unavailable", components::NoticeKind::Warning);
+            cx.notify();
+        });
+        window.render_frame(cx);
+        window.click("candidate-1", cx);
+        let view = view.read(cx);
+        assert_eq!(view.model.selection_id(), Some("menu:parent"));
+        assert!(view.model.menu_path().is_none());
+        assert_eq!(view.notice.as_deref(), Some("Unavailable"));
     })
     .unwrap();
 }

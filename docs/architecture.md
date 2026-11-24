@@ -2,11 +2,11 @@
 
 当前源码为 V0.14 macOS 15+ GPUI 开发预览。Rust Core 决定业务语义，GPUI
 呈现并处理输入，AppKit / Quick Look / WebKit 只提供系统适配。最后核对：
-2026-11-18。
+2026-11-23。
 
 产品入口是 `apps/gpui/src/app.rs`。当前范围与证据见
-[GPUI 技术方案与验收](mvp-gpui.md)，窗口、焦点和输入契约见
-[GPUI 产品架构](archive/gpui-migration.md)。
+[GPUI 交付范围与验收状态](mvp-gpui.md)，窗口、焦点和输入契约见
+[Launcher 交互](launcher-interaction.md)与[界面设计](ui-design.md)。
 
 ## 分层
 
@@ -99,11 +99,33 @@ GPUI 内的 Session / revision / snapshot gate / stream cancellation 由
 Tasks 的页面工作态由 `launcher/model.rs`、`launcher/pages.rs` 与
 `launcher/pages/tasks.rs` 持有。文件分页在 `launcher/view/controllers/file_search.rs`
 复用 Launcher 快照门禁。Tasks 列表只由任务订阅发布。WebView / document / ack
-状态由 `launcher/view/web_surface.rs` 持有。根视图负责
-路由和跨页意图；activation / retention 位于 `view/navigation.rs`，按键与 IME
-优先级位于 `view/input.rs`，Settings 草稿 / 保存 / 关闭控制器位于
-`view/settings/controller.rs`。原生通道采用有界 admission；激活、恢复、分页和后续 follow
+状态由 `launcher/view/web_surface.rs` 持有；设置编辑态（`SettingsEditor`）、快捷键
+录制态（`ShortcutEditor`）、预览态（`PreviewState`）、窗口滞留态（`WindowPresence`）、
+滚动句柄（`ScrollHandles`）与图标加载器（`IconLoader`）集中在 `launcher/view/state.rs`。
+固定命令由 `launcher/view/actions.rs` 通过 GPUI `actions!` 与 `key_context` 注册派发，
+其余按键与 IME 优先级拦截位于 `view/input.rs`；根视图负责路由和跨页意图，
+activation / retention 位于 `view/navigation.rs` 与 `view/controllers/navigation.rs`，
+通用列表行组件位于 `launcher/components/list_row.rs`，Settings 草稿 / 保存 / 关闭控制器
+位于 `view/settings/controller.rs`。原生通道采用有界 admission；激活、恢复、分页和后续 follow
 统一把完整 Launcher 快照表达为 `Arc<LauncherState>`，单次回复只投递一个结果。
+
+### 从 Flutter 桥接到进程内共享
+
+Flutter 阶段由 Dart controller 接收生成的桥接 DTO，再投影出页面行。现在 GPUI 和
+Application 可以直接借用同一批 Rust 数据。保留 Application 作为异步和授权边界有
+实际用途：匹配、目录读取和动作解析可以离开渲染线程，发布和执行仍能检查 Session、
+revision、目录授权与动作版本。窗口焦点、选择、语言和布局由 GPUI 单独持有。
+
+| 路径 | 当前所有权 |
+| --- | --- |
+| Core 提交 → Session、watch、请求回复 | 排序候选、Context 候选与对象动作各自共享不可变数组，并通过 `published_state: Option<Arc<LauncherState>>` 在 watch 通道和查询回复间共享同一只读快照。文件搜索复用 `file_candidate_indices` 与增量 `displayed_file_paths`，不再在执行表重复保存整批文件 `Candidate`。Usage 查找通过 `UsageKey` + `Borrow<dyn UsageKeyRef>` 零拷贝查询，消除每次按键重建临时借用哈希表。执行表始终接收本次复验后的目标和守卫，即使展示完全一致也会更新。 |
+| 快照订阅 → GPUI 视图 | `LiveLauncher::subscribe_snapshots` 直接暴露 `watch::Receiver<Option<Arc<LauncherState>>>`，`LauncherView` 在 GPUI executor 上直接监听 `changed().await`，取消额外的 Tokio 中继任务与 `mpsc` 通道；Blocking 线程池限制 `max_blocking_threads(16)` 与 15 秒回收。 |
+| 原生图标 → Metal 纹理 | macOS `launcher_application_icon_bgra` / `launcher_file_icon_bgra` 通过 `CGBitmapContext` 直接光栅化预乘 BGRA8 像素，经 `oneshot` 返回并封装为 `Arc<RenderImage>`，消除 PNG 编解码往返；LRU（96 项，隐藏收缩至 32 项）在淘汰与 idle 清理时调用 `window.drop_image(...)` 立即回收 GPU 纹理。 |
+| 剪贴板持久化与文件排序 | 剪贴板 SQLite 启用 WAL、2 MiB 页缓存与 FTS5 `trigram` 虚拟表（v4 迁移自动重建索引），中英文长词查询走索引交集，短词回退 `instr` 保证精确子串语义；删除/清理后执行 `wal_checkpoint(TRUNCATE)`。文件搜索外部排序在非测试构建提升至 4 MiB / 4096 条每 run，减少临时文件落盘与归并轮次。 |
+| 快照 → 文件结果行 | 文件页保留共享候选和去重后的下标。方向键、分页恢复只读 ID 和可用性，虚拟列表（包括主 Launcher 列表在内的全部列表统一使用 `uniform_list`）按视口投影文字。普通搜索、菜单和混合结果沿用各自的展示规则。 |
+| 选中对象 → 对象动作 | 文件和历史对象在入队前由 Core 记录选择顺序。较早的选择即使晚开始也不能覆盖已受理的新选择。文件动作在后台解析，GPUI 接收该请求复验过的快照，并在回包时核对页面、父对象与快照游标。 |
+| 第三方 Web 工具 → Rust | 文档 handle、IPC、授权和资源预算仍由 broker 管理。这里跨越插件信任边界，页面无法直接借用原生执行对象。 |
+| Launcher 页面 → 独立普通窗口 | 文件搜索、剪贴板历史、应用历史和 Web 工具从当前快照复制出独立 Session。主 Launcher 立即回到自己的搜索会话，窗口关闭只撤销自己的 Session。插件目录、来源授权或捕获策略变更会使所有旧工具窗口的执行资格立即失效，窗口保留并显示重新打开提示。 |
 
 ## 激活与 Context
 
@@ -161,6 +183,9 @@ GPUI 的顺序门禁在 `apps/gpui/src/launcher/snapshot_gate.rs`。
 剪贴板采集默认关闭。启用后，文本、图片、文件列表与可读取格式存入 SQLite；
 查询、去重、配额和原始数据读取由持久化层负责。Clipboard History 是主窗口工具，
 Clipboard Shelf 是独立的置顶 GPUI 窗口，两者复用同一策略与结果模型。
+`HistoryService` 将策略 / `epoch` / 缓存状态锁（`state`）与 SQLite 仓库锁（`repository`）
+分离，严格遵守 `state -> repository` 加锁顺序，读写 SQLite 前释放 `state` 并以 `epoch`
+校验并发失效，避免大图片写入或过期清理阻塞状态读取。
 
 应用历史通过 `source.json` / `transform.js` 读取一个选定外部来源，运行有界纯
 JS 转换并形成普通候选和对象动作。它与 Launcher Usage、剪贴板历史是三类独立
@@ -231,6 +256,17 @@ SessionCoordinator 封装 Session 锁与 execution epoch；Resolver 的准备 / 
 同一组 Session / policy 锁内通过 `publish_state` 投递 watch。普通对象和应用历史
 对象共用请求票据、借用 Usage 查询、动作匹配及发布复验；历史对象保留自己的
 来源、路径和执行守卫。
+
+Core 与 `host/` 中的共享锁按语义通过 `crates/anywhere-core/src/core/sync.rs`
+统一处理中毒策略，并由 `scripts/architecture_rules.py` 的 `check_lock_usage`
+门禁禁止生产代码直接 `.lock().unwrap()` / `.expect()`：
+
+| 类别 | 锁不可用时 | 适用 |
+|---|---|---|
+| 授权 / 发布 | 拒绝（返回错误或不发布），记录 `error` | 能力检查、候选发布、RPC 准入 |
+| 撤销 / 清理 | 恢复守卫并继续执行，记录 `error` | Web 失效、文档关闭、会话放弃、来源关闭 |
+| 纯缓存 | 恢复守卫并重置为默认值 | 目录 memo、offer / 投影 / 快照缓存 |
+| 服务状态 | 转为错误返回，不 panic | 应用历史、文件搜索、扫描队列 |
 
 空查询 offers、Scopes 和快捷键目录使用有界单项缓存，键包含动作注册表、Context、
 Facts、Usage 与排名时钟。动态工厂包含请求版本，静态 offers 在使用时绑定回当前

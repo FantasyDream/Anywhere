@@ -21,11 +21,11 @@ impl LauncherView {
                     ContextSource::FinderSelection,
                     l10n::finder_selection(self.locale),
                     l10n::selected_files_description(self.locale),
-                    self.settings_draft.capture_finder_selection,
+                    self.settings_editor.draft.capture_finder_selection,
                     Switch::new("capture-finder")
-                        .checked(self.settings_draft.capture_finder_selection)
+                        .checked(self.settings_editor.draft.capture_finder_selection)
                         .on_change(cx.listener(|this, checked, _, cx| {
-                            this.settings_draft.capture_finder_selection = *checked;
+                            this.settings_editor.draft.capture_finder_selection = *checked;
                             cx.notify();
                         })),
                     cx,
@@ -34,11 +34,11 @@ impl LauncherView {
                     ContextSource::SelectedText,
                     l10n::selected_text(self.locale),
                     l10n::selected_text_description(self.locale),
-                    self.settings_draft.capture_selected_text,
+                    self.settings_editor.draft.capture_selected_text,
                     Switch::new("capture-selected-text")
-                        .checked(self.settings_draft.capture_selected_text)
+                        .checked(self.settings_editor.draft.capture_selected_text)
                         .on_change(cx.listener(|this, checked, _, cx| {
-                            this.settings_draft.capture_selected_text = *checked;
+                            this.settings_editor.draft.capture_selected_text = *checked;
                             cx.notify();
                         })),
                     cx,
@@ -47,11 +47,11 @@ impl LauncherView {
                     ContextSource::BrowserCurrentPage,
                     l10n::browser_current_page(self.locale),
                     l10n::browser_page_description(self.locale),
-                    self.settings_draft.capture_browser_current_page,
+                    self.settings_editor.draft.capture_browser_current_page,
                     Switch::new("capture-browser")
-                        .checked(self.settings_draft.capture_browser_current_page)
+                        .checked(self.settings_editor.draft.capture_browser_current_page)
                         .on_change(cx.listener(|this, checked, _, cx| {
-                            this.settings_draft.capture_browser_current_page = *checked;
+                            this.settings_editor.draft.capture_browser_current_page = *checked;
                             cx.notify();
                         })),
                     cx,

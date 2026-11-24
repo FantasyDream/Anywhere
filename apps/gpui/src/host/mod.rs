@@ -16,16 +16,16 @@ use anywhere_core::application::frontend_runtime::RuntimePaths;
 pub use anywhere_core::application::frontend_runtime::WebPackageOperation;
 
 pub use dto::{
-    AppHistoryItem, AppHistoryObjectAction, AppHistorySnapshot, AppHistorySource, ClipboardItem,
-    ClipboardSnapshot, ExecutionDetail, ExecutionRow, PreviewFile, ShortcutCandidate,
-    ShortcutCatalogAction, WebDocument, WebPackage, WebPackageReview,
+    ActivationInput, AppHistoryItem, AppHistoryObjectAction, AppHistorySnapshot, AppHistorySource,
+    ClipboardItem, ClipboardSnapshot, ExecutionDetail, ExecutionRow, PreviewFile,
+    ShortcutCandidate, ShortcutCatalogAction, WebDocument, WebPackage, WebPackageReview,
 };
 pub use hotkeys::{registered_preferences, HotKeyAction, HotKeyController};
 pub use login_item::LoginItemState;
 pub(crate) use native_window::defer_native_window_update;
 pub use preferences::{
     reserved_action_shortcut, ActionShortcutBinding, ActionShortcutRoute, HostPreferences,
-    UiLanguage,
+    UiLanguage, UiTheme,
 };
 pub use runtime::{LiveEvent, LiveLauncher};
 

@@ -53,6 +53,20 @@ extern "C" {
         size: c_uint,
         out_length: *mut c_uint,
     ) -> *mut u8;
+    pub fn launcher_application_icon_bgra(
+        path: *const c_char,
+        size: c_uint,
+        out_width: *mut c_uint,
+        out_height: *mut c_uint,
+        out_length: *mut c_uint,
+    ) -> *mut u8;
+    pub fn launcher_file_icon_bgra(
+        path: *const c_char,
+        size: c_uint,
+        out_width: *mut c_uint,
+        out_height: *mut c_uint,
+        out_length: *mut c_uint,
+    ) -> *mut u8;
     /// Metadata only. Returns -1 when Cocoa cannot query the pasteboard.
     pub fn launcher_clipboard_change_count() -> i64;
     pub fn launcher_clipboard_history_access_allowed() -> i32;

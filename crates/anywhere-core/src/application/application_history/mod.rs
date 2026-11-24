@@ -271,38 +271,50 @@ impl SourceLoader for SourceCatalog {
             .collect()
     }
     fn revision(&self, source: &SourcePreference) -> Option<SourceRevision> {
+        use anywhere_platform::paths::open_regular_read;
         use std::io::Read;
+        use std::path::Path;
+        let package = self
+            .packages
+            .iter()
+            .find(|package| package.manifest.id == source.id)?;
         let path = source.path.canonicalize().ok()?;
-        let metadata = std::fs::metadata(&path).ok()?;
-        if !metadata.is_file() {
-            return None;
-        }
-        let sidecar_meta = |suffix: &str| -> Option<Option<(u64, std::time::SystemTime)>> {
-            let mut sidecar = path.as_os_str().to_os_string();
-            sidecar.push(suffix);
-            match std::fs::metadata(std::path::Path::new(&sidecar)) {
-                Ok(meta) => Some(Some((meta.len(), meta.modified().ok()?))),
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Some(None),
-                Err(_) => None,
-            }
-        };
-        let journal = sidecar_meta("-wal")?;
-        let rollback_journal = sidecar_meta("-journal")?;
+        let main_file = open_regular_read(&path).ok()?;
+        let metadata = main_file.metadata().ok()?;
         let mut header_fingerprint = [0u8; 64];
-        if let Ok(mut main_file) = std::fs::File::open(&path) {
-            let _ = main_file.read(&mut header_fingerprint[..32]);
-        }
-        let mut wal_path = path.as_os_str().to_os_string();
-        wal_path.push("-wal");
-        if let Ok(mut wal_file) = std::fs::File::open(std::path::Path::new(&wal_path)) {
-            let _ = wal_file.read(&mut header_fingerprint[32..]);
+        let read_header = |mut file: std::fs::File, header: &mut [u8]| {
+            let size = file.read(header).ok()?;
+            header[size..].fill(0);
+            Some(())
+        };
+        read_header(main_file, &mut header_fingerprint[..32])?;
+        let mut sidecars = [None, None];
+        if matches!(
+            package.manifest.reader,
+            crate::persistence::application_history::Reader::Sqlite { .. }
+        ) {
+            for (index, suffix) in ["-wal", "-journal"].into_iter().enumerate() {
+                let mut sidecar = path.as_os_str().to_os_string();
+                sidecar.push(suffix);
+                match open_regular_read(Path::new(&sidecar)) {
+                    Ok(file) => {
+                        let metadata = file.metadata().ok()?;
+                        sidecars[index] = Some((metadata.len(), metadata.modified().ok()?));
+                        if index == 0 {
+                            read_header(file, &mut header_fingerprint[32..])?;
+                        }
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(_) => return None,
+                }
+            }
         }
         Some(SourceRevision {
             path,
             bytes: metadata.len(),
             modified: metadata.modified().ok()?,
-            journal,
-            rollback_journal,
+            journal: sidecars[0],
+            rollback_journal: sidecars[1],
             header_fingerprint,
         })
     }

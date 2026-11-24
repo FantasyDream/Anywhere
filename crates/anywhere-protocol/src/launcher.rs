@@ -4,6 +4,7 @@ use super::{
     identifiers::{ContextKey, GroupId, Revision, SessionId},
 };
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SearchSourceState {
@@ -53,17 +54,17 @@ pub struct LauncherState {
     #[serde(default)]
     pub file_search: Option<Box<FileSearchProgress>>,
     #[serde(default)]
-    pub result_actions: Vec<CandidatePresentation>,
+    pub result_actions: Arc<Vec<CandidatePresentation>>,
     pub context_summary: Vec<ContextPresentation>,
     #[serde(default)]
-    pub context_candidates: Vec<CandidatePresentation>,
+    pub context_candidates: Arc<Vec<CandidatePresentation>>,
     pub preferred_context_key: Option<ContextKey>,
     #[serde(default)]
     pub scopes: Vec<ScopeEntry>,
     pub selected_scope: Option<GroupId>,
     #[serde(default)]
     pub context_captures: Vec<ContextCapturePresentation>,
-    pub candidates: std::sync::Arc<Vec<CandidatePresentation>>,
+    pub candidates: Arc<Vec<CandidatePresentation>>,
     /// Stable across append/progress; changes when the object list is replaced.
     #[serde(default)]
     pub candidate_list_version: u32,
@@ -74,7 +75,7 @@ impl LauncherState {
     pub fn candidate(&self, id: &str) -> Option<&CandidatePresentation> {
         self.candidates
             .iter()
-            .chain(&self.context_candidates)
+            .chain(self.context_candidates.iter())
             .find(|candidate| candidate.id == id)
     }
     /// Missing groups remain empty; they never widen to Universal.

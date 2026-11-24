@@ -248,9 +248,7 @@ impl Application {
             offers.retain(|offer| {
                 route.context_type.as_ref().is_none_or(|ty| {
                     session
-                        .execution
-                        .candidates
-                        .get(offer.id.as_str())
+                        .execution_candidate(offer.id.as_str())
                         .and_then(|c| c.context())
                         .is_some_and(|ctx| &ctx.type_id == ty)
                 })
@@ -307,12 +305,17 @@ fn binding_offers(
     action_id: &str,
 ) -> Result<Vec<CandidatePresentation>> {
     actions.persistent_binding(action_id)?;
+    let search_candidates = if session.input_mode == anywhere_protocol::InputMode::FileSearch {
+        session.execution.file_candidates.as_slice()
+    } else {
+        session.resolution.search_candidates.as_slice()
+    };
     let mut candidates: Vec<_> = session
         .execution
         .candidates
         .values()
         .map(|candidate| candidate as &crate::core::search::candidate::Candidate)
-        .chain(session.resolution.search_candidates.iter())
+        .chain(search_candidates)
         .filter(|c| {
             c.presentation.command_id.as_deref() == Some(action_id)
                 && c.presentation.availability.is_executable()
@@ -325,7 +328,7 @@ fn binding_offers(
             .execution
             .candidates
             .values()
-            .chain(session.resolution.search_candidates.iter())
+            .chain(search_candidates)
             .find_map(|c| {
                 (c.presentation.command_id.as_deref() == Some(action_id))
                     .then(|| c.presentation.availability.reason.clone())

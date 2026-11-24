@@ -9,9 +9,9 @@ use super::{
 use crate::settings::{FeatureSetting, SettingsSnapshot};
 use anyhow::Result;
 use anywhere_core::application::frontend_runtime::{ApplicationRuntime, WebDocumentView};
-use anywhere_protocol::{
-    CandidatePresentation, ExecutionSessionDetail, ExecutionSessionSummary, LauncherState,
-};
+#[cfg(test)]
+use anywhere_protocol::LauncherState;
+use anywhere_protocol::{CandidatePresentation, ExecutionSessionDetail, ExecutionSessionSummary};
 use std::path::PathBuf;
 
 pub(super) fn reconcile_access_at_startup(
@@ -66,6 +66,7 @@ pub(super) fn apply_preferences(
     Ok(())
 }
 
+#[cfg(test)]
 pub(super) fn snapshot_cursor(state: &LauncherState) -> u64 {
     (u64::from(state.revision) << 32) | u64::from(state.snapshot_seq)
 }
@@ -151,19 +152,19 @@ pub(super) fn app_history_sources_from(
 }
 
 pub(super) fn app_history_object_action(
-    candidate: CandidatePresentation,
+    candidate: &CandidatePresentation,
 ) -> Option<AppHistoryObjectAction> {
     candidate
         .availability
         .is_visible()
         .then(|| AppHistoryObjectAction {
-            id: candidate.id,
+            id: candidate.id.clone(),
             title: candidate
                 .localized_titles
                 .get("en")
-                .cloned()
-                .unwrap_or(candidate.title),
-            localized_titles: candidate.localized_titles,
+                .unwrap_or(&candidate.title)
+                .clone(),
+            localized_titles: candidate.localized_titles.clone(),
             enabled: candidate.availability.is_executable(),
         })
 }
@@ -235,6 +236,7 @@ pub(super) fn web_packages_from(application: &ApplicationRuntime) -> Result<Vec<
             enabled: status.enabled,
             available: status.available,
             rollback: status.rollback,
+            builtin: status.builtin,
             permission_count: status.permissions.len(),
         })
         .collect())
@@ -246,6 +248,7 @@ pub(super) fn web_document(document: WebDocumentView) -> WebDocument {
         origin: document.origin,
         entry: document.entry,
         title: document.title,
+        builtin: document.builtin,
     }
 }
 

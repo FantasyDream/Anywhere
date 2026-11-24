@@ -12,6 +12,16 @@ fn native_operation<T>(operation: impl FnOnce() -> Result<T>) -> Result<T> {
         .map_err(|_| ContextReadError::Unavailable)?
 }
 
+#[cfg(target_os = "macos")]
+static NATIVE_CLIPBOARD_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+#[cfg(target_os = "macos")]
+fn lock_native_clipboard() -> Result<std::sync::MutexGuard<'static, ()>> {
+    NATIVE_CLIPBOARD_LOCK
+        .lock()
+        .map_err(|_| ContextReadError::Unavailable.into())
+}
+
 fn context<T>(operation: impl FnOnce(&ClipboardContext) -> Result<T>) -> Result<T> {
     let run = || {
         let clipboard = ClipboardContext::new().map_err(|_| ContextReadError::Unavailable)?;
@@ -19,7 +29,10 @@ fn context<T>(operation: impl FnOnce(&ClipboardContext) -> Result<T>) -> Result<
     };
     #[cfg(target_os = "macos")]
     {
-        native_operation(|| objc2::rc::autoreleasepool(|_| run()))
+        native_operation(|| {
+            let _guard = lock_native_clipboard()?;
+            objc2::rc::autoreleasepool(|_| run())
+        })
     }
     #[cfg(not(target_os = "macos"))]
     {

@@ -2,7 +2,11 @@
 //!
 //! The domain depends on this interface, never on SQLite. `UsageStats` is the only shape
 //! ranking sees; how the numbers are stored is a persistence concern.
-use std::collections::HashMap;
+use std::{
+    borrow::Borrow,
+    collections::HashMap,
+    hash::{Hash, Hasher},
+};
 
 /// What the ranking engine reads about past use.
 #[derive(Debug, Default, Clone, Copy)]
@@ -12,8 +16,76 @@ pub struct UsageStats {
 }
 
 /// Key of an action usage row: `(action_id, canonical context_type)`.
-pub type UsageKey = (String, String);
+///
+/// Supports zero-allocation lookups from borrowed `(&str, &str)` pairs through
+/// [`UsageKeyRef`] and [`lookup_usage`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UsageKey(pub String, pub String);
+
+impl UsageKey {
+    pub fn new(action_id: impl Into<String>, context_type: impl Into<String>) -> Self {
+        Self(action_id.into(), context_type.into())
+    }
+}
+
+impl From<(String, String)> for UsageKey {
+    fn from((action_id, context_type): (String, String)) -> Self {
+        Self(action_id, context_type)
+    }
+}
+
+pub trait UsageKeyRef {
+    fn as_pair(&self) -> (&str, &str);
+}
+
+impl UsageKeyRef for UsageKey {
+    fn as_pair(&self) -> (&str, &str) {
+        (&self.0, &self.1)
+    }
+}
+
+impl UsageKeyRef for (&str, &str) {
+    fn as_pair(&self) -> (&str, &str) {
+        (self.0, self.1)
+    }
+}
+
+impl<'a> Borrow<dyn UsageKeyRef + 'a> for UsageKey {
+    fn borrow(&self) -> &(dyn UsageKeyRef + 'a) {
+        self
+    }
+}
+
+impl PartialEq for dyn UsageKeyRef + '_ {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_pair() == other.as_pair()
+    }
+}
+
+impl Eq for dyn UsageKeyRef + '_ {}
+
+impl Hash for dyn UsageKeyRef + '_ {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_pair().hash(state);
+    }
+}
+
+impl Hash for UsageKey {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.as_pair().hash(state);
+    }
+}
+
 pub type UsageSnapshot = HashMap<UsageKey, UsageStats>;
+
+/// Zero-allocation lookup by `(action_id, context_type)`.
+pub fn lookup_usage(snapshot: &UsageSnapshot, action_id: &str, context_type: &str) -> UsageStats {
+    let key = (action_id, context_type);
+    snapshot
+        .get(&key as &dyn UsageKeyRef)
+        .copied()
+        .unwrap_or_default()
+}
 
 /// Context type recorded for application-launch usage rows.
 pub const APPLICATION_CONTEXT_TYPE: &str = "application";
@@ -55,13 +127,17 @@ impl UsageRepository for MemoryUsage {
             .0
             .iter()
             .filter(|((_, _, app), _)| app == source_app)
-            .map(|((action, kind, _), stats)| ((action.clone(), kind.clone()), *stats))
+            .map(|((action, kind, _), stats)| (UsageKey(action.clone(), kind.clone()), *stats))
             .collect())
     }
     fn load_global(&self) -> anyhow::Result<UsageSnapshot> {
         let mut snapshot = UsageSnapshot::new();
         for ((action, kind, _), stats) in &self.0 {
-            merge_usage(&mut snapshot, (action.clone(), kind.clone()), *stats);
+            merge_usage(
+                &mut snapshot,
+                UsageKey(action.clone(), kind.clone()),
+                *stats,
+            );
         }
         Ok(snapshot)
     }

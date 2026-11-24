@@ -53,17 +53,18 @@ impl Default for FeaturePolicy {
 impl FeaturePolicy {
     pub(crate) fn allows(&self, id: &str) -> bool {
         self.snapshot().allows_contributor(id)
-            && self.excluded.read().is_ok_and(|ids| !ids.contains(id))
+            && crate::core::sync::read_or_deny(&self.excluded, "feature_exclusions")
+                .is_ok_and(|ids| !ids.contains(id))
     }
     pub(crate) fn snapshot(&self) -> std::sync::Arc<FeaturePolicySnapshot> {
-        self.current
-            .read()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        crate::core::sync::read_or_deny(&self.current, "feature_policy")
+            .map(|current| current.clone())
+            .unwrap_or_else(|_| {
+                std::sync::Arc::new(FeaturePolicySnapshot::new(0, Default::default(), true))
+            })
     }
     pub(crate) fn is_current(&self, snapshot: &std::sync::Arc<FeaturePolicySnapshot>) -> bool {
-        self.current
-            .read()
+        crate::core::sync::read_or_deny(&self.current, "feature_policy")
             .is_ok_and(|current| std::sync::Arc::ptr_eq(&current, snapshot))
     }
     pub(crate) fn request_guard(

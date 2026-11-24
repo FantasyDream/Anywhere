@@ -77,12 +77,17 @@ pub(in crate::platform) fn tasks_window_style_mask() -> NSWindowStyleMask {
         | NSWindowStyleMask::FullSizeContentView
 }
 
+pub(in crate::platform) fn tool_window_style_mask() -> NSWindowStyleMask {
+    tasks_window_style_mask()
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(in crate::platform) enum NativeSurface {
     Launcher,
     ClipboardShelf,
     Settings,
     Tasks,
+    ToolWindow,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -111,9 +116,11 @@ impl NativeSurface {
         self,
     ) -> crate::platform::material::WindowGlassStyle {
         match self {
-            Self::Launcher | Self::ClipboardShelf | Self::Settings | Self::Tasks => {
-                crate::platform::material::WindowGlassStyle::Regular
-            }
+            Self::Launcher
+            | Self::ClipboardShelf
+            | Self::Settings
+            | Self::Tasks
+            | Self::ToolWindow => crate::platform::material::WindowGlassStyle::Regular,
         }
     }
 }
@@ -122,7 +129,9 @@ pub(in crate::platform) const fn window_layer_policy(surface: NativeSurface) -> 
     match surface {
         NativeSurface::Launcher => WindowLayerPolicy::Spotlight,
         NativeSurface::ClipboardShelf => WindowLayerPolicy::FloatingTool,
-        NativeSurface::Settings | NativeSurface::Tasks => WindowLayerPolicy::Normal,
+        NativeSurface::Settings | NativeSurface::Tasks | NativeSurface::ToolWindow => {
+            WindowLayerPolicy::Normal
+        }
     }
 }
 
@@ -502,6 +511,73 @@ pub(in crate::platform) fn configure_tasks_window(title: &str) -> bool {
     configure_tasks_window_style(&window);
     window.center();
     true
+}
+
+pub(in crate::platform) fn configure_tool_window_style(window: &NSWindow) {
+    let style_mask = tool_window_style_mask();
+    if window.styleMask() != style_mask {
+        window.setStyleMask(style_mask);
+    }
+    window.setTitlebarAppearsTransparent(true);
+    window.setTitleVisibility(NSWindowTitleVisibility::Hidden);
+    show_standard_button(window, NSWindowButton::CloseButton, true);
+    show_standard_button(window, NSWindowButton::MiniaturizeButton, true);
+    show_standard_button(window, NSWindowButton::ZoomButton, true);
+    apply_window_layer(window, window_layer_policy(NativeSurface::ToolWindow));
+    window.setMovableByWindowBackground(false);
+    window.setHasShadow(true);
+    window.setAcceptsMouseMovedEvents(true);
+    window.setMinSize(objc2_foundation::NSSize::new(
+        f64::from(crate::ui::LAUNCHER_WIDTH),
+        f64::from(crate::ui::TOOL_WINDOW_MIN_HEIGHT),
+    ));
+    if !crate::platform::material::install_window_material(
+        window,
+        f64::from(crate::ui::LAUNCHER_CORNER_RADIUS),
+        NativeSurface::ToolWindow.glass_style(),
+    ) {
+        tracing::warn!("native_tool_window_material_failed");
+    }
+    if !restore_gpui_first_responder(window) {
+        tracing::warn!("native_tool_window_first_responder_missing");
+    }
+}
+
+pub(in crate::platform) fn configure_tool_window_number(window_number: isize) {
+    let Some(marker) = MainThreadMarker::new() else {
+        return;
+    };
+    let application = NSApplication::sharedApplication(marker);
+    if let Some(window) = application
+        .windows()
+        .iter()
+        .find(|window| window.windowNumber() == window_number)
+    {
+        configure_tool_window_style(&window);
+    }
+}
+
+pub(in crate::platform) fn refresh_tool_window_materials() -> bool {
+    let Some(marker) = MainThreadMarker::new() else {
+        return false;
+    };
+    crate::platform::material::prepare_window_material();
+    let application = NSApplication::sharedApplication(marker);
+    let mut refreshed = false;
+    for window in application.windows() {
+        use objc2_app_kit::NSUserInterfaceItemIdentification as _;
+        if window
+            .identifier()
+            .is_some_and(|current| current.to_string() == crate::platform::TOOL_WINDOW_IDENTITY)
+        {
+            refreshed |= crate::platform::material::install_window_material(
+                &window,
+                f64::from(crate::ui::LAUNCHER_CORNER_RADIUS),
+                NativeSurface::ToolWindow.glass_style(),
+            );
+        }
+    }
+    refreshed
 }
 
 pub(in crate::platform) fn refresh_window_material(title: &str) -> bool {

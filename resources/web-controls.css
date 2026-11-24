@@ -41,26 +41,34 @@
   outline: none; border-color: var(--aw-selected-border);
   box-shadow: inset 0 0 0 calc(var(--aw-focus-border-width) - var(--aw-control-border-width)) var(--aw-selected-border);
 }
-:where(dialog button, dialog select, [role="dialog"] button, [role="dialog"] select, menu button, [role="menu"] button, [role="listbox"] button) {
+/* Dialogs use the fixed surface, while action menus inherit the document theme. */
+:where(dialog button, dialog select, [role="dialog"] button, [role="dialog"] select) {
+  --aw-select-caret: var(--aw-select-caret-on-dark);
   color: var(--aw-on-dark-primary); border-color: var(--aw-on-dark-control-border);
 }
-:where(dialog button:hover:not(:disabled), dialog select:hover:not(:disabled), [role="dialog"] button:hover:not(:disabled), [role="dialog"] select:hover:not(:disabled), menu button:hover:not(:disabled), [role="menu"] button:hover:not(:disabled), [role="listbox"] button:hover:not(:disabled)) {
+:where(dialog button:hover:not(:disabled), dialog select:hover:not(:disabled), [role="dialog"] button:hover:not(:disabled), [role="dialog"] select:hover:not(:disabled)) {
   background-color: var(--aw-on-dark-hover);
 }
-:where(dialog button:active:not(:disabled), dialog select:active:not(:disabled), [role="dialog"] button:active:not(:disabled), [role="dialog"] select:active:not(:disabled), menu button:active:not(:disabled), [role="menu"] button:active:not(:disabled), [role="listbox"] button:active:not(:disabled)) {
+:where(dialog button:active:not(:disabled), dialog select:active:not(:disabled), [role="dialog"] button:active:not(:disabled), [role="dialog"] select:active:not(:disabled)) {
   background-color: var(--aw-on-dark-selected-surface);
 }
-:where(dialog button:focus-visible, dialog select:focus-visible, [role="dialog"] button:focus-visible, [role="dialog"] select:focus-visible, menu button:focus-visible, [role="menu"] button:focus-visible, [role="listbox"] button:focus-visible) {
+:where(dialog button:focus-visible, dialog select:focus-visible, [role="dialog"] button:focus-visible, [role="dialog"] select:focus-visible) {
   border-color: var(--aw-on-dark-selection-outline);
   box-shadow: inset 0 0 0 calc(var(--aw-focus-border-width) - var(--aw-control-border-width)) var(--aw-on-dark-selection-outline);
 }
 :where(button:disabled, select:disabled, input:disabled, textarea:disabled) { opacity: var(--aw-disabled-opacity); cursor: default; }
+html {
+  --aw-select-caret-on-dark: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m5 6.5 3 3 3-3' fill='none' stroke='%23edf0f5' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  --aw-select-caret: var(--aw-select-caret-on-dark);
+}
+html { --aw-select-caret-on-light: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m5 6.5 3 3 3-3' fill='none' stroke='%233c434d' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); }
 :where(select) {
   padding-right: calc(var(--aw-control-padding-x) + var(--aw-icon-size));
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Cpath d='m5 6.5 3 3 3-3' fill='none' stroke='%233c434d' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-image: var(--aw-select-caret);
   background-repeat: no-repeat; background-position: right var(--aw-space-xs) center; background-size: var(--aw-icon-size);
 }
-:where(select option) { color-scheme: dark; background: var(--aw-menu-surface); color: var(--aw-on-dark-primary); }
+:where(select option) { background: var(--aw-action-menu-surface); color: var(--aw-primary); }
+:where(dialog select option, [role="dialog"] select option) { color-scheme: dark; background: var(--aw-menu-surface); color: var(--aw-on-dark-primary); }
 :where(input, textarea) {
   min-width: 0; padding: var(--aw-field-padding-y) var(--aw-field-padding-x);
   color: var(--aw-text); background: var(--aw-field);
@@ -72,7 +80,7 @@
   outline: none; border-color: var(--aw-selected-border);
   box-shadow: inset 0 0 0 calc(var(--aw-field-focus-border-width) - var(--aw-field-border-width)) var(--aw-selected-border);
 }
-:where(input::placeholder, textarea::placeholder) { color: var(--aw-muted); opacity: 1; }
+:where(input, textarea)::placeholder { color: var(--aw-muted); -webkit-text-fill-color: currentColor; opacity: 1; }
 :where(input:read-only, textarea:read-only) { background: var(--aw-elevated); }
 :where(input:read-only:focus-visible, textarea:read-only:focus-visible) { box-shadow: none; }
 :where(input[type="search"])::-webkit-search-cancel-button { -webkit-appearance: none; }
@@ -127,27 +135,39 @@
 :where(legend) { padding: 0 var(--aw-space-xs); color: var(--aw-primary); font-size: var(--aw-label-size); font-weight: var(--aw-primary-control-weight); }
 :where(dialog, [role="dialog"]) { max-width: min(92vw, 520px); max-height: min(86vh, 640px); overflow: auto; padding: var(--aw-space-xl); color-scheme: dark; color: var(--aw-on-dark-primary); background: var(--aw-overlay); border: var(--aw-divider-width) solid var(--aw-on-dark-control-border); border-radius: var(--aw-card-radius); box-shadow: 0 18px 48px #00000059; }
 :where(dialog)::backdrop { background: #00000066; backdrop-filter: none; }
-:where(menu, [role="menu"], [role="listbox"]) { margin: 0; padding: var(--aw-space-xs); color-scheme: dark; color: var(--aw-on-dark-primary); background: var(--aw-menu-surface); border: var(--aw-divider-width) solid var(--aw-on-dark-control-border); border-radius: var(--aw-control-radius); box-shadow: 0 12px 32px #00000040; }
-:where([role="menuitem"], [role="option"], [role="menuitemcheckbox"]) { min-height: var(--aw-control-height); padding: var(--aw-control-padding-y) var(--aw-control-padding-x); border-radius: calc(var(--aw-control-radius) - 2px); }
-:where([role="menuitem"]:hover, [role="option"][aria-selected="true"], [role="menuitemcheckbox"][aria-checked="true"]) { background: var(--aw-on-dark-selected-surface); color: var(--aw-on-dark-primary); }
+/* Action popovers can contain ordinary buttons and selects with native roles. */
+/* In-page commands remain in normal layout and use native button focus and activation. */
+:where(.aw-command-list) { display: flex; flex-direction: column; min-width: 0; gap: var(--aw-space-xs); border-top: var(--aw-divider-width) solid var(--aw-divider); padding-top: var(--aw-space-xs); }
+:where(.aw-command-list > button) { justify-content: flex-start; min-height: var(--aw-menu-row-height); flex-shrink: 0; }
+:where(.aw-action-popover, menu, [role="menu"], [role="listbox"]) {
+  margin: 0;
+  padding: var(--aw-space-xs);
+  color: var(--aw-primary);
+  background: var(--aw-action-menu-surface);
+  border: var(--aw-divider-width) solid var(--aw-control-border);
+  border-radius: var(--aw-card-radius);
+  box-shadow: 0 8px 24px #0000002e;
+}
+:where(.aw-action-popover > button) { min-height: var(--aw-menu-row-height); justify-content: flex-start; border-color: transparent; }
+:where(.aw-action-popover > button:focus-visible) { background: var(--aw-action-menu-selection); border-color: var(--aw-selected-border); }
+:where(.aw-action-popover > hr) { margin: var(--aw-space-xs) 0; }
+:where([role="menuitem"], [role="option"], [role="menuitemcheckbox"]) { min-height: var(--aw-menu-row-height); padding: var(--aw-control-padding-y) var(--aw-control-padding-x); border-radius: calc(var(--aw-control-radius) - 2px); }
+:where([role="menuitem"]:hover, [role="option"][aria-selected="true"], [role="menuitemcheckbox"][aria-checked="true"]) { background: var(--aw-action-menu-selection); color: var(--aw-primary); }
 :where([role="tooltip"]) { max-width: min(320px, 80vw); padding: var(--aw-space-xs) var(--aw-space-sm); color-scheme: dark; color: var(--aw-on-dark-primary); background: var(--aw-overlay); border: var(--aw-divider-width) solid var(--aw-on-dark-control-border); border-radius: var(--aw-tooltip-radius); box-shadow: 0 8px 24px #00000040; font-size: var(--aw-caption-size); line-height: var(--aw-caption-line-height); }
-:where(dialog a, [role="dialog"] a, menu a, [role="menu"] a, [role="listbox"] a, [role="tooltip"] a) { color: var(--aw-on-dark-accent); }
+:where(dialog a, [role="dialog"] a, [role="tooltip"] a) { color: var(--aw-on-dark-accent); }
 :where([hidden]) { display: none !important; }
 :where(.sr-only) { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 ::-webkit-scrollbar { width: var(--aw-scrollbar-size); height: var(--aw-scrollbar-size); }
 ::-webkit-scrollbar-thumb { background: var(--aw-border); border-radius: var(--aw-scrollbar-size); }
 @media (prefers-contrast: more) {
   :where(body, .aw-ui) { color: var(--aw-primary); }
-  :where(button, select, input, textarea, .aw-card, fieldset, dialog, menu, [role="listbox"]) {
-    border-color: var(--aw-secondary);
-  }
   :where(.aw-muted, .aw-workspace-notice) { color: var(--aw-secondary); }
 }
 @media (prefers-reduced-transparency: reduce) {
   /* The native host replaces Glass with its opaque fallback. Plugin-local
      overlays must not create a second blur or translucent layer. */
   :where(*, *::before, *::after) { backdrop-filter: none !important; -webkit-backdrop-filter: none !important; }
-  :where(dialog, [role="dialog"], menu, [role="menu"], [role="listbox"], [role="tooltip"]) {
+  :where(dialog, [role="dialog"], [role="tooltip"]) {
     background-color: var(--aw-fallback-surface);
   }
 }
@@ -162,7 +182,7 @@
 :where(pre) { margin: 0; padding: var(--aw-control-padding-x); overflow: auto; border-radius: var(--aw-control-radius); background: var(--aw-action-surface); }
 
 /* A normal input with a fixed prefix, shared by formula and other input groups. */
-:where(.aw-input-group) { display: flex; align-items: stretch; min-width: 0; overflow: hidden; background: var(--aw-action-surface); border: var(--aw-field-border-width) solid var(--aw-control-border); border-radius: var(--aw-control-radius); }
+:where(.aw-input-group) { display: flex; align-items: stretch; min-width: 0; overflow: hidden; background: var(--aw-editor-surface); border: var(--aw-field-border-width) solid var(--aw-control-border); border-radius: var(--aw-control-radius); }
 :where(.aw-input-group:focus-within) { border-color: var(--aw-selected-border); box-shadow: inset 0 0 0 calc(var(--aw-field-focus-border-width) - var(--aw-field-border-width)) var(--aw-selected-border); }
 :where(.aw-input-group[data-invalid="true"]) { border-color: var(--aw-danger); box-shadow: none; }
 :where(.aw-input-prefix) { display: flex; align-items: center; padding: var(--aw-field-padding-y) var(--aw-field-padding-x); border-right: var(--aw-divider-width) solid var(--aw-divider); color: var(--aw-secondary); user-select: none; }
@@ -183,7 +203,7 @@
 :where(.aw-pane-header label) { color: var(--aw-primary); font-size: var(--aw-label-size); font-weight: var(--aw-primary-control-weight); line-height: var(--aw-body-line-height); }
 :where(.aw-pane-header span) { font-variant-numeric: tabular-nums; }
 :where(.aw-pane-body) { flex: 1; min-height: 0; display: flex; margin: 0 var(--aw-space-lg); }
-:where(.aw-editor) { flex: 1; min-height: 0; width: 100%; resize: none; padding: var(--aw-control-padding-x); border: var(--aw-divider-width) solid transparent; border-radius: var(--aw-control-radius); background: var(--aw-action-surface); white-space: pre; tab-size: 2; }
+:where(.aw-editor) { flex: 1; min-height: 0; width: 100%; resize: none; padding: var(--aw-control-padding-x); border: var(--aw-divider-width) solid transparent; border-radius: var(--aw-control-radius); background: var(--aw-editor-surface); white-space: pre; tab-size: 2; }
 :where(.aw-editor:focus-visible) { outline: none; border-color: var(--aw-selected-border); box-shadow: inset 0 0 0 calc(var(--aw-field-focus-border-width) - var(--aw-divider-width)) var(--aw-selected-border); }
 :where(.aw-button--action) { font-weight: var(--aw-primary-control-weight); }
 :where(.aw-workspace-notice) { margin: var(--aw-space-sm) var(--aw-space-lg); padding: var(--aw-space-sm) var(--aw-space-md); border-radius: var(--aw-result-radius); background: var(--aw-card); color: var(--aw-primary); font-size: var(--aw-caption-size); border: var(--aw-control-border-width) solid var(--aw-warning); overflow-wrap: anywhere; max-height: 100px; flex-shrink: 0; overflow: auto; }

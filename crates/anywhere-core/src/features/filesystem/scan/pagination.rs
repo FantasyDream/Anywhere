@@ -47,7 +47,8 @@ impl ScanStore {
         displayed: &std::collections::HashSet<PathBuf>,
         cancelled: &(dyn Fn() -> bool + Sync),
     ) -> Result<ScanPage> {
-        let mut continuous = self.continuous.lock().unwrap();
+        let mut continuous =
+            crate::core::sync::lock_state(&self.continuous, "file_search_pagination")?;
         let result = continuous.more(self, displayed, &|| {
             self.cancelled.load(AtomicOrdering::Acquire) || cancelled()
         });

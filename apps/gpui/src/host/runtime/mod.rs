@@ -1,14 +1,16 @@
+#[cfg(test)]
+use super::runtime_support::snapshot_cursor;
 use super::runtime_support::{
     app_history_object_action, app_history_sources_from, apply_preferences,
     clipboard_snapshot_from, execution_detail, execution_row, preview, reconcile_access_at_startup,
-    settings_snapshot_from, snapshot_cursor, web_document, web_packages_from, web_permission_label,
+    settings_snapshot_from, web_document, web_packages_from, web_permission_label,
 };
 use super::{
     directory_access::DirectoryAccess,
     dto::{
-        AppHistoryItem, AppHistoryObjectAction, AppHistorySnapshot, AppHistorySource,
-        ClipboardSnapshot, ExecutionDetail, ExecutionRow, PreviewFile, ShortcutCandidate,
-        ShortcutCatalogAction, WebDocument, WebPackage, WebPackageReview,
+        ActivationInput, AppHistoryItem, AppHistoryObjectAction, AppHistorySnapshot,
+        AppHistorySource, ClipboardSnapshot, ExecutionDetail, ExecutionRow, PreviewFile,
+        ShortcutCandidate, ShortcutCatalogAction, WebDocument, WebPackage, WebPackageReview,
     },
     login_item, ActionShortcutBinding, HostPreferences, ProductPaths,
 };
@@ -67,6 +69,7 @@ pub enum LiveEvent {
         directory: String,
     },
     ShortcutCatalog(Vec<ShortcutCatalogAction>),
+    ActivationInput(Option<ActivationInput>),
     ActionShortcutReady {
         action_id: String,
         revision: Revision,
@@ -97,10 +100,6 @@ pub enum LiveEvent {
     DirectoriesAuthorized {
         roots: Vec<String>,
     },
-    ApplicationIcon {
-        candidate_id: String,
-        bytes: Option<Vec<u8>>,
-    },
     Preview(PreviewFile),
     Ignored,
     Error(String),
@@ -110,6 +109,7 @@ pub enum LiveEvent {
 /// GPUI never runs blocking Core or platform work on its render thread.
 pub struct LiveLauncher {
     runtime: Option<tokio::runtime::Runtime>,
+    runtime_owner: Option<Arc<LiveLauncher>>,
     application: Arc<ApplicationRuntime>,
     session_id: AtomicU32,
     preferences_path: PathBuf,
@@ -124,16 +124,18 @@ pub struct LiveLauncher {
 impl LiveLauncher {
     pub fn open() -> Result<Self> {
         let paths = ProductPaths::discover()?;
-        Self::open_with_isolation(paths.runtime_paths(), paths.explicit_data_directory)
+        Self::open_with_isolation(&paths.runtime_paths(), paths.explicit_data_directory)
     }
 
     pub fn open_at(paths: RuntimePaths) -> Result<Self> {
-        Self::open_with_isolation(paths, true)
+        Self::open_with_isolation(&paths, true)
     }
 
-    fn open_with_isolation(paths: RuntimePaths, explicit_data_directory: bool) -> Result<Self> {
+    fn open_with_isolation(paths: &RuntimePaths, explicit_data_directory: bool) -> Result<Self> {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
+            .max_blocking_threads(16)
+            .thread_keep_alive(std::time::Duration::from_secs(15))
             .thread_name("anywhere-core")
             .enable_all()
             .build()
@@ -156,6 +158,7 @@ impl LiveLauncher {
         let settings_cache = settings_snapshot_from(&application)?;
         Ok(Self {
             runtime: Some(runtime),
+            runtime_owner: None,
             application,
             session_id: AtomicU32::new(0),
             preferences_path,
@@ -166,6 +169,27 @@ impl LiveLauncher {
             preferences_cache: Arc::new(Mutex::new(preferences)),
             settings_cache: Arc::new(Mutex::new(settings_cache)),
         })
+    }
+
+    pub(crate) fn tool_window(
+        self: &Arc<Self>,
+        handle: &str,
+    ) -> Result<(Arc<Self>, LauncherState, String)> {
+        let (application, state, invocation) = self.application.tool_window(handle)?;
+        let window = Arc::new(Self {
+            runtime: None,
+            runtime_owner: Some(self.clone()),
+            application,
+            session_id: AtomicU32::new(state.session_id),
+            preferences_path: self.preferences_path.clone(),
+            explicit_data_directory: self.explicit_data_directory,
+            directory_access: self.directory_access.clone(),
+            search_access_error: self.search_access_error.clone(),
+            preferences_write: self.preferences_write.clone(),
+            preferences_cache: self.preferences_cache.clone(),
+            settings_cache: self.settings_cache.clone(),
+        });
+        Ok((window, state, invocation))
     }
 
     pub fn session_id(&self) -> SessionId {
@@ -185,15 +209,12 @@ impl LiveLauncher {
     }
 
     pub fn preferences(&self) -> Result<HostPreferences> {
-        self.preferences_cache
-            .lock()
+        anywhere_core::core::sync::lock_state(&self.preferences_cache, "preferences_cache")
             .map(|preferences| preferences.clone())
-            .map_err(|_| anyhow::anyhow!("preferences cache is unavailable"))
     }
 
     pub fn search_access_error(&self) -> Option<String> {
-        self.search_access_error
-            .lock()
+        anywhere_core::core::sync::lock_state(&self.search_access_error, "search_access_error")
             .ok()
             .and_then(|error| error.clone())
     }
@@ -219,10 +240,10 @@ impl LiveLauncher {
             let event = match operation() {
                 Ok(event) => event,
                 Err(error) => {
-                    let locale = preferences
-                        .lock()
-                        .map(|preferences| preferences.ui_language.locale())
-                        .unwrap_or(crate::l10n::Locale::En);
+                    let locale =
+                        anywhere_core::core::sync::lock_state(&preferences, "preferences_cache")
+                            .map(|preferences| preferences.ui_language.locale())
+                            .unwrap_or(crate::l10n::Locale::En);
                     LiveEvent::Error(super::directory_access::localized_error(&error, locale))
                 }
             };
@@ -242,7 +263,9 @@ impl LiveLauncher {
             let event = match operation() {
                 Ok(()) => match settings_snapshot_from(&application) {
                     Ok(snapshot) => {
-                        if let Ok(mut cached) = settings_cache.lock() {
+                        if let Ok(mut cached) =
+                            anywhere_core::core::sync::lock_state(&settings_cache, "settings_cache")
+                        {
                             *cached = snapshot.clone();
                         }
                         LiveEvent::Settings(snapshot)
@@ -260,9 +283,12 @@ impl LiveLauncher {
     }
 
     fn runtime(&self) -> &tokio::runtime::Runtime {
-        self.runtime
-            .as_ref()
-            .expect("LiveLauncher runtime is unavailable only after Drop")
+        self.runtime.as_ref().unwrap_or_else(|| {
+            self.runtime_owner
+                .as_ref()
+                .expect("tool runtime owner")
+                .runtime()
+        })
     }
 }
 

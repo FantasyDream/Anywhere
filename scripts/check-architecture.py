@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 import subprocess
-from architecture_rules import check_core_imports, check_feature_imports, check_persistence_imports, production_source
+from architecture_rules import check_core_imports, check_feature_imports, check_lock_usage, check_persistence_imports, production_source
 
 subprocess.check_call([
     'python3', '-m', 'unittest', 'discover', '-s', 'scripts/tests', '-p',
@@ -57,6 +57,7 @@ print('Persistence imports OK: adapters do not call Application')
 for source in Path('crates/anywhere-core/src').rglob('*.rs'):
     if source.name == 'tests.rs' or source.name.endswith('_tests.rs'):
         continue
+    check_lock_usage(source.read_text(), source)
     production = production_source(source.read_text())
     for token in ['MacOsPlatform', 'com.apple.finder', '/bin/sh', 'std::os::']:
         assert token not in production, (source, token)

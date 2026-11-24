@@ -52,18 +52,14 @@ impl FeatureCatalog {
     }
 
     pub fn registry(&self) -> Arc<ActionRegistry> {
-        self.registry
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner())
-            .clone()
+        crate::core::sync::lock_for_revoke(&self.registry, "feature_registry").clone()
     }
 
     /// Caller holds Session; publication consumers revalidate this version.
     pub fn replace_registry(&self, mut registry: ActionRegistry) {
         registry.retain_contributors(|id| self.allows(id));
-        if let Ok(mut slot) = self.registry.lock() {
-            *slot = Arc::new(registry);
-        }
+        *crate::core::sync::lock_for_revoke(&self.registry, "feature_registry") =
+            Arc::new(registry);
         self.version.fetch_add(1, Ordering::AcqRel);
     }
 
@@ -116,9 +112,7 @@ impl FeatureCatalog {
     }
 
     pub fn register_source(&self, source: CandidateSourceRef) {
-        self.sources
-            .lock()
-            .expect("sources lock poisoned")
+        crate::core::sync::lock_for_revoke(&self.sources, "feature_sources")
             .base
             .synchronous
             .push(source);

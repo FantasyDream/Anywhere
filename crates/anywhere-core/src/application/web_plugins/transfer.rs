@@ -132,8 +132,8 @@ impl RpcState {
         self.transfer = None;
         Ok(Value::Null)
     }
-    pub fn pack(&mut self, request_id: &str, value: Value) -> WebResult<String> {
-        let payload = bounded_json(&value, MAX_TRANSFER_BYTES)?;
+    pub fn pack(&mut self, request_id: &str, value: &Value) -> WebResult<String> {
+        let payload = bounded_json(value, MAX_TRANSFER_BYTES)?;
         if payload.len() + request_id.len() + 64 < MAX_FRAME_BYTES {
             return Ok(format!(
                 "{{\"requestId\":\"{request_id}\",\"result\":{{\"value\":{payload}}}}}"

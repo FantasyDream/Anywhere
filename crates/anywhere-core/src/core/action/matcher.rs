@@ -252,6 +252,7 @@ fn subtitle(action: &ActionDescriptor, context: &ResolvedContext) -> String {
     }
     let detail = context.display_detail();
     match &action.subtitle {
+        Some(subtitle) if detail.trim().is_empty() => subtitle.clone(),
         Some(subtitle) => format!("{subtitle} · {detail}"),
         None => detail,
     }

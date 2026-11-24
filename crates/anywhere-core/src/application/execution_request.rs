@@ -118,8 +118,8 @@ impl ExecutionRequest {
                         .presentation
                         .availability
                         .reason
-                        .clone()
-                        .unwrap_or_else(|| "action is not available".into())
+                        .as_deref()
+                        .unwrap_or("action is not available")
                 );
             }
             (

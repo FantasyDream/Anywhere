@@ -8,9 +8,30 @@ use anywhere_protocol::FileSearchFilter;
 mod tasks;
 pub use tasks::TasksPageModel;
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum ClipboardKindFilter {
+    #[default]
+    All,
+    Text,
+    Image,
+    File,
+}
+
+impl ClipboardKindFilter {
+    pub fn matches(self, kind: &str) -> bool {
+        match self {
+            Self::All => true,
+            Self::Text => matches!(kind, "text" | "rich_text" | "link" | "color"),
+            Self::Image => kind == "image",
+            Self::File => matches!(kind, "file" | "files"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct ClipboardPageModel {
     pub query: String,
+    pub kind_filter: ClipboardKindFilter,
     pub selected: usize,
     pub browsing: bool,
     pub loading: bool,
@@ -30,15 +51,32 @@ impl ClipboardPageModel {
     pub fn apply(&mut self, snapshot: ClipboardSnapshot) {
         self.loading = false;
         let previous = self.selected_id();
-        let selected = previous.and_then(|id| snapshot.items.iter().position(|item| item.id == id));
+        self.status = Some(snapshot);
+        let selected = previous.and_then(|id| self.visible_position(id));
         self.selected = selected.unwrap_or(0);
         if self.browsing && selected.is_none() {
             self.browsing = false;
         }
-        if self.selected >= snapshot.items.len() {
-            self.selected = snapshot.items.len().saturating_sub(1);
+        let len = self.visible_len();
+        if self.selected >= len {
+            self.selected = len.saturating_sub(1);
         }
-        self.status = Some(snapshot);
+    }
+
+    pub fn set_kind_filter(&mut self, filter: ClipboardKindFilter) {
+        if self.kind_filter == filter {
+            return;
+        }
+        let previous = self.selected_id();
+        self.kind_filter = filter;
+        let selected = previous.and_then(|id| self.visible_position(id));
+        self.selected = selected.unwrap_or(0);
+        let len = self.visible_len();
+        if len == 0 {
+            self.browsing = false;
+        } else if self.selected >= len {
+            self.selected = len.saturating_sub(1);
+        }
     }
 
     pub fn loading(&mut self) {
@@ -67,24 +105,58 @@ impl ClipboardPageModel {
             .unwrap_or_default()
     }
 
+    pub fn visible_len(&self) -> usize {
+        if self.kind_filter == ClipboardKindFilter::All {
+            self.items().len()
+        } else {
+            self.items()
+                .iter()
+                .filter(|item| self.kind_filter.matches(&item.kind))
+                .count()
+        }
+    }
+
+    pub fn visible_item(&self, index: usize) -> Option<&ClipboardItem> {
+        if self.kind_filter == ClipboardKindFilter::All {
+            self.items().get(index)
+        } else {
+            self.items()
+                .iter()
+                .filter(|item| self.kind_filter.matches(&item.kind))
+                .nth(index)
+        }
+    }
+
+    pub fn visible_position(&self, item_id: i64) -> Option<usize> {
+        if self.kind_filter == ClipboardKindFilter::All {
+            self.items().iter().position(|item| item.id == item_id)
+        } else {
+            self.items()
+                .iter()
+                .filter(|item| self.kind_filter.matches(&item.kind))
+                .position(|item| item.id == item_id)
+        }
+    }
+
     pub fn selected_id(&self) -> Option<i64> {
         if !self.browsing {
             return None;
         }
-        self.items().get(self.selected).map(|item| item.id)
+        self.visible_item(self.selected).map(|item| item.id)
     }
 
     pub fn selected_item(&self) -> Option<&ClipboardItem> {
         if !self.browsing {
             return None;
         }
-        self.items().get(self.selected)
+        self.visible_item(self.selected)
     }
 
     pub fn select_next(&mut self) {
-        if !self.items().is_empty() {
+        let len = self.visible_len();
+        if len > 0 {
             self.selected = if self.browsing {
-                (self.selected + 1).min(self.items().len().saturating_sub(1))
+                (self.selected + 1).min(len.saturating_sub(1))
             } else {
                 0
             };
@@ -93,7 +165,7 @@ impl ClipboardPageModel {
     }
 
     pub fn select_previous(&mut self) {
-        if !self.items().is_empty() {
+        if self.visible_len() > 0 {
             self.selected = if !self.browsing || self.selected == 0 {
                 0
             } else {
@@ -123,7 +195,7 @@ pub struct AppHistoryPageModel {
     pub object_actions: Vec<AppHistoryObjectAction>,
     pub object_actions_active: bool,
     pub object_actions_loading: bool,
-    pub empty_actions_open: bool,
+    pub page_actions_open: bool,
     pub fallback_actions_open: bool,
     pub fallback_action_selected: usize,
     pub object_action_selected: usize,
@@ -153,7 +225,7 @@ impl AppHistoryPageModel {
         self.loading = true;
         self.notice = None;
         self.failed_sources = false;
-        self.empty_actions_open = false;
+        self.page_actions_open = false;
         self.fallback_actions_open = false;
         self.fallback_action_selected = 0;
         self.invalidate_object_actions();
@@ -215,7 +287,7 @@ impl AppHistoryPageModel {
         self.reset_selection_on_next_snapshot = false;
         self.failed_sources = !snapshot.failed_sources.is_empty();
         self.notice = snapshot.notice;
-        self.empty_actions_open = false;
+        self.page_actions_open = false;
         self.fallback_actions_open = false;
         self.fallback_action_selected = 0;
         self.invalidate_object_actions();
@@ -243,7 +315,7 @@ impl AppHistoryPageModel {
         self.loading = false;
         self.items.clear();
         self.selected = 0;
-        self.empty_actions_open = false;
+        self.page_actions_open = false;
         self.fallback_actions_open = false;
         self.fallback_action_selected = 0;
         self.invalidate_object_actions();
@@ -543,6 +615,7 @@ mod tests {
             enabled: false,
             available: true,
             rollback: false,
+            builtin: false,
             permission_count: 0,
         };
         let mut model = WebPageModel::default();

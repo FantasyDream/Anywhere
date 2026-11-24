@@ -102,6 +102,7 @@ pub struct WebDocumentView {
     pub origin: String,
     pub entry: String,
     pub title: String,
+    pub builtin: bool,
 }
 
 /// Owns the services shared by the product frontend in one process.
@@ -112,9 +113,9 @@ pub struct WebDocumentView {
 /// binding before awaiting application work.
 pub struct ApplicationRuntime {
     application: Arc<Application>,
-    settings: Mutex<SettingsService>,
+    settings: Arc<Mutex<SettingsService>>,
     #[cfg(target_os = "macos")]
-    web_packages: Mutex<Option<WebPackageStore>>,
+    web_packages: Arc<Mutex<Option<WebPackageStore>>>,
     document: Mutex<Option<WebDocumentBinding>>,
     opening: tokio::sync::Mutex<()>,
     paths: RuntimePaths,
@@ -155,9 +156,10 @@ impl ApplicationRuntime {
 
         #[cfg(target_os = "macos")]
         let web_packages = {
-            let store = match WebPackageStore::open(
+            let store = match WebPackageStore::open_with_builtins(
                 paths.data_directory.join("web-packages"),
                 anywhere_protocol::web_plugin::WebPlatform::Macos,
+                crate::application::web_plugins::BUILTIN_WEB_PACKAGES,
                 application.as_ref(),
             ) {
                 Ok(store) => Some(store),
@@ -172,13 +174,40 @@ impl ApplicationRuntime {
 
         Ok(Arc::new(Self {
             application,
-            settings: Mutex::new(settings),
+            settings: Arc::new(Mutex::new(settings)),
             #[cfg(target_os = "macos")]
-            web_packages,
+            web_packages: Arc::new(web_packages),
             document: Mutex::new(None),
             opening: tokio::sync::Mutex::new(()),
             paths,
         }))
+    }
+
+    pub fn tool_window(
+        &self,
+        handle: &str,
+    ) -> Result<(Arc<Self>, anywhere_protocol::LauncherState, String)> {
+        let document = self.document(handle)?;
+        let (application, state, invocation) = self.application.tool_window(&document)?;
+        Ok((
+            Arc::new(Self {
+                application,
+                settings: self.settings.clone(),
+                paths: self.paths.clone(),
+                #[cfg(target_os = "macos")]
+                web_packages: self.web_packages.clone(),
+                document: Default::default(),
+                opening: Default::default(),
+            }),
+            state,
+            invocation,
+        ))
+    }
+
+    pub fn history_reader(
+        &self,
+    ) -> Result<Arc<crate::features::application_history::service::HistoryService>> {
+        self.settings()?.application_history()
     }
 
     pub fn paths(&self) -> &RuntimePaths {
@@ -375,6 +404,7 @@ impl ApplicationRuntime {
             origin: binding.origin().into(),
             entry: package.entry,
             title: package.name,
+            builtin: package.builtin,
             binding,
         })
     }

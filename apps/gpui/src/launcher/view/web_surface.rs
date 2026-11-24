@@ -57,7 +57,7 @@ impl LauncherView {
                 if request_id != this.web_surface.open_generation
                     || this.screen != Screen::WebTool
                     || this.web_surface.invocation_id != invocation_id
-                    || (!this.presented && !this.retained_workspace)
+                    || (!this.presence.presented && !this.presence.retained_workspace)
                 {
                     return;
                 }
@@ -122,7 +122,7 @@ impl LauncherView {
                         this.web_surface.error = None;
                         this.web_surface.state_handle = None;
                         this.web_surface.state_version = 0;
-                        if this.presented && !this.web_surface.needs_resume {
+                        if this.presence.presented && !this.web_surface.needs_resume {
                             let _ = this.evaluate_web_script(&visibility_script(true), cx);
                         }
                     }
@@ -144,7 +144,7 @@ impl LauncherView {
 
     pub(super) fn resume_web_surface_if_needed(&mut self, cx: &mut Context<Self>) {
         if self.screen != Screen::WebTool
-            || !self.presented
+            || !self.presence.presented
             || !self.web_surface.needs_resume
             || self.web_surface.opening
             || self.web_surface.resume_busy

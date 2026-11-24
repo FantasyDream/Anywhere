@@ -11,3 +11,4 @@ plutil -lint apps/gpui/macos/Info.plist apps/gpui/macos/Release.entitlements
 cargo fmt --all -- --check
 cargo test -p anywhere-gpui --locked
 cargo clippy -p anywhere-gpui --all-targets --locked -- -D warnings
+cargo clippy -p anywhere-gpui --lib --bins --locked -- -W clippy::too_many_lines -D warnings

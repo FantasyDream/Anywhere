@@ -46,7 +46,7 @@ impl AppActionCatalog {
         app: &ApplicationInfo,
         version: Option<&str>,
     ) -> Option<Arc<[DiscoveredMenuItem]>> {
-        let guard = self.inner.lock().ok()?;
+        let guard = crate::core::sync::lock_cache(&self.inner, "app_action_catalog");
         let cached = guard.get(&app.bundle_id)?.cached.as_ref()?;
         if cached.app != *app || cached.version.as_deref() != version {
             return None;
@@ -54,9 +54,7 @@ impl AppActionCatalog {
         Some(Arc::clone(&cached.items))
     }
     pub fn begin(&self, ticket: &DiscoveryTicket, invalidate: bool) -> bool {
-        let Ok(mut entries) = self.inner.lock() else {
-            return false;
-        };
+        let mut entries = crate::core::sync::lock_cache(&self.inner, "app_action_catalog");
         let entry = entries.entry(ticket.app.bundle_id.clone()).or_default();
         if entry.generation >= ticket.generation {
             return false;
@@ -80,9 +78,7 @@ impl AppActionCatalog {
     /// Failure may arrive after focus loss. Invalidate even then, without erasing a
     /// newer session's cache or cancelling its discovery.
     pub fn invalidate_through(&self, bundle: &str, generation: u64) {
-        let Ok(mut entries) = self.inner.lock() else {
-            return;
-        };
+        let mut entries = crate::core::sync::lock_cache(&self.inner, "app_action_catalog");
         if let Some(entry) = entries.get_mut(bundle) {
             if entry.generation <= generation {
                 entry.generation = self.next.fetch_add(1, Ordering::Relaxed) + 1;
@@ -99,9 +95,7 @@ impl AppActionCatalog {
         publish: impl FnOnce(),
     ) -> bool {
         {
-            let Ok(mut entries) = self.inner.lock() else {
-                return false;
-            };
+            let mut entries = crate::core::sync::lock_cache(&self.inner, "app_action_catalog");
             let Some(entry) = entries.get_mut(&ticket.app.bundle_id) else {
                 return false;
             };

@@ -19,9 +19,13 @@ pub(super) struct ApplicationIndex {
     updates: watch::Sender<u64>,
 }
 
+#[derive(Default)]
 enum ScanQueue {
+    #[default]
     Idle,
-    Running { pending: Option<ScanRequest> },
+    Running {
+        pending: Option<ScanRequest>,
+    },
 }
 
 struct ScanRequest {
@@ -124,7 +128,7 @@ impl ApplicationIndex {
 
     /// Keep at most one scan running and one follow-up for the latest activation.
     pub fn spawn_scan(self: &Arc<Self>, platform: Arc<dyn ApplicationCatalogHost>) -> u64 {
-        let mut queue = self.scans.lock().expect("application scan queue poisoned");
+        let mut queue = crate::core::sync::lock_cache(&self.scans, "application_scan_queue");
         let generation = self.issue_scan();
         let request = ScanRequest {
             generation,
@@ -147,9 +151,10 @@ impl ApplicationIndex {
             let scanned = index::scan_async(request.platform).await;
             self.publish(request.generation, scanned);
 
-            let mut queue = self.scans.lock().expect("application scan queue poisoned");
+            let mut queue = crate::core::sync::lock_cache(&self.scans, "application_scan_queue");
             let ScanQueue::Running { pending } = &mut *queue else {
-                unreachable!("scan worker owns the running queue");
+                *queue = ScanQueue::Idle;
+                return;
             };
             let Some(next) = pending.take() else {
                 *queue = ScanQueue::Idle;
@@ -164,7 +169,8 @@ impl ApplicationIndex {
     }
 
     fn publish(&self, generation: u64, scanned: ScanStatus) {
-        let Ok(mut state) = self.published.lock() else {
+        let Ok(mut state) = crate::core::sync::lock_or_deny(&self.published, "application_catalog")
+        else {
             return;
         };
         // An older completed scan cannot overwrite a newer success or failure.

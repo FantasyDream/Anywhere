@@ -5,11 +5,14 @@ use anywhere_plugin::web::{VerifiedAsset, VerifiedWebPackage, MAX_ASSET_BYTES};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
 };
+
+const MAX_THIRD_PARTY_RECEIPTS: usize = 64;
+const MAX_RECEIPTS_BYTES: usize = 256 * 1024;
 
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -23,6 +26,7 @@ pub(crate) struct Receipt {
 
 pub(crate) struct WebPackageRepository {
     root: PathBuf,
+    builtin_ids: BTreeSet<String>,
 }
 #[derive(Clone)]
 pub struct WebResourceFile {
@@ -42,14 +46,18 @@ impl WebResourceFile {
     }
 }
 impl WebPackageRepository {
-    pub fn open(root: PathBuf) -> Result<(Self, BTreeMap<String, Receipt>)> {
+    pub fn open(
+        root: PathBuf,
+        builtin_ids: BTreeSet<String>,
+    ) -> Result<(Self, BTreeMap<String, Receipt>)> {
         fs::create_dir_all(&root)?;
         let root = fs::canonicalize(root)?;
         let ledger = root.join("receipts.json");
+        let repository = Self { root, builtin_ids };
         let receipts = if ledger.exists() {
-            let bytes = read_regular(&ledger, 256 * 1024)?;
+            let bytes = read_regular(&ledger, MAX_RECEIPTS_BYTES as u64)?;
             let receipts: BTreeMap<String, Receipt> = serde_json::from_slice(&bytes)?;
-            ensure!(receipts.len() <= 64, "too many Web receipts");
+            repository.validate_count(&receipts)?;
             for (id, item) in &receipts {
                 ensure!(
                     id == &item.id
@@ -62,7 +70,25 @@ impl WebPackageRepository {
         } else {
             BTreeMap::new()
         };
-        Ok((Self { root }, receipts))
+        Ok((repository, receipts))
+    }
+    pub fn is_builtin(&self, id: &str) -> bool {
+        self.builtin_ids.contains(id)
+    }
+    pub fn can_insert(&self, receipts: &BTreeMap<String, Receipt>, id: &str) -> bool {
+        self.is_builtin(id)
+            || receipts.contains_key(id)
+            || self.third_party_count(receipts) < MAX_THIRD_PARTY_RECEIPTS
+    }
+    fn third_party_count(&self, receipts: &BTreeMap<String, Receipt>) -> usize {
+        receipts.keys().filter(|id| !self.is_builtin(id)).count()
+    }
+    fn validate_count(&self, receipts: &BTreeMap<String, Receipt>) -> Result<()> {
+        ensure!(
+            self.third_party_count(receipts) <= MAX_THIRD_PARTY_RECEIPTS,
+            "too many Web receipts"
+        );
+        Ok(())
     }
     pub fn package(&self, digest: &str) -> Result<VerifiedWebPackage> {
         let path = self.root.join(digest).join("package.awplugin");
@@ -80,8 +106,14 @@ impl WebPackageRepository {
         }
     }
     pub fn save(&self, receipts: &BTreeMap<String, Receipt>) -> Result<()> {
+        self.validate_count(receipts)?;
+        let bytes = serde_json::to_vec(receipts)?;
+        ensure!(
+            bytes.len() <= MAX_RECEIPTS_BYTES,
+            "Web receipts exceed size limit"
+        );
         let mut file = tempfile::NamedTempFile::new_in(&self.root)?;
-        serde_json::to_writer(&mut file, receipts)?;
+        file.write_all(&bytes)?;
         file.flush()?;
         file.as_file().sync_all()?;
         file.persist(self.root.join("receipts.json"))

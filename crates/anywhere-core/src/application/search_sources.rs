@@ -1,5 +1,6 @@
 //! Independent generic source orchestration. Domain workspaces adapt their own queries.
 use super::{session_runtime::Resolver, Application};
+use crate::core::search::candidate_source::AsyncCandidateSource as _;
 use crate::core::search::candidate_source::{AsyncCandidateBatch, AsyncSearchRequest, BatchUpdate};
 use anywhere_protocol::*;
 use std::{collections::HashSet, sync::Arc};
@@ -15,17 +16,26 @@ impl Application {
         if scope.is_some() || mode == InputMode::Content {
             return;
         }
-        let sources: Vec<_> = self
-            .resolver
-            .catalog
-            .asynchronous_sources()
-            .expect("sources lock poisoned")
+        let Ok(asynchronous) = self.resolver.catalog.asynchronous_sources() else {
+            tracing::error!("asynchronous_sources_lock_poisoned");
+            return;
+        };
+        let mut sources: Vec<_> = asynchronous
             .into_iter()
             .filter(|s| s.accepts_mode(mode) && s.accepts(input))
             .collect();
         // Product workspace dispatch lives at the Application boundary, never in
         // the generic runner, request or publication protocol.
         if mode == InputMode::FileSearch {
+            // Main sessions retain registered test and extension sources. Only an
+            // explicitly isolated tool window swaps in its own active scan store.
+            if self.isolated_file_search {
+                for source in &mut sources {
+                    if source.id() == self.file_search_source.id() {
+                        *source = self.file_search_source.clone();
+                    }
+                }
+            }
             self.spawn_file_search_sources(session_id, revision, input, sources);
             return;
         }

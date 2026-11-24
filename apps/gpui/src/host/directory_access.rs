@@ -159,10 +159,7 @@ impl DirectoryAccess {
         {
             (|| {
                 let resolved = Self::resolve_macos(&self.load()?, &requested)?;
-                *self
-                    .leases
-                    .lock()
-                    .map_err(|_| anyhow::anyhow!("search directory access is unavailable"))? =
+                *anywhere_core::core::sync::lock_state(&self.leases, "directory_leases")? =
                     resolved;
                 Ok(requested)
             })()
@@ -187,9 +184,7 @@ impl DirectoryAccess {
     pub fn clear(&self) {
         #[cfg(target_os = "macos")]
         {
-            if let Ok(mut leases) = self.leases.lock() {
-                leases.clear();
-            }
+            anywhere_core::core::sync::lock_for_revoke(&self.leases, "directory_leases").clear();
         }
     }
 

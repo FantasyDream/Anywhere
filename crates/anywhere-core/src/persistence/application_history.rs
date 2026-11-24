@@ -3,9 +3,10 @@ pub(crate) mod discovery;
 pub(crate) mod packages;
 use crate::features::application_history::model::{Cancelled, MAX_INPUT};
 use anyhow::{bail, ensure, Result};
+use anywhere_platform::paths::open_regular_read;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::{fs::File, io::Read, path::Path};
+use std::{io::Read, path::Path};
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "format", rename_all = "snake_case", deny_unknown_fields)]
@@ -20,7 +21,7 @@ pub(crate) enum Reader {
 }
 pub(crate) fn read_json_text(path: &Path, cancelled: &Cancelled) -> Result<String> {
     ensure!(!cancelled(), "source read cancelled");
-    let mut file = File::open(path)?;
+    let mut file = open_regular_read(path)?;
     let before = file.metadata()?;
     ensure!(
         before.is_file() && before.len() <= MAX_INPUT as u64,
@@ -51,7 +52,7 @@ pub(crate) fn read(path: &Path, reader: &Reader, cancelled: Cancelled) -> Result
     {
         return sqlite(path, query, parameters, tables, cancelled);
     }
-    let mut file = File::open(path)?;
+    let mut file = open_regular_read(path)?;
     let before = file.metadata()?;
     ensure!(
         before.is_file() && before.len() <= MAX_INPUT as u64,
@@ -123,6 +124,16 @@ fn sqlite(
         types::ValueRef,
         Connection, OpenFlags,
     };
+    open_regular_read(path)?;
+    for suffix in ["-wal", "-journal", "-shm"] {
+        let mut sidecar = path.as_os_str().to_os_string();
+        sidecar.push(suffix);
+        match open_regular_read(Path::new(&sidecar)) {
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
     let mut db = Connection::open_with_flags(
         path,
         OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,

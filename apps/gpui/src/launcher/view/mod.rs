@@ -12,18 +12,19 @@ use gpui_kit::{
     div, img,
     prelude::*,
     px, AnyElement, AnyWindowHandle, ClipboardItem, Context, Div, Entity, FocusHandle,
-    Focusable as _, FontWeight, Image, ImageFormat, IntoElement, MouseButton, ObjectFit, Render,
-    ScrollHandle, SharedString, Styled, Subscription, TestSupportExt as _, Window,
+    Focusable as _, FontWeight, IntoElement, MouseButton, ObjectFit, Render, ScrollHandle,
+    SharedString, Styled, Subscription, TestSupportExt as _, Window,
 };
 
 use crate::{
     host::{
         registered_preferences, ActionShortcutBinding, ActionShortcutRoute, HostPreferences,
-        HotKeyController, LiveEvent, LiveLauncher, ShortcutCatalogAction, UiLanguage,
+        HotKeyController, LiveEvent, LiveLauncher, ShortcutCatalogAction, UiLanguage, UiTheme,
     },
     l10n::{self, Locale},
     launcher::{
-        AppHistoryPageModel, ClipboardPageModel, FileSearchPageModel, TasksPageModel, WebPageModel,
+        AppHistoryPageModel, ClipboardKindFilter, ClipboardPageModel, FileSearchPageModel,
+        TasksPageModel, WebPageModel,
     },
     platform::{open_privacy_settings, PreviewHost, PreviewPoll, PrivacySettingsPane},
     settings::{SettingsCategory, SettingsModel},
@@ -56,6 +57,9 @@ use std::{
 };
 use tokio::sync::{mpsc::Receiver, oneshot};
 
+mod actions;
+#[path = "controllers/activation_prefill.rs"]
+mod activation_prefill_controller;
 mod candidate_row;
 #[path = "controllers/clipboard.rs"]
 mod clipboard_controller;
@@ -77,30 +81,28 @@ mod preview_controller;
 mod settings;
 #[path = "settings/controller.rs"]
 mod settings_controller;
+mod state;
 #[path = "controllers/streams.rs"]
 mod streams_controller;
 #[path = "controllers/tasks.rs"]
 mod tasks_controller;
+mod tool_window;
 #[path = "controllers/web.rs"]
 mod web_controller;
 mod web_surface;
 
+pub(crate) use actions::bind_keys;
 use live_state::LiveState;
+use state::{
+    ActivationPrefill, HudToastState, IconLoader, PreviewState, ScrollHandles, SettingsEditor,
+    ShortcutEditor, WindowPresence,
+};
 use web_surface::{ActiveWebBinding, WebIpcRequest, WebSurfaceState};
-
-#[derive(Default)]
-struct ToolListScrolls {
-    file_search: gpui_kit::UniformListScrollHandle,
-    clipboard: gpui_kit::UniformListScrollHandle,
-    clipboard_shelf: gpui_kit::UniformListScrollHandle,
-    history: gpui_kit::UniformListScrollHandle,
-    tasks: gpui_kit::UniformListScrollHandle,
-    tasks_output: gpui_kit::UniformListScrollHandle,
-}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ViewKind {
     Main,
+    ToolWindow,
     ClipboardShelf,
     Tasks,
 }
@@ -240,24 +242,6 @@ fn is_tool_page_tab_shortcut(screen: Screen, key: &str, modifiers: KeyModifiers)
         && !modifiers.alt
 }
 
-fn is_tasks_global_shortcut(key: &str, modifiers: KeyModifiers) -> bool {
-    if !modifiers.modified && !modifiers.command {
-        return key.eq_ignore_ascii_case("escape");
-    }
-    let command = modifiers.command && !modifiers.control && !modifiers.shift;
-    if command && !modifiers.alt {
-        return matches!(
-            key.to_ascii_lowercase().as_str(),
-            "k" | "l" | "." | "r" | "f"
-        );
-    }
-    command && modifiers.alt && matches!(key.to_ascii_lowercase().as_str(), "up" | "down")
-}
-
-fn should_handle_tasks_shortcut(key: &str, modifiers: KeyModifiers, character_input: bool) -> bool {
-    is_tasks_global_shortcut(key, modifiers) && (modifiers.command || !character_input)
-}
-
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 enum Screen {
     #[default]
@@ -309,94 +293,42 @@ pub struct LauncherView {
     clipboard: ClipboardPageModel,
     app_history: AppHistoryPageModel,
     tasks: TasksPageModel,
-    pending_task_selection: Option<String>,
-    tasks_output_scroll: ScrollHandle,
-    tasks_refresh_cancel: Option<oneshot::Sender<()>>,
     web: WebPageModel,
     web_surface: WebSurfaceState,
-    application_icons: ApplicationIconCache,
-    application_icons_requested: HashMap<String, ApplicationIconRequest>,
-    application_icon_generation: u64,
+    icons: IconLoader,
     object_action_generation: u64,
     preferences: HostPreferences,
-    settings_draft: HostPreferences,
-    excluded_apps_input: Entity<InputState>,
-    file_roots_input: Entity<InputState>,
-    file_exclusions_input: Entity<InputState>,
-    history_path_input: Entity<InputState>,
-    history_settings_filter_input: Entity<InputState>,
-    history_settings_enabled_only: bool,
-    action_shortcut_input: Entity<InputState>,
-    context_shortcut_name_input: Entity<InputState>,
-    current_shortcut_input: Entity<InputState>,
-    universal_shortcut_input: Entity<InputState>,
-    shortcut_recording: Option<ShortcutSlot>,
-    settings_action_picker_open: bool,
-    settings_action_picker_focus: FocusHandle,
-    pending_action_shortcut: Option<ShortcutCatalogAction>,
-    pending_action_shortcut_value: Option<String>,
-    pending_action_shortcut_global: bool,
-    context_shortcut_draft: Option<ContextShortcutDraft>,
-    shortcut_catalog: Vec<ShortcutCatalogAction>,
-    shortcut_catalog_loading: bool,
+    shortcuts: ShortcutEditor,
     pending_shortcut_execution: Option<ActionShortcutBinding>,
-    action_shortcut_resolving: Option<String>,
-    settings_close_pending: bool,
-    settings_exit_intent: Option<SettingsExitIntent>,
-    settings_modal_return_focus: Option<FocusHandle>,
-    settings_keep_editing_focus: FocusHandle,
-    settings_discard_focus: FocusHandle,
-    settings_save_focus: FocusHandle,
-    settings_confirm_cancel_focus: FocusHandle,
-    settings_confirm_accept_focus: FocusHandle,
-    clipboard_settings_choice: Option<ClipboardSettingsChoice>,
     clipboard_confirmation: Option<ClipboardConfirmation>,
-    settings_save_generation: u64,
     parent_workspace: Option<ParentWorkspace>,
     input_mode: InputMode,
     scope_selection_intent: ScopeSelectionIntent,
     input_placeholder: String,
     root_navigation_open: bool,
     root_navigation_mode: InputMode,
-    scope_scroll: ScrollHandle,
-    notice_scroll: ScrollHandle,
-    file_filter_scroll: ScrollHandle,
-    result_scroll: ScrollHandle,
-    tool_list_scrolls: ToolListScrolls,
-    file_search_scroll: ScrollHandle,
-    clipboard_scroll: ScrollHandle,
-    clipboard_shelf_scroll: ScrollHandle,
-    history_scroll: ScrollHandle,
-    tasks_scroll: ScrollHandle,
-    web_packages_scroll: ScrollHandle,
-    unsupported_tool_scroll: ScrollHandle,
-    settings_scrolls: [ScrollHandle; 7],
-    settings: SettingsModel,
-    settings_focus_handle: FocusHandle,
+    scrolls: ScrollHandles,
+    settings_editor: SettingsEditor,
     screen: Screen,
     locale: Locale,
     notice: Option<String>,
     notice_kind: components::NoticeKind,
-    preview: Option<PreviewHost>,
-    preview_busy: bool,
-    preview_generation: u64,
-    preview_request_generation: u64,
-    preview_open: bool,
+    hud_toast: HudToastState,
+    preview: PreviewState,
     live: Option<Arc<LiveLauncher>>,
     hotkeys: Option<Arc<Mutex<HotKeyController>>>,
     hotkey_error: Option<String>,
     standalone_shelf: bool,
     standalone_tasks: bool,
+    standalone_tool: bool,
+    tool_windows: Vec<tool_window::OpenToolWindow>,
     runtime_state: RuntimeState,
     live_state: LiveState,
-    presented: bool,
-    retained_workspace: bool,
-    hidden_at: Option<Instant>,
-    retention_task: Option<gpui_kit::Task<()>>,
-    resize_pending: bool,
+    activation_prefill: ActivationPrefill,
+    presence: WindowPresence,
     clipboard_search_task: Option<gpui_kit::Task<()>>,
-    preview_selection_task: Option<gpui_kit::Task<()>>,
     window_handle: AnyWindowHandle,
+    surface_focus_handle: FocusHandle,
     _editor_sync_guard: Rc<Cell<bool>>,
     _input_subscription: Subscription,
     _key_interceptor: Subscription,
@@ -520,31 +452,31 @@ impl LauncherView {
         settings.error = settings_error.clone();
 
         set_input_value(
-            &self.excluded_apps_input,
+            &self.settings_editor.excluded_apps_input,
             preferences.excluded_apps.join("\n"),
             window,
             cx,
         );
         set_input_value(
-            &self.file_roots_input,
+            &self.settings_editor.file_roots_input,
             preferences.file_search_roots.join("\n"),
             window,
             cx,
         );
         set_input_value(
-            &self.file_exclusions_input,
+            &self.settings_editor.file_exclusions_input,
             preferences.file_search_excluded_names.join("\n"),
             window,
             cx,
         );
         set_input_value(
-            &self.current_shortcut_input,
+            &self.shortcuts.current_input,
             preferences.current_app_shortcut.clone(),
             window,
             cx,
         );
         set_input_value(
-            &self.universal_shortcut_input,
+            &self.shortcuts.universal_input,
             preferences.universal_shortcut.clone(),
             window,
             cx,
@@ -553,8 +485,8 @@ impl LauncherView {
         self.model.set_locale(locale);
         self.refresh_editor_placeholders(window, cx);
         self.preferences = preferences.clone();
-        self.settings_draft = preferences;
-        self.settings = settings;
+        self.settings_editor.draft = preferences;
+        self.settings_editor.model = settings;
         self.input_placeholder = l10n::search_apps_actions(locale);
         self.hotkey_error = hotkey_error;
         self.notice = settings_error.or_else(|| self.hotkey_error_message());
@@ -595,9 +527,10 @@ impl LauncherView {
         hotkeys: Option<Arc<Mutex<HotKeyController>>>,
         kind: ViewKind,
     ) -> Self {
+        actions::bind_keys(cx);
         let standalone_shelf = kind == ViewKind::ClipboardShelf;
         let standalone_tasks = kind == ViewKind::Tasks;
-        let auxiliary = kind != ViewKind::Main;
+        let auxiliary = standalone_tasks || standalone_shelf;
         let runtime_state = if live.is_some() {
             RuntimeState::Ready
         } else {
@@ -639,11 +572,128 @@ impl LauncherView {
             cx.new(|cx| InputState::new(window, cx).placeholder(l10n::find_atask(locale)))
         };
         let editor_sync_guard = Rc::new(Cell::new(false));
+        let (shortcuts, mut page_input_subscriptions) = ShortcutEditor::new(
+            auxiliary || kind == ViewKind::ToolWindow,
+            &input,
+            &preferences,
+            locale,
+            window,
+            cx,
+        );
+        let (settings_editor, history_filter_subscription) = SettingsEditor::new(
+            auxiliary || kind == ViewKind::ToolWindow,
+            &input,
+            settings,
+            &preferences,
+            locale,
+            window,
+            cx,
+        );
+        let (_input_subscription, mut editor_subscriptions) = Self::build_editor_subscriptions(
+            &input,
+            &content_input,
+            &clipboard_input,
+            &history_input,
+            &tasks_filter_input,
+            &editor_sync_guard,
+            cx,
+        );
+        page_input_subscriptions.append(&mut editor_subscriptions);
+        page_input_subscriptions.push(history_filter_subscription);
+        let key_interceptor = Self::build_key_interceptor(cx);
+        let window_appearance_subscription = {
+            let this = cx.weak_entity();
+            window.observe_window_appearance(move |window, cx| {
+                let _ = this.update(cx, |this, cx| {
+                    this.window_appearance_changed(window, cx);
+                });
+            })
+        };
+        let window_display_subscription = {
+            let this = cx.weak_entity();
+            window.observe_window_display(move |window, cx| {
+                let _ = this.update(cx, |this, cx| {
+                    this.resize_current_window(cx);
+                    cx.notify();
+                    window.refresh();
+                });
+            })
+        };
+        Self {
+            input,
+            content_input,
+            clipboard_input,
+            history_input,
+            tasks_filter_input,
+            model,
+            file_search: FileSearchPageModel::default(),
+            clipboard: ClipboardPageModel::default(),
+            app_history: AppHistoryPageModel::default(),
+            tasks: TasksPageModel::default(),
+            web: WebPageModel::default(),
+            web_surface: WebSurfaceState::default(),
+            icons: IconLoader::default(),
+            object_action_generation: 0,
+            preferences,
+            shortcuts,
+            pending_shortcut_execution: None,
+            clipboard_confirmation: None,
+            parent_workspace: None,
+            input_mode: InputMode::Environment,
+            scope_selection_intent: ScopeSelectionIntent::PendingCurrentApp,
+            input_placeholder: l10n::search_apps_actions(locale),
+            root_navigation_open: false,
+            root_navigation_mode: InputMode::Environment,
+            scrolls: ScrollHandles::default(),
+            settings_editor,
+            screen: Screen::Launcher,
+            locale,
+            notice: search_access_error,
+            notice_kind: components::NoticeKind::Error,
+            hud_toast: HudToastState::default(),
+            preview: PreviewState::default(),
+            live,
+            hotkey_error: hotkeys.as_ref().and_then(|hotkeys| {
+                hotkeys
+                    .lock()
+                    .ok()
+                    .and_then(|hotkeys| hotkeys.registration_error().map(str::to_owned))
+            }),
+            hotkeys,
+            standalone_shelf,
+            standalone_tasks,
+            standalone_tool: kind == ViewKind::ToolWindow,
+            tool_windows: Vec::new(),
+            runtime_state,
+            live_state: LiveState::default(),
+            activation_prefill: ActivationPrefill::default(),
+            presence: WindowPresence::default(),
+            clipboard_search_task: None,
+            window_handle: window.window_handle(),
+            surface_focus_handle: cx.focus_handle(),
+            _editor_sync_guard: editor_sync_guard,
+            _input_subscription,
+            _key_interceptor: key_interceptor,
+            _window_appearance_subscription: window_appearance_subscription,
+            _window_display_subscription: window_display_subscription,
+            _page_input_subscriptions: page_input_subscriptions,
+        }
+    }
+
+    fn build_editor_subscriptions(
+        input: &Entity<InputState>,
+        content_input: &Entity<TextareaState>,
+        clipboard_input: &Entity<InputState>,
+        history_input: &Entity<InputState>,
+        tasks_filter_input: &Entity<InputState>,
+        editor_sync_guard: &Rc<Cell<bool>>,
+        cx: &mut Context<Self>,
+    ) -> (Subscription, Vec<Subscription>) {
         let input_sync_guard = editor_sync_guard.clone();
         let input_edits_subscription =
-            cx.subscribe(&input, |this: &mut Self, _, event: &InputEditsEvent, cx| {
+            cx.subscribe(input, |this: &mut Self, _, event: &InputEditsEvent, cx| {
                 if this.screen != Screen::FileSearch
-                    || (!this.preview_open && !this.file_search_selection_active())
+                    || (!this.preview.open && !this.file_search_selection_active())
                 {
                     return;
                 }
@@ -656,14 +706,14 @@ impl LauncherView {
                 if crate::platform::current_key_event_is_repeat() {
                     return;
                 }
-                if this.preview_open {
+                if this.preview.open {
                     this.close_preview(cx);
                 } else {
                     this.request_preview(cx);
                 }
             });
-        let _input_subscription =
-            cx.subscribe(&input, move |this: &mut Self, _, event: &InputEvent, cx| {
+        let input_subscription =
+            cx.subscribe(input, move |this: &mut Self, _, event: &InputEvent, cx| {
                 if this.standalone_shelf || this.standalone_tasks {
                     return;
                 }
@@ -708,7 +758,7 @@ impl LauncherView {
             });
         let content_sync_guard = editor_sync_guard.clone();
         let content_subscription = cx.subscribe(
-            &content_input,
+            content_input,
             move |this: &mut Self, _, event: &InputEvent, cx| {
                 if matches!(event, InputEvent::Change) {
                     if content_sync_guard.get() {
@@ -731,10 +781,10 @@ impl LauncherView {
             },
         );
         let clipboard_edits_subscription = cx.subscribe(
-            &clipboard_input,
+            clipboard_input,
             |this: &mut Self, _, event: &InputEditsEvent, cx| {
                 if !matches!(this.screen, Screen::Clipboard | Screen::ClipboardShelf)
-                    || (!this.preview_open && !this.clipboard_selection_active())
+                    || (!this.preview.open && !this.clipboard_selection_active())
                 {
                     return;
                 }
@@ -747,7 +797,7 @@ impl LauncherView {
                 if crate::platform::current_key_event_is_repeat() {
                     return;
                 }
-                if this.preview_open {
+                if this.preview.open {
                     this.close_preview(cx);
                 } else {
                     this.preview_selected_clipboard(cx);
@@ -755,7 +805,7 @@ impl LauncherView {
             },
         );
         let clipboard_subscription = cx.subscribe(
-            &clipboard_input,
+            clipboard_input,
             |this: &mut Self, _, event: &InputEvent, cx| {
                 if !matches!(this.screen, Screen::Clipboard | Screen::ClipboardShelf) {
                     return;
@@ -783,7 +833,7 @@ impl LauncherView {
             },
         );
         let history_subscription = cx.subscribe(
-            &history_input,
+            history_input,
             |this: &mut Self, _, event: &InputEvent, cx| {
                 if this.screen != Screen::ApplicationHistory {
                     return;
@@ -797,7 +847,7 @@ impl LauncherView {
             },
         );
         let tasks_filter_subscription = cx.subscribe(
-            &tasks_filter_input,
+            tasks_filter_input,
             |this: &mut Self, _, event: &InputEvent, cx| {
                 if this.screen != Screen::Tasks {
                     return;
@@ -809,500 +859,255 @@ impl LauncherView {
                 if filter == this.tasks.filter {
                     return;
                 }
-                this.pending_task_selection = None;
+                this.tasks.pending_selection = None;
                 this.tasks.set_filter(filter);
                 this.refresh_selected_task_detail(cx);
                 cx.notify();
             },
         );
-        let action_shortcut_input = if auxiliary {
-            input.clone()
-        } else {
-            cx.new(|cx| InputState::new(window, cx).placeholder(l10n::find_an_action(locale)))
-        };
-        let context_shortcut_name_input = if auxiliary {
-            input.clone()
-        } else {
-            cx.new(|cx| InputState::new(window, cx).placeholder(l10n::e_gopen_terminal(locale)))
-        };
-        let action_shortcut_subscription = cx.subscribe(
-            &action_shortcut_input,
-            move |_: &mut Self, _, event: &InputEvent, cx| {
-                if !auxiliary && matches!(event, InputEvent::Change) {
-                    cx.notify();
-                }
-            },
-        );
-        let context_shortcut_name_subscription = cx.subscribe(
-            &context_shortcut_name_input,
-            move |_: &mut Self, _, event: &InputEvent, cx| {
-                if !auxiliary && matches!(event, InputEvent::Change) {
-                    cx.notify();
-                }
-            },
-        );
-        let excluded_apps_input = if auxiliary {
-            input.clone()
-        } else {
-            cx.new(|cx| {
-                InputState::new(window, cx).default_value(preferences.excluded_apps.join("\n"))
-            })
-        };
-        let file_roots_input = if auxiliary {
-            input.clone()
-        } else {
-            cx.new(|cx| {
-                InputState::new(window, cx).default_value(preferences.file_search_roots.join("\n"))
-            })
-        };
-        let file_exclusions_input = if auxiliary {
-            input.clone()
-        } else {
-            cx.new(|cx| {
-                InputState::new(window, cx)
-                    .default_value(preferences.file_search_excluded_names.join("\n"))
-            })
-        };
-        let history_path_input = if auxiliary {
-            input.clone()
-        } else {
-            cx.new(|cx| InputState::new(window, cx))
-        };
-        let history_settings_filter_input = if auxiliary {
-            input.clone()
-        } else {
-            cx.new(|cx| {
-                InputState::new(window, cx).placeholder(l10n::app_history_filter_sources(locale))
-            })
-        };
-        let history_settings_filter_subscription = cx.subscribe(
-            &history_settings_filter_input,
-            move |_: &mut Self, _, event: &InputEvent, cx| {
-                if !auxiliary && matches!(event, InputEvent::Change) {
-                    cx.notify();
-                }
-            },
-        );
-        let current_shortcut_input = if auxiliary {
-            input.clone()
-        } else {
-            cx.new(|cx| {
-                InputState::new(window, cx).default_value(preferences.current_app_shortcut.clone())
-            })
-        };
-        let universal_shortcut_input = if auxiliary {
-            input.clone()
-        } else {
-            cx.new(|cx| {
-                InputState::new(window, cx).default_value(preferences.universal_shortcut.clone())
-            })
-        };
-        let key_interceptor = {
-            let this = cx.weak_entity();
-            cx.intercept_keystrokes(move |event, window, cx| {
-                let modifiers = KeyModifiers {
-                    command: event.keystroke.modifiers.platform,
-                    control: event.keystroke.modifiers.control,
-                    shift: event.keystroke.modifiers.shift,
-                    alt: event.keystroke.modifiers.alt,
-                    modified: event.keystroke.modifiers.modified(),
-                };
-                let repeated = crate::platform::current_key_event_is_repeat();
-                if modifiers.command {
-                    tracing::debug!(
-                        key = %event.keystroke.key,
-                        control = modifiers.control,
-                        shift = modifiers.shift,
-                        alt = modifiers.alt,
-                        "launcher_command_key_observed"
-                    );
-                }
-                let _ = this.update(cx, |this, cx| {
-                    // Interceptors are application-wide, including hidden tool views.
-                    if this.window_handle != window.window_handle() {
-                        return;
-                    }
-                    if this.settings_modal_active() {
-                        if is_scope_tab_shortcut(event.keystroke.key.as_str(), modifiers) {
-                            this.cycle_settings_modal_focus(
-                                event.keystroke.modifiers.shift,
-                                window,
-                                cx,
-                            );
-                            window.prevent_default();
-                            cx.stop_propagation();
-                            return;
-                        }
-                        if !modifiers.modified && event.keystroke.key.eq_ignore_ascii_case("escape")
-                        {
-                            this.handle_settings_modal_escape(window, cx);
-                            window.prevent_default();
-                            cx.stop_propagation();
-                            return;
-                        }
-                        if this.settings_action_picker_open {
-                            if this.shortcut_recording.is_some() {
-                                this.handle_key_with_repeat(
-                                    event.keystroke.key.as_str(),
-                                    modifiers,
-                                    repeated,
-                                    window,
-                                    cx,
-                                );
-                                window.prevent_default();
-                                cx.stop_propagation();
-                            }
-                            return;
-                        }
-                        let focused_modal_control = window.focused(cx).is_some_and(|focused| {
-                            [
-                                &this.settings_keep_editing_focus,
-                                &this.settings_discard_focus,
-                                &this.settings_save_focus,
-                                &this.settings_confirm_cancel_focus,
-                                &this.settings_confirm_accept_focus,
-                            ]
-                            .into_iter()
-                            .any(|handle| handle == &focused)
-                        });
-                        let activates_focused_control = !modifiers.modified
-                            && matches!(event.keystroke.key.as_str(), "enter" | "space" | "return")
-                            && focused_modal_control;
-                        if !activates_focused_control {
-                            window.prevent_default();
-                            cx.stop_propagation();
-                        }
-                        return;
-                    }
-                    if this.shortcut_recording.is_some() {
-                        this.handle_key_with_repeat(
-                            event.keystroke.key.as_str(),
-                            modifiers,
-                            repeated,
-                            window,
-                            cx,
-                        );
-                        window.prevent_default();
-                        cx.stop_propagation();
-                        return;
-                    }
-                    // Composition belongs to the editor. An open Settings modal
-                    // is handled above so IME input cannot reach underlying fields.
-                    if matches!(
-                        event.input_preference,
-                        gpui_kit::InputPreference::CharacterInput
-                    ) {
-                        return;
-                    }
-                    if event.keystroke.modifiers.platform
-                        && !event.keystroke.modifiers.control
-                        && !event.keystroke.modifiers.alt
-                        && !event.keystroke.modifiers.shift
-                        && event.keystroke.key == ","
-                        && !this.standalone_shelf
-                        && !this.standalone_tasks
-                        && !this.preview_open
-                    {
-                        this.open_settings(window, cx);
-                        window.prevent_default();
-                        cx.stop_propagation();
-                        return;
-                    }
-                    if this.screen == Screen::Settings
-                        && !this.preview_open
-                        && event.keystroke.key.eq_ignore_ascii_case("escape")
-                    {
-                        this.handle_key_with_repeat(
-                            event.keystroke.key.as_str(),
-                            modifiers,
-                            repeated,
-                            window,
-                            cx,
-                        );
-                        window.prevent_default();
-                        cx.stop_propagation();
-                        return;
-                    }
-                    if this.screen == Screen::Settings
-                        && is_scope_tab_shortcut(event.keystroke.key.as_str(), modifiers)
-                    {
-                        let backwards = event.keystroke.modifiers.shift;
-                        cx.defer_in(window, move |_, window, cx| {
-                            if backwards {
-                                window.focus_prev(cx);
-                            } else {
-                                window.focus_next(cx);
-                            }
-                        });
-                        window.prevent_default();
-                        cx.stop_propagation();
-                        return;
-                    }
-                    if is_tool_page_tab_shortcut(
-                        this.screen,
-                        event.keystroke.key.as_str(),
-                        modifiers,
-                    ) {
-                        window.prevent_default();
-                        cx.stop_propagation();
-                        return;
-                    }
-                    if this.preview_open && event.keystroke.key.eq_ignore_ascii_case("escape") {
-                        this.handle_key_with_repeat(
-                            event.keystroke.key.as_str(),
-                            modifiers,
-                            repeated,
-                            window,
-                            cx,
-                        );
-                        window.prevent_default();
-                        cx.stop_propagation();
-                        return;
-                    }
-                    let command_only = event.keystroke.modifiers.platform
-                        && !event.keystroke.modifiers.control
-                        && !event.keystroke.modifiers.alt
-                        && !event.keystroke.modifiers.shift;
-                    if command_only
-                        && event.keystroke.key.eq_ignore_ascii_case("y")
-                        && this.can_toggle_preview_shortcut()
-                    {
-                        if !repeated {
-                            this.toggle_preview_shortcut(window, cx);
-                        }
-                        window.prevent_default();
-                        cx.stop_propagation();
-                        return;
-                    }
-                    if command_only
-                        && this.preview_open
-                        && event.keystroke.key.eq_ignore_ascii_case("l")
-                    {
-                        this.close_preview(cx);
-                        this.focus_active_editor(window, cx);
-                        window.prevent_default();
-                        cx.stop_propagation();
-                        return;
-                    }
-                    if this.handle_preview_keystroke(
-                        event.keystroke.key.as_str(),
-                        modifiers.modified,
-                        matches!(
-                            event.input_preference,
-                            gpui_kit::InputPreference::CharacterInput
-                        ),
-                        repeated,
-                        window,
-                        cx,
-                    ) {
-                        window.prevent_default();
-                        cx.stop_propagation();
-                        return;
-                    }
-                    if this.screen == Screen::Tasks
-                        && should_handle_tasks_shortcut(
-                            event.keystroke.key.as_str(),
-                            modifiers,
-                            matches!(
-                                event.input_preference,
-                                gpui_kit::InputPreference::CharacterInput
-                            ),
-                        )
-                    {
-                        this.handle_key_with_repeat(
-                            event.keystroke.key.as_str(),
-                            modifiers,
-                            repeated,
-                            window,
-                            cx,
-                        );
-                        window.prevent_default();
-                        cx.stop_propagation();
-                        return;
-                    }
-                    if matches!(
-                        event.input_preference,
-                        gpui_kit::InputPreference::CharacterInput
-                    ) || !is_scope_tab_shortcut(event.keystroke.key.as_str(), modifiers)
-                        || !this.active_editor_focused(window, cx)
-                        || !(this.screen == Screen::FileSearch
-                            || (this.screen == Screen::Launcher
-                                && this.has_scope_bar()
-                                && !this.model.object_actions_active
-                                && this.model.menu_path().is_none()))
-                    {
-                        return;
-                    }
-                    this.handle_key_with_repeat(
-                        event.keystroke.key.as_str(),
-                        modifiers,
-                        repeated,
-                        window,
-                        cx,
-                    );
-                    window.prevent_default();
-                    cx.stop_propagation();
-                });
-            })
-        };
-        let window_appearance_subscription = {
-            let this = cx.weak_entity();
-            window.observe_window_appearance(move |window, cx| {
-                let _ = this.update(cx, |this, cx| {
-                    this.window_appearance_changed(window, cx);
-                });
-            })
-        };
-        let window_display_subscription = {
-            let this = cx.weak_entity();
-            window.observe_window_display(move |window, cx| {
-                let _ = this.update(cx, |this, cx| {
-                    this.resize_current_window(cx);
-                    cx.notify();
-                    window.refresh();
-                });
-            })
-        };
-        let tool_list_scrolls = ToolListScrolls::default();
-        let view = Self {
-            input,
-            content_input,
-            clipboard_input,
-            history_input,
-            tasks_filter_input,
-            model,
-            file_search: FileSearchPageModel::default(),
-            clipboard: ClipboardPageModel::default(),
-            app_history: AppHistoryPageModel::default(),
-            tasks: TasksPageModel::default(),
-            pending_task_selection: None,
-            tasks_output_scroll: tool_list_scrolls
-                .tasks_output
-                .0
-                .borrow()
-                .base_handle
-                .clone(),
-            tasks_refresh_cancel: None,
-            web: WebPageModel::default(),
-            web_surface: WebSurfaceState::default(),
-            application_icons: ApplicationIconCache::default(),
-            application_icons_requested: HashMap::new(),
-            application_icon_generation: 0,
-            object_action_generation: 0,
-            settings_draft: preferences.clone(),
-            preferences,
-            excluded_apps_input,
-            file_roots_input,
-            file_exclusions_input,
-            history_path_input,
-            history_settings_filter_input,
-            history_settings_enabled_only: false,
-            action_shortcut_input,
-            context_shortcut_name_input,
-            current_shortcut_input,
-            universal_shortcut_input,
-            shortcut_recording: None,
-            settings_action_picker_open: false,
-            settings_action_picker_focus: cx.focus_handle(),
-            pending_action_shortcut: None,
-            pending_action_shortcut_value: None,
-            pending_action_shortcut_global: false,
-            context_shortcut_draft: None,
-            shortcut_catalog: Vec::new(),
-            shortcut_catalog_loading: false,
-            pending_shortcut_execution: None,
-            action_shortcut_resolving: None,
-            settings_close_pending: false,
-            settings_exit_intent: None,
-            settings_modal_return_focus: None,
-            settings_keep_editing_focus: cx.focus_handle(),
-            settings_discard_focus: cx.focus_handle(),
-            settings_save_focus: cx.focus_handle(),
-            settings_confirm_cancel_focus: cx.focus_handle(),
-            settings_confirm_accept_focus: cx.focus_handle(),
-            clipboard_settings_choice: None,
-            clipboard_confirmation: None,
-            settings_save_generation: 0,
-            parent_workspace: None,
-            input_mode: InputMode::Environment,
-            scope_selection_intent: ScopeSelectionIntent::PendingCurrentApp,
-            input_placeholder: l10n::search_apps_actions(locale),
-            root_navigation_open: false,
-            root_navigation_mode: InputMode::Environment,
-            scope_scroll: ScrollHandle::new(),
-            notice_scroll: ScrollHandle::new(),
-            file_filter_scroll: ScrollHandle::new(),
-            result_scroll: ScrollHandle::new(),
-            file_search_scroll: tool_list_scrolls.file_search.0.borrow().base_handle.clone(),
-            clipboard_scroll: tool_list_scrolls.clipboard.0.borrow().base_handle.clone(),
-            clipboard_shelf_scroll: tool_list_scrolls
-                .clipboard_shelf
-                .0
-                .borrow()
-                .base_handle
-                .clone(),
-            history_scroll: tool_list_scrolls.history.0.borrow().base_handle.clone(),
-            tasks_scroll: tool_list_scrolls.tasks.0.borrow().base_handle.clone(),
-            web_packages_scroll: ScrollHandle::new(),
-            tool_list_scrolls: ToolListScrolls {
-                file_search: tool_list_scrolls.file_search.clone(),
-                clipboard: tool_list_scrolls.clipboard.clone(),
-                clipboard_shelf: tool_list_scrolls.clipboard_shelf.clone(),
-                history: tool_list_scrolls.history.clone(),
-                tasks: tool_list_scrolls.tasks.clone(),
-                tasks_output: tool_list_scrolls.tasks_output.clone(),
-            },
-            unsupported_tool_scroll: ScrollHandle::new(),
-            settings_scrolls: std::array::from_fn(|_| ScrollHandle::new()),
-            settings,
-            settings_focus_handle: cx.focus_handle(),
-            screen: Screen::Launcher,
-            locale,
-            notice: search_access_error,
-            notice_kind: components::NoticeKind::Error,
-            preview: None,
-            preview_busy: false,
-            preview_generation: 0,
-            preview_request_generation: 0,
-            preview_open: false,
-            live,
-            hotkey_error: hotkeys.as_ref().and_then(|hotkeys| {
-                hotkeys
-                    .lock()
-                    .ok()
-                    .and_then(|hotkeys| hotkeys.registration_error().map(str::to_owned))
-            }),
-            hotkeys,
-            standalone_shelf,
-            standalone_tasks,
-            runtime_state,
-            live_state: LiveState::default(),
-            presented: false,
-            retained_workspace: false,
-            hidden_at: None,
-            retention_task: None,
-            resize_pending: false,
-            clipboard_search_task: None,
-            preview_selection_task: None,
-            window_handle: window.window_handle(),
-            _editor_sync_guard: editor_sync_guard,
-            _input_subscription,
-            _key_interceptor: key_interceptor,
-            _window_appearance_subscription: window_appearance_subscription,
-            _window_display_subscription: window_display_subscription,
-            _page_input_subscriptions: vec![
+        (
+            input_subscription,
+            vec![
                 clipboard_subscription,
                 history_subscription,
                 input_edits_subscription,
                 clipboard_edits_subscription,
                 content_subscription,
-                action_shortcut_subscription,
-                context_shortcut_name_subscription,
-                history_settings_filter_subscription,
                 tasks_filter_subscription,
             ],
+        )
+    }
+
+    fn build_key_interceptor(cx: &mut Context<Self>) -> Subscription {
+        let this = cx.weak_entity();
+        cx.intercept_keystrokes(move |event, window, cx| {
+            let modifiers = KeyModifiers {
+                command: event.keystroke.modifiers.platform,
+                control: event.keystroke.modifiers.control,
+                shift: event.keystroke.modifiers.shift,
+                alt: event.keystroke.modifiers.alt,
+                modified: event.keystroke.modifiers.modified(),
+            };
+            let repeated = crate::platform::current_key_event_is_repeat();
+            if modifiers.command {
+                tracing::debug!(
+                    key = %event.keystroke.key,
+                    control = modifiers.control,
+                    shift = modifiers.shift,
+                    alt = modifiers.alt,
+                    "launcher_command_key_observed"
+                );
+            }
+            let _ = this.update(cx, |this, cx| {
+                this.intercept_window_keystroke(event, modifiers, repeated, window, cx);
+            });
+        })
+    }
+
+    fn intercept_window_keystroke(
+        &mut self,
+        event: &gpui_kit::KeystrokeEvent,
+        modifiers: KeyModifiers,
+        repeated: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if self.window_handle != window.window_handle() {
+            return;
+        }
+        if self.settings_modal_active() {
+            self.intercept_settings_modal_keystroke(event, modifiers, repeated, window, cx);
+            return;
+        }
+        if self.shortcuts.recording.is_some() {
+            self.handle_key_with_repeat(
+                event.keystroke.key.as_str(),
+                modifiers,
+                repeated,
+                window,
+                cx,
+            );
+            window.prevent_default();
+            cx.stop_propagation();
+            return;
+        }
+        if self.screen == Screen::Launcher
+            && self.input_mode == InputMode::Content
+            && !modifiers.modified
+            && matches!(
+                event.keystroke.key.as_str(),
+                "up" | "down" | "enter" | "return"
+            )
+            && self.active_editor_focused(window, cx)
+        {
+            self.handle_key_with_repeat(
+                event.keystroke.key.as_str(),
+                modifiers,
+                repeated,
+                window,
+                cx,
+            );
+            window.prevent_default();
+            cx.stop_propagation();
+            return;
+        }
+        if matches!(
+            event.input_preference,
+            gpui_kit::InputPreference::CharacterInput
+        ) {
+            return;
+        }
+        let input = input::KeyInput {
+            key: event.keystroke.key.as_str(),
+            modifiers,
+            shortcut: normalized_shortcut(
+                event.keystroke.key.as_str(),
+                modifiers.command,
+                modifiers.control,
+                modifiers.alt,
+                modifiers.shift,
+            ),
+            repeated,
         };
-        view
+        if self.filter_repeated_key(&input) == input::KeyFlow::Handled
+            || self.handle_overlay_keys(&input, window, cx) == input::KeyFlow::Handled
+            || self.handle_user_shortcut_key(&input, cx) == input::KeyFlow::Handled
+        {
+            window.prevent_default();
+            cx.stop_propagation();
+            return;
+        }
+        if self.screen == Screen::Settings
+            && !self.preview.open
+            && event.keystroke.key.eq_ignore_ascii_case("escape")
+        {
+            self.handle_key_with_repeat(
+                event.keystroke.key.as_str(),
+                modifiers,
+                repeated,
+                window,
+                cx,
+            );
+            window.prevent_default();
+            cx.stop_propagation();
+            return;
+        }
+        if self.screen == Screen::Settings
+            && is_scope_tab_shortcut(event.keystroke.key.as_str(), modifiers)
+        {
+            let backwards = event.keystroke.modifiers.shift;
+            cx.defer_in(window, move |_, window, cx| {
+                if backwards {
+                    window.focus_prev(cx);
+                } else {
+                    window.focus_next(cx);
+                }
+            });
+            window.prevent_default();
+            cx.stop_propagation();
+            return;
+        }
+        if is_tool_page_tab_shortcut(self.screen, event.keystroke.key.as_str(), modifiers) {
+            window.prevent_default();
+            cx.stop_propagation();
+            return;
+        }
+        if self.handle_preview_key_overlay(&input, window, cx) == input::KeyFlow::Handled {
+            window.prevent_default();
+            cx.stop_propagation();
+            return;
+        }
+        if self.handle_preview_keystroke(
+            event.keystroke.key.as_str(),
+            modifiers.modified,
+            matches!(
+                event.input_preference,
+                gpui_kit::InputPreference::CharacterInput
+            ),
+            repeated,
+            window,
+            cx,
+        ) {
+            window.prevent_default();
+            cx.stop_propagation();
+            return;
+        }
+        if matches!(
+            event.input_preference,
+            gpui_kit::InputPreference::CharacterInput
+        ) || !is_scope_tab_shortcut(event.keystroke.key.as_str(), modifiers)
+            || !self.active_editor_focused(window, cx)
+            || !(self.screen == Screen::FileSearch
+                || (self.screen == Screen::Launcher
+                    && self.has_scope_bar()
+                    && !self.model.object_actions_active
+                    && self.model.menu_path().is_none()))
+        {
+            return;
+        }
+        self.handle_key_with_repeat(
+            event.keystroke.key.as_str(),
+            modifiers,
+            repeated,
+            window,
+            cx,
+        );
+        window.prevent_default();
+        cx.stop_propagation();
+    }
+
+    fn intercept_settings_modal_keystroke(
+        &mut self,
+        event: &gpui_kit::KeystrokeEvent,
+        modifiers: KeyModifiers,
+        repeated: bool,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if is_scope_tab_shortcut(event.keystroke.key.as_str(), modifiers) {
+            self.cycle_settings_modal_focus(event.keystroke.modifiers.shift, window, cx);
+            window.prevent_default();
+            cx.stop_propagation();
+            return;
+        }
+        if !modifiers.modified && event.keystroke.key.eq_ignore_ascii_case("escape") {
+            self.handle_settings_modal_escape(window, cx);
+            window.prevent_default();
+            cx.stop_propagation();
+            return;
+        }
+        if self.settings_editor.action_picker_open {
+            if self.shortcuts.recording.is_some() {
+                self.handle_key_with_repeat(
+                    event.keystroke.key.as_str(),
+                    modifiers,
+                    repeated,
+                    window,
+                    cx,
+                );
+                window.prevent_default();
+                cx.stop_propagation();
+            }
+            return;
+        }
+        let focused_modal_control = window.focused(cx).is_some_and(|focused| {
+            [
+                &self.settings_editor.keep_editing_focus,
+                &self.settings_editor.discard_focus,
+                &self.settings_editor.save_focus,
+                &self.settings_editor.confirm_cancel_focus,
+                &self.settings_editor.confirm_accept_focus,
+            ]
+            .into_iter()
+            .any(|handle| handle == &focused)
+        });
+        let activates_focused_control = !modifiers.modified
+            && matches!(event.keystroke.key.as_str(), "enter" | "space" | "return")
+            && focused_modal_control;
+        if !activates_focused_control {
+            window.prevent_default();
+            cx.stop_propagation();
+        }
     }
 
     #[cfg(test)]
@@ -1315,6 +1120,7 @@ impl LauncherView {
         state: Arc<anywhere_protocol::LauncherState>,
         cx: &mut Context<Self>,
     ) -> super::LauncherApply {
+        let previous_index = self.model.selected;
         let mut applied = self.model.apply_shared(state);
         if self.apply_pending_current_app_scope(cx) {
             applied.rows_changed = true;
@@ -1325,8 +1131,15 @@ impl LauncherView {
         if applied.rows_changed || applied.scopes_changed {
             self.reveal_selected_scope();
         }
+        if self.screen == Screen::Launcher
+            && self.model.selected != previous_index
+            && self.model.selection_id().is_some()
+        {
+            self.reveal_result_row(self.model.selected);
+        }
         self.notice = None;
         self.try_start_pending_action_shortcut(cx);
+        self.maybe_request_activation_prefill(cx);
         self.resume_web_surface_if_needed(cx);
         applied
     }
@@ -1355,8 +1168,7 @@ impl LauncherView {
             if pending_navigation && self.model.context_complete() {
                 self.scope_selection_intent = ScopeSelectionIntent::UserControlled;
                 self.model.loading = false;
-                self.model.rows.clear();
-                self.model.selected = 0;
+                self.model.clear_rows_until_snapshot();
             }
             return false;
         };
@@ -1371,8 +1183,7 @@ impl LauncherView {
         );
         self.model.select_scope(Some(current_app.id.clone()));
         self.model.loading = true;
-        self.model.rows.clear();
-        self.model.selected = 0;
+        self.model.clear_rows_until_snapshot();
         self.request_live_update(cx);
         true
     }
@@ -1424,8 +1235,7 @@ impl LauncherView {
             .cloned()
         else {
             self.model.loading = true;
-            self.model.rows.clear();
-            self.model.selected = 0;
+            self.model.clear_rows_until_snapshot();
             return;
         };
         self.scope_selection_intent = ScopeSelectionIntent::UserControlled;
@@ -1434,9 +1244,11 @@ impl LauncherView {
 
     fn mark_scope_user_controlled(&mut self) {
         self.scope_selection_intent = ScopeSelectionIntent::UserControlled;
+        self.cancel_activation_prefill();
     }
 
     fn mark_query_user_controlled(&mut self) {
+        self.cancel_activation_prefill();
         if self.scope_selection_intent == ScopeSelectionIntent::PendingCurrentApp {
             self.scope_selection_intent = ScopeSelectionIntent::UserControlled;
         }
@@ -1776,8 +1588,38 @@ impl LauncherView {
         self.notice_kind = components::NoticeKind::Warning;
     }
 
+    pub(super) fn show_hud_toast(
+        &mut self,
+        message: impl Into<String>,
+        icon: IconName,
+        kind: components::NoticeKind,
+        cx: &mut Context<Self>,
+    ) {
+        self.hud_toast.generation = self.hud_toast.generation.wrapping_add(1);
+        let generation = self.hud_toast.generation;
+        self.hud_toast.message = Some(message.into());
+        self.hud_toast.icon = Some(icon);
+        self.hud_toast.kind = kind;
+        self.hud_toast.task = Some(cx.spawn(async move |this, cx| {
+            cx.background_executor()
+                .timer(Duration::from_millis(1600))
+                .await;
+            let _ = this.update(cx, |this, cx| {
+                if this.hud_toast.generation == generation {
+                    this.hud_toast.message = None;
+                    this.hud_toast.icon = None;
+                    this.hud_toast.task = None;
+                    cx.notify();
+                }
+            });
+        }));
+    }
+
     fn sync_launcher_window_after_render(&mut self, window: &Window, cx: &mut Context<Self>) {
-        if self.resize_pending || !self.should_sync_launcher_size() {
+        if self.presence.resize_pending || !self.should_sync_launcher_size() {
+            return;
+        }
+        if self.standalone_tool {
             return;
         }
         let size = self.effective_window_size(window, cx);
@@ -1828,7 +1670,8 @@ impl LauncherView {
         if self.has_scope_bar() {
             // The leading flexible gutter is the scroll container's first
             // child; scope buttons begin at index one.
-            self.scope_scroll
+            self.scrolls
+                .scope
                 .scroll_to_item(self.selected_scope_item_index() + 1);
         }
     }
@@ -1849,17 +1692,19 @@ impl LauncherView {
     }
 
     fn reveal_selected_file_filter(&self) {
-        self.file_filter_scroll
+        self.scrolls
+            .file_filter
             .scroll_to_item(self.selected_file_filter_index());
     }
 
     fn reveal_result_row(&self, index: usize) {
         let tool_scroll = match self.screen {
-            Screen::FileSearch => Some(&self.tool_list_scrolls.file_search),
-            Screen::Clipboard => Some(&self.tool_list_scrolls.clipboard),
-            Screen::ClipboardShelf => Some(&self.tool_list_scrolls.clipboard_shelf),
-            Screen::ApplicationHistory => Some(&self.tool_list_scrolls.history),
-            Screen::Tasks => Some(&self.tool_list_scrolls.tasks),
+            Screen::Launcher => Some(&self.scrolls.tool_lists.launcher),
+            Screen::FileSearch => Some(&self.scrolls.tool_lists.file_search),
+            Screen::Clipboard => Some(&self.scrolls.tool_lists.clipboard),
+            Screen::ClipboardShelf => Some(&self.scrolls.tool_lists.clipboard_shelf),
+            Screen::ApplicationHistory => Some(&self.scrolls.tool_lists.history),
+            Screen::Tasks => Some(&self.scrolls.tool_lists.tasks),
             _ => None,
         };
         if let Some(scroll) = tool_scroll {
@@ -1879,8 +1724,7 @@ impl LauncherView {
             scroll.scroll_to_item(index, gpui_kit::ScrollStrategy::Nearest);
         } else {
             let scroll = match self.screen {
-                Screen::Launcher => &self.result_scroll,
-                Screen::WebPackages => &self.web_packages_scroll,
+                Screen::WebPackages => &self.scrolls.web_packages,
                 _ => return,
             };
             scroll.scroll_to_item(index);
@@ -1910,13 +1754,15 @@ impl LauncherView {
         self.tasks_filter_input.update(cx, |input, cx| {
             input.set_placeholder(l10n::find_atask(locale), window, cx)
         });
-        self.history_settings_filter_input.update(cx, |input, cx| {
-            input.set_placeholder(l10n::app_history_filter_sources(locale), window, cx)
-        });
-        self.action_shortcut_input.update(cx, |input, cx| {
+        self.settings_editor
+            .history_filter_input
+            .update(cx, |input, cx| {
+                input.set_placeholder(l10n::app_history_filter_sources(locale), window, cx)
+            });
+        self.shortcuts.action_input.update(cx, |input, cx| {
             input.set_placeholder(l10n::find_an_action(locale), window, cx)
         });
-        self.context_shortcut_name_input.update(cx, |input, cx| {
+        self.shortcuts.context_name_input.update(cx, |input, cx| {
             input.set_placeholder(l10n::e_gopen_terminal(locale), window, cx)
         });
     }
@@ -1946,15 +1792,7 @@ impl LauncherView {
     ) {
         self.locale = locale;
         self.model.set_locale(locale);
-        if self.standalone_tasks {
-            self.tasks_filter_input.update(cx, |input, cx| {
-                input.set_placeholder(l10n::find_atask(locale), window, cx)
-            });
-        } else {
-            self.clipboard_input.update(cx, |input, cx| {
-                input.set_placeholder(l10n::search_clipboard(locale), window, cx)
-            });
-        }
+        self.refresh_editor_placeholders(window, cx);
         cx.notify();
     }
 
@@ -1969,7 +1807,7 @@ impl LauncherView {
             return;
         };
         if let Some(web_view) = self.web_surface.view.as_ref() {
-            let web_theme = if theme::glass_surface_is_light() {
+            let web_theme = if theme::surface_is_light() {
                 wry::Theme::Light
             } else {
                 wry::Theme::Dark
@@ -1981,13 +1819,32 @@ impl LauncherView {
         if event_handle_matches(self, &handle) {
             let _ = self
                 .evaluate_web_script(&canvas_script(!crate::platform::uses_opaque_fallback()), cx);
-            let _ =
-                self.evaluate_web_script(&web_theme_script(theme::glass_surface_is_light()), cx);
+            let _ = self.evaluate_web_script(
+                &web_theme_script(theme::palette(), theme::fixed(), theme::surface_is_light()),
+                cx,
+            );
         }
         cx.notify();
     }
 
     fn window_appearance_changed(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.standalone_tool {
+            crate::host::defer_native_window_update(
+                cx.weak_entity(),
+                window.window_handle(),
+                cx,
+                crate::platform::refresh_tool_window_materials,
+                |this, window, cx, refreshed| {
+                    if refreshed {
+                        crate::app::install_component_theme(cx);
+                    }
+                    cx.set_reduce_motion(crate::platform::uses_reduce_motion());
+                    this.platform_appearance_changed(cx);
+                    window.refresh();
+                },
+            );
+            return;
+        }
         let title = if self.standalone_shelf {
             crate::CLIPBOARD_SHELF_TITLE
         } else if self.standalone_tasks {
@@ -2042,25 +1899,26 @@ impl LauncherView {
             && !self.root_navigation_open
             && !self.model.object_actions_active
             && self.model.menu_path().is_none();
-        (self.presented || self.runtime_state == RuntimeState::Preview)
+        (self.presence.presented || self.runtime_state == RuntimeState::Preview)
             && matches!(self.screen, Screen::Launcher | Screen::FileSearch)
+            && !self.standalone_tool
             && !self.standalone_shelf
             && !self.standalone_tasks
             && !waiting_for_results
     }
 
     fn resize_current_window(&mut self, cx: &mut Context<Self>) {
-        if self.resize_pending || !self.should_sync_launcher_size() {
+        if self.presence.resize_pending || !self.should_sync_launcher_size() {
             return;
         }
-        self.resize_pending = true;
+        self.presence.resize_pending = true;
         // Coalesce changes before the window borrow ends and use the latest layout.
         let view = cx.weak_entity();
         let window_handle = self.window_handle;
         cx.defer(move |cx| {
             let _ = window_handle.update(cx, |_, window, cx| {
                 let _ = view.update(cx, |this, cx| {
-                    this.resize_pending = false;
+                    this.presence.resize_pending = false;
                     if this.should_sync_launcher_size() {
                         this.resize_window_for_screen(window, cx);
                     }
@@ -2070,6 +1928,9 @@ impl LauncherView {
     }
 
     fn resize_window_for_screen(&self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.standalone_tool {
+            return;
+        }
         let size = self.effective_window_size(window, cx);
         if window_size_changed(window.bounds().size, size)
             && !crate::platform::resize_main_window_preserving_top(
@@ -2131,6 +1992,7 @@ impl LauncherView {
     }
 
     fn activate_selection(&mut self, cx: &mut Context<Self>) {
+        self.cancel_activation_prefill();
         if self.screen == Screen::FileSearch && !self.file_search.browsing {
             return;
         }
@@ -2140,13 +2002,16 @@ impl LauncherView {
             cx.notify();
             return;
         }
-        if let (Some(live), Some(row)) = (self.live.clone(), self.model.selected_row().cloned()) {
+        if let (Some(live), Some(row)) = (
+            self.live.clone(),
+            self.model.selected_row().map(std::borrow::Cow::into_owned),
+        ) {
             if row.enabled {
                 self.set_notice(
                     l10n::running_action(self.locale, &row.title),
                     components::NoticeKind::Info,
                 );
-                let receiver = live.execute(self.model.revision, row.id);
+                let receiver = live.execute(self.model.revision, row.id.to_string());
                 self.poll(receiver, self.live_state.generation, cx);
                 self.resize_current_window(cx);
                 cx.notify();
@@ -2194,6 +2059,7 @@ impl LauncherView {
         } else {
             result.close_window
         };
+        let dismiss = dismiss && !self.standalone_tool;
         if dismiss {
             self.prepare_hide(cx);
         } else {
@@ -2264,9 +2130,9 @@ impl LauncherView {
         if self.handle_settings_modal_escape(window, cx) {
             return;
         }
-        if self.settings_action_picker_open {
+        if self.settings_editor.action_picker_open {
             self.close_action_shortcut_picker(cx);
-            self.settings_focus_handle.focus(window, cx);
+            self.settings_editor.focus_handle.focus(window, cx);
         } else {
             self.request_close_settings(window, cx);
         }
@@ -2274,9 +2140,9 @@ impl LauncherView {
 
     fn settings_modal_active(&self) -> bool {
         self.screen == Screen::Settings
-            && (self.settings_close_pending
+            && (self.settings_editor.close_pending
                 || self.clipboard_confirmation.is_some()
-                || self.settings_action_picker_open)
+                || self.settings_editor.action_picker_open)
     }
 
     fn handle_settings_modal_escape(
@@ -2287,12 +2153,12 @@ impl LauncherView {
         if !self.settings_modal_active() {
             return false;
         }
-        self.shortcut_recording = None;
+        self.shortcuts.recording = None;
         if self.clipboard_confirmation.is_some() {
             self.cancel_clipboard_confirmation(window, cx);
-        } else if self.settings_action_picker_open {
+        } else if self.settings_editor.action_picker_open {
             self.close_action_shortcut_picker(cx);
-            self.settings_focus_handle.focus(window, cx);
+            self.settings_editor.focus_handle.focus(window, cx);
         } else {
             self.cancel_settings_close_prompt(window, cx);
         }
@@ -2333,10 +2199,10 @@ impl LauncherView {
         self.screen == Screen::FileSearch
             && self.file_search.browsing
             && !self.model.object_actions_active
-            && self.model.selected_row().is_some()
+            && self.model.selection_id().is_some()
     }
 
-    fn selected_row_for_action(&self) -> Option<&LauncherRow> {
+    fn selected_row_for_action(&self) -> Option<std::borrow::Cow<'_, LauncherRow>> {
         if self.screen == Screen::FileSearch
             && !self.file_search.browsing
             && !self.model.object_actions_active
@@ -2376,7 +2242,7 @@ impl LauncherView {
         }
         self.reveal_result_row(self.model.selected);
         self.notice = None;
-        if self.preview_open {
+        if self.preview.open {
             self.schedule_selected_preview(cx);
         }
         cx.notify();
@@ -2386,7 +2252,7 @@ impl LauncherView {
         if self.screen == Screen::FileSearch && !self.file_search.browsing {
             return;
         }
-        let Some(row) = self.model.selected_row().cloned() else {
+        let Some(row) = self.model.selected_row().map(std::borrow::Cow::into_owned) else {
             return;
         };
         if !matches!(self.screen, Screen::Launcher | Screen::FileSearch) {
@@ -2401,7 +2267,7 @@ impl LauncherView {
         self.model.show_object_actions();
         self.notice = None;
         if let Some(live) = self.live.clone() {
-            let receiver = live.object_actions(self.model.revision, row.id);
+            let receiver = live.object_actions(self.model.revision, row.id.to_string());
             self.poll_auxiliary_state(receiver, self.live_state.generation, cx);
         }
         cx.notify();
@@ -2418,49 +2284,139 @@ impl LauncherView {
     }
 
     fn render_launcher(&mut self, cx: &mut Context<Self>) -> AnyElement {
-        let selected_scope = self.model.selected_scope.as_deref();
         let has_scope_bar = self.has_scope_bar();
         let has_panel = self.launcher_has_panel();
-        let scope_controls = if !has_scope_bar {
-            None
-        } else {
-            Some(
+        let scope_controls = has_scope_bar.then(|| self.render_launcher_scope_bar(cx));
+        let result_heading = self.result_heading();
+        let rows = self.render_launcher_rows(cx);
+        let search_header = self.render_launcher_search_header(cx);
+
+        let mut root = div()
+            .id("launcher-surface")
+            .key_context("Launcher")
+            .track_focus(&self.surface_focus_handle)
+            .on_action(cx.listener(Self::on_action_toggle_preview))
+            .on_action(cx.listener(Self::on_action_close_preview_to_editor))
+            .on_action(cx.listener(Self::on_action_toggle_object_actions))
+            .on_action(cx.listener(Self::on_action_toggle_root_navigation))
+            .size_full()
+            .flex()
+            .flex_col()
+            .child(search_header);
+        if has_panel || self.root_navigation_open {
+            root = root.child(div().h(px(metrics::DIVIDER_WIDTH)).bg(theme::divider()));
+        }
+        if self.root_navigation_open {
+            return root
+                .child(self.render_root_navigation(cx))
+                .into_any_element();
+        }
+        if let Some(controls) = scope_controls {
+            root = root.child(controls);
+        }
+        if let Some((title, detail)) = result_heading {
+            root = root.child(
                 div()
-                    .id("launcher-scope-scroll")
-                    .h(px(metrics::PAGE_TOOLBAR_HEIGHT))
-                    .flex_shrink_0()
-                    .px(px(metrics::SPACE_LG))
+                    .id("launcher-result-heading")
+                    .test_support()
+                    .h(px(24.))
+                    .px(px(22.))
                     .flex()
                     .items_center()
-                    .overflow_x_scroll()
-                    .track_scroll(&self.scope_scroll)
-                    // Empty flexible gutters center a short group but collapse
-                    // to zero when the scope buttons overflow. Keeping the
-                    // buttons as direct scroll children also makes
-                    // `scroll_to_item` able to reveal a late selection.
-                    .child(div().min_w(px(0.)).flex_1())
-                    .children(self.model.scopes.iter().map(|scope| {
-                        self.scope_button(
-                            Some(scope.id.clone()),
-                            selected_scope == Some(scope.id.as_str()),
-                            cx,
+                    .gap(px(12.))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.))
+                            .truncate()
+                            .text_size(px(11.))
+                            .line_height(px(11. * metrics::CAPTION_LINE_HEIGHT))
+                            .font_weight(FontWeight::MEDIUM)
+                            .text_color(theme::secondary())
+                            .child(title),
+                    )
+                    .when_some(detail, |element, detail| {
+                        element.child(
+                            div()
+                                .flex_1()
+                                .min_w(px(0.))
+                                .truncate()
+                                .text_right()
+                                .text_size(px(metrics::CAPTION_SIZE))
+                                .text_color(theme::muted())
+                                .child(detail),
                         )
-                    }))
-                    .child(div().min_w(px(0.)).flex_1())
-                    .into_any_element(),
-            )
-        };
-        let mode_label = self.header_mode_label();
-        let result_heading = self.result_heading();
+                    }),
+            );
+        }
+        if let Some(notice) = self.notice.clone() {
+            let notice_height = self.launcher_notice_height();
+            root = root.child(
+                div()
+                    .id("launcher-notice")
+                    .test_support()
+                    .h(px(notice_height))
+                    .flex_shrink_0()
+                    .px(px(metrics::SPACE_XL))
+                    .py(px(4.))
+                    .flex()
+                    .items_center()
+                    .child(
+                        div()
+                            .id("launcher-notice-scroll")
+                            .test_support()
+                            .size_full()
+                            .track_scroll(&self.scrolls.notice)
+                            .overflow_y_scroll()
+                            .child(components::notice(notice, self.notice_kind))
+                            .vertical_scrollbar(&self.scrolls.notice),
+                    ),
+            );
+        }
+        if has_panel {
+            root = root.child(rows);
+        }
+        root.into_any_element()
+    }
 
-        let rows = if self.model.loading {
+    fn render_launcher_scope_bar(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let selected_scope = self.model.selected_scope.as_deref();
+        div()
+            .id("launcher-scope-scroll")
+            .h(px(metrics::PAGE_TOOLBAR_HEIGHT))
+            .flex_shrink_0()
+            .px(px(metrics::SPACE_LG))
+            .flex()
+            .items_center()
+            .overflow_x_scroll()
+            .track_scroll(&self.scrolls.scope)
+            // Empty flexible gutters center a short group but collapse
+            // to zero when the scope buttons overflow. Keeping the
+            // buttons as direct scroll children also makes
+            // `scroll_to_item` able to reveal a late selection.
+            .child(div().min_w(px(0.)).flex_1())
+            .children(self.model.scopes.iter().map(|scope| {
+                self.scope_button(
+                    Some(scope.id.clone()),
+                    selected_scope == Some(scope.id.as_str()),
+                    cx,
+                )
+            }))
+            .child(div().min_w(px(0.)).flex_1())
+            .into_any_element()
+    }
+
+    fn render_launcher_rows(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        if self.model.loading {
             div()
                 .h(px(64.))
                 .flex()
                 .items_center()
                 .justify_center()
+                .gap(px(metrics::SPACE_SM))
                 .text_size(px(metrics::BODY_SIZE))
                 .text_color(theme::secondary())
+                .child(Spinner::new().xsmall().color(theme::accent()))
                 .child(l10n::searching(self.locale))
                 .into_any_element()
         } else if self.model.rows.is_empty() {
@@ -2479,23 +2435,34 @@ impl LauncherView {
                 )
                 .into_any_element()
         } else {
-            let mut list = div()
-                .id("launcher-results")
+            div()
                 .flex_1()
                 .min_h(px(0.))
-                .flex()
-                .flex_col()
-                .px(px(10.))
-                .pb(px(8.))
-                .track_scroll(&self.result_scroll)
-                .overflow_y_scroll();
-            for (index, row) in self.model.rows.clone().into_iter().enumerate() {
-                list = list.child(self.render_row(index, row, self.model.selected == index, cx));
-            }
-            list.vertical_scrollbar(&self.result_scroll)
+                .relative()
+                .child(
+                    gpui_kit::uniform_list(
+                        "launcher-results",
+                        self.model.rows.len(),
+                        cx.processor(|this, range: std::ops::Range<usize>, _, cx| {
+                            range
+                                .map(|index| {
+                                    this.render_row(index, this.model.selected == index, cx)
+                                })
+                                .collect::<Vec<_>>()
+                        }),
+                    )
+                    .size_full()
+                    .px(px(metrics::ROW_PADDING_X))
+                    .py(px(metrics::SPACE_XS))
+                    .track_scroll(&self.scrolls.tool_lists.launcher),
+                )
+                .vertical_scrollbar(&self.scrolls.launcher_base())
                 .into_any_element()
-        };
+        }
+    }
 
+    fn render_launcher_search_header(&mut self, cx: &mut Context<Self>) -> AnyElement {
+        let mode_label = self.header_mode_label();
         let browsing = self.model.object_actions_active || self.model.menu_path().is_some();
         let leading_control = if browsing {
             div()
@@ -2600,156 +2567,76 @@ impl LauncherView {
                 .into_any_element()
         };
 
-        let mut root = div()
-            .id("launcher-surface")
-            .size_full()
+        div()
+            .id("launcher-search-header")
+            .test_support()
+            .h(px(self.launcher_input_height() - metrics::SPACE_MD))
+            .flex_shrink_0()
+            .mx(px(metrics::SPACE_SM))
+            .my(px(metrics::SPACE_MD / 2.))
+            .px(px(metrics::SPACE_XL - metrics::SPACE_SM))
             .flex()
-            .flex_col()
+            .items_center()
+            .rounded(px(metrics::RESULT_RADIUS))
+            .bg(theme::result_surface(false))
+            .child(leading_control)
+            .child(div().w(px(12.)))
             .child(
                 div()
-                    .id("launcher-search-header")
-                    .test_support()
-                    .h(px(self.launcher_input_height() - metrics::SPACE_MD))
-                    .flex_shrink_0()
-                    .mx(px(metrics::SPACE_SM))
-                    .my(px(metrics::SPACE_MD / 2.))
-                    .px(px(metrics::SPACE_XL - metrics::SPACE_SM))
+                    .flex_1()
+                    .min_w(px(0.))
                     .flex()
-                    .items_center()
-                    .rounded(px(metrics::RESULT_RADIUS))
-                    .bg(theme::result_surface(false))
-                    .child(leading_control)
-                    .child(div().w(px(12.)))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(0.))
-                            .flex()
-                            .flex_col()
-                            .justify_center()
-                            .min_h(px(0.))
-                            .gap(px(if self.input_mode == InputMode::Content {
-                                6.
-                            } else {
-                                2.
-                            }))
-                            .when_some(mode_label, |element, label| {
-                                element.child(
-                                    div()
-                                        .id(if self.input_mode == InputMode::Environment {
-                                            "launcher-current-app-label"
-                                        } else {
-                                            "launcher-mode-label"
-                                        })
-                                        .test_support()
-                                        .truncate()
-                                        .text_size(px(metrics::PAGE_MODE_SIZE))
-                                        .line_height(px(
-                                            metrics::PAGE_MODE_SIZE * metrics::CAPTION_LINE_HEIGHT
-                                        ))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(theme::secondary())
-                                        .child(label),
-                                )
-                            })
-                            .child(
-                                div()
-                                    .id("launcher-search-input-slot")
-                                    .test_support()
-                                    .min_w(px(0.))
-                                    .min_h(px(0.))
-                                    .w_full()
-                                    .child(launcher_editor),
-                            ),
-                    )
-                    .child(div().w(px(14.)))
-                    .child(if self.model.loading && self.presented {
-                        div()
-                            .size(px(16.))
-                            .flex_none()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .child(Spinner::new().xsmall().color(theme::secondary()))
-                            .into_any_element()
+                    .flex_col()
+                    .justify_center()
+                    .min_h(px(0.))
+                    .gap(px(if self.input_mode == InputMode::Content {
+                        6.
                     } else {
-                        self.keycap("esc").into_any_element()
-                    }),
-            );
-        if has_panel || self.root_navigation_open {
-            root = root.child(div().h(px(metrics::DIVIDER_WIDTH)).bg(theme::divider()));
-        }
-        if self.root_navigation_open {
-            return root
-                .child(self.render_root_navigation(cx))
-                .into_any_element();
-        }
-        if let Some(controls) = scope_controls {
-            root = root.child(controls);
-        }
-        if let Some((title, detail)) = result_heading {
-            root = root.child(
-                div()
-                    .id("launcher-result-heading")
-                    .test_support()
-                    .h(px(24.))
-                    .px(px(22.))
-                    .flex()
-                    .items_center()
-                    .gap(px(12.))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w(px(0.))
-                            .truncate()
-                            .text_size(px(11.))
-                            .line_height(px(11. * metrics::CAPTION_LINE_HEIGHT))
-                            .font_weight(FontWeight::MEDIUM)
-                            .text_color(theme::secondary())
-                            .child(title),
-                    )
-                    .when_some(detail, |element, detail| {
+                        2.
+                    }))
+                    .when_some(mode_label, |element, label| {
                         element.child(
                             div()
-                                .flex_1()
-                                .min_w(px(0.))
+                                .id(if self.input_mode == InputMode::Environment {
+                                    "launcher-current-app-label"
+                                } else {
+                                    "launcher-mode-label"
+                                })
+                                .test_support()
                                 .truncate()
-                                .text_right()
-                                .text_size(px(metrics::CAPTION_SIZE))
-                                .text_color(theme::muted())
-                                .child(detail),
+                                .text_size(px(metrics::PAGE_MODE_SIZE))
+                                .line_height(px(
+                                    metrics::PAGE_MODE_SIZE * metrics::CAPTION_LINE_HEIGHT
+                                ))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(theme::secondary())
+                                .child(label),
                         )
-                    }),
-            );
-        }
-        if let Some(notice) = self.notice.clone() {
-            let notice_height = self.launcher_notice_height();
-            root = root.child(
-                div()
-                    .id("launcher-notice")
-                    .test_support()
-                    .h(px(notice_height))
-                    .flex_shrink_0()
-                    .px(px(metrics::SPACE_XL))
-                    .py(px(4.))
-                    .flex()
-                    .items_center()
+                    })
                     .child(
                         div()
-                            .id("launcher-notice-scroll")
+                            .id("launcher-search-input-slot")
                             .test_support()
-                            .size_full()
-                            .track_scroll(&self.notice_scroll)
-                            .overflow_y_scroll()
-                            .child(components::notice(notice, self.notice_kind))
-                            .vertical_scrollbar(&self.notice_scroll),
+                            .min_w(px(0.))
+                            .min_h(px(0.))
+                            .w_full()
+                            .child(launcher_editor),
                     ),
-            );
-        }
-        if has_panel {
-            root = root.child(rows);
-        }
-        root.into_any_element()
+            )
+            .child(div().w(px(14.)))
+            .child(if self.model.loading && self.presence.presented {
+                div()
+                    .size(px(16.))
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .child(Spinner::new().xsmall().color(theme::secondary()))
+                    .into_any_element()
+            } else {
+                self.keycap("esc").into_any_element()
+            })
+            .into_any_element()
     }
 
     fn keycap(&self, value: impl Into<SharedString>) -> impl IntoElement {
@@ -2764,9 +2651,9 @@ impl Render for LauncherView {
         let content = match self.screen {
             Screen::Launcher => self.render_launcher(cx),
             Screen::FileSearch => self.render_file_search(cx),
-            Screen::Clipboard => self.render_clipboard(window, cx),
+            Screen::Clipboard => self.render_clipboard(cx),
             Screen::ClipboardShelf => self.render_clipboard_shelf(cx),
-            Screen::ApplicationHistory => self.render_app_history(window, cx),
+            Screen::ApplicationHistory => self.render_app_history(cx),
             Screen::Tasks => self.render_tasks(window, cx),
             Screen::WebPackages => self.render_web_packages(cx),
             Screen::WebTool => self.render_web_tool(window, cx),
@@ -2778,6 +2665,9 @@ impl Render for LauncherView {
             .relative()
             .flex()
             .flex_col()
+            .key_context("Anywhere")
+            .on_action(cx.listener(Self::on_action_open_settings))
+            .on_action(cx.listener(Self::on_action_quit_app))
             .rounded(px(LAUNCHER_CORNER_RADIUS))
             .overflow_hidden()
             .bg(if crate::platform::uses_opaque_fallback() {
@@ -2788,62 +2678,19 @@ impl Render for LauncherView {
             .text_color(theme::primary())
             .font_family(fonts::FONT_UI)
             .font_weight(FontWeight::NORMAL)
-            .capture_key_down(
-                cx.listener(|this, event: &gpui_kit::KeyDownEvent, window, cx| {
-                    if event.prefer_character_input {
-                        return;
-                    }
-                    if event.keystroke.modifiers.platform
-                        && !event.keystroke.modifiers.control
-                        && !event.keystroke.modifiers.alt
-                        && !event.keystroke.modifiers.shift
-                        && event.keystroke.key == ","
-                        && !this.standalone_shelf
-                        && !this.standalone_tasks
-                        && !this.preview_open
-                    {
-                        this.open_settings(window, cx);
-                        window.prevent_default();
-                        cx.stop_propagation();
-                        return;
-                    }
-                    if this.handle_preview_key(event, window, cx) {
-                        window.prevent_default();
-                        cx.stop_propagation();
-                        return;
-                    }
-                    if event.keystroke.modifiers.platform
-                        && event.keystroke.key.eq_ignore_ascii_case("y")
-                        && this.can_toggle_preview_shortcut()
-                    {
-                        if !event.is_held {
-                            this.toggle_preview_shortcut(window, cx);
-                        }
-                        window.prevent_default();
-                        cx.stop_propagation();
-                    } else if event.keystroke.modifiers.platform
-                        && event.keystroke.key.eq_ignore_ascii_case("k")
-                        && matches!(this.screen, Screen::Launcher | Screen::FileSearch)
-                    {
-                        this.show_object_actions(cx);
-                        window.prevent_default();
-                        cx.stop_propagation();
-                    }
-                }),
-            )
             .on_key_down(
                 cx.listener(|this, event: &gpui_kit::KeyDownEvent, window, cx| {
-                    if this.shortcut_recording.is_some()
+                    if this.shortcuts.recording.is_some()
                         || (this.screen == Screen::Settings
-                            && !this.preview_open
+                            && !this.preview.open
                             && event.keystroke.key.eq_ignore_ascii_case("escape"))
                         || (this.screen == Screen::Settings
                             && event.keystroke.key.eq_ignore_ascii_case("tab"))
-                        || (this.preview_open && event.keystroke.key.eq_ignore_ascii_case("escape"))
+                        || (this.preview.open && event.keystroke.key.eq_ignore_ascii_case("escape"))
                     {
                         return;
                     }
-                    if event.prefer_character_input && this.shortcut_recording.is_none() {
+                    if event.prefer_character_input && this.shortcuts.recording.is_none() {
                         return;
                     }
                     if is_scope_tab_shortcut(event.keystroke.key.as_str(), key_modifiers(event)) {
@@ -2859,6 +2706,25 @@ impl Render for LauncherView {
                 }),
             )
             .child(content)
+            .when_some(self.hud_toast.message.clone(), |element, message| {
+                let icon = self.hud_toast.icon.unwrap_or(IconName::Check);
+                let tint = match self.hud_toast.kind {
+                    components::NoticeKind::Success => theme::success(),
+                    components::NoticeKind::Warning => theme::warning(),
+                    components::NoticeKind::Error => theme::danger(),
+                    components::NoticeKind::Info => theme::accent(),
+                };
+                element.child(
+                    div()
+                        .absolute()
+                        .bottom(px(metrics::SPACE_XL))
+                        .left_0()
+                        .right_0()
+                        .flex()
+                        .justify_center()
+                        .child(components::hud_toast(message, icon, tint)),
+                )
+            })
             // The native material owns the window rim and shadow. The GPUI
             // canvas supplies content only; no window-wide stroke or veil.
             .when(self.screen == Screen::Launcher, |element| {

@@ -109,14 +109,23 @@ impl ContextCaptureService {
         clipboard: bool,
         revoke_execution: impl FnOnce(),
     ) {
-        if let Ok(mut policy) = self.policy.lock() {
-            policy.set(finder, selected_text, browser_page, clipboard);
-            revoke_execution();
-        }
+        let mut policy = crate::core::sync::lock_for_revoke(&self.policy, "capture_policy");
+        policy.set(finder, selected_text, browser_page, clipboard);
+        revoke_execution();
     }
 
     fn token(&self, source: ContextSource) -> Option<u64> {
-        self.policy.lock().ok()?.token(source)
+        crate::core::sync::lock_or_deny(&self.policy, "capture_policy")
+            .ok()?
+            .token(source)
+    }
+
+    #[cfg(test)]
+    pub(super) fn poison_policy_for_test(&self) {
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = self.policy.lock().unwrap();
+            panic!("poison capture policy");
+        }));
     }
 
     pub fn spawn_sources(&self, session_id: SessionId, frontmost: Option<ApplicationInfo>) {
@@ -152,6 +161,7 @@ impl ContextCaptureService {
                     move || {
                         let context = platform
                             .browser_current_url(&target)?
+                            .as_deref()
                             .map(browser_context)
                             .transpose()?
                             .flatten();
@@ -190,9 +200,7 @@ impl ContextCaptureService {
     ) {
         let service = self.clone();
         tokio::spawn(async move {
-            if !service
-                .policy
-                .lock()
+            if !crate::core::sync::lock_or_deny(&service.policy, "capture_policy")
                 .is_ok_and(|policy| policy.allows(source, token))
             {
                 return;
@@ -242,11 +250,11 @@ fn text_context(text: String, source: ContextSource) -> Result<Option<ResolvedCo
     )))
 }
 
-fn browser_context(raw: String) -> Result<Option<ResolvedContext>> {
+fn browser_context(raw: &str) -> Result<Option<ResolvedContext>> {
     if raw.len() > 8 * 1024 {
         return Err(ContextReadError::TooLarge.into());
     }
-    let Ok(url) = url::Url::parse(&raw) else {
+    let Ok(url) = url::Url::parse(raw) else {
         return Ok(None);
     };
     if !matches!(url.scheme(), "http" | "https") || url.host_str().is_none() {
@@ -330,7 +338,7 @@ impl ContextCaptureService {
         let resolver = &self.resolver;
         let contexts = capture.contexts.clone();
         {
-            let Ok(policy) = self.policy.lock() else {
+            let Ok(policy) = crate::core::sync::lock_or_deny(&self.policy, "capture_policy") else {
                 return;
             };
             if !policy.allows(capture.source, token) {

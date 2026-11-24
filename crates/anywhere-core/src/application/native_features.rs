@@ -123,7 +123,9 @@ impl FeatureSettings {
             policy: Arc::new(FeaturePolicySnapshot::new(0, Default::default(), false)),
             error: None,
         };
-        settings.read().expect("initial generation is available");
+        if let Err(error) = settings.read() {
+            unreachable!("initial generation is available: {error}");
+        }
         settings
     }
     pub fn read(&mut self) -> Result<()> {

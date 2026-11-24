@@ -101,9 +101,7 @@ async fn git_shortcuts_search_and_copy_actions_use_the_repository_root_and_recor
         );
         let usage = history.lock().unwrap().load_global().unwrap();
         assert_eq!(
-            usage
-                .get(&(id.into(), GIT_REPOSITORY.into()))
-                .unwrap()
+            anywhere_core::core::ranking::usage::lookup_usage(&usage, id, GIT_REPOSITORY)
                 .execute_count,
             1
         );

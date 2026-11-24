@@ -12,7 +12,7 @@ use crate::{
     host::{HotKeyAction, HotKeyController, LiveLauncher},
     launcher::{
         launcher_window_size, locale_for_language, ClipboardShelfView, LauncherEvent, LauncherView,
-        TasksWindowView,
+        ToolWindowView,
     },
     ui::{
         design_tokens::{fonts, metrics},
@@ -38,6 +38,25 @@ enum RuntimeStartup {
 }
 
 impl ProductShell {
+    fn refresh_appearance(&self, cx: &mut Context<Self>) {
+        crate::platform::refresh_all_window_materials();
+        cx.set_reduce_motion(crate::platform::uses_reduce_motion());
+        install_component_theme(cx);
+        self.launcher
+            .update(cx, |launcher, cx| launcher.platform_appearance_changed(cx));
+        for (handle, tool) in self
+            .launcher
+            .read(cx)
+            .tool_window_handles()
+            .collect::<Vec<_>>()
+        {
+            let _ = handle.update(cx, |_, _, cx| {
+                let _ = tool.update(cx, |tool, cx| tool.platform_appearance_changed(cx));
+            });
+        }
+        cx.refresh_windows();
+    }
+
     fn hide_launcher(&mut self, cx: &mut Context<Self>) {
         self.launcher
             .update(cx, |launcher, cx| launcher.prepare_hide(cx));
@@ -60,13 +79,14 @@ impl ProductShell {
             crate::platform::bind_window_identity(window, CLIPBOARD_SHELF_TITLE);
             let launcher =
                 cx.new(|cx| LauncherView::clipboard_shelf(window, cx, live.clone(), locale));
-            cx.new(|cx| ClipboardShelfView::new(launcher, cx))
+            cx.new(|cx| ClipboardShelfView::new(launcher, window, cx))
         });
         match opened {
             Ok((window, shell)) => {
                 crate::platform::configure_clipboard_shelf_window_after_update(
                     CLIPBOARD_SHELF_TITLE,
                 );
+                crate::platform::activate_window_after_update(CLIPBOARD_SHELF_TITLE);
                 let launcher = shell.read(cx).launcher.clone();
                 let _ = window.update(cx, |_, window, _| {
                     window.on_next_frame(move |_, cx| {
@@ -105,14 +125,13 @@ impl ProductShell {
             crate::platform::bind_window_identity(window, TASKS_WINDOW_TITLE);
             let launcher =
                 cx.new(|cx| LauncherView::tasks_window(window, cx, live.clone(), locale));
-            cx.new(|cx| TasksWindowView::new(launcher, main_launcher, cx))
+            cx.new(|cx| ToolWindowView::new(launcher, main_launcher, window, cx))
         });
         match opened {
             Ok((window, shell)) => {
                 crate::platform::configure_tasks_window_after_update(TASKS_WINDOW_TITLE);
                 let launcher = shell.read(cx).launcher.clone();
                 self.tasks_launcher = Some(launcher.clone());
-                let selected_task_id = selected_task_id.clone();
                 let _ = window.update(cx, move |_, window, _| {
                     window.on_next_frame(move |_, cx| {
                         launcher.update(cx, |launcher, cx| {
@@ -168,8 +187,8 @@ fn configure_component_theme(theme: &mut gpui_kit::component::Theme) {
     theme.colors.secondary_foreground = theme::secondary();
     theme.colors.muted_foreground = theme::muted();
     theme.colors.border = theme::border();
-    theme.colors.popover = theme::menu_surface();
-    theme.colors.popover_foreground = theme::on_dark_primary();
+    theme.colors.popover = theme::action_menu_surface();
+    theme.colors.popover_foreground = theme::primary();
     theme.colors.input = theme::control_border();
     theme.colors.ring = theme::selection_outline();
     theme.colors.caret = theme::accent();
@@ -178,18 +197,25 @@ fn configure_component_theme(theme: &mut gpui_kit::component::Theme) {
     theme.tokens.selection = theme::text_selection().into();
     theme.colors.primary = theme::accent_fill();
     theme.colors.primary_foreground = theme::on_dark_primary();
-    theme.colors.primary_hover = theme::accent();
-    theme.colors.primary_active = theme::accent_fill();
+    theme.colors.primary_hover = theme::accent_fill().opacity(0.88);
+    theme.colors.primary_active = theme::accent_fill().opacity(0.76);
     theme.tokens.primary = theme::accent_fill().into();
-    theme.tokens.primary_hover = theme::accent().into();
-    theme.tokens.primary_active = theme::accent_fill().into();
-    theme.colors.button_primary = theme::primary_button_surface();
+    theme.tokens.primary_hover = theme::accent_fill().opacity(0.88).into();
+    theme.tokens.primary_active = theme::accent_fill().opacity(0.76).into();
+    theme.colors.button_primary = theme::accent_fill();
     theme.colors.button_primary_foreground = theme::on_dark_primary();
-    theme.colors.button_primary_hover = theme::accent();
-    theme.colors.button_primary_active = theme::accent_fill();
-    theme.tokens.button_primary = theme::primary_button_surface().into();
-    theme.tokens.button_primary_hover = theme::accent().into();
-    theme.tokens.button_primary_active = theme::accent_fill().into();
+    theme.colors.button_primary_hover = theme::accent_fill().opacity(0.88);
+    theme.colors.button_primary_active = theme::accent_fill().opacity(0.76);
+    theme.tokens.button_primary = theme::accent_fill().into();
+    theme.tokens.button_primary_hover = theme::accent_fill().opacity(0.88).into();
+    theme.tokens.button_primary_active = theme::accent_fill().opacity(0.76).into();
+    theme.colors.button_danger = theme::danger().opacity(0.14);
+    theme.colors.button_danger_foreground = theme::danger();
+    theme.colors.button_danger_hover = theme::danger().opacity(0.22);
+    theme.colors.button_danger_active = theme::danger().opacity(0.30);
+    theme.tokens.button_danger = theme::danger().opacity(0.14).into();
+    theme.tokens.button_danger_hover = theme::danger().opacity(0.22).into();
+    theme.tokens.button_danger_active = theme::danger().opacity(0.30).into();
     theme.colors.button_secondary = theme::transparent();
     theme.colors.button_secondary_foreground = theme::primary();
     theme.colors.button_secondary_hover = theme::hover();
@@ -223,7 +249,7 @@ fn configure_component_theme(theme: &mut gpui_kit::component::Theme) {
 
 pub(crate) fn install_component_theme(cx: &mut GpuiApp) {
     gpui_kit::component::Theme::update(cx, |theme| {
-        theme.mode = if theme::glass_surface_is_light() {
+        theme.mode = if theme::surface_is_light() {
             gpui_kit::component::ThemeMode::Light
         } else {
             gpui_kit::component::ThemeMode::Dark
@@ -234,13 +260,14 @@ pub(crate) fn install_component_theme(cx: &mut GpuiApp) {
 
 pub fn run(cx: &mut GpuiApp) {
     gpui_kit::init(cx);
+    crate::launcher::bind_keys(cx);
     crate::platform::prepare_window_material();
     install_component_theme(cx);
     cx.set_reduce_motion(crate::platform::uses_reduce_motion());
     cx.set_activation_policy(app_activation_policy());
     let preview = std::env::var_os("ANYWHERE_PREVIEW").is_some();
     let startup_receiver = (!preview).then(start_live_runtime);
-    let (status_actions, mut status_receiver) =
+    let (status_actions, status_receiver) =
         tokio::sync::mpsc::channel::<crate::platform::StatusItemAction>(64);
     let options = main_window_options(cx);
     let opened = gpui_kit::open_window(options, cx, |window, cx| {
@@ -285,6 +312,21 @@ pub fn run(cx: &mut GpuiApp) {
         tracing::warn!("ui_preview_uses_fixture_data_without_live_runtime");
         crate::platform::show_main_window_after_launch();
     }
+    let launcher_window = window_handle;
+    install_status_and_shell_events(launcher_window, &shell, status_actions, cx);
+    if let Some(startup_receiver) = startup_receiver {
+        spawn_runtime_startup(startup_receiver, window_handle, shell.clone(), cx);
+    }
+    spawn_status_action_loop(status_receiver, window_handle, shell.clone(), cx);
+    spawn_platform_event_loop(window_handle, shell, preview, cx);
+}
+
+fn install_status_and_shell_events(
+    launcher_window: AnyWindowHandle,
+    shell: &gpui_kit::Entity<ProductShell>,
+    status_actions: tokio::sync::mpsc::Sender<crate::platform::StatusItemAction>,
+    cx: &mut GpuiApp,
+) {
     let locale = shell.read(cx).launcher.read(cx).locale();
     let preferences =
         crate::host::registered_preferences(&crate::host::HostPreferences::default(), None);
@@ -296,12 +338,11 @@ pub fn run(cx: &mut GpuiApp) {
     );
     let status_item = crate::platform::install_status_item(
         status_actions,
-        crate::platform::StatusMenuLabels::new(locale, &preferences),
+        &crate::platform::StatusMenuLabels::new(locale, &preferences),
     );
     if status_item.is_none() {
         tracing::warn!("status_item_unavailable");
     }
-    let launcher_window = window_handle;
     shell.update(cx, |shell, cx| {
         shell._status_item = status_item;
         let weak = cx.weak_entity();
@@ -367,6 +408,11 @@ pub fn run(cx: &mut GpuiApp) {
                         locale,
                         preferences,
                     } => {
+                        if crate::platform::set_application_appearance(
+                            preferences.ui_theme.appearance(),
+                        ) {
+                            shell.refresh_appearance(cx);
+                        }
                         for handle in [shell.shelf_window, shell.tasks_window]
                             .into_iter()
                             .flatten()
@@ -377,7 +423,7 @@ pub fn run(cx: &mut GpuiApp) {
                                     shelf.read(cx).launcher.clone().update(cx, |view, cx| {
                                         view.update_tool_locale(locale, window, cx)
                                     });
-                                } else if let Ok(tasks) = view.downcast::<TasksWindowView>() {
+                                } else if let Ok(tasks) = view.downcast::<ToolWindowView>() {
                                     tasks.read(cx).launcher.clone().update(cx, |view, cx| {
                                         view.update_tool_locale(locale, window, cx)
                                     });
@@ -385,8 +431,23 @@ pub fn run(cx: &mut GpuiApp) {
                                 window.refresh();
                             });
                         }
+                        for (handle, tool) in shell
+                            .launcher
+                            .read(cx)
+                            .tool_window_handles()
+                            .collect::<Vec<_>>()
+                        {
+                            let locale = *locale;
+                            let _ = handle.update(cx, |_, window, cx| {
+                                let _ = tool.update(cx, |tool, cx| {
+                                    tool.update_tool_locale(locale, window, cx);
+                                    tool.platform_appearance_changed(cx);
+                                });
+                                window.refresh();
+                            });
+                        }
                         if let Some(status_item) = shell._status_item.as_ref() {
-                            status_item.update_labels(crate::platform::StatusMenuLabels::new(
+                            status_item.update_labels(&crate::platform::StatusMenuLabels::new(
                                 *locale,
                                 preferences,
                             ));
@@ -396,98 +457,110 @@ pub fn run(cx: &mut GpuiApp) {
             },
         ));
     });
-    if let Some(mut startup_receiver) = startup_receiver {
-        let startup_window = window_handle;
-        let startup_shell = shell.clone();
-        cx.spawn(async move |cx| {
-            let Some(startup) = startup_receiver.recv().await else {
-                let error = "Anywhere runtime startup worker stopped unexpectedly".to_owned();
-                tracing::error!("{error}");
+}
+
+fn spawn_runtime_startup(
+    mut startup_receiver: tokio::sync::mpsc::Receiver<RuntimeStartup>,
+    startup_window: AnyWindowHandle,
+    startup_shell: gpui_kit::Entity<ProductShell>,
+    cx: &mut GpuiApp,
+) {
+    cx.spawn(async move |cx| {
+        let Some(startup) = startup_receiver.recv().await else {
+            let error = "Anywhere runtime startup worker stopped unexpectedly".to_owned();
+            tracing::error!("{error}");
+            let _ = startup_window.update(cx, |_, _, cx| {
+                startup_shell.update(cx, |shell, cx| {
+                    shell.launcher.update(cx, |launcher, cx| {
+                        launcher.set_startup_error(error.clone(), cx)
+                    });
+                });
+            });
+            return;
+        };
+        match startup {
+            RuntimeStartup::Ready(live) => {
+                let preferences = match live.preferences() {
+                    Ok(preferences) => preferences,
+                    Err(error) => {
+                        tracing::error!(%error, "startup_preferences_unavailable");
+                        let message = format!("Anywhere preferences are unavailable: {error:#}");
+                        let _ = startup_window.update(cx, |_, _, cx| {
+                            startup_shell.update(cx, |shell, cx| {
+                                shell.launcher.update(cx, |launcher, cx| {
+                                    launcher.set_startup_error(message.clone(), cx)
+                                });
+                            });
+                        });
+                        return;
+                    }
+                };
+                let (hotkeys, hotkey_error) = match HotKeyController::new(&preferences) {
+                    Ok(controller) => {
+                        let error = controller.registration_error().map(str::to_owned);
+                        (Some(Arc::new(Mutex::new(controller))), error)
+                    }
+                    Err(error) => {
+                        tracing::error!(%error, "global_hotkey_manager_unavailable");
+                        (None, Some(format!("{error:#}")))
+                    }
+                };
+                let locale = locale_for_language(preferences.ui_language);
+                let effective = {
+                    let controller = hotkeys.as_ref().and_then(|hotkeys| hotkeys.lock().ok());
+                    crate::host::registered_preferences(&preferences, controller.as_deref())
+                };
+                let labels = crate::platform::StatusMenuLabels::new(locale, &effective);
+                let attached = startup_window
+                    .update(cx, |_, window, cx| {
+                        startup_shell.update(cx, |shell, cx| {
+                            shell.live = Some(live.clone());
+                            shell.launcher.update(cx, |launcher, cx| {
+                                launcher.attach_runtime(
+                                    live,
+                                    hotkeys.clone(),
+                                    hotkey_error,
+                                    window,
+                                    cx,
+                                )
+                            });
+                            if crate::platform::set_application_appearance(
+                                preferences.ui_theme.appearance(),
+                            ) {
+                                shell.refresh_appearance(cx);
+                            }
+                            if let Some(status_item) = shell._status_item.as_ref() {
+                                status_item.update_labels(&labels);
+                            }
+                        })
+                    })
+                    .is_ok();
+                if attached {
+                    install_global_hotkeys(cx, startup_window, &startup_shell);
+                }
+            }
+            RuntimeStartup::Failed(error) => {
+                tracing::error!(%error, "shared_runtime_unavailable");
+                let message = format!("Anywhere could not open its local runtime: {error}");
                 let _ = startup_window.update(cx, |_, _, cx| {
                     startup_shell.update(cx, |shell, cx| {
                         shell.launcher.update(cx, |launcher, cx| {
-                            launcher.set_startup_error(error.clone(), cx)
+                            launcher.set_startup_error(message.clone(), cx)
                         });
                     });
                 });
-                return;
-            };
-            match startup {
-                RuntimeStartup::Ready(live) => {
-                    let preferences = match live.preferences() {
-                        Ok(preferences) => preferences,
-                        Err(error) => {
-                            tracing::error!(%error, "startup_preferences_unavailable");
-                            let message =
-                                format!("Anywhere preferences are unavailable: {error:#}");
-                            let _ = startup_window.update(cx, |_, _, cx| {
-                                startup_shell.update(cx, |shell, cx| {
-                                    shell.launcher.update(cx, |launcher, cx| {
-                                        launcher.set_startup_error(message.clone(), cx)
-                                    });
-                                });
-                            });
-                            return;
-                        }
-                    };
-                    let (hotkeys, hotkey_error) = match HotKeyController::new(&preferences) {
-                        Ok(controller) => {
-                            let error = controller.registration_error().map(str::to_owned);
-                            (Some(Arc::new(Mutex::new(controller))), error)
-                        }
-                        Err(error) => {
-                            tracing::error!(%error, "global_hotkey_manager_unavailable");
-                            (None, Some(format!("{error:#}")))
-                        }
-                    };
-                    let locale = locale_for_language(preferences.ui_language);
-                    let effective = {
-                        let controller = hotkeys.as_ref().and_then(|hotkeys| hotkeys.lock().ok());
-                        crate::host::registered_preferences(&preferences, controller.as_deref())
-                    };
-                    let labels = crate::platform::StatusMenuLabels::new(locale, &effective);
-                    let attached = startup_window
-                        .update(cx, |_, window, cx| {
-                            startup_shell.update(cx, |shell, cx| {
-                                shell.live = Some(live.clone());
-                                shell.launcher.update(cx, |launcher, cx| {
-                                    launcher.attach_runtime(
-                                        live,
-                                        hotkeys.clone(),
-                                        hotkey_error,
-                                        window,
-                                        cx,
-                                    )
-                                });
-                                if let Some(status_item) = shell._status_item.as_ref() {
-                                    status_item.update_labels(labels);
-                                }
-                            })
-                        })
-                        .is_ok();
-                    if attached {
-                        install_global_hotkeys(cx, startup_window, startup_shell);
-                    }
-                }
-                RuntimeStartup::Failed(error) => {
-                    tracing::error!(%error, "shared_runtime_unavailable");
-                    let message = format!("Anywhere could not open its local runtime: {error}");
-                    let _ = startup_window.update(cx, |_, _, cx| {
-                        startup_shell.update(cx, |shell, cx| {
-                            shell.launcher.update(cx, |launcher, cx| {
-                                launcher.set_startup_error(message.clone(), cx)
-                            });
-                        });
-                    });
-                }
             }
-        })
-        .detach();
-    }
-    let mut platform_events = crate::platform::install_platform_observers();
+        }
+    })
+    .detach();
+}
 
-    let status_window = window_handle;
-    let status_shell = shell.clone();
+fn spawn_status_action_loop(
+    mut status_receiver: tokio::sync::mpsc::Receiver<crate::platform::StatusItemAction>,
+    status_window: AnyWindowHandle,
+    status_shell: gpui_kit::Entity<ProductShell>,
+    cx: &mut GpuiApp,
+) {
     cx.spawn(async move |cx| {
         while let Some(action) = status_receiver.recv().await {
             match action {
@@ -592,9 +665,15 @@ pub fn run(cx: &mut GpuiApp) {
         }
     })
     .detach();
+}
 
-    let focus_window = window_handle;
-    let focus_shell = shell;
+fn spawn_platform_event_loop(
+    focus_window: AnyWindowHandle,
+    focus_shell: gpui_kit::Entity<ProductShell>,
+    preview: bool,
+    cx: &mut GpuiApp,
+) {
+    let mut platform_events = crate::platform::install_platform_observers();
     let focus_epoch = Arc::new(AtomicU64::new(0));
     cx.spawn(async move |cx| {
         while let Some(event) = platform_events.recv().await {
@@ -652,18 +731,6 @@ pub fn run(cx: &mut GpuiApp) {
                         .unwrap_or(false);
                     tracing::debug!(handled, "settings_escape_dispatched");
                 }
-                crate::platform::PlatformEvent::WebViewEscape => {
-                    let handled = focus_window
-                        .update(cx, |_, window, cx| {
-                            focus_shell.update(cx, |shell, cx| {
-                                shell.launcher.update(cx, |launcher, cx| {
-                                    launcher.handle_web_view_escape_from_platform(window, cx)
-                                })
-                            })
-                        })
-                        .unwrap_or(false);
-                    tracing::debug!(handled, "web_view_escape_dispatched");
-                }
                 crate::platform::PlatformEvent::TasksKey { key, repeated } => {
                     let key_name = match key {
                         crate::platform::TasksNavigationKey::Escape => "escape",
@@ -687,28 +754,7 @@ pub fn run(cx: &mut GpuiApp) {
                     tracing::debug!(?key, handled, "tasks_navigation_key_dispatched");
                 }
                 crate::platform::PlatformEvent::AccessibilityDisplayChanged => {
-                    let refreshed = crate::platform::refresh_all_window_materials();
-                    let reduce_motion = crate::platform::uses_reduce_motion();
-                    let _ = focus_window.update(cx, |_, window, cx| {
-                        cx.set_reduce_motion(reduce_motion);
-                        if refreshed {
-                            install_component_theme(cx);
-                            focus_shell.update(cx, |shell, cx| {
-                                shell.launcher.update(cx, |launcher, cx| {
-                                    launcher.platform_appearance_changed(cx)
-                                });
-                            });
-                            window.refresh();
-                        }
-                    });
-                    focus_shell.update(cx, |shell, cx| {
-                        for handle in [shell.shelf_window, shell.tasks_window]
-                            .into_iter()
-                            .flatten()
-                        {
-                            let _ = handle.update(cx, |_, window, _| window.refresh());
-                        }
-                    });
+                    focus_shell.update(cx, |shell, cx| shell.refresh_appearance(cx));
                 }
             }
         }
@@ -744,7 +790,7 @@ fn start_runtime_worker(
 fn install_global_hotkeys(
     cx: &mut gpui_kit::AsyncApp,
     window_handle: AnyWindowHandle,
-    shell: Entity<ProductShell>,
+    shell: &Entity<ProductShell>,
 ) {
     let (event_sender, mut event_receiver) = tokio::sync::mpsc::channel(64);
     global_hotkey::GlobalHotKeyEvent::set_event_handler(Some(move |event| {
@@ -914,6 +960,18 @@ fn shelf_window_options(cx: &mut GpuiApp) -> WindowOptions {
     }
 }
 
+pub(crate) fn tool_window_options(title: String, cx: &mut GpuiApp) -> WindowOptions {
+    let mut options = tasks_window_options(cx);
+    if let Some(titlebar) = options.titlebar.as_mut() {
+        titlebar.title = Some(title.into());
+    }
+    options.window_min_size = Some(size(
+        px(crate::ui::LAUNCHER_WIDTH),
+        px(crate::ui::TOOL_WINDOW_MIN_HEIGHT),
+    ));
+    options
+}
+
 fn tasks_window_options(cx: &mut GpuiApp) -> WindowOptions {
     let requested = size(
         px(crate::ui::TASKS_WINDOW_WIDTH),
@@ -1016,10 +1074,7 @@ mod tests {
         assert_eq!(theme.colors.background, theme::transparent());
         assert_eq!(theme.tokens.background, theme::transparent().into());
         assert_eq!(theme.tokens.input.color, theme::control_border());
-        assert_eq!(
-            theme.tokens.button_primary.color,
-            theme::primary_button_surface()
-        );
+        assert_eq!(theme.tokens.button_primary.color, theme::accent_fill());
         assert_eq!(theme.tokens.button_secondary.color, theme::transparent());
         assert_eq!(theme.tokens.list_active.color, theme::selected());
         assert_eq!(theme.tokens.primary.color, theme::accent_fill());
@@ -1038,10 +1093,7 @@ mod tests {
             assert_eq!(theme.colors.background, theme::transparent());
             assert_eq!(theme.tokens.background, theme::transparent().into());
             assert_eq!(theme.tokens.input.color, theme::control_border());
-            assert_eq!(
-                theme.tokens.button_primary.color,
-                theme::primary_button_surface()
-            );
+            assert_eq!(theme.tokens.button_primary.color, theme::accent_fill());
             assert_eq!(theme.tokens.button_secondary.color, theme::transparent());
             assert_eq!(theme.tokens.list_active.color, theme::selected());
             assert_eq!(theme.tokens.primary.color, theme::accent_fill());
@@ -1102,6 +1154,33 @@ mod tests {
     }
 
     #[gpui_kit::test]
+    fn tool_window_uses_transparent_frameless_glass_chrome(cx: &mut TestAppContext) {
+        cx.update(gpui_kit::init);
+        let options = cx.update(|cx| tool_window_options("JSON Workspace".into(), cx));
+        assert!(options.show);
+        assert!(options.focus);
+        assert!(options.is_resizable);
+        assert!(matches!(options.kind, WindowKind::Normal));
+        assert_eq!(
+            options.window_background,
+            WindowBackgroundAppearance::Transparent
+        );
+        assert!(options
+            .titlebar
+            .as_ref()
+            .is_some_and(|titlebar| titlebar.appears_transparent
+                && titlebar.traffic_light_position.is_some()
+                && titlebar.title.as_deref() == Some("JSON Workspace")));
+        assert_eq!(
+            options.window_min_size,
+            Some(size(
+                px(crate::ui::LAUNCHER_WIDTH),
+                px(crate::ui::TOOL_WINDOW_MIN_HEIGHT),
+            ))
+        );
+    }
+
+    #[gpui_kit::test]
     fn tasks_restore_launcher_waits_for_the_tasks_window_update_to_finish(cx: &mut TestAppContext) {
         cx.update(gpui_kit::init);
         let (_main_window, main_launcher) = cx
@@ -1143,7 +1222,7 @@ mod tests {
                         let launcher = cx.new(|cx| {
                             LauncherView::tasks_window(window, cx, live, crate::l10n::Locale::En)
                         });
-                        cx.new(|cx| TasksWindowView::new(launcher, main_launcher, cx))
+                        cx.new(|cx| ToolWindowView::new(launcher, main_launcher, window, cx))
                     },
                 )
             })

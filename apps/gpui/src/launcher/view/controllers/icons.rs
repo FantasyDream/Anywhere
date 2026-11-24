@@ -1,8 +1,28 @@
 use super::*;
+use crate::launcher::icon_cache::raw_icon_to_render_image;
 
 impl LauncherView {
+    pub(super) fn drop_render_images(
+        &self,
+        images: Vec<Arc<gpui_kit::RenderImage>>,
+        cx: &mut Context<Self>,
+    ) {
+        if images.is_empty() {
+            return;
+        }
+        let window_handle = self.window_handle;
+        cx.defer(move |cx| {
+            let _ = window_handle.update(cx, |_, window, _| {
+                for image in images {
+                    let _ = window.drop_image(image);
+                }
+            });
+        });
+    }
+
     pub(super) fn request_application_icons(&mut self, cx: &mut Context<Self>) {
-        if !self.presented || !matches!(self.screen, Screen::Launcher | Screen::FileSearch) {
+        if !self.presence.presented || !matches!(self.screen, Screen::Launcher | Screen::FileSearch)
+        {
             return;
         }
         let Some(live) = self.live.clone() else {
@@ -11,29 +31,33 @@ impl LauncherView {
         let visible_ids = self
             .model
             .rows
+            .projected()
             .iter()
             .filter(|row| row.kind == CandidateKind::Application)
             .map(|row| {
                 (
-                    row.id.clone(),
-                    row.icon_identity.clone().unwrap_or_else(|| row.id.clone()),
+                    row.id.to_string(),
+                    row.icon_identity
+                        .clone()
+                        .unwrap_or_else(|| row.id.to_string()),
                 )
             })
             .collect::<Vec<_>>();
         for (candidate_id, cache_key) in visible_ids {
-            if self.application_icons.contains(&cache_key)
-                || self.application_icons_requested.contains_key(&candidate_id)
+            if self.icons.cache.contains(&cache_key)
+                || self.icons.requested.contains_key(&candidate_id)
                 || self
-                    .application_icons_requested
+                    .icons
+                    .requested
                     .values()
                     .any(|request| request.cache_key == cache_key)
-                || self.application_icons_requested.len() >= MAX_APPLICATION_ICON_REQUESTS
+                || self.icons.requested.len() >= MAX_APPLICATION_ICON_REQUESTS
             {
                 continue;
             }
-            self.application_icon_generation = self.application_icon_generation.wrapping_add(1);
-            let ticket = self.application_icon_generation;
-            self.application_icons_requested.insert(
+            self.icons.generation = self.icons.generation.wrapping_add(1);
+            let ticket = self.icons.generation;
+            self.icons.requested.insert(
                 candidate_id.clone(),
                 ApplicationIconRequest {
                     ticket,
@@ -47,43 +71,35 @@ impl LauncherView {
 
     pub(super) fn poll_application_icon(
         &mut self,
-        mut receiver: Receiver<LiveEvent>,
+        receiver: oneshot::Receiver<Option<anywhere_platform::RawIconImage>>,
         candidate_id: String,
         cache_key: String,
         ticket: u64,
         cx: &mut Context<Self>,
     ) {
         cx.spawn(async move |this, cx| {
-            let event = receiver.recv().await;
+            let raw = receiver.await.ok().flatten();
+            let decoded = raw.and_then(raw_icon_to_render_image);
             this.update(cx, |this, cx| {
                 if this
-                    .application_icons_requested
+                    .icons
+                    .requested
                     .get(&candidate_id)
                     .map(|request| request.ticket)
                     != Some(ticket)
                 {
+                    if let Some(image) = decoded {
+                        this.drop_render_images(vec![image], cx);
+                    }
                     return;
                 }
-                match event {
-                    Some(LiveEvent::ApplicationIcon {
-                        candidate_id: response_id,
-                        bytes,
-                    }) if response_id == candidate_id => {
-                        this.application_icons_requested.remove(&candidate_id);
-                        if let Some(bytes) = bytes {
-                            this.application_icons.insert(
-                                cache_key,
-                                Arc::new(Image::from_bytes(ImageFormat::Png, bytes)),
-                            );
-                        } else {
-                            this.application_icons.insert_missing(cache_key);
-                        }
-                    }
-                    Some(_) | None => {
-                        this.application_icons_requested.remove(&candidate_id);
-                        this.application_icons.insert_missing(cache_key);
-                    }
-                }
+                this.icons.requested.remove(&candidate_id);
+                let evicted = if let Some(image) = decoded {
+                    this.icons.cache.insert(cache_key, image)
+                } else {
+                    this.icons.cache.insert_missing(cache_key)
+                };
+                this.drop_render_images(evicted, cx);
                 cx.notify();
                 this.request_application_icons(cx);
             })

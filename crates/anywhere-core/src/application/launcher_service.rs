@@ -51,6 +51,8 @@ pub trait LauncherApplication: Send + Sync {
 }
 
 pub struct Application {
+    pub(super) tool_windows: Mutex<Vec<std::sync::Weak<Application>>>,
+    pub(super) object_selection_order: std::sync::atomic::AtomicU64,
     pub(super) previews: Arc<Mutex<crate::features::preview::PreviewStore>>,
     pub(super) web_rpc_workers: Arc<tokio::sync::Semaphore>,
     pub(super) web_plugins: Arc<Mutex<super::web_plugins::WebPluginService>>,
@@ -65,6 +67,7 @@ pub struct Application {
     pub(super) file_search_policy:
         Arc<std::sync::RwLock<crate::features::filesystem::search::FileSearchPolicy>>,
     pub(super) file_search_source: Arc<crate::features::filesystem::search::FileSearchSource>,
+    pub(super) isolated_file_search: bool,
     pub(super) preview_worker: Arc<tokio::sync::Semaphore>,
     pub(super) context_capture: super::context_capture::ContextCaptureService,
 }
@@ -110,6 +113,8 @@ impl Application {
         let context_capture =
             super::context_capture::ContextCaptureService::new(platform.clone(), resolver.clone());
         Self {
+            tool_windows: Default::default(),
+            object_selection_order: Default::default(),
             previews: Default::default(),
             web_rpc_workers: Arc::new(tokio::sync::Semaphore::new(
                 anywhere_protocol::web_bridge::MAX_RUNNING,
@@ -120,6 +125,7 @@ impl Application {
             resolver,
             file_search_policy,
             file_search_source: source,
+            isolated_file_search: false,
             preview_worker: Arc::new(tokio::sync::Semaphore::new(1)),
             startup_diagnostics,
             budget,
@@ -195,17 +201,15 @@ impl Application {
                 anywhere_protocol::policy::LAUNCHER_RETENTION_MS,
             ))
             .await;
-            let Ok(mut session) = resolver.session.access() else {
-                return;
-            };
+            let mut session = resolver.session.access_for_revoke();
             if session.state.session_id == session_id
                 && session.suspended
                 && resolver.session.execution_epoch() == epoch
             {
                 session.invalidate_execution();
-                if let Ok(mut web) = web_plugins.lock() {
-                    web.invalidate();
-                }
+                let mut web = crate::core::sync::lock_for_revoke(&web_plugins, "web_plugins");
+                web.invalidate();
+                drop(web);
                 resolver.abandon_session();
                 files.clear();
             }
@@ -240,8 +244,8 @@ impl Application {
         }
         let mut state = session.state.clone();
         state.candidates = Arc::new(Vec::new());
-        state.result_actions.clear();
-        state.context_candidates.clear();
+        state.result_actions = Arc::default();
+        state.context_candidates = Arc::default();
         Ok(Some(state))
     }
 
@@ -258,15 +262,31 @@ impl Application {
     pub fn replace_registry(&self, registry: crate::core::action::descriptor::ActionRegistry) {
         let session_id = {
             let Ok(mut session) = self.session() else {
+                let mut web = crate::core::sync::lock_for_revoke(&self.web_plugins, "web_plugins");
+                web.invalidate();
+                tracing::error!("replace_registry_session_unavailable");
                 return;
             };
-            let Ok(mut web) = self.web_plugins.lock() else {
-                return;
+            let mut web = match crate::core::sync::lock_or_deny(&self.web_plugins, "web_plugins") {
+                Ok(web) => web,
+                Err(error) => {
+                    tracing::error!(%error, "replace_registry_web_unavailable");
+                    let mut web =
+                        crate::core::sync::lock_for_revoke(&self.web_plugins, "web_plugins");
+                    web.invalidate();
+                    return;
+                }
             };
-            let Ok(registry) = web.restore_actions(&registry) else {
-                return;
+            let registry = match web.restore_actions(&registry) {
+                Ok(registry) => registry,
+                Err(error) => {
+                    tracing::error!(%error, "replace_registry_restore_web_actions_failed");
+                    web.invalidate();
+                    return;
+                }
             };
             web.invalidate();
+            self.revoke_tool_windows();
             // Catalog invalidation and session replacement are one publication boundary.
             self.resolver.catalog.replace_registry(registry);
             session.actions = self.resolver.base_registry();
@@ -327,6 +347,7 @@ impl Application {
                 session.invalidate_execution();
                 self.resolver.abandon_session();
             })?;
+        self.revoke_tool_windows();
         drop(session);
         retired.reset();
         self.file_search_source.clear();
@@ -346,14 +367,13 @@ impl Application {
     ) {
         self.context_capture
             .set_sources(finder, selected_text, browser_page, clipboard, || {
-                // Policy and execution revocation share the capture -> session lock order.
-                if let Ok(mut session) = self.session() {
-                    self.resolver.session.advance_execution();
-                    session.execution = Default::default();
-                    if let Ok(mut web) = self.web_plugins.lock() {
-                        web.invalidate();
-                    }
-                }
+                // Policy and execution revocation share the capture -> session -> web lock order.
+                let mut session = self.resolver.session.access_for_revoke();
+                self.resolver.session.advance_execution();
+                session.execution = Default::default();
+                let mut web = crate::core::sync::lock_for_revoke(&self.web_plugins, "web_plugins");
+                self.revoke_tool_windows();
+                web.invalidate();
             });
     }
 
@@ -608,6 +628,48 @@ impl Application {
         }
         Ok(committed)
     }
+
+    /// Raw premultiplied BGRA8 pixels for an application candidate icon, avoiding PNG round-trips.
+    pub fn application_icon_bgra(
+        &self,
+        candidate_id: &str,
+    ) -> Result<Option<anywhere_platform::RawIconImage>> {
+        let path = {
+            let session = self.session()?;
+            session
+                .execution_candidate(candidate_id)
+                .and_then(|candidate| match &candidate.target {
+                    crate::core::search::candidate::CandidateTarget::LaunchApplication {
+                        icon_source,
+                        ..
+                    } => Some(icon_source.clone()),
+                    _ => None,
+                })
+        };
+        let Some(path) = path else {
+            return Ok(None);
+        };
+        self.platform.application_icon_bgra(&path, ICON_PIXELS)
+    }
+
+    /// Raw premultiplied BGRA8 pixels for a file/directory candidate icon.
+    pub fn file_icon_bgra(
+        &self,
+        candidate_id: &str,
+    ) -> Result<Option<anywhere_platform::RawIconImage>> {
+        let path = {
+            let session = self.session()?;
+            session
+                .execution_candidate(candidate_id)
+                .and_then(|candidate| candidate.context())
+                .and_then(|context| context.value.path())
+                .map(|path| path.to_string_lossy().into_owned())
+        };
+        let Some(path) = path else {
+            return Ok(None);
+        };
+        self.platform.file_icon_bgra(&path, ICON_PIXELS)
+    }
 }
 
 #[async_trait::async_trait]
@@ -664,14 +726,13 @@ impl LauncherApplication for Application {
     }
 
     fn deactivate(&self, session_id: SessionId) -> Result<()> {
-        let mut session = self.session()?;
+        let mut session = self.resolver.session.access_for_revoke();
         if session.state.session_id != session_id || self.resolver.is_abandoned() {
             return Ok(());
         }
-        self.web_plugins
-            .lock()
-            .map_err(|_| anyhow::anyhow!("Web service unavailable"))?
-            .invalidate();
+        let mut web = crate::core::sync::lock_for_revoke(&self.web_plugins, "web_plugins");
+        web.invalidate();
+        drop(web);
         self.resolver.session.advance_execution();
         session.invalidate_execution();
         self.resolver.abandon_session();

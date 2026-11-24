@@ -184,7 +184,7 @@ QuickJS 每次按需创建，32 MiB 内存、256 KiB 栈、250 ms JS 执行预�
 
 ## 5. 界面与生命周期
 
-- **背景自动适配**：无需权限、API 或背景 CSS。不要给根节点设置不透明背景或覆盖 Host 的 `color-scheme`。普通控件会继承当前 scheme；若自建固定深色 menu / dialog / tooltip，局部声明 `color-scheme: dark`，并把 `--aw-text`、Primary / Secondary / Muted、边界和交互表面映射到 `--aw-on-dark-*`。
+- **背景自动适配**：无需权限、API 或背景 CSS。不要给根节点设置不透明背景或覆盖 Host 的 `color-scheme`。普通控件和操作菜单会继承当前 scheme；若自建固定深色 dialog / tooltip，局部声明 `color-scheme: dark`，并把 `--aw-text`、Primary / Secondary / Muted、边界和交互表面映射到 `--aw-on-dark-*`。
 - **窗口由 Host 提供**：不用再画标题栏、关闭按钮、搜索框或返回按钮。
 - **默认控件样式**：普通 HTML 自动继承 Host 的字体、颜色和控件外观，无需样式导入或 `aw-ui` 包装。模板的 `aw-tool` 提供页面留白；组合输入和分栏复用 [SDK 公共类](../packages/plugin-sdk/README.md#统一样式)，局部 CSS 只负责业务布局或例外。
 - 编辑器 / 查询工具可用 `aw-workspace`、`aw-workspace-toolbar`、`aw-workspace-panes`、`aw-pane` 和 `aw-editor`；分栏与代码区域跟随 File Search 的共享设计，不用再画两张独立大卡片。完整类名见 SDK README。

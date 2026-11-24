@@ -195,7 +195,16 @@ async fn failed_save_rolls_back_catalog_preferences_and_live_session() {
     assert!(status(&manager, "first-party:url").active);
     assert!(Arc::ptr_eq(&policy, &manager.feature_policy()));
     assert!(app.execute(id, 1, row).await.is_ok());
-    assert_eq!(std::fs::read_dir(tmp.path()).unwrap().count(), 3);
+    let non_wal_entries = std::fs::read_dir(tmp.path())
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            let name = entry.file_name();
+            let name = name.to_string_lossy();
+            !name.ends_with("-wal") && !name.ends_with("-shm")
+        })
+        .count();
+    assert_eq!(non_wal_entries, 3);
 }
 
 #[tokio::test]

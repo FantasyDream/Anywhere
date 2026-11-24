@@ -278,7 +278,7 @@ fn digest_covers_js_css_and_manifest_but_not_zip_order_or_compression() {
         assert_ne!(original.digest(), updated.digest());
         assert_eq!(original.action_id("open"), updated.action_id("open"));
     }
-    let mut with_css = files.clone();
+    let mut with_css = files;
     with_css.push(("dist/style.css".into(), b"body{}".to_vec()));
     assert_ne!(original.digest(), package(&with_css).digest());
 }

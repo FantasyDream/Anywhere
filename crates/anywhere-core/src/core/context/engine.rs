@@ -346,10 +346,11 @@ impl ContextGraphRun {
             self.visited.insert(key);
             let (tx, outcome) = oneshot::channel();
             let execution = self.execution.clone();
-            tokio::spawn(run_provider(provider, input.clone(), execution, tx));
+            let source_context_id = input.id.clone();
+            tokio::spawn(run_provider(provider, input, execution, tx));
             self.pending = Some(PendingStep {
                 provider_id: id,
-                source_context_id: input.id.clone(),
+                source_context_id,
                 produces,
                 outcome,
             });

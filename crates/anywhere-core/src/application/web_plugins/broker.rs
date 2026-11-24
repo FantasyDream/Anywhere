@@ -233,7 +233,7 @@ impl WebPluginService {
     ) -> String {
         let result = request.control.check().and_then(|_| {
             let rpc = self.rpc(binding, source.get())?;
-            value.and_then(|value| rpc.pack(&request.id, value))
+            value.and_then(|value| rpc.pack(&request.id, &value))
         });
         if let Some(invocation) = self.invocations.get_mut(&binding.invocation_id) {
             invocation.rpc.finish(request);

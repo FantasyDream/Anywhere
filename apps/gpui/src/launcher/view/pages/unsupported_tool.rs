@@ -5,6 +5,20 @@ impl LauncherView {
         &mut self,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        if self.standalone_tool && self.live_state.session_id.is_none() {
+            return self
+                .render_page_shell(
+                    l10n::tool_access_changed(self.locale).into(),
+                    "".into(),
+                    None,
+                    self.empty_page_state(l10n::reopen_tool_after_access_change(self.locale), None),
+                    cx,
+                )
+                .id("expired-tool-window")
+                .test_support()
+                .track_focus(&self.surface_focus_handle)
+                .into_any_element();
+        }
         let (id, input) = self
             .web_surface
             .unsupported_tool
@@ -80,10 +94,10 @@ impl LauncherView {
             .test_support()
             .size_full()
             .min_h(px(0.))
-            .track_scroll(&self.unsupported_tool_scroll)
+            .track_scroll(&self.scrolls.unsupported_tool)
             .overflow_y_scroll()
             .child(sections)
-            .vertical_scrollbar(&self.unsupported_tool_scroll);
+            .vertical_scrollbar(&self.scrolls.unsupported_tool);
         self.render_page_shell(
             SharedString::from(title),
             SharedString::from(l10n::native_destination_unavailable(self.locale)),
@@ -91,6 +105,9 @@ impl LauncherView {
             content.into_any_element(),
             cx,
         )
+        .id("unsupported-tool-surface")
+        .key_context("UnsupportedTool")
+        .track_focus(&self.surface_focus_handle)
         .into_any_element()
     }
 }

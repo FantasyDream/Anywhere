@@ -86,7 +86,7 @@ pub(crate) struct WindowMaterialPlan {
 }
 
 static MATERIAL_MODE: AtomicU8 = AtomicU8::new(WindowMaterialMode::Opaque.code());
-static APPEARANCE: AtomicU8 = AtomicU8::new(WindowAppearance::Light.code());
+static APPEARANCE: AtomicU8 = AtomicU8::new(WindowAppearance::Dark.code());
 static INCREASE_CONTRAST: AtomicBool = AtomicBool::new(false);
 static REDUCE_MOTION: AtomicBool = AtomicBool::new(false);
 
@@ -154,6 +154,18 @@ pub(crate) fn prepare_window_material() {
             increase_contrast: false,
             reduce_motion: false,
         });
+    }
+}
+
+pub(crate) fn set_application_appearance(appearance: Option<WindowAppearance>) -> bool {
+    #[cfg(target_os = "macos")]
+    {
+        macos::set_application_appearance(appearance)
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = appearance;
+        false
     }
 }
 

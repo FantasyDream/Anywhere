@@ -1,61 +1,55 @@
-use gpui_kit::{rgb, rgba, Hsla};
+use gpui_kit::{rgba, Hsla};
 
-use super::{argb, design_tokens::colors};
+use super::{
+    argb,
+    design_tokens::{
+        colors::{self, FixedColors},
+        Palette,
+    },
+};
 use crate::platform::{current_window_appearance, uses_increase_contrast, WindowAppearance};
 
 fn token(value: u32) -> Hsla {
     rgba(argb(value)).into()
 }
 
-fn rgb_token(value: u32) -> Hsla {
-    rgb(value & 0x00ff_ffff).into()
+pub fn surface_is_light() -> bool {
+    current_window_appearance() == WindowAppearance::Light
 }
 
-fn with_contrast(value: u32, alpha: u8) -> Hsla {
-    if uses_increase_contrast() {
-        token((u32::from(alpha) << 24) | (value & 0x00ff_ffff))
-    } else {
-        token(value)
+pub fn palette_for(
+    appearance: WindowAppearance,
+    opaque_fallback: bool,
+    increase_contrast: bool,
+) -> &'static Palette {
+    match (appearance, opaque_fallback, increase_contrast) {
+        (WindowAppearance::Light, _, false) => &colors::GLASS_LIGHT,
+        (WindowAppearance::Light, _, true) => &colors::GLASS_LIGHT_CONTRAST,
+        (WindowAppearance::Dark, true, false) => &colors::OPAQUE_DARK,
+        (WindowAppearance::Dark, true, true) => &colors::OPAQUE_DARK_CONTRAST,
+        (WindowAppearance::Dark, false, false) => &colors::GLASS_DARK,
+        (WindowAppearance::Dark, false, true) => &colors::GLASS_DARK_CONTRAST,
     }
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum GlassTone {
-    Light,
-    Dark,
-}
-
-fn glass_tone_for(appearance: WindowAppearance, opaque_fallback: bool) -> GlassTone {
-    if appearance == WindowAppearance::Light && !opaque_fallback {
-        GlassTone::Light
-    } else {
-        GlassTone::Dark
-    }
-}
-
-fn glass_tone() -> GlassTone {
-    glass_tone_for(
+pub fn palette() -> &'static Palette {
+    palette_for(
         current_window_appearance(),
         crate::platform::uses_opaque_fallback(),
+        uses_increase_contrast(),
     )
 }
 
-pub fn glass_surface_is_light() -> bool {
-    glass_tone() == GlassTone::Light
+pub(crate) fn fixed() -> &'static FixedColors {
+    fixed_for(uses_increase_contrast())
 }
 
-fn glass_color(light: u32, dark: u32) -> Hsla {
-    rgb_token(match glass_tone() {
-        GlassTone::Light => light,
-        GlassTone::Dark => dark,
-    })
-}
-
-fn adaptive_surface(light: u32, dark: u32) -> Hsla {
-    token(match glass_tone() {
-        GlassTone::Light => light,
-        GlassTone::Dark => dark,
-    })
+pub(crate) fn fixed_for(increase_contrast: bool) -> &'static FixedColors {
+    if increase_contrast {
+        &colors::FIXED_CONTRAST
+    } else {
+        &colors::FIXED
+    }
 }
 
 pub fn glass_surface() -> Hsla {
@@ -63,96 +57,84 @@ pub fn glass_surface() -> Hsla {
 }
 
 pub fn fallback_surface() -> Hsla {
-    token(colors::FALLBACK_SURFACE)
+    token(if surface_is_light() {
+        fixed().light_fallback_surface
+    } else {
+        fixed().fallback_surface
+    })
 }
 
 pub fn menu_surface() -> Hsla {
-    token(colors::MENU_SURFACE)
+    token(fixed().menu_surface)
+}
+
+pub fn action_menu_surface() -> Hsla {
+    token(palette().action_menu_surface)
+}
+
+pub fn action_menu_selection() -> Hsla {
+    token(palette().action_menu_selection)
 }
 
 pub fn modal_scrim() -> Hsla {
-    token(colors::MODAL_SCRIM)
+    token(fixed().modal_scrim)
 }
 
 pub fn window() -> Hsla {
-    let tone = glass_tone();
-    with_contrast(
-        match tone {
-            GlassTone::Light => colors::GLASS_LIGHT_WINDOW,
-            GlassTone::Dark => colors::WINDOW,
-        },
-        if tone == GlassTone::Light { 0x4d } else { 0x85 },
-    )
+    token(palette().window)
 }
 
 pub fn selected() -> Hsla {
-    adaptive_surface(
-        colors::GLASS_LIGHT_SELECTED_SURFACE,
-        colors::SELECTED_SURFACE,
-    )
+    token(palette().selected_surface)
 }
 
 pub fn result_surface(selected: bool) -> Hsla {
-    let value = match (selected, glass_tone()) {
-        (true, GlassTone::Light) => colors::GLASS_LIGHT_RESULT_SURFACE_SELECTED,
-        (false, GlassTone::Light) => colors::GLASS_LIGHT_RESULT_SURFACE,
-        (true, GlassTone::Dark) => colors::RESULT_SURFACE_SELECTED,
-        (false, GlassTone::Dark) => colors::RESULT_SURFACE,
-    };
-    token(value)
+    let p = palette();
+    token(if selected {
+        p.result_surface_selected
+    } else {
+        p.result_surface
+    })
 }
 
 pub fn hover() -> Hsla {
-    adaptive_surface(colors::GLASS_LIGHT_HOVER, colors::HOVER)
+    token(palette().hover)
 }
 
 pub fn field() -> Hsla {
-    adaptive_surface(colors::GLASS_LIGHT_FIELD, colors::FIELD)
+    token(palette().field)
 }
 
 pub fn card() -> Hsla {
-    adaptive_surface(colors::GLASS_LIGHT_CARD, colors::CARD)
+    token(palette().card)
 }
 
 pub fn control_surface() -> Hsla {
-    token(colors::CONTROL_SURFACE)
+    token(fixed().control_surface)
 }
 
 pub fn control_selection() -> Hsla {
-    token(colors::CONTROL_SELECTION)
+    token(fixed().control_selection)
 }
 
 pub fn control_border() -> Hsla {
-    let tone = glass_tone();
-    with_contrast(
-        match tone {
-            GlassTone::Light => colors::GLASS_LIGHT_CONTROL_BORDER,
-            GlassTone::Dark => colors::CONTROL_BORDER,
-        },
-        if tone == GlassTone::Light { 0x5c } else { 0x52 },
-    )
+    token(palette().control_border)
 }
 
 pub fn on_dark_control_border() -> Hsla {
-    with_contrast(colors::ON_DARK_CONTROL_BORDER, 0x52)
+    token(fixed().on_dark_control_border)
 }
 
 pub fn primary_button_surface() -> Hsla {
-    token(colors::PRIMARY_BUTTON_SURFACE)
+    token(fixed().primary_button_surface)
 }
 
 pub fn button_selection() -> Hsla {
-    adaptive_surface(
-        colors::GLASS_LIGHT_BUTTON_SELECTION,
-        colors::BUTTON_SELECTION,
-    )
+    token(palette().button_selection)
 }
 
 pub fn text_selection() -> Hsla {
-    token(match glass_tone() {
-        GlassTone::Light => colors::GLASS_LIGHT_TEXT_SELECTION,
-        GlassTone::Dark => colors::TEXT_SELECTION,
-    })
+    token(palette().text_selection)
 }
 
 pub fn transparent() -> Hsla {
@@ -160,215 +142,181 @@ pub fn transparent() -> Hsla {
 }
 
 pub fn border() -> Hsla {
-    let tone = glass_tone();
-    with_contrast(
-        match tone {
-            GlassTone::Light => colors::GLASS_LIGHT_BORDER,
-            GlassTone::Dark => colors::BORDER,
-        },
-        0x66,
-    )
+    token(palette().border)
 }
 
 pub fn selection_outline() -> Hsla {
-    let tone = glass_tone();
-    with_contrast(
-        match tone {
-            GlassTone::Light => colors::GLASS_LIGHT_SELECTION_OUTLINE,
-            GlassTone::Dark => colors::SELECTION_OUTLINE,
-        },
-        if tone == GlassTone::Light { 0x8a } else { 0x68 },
-    )
+    token(palette().selection_outline)
 }
 
 pub fn on_dark_selection_outline() -> Hsla {
-    with_contrast(colors::ON_DARK_SELECTION_OUTLINE, 0x68)
+    token(fixed().on_dark_selection_outline)
+}
+
+/// Result rows rely on their fill for selection; the focus-ring outline is
+/// kept only when Increase Contrast asks for a stronger boundary.
+pub fn result_selection_outline() -> Hsla {
+    if uses_increase_contrast() {
+        selection_outline()
+    } else {
+        divider()
+    }
 }
 
 pub fn on_dark_divider() -> Hsla {
-    with_contrast(colors::ON_DARK_DIVIDER, 0x42)
+    token(fixed().on_dark_divider)
 }
 
 pub fn divider() -> Hsla {
-    let tone = glass_tone();
-    with_contrast(
-        match tone {
-            GlassTone::Light => colors::GLASS_LIGHT_DIVIDER,
-            GlassTone::Dark => colors::DIVIDER,
-        },
-        0x42,
-    )
+    token(palette().divider)
 }
 
 pub fn keycap_surface() -> Hsla {
-    adaptive_surface(colors::GLASS_LIGHT_KEYCAP_SURFACE, colors::KEYCAP_SURFACE)
+    token(palette().keycap_surface)
 }
 
 pub fn keycap_border() -> Hsla {
-    adaptive_surface(colors::GLASS_LIGHT_KEYCAP_BORDER, colors::KEYCAP_BORDER)
+    token(palette().keycap_border)
 }
 
 pub fn primary() -> Hsla {
-    glass_color(colors::GLASS_LIGHT_PRIMARY, colors::PRIMARY)
+    token(palette().primary)
 }
 
 pub fn secondary() -> Hsla {
-    glass_color(colors::GLASS_LIGHT_SECONDARY, colors::SECONDARY)
+    token(palette().secondary)
 }
 
 pub fn muted() -> Hsla {
-    if uses_increase_contrast() {
-        secondary()
-    } else {
-        glass_color(colors::GLASS_LIGHT_MUTED, colors::MUTED)
-    }
+    token(palette().muted)
 }
 
 pub fn accent() -> Hsla {
-    if crate::platform::uses_opaque_fallback() {
-        rgb_token(colors::ACCENT)
-    } else {
-        glass_color(colors::GLASS_LIGHT_ACCENT, colors::GLASS_DARK_ACCENT)
-    }
+    token(palette().accent)
 }
 
 pub fn accent_fill() -> Hsla {
-    token(colors::ACCENT_FILL)
+    token(fixed().accent_fill)
 }
 
 pub fn warning() -> Hsla {
-    if crate::platform::uses_opaque_fallback() {
-        rgb_token(colors::WARNING)
-    } else {
-        glass_color(colors::GLASS_LIGHT_WARNING, colors::GLASS_DARK_WARNING)
-    }
+    token(palette().warning)
 }
 
 pub fn danger() -> Hsla {
-    if crate::platform::uses_opaque_fallback() {
-        rgb_token(colors::DANGER)
-    } else {
-        glass_color(colors::GLASS_LIGHT_DANGER, colors::GLASS_DARK_DANGER)
-    }
+    token(palette().danger)
 }
 
 pub fn success() -> Hsla {
-    if crate::platform::uses_opaque_fallback() {
-        rgb_token(colors::SUCCESS)
-    } else {
-        glass_color(colors::GLASS_LIGHT_SUCCESS, colors::GLASS_DARK_SUCCESS)
-    }
+    token(palette().success)
 }
 
 pub fn on_dark_primary() -> Hsla {
-    rgb_token(colors::ON_DARK_PRIMARY)
+    token(fixed().on_dark_primary)
 }
 
 pub fn on_dark_secondary() -> Hsla {
-    rgb_token(colors::ON_DARK_SECONDARY)
+    token(fixed().on_dark_secondary)
 }
 
 pub fn on_dark_muted() -> Hsla {
-    rgb_token(colors::ON_DARK_MUTED)
+    token(fixed().on_dark_muted)
 }
 
 pub fn on_dark_accent() -> Hsla {
-    rgb_token(colors::ON_DARK_ACCENT)
+    token(fixed().on_dark_accent)
 }
 
 pub fn on_dark_warning() -> Hsla {
-    rgb_token(colors::ON_DARK_WARNING)
+    token(fixed().on_dark_warning)
 }
 
 pub fn on_dark_danger() -> Hsla {
-    rgb_token(colors::ON_DARK_DANGER)
+    token(fixed().on_dark_danger)
 }
 
 pub fn on_dark_success() -> Hsla {
-    rgb_token(colors::ON_DARK_SUCCESS)
+    token(fixed().on_dark_success)
 }
 
 pub fn on_dark_hover() -> Hsla {
-    token(colors::ON_DARK_HOVER)
+    token(fixed().on_dark_hover)
 }
 
 pub fn on_dark_selected() -> Hsla {
-    token(colors::ON_DARK_SELECTED_SURFACE)
+    token(fixed().on_dark_selected_surface)
 }
 
 pub fn icon_blue() -> Hsla {
-    glass_color(colors::GLASS_LIGHT_ICON_BLUE, colors::ICON_BLUE)
+    token(palette().icon_blue)
 }
 
 pub fn icon_green() -> Hsla {
-    glass_color(colors::GLASS_LIGHT_ICON_GREEN, colors::ICON_GREEN)
+    token(palette().icon_green)
 }
 
 pub fn icon_coral() -> Hsla {
-    glass_color(colors::GLASS_LIGHT_ICON_CORAL, colors::ICON_CORAL)
+    token(palette().icon_coral)
 }
 
 pub fn icon_purple() -> Hsla {
-    glass_color(colors::GLASS_LIGHT_ICON_PURPLE, colors::ICON_PURPLE)
+    token(palette().icon_purple)
 }
 
 pub fn icon_amber() -> Hsla {
-    glass_color(colors::GLASS_LIGHT_ICON_AMBER, colors::ICON_AMBER)
+    token(palette().icon_amber)
 }
 
 pub fn icon_pink() -> Hsla {
-    glass_color(colors::GLASS_LIGHT_ICON_PINK, colors::ICON_PINK)
+    token(palette().icon_pink)
 }
 
 pub fn icon_neutral() -> Hsla {
-    glass_color(colors::GLASS_LIGHT_ICON_NEUTRAL, colors::ICON_NEUTRAL)
+    token(palette().icon_neutral)
 }
 
 pub fn icon_badge_ink() -> Hsla {
-    rgb_token(colors::ICON_BADGE_INK)
+    token(fixed().icon_badge_ink)
 }
 
 pub fn sidebar() -> Hsla {
-    adaptive_surface(colors::GLASS_LIGHT_SIDEBAR, colors::SIDEBAR)
+    token(palette().sidebar)
 }
 
 pub fn sidebar_selection() -> Hsla {
-    adaptive_surface(
-        colors::GLASS_LIGHT_SIDEBAR_SELECTION,
-        colors::SIDEBAR_SELECTION,
-    )
+    token(palette().sidebar_selection)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use gpui_kit::rgb;
 
     #[test]
     fn design_token_argb_colors_keep_their_alpha() {
-        assert_eq!(selected(), rgba(0x18223028).into());
+        assert_eq!(selected(), rgba(0xffffff22).into());
         assert_eq!(glass_surface(), rgba(0x16191e66).into());
         assert_eq!(field(), rgba(0x20232a80).into());
         assert_eq!(menu_surface(), rgba(0x2b2e35ff).into());
-        assert_eq!(token(colors::CONTENT_SCRIM), rgba(0x30343800).into());
-        assert_eq!(token(colors::PAGE_SCRIM), rgba(0x30343800).into());
+        assert_eq!(token(colors::FIXED.content_scrim), rgba(0x30343800).into());
+        assert_eq!(token(colors::FIXED.page_scrim), rgba(0x30343800).into());
         assert_eq!(result_surface(false), rgba(0x282c3300).into());
-        assert_eq!(result_surface(true), rgba(0x18223028).into());
+        assert_eq!(result_surface(true), rgba(0xffffff20).into());
         assert_eq!(modal_scrim(), rgba(0x000000a8).into());
     }
 
     #[test]
-    fn glass_light_palette_is_selected_only_for_light_transparent_material() {
-        assert_eq!(
-            glass_tone_for(WindowAppearance::Light, false),
-            GlassTone::Light
-        );
-        for (appearance, opaque) in [
-            (WindowAppearance::Light, true),
-            (WindowAppearance::Dark, false),
-            (WindowAppearance::Dark, true),
-        ] {
-            assert_eq!(glass_tone_for(appearance, opaque), GlassTone::Dark);
+    fn opaque_light_uses_light_ink_with_normal_and_increased_contrast() {
+        for contrast in [false, true] {
+            assert_eq!(
+                palette_for(WindowAppearance::Light, true, contrast).primary,
+                palette_for(WindowAppearance::Light, false, contrast).primary,
+            );
         }
+        assert_eq!(
+            token(colors::FIXED.light_fallback_surface),
+            rgb(0xf5f6f8).into()
+        );
     }
 
     #[test]
@@ -380,5 +328,27 @@ mod tests {
         assert_eq!(warning(), rgb(0xffc66d).into());
         assert_eq!(danger(), rgb(0xff8078).into());
         assert_eq!(success(), rgb(0x73cc91).into());
+    }
+
+    #[test]
+    fn all_six_generated_palettes_preserve_exact_legacy_role_values() {
+        let opaque = palette_for(WindowAppearance::Dark, true, false);
+        let opaque_contrast = palette_for(WindowAppearance::Dark, true, true);
+        let glass_dark = palette_for(WindowAppearance::Dark, false, false);
+        let glass_dark_contrast = palette_for(WindowAppearance::Dark, false, true);
+        let glass_light = palette_for(WindowAppearance::Light, false, false);
+        let glass_light_contrast = palette_for(WindowAppearance::Light, false, true);
+
+        assert_eq!(opaque.accent, 0xffa7_caff);
+        assert_eq!(glass_dark.accent, 0xffd4_e6ff);
+        assert_eq!(glass_light.accent, 0xff1f_5d99);
+        assert_eq!(opaque_contrast.window, 0x8516_191e);
+        assert_eq!(glass_dark_contrast.border, 0x66ff_ffff);
+        assert_eq!(glass_light_contrast.window, 0xe6f4_f6f9);
+        assert_eq!(glass_light_contrast.selection_outline, 0x8a00_0000);
+        assert_eq!(glass_light_contrast.muted, glass_light.secondary);
+        assert_eq!(opaque_contrast.muted, opaque.secondary);
+        assert_eq!(colors::FIXED.on_dark_divider, 0x1fff_ffff);
+        assert_eq!(colors::FIXED_CONTRAST.on_dark_divider, 0x42ff_ffff);
     }
 }

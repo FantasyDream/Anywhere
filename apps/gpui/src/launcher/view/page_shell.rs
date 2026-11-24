@@ -1,41 +1,6 @@
 use super::*;
 
 impl LauncherView {
-    pub(super) fn row_popup(
-        window: &Window,
-        scroll: &gpui_kit::UniformListScrollHandle,
-        selected: usize,
-        panel: AnyElement,
-    ) -> AnyElement {
-        let state = scroll.0.borrow();
-        let bounds = state.base_handle.bounds();
-        let height = state
-            .last_item_size
-            .map(|size| size.item.height)
-            .unwrap_or(px(64.));
-        let top = (bounds.origin.y + state.base_handle.offset().y + height * selected as f32)
-            .max(bounds.origin.y)
-            .min(bounds.bottom() - height);
-        Self::page_popup(window, top, px(metrics::SPACE_MD), panel)
-    }
-
-    pub(super) fn page_popup(
-        window: &Window,
-        top: gpui_kit::Pixels,
-        right: gpui_kit::Pixels,
-        panel: AnyElement,
-    ) -> AnyElement {
-        gpui_kit::deferred(
-            gpui_kit::anchored()
-                .anchor(gpui_kit::Anchor::TopRight)
-                .position(gpui_kit::point(window.viewport_size().width - right, top))
-                .snap_to_window_with_margin(px(metrics::SPACE_SM))
-                .child(panel),
-        )
-        .with_priority(gpui_kit::base::POPUP_PRIORITY)
-        .into_any_element()
-    }
-
     pub(super) fn empty_page_state(
         &self,
         title: impl Into<SharedString>,
@@ -50,7 +15,7 @@ impl LauncherView {
         title: impl Into<SharedString>,
         detail: Option<String>,
     ) -> AnyElement {
-        components::empty_state(icon, title, detail)
+        components::empty_state(icon, title, detail).into_any_element()
     }
 
     pub(super) fn render_page_shell(
@@ -73,36 +38,10 @@ impl LauncherView {
         trailing: Option<AnyElement>,
         cx: &mut Context<Self>,
     ) -> Div {
-        let title_area = if let Some((input, id, placeholder)) = search {
-            div()
-                .flex_1()
-                .min_w(px(0.))
-                .flex()
-                .flex_col()
-                .justify_center()
-                .gap(px(metrics::PAGE_TITLE_GAP))
-                .child(
-                    div()
-                        .truncate()
-                        .text_size(px(metrics::PAGE_MODE_SIZE))
-                        .line_height(px(metrics::PAGE_MODE_SIZE * metrics::CAPTION_LINE_HEIGHT))
-                        .font_weight(FontWeight::MEDIUM)
-                        .text_color(theme::secondary())
-                        .child(title),
-                )
-                .child(
-                    Input::new(input)
-                        .id(SharedString::from(id))
-                        .aria_label(placeholder)
-                        .appearance(false)
-                        .bordered(false)
-                        .focus_bordered(false)
-                        .cleanable(true)
-                        .text_size(px(metrics::PAGE_HEADING_SIZE))
-                        .line_height(px(metrics::PAGE_HEADING_SIZE * metrics::BODY_LINE_HEIGHT))
-                        .p(px(0.))
-                        .w_full(),
-                )
+        let title_area = if let Some((input, id, placeholder)) =
+            search.filter(|_| !self.page_actions_visible())
+        {
+            self.page_search_title(title, input, id, placeholder)
         } else {
             div()
                 .flex_1()
@@ -130,12 +69,6 @@ impl LauncherView {
                     )
                 })
         };
-        let standalone = self.standalone_tasks || self.standalone_shelf;
-        let back_label = if standalone {
-            l10n::close(self.locale)
-        } else {
-            l10n::back(self.locale)
-        };
         let notice = self.notice.clone();
         let notice_kind = self.notice_kind;
         div()
@@ -148,54 +81,27 @@ impl LauncherView {
             .when(self.standalone_tasks, |element| {
                 element.pt(px(metrics::TITLE_BAR_INSET))
             })
-            .child(
-                div()
-                    .debug_selector(|| "page-header".into())
-                    .h(px(metrics::PAGE_HEADER_HEIGHT))
-                    .flex_shrink_0()
-                    .px(px(metrics::SPACE_XL))
-                    .flex()
-                    .items_center()
-                    .child(
-                        Button::new("page-back")
-                            .ghost()
-                            .icon(if standalone {
-                                IconName::X
-                            } else {
-                                IconName::ArrowLeft
-                            })
-                            .accessibility_label(back_label.clone())
-                            .tooltip(back_label)
-                            .on_click(cx.listener(|this, _, window, cx| this.go_back(window, cx))),
-                    )
-                    .child(div().w(px(metrics::SPACE_MD)))
-                    .child(title_area)
-                    .child(div().w(px(14.)))
-                    .children(trailing)
-                    .child(
-                        div()
-                            .id("page-escape")
-                            .test_support()
-                            .cursor_pointer()
-                            .rounded(px(metrics::KEYCAP_RADIUS))
-                            .tooltip(components::text_tooltip(if standalone {
-                                l10n::close_esc(self.locale)
-                            } else {
-                                l10n::back_esc(self.locale)
-                            }))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.handle_key("escape", KeyModifiers::default(), window, cx)
-                            }))
-                            .child(self.keycap("esc")),
-                    ),
-            )
-            .child(
-                div()
-                    .h(px(metrics::DIVIDER_WIDTH))
-                    .flex_shrink_0()
-                    .mx(px(metrics::SPACE_XL))
-                    .bg(theme::divider()),
-            )
+            // Standalone Web tool windows use a frameless transparent titlebar
+            // with native traffic lights; reserve a draggable band above the header.
+            .when(self.standalone_tool, |element| {
+                element.child(
+                    div()
+                        .id("tool-window-titlebar")
+                        .test_support()
+                        .h(px(metrics::TITLE_BAR_INSET))
+                        .w_full()
+                        .flex_shrink_0()
+                        .on_mouse_down(MouseButton::Left, |_, window, _| {
+                            window.start_window_move()
+                        }),
+                )
+            })
+            .child(self.render_page_header(title_area, trailing, cx))
+            .child(if self.standalone_tool {
+                Self::full_width_divider()
+            } else {
+                Self::page_header_divider()
+            })
             .when_some(notice, |element, notice| {
                 element.child(
                     div()
@@ -215,6 +121,163 @@ impl LauncherView {
                     .overflow_hidden()
                     .child(content),
             )
+    }
+
+    pub(super) fn page_search_title(
+        &self,
+        title: SharedString,
+        input: &Entity<InputState>,
+        id: &'static str,
+        placeholder: String,
+    ) -> Div {
+        let file_search = self.screen == Screen::FileSearch;
+        let label = div()
+            .truncate()
+            .text_size(px(metrics::PAGE_MODE_SIZE))
+            .line_height(px(metrics::PAGE_MODE_SIZE * metrics::CAPTION_LINE_HEIGHT))
+            .font_weight(FontWeight::MEDIUM)
+            .text_color(theme::secondary())
+            .child(title);
+        div()
+            .flex_1()
+            .min_w(px(0.))
+            .flex()
+            .flex_col()
+            .justify_center()
+            .gap(px(metrics::PAGE_TITLE_GAP))
+            .child(if file_search {
+                label
+                    .id("launcher-mode-label")
+                    .test_support()
+                    .into_any_element()
+            } else {
+                label.into_any_element()
+            })
+            .child(
+                Input::new(input)
+                    .id(id)
+                    .aria_label(placeholder)
+                    .appearance(false)
+                    .bordered(false)
+                    .focus_bordered(false)
+                    .cleanable(!file_search)
+                    .text_size(px(metrics::PAGE_HEADING_SIZE))
+                    .line_height(px(metrics::PAGE_HEADING_SIZE * metrics::BODY_LINE_HEIGHT))
+                    .p(px(0.))
+                    .w_full(),
+            )
+    }
+
+    pub(super) fn render_page_header(
+        &self,
+        title_area: Div,
+        trailing: Option<AnyElement>,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let standalone = (self.standalone_tasks || self.standalone_shelf || self.standalone_tool)
+            && !self.page_actions_visible();
+        let frameless_tool = self.standalone_tool && !self.page_actions_visible();
+        let file_search = self.screen == Screen::FileSearch;
+        let back_label = if standalone {
+            l10n::close(self.locale)
+        } else {
+            l10n::back(self.locale)
+        };
+        let leading: AnyElement = if frameless_tool {
+            components::squircle_icon_plate(IconName::Puzzle, theme::accent(), metrics::ICON_SIZE)
+                .into_any_element()
+        } else {
+            Button::new(if file_search {
+                "file-search-back"
+            } else {
+                "page-back"
+            })
+            .ghost()
+            .icon(if standalone {
+                IconName::X
+            } else {
+                IconName::ArrowLeft
+            })
+            .accessibility_label(back_label.clone())
+            .tooltip(back_label)
+            .on_click(cx.listener(|this, _, window, cx| {
+                if this.page_actions_visible() {
+                    this.handle_key("escape", KeyModifiers::default(), window, cx);
+                    this.focus_active_editor(window, cx);
+                } else {
+                    this.go_back(window, cx);
+                }
+            }))
+            .into_any_element()
+        };
+        let header_title: AnyElement = if frameless_tool {
+            div()
+                .id("tool-window-drag-header")
+                .flex_1()
+                .min_w(px(0.))
+                .on_mouse_down(MouseButton::Left, |_, window, _| window.start_window_move())
+                .child(title_area)
+                .into_any_element()
+        } else {
+            title_area.into_any_element()
+        };
+        div()
+            .id(if file_search {
+                "file-search-header"
+            } else {
+                "page-header"
+            })
+            .test_support()
+            .h(px(metrics::PAGE_HEADER_HEIGHT))
+            .flex_shrink_0()
+            .px(px(metrics::SPACE_XL))
+            .flex()
+            .items_center()
+            .gap(px(metrics::SPACE_MD))
+            .child(leading)
+            .child(header_title)
+            .children(trailing)
+            .when(self.can_open_tool_window(), |header| {
+                let label = l10n::open_tool_window_copy(self.locale);
+                header.child(
+                    Button::new("page-open-window")
+                        .ghost()
+                        .icon(IconName::ExternalLink)
+                        .accessibility_label(label.clone())
+                        .tooltip(label)
+                        .on_click(
+                            cx.listener(|this, _, window, cx| this.open_tool_window(window, cx)),
+                        ),
+                )
+            })
+            .child(
+                div()
+                    .id("page-escape")
+                    .test_support()
+                    .flex_none()
+                    .cursor_pointer()
+                    .rounded(px(metrics::KEYCAP_RADIUS))
+                    .tooltip(components::text_tooltip(if standalone {
+                        l10n::close_esc(self.locale)
+                    } else {
+                        l10n::back_esc(self.locale)
+                    }))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.handle_key("escape", KeyModifiers::default(), window, cx)
+                    }))
+                    .child(self.keycap("esc")),
+            )
+    }
+
+    fn full_width_divider() -> Div {
+        div()
+            .h(px(metrics::DIVIDER_WIDTH))
+            .flex_shrink_0()
+            .bg(theme::divider())
+    }
+
+    pub(super) fn page_header_divider() -> Div {
+        Self::full_width_divider().mx(px(metrics::SPACE_XL))
     }
 
     pub(super) fn scope_button(
@@ -332,12 +395,7 @@ impl LauncherView {
                 self.locale,
             )))
             .on_click(cx.listener(move |this, _, _, cx| {
-                this.file_search.filter = filter;
-                this.reveal_selected_file_filter();
-                this.reset_file_search_browsing(cx);
-                this.request_live_update(cx);
-                this.notice = None;
-                cx.notify();
+                this.select_file_filter(filter, cx);
             }))
             .child(label)
     }

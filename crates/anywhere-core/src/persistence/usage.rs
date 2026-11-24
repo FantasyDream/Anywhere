@@ -3,7 +3,7 @@
 //! The only module in the crate that knows about `rusqlite`. Everything above it depends on
 //! the `UsageRepository` interface.
 pub use crate::core::ranking::usage::UsageRepository;
-use crate::core::ranking::usage::{UsageSnapshot, UsageStats};
+use crate::core::ranking::usage::{UsageKey, UsageSnapshot, UsageStats};
 use anyhow::Result;
 
 pub struct SqliteUsageRepository(rusqlite::Connection);
@@ -45,7 +45,7 @@ impl UsageRepository for SqliteUsageRepository {
         let rows = query.query_map([source_app], |row| {
             let count: i64 = row.get(2)?;
             Ok((
-                (row.get(0)?, row.get(1)?),
+                UsageKey(row.get(0)?, row.get(1)?),
                 UsageStats {
                     execute_count: count.clamp(0, u32::MAX as i64) as u32,
                     last_executed_at: row.get(3)?,
@@ -62,7 +62,7 @@ impl UsageRepository for SqliteUsageRepository {
         let rows = query.query_map([], |row| {
             let count: i64 = row.get(2)?;
             Ok((
-                (row.get::<_, String>(0)?, row.get::<_, String>(1)?),
+                UsageKey(row.get::<_, String>(0)?, row.get::<_, String>(1)?),
                 UsageStats {
                     execute_count: count.clamp(0, u32::MAX as i64) as u32,
                     last_executed_at: row.get(3)?,
@@ -109,9 +109,9 @@ mod tests {
         let history = SqliteUsageRepository::open(&path).unwrap();
         let usage = history.load("").unwrap();
         assert_eq!(usage.len(), 1);
-        assert_eq!(usage[&("copy".into(), "core.url".into())].execute_count, 3);
+        assert_eq!(usage[&UsageKey::new("copy", "core.url")].execute_count, 3);
         assert_eq!(
-            usage[&("copy".into(), "core.url".into())].last_executed_at,
+            usage[&UsageKey::new("copy", "core.url")].last_executed_at,
             12
         );
         assert_eq!(history.load("com.apple.finder").unwrap().len(), 1);
@@ -137,24 +137,24 @@ mod tests {
 
         let global = history.load_global().unwrap();
         assert_eq!(
-            global[&("app:com.google.Chrome".into(), "application".into())].execute_count,
+            global[&UsageKey::new("app:com.google.Chrome", "application")].execute_count,
             2
         );
         assert_eq!(
-            global[&("core.url.copy".into(), "core.url".into())].execute_count,
+            global[&UsageKey::new("core.url.copy", "core.url")].execute_count,
             2
         );
         assert_eq!(
-            global[&("core.url.copy".into(), "core.url".into())].last_executed_at,
+            global[&UsageKey::new("core.url.copy", "core.url")].last_executed_at,
             40
         );
         // The app-scoped load must not leak another application's rows.
         let finder = history.load("com.apple.finder").unwrap();
         assert_eq!(
-            finder[&("core.url.copy".into(), "core.url".into())].execute_count,
+            finder[&UsageKey::new("core.url.copy", "core.url")].execute_count,
             1
         );
-        assert!(!finder.contains_key(&("app:com.google.Chrome".into(), "application".into())));
+        assert!(!finder.contains_key(&UsageKey::new("app:com.google.Chrome", "application")));
     }
 
     #[test]
@@ -167,7 +167,7 @@ mod tests {
             .record("app:com.example", "application", "", 9)
             .unwrap();
         let global = history.load_global().unwrap();
-        let stats = global[&("app:com.example".into(), "application".into())];
+        let stats = global[&UsageKey::new("app:com.example", "application")];
         assert_eq!(stats.execute_count, 2);
         assert_eq!(stats.last_executed_at, 9);
     }
@@ -182,16 +182,16 @@ mod tests {
         for _ in 0..2 {
             let history = SqliteUsageRepository::open(&path).unwrap();
             let app = history.load("app").unwrap();
-            let value = app.get(&("copy".into(), "json.document".into())).unwrap();
+            let value = app.get(&UsageKey::new("copy", "json.document")).unwrap();
             assert_eq!(value.execute_count, 7);
             assert_eq!(
-                app[&("saturated".into(), "json.document".into())].execute_count,
+                app[&UsageKey::new("saturated", "json.document")].execute_count,
                 u32::MAX
             );
             assert_eq!(value.last_executed_at, 250);
-            assert!(!app.contains_key(&("copy".into(), "core.json".into())));
+            assert!(!app.contains_key(&UsageKey::new("copy", "core.json")));
             assert_eq!(
-                history.load_global().unwrap()[&("copy".into(), "json.document".into())]
+                history.load_global().unwrap()[&UsageKey::new("copy", "json.document")]
                     .execute_count,
                 9
             );

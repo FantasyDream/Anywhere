@@ -1,0 +1,25 @@
+{
+  "files": {
+    "apps/gpui/src/app.rs": 11,
+    "apps/gpui/src/launcher/components/list_row.rs": 1,
+    "apps/gpui/src/launcher/components/mod.rs": 19,
+    "apps/gpui/src/launcher/pages/tasks.rs": 1,
+    "apps/gpui/src/launcher/view/candidate_row.rs": 17,
+    "apps/gpui/src/launcher/view/controllers/navigation.rs": 11,
+    "apps/gpui/src/launcher/view/mod.rs": 40,
+    "apps/gpui/src/launcher/view/page_shell.rs": 9,
+    "apps/gpui/src/launcher/view/pages/application_history.rs": 21,
+    "apps/gpui/src/launcher/view/pages/clipboard.rs": 16,
+    "apps/gpui/src/launcher/view/pages/clipboard_shelf.rs": 6,
+    "apps/gpui/src/launcher/view/pages/file_search.rs": 13,
+    "apps/gpui/src/launcher/view/pages/tasks.rs": 13,
+    "apps/gpui/src/launcher/view/pages/unsupported_tool.rs": 3,
+    "apps/gpui/src/launcher/view/pages/web_packages.rs": 15,
+    "apps/gpui/src/launcher/view/pages/web_tool.rs": 9,
+    "apps/gpui/src/launcher/view/settings.rs": 32,
+    "apps/gpui/src/launcher/view/settings/application_history.rs": 6,
+    "apps/gpui/src/launcher/view/settings/context.rs": 7,
+    "apps/gpui/src/launcher/view/settings/layout.rs": 3,
+    "apps/gpui/src/launcher/view/settings/shortcuts.rs": 16
+  }
+}

@@ -27,6 +27,12 @@ mkdir -p \
   "$APP/Contents/MacOS" \
   "$APP/Contents/Resources/Licenses"
 cp target/release/anywhere-gpui "$APP/Contents/MacOS/Anywhere"
+DSYM_SOURCE="target/release/anywhere-gpui.dSYM"
+DSYM_DEST="$APP.dSYM"
+rm -rf "$DSYM_DEST"
+if [[ -d "$DSYM_SOURCE" ]]; then
+  ditto "$DSYM_SOURCE" "$DSYM_DEST"
+fi
 cp apps/gpui/macos/Info.plist "$APP/Contents/Info.plist"
 cp resources/icon/Anywhere.icns "$APP/Contents/Resources/Anywhere.icns"
 ditto resources/native-localizations "$APP/Contents/Resources"

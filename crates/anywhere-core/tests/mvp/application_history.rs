@@ -382,7 +382,7 @@ async fn history_objects_reuse_actions_without_leaking_targets_to_usage_or_accep
     let records = usage.lock().unwrap().load_global().unwrap();
     assert!(records
         .keys()
-        .any(|(action, kind)| action == "core.directory.copy" && kind == DIRECTORY));
+        .any(|key| { key.0 == "core.directory.copy" && key.1 == DIRECTORY }));
     assert!(!format!("{records:?}").contains("history-only-project"));
 
     // Same Action and path, new object-actions request: the old offer is revoked.

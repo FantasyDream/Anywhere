@@ -37,8 +37,14 @@ impl LauncherView {
         self.web_surface.opening = false;
     }
 
-    pub(super) fn toggle_web_actions(&mut self, cx: &mut Context<Self>) {
+    pub(super) fn toggle_web_actions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.web_surface.actions_open = !self.web_surface.actions_open;
+        if let Some(view) = &self.web_surface.view {
+            if let Err(error) = view.read(cx).set_visible(!self.web_surface.actions_open) {
+                tracing::warn!(%error, "web_tool_visibility_failed");
+            }
+        }
+        self.surface_focus_handle.focus(window, cx);
         self.web_surface.action_selected = 0;
         cx.notify();
     }
@@ -65,8 +71,7 @@ impl LauncherView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.web_surface.actions_open = false;
-        self.web_surface.action_selected = 0;
+        self.toggle_web_actions(window, cx);
         match action {
             0 => self.reload_web_tool(cx),
             1 => self.go_back(window, cx),
@@ -98,6 +103,23 @@ impl LauncherView {
         }
     }
 
+    pub(super) fn cancel_web_package_review(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> bool {
+        let Some(review) = self.web_surface.review.take() else {
+            return false;
+        };
+        if let Some(live) = &self.live {
+            let receiver = live.cancel_web_review(review.token);
+            self.poll(receiver, self.live_state.generation, cx);
+        }
+        self.surface_focus_handle.focus(window, cx);
+        cx.notify();
+        true
+    }
+
     pub(super) fn change_web_package_operation(
         &mut self,
         id: String,
@@ -111,7 +133,7 @@ impl LauncherView {
     }
 
     pub(super) fn ensure_web_view(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if !self.presented
+        if !self.presence.presented
             || self.web_surface.opening
             || self.web_surface.resume_busy
             || self.web_surface.needs_resume
@@ -135,8 +157,9 @@ impl LauncherView {
         };
         let runtime = live.web_runtime();
         let protocol_policy = policy.clone();
-        let protocol_runtime = runtime.clone();
-        let ipc_policy = policy.clone();
+        let entry_url = policy.url();
+        let protocol_runtime = runtime;
+        let ipc_policy = policy;
         let active_binding = Arc::new(Mutex::new(ActiveWebBinding {
             handle: document.handle.clone(),
             origin: document.origin.clone(),
@@ -144,7 +167,6 @@ impl LauncherView {
         let protocol_binding = active_binding.clone();
         let ipc_binding = active_binding.clone();
         let (ipc_sender, ipc_receiver) = tokio::sync::mpsc::channel(WEB_IPC_QUEUE_CAPACITY);
-        let entry_url = policy.url();
         let language = match self.locale {
             Locale::En => "en",
             Locale::Zh => "zh",
@@ -155,7 +177,10 @@ impl LauncherView {
             .with_devtools(cfg!(debug_assertions))
             .with_autoplay(false)
             .with_initialization_script(bootstrap_script(language))
-            .with_navigation_handler(move |candidate| candidate == entry_url)
+            .with_navigation_handler({
+                let entry_url = entry_url.clone();
+                move |candidate| candidate == entry_url
+            })
             .with_new_window_req_handler(|_, _| wry::NewWindowResponse::Deny)
             .with_download_started_handler(|_, _| false)
             .with_custom_protocol("anywhere-plugin".to_owned(), move |_, request| {
@@ -201,7 +226,7 @@ impl LauncherView {
                     tracing::warn!("web_ipc_queue_full");
                 }
             })
-            .with_url(policy.url());
+            .with_url(entry_url);
         let web_view = match gpui_webview::WebView::build(builder, window, cx) {
             Ok(web_view) => web_view,
             Err(error) => {
@@ -210,7 +235,7 @@ impl LauncherView {
                 return;
             }
         };
-        let web_theme = if theme::glass_surface_is_light() {
+        let web_theme = if theme::surface_is_light() {
             wry::Theme::Light
         } else {
             wry::Theme::Dark
@@ -391,6 +416,14 @@ impl LauncherView {
                             match acknowledgement.as_deref() {
                                 Some("lifecycle.ready") => {
                                     this.web_surface.ready = true;
+                                    let _ = this.evaluate_web_script(
+                                        &crate::web_tool::web_theme_script(
+                                            theme::palette(),
+                                            theme::fixed(),
+                                            theme::surface_is_light(),
+                                        ),
+                                        cx,
+                                    );
                                     if this
                                         .evaluate_web_script(
                                             &canvas_script(
@@ -528,5 +561,59 @@ impl LauncherView {
             }
         })
         .detach();
+    }
+
+    pub(in crate::launcher::view) fn handle_web_overlay_keys(
+        &mut self,
+        input: &crate::launcher::view::input::KeyInput<'_>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> crate::launcher::view::input::KeyFlow {
+        use crate::launcher::view::input::KeyFlow;
+        if self.screen != Screen::WebTool
+            || !self.web_surface.actions_open
+            || input.modifiers.modified
+        {
+            return KeyFlow::Continue;
+        }
+        match input.key {
+            "down" | "up" => {
+                self.web_surface.action_selected = 1 - self.web_surface.action_selected;
+                cx.notify();
+            }
+            "enter" | "return" => {
+                self.execute_web_action(self.web_surface.action_selected, window, cx);
+            }
+            "escape" => {
+                self.toggle_web_actions(window, cx);
+            }
+            _ => {}
+        }
+        KeyFlow::Handled
+    }
+
+    pub(in crate::launcher::view) fn handle_web_packages_key(
+        &mut self,
+        input: &crate::launcher::view::input::KeyInput<'_>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let modified = input.modifiers.modified;
+        match input.key {
+            "escape" => self.go_back(window, cx),
+            _ if self.web_surface.review.is_some() => {}
+            "down" if !modified => {
+                self.web.select_next();
+                self.reveal_result_row(self.web.selected);
+                cx.notify();
+            }
+            "up" if !modified => {
+                self.web.select_previous();
+                self.reveal_result_row(self.web.selected);
+                cx.notify();
+            }
+            "enter" | "return" => self.toggle_selected_web_package(cx),
+            _ => {}
+        }
     }
 }

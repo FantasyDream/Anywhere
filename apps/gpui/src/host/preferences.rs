@@ -35,6 +35,36 @@ impl UiLanguage {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UiTheme {
+    #[default]
+    System,
+    Light,
+    Dark,
+}
+
+impl UiTheme {
+    pub const ALL: [Self; 3] = [Self::System, Self::Light, Self::Dark];
+
+    pub fn label(self, locale: l10n::Locale) -> String {
+        match self {
+            Self::System => l10n::language_system(locale),
+            Self::Light => l10n::theme_light(locale),
+            Self::Dark => l10n::theme_dark(locale),
+        }
+    }
+
+    pub fn appearance(self) -> Option<crate::platform::WindowAppearance> {
+        use crate::platform::WindowAppearance;
+        match self {
+            Self::System => None,
+            Self::Light => Some(WindowAppearance::Light),
+            Self::Dark => Some(WindowAppearance::Dark),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActionShortcutRoute {
@@ -72,6 +102,7 @@ pub struct HostPreferences {
     pub universal_shortcut: String,
     pub launch_at_login: bool,
     pub ui_language: UiLanguage,
+    pub ui_theme: UiTheme,
     pub excluded_apps: Vec<String>,
     pub capture_finder_selection: bool,
     pub capture_selected_text: bool,
@@ -93,6 +124,7 @@ impl Default for HostPreferences {
             universal_shortcut: DEFAULT_UNIVERSAL_SHORTCUT.to_owned(),
             launch_at_login: false,
             ui_language: UiLanguage::System,
+            ui_theme: UiTheme::System,
             excluded_apps: Vec::new(),
             capture_finder_selection: true,
             capture_selected_text: true,
@@ -424,9 +456,34 @@ mod tests {
             DEFAULT_CURRENT_APP_SHORTCUT
         );
         assert_eq!(preferences.universal_shortcut, DEFAULT_UNIVERSAL_SHORTCUT);
+        assert_eq!(preferences.ui_theme, UiTheme::System);
         assert!(!preferences.file_search_enabled);
         assert!(preferences.file_search_roots.is_empty());
         assert!(preferences.validate().is_ok());
+    }
+
+    #[test]
+    fn theme_defaults_for_legacy_settings_and_round_trips_all_modes() {
+        use crate::platform::WindowAppearance;
+        let legacy: HostPreferences = serde_json::from_str(r#"{"uiLanguage":"zh"}"#).unwrap();
+        assert_eq!(legacy.ui_theme, UiTheme::System);
+        for (mode, saved, appearance) in [
+            (UiTheme::System, "system", None),
+            (UiTheme::Light, "light", Some(WindowAppearance::Light)),
+            (UiTheme::Dark, "dark", Some(WindowAppearance::Dark)),
+        ] {
+            let preferences = HostPreferences {
+                ui_theme: mode,
+                ..legacy.clone()
+            };
+            let value = serde_json::to_value(&preferences).unwrap();
+            assert_eq!(value["uiTheme"], saved);
+            assert_eq!(
+                serde_json::from_value::<HostPreferences>(value).unwrap(),
+                preferences
+            );
+            assert_eq!(mode.appearance(), appearance);
+        }
     }
 
     #[test]

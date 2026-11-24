@@ -54,7 +54,7 @@ async fn a_cold_menu_home_prefers_basic_edit_commands_over_settings_and_execute(
         let top: Vec<_> = state.context_candidates.iter().take(5).collect();
         assert_eq!(top.len(), 5);
         assert!(top.iter().all(|row| basic.contains(&row.title.as_str())));
-        for row in &state.context_candidates {
+        for row in state.context_candidates.iter() {
             if ["Service Settings", "Shortcut Settings", "Execute All"]
                 .contains(&row.title.as_str())
             {
@@ -862,7 +862,8 @@ async fn sqlite_menu_history_is_quarantined_across_identity_transitions_and_reop
         let mut history = SqliteUsageRepository::open(&database).unwrap();
         let rows = history.load("test.editor").unwrap();
         assert_eq!(
-            rows[&(original_id.clone(), APPLICATION.to_owned())].execute_count,
+            anywhere_core::core::ranking::usage::lookup_usage(&rows, &original_id, APPLICATION)
+                .execute_count,
             1
         );
         assert_eq!(rows.len(), 1);

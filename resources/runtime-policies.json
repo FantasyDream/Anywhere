@@ -1,6 +1,7 @@
 {
   "launcherRetentionMs": 15000,
   "clipboardPrefillLifetimeMs": 15000,
+  "selectionPrefillGraceMs": 500,
   "maxSearchRoots": 8,
   "maxSearchExclusions": 32,
   "maxSearchPathBytes": 4096,

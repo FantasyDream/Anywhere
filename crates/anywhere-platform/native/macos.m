@@ -165,18 +165,13 @@ int launcher_launch_application(const char *utf8_path) {
 }
 
 // Small PNG icon for a bundle. The caller frees the returned buffer.
-unsigned char *launcher_application_icon(const char *utf8_path, unsigned int size,
-                                         unsigned int *out_length) {
-  @autoreleasepool {
-    if (out_length) *out_length = 0;
-    if (!utf8_path || size == 0 || size > 512) return NULL;
-    NSString *path = [NSString stringWithUTF8String:utf8_path];
-    if (path.length == 0) return NULL;
+static NSImage *launcher_load_icon_image(NSString *path, BOOL prefer_bundle) {
+  NSImage *image = nil;
+  if (prefer_bundle) {
     // Prefer the bundle's own icon file: `iconForFile` can hand back a stale or
     // generic icon for an app LaunchServices has not indexed yet, which is what a
     // freshly installed browser showed us. Fall back to the workspace lookup for
     // bundles that keep their icon in Assets.car.
-    NSImage *image = nil;
     NSBundle *bundle = [NSBundle bundleWithPath:path];
     NSString *iconFile = bundle.infoDictionary[@"CFBundleIconFile"];
     if ([iconFile isKindOfClass:NSString.class] && iconFile.length > 0) {
@@ -189,7 +184,83 @@ unsigned char *launcher_application_icon(const char *utf8_path, unsigned int siz
         image = [[NSImage alloc] initWithContentsOfFile:iconPath];
       }
     }
-    if (!image) image = [[NSWorkspace sharedWorkspace] iconForFile:path];
+  }
+  if (!image) image = [[NSWorkspace sharedWorkspace] iconForFile:path];
+  return image;
+}
+
+static unsigned char *launcher_rasterize_icon_bgra(const char *utf8_path, unsigned int size,
+                                                   BOOL prefer_bundle, unsigned int *out_width,
+                                                   unsigned int *out_height,
+                                                   unsigned int *out_length) {
+  @autoreleasepool {
+    if (out_width) *out_width = 0;
+    if (out_height) *out_height = 0;
+    if (out_length) *out_length = 0;
+    if (!utf8_path || size == 0 || size > 512) return NULL;
+    NSString *path = [NSString stringWithUTF8String:utf8_path];
+    if (path.length == 0) return NULL;
+    NSImage *image = launcher_load_icon_image(path, prefer_bundle);
+    if (!image) return NULL;
+    size_t row_bytes = (size_t)size * 4;
+    size_t total_bytes = row_bytes * (size_t)size;
+    unsigned char *buffer = calloc(1, total_bytes);
+    if (!buffer) return NULL;
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    if (!colorSpace) {
+      free(buffer);
+      return NULL;
+    }
+    CGBitmapInfo bitmapInfo =
+        (CGBitmapInfo)kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little;
+    CGContextRef cg = CGBitmapContextCreate(buffer, (size_t)size, (size_t)size, 8, row_bytes,
+                                            colorSpace, bitmapInfo);
+    CGColorSpaceRelease(colorSpace);
+    if (!cg) {
+      free(buffer);
+      return NULL;
+    }
+    NSGraphicsContext *context = [NSGraphicsContext graphicsContextWithCGContext:cg flipped:NO];
+    if (!context) {
+      CGContextRelease(cg);
+      free(buffer);
+      return NULL;
+    }
+    [NSGraphicsContext saveGraphicsState];
+    NSGraphicsContext.currentContext = context;
+    [image drawInRect:NSMakeRect(0, 0, (CGFloat)size, (CGFloat)size)
+             fromRect:NSZeroRect
+            operation:NSCompositingOperationSourceOver
+             fraction:1.0];
+    [NSGraphicsContext restoreGraphicsState];
+    CGContextRelease(cg);
+    if (out_width) *out_width = size;
+    if (out_height) *out_height = size;
+    if (out_length) *out_length = (unsigned int)total_bytes;
+    return buffer;
+  }
+}
+
+unsigned char *launcher_application_icon_bgra(const char *utf8_path, unsigned int size,
+                                              unsigned int *out_width, unsigned int *out_height,
+                                              unsigned int *out_length) {
+  return launcher_rasterize_icon_bgra(utf8_path, size, YES, out_width, out_height, out_length);
+}
+
+unsigned char *launcher_file_icon_bgra(const char *utf8_path, unsigned int size,
+                                       unsigned int *out_width, unsigned int *out_height,
+                                       unsigned int *out_length) {
+  return launcher_rasterize_icon_bgra(utf8_path, size, NO, out_width, out_height, out_length);
+}
+
+unsigned char *launcher_application_icon(const char *utf8_path, unsigned int size,
+                                         unsigned int *out_length) {
+  @autoreleasepool {
+    if (out_length) *out_length = 0;
+    if (!utf8_path || size == 0 || size > 512) return NULL;
+    NSString *path = [NSString stringWithUTF8String:utf8_path];
+    if (path.length == 0) return NULL;
+    NSImage *image = launcher_load_icon_image(path, YES);
     if (!image) return NULL;
     NSSize target = NSMakeSize((CGFloat)size, (CGFloat)size);
     NSBitmapImageRep *rep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL

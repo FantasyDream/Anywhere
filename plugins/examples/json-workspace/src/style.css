@@ -1,10 +1,10 @@
-/* Desktop layout only; typography, ink and controls come from the Host. */
+/* Workspace layout and syntax colors use Host metrics and semantic inks. */
 #app { height: 100%; }
-.json-workspace { min-width: 620px; }
-.json-query-toolbar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--aw-space-sm); padding: var(--aw-space-sm) var(--aw-space-lg); flex-shrink: 0; }
-.json-query-toolbar > select { width: 110px; }
+.json-query-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--aw-space-sm); padding: var(--aw-space-sm) var(--aw-space-lg); flex-shrink: 0; }
+.json-query-toolbar > .aw-input-group { flex: 1 1 10em; }
+.json-query-toolbar > button { flex-shrink: 0; }
 .json-panes { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); }
-.json-workspace .aw-pane-header { flex-wrap: nowrap; gap: var(--aw-space-sm); min-height: 44px; padding: var(--aw-space-sm) var(--aw-space-lg); }
+.json-workspace .aw-pane-header { flex-wrap: nowrap; gap: var(--aw-space-sm); min-height: var(--aw-page-toolbar-height); padding: var(--aw-space-sm) var(--aw-space-lg); }
 .json-pane-heading { display: flex; align-items: baseline; gap: var(--aw-space-sm); min-width: 0; }
 .json-pane-heading > label { white-space: nowrap; }
 .json-pane-heading > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -12,33 +12,34 @@
 .json-workspace .aw-pane + .aw-pane { border-left: var(--aw-divider-width) solid var(--aw-divider); border-top: 0; }
 .json-workspace .aw-pane-header > button { flex-shrink: 0; }
 
-/* A native button opens a bounded desktop popup without resizing the editors. */
-.json-menu { position: relative; flex-shrink: 0; }
-.json-menu > .json-more { padding: 0; border-color: transparent; display: flex; align-items: center; justify-content: center; width: var(--aw-icon-button-size); height: var(--aw-icon-button-size); cursor: pointer; border-radius: var(--aw-control-radius); color: var(--aw-secondary); }
-.json-menu > .json-more > span { font-size: var(--aw-heading-size); font-weight: var(--aw-heading-weight); }
-.json-menu > .json-more:hover, .json-menu[data-open="true"] > .json-more { background: var(--aw-hover); color: var(--aw-primary); }
-.json-menu > .json-more:focus-visible { outline: var(--aw-focus-border-width) solid var(--aw-selected-border); outline-offset: 1px; }
-.json-menu-panel {
-  --aw-text: var(--aw-on-dark-primary);
-  --aw-primary: var(--aw-on-dark-primary);
-  --aw-secondary: var(--aw-on-dark-secondary);
-  --aw-muted: var(--aw-on-dark-muted);
-  --aw-border: var(--aw-on-dark-control-border);
-  --aw-control-border: var(--aw-on-dark-control-border);
-  --aw-divider: var(--aw-on-dark-divider);
-  --aw-hover: var(--aw-on-dark-hover);
-  --aw-selected-surface: var(--aw-on-dark-selected-surface);
-  --aw-button-selection: var(--aw-on-dark-selected-surface);
-  --aw-selection-outline: var(--aw-on-dark-selection-outline);
-  --aw-selected-border: var(--aw-on-dark-selection-outline);
-  position: absolute; top: calc(100% + var(--aw-space-xs)); right: 0; z-index: 2; display: flex; flex-direction: column; width: 220px; max-height: 340px; overflow: auto; padding: var(--aw-space-xs);
-  color-scheme: dark; color: var(--aw-on-dark-primary);
-  background: var(--aw-menu-surface); border: var(--aw-control-border-width) solid var(--aw-on-dark-control-border); border-radius: var(--aw-control-radius);
+/* The translucent selection and caret belong to the textarea. The mirror
+   supplies glyphs only, using the same layout as the native editor. */
+.json-editor { min-width: 0; flex: 1; display: flex; position: relative; isolation: isolate; overflow: hidden; border-radius: var(--aw-control-radius); background: var(--aw-editor-surface); }
+.json-editor-overlay { position: absolute; inset: 0; overflow: hidden; pointer-events: none; user-select: none; }
+.json-editor .aw-editor { background: transparent; font-variant-ligatures: none; letter-spacing: 0; }
+.json-editor textarea { position: relative; }
+.json-editor[data-highlighted="true"] textarea { color: transparent; }
+.json-editor[data-highlighted="true"] textarea::selection { color: transparent; background: var(--aw-text-selection); }
+.json-editor pre { position: absolute; inset: 0; overflow: visible; color: var(--aw-primary); }
+.json-token-key { color: var(--aw-icon-blue); }
+.json-token-string { color: var(--aw-icon-green); }
+.json-token-number { color: var(--aw-icon-amber); }
+.json-token-literal { color: var(--aw-icon-purple); }
+@media (forced-colors: active) {
+  .json-editor-overlay { display: none; }
+  .json-editor[data-highlighted="true"] textarea { color: CanvasText; }
+  .json-editor[data-highlighted="true"] textarea::selection { color: HighlightText; background: Highlight; }
 }
-.json-menu-panel > button { justify-content: flex-start; color: var(--aw-on-dark-primary); border-color: transparent; }
-.json-menu-panel > button:hover:not(:disabled) { background: var(--aw-on-dark-hover); }
-.json-menu-panel > button:active:not(:disabled), .json-menu-panel > button:focus-visible { background: var(--aw-on-dark-selected-surface); border-color: var(--aw-on-dark-selection-outline); }
-.json-menu-panel select { color: var(--aw-on-dark-primary); border-color: var(--aw-on-dark-control-border); }
-.json-menu-panel .indent { color: var(--aw-on-dark-secondary); }
-.json-menu-panel > hr { margin: var(--aw-space-xs) 0; border-color: var(--aw-on-dark-divider); }
+
+/* Keep tool commands in the input pane's flow so the editor and output remain usable. */
+.json-workspace .aw-pane-header:has(.json-menu) { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+.json-menu { display: contents; }
+.json-menu > .json-more { border-color: transparent; color: var(--aw-secondary); }
+.json-menu[data-open="true"] > .json-more { background: var(--aw-button-selection); color: var(--aw-primary); }
+.json-menu-panel { grid-column: 1 / -1; max-height: 40vh; overflow: auto; }
 .indent { display: flex; align-items: center; justify-content: space-between; gap: var(--aw-space-sm); padding: var(--aw-space-xs) var(--aw-space-sm); color: var(--aw-secondary); }
+
+@media (max-width: 560px) {
+  .json-panes { grid-template-columns: minmax(0, 1fr); }
+  .json-workspace .aw-pane + .aw-pane { border-left: 0; border-top: var(--aw-divider-width) solid var(--aw-divider); }
+}

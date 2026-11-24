@@ -1,18 +1,18 @@
 # 文档导航
 
-当前源码为 **V0.14 GPUI 开发预览**。产品只有一个 macOS 15+ GPUI 界面实现；
+当前源码为 **V0.14.1 GPUI 开发预览**。产品只有一个 macOS 15+ GPUI 界面实现；
 Rust Core 负责 Context、匹配、排序、授权和执行。自动化、构建和物理桌面矩阵
-分别记录，Development Preview 不等于正式发行。最后整理：2026-11-18。先从
+分别记录，Development Preview 不等于正式发行。最后整理：2026-11-24。先从
 [项目首页](../README.md)了解功能和平台状态。
 
 ## 使用与参与
 
 | 文档 | 用途 |
 |---|---|
-| [V0.14.0 开发预览](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.0) | macOS 15+ Apple Silicon 下载、校验和、provenance 与已知限制 |
+| [V0.14.1 开发预览](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.1) | macOS 15+ Apple Silicon 下载、校验和、provenance 与已知限制 |
 | [使用指南](usage.md) | 唤醒、权限、Scope、快捷键、搜索、剪贴板、项目工具和本地数据 |
 | [开发与构建](development.md) | 环境、App / SDK 构建、测试、生成物和代码入口 |
-| [完整测试用例与验收清单](test-acceptance-checklist.md) | 当前GPUI逐项用例、前置数据、优先级、18来源和环境矩阵、自动化追溯及结果模板 |
+| [完整测试用例与验收清单](test-acceptance-checklist.md) | 当前源码的 341 条用例、26 个模块、18 来源参数矩阵与可复用证据模板 |
 | [代码规范](code-style.md) | Google / 官方语言规范、隔离工具、自动检查与生成文件边界 |
 | [发布检查](releasing.md) | 开发包、版本、签名 / 归档、验收与 GitHub 发布边界 |
 | [贡献指南](../CONTRIBUTING.md) | 改动约定、提交与 PR 验证 |
@@ -25,7 +25,7 @@ Rust Core 负责 Context、匹配、排序、授权和执行。自动化、构�
 |---|---|
 | [仓库阅读入口](../AGENTS.md) | AI / 开发者的代码地图、稳定边界与验证入口 |
 | [架构](architecture.md) | Rust Core / GPUI / macOS 薄适配的分工、静态模块、快照、取消与执行 |
-| [GPUI 技术方案与验收](mvp-gpui.md) | 当前功能范围、自动化证据、发布检查与物理桌验矩阵 |
+| [GPUI 交付范围与验收状态](mvp-gpui.md) | 当前源码、已发布开发预览、工程证据与实机状态 |
 | [Context 模型](context-model.md) | 类型、来源、Provider 图、等价与身份 |
 | [默认输入](context-input-navigation.md) | 选中文本、15 秒剪贴板、InputMode 和 Esc |
 | [Launcher 交互](launcher-interaction.md) | Scope、菜单、二级操作、快捷键和隐藏恢复 |
@@ -51,7 +51,6 @@ Rust Core 负责 Context、匹配、排序、授权和执行。自动化、构�
 
 ## 历史与研究
 
-- [Flutter 3.50 与内存调研实施方案](archive/flutter-3.50-memory.md)：界面迁移到 GPUI 前的历史方案、测量与 Flutter / Windows 边界，不描述当前产品。
 - [历史验收、迁移与 Review](archive/README.md)：旧 MVP、已完成迁移、实验和逐构建证据。
 - [研究资料](research/README.md)：外部产品、开源选型与未落地设计。
 

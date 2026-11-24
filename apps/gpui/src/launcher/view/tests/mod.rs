@@ -1,8 +1,10 @@
 mod acceptance_regressions;
+mod activation_prefill_regressions;
 mod async_regressions;
 mod full_review;
 mod lifecycle_regressions;
 mod optimization_regressions;
+mod tool_windows;
 
 use super::*;
 use crate::host::WebDocument;
@@ -14,6 +16,7 @@ use gpui_kit::{
 
 fn open_view(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<LauncherView>) {
     cx.update(gpui_kit::init);
+    cx.update(crate::launcher::bind_keys);
     let (window, view) = cx
         .update(|cx| {
             gpui_kit::open_window(
@@ -28,6 +31,15 @@ fn open_view(cx: &mut TestAppContext) -> (AnyWindowHandle, Entity<LauncherView>)
         })
         .unwrap();
     (window, view)
+}
+
+fn dispatch_shortcut(cx: &mut TestAppContext, window: AnyWindowHandle, shortcut: &'static str) {
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        let keystroke = gpui_kit::Keystroke::parse(shortcut).expect("valid shortcut");
+        window.dispatch_keystroke(keystroke, cx);
+    })
+    .unwrap();
 }
 
 fn sync_test_viewport(
@@ -89,9 +101,9 @@ fn current_app_scope() -> anywhere_protocol::ScopeEntry {
 
 fn file_row(id: &str, title: &str) -> LauncherRow {
     LauncherRow {
-        id: id.to_owned(),
-        title: title.to_owned(),
-        subtitle: Some(format!("/fixtures/{title}")),
+        id: SharedString::from(id.to_owned()),
+        title: SharedString::from(title.to_owned()),
+        subtitle: Some(SharedString::from(format!("/fixtures/{title}"))),
         shortcut: None,
         icon: "file".to_owned(),
         kind: CandidateKind::File,
@@ -100,7 +112,7 @@ fn file_row(id: &str, title: &str) -> LauncherRow {
         menu_path: Vec::new(),
         command_id: None,
         file_kind: Some(FileObjectKind::File),
-        source_label: Some("Files".to_owned()),
+        source_label: Some(SharedString::from("Files")),
         icon_identity: None,
         execution_context_id: None,
         primary_action: false,
@@ -112,7 +124,7 @@ fn focusing_an_open_workspace_keeps_the_live_snapshot_stream(cx: &mut TestAppCon
     let (window, view) = open_view(cx);
     cx.update_window(window, |_, window, cx| {
         let expected_generation = view.update(cx, |view, cx| {
-            view.presented = true;
+            view.presence.presented = true;
             view.screen = Screen::Launcher;
             view.input_mode = InputMode::Environment;
             view.live_state.generation = 41;
@@ -457,55 +469,9 @@ fn tool_pages_consume_unmodified_tab_navigation() {
     ));
 }
 
-#[test]
-fn tasks_global_shortcuts_do_not_require_a_focused_control() {
-    let command = KeyModifiers {
-        command: true,
-        modified: true,
-        ..Default::default()
-    };
-    for key in ["k", "l", ".", "r", "f"] {
-        assert!(is_tasks_global_shortcut(key, command));
-    }
-    assert!(is_tasks_global_shortcut("escape", KeyModifiers::default()));
-    assert!(is_tasks_global_shortcut(
-        "up",
-        KeyModifiers {
-            alt: true,
-            ..command
-        }
-    ));
-    assert!(!is_tasks_global_shortcut("a", command));
-    assert!(!is_tasks_global_shortcut("s", KeyModifiers::default()));
-    assert!(!is_tasks_global_shortcut(
-        "l",
-        KeyModifiers {
-            control: true,
-            modified: true,
-            ..Default::default()
-        }
-    ));
-    assert!(should_handle_tasks_shortcut("l", command, true));
-    assert!(!should_handle_tasks_shortcut(
-        "escape",
-        KeyModifiers::default(),
-        true
-    ));
-    assert!(should_handle_tasks_shortcut(
-        "escape",
-        KeyModifiers::default(),
-        false
-    ));
-}
-
 #[gpui_kit::test]
 fn tasks_search_shortcut_only_focuses_the_visible_filter(cx: &mut TestAppContext) {
     let (window, view) = open_view(cx);
-    let command = KeyModifiers {
-        command: true,
-        modified: true,
-        ..Default::default()
-    };
     let row = |id: &str| crate::host::ExecutionRow {
         id: id.to_owned(),
         title: id.to_owned(),
@@ -523,8 +489,14 @@ fn tasks_search_shortcut_only_focuses_the_visible_filter(cx: &mut TestAppContext
         view.update(cx, |view, cx| {
             view.screen = Screen::Tasks;
             view.standalone_tasks = true;
+            view.surface_focus_handle.focus(window, cx);
             assert!(view.tasks.rows.is_empty());
-            view.handle_key("f", command, window, cx);
+        });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-f");
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
             assert!(!view
                 .tasks_filter_input
                 .read(cx)
@@ -534,14 +506,18 @@ fn tasks_search_shortcut_only_focuses_the_visible_filter(cx: &mut TestAppContext
             view.apply_tasks_rows(vec![row("task")], cx);
             view.tasks_filter_input
                 .update(cx, |input, cx| input.set_value("task", window, cx));
-            view.handle_key("f", command, window, cx);
-            assert!(view
-                .tasks_filter_input
-                .read(cx)
-                .focus_handle(cx)
-                .is_focused(window));
-            assert_eq!(view.tasks_filter_input.read(cx).selected_range(), 0..4);
         });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-f");
+    cx.update_window(window, |_, window, cx| {
+        let view = view.read(cx);
+        assert!(view
+            .tasks_filter_input
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window));
+        assert_eq!(view.tasks_filter_input.read(cx).selected_range(), 0..4);
     })
     .unwrap();
 }
@@ -571,14 +547,19 @@ fn tasks_command_k_opens_the_current_task_actions(cx: &mut TestAppContext) {
         view.update(cx, |view, cx| {
             view.screen = Screen::Tasks;
             view.standalone_tasks = true;
+            view.surface_focus_handle.focus(window, cx);
             view.apply_tasks_rows(vec![row.clone()], cx);
             view.tasks.detail = Some(crate::host::ExecutionDetail {
                 row,
                 stdout: "ready".into(),
                 stderr: "".into(),
             });
-
-            view.handle_key("k", command, window, cx);
+        });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-k");
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
             assert!(view.tasks.task_actions_open);
             assert!(!view.tasks.tool_options_open);
             assert_eq!(view.tasks.task_action_selected, 0);
@@ -613,7 +594,13 @@ fn tasks_command_k_uses_window_options_until_a_detail_is_visible(cx: &mut TestAp
         view.update(cx, |view, cx| {
             view.screen = Screen::Tasks;
             view.standalone_tasks = true;
-            view.handle_key("k", command, window, cx);
+            view.surface_focus_handle.focus(window, cx);
+        });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-k");
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
             assert!(view.tasks.tool_options_open);
             assert!(!view.tasks.task_actions_open);
             view.handle_key_with_repeat("k", command, true, window, cx);
@@ -641,7 +628,7 @@ fn tasks_tool_options_expose_the_launcher(cx: &mut TestAppContext) {
     .unwrap();
     cx.run_until_parked();
     let mut visual = VisualTestContext::from_window(window, cx);
-    assert!(visual.debug_bounds("tasks-open-launcher").is_some());
+    visual.update(|window, _| assert!(window.try_find("tasks-open-launcher").is_some()));
 }
 
 #[gpui_kit::test]
@@ -649,11 +636,6 @@ fn tasks_tool_options_keyboard_selects_launcher_and_closes_with_escape(cx: &mut 
     use std::{cell::Cell, rc::Rc};
 
     let (window, view) = open_view(cx);
-    let command = KeyModifiers {
-        command: true,
-        modified: true,
-        ..Default::default()
-    };
     let restored = Rc::new(Cell::new(false));
     let observed = restored.clone();
     let _event = cx.update(|cx| {
@@ -667,7 +649,13 @@ fn tasks_tool_options_keyboard_selects_launcher_and_closes_with_escape(cx: &mut 
         view.update(cx, |view, cx| {
             view.screen = Screen::Tasks;
             view.standalone_tasks = true;
-            view.handle_key("k", command, window, cx);
+            view.surface_focus_handle.focus(window, cx);
+        });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-k");
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
             assert!(view.tasks.tool_options_open);
             assert_eq!(view.tasks.tool_option_selected, 0);
 
@@ -675,8 +663,12 @@ fn tasks_tool_options_keyboard_selects_launcher_and_closes_with_escape(cx: &mut 
             assert_eq!(view.tasks.tool_option_selected, 1);
             view.handle_key("enter", KeyModifiers::default(), window, cx);
             assert!(!view.tasks.tool_options_open);
-
-            view.handle_key("k", command, window, cx);
+        });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-k");
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
             view.handle_key("escape", KeyModifiers::default(), window, cx);
             assert!(!view.tasks.tool_options_open);
             assert_eq!(view.screen, Screen::Tasks);
@@ -722,27 +714,25 @@ fn repeated_tasks_enter_does_not_repeat_the_tool_option(cx: &mut TestAppContext)
 #[gpui_kit::test]
 fn clipboard_shelf_search_shortcut_selects_the_existing_query(cx: &mut TestAppContext) {
     let (window, view) = open_view(cx);
-    let command = KeyModifiers {
-        command: true,
-        modified: true,
-        ..Default::default()
-    };
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::ClipboardShelf;
             view.standalone_shelf = true;
+            view.surface_focus_handle.focus(window, cx);
             view.clipboard_input
                 .update(cx, |input, cx| input.set_value("history", window, cx));
-
-            view.handle_key("f", command, window, cx);
-
-            assert!(view
-                .clipboard_input
-                .read(cx)
-                .focus_handle(cx)
-                .is_focused(window));
-            assert_eq!(view.clipboard_input.read(cx).selected_range(), 0..7);
         });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-f");
+    cx.update_window(window, |_, window, cx| {
+        let view = view.read(cx);
+        assert!(view
+            .clipboard_input
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window));
+        assert_eq!(view.clipboard_input.read(cx).selected_range(), 0..7);
     })
     .unwrap();
 }
@@ -802,31 +792,35 @@ fn typing_in_clipboard_search_closes_actions(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn clipboard_actions_close_before_handling_command_shortcuts(cx: &mut TestAppContext) {
     let (window, view) = open_view(cx);
-    let command = KeyModifiers {
-        command: true,
-        modified: true,
-        ..Default::default()
-    };
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::ClipboardShelf;
             view.standalone_shelf = true;
+            view.surface_focus_handle.focus(window, cx);
             view.clipboard.actions_open = true;
             view.clipboard.action_target = Some(1);
-
-            view.handle_key("k", command, window, cx);
-            assert!(!view.clipboard.actions_open);
-
-            view.clipboard.actions_open = true;
-            view.clipboard.action_target = Some(1);
-            view.handle_key("f", command, window, cx);
-            assert!(!view.clipboard.actions_open);
-            assert!(view
-                .clipboard_input
-                .read(cx)
-                .focus_handle(cx)
-                .is_focused(window));
         });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-k");
+    cx.update_window(window, |_, _window, cx| {
+        view.update(cx, |view, _| {
+            assert!(!view.clipboard.actions_open);
+
+            view.clipboard.actions_open = true;
+            view.clipboard.action_target = Some(1);
+        });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-f");
+    cx.update_window(window, |_, window, cx| {
+        let view = view.read(cx);
+        assert!(!view.clipboard.actions_open);
+        assert!(view
+            .clipboard_input
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window));
     })
     .unwrap();
 }
@@ -834,6 +828,7 @@ fn clipboard_actions_close_before_handling_command_shortcuts(cx: &mut TestAppCon
 #[gpui_kit::test]
 fn clipboard_refresh_survives_a_stale_action_target(cx: &mut TestAppContext) {
     cx.update(gpui_kit::init);
+    cx.update(crate::launcher::bind_keys);
     let directory = tempfile::tempdir().unwrap();
     let plugins = directory.path().join("plugins");
     std::fs::create_dir_all(&plugins).unwrap();
@@ -885,6 +880,7 @@ fn held_return_copies_a_shelf_item_once(cx: &mut TestAppContext) {
     use gpui_kit::test::TestEventExt;
 
     cx.update(gpui_kit::init);
+    cx.update(crate::launcher::bind_keys);
     let directory = tempfile::tempdir().unwrap();
     let plugins = directory.path().join("plugins");
     std::fs::create_dir_all(&plugins).unwrap();
@@ -986,7 +982,9 @@ fn held_command_k_does_not_toggle_shelf_actions_twice(cx: &mut TestAppContext) {
         window.key_down("cmd-k", false, cx);
         assert!(view.read(cx).clipboard.actions_open);
 
+        crate::platform::set_key_event_is_repeat_for_test(true);
         window.key_down("cmd-k", true, cx);
+        crate::platform::set_key_event_is_repeat_for_test(false);
         assert!(view.read(cx).clipboard.actions_open);
     })
     .unwrap();
@@ -995,6 +993,7 @@ fn held_command_k_does_not_toggle_shelf_actions_twice(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn tasks_window_does_not_keep_a_hidden_launcher_editor_focused(cx: &mut TestAppContext) {
     cx.update(gpui_kit::init);
+    cx.update(crate::launcher::bind_keys);
     let directory = tempfile::tempdir().unwrap();
     let plugins = directory.path().join("plugins");
     std::fs::create_dir_all(&plugins).unwrap();
@@ -1039,11 +1038,6 @@ fn tasks_window_does_not_keep_a_hidden_launcher_editor_focused(cx: &mut TestAppC
 #[gpui_kit::test]
 fn removing_every_task_blurs_the_hidden_filter(cx: &mut TestAppContext) {
     let (window, view) = open_view(cx);
-    let command = KeyModifiers {
-        command: true,
-        modified: true,
-        ..Default::default()
-    };
     let row = crate::host::ExecutionRow {
         id: "task".to_owned(),
         title: "task".to_owned(),
@@ -1061,8 +1055,14 @@ fn removing_every_task_blurs_the_hidden_filter(cx: &mut TestAppContext) {
         view.update(cx, |view, cx| {
             view.screen = Screen::Tasks;
             view.standalone_tasks = true;
+            view.surface_focus_handle.focus(window, cx);
             view.apply_tasks_rows(vec![row], cx);
-            view.handle_key("f", command, window, cx);
+        });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-f");
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
             assert!(view
                 .tasks_filter_input
                 .read(cx)
@@ -1208,6 +1208,7 @@ fn clicking_a_task_row_moves_focus_out_of_the_filter(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn starting_runtime_wakes_only_the_shell_without_reserving_a_session(cx: &mut TestAppContext) {
     cx.update(gpui_kit::init);
+    cx.update(crate::launcher::bind_keys);
     let (window, view) = cx
         .update(|cx| {
             gpui_kit::open_window(
@@ -1224,7 +1225,7 @@ fn starting_runtime_wakes_only_the_shell_without_reserving_a_session(cx: &mut Te
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             assert!(view.activate_from_entry(InputMode::Environment, true, window, cx));
-            assert!(view.presented);
+            assert!(view.presence.presented);
             assert_eq!(view.runtime_state, RuntimeState::Starting);
             assert_eq!(
                 view.notice.as_deref(),
@@ -1365,7 +1366,7 @@ fn settings_expose_privacy_recovery_actions(cx: &mut TestAppContext) {
                 },
                 cx,
             );
-            view.settings.selected = SettingsCategory::Context;
+            view.settings_editor.model.selected = SettingsCategory::Context;
             view.screen = Screen::Settings;
             cx.notify();
         });
@@ -1377,7 +1378,7 @@ fn settings_expose_privacy_recovery_actions(cx: &mut TestAppContext) {
             .is_some());
 
         view.update(cx, |view, cx| {
-            view.settings.selected = SettingsCategory::Search;
+            view.settings_editor.model.selected = SettingsCategory::Search;
             cx.notify();
         });
         window.render_frame(cx);
@@ -1393,7 +1394,7 @@ fn file_search_uses_the_original_fixed_page_shape(cx: &mut TestAppContext) {
         view.update(cx, |view, cx| {
             view.screen = Screen::FileSearch;
             view.model.query = "report".to_owned();
-            view.model.rows = vec![file_row("report", "report.pdf")];
+            view.model.rows = vec![file_row("report", "report.pdf")].into();
             cx.notify();
         });
     });
@@ -1436,7 +1437,7 @@ fn standalone_tasks_and_settings_keep_fixed_headers_separate(cx: &mut TestAppCon
         view.update(cx, |view, cx| {
             view.screen = Screen::Settings;
             view.standalone_tasks = false;
-            view.settings_draft.launch_at_login = !view.preferences.launch_at_login;
+            view.settings_editor.draft.launch_at_login = !view.preferences.launch_at_login;
             cx.notify();
         });
         window.render_frame(cx);
@@ -1531,8 +1532,8 @@ fn result_heading_tracks_actions_and_menu_breadcrumbs(cx: &mut TestAppContext) {
             view.model.hide_object_actions();
 
             view.model.rows = vec![LauncherRow {
-                id: "menu-item".to_owned(),
-                title: "Menu item".to_owned(),
+                id: SharedString::from("menu-item"),
+                title: SharedString::from("Menu item"),
                 subtitle: None,
                 shortcut: None,
                 icon: "menu".to_owned(),
@@ -1546,7 +1547,8 @@ fn result_heading_tracks_actions_and_menu_breadcrumbs(cx: &mut TestAppContext) {
                 icon_identity: None,
                 execution_context_id: None,
                 primary_action: false,
-            }];
+            }]
+            .into();
             assert!(view.model.open_selected_menu());
             assert_eq!(
                 view.result_heading(),
@@ -1559,17 +1561,12 @@ fn result_heading_tracks_actions_and_menu_breadcrumbs(cx: &mut TestAppContext) {
 #[gpui_kit::test]
 fn command_k_browses_a_menu_when_no_object_actions_exist(cx: &mut TestAppContext) {
     let (window, view) = open_view(cx);
-    let command = KeyModifiers {
-        command: true,
-        modified: true,
-        ..Default::default()
-    };
-    cx.update_window(window, |_, window, cx| {
-        view.update(cx, |view, cx| {
+    cx.update_window(window, |_, _window, cx| {
+        view.update(cx, |view, _| {
             view.screen = Screen::Launcher;
             view.model.rows = vec![LauncherRow {
-                id: "menu-item".to_owned(),
-                title: "Menu item".to_owned(),
+                id: SharedString::from("menu-item"),
+                title: SharedString::from("Menu item"),
                 subtitle: None,
                 shortcut: None,
                 icon: "menu".to_owned(),
@@ -1583,14 +1580,17 @@ fn command_k_browses_a_menu_when_no_object_actions_exist(cx: &mut TestAppContext
                 icon_identity: None,
                 execution_context_id: None,
                 primary_action: false,
-            }];
+            }]
+            .into();
             view.model.selected = 0;
-
-            view.handle_key("k", command, window, cx);
-
-            assert!(!view.model.object_actions_active);
-            assert_eq!(view.model.menu_path(), Some(&["View".to_owned()][..]));
         });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-k");
+    cx.update_window(window, |_, _, cx| {
+        let view = view.read(cx);
+        assert!(!view.model.object_actions_active);
+        assert_eq!(view.model.menu_path(), Some(&["View".to_owned()][..]));
     })
     .unwrap();
 }
@@ -1759,7 +1759,7 @@ fn constrained_settings_viewport_fills_the_native_window_and_keeps_content_insid
     cx.update(|cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::Settings;
-            view.settings.selected = SettingsCategory::General;
+            view.settings_editor.model.selected = SettingsCategory::General;
             cx.notify();
         });
     });
@@ -1772,7 +1772,7 @@ fn constrained_settings_viewport_fills_the_native_window_and_keeps_content_insid
         let content = window.find("settings-content-scroll-general").bounds();
         assert!(content.bottom() <= constrained.height);
         assert!(
-            view.read(cx).settings_scrolls[SettingsCategory::General as usize]
+            view.read(cx).settings_editor.scrolls[SettingsCategory::General as usize]
                 .max_offset()
                 .y
                 >= px(0.)
@@ -1910,7 +1910,7 @@ fn mode_chooser_resizes_compact_window_and_keeps_both_languages_inside_rows(
                 let row = window.find(id).bounds();
                 let title = window.find(format!("{id}-title")).bounds();
                 let detail = window.find(format!("{id}-detail")).bounds();
-                assert_eq!(row.size.height, px(44.));
+                assert_eq!(row.size.height, px(metrics::ROW_HEIGHT_COMPACT));
                 assert!(title.top() >= row.top());
                 assert!(detail.top() >= title.bottom());
                 assert!(detail.bottom() <= row.bottom());
@@ -1929,7 +1929,7 @@ fn long_candidate_text_does_not_compress_rows_or_cover_primary_action(cx: &mut T
                 .map(|i| {
                     let mut row =
                         file_row(&format!("long-{i}"), &"长文件名称 with spaces ".repeat(15));
-                    row.subtitle = Some("/very/long/目录/path/".repeat(30));
+                    row.subtitle = Some(SharedString::from("/very/long/目录/path/".repeat(30)));
                     row.shortcut = Some("⌃⌥⇧⌘F12".into());
                     row.enabled = true;
                     row
@@ -1949,8 +1949,10 @@ fn long_candidate_text_does_not_compress_rows_or_cover_primary_action(cx: &mut T
         let title = window.find("candidate-0-title").bounds();
         let subtitle = window.find("candidate-0-subtitle").bounds();
         let action = window.find("candidate-0-primary").bounds();
+        let input = window.find("launcher-search-input-slot").bounds();
         assert_eq!(first.size.height, px(LAUNCHER_ROW_HEIGHT));
         assert_eq!(second.size.height, px(LAUNCHER_ROW_HEIGHT));
+        assert_eq!(title.left(), input.left());
         assert!(first.bottom() <= second.top());
         assert!(title.right() <= action.left());
         assert!(subtitle.right() <= action.left());
@@ -1982,6 +1984,212 @@ fn long_candidate_text_does_not_compress_rows_or_cover_primary_action(cx: &mut T
 }
 
 #[gpui_kit::test]
+fn list_rows_across_pages_keep_height_title_alignment_and_non_overlapping_actions(
+    cx: &mut TestAppContext,
+) {
+    let (handle, view) = open_view(cx);
+    let long_title = "长条目名称 with spaces ".repeat(12);
+    let long_subtitle = "/very/long/目录/subpath/".repeat(20);
+
+    // Clipboard
+    cx.update(|cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::Clipboard;
+            view.clipboard.browsing = true;
+            view.clipboard.selected = 0;
+            view.clipboard.status = Some(crate::host::ClipboardSnapshot {
+                recording: true,
+                recording_enabled: true,
+                available: true,
+                paused_until_ms: None,
+                retention_days: 7,
+                storage_usage: Some((1, 2)),
+                notice: None,
+                items: vec![
+                    crate::host::ClipboardItem {
+                        id: 1,
+                        summary: long_title.clone(),
+                        kind: "text".into(),
+                        copied_at_ms: 0,
+                        byte_count: 10,
+                    },
+                    crate::host::ClipboardItem {
+                        id: 2,
+                        summary: long_title.clone(),
+                        kind: "text".into(),
+                        copied_at_ms: 0,
+                        byte_count: 10,
+                    },
+                ],
+            });
+            cx.notify();
+        });
+    });
+    sync_test_viewport_to_desired(cx, handle, &view);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        let first = window.find("clipboard-item-1").bounds();
+        let second = window.find("clipboard-item-2").bounds();
+        let title0 = window.find("clipboard-title-1").bounds();
+        let title1 = window.find("clipboard-title-2").bounds();
+        let subtitle0 = window.find("clipboard-item-1-subtitle").bounds();
+        let action = window.find("clipboard-copy-1").bounds();
+        assert_eq!(
+            first.size.height,
+            px(crate::ui::design_tokens::metrics::ROW_HEIGHT_COMFORTABLE)
+        );
+        assert_eq!(title0.left(), title1.left());
+        assert!(first.bottom() <= second.top());
+        assert!(title0.right() <= action.left());
+        assert!(subtitle0.right() <= action.left());
+        assert!(subtitle0.bottom() <= first.bottom());
+    })
+    .unwrap();
+
+    // Clipboard Shelf
+    cx.update(|cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::ClipboardShelf;
+            view.clipboard.browsing = true;
+            view.clipboard.selected = 0;
+            cx.notify();
+        });
+    });
+    sync_test_viewport_to_desired(cx, handle, &view);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        let first = window.find("clipboard-shelf-item-1").bounds();
+        let second = window.find("clipboard-shelf-item-2").bounds();
+        let title0 = window.find("shelf-title-1").bounds();
+        let title1 = window.find("shelf-title-2").bounds();
+        let subtitle0 = window.find("clipboard-shelf-item-1-subtitle").bounds();
+        let action = window.find("shelf-more-1").bounds();
+        let copy = window.find("shelf-copy-1").bounds();
+        assert!(action.right() <= copy.left());
+        assert!(copy.right() <= first.right());
+        assert_eq!(
+            first.size.height,
+            px(crate::ui::design_tokens::metrics::ROW_HEIGHT_COMPACT)
+        );
+        assert_eq!(title0.left(), title1.left());
+        assert!(first.bottom() <= second.top());
+        assert!(title0.right() <= action.left());
+        assert!(subtitle0.right() <= action.left());
+        assert!(subtitle0.bottom() <= first.bottom());
+    })
+    .unwrap();
+
+    // Application History
+    cx.update(|cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::ApplicationHistory;
+            view.app_history.apply(crate::host::AppHistorySnapshot {
+                source_id: "code".to_owned(),
+                items: vec![
+                    crate::host::AppHistoryItem {
+                        id: "h1".to_owned(),
+                        object_key: "code:h1".to_owned(),
+                        source_id: "code".to_owned(),
+                        title: long_title.clone(),
+                        value: long_subtitle.clone(),
+                        kind: "directory",
+                        can_open: true,
+                    },
+                    crate::host::AppHistoryItem {
+                        id: "h2".to_owned(),
+                        object_key: "code:h2".to_owned(),
+                        source_id: "code".to_owned(),
+                        title: long_title.clone(),
+                        value: long_subtitle.clone(),
+                        kind: "directory",
+                        can_open: true,
+                    },
+                ],
+                failed_sources: vec![],
+                notice: None,
+            });
+            view.app_history.selected = 0;
+            cx.notify();
+        });
+    });
+    sync_test_viewport_to_desired(cx, handle, &view);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        let first = window.find("history-item-h1").bounds();
+        let second = window.find("history-item-h2").bounds();
+        let title0 = window.find("history-item-h1-title").bounds();
+        let title1 = window.find("history-item-h2-title").bounds();
+        let subtitle0 = window.find("history-item-h1-subtitle").bounds();
+        let action = window.find("history-open-h1").bounds();
+        assert_eq!(
+            first.size.height,
+            px(crate::ui::design_tokens::metrics::ROW_HEIGHT_COMFORTABLE)
+        );
+        assert_eq!(title0.left(), title1.left());
+        assert!(first.bottom() <= second.top());
+        assert!(title0.right() <= action.left());
+        assert!(subtitle0.right() <= action.left());
+        assert!(subtitle0.bottom() <= first.bottom());
+    })
+    .unwrap();
+
+    // Web Packages
+    cx.update(|cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::WebPackages;
+            view.web.apply(vec![
+                crate::host::WebPackage {
+                    id: "pkg-a".into(),
+                    name: long_title.clone(),
+                    version: "1.0.0".into(),
+                    digest: "abc".into(),
+                    entry: "index.html".into(),
+                    enabled: true,
+                    available: true,
+                    rollback: false,
+                    builtin: false,
+                    permission_count: 1,
+                },
+                crate::host::WebPackage {
+                    id: "pkg-b".into(),
+                    name: long_title.clone(),
+                    version: "1.0.0".into(),
+                    digest: "def".into(),
+                    entry: "index.html".into(),
+                    enabled: false,
+                    available: true,
+                    rollback: false,
+                    builtin: false,
+                    permission_count: 1,
+                },
+            ]);
+            view.web.selected = 0;
+            cx.notify();
+        });
+    });
+    sync_test_viewport_to_desired(cx, handle, &view);
+    cx.update_window(handle, |_, window, cx| {
+        window.render_frame(cx);
+        let first = window.find("web-package-0").bounds();
+        let second = window.find("web-package-1").bounds();
+        let title0 = window.find("web-package-0-title").bounds();
+        let title1 = window.find("web-package-1-title").bounds();
+        let subtitle0 = window.find("web-package-0-subtitle").bounds();
+        let action = window.find("web-toggle-slot-pkg-a").bounds();
+        assert_eq!(
+            first.size.height,
+            px(crate::ui::design_tokens::metrics::ROW_HEIGHT_COMFORTABLE)
+        );
+        assert_eq!(title0.left(), title1.left());
+        assert!(first.bottom() <= second.top());
+        assert!(title0.right() <= action.left());
+        assert!(subtitle0.right() <= action.left());
+        assert!(subtitle0.bottom() <= first.bottom());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
 fn file_search_selection_reveals_rows_in_a_long_tracked_list(cx: &mut TestAppContext) {
     let (window, view) = open_view(cx);
     cx.update(|cx| {
@@ -2000,7 +2208,7 @@ fn file_search_selection_reveals_rows_in_a_long_tracked_list(cx: &mut TestAppCon
     sync_test_viewport_to_desired(cx, window, &view);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        let initial_maximum = view.read(cx).file_search_scroll.max_offset().y;
+        let initial_maximum = view.read(cx).scrolls.file_search_base().max_offset().y;
         assert!(
             initial_maximum > px(0.),
             "a long result list must expose a real scroll range"
@@ -2012,7 +2220,7 @@ fn file_search_selection_reveals_rows_in_a_long_tracked_list(cx: &mut TestAppCon
             assert_eq!(view.model.selected, 19);
         });
         window.render_frame(cx);
-        let scroll = &view.read(cx).file_search_scroll;
+        let scroll = &view.read(cx).scrolls.file_search_base();
         assert!(
             scroll.offset().y < px(0.),
             "revealing the selected row must scroll the tracked list"
@@ -2068,7 +2276,7 @@ fn tasks_output_follow_tracks_the_shared_scroll_handle(cx: &mut TestAppContext) 
     })
     .unwrap();
     cx.update_window(window, |_, _, cx| {
-        let scroll = &view.read(cx).tasks_output_scroll;
+        let scroll = &view.read(cx).scrolls.tasks_output_base();
         let maximum = scroll.max_offset().y;
         assert!(
             maximum > px(0.),
@@ -2109,7 +2317,7 @@ fn selected_file_row_exposes_the_original_preview_affordance(cx: &mut TestAppCon
         view.update(cx, |view, cx| {
             view.screen = Screen::FileSearch;
             view.file_search.browsing = true;
-            view.model.rows = vec![file_row("file-a", "a.txt")];
+            view.model.rows = vec![file_row("file-a", "a.txt")].into();
             view.model.selected = 0;
             cx.notify();
         });
@@ -2129,8 +2337,8 @@ fn menu_navigation_replaces_the_mode_control_with_back(cx: &mut TestAppContext) 
     cx.update(|cx| {
         view.update(cx, |view, cx| {
             view.model.rows = vec![LauncherRow {
-                id: "menu-item".to_owned(),
-                title: "Menu item".to_owned(),
+                id: SharedString::from("menu-item"),
+                title: SharedString::from("Menu item"),
                 subtitle: None,
                 shortcut: None,
                 icon: "menu".to_owned(),
@@ -2144,7 +2352,8 @@ fn menu_navigation_replaces_the_mode_control_with_back(cx: &mut TestAppContext) 
                 icon_identity: None,
                 execution_context_id: None,
                 primary_action: false,
-            }];
+            }]
+            .into();
             assert!(view.model.open_selected_menu());
             cx.notify();
         });
@@ -2163,18 +2372,18 @@ fn only_the_transient_main_launcher_dismisses_on_focus_loss(cx: &mut TestAppCont
     cx.update(|cx| {
         view.update(cx, |view, _| {
             assert!(!view.dismiss_on_focus_loss());
-            view.presented = true;
+            view.presence.presented = true;
             assert!(view.dismiss_on_focus_loss());
 
             view.screen = Screen::FileSearch;
             assert!(view.dismiss_on_focus_loss());
 
-            view.preview_open = true;
+            view.preview.open = true;
             assert!(!view.dismiss_on_focus_loss());
-            view.preview_open = false;
-            view.preview_busy = true;
+            view.preview.open = false;
+            view.preview.busy = true;
             assert!(!view.dismiss_on_focus_loss());
-            view.preview_busy = false;
+            view.preview.busy = false;
 
             view.screen = Screen::Settings;
             assert!(!view.dismiss_on_focus_loss());
@@ -2288,7 +2497,7 @@ fn invalid_context_binding_keeps_recording(cx: &mut TestAppContext) {
         view.update(cx, |view, cx| {
             view.screen = Screen::Settings;
             for key in ["1", "c"] {
-                view.shortcut_recording = Some(ShortcutSlot::ContextShortcut);
+                view.shortcuts.recording = Some(ShortcutSlot::ContextShortcut);
                 view.handle_key(
                     key,
                     KeyModifiers {
@@ -2299,7 +2508,10 @@ fn invalid_context_binding_keeps_recording(cx: &mut TestAppContext) {
                     window,
                     cx,
                 );
-                assert_eq!(view.shortcut_recording, Some(ShortcutSlot::ContextShortcut));
+                assert_eq!(
+                    view.shortcuts.recording,
+                    Some(ShortcutSlot::ContextShortcut)
+                );
                 assert!(view.notice.is_some());
             }
         });
@@ -2436,16 +2648,12 @@ fn opening_application_history_starts_with_a_fresh_query_and_rows(cx: &mut TestA
 }
 
 #[gpui_kit::test]
-fn application_history_does_not_bind_command_k_to_actions(cx: &mut TestAppContext) {
+fn application_history_binds_command_k_to_actions(cx: &mut TestAppContext) {
     let (window, view) = open_view(cx);
-    let command = KeyModifiers {
-        command: true,
-        modified: true,
-        ..Default::default()
-    };
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::ApplicationHistory;
+            view.surface_focus_handle.focus(window, cx);
             view.app_history.items = vec![crate::host::AppHistoryItem {
                 id: "remote".to_owned(),
                 object_key: "remote:item".to_owned(),
@@ -2455,44 +2663,72 @@ fn application_history_does_not_bind_command_k_to_actions(cx: &mut TestAppContex
                 kind: "remote",
                 can_open: false,
             }];
-
-            view.handle_key("k", command, window, cx);
-            assert!(!view.app_history.fallback_actions_open);
-            assert!(!view.app_history.object_actions_active);
-
-            view.app_history.items.clear();
-            view.handle_key("k", command, window, cx);
-            assert!(!view.app_history.empty_actions_open);
         });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-k");
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, _| {
+            assert!(view.app_history.fallback_actions_open);
+            assert!(!view.app_history.object_actions_active);
+            view.app_history.fallback_actions_open = false;
+            view.app_history.items.clear();
+        });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-k");
+    cx.update_window(window, |_, _, cx| {
+        assert!(view.read(cx).app_history.page_actions_open);
     })
     .unwrap();
 }
 
 #[gpui_kit::test]
-fn application_history_does_not_bind_command_r_to_refresh(cx: &mut TestAppContext) {
+fn application_history_binds_command_r_to_refresh(cx: &mut TestAppContext) {
     let (window, view) = open_view(cx);
-    let command = KeyModifiers {
-        command: true,
-        modified: true,
-        ..Default::default()
-    };
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::ApplicationHistory;
+            view.surface_focus_handle.focus(window, cx);
             view.app_history.session_generation = 7;
             view.app_history.query_generation = 11;
-
-            view.handle_key("r", command, window, cx);
-
-            assert_eq!(view.app_history.session_generation, 7);
-            assert_eq!(view.app_history.query_generation, 11);
         });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-r");
+    cx.update_window(window, |_, _, cx| {
+        let view = view.read(cx);
+        assert_eq!(view.app_history.session_generation, 7);
+        assert_eq!(view.app_history.query_generation, 12);
     })
     .unwrap();
 }
 
 #[gpui_kit::test]
-fn application_history_renders_and_dismisses_object_actions(cx: &mut TestAppContext) {
+fn launcher_quick_index_shortcut_selects_and_activates_row(cx: &mut TestAppContext) {
+    let (window, view) = open_view(cx);
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.model.rows = (0..3)
+                .map(|index| file_row(&format!("row-{index}"), &format!("Result {index}")))
+                .collect();
+            view.model.selected = 0;
+            view.surface_focus_handle.focus(window, cx);
+            cx.notify();
+        });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-2");
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert_eq!(view.read(cx).model.selected, 1);
+        assert!(window.try_find("launcher-footer").is_none());
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn application_history_scrolls_selected_object_actions_and_dismisses(cx: &mut TestAppContext) {
     let (window, view) = open_view(cx);
     cx.update(|cx| {
         view.update(cx, |view, _| {
@@ -2518,12 +2754,14 @@ fn application_history_renders_and_dismisses_object_actions(cx: &mut TestAppCont
                 request,
                 "item",
                 view.model.revision,
-                vec![crate::host::AppHistoryObjectAction {
-                    id: "copy-path".to_owned(),
-                    title: "Copy Path".to_owned(),
-                    localized_titles: Default::default(),
-                    enabled: true,
-                }],
+                (0..18)
+                    .map(|index| crate::host::AppHistoryObjectAction {
+                        id: format!("action-{index}"),
+                        title: format!("Action {index}"),
+                        localized_titles: Default::default(),
+                        enabled: true,
+                    })
+                    .collect(),
             ));
         });
     });
@@ -2540,7 +2778,21 @@ fn application_history_renders_and_dismisses_object_actions(cx: &mut TestAppCont
     let panel = visual
         .debug_bounds("history-object-actions")
         .expect("history object actions panel bounds");
-    assert_eq!(panel.size.width, px(300.));
+    assert_eq!(panel.size.width, viewport.width);
+    let menu_scroll = visual.update(|_, cx| view.read(cx).scrolls.history_actions.clone());
+    assert!(menu_scroll.max_offset().y > px(0.));
+    visual.update(|window, _| assert!(window.try_find("history-item-item").is_none()));
+    visual.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.handle_key("up", KeyModifiers::default(), window, cx);
+            assert_eq!(view.app_history.object_action_selected, 18);
+        });
+        window.render_frame(cx);
+        assert!(menu_scroll.offset().y < px(0.));
+        let refreshed = window.find("history-object-action-refresh").bounds();
+        assert!(refreshed.top() >= menu_scroll.bounds().top());
+        assert!(refreshed.bottom() <= menu_scroll.bounds().bottom());
+    });
     assert!(
         panel.left() >= px(0.) && panel.right() >= viewport.width - px(16.),
         "panel={panel:?} viewport={viewport:?}"
@@ -2622,21 +2874,21 @@ fn empty_application_history_exposes_refresh_actions(cx: &mut TestAppContext) {
         view.update(cx, |view, cx| {
             view.screen = Screen::ApplicationHistory;
             view.app_history.items.clear();
-            view.app_history.empty_actions_open = false;
+            view.app_history.page_actions_open = false;
             cx.notify();
         });
     });
     sync_test_viewport_to_desired(cx, window, &view);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(window.try_find("app-history-empty-actions").is_some());
-        window.click("app-history-empty-actions", cx);
+        assert!(window.try_find("app-history-page-actions").is_some());
+        window.click("app-history-page-actions", cx);
     })
     .unwrap();
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(window.try_find("app-history-empty-refresh").is_some());
+        assert!(window.try_find("app-history-page-refresh").is_some());
         view.update(cx, |view, cx| {
             view.history_input
                 .update(cx, |input, cx| input.focus(window, cx));
@@ -2646,7 +2898,7 @@ fn empty_application_history_exposes_refresh_actions(cx: &mut TestAppContext) {
     .unwrap();
     cx.run_until_parked();
     cx.update(|cx| {
-        assert!(!view.read(cx).app_history.empty_actions_open);
+        assert!(!view.read(cx).app_history.page_actions_open);
     });
 }
 
@@ -2672,6 +2924,13 @@ fn non_openable_application_history_exposes_copy_and_refresh(cx: &mut TestAppCon
     sync_test_viewport_to_desired(cx, window, &view);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
+        window.click("app-history-page-actions", cx);
+        window.render_frame(cx);
+        assert!(window.try_find("app-history-page-refresh").is_some());
+        view.update(cx, |view, cx| {
+            view.handle_key("escape", KeyModifiers::default(), window, cx);
+        });
+        window.render_frame(cx);
         window.click("history-actions-remote", cx);
     })
     .unwrap();
@@ -2683,6 +2942,7 @@ fn non_openable_application_history_exposes_copy_and_refresh(cx: &mut TestAppCon
             .is_some());
         assert!(window.try_find("app-history-fallback-action-0").is_some());
         assert!(window.try_find("app-history-fallback-action-1").is_some());
+        assert!(window.try_find("app-history-page-refresh").is_none());
         view.update(cx, |view, cx| {
             view.handle_key("down", KeyModifiers::default(), window, cx);
             assert_eq!(view.app_history.fallback_action_selected, 1);
@@ -2730,7 +2990,7 @@ fn clipboard_actions_panel_stays_inside_the_page(cx: &mut TestAppContext) {
     let panel = visual
         .debug_bounds("clipboard-actions")
         .expect("clipboard actions panel bounds");
-    assert_eq!(panel.size.width, px(300.));
+    assert_eq!(panel.size.width, viewport.width);
     assert!(
         panel.left() >= px(0.) && panel.right() >= viewport.width - px(16.),
         "panel={panel:?} viewport={viewport:?}"
@@ -2759,7 +3019,7 @@ fn empty_clipboard_pages_expose_refresh_without_a_target(cx: &mut TestAppContext
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(window.try_find("history-empty-actions").is_some());
+        assert!(window.try_find("clipboard-page-actions").is_some());
     })
     .unwrap();
     cx.update(|cx| {
@@ -2810,14 +3070,14 @@ fn tasks_tool_options_stay_inside_the_page(cx: &mut TestAppContext) {
         })
         .unwrap();
     let mut visual = VisualTestContext::from_window(window, cx);
-    assert!(
-        visual.debug_bounds("tasks-toolbar").is_some(),
-        "the Tasks toolbar must render"
-    );
+    visual.update(|window, _| {
+        assert!(window.try_find("page-back").is_some());
+        assert!(window.try_find("tasks-refresh").is_some());
+    });
     let panel = visual
         .debug_bounds("tasks-tool-options-panel")
         .expect("tasks tool options panel bounds");
-    assert_eq!(panel.size.width, px(210.));
+    assert_eq!(panel.size.width, viewport.width);
     assert!(
         panel.left() >= px(0.) && panel.right() >= viewport.width - px(22.),
         "panel={panel:?} viewport={viewport:?}"
@@ -2859,7 +3119,8 @@ fn tasks_actions_stay_inside_the_page(cx: &mut TestAppContext) {
                 cx.notify();
             });
             window.render_frame(cx);
-            assert!(window.try_find("task-more-actions").is_some());
+            assert!(window.try_find("task-action-copy-command").is_some());
+            assert!(window.try_find("task-more-actions").is_none());
             window.viewport_size()
         })
         .unwrap();
@@ -2867,7 +3128,7 @@ fn tasks_actions_stay_inside_the_page(cx: &mut TestAppContext) {
     let panel = visual
         .debug_bounds("tasks-actions")
         .expect("tasks actions panel bounds");
-    assert_eq!(panel.size.width, px(210.));
+    assert_eq!(panel.size.width, viewport.width);
     assert!(
         panel.left() >= px(0.) && panel.right() >= viewport.width - px(22.),
         "panel={panel:?} viewport={viewport:?}"
@@ -2912,7 +3173,8 @@ fn file_search_requires_navigation_before_actions_and_space_preview(cx: &mut Tes
                 file_row("file-a", "a.txt"),
                 file_row("file-b", "b.txt"),
                 file_row("file-c", "c.txt"),
-            ];
+            ]
+            .into();
             view.model.selected = 0;
             view.file_search.browsing = false;
 
@@ -2928,7 +3190,9 @@ fn file_search_requires_navigation_before_actions_and_space_preview(cx: &mut Tes
             assert!(view.file_search.browsing);
             assert_eq!(view.model.selected, 0);
             assert_eq!(
-                view.selected_row_for_action().map(|row| row.id.as_str()),
+                view.selected_row_for_action()
+                    .as_deref()
+                    .map(|row| row.id.as_str()),
                 Some("file-a")
             );
             assert!(view.can_preview_selected_file());
@@ -2949,7 +3213,7 @@ fn file_search_space_only_previews_after_navigation_and_escape_closes_preview(
     cx.update(|cx| {
         view.update(cx, |view, _| {
             view.screen = Screen::FileSearch;
-            view.model.rows = vec![file_row("file-a", "a.txt")];
+            view.model.rows = vec![file_row("file-a", "a.txt")].into();
             view.model.selected = 0;
             view.file_search.browsing = false;
         });
@@ -2985,7 +3249,7 @@ fn file_search_space_only_previews_after_navigation_and_escape_closes_preview(
     cx.update(|cx| {
         view.update(cx, |view, _| {
             view.file_search.browsing = true;
-            view.model.rows = vec![file_row("file-a", "a.txt")];
+            view.model.rows = vec![file_row("file-a", "a.txt")].into();
             view.model.selected = 0;
         });
         assert!(view.read(cx).file_search_selection_active());
@@ -3023,7 +3287,7 @@ fn file_search_space_only_previews_after_navigation_and_escape_closes_preview(
     });
 
     cx.update(|cx| {
-        view.update(cx, |view, _| view.preview_open = true);
+        view.update(cx, |view, _| view.preview.open = true);
     });
     cx.update_window(window, |_, window, cx| {
         window.press("escape", cx);
@@ -3032,7 +3296,7 @@ fn file_search_space_only_previews_after_navigation_and_escape_closes_preview(
     cx.run_until_parked();
     cx.update(|cx| {
         let view = view.read(cx);
-        assert!(!view.preview_open);
+        assert!(!view.preview.open);
         assert_eq!(view.screen, Screen::FileSearch);
         assert_eq!(
             view.input.read(cx).value().as_ref(),
@@ -3063,8 +3327,8 @@ fn leaving_settings_keeps_resumes_or_restarts_the_launcher_stream(cx: &mut TestA
     cx.update(|cx| {
         view.update(cx, |view, _| {
             view.live_state.session_id = Some(7);
-            view.retained_workspace = true;
-            view.hidden_at = Some(Instant::now());
+            view.presence.retained_workspace = true;
+            view.presence.hidden_at = Some(Instant::now());
             assert_eq!(
                 view.settings_launcher_recovery(),
                 LauncherStreamRecovery::Resume
@@ -3078,7 +3342,7 @@ fn leaving_settings_keeps_resumes_or_restarts_the_launcher_stream(cx: &mut TestA
             );
 
             view.live_state.cancel = None;
-            view.hidden_at = Some(
+            view.presence.hidden_at = Some(
                 Instant::now()
                     - Duration::from_millis(anywhere_protocol::policy::LAUNCHER_RETENTION_MS + 1),
             );
@@ -3087,8 +3351,8 @@ fn leaving_settings_keeps_resumes_or_restarts_the_launcher_stream(cx: &mut TestA
                 LauncherStreamRecovery::Restart
             );
 
-            view.hidden_at = None;
-            view.retained_workspace = false;
+            view.presence.hidden_at = None;
+            view.presence.retained_workspace = false;
             view.live_state.session_id = None;
             assert_eq!(
                 view.settings_launcher_recovery(),
@@ -3116,7 +3380,7 @@ fn settings_edits_are_dirty_until_saved_or_discarded(cx: &mut TestAppContext) {
     cx.run_until_parked();
     cx.update(|cx| {
         view.update(cx, |view, cx| {
-            assert!(view.settings_draft.launch_at_login);
+            assert!(view.settings_editor.draft.launch_at_login);
             assert!(!view.preferences.launch_at_login);
             assert!(view.settings_dirty(cx));
         });
@@ -3144,7 +3408,7 @@ fn settings_edits_are_dirty_until_saved_or_discarded(cx: &mut TestAppContext) {
     cx.run_until_parked();
     cx.update(|cx| {
         let view = view.read(cx);
-        assert!(view.settings_close_pending);
+        assert!(view.settings_editor.close_pending);
         assert_eq!(view.screen, Screen::Settings);
     });
     cx.update_window(window, |_, window, cx| {
@@ -3157,8 +3421,53 @@ fn settings_edits_are_dirty_until_saved_or_discarded(cx: &mut TestAppContext) {
         let view = view.read(cx);
         assert_eq!(view.screen, Screen::Launcher);
         assert!(view.preferences.launch_at_login);
-        assert!(view.settings_draft.launch_at_login);
+        assert!(view.settings_editor.draft.launch_at_login);
     });
+}
+
+#[gpui_kit::test]
+fn settings_save_validation_error_stays_pinned_and_shows_in_close_prompt(cx: &mut TestAppContext) {
+    let (window, view) = open_view(cx);
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        view.update(cx, |view, cx| {
+            view.open_settings(window, cx);
+            view.settings_editor.model.selected = SettingsCategory::Search;
+            set_input_value(
+                &view.settings_editor.file_roots_input,
+                String::new(),
+                window,
+                cx,
+            );
+            view.settings_editor.draft.file_search_roots.clear();
+            view.settings_editor.draft.file_search_enabled = true;
+            view.settings_editor.scrolls[SettingsCategory::Search as usize]
+                .set_offset(gpui_kit::point(px(0.), px(-200.)));
+            cx.notify();
+        });
+        window.render_frame(cx);
+        window.click("save-settings", cx);
+        window.render_frame(cx);
+        let error_bounds = window.find("settings-save-error").bounds();
+        let scroll_bounds = window.find("settings-content-scroll-search").bounds();
+        assert!(
+            error_bounds.bottom() <= scroll_bounds.top() + px(1.),
+            "validation error must stay pinned above the scroll container even when scrolled"
+        );
+        assert!(view.read(cx).settings_editor.model.error.is_some());
+    })
+    .unwrap();
+
+    cx.update_window(window, |_, window, cx| {
+        window.click("done-settings", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).settings_editor.close_pending);
+        window.click("save-settings-confirm", cx);
+        window.render_frame(cx);
+        assert!(view.read(cx).settings_editor.close_pending);
+        assert!(window.try_find("settings-close-prompt-error").is_some());
+    })
+    .unwrap();
 }
 
 #[gpui_kit::test]
@@ -3172,17 +3481,32 @@ fn settings_pointer_navigation_does_not_leave_general_keyboard_focused(cx: &mut 
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        assert!(view.read(cx).settings_focus_handle.is_focused(window));
+        assert!(view
+            .read(cx)
+            .settings_editor
+            .focus_handle
+            .is_focused(window));
         window.click("settings-category-shortcuts", cx);
         window.render_frame(cx);
-        assert_eq!(view.read(cx).settings.selected, SettingsCategory::Shortcuts);
-        assert!(view.read(cx).settings_focus_handle.is_focused(window));
+        assert_eq!(
+            view.read(cx).settings_editor.model.selected,
+            SettingsCategory::Shortcuts
+        );
+        assert!(view
+            .read(cx)
+            .settings_editor
+            .focus_handle
+            .is_focused(window));
         assert_ne!(
             window.find("settings-category-general").focused(),
             Some(true)
         );
         view.update(cx, |view, cx| view.focus_settings_navigation(window, cx));
-        assert!(view.read(cx).settings_focus_handle.is_focused(window));
+        assert!(view
+            .read(cx)
+            .settings_editor
+            .focus_handle
+            .is_focused(window));
     })
     .unwrap();
 }
@@ -3193,18 +3517,18 @@ fn repeated_space_does_not_toggle_an_open_file_preview(cx: &mut TestAppContext) 
     cx.update(|cx| {
         view.update(cx, |view, _| {
             view.screen = Screen::FileSearch;
-            view.model.rows = vec![file_row("file-a", "a.txt")];
+            view.model.rows = vec![file_row("file-a", "a.txt")].into();
             view.model.selected = 0;
             view.file_search.browsing = true;
-            view.preview_open = true;
+            view.preview.open = true;
         });
     });
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             assert!(view.handle_preview_keystroke("space", false, false, true, window, cx));
-            assert!(view.preview_open, "auto-repeat must not close the preview");
+            assert!(view.preview.open, "auto-repeat must not close the preview");
             assert!(view.handle_preview_keystroke("space", false, false, false, window, cx));
-            assert!(!view.preview_open, "a new key-down closes the preview");
+            assert!(!view.preview.open, "a new key-down closes the preview");
         });
     })
     .unwrap();
@@ -3218,10 +3542,10 @@ fn command_y_toggles_file_preview_once_and_ignores_repeat(cx: &mut TestAppContex
     cx.update(|cx| {
         view.update(cx, |view, _| {
             view.screen = Screen::FileSearch;
-            view.model.rows = vec![file_row("file-a", "a.txt")];
+            view.model.rows = vec![file_row("file-a", "a.txt")].into();
             view.model.selected = 0;
             view.file_search.browsing = true;
-            view.preview_open = true;
+            view.preview.open = true;
         });
     });
     cx.update_window(window, |_, window, cx| {
@@ -3229,9 +3553,9 @@ fn command_y_toggles_file_preview_once_and_ignores_repeat(cx: &mut TestAppContex
     })
     .unwrap();
     cx.update(|cx| {
-        assert!(!view.read(cx).preview_open);
+        assert!(!view.read(cx).preview.open);
         view.update(cx, |view, _| {
-            view.preview_open = true;
+            view.preview.open = true;
             crate::platform::set_key_event_is_repeat_for_test(true);
         });
     });
@@ -3242,7 +3566,7 @@ fn command_y_toggles_file_preview_once_and_ignores_repeat(cx: &mut TestAppContex
     cx.update(|cx| {
         crate::platform::set_key_event_is_repeat_for_test(false);
         assert!(
-            view.read(cx).preview_open,
+            view.read(cx).preview.open,
             "held command-y must not toggle the preview twice"
         );
     });
@@ -3253,9 +3577,11 @@ fn command_y_closes_a_clipboard_preview_and_command_l_restores_search(cx: &mut T
     use gpui_kit::test::TestEventExt;
 
     let (window, view) = open_view(cx);
-    cx.update(|cx| {
-        view.update(cx, |view, _| {
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
             view.screen = Screen::Clipboard;
+            view.clipboard_input
+                .update(cx, |input, cx| input.focus(window, cx));
             view.clipboard.status = Some(crate::host::ClipboardSnapshot {
                 recording: false,
                 recording_enabled: false,
@@ -3274,21 +3600,22 @@ fn command_y_closes_a_clipboard_preview_and_command_l_restores_search(cx: &mut T
             });
             view.clipboard.browsing = true;
             view.clipboard.selected = 0;
-            view.preview_open = true;
+            view.preview.open = true;
         });
-    });
+    })
+    .unwrap();
     cx.update_window(window, |_, window, cx| {
         window.key_down("cmd-y", false, cx);
     })
     .unwrap();
     cx.update(|cx| {
-        assert!(!view.read(cx).preview_open);
+        assert!(!view.read(cx).preview.open);
         view.update(cx, |view, _| {
             view.screen = Screen::FileSearch;
-            view.model.rows = vec![file_row("file-a", "a.txt")];
+            view.model.rows = vec![file_row("file-a", "a.txt")].into();
             view.model.selected = 0;
             view.file_search.browsing = true;
-            view.preview_open = true;
+            view.preview.open = true;
         });
     });
     cx.update_window(window, |_, window, cx| {
@@ -3297,7 +3624,7 @@ fn command_y_closes_a_clipboard_preview_and_command_l_restores_search(cx: &mut T
     .unwrap();
     cx.update(|cx| {
         let view = view.read(cx);
-        assert!(!view.preview_open);
+        assert!(!view.preview.open);
         assert_eq!(view.screen, Screen::FileSearch);
     });
 }
@@ -3326,7 +3653,7 @@ fn space_and_enter_activate_a_focused_page_button(cx: &mut TestAppContext) {
             });
             view.clipboard.browsing = true;
             view.clipboard.selected = 0;
-            view.preview_open = true;
+            view.preview.open = true;
         });
     });
     let mut focused = false;
@@ -3365,7 +3692,7 @@ fn space_and_enter_activate_a_focused_page_button(cx: &mut TestAppContext) {
             view.screen = Screen::Clipboard;
             view.clipboard.browsing = true;
             view.clipboard.selected = 0;
-            view.preview_open = true;
+            view.preview.open = true;
         });
     });
     let mut focused = false;
@@ -3405,23 +3732,23 @@ fn file_search_space_preview_requires_the_editor_to_own_focus(cx: &mut TestAppCo
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::FileSearch;
-            view.model.rows = vec![file_row("file-a", "a.txt")];
+            view.model.rows = vec![file_row("file-a", "a.txt")].into();
             view.model.selected = 0;
             view.file_search.browsing = true;
-            view.preview_open = true;
+            view.preview.open = true;
 
             window.blur(cx);
             assert!(!view.active_editor_focused(window, cx));
             assert!(!view.handle_preview_keystroke("space", false, false, false, window, cx));
             assert!(
-                view.preview_open,
+                view.preview.open,
                 "Space must not preview for an unfocused editor"
             );
 
             view.input.update(cx, |input, cx| input.focus(window, cx));
             assert!(view.active_editor_focused(window, cx));
             assert!(view.handle_preview_keystroke("space", false, false, false, window, cx));
-            assert!(!view.preview_open);
+            assert!(!view.preview.open);
         });
     })
     .unwrap();
@@ -3441,9 +3768,9 @@ fn editing_navigation_closes_the_current_preview(cx: &mut TestAppContext) {
         view.update(cx, |view, cx| {
             view.screen = Screen::Clipboard;
             view.clipboard.browsing = true;
-            view.preview_open = true;
+            view.preview.open = true;
             view.handle_key("left", KeyModifiers::default(), window, cx);
-            assert!(!view.preview_open);
+            assert!(!view.preview.open);
             assert!(!view.clipboard.browsing);
         });
     })
@@ -3456,14 +3783,14 @@ fn repeated_space_edit_does_not_toggle_a_preview(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::FileSearch;
-            view.model.rows = vec![file_row("file-a", "a.txt")];
+            view.model.rows = vec![file_row("file-a", "a.txt")].into();
             view.model.selected = 0;
             view.file_search.browsing = true;
-            view.preview_open = true;
+            view.preview.open = true;
             crate::platform::set_key_event_is_repeat_for_test(true);
             view.input
                 .update(cx, |input, cx| input.insert(" ", window, cx));
-            assert!(view.preview_open);
+            assert!(view.preview.open);
             crate::platform::set_key_event_is_repeat_for_test(false);
 
             view.screen = Screen::Clipboard;
@@ -3485,11 +3812,11 @@ fn repeated_space_edit_does_not_toggle_a_preview(cx: &mut TestAppContext) {
             });
             view.clipboard.browsing = true;
             view.clipboard.selected = 0;
-            view.preview_open = true;
+            view.preview.open = true;
             crate::platform::set_key_event_is_repeat_for_test(true);
             view.clipboard_input
                 .update(cx, |input, cx| input.insert(" ", window, cx));
-            assert!(view.preview_open);
+            assert!(view.preview.open);
             crate::platform::set_key_event_is_repeat_for_test(false);
         });
     })
@@ -3537,7 +3864,7 @@ fn settings_shortcut_recorders_are_reachable_and_activated_from_the_keyboard(
     cx.run_until_parked();
     cx.update(|cx| {
         assert_eq!(
-            view.read(cx).shortcut_recording,
+            view.read(cx).shortcuts.recording,
             Some(ShortcutSlot::CurrentApp)
         );
     });
@@ -3551,7 +3878,7 @@ fn settings_add_action_shortcut_opens_a_picker_and_saves_the_recorded_scope(
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         view.update(cx, |view, cx| {
-            view.shortcut_catalog = vec![ShortcutCatalogAction {
+            view.shortcuts.catalog = vec![ShortcutCatalogAction {
                 action_id: "developer.terminal.open".to_owned(),
                 title: "Open terminal".to_owned(),
                 localized_titles: Default::default(),
@@ -3590,9 +3917,10 @@ fn settings_add_action_shortcut_opens_a_picker_and_saves_the_recorded_scope(
     cx.run_until_parked();
     cx.update(|cx| {
         let view = view.read(cx);
-        assert!(!view.settings_action_picker_open);
+        assert!(!view.settings_editor.action_picker_open);
         let binding = view
-            .settings_draft
+            .settings_editor
+            .draft
             .action_shortcuts
             .iter()
             .find(|binding| binding.action_id == "developer.terminal.open")
@@ -3609,9 +3937,9 @@ fn settings_use_localized_engine_names_and_full_width_path_fields(cx: &mut TestA
         view.update(cx, |view, cx| {
             view.locale = Locale::Zh;
             view.model.set_locale(Locale::Zh);
-            view.settings_draft.file_search_engine =
+            view.settings_editor.draft.file_search_engine =
                 anywhere_platform::FileSearchEngine::SystemIndex;
-            view.settings.selected = SettingsCategory::Search;
+            view.settings_editor.model.selected = SettingsCategory::Search;
             view.screen = Screen::Settings;
             cx.notify();
         });
@@ -3624,7 +3952,7 @@ fn settings_use_localized_engine_names_and_full_width_path_fields(cx: &mut TestA
         );
 
         view.update(cx, |view, cx| {
-            view.settings.selected = SettingsCategory::ApplicationHistory;
+            view.settings_editor.model.selected = SettingsCategory::ApplicationHistory;
             view.app_history.sources = vec![crate::host::AppHistorySource {
                 id: "source".into(),
                 title: "Source".into(),
@@ -3663,7 +3991,7 @@ fn settings_history_filter_matches_identity_and_enabled_state(cx: &mut TestAppCo
     let (window, view) = open_view(cx);
     cx.update(|cx| {
         view.update(cx, |view, cx| {
-            view.settings.selected = SettingsCategory::ApplicationHistory;
+            view.settings_editor.model.selected = SettingsCategory::ApplicationHistory;
             view.screen = Screen::Settings;
             view.app_history.sources = vec![
                 crate::host::AppHistorySource {
@@ -3713,7 +4041,7 @@ fn settings_sources_load_without_starting_an_application_history_query(cx: &mut 
     let (window, view) = open_view(cx);
     cx.update(|cx| {
         view.update(cx, |view, cx| {
-            view.settings.selected = SettingsCategory::ApplicationHistory;
+            view.settings_editor.model.selected = SettingsCategory::ApplicationHistory;
             view.screen = Screen::Settings;
             view.app_history.loading = false;
             view.apply_auxiliary_event(
@@ -3750,7 +4078,7 @@ fn capture_and_excluded_apps_belong_to_their_settings_pages(cx: &mut TestAppCont
     cx.update(|cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::Settings;
-            view.settings.selected = SettingsCategory::Context;
+            view.settings_editor.model.selected = SettingsCategory::Context;
             cx.notify();
         });
     });
@@ -3759,13 +4087,13 @@ fn capture_and_excluded_apps_belong_to_their_settings_pages(cx: &mut TestAppCont
         assert!(window.try_find("capture-clipboard").is_none());
         assert!(window.try_find("excluded-apps").is_none());
         view.update(cx, |view, cx| {
-            view.settings.selected = SettingsCategory::Clipboard;
+            view.settings_editor.model.selected = SettingsCategory::Clipboard;
             cx.notify();
         });
         window.render_frame(cx);
         assert!(window.try_find("capture-clipboard").is_some());
         view.update(cx, |view, cx| {
-            view.settings.selected = SettingsCategory::Search;
+            view.settings_editor.model.selected = SettingsCategory::Search;
             cx.notify();
         });
         window.render_frame(cx);
@@ -3786,7 +4114,7 @@ fn settings_switch_starts_the_new_category_at_the_top(cx: &mut TestAppContext) {
 
     cx.update(|cx| {
         view.update(cx, |view, _| {
-            view.settings_scrolls[SettingsCategory::Shortcuts as usize]
+            view.settings_editor.scrolls[SettingsCategory::Shortcuts as usize]
                 .set_offset(gpui_kit::point(px(0.), px(-240.)));
         });
     });
@@ -3797,9 +4125,12 @@ fn settings_switch_starts_the_new_category_at_the_top(cx: &mut TestAppContext) {
     cx.run_until_parked();
     cx.update(|cx| {
         let view = view.read(cx);
-        assert_eq!(view.settings.selected, SettingsCategory::Search);
         assert_eq!(
-            view.settings_scrolls[SettingsCategory::Search as usize].offset(),
+            view.settings_editor.model.selected,
+            SettingsCategory::Search
+        );
+        assert_eq!(
+            view.settings_editor.scrolls[SettingsCategory::Search as usize].offset(),
             gpui_kit::point(px(0.), px(0.))
         );
     });
@@ -3811,7 +4142,7 @@ fn settings_escape_runs_before_a_focused_text_control(cx: &mut TestAppContext) {
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         view.update(cx, |view, cx| {
-            view.shortcut_catalog = vec![ShortcutCatalogAction {
+            view.shortcuts.catalog = vec![ShortcutCatalogAction {
                 action_id: "developer.terminal.open".to_owned(),
                 title: "Open terminal".to_owned(),
                 localized_titles: Default::default(),
@@ -3837,7 +4168,7 @@ fn settings_escape_runs_before_a_focused_text_control(cx: &mut TestAppContext) {
     cx.update(|cx| {
         let view = view.read(cx);
         assert_eq!(view.screen, Screen::Settings);
-        assert!(!view.settings_action_picker_open);
+        assert!(!view.settings_editor.action_picker_open);
     });
     cx.update_window(window, |_, window, cx| {
         window.click("done-settings", cx);
@@ -3861,7 +4192,7 @@ fn settings_escape_runs_before_a_focused_text_control(cx: &mut TestAppContext) {
     cx.update(|cx| {
         let view = view.read(cx);
         assert_eq!(view.screen, Screen::Settings);
-        assert!(view.settings_close_pending);
+        assert!(view.settings_editor.close_pending);
     });
 
     cx.update_window(window, |_, window, cx| {
@@ -3873,7 +4204,7 @@ fn settings_escape_runs_before_a_focused_text_control(cx: &mut TestAppContext) {
     cx.update(|cx| {
         let view = view.read(cx);
         assert_eq!(view.screen, Screen::Settings);
-        assert!(!view.settings_close_pending);
+        assert!(!view.settings_editor.close_pending);
     });
 }
 
@@ -3938,7 +4269,7 @@ fn launcher_hotkey_closes_clean_settings_and_keeps_dirty_settings_visible(cx: &m
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         let shown = view.update(cx, |view, cx| {
-            view.presented = true;
+            view.presence.presented = true;
             view.screen = Screen::Settings;
             view.activate_from_hotkey(InputMode::Search, window, cx)
         });
@@ -3946,14 +4277,14 @@ fn launcher_hotkey_closes_clean_settings_and_keeps_dirty_settings_visible(cx: &m
         assert_eq!(view.read(cx).screen, Screen::Launcher);
 
         view.update(cx, |view, cx| {
-            view.presented = true;
+            view.presence.presented = true;
             view.screen = Screen::Settings;
-            view.settings_draft.launch_at_login = !view.preferences.launch_at_login;
+            view.settings_editor.draft.launch_at_login = !view.preferences.launch_at_login;
             assert!(!view.activate_from_hotkey(InputMode::Search, window, cx));
         });
         let view = view.read(cx);
         assert_eq!(view.screen, Screen::Settings);
-        assert!(view.settings_close_pending);
+        assert!(view.settings_editor.close_pending);
         assert!(view.notice.is_some());
     })
     .unwrap();
@@ -3983,46 +4314,46 @@ fn launcher_escape_restores_the_flutter_root_navigation_chain(cx: &mut TestAppCo
     let (window, view) = open_view(cx);
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
-            view.presented = true;
+            view.presence.presented = true;
             view.input_mode = InputMode::Environment;
             view.model.set_query(String::new());
             view.handle_key("escape", KeyModifiers::default(), window, cx);
-            assert!(view.presented);
+            assert!(view.presence.presented);
             assert_eq!(view.input_mode, InputMode::Search);
 
             view.handle_key("escape", KeyModifiers::default(), window, cx);
-            assert!(!view.presented);
+            assert!(!view.presence.presented);
 
-            view.presented = true;
+            view.presence.presented = true;
             view.input_mode = InputMode::Content;
             view.model.set_query("captured".to_owned());
             set_textarea_value(&view.content_input, "captured", window, cx);
             view.handle_key("escape", KeyModifiers::default(), window, cx);
-            assert!(view.presented);
+            assert!(view.presence.presented);
             assert_eq!(view.input_mode, InputMode::Environment);
             assert_eq!(view.model.query, "");
             assert_eq!(view.input.read(cx).value().as_ref(), "");
             assert_eq!(view.content_input.read(cx).value().as_ref(), "");
 
             view.handle_key("escape", KeyModifiers::default(), window, cx);
-            assert!(view.presented);
+            assert!(view.presence.presented);
             assert_eq!(view.input_mode, InputMode::Search);
             view.handle_key("escape", KeyModifiers::default(), window, cx);
-            assert!(!view.presented);
+            assert!(!view.presence.presented);
 
-            view.presented = true;
+            view.presence.presented = true;
             view.input_mode = InputMode::Environment;
             view.model.set_query("git".to_owned());
             set_input_value(&view.input, "git", window, cx);
             view.handle_key("escape", KeyModifiers::default(), window, cx);
-            assert!(view.presented);
+            assert!(view.presence.presented);
             assert_eq!(view.input_mode, InputMode::Environment);
             assert_eq!(view.model.query, "");
             assert_eq!(view.input.read(cx).value().as_ref(), "");
 
             view.model.rows = vec![LauncherRow {
-                id: "menu-item".to_owned(),
-                title: "Menu item".to_owned(),
+                id: SharedString::from("menu-item"),
+                title: SharedString::from("Menu item"),
                 subtitle: None,
                 shortcut: None,
                 icon: "menu".to_owned(),
@@ -4036,7 +4367,8 @@ fn launcher_escape_restores_the_flutter_root_navigation_chain(cx: &mut TestAppCo
                 icon_identity: None,
                 execution_context_id: None,
                 primary_action: false,
-            }];
+            }]
+            .into();
             assert!(view.model.open_selected_menu());
             view.model.set_query("export".to_owned());
             view.handle_key("escape", KeyModifiers::default(), window, cx);
@@ -4044,7 +4376,7 @@ fn launcher_escape_restores_the_flutter_root_navigation_chain(cx: &mut TestAppCo
             assert_eq!(view.model.menu_path(), Some(&[][..]));
             view.handle_key("escape", KeyModifiers::default(), window, cx);
             assert!(view.model.menu_path().is_none());
-            assert!(view.presented);
+            assert!(view.presence.presented);
         });
     })
     .unwrap();
@@ -4105,7 +4437,7 @@ fn option_modified_launcher_shortcuts_record_and_validate(cx: &mut TestAppContex
     cx.update_window(window, |_, window, cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::Settings;
-            view.shortcut_recording = Some(ShortcutSlot::CurrentApp);
+            view.shortcuts.recording = Some(ShortcutSlot::CurrentApp);
             view.handle_key(
                 "space",
                 KeyModifiers {
@@ -4119,11 +4451,11 @@ fn option_modified_launcher_shortcuts_record_and_validate(cx: &mut TestAppContex
                 cx,
             );
             assert_eq!(
-                view.current_shortcut_input.read(cx).value().as_ref(),
+                view.shortcuts.current_input.read(cx).value().as_ref(),
                 "control+alt+Space"
             );
 
-            view.shortcut_recording = Some(ShortcutSlot::Universal);
+            view.shortcuts.recording = Some(ShortcutSlot::Universal);
             view.handle_key(
                 "space",
                 KeyModifiers {
@@ -4137,7 +4469,7 @@ fn option_modified_launcher_shortcuts_record_and_validate(cx: &mut TestAppContex
                 cx,
             );
             assert_eq!(
-                view.universal_shortcut_input.read(cx).value().as_ref(),
+                view.shortcuts.universal_input.read(cx).value().as_ref(),
                 "alt+Space"
             );
             assert!(view.preferences_from_editors(cx).validate().is_ok());
@@ -4159,9 +4491,9 @@ fn context_shortcut_builder_keeps_routes_and_records_one_chord(cx: &mut TestAppC
                 context_types: vec!["core.file".to_owned()],
             };
             view.open_context_shortcut_draft(None, window, cx);
-            set_input_value(&view.context_shortcut_name_input, "Open here", window, cx);
+            set_input_value(&view.shortcuts.context_name_input, "Open here", window, cx);
             view.add_context_shortcut_action(&action, cx);
-            view.shortcut_recording = Some(ShortcutSlot::ContextShortcut);
+            view.shortcuts.recording = Some(ShortcutSlot::ContextShortcut);
             view.handle_key(
                 "k",
                 KeyModifiers {
@@ -4175,14 +4507,16 @@ fn context_shortcut_builder_keeps_routes_and_records_one_chord(cx: &mut TestAppC
                 cx,
             );
             assert_eq!(
-                view.context_shortcut_draft
+                view.shortcuts
+                    .context_draft
                     .as_ref()
                     .and_then(|draft| draft.shortcut.as_deref()),
                 Some("control+alt+shift+KeyK")
             );
             view.commit_context_shortcut_draft(cx).unwrap();
             let binding = view
-                .settings_draft
+                .settings_editor
+                .draft
                 .action_shortcuts
                 .iter()
                 .find(|binding| binding.action_id.starts_with("intent:"))
@@ -4266,6 +4600,7 @@ fn web_teardown_clears_every_document_owned_field(cx: &mut TestAppContext) {
                 origin: "anywhere-plugin://0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.plugin.local".to_owned(),
                 entry: "index.html".to_owned(),
                 title: "Tool".to_owned(),
+                builtin: false,
             });
             view.web_surface.ready = true;
             view.web_surface.error = Some("old error".to_owned());
@@ -4352,7 +4687,7 @@ fn task_results_open_tasks_before_dismissing_launcher(cx: &mut TestAppContext) {
     };
     let (generation_before, dismissed, generation_after) = cx.update(|cx| {
         view.update(cx, |view, cx| {
-            view.presented = true;
+            view.presence.presented = true;
             let generation = view.live_state.generation;
             let dismissed = view.finish_action_result(&task_result(), false, cx);
             let generation_after = view.live_state.generation;
@@ -4367,7 +4702,7 @@ fn task_results_open_tasks_before_dismissing_launcher(cx: &mut TestAppContext) {
     let (generation_before, dismissed, still_presented, generation_after_warning) =
         cx.update(|cx| {
             view.update(cx, |view, cx| {
-                view.presented = true;
+                view.presence.presented = true;
                 let generation = view.live_state.generation;
                 let mut warning = task_result();
                 warning.warning = Some("usage unavailable".to_owned());
@@ -4375,7 +4710,7 @@ fn task_results_open_tasks_before_dismissing_launcher(cx: &mut TestAppContext) {
                 (
                     generation,
                     dismissed,
-                    view.presented,
+                    view.presence.presented,
                     view.live_state.generation,
                 )
             })
@@ -4412,7 +4747,7 @@ fn selecting_a_started_task_applies_to_the_next_tasks_snapshot(cx: &mut TestAppC
                 view.tasks.selected_row().map(|row| row.id.as_str()),
                 Some("new-task")
             );
-            assert!(view.pending_task_selection.is_none());
+            assert!(view.tasks.pending_selection.is_none());
             assert!(view.tasks.detail.is_none());
 
             view.select_execution("old-task".to_owned(), cx);
@@ -4499,7 +4834,7 @@ fn web_tool_actions_expose_reload_and_back(cx: &mut TestAppContext) {
                 Some("invocation")
             );
 
-            view.toggle_web_actions(cx);
+            view.toggle_web_actions(window, cx);
             view.handle_key("down", KeyModifiers::default(), window, cx);
             assert_eq!(view.web_surface.action_selected, 1);
             view.handle_key("enter", KeyModifiers::default(), window, cx);
@@ -4552,8 +4887,8 @@ fn settings_close_prompt_blocks_pointer_and_traps_focus(cx: &mut TestAppContext)
     cx.update(|cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::Settings;
-            view.settings.selected = SettingsCategory::General;
-            view.settings_draft.launch_at_login = !view.preferences.launch_at_login;
+            view.settings_editor.model.selected = SettingsCategory::General;
+            view.settings_editor.draft.launch_at_login = !view.preferences.launch_at_login;
             cx.notify();
         });
     });
@@ -4561,7 +4896,7 @@ fn settings_close_prompt_blocks_pointer_and_traps_focus(cx: &mut TestAppContext)
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         view.update(cx, |view, cx| {
-            view.settings_focus_handle.focus(window, cx);
+            view.settings_editor.focus_handle.focus(window, cx);
             assert!(!view.request_settings_exit(SettingsExitIntent::Close, window, cx));
         });
         window.render_frame(cx);
@@ -4570,11 +4905,14 @@ fn settings_close_prompt_blocks_pointer_and_traps_focus(cx: &mut TestAppContext)
     cx.run_until_parked();
     assert!(cx
         .update_window(window, |_, window, cx| {
-            view.read(cx).settings_keep_editing_focus.is_focused(window)
+            view.read(cx)
+                .settings_editor
+                .keep_editing_focus
+                .is_focused(window)
         })
         .unwrap());
 
-    let before = cx.update(|cx| view.read(cx).settings_draft.launch_at_login);
+    let before = cx.update(|cx| view.read(cx).settings_editor.draft.launch_at_login);
     let switch_center = cx
         .update_window(window, |_, window, _| {
             window.find("open-at-login").bounds().center()
@@ -4584,7 +4922,7 @@ fn settings_close_prompt_blocks_pointer_and_traps_focus(cx: &mut TestAppContext)
     visual.simulate_click(switch_center, gpui_kit::Modifiers::default());
     visual.run_until_parked();
     assert_eq!(
-        visual.update(|_, cx| view.read(cx).settings_draft.launch_at_login),
+        visual.update(|_, cx| view.read(cx).settings_editor.draft.launch_at_login),
         before,
         "the scrim must block pointer interaction with the underlying switch"
     );
@@ -4594,23 +4932,23 @@ fn settings_close_prompt_blocks_pointer_and_traps_focus(cx: &mut TestAppContext)
     visual.update(|window, cx| {
         let view = view.read(cx);
         assert!(
-            view.settings_discard_focus.is_focused(window)
-                || view.settings_save_focus.is_focused(window)
+            view.settings_editor.discard_focus.is_focused(window)
+                || view.settings_editor.save_focus.is_focused(window)
         );
-        assert!(!view.settings_focus_handle.is_focused(window));
+        assert!(!view.settings_editor.focus_handle.is_focused(window));
     });
 
     visual.update(|window, cx| window.press("x", cx));
     visual.run_until_parked();
     visual.update(|_, cx| {
         let view = view.read(cx);
-        assert!(view.settings_close_pending);
-        assert_eq!(view.settings_draft.launch_at_login, before);
+        assert!(view.settings_editor.close_pending);
+        assert_eq!(view.settings_editor.draft.launch_at_login, before);
     });
 
     visual.update(|window, cx| {
         view.update(cx, |view, cx| {
-            view.settings_keep_editing_focus.focus(window, cx);
+            view.settings_editor.keep_editing_focus.focus(window, cx);
             cx.notify();
         });
     });
@@ -4619,10 +4957,10 @@ fn settings_close_prompt_blocks_pointer_and_traps_focus(cx: &mut TestAppContext)
     visual.run_until_parked();
     visual.update(|window, cx| {
         let view = view.read(cx);
-        assert!(!view.settings_close_pending);
+        assert!(!view.settings_editor.close_pending);
         assert_eq!(view.screen, Screen::Settings);
-        assert_eq!(view.settings_draft.launch_at_login, before);
-        assert!(view.settings_focus_handle.is_focused(window));
+        assert_eq!(view.settings_editor.draft.launch_at_login, before);
+        assert!(view.settings_editor.focus_handle.is_focused(window));
     });
 }
 
@@ -4634,9 +4972,9 @@ fn platform_escape_uses_the_settings_modal_route_and_stops_shortcut_recording(
     cx.update(|cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::Settings;
-            view.settings.selected = SettingsCategory::General;
-            view.settings_draft.launch_at_login = !view.preferences.launch_at_login;
-            view.shortcut_recording = Some(ShortcutSlot::CurrentApp);
+            view.settings_editor.model.selected = SettingsCategory::General;
+            view.settings_editor.draft.launch_at_login = !view.preferences.launch_at_login;
+            view.shortcuts.recording = Some(ShortcutSlot::CurrentApp);
             cx.notify();
         });
     });
@@ -4645,10 +4983,10 @@ fn platform_escape_uses_the_settings_modal_route_and_stops_shortcut_recording(
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
         view.update(cx, |view, cx| {
-            view.settings_focus_handle.focus(window, cx);
+            view.settings_editor.focus_handle.focus(window, cx);
             assert!(!view.request_settings_exit(SettingsExitIntent::Close, window, cx));
-            assert!(view.settings_close_pending);
-            assert_eq!(view.shortcut_recording, None);
+            assert!(view.settings_editor.close_pending);
+            assert_eq!(view.shortcuts.recording, None);
         });
         window.render_frame(cx);
     })
@@ -4657,7 +4995,8 @@ fn platform_escape_uses_the_settings_modal_route_and_stops_shortcut_recording(
 
     let original = cx.update(|cx| {
         view.read(cx)
-            .current_shortcut_input
+            .shortcuts
+            .current_input
             .read(cx)
             .value()
             .to_string()
@@ -4666,7 +5005,7 @@ fn platform_escape_uses_the_settings_modal_route_and_stops_shortcut_recording(
         view.update(cx, |view, cx| {
             // The modal must remain authoritative even if a stale recorder
             // state is restored by an asynchronous path.
-            view.shortcut_recording = Some(ShortcutSlot::CurrentApp);
+            view.shortcuts.recording = Some(ShortcutSlot::CurrentApp);
             cx.notify();
         });
     });
@@ -4674,9 +5013,9 @@ fn platform_escape_uses_the_settings_modal_route_and_stops_shortcut_recording(
     cx.run_until_parked();
     cx.update(|cx| {
         let view = view.read(cx);
-        assert!(view.settings_close_pending);
+        assert!(view.settings_editor.close_pending);
         assert_eq!(
-            view.current_shortcut_input.read(cx).value(),
+            view.shortcuts.current_input.read(cx).value(),
             original.as_str()
         );
     });
@@ -4692,12 +5031,12 @@ fn platform_escape_uses_the_settings_modal_route_and_stops_shortcut_recording(
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         let view = view.read(cx);
-        assert!(!view.settings_close_pending);
+        assert!(!view.settings_editor.close_pending);
         assert_eq!(view.screen, Screen::Settings);
-        assert!(view.settings_focus_handle.is_focused(window));
-        assert_eq!(view.shortcut_recording, None);
+        assert!(view.settings_editor.focus_handle.is_focused(window));
+        assert_eq!(view.shortcuts.recording, None);
         assert_eq!(
-            view.settings_draft.launch_at_login,
+            view.settings_editor.draft.launch_at_login,
             !view.preferences.launch_at_login
         );
     })
@@ -4712,8 +5051,9 @@ fn platform_escape_cancels_a_clipboard_confirmation_before_leaving_settings(
     cx.update(|cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::Settings;
-            view.settings.selected = SettingsCategory::Clipboard;
-            view.settings_modal_return_focus = Some(view.settings_focus_handle.clone());
+            view.settings_editor.model.selected = SettingsCategory::Clipboard;
+            view.settings_editor.modal_return_focus =
+                Some(view.settings_editor.focus_handle.clone());
             view.clipboard_confirmation = Some(ClipboardConfirmation::Clear);
             cx.notify();
         });
@@ -4723,7 +5063,7 @@ fn platform_escape_cancels_a_clipboard_confirmation_before_leaving_settings(
     let handled = cx
         .update_window(window, |_, window, cx| {
             view.update(cx, |view, cx| {
-                view.settings_focus_handle.focus(window, cx);
+                view.settings_editor.focus_handle.focus(window, cx);
                 view.handle_settings_escape_from_platform(window, cx)
             })
         })
@@ -4734,7 +5074,7 @@ fn platform_escape_cancels_a_clipboard_confirmation_before_leaving_settings(
         let view = view.read(cx);
         assert!(view.clipboard_confirmation.is_none());
         assert_eq!(view.screen, Screen::Settings);
-        assert!(view.settings_focus_handle.is_focused(window));
+        assert!(view.settings_editor.focus_handle.is_focused(window));
     })
     .unwrap();
 }
@@ -4745,7 +5085,7 @@ fn launcher_notice_uses_bounded_height_and_never_overlaps_rows(cx: &mut TestAppC
     cx.update(|cx| {
         view.update(cx, |view, cx| {
             view.model.set_query("report".to_owned());
-            view.model.rows = vec![file_row("one", "Report.pdf")];
+            view.model.rows = vec![file_row("one", "Report.pdf")].into();
             view.set_notice(
                 "A long error detail\n".repeat(32),
                 components::NoticeKind::Error,
@@ -4776,8 +5116,9 @@ fn notice_changes_converge_to_the_latest_window_size(cx: &mut TestAppContext) {
     cx.update(|cx| {
         view.update(cx, |view, cx| {
             view.model.set_query("action".to_owned());
-            view.model.rows = vec![file_row("disabled", "Unavailable action")];
-            view.model.rows[0].enabled = false;
+            let mut row = file_row("disabled", "Unavailable action");
+            row.enabled = false;
+            view.model.rows = vec![row].into();
             view.model.selected = 0;
             cx.notify();
         });
@@ -4866,7 +5207,7 @@ fn scope_bar_overflow_starts_at_the_leading_edge_and_reveals_a_late_selection(
     sync_test_viewport_to_desired(cx, window, &view);
     cx.update_window(window, |_, window, cx| {
         window.render_frame(cx);
-        let maximum = view.read(cx).scope_scroll.max_offset().x;
+        let maximum = view.read(cx).scrolls.scope.max_offset().x;
         assert!(
             maximum > px(0.),
             "an overflowing scope group must expose horizontal scrolling"
@@ -4884,7 +5225,7 @@ fn scope_bar_overflow_starts_at_the_leading_edge_and_reveals_a_late_selection(
     cx.run_until_parked();
     cx.update_window(window, |_, window, cx| {
         let last = window.find("scope-scope-7").bounds();
-        let offset = view.read(cx).scope_scroll.offset().x;
+        let offset = view.read(cx).scrolls.scope.offset().x;
         assert!(
             last.left() >= px(0.) && last.right() <= window.viewport_size().width,
             "the selected late scope must be revealed inside the viewport: \
@@ -4980,11 +5321,12 @@ fn unsupported_tool_content_scrolls_to_long_input(cx: &mut TestAppContext) {
     });
     sync_test_viewport_to_desired(cx, window, &view);
     let mut visual = VisualTestContext::from_window(window, cx);
-    let maximum = visual.update(|_, cx| view.read(cx).unsupported_tool_scroll.max_offset().y);
+    let maximum = visual.update(|_, cx| view.read(cx).scrolls.unsupported_tool.max_offset().y);
     assert!(maximum > px(0.));
     visual.update(|_, cx| {
         view.read(cx)
-            .unsupported_tool_scroll
+            .scrolls
+            .unsupported_tool
             .set_offset(gpui_kit::point(px(0.), -maximum));
     });
     visual.update(|window, cx| window.render_frame(cx));
@@ -5004,12 +5346,14 @@ fn discarding_language_draft_restores_the_saved_locale(cx: &mut TestAppContext) 
     cx.update(|cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::Settings;
-            view.settings.selected = SettingsCategory::General;
+            view.settings_editor.model.selected = SettingsCategory::General;
             view.preferences.ui_language = UiLanguage::Zh;
-            view.settings_draft.ui_language = UiLanguage::Zh;
+            view.settings_editor.draft.ui_language = UiLanguage::Zh;
             view.locale = Locale::Zh;
             view.model.set_locale(Locale::Zh);
-            view.settings_draft.ui_language = UiLanguage::En;
+            view.settings_editor.draft.ui_language = UiLanguage::En;
+            view.preferences.ui_theme = UiTheme::Dark;
+            view.settings_editor.draft.ui_theme = UiTheme::Light;
             view.locale = Locale::En;
             view.model.set_locale(Locale::En);
             cx.notify();
@@ -5023,7 +5367,8 @@ fn discarding_language_draft_restores_the_saved_locale(cx: &mut TestAppContext) 
     cx.update(|cx| {
         let view = view.read(cx);
         assert_eq!(view.locale, Locale::Zh);
-        assert_eq!(view.settings_draft.ui_language, UiLanguage::Zh);
+        assert_eq!(view.settings_editor.draft.ui_language, UiLanguage::Zh);
+        assert_eq!(view.settings_editor.draft.ui_theme, UiTheme::Dark);
         assert_eq!(view.screen, Screen::Launcher);
     });
 }
@@ -5034,7 +5379,7 @@ fn clipboard_settings_expose_real_choices_and_confirm_destructive_changes(cx: &m
     cx.update(|cx| {
         view.update(cx, |view, cx| {
             view.screen = Screen::Settings;
-            view.settings.selected = SettingsCategory::Clipboard;
+            view.settings_editor.model.selected = SettingsCategory::Clipboard;
             view.clipboard.status = Some(crate::host::ClipboardSnapshot {
                 recording: true,
                 recording_enabled: true,
@@ -5103,7 +5448,7 @@ fn clipboard_settings_expose_real_choices_and_confirm_destructive_changes(cx: &m
     cx.run_until_parked();
     cx.update(|cx| {
         let view = view.read(cx);
-        assert!(view.clipboard_settings_choice.is_none());
+        assert!(view.settings_editor.clipboard_choice.is_none());
         assert!(view.clipboard_confirmation.is_none());
     });
 }
@@ -5173,4 +5518,274 @@ fn task_notices_keep_success_and_help_semantics(cx: &mut TestAppContext) {
             assert_eq!(view.notice_kind, components::NoticeKind::Info);
         });
     });
+}
+
+#[gpui_kit::test]
+fn key_dispatch_precedence_preserves_recording_overlays_shortcuts_and_preview(
+    cx: &mut TestAppContext,
+) {
+    let (window, view) = open_view(cx);
+
+    // 1. Recording shortcut captures Escape and invalid keys without leaving Settings.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::Settings;
+            view.shortcuts.recording = Some(ShortcutSlot::CurrentApp);
+            view.handle_key("k", KeyModifiers::default(), window, cx);
+            assert_eq!(view.screen, Screen::Settings);
+            assert_eq!(view.shortcuts.recording, Some(ShortcutSlot::CurrentApp));
+            assert_eq!(view.notice_kind, components::NoticeKind::Warning);
+
+            view.handle_key("escape", KeyModifiers::default(), window, cx);
+            assert_eq!(view.screen, Screen::Settings);
+            assert_eq!(view.shortcuts.recording, None);
+        });
+    })
+    .unwrap();
+
+    // 2. Clipboard action overlay intercepts Cmd+K and falls through after closing on other keys.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::Clipboard;
+            view.surface_focus_handle.focus(window, cx);
+            view.clipboard.actions_open = true;
+        });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-k");
+    cx.update_window(window, |_, _, cx| {
+        view.update(cx, |view, _| {
+            assert!(!view.clipboard.actions_open);
+            assert_eq!(view.screen, Screen::Clipboard);
+            view.clipboard.actions_open = true;
+        });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-f");
+    cx.update_window(window, |_, window, cx| {
+        let view = view.read(cx);
+        assert!(!view.clipboard.actions_open);
+        assert!(view
+            .clipboard_input
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window));
+    })
+    .unwrap();
+
+    // 3. Preview Escape closes preview only, keeping current screen intact.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::FileSearch;
+            view.preview.open = true;
+            view.handle_key("escape", KeyModifiers::default(), window, cx);
+            assert!(!view.preview.open);
+            assert_eq!(view.screen, Screen::FileSearch);
+        });
+    })
+    .unwrap();
+
+    // 4. User local shortcut takes precedence over built-in Cmd+F on Clipboard.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::Clipboard;
+            view.surface_focus_handle.focus(window, cx);
+            view.notice = Some("existing".into());
+            view.preferences.action_shortcuts = vec![ActionShortcutBinding {
+                action_id: "user.custom".to_owned(),
+                title: "Custom".to_owned(),
+                shortcut: "meta+KeyF".to_owned(),
+                global: false,
+                routes: Vec::new(),
+            }];
+        });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-f");
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            assert!(view.notice.is_none());
+            assert!(!view
+                .clipboard_input
+                .read(cx)
+                .focus_handle(cx)
+                .is_focused(window));
+            view.preferences.action_shortcuts.clear();
+        });
+    })
+    .unwrap();
+
+    // 5. Root navigation intercepts Escape before Launcher root escape runs.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::Launcher;
+            view.root_navigation_open = true;
+            view.handle_key("escape", KeyModifiers::default(), window, cx);
+            assert!(!view.root_navigation_open);
+        });
+    })
+    .unwrap();
+}
+
+#[gpui_kit::test]
+fn gpui_keymap_dispatches_fixed_commands_while_input_is_focused_without_swallowing_typing(
+    cx: &mut TestAppContext,
+) {
+    use std::{cell::Cell, rc::Rc};
+
+    let (window, view) = open_view(cx);
+
+    // 1. Focused Launcher input keeps plain typing and dispatches Cmd+Enter / Cmd+, / Cmd+Q.
+    cx.update_window(window, |_, window, cx| {
+        window.render_frame(cx);
+        assert!(view
+            .read(cx)
+            .input
+            .read(cx)
+            .focus_handle(cx)
+            .is_focused(window));
+    })
+    .unwrap();
+    cx.simulate_input(window, "json");
+    cx.update(|cx| {
+        assert_eq!(view.read(cx).input.read(cx).value().as_ref(), "json");
+    });
+
+    dispatch_shortcut(cx, window, "cmd-enter");
+    cx.update(|cx| {
+        assert!(view.read(cx).root_navigation_open);
+    });
+    dispatch_shortcut(cx, window, "cmd-enter");
+    cx.update(|cx| {
+        assert!(!view.read(cx).root_navigation_open);
+    });
+
+    dispatch_shortcut(cx, window, "cmd-,");
+    cx.update(|cx| {
+        assert_eq!(view.read(cx).screen, Screen::Settings);
+    });
+
+    // 2. Settings dispatches Cmd+S (SaveSettings) and Cmd+Q (QuitApp).
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.settings_editor.draft.launch_at_login = true;
+            view.settings_editor.focus_handle.focus(window, cx);
+        });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-s");
+    cx.update(|cx| {
+        assert!(view.read(cx).preferences.launch_at_login);
+    });
+
+    let quit_requested = Rc::new(Cell::new(false));
+    let observed_quit = quit_requested.clone();
+    let _quit_sub = cx.update(|cx| {
+        cx.subscribe(&view, move |_, event: &LauncherEvent, _| {
+            if event == &LauncherEvent::QuitRequested {
+                observed_quit.set(true);
+            }
+        })
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::Launcher;
+            view.input.update(cx, |input, cx| input.focus(window, cx));
+        });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-q");
+    assert!(quit_requested.get());
+
+    // 3. ClipboardShelf with focused input dispatches Cmd+K, Cmd+Shift+Backspace, and plain typing.
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::ClipboardShelf;
+            view.standalone_shelf = true;
+            view.clipboard.status = Some(crate::host::ClipboardSnapshot {
+                recording: false,
+                recording_enabled: false,
+                available: true,
+                paused_until_ms: None,
+                retention_days: 7,
+                storage_usage: Some((1, 4)),
+                notice: None,
+                items: vec![crate::host::ClipboardItem {
+                    id: 42,
+                    summary: "alpha".into(),
+                    kind: "text".into(),
+                    copied_at_ms: 0,
+                    byte_count: 5,
+                }],
+            });
+            view.clipboard.browsing = true;
+            view.clipboard.selected = 0;
+            view.clipboard_input
+                .update(cx, |input, cx| input.focus(window, cx));
+        });
+    })
+    .unwrap();
+    cx.simulate_input(window, "hi");
+    cx.update(|cx| {
+        assert_eq!(
+            view.read(cx).clipboard_input.read(cx).value().as_ref(),
+            "hi"
+        );
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.handle_key("down", KeyModifiers::default(), window, cx);
+        });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-k");
+    cx.update(|cx| {
+        assert!(view.read(cx).clipboard.actions_open);
+    });
+    dispatch_shortcut(cx, window, "cmd-k");
+    cx.update(|cx| {
+        assert!(!view.read(cx).clipboard.actions_open);
+    });
+    dispatch_shortcut(cx, window, "cmd-shift-backspace");
+    cx.update(|cx| {
+        assert_eq!(view.read(cx).clipboard.delete_pending, Some(42));
+    });
+
+    // 4. Tasks dispatches Cmd+L (RestoreLauncher) even while filter input is focused.
+    let restored = Rc::new(Cell::new(false));
+    let observed_restore = restored.clone();
+    let _restore_sub = cx.update(|cx| {
+        cx.subscribe(&view, move |_, event: &LauncherEvent, _| {
+            if event == &LauncherEvent::RestoreLauncher {
+                observed_restore.set(true);
+            }
+        })
+    });
+    cx.update_window(window, |_, window, cx| {
+        view.update(cx, |view, cx| {
+            view.screen = Screen::Tasks;
+            view.standalone_tasks = true;
+            view.apply_tasks_rows(
+                vec![crate::host::ExecutionRow {
+                    id: "t1".into(),
+                    title: "Task".into(),
+                    directory: "/tmp".into(),
+                    command: "echo".into(),
+                    status: anywhere_protocol::ExecutionSessionStatus::Running,
+                    output_revision: 0,
+                    exit_code: None,
+                    started_at_ms: 0,
+                    finished_at_ms: None,
+                    output_truncated: false,
+                    error: None,
+                }],
+                cx,
+            );
+            view.tasks_filter_input
+                .update(cx, |input, cx| input.focus(window, cx));
+        });
+    })
+    .unwrap();
+    dispatch_shortcut(cx, window, "cmd-l");
+    assert!(restored.get());
 }

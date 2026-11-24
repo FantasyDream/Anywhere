@@ -3,15 +3,15 @@
 //! Called with data already copied out of the session lock; publication revalidates it.
 use crate::core::action::descriptor::ActionRegistry;
 use crate::core::context::ResolvedContext;
-use crate::core::ranking::score::UsageStats;
-use crate::core::search::candidate::CandidateSet;
+use crate::core::ranking::usage::{lookup_usage, UsageSnapshot};
+use crate::core::search::candidate::{Candidate, CandidateSet};
 use crate::core::search::candidate_source::CandidateSource;
 use crate::core::search::engine::ActionSearch;
 use crate::core::search::query::Query;
 use crate::core::session::facts::SessionFacts;
 use crate::features::applications::index::ApplicationCatalog;
 use anywhere_protocol::*;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 
 pub(crate) mod cache;
 
@@ -27,14 +27,15 @@ pub struct PreparedSnapshot {
     pub shortcut_catalog: Vec<super::shortcuts::ShortcutAction>,
 }
 
+#[derive(Clone, Copy)]
 pub struct SnapshotInput<'a> {
     pub action_catalog_version: u64,
     pub input: &'a str,
     pub input_mode: InputMode,
     pub selected_scope: Option<&'a str>,
     pub facts: &'a SessionFacts,
-    pub usage: &'a Arc<HashMap<(String, String), UsageStats>>,
-    pub app_usage: &'a HashMap<(String, String), UsageStats>,
+    pub usage: &'a Arc<UsageSnapshot>,
+    pub app_usage: &'a UsageSnapshot,
     pub actions: &'a Arc<ActionRegistry>,
     pub contexts: &'a [ResolvedContext],
     pub incoming_diagnostics: &'a [String],
@@ -50,17 +51,7 @@ pub fn prepare(
     input: SnapshotInput<'_>,
     cache: &std::sync::Mutex<Option<cache::OfferCache>>,
 ) -> PreparedSnapshot {
-    let usage_index: HashMap<_, _> = input
-        .usage
-        .iter()
-        .map(|((command, kind), stats)| ((command.as_str(), kind.as_str()), stats))
-        .collect();
-    let usage_of = |command: &str, kind: &str| {
-        usage_index
-            .get(&(command, kind))
-            .map(|stats| **stats)
-            .unwrap_or_default()
-    };
+    let usage_of = |command: &str, kind: &str| lookup_usage(input.usage, command, kind);
     let offers = cache::prepare(&input, cache, &usage_of);
     let SnapshotInput {
         action_catalog_version,
@@ -82,16 +73,7 @@ pub fn prepare(
     } = input;
     let action_diagnostics = offers.diagnostics;
     let actions = &offers.actions;
-    let app_usage_index: HashMap<_, _> = app_usage
-        .iter()
-        .map(|((command, kind), stats)| ((command.as_str(), kind.as_str()), stats))
-        .collect();
-    let app_usage_of = |command: &str, kind: &str| {
-        app_usage_index
-            .get(&(command, kind))
-            .map(|stats| **stats)
-            .unwrap_or_default()
-    };
+    let app_usage_of = |command: &str, kind: &str| lookup_usage(app_usage, command, kind);
     let search = ActionSearch::new(
         actions,
         &usage_of,
@@ -164,73 +146,19 @@ pub fn prepare(
         offers.candidates
     };
     let mut host_actions = workspace.binding_offers(&context_candidates);
-    let object_registry = if object_actions.iter().any(|candidate| {
-        matches!(
-            &candidate.target,
-            crate::core::search::candidate::CandidateTarget::Action { action, .. }
-                if actions.get_shared(&action.id).is_none()
-        )
-    }) {
-        let mut object_contexts = Vec::new();
-        for candidate in object_actions {
-            if let Some(context) = candidate.context() {
-                if !object_contexts.contains(context) {
-                    object_contexts.push(context.clone());
-                }
-            }
-        }
-        Some(base_actions.for_contexts(&object_contexts).0)
-    } else {
-        None
-    };
-    let mut result_actions: Vec<_> = object_actions
-        .iter()
-        .filter_map(|candidate| {
-            let mut candidate = candidate.clone();
-            if let crate::core::search::candidate::CandidateTarget::Action { action, context } =
-                &mut candidate.target
-            {
-                let current = actions.get_shared(&action.id).or_else(|| {
-                    object_registry
-                        .as_ref()
-                        .and_then(|registry| registry.get_shared(&action.id))
-                })?;
-                if !current.matches(context) {
-                    return None;
-                }
-                candidate.presentation.availability = crate::core::action::availability::evaluate(
-                    &current.availability,
-                    context,
-                    facts,
-                );
-                *action = current;
-            }
-            candidate
-                .presentation
-                .availability
-                .is_visible()
-                .then_some(candidate)
-        })
-        .collect();
+    let mut result_actions =
+        revalidate_object_actions(object_actions, actions, base_actions, facts);
     // A definition reload must not silently substitute a same-ID implementation for
     // a request selected from an older visible snapshot. Query re-ranking does not
     // advance this version; persistent bindings use ActionId instead of this row ID.
-    if action_catalog_version > 1 {
-        for candidate in set
-            .candidates
+    stamp_candidate_ids(
+        set.candidates
             .iter_mut()
             .chain(&mut context_candidates)
             .chain(&mut result_actions)
-            .chain(&mut host_actions)
-        {
-            if candidate.context().is_some() {
-                candidate
-                    .presentation
-                    .id
-                    .push_str(&format!(":catalog:{action_catalog_version}"));
-            }
-        }
-    }
+            .chain(&mut host_actions),
+        action_catalog_version,
+    );
     let scopes = if input.trim().is_empty()
         && selected_scope.is_none()
         && context_candidates.len() != offers_candidate_count
@@ -258,6 +186,77 @@ pub fn prepare(
         result_actions,
         host_actions,
         scopes,
+    }
+}
+
+fn revalidate_object_actions(
+    object_actions: &[crate::core::search::candidate::Candidate],
+    actions: &ActionRegistry,
+    base_actions: &ActionRegistry,
+    facts: &SessionFacts,
+) -> Vec<crate::core::search::candidate::Candidate> {
+    let object_registry = if object_actions.iter().any(|candidate| {
+        matches!(
+            &candidate.target,
+            crate::core::search::candidate::CandidateTarget::Action { action, .. }
+                if actions.get_shared(&action.id).is_none()
+        )
+    }) {
+        let mut object_contexts = Vec::new();
+        for candidate in object_actions {
+            if let Some(context) = candidate.context() {
+                if !object_contexts.contains(context) {
+                    object_contexts.push(context.clone());
+                }
+            }
+        }
+        Some(base_actions.for_contexts(&object_contexts).0)
+    } else {
+        None
+    };
+    object_actions
+        .iter()
+        .filter_map(|candidate| {
+            let mut candidate = candidate.clone();
+            if let crate::core::search::candidate::CandidateTarget::Action { action, context } =
+                &mut candidate.target
+            {
+                let current = actions.get_shared(&action.id).or_else(|| {
+                    object_registry
+                        .as_ref()
+                        .and_then(|registry| registry.get_shared(&action.id))
+                })?;
+                if !current.matches(context) {
+                    return None;
+                }
+                candidate.presentation.availability = crate::core::action::availability::evaluate(
+                    &current.availability,
+                    context,
+                    facts,
+                );
+                *action = current;
+            }
+            candidate
+                .presentation
+                .availability
+                .is_visible()
+                .then_some(candidate)
+        })
+        .collect()
+}
+
+pub(super) fn stamp_candidate_ids<'a>(
+    candidates: impl IntoIterator<Item = &'a mut Candidate>,
+    version: u64,
+) {
+    if version <= 1 {
+        return;
+    }
+    let suffix = format!(":catalog:{version}");
+    for candidate in candidates {
+        if candidate.context().is_some() {
+            candidate.presentation.id.push_str(&suffix);
+        }
     }
 }
 

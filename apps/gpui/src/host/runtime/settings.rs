@@ -2,10 +2,8 @@ use super::*;
 
 impl LiveLauncher {
     pub fn settings_snapshot(&self) -> Result<SettingsSnapshot> {
-        self.settings_cache
-            .lock()
+        anywhere_core::core::sync::lock_state(&self.settings_cache, "settings_cache")
             .map(|snapshot| snapshot.clone())
-            .map_err(|_| anyhow::anyhow!("settings cache is unavailable"))
     }
 
     pub fn set_clipboard_recording(&self, enabled: bool) -> Receiver<LiveEvent> {
@@ -43,7 +41,10 @@ impl LiveLauncher {
                 return LiveEvent::LoginItemReconciled(None);
             }
             let _guard = preferences_write.lock().await;
-            let Ok(desired) = preferences.lock().map(|saved| saved.launch_at_login) else {
+            let Ok(desired) =
+                anywhere_core::core::sync::lock_state(&preferences, "preferences_cache")
+                    .map(|saved| saved.launch_at_login)
+            else {
                 return LiveEvent::Error("preferences cache is unavailable".into());
             };
             match tokio::task::spawn_blocking(move || apply_login_item(desired)).await {
@@ -101,9 +102,7 @@ impl LiveLauncher {
                         ))),
                     };
                 }
-                if let Ok(mut error) = access_error.lock() {
-                    *error = None;
-                }
+                *anywhere_core::core::sync::lock_cache(&access_error, "search_access_error") = None;
                 let host_error = if !explicit_data_directory
                     && previous.launch_at_login != preferences.launch_at_login
                 {
@@ -112,13 +111,10 @@ impl LiveLauncher {
                     None
                 };
                 let snapshot = settings_snapshot_from(&application)?;
-                *preferences_cache
-                    .lock()
-                    .map_err(|_| anyhow::anyhow!("preferences cache is unavailable"))? =
+                *anywhere_core::core::sync::lock_state(&preferences_cache, "preferences_cache")? =
                     preferences.clone();
-                *settings_cache
-                    .lock()
-                    .map_err(|_| anyhow::anyhow!("settings cache is unavailable"))? = snapshot;
+                *anywhere_core::core::sync::lock_state(&settings_cache, "settings_cache")? =
+                    snapshot;
                 Ok(LiveEvent::Preferences {
                     preferences,
                     host_error,

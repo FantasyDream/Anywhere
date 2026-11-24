@@ -8,7 +8,7 @@ struct CachedTaskOutput {
     longest_line: Option<usize>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct TasksPageModel {
     output_cache: Option<CachedTaskOutput>,
     visible_cache: Option<(String, usize, std::sync::Arc<[usize]>)>,
@@ -27,6 +27,8 @@ pub struct TasksPageModel {
     pub task_actions_open: bool,
     pub task_action_selected: usize,
     pub refresh_generation: u64,
+    pub pending_selection: Option<String>,
+    pub refresh_cancel: Option<tokio::sync::oneshot::Sender<()>>,
 }
 
 impl Default for TasksPageModel {
@@ -49,6 +51,8 @@ impl Default for TasksPageModel {
             task_actions_open: false,
             task_action_selected: 0,
             refresh_generation: 0,
+            pending_selection: None,
+            refresh_cancel: None,
         }
     }
 }
