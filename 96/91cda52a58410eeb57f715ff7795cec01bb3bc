@@ -1,0 +1,214 @@
+apps/gpui/src/platform/windows.rs
+  s_b3bde07587ea60::t_03d785bbb7db68 119,136-140,161-162,178-180,194-196,199-203,206-208,214-221,226-228,240-242,245-255,261-262,266-272
+  s_b3bde07587ea60::t_ccca79d0338fd0 1-7,9-12,15,19-23,61-65,67-68,79-96,98-103,111,114-118,121-135,141-160,163-172,174-177,181-184,186-187,204-205,209-213,222,229-233,235-239,243,256-260,263-264,273-277,282
+  s_b3bde07587ea60::t_c89898a645a3ef 265,278-281
+  s_b3bde07587ea60::t_2c60c671fe1879 69-78,104-110,112-113,120,185,244
+  s_b3bde07587ea60::t_d569e9bdbdac5d 97,173,197-198,234
+  s_b3bde07587ea60::t_3e49afec43dd71 16-18
+  s_b3bde07587ea60::t_247cd34616688c 66,188-193,223-225
+  s_b3bde07587ea60::t_0b13c945627b11 8,13-14,24-60
+apps/gpui/src/host/login_item.rs
+  s_b3bde07587ea60::t_61a2c625819e31 28-32,35-49,56-62,66,71-72
+  s_b3bde07587ea60::t_03d785bbb7db68 50-55,63-65,67-70
+apps/gpui/src/ui/design_tokens.rs
+  s_b3bde07587ea60::t_03d785bbb7db68 518-520,522-524
+crates/anywhere-core/src/features/filesystem/scan/tests.rs
+  s_b3bde07587ea60::t_5f8b50d7920d7d 82-85,95-98,105-112,118-127,129-134
+  s_b3bde07587ea60::t_04539f26181a20 5,70-81,86-94,99-104,113-117,128,135-141
+  s_b3bde07587ea60::t_130c053277da3b 142-143
+docs/test-acceptance-checklist.md
+  s_b3bde07587ea60::t_c89898a645a3ef 799-800
+apps/gpui/src/platform/mod.rs
+  s_b3bde07587ea60::t_247cd34616688c 3,120-124,131,145,158-159,167-171,182-186,212-213,221-225,265-269,327-331,357-361,386-388,469-473,485-490,602-606,617-621,638-640,683-684,702-706,722-726,750-769,864-868
+  s_b3bde07587ea60::t_2c60c671fe1879 36,83,392,395,822,827,832,891-893,902
+  s_b3bde07587ea60::t_0b13c945627b11 4-5
+  s_b3bde07587ea60::t_03d785bbb7db68 147,743-745,747-749
+  s_b3bde07587ea60::t_32ac1fb0739c38 735,741-742,746,771-772
+  s_b3bde07587ea60::t_5de099cb4602a1 894-901
+  s_b3bde07587ea60::t_b8985129d44a7e 770
+  s_b3bde07587ea60::t_9467eb415de229 903
+crates/anywhere-platform/src/search_storage.rs
+  s_b3bde07587ea60::t_04539f26181a20 15-16
+  s_b3bde07587ea60::t_c89898a645a3ef 128-129,133-136
+crates/anywhere-core/src/features/filesystem/scan/index.rs
+  s_b3bde07587ea60::t_fe5924881f1cab 1,5-26,33-39,44-57,60-70
+  s_b3bde07587ea60::t_0908c448240c41 2-4,27-32,40-43,58-59
+crates/anywhere-platform/src/everything_wire.rs
+  s_b3bde07587ea60::t_0908c448240c41 20-23,46-49,63-75,79-81,98-101,120-127,133-136,146-149,153-156,166-169
+  s_b3bde07587ea60::t_0c32e81c528d6a 1-19,24-45,50-62,76-78,82-97,102-119,128-132,137-145,150-152,157-165,170-179
+scripts/generate-design-tokens.py
+  s_b3bde07587ea60::t_cb171766fcc3e9 220-222,227-228,231-236
+  s_b3bde07587ea60::t_c89898a645a3ef 229-230
+crates/anywhere-platform/src/windows/clipboard.rs
+  s_b3bde07587ea60::t_03d785bbb7db68 11-12,46-48,56-59,76-79
+  s_b3bde07587ea60::t_5b91df56e76f74 50-55
+  s_b3bde07587ea60::t_c89898a645a3ef 64,85-100,139,149
+  s_b3bde07587ea60::t_0058755fa7bc72 1-10,13-45,49,60-63,65-75,80-84,101-138,140-148,150-160
+crates/anywhere-platform/src/process/tooling.rs
+  s_b3bde07587ea60::t_03d785bbb7db68 179-182
+apps/gpui/src/launcher/view/pages/file_search.rs
+  s_b3bde07587ea60::t_04539f26181a20 48-51
+  s_b3bde07587ea60::t_50982bdaee8311 234-237
+crates/anywhere-core/src/features/filesystem/search.rs
+  s_b3bde07587ea60::t_fe5924881f1cab 252,254-256,288,290,299-300,303,309
+  s_b3bde07587ea60::t_0908c448240c41 289,310-315
+apps/gpui/src/app.rs
+  s_b3bde07587ea60::t_1c467416170b62 8,513,521
+  s_b3bde07587ea60::t_32ac1fb0739c38 34,296,298,1040,1062-1068,1209,1213,1329-1330
+  s_b3bde07587ea60::t_1fc7ad9e6b294b 33,265-266,286,295,297,356-357,529-536,885-889,894,897-898,908-909,959-966,976,985,1015,1024,1076
+  s_b3bde07587ea60::t_3e49afec43dd71 528
+  s_b3bde07587ea60::t_c89898a645a3ef 354-355
+  s_b3bde07587ea60::t_03d785bbb7db68 902-906,1069-1075
+  s_b3bde07587ea60::t_2c6d7f9e07bb96 1077
+crates/anywhere-platform/src/windows.rs
+  s_b3bde07587ea60::t_03d785bbb7db68 38-41,63,65-66,80-83,88-89,100-103,105-108,125-128,157-160,165-168,177-180
+  s_b3bde07587ea60::t_1099ac8ee1f975 2,7-8,138-144,147,149-150
+  s_b3bde07587ea60::t_c89898a645a3ef 64
+  s_b3bde07587ea60::t_32ac1fb0739c38 169,181,184-185
+  s_b3bde07587ea60::t_320fb49a7b02a2 1,3-6,9-37,42-62,67-79,84-87,90-99,104,109-124,129-137,145-146,148,151-156,161-164,170-176,182-183,186-190
+docs/mvp-gpui.md
+  s_b3bde07587ea60::t_637488a4243d6d 55
+docs/windows.md
+  s_b3bde07587ea60::t_c981e6371eda57 65-75
+  s_b3bde07587ea60::t_3c64b60b501966 8-10,83
+  s_b3bde07587ea60::t_0b13c945627b11 16,89
+  s_b3bde07587ea60::t_04539f26181a20 29,33,35-48,86
+  s_b3bde07587ea60::t_c89898a645a3ef 93
+  s_b3bde07587ea60::t_637488a4243d6d 1-7,11-15,17-28,30-32,34,49-64,76-82,84-85,87-88,90-92
+apps/gpui/src/main.rs
+  s_b3bde07587ea60::t_32ac1fb0739c38 1-2
+  s_b3bde07587ea60::t_0b13c945627b11 12-15
+resources/design-tokens.json
+  s_b3bde07587ea60::t_cb171766fcc3e9 516-519
+apps/gpui/src/platform/preview.rs
+  s_b3bde07587ea60::t_1c467416170b62 2-3,216,225
+  s_b3bde07587ea60::t_202a81da17e0bb 1
+README.md
+  s_b3bde07587ea60::t_630fed1598b51f 33
+  s_b3bde07587ea60::t_637488a4243d6d 16-17,84
+resources/localization/app_zh.arb
+  s_b3bde07587ea60::t_59cd3e0612301f 74
+  s_b3bde07587ea60::t_04539f26181a20 381
+apps/gpui/src/host/mod.rs
+  s_b3bde07587ea60::t_1c467416170b62 13-15
+  s_b3bde07587ea60::t_61a2c625819e31 47-51,61,69-70,77,137,172-174,179,183-184
+  s_b3bde07587ea60::t_32ac1fb0739c38 52,71-74
+  s_b3bde07587ea60::t_03d785bbb7db68 53-60,62-68,175-178
+apps/gpui/src/launcher/view/settings/shortcuts.rs
+  s_b3bde07587ea60::t_32ac1fb0739c38 414,557,932
+  s_b3bde07587ea60::t_03d785bbb7db68 281-282
+apps/gpui/src/host/hotkeys.rs
+  s_b3bde07587ea60::t_1c467416170b62 18,38
+crates/anywhere-platform/src/windows/shell.rs
+  s_b3bde07587ea60::t_0058755fa7bc72 1-5,7,9-14,16,19-21,25-29,32-92,97-110,119,124-136,138-140,145-146,171-172
+  s_b3bde07587ea60::t_03d785bbb7db68 22-24,30-31,93-96,111-118,120-123,141-144,147-150,155-158,161-164
+  s_b3bde07587ea60::t_32ac1fb0739c38 6,8,15,17-18,137,151-154,159-160,165-170
+crates/anywhere-platform/src/windows/everything.rs
+  s_b3bde07587ea60::t_1099ac8ee1f975 1-3,5-7,9,14-65,80,85-100,108-119,126-130,134-138,142-150,154-159,167-169,179-191,196-197,203-205,210,215-218,224,232-240,242-244,249-250,273,275,280-282,286-287,346
+  s_b3bde07587ea60::t_630fed1598b51f 4,8,241,251-255,258-259,262,266-272,274,288-297,303-305,310-312,320-325,327,341-345
+  s_b3bde07587ea60::t_50982bdaee8311 192-195,198-202,256-257,260-261,263-265,298-302,306-309,313-319,328-340
+  s_b3bde07587ea60::t_69fdfd920cfb11 326
+  s_b3bde07587ea60::t_0908c448240c41 10-13,66-79,81-84,101-107,120-125,131-133,139-141,151-153,160-166,170-178,206-209,211-214,219-223,225-231,245-248,276-279,283-285
+apps/gpui/src/host/directory_access.rs
+  s_b3bde07587ea60::t_1c467416170b62 2,4-8,35,40,48,58,78-79,81,102,156-164,171-173,218,246,351,405
+  s_b3bde07587ea60::t_3e49afec43dd71 165-170
+apps/gpui/src/launcher/view/settings/context.rs
+  s_b3bde07587ea60::t_59cd3e0612301f 17-21
+  s_b3bde07587ea60::t_e0e9acb7d4828e 23-24,65
+apps/gpui/src/platform/windows/tray.rs
+  s_b3bde07587ea60::t_c89898a645a3ef 106-107,188-190
+  s_b3bde07587ea60::t_13fd8801bfe5cc 21-23,37-39
+  s_b3bde07587ea60::t_0b13c945627b11 19-20,30,32,35-36,40-45,71-77,82,174-177
+  s_b3bde07587ea60::t_d569e9bdbdac5d 1-2,7-13,18,24-29,31,33-34,46-70,78,93-99,105,108-144,150-158,165,169-173,178-187,191-229,239-240,244
+  s_b3bde07587ea60::t_03d785bbb7db68 3-6,14-17,79-81,83-92,100-104,145-149,159-164,166-168,230-238,241-243
+.github/workflows/portable.yml
+  s_b3bde07587ea60::t_4bbd7481798f64 16-17,60-76,79-87
+  s_b3bde07587ea60::t_630fed1598b51f 77-78
+docs/roadmap.md
+  s_b3bde07587ea60::t_c89898a645a3ef 27-28,76
+  s_b3bde07587ea60::t_59cd3e0612301f 4
+apps/gpui/src/platform/material.rs
+  s_b3bde07587ea60::t_2c60c671fe1879 52,76,120,131,207,209,213
+  s_b3bde07587ea60::t_03d785bbb7db68 176-181
+  s_b3bde07587ea60::t_1fc7ad9e6b294b 13-17,161,169-175,182-187,193-200
+crates/anywhere-core/src/features/filesystem/scan/scope.rs
+  s_b3bde07587ea60::t_69fdfd920cfb11 113,115
+  s_b3bde07587ea60::t_ac44ee0de05b63 103-112
+  s_b3bde07587ea60::t_0908c448240c41 89-93,95-98,126-130,146-151,155-159
+  s_b3bde07587ea60::t_fe5924881f1cab 5,82-83,85-88,94,99-102,117-125,131-135,137,139-143,145,153,160,163
+  s_b3bde07587ea60::t_630fed1598b51f 114,116,136,138
+docs/development.md
+  s_b3bde07587ea60::t_637488a4243d6d 16-17,82-84
+crates/anywhere-platform/Cargo.toml
+  s_b3bde07587ea60::t_320fb49a7b02a2 23,25,29-37
+  s_b3bde07587ea60::t_0c32e81c528d6a 26-27
+  s_b3bde07587ea60::t_32ac1fb0739c38 24,28
+apps/gpui/src/launcher/view/settings/search.rs
+  s_b3bde07587ea60::t_03d785bbb7db68 232-236
+  s_b3bde07587ea60::t_cb171766fcc3e9 112,133,209,224
+  s_b3bde07587ea60::t_59cd3e0612301f 190-194
+apps/gpui/src/launcher/view/mod.rs
+  s_b3bde07587ea60::t_c981e6371eda57 652-655
+  s_b3bde07587ea60::t_1c467416170b62 55,319,417,439,504,514,523
+crates/anywhere-platform/src/lib.rs
+  s_b3bde07587ea60::t_320fb49a7b02a2 265-266,274-278
+  s_b3bde07587ea60::t_0908c448240c41 20-21
+  s_b3bde07587ea60::t_0c32e81c528d6a 15-16,30-34
+  s_b3bde07587ea60::t_387599bb63e8fc 35-36
+apps/gpui/src/host/preferences.rs
+  s_b3bde07587ea60::t_1fc7ad9e6b294b 94,96-97
+  s_b3bde07587ea60::t_cb171766fcc3e9 132-134
+scripts/package-windows.py
+  s_b3bde07587ea60::t_c89898a645a3ef 40-41
+  s_b3bde07587ea60::t_4bbd7481798f64 1-39,42-70
+apps/gpui/src/launcher/view/settings/controller.rs
+  s_b3bde07587ea60::t_1c467416170b62 708,710-711,717
+docs/platform-portability.md
+  s_b3bde07587ea60::t_637488a4243d6d 3-4,10,15,26,29,61-62,71-72,87-89
+apps/gpui/src/launcher/view/controllers/web.rs
+  s_b3bde07587ea60::t_c981e6371eda57 3
+resources/localization/app_en.arb
+  s_b3bde07587ea60::t_04539f26181a20 381
+  s_b3bde07587ea60::t_59cd3e0612301f 74
+apps/gpui/src/launcher/view/settings.rs
+  s_b3bde07587ea60::t_1c467416170b62 2
+crates/anywhere-core/src/features/filesystem/scan/traversal.rs
+  s_b3bde07587ea60::t_fe5924881f1cab 223
+apps/gpui/Cargo.toml
+  s_b3bde07587ea60::t_0b13c945627b11 79,81
+  s_b3bde07587ea60::t_61a2c625819e31 75-78,80,82-85
+docs/file-search.md
+  s_b3bde07587ea60::t_04539f26181a20 3-4,23,49,54-57
+  s_b3bde07587ea60::t_130d89249565d5 58
+docs/architecture.md
+  s_b3bde07587ea60::t_637488a4243d6d 77-78,84,95
+docs/README.md
+  s_b3bde07587ea60::t_637488a4243d6d 3,15,39
+apps/gpui/src/l10n/generated.rs
+  s_b3bde07587ea60::t_e0e9acb7d4828e 529-535,2050-2051,2054-2055,3180
+  s_b3bde07587ea60::t_5f8b50d7920d7d 2052-2053
+  s_b3bde07587ea60::t_867422036adac0 2056
+crates/anywhere-platform/src/traits.rs
+  s_b3bde07587ea60::t_0c32e81c528d6a 7-8,174-178,212-219
+  s_b3bde07587ea60::t_cfe4f823a1bf6c 220-221
+crates/anywhere-core/src/features/filesystem/scan.rs
+  s_b3bde07587ea60::t_fe5924881f1cab 17
+Cargo.lock
+  s_b3bde07587ea60::t_c4db5603758f1b 270-271,281,290
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "9691cda52a58410eeb57f715ff7795cec01bb3bc",
+  "prompts": {},
+  "sessions": {
+    "s_b3bde07587ea60": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a20b91-9186-7d10-8e29-180439ffe5f1",
+        "model": "gpt-6.2-sol"
+      },
+      "human_author": "diwen.zhang <diwen.zhang@lkcoffee.com>"
+    }
+  }
+}
