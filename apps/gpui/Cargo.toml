@@ -72,6 +72,17 @@ objc2-quick-look-ui = { version = "0.3.2", default-features = false, features = 
 objc2-service-management = { version = "0.3.2", features = ["SMAppService"] }
 quicklook = "0.2.2"
 
+[target.'cfg(windows)'.dependencies]
+windows-registry = "0.6.1"
+windows-sys = { version = "0.61.2", features = [
+  "Win32_Graphics_Gdi",
+  "Win32_Security",
+  "Win32_System_LibraryLoader",
+  "Win32_System_Threading",
+  "Win32_UI_Shell",
+  "Win32_UI_WindowsAndMessaging",
+] }
+
 [dev-dependencies]
 gpui-kit = { version = "=0.9.1", features = ["gpui-fast", "test-support"] }
 tempfile = "3"

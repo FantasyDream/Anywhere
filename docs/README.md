@@ -1,6 +1,6 @@
 # 文档导航
 
-当前源码为 **V0.14.1 GPUI 开发预览**。产品只有一个 macOS 15+ GPUI 界面实现；
+当前源码为 **V0.14.1 GPUI 开发预览**。macOS 15+ 和 Windows 11 x64 共用 GPUI 界面；
 Rust Core 负责 Context、匹配、排序、授权和执行。自动化、构建和物理桌面矩阵
 分别记录，Development Preview 不等于正式发行。最后整理：2026-11-24。先从
 [项目首页](../README.md)了解功能和平台状态。
@@ -12,6 +12,7 @@ Rust Core 负责 Context、匹配、排序、授权和执行。自动化、构�
 | [V0.14.1 开发预览](https://github.com/FantasyDream/Anywhere/releases/tag/v0.14.1) | macOS 15+ Apple Silicon 下载、校验和、provenance 与已知限制 |
 | [使用指南](usage.md) | 唤醒、权限、Scope、快捷键、搜索、剪贴板、项目工具和本地数据 |
 | [开发与构建](development.md) | 环境、App / SDK 构建、测试、生成物和代码入口 |
+| [Windows 开发预览](windows.md) | x64 功能范围、构建打包与实机验收 |
 | [完整测试用例与验收清单](test-acceptance-checklist.md) | 当前源码的 341 条用例、26 个模块、18 来源参数矩阵与可复用证据模板 |
 | [代码规范](code-style.md) | Google / 官方语言规范、隔离工具、自动检查与生成文件边界 |
 | [发布检查](releasing.md) | 开发包、版本、签名 / 归档、验收与 GitHub 发布边界 |
@@ -35,7 +36,7 @@ Rust Core 负责 Context、匹配、排序、授权和执行。自动化、构�
 | [系统预览](native-preview.md) | 按需窗口、空格输入边界、资源租约与跨平台接口 |
 | [GPUI UI 设计](ui-design.md) | tokens、页面层级、材质、交互状态与可访问性 |
 | [性能](performance.md) | 资源预算、Core 测量、`hotkey_to_visible_ms` 与历史样本边界 |
-| [跨平台](platform-portability.md) | 平台能力、路径、快捷键与未完成的 Windows 接入 |
+| [跨平台](platform-portability.md) | 平台能力、路径、快捷键和桌面宿主边界 |
 
 ## 插件与后续计划
 

@@ -267,6 +267,8 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "url",
+ "windows-registry 0.6.1",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -276,6 +278,7 @@ dependencies = [
  "anyhow",
  "cc",
  "clipboard-rs",
+ "dunce",
  "libc",
  "objc2 0.6.5",
  "serde",
@@ -284,6 +287,7 @@ dependencies = [
  "tracing",
  "url",
  "which",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

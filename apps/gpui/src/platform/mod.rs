@@ -1,5 +1,8 @@
 mod material;
 mod preview;
+#[cfg(windows)]
+#[doc(hidden)]
+pub mod windows;
 
 pub(crate) use material::set_application_appearance;
 pub use material::{
@@ -30,6 +33,7 @@ pub enum TasksNavigationKey {
     Enter,
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn tasks_navigation_key(key_code: u16, shift: bool) -> Option<TasksNavigationKey> {
     if shift {
         return None;
@@ -76,6 +80,7 @@ pub enum ApplicationReturnResult {
     Failed,
 }
 
+#[cfg(any(target_os = "macos", test))]
 impl PrivacySettingsPane {
     fn target(self) -> &'static str {
         match self {
@@ -112,14 +117,18 @@ pub fn install_platform_observers() -> tokio::sync::mpsc::Receiver<PlatformEvent
     {
         macos::install_platform_observers()
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        windows::install_observers()
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let (_sender, receiver) = tokio::sync::mpsc::channel(64);
         receiver
     }
 }
 
-/// The GPUI product targets macOS 15+.
+/// Check minimum requirements for desktop product hosts.
 pub fn require_supported_host() {
     #[cfg(target_os = "macos")]
     {
@@ -133,12 +142,9 @@ pub fn require_supported_host() {
             crate::MINIMUM_MACOS_MAJOR
         );
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
-        panic!(
-            "{} is currently implemented for macOS only",
-            crate::PRODUCT_NAME
-        );
+        panic!("{} requires macOS or Windows", crate::PRODUCT_NAME);
     }
 }
 
@@ -149,6 +155,8 @@ pub(crate) fn prepare_window_material() {
 pub fn show_main_window() {
     #[cfg(target_os = "macos")]
     macos::show_main_window();
+    #[cfg(windows)]
+    windows::activate(crate::PRODUCT_NAME);
 }
 
 pub fn remember_clipboard_shelf_destination() -> bool {
@@ -156,7 +164,11 @@ pub fn remember_clipboard_shelf_destination() -> bool {
     {
         macos::remember_clipboard_shelf_destination()
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        windows::remember_destination()
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         false
     }
@@ -167,7 +179,11 @@ pub fn return_to_previous_application() -> ApplicationReturnResult {
     {
         macos::return_to_previous_application()
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        windows::return_to_previous_application()
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         ApplicationReturnResult::Unavailable
     }
@@ -193,6 +209,8 @@ pub fn hide_main_window() {
     preview::dismiss_quick_look(crate::PRODUCT_NAME);
     #[cfg(target_os = "macos")]
     macos::hide_main_window();
+    #[cfg(windows)]
+    windows::hide_main_window();
 }
 
 pub fn configure_main_window(title: &str) -> bool {
@@ -200,7 +218,11 @@ pub fn configure_main_window(title: &str) -> bool {
     {
         macos::configure_main_window(title)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        windows::window_exists(title)
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = title;
         false
@@ -240,7 +262,11 @@ pub fn configure_settings_window(title: &str) -> bool {
     {
         macos::configure_settings_window(title)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        windows::window_exists(title)
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = title;
         false
@@ -298,7 +324,11 @@ pub fn activate_window(title: &str) -> bool {
     {
         macos::activate_window(title)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        windows::activate(title)
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = title;
         false
@@ -324,7 +354,11 @@ pub fn activate_window_after_update(title: &str) -> bool {
         });
         true
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        windows::activate(title)
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = title;
         false
@@ -349,12 +383,16 @@ pub fn bind_window_identity(window: &gpui_kit::Window, title: &str) {
             native.setIdentifier(Some(&objc2_foundation::NSString::from_str(identity)));
         }
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    windows::bind_window(window, title);
+    #[cfg(not(any(target_os = "macos", windows)))]
     let _ = (window, title);
 }
 
+#[cfg(target_os = "macos")]
 pub(in crate::platform) const TOOL_WINDOW_IDENTITY: &str = "dev.anywhere.window.tool";
 
+#[cfg(target_os = "macos")]
 fn window_identity(title: &str) -> Option<&'static str> {
     match title {
         crate::PRODUCT_NAME => Some("dev.anywhere.window.main"),
@@ -428,7 +466,11 @@ pub fn window_exists(title: &str) -> bool {
     {
         macos::window_exists(title)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        windows::window_exists(title)
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = title;
         false
@@ -440,7 +482,12 @@ pub fn refresh_window_material(title: &str) -> bool {
     {
         macos::refresh_window_material(title)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        material::prepare_window_material();
+        windows::window_exists(title)
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = title;
         false
@@ -552,7 +599,11 @@ pub fn launcher_should_dismiss_for_focus_loss() -> bool {
     {
         macos::launcher_should_dismiss_for_focus_loss()
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        windows::should_dismiss()
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         false
     }
@@ -563,7 +614,11 @@ pub fn configure_clipboard_shelf_window(title: &str) -> bool {
     {
         macos::configure_clipboard_shelf_window(title)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        windows::configure_shelf(title)
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = title;
         false
@@ -580,7 +635,9 @@ pub fn configure_clipboard_shelf_window_after_update(title: &str) {
             }
         });
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    windows::configure_shelf(title);
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = title;
     }
@@ -623,6 +680,8 @@ impl StatusMenuLabels {
 }
 
 pub struct StatusItemHost {
+    #[cfg(windows)]
+    tray: windows::Tray,
     #[cfg(target_os = "macos")]
     bar: objc2::rc::Retained<objc2_app_kit::NSStatusBar>,
     #[cfg(target_os = "macos")]
@@ -640,7 +699,11 @@ impl StatusItemHost {
             macos::update_status_menu(&self._menu, &self._target, labels);
             true
         }
-        #[cfg(not(target_os = "macos"))]
+        #[cfg(windows)]
+        {
+            self.tray.update_labels(labels)
+        }
+        #[cfg(not(any(target_os = "macos", windows)))]
         {
             let _ = labels;
             false
@@ -656,7 +719,11 @@ pub fn install_status_item(
     {
         macos::install_status_item(actions, labels)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        windows::Tray::install(actions, labels).map(|tray| StatusItemHost { tray })
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = actions;
         let _ = labels;
@@ -665,13 +732,44 @@ pub fn install_status_item(
 }
 
 fn status_action_label(title: String, shortcut: &str) -> String {
-    match macos_shortcut_label(shortcut) {
+    match shortcut_label(shortcut) {
         Some(shortcut) => format!("{title}  {shortcut}"),
         None => title,
     }
 }
 
-pub(crate) fn macos_shortcut_label(shortcut: &str) -> Option<String> {
+pub(crate) fn shortcut_label(shortcut: &str) -> Option<String> {
+    #[cfg(windows)]
+    {
+        windows_shortcut_label(shortcut)
+    }
+    #[cfg(not(windows))]
+    {
+        macos_shortcut_label(shortcut)
+    }
+}
+
+#[cfg(windows)]
+fn windows_shortcut_label(shortcut: &str) -> Option<String> {
+    use global_hotkey::hotkey::Modifiers;
+    let hotkey = shortcut.parse::<global_hotkey::hotkey::HotKey>().ok()?;
+    let mut label = String::new();
+    for (modifier, name) in [
+        (Modifiers::CONTROL, "Ctrl+"),
+        (Modifiers::ALT, "Alt+"),
+        (Modifiers::SHIFT, "Shift+"),
+        (Modifiers::META, "Win+"),
+    ] {
+        if hotkey.mods.contains(modifier) {
+            label.push_str(name);
+        }
+    }
+    label.push_str(&status_key_label(hotkey.key));
+    Some(label)
+}
+
+#[cfg(any(not(windows), test))]
+fn macos_shortcut_label(shortcut: &str) -> Option<String> {
     use global_hotkey::hotkey::Modifiers;
 
     let hotkey = shortcut.parse::<global_hotkey::hotkey::HotKey>().ok()?;
@@ -721,14 +819,17 @@ fn status_key_label(code: global_hotkey::hotkey::Code) -> String {
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn launcher_anchor_top(visible_bottom: f64, visible_height: f64) -> f64 {
     visible_bottom + visible_height * 0.8
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn launcher_origin_y(visible_bottom: f64, window_height: f64, anchor_top: f64) -> f64 {
     (anchor_top - window_height).max(visible_bottom)
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn bottom_trailing_origin(
     visible_x: f64,
     visible_y: f64,
@@ -760,7 +861,11 @@ pub fn clipboard_shelf_is_key_window() -> bool {
     {
         macos::clipboard_shelf_is_key_window()
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        windows::shelf_is_active()
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         false
     }
@@ -782,6 +887,19 @@ impl Drop for StatusItemHost {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_launcher_labels_keep_the_windows_modifier_distinct() {
+        assert_eq!(
+            shortcut_label("control+alt+Space").as_deref(),
+            Some("Ctrl+Alt+Space")
+        );
+        assert_eq!(
+            shortcut_label("meta+shift+KeyK").as_deref(),
+            Some("Shift+Win+K")
+        );
+    }
 
     #[test]
     fn status_menu_shortcuts_use_macos_labels() {

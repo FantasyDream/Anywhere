@@ -14,6 +14,7 @@ use std::{
     },
 };
 
+mod index;
 mod pagination;
 mod progress;
 mod query;

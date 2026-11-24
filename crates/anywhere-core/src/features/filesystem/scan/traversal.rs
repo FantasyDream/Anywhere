@@ -220,7 +220,7 @@ impl ScanStore {
         Ok(())
     }
 
-    fn collect_canonical_roots(&self) -> Result<Vec<std::path::PathBuf>> {
+    pub(super) fn collect_canonical_roots(&self) -> Result<Vec<std::path::PathBuf>> {
         let mut roots = Vec::new();
         for root in self.scope.configured_roots()? {
             match root.canonicalize() {

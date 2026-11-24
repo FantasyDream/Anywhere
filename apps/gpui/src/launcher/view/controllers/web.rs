@@ -1,5 +1,6 @@
 use super::*;
 use crate::host::WebPackageOperation;
+use std::sync::Mutex;
 
 impl LauncherView {
     pub(super) fn close_web_surface(&mut self, cx: &mut Context<Self>) {

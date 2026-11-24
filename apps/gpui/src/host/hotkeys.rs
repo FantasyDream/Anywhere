@@ -15,7 +15,7 @@ struct RegisteredActionShortcut {
     binding: ActionShortcutBinding,
 }
 
-trait HotKeyRegistry: Send {
+trait HotKeyRegistry {
     fn register(&self, hotkey: HotKey) -> Result<()>;
     fn unregister(&self, hotkey: HotKey) -> Result<()>;
     fn unregister_all(&self, hotkeys: &[HotKey]) -> Result<()>;
@@ -35,7 +35,7 @@ impl HotKeyRegistry for GlobalHotKeyManager {
     }
 }
 
-/// Owns registered macOS global hotkeys for the process lifetime.
+/// Owns the registered global hotkeys on the desktop event loop.
 pub struct HotKeyController {
     manager: Box<dyn HotKeyRegistry>,
     registration_error: Option<String>,

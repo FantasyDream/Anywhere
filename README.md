@@ -13,7 +13,8 @@ V0.14 已接入[应用历史与动作排序](docs/mvp-gpui.md)：通用文件读
 | 平台 | 状态 |
 |---|---|
 | macOS 15+ | 主要开发和验证平台；从源码构建本机架构的 GPUI App |
-| Windows / Linux | 共享 Rust crate 保留编译和测试检查；尚未交付 GPUI App |
+| Windows 11 x64 | 当前源码提供 GPUI 开发预览和 ZIP 打包入口，桌面实机验收待完成。见 [Windows 指南](docs/windows.md) |
+| Linux | 共享 Rust crate 保留编译和测试检查 |
 
 本地开发包使用持久本机签名，手动 GitHub 打包使用独立 CI 开发签名；公开分发所需的签名、公证、安装升级和完整辅助功能矩阵仍需验收。当前进度见 [GPUI 技术方案与验收](docs/mvp-gpui.md)，更早的界面阶段记录只作为[历史证据](docs/archive/README.md)。
 
@@ -29,7 +30,7 @@ V0.14 已接入[应用历史与动作排序](docs/mvp-gpui.md)：通用文件读
 
 - **应用与动作搜索**：启动或切回应用，搜索当前应用的可用菜单，通过 Scope 筛选领域动作。
 - **Context 动作**：读取 Finder 选中项 / 目录、选中文本、浏览器当前 URL 和近期剪贴板；支持路径、URL 与项目类型识别。
-- **文件搜索**：可选 Spotlight、Ripgrep 或并发合并快批，同时执行完整文件名遍历，支持隐藏文件、类型过滤、稳定追加与按需 Quick Look，不建立长期全盘索引。
+- **文件搜索**：macOS 支持 Spotlight、Ripgrep、完整遍历和 Quick Look，Windows 通过 Everything 查询。两端都支持目录范围、类型过滤和分页。
 - **剪贴板历史**：本机保存和检索文本、图片、文件列表及可读取格式；另有独立置顶的 GPUI 悬浮窗，支持连续复制。采集默认关闭。
 - **开发工具**：Git 常用动作、Maven / Gradle / Node / Cargo 与 Spring Boot 动作，长任务可返回查看输出与停止。
 - **快捷键与语言**：自定义 Action / 全局 / Context 快捷键，支持简体中文、English、全拼与首字母搜索。外观支持跟随系统、浅色和深色。
@@ -80,7 +81,7 @@ Rust 负责识别、匹配、排序、执行、授权和资源预算；GPUI 负�
 
 ## 从源码构建
 
-需要 macOS 15+、Xcode Command Line Tools、[指定版本的 Rust/Cargo beta 预发布工具链](rust-toolchain.toml)、Python 3.10+、Node.js 22+ / npm，以及持久本机签名身份。
+macOS 需要 macOS 15+、Xcode Command Line Tools、[指定版本的 Rust/Cargo beta 预发布工具链](rust-toolchain.toml)、Python 3.10+、Node.js 22+ / npm，以及持久本机签名身份。Windows 环境和打包命令见 [Windows 指南](docs/windows.md)。
 
 ```bash
 source scripts/env.sh

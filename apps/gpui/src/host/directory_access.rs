@@ -1,9 +1,11 @@
 use anyhow::{Context, Result};
+#[cfg(any(target_os = "macos", test))]
 use serde::{Deserialize, Serialize};
-use std::{
-    io::Read as _,
-    path::{Path, PathBuf},
-};
+#[cfg(any(target_os = "macos", test))]
+use std::io::Read as _;
+#[cfg(target_os = "macos")]
+use std::path::Path;
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub enum DirectoryAccessError {
@@ -30,10 +32,12 @@ pub(super) fn localized_error(error: &anyhow::Error, locale: crate::l10n::Locale
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 const MAX_BOOKMARK_FILE_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg(any(target_os = "macos", test))]
 struct BookmarkFile {
     version: u32,
     bookmarks: Vec<StoredBookmark>,
@@ -41,6 +45,7 @@ struct BookmarkFile {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+#[cfg(any(target_os = "macos", test))]
 struct StoredBookmark {
     path: String,
     bytes: Vec<u8>,
@@ -50,6 +55,7 @@ struct StoredBookmark {
 /// deliberately small and separate from user preferences so corrupt or stale
 /// grants fail closed instead of silently widening the file-search scope.
 pub struct DirectoryAccess {
+    #[cfg(any(target_os = "macos", test))]
     bookmark_file: PathBuf,
     #[cfg(target_os = "macos")]
     leases: std::sync::Mutex<Vec<SecurityScope>>,
@@ -69,7 +75,10 @@ impl Drop for SecurityScope {
 
 impl DirectoryAccess {
     pub fn new(bookmark_file: PathBuf) -> Self {
+        #[cfg(not(any(target_os = "macos", test)))]
+        let _ = bookmark_file;
         Self {
+            #[cfg(any(target_os = "macos", test))]
             bookmark_file,
             #[cfg(target_os = "macos")]
             leases: std::sync::Mutex::new(Vec::new()),
@@ -90,6 +99,7 @@ impl DirectoryAccess {
                 DirectoryAccessError::Authorization.into()
             })
     }
+    #[cfg(target_os = "macos")]
     fn authorize_impl(
         &self,
         selected: &[PathBuf],
@@ -135,13 +145,30 @@ impl DirectoryAccess {
         }
         // Probe the draft grants with temporary scopes. Only reconciliation
         // of the saved preferences replaces the leases used by live search.
-        #[cfg(target_os = "macos")]
         Self::resolve_macos(&current, &requested)?;
         self.save(&current)?;
         Ok(requested
             .into_iter()
             .map(|path| path.to_string_lossy().into_owned())
             .collect())
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    fn authorize_impl(
+        &self,
+        _selected: &[PathBuf],
+        roots: &[String],
+        _saved_roots: &[String],
+    ) -> Result<Vec<String>> {
+        canonical_roots(roots)?
+            .into_iter()
+            .map(|path| {
+                path.into_os_string()
+                    .into_string()
+                    .ok()
+                    .context("search directory name is not valid Unicode")
+            })
+            .collect()
     }
 
     /// Starts access for exactly the configured roots. Missing, stale, or
@@ -188,6 +215,7 @@ impl DirectoryAccess {
         }
     }
 
+    #[cfg(any(target_os = "macos", test))]
     fn load(&self) -> Result<BookmarkFile> {
         match std::fs::File::open(&self.bookmark_file) {
             Ok(file) => {
@@ -215,6 +243,7 @@ impl DirectoryAccess {
         }
     }
 
+    #[cfg(any(target_os = "macos", test))]
     fn save(&self, file: &BookmarkFile) -> Result<()> {
         anyhow::ensure!(
             file.bookmarks.len() <= 16,
@@ -319,6 +348,7 @@ impl DirectoryAccess {
     }
 }
 
+#[cfg(target_os = "macos")]
 impl BookmarkFile {
     fn keep_roots(&mut self, draft: &[PathBuf], saved: &[String]) {
         let saved = saved
@@ -372,6 +402,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(target_os = "macos")]
     fn staging_directory_grants_preserves_saved_roots() {
         let temporary = tempfile::tempdir().unwrap();
         let saved = temporary.path().join("saved-offline").display().to_string();

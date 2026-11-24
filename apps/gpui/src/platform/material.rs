@@ -10,6 +10,11 @@ use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 #[cfg(target_os = "macos")]
 mod macos;
 
+#[cfg(windows)]
+thread_local! {
+    static APPEARANCE_OVERRIDE: std::cell::Cell<Option<WindowAppearance>> = const { std::cell::Cell::new(None) };
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum WindowMaterialMode {
     /// macOS 26+ Liquid Glass.
@@ -44,6 +49,7 @@ pub enum WindowAppearance {
     Dark,
 }
 
+#[cfg(target_os = "macos")]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum WindowGlassStyle {
     /// Use the system's regular material without a custom tint or backdrop veil.
@@ -67,6 +73,7 @@ impl WindowAppearance {
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct WindowMaterialEnvironment {
     pub liquid_glass_available: bool,
@@ -110,6 +117,7 @@ pub fn uses_reduce_motion() -> bool {
     REDUCE_MOTION.load(Ordering::Acquire)
 }
 
+#[cfg(any(target_os = "macos", test))]
 fn material_mode(environment: WindowMaterialEnvironment) -> WindowMaterialMode {
     if environment.reduce_transparency {
         WindowMaterialMode::Opaque
@@ -120,6 +128,7 @@ fn material_mode(environment: WindowMaterialEnvironment) -> WindowMaterialMode {
     }
 }
 
+#[cfg(any(target_os = "macos", test))]
 pub(crate) fn plan_window_material(
     environment: WindowMaterialEnvironment,
     corner_radius: f64,
@@ -149,7 +158,7 @@ pub(crate) fn prepare_window_material() {
     {
         remember_material_plan(WindowMaterialPlan {
             mode: WindowMaterialMode::Opaque,
-            appearance: WindowAppearance::Light,
+            appearance: fallback_appearance(),
             corner_radius: 0.0,
             increase_contrast: false,
             reduce_motion: false,
@@ -157,36 +166,51 @@ pub(crate) fn prepare_window_material() {
     }
 }
 
+#[cfg(not(target_os = "macos"))]
+fn fallback_appearance() -> WindowAppearance {
+    #[cfg(windows)]
+    {
+        if let Some(appearance) = APPEARANCE_OVERRIDE.get() {
+            return appearance;
+        }
+        if matches!(
+            windows_registry::CURRENT_USER
+                .open(r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
+                .and_then(|key| key.get_u32("AppsUseLightTheme")),
+            Ok(0)
+        ) {
+            return WindowAppearance::Dark;
+        }
+    }
+    WindowAppearance::Light
+}
+
 pub(crate) fn set_application_appearance(appearance: Option<WindowAppearance>) -> bool {
     #[cfg(target_os = "macos")]
     {
         macos::set_application_appearance(appearance)
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        APPEARANCE_OVERRIDE.set(appearance);
+        let previous = current_appearance();
+        prepare_window_material();
+        previous != current_appearance()
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         let _ = appearance;
         false
     }
 }
 
+#[cfg(target_os = "macos")]
 pub(crate) fn install_window_material(
-    #[cfg(target_os = "macos")] window: &objc2_app_kit::NSWindow,
+    window: &objc2_app_kit::NSWindow,
     corner_radius: f64,
     glass_style: WindowGlassStyle,
 ) -> bool {
-    #[cfg(target_os = "macos")]
-    {
-        macos::install_window_material(window, corner_radius, glass_style)
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        // A future Windows adapter maps the same plan to DWM SystemBackdrop
-        // (Mica/Acrylic) and its accessibility fallback.
-        let _ = corner_radius;
-        let _ = glass_style;
-        prepare_window_material();
-        true
-    }
+    macos::install_window_material(window, corner_radius, glass_style)
 }
 
 #[cfg(test)]

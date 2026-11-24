@@ -515,7 +515,13 @@ pub mod metrics {
 }
 
 pub mod fonts {
+    #[cfg(windows)]
+    pub const FONT_UI: &str = "Segoe UI";
+    #[cfg(not(windows))]
     pub const FONT_UI: &str = ".SystemUIFont";
+    #[cfg(windows)]
+    pub const FONT_MONO: &str = "Consolas";
+    #[cfg(not(windows))]
     pub const FONT_MONO: &str = "Menlo";
 }
 

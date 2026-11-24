@@ -52,7 +52,7 @@ use std::{
     cell::Cell,
     collections::HashMap,
     rc::Rc,
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::{Duration, Instant},
 };
 use tokio::sync::{mpsc::Receiver, oneshot};
@@ -316,7 +316,7 @@ pub struct LauncherView {
     hud_toast: HudToastState,
     preview: PreviewState,
     live: Option<Arc<LiveLauncher>>,
-    hotkeys: Option<Arc<Mutex<HotKeyController>>>,
+    hotkeys: Option<HotKeyController>,
     hotkey_error: Option<String>,
     standalone_shelf: bool,
     standalone_tasks: bool,
@@ -414,7 +414,7 @@ impl LauncherView {
         cx: &mut Context<Self>,
         live: Arc<LiveLauncher>,
         locale: Locale,
-        hotkeys: Arc<Mutex<HotKeyController>>,
+        hotkeys: HotKeyController,
     ) -> Self {
         let locale = live
             .preferences()
@@ -436,7 +436,7 @@ impl LauncherView {
     pub(crate) fn attach_runtime(
         &mut self,
         live: Arc<LiveLauncher>,
-        hotkeys: Option<Arc<Mutex<HotKeyController>>>,
+        hotkeys: Option<HotKeyController>,
         hotkey_error: Option<String>,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -501,7 +501,7 @@ impl LauncherView {
         &self,
         event: global_hotkey::GlobalHotKeyEvent,
     ) -> Option<crate::host::HotKeyAction> {
-        self.hotkeys.as_ref()?.lock().ok()?.action_for_event(event)
+        self.hotkeys.as_ref()?.action_for_event(event)
     }
 
     fn hotkey_error_message(&self) -> Option<String> {
@@ -511,11 +511,7 @@ impl LauncherView {
     }
 
     fn registered_preferences(&self) -> HostPreferences {
-        let controller = self
-            .hotkeys
-            .as_ref()
-            .and_then(|hotkeys| hotkeys.lock().ok());
-        registered_preferences(&self.preferences, controller.as_deref())
+        registered_preferences(&self.preferences, self.hotkeys.as_ref())
     }
 
     fn build(
@@ -524,7 +520,7 @@ impl LauncherView {
         model: LauncherModel,
         locale: Locale,
         live: Option<Arc<LiveLauncher>>,
-        hotkeys: Option<Arc<Mutex<HotKeyController>>>,
+        hotkeys: Option<HotKeyController>,
         kind: ViewKind,
     ) -> Self {
         actions::bind_keys(cx);
@@ -653,12 +649,10 @@ impl LauncherView {
             hud_toast: HudToastState::default(),
             preview: PreviewState::default(),
             live,
-            hotkey_error: hotkeys.as_ref().and_then(|hotkeys| {
-                hotkeys
-                    .lock()
-                    .ok()
-                    .and_then(|hotkeys| hotkeys.registration_error().map(str::to_owned))
-            }),
+            hotkey_error: hotkeys
+                .as_ref()
+                .and_then(HotKeyController::registration_error)
+                .map(str::to_owned),
             hotkeys,
             standalone_shelf,
             standalone_tasks,

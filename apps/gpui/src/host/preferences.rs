@@ -91,7 +91,10 @@ pub struct ActionShortcutBinding {
 }
 
 const DEFAULT_CURRENT_APP_SHORTCUT: &str = "control+alt+Space";
+#[cfg(not(windows))]
 const DEFAULT_UNIVERSAL_SHORTCUT: &str = "alt+Space";
+#[cfg(windows)]
+const DEFAULT_UNIVERSAL_SHORTCUT: &str = "control+alt+K";
 const LEGACY_CURRENT_APP_SHORTCUT: &str = "meta+alt+Space";
 const LEGACY_UNIVERSAL_SHORTCUT: &str = "meta+Space";
 
@@ -126,9 +129,9 @@ impl Default for HostPreferences {
             ui_language: UiLanguage::System,
             ui_theme: UiTheme::System,
             excluded_apps: Vec::new(),
-            capture_finder_selection: true,
-            capture_selected_text: true,
-            capture_browser_current_page: true,
+            capture_finder_selection: !cfg!(windows),
+            capture_selected_text: !cfg!(windows),
+            capture_browser_current_page: !cfg!(windows),
             capture_clipboard: true,
             file_search_enabled: false,
             file_search_engine: anywhere_platform::FileSearchEngine::SystemIndex,

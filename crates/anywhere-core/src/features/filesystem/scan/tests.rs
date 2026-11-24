@@ -2,7 +2,7 @@
 
 use super::record::MAX_RECORD;
 use super::*;
-use anywhere_platform::FileSearchHit;
+use anywhere_platform::{FileIndexResults, FileSearchHit, FileSearchIndex};
 use std::{
     fs::OpenOptions,
     io::{BufWriter, Write},
@@ -65,6 +65,80 @@ fn all_pages(store: &ScanStore, first: ScanPage) -> BTreeSet<PathBuf> {
         }
     }
     all
+}
+
+#[test]
+fn authoritative_index_paginates_only_verified_matches_and_reports_truncation() {
+    struct FixtureIndex(Vec<FileSearchHit>);
+    impl FileSearchIndex for FixtureIndex {
+        fn search_index(
+            &self,
+            query: &str,
+            roots: &[PathBuf],
+            _: &(dyn Fn() -> bool + Sync),
+        ) -> Result<FileIndexResults> {
+            assert_eq!(query, "report");
+            assert_eq!(roots.len(), 1);
+            Ok(FileIndexResults {
+                hits: self.0.clone(),
+                truncated: true,
+            })
+        }
+    }
+
+    let fixture = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let root = fixture.path().canonicalize().unwrap();
+    let create_file = |directory: &Path, name: &str| {
+        let path = directory.join(name);
+        std::fs::write(&path, "").unwrap();
+        FileSearchHit {
+            path,
+            is_directory: false,
+        }
+    };
+    let expected: Vec<_> = (0..(PAGE_SIZE + 7))
+        .map(|index| create_file(&root, &format!("report-{index:03}.pdf")))
+        .collect();
+    let mut hits = expected.clone();
+    hits.push(expected[0].clone());
+    hits.push(FileSearchHit {
+        path: root.join("report-deleted.pdf"),
+        is_directory: false,
+    });
+    hits.push(create_file(
+        &outside.path().canonicalize().unwrap(),
+        "report-outside.pdf",
+    ));
+    hits.push(create_file(&root, "report-other-type.txt"));
+    let ignored = root.join("ignored");
+    std::fs::create_dir(&ignored).unwrap();
+    hits.push(create_file(&ignored, "report-excluded.pdf"));
+    let unindexed = create_file(&root, "report-unindexed.pdf");
+    let store = ScanStore::new(
+        "report",
+        FileSearchFilter::Pdf,
+        FileSearchOptions {
+            restrict_to_roots: true,
+            excluded_directory_names: vec!["ignored".into()],
+            ..options(&root)
+        },
+    )
+    .unwrap();
+    let mut first = None;
+    store
+        .run_index(&FixtureIndex(hits), "report", &|| false, |page| {
+            first = Some(page);
+            Ok(())
+        })
+        .unwrap();
+    let first = first.unwrap();
+    assert!(first.progress.finished);
+    assert_eq!(first.progress.issue_count, 1);
+    assert_eq!(first.progress.confirmed_matches, expected.len() as u64);
+    let all = all_pages(&store, first);
+    assert!(!all.contains(&unindexed.path));
+    assert_eq!(all, expected.into_iter().map(|hit| hit.path).collect());
 }
 
 #[test]

@@ -109,6 +109,7 @@ impl LauncherView {
     }
 
     pub(in crate::launcher::view) fn search_settings(&mut self, cx: &mut Context<Self>) -> Div {
+        #[cfg(not(windows))]
         let engine = match self.settings_editor.draft.file_search_engine {
             FileSearchEngine::Ripgrep => l10n::search_engine_ripgrep(self.locale),
             FileSearchEngine::Combined => l10n::search_engine_combined(self.locale),
@@ -129,6 +130,7 @@ impl LauncherView {
                                 cx.notify();
                             })),
                     ),
+                    #[cfg(not(windows))]
                     self.settings_row_bare(
                         l10n::search_engine(self.locale),
                         l10n::search_engine_description(self.locale),
@@ -185,7 +187,11 @@ impl LauncherView {
                     ),
                     self.settings_stack_row(
                         l10n::directory_access(self.locale),
-                        l10n::file_search_access_message(self.locale),
+                        if cfg!(windows) {
+                            l10n::windows_file_search_access_message(self.locale)
+                        } else {
+                            l10n::file_search_access_message(self.locale)
+                        },
                         div()
                             .flex()
                             .items_center()
@@ -200,7 +206,7 @@ impl LauncherView {
                                         this.choose_search_directories(window, cx);
                                     })),
                             )
-                            .child(
+                            .when(!cfg!(windows), |row| row.child(
                                 Button::new("open-full-disk-access")
                                     .ghost()
                                     .label(l10n::full_disk_access(self.locale))
@@ -215,7 +221,7 @@ impl LauncherView {
                                             cx.notify();
                                         }
                                     })),
-                            ),
+                            )),
                     ),
                 ]))
             .child(self.settings_list_editor_card(
@@ -223,7 +229,11 @@ impl LauncherView {
                 l10n::authorized_directories_help(self.locale),
                 &self.settings_editor.file_roots_input,
                 "file-search-roots",
-                "/Users/me/Documents, /Users/me/Projects",
+                if cfg!(windows) {
+                    r"C:\Users\me\Documents, D:\Projects"
+                } else {
+                    "/Users/me/Documents, /Users/me/Projects"
+                },
                 false,
                 cx,
             ))

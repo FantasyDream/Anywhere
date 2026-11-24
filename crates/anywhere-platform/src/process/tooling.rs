@@ -176,7 +176,10 @@ pub fn wrapped_tool(
             ));
         }
         #[cfg(not(unix))]
-        anyhow::bail!("project wrappers are currently supported on Unix only");
+        anyhow::bail!(
+            "project wrapper {} is currently supported on Unix only",
+            path.display()
+        );
     }
     Ok((
         find_executable(fallback).with_context(|| format!("{fallback} was not found in PATH"))?,

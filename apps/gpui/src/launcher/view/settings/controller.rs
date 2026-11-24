@@ -9,7 +9,6 @@ use tokio::sync::mpsc::Receiver;
 
 use crate::host::HotKeyController;
 use crate::launcher::components;
-use std::sync::{Arc, Mutex};
 
 impl LauncherView {
     pub(super) fn preferences_from_editors(&self, cx: &Context<Self>) -> HostPreferences {
@@ -706,21 +705,16 @@ impl LauncherView {
         }
         // Keep a failed startup controller for retries. Manager creation itself
         // can also fail, so recover it here when the live runtime is available.
-        self.hotkey_error = if let Some(hotkeys) = self.hotkeys.as_ref() {
+        self.hotkey_error = if let Some(hotkeys) = self.hotkeys.as_mut() {
             hotkeys
-                .lock()
-                .map_err(|_| l10n::hotkey_state_unavailable(self.locale))
-                .and_then(|mut hotkeys| {
-                    hotkeys
-                        .register(&preferences)
-                        .map_err(|error| format!("{error:#}"))
-                })
+                .register(&preferences)
+                .map_err(|error| format!("{error:#}"))
                 .err()
         } else if self.live.is_some() {
             match HotKeyController::new(&preferences) {
                 Ok(controller) => {
                     let error = controller.registration_error().map(str::to_owned);
-                    self.hotkeys = Some(Arc::new(Mutex::new(controller)));
+                    self.hotkeys = Some(controller);
                     error
                 }
                 Err(error) => Some(format!("{error:#}")),

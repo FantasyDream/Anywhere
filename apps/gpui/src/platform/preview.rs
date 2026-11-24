@@ -1,4 +1,6 @@
-use anyhow::{bail, Context, Result};
+#[cfg(target_os = "macos")]
+use anyhow::Context;
+use anyhow::{bail, Result};
 #[cfg(target_os = "macos")]
 use std::{
     cell::{OnceCell, RefCell},
@@ -211,7 +213,7 @@ pub struct PreviewHost;
 #[cfg(not(target_os = "macos"))]
 impl PreviewHost {
     pub fn new() -> Result<Self> {
-        bail!("Quick Look is available on macOS only")
+        bail!("system previews are unavailable on this platform")
     }
 
     pub fn show(
@@ -220,7 +222,7 @@ impl PreviewHost {
         _paths: &[String],
         _owner_title: &str,
     ) -> Result<Option<String>> {
-        bail!("Quick Look is available on macOS only")
+        bail!("system previews are unavailable on this platform")
     }
 
     pub fn poll(&mut self) -> PreviewPoll {

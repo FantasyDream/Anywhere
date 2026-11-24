@@ -45,7 +45,10 @@ impl LauncherView {
             let detail = if idle {
                 Some(l10n::type_file_name(self.locale))
             } else if has_issue {
-                Some(l10n::file_search_incomplete_help(self.locale))
+                progress
+                    .filter(|_| cfg!(windows))
+                    .and_then(|progress| progress.issue_examples.first().cloned())
+                    .or_else(|| Some(l10n::file_search_incomplete_help(self.locale)))
             } else {
                 None
             };
@@ -228,6 +231,10 @@ impl LauncherView {
                 div()
                     .id("file-search-summary")
                     .test_support()
+                    .when_some(
+                        progress.issue_examples.first().filter(|_| cfg!(windows)),
+                        |summary, issue| summary.tooltip(components::text_tooltip(issue.clone())),
+                    )
                     .role(gpui_kit::Role::Status)
                     .aria_label(label)
                     .flex_1()

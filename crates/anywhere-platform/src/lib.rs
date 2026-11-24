@@ -12,17 +12,26 @@ use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 pub use traits::{
-    ApplicationCatalog, ApplicationHost, ClipboardHost, ContextReader, FileSearchHost, GitHost,
-    MenuHost, Platform, ResourceOpener,
+    ApplicationCatalog, ApplicationHost, ClipboardHost, ContextReader, FileSearchHost,
+    FileSearchIndex, GitHost, MenuHost, Platform, ResourceOpener,
 };
 #[cfg(any(target_os = "macos", test))]
 pub(crate) mod editor_context;
+#[cfg(any(windows, test))]
+mod everything_wire;
 pub mod file_search;
 pub mod process;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileSearchHit {
     pub path: PathBuf,
     pub is_directory: bool,
+}
+
+/// One bounded, authoritative index response. Truncated results remain pageable locally.
+#[derive(Debug, Default)]
+pub struct FileIndexResults {
+    pub hits: Vec<FileSearchHit>,
+    pub truncated: bool,
 }
 
 /// Premultiplied top-down BGRA8 bitmap returned directly by OS icon APIs
@@ -253,6 +262,8 @@ mod macos;
 pub use macos::MacOsPlatform;
 #[cfg(target_os = "macos")]
 pub use macos::MacOsPlatform as NativePlatform;
+#[cfg(windows)]
+mod windows;
 
 /// Composition root selects the OS adapter; shared bridge code does not name an OS.
 pub fn native_platform() -> Result<std::sync::Arc<dyn Platform>> {
@@ -260,7 +271,11 @@ pub fn native_platform() -> Result<std::sync::Arc<dyn Platform>> {
     {
         Ok(std::sync::Arc::new(MacOsPlatform))
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        Ok(std::sync::Arc::new(windows::WindowsPlatform::default()))
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         anyhow::bail!("This build has no native system adapter. Shared Core remains available with an injected Platform.")
     }

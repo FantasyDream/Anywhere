@@ -74,14 +74,14 @@ apps/gpui/src/
 
 ## 启动与依赖
 
-`apps/gpui/src/main.rs` 先验证 macOS 15+，再启动 GPUI application。
-`app.rs` 先创建隐藏的 Starting 窗口和状态栏壳，随后由独立启动线程打开共享
+`apps/gpui/src/main.rs` 检查宿主环境后启动 GPUI application。
+`app.rs` 先创建 Starting 窗口和状态栏壳，随后由独立启动线程打开共享
 runtime；Ready 后才注入缓存设置、偏好和热键。Starting / Failed 状态不能预留
 Session 或执行动作。`app.rs` 最终创建：
 
 - `LiveLauncher` 与 `ApplicationRuntime`；
 - 主 GPUI 窗口；
-- `NSStatusBar` 状态项；
+- macOS `NSStatusBar` 状态项或 Windows 托盘图标；
 - 全局热键控制器；
 - 按需打开的独立 Clipboard Shelf 与 Running Tasks 窗口；
 - 窗口关闭、清理和状态栏恢复路径。
@@ -92,7 +92,7 @@ Application History、Tasks 和 Web 拆分请求方法。`host/runtime_support.r
 负责启动偏好应用、目录恢复和领域快照到 GPUI DTO 的纯投影。同步设置或系统
 操作不得阻塞渲染线程。产品路径由
 `apps/gpui/src/host/mod.rs` 构造，默认数据目录是
-`~/Library/Application Support/Anywhere`。
+`~/Library/Application Support/Anywhere`（macOS）或 `%LOCALAPPDATA%\Anywhere`（Windows）。
 
 GPUI 内的 Session / revision / snapshot gate / stream cancellation 由
 `launcher/view/live_state.rs` 持有；File Search、Clipboard、Application History、

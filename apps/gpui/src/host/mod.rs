@@ -10,7 +10,9 @@ mod runtime;
 mod runtime_support;
 
 use anyhow::{Context, Result};
-use std::path::{Component, Path, PathBuf};
+#[cfg(any(not(windows), test))]
+use std::path::Path;
+use std::path::{Component, PathBuf};
 
 use anywhere_core::application::frontend_runtime::RuntimePaths;
 pub use anywhere_core::application::frontend_runtime::WebPackageOperation;
@@ -41,11 +43,38 @@ impl ProductPaths {
     pub fn discover() -> Result<Self> {
         let data_override = path_override("ANYWHERE_DATA_DIR")?;
         let plugin_override = path_override("ANYWHERE_PLUGIN_DIR")?;
-        let home = std::env::var_os("HOME").map(PathBuf::from);
         let executable = std::env::current_exe()?;
-        Self::resolve(home.as_deref(), &executable, data_override, plugin_override)
+        #[cfg(windows)]
+        {
+            let explicit_data_directory = data_override.is_some();
+            let data_directory = match data_override {
+                Some(path) => path,
+                None => std::env::var_os("LOCALAPPDATA")
+                    .map(PathBuf::from)
+                    .filter(|path| path.is_absolute())
+                    .or_else(|| {
+                        anywhere_platform::paths::home_directory()
+                            .map(|path| path.join(r"AppData\Local"))
+                    })
+                    .context("Windows local application data directory is unavailable")?
+                    .join("Anywhere"),
+            };
+            let bundled_plugin_directory =
+                plugin_override.unwrap_or_else(|| executable.with_file_name("plugins"));
+            Ok(Self {
+                data_directory,
+                bundled_plugin_directory,
+                explicit_data_directory,
+            })
+        }
+        #[cfg(not(windows))]
+        {
+            let home = std::env::var_os("HOME").map(PathBuf::from);
+            Self::resolve(home.as_deref(), &executable, data_override, plugin_override)
+        }
     }
 
+    #[cfg(not(windows))]
     fn resolve(
         home: Option<&Path>,
         executable: &Path,
@@ -105,6 +134,7 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(not(windows))]
     fn data_and_plugin_overrides_are_independent() {
         let executable = Path::new("/Applications/Anywhere.app/Contents/MacOS/Anywhere");
         let data = PathBuf::from("/tmp/gpui-data");
@@ -139,12 +169,19 @@ mod tests {
 
     #[test]
     fn explicit_directories_reject_unsafe_paths() {
-        for path in ["relative/path", "/", "/tmp/../data"] {
+        #[cfg(not(windows))]
+        let (invalid, valid) = (["relative/path", "/", "/tmp/../data"], "/tmp/gpui-data");
+        #[cfg(windows)]
+        let (invalid, valid) = (
+            [r"relative\path", r"C:\", r"C:\tmp\..\data"],
+            r"C:\tmp\gpui-data",
+        );
+        for path in invalid {
             assert!(validate_override_path(PathBuf::from(path), "TEST_PATH").is_err());
         }
         assert_eq!(
-            validate_override_path(PathBuf::from("/tmp/gpui-data"), "TEST_PATH").unwrap(),
-            Path::new("/tmp/gpui-data")
+            validate_override_path(PathBuf::from(valid), "TEST_PATH").unwrap(),
+            Path::new(valid)
         );
     }
 }

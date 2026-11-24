@@ -4,8 +4,8 @@
 //! still injects one adapter through [`Platform`].
 use super::{
     catalog, clipboard, file_search, git, ApplicationInfo, BundleApplication, ClipboardSnapshot,
-    ContextReadError, FileSearchEngine, FileSearchHit, FileSearchOptions, GitOperation, GitOutput,
-    InstalledApplications, MenuDiscovery, MenuLocator,
+    ContextReadError, FileIndexResults, FileSearchEngine, FileSearchHit, FileSearchOptions,
+    GitOperation, GitOutput, InstalledApplications, MenuDiscovery, MenuLocator,
 };
 use anyhow::{bail, Result};
 use std::path::{Path, PathBuf};
@@ -171,6 +171,11 @@ pub trait FileSearchHost: Send + Sync {
         false
     }
 
+    /// Some platforms use the local index as the sole source for filename queries.
+    fn file_search_index(&self) -> Option<&dyn FileSearchIndex> {
+        None
+    }
+
     /// Read the system index; callers own cancellation and result limits.
     fn search_files(
         &self,
@@ -202,6 +207,16 @@ pub trait FileSearchHost: Send + Sync {
         }
         self.search_files(query, limit, cancelled)
     }
+}
+
+/// An authoritative local file index. Core independently verifies its candidates.
+pub trait FileSearchIndex: Send + Sync {
+    fn search_index(
+        &self,
+        query: &str,
+        roots: &[PathBuf],
+        cancelled: &(dyn Fn() -> bool + Sync),
+    ) -> Result<FileIndexResults>;
 }
 
 /// Explicit local and URL opening, including application-targeted handoff.

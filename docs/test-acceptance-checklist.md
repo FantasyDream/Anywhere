@@ -796,7 +796,8 @@ JSON 高亮另见
 
 | 范围 | 处理方式 |
 | --- | --- |
-| Windows / Linux GPUI App、其他平台原生预览 | 未交付；不安排成功运行验收，只做已提供的共享crate检查 |
+| Windows GPUI App | x64 开发预览实机项目单列在 [Windows 验收](windows.md#windows-11-实机验收)，初始状态为 Pending |
+| Linux GPUI App、其他平台原生预览 | 待接入 |
 | PTY / 交互式终端、任务跨重启恢复 | 未实现；Tasks不按终端或恢复系统验收 |
 | 浏览器历史、书签与Tab管理、Obsidian最近笔记、多个Profile / 实例选择 | 未交付；不能用最近项目 / vault列表冒充 |
 | 插件市场、自动更新、第三方进程沙箱、Shell / Node / 任意文件与网络能力 | 未交付；需要验证边界拒绝，不提供成功能力用例 |

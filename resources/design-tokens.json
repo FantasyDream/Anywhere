@@ -513,6 +513,10 @@
   "fontUi": "-apple-system, BlinkMacSystemFont, \"Segoe UI\", sans-serif",
   "fontMono": "Menlo, Consolas, monospace"
  },
+ "windowsFonts": {
+  "fontUi": "Segoe UI",
+  "fontMono": "Consolas"
+ },
  "aliases": {
   "text": "primary"
  }

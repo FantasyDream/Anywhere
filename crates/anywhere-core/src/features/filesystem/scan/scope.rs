@@ -2,7 +2,7 @@
 use super::{query::insert_top, RankedHit, ScanStore, PAGE_SIZE};
 use anyhow::{bail, Context, Result};
 use anywhere_platform::{FileSearchHit, FileSearchOptions};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 pub(super) struct ScanScope {
     pub(super) options: FileSearchOptions,
@@ -76,84 +76,91 @@ impl ScanStore {
             if cancelled() {
                 break;
             }
-            if self
-                .scope
-                .system_exclusions
-                .excludes(&hit.path, hit.is_directory)
-            {
-                continue;
-            }
             if !seen.insert(hit.path.clone()) {
                 continue;
             }
-            let Some(ranked) = self.query.rank(&hit.path, hit.is_directory) else {
-                continue;
-            };
-            let Ok(kind) = std::fs::symlink_metadata(&hit.path).map(|m| m.file_type()) else {
-                continue;
-            };
-            if kind.is_symlink() && !self.scope.authorized_link_target(&hit.path) {
-                continue;
-            }
-            // Spotlight can expose metadata from a directory whose contents
-            // cannot be read. Such a hit is not an authorized scan result.
-            if self.scope.options.restrict_to_roots {
-                let directory = if kind.is_dir() {
-                    hit.path.as_path()
-                } else {
-                    let Some(parent) = hit.path.parent() else {
-                        continue;
-                    };
-                    parent
-                };
-                if std::fs::read_dir(directory).is_err() {
-                    continue;
-                }
-            }
-            if kind.is_dir() != hit.is_directory
-                || !(kind.is_dir() || kind.is_file() || kind.is_symlink())
-            {
-                continue;
-            }
-            let allowed = roots.iter().any(|root| {
-                let Ok(relative) = hit.path.strip_prefix(root) else {
-                    return false;
-                };
-                let mut path = root.clone();
-                for part in relative.components() {
-                    path.push(part.as_os_str());
-                    if !self.scope.options.include_hidden
-                        && anywhere_platform::search_storage::is_hidden(&path, part.as_os_str())
-                            .unwrap_or(true)
-                    {
-                        return false;
-                    }
-                    if (path != hit.path || kind.is_dir())
-                        && self
-                            .scope
-                            .options
-                            .excluded_directory_names
-                            .iter()
-                            .any(|name| part.as_os_str() == name.as_str())
-                    {
-                        return false;
-                    }
-                    // Descendants through a directory link are outside traversal coverage.
-                    if path != hit.path
-                        && path
-                            .symlink_metadata()
-                            .map_or(true, |m| m.file_type().is_symlink())
-                    {
-                        return false;
-                    }
-                }
-                true
-            });
-            if allowed {
+            if let Some(ranked) = self.rank_index_hit(&hit, &roots) {
                 insert_top(&mut top, ranked);
             }
         }
         top
+    }
+
+    pub(super) fn rank_index_hit(
+        &self,
+        hit: &FileSearchHit,
+        roots: &[PathBuf],
+    ) -> Option<RankedHit> {
+        if hit.path.starts_with(self.workspace())
+            || self
+                .scope
+                .system_exclusions
+                .excludes(&hit.path, hit.is_directory)
+        {
+            return None;
+        }
+        let ranked = self.query.rank(&hit.path, hit.is_directory)?;
+        let mut scoped = roots
+            .iter()
+            .filter_map(|root| {
+                let relative = hit.path.strip_prefix(root).ok()?;
+                relative
+                    .components()
+                    .all(|part| matches!(part, Component::Normal(_)))
+                    .then_some((root.as_path(), relative))
+            })
+            .peekable();
+        if scoped.peek().is_none()
+            || !self.scope.authorized_link_target(&hit.path)
+            || !scoped.any(|(root, relative)| self.index_path_allowed(hit, root, relative))
+        {
+            return None;
+        }
+        let kind = hit.path.symlink_metadata().ok()?.file_type();
+        if kind.is_dir() != hit.is_directory
+            || !(kind.is_dir() || kind.is_file() || kind.is_symlink())
+        {
+            return None;
+        }
+        if self.scope.options.restrict_to_roots {
+            let directory = if kind.is_dir() {
+                &hit.path
+            } else {
+                hit.path.parent()?
+            };
+            std::fs::read_dir(directory).ok()?;
+        }
+        Some(ranked)
+    }
+
+    fn index_path_allowed(&self, hit: &FileSearchHit, root: &Path, relative: &Path) -> bool {
+        let mut path = root.to_owned();
+        for name in relative.iter() {
+            path.push(name);
+            if !self.scope.options.include_hidden
+                && anywhere_platform::search_storage::is_hidden(&path, name).unwrap_or(true)
+            {
+                return false;
+            }
+            if (path != hit.path || hit.is_directory)
+                && self
+                    .scope
+                    .options
+                    .excluded_directory_names
+                    .iter()
+                    .any(|excluded| name == excluded.as_str())
+            {
+                return false;
+            }
+            if path != hit.path
+                && path
+                    .symlink_metadata()
+                    .map_or(true, |meta| meta.file_type().is_symlink())
+            {
+                return false;
+            }
+        }
+        true
     }
 }
 

@@ -526,6 +526,13 @@ pub fn context_description(locale: Locale) -> String {
     }
 }
 
+pub fn windows_context_description(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Current App can read the name of the foreground app. Configure recent text capture under Clipboard.".to_string(),
+        Locale::Zh => "当前应用可以读取前台应用的名称。近期文本采集可在剪贴板设置中配置。".to_string(),
+    }
+}
+
 pub fn finder_selection(locale: Locale) -> String {
     match locale {
         Locale::En => "Finder selection".to_string(),
@@ -2040,6 +2047,13 @@ pub fn file_search_access_message(locale: Locale) -> String {
     }
 }
 
+pub fn windows_file_search_access_message(locale: Locale) -> String {
+    match locale {
+        Locale::En => "Choose folders Anywhere may search. Keep Everything running and indexing these folders. Windows file permissions still apply.".to_string(),
+        Locale::Zh => "选择允许 Anywhere 搜索的文件夹，并保持 Everything 在后台运行、索引这些目录。搜索仍受 Windows 文件权限约束。".to_string(),
+    }
+}
+
 pub fn permission_current_app(locale: Locale) -> String {
     match locale {
         Locale::En => "Current application name".to_string(),
@@ -3163,4 +3177,4 @@ pub fn search_directory_unavailable(locale: Locale) -> String {
 }
 
 /// Stable message count for generated-resource verification.
-pub const MESSAGE_COUNT: usize = 430;
+pub const MESSAGE_COUNT: usize = 432;

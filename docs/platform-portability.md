@@ -1,18 +1,18 @@
 # 跨平台架构与接入契约
 
-当前 macOS 15+ GPUI 产品已交付开发构建；Windows / Linux 仅共享 Rust crates
-参与编译与回归，尚无桌面 App。最后整理：2026-11-11。
+macOS 15+ 已发布 GPUI 开发构建。Windows 11 x64 源码提供共用 GPUI 的开发预览，
+范围和实机状态见 [Windows 指南](windows.md)。Linux 参与共享 crate 的编译和回归。
 
 ## 共享与系统边界
 
 | 层 | 共享内容 | 系统边界 |
 | --- | --- | --- |
-| GPUI product | 页面、导航、输入、Scope、选择、设置与工具状态 | 当前 `apps/gpui` 依赖 macOS AppKit / Quick Look / WebKit |
+| GPUI product | 页面、导航、输入、Scope、选择、设置与工具状态 | macOS 对接 AppKit / Quick Look / WebKit，Windows 对接 Win32 和任务栏通知区域 |
 | Product host | 数据路径、运行时、偏好、热键、目录授权和登录项 | `apps/gpui/src/host/`、`apps/gpui/src/platform/` |
 | Rust Core | Context Graph、Action、候选、搜索、Ranking、Execution | 通过窄能力接口使用 OS |
 | Platform services | 应用、Context、剪贴板、文件搜索、资源、菜单与 Git | 不把应用 ID、Finder 或 shell 规则散布到 Core |
 | Protocol | Context、Candidate、Launcher、执行与 Web Manifest | 不包含 NSView 或其他 UI 对象 |
-| Shortcut schema | HID usage、语义修饰位、动作身份与意图规则 | macOS 使用 Carbon / global-hotkey 适配 |
+| Shortcut schema | HID usage、语义修饰位、动作身份与意图规则 | global-hotkey 对接 macOS Carbon 和 Windows RegisterHotKey |
 
 GPUI 页面不是 AppKit 控件。系统能力缺失时返回明确禁用状态或安全空值，GPUI
 继续渲染主题与其他页面。不得用 OS API 猜测业务授权，也不得让 Core 持有窗口对象。
@@ -23,10 +23,10 @@ GPUI 页面不是 AppKit 控件。系统能力缺失时返回明确禁用状态�
 `apps/gpui/src/app.rs` 建立主窗口、状态栏、热键和运行时。
 `apps/gpui/src/host/mod.rs` 解析：
 
-- 数据目录：默认 `~/Library/Application Support/Anywhere`；
+- 数据目录：macOS 为 `~/Library/Application Support/Anywhere`，Windows 为 `%LOCALAPPDATA%\Anywhere`；
 - 用户已批准 Web 包、应用历史自定义适配与模块存储：位于数据目录下的对应子目录；
 - 显式覆盖：绝对路径、非根目录、不含 `..`；
-- 显式数据目录（`ANYWHERE_DATA_DIR`）：自动跳过 macOS 系统登录项修改。
+- 显式数据目录（`ANYWHERE_DATA_DIR`）：自动跳过系统登录项修改。
 
 路径或运行时初始化失败必须显示可诊断错误，不能猜测其他动态库、数据目录或产品
 身份。仓库没有跨语言运行库加载步骤。
@@ -58,8 +58,8 @@ Control=1、Alt=2、Shift=4、Meta=8。未知版本不执行其中绑定，也�
 - 标准页面命令使用平台惯例的 Command / Ctrl。
 - 注册失败恢复旧绑定；冲突时显示状态并要求重新选择。
 
-macOS adapter 位于 `apps/gpui/src/host/hotkeys.rs`。共享 schema 可以跨平台使用，
-但其他平台的物理热键注册与冲突矩阵尚未验收。
+控制器位于 `apps/gpui/src/host/hotkeys.rs`，由 GPUI 事件线程拥有。
+Windows 的物理热键注册、布局和冲突矩阵尚待实机验收。
 
 ## 状态栏、窗口与预览
 
@@ -68,8 +68,8 @@ macOS 在 `apps/gpui/src/platform/macos/status_item.rs` 使用 `NSStatusItem` �
 `apps/gpui/src/platform/preview.rs` 使用 `QLPreviewPanel`。
 
 文件与剪贴板资源由 Rust 校验，GPUI 只管理当前选择和 preview generation。关闭
-回调绑定资源与 generation，旧预览不能影响新目标。Windows 后续需要自己的窗口
-宿主与 Preview Handler，现有 macOS Quick Look 不能作为该工作的实现证据。
+回调绑定资源与 generation，旧预览不能影响新目标。Windows 已有窗口和托盘宿主，
+系统预览仍待接入。
 
 ## CI 与平台验证
 
@@ -84,9 +84,9 @@ cargo check \
   --all-targets --locked
 ```
 
-Linux 还运行相同共享 crates 的测试。macOS workflow 负责 `anywhere-gpui`、
-完整 `scripts/check.sh` 和开发包。共享 crate 通过不能宣称 Windows 窗口、系统
-权限、菜单、登录项、WebView 或安装包已经可用。
+Linux 还运行相同共享 crates 的测试。Windows 桌面 job 检查 `anywhere-gpui`、
+构建 x64 可执行文件并产出 ZIP。macOS workflow 运行完整 `scripts/check.sh` 和
+macOS 打包。
 
 ## 后续桌面平台
 

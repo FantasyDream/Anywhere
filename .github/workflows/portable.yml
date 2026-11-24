@@ -13,6 +13,8 @@ on:
       - 'apps/gpui/**'
       - 'resources/**'
       - 'scripts/**'
+      - 'docs/windows.md'
+      - 'LICENSE'
       - '.github/workflows/portable.yml'
 
 permissions:
@@ -55,3 +57,31 @@ jobs:
           -p anywhere-plugin
           -p anywhere-protocol
           --locked
+
+  windows-desktop:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.100.0-beta.7
+          components: clippy
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - name: Check Windows GPUI and platform targets
+        run: cargo clippy -p anywhere-gpui -p anywhere-platform --all-targets --locked -- -D warnings
+      - name: Run Windows launcher configuration regressions
+        run: cargo test -p anywhere-gpui --lib --locked windows_launcher
+      - name: Run Everything IPC and path regressions
+        run: cargo test -p anywhere-platform --lib --locked everything
+      - name: Build Windows executable
+        run: cargo build -p anywhere-gpui --release --target x86_64-pc-windows-msvc --locked
+      - name: Package and checksum Windows executable
+        run: python scripts/package-windows.py target/x86_64-pc-windows-msvc/release/anywhere-gpui.exe
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Anywhere-Windows-x64-${{ github.sha }}
+          path: build/windows/Anywhere-windows-x64.zip*
+          if-no-files-found: error

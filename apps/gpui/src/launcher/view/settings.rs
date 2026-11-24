@@ -1,4 +1,5 @@
 use super::*;
+#[cfg(not(windows))]
 use anywhere_platform::FileSearchEngine;
 use gpui_kit::component::menu::{DropdownMenu as _, PopupMenuItem};
 

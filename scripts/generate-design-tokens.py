@@ -217,10 +217,23 @@ def render(spec):
             f'  {css_name(key)}: {value:g}{"px" if unit == "px" else ""};')
         rust.append(f'    pub const {rust_name(key)}: f32 = {float(value):.6};')
     rust += ['}', '', 'pub mod fonts {']
+    windows_fonts = spec.get('windowsFonts', {})
+    if not set(windows_fonts).issubset(spec['fonts']):
+        raise ValueError('Unknown Windows font token')
     for key, value in spec['fonts'].items():
         if not isinstance(value, str) or any(c in value for c in ';{}<>\n\r'):
             raise ValueError('Invalid font stack')
         css.append(f'  {css_name(key)}: {value};')
+        if key in windows_fonts:
+            family = windows_fonts[key]
+            if not isinstance(family, str) or not re.fullmatch(
+                    r'[A-Za-z0-9 ]+', family):
+                raise ValueError('Invalid Windows font family')
+            rust += [
+                '    #[cfg(windows)]',
+                f'    pub const {rust_name(key)}: &str = {json.dumps(family)};',
+                '    #[cfg(not(windows))]',
+            ]
         rust.append(
             f'    pub const {rust_name(key)}: &str = {json.dumps(rust_font_family(value))};'
         )

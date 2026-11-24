@@ -278,8 +278,8 @@ impl LauncherView {
         let title = title.into();
         let recording = self.shortcuts.recording == Some(slot);
         let shortcut = input.read(cx).value();
-        let shortcut_label = crate::platform::macos_shortcut_label(&shortcut)
-            .unwrap_or_else(|| shortcut.to_string());
+        let shortcut_label =
+            crate::platform::shortcut_label(&shortcut).unwrap_or_else(|| shortcut.to_string());
         let shortcut_action_label =
             format!("{}: {}", l10n::record_shortcut(self.locale), shortcut_label);
         div()
@@ -411,7 +411,7 @@ impl LauncherView {
                                 draft
                                     .shortcut
                                     .as_deref()
-                                    .and_then(crate::platform::macos_shortcut_label)
+                                    .and_then(crate::platform::shortcut_label)
                                     .unwrap_or_else(|| l10n::record_shortcut(self.locale))
                             })
                             .on_click(cx.listener(|this, _, _, cx| {
@@ -554,7 +554,7 @@ impl LauncherView {
         let binding_for_edit = binding.clone();
         let action_for_edit = action.clone();
         let action_label = shortcut_action_title(&action, self.locale);
-        let shortcut_label = crate::platform::macos_shortcut_label(&binding.shortcut)
+        let shortcut_label = crate::platform::shortcut_label(&binding.shortcut)
             .unwrap_or_else(|| binding.shortcut.clone());
         let action_missing = !catalog_empty
             && !self
@@ -929,7 +929,7 @@ impl LauncherView {
             .shortcuts
             .pending_value
             .as_deref()
-            .and_then(crate::platform::macos_shortcut_label)
+            .and_then(crate::platform::shortcut_label)
             .unwrap_or_else(|| {
                 self.shortcuts
                     .pending_value

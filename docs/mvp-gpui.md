@@ -52,7 +52,7 @@ Workspace 33 项通过，严格 Clippy、原生菜单、生成物、文档和架
 
 ## 发行边界
 
-- Windows / Linux 当前验证共享 Rust crates。
+- Windows 11 x64 开发预览的功能和实机证据见 [Windows 指南](windows.md)。Linux 当前验证共享 Rust crates。
 - Developer ID 签名、公证、干净机器升级与自动更新仍待完成。
 - Web 后台使用进程内 QuickJS。第三方进程隔离、插件市场、浏览器历史 /
   书签 / Tab 管理和交互式 PTY 属于后续范围。

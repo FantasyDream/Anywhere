@@ -14,9 +14,14 @@ impl LauncherView {
                 div()
                     .text_size(px(metrics::CAPTION_SIZE))
                     .text_color(theme::muted())
-                    .child(l10n::context_description(self.locale)),
+                    .child(if cfg!(windows) {
+                        l10n::windows_context_description(self.locale)
+                    } else {
+                        l10n::context_description(self.locale)
+                    }),
             )
-            .child(self.settings_rows_card(vec![
+            .when(!cfg!(windows), |page| {
+                page.child(self.settings_rows_card(vec![
                 self.context_capture_row(
                     ContextSource::FinderSelection,
                     l10n::finder_selection(self.locale),
@@ -57,6 +62,7 @@ impl LauncherView {
                     cx,
                 ),
             ]))
+            })
     }
 
     pub(in crate::launcher::view) fn context_capture_row(
