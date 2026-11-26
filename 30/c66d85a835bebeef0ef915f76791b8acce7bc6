@@ -1,0 +1,19 @@
+crates/anywhere-platform/src/clipboard/backend.rs
+  s_258733a297a1be::t_7436c1795f400b 132-133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.6",
+  "base_commit_sha": "30c66d85a835bebeef0ef915f76791b8acce7bc6",
+  "prompts": {},
+  "sessions": {
+    "s_258733a297a1be": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a2166f-4565-7f42-9651-5459560939ae",
+        "model": "opencode-go/deepseek-v4.1-flash"
+      },
+      "human_author": "diwen.zhang <diwen.zhang@lkcoffee.com>"
+    }
+  }
+}
